@@ -104,6 +104,13 @@ jobs:
                !activeBlock.block.includes('allow delete: if isAdmin()'))
               throw Error('Unrecognized old live announcement authority; abort without deployment');
             let revised=next.block;
+            // Preserve active suspension protection: the new app source's isAdmin()
+            // alone may not match the deployed helper's adminStatus behavior.
+            for(const operation of ['create','update','delete']){
+              const before='allow '+operation+': if isAdmin()';
+              if(revised.split(before).length!==2)throw Error('Unexpected '+operation+' announcement writer rule');
+              revised=revised.replace(before,before+"\\n        && profile().get('adminStatus', 'active') != 'suspended'");
+            }
             // Preserve the active production suspension gate even if the
             // announcement-only source was authored before that restriction.
             for(const operation of ['create','update','delete']){
