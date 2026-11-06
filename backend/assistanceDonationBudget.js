@@ -3,12 +3,22 @@
 const MAX_APPROVED_BUDGET = 100000000;
 
 function budgetApprovalIsEligible(request, review) {
-  return Number(request?.estimatedAmount || 0) === 0 &&
-    Number(review?.verifiedGrossCost || 0) === 0 &&
-    Number(review?.verifiedUncoveredAmount || 0) === 0 &&
-    review?.costVerificationRequired !== true &&
+  // A reviewed case can have zero remaining money because the resident entered
+  // no initial cost OR because its original costs were fully covered. A new
+  // separately documented item budget is allowed in both cases, once only.
+  const gross = Number(review?.verifiedGrossCost ?? 0);
+  const existing = Number(review?.confirmedExistingAssistanceAmount ?? 0);
+  const uncovered = Number(review?.verifiedUncoveredAmount ?? 0);
+  const remaining = Number(request?.remainingAmount ?? 0);
+  const valid = value => Number.isFinite(value) && value >= 0 &&
+    value <= MAX_APPROVED_BUDGET;
+  return valid(gross) && valid(existing) && valid(uncovered) &&
+    valid(remaining) && gross >= existing &&
+    uncovered <= 0.009 && remaining <= 0.009 &&
+    Math.abs((gross - existing) - uncovered) <= 0.01 &&
     !request?.donationCampaignId &&
-    !review?.postApprovalBudgetAt;
+    !review?.postApprovalBudgetAt &&
+    String(request?.status || "verified").toLowerCase() === "verified";
 }
 
 function evaluateBudgetInput(input) {
@@ -41,4 +51,28 @@ function evaluateBudgetInput(input) {
   };
 }
 
-module.exports = { evaluateBudgetInput, budgetApprovalIsEligible };
+function combineApprovedBudget(request, review, input) {
+  if (!budgetApprovalIsEligible(request, review)) {
+    return {ok: false, code: "donation_budget_not_editable",
+      message: "This case already has an active campaign, completed assistance, or an approved extra budget."};
+  }
+  const budget = evaluateBudgetInput(input);
+  if (!budget.ok) return budget;
+  const previousGrossCost = Number(review?.verifiedGrossCost || 0);
+  const previousAssistance = Number(review?.confirmedExistingAssistanceAmount || 0);
+  const newTotalCost = Math.round((previousGrossCost + budget.approvedGrossCost) * 100) / 100;
+  const newExistingAssistance = Math.round((previousAssistance + budget.confirmedExistingAssistanceAmount) * 100) / 100;
+  if (newTotalCost > MAX_APPROVED_BUDGET || newExistingAssistance > MAX_APPROVED_BUDGET) {
+    return {ok: false, code: "donation_budget_limit_exceeded",
+      message: "The combined approved budget exceeds the allowed limit."};
+  }
+  return {
+    ...budget,
+    previousGrossCost,
+    previousAssistance,
+    updatedGrossCost: newTotalCost,
+    updatedExistingAssistance: newExistingAssistance,
+  };
+}
+
+module.exports = { evaluateBudgetInput, budgetApprovalIsEligible, combineApprovedBudget };

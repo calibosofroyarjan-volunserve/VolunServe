@@ -9,7 +9,7 @@ const {
   FieldValue,
 } = require("./firebaseAdmin");
 const { reconcileCommunityEventCertificates } = require("./communityCertificates");
-const { evaluateBudgetInput, budgetApprovalIsEligible } = require("./assistanceDonationBudget");
+const { combineApprovedBudget } = require("./assistanceDonationBudget");
 const { probeIdentityAiReadiness } = require("./identityAiReadiness");
 const {
   getProfileRole,
@@ -7264,29 +7264,32 @@ app.post(
                     .serverTimestamp(),
               };
               if (action === "approve_donation_budget") {
-                // A case can be verified as a genuine need before the Resident
-                // has provided any monetary estimate. Only that zero-budget case
-                // may receive a separately documented LGU itemized budget.
-                if (!budgetApprovalIsEligible(assistanceData, reviewData)) {
-                  throw makeHttpError(
-                    409, "donation_budget_not_editable",
-                    "Only a verified request without an earlier monetary assessment or campaign can receive an itemized donation budget.",
-                  );
-                }
-                const budget = evaluateBudgetInput(request.body);
+                // Verified support is not equivalent to an approved monetary
+                // shortage. Require a documented, additional itemized need;
+                // preserve the original gross / assistance figures in audit.
+                const budget = combineApprovedBudget(
+                  assistanceData, reviewData, request.body
+                );
                 if (!budget.ok) {
-                  throw makeHttpError(400, budget.code, budget.message);
+                  throw makeHttpError(
+                    budget.code === "donation_budget_not_editable" ? 409 : 400,
+                    budget.code, budget.message,
+                  );
                 }
                 transaction.update(reviewRef, {
                   costVerificationRequired: true,
                   costVerificationStatus: "confirmed",
-                  verifiedGrossCost: budget.approvedGrossCost,
-                  confirmedExistingAssistanceAmount: budget.confirmedExistingAssistanceAmount,
+                  verifiedGrossCost: budget.updatedGrossCost,
+                  confirmedExistingAssistanceAmount: budget.updatedExistingAssistance,
                   verifiedUncoveredAmount: budget.verifiedUncoveredAmount,
-                  costNotes: budget.budgetEvidenceNote,
+                  postApprovalOriginalGrossCost: budget.previousGrossCost,
+                  postApprovalOriginalAssistance: budget.previousAssistance,
+                  postApprovalNewItemCost: budget.approvedGrossCost,
+                  postApprovalNewAssistance: budget.confirmedExistingAssistanceAmount,
                   postApprovalBudgetBasis: budget.budgetEvidenceNote,
                   postApprovalBudgetAt: FieldValue.serverTimestamp(),
                   postApprovalBudgetBy: adminUid,
+                  costNotes: budget.budgetEvidenceNote,
                   updatedAt: FieldValue.serverTimestamp(),
                 });
                 transaction.update(assistanceRef, {
@@ -7294,8 +7297,8 @@ app.post(
                   approvedDonationBudget: budget.verifiedUncoveredAmount,
                 });
                 return {
-                  approvedGrossCost: budget.approvedGrossCost,
-                  confirmedExistingAssistanceAmount: budget.confirmedExistingAssistanceAmount,
+                  approvedGrossCost: budget.updatedGrossCost,
+                  confirmedExistingAssistanceAmount: budget.updatedExistingAssistance,
                   verifiedUncoveredAmount: budget.verifiedUncoveredAmount,
                 };
               }

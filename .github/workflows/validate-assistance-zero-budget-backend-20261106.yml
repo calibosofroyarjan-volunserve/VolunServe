@@ -1,0 +1,19 @@
+name: Verify Assistance Zero Budget Fix Backend NO DEPLOY
+on:
+  push:
+    branches: [fix/assistance-zero-budget-button-backend-20261106]
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with: {submodules: false}
+      - uses: actions/setup-node@v4
+        with: {node-version: "22"}
+      - run: node --check backend/server.js
+      - run: node --check backend/assistanceDonationBudget.js
+      - run: node --test backend/tests/assistanceDonationBudget.test.js
+      - run: echo "PASS backend only; no Render, Firebase or Firestore deployment"
