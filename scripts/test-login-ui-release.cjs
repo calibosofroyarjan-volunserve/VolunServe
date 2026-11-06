@@ -34,7 +34,9 @@ test("Reset, Google and Guest continue working",()=>{
     assert.doesNotMatch(s,/sendPasswordResetEmail/);
   }
   assert.match(modal,/await sendPasswordResetEmail\(auth, address\)/);
-  assert.match(web,/connectGoogleAccountWeb/);
+  assert.match(web,/useSignupGoogle/);
+  assert.match(read("lib/useSignupGoogle.web.ts"),/signInWithPopup/);
+  assert.match(read("lib/useSignupGoogle.ts"),/GoogleAuthProvider\.credential/);
   assert.match(read("components/auth/AuthFeedback.tsx"),/accessibilityRole="alert"/);
 });
 test("Staff entrypoint no longer duplicates login and keeps existing bookmarks",()=>{
