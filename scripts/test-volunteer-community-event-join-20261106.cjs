@@ -28,6 +28,6 @@ assert(source.includes('import { canVolunteerJoinEvent, eventScheduleHasPassed }
 assert(source.includes('onPress={() => void respondToEvent(event, "joined")}'), "Keep actual Join handler connected");
 assert(source.includes('"communityEventParticipants"') && source.includes("runTransaction("), "Keep original Firestore transaction");
 assert(source.includes("setEventActionFeedback({") && source.includes("accessibilityRole=\"alert\""), "Show event-local visible errors");
-assert(source.includes("eventScheduleHasPassed(current"), "Check latest event inside transaction");
+assert(source.includes("eventScheduleHasPassed({ status: String(current.status"), "Check typed latest event inside transaction");
 assert(source.includes("canVolunteerJoinEvent(event)"), "Apply same joinability to card controls");
 console.log("PASS volunteer Join UI, event-local messages, expiry and unchanged Firestore transaction");
