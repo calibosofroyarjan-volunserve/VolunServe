@@ -99,7 +99,12 @@ jobs:
               console.log('Announcements already updated in active rules; no deployment necessary.');
               return;
             }
-            if(activeBlock.block!==old.block)throw Error('Active announcement policy differs from known baseline: do not overwrite');
+            if(activeBlock.block!==old.block){
+              console.log('ACTIVE_ANNOUNCEMENT_POLICY_START');
+              console.log(activeBlock.block);
+              console.log('ACTIVE_ANNOUNCEMENT_POLICY_END');
+              throw Error('Active announcement policy differs from known baseline: diagnostic only, no deployment');
+            }
             const patched=active.slice(0,activeBlock.start)+next.block+active.slice(activeBlock.end);
             const patchBound=bounds(patched);
             if(without(active,activeBlock)!==without(patched,patchBound))throw Error('Non-announcement rules changed: abort');
