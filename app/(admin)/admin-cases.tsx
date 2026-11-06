@@ -581,21 +581,10 @@ export default function AdminCases() {
   const [approvedVolunteers, setApprovedVolunteers] = useState<VolunteerProfile[]>(
     []
   );
-  const [lguPersonnel, setLguPersonnel] = useState<LguPersonnelCandidate[]>([]);
-  const [lguPersonnelLoading, setLguPersonnelLoading] = useState(false);
-  const [lguPersonnelError, setLguPersonnelError] = useState("");
-  const [lguFieldReports, setLguFieldReports] = useState<LguFieldReport[]>([]);
-  const [lguFieldReportsLoading, setLguFieldReportsLoading] = useState(false);
-  const [lguFieldReportsError, setLguFieldReportsError] = useState("");
-  const [lguFieldReviewNotes, setLguFieldReviewNotes] = useState<
-    Record<string, string>
-  >({});
-
   const [filterStatus, setFilterStatus] = useState<CaseStatus | "all">("all");
   const [filterSeverity, setFilterSeverity] = useState<Severity | "all">("all");
   const [caseSearch, setCaseSearch] = useState("");
   const [recordPage, setRecordPage] = useState(1);
-  const [personnelPage, setPersonnelPage] = useState(1);
   const [volunteerPage, setVolunteerPage] = useState(1);
   const [activeAssignmentPage, setActiveAssignmentPage] = useState(1);
   const [historyAssignmentPage, setHistoryAssignmentPage] = useState(1);
@@ -630,278 +619,8 @@ export default function AdminCases() {
     Set<string>
   >(new Set());
 
-  const loadLguPersonnel = async (silent = false) => {
-    const adminUser = getAuth().currentUser;
 
-    if (!adminUser) {
-      setLguPersonnelError("Admin session expired. Please sign in again.");
-      return;
-    }
 
-    if (!silent) {
-      setLguPersonnelLoading(true);
-    }
-
-    setLguPersonnelError("");
-
-    try {
-      const token = await adminUser.getIdToken(true);
-      const response = await fetch(`${BACKEND_URL}/api/admin/lgu/personnel`, {
-        method: "GET",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          Accept: "application/json",
-        },
-      });
-
-      const raw = await response.text();
-      let payload: any = {};
-
-      if (raw) {
-        try {
-          payload = JSON.parse(raw);
-        } catch {
-          payload = {};
-        }
-      }
-
-      if (!response.ok) {
-        throw new Error(
-          payload?.message ||
-            `Unable to load LGU Personnel (status ${response.status}).`
-        );
-      }
-
-      const list = Array.isArray(payload?.personnel) ? payload.personnel : [];
-
-      setLguPersonnel(
-        list
-          .map((item: any) => ({
-            uid: String(item?.uid || ""),
-            fullName: String(item?.fullName || "LGU Personnel"),
-            email: String(item?.email || ""),
-            employeeId: String(item?.employeeId || ""),
-            department: String(item?.department || ""),
-            position: String(item?.position || ""),
-            capabilities: normalizeStringArray(item?.capabilities),
-            verificationStatus: String(item?.verificationStatus || ""),
-            employmentStatus: String(item?.employmentStatus || ""),
-            dutyStatus: String(item?.dutyStatus || "off_duty"),
-            availabilityStatus: String(
-              item?.availabilityStatus || "unavailable"
-            ),
-            shiftDate: String(item?.shiftDate || ""),
-            activeCaseId: String(item?.activeCaseId || ""),
-            activeAssignmentId: String(item?.activeAssignmentId || ""),
-            isTestAccount: item?.isTestAccount === true,
-          }))
-          .filter((item: LguPersonnelCandidate) => Boolean(item.uid))
-          .sort((a: LguPersonnelCandidate, b: LguPersonnelCandidate) => {
-            const aAvailable =
-              a.dutyStatus === "on_duty" &&
-              a.availabilityStatus === "available" &&
-              !a.activeCaseId &&
-              !a.activeAssignmentId;
-            const bAvailable =
-              b.dutyStatus === "on_duty" &&
-              b.availabilityStatus === "available" &&
-              !b.activeCaseId &&
-              !b.activeAssignmentId;
-
-            if (aAvailable !== bAvailable) {
-              return aAvailable ? -1 : 1;
-            }
-
-            return a.fullName.localeCompare(b.fullName);
-          })
-      );
-    } catch (error) {
-      console.log("LGU personnel load error:", error);
-      setLguPersonnelError(
-        error instanceof Error
-          ? error.message
-          : "Unable to load LGU Personnel."
-      );
-    } finally {
-      if (!silent) {
-        setLguPersonnelLoading(false);
-      }
-    }
-  };
-
-  const loadLguFieldReports = async (
-    caseId: string,
-    silent = false
-  ) => {
-    const adminUser = getAuth().currentUser;
-
-    if (!adminUser || !caseId) {
-      setLguFieldReports([]);
-      return;
-    }
-
-    if (!silent) {
-      setLguFieldReportsLoading(true);
-    }
-
-    setLguFieldReportsError("");
-
-    try {
-      const token = await adminUser.getIdToken(true);
-      const response = await fetch(
-        `${BACKEND_URL}/api/admin/lgu/field-reports?caseId=${encodeURIComponent(
-          caseId
-        )}`,
-        {
-          method: "GET",
-          headers: {
-            Authorization: `Bearer ${token}`,
-            Accept: "application/json",
-          },
-        }
-      );
-
-      const raw = await response.text();
-      let payload: any = {};
-
-      if (raw) {
-        try {
-          payload = JSON.parse(raw);
-        } catch {
-          payload = {};
-        }
-      }
-
-      if (!response.ok) {
-        throw new Error(
-          payload?.message ||
-            `Unable to load official LGU field report (status ${response.status}).`
-        );
-      }
-
-      const list = Array.isArray(payload?.reports) ? payload.reports : [];
-
-      setLguFieldReports(
-        list.map((item: any) => ({
-          id: String(item?.id || item?.assignmentId || ""),
-          assignmentId: String(item?.assignmentId || ""),
-          caseId: String(item?.caseId || ""),
-          personnelUid: String(item?.personnelUid || ""),
-          personnelName: String(item?.personnelName || "LGU Responder"),
-          department: String(item?.department || ""),
-          position: String(item?.position || ""),
-          caseTitle: String(item?.caseTitle || "Emergency Case"),
-          caseCategory: String(item?.caseCategory || "Emergency"),
-          caseSeverity: String(item?.caseSeverity || ""),
-          responseLocation: String(item?.responseLocation || ""),
-          situationSummary: String(item?.situationSummary || ""),
-          actionsTaken: String(item?.actionsTaken || ""),
-          peopleAssisted: Number(item?.peopleAssisted || 0),
-          outcome: String(item?.outcome || ""),
-          remainingNeeds: String(item?.remainingNeeds || ""),
-          notes: String(item?.notes || ""),
-          adminReviewStatus: String(item?.adminReviewStatus || "pending"),
-          adminReviewNote: String(item?.adminReviewNote || ""),
-          submittedAt: String(item?.submittedAt || ""),
-          reviewedAt: String(item?.reviewedAt || ""),
-          reviewedBy: String(item?.reviewedBy || ""),
-        }))
-      );
-    } catch (error) {
-      console.log("Official LGU field report load error:", error);
-      setLguFieldReports([]);
-      setLguFieldReportsError(
-        error instanceof Error
-          ? error.message
-          : "Unable to load official LGU field report."
-      );
-    } finally {
-      if (!silent) {
-        setLguFieldReportsLoading(false);
-      }
-    }
-  };
-
-  const reviewLguFieldReport = async (report: LguFieldReport) => {
-    const adminUser = getAuth().currentUser;
-
-    if (!adminUser) {
-      Alert.alert("Session Expired", "Please sign in again.");
-      return;
-    }
-
-    const note = (
-      lguFieldReviewNotes[report.id] ??
-      report.adminReviewNote ??
-      ""
-    ).trim();
-
-    if (note.length > 1500) {
-      Alert.alert(
-        "Review Note Too Long",
-        "Admin review note must be 1500 characters or fewer."
-      );
-      return;
-    }
-
-    const busyId = `lgu_field_review_${report.id}`;
-    setBusyKey(busyId);
-
-    try {
-      const token = await adminUser.getIdToken(true);
-      const response = await fetch(
-        `${BACKEND_URL}/api/admin/lgu/field-reports/${encodeURIComponent(
-          report.id
-        )}/review`,
-        {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${token}`,
-            Accept: "application/json",
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            adminReviewNote: note,
-          }),
-        }
-      );
-
-      const raw = await response.text();
-      let payload: any = {};
-
-      if (raw) {
-        try {
-          payload = JSON.parse(raw);
-        } catch {
-          payload = {};
-        }
-      }
-
-      if (!response.ok) {
-        throw new Error(
-          payload?.message ||
-            `Unable to review official LGU field report (status ${response.status}).`
-        );
-      }
-
-      await loadLguFieldReports(report.caseId, true);
-
-      Alert.alert(
-        "LGU Field Report Reviewed",
-        "The official responder report is reviewed. You may now resolve the emergency if the case is fully handled, or keep it In Progress for follow-up."
-      );
-    } catch (error) {
-      console.log("Official LGU field report review error:", error);
-      Alert.alert(
-        "Review Failed",
-        error instanceof Error
-          ? error.message
-          : "Unable to review the official LGU field report."
-      );
-    } finally {
-      setBusyKey("");
-    }
-  };
 
   useEffect(() => {
     const loadRole = async () => {
@@ -1406,7 +1125,6 @@ export default function AdminCases() {
   useEffect(() => {
     setDetailTab("overview");
     setAssignmentCaseId("");
-    setPersonnelPage(1);
     setVolunteerPage(1);
     setActiveAssignmentPage(1);
     setHistoryAssignmentPage(1);
@@ -1998,19 +1716,6 @@ export default function AdminCases() {
 
     if (
       nextStatus === "resolved" &&
-      String(incident.officialLguResponseStatus || "")
-        .trim()
-        .toLowerCase() === "completed_pending_admin_review"
-    ) {
-      Alert.alert(
-        "LGU Field Report Review Required",
-        "Review the completed official LGU field report in the Response tab before resolving this emergency."
-      );
-      return;
-    }
-
-    if (
-      nextStatus === "resolved" &&
       caseAssignments.length > 0 &&
       caseAssignments.some(
         (item) => String(item.status) !== "completed"
@@ -2018,7 +1723,7 @@ export default function AdminCases() {
     ) {
       Alert.alert(
         "Volunteer Support Still Active",
-        "Finish or cancel the active Volunteer assignments before resolving the case. LGU response itself does not depend on Volunteer acceptance."
+        "Finish or cancel open Volunteer assignments before resolving the case."
       );
       return;
     }
@@ -2093,7 +1798,7 @@ export default function AdminCases() {
       Alert.alert(
         "Case Updated",
         nextStatus === "in_progress"
-          ? "LGU response is now marked In Progress. Volunteer support remains optional."
+          ? "The emergency case is In Progress. Review active Volunteer tasks and reports before resolving."
           : `Status changed to ${labelOfStatus(nextStatus)}.`
       );
     } catch (error) {
@@ -2822,115 +2527,6 @@ export default function AdminCases() {
     }
   };
 
-  const assignLguPersonnelToCase = async (
-    incident: DisasterCase,
-    personnel: LguPersonnelCandidate
-  ) => {
-    const adminUser = getAuth().currentUser;
-
-    if (!adminUser) {
-      Alert.alert("Session Expired", "Please sign in again.");
-      return;
-    }
-
-    const verificationStatus = String(
-      incident.verificationStatus || "pending_verification"
-    );
-
-    if (verificationStatus !== "validated") {
-      Alert.alert(
-        "Validate Case First",
-        "The emergency report must be validated before official LGU Personnel can be assigned."
-      );
-      return;
-    }
-
-    if (!["validated", "assigned", "in_progress"].includes(incident.status)) {
-      Alert.alert(
-        "Assignment Unavailable",
-        "This emergency case is not currently eligible for an LGU Personnel assignment."
-      );
-      return;
-    }
-
-    if (incident.activeLguResponderUid) {
-      Alert.alert(
-        "Official Responder Already Assigned",
-        `${incident.activeLguResponderName || "An LGU responder"} is already assigned to this emergency.`
-      );
-      return;
-    }
-
-    const assignable =
-      personnel.verificationStatus === "verified" &&
-      personnel.employmentStatus === "active" &&
-      personnel.dutyStatus === "on_duty" &&
-      personnel.availabilityStatus === "available" &&
-      !personnel.activeCaseId &&
-      !personnel.activeAssignmentId;
-
-    if (!assignable) {
-      Alert.alert(
-        "Personnel Not Available",
-        "Only verified LGU Personnel who are On Duty and Available with no active emergency assignment can be assigned."
-      );
-      return;
-    }
-
-    const busyId = `lgu_assign_${incident.id}_${personnel.uid}`;
-    setBusyKey(busyId);
-
-    try {
-      const token = await adminUser.getIdToken(true);
-      const response = await fetch(`${BACKEND_URL}/api/admin/lgu/assignments`, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          Accept: "application/json",
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          caseId: incident.id,
-          personnelUid: personnel.uid,
-        }),
-      });
-
-      const raw = await response.text();
-      let payload: any = {};
-
-      if (raw) {
-        try {
-          payload = JSON.parse(raw);
-        } catch {
-          payload = {};
-        }
-      }
-
-      if (!response.ok) {
-        throw new Error(
-          payload?.message ||
-            `Unable to assign LGU Personnel (status ${response.status}).`
-        );
-      }
-
-      await loadLguPersonnel(true);
-
-      Alert.alert(
-        "LGU Personnel Assigned",
-        `${personnel.fullName} is now the official LGU responder for this emergency. The personnel and resident were notified.`
-      );
-    } catch (error) {
-      console.log("Assign LGU Personnel error:", error);
-      Alert.alert(
-        "Assignment Failed",
-        error instanceof Error
-          ? error.message
-          : "Unable to assign this LGU Personnel."
-      );
-    } finally {
-      setBusyKey("");
-    }
-  };
 
   // Direct Admin assignment creates a validated responseAssignment.
   // Volunteers accept or decline it from the incident card in New.
@@ -3391,9 +2987,9 @@ export default function AdminCases() {
       showsVerticalScrollIndicator={true}
     >
       <AdminReviewHero
-        eyebrow="LGU OPERATIONS / EMERGENCY & ASSISTANCE"
+        eyebrow="ADMIN / EMERGENCY & ASSISTANCE"
         title="Emergency Reports"
-        subtitle="Review resident incident reports, verify evidence, coordinate authorized LGU responders, and track case resolution."
+        subtitle="Validate resident emergency reports, assign volunteers, review task updates and field reports, and close resolved cases."
         icon="warning-outline"
         tag="INCIDENT RESPONSE"
       />
@@ -3575,19 +3171,6 @@ export default function AdminCases() {
             activeAssignments[0]?.status || incidentAssignments.find(item => item.status === "completed")?.status,
           );
           const incidentFieldReports = fieldReportsForCase(incident.id);
-          const incidentLguFieldReports = lguFieldReports.filter(
-            (report) => report.caseId === incident.id
-          );
-          const latestLguFieldReport =
-            incidentLguFieldReports[0] || null;
-          const officialLguResponseStatus = String(
-            incident.officialLguResponseStatus || ""
-          )
-            .trim()
-            .toLowerCase();
-          const lguFieldReviewPending =
-            officialLguResponseStatus ===
-            "completed_pending_admin_review";
           const volunteerSupportAvailable = activeAssignments.length === 0;
           const volunteerProgressStatus = incident.status === "closed" ? "CASE CLOSED"
             : incident.status === "resolved" ? "COMPLETED"
@@ -3603,9 +3186,6 @@ export default function AdminCases() {
 
           const assignmentPanelOpen = assignmentCaseId === incident.id;
           const volunteerCandidates = volunteerCandidatesForCase(incident);
-          const onDutyPersonnel = lguPersonnel.filter(personnel =>
-            personnel.uid !== incident.activeLguResponderUid && personnel.dutyStatus === "on_duty"
-          );
           const eligibleVolunteerCount = volunteerCandidates.filter(
             (volunteer) => volunteerEligibilityForCase(incident, volunteer).eligible
           ).length;
@@ -3625,30 +3205,6 @@ export default function AdminCases() {
             ["validated", "assigned", "in_progress", "resolved", "closed"].includes(
               incident.status
             );
-
-          const lguHeartbeatMs = timestampMillis(incident.activeLguHeartbeatAt);
-          const lguOwnerFresh =
-            Boolean(incident.activeLguResponderUid) &&
-            lguHeartbeatMs > 0 &&
-            Date.now() - lguHeartbeatMs < 120000;
-
-          const activeLguProfile = lguPersonnel.find(
-            (personnel) => personnel.uid === incident.activeLguResponderUid
-          ) || null;
-
-          const activeLguTrackingLabel = !activeLguProfile
-            ? lguOwnerFresh
-              ? "Live Tracking"
-              : "Assigned"
-            : activeLguProfile.availabilityStatus === "assigned"
-            ? "Awaiting Response"
-            : activeLguProfile.availabilityStatus === "responding"
-            ? lguOwnerFresh
-              ? "Live Tracking"
-              : "Responding"
-            : activeLguProfile.availabilityStatus === "on_site"
-            ? "On Site"
-            : labelOfStatus(activeLguProfile.availabilityStatus || "assigned");
 
           const directAssessmentId = `direct_${incident.id}`;
           const directAssessmentExists =
@@ -4237,12 +3793,12 @@ export default function AdminCases() {
                     verificationStatus !== "rejected" && (
                     <View style={styles.criticalResponseNotice}>
                       <Text style={styles.criticalResponseTitle}>
-                        Critical case — official LGU response takes priority
+                        Critical case — urgent admin validation required
                       </Text>
                       <Text style={styles.criticalResponseText}>
-                        Official LGU navigation may begin immediately while the
-                        evidence review continues. Qualified community responder
-                        assignment remains controlled by LGU verification.
+                        Review the evidence and location promptly. For immediate danger,
+                        contact 911 or authorized emergency services. Volunteer
+                        task offers follow Admin validation and can be accepted or declined.
                       </Text>
                       <TouchableOpacity
                         style={styles.criticalNavigateButton}
@@ -4255,7 +3811,7 @@ export default function AdminCases() {
                         }
                       >
                         <Text style={styles.criticalNavigateButtonText}>
-                          Start / Open Critical LGU Live Response
+                          Open Emergency Map & Route
                         </Text>
                       </TouchableOpacity>
                     </View>
