@@ -140,7 +140,7 @@ export default function WebHome() {
   const router = useRouter();
   const { width } = useWindowDimensions();
   const { user, profile } = useUserSession();
-  const { items: announcementAlerts } = useAnnouncementAlerts(user?.uid, profile?.barangay);
+  const { items: announcementAlerts } = useAnnouncementAlerts(user?.uid);
 
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [cases, setCases] = useState<DisasterCase[]>([]);
@@ -204,17 +204,13 @@ export default function WebHome() {
             id: item.id,
             ...(item.data() as Omit<Announcement, "id">),
           }))
-          .filter((item) => {
-            const audience = String(item.audience || "").trim().toLowerCase();
-            const userBarangay = String(profile?.barangay || "").trim().toLowerCase();
-            return audience === "all" || (!!userBarangay && audience === userBarangay);
-          });
+          ;
 
         setAnnouncements(nextAnnouncements);
       },
       () => setAnnouncements([])
     );
-  }, [profile?.barangay]);
+  }, []);
 
   useEffect(() => {
     if (!user) {
