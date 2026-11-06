@@ -46,6 +46,7 @@ const volunteerDesktopTabs: TabDefinition[] = [
  {name:"index",label:"Home",icon:"home-outline",activeIcon:"home"},
  {name:"volunteer",label:"Emergency Tasks",icon:"people-outline",activeIcon:"people"},
  {name:"community-events",label:"Community Events",icon:"calendar-outline",activeIcon:"calendar"},
+ {name:"certificate",label:"My Certificates",icon:"ribbon-outline",activeIcon:"ribbon"},
 ];
 
 type ModuleIdentity = { subtitle: string; colors: readonly [string, string] };
