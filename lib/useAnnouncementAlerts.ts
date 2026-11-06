@@ -1,5 +1,5 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { collection, onSnapshot, query, Timestamp, where } from "firebase/firestore";
+import { collection, onSnapshot, query, where } from "firebase/firestore";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { db } from "./firebase";
 import { isApprovedProfile } from "./firebaseAuth";
@@ -86,15 +86,20 @@ export function useAnnouncementAlerts() {
     }
     // Retain the last good announcements while a newer time window subscribes.
     setLoading(true);
+    // Production Firestore enforces an audience-constrained LIST query.
+    const audience = String(barangay || "").trim();
     const q = query(
       collection(db, "announcements"),
-      where("publishAt", "<=", Timestamp.fromMillis(nowMs)),
+      where("audience", "in", audience ? ["all", audience] : ["all"]),
     );
     return onSnapshot(q, snapshot => {
       const results: PublishedAnnouncement[] = snapshot.docs
         .map(item => {
           const data = item.data();
-          if (!allowedAudience(data.audience, barangay)) return null;
+          const publishedAt = typeof data.publishAt?.toMillis === "function"
+            ? data.publishAt.toMillis() : Number.POSITIVE_INFINITY;
+          if (!allowedAudience(data.audience, barangay) ||
+              publishedAt > nowMs) return null;
           return {
             id: "feed_announcement_" + item.id,
             userId: uid,
