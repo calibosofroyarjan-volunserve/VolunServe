@@ -80,7 +80,7 @@ jobs:
           const assert=require('node:assert/strict'),fs=require('node:fs');
           const ui=fs.readFileSync('app/(admin)/assistance-requests.tsx','utf8');
           const verified=ui.slice(ui.indexOf('function CompactVerifiedAssistance({'),ui.indexOf('function CompactReviewSelect({'));
-          for(const item of ['Item breakdown and price basis','canSetBudget && (','Amount to raise:']){
+          for(const item of ['NEW items, quantities and price basis','canSetBudget && (','Amount to raise:']){
             assert(verified.includes(item),'Missing itemized budget form '+item);
           }
           for(const item of ['approvedGrossCost: gross','router.push({ pathname: "/donation-list"','reviewReadyForVerification(reviewDraft)','onVerify={verifyNeed}','onReject={rejectRequest}']){
