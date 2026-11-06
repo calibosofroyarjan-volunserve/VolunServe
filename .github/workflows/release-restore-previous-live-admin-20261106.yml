@@ -1,0 +1,79 @@
+name: Restore Previously Live Admin Screens - Guarded Hosting
+on:
+  push:
+    branches: [restore/admin-live-before-regression-20261106]
+    paths:
+      - .github/workflows/release-restore-previous-live-admin-20261106.yml
+permissions:
+  contents: read
+concurrency:
+  group: volunserve-production-hosting-release
+  cancel-in-progress: false
+jobs:
+  verify-and-publish:
+    if: github.repository == 'calibosofroyarjan-volunserve/VolunServe'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      BASE_SHA: 70b9785cd7baa9ae82933eeeedc0660ccb2a18dc
+      FIREBASE_SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_VOLUNSERVE_3AA5B || secrets.FIREBASE_SERVICE_ACCOUNT }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Require only restored Admin files and their pure helper modules
+        shell: bash
+        run: |
+          set -euo pipefail
+          git merge-base --is-ancestor "$BASE_SHA" HEAD
+          git diff --name-only "$BASE_SHA" HEAD > "$RUNNER_TEMP/changed.txt"
+          node <<'NODE'
+          const fs=require('fs'),assert=require('assert');
+          const actual=fs.readFileSync(process.env.RUNNER_TEMP+'/changed.txt','utf8').trim().split('\n').filter(Boolean).sort();
+          const expected=[
+            '.github/workflows/release-restore-previous-live-admin-20261106.yml',
+            'app/(admin)/admin-cases.tsx',
+            'app/(admin)/assistance-requests.tsx',
+            'app/(admin)/create-announcement.tsx',
+            'lib/assistanceReviewQueue.ts',
+            'lib/assistanceReviewValidation.ts',
+            'lib/emergencyTaskStatus.ts'
+          ].sort();
+          assert.deepStrictEqual(actual,expected,'STOP unexpected modification of Login, Signup, Super Admin, or other production modules');
+          const layout=fs.readFileSync('app/(admin)/_layout.tsx','utf8');
+          assert(!layout.includes('Communication & Reports') && !layout.includes('label: "Disputes"'));
+          assert(layout.includes('route: "/(admin)/create-announcement"'));
+          NODE
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Validate Admin flows, core modules and production build
+        run: |
+          node scripts/test-admin-navigation-contract.cjs
+          node scripts/test-lgu-admin-navigation-groups.cjs
+          node scripts/test-final-admin-scope.cjs
+          npx tsc --noEmit --incremental false
+          npx expo export --platform web --clear
+          node scripts/verify-hosting-release.cjs
+      - name: Require Firebase credentials
+        run: test -n "$FIREBASE_SA"
+      - name: Hosting-only publish; never change rules, accounts, data, or backend
+        uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          firebaseServiceAccount: ${{ env.FIREBASE_SA }}
+          projectId: volunserve-3aa5b
+          channelId: live
+      - name: Confirm exact live production SHA
+        env:
+          VOLUNSERVE_HOSTING_URL: https://volunserve.com
+          VOLUNSERVE_EXPECTED_SHA: ${{ github.sha }}
+        run: |
+          for attempt in 1 2 3 4 5 6; do
+            if node scripts/check-live-hosting.cjs; then exit 0; fi
+            sleep 10
+          done
+          echo "::error::Production revision unverified"
+          exit 1
