@@ -112,6 +112,7 @@ type AssistanceRequest = {
   assignedLocationSetAt?: any;
 
   donationCampaignId?: string;
+  publicAppealStatus?: string;
   adminNote?: string;
 
   reviewedAt?: any;
@@ -1398,6 +1399,8 @@ export default function AssistanceRequestsAdmin() {
           confirmedExistingAssistanceAmount: Number(values.confirmedExistingAssistanceAmount || 0),
           budgetEvidenceNote: String(values.budgetEvidenceNote || "").trim(),
         };
+      } else if (["publish_public_appeal", "close_public_appeal"].includes(actionKey)) {
+        payload = { action: actionKey === "publish_public_appeal" ? "publish" : "close" };
       } else if (actionKey === "resource_assessment") {
         payload = {
           supportDecision: String(values.supportDecision || ""),
@@ -1426,10 +1429,11 @@ export default function AssistanceRequestsAdmin() {
         throw new Error("Unsupported Assistance Request operation.");
       }
 
+      const isPublicAppeal = ["publish_public_appeal", "close_public_appeal"].includes(actionKey);
       const response = await fetch(
         `${SECURE_ASSISTANCE_BACKEND}/api/admin/assistance/requests/${encodeURIComponent(
           selected.id,
-        )}/operation`,
+        )}/${isPublicAppeal ? "public-appeal" : "operation"}`,
         {
           method: "POST",
           headers: {
@@ -1437,8 +1441,7 @@ export default function AssistanceRequestsAdmin() {
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            action: actionKey,
-            ...payload,
+            ...(isPublicAppeal ? payload : { action: actionKey, ...payload }),
           }),
         },
       );
@@ -1462,6 +1465,10 @@ export default function AssistanceRequestsAdmin() {
       const successMessages: Record<string, string> = {
         resource_assessment:
           "LGU resource assessment has been saved.",
+        publish_public_appeal:
+          "Assistance Appeal published. Residents and Volunteers can see it in Donations.",
+        close_public_appeal:
+          "Public Assistance Appeal has been closed.",
         assistance_provided:
           "Assistance has been marked as provided.",
         save_location:
@@ -2335,6 +2342,8 @@ This still does not automatically create a Donation Campaign.`,
         savingAction={savingAction}
         onDonation={continueToDonationCampaign}
         onSaveOtherSupport={saveSimpleSupportChoice}
+        onPublishAppeal={() => updateRequest("publish_public_appeal", {})}
+        onCloseAppeal={() => updateRequest("close_public_appeal", {})}
         onOpenCampaign={() => router.push({
           pathname: "/donation-list",
           params: { assistanceRequestId: selected.id },
@@ -3441,7 +3450,7 @@ function ResidentReviewTab({
 function CompactVerifiedAssistance({
   request, reviewRecord, reviewLoading, publicOfficeName, setPublicOfficeName,
   publicOfficeAddress, setPublicOfficeAddress, savingAction,
-  onDonation, onSaveOtherSupport, onOpenCampaign,
+  onDonation, onSaveOtherSupport, onPublishAppeal, onCloseAppeal, onOpenCampaign,
 }: {
   request: AssistanceRequest;
   reviewRecord: Record<string, any> | null;
@@ -3453,6 +3462,8 @@ function CompactVerifiedAssistance({
   savingAction: string;
   onDonation: (name: string, address: string) => Promise<boolean>;
   onSaveOtherSupport: (choice: string) => Promise<boolean>;
+  onPublishAppeal: () => Promise<boolean>;
+  onCloseAppeal: () => Promise<boolean>;
   onOpenCampaign: () => void;
 }) {
   const cap = Number(reviewRecord?.verifiedUncoveredAmount || 0);
@@ -3541,11 +3552,26 @@ function CompactVerifiedAssistance({
           </View>
 
           {cap <= 0 && (
-            <View style={styles.simpleReviewAmountNotice}>
-              <Ionicons name="information-circle-outline" size={18} color="#64748B" />
-              <Text style={[styles.simpleCopy, { flex: 1 }]}>
-                No approved donation amount for this request. Select LGU or Partner Support or No Further Support.
-              </Text>
+            <View style={styles.assistanceAppealPanel}>
+              <View style={{ flex: 1, gap: 5 }}>
+                <Text style={styles.simpleSection}>
+                  {request.publicAppealStatus === "published" ? "Public Assistance Appeal" : "Publish Community Assistance"}
+                </Text>
+                <Text style={styles.simpleCopy}>
+                  {request.publicAppealStatus === "published"
+                    ? "Published for Residents and Volunteers to view. No payments are collected."
+                    : "Publish the verified need as an in-kind support appeal. No extra form or monetary amount is needed."}
+                </Text>
+              </View>
+              {request.publicAppealStatus === "published" ? (
+                <ActionButton label="Close Published Appeal" icon="checkmark-circle-outline"
+                  variant="secondary" disabled={busy} loading={savingAction === "close_public_appeal"}
+                  onPress={() => { void onCloseAppeal(); }} />
+              ) : (
+                <ActionButton label="Publish Assistance Appeal" icon="megaphone-outline"
+                  variant="success" disabled={busy} loading={savingAction === "publish_public_appeal"}
+                  onPress={() => { void onPublishAppeal(); }} />
+              )}
             </View>
           )}
           {choice === "donation" && (
@@ -5639,6 +5665,7 @@ function DocumentPreviewModal({
 
 const styles = StyleSheet.create({
   simpleVerifiedAmount: { fontSize: 22, fontWeight: "800", color: "#047857", paddingVertical: 3 },
+  assistanceAppealPanel: { gap: 12, padding: 16, borderWidth: 1, borderColor: "#D1E6DA", backgroundColor: "#F7FBF8", borderRadius: 12 },
   simpleReviewAmountNotice: { flexDirection: "row", alignItems: "flex-start", gap: 9, padding: 12, borderRadius: 9, borderColor: "#FDE68A", borderWidth: 1, backgroundColor: "#FFFBEB" },
   simpleReviewOfficeCard: { flexDirection: "row", alignItems: "flex-start", gap: 9, padding: 12, borderRadius: 9, backgroundColor: "#F0FDF4", borderWidth: 1, borderColor: "#BBF7D0" },
 
