@@ -8,6 +8,8 @@ const saOverview = source("app/(superadmin)/index.tsx");
 const saRecords = source("app/(superadmin)/all-records.tsx");
 const adminLayout = source("app/(admin)/_layout.tsx");
 const adminLogin = source("app/admin-login.tsx");
+const unifiedWebLogin = source("app/login.web.tsx");
+const unifiedNativeLogin = source("app/login.tsx");
 const docs = source("docs/final-superadmin-lgu-admin-scope.md");
 const ruleSection = (start, end) => {
   const i=rules.indexOf(start), j=rules.indexOf(end,i+start.length);
@@ -66,8 +68,10 @@ assert(saOverview.includes('onSnapshot(') &&
   saLayout.includes('accessibilityLabel="Super Admin profile dropdown"') &&
   !saOverview.includes('Pending LGU Applications'),
   "Super Admin overview must show live governance activity with working navigation, without reintroducing removed LGU Staff onboarding");
-assert(adminLogin.includes("Request LGU Admin Access") &&
-  adminLogin.includes('router.push("/admin-request")') &&
+assert(adminLogin.includes('<Redirect href="/login" />') &&
+  [unifiedWebLogin, unifiedNativeLogin].every(login =>
+    login.includes('accessibilityLabel="Request LGU Admin Access"') &&
+    login.includes('router.push("/admin-request")')) &&
   docs.includes("Fresh independent LGU review"),
   "Current user-facing request label must still route to pending-only LGU staff application");
 console.log("PASS scope: Super Admin governance, LGU operational modules, suspended-account security, event ownership");
