@@ -1,0 +1,40 @@
+name: Validate Original Assistance Monetary Campaign UI (NO DEPLOY)
+on:
+  push:
+    branches: [fix/restore-assistance-money-bar-ui-live-20261106]
+permissions:
+  contents: read
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - name: Check the original money bar path and minimal verified goal
+        run: |
+          node <<'NODE'
+          const fs=require("node:fs"),assert=require("node:assert/strict");
+          const admin=fs.readFileSync("app/(admin)/assistance-requests.tsx","utf8");
+          const donations=fs.readFileSync("app/(admin)/donation-list.tsx","utf8");
+          const resident=fs.readFileSync("app/(tabs)/donation.tsx","utf8");
+          for(const text of [
+            'Start Monetary Fundraising','Amount to raise (PHP) *','What is this funding for? *',
+            'approve_donation_budget','confirmedExistingAssistanceAmount: 0',
+            'resource_assessment','supportDecision: "donation_support"',
+            'router.push({ pathname: "/donation-list"',
+            'Publish Assistance Appeal', 'Close Published Appeal'
+          ]) assert(admin.includes(text),'Missing restored original support path: '+text);
+          assert(!admin.includes('assistanceBudgetFields'),'Long removed budget form is back');
+          for(const text of ['assistanceSourceIsEligible','monetaryGoal','verifiedAmountReceived','Publish Donation Campaign']){
+            assert(donations.includes(text),'Missing existing donation publishing: '+text);
+          }
+          assert(resident.includes('Verified Community Assistance Appeals'),'Existing appeals unexpectedly removed');
+          console.log("PASS original monetary Donation Campaign and separate appeal can coexist before funded campaign publication");
+          NODE
+      - run: npx tsc --noEmit --pretty false
+      - run: npx expo export --platform web
