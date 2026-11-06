@@ -7,6 +7,7 @@ import CommunityEventPinPicker from "../../components/CommunityEventPinPicker";
 import CommunityEventLiveLocation from "../../components/CommunityEventLiveLocation";
 import CommunityEventRoadMap from "../../components/CommunityEventRoadMap";
 import CommunityEventHeroArt from "../../components/CommunityEventHeroArt";
+import CommunityEventRoster from "../../components/volunteers/CommunityEventRoster";
 import { router } from "expo-router";
 import {
   collection,
@@ -2278,6 +2279,13 @@ export default function CommunityEventsScreen() {
                  ? "This event's date has passed. Ask Admin for a new schedule."
                  : "This event is closed for new volunteers."}</Text>
             </View>}
+            {isVolunteer && user && (
+              <CommunityEventRoster
+                eventId={event.id}
+                viewer={user}
+                participantsCount={Number(event.participantsCount || 0)}
+              />
+            )}
             {/* The organizer's live GPS is private and shown ONLY after Join.
                 The public event location and route stay available separately. */}
             {isVolunteer && joined && (
