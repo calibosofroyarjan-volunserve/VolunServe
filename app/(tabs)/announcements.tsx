@@ -27,6 +27,7 @@ import {
 import {
   useUserSession,
 } from "../../lib/useUserSession";
+import { usePublishedAnnouncementCutoff } from "../../lib/usePublishedAnnouncementCutoff";
 
 type Announcement = {
   id: string;
@@ -52,6 +53,7 @@ export default function AnnouncementsScreen() {
     loading: sessionLoading,
   } = useUserSession();
 
+  const announcementCutoff = usePublishedAnnouncementCutoff();
   const [announcements, setAnnouncements] =
     useState<Announcement[]>([]);
 
@@ -74,7 +76,7 @@ export default function AnnouncementsScreen() {
       where(
         "publishAt",
         "<=",
-        Timestamp.now()
+        Timestamp.fromDate(announcementCutoff)
       ),
       orderBy(
         "publishAt",
@@ -157,7 +159,7 @@ export default function AnnouncementsScreen() {
     );
 
     return unsubscribe;
-  }, []);
+  }, [announcementCutoff]);
 
   const visibleAnnouncements = announcements;
 
