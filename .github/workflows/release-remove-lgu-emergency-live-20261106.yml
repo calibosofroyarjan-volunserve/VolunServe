@@ -1,0 +1,99 @@
+name: Remove Retired LGU Personnel from Live Emergency Response - Hosting ONLY
+on:
+  push:
+    branches:
+      - fix/remove-lgu-personnel-emergency-only-20261106
+    paths:
+      - '.github/workflows/release-remove-lgu-emergency-live-20261106.yml'
+permissions:
+  contents: read
+concurrency:
+  group: volunserve-production-hosting-release
+  cancel-in-progress: false
+jobs:
+  guarded-admin-volunteer-emergency:
+    if: github.repository == 'calibosofroyarjan-volunserve/VolunServe'
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    env:
+      LIVE_BASE: a5fb8e3bd54cf321bb26cf364ed598a2fe84e055
+      FIREBASE_SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_VOLUNSERVE_3AA5B || secrets.FIREBASE_SERVICE_ACCOUNT }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Verify only current Emergency Reports screen changed
+        shell: bash
+        run: |
+          set -euo pipefail
+          git merge-base --is-ancestor "$LIVE_BASE" HEAD
+          node <<'NODE'
+          const fs=require('node:fs'),cp=require('node:child_process'),assert=require('node:assert/strict');
+          const files=cp.execFileSync('git',['diff','--name-only',process.env.LIVE_BASE,'HEAD'],{encoding:'utf8'}).trim().split('\n').sort();
+          assert.deepEqual(files,[
+            '.github/workflows/release-remove-lgu-emergency-live-20261106.yml',
+            'app/(admin)/admin-cases.tsx'
+          ],'STOP: protected modules modified');
+          const s=fs.readFileSync('app/(admin)/admin-cases.tsx','utf8');
+          for(const term of [
+            '/api/admin/lgu/personnel','/api/admin/lgu/assignments','/api/admin/lgu/field-reports',
+            'loadLguPersonnel','loadLguFieldReports','assignLguPersonnelToCase',
+            'official LGU response takes priority','LGU Field Report Review Required',
+            'Start / Open Critical LGU Live Response'
+          ]) assert(!s.includes(term),'Retired Emergency LGU flow still present: '+term);
+          for(const term of [
+            'const assignVolunteerToCase = async','const reviewVolunteerFieldReport = async',
+            'const changeCaseStatus = async','Volunteer Task Status',
+            'Send Volunteer Task Offers','EmergencyIncidentMap','Close Case',
+            'residentConfirmationStatus','responderLocks','responseLocations'
+          ]) assert(s.includes(term),'STOP: missing protected Volunteer/Emergency feature: '+term);
+          assert(s.includes('contact 911 or authorized emergency services'),'Critical notice must explain urgent official assistance');
+          const bell=fs.readFileSync('components/home/Home.web.tsx','utf8');
+          assert(bell.includes('setNotificationMenuOpen(open => !open)'),'Latest notification dropdown missing');
+          const announcements=fs.readFileSync('app/(admin)/create-announcement.tsx','utf8');
+          assert(announcements.includes('collection(db, "announcements"'),'Announcement publisher missing');
+          console.log('PASS retired LGU Personnel removed from Admin Emergency screen; Volunteer and core production modules retained');
+          NODE
+      - name: Verify latest live production revision first; reject stale snapshot
+        env:
+          VOLUNSERVE_HOSTING_URL: https://volunserve.com
+          VOLUNSERVE_EXPECTED_SHA: ${{ env.LIVE_BASE }}
+        run: node scripts/check-live-hosting.cjs
+      - name: Install exact package-lock dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Validate Admin navigation, types, clean web build
+        run: |
+          node scripts/test-admin-navigation-contract.cjs
+          node scripts/test-lgu-admin-navigation-groups.cjs
+          node scripts/test-final-admin-scope.cjs
+          npx tsc --noEmit --incremental false
+          npx expo export --platform web --clear
+          node scripts/verify-hosting-release.cjs
+      - name: Recheck live base and credentials immediately before publish
+        env:
+          VOLUNSERVE_HOSTING_URL: https://volunserve.com
+          VOLUNSERVE_EXPECTED_SHA: ${{ env.LIVE_BASE }}
+        run: |
+          test -n "$FIREBASE_SA" || { echo "::error::Missing credentials"; exit 1; }
+          node scripts/check-live-hosting.cjs
+      - name: Deploy Hosting ONLY, never touch Auth, rules, users, data, Render, or Cloud Functions
+        uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          firebaseServiceAccount: ${{ env.FIREBASE_SA }}
+          projectId: volunserve-3aa5b
+          channelId: live
+      - name: Verify new exact live revision
+        env:
+          VOLUNSERVE_HOSTING_URL: https://volunserve.com
+          VOLUNSERVE_EXPECTED_SHA: ${{ github.sha }}
+        run: |
+          for i in 1 2 3 4 5 6; do
+            if node scripts/check-live-hosting.cjs; then exit 0; fi
+            sleep 10
+          done
+          echo "::error::Live revision could not be verified"; exit 1
