@@ -9,6 +9,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { db } from "../../lib/firebase";
 import { activeModeForProfile } from "../../lib/firebaseAuth";
+import { useAnnouncementAlerts } from "../../lib/useAnnouncementAlerts";
 import { useUserSession } from "../../lib/useUserSession";
 
 type InboxItem = {
@@ -105,6 +106,7 @@ export default function NotificationDropdown({ variant = "default" }: { variant?
   const [open, setOpen] = useState(false);
   const [showUnreadOnly, setShowUnreadOnly] = useState(false);
   const [items, setItems] = useState<InboxItem[]>([]);
+  const { alerts: announcementAlerts, markAnnouncementRead } = useAnnouncementAlerts();
   const [loading, setLoading] = useState(!!uid);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
@@ -133,24 +135,35 @@ export default function NotificationDropdown({ variant = "default" }: { variant?
   }, [uid]);
 
   useEffect(() => { setOpen(false); }, [uid]);
-  const unread = useMemo(() => items.filter(item => !item.read).length, [items]);
-  const shown = useMemo(() => (showUnreadOnly ? items.filter(item => !item.read) : items).slice(0, 5),
-    [items, showUnreadOnly]);
+  // A published announcement is also a bell item even when no Cloud Function
+  // has created a private notification document. Avoid showing duplicates.
+  const allItems = useMemo(() => {
+    const notified = new Set(items.map(item => item.announcementId).filter(Boolean));
+    return [...items, ...announcementAlerts.filter(item => !notified.has(item.announcementId))]
+      .sort((a, b) => toTime(b.createdAt) - toTime(a.createdAt));
+  }, [items, announcementAlerts]);
+  const unread = useMemo(() => allItems.filter(item => !item.read).length, [allItems]);
+  const shown = useMemo(() => (showUnreadOnly ? allItems.filter(item => !item.read) : allItems).slice(0, 5),
+    [allItems, showUnreadOnly]);
 
   const openItem = (item: InboxItem) => {
     if (!uid || item.userId !== uid) return;
     const destination = destinationFor(item, volunteerMode);
     setOpen(false);
     if (!item.read) {
-      void updateDoc(doc(db, "notifications", item.id), { read: true })
-        .catch(() => { /* Navigation works even if read status cannot be saved. */ });
+      if (item.id.startsWith("feed_announcement_")) {
+        void markAnnouncementRead(item.id);
+      } else {
+        void updateDoc(doc(db, "notifications", item.id), { read: true })
+          .catch(() => { /* Navigation works even if read status cannot be saved. */ });
+      }
     }
     router.push(destination);
   };
 
   const markAllRead = async () => {
     if (!uid || saving) return;
-    const targets = items.filter(item => item.userId === uid && !item.read);
+    const targets = allItems.filter(item => item.userId === uid && !item.read);
     if (!targets.length) return;
     setSaving(true);
     setError("");
@@ -158,7 +171,9 @@ export default function NotificationDropdown({ variant = "default" }: { variant?
     try {
       for (let start = 0; start < targets.length; start += 15) {
         const results = await Promise.allSettled(targets.slice(start, start + 15)
-          .map(item => updateDoc(doc(db, "notifications", item.id), { read: true })));
+          .map(item => item.id.startsWith("feed_announcement_")
+            ? markAnnouncementRead(item.id)
+            : updateDoc(doc(db, "notifications", item.id), { read: true })));
         failed += results.filter(result => result.status === "rejected").length;
       }
       if (failed) setError("Some updates couldn't be marked as read. Please try again.");
