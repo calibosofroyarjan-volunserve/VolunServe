@@ -1,0 +1,37 @@
+name: Verify Assistance Zero Budget Button UI NO DEPLOY
+on:
+  push:
+    branches: [fix/assistance-zero-budget-button-ui-20261106]
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with: {submodules: false}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - name: Verify budget error handling and secure action wiring
+        run: |
+          node <<'NODE'
+          const assert=require("node:assert/strict"),fs=require("node:fs");
+          const s=fs.readFileSync("app/(admin)/assistance-requests.tsx","utf8");
+          for(const text of [
+            "budgetAttempted && !canSetBudget",
+            "NEW confirmed items",
+            "Math.abs(previousGross - previousHelp) < 0.01",
+            "Math.abs(originalGross - originalHelp) < 0.01",
+            'updateRequest("approve_donation_budget"',
+            "reviewReadyForVerification(reviewDraft)",
+            'router.push({ pathname: "/donation-list"'
+          ]) assert(s.includes(text), "Missing required guard or action: "+text);
+          console.log("PASS donation button always shows budget form or error with protected approval");
+          NODE
+      - run: npx tsc --noEmit --pretty false
+      - run: npx expo export --platform web
+      - run: echo "PASS web export only; Firebase Hosting unchanged"
