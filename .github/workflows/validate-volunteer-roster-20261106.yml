@@ -1,0 +1,47 @@
+name: Validate Volunteer Join And Privacy-Safe Event Roster (No Deploy)
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'backend/communityEventRoster.js'
+      - 'backend/test-communityEventRoster.js'
+      - 'backend/server.js'
+      - 'components/volunteers/CommunityEventRoster.tsx'
+      - 'app/(tabs)/community-events.tsx'
+      - '.github/workflows/validate-volunteer-roster-20261106.yml'
+permissions:
+  contents: read
+jobs:
+  roster-and-join:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - name: Backend roster privacy and authorization
+        run: |
+          node --check backend/communityEventRoster.js
+          node --check backend/server.js
+          node backend/test-communityEventRoster.js
+      - name: Preserve original Join Event transactions and source
+        run: |
+          node scripts/test-volunteer-community-event-join-20261106.cjs
+          node - <<'NODE'
+          const fs=require('fs'),assert=require('assert/strict');
+          const s=fs.readFileSync('app/(tabs)/community-events.tsx','utf8');
+          assert(s.includes('runTransaction('));
+          assert(s.includes('respondToEvent(event, "joined")'));
+          assert(s.includes('<CommunityEventRoster'));
+          assert(!s.includes('collection(db, "communityEventParticipants"), where("eventId"'),"Must never expose raw Firestore participant records to volunteers");
+          NODE
+      - name: TypeScript and Expo web export
+        run: |
+          npx tsc --noEmit --incremental false
+          npx expo export --platform web --clear
+          node scripts/verify-hosting-release.cjs
