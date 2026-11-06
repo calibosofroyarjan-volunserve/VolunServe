@@ -40,7 +40,7 @@ async function main(){
     const suspended=env.authenticatedContext("suspended-test").firestore();
     const published=await assertSucceeds(admin.collection("announcements").add(values()));
     await assertFails(suspended.collection("announcements").add({...values(),createdBy:"suspended-test"}));
-    const cutoff=firebase.firestore.Timestamp.fromDate(new Date(Date.now()+30000));
+    const cutoff=firebase.firestore.Timestamp.fromDate(new Date());
     const q=db=>db.collection("announcements").where("publishAt","<=",cutoff).orderBy("publishAt","desc");
     for(const [role,db] of [["Resident",resident],["Volunteer",volunteer]]){
       const updates=await assertSucceeds(q(db).get());
