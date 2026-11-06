@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
-import { Linking, Platform, Pressable, Text, TextInput, View } from "react-native";
+import { Platform, Pressable, Text, TextInput, View } from "react-native";
+import { isSjdmEventPoint } from "../lib/communityEventSjdmScope";
 import MapView, { Marker, PROVIDER_GOOGLE } from "react-native-maps";
 import { lookUpEventVenue } from "../lib/eventVenueLookup";
 
@@ -12,7 +13,7 @@ type Props = {
   onChange: (lat: number | null, lng: number | null) => void;
 };
 const CENTER: Venue = {latitude:14.8139,longitude:121.0453};
-const valid = (a: number,b: number) => Number.isFinite(a)&&Number.isFinite(b)&&a>=14.65&&a<=15.0&&b>=120.88&&b<=121.30;
+const valid = (a: number,b: number) => isSjdmEventPoint(a,b);
 const tidy = (latitude: number,longitude: number): Venue => ({
   latitude:Number(latitude.toFixed(6)),longitude:Number(longitude.toFixed(6)),
 });
@@ -90,10 +91,6 @@ export default function CommunityEventPinPicker({latitude,longitude,barangay="",
         title="Event Meeting Point"/>:null}
     </MapView>
     <View style={{flexDirection:"row",flexWrap:"wrap",gap:9,marginTop:11}}>
-      <Pressable onPress={()=>void Linking.openURL("https://www.google.com/maps/@14.8139,121.0453,13z")}
-        style={{padding:12,backgroundColor:"#E7F1FC",borderRadius:8}}>
-        <Text style={{fontSize:12,color:"#17628D",fontWeight:"800"}}>Find Venue in Google Maps ↗</Text>
-      </Pressable>
     </View>
     <Text style={{fontWeight:"800",fontSize:12,color:"#143F42",marginTop:13}}>Or enter exact coordinates</Text>
     <View style={{flexDirection:"row",gap:8,marginTop:7}}>
