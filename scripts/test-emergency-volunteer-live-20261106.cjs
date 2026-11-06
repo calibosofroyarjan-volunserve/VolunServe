@@ -5,7 +5,7 @@ const fs = require("node:fs");
 const { execFileSync } = require("node:child_process");
 
 const read = path => fs.readFileSync(path, "utf8");
-const baseline = "b7f1c0a0e8f12468ab7fbe6ae99407a6ed4aae5b";
+const baseline = "9d1de3eccdffe4b3699a894e730e657bd2f9e4b4";
 const allowed = new Set([
   "app/(admin)/_layout.tsx",
   "app/(admin)/admin-cases.tsx",
@@ -25,6 +25,7 @@ const allowed = new Set([
   "lib/emergencyTaskStatus.ts",
   "scripts/test-emergency-volunteer-live-20261106.cjs",
   ".github/workflows/validate-emergency-volunteer-live-20261106.yml",
+  ".github/workflows/release-admin-emergency-ui-live-20261106.yml",
   ".github/workflows/release-emergency-volunteer-hosting-only-20261106.yml",
   "scripts/test-clean-emergency-report-header.cjs",
   "scripts/test-isolated-emergency-volunteer-release.cjs",
@@ -60,7 +61,7 @@ test("Admin directly coordinates approved Volunteers and verifies completion", (
     "const confirmVolunteerCompletion = async",
     'fieldSnapshot.data().reportStatus !== "reviewed"',
     "Volunteer Completion Reports",
-    "Confirm Volunteer Completion",
+    "Review & Resolve Case",
     "emergencyTaskStatusLabel",
     'pageFive(activeAssignments, activeAssignmentPage)',
     "doc(collection(db, \"notifications\"))",
