@@ -1,0 +1,94 @@
+name: Verify Live Resident and Volunteer Announcement Display - No Production Writes
+on:
+  push:
+    branches: [verify/live-resident-volunteer-announcement-display-20261106]
+    paths:
+      - .github/workflows/verify-live-resident-volunteer-announcements-20261106.yml
+permissions:
+  contents: read
+jobs:
+  active-policy-role-display:
+    if: github.repository == 'calibosofroyarjan-volunserve/VolunServe'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      FIREBASE_SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_VOLUNSERVE_3AA5B || secrets.FIREBASE_SERVICE_ACCOUNT }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Require no production application changes or stale baseline
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const fs=require('fs'),assert=require('node:assert/strict');
+          for(const p of ['app/(admin)/create-announcement.tsx','app/(tabs)/announcements.tsx','app/(tabs)/notifications.tsx','lib/announcementAlerts.ts','lib/usePublishedAnnouncementCutoff.ts']){
+            assert(fs.existsSync(p),'Missing live announcement module '+p);
+          }
+          const publisher=fs.readFileSync('app/(admin)/create-announcement.tsx','utf8');
+          const feed=fs.readFileSync('app/(tabs)/announcements.tsx','utf8');
+          const notifications=fs.readFileSync('app/(tabs)/notifications.tsx','utf8');
+          const alerts=fs.readFileSync('lib/announcementAlerts.ts','utf8');
+          assert(publisher.includes('audience: "all"') && publisher.includes('collection(db, "announcements"'));
+          assert(feed.includes('collection(db, "announcements"') && feed.includes('onSnapshot('));
+          assert(notifications.includes('useAnnouncementAlerts(uid)'));
+          assert(alerts.includes('collection(db, "announcements"') && alerts.includes('onSnapshot('));
+          console.log('PASS same live announcement collection is used by Admin, Updates and Notifications');
+          NODE
+          test -n "$FIREBASE_SA"
+      - name: Verify expected live Hosting revision without cache
+        env:
+          VOLUNSERVE_HOSTING_URL: https://volunserve.com
+          VOLUNSERVE_EXPECTED_SHA: 6339a61645f831ac5786ca58e30165bf66e421f9
+        run: node scripts/check-live-hosting.cjs
+      - name: Install locked dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Get only active live Firestore rules (read-only)
+        uses: google-github-actions/auth@v3
+        with:
+          credentials_json: ${{ env.FIREBASE_SA }}
+          project_id: volunserve-3aa5b
+      - uses: google-github-actions/setup-gcloud@v3
+      - name: Download currently active announcement policy into temporary file
+        shell: bash
+        run: |
+          set -euo pipefail
+          TOKEN="$(gcloud auth print-access-token)"
+          export TOKEN
+          node <<'NODE'
+          const fs=require('fs');
+          const headers={Authorization:'Bearer '+process.env.TOKEN};
+          (async()=>{
+            const base='https://firebaserules.googleapis.com/v1/';
+            const get=async p=>{
+              const r=await fetch(base+p,{headers});
+              if(!r.ok)throw Error('Read-only active rules fetch failed: '+r.status);
+              return r.json();
+            };
+            const active=await get('projects/volunserve-3aa5b/releases/cloud.firestore');
+            if(!active.rulesetName)throw Error('No active Firestore ruleset');
+            const rules=await get(active.rulesetName);
+            const files=rules.source?.files;
+            if(!Array.isArray(files)||files.length!==1||!files[0].content)throw Error('Unexpected ruleset shape');
+            const source=files[0].content;
+            if(!source.includes('match /announcements/{announcementId}'))throw Error('Missing announcement policy');
+            fs.writeFileSync('/tmp/volunserve-active-test-firestore.rules',source);
+            console.log('Retrieved active live Firestore rule snapshot for LOCAL testing only');
+          })().catch(e=>{console.error(e.message);process.exit(1)});
+          NODE
+      - name: Emulate Resident and Volunteer feed permissions with active live policy
+        env:
+          ACTIVE_FIRESTORE_RULES: /tmp/volunserve-active-test-firestore.rules
+        run: npx firebase-tools emulators:exec --only firestore --project demo-volunserve "node scripts/test-live-announcement-role-display-20261106.cjs"
+      - name: Confirm deployed site was not changed during test
+        env:
+          VOLUNSERVE_HOSTING_URL: https://volunserve.com
+          VOLUNSERVE_EXPECTED_SHA: 6339a61645f831ac5786ca58e30165bf66e421f9
+        run: node scripts/check-live-hosting.cjs
