@@ -62,14 +62,13 @@ assert(incident.includes('detailTab === "map" && Platform.OS === "web"') &&
 
 const announce = read("app/(admin)/create-announcement.tsx");
 const rules = read("firestore.rules");
-assert(announce.includes('accessibilityLabel="Choose authorized announcement barangay"') &&
-       announce.includes("cleanMessage.length < 10") &&
-       announce.includes("audience: publishBarangay") &&
-       announce.includes("publishBarangay !== barangay"),
-       "LGU announcement selector must not grant cross-barangay publishing");
-assert(rules.includes("request.resource.data.audience == profile().barangay") &&
+assert(announce.includes("cleanMessage.length < 10") &&
+       announce.includes('audience: "all"') &&
+       !announce.includes('publishBarangay !== barangay'),
+       "Admin announcement publishing must be community-wide without barangay input");
+assert(rules.includes('request.resource.data.audience == "all"') &&
        rules.includes("request.resource.data.message.size() >= 10"),
-       "Announcement backend must match UI scope and validation");
+       "Announcement backend must enforce global audience and message validation");
 const superAdmin = read("app/(superadmin)/_layout.tsx");
 assert(superAdmin.includes('accessibilityLabel="Super Admin profile dropdown"'),"Keep approved Super Admin UI");
 assert(read("app/signup.web.tsx").includes("verification link"),"Keep signup verification");

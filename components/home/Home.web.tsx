@@ -33,6 +33,8 @@ import {
   setActiveUserMode,
 } from "../../lib/firebaseAuth";
 import { useUserSession } from "../../lib/useUserSession";
+import { usePublishedAnnouncementCutoff } from "../../lib/usePublishedAnnouncementCutoff";
+import { useAnnouncementAlerts } from "../../lib/announcementAlerts";
 
 type Announcement = {
   id: string;
@@ -139,6 +141,8 @@ export default function WebHome() {
   const router = useRouter();
   const { width } = useWindowDimensions();
   const { user, profile } = useUserSession();
+  const announcementCutoff = usePublishedAnnouncementCutoff();
+  const { items: announcementAlerts } = useAnnouncementAlerts(user?.uid);
 
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [cases, setCases] = useState<DisasterCase[]>([]);
@@ -190,7 +194,7 @@ export default function WebHome() {
   useEffect(() => {
     const announcementsQuery = query(
       collection(db, "announcements"),
-      where("publishAt", "<=", Timestamp.now()),
+      where("publishAt", "<=", Timestamp.fromDate(announcementCutoff)),
       orderBy("publishAt", "desc")
     );
 
@@ -201,19 +205,13 @@ export default function WebHome() {
           .map((item) => ({
             id: item.id,
             ...(item.data() as Omit<Announcement, "id">),
-          }))
-          .filter(
-            (item) =>
-              !item.audience ||
-              item.audience === "all" ||
-              item.audience === profile?.role
-          );
+          }));
 
         setAnnouncements(nextAnnouncements);
       },
       () => setAnnouncements([])
     );
-  }, [profile?.role]);
+  }, [announcementCutoff]);
 
   useEffect(() => {
     if (!user) {
@@ -403,8 +401,8 @@ export default function WebHome() {
   const latestAssignment = assignments[0];
 
   const unreadCount = useMemo(
-    () => notifications.filter((item) => !item.read).length,
-    [notifications]
+    () => notifications.filter((item) => !item.read).length + announcementAlerts.filter((item) => !item.read).length,
+    [notifications, announcementAlerts]
   );
 
   const reportStatus = latestCase

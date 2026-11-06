@@ -10,7 +10,7 @@ if (!process.env.FIRESTORE_EMULATOR_HOST) {
  process.exit(1);
 }
 const stamp = () => firebase.firestore.FieldValue.serverTimestamp();
-const doc = (adminUid, area, message = "Official barangay advisory confirmed for public residents.") => ({
+const doc = (adminUid, area, message = "Official community advisory confirmed for residents and volunteers.") => ({
   title: "Community Advisory",
   message, audience: area, priority: "normal",
   publishAt: stamp(), linkUrl: "", imageUrl: "",
@@ -34,13 +34,13 @@ const doc = (adminUid, area, message = "Official barangay advisory confirmed for
   const suspended=env.authenticatedContext("pavia-suspended").firestore();
   const resident=env.authenticatedContext("pavia-resident").firestore();
   const missing=env.authenticatedContext("pavia-unassigned").firestore();
-  await assertSucceeds(valid.collection("announcements").add(doc("pavia-admin","Muzon")));
+  await assertSucceeds(valid.collection("announcements").add(doc("pavia-admin","all")));
   await assertFails(valid.collection("announcements").add(doc("pavia-admin","Tungko")));
-  await assertFails(valid.collection("announcements").add(doc("pavia-admin","Muzon","Too short")));
-  await assertFails(suspended.collection("announcements").add(doc("pavia-suspended","Muzon")));
-  await assertFails(resident.collection("announcements").add(doc("pavia-resident","Muzon")));
-  await assertFails(missing.collection("announcements").add(doc("pavia-unassigned","Muzon")));
+  await assertFails(valid.collection("announcements").add(doc("pavia-admin","all","Too short")));
+  await assertFails(suspended.collection("announcements").add(doc("pavia-suspended","all")));
+  await assertFails(resident.collection("announcements").add(doc("pavia-resident","all")));
+  await assertSucceeds(missing.collection("announcements").add(doc("pavia-unassigned","all")));
   await assertSucceeds(valid.collection("announcements").get());
-  console.log("PASS actual Firestore announcement publishing: assigned barangay only, min length, admin access");
+  console.log("PASS Firestore community-wide Admin announcements without barangay, min length, role access");
  }finally {await env.cleanup();}
 })().catch(e=>{console.error(e);process.exit(1)});
