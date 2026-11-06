@@ -10,6 +10,7 @@ import cv2
 import mediapipe as mp
 import pytesseract
 from document_screening import assess_document_text, document_ocr_unavailable
+from id_portrait_selection import has_clear_primary_id_portrait
 import numpy as np
 from fastapi import FastAPI, Header, HTTPException, Request
 from starlette.datastructures import UploadFile as StarletteUploadFile
@@ -424,6 +425,8 @@ def image_quality(
 
 def largest_face_crop(
     image,
+    *,
+    for_government_id=False,
 ):
     gray = cv2.cvtColor(
         image,
@@ -443,18 +446,25 @@ def largest_face_crop(
         minSize=(60, 60),
     )
     if len(faces) == 0:
-        return image, 0
+        return image, 0, False
     x, y, width, height = max(
         faces,
         key=lambda item: (
             item[2] * item[3]
         ),
     )
+    # A genuine National ID can show a smaller ghost/security portrait.
+    # Never use this exception for selfies or comparable-size face images.
+    clear_id_primary = (
+        for_government_id
+        and len(faces) > 1
+        and has_clear_primary_id_portrait(faces)
+    )
     margin_x = int(
-        round(width * 0.35)
+        round(width * (0.14 if clear_id_primary else 0.35))
     )
     margin_y = int(
-        round(height * 0.45)
+        round(height * (0.20 if clear_id_primary else 0.45))
     )
     x0 = max(
         0,
@@ -475,19 +485,24 @@ def largest_face_crop(
     return (
         image[y0:y1, x0:x1].copy(),
         len(faces),
+        clear_id_primary,
     )
 
 
 def face_landmarks(
     image,
+    *,
+    for_government_id=False,
 ):
-    face_crop, detected_count = (
+    face_crop, detected_count, clear_id_primary = (
         largest_face_crop(
-            image
+            image,
+            for_government_id=for_government_id,
         )
     )
-    # Preserve the full-image multiple-face finding before cropping.
-    if detected_count > 1:
+    # Ignore only a clearly smaller ID security portrait. Reject ambiguous
+    # multi-person ID photos, and ALWAYS require a single-face selfie.
+    if detected_count > 1 and not clear_id_primary:
         return None, {
             "faceCount": detected_count,
             "reason": "multiple_faces",
@@ -929,7 +944,8 @@ def run_face_verification(
     )
     id_landmarks, id_meta = (
         face_landmarks(
-            id_image
+            id_image,
+            for_government_id=True,
         )
     )
     selfie_landmarks, selfie_meta = (
