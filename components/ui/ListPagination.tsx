@@ -19,7 +19,8 @@ export default function ListPagination({
   const safePageSize = Number.isFinite(pageSize) ? Math.max(1, Math.floor(pageSize)) : 5;
   const recordCount = Number.isFinite(total) ? Math.max(0, Math.floor(total)) : 0;
   const pages = Math.max(1, Math.ceil(recordCount / safePageSize));
-  const safePage = Math.max(1, Math.min(page, pages));
+  const requestedPage = Number.isFinite(page) ? Math.floor(page) : 1;
+  const safePage = Math.max(1, Math.min(requestedPage, pages));
   const first = recordCount === 0 ? 0 : (safePage - 1) * safePageSize + 1;
   const last = Math.min(recordCount, safePage * safePageSize);
   const firstButton = Math.max(1, Math.min(safePage - 1, pages - 2));
