@@ -1591,7 +1591,7 @@ export default function CommunityEventsScreen() {
           const current = eventDoc.data();
 
           // Recheck the actual event schedule; the list might be stale.
-          if (current.status === "upcoming" && eventScheduleHasPassed(current)) {
+          if (current.status === "upcoming" && eventScheduleHasPassed({ status: String(current.status || ""), date: String(current.date || ""), time: String(current.time || ""), endTime: String(current.endTime || "") })) {
             throw new Error("This event's date has passed. Ask Admin to publish a new schedule.");
           }
 
