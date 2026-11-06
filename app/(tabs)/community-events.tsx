@@ -3,6 +3,8 @@ import { LinearGradient } from "expo-linear-gradient";
 import {useFonts} from "expo-font";
 import {Inter_400Regular,Inter_500Medium,Inter_600SemiBold,Inter_700Bold,Inter_800ExtraBold} from "@expo-google-fonts/inter";
 import * as ImagePicker from "expo-image-picker";
+import * as Location from "expo-location";
+import { isSjdmEventPoint } from "../../lib/communityEventSjdmScope";
 import CommunityEventPinPicker from "../../components/CommunityEventPinPicker";
 import CommunityEventLiveLocation from "../../components/CommunityEventLiveLocation";
 import CommunityEventRoadMap from "../../components/CommunityEventRoadMap";
@@ -415,25 +417,12 @@ const eventDestination = (event: CommunityEvent): string => {
 const eventHasCoordinates = (event: CommunityEvent): boolean => {
   const lat = Number(event.coordinates?.latitude ?? event.latitude);
   const lng = Number(event.coordinates?.longitude ?? event.longitude);
-  return Number.isFinite(lat) && lat >= -90 && lat <= 90 &&
-    Number.isFinite(lng) && lng >= -180 && lng <= 180;
+  return isSjdmEventPoint(lat, lng);
 };
-
-const googleMapsViewUrl = (event: CommunityEvent) =>
-  `https://maps.google.com/maps?q=${encodeURIComponent(eventDestination(event))}&z=15&output=embed`;
-
-const googleMapsDirectionsUrl = (event: CommunityEvent) =>
-  `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(eventDestination(event))}`;
-
-const googleMapsSearchUrl = (event: CommunityEvent) =>
-  `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(eventDestination(event))}`;
 
 // Browser GPS is requested only when a visitor explicitly asks for directions.
 // OpenFreeMap / OSRM works without a Google Maps Embed API key.
 type RouteOrigin = { latitude: number; longitude: number };
-
-const googleMapsNavigationUrl = (event: CommunityEvent) =>
-  `${googleMapsDirectionsUrl(event)}&travelmode=driving&dir_action=navigate`;
 
 const prettyAttendanceTime = (timestamp: unknown): string => {
   const time = getTime(timestamp);
@@ -1328,8 +1317,9 @@ export default function CommunityEventsScreen() {
       setNotice("At least one event site evidence photo is required. Upload Main Photo or supply a valid HTTPS image link.");
       return;
     }
-    if (form.latitude === null || form.longitude === null) {
-      setNotice("Set the exact GPS meeting point by tapping the map or using the venue's GPS.");
+    if (form.latitude === null || form.longitude === null ||
+        !isSjdmEventPoint(form.latitude, form.longitude)) {
+      setNotice("Confirm an exact event meeting-point pin inside the City of San Jose del Monte.");
       return;
     }
 
@@ -2451,10 +2441,8 @@ export default function CommunityEventsScreen() {
     </View>;
   };
 
-  // Route preview uses the supported Google Maps Embed API when configured.
-  // Otherwise the old address-based map continues to show the real saved venue.
+  // Render the event's embedded map on web and native. Never navigate away from VolunServe.
   const renderWebMap = (event: CommunityEvent) => {
-    if (Platform.OS !== "web") return null;
     if (eventHasCoordinates(event)) {
       return (
         <CommunityEventRoadMap
@@ -2471,13 +2459,7 @@ export default function CommunityEventsScreen() {
         />
       );
     }
-    return React.createElement("iframe" as any, {
-      key: `${event.id}-approximate`,
-      title: `Approximate venue search for ${event.title}`,
-      src: googleMapsViewUrl(event), loading: "lazy",
-      referrerPolicy: "strict-origin-when-cross-origin",
-      style: { display: "block", width: "100%", height: "270px", border: "0", borderRadius: "11px" },
-    });
+    return <Text style={styles.lockedMapWarning}>The exact SJDM event meeting-point pin is awaiting confirmation. No unverified route is shown.</Text>;
   };
 
   return (
