@@ -45,7 +45,7 @@ export default function CreateAnnouncement() {
   const ANNOUNCEMENT_TEMPLATES = [
     { label: "Community Event Reminder", title: "Community Event Reminder", body: "Residents and volunteers are invited to check the published community event details and schedule in VolunServe." },
     { label: "Volunteer Schedule Update", title: "Volunteer Schedule Update", body: "Volunteers, please review your assigned activities and any schedule updates in VolunServe." },
-    { label: "Public Service Advisory", title: "Public Service Advisory", body: "Please review the latest official barangay service advisory and follow instructions from authorized LGU personnel." },
+    { label: "Public Service Advisory", title: "Public Service Advisory", body: "Please review the latest official community service advisory and follow instructions from authorized personnel." },
   ];
 
   const [submitting, setSubmitting] =
