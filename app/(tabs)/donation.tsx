@@ -108,6 +108,20 @@ type DonationCampaign = {
   handoffNotes?: string;
 };
 
+type PublicAssistanceAppeal = {
+  id: string;
+  title: string;
+  category: string;
+  description: string;
+  generalArea: string;
+  supportType: "in_kind_coordination";
+  publicPhotoUrl?: string;
+  publicOfficeName?: string;
+  publicOfficeAddress?: string;
+  paymentEnabled: false;
+  publishedAt: number;
+};
+
 type MyDonation = {
   id: string;
   campaignId?: string;
@@ -426,6 +440,8 @@ export default function Donation() {
   const { loading, user, profile } = useUserSession();
 
   const [campaigns, setCampaigns] = useState<DonationCampaign[]>([]);
+  const [assistanceAppeals, setAssistanceAppeals] = useState<PublicAssistanceAppeal[]>([]);
+  const [appealRefreshCount, setAppealRefreshCount] = useState(0);
   const [myDonations, setMyDonations] = useState<MyDonation[]>([]);
   const [campaignsReady, setCampaignsReady] = useState(false);
   const [historyReady, setHistoryReady] = useState(false);
@@ -498,6 +514,25 @@ export default function Donation() {
 
     return unsubscribe;
   }, [user?.uid, canUseDonationPage]);
+
+  // Public non-monetary appeals are separate from paid Donation Campaigns.
+  useEffect(() => {
+    if (!user || !canUseDonationPage) return;
+    let active = true;
+    const load = async () => {
+      try {
+        const response = await fetch("https://volunserve.onrender.com/api/public/assistance/appeals");
+        if (!response.ok) throw new Error("Assistance appeals are temporarily unavailable");
+        const payload = await response.json();
+        if (!payload?.ok || !Array.isArray(payload.appeals)) throw new Error("Invalid public appeals response");
+        if (active) setAssistanceAppeals(payload.appeals.slice(0, 50));
+      } catch (error) {
+        console.log("Public assistance appeal feed temporarily unavailable", error);
+      }
+    };
+    void load();
+    return () => { active = false; };
+  }, [user?.uid, canUseDonationPage, appealRefreshCount]);
 
   useEffect(() => {
     if (!user || !canUseDonationPage) return;
@@ -951,6 +986,47 @@ export default function Donation() {
         <View style={styles.errorBox}>
           <Ionicons name="warning-outline" size={18} color="#B42318" />
           <Text style={styles.errorText}>{error}</Text>
+        </View>
+      )}
+
+      {!showHistory && !showCompletedCampaigns && filter !== "disaster_affected" &&
+        assistanceAppeals.filter((appeal) =>
+          [appeal.title, appeal.category, appeal.description].join(" ").toLowerCase().includes(searchText.toLowerCase().trim()),
+        ).length > 0 && (
+        <View style={{ backgroundColor: "#FFFFFF", padding: 18, borderRadius: 16, borderWidth: 1, borderColor: "#DCE9E3", gap: 12, marginBottom: 18 }}>
+          <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
+            <View style={{ gap: 4, flex: 1 }}>
+              <Text style={{ fontSize: 18, fontWeight: "800", color: "#16372B" }}>Verified Community Assistance Appeals</Text>
+              <Text style={{ fontSize: 12, color: "#526477", lineHeight: 18 }}>In-kind and LGU partner support only. These are not monetary donation campaigns.</Text>
+            </View>
+            <TouchableOpacity accessibilityRole="button" onPress={() => setAppealRefreshCount((count) => count + 1)}
+              style={{ borderRadius: 9, backgroundColor: "#EEF8F2", borderWidth: 1, borderColor: "#CCE5D5", paddingHorizontal: 13, paddingVertical: 9 }}>
+              <Text style={{ color: "#047857", fontSize: 12, fontWeight: "700" }}>Refresh</Text>
+            </TouchableOpacity>
+          </View>
+          {assistanceAppeals.filter((appeal) =>
+            [appeal.title, appeal.category, appeal.description].join(" ").toLowerCase().includes(searchText.toLowerCase().trim()),
+          ).map((appeal) => (
+            <View key={appeal.id} style={{ flexDirection: width < 600 ? "column" : "row", gap: 14, padding: 14, backgroundColor: "#F9FCFA", borderColor: "#E0EAE4", borderWidth: 1, borderRadius: 12 }}>
+              {String(appeal.publicPhotoUrl || "").startsWith("https://") ? (
+                <Image source={{ uri: appeal.publicPhotoUrl }} resizeMode="cover"
+                  style={{ width: width < 600 ? "100%" : 124, height: 112, borderRadius: 9 }} />
+              ) : (
+                <View style={{ width: width < 600 ? "100%" : 124, height: 112, borderRadius: 9, backgroundColor: "#E2F5E9", justifyContent: "center", alignItems: "center" }}>
+                  <Ionicons name="heart-outline" size={28} color="#047857" />
+                </View>
+              )}
+              <View style={{ flex: 1, gap: 6 }}>
+                <Text style={{ fontSize: 14, fontWeight: "800", color: "#17352A" }}>{appeal.title}</Text>
+                <Text style={{ fontSize: 12, color: "#586B64" }}>{appeal.generalArea}</Text>
+                <Text style={{ fontSize: 12, color: "#334155", lineHeight: 19 }}>{appeal.description}</Text>
+                <Text style={{ fontSize: 12, fontWeight: "700", color: "#047857" }}>
+                  {appeal.publicOfficeName ? "Coordinate with: " + appeal.publicOfficeName : "Coordinate with your local LGU office"}
+                </Text>
+                {!!appeal.publicOfficeAddress && <Text style={{ fontSize: 12, color: "#475569" }}>{appeal.publicOfficeAddress}</Text>}
+              </View>
+            </View>
+          ))}
         </View>
       )}
 
