@@ -23,7 +23,9 @@ for(const s of [native,web]){
   assert(s.includes("handleGoogleLogin") && s.includes('router.replace("/public")') && s.includes("PasswordResetDialog"),
     "Keep Google, Guest and Forgot Password flows");
 }
-assert(web.includes("connectGoogleAccountWeb") && native.includes("GoogleAuthProvider.credential"),
+assert(web.includes("useSignupGoogle") && native.includes("useSignupGoogle") &&
+       read("lib/useSignupGoogle.web.ts").includes("signInWithPopup") &&
+       read("lib/useSignupGoogle.ts").includes("GoogleAuthProvider.credential"),
   "Native and web Google OAuth must be preserved for community accounts");
 assert(web.includes('profile.role === "admin" || profile.role === "superadmin"') &&
        native.includes('profile.role === "admin" || profile.role === "superadmin"'),
