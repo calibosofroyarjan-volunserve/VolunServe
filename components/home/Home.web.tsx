@@ -33,6 +33,7 @@ import {
   setActiveUserMode,
 } from "../../lib/firebaseAuth";
 import { useUserSession } from "../../lib/useUserSession";
+import { usePublishedAnnouncementCutoff } from "../../lib/usePublishedAnnouncementCutoff";
 import { useAnnouncementAlerts } from "../../lib/announcementAlerts";
 
 type Announcement = {
@@ -140,6 +141,7 @@ export default function WebHome() {
   const router = useRouter();
   const { width } = useWindowDimensions();
   const { user, profile } = useUserSession();
+  const announcementCutoff = usePublishedAnnouncementCutoff();
   const { items: announcementAlerts } = useAnnouncementAlerts(user?.uid);
 
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
@@ -192,7 +194,7 @@ export default function WebHome() {
   useEffect(() => {
     const announcementsQuery = query(
       collection(db, "announcements"),
-      where("publishAt", "<=", Timestamp.now()),
+      where("publishAt", "<=", Timestamp.fromDate(announcementCutoff)),
       orderBy("publishAt", "desc")
     );
 
@@ -209,7 +211,7 @@ export default function WebHome() {
       },
       () => setAnnouncements([])
     );
-  }, []);
+  }, [announcementCutoff]);
 
   useEffect(() => {
     if (!user) {
