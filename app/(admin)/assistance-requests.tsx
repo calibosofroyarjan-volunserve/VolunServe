@@ -61,7 +61,6 @@ type ReviewTab =
 
 type ReviewStage = "checks" | "costs" | "residency" | "decision" | "support";
 type ReviewStageFocus = { stage: ReviewStage; ticket: number };
-type DonationBudgetDraft = { total: string; alreadyReceived: string; basis: string };
 
 type StoredDocument = {
   documentType?: string;
@@ -1519,7 +1518,6 @@ export default function AssistanceRequestsAdmin() {
   const continueToDonationCampaign = async (
     publicOfficeName: string,
     publicOfficeAddress: string,
-    budget: DonationBudgetDraft,
   ): Promise<boolean> => {
     if (!selected || selected.verificationStatus !== "verified" || !verificationReview) {
       Alert.alert("Review first", "This request must be verified before setting up donations.");
@@ -1529,39 +1527,15 @@ export default function AssistanceRequestsAdmin() {
       router.push({ pathname: "/donation-list", params: { assistanceRequestId: selected.id } } as any);
       return true;
     }
-    let verifiedAmount = Number(verificationReview.verifiedUncoveredAmount || 0);
+    const verifiedAmount = Number(verificationReview.verifiedUncoveredAmount || 0);
     if (!Number.isFinite(verifiedAmount) || verifiedAmount <= 0) {
-      const previousGross = Number(verificationReview.verifiedGrossCost || 0);
-      const previousHelp = Number(verificationReview.confirmedExistingAssistanceAmount || 0);
-      const canApprove = !selected.donationCampaignId &&
-        String(selected.status || "verified").toLowerCase() === "verified" &&
-        Number(selected.remainingAmount || 0) <= 0 &&
-        previousGross >= 0 && previousHelp >= 0 &&
-        Math.abs(previousGross - previousHelp) < 0.01 &&
-        !verificationReview.postApprovalBudgetAt;
-      if (!canApprove) {
-        if (Platform.OS === "web" && typeof (globalThis as any).alert === "function") {
-          (globalThis as any).alert("Donation budget is not editable. This request may already have a published campaign or an approved additional budget.");
-        } else {
-          Alert.alert("Budget unavailable", "This request already has a campaign or approved additional budget.");
-        }
-        return false;
+      const message = "This request has no LGU-approved donation amount. Choose LGU or Partner Support, or No Further Support.";
+      if (Platform.OS === "web" && typeof (globalThis as any).alert === "function") {
+        (globalThis as any).alert(message);
+      } else {
+        Alert.alert("No approved donation amount", message);
       }
-      const gross = Number(budget.total);
-      const previous = Number(budget.alreadyReceived || 0);
-      const basis = budget.basis.trim();
-      const centsOk = (amount: number) => Math.abs(amount * 100 - Math.round(amount * 100)) < 0.00001;
-      if (!Number.isFinite(gross) || gross <= 0 || gross > 100000000 ||
-          !Number.isFinite(previous) || previous < 0 || previous >= gross ||
-          !centsOk(gross) || !centsOk(previous) || basis.length < 20 || basis.length > 800) {
-        Alert.alert("Check donation budget", "Enter the item total, other assistance received and an itemized price explanation.");
-        return false;
-      }
-      const approved = await updateRequest("approve_donation_budget", {
-        approvedGrossCost: gross, confirmedExistingAssistanceAmount: previous, budgetEvidenceNote: basis,
-      }, true);
-      if (!approved) return false;
-      verifiedAmount = Math.round((gross - previous) * 100) / 100;
+      return false;
     }
     const savedPlace = String(selected.assignedLocationName || "").trim();
     const savedAddress = String(selected.assignedLocationAddress || "").trim();
@@ -3477,37 +3451,18 @@ function CompactVerifiedAssistance({
   publicOfficeAddress: string;
   setPublicOfficeAddress: (value: string) => void;
   savingAction: string;
-  onDonation: (name: string, address: string, budget: DonationBudgetDraft) => Promise<boolean>;
+  onDonation: (name: string, address: string) => Promise<boolean>;
   onSaveOtherSupport: (choice: string) => Promise<boolean>;
   onOpenCampaign: () => void;
 }) {
+  const cap = Number(reviewRecord?.verifiedUncoveredAmount || 0);
   const [choice, setChoice] = useState<"donation" | "lgu" | "none">(
     request.supportDecision === "internal_support" ? "lgu" :
-      request.supportDecision === "not_required" ? "none" : "donation",
+      request.supportDecision === "not_required" ? "none" :
+      cap > 0 ? "donation" : "lgu",
   );
   const [submitting, setSubmitting] = useState(false);
   const [locationAttempted, setLocationAttempted] = useState(false);
-  const [budgetAttempted, setBudgetAttempted] = useState(false);
-  const [budgetTotal, setBudgetTotal] = useState("");
-  const [alreadyReceived, setAlreadyReceived] = useState("0");
-  const [budgetBasis, setBudgetBasis] = useState("");
-  const cap = Number(reviewRecord?.verifiedUncoveredAmount || 0);
-  const originalGross = Number(reviewRecord?.verifiedGrossCost || 0);
-  const originalHelp = Number(reviewRecord?.confirmedExistingAssistanceAmount || 0);
-  const canSetBudget = cap <= 0 && !request.donationCampaignId &&
-    String(request.status || "verified").toLowerCase() === "verified" &&
-    Number(request.remainingAmount || 0) <= 0 &&
-    originalGross >= 0 && originalHelp >= 0 &&
-    Math.abs(originalGross - originalHelp) < 0.01 &&
-    !reviewRecord?.postApprovalBudgetAt;
-  const numericTotal = Number(budgetTotal);
-  const numericAlreadyReceived = Number(alreadyReceived || 0);
-  const currencyOk = (amount: number) => Math.abs(amount * 100 - Math.round(amount * 100)) < 0.00001;
-  const budgetIsValid = Number.isFinite(numericTotal) && numericTotal > 0 &&
-    numericTotal <= 100000000 && Number.isFinite(numericAlreadyReceived) &&
-    numericAlreadyReceived >= 0 && numericAlreadyReceived < numericTotal &&
-    currencyOk(numericTotal) && currencyOk(numericAlreadyReceived) &&
-    budgetBasis.trim().length >= 20 && budgetBasis.trim().length <= 800;
   const hasOffice = String(request.assignedLocationName || "").trim().length >= 3 &&
     String(request.assignedLocationAddress || "").trim().length >= 5;
   const locationError = locationAttempted &&
@@ -3516,8 +3471,13 @@ function CompactVerifiedAssistance({
   const submit = async () => {
     if (busy) return;
     if (choice === "donation" && cap <= 0) {
-      setBudgetAttempted(true);
-      if (!canSetBudget || !budgetIsValid) return;
+      const message = "A monetary campaign needs an approved donation amount. Select another support plan.";
+      if (Platform.OS === "web" && typeof (globalThis as any).alert === "function") {
+        (globalThis as any).alert(message);
+      } else {
+        Alert.alert("No approved amount", message);
+      }
+      return;
     }
     if (choice === "donation" && !hasOffice) {
       setLocationAttempted(true);
@@ -3525,7 +3485,7 @@ function CompactVerifiedAssistance({
     }
     setSubmitting(true);
     try {
-      if (choice === "donation") await onDonation(publicOfficeName, publicOfficeAddress, { total: budgetTotal, alreadyReceived, basis: budgetBasis });
+      if (choice === "donation") await onDonation(publicOfficeName, publicOfficeAddress);
       else await onSaveOtherSupport(choice === "lgu" ? "internal_support" : "not_required");
     } finally {
       setSubmitting(false);
@@ -3561,7 +3521,7 @@ function CompactVerifiedAssistance({
           <Text style={styles.simpleSection}>Choose a support plan</Text>
           <View style={styles.simpleOptions}>
             {([
-              ["donation", "Create Donation Campaign"],
+              ...(cap > 0 ? ([["donation", "Create Donation Campaign"]] as const) : []),
               ["lgu", "LGU or Partner Support"],
               ["none", "No Further Support"],
             ] as const).map(([key,label]) => (
@@ -3580,72 +3540,21 @@ function CompactVerifiedAssistance({
             ))}
           </View>
 
+          {cap <= 0 && (
+            <View style={styles.simpleReviewAmountNotice}>
+              <Ionicons name="information-circle-outline" size={18} color="#64748B" />
+              <Text style={[styles.simpleCopy, { flex: 1 }]}>
+                No approved donation amount for this request. Select LGU or Partner Support or No Further Support.
+              </Text>
+            </View>
+          )}
           {choice === "donation" && (
             <View style={styles.simpleField}>
               <Text style={styles.simpleSection}>Approved donation amount</Text>
-              {cap > 0 ? (
-                <Text style={styles.simpleVerifiedAmount}>{money(cap)}</Text>
-              ) : (
-                <View style={styles.simpleField}>
-                  <Text style={styles.simpleCopy}>
-                    {canSetBudget
-                      ? "Add only NEW confirmed items or expenses not covered by earlier assistance. Use prices or supplier quotations; a hospital bill is not required for food or supplies."
-                      : "This case cannot start a monetary campaign. It may already have an approved budget or a completed assistance record."}
-                  </Text>
-                  {budgetAttempted && !canSetBudget && (
-                    <ReviewValidationHint message="Donation setup is unavailable because the case has no eligible new budget. Review the request status or choose LGU/Partner Support." />
-                  )}
-                  {canSetBudget && (
-                    <View style={styles.assistanceBudgetFields}>
-                      <Text style={styles.simpleCheckTitle}>Additional item cost (PHP) *</Text>
-                      <TextInput
-                        value={budgetTotal}
-                        onChangeText={(value) => setBudgetTotal(value.replace(/[^0-9.]/g, ""))}
-                        editable={!busy}
-                        keyboardType="decimal-pad"
-                        placeholder="Example: 3600"
-                        placeholderTextColor="#94A3B8"
-                        style={[styles.input, budgetAttempted && !budgetIsValid && styles.assistanceFieldInvalid]}
-                      />
-                      <Text style={styles.simpleCheckTitle}>Support already received for these NEW items (PHP)</Text>
-                      <TextInput
-                        value={alreadyReceived}
-                        onChangeText={(value) => setAlreadyReceived(value.replace(/[^0-9.]/g, ""))}
-                        editable={!busy}
-                        keyboardType="decimal-pad"
-                        placeholder="Enter 0 if none"
-                        placeholderTextColor="#94A3B8"
-                        style={styles.input}
-                      />
-                      <Text style={styles.simpleCheckTitle}>NEW items, quantities and price basis *</Text>
-                      <TextInput
-                        value={budgetBasis}
-                        onChangeText={setBudgetBasis}
-                        editable={!busy}
-                        multiline
-                        maxLength={800}
-                        placeholder="Example: 12 NEW bags of dog food x PHP 300, checked at a local supplier."
-                        placeholderTextColor="#94A3B8"
-                        style={[styles.textArea, budgetAttempted && !budgetIsValid && styles.assistanceFieldInvalid]}
-                      />
-                      {budgetAttempted && !budgetIsValid && (
-                        <ReviewValidationHint message="Please enter the additional item costs, any support received for those items, and a clear explanation of prices (at least 20 characters)." />
-                      )}
-                      {budgetIsValid && (
-                        <Text style={styles.simpleVerifiedAmount}>
-                          Amount to raise: {money(Math.round((numericTotal - numericAlreadyReceived) * 100) / 100)}
-                        </Text>
-                      )}
-                    </View>
-                  )}
-                </View>
-              )}
-              {cap > 0 && (
-                <Text style={styles.simpleCopy}>
-                  Approved amount from the LGU review. No need to enter it again.
-                </Text>
-              )}
-
+              <Text style={styles.simpleVerifiedAmount}>{money(cap)}</Text>
+              <Text style={styles.simpleCopy}>
+                Approved amount from the LGU review. You can review the campaign before publishing.
+              </Text>
               {hasOffice ? (
                 <View style={styles.simpleReviewOfficeCard}>
                   <Ionicons name="business-outline" size={17} color="#047857" />
@@ -5730,7 +5639,6 @@ function DocumentPreviewModal({
 
 const styles = StyleSheet.create({
   simpleVerifiedAmount: { fontSize: 22, fontWeight: "800", color: "#047857", paddingVertical: 3 },
-  assistanceBudgetFields: { gap: 10, padding: 15, borderWidth: 1, borderColor: "#D8E8DE", borderRadius: 12, backgroundColor: "#FAFCFA" },
   simpleReviewAmountNotice: { flexDirection: "row", alignItems: "flex-start", gap: 9, padding: 12, borderRadius: 9, borderColor: "#FDE68A", borderWidth: 1, backgroundColor: "#FFFBEB" },
   simpleReviewOfficeCard: { flexDirection: "row", alignItems: "flex-start", gap: 9, padding: 12, borderRadius: 9, backgroundColor: "#F0FDF4", borderWidth: 1, borderColor: "#BBF7D0" },
 
