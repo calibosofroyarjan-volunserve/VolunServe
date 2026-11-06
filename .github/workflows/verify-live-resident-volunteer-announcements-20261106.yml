@@ -87,6 +87,7 @@ jobs:
       - name: Emulate Resident and Volunteer feed permissions with active live policy
         env:
           ACTIVE_FIRESTORE_RULES: /tmp/volunserve-active-test-firestore.rules
+          TEST_CANDIDATE_REMOVE_TIMESTAMP_TYPE: '1'
         run: npx firebase-tools emulators:exec --only firestore --project demo-volunserve "node scripts/test-live-announcement-role-display-20261106.cjs"
       - name: Confirm deployed site was not changed during test
         env:
