@@ -47,7 +47,7 @@ for(const entry of [
 ]) assert(saLayout.includes(entry),"Missing Super Admin governance nav "+entry);
 for(const entry of [
   "Emergency & Assistance","People & Verification","Events & Volunteering",
-  "Donations & Funds","Communication & Reports",
+  "Donations & Funds","Announcements",
 ]) assert(adminLayout.includes(entry),"Missing LGU operational nav "+entry);
 for(const route of [
   "/(admin)/admin-cases","/(admin)/assistance-requests","/(admin)/identity-reviews",
