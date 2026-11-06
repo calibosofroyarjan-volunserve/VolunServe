@@ -30,6 +30,7 @@ assert(web.includes("openLiveMap()") && native.includes("openLiveMap()"),
 assert(web.includes("runTransaction(") && native.includes("runTransaction("),
   "Do not remove Volunteer task state transitions");
 assert(pagination.includes("safePageSize") && pagination.includes("recordCount") &&
+  pagination.includes("Number.isFinite(page)") &&
   pagination.includes("ui.minTouchHeight"), "Pagination must clamp invalid inputs and meet minimum touch sizes");
 const guardedDismissals = dialog.match(/if \(request && cancelable\) dismissAppDialog\(request\.id\)/g) || [];
 assert.equal(guardedDismissals.length, 2,
