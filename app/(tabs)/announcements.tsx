@@ -1,6 +1,5 @@
 import React, {
   useEffect,
-  useMemo,
   useState,
 } from "react";
 
@@ -51,7 +50,6 @@ type Announcement = {
 export default function AnnouncementsScreen() {
   const {
     loading: sessionLoading,
-    profile,
   } = useUserSession();
 
   const [announcements, setAnnouncements] =
@@ -62,11 +60,6 @@ export default function AnnouncementsScreen() {
 
   const [error, setError] =
     useState("");
-
-  const barangay =
-    typeof profile?.barangay === "string"
-      ? profile.barangay.trim()
-      : "";
 
   useEffect(() => {
     /*
@@ -166,52 +159,7 @@ export default function AnnouncementsScreen() {
     return unsubscribe;
   }, []);
 
-  /*
-   * USER VISIBILITY
-   *
-   * Super Admin announcement:
-   *   audience = "all"
-   *
-   * Local Admin announcement:
-   *   audience = Admin barangay
-   *
-   * Resident / Volunteer sees:
-   *   GLOBAL
-   *   +
-   *   their own BARANGAY
-   */
-  const visibleAnnouncements =
-    useMemo(() => {
-      const normalizedBarangay =
-        barangay.toLowerCase();
-
-      return announcements.filter(
-        (announcement) => {
-          const audience =
-            (
-              announcement.audience || ""
-            )
-              .trim()
-              .toLowerCase();
-
-          if (audience === "all") {
-            return true;
-          }
-
-          if (
-            normalizedBarangay &&
-            audience === normalizedBarangay
-          ) {
-            return true;
-          }
-
-          return false;
-        }
-      );
-    }, [
-      announcements,
-      barangay,
-    ]);
+  const visibleAnnouncements = announcements;
 
   if (sessionLoading || loading) {
     return (
@@ -246,7 +194,7 @@ export default function AnnouncementsScreen() {
 
         <Text style={styles.subtitle}>
           View official VolunServe updates and
-          announcements relevant to your area.
+          announcements for all residents and volunteers.
         </Text>
       </View>
 
@@ -265,10 +213,7 @@ export default function AnnouncementsScreen() {
         </Text>
 
         <Text style={styles.areaHelp}>
-          Global announcements are published by
-          the Super Admin. Local announcements
-          are published by the Admin assigned to
-          your area.
+          View published announcements from VolunServe Admins.
         </Text>
       </View>
 
@@ -299,7 +244,7 @@ export default function AnnouncementsScreen() {
 
           <Text style={styles.emptyText}>
             There are currently no published
-            announcements for your area.
+            announcements yet.
           </Text>
         </View>
       ) : null}
@@ -363,10 +308,7 @@ export default function AnnouncementsScreen() {
 
               <View style={styles.cardFooter}>
                 <Text style={styles.audienceLabel}>
-                  {isGlobal
-                    ? "Visible system-wide"
-                    : announcement.audience ||
-                      barangay}
+                  {"Visible to all residents and volunteers"}
                 </Text>
               </View>
             </View>
