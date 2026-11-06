@@ -39,6 +39,9 @@ jobs:
             'app/(admin)/admin-cases.tsx',
             'app/(admin)/assistance-requests.tsx',
             'app/(admin)/create-announcement.tsx',
+            'components/admin/EmergencyIncidentMap.native.tsx',
+            'components/admin/EmergencyIncidentMap.tsx',
+            'components/admin/EmergencyIncidentMap.web.tsx',
             'lib/assistanceReviewQueue.ts',
             'lib/assistanceReviewValidation.ts',
             'lib/emergencyTaskStatus.ts'
