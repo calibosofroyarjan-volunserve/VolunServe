@@ -18,7 +18,7 @@ jobs:
       EXPO_NO_TELEMETRY: "1"
       EXPO_PUBLIC_EMAIL_FIRST_SIGNUP: "true"
       PROJECT: volunserve-3aa5b
-      LIVE_BASE: b7f1c0a0e8f12468ab7fbe6ae99407a6ed4aae5b
+      LIVE_BASE: f4977098ae1a3f5568294164860f480520b85b89
       FIREBASE_SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_VOLUNSERVE_3AA5B || secrets.FIREBASE_SERVICE_ACCOUNT }}
       GOOGLE_APPLICATION_CREDENTIALS: /tmp/volunserve-emergency-volunteer-prod.json
     steps:
@@ -55,19 +55,10 @@ jobs:
             'scripts/test-isolated-emergency-volunteer-release.cjs'
           ]);
           const files=fs.readFileSync(process.env.RUNNER_TEMP+'/emergency-change-list.txt','utf8').split('\n').filter(Boolean);
-          // Strict scope: Emergency task offers, Volunteer task acceptance
-          // and the standalone map preview. No unrelated production files.
+          // Strict scope: one Admin Emergency Reports UI file plus this guarded release workflow.
           const expected=new Set([
-            '.github/workflows/validate-emergency-volunteer-live-20261106.yml',
             '.github/workflows/release-emergency-volunteer-hosting-only-20261106.yml',
-            'app/(admin)/admin-cases.tsx',
-            'app/(tabs)/volunteer.tsx',
-            'app/(tabs)/volunteer.web.tsx',
-            'components/admin/EmergencyIncidentMap.tsx',
-            'components/admin/EmergencyIncidentMap.web.tsx',
-            'components/admin/EmergencyIncidentMap.native.tsx',
-            'scripts/test-emergency-volunteer-live-20261106.cjs',
-            'scripts/test-isolated-emergency-volunteer-release.cjs'
+            'app/(admin)/admin-cases.tsx'
           ]);
           assert(files.length===expected.size,'STOP: unexpected file count compared with latest LIVE release');
           for(const file of files){
