@@ -1,0 +1,91 @@
+name: Live Volunteer Attendance Buttons - Safe Hosting Only
+on:
+  push:
+    branches: [hotfix/live-volunteer-attendance-buttons-20261106]
+    paths:
+      - '.github/workflows/release-volunteer-time-buttons-live-20261106.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: volunserve-production-hosting-release
+  cancel-in-progress: false
+jobs:
+  verify-and-release:
+    if: github.repository == 'calibosofroyarjan-volunserve/VolunServe'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      CI: 'true'
+      EXPO_NO_TELEMETRY: '1'
+      EXACT_LIVE_BASE: a5fb8e3bd54cf321bb26cf364ed598a2fe84e055
+      FIREBASE_SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_VOLUNSERVE_3AA5B || secrets.FIREBASE_SERVICE_ACCOUNT }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Ensure exact successful live release ancestry and no other module was changed
+        shell: bash
+        run: |
+          set -euo pipefail
+          git merge-base --is-ancestor "$EXACT_LIVE_BASE" HEAD
+          git diff --name-only "$EXACT_LIVE_BASE" HEAD | while IFS= read -r path; do
+            case "$path" in
+              'app/(tabs)/community-events.tsx'|'scripts/test-volunteer-time-controls-20261106.cjs'|'.github/workflows/release-volunteer-time-buttons-live-20261106.yml') ;;
+              *) echo "::error::Non-attendance change: $path"; exit 1 ;;
+            esac
+          done
+          git diff --exit-code "$EXACT_LIVE_BASE" HEAD -- 'app/login.tsx' 'app/login.web.tsx' 'app/signup.tsx' 'app/signup.web.tsx' 'app/(admin)' 'app/(superadmin)' 'app/(tabs)/_layout.tsx' 'components' 'backend' 'functions' 'firestore.rules' 'storage.rules' 'firebase.json'
+      - name: Verify current production live revision before building
+        env:
+          VOLUNSERVE_HOSTING_URL: https://volunserve.com
+          VOLUNSERVE_EXPECTED_SHA: ${{ env.EXACT_LIVE_BASE }}
+        run: node scripts/check-live-hosting.cjs
+      - name: Install from lockfile
+        run: npm ci --no-audit --no-fund
+      - name: Guard visible buttons, server attendance and Admin Start workflow
+        run: |
+          node scripts/test-volunteer-time-controls-20261106.cjs
+          node scripts/test-volunteer-community-event-join-20261106.cjs
+      - name: Real Firestore security and attendance tests (emulator only)
+        run: npx firebase-tools emulators:exec --only firestore --project demo-volunserve "node scripts/test-community-events-rules.cjs"
+      - name: Compile and export exact complete web app
+        run: |
+          npx tsc --noEmit --incremental false
+          npx expo export --platform web --clear
+          node scripts/verify-hosting-release.cjs
+      - name: Require correct production Firebase service account
+        shell: bash
+        run: |
+          if [ -z "$FIREBASE_SA" ]; then echo "::error::Firebase service account not available"; exit 1; fi
+          node -e 'const a=JSON.parse(process.env.FIREBASE_SA); if(a.project_id!=="volunserve-3aa5b") throw new Error("Wrong Firebase project");'
+      - name: Block deployment if another live release arrived during build
+        env:
+          VOLUNSERVE_HOSTING_URL: https://volunserve.com
+          VOLUNSERVE_EXPECTED_SHA: ${{ env.EXACT_LIVE_BASE }}
+        run: node scripts/check-live-hosting.cjs
+      - name: Release Firebase Hosting ONLY - no rules, functions or records
+        uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          firebaseServiceAccount: ${{ env.FIREBASE_SA }}
+          projectId: volunserve-3aa5b
+          channelId: live
+      - name: Confirm exact live revision and public routes
+        env:
+          VOLUNSERVE_HOSTING_URL: https://volunserve.com
+          VOLUNSERVE_EXPECTED_SHA: ${{ github.sha }}
+        shell: bash
+        run: |
+          for attempt in 1 2 3 4 5 6; do
+            if node scripts/check-live-hosting.cjs; then exit 0; fi
+            sleep 10
+          done
+          echo "::error::Cannot verify exact live revision"; exit 1
