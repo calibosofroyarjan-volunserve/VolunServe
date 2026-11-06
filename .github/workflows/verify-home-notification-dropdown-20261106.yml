@@ -1,0 +1,40 @@
+name: Verify Home Notification Bell Dropdown (No Deploy)
+on:
+  push:
+    branches:
+      - fix/restore-home-notifications-bell-dropdown-20261106
+    paths:
+      - 'components/home/Home.web.tsx'
+      - '.github/workflows/verify-home-notification-dropdown-20261106.yml'
+permissions:
+  contents: read
+jobs:
+  ui-regression:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with: {fetch-depth: 0, submodules: false}
+      - uses: actions/setup-node@v4
+        with: {node-version: '22', cache: npm}
+      - name: Guarantee existing live modules preserved
+        run: |
+          set -euo pipefail
+          git diff --name-only e9341c6d0cdf905ee3fc0079d5bbfc5d827ce36c HEAD | grep -Ev '^(components/home/Home\.web\.tsx|\.github/workflows/verify-home-notification-dropdown-20261106\.yml)$' | tee /tmp/unexpected
+          test ! -s /tmp/unexpected
+          node <<'NODE'
+          const fs=require('fs'), assert=require('node:assert/strict');
+          const source=fs.readFileSync('components/home/Home.web.tsx','utf8');
+          assert(source.includes('setNotificationMenuOpen(open => !open)'));
+          assert(source.includes('View All Notifications'));
+          assert(source.includes('latestBellAlerts'));
+          assert(!source.includes('onPress={() => router.push("/notifications")}'));
+          assert(source.includes('profileDropdown'));
+          console.log('PASS dropdown toggles next to bell; existing notifications page and profile menu remain');
+          NODE
+      - name: Install and verify build
+        run: |
+          npm ci --no-audit --no-fund
+          npx tsc --noEmit --incremental false
+          npx expo export --platform web --clear
+          node scripts/verify-hosting-release.cjs
