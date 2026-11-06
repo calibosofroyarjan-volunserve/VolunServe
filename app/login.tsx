@@ -2,15 +2,15 @@ import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import GoogleBrandMark from "../components/auth/GoogleBrandMark";
 import AuthFeedback from "../components/auth/AuthFeedback";
+import { unifiedPasswordDestination } from "../lib/unifiedLoginRouting";
+import { getLoginEmailError, getLoginEmailSuggestion } from "../lib/loginInputValidation";
+import { googleSignInErrorMessage } from "../lib/googleSignInFeedback";
+import { userFacingError } from "../lib/userFacingError";
+import { useSignupGoogle } from "../lib/useSignupGoogle";
 import PasswordResetDialog from "../components/auth/PasswordResetDialog";
-import * as AuthSession from "expo-auth-session";
-import * as Google from "expo-auth-session/providers/google";
 import { useRouter, type Href } from "expo-router";
-import * as WebBrowser from "expo-web-browser";
 import {
   signOut as firebaseSignOut,
-  GoogleAuthProvider,
-  signInWithCredential,
   setPersistence,
   browserLocalPersistence,
   browserSessionPersistence,
@@ -37,24 +37,28 @@ import {
   loginUser,
 } from "../lib/firebaseAuth";
 
-WebBrowser.maybeCompleteAuthSession();
-
-const redirectUri = AuthSession.makeRedirectUri({
-  scheme: "com.froyarjan123.volunserve",
-});
-
 export default function Login() {
   const router = useRouter();
+  const signInGoogle = useSignupGoogle();
   const emailInputRef = useRef<TextInput>(null);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
+  const [googleError, setGoogleError] = useState("");
   const [resetOpen, setResetOpen] = useState(false);
   const [feedback, setFeedback] = useState<{ type: "error" | "success"; message: string }>({ type: "error", message: "" });
   const showError = (message: string) => setFeedback({ type: "error", message });
   const clearFeedback = () => setFeedback({ type: "error", message: "" });
+  const [attemptedLogin, setAttemptedLogin] = useState(false);
+  const [emailTouched, setEmailTouched] = useState(false);
+  const [passwordTouched, setPasswordTouched] = useState(false);
+  const inlineEmailError = attemptedLogin || emailTouched ? getLoginEmailError(email) : null;
+  const inlineEmailSuggestion = !inlineEmailError && (attemptedLogin || emailTouched)
+    ? getLoginEmailSuggestion(email) : null;
+  const inlinePasswordError = (attemptedLogin || passwordTouched) && !password
+    ? "Enter your password." : null;
   const [focused, setFocused] = useState<string | null>(null);
   const [rememberMe, setRememberMe] = useState(true);
   const applyRememberMe = async () => {
@@ -64,30 +68,23 @@ export default function Login() {
   };
 
 
-  const [googleRequest, , promptGoogleAsync] = Google.useAuthRequest({
-    webClientId: "233201250762-ton2r7m31pomrc42rgfjl7vb292e0var.apps.googleusercontent.com",
-    androidClientId: "233201250762-d7tnic7h4q3f6ohip52a36ng22uqrvl5.apps.googleusercontent.com",
-    redirectUri,
-    scopes: ["openid", "profile", "email"],
-  });
-
   const routeSignedInProfile = async (uid: string) => {
     let profile;
 
     try {
       profile = await getUserProfile(uid);
-    } catch {
+    } catch (error) {
       await firebaseSignOut(auth);
-
-      throw new Error(
-        "No VolunServe profile was found for this account. Please register first."
-      );
+      if (error instanceof Error && error.message === "Profile not found.") {
+        throw new Error("No VolunServe profile was found for this account. Please register first.");
+      }
+      throw new Error("Unable to check your VolunServe account. Check your connection and try again.");
     }
 
     // Staff accounts use a separate email/password portal, never community Google OAuth.
     if (profile.role === "admin" || profile.role === "superadmin") {
       await firebaseSignOut(auth);
-      throw new Error("LGU Admin and system staff must use Admin Login with their issued email and password.");
+      throw new Error("Staff accounts must use email and password. Use the fields above.");
     }
 
     if (!isApprovedProfile(profile)) {
@@ -118,11 +115,13 @@ export default function Login() {
 
   const handleLogin = async () => {
     const cleanEmail = email.trim();
-
-    if (!cleanEmail || !password) {
-      showError("Please enter your email address and password.");
+    setAttemptedLogin(true);
+    const emailError = getLoginEmailError(email);
+    if (emailError || !password) {
+      showError(emailError || "Enter your password.");
       return;
     }
+    setGoogleError("");
 
     if (loading || googleLoading) {
       return;
@@ -138,16 +137,16 @@ export default function Login() {
         password
       );
 
-      if (profile.role === "admin" || profile.role === "superadmin") {
+      let destination;
+      try {
+        destination = unifiedPasswordDestination(profile);
+      } catch (accessError) {
         await firebaseSignOut(auth);
-        throw new Error("Use the LGU Admin Login tab for staff accounts.");
+        throw accessError;
       }
-      const destination =
-        homeRouteForProfile(profile);
-
       router.replace(destination as any);
     } catch (error: any) {
-      showError(error?.message || "Unable to sign in. Please try again.");
+      showError(userFacingError(error, "Unable to sign in. Check your details and try again."));
     } finally {
       setLoading(false);
     }
@@ -160,78 +159,55 @@ export default function Login() {
   };
 
   const handleGoogleLogin = async () => {
-    if (!googleRequest || loading || googleLoading) {
-      return;
-    }
+    if (loading || googleLoading) return;
 
+    let authenticatedUid: string | null = null;
     try {
       clearFeedback();
+      setGoogleError("");
       setGoogleLoading(true);
-
-      const result = await promptGoogleAsync();
-
-      if (result.type !== "success") {
-        if (result.type !== "dismiss" && result.type !== "cancel") {
-          showError("Google sign-in was not completed. Please try again.");
-        }
-        return;
-      }
-
-      const idToken = result.params?.id_token;
-
-      if (!idToken) {
-        throw new Error(
-          "Google did not return a valid sign-in token. Please try again."
-        );
-      }
-
       await applyRememberMe();
-      const credential =
-        GoogleAuthProvider.credential(idToken);
 
-      const userCredential =
-        await signInWithCredential(
-          auth,
-          credential
-        );
-
-      await routeSignedInProfile(
-        userCredential.user.uid
-      );
-    } catch (error: any) {
-      await firebaseSignOut(auth).catch(() => undefined);
-
-      showError(error?.message || "Google sign-in failed. Please try again.");
+      const user = await signInGoogle();
+      authenticatedUid = user.uid;
+      await routeSignedInProfile(user.uid);
+    } catch (error) {
+      // Do not sign out a pre-existing session when the popup was merely cancelled.
+      if (authenticatedUid && auth.currentUser?.uid === authenticatedUid) {
+        await firebaseSignOut(auth).catch(() => undefined);
+      }
+      setGoogleError(googleSignInErrorMessage(error));
     } finally {
       setGoogleLoading(false);
     }
   };
 
-  // Shared premium shell supplies the real two-route tab switcher.
-  // Authentication, guarded role routing and Resident-only Google OAuth remain intact.
+  // Shared premium shell for all roles; Google OAuth stays community-only.
   return (
     <KeyboardAvoidingView style={styles.root} behavior={Platform.OS === "ios" ? "padding" : undefined}>
-      <PremiumAuthShell active="resident">
+      <PremiumAuthShell>
         <Text style={styles.label}>Email Address</Text>
-        <View style={[styles.inputBox, authCornerCut(10), focused === "email" && styles.focused]}>
+        <View style={[styles.inputBox, authCornerCut(10), focused === "email" && styles.focused, !!inlineEmailError && styles.invalidInput]}>
           <Ionicons name="mail-outline" size={21} color="#194F41" />
           <TextInput ref={emailInputRef} style={styles.input} value={email} onChangeText={value => { setEmail(value); clearFeedback(); }}
-            accessibilityLabel="Resident or volunteer email address"
+            accessibilityLabel="Email address"
             placeholder="Email address" placeholderTextColor="#8BA0B4"
             autoCapitalize="none" autoCorrect={false} keyboardType="email-address"
             textContentType="emailAddress" autoComplete="email" editable={!loading && !googleLoading}
-            returnKeyType="next" onFocus={() => setFocused("email")} onBlur={() => setFocused(null)} />
+            returnKeyType="next" onFocus={() => setFocused("email")} onBlur={() => { setFocused(null); setEmailTouched(true); }} />
         </View>
+        {!!inlineEmailError && <Text accessibilityRole="alert" style={styles.fieldError}>{inlineEmailError}</Text>}
+        {!!inlineEmailSuggestion && <Text style={styles.fieldSuggestion}>{inlineEmailSuggestion}</Text>}
         <Text style={[styles.label, styles.passwordLabel]}>Password</Text>
-        <View style={[styles.inputBox, authCornerCut(10), focused === "password" && styles.focused]}>
+        <View style={[styles.inputBox, authCornerCut(10), focused === "password" && styles.focused, !!inlinePasswordError && styles.invalidInput]}>
           <Ionicons name="lock-closed-outline" size={21} color="#64748B" />
           <TextInput style={styles.input} value={password} onChangeText={value => { setPassword(value); clearFeedback(); }}
-            accessibilityLabel="Resident or volunteer password"
+            accessibilityLabel="Password"
             placeholder="Password" placeholderTextColor="#8BA0B4" secureTextEntry={!showPassword}
             autoCapitalize="none" autoCorrect={false} textContentType="password" autoComplete="password"
             editable={!loading && !googleLoading} returnKeyType="done"
             onSubmitEditing={() => void handleLogin()} onFocus={() => setFocused("password")}
-            onBlur={() => setFocused(null)} />
+            onBlur={() => { setFocused(null); setPasswordTouched(true); }} />
           <TouchableOpacity accessibilityRole="button"
             accessibilityLabel={showPassword ? "Hide password" : "Show password"}
             onPress={() => setShowPassword(value => !value)} disabled={loading || googleLoading}
@@ -239,6 +215,7 @@ export default function Login() {
             <Ionicons name={showPassword ? "eye-off-outline" : "eye-outline"} size={20} color="#245947" />
           </TouchableOpacity>
         </View>
+        {!!inlinePasswordError && <Text accessibilityRole="alert" style={styles.fieldError}>{inlinePasswordError}</Text>}
         <View style={styles.options}>
           <TouchableOpacity accessibilityRole="checkbox"
             accessibilityState={{ checked: rememberMe }}
@@ -254,6 +231,7 @@ export default function Login() {
         </View>
         {!!feedback.message && (
           <AuthFeedback
+            title="Check your sign-in details"
             message={feedback.message}
             type={feedback.type}
             onDismiss={clearFeedback}
@@ -272,7 +250,7 @@ export default function Login() {
             </View>
           ) :
             <View style={styles.centerRow}>
-              <Text style={styles.signInText}>Login as Resident / Volunteer</Text>
+              <Text style={styles.signInText}>Sign In</Text>
               <Ionicons name="arrow-forward-outline" size={21} color="#FFFFFF" />
             </View>}
         </Pressable>
@@ -282,9 +260,9 @@ export default function Login() {
           <View style={styles.dividerLine} />
         </View>
         <TouchableOpacity accessibilityRole="button" onPress={() => void handleGoogleLogin()}
-          disabled={!googleRequest || loading || googleLoading}
+          disabled={loading || googleLoading}
           style={[styles.outlineButton,
-            (!googleRequest || loading || googleLoading) && styles.disabled]}>
+            (loading || googleLoading) && styles.disabled]}>
           {googleLoading ? (
             <View style={styles.centerRow}>
               <ActivityIndicator color="#087F66" />
@@ -296,6 +274,13 @@ export default function Login() {
               <Text style={styles.outlineText}>Continue with Google</Text>
             </View>}
         </TouchableOpacity>
+        {!!googleError && (
+          <AuthFeedback
+            title="Google sign-in issue"
+            message={googleError}
+            onDismiss={() => setGoogleError("")}
+          />
+        )}
         <TouchableOpacity accessibilityRole="button" onPress={() => router.replace("/public")}
           disabled={loading || googleLoading}
           style={[styles.outlineButton, authCornerCut(10), (loading || googleLoading) && styles.disabled]}>
@@ -313,7 +298,14 @@ export default function Login() {
           disabled={loading || googleLoading}
           style={styles.createButton}>
           <Ionicons name="person-add-outline" color="#08785D" size={19} />
-          <Text style={styles.createLink}>Create An Account</Text>
+          <Text style={styles.createLink}>Sign Up</Text>
+        </TouchableOpacity>
+        <TouchableOpacity accessibilityRole="button"
+          accessibilityLabel="Request LGU Admin Access"
+          onPress={() => router.push("/admin-request")}
+          disabled={loading || googleLoading}
+          style={styles.staffRequest}>
+          <Text style={styles.staffRequestText}>LGU staff? <Text style={styles.staffRequestLink}>Request Admin Access</Text></Text>
         </TouchableOpacity>
       </PremiumAuthShell>
       <PasswordResetDialog
@@ -334,6 +326,9 @@ const styles = StyleSheet.create({
     borderRadius:13,borderWidth:1,marginBottom:2},
   input: {flex:1,minWidth:0,fontSize:15,paddingVertical:14,color:"#103F33"},
   focused: {borderColor:"#068064",backgroundColor:"#FFFFFF",borderWidth:2},
+  invalidInput: {borderColor:"#D33434",borderWidth:2,backgroundColor:"#FFFFFF"},
+  fieldError: {color:"#C62828",fontSize:12,lineHeight:18,fontWeight:"600",marginTop:5,marginBottom:5},
+  fieldSuggestion: {color:"#9A4C15",fontSize:12,lineHeight:18,fontWeight:"600",marginTop:5,marginBottom:5},
   eye:{padding:7},
   options:{flexDirection:"row",alignItems:"center",justifyContent:"space-between",
     flexWrap:"wrap",gap:12,marginTop:3,marginBottom:5},
@@ -356,5 +351,8 @@ const styles = StyleSheet.create({
     flexDirection:"row",alignItems:"center",justifyContent:"center",gap:11,
     backgroundColor:"rgba(255,255,255,.36)"},
   createLink:{fontSize:15,fontWeight:"800",color:"#075B44"},
+  staffRequest:{alignItems:"center",justifyContent:"center",minHeight:38,paddingHorizontal:10,marginTop:1},
+  staffRequestText:{fontSize:12,color:"#527766"},
+  staffRequestLink:{fontSize:12,fontWeight:"800",color:"#076B51"},
   disabled:{opacity:0.55},
 });

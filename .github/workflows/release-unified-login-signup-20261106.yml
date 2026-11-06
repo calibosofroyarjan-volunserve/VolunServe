@@ -1,0 +1,97 @@
+name: Restore unified Login and verified Signup - guarded Hosting ONLY
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/release-unified-login-signup-20261106.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: volunserve-production-hosting-release
+  cancel-in-progress: false
+
+jobs:
+  validate-and-release:
+    if: github.repository == 'calibosofroyarjan-volunserve/VolunServe'
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    env:
+      CI: 'true'
+      EXPO_NO_TELEMETRY: '1'
+      LIVE_BASE_SHA: 804a4f8d75b09dbd390f8037982a45c571161625
+      FIREBASE_SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_VOLUNSERVE_3AA5B || secrets.FIREBASE_SERVICE_ACCOUNT }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Prove exact existing live base and scoped auth-only change
+        shell: bash
+        run: |
+          set -euo pipefail
+          git merge-base --is-ancestor "$LIVE_BASE_SHA" HEAD
+          git diff --name-only "$LIVE_BASE_SHA" HEAD | while IFS= read -r file; do
+            case "$file" in
+              app/_layout.tsx|app/login.tsx|app/login.web.tsx|app/admin-login.tsx|app/signup.tsx|app/signup.web.tsx|components/auth/PremiumAuthShell.tsx|components/auth/AuthFeedback.tsx|components/auth/EmailFirstSignup.tsx|lib/firebaseAuth.ts|lib/unifiedLoginRouting.ts|lib/loginInputValidation.ts|lib/registrationEmailPolicy.ts|lib/disposableEmailDomains.generated.ts|lib/signupFeature.ts|lib/signupMessages.ts|lib/signupRegistration.ts|lib/emailFirstSignupAuth.ts|lib/useSignupGoogle.ts|lib/useSignupGoogle.web.ts|lib/googleSignInFeedback.ts|lib/userFacingError.ts|scripts/test-signup-prod.cjs|scripts/test-final-admin-scope.cjs|scripts/test-route-entrypoints.cjs|scripts/test-unified-login-routing.cjs|scripts/test-login-field-validation.cjs|scripts/test-login-ui-release.cjs|scripts/test-admin-staff-login.cjs|scripts/test-premium-auth-portal.cjs|.github/workflows/release-unified-login-signup-20261106.yml) ;;
+              *) echo "::error::Unexpected non-auth change $file; production unchanged"; exit 1 ;;
+            esac
+          done
+          git diff --exit-code "$LIVE_BASE_SHA" HEAD -- 'app/(admin)' 'app/(superadmin)' 'app/(tabs)' 'components/donations' 'components/notifications' 'firestore.rules' 'storage.rules' 'firebase.json' 'backend' 'functions'
+          grep -q 'unifiedPasswordDestination' app/login.web.tsx
+          grep -q 'EMAIL_FIRST_SIGNUP_ENABLED' app/signup.web.tsx
+          grep -q 'Platform.OS === "web"' lib/signupFeature.ts
+          if grep -q 'Residents & Volunteers' components/auth/PremiumAuthShell.tsx; then echo "::error::Legacy role tabs returned"; exit 1; fi
+      - name: Require production still serves expected source before build
+        env:
+          VOLUNSERVE_HOSTING_URL: https://volunserve.com
+          VOLUNSERVE_EXPECTED_SHA: ${{ env.LIVE_BASE_SHA }}
+        run: node scripts/check-live-hosting.cjs
+      - name: Install exact locked dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Authenticate flow and permissions source regression checks
+        run: |
+          node --test scripts/test-login-ui-release.cjs
+          node scripts/test-admin-staff-login.cjs
+          node scripts/test-premium-auth-portal.cjs
+          node scripts/test-unified-login-routing.cjs
+          node scripts/test-login-field-validation.cjs
+          node scripts/test-signup-prod.cjs
+      - name: Strict TypeScript check
+        run: npx tsc --noEmit --incremental false
+      - name: Export exact integrated web app and fingerprint
+        run: |
+          npx expo export --platform web --clear
+          node scripts/verify-hosting-release.cjs
+      - name: Require Firebase service account (fail closed)
+        shell: bash
+        run: |
+          if [ -z "$FIREBASE_SA" ]; then echo "::error::Missing Firebase service account"; exit 1; fi
+      - name: Re-check exact current live base immediately before publishing
+        env:
+          VOLUNSERVE_HOSTING_URL: https://volunserve.com
+          VOLUNSERVE_EXPECTED_SHA: ${{ env.LIVE_BASE_SHA }}
+        run: node scripts/check-live-hosting.cjs
+      - name: Deploy Firebase Hosting ONLY (no rules, no functions, no database)
+        uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          firebaseServiceAccount: ${{ env.FIREBASE_SA }}
+          projectId: volunserve-3aa5b
+          channelId: live
+      - name: Confirm exact deployed revision on custom domain
+        env:
+          VOLUNSERVE_HOSTING_URL: https://volunserve.com
+          VOLUNSERVE_EXPECTED_SHA: ${{ github.sha }}
+        shell: bash
+        run: |
+          for attempt in 1 2 3 4 5 6; do
+            if node scripts/check-live-hosting.cjs; then exit 0; fi
+            sleep 10
+          done
+          echo "::error::Cannot confirm exact production deployment"
+          exit 1

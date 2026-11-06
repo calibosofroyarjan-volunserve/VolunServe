@@ -1,3 +1,6 @@
+import EmailFirstSignup from "../components/auth/EmailFirstSignup";
+import { userFacingError } from "../lib/userFacingError";
+import { EMAIL_FIRST_SIGNUP_ENABLED } from "../lib/signupFeature";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { Feather } from "@expo/vector-icons";
 import * as AuthSession from "expo-auth-session";
@@ -208,7 +211,7 @@ function getFriendlyAuthError(error: any) {
   if (code === "auth/weak-password") return "Your password is too weak.";
   if (code === "auth/network-request-failed") return "Network error. Please check your internet connection and try again.";
   if (code === "auth/account-exists-with-different-credential") return "An account already exists with this email using a different sign-in method.";
-  return error?.message || "Something went wrong. Please try again.";
+  return userFacingError(error, "Unable to complete registration. Check your details and try again.");
 }
 
 function splitDisplayName(displayName: string) {
@@ -420,7 +423,7 @@ function TermsModal({ visible, onClose }: { visible: boolean; onClose: () => voi
   );
 }
 
-export default function Signup() {
+function LegacySignup() {
   const router = useRouter();
   const { width } = useWindowDimensions();
   const scrollRef = useRef<ScrollView | null>(null);
@@ -502,7 +505,7 @@ export default function Signup() {
 
         Alert.alert("Google Account Connected", "Your Google account information has been added to the registration form.");
       } catch (error: any) {
-        Alert.alert("Firebase Error", getFriendlyAuthError(error));
+        Alert.alert("Unable to continue", getFriendlyAuthError(error));
       }
     };
     handleGoogleSuccess();
@@ -631,7 +634,7 @@ export default function Signup() {
     }
     try {
       setLoadingSubmit(true);
-      await signUpUser({
+      const registeredUser = await signUpUser({
         lastName: formData.lastName.trim(),
         firstName: formData.firstName.trim(),
         middleName: formData.middleName.trim(),
@@ -650,11 +653,13 @@ export default function Signup() {
       });
 
       Alert.alert(
-        googleBound ? "Basic Account Created" : "Verify Your Email",
+        registeredUser.emailVerified ? "Basic Account Created" : "Verify Your Email",
         googleBound
           ? "Your Google account is ready. Complete Resident Identity Verification later for protected services."
-          : "We sent a verification link to your email address. Open your inbox (or Spam), verify your email, then sign in with your email and password.",
-        [{ text: "Continue", onPress: () => router.replace(googleBound ? "/(tabs)" : "/login") }]
+          : registeredUser.emailVerified
+            ? "Your Basic Resident profile is ready. Sign in to continue."
+            : "Verification email requested. Open the verification link in your Inbox or Spam, then return to this form and submit again with the same email and password. Your details stay in this open form. If you already completed a profile, sign in after verifying.",
+        [{ text: "Continue", onPress: () => { if (registeredUser.emailVerified) router.replace(googleBound ? "/(tabs)" : "/login"); } }]
       );
     } catch (e: any) {
       Alert.alert("Registration Error", getFriendlyAuthError(e));
@@ -1210,3 +1215,6 @@ const styles = StyleSheet.create({
     lineHeight: 18,
   }, 
 })
+export default function Signup() {
+  return EMAIL_FIRST_SIGNUP_ENABLED ? <EmailFirstSignup /> : <LegacySignup />;
+}
