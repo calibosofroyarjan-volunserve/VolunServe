@@ -877,33 +877,62 @@ export default function CommunityEventsScreen() {
   const [routeLoading, setRouteLoading] = useState(false);
   const [routeNotice, setRouteNotice] = useState("");
 
-  const showRouteInVolunServe = (event: CommunityEvent) => {
+  const showRouteInVolunServe = async (event: CommunityEvent) => {
     setRouteNotice("");
     if (!eventHasCoordinates(event)) {
-      setRouteNotice("An exact meeting-point pin has not been recorded. Use Google Maps to search the published venue, and confirm it with LGU.");
+      setRouteEventId(null);
+      setRouteOrigin(null);
+      setRouteNotice("This event has no confirmed meeting-point pin inside SJDM. Ask the organizer to confirm the venue.");
       return;
     }
+
+    const usePosition = (latitude: number, longitude: number) => {
+      if (!isSjdmEventPoint(latitude, longitude)) {
+        setRouteOrigin(null);
+        setRouteEventId(null);
+        setRouteNotice("Your current location is outside SJDM. This Community Events map shows routes within San Jose del Monte only.");
+        return;
+      }
+      setRouteOrigin({ latitude, longitude });
+      setRouteEventId(event.id);
+    };
+
+    // Only request location after the visitor taps Show Route.
+    // Neither browser nor native GPS coordinates are stored in Firestore.
+    setRouteLoading(true);
     if (Platform.OS !== "web") {
-      setRouteNotice("On mobile, use the event pin and Open in Google Maps for road navigation.");
+      try {
+        const permission = await Location.requestForegroundPermissionsAsync();
+        if (permission.status !== "granted") {
+          setRouteNotice("Allow location permission to show an in-app route to the event.");
+          return;
+        }
+        const position = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
+        usePosition(position.coords.latitude, position.coords.longitude);
+      } catch {
+        setRouteNotice("Device GPS is unavailable. Enable location access and try Show Route again.");
+      } finally {
+        setRouteLoading(false);
+      }
       return;
     }
+
     const geolocation = (globalThis as any).navigator?.geolocation;
     if (!geolocation) {
-      setRouteNotice("This browser cannot provide GPS location. Use Open in Google Maps instead.");
+      setRouteLoading(false);
+      setRouteNotice("This browser cannot access GPS. Enable location services to show an in-app route.");
       return;
     }
-    setRouteLoading(true);
     geolocation.getCurrentPosition(
       (position: { coords: { latitude: number; longitude: number } }) => {
-        setRouteOrigin({ latitude: position.coords.latitude, longitude: position.coords.longitude });
-        setRouteEventId(event.id);
+        usePosition(position.coords.latitude, position.coords.longitude);
         setRouteLoading(false);
-        setRouteNotice("");
       },
       () => {
         setRouteEventId(null);
+        setRouteOrigin(null);
         setRouteLoading(false);
-        setRouteNotice("Location permission was denied or unavailable. Allow browser location access to preview the route, or use Google Maps directly.");
+        setRouteNotice("Location permission was denied or unavailable. Allow browser GPS access, then tap Show Route again.");
       },
       { enableHighAccuracy: true, timeout: 12000, maximumAge: 60000 }
     );
@@ -1939,19 +1968,16 @@ export default function CommunityEventsScreen() {
               <Text style={{fontSize:12,color:"#577987"}}>{eventScheduleLabel(event)}</Text>
               <Text style={{fontSize:12,color:"#577987"}}>{event.location}{event.barangay ? ", " + event.barangay : ""}, San Jose del Monte, Bulacan</Text>
               {!eventHasCoordinates(event) && <Text style={{fontSize:11,color:"#956619"}}>Approximate address — confirm the exact meeting point with Admin/LGU.</Text>}
+              {renderWebMap(event)}
               {eventHasCoordinates(event) && (
-                <CommunityEventRoadMap eventId={event.id} title={event.title} category={event.category}
-                  destination={{
-                    latitude: Number(event.coordinates?.latitude ?? event.latitude),
-                    longitude: Number(event.coordinates?.longitude ?? event.longitude),
-                  }} height={230} />
+                <Pressable accessibilityRole="button" accessibilityLabel={"Show road route in VolunServe for " + event.title}
+                  disabled={routeLoading} onPress={() => void showRouteInVolunServe(event)}
+                  style={{backgroundColor:"#087F75",padding:13,borderRadius:9,flexDirection:"row",alignItems:"center",justifyContent:"center",gap:8}}>
+                  <Ionicons name="map-outline" size={17} color="#FFFFFF"/>
+                  <Text style={{color:"#FFFFFF",fontWeight:"800",fontSize:12}}>{routeLoading ? "Locating…" : "Show Route"}</Text>
+                </Pressable>
               )}
-              <Pressable accessibilityRole="button" accessibilityLabel={"Navigate to " + event.title + " in Google Maps"}
-                onPress={() => void Linking.openURL(googleMapsNavigationUrl(event))}
-                style={{backgroundColor:"#087F75",padding:13,borderRadius:9,flexDirection:"row",alignItems:"center",justifyContent:"center",gap:8}}>
-                <Ionicons name="navigate-outline" size={17} color="#FFFFFF"/>
-                <Text style={{color:"#FFFFFF",fontWeight:"800",fontSize:12}}>Open Directions in Google Maps</Text>
-              </Pressable>
+              {!!routeNotice && <Text style={styles.lockedRouteNotice}>{routeNotice}</Text>}
             </View>
           </View>
         )}
@@ -2318,17 +2344,12 @@ export default function CommunityEventsScreen() {
               </View>}
               <View style={styles.lockedMapActions}>
                 {eventHasCoordinates(event) && (
-                  <Pressable style={styles.lockedMapOutline} accessibilityRole="button" accessibilityLabel="Show road route inside VolunServe" disabled={routeLoading}
-                    onPress={() => showRouteInVolunServe(event)}>
-                    {routeLoading ? <ActivityIndicator size="small" color="#08796F" /> : <Ionicons name="map-outline" size={16} color="#0B5963" />}
-                    <Text style={styles.lockedMapOutlineText}>{routeLoading ? "Locating…" : "Show Road Route"}</Text>
+                  <Pressable style={styles.lockedMapSolid} accessibilityRole="button" accessibilityLabel="Show road route inside VolunServe" disabled={routeLoading}
+                    onPress={() => void showRouteInVolunServe(event)}>
+                    {routeLoading ? <ActivityIndicator size="small" color="#FFFFFF" /> : <Ionicons name="map-outline" size={16} color="white" />}
+                    <Text style={styles.lockedMapSolidText}>{routeLoading ? "Locating…" : "Show Route"}</Text>
                   </Pressable>
                 )}
-                <Pressable style={styles.lockedMapSolid} accessibilityRole="button" accessibilityLabel="Open directions in Google Maps"
-                  onPress={() => void Linking.openURL(googleMapsNavigationUrl(event))}>
-                  <Ionicons name="navigate-outline" size={16} color="white" />
-                  <Text style={styles.lockedMapSolidText}>{eventHasCoordinates(event) ? "Navigate to GPS Pin" : "Open in Google Maps"}</Text>
-                </Pressable>
               </View>
               <Text style={styles.lockedMapFootnote}>In-app route uses OpenStreetMap roads and an OSRM estimate without live traffic. Your GPS is shared only with the routing service when you tap Show Road Route; it is not saved in Firestore.</Text>
             </View>
@@ -2405,7 +2426,7 @@ export default function CommunityEventsScreen() {
       </View>}
       {residentDetailTab==="map" && <View style={styles.ruiDetailContent}>
         <Text style={styles.ruiSectionTitle}>Event Venue & Directions</Text>
-        <Text style={styles.ruiParagraph}>{eventDestination(event)}</Text>
+        <Text style={styles.ruiParagraph}>{event.location}{event.barangay ? `, ${event.barangay}` : ""}, San Jose del Monte, Bulacan</Text>
         {event.proposedBy === user?.uid && (
           <CommunityEventLiveLocation
             eventId={event.id}
@@ -2419,7 +2440,7 @@ export default function CommunityEventsScreen() {
         {renderWebMap(event)}
         {eventHasCoordinates(event) && (
           <Pressable accessibilityRole="button" disabled={routeLoading}
-            onPress={() => showRouteInVolunServe(event)}
+            onPress={() => void showRouteInVolunServe(event)}
             style={[styles.ruiPrimary, { backgroundColor: "#E6F2EB", marginTop: 10 }]}>
             <Ionicons name="map-outline" size={17} color="#1E7156" />
             <Text style={[styles.ruiPrimaryText, { color: "#1E7156" }]}>
@@ -2431,10 +2452,6 @@ export default function CommunityEventsScreen() {
         {routeEventId === event.id && !!routeOrigin && (
           <Text style={styles.lockedMapFootnote}>Route estimate uses OSRM, not live traffic. GPS is not stored in VolunServe.</Text>
         )}
-        <Pressable style={styles.ruiPrimary} onPress={()=>void Linking.openURL(googleMapsDirectionsUrl(event))}>
-          <Text style={styles.ruiPrimaryText}>Open in Google Maps</Text>
-          <Ionicons name="navigate-outline" size={16} color="white"/>
-        </Pressable>
       </View>}
       {residentDetailTab==="volunteers" && <View style={styles.ruiDetailContent}><Text style={styles.ruiSectionTitle}>Volunteer Participation</Text><Text style={styles.ruiParagraph}>{Number(event.participantsCount||0)} of {Number(event.capacity||0)} slots filled. Approved volunteers can join in Volunteer Mode. Resident profiles are not disclosed here.</Text></View>}
       {residentDetailTab==="media" && <View style={styles.ruiDetailContent}><Text style={styles.ruiSectionTitle}>Location / Activity Photos</Text><View style={styles.ruiMediaGallery}>{pictures.map((url,index)=><Image key={index} source={{uri:url}} style={styles.ruiGalleryPhoto} resizeMode="cover"/>)}</View>{pictures.length===0&&<Text style={styles.ruiParagraph}>No public photos have been provided.</Text>}{!!(event as any).videoUrl&&videoLinkSupported((event as any).videoUrl)&&<Pressable onPress={()=>void Linking.openURL((event as any).videoUrl)} style={styles.ruiPrimary}><Text style={styles.ruiPrimaryText}>View Optional Event Video</Text><Ionicons name="play-circle-outline" size={16} color="white"/></Pressable>}</View>}
