@@ -69,6 +69,9 @@ export default function CampaignBeneficiaryWallet({
     <Text style={s.note}>
       Donors pay through VolunServe checkout. This test-only wallet alias is for the LGU release record, not for collecting donations.
     </Text>
+    {/* Always render the original donation checkout, even for the campaign owner.
+        Keep the beneficiary wallet private and independent of the donor controls. */}
+    {children}
   </View>;
 }
 const s=StyleSheet.create({
