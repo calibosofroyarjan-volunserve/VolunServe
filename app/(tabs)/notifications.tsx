@@ -5,7 +5,6 @@ import { collection, doc, onSnapshot, query, updateDoc, where } from "firebase/f
 import React, { useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { auth, db } from "../../lib/firebase";
-import { useUserSession } from "../../lib/useUserSession";
 import { useAnnouncementAlerts } from "../../lib/announcementAlerts";
 import { enableAndroidPhoneAlerts, disableAndroidPhoneAlerts } from "../../lib/androidNativePush";
 
@@ -41,8 +40,7 @@ const categoryOf = (item: NotificationItem): Exclude<Filter, "All" | "Unread"> =
 
 export default function NotificationsScreen() {
   const [uid, setUid] = useState<string | null>(null);
-  const { profile } = useUserSession();
-  const { items: announcementAlerts, markSeen } = useAnnouncementAlerts(uid, profile?.barangay);
+  const { items: announcementAlerts, markSeen } = useAnnouncementAlerts(uid);
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
