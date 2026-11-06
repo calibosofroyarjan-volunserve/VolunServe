@@ -1,0 +1,41 @@
+name: Audit Active VolunServe Announcement Rule (Read Only)
+on:
+  push:
+    branches: [hotfix/live-announcements-9d1-20261106]
+    paths: [.github/workflows/audit-active-announcement-rules-9d1-20261106.yml]
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: google-github-actions/auth@v3
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_VOLUNSERVE_3AA5B || secrets.FIREBASE_SERVICE_ACCOUNT }}
+          project_id: volunserve-3aa5b
+      - uses: google-github-actions/setup-gcloud@v3
+      - name: Read actual active announcement policy only, no writes
+        run: |
+          node <<'NODE'
+          const cp=require('node:child_process');
+          (async()=>{
+            const t=cp.execFileSync('gcloud',['auth','print-access-token'],{encoding:'utf8'}).trim();
+            const fetchJson=async url=>{
+              const x=await fetch(url,{headers:{Authorization:'Bearer '+t},signal:AbortSignal.timeout(20000)});
+              if(!x.ok)throw Error('Rules API HTTP '+x.status);
+              return x.json();
+            };
+            const root='https://firebaserules.googleapis.com/v1/';
+            const release=await fetchJson(root+'projects/volunserve-3aa5b/releases/cloud.firestore');
+            const rules=await fetchJson(root+release.rulesetName);
+            const source=(rules.source?.files||[]).map(f=>f.content||'').join('\n').replace(/\r\n/g,'\n');
+            const match=source.indexOf('match /announcements/{announcementId}');
+            console.log('Active rules revision:',release.rulesetName.split('/').pop());
+            console.log('Announcement block found:',match>=0);
+            if(match<0)throw Error('No announcement block in active rules.');
+            const next=source.indexOf('\n    match /',match+10);
+            const block=source.slice(match,next<0?source.length:next);
+            console.log('Announcement block policy (no secrets, no changes):\n'+block.slice(0,2500));
+          })().catch(e=>{console.error('AUDIT FAILED '+e.message);process.exit(1)});
+          NODE
