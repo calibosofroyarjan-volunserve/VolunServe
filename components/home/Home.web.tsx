@@ -75,6 +75,10 @@ type VolunteerAssignmentSummary = {
 type NotificationItem = {
   id: string;
   read?: boolean;
+  title?: string;
+  message?: string;
+  type?: string;
+  createdAt?: unknown;
 };
 
 type WeatherState = {
@@ -158,6 +162,7 @@ export default function WebHome() {
   const [weatherError, setWeatherError] = useState(false);
   const [mobileSlide, setMobileSlide] = useState(0);
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
+  const [notificationMenuOpen, setNotificationMenuOpen] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
 
   const compact = width < 1040;
@@ -405,6 +410,13 @@ export default function WebHome() {
     [notifications, announcementAlerts]
   );
 
+  const latestBellAlerts = useMemo(() =>
+    [...notifications, ...announcementAlerts]
+      .sort((a, b) => toMillis(b.createdAt) - toMillis(a.createdAt))
+      .slice(0, 5),
+    [notifications, announcementAlerts]
+  );
+
   const reportStatus = latestCase
     ? formatStatus(latestCase.status)
     : "No reports";
@@ -579,7 +591,11 @@ export default function WebHome() {
                     styles.notificationButton,
                     pressed && styles.pressed,
                   ]}
-                  onPress={() => router.push("/notifications")}
+                  accessibilityState={{ expanded: notificationMenuOpen }}
+                  onPress={() => {
+                    setProfileMenuOpen(false);
+                    setNotificationMenuOpen(open => !open);
+                  }}
                 >
                   <Ionicons
                     name="notifications-outline"
@@ -604,7 +620,7 @@ export default function WebHome() {
                     profileMenuOpen && styles.profileButtonOpen,
                     pressed && styles.pressed,
                   ]}
-                  onPress={() => setProfileMenuOpen(current => !current)}
+                  onPress={() => { setNotificationMenuOpen(false); setProfileMenuOpen(current => !current); }}
                 >
                   {profile?.profilePictureUrl ? (
                     <Image
@@ -628,6 +644,47 @@ export default function WebHome() {
                 </Pressable>
               </View>
             </View>
+            {notificationMenuOpen ? (
+              <View style={styles.bellDropdown}>
+                <View style={styles.bellDropdownHeading}>
+                  <View>
+                    <Text style={styles.bellDropdownTitle}>Notifications</Text>
+                    <Text style={styles.bellDropdownSub}>{unreadCount} unread update{unreadCount === 1 ? "" : "s"}</Text>
+                  </View>
+                  <Pressable accessibilityRole="button" accessibilityLabel="Close notification dropdown" onPress={() => setNotificationMenuOpen(false)} style={styles.bellCloseButton}>
+                    <Ionicons name="close-outline" size={20} color="#60768A" />
+                  </Pressable>
+                </View>
+                {latestBellAlerts.length ? latestBellAlerts.map((item) => (
+                  <Pressable
+                    key={item.id}
+                    accessibilityRole="button"
+                    accessibilityLabel={"Open notification: " + (item.title || "VolunServe update")}
+                    style={[styles.bellAlertRow, !item.read && styles.bellAlertUnread]}
+                    onPress={() => {setNotificationMenuOpen(false); router.push("/notifications");}}
+                  >
+                    <View style={styles.bellAlertIcon}>
+                      <Ionicons name={item.type === "announcement" ? "megaphone-outline" : "notifications-outline"} size={17} color="#087F74"/>
+                    </View>
+                    <View style={styles.bellAlertText}>
+                      <Text numberOfLines={1} style={styles.bellAlertTitle}>{item.title || "VolunServe update"}</Text>
+                      <Text numberOfLines={2} style={styles.bellAlertMessage}>{item.message || "Open your notifications for details."}</Text>
+                      <Text style={styles.bellAlertDate}>{formatDate(item.createdAt)}</Text>
+                    </View>
+                    {!item.read && <View style={styles.bellUnreadDot} />}
+                  </Pressable>
+                )) : (
+                  <View style={styles.bellEmpty}>
+                    <Ionicons name="notifications-off-outline" size={23} color="#8A9BA6"/>
+                    <Text style={styles.bellEmptyText}>You're all caught up. No notifications yet.</Text>
+                  </View>
+                )}
+                <Pressable accessibilityRole="button" accessibilityLabel="View all notifications" style={styles.bellViewAll} onPress={() => {setNotificationMenuOpen(false); router.push("/notifications");}}>
+                  <Text style={styles.bellViewAllText}>View All Notifications</Text>
+                  <Ionicons name="arrow-forward" size={16} color="#087F74"/>
+                </Pressable>
+              </View>
+            ) : null}
             {profileMenuOpen ? (
               <View style={styles.profileDropdown}>
                 <View style={styles.dropdownIdentity}>
@@ -1260,6 +1317,40 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
     zIndex: 70,
   },
+  bellDropdown: {
+    position: "absolute",
+    right: 214,
+    top: 57,
+    width: 350,
+    maxWidth: "96%",
+    backgroundColor: "#FFFFFF",
+    borderColor: "#E4EDF1",
+    borderWidth: 1,
+    borderRadius: 16,
+    padding: 10,
+    zIndex: 95,
+    shadowColor: "#0B2E45",
+    shadowOffset: {width: 0, height: 12},
+    shadowOpacity: 0.16,
+    shadowRadius: 24,
+    elevation: 24,
+  },
+  bellDropdownHeading: {flexDirection: "row", justifyContent: "space-between", alignItems: "center", padding: 10, borderBottomWidth: 1, borderBottomColor: "#EAF1F3"},
+  bellDropdownTitle: {fontSize: 15, fontWeight: "800", color: "#173847"},
+  bellDropdownSub: {fontSize: 11, color: "#6B808D", marginTop: 3},
+  bellCloseButton: {padding: 6},
+  bellAlertRow: {flexDirection: "row", alignItems: "center", padding: 10, gap: 10, borderBottomWidth: 1, borderBottomColor: "#EFF3F5", borderRadius: 8},
+  bellAlertUnread: {backgroundColor: "#F1FAF6"},
+  bellAlertIcon: {height: 35, width: 35, borderRadius: 18, alignItems: "center", justifyContent: "center", backgroundColor: "#E2F3EC"},
+  bellAlertText: {flex: 1, minWidth: 0},
+  bellAlertTitle: {color: "#203B4B", fontSize: 12, fontWeight: "800"},
+  bellAlertMessage: {color: "#506879", fontSize: 11, lineHeight: 16, marginTop: 3},
+  bellAlertDate: {color: "#81949E", fontSize: 10, marginTop: 4},
+  bellUnreadDot: {backgroundColor: "#0B9277", width: 7, height: 7, borderRadius: 4},
+  bellEmpty: {alignItems: "center", padding: 20, gap: 8},
+  bellEmptyText: {color: "#68818E", textAlign: "center", fontSize: 11},
+  bellViewAll: {flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, marginTop: 6, paddingVertical: 11},
+  bellViewAllText: {fontSize: 12, fontWeight: "800", color: "#087F74"},
   profileDropdown: {
     position: "absolute",
     top: 57,
