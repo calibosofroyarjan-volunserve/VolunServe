@@ -1,0 +1,19 @@
+name: Validate Public Assistance Appeals Backend (NO DEPLOY)
+on:
+  push:
+    branches: [feature/verified-assistance-in-kind-appeal-backend-20261106]
+permissions:
+  contents: read
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with: {submodules: false}
+      - uses: actions/setup-node@v4
+        with: {node-version: "22"}
+      - run: node --check backend/publicAssistanceAppeals.js
+      - run: node --check backend/server.js
+      - run: node --test backend/tests/publicAssistanceAppeals.test.js
+      - run: echo "Validation only. No Render, Hosting or database deployment."
