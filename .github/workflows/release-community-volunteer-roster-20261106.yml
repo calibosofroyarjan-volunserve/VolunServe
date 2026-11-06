@@ -1,0 +1,83 @@
+name: Publish Privacy-Safe Volunteer Event Roster - Hosting ONLY
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/release-community-volunteer-roster-20261106.yml'
+permissions:
+  contents: read
+concurrency:
+  group: volunserve-production-hosting-release
+  cancel-in-progress: false
+jobs:
+  scoped-volunteer-roster:
+    if: github.repository == 'calibosofroyarjan-volunserve/VolunServe'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      LIVE_BASE: 70b9785cd7baa9ae82933eeeedc0660ccb2a18dc
+      FIREBASE_SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_VOLUNSERVE_3AA5B || secrets.FIREBASE_SERVICE_ACCOUNT }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Reject unrelated changes since current production Hosting
+        shell: bash
+        run: |
+          set -euo pipefail
+          git merge-base --is-ancestor "$LIVE_BASE" HEAD
+          MODIFIED="$(git diff --name-only "$LIVE_BASE" HEAD | grep -Ev '^((app/\(tabs\)/community-events\.tsx)|(backend/communityEventRoster\.js)|(backend/test-communityEventRoster\.js)|(backend/server\.js)|(components/volunteers/CommunityEventRoster\.tsx)|(\.github/workflows/validate-volunteer-roster-20261106\.yml)|(\.github/workflows/release-community-volunteer-roster-20261106\.yml))$' || true)"
+          test -z "$MODIFIED" || { echo "::error::Unreviewed production differences: $MODIFIED"; exit 1; }
+          git diff --exit-code "$LIVE_BASE" HEAD -- 'app/login.tsx' 'app/login.web.tsx' 'app/signup.tsx' 'app/signup.web.tsx' 'app/(admin)' 'app/(superadmin)' 'firestore.rules' 'firebase.json' 'components/donations' 'app/(tabs)/certificate.tsx'
+      - name: Check previous live domain and backend API
+        shell: bash
+        env:
+          VOLUNSERVE_HOSTING_URL: https://volunserve.com
+          VOLUNSERVE_EXPECTED_SHA: ${{ env.LIVE_BASE }}
+        run: |
+          node scripts/check-live-hosting.cjs
+          for i in 1 2 3 4 5 6; do
+            STATUS="$(curl --location --silent --show-error --output /tmp/volunserve-roster.json --write-out '%{http_code}' 'https://volunserve.onrender.com/api/community-events/test-roster-unauthenticated/volunteers?page=1' || true)"
+            if [ "$STATUS" = 401 ]; then
+              echo "PASS: new Render roster endpoint is deployed and requires authentication"; break
+            fi
+            if [ "$i" = 6 ]; then echo "::error::Render roster endpoint not verified ($STATUS). Hosting not changed"; exit 1; fi
+            sleep 10
+          done
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Regression tests and Expo production build
+        run: |
+          node backend/test-communityEventRoster.js
+          node scripts/test-volunteer-community-event-join-20261106.cjs
+          npx tsc --noEmit --incremental false
+          npx expo export --platform web --clear
+          node scripts/verify-hosting-release.cjs
+      - name: Recheck current live base and credentials
+        env:
+          VOLUNSERVE_HOSTING_URL: https://volunserve.com
+          VOLUNSERVE_EXPECTED_SHA: ${{ env.LIVE_BASE }}
+        run: |
+          test -n "$FIREBASE_SA" || { echo "::error::Missing Firebase service account"; exit 1; }
+          node scripts/check-live-hosting.cjs
+      - name: Deploy Hosting ONLY; no Firestore Rules, Auth, data, backend or AI
+        uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          firebaseServiceAccount: ${{ env.FIREBASE_SA }}
+          projectId: volunserve-3aa5b
+          channelId: live
+      - name: Confirm exact frontend release at volunserve.com
+        env:
+          VOLUNSERVE_HOSTING_URL: https://volunserve.com
+          VOLUNSERVE_EXPECTED_SHA: ${{ github.sha }}
+        run: |
+          for i in 1 2 3 4 5 6; do
+            if node scripts/check-live-hosting.cjs; then exit 0; fi
+            sleep 10
+          done
+          echo "::error::Unable to confirm current production frontend revision"; exit 1
