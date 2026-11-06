@@ -33,6 +33,7 @@ jobs:
       - name: Confirm existing volunteer Join and other modules remain unmodified
         shell: bash
         run: |
+          git fetch --no-tags origin main:refs/remotes/origin/main
           git diff --exit-code origin/main -- 'app/(tabs)/community-events.tsx' 'app/(tabs)/volunteer.tsx' 'app/(tabs)/volunteer.web.tsx' 'app/(tabs)/certificate.tsx' 'app/login.tsx' 'app/signup.tsx' 'firestore.rules' 'app/(admin)' 'app/(superadmin)'
       - name: TypeScript and web export
         run: |
