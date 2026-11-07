@@ -1,0 +1,82 @@
+# NO PRODUCTION DEPLOY. Full release readiness against real live marker using the exact live-derived source.
+name: Full Production Release Readiness Test (NO DEPLOY)
+on:
+  push:
+    branches: [test/full-release-readiness-no-deploy-20261108]
+permissions:
+  contents: read
+concurrency:
+  group: volunserve-release-readiness-test
+  cancel-in-progress: true
+jobs:
+  validate-release-artifact-without-publishing:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      CI: 'true'
+      EXPO_NO_TELEMETRY: '1'
+      EXPECTED_LIVE: e83f4a72c7cb733ff7bb888a6ac19bf3c0f076c4
+    steps:
+      - name: Checkout live-derived review commit (not outdated main)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Verify exact live ancestry and ZERO app changes
+        shell: bash
+        run: |
+          set -euo pipefail
+          git merge-base --is-ancestor "$EXPECTED_LIVE" HEAD
+          if git diff --name-only "$EXPECTED_LIVE" HEAD | grep -Ev '^(\.github/workflows/|scripts/guard-live-protected-release\.cjs$|docs/LIVE_PROTECTED_DEPLOYMENT\.md$)' ; then
+            echo "::error::Application or unapproved source differs from actual live baseline"
+            exit 1
+          fi
+          echo "PASS: current release-safety source is live-derived; ZERO app changes"
+      - name: Verify release guard tests, including block of outdated main
+        run: |
+          node --check scripts/guard-live-protected-release.cjs
+          node scripts/guard-live-protected-release.cjs --self-test
+      - name: Confirm real live Hosting routes and EXACT SHA (READ ONLY)
+        env:
+          VOLUNSERVE_HOSTING_URL: https://volunserve.com
+          VOLUNSERVE_EXPECTED_SHA: ${{ env.EXPECTED_LIVE }}
+        run: node scripts/check-live-hosting.cjs
+      - name: Install exact lockfile dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Validate TS frontend and web/static source
+        run: npx tsc --noEmit --incremental false
+      - name: Test login, user roles, navigation and volunteer behavior
+        run: |
+          node scripts/test-premium-auth-portal.cjs
+          node scripts/test-unified-login-routing.cjs
+          node scripts/test-admin-navigation-contract.cjs
+          node scripts/test-resident-volunteer-sidebar.cjs
+          node scripts/test-embedded-emergency-map-navigation.cjs
+          node scripts/test-volunteer-community-event-join-20261106.cjs
+          node scripts/test-volunteer-time-controls-20261106.cjs
+      - name: Produce full production web export but DO NOT publish it
+        run: |
+          npx expo export --platform web --clear
+          node scripts/verify-hosting-release.cjs
+      - name: Verify export fingerprint identifies exact tested code
+        shell: bash
+        run: |
+          node - <<'NODE'
+          const fs=require('fs'),assert=require('node:assert/strict');
+          const m=JSON.parse(fs.readFileSync('dist/volunserve-release.json','utf8'));
+          assert.equal(m.revision,process.env.GITHUB_SHA);
+          assert.equal(m.firebaseProject,'volunserve-3aa5b');
+          assert.equal(m.releaseType,'firebase-hosting-web');
+          console.log('PASS: reviewed candidate build has exact immutable revision',m.revision);
+          NODE
+      - name: Verify production is STILL on previously approved live SHA
+        env:
+          VOLUNSERVE_HOSTING_URL: https://volunserve.com
+          VOLUNSERVE_EXPECTED_SHA: ${{ env.EXPECTED_LIVE }}
+        run: node scripts/check-live-hosting.cjs
+      - name: Confirm deployment NOT performed
+        run: echo "BUILD AND RELEASE READINESS ONLY. No Firebase, Render, Firestore, database or credential operations."
