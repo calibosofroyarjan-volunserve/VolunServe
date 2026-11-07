@@ -276,7 +276,7 @@ export default function EmailFirstSignup() {
     setShowErrors(true);
     setError("");
     setMessage("");
-    if (resumeMode ? !email.trim() : !!emailErr) return;
+    if (emailErr) return;
     // Existing accounts may have older passwords; only new credentials
     // must pass the current complexity policy.
     if (resumeMode ? !password.trim() : !!passwordErr) return;
@@ -324,6 +324,11 @@ export default function EmailFirstSignup() {
     setBusy(true); setError(""); setMessage("");
     try {
       const user = await signInGoogle();
+      const googleEmailError = getRegistrationEmailError(user.email || "");
+      if (googleEmailError) {
+        if (auth.currentUser?.uid === user.uid) await signOut(auth);
+        throw new Error(googleEmailError);
+      }
       const state = await inspectSignupUser(user);
       showRegistrationState(state);
       if (!user.emailVerified) setMessage("Verify your Google email to continue registration.");
