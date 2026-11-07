@@ -270,10 +270,10 @@ const styles = StyleSheet.create({
 
   content: {
     width: "100%",
-    maxWidth: 900,
+    maxWidth: 1100,
     alignSelf: "center",
-    paddingHorizontal: 24,
-    paddingTop: 28,
+    paddingHorizontal: 26,
+    paddingTop: 30,
     paddingBottom: 60,
   },
 
@@ -342,10 +342,15 @@ const styles = StyleSheet.create({
   formCard: {
     backgroundColor: "#FFFFFF",
     borderWidth: 1,
-    borderColor: "#E2E8F0",
-    borderRadius: 9,
-    padding: 20,
-  },
+    borderColor: "#D9E7DF",
+    borderRadius: 19,
+    padding: 26,
+  
+    shadowColor: "#153C2F",
+    shadowOpacity: 0.05,
+    shadowRadius: 15,
+    shadowOffset: {width:0,height:5},
+    elevation: 1},
 
   inputLabel: {
     color: "#475569",
@@ -357,12 +362,12 @@ const styles = StyleSheet.create({
 
   input: {
     width: "100%",
-    minHeight: 48,
+    minHeight: 50,
     borderWidth: 1,
-    borderColor: "#CBD5E1",
+    borderColor: "#C8DDD0",
     backgroundColor: "#FFFFFF",
-    borderRadius: 10,
-    paddingHorizontal: 13,
+    borderRadius: 12,
+    paddingHorizontal: 15,
     paddingVertical: 11,
     fontSize: 14,
     color: "#1E293B",
@@ -388,8 +393,8 @@ const styles = StyleSheet.create({
   noticeText: { color: "#163F34", fontSize: designUi.type.body.fontSize, fontWeight: designUi.type.body.fontWeight, lineHeight: designUi.type.body.lineHeight,},
   submitButton: {
     minHeight: 48,
-    backgroundColor: "#087F78",
-    borderRadius: 10,
+    backgroundColor: "#0D8061",
+    borderRadius: 12,
     alignItems: "center",
     justifyContent: "center",
     paddingHorizontal: 18,

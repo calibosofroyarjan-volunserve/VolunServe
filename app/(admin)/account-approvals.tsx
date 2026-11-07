@@ -809,9 +809,9 @@ const styles =
     recordsTitle: { color: "#153E32", fontSize: 18, fontWeight: "900" },
     recordsDescription: { color: "#6D8778", fontSize: 12, lineHeight: 19, marginTop: 5 },
     container: {
-      padding: 20,
-      paddingBottom: 50,
-      backgroundColor: "#F4F8F5",
+      padding: 26,
+      paddingBottom: 64,
+      backgroundColor: "#F5F8F6",
     },
 
     center: {
@@ -872,7 +872,7 @@ const styles =
     reviewSummary: { backgroundColor: "#E9F7EF", borderWidth: 1, borderColor: "#CDE8D9", borderRadius: 11, padding: 12, marginBottom: 12 },
     reviewSummaryText: { color: "#245846", fontSize: 12, fontWeight: "700", lineHeight: 18 },
     searchWrap: { flexDirection: "row", alignItems: "center", gap: 9, backgroundColor: "#FFFFFF", borderWidth: 1, borderColor: "#D8E5DE", borderRadius: 12, paddingHorizontal: 13, marginBottom: 10 },
-    searchInput: { flex: 1, minHeight: 46, fontSize: 13, color: "#173D32" },
+    searchInput: { flex: 1, minHeight: 48, fontSize: 14, color: "#173D32" },
     approvalEvidenceScroll: { maxHeight: 260, marginTop: 12 },
     approvalEvidence: { backgroundColor: "#F6FBF8", borderColor: "#D9EAE0", borderWidth: 1, borderRadius: 11, padding: 13, marginVertical: 13, gap: 3 },
     evidenceTitle: { color: "#173D32", fontSize: 14, fontWeight: "900", marginBottom: 5 },
@@ -923,12 +923,17 @@ const styles =
 
     card: {
       backgroundColor: "#FFFFFF",
-      borderRadius: 14,
-      padding: 18,
-      marginBottom: 12,
+      borderRadius: 18,
+      padding: 22,
+      marginBottom: 15,
       borderWidth: 1,
-      borderColor: "#E2E8F0",
-    },
+      borderColor: "#DBE8DF",
+    
+    shadowColor: "#153C2F",
+    shadowOpacity: 0.04,
+    shadowRadius: 12,
+    shadowOffset: {width:0,height:4},
+    elevation: 1},
 
     cardHeader: {
       flexDirection: "row",

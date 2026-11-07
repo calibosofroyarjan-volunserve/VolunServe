@@ -1157,8 +1157,8 @@ const styles =
       width: "100%",
       maxWidth: 920,
       alignSelf: "center",
-      padding: 24,
-      paddingBottom: 70,
+      padding: 28,
+      paddingBottom: 76,
     },
 
     loadingScreen: {
@@ -1204,12 +1204,12 @@ const styles =
 
     purposeCard: {
       marginBottom: 14,
-      padding: 14,
+      padding: 19,
       flexDirection: "row",
       alignItems:
         "flex-start",
       gap: 11,
-      borderRadius: 13,
+      borderRadius: 17,
       backgroundColor:
         "#EDF8F5",
       borderWidth: 1,
@@ -1245,12 +1245,12 @@ const styles =
     },
 
     permissionCard: {
-      padding: 22,
+      padding: 27,
       alignItems: "center",
-      borderRadius: 16,
+      borderRadius: 20,
       borderWidth: 1,
       borderColor:
-        "#DCE5EA",
+        "#DCE8DF",
       backgroundColor:
         "#FFFFFF",
     },
@@ -1284,7 +1284,7 @@ const styles =
 
     primaryButton: {
       marginTop: 15,
-      minHeight: 42,
+      minHeight: 46,
       paddingHorizontal: 18,
       paddingVertical: 10,
       flexDirection: "row",
@@ -1292,9 +1292,9 @@ const styles =
       justifyContent:
         "center",
       gap: 7,
-      borderRadius: 9,
+      borderRadius: 12,
       backgroundColor:
-        "#087F78",
+        "#0B8061",
     },
 
     primaryButtonText: {
@@ -1585,16 +1585,16 @@ const styles =
 
     input: {
       marginTop: 6,
-      minHeight: 45,
-      paddingHorizontal: 12,
-      borderRadius: 9,
+      minHeight: 48,
+      paddingHorizontal: 15,
+      borderRadius: 12,
       borderWidth: 1,
       borderColor:
-        "#CBD8DE",
+        "#C6DCD0",
       backgroundColor:
         "#FBFCFD",
       color: "#173748",
-      fontSize: 12,
+      fontSize: 14,
     },
 
     manualButton: {

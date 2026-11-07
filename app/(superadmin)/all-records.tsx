@@ -1615,10 +1615,10 @@ function RecordCard({
 const styles =
   StyleSheet.create({
     container: {
-      padding: 24,
-      paddingBottom: 60,
+      padding: 28,
+      paddingBottom: 70,
       backgroundColor:
-        "#F1F5F9",
+        "#F5F8F6",
       minHeight: "100%",
     },
 
@@ -1818,7 +1818,7 @@ const styles =
 
     searchInput: {
       flex: 1,
-      minHeight: 45,
+      minHeight: 48,
       color: "#173D32",
       outlineStyle: "none",
     } as any,

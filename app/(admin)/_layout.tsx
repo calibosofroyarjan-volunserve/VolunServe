@@ -579,7 +579,7 @@ const styles =
     shell: {
       flex: 1,
       flexDirection: "row",
-      backgroundColor: "#F6F8F7",
+      backgroundColor: "#F5F8F6",
     },
 
     center: {
@@ -606,9 +606,9 @@ const styles =
       minHeight: 0,
       flexShrink: 0,
       overflow: "hidden",
-      backgroundColor: "#0F392F",
+      backgroundColor: "#0D392E",
       borderRightWidth: 1,
-      borderRightColor: "#1D5547",
+      borderRightColor: "#245947",
     },
 
     brand: {
@@ -684,10 +684,10 @@ const styles =
       letterSpacing: 1.1, lineHeight: designUi.type.eyebrow.lineHeight,},
 
     navItem: {
-      minHeight: 49,
-      marginBottom: 3,
-      paddingHorizontal: 9,
-      borderRadius: 9,
+      minHeight: 48,
+      marginBottom: 4,
+      paddingHorizontal: 12,
+      borderRadius: 12,
       flexDirection: "row",
       alignItems: "center",
       gap: 11,
@@ -696,7 +696,7 @@ const styles =
     navSelectedGradient: { ...StyleSheet.absoluteFillObject, borderRadius: 13 },
 
     navItemActive: {
-      backgroundColor: "#257C61",
+      backgroundColor: "#1C7258",
     },
 
     navLabel: {
@@ -756,7 +756,7 @@ const styles =
     main: {
       flex: 1,
       minWidth: 0,
-      backgroundColor: "#F6F8F7",
+      backgroundColor: "#F5F8F6",
     },
 
     topBar: {
@@ -771,7 +771,7 @@ const styles =
       borderBottomWidth:
         1,
       borderBottomColor:
-        "#DAE7DD",
+        "#DEE9E2",
       backgroundColor:
         "#FFFFFF",
     },
@@ -805,9 +805,9 @@ const styles =
       flexDirection: "row",
       alignItems: "center",
       gap: 11,
-      minHeight: 56,
-      borderRadius: 9,
-      paddingHorizontal: 10,
+      minHeight: 52,
+      borderRadius: 13,
+      paddingHorizontal: 14,
     },
 
     profileAvatar: {

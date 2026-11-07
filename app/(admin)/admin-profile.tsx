@@ -191,7 +191,7 @@ export default function AdminProfile() {
 
 const styles = StyleSheet.create({
   screen: { flex: 1, minHeight: 0, backgroundColor: "#F6F8F7" },
-  page: { width: "100%", maxWidth: 1150, alignSelf: "center", paddingHorizontal: 32, paddingTop: 31, paddingBottom: 68 },
+  page: { width: "100%", maxWidth: 1150, alignSelf: "center", paddingHorizontal: 32, paddingTop: 28, paddingBottom: 68 },
   pageCompact: { paddingHorizontal: 18, paddingTop: 24 },
   loading: { flex: 1, alignItems: "center", justifyContent: "center", gap: 12, backgroundColor: "#F6F8F7" },
   muted: { color: "#708278", fontSize: 13 },
@@ -201,7 +201,7 @@ const styles = StyleSheet.create({
   subtitle: { fontSize: designUi.type.body.fontSize, lineHeight: designUi.type.body.lineHeight, color: "#6F8276", marginTop: 5, fontWeight: designUi.type.body.fontWeight,},
   backButton: { flexDirection: "row", gap: 6, alignItems: "center", minHeight: 40, paddingHorizontal: 11, borderRadius: 8, borderWidth: 1, borderColor: "#D6E5DB" },
   backText: { color: "#23765F", fontSize: 12, fontWeight: "600" },
-  identity: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 17, paddingVertical: 22, borderTopWidth: 1, borderBottomWidth: 1, borderColor: "#DCE8DF", marginBottom: 31 },
+  identity: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 22, paddingVertical: 26, borderTopWidth: 1, borderBottomWidth: 1, borderColor: "#DCE8DF", marginBottom: 31 },
   avatar: { width: 68, height: 68, borderRadius: 34, backgroundColor: "#186452", justifyContent: "center", alignItems: "center" },
   avatarText: { color: "#FFFFFF", fontSize: 23, fontWeight: "700" },
   identityCopy: { flex: 1, minWidth: 190 },
@@ -225,7 +225,7 @@ const styles = StyleSheet.create({
   detailValue: { color: "#233F34", fontSize: 13, fontWeight: "600", lineHeight: 20 },
   form: { gap: 8, marginTop: 5 },
   fieldLabel: { color: "#395F4F", fontSize: designUi.type.label.fontSize, fontWeight: designUi.type.label.fontWeight, marginTop: 5, lineHeight: designUi.type.label.lineHeight,},
-  input: { minHeight: 44, borderRadius: 8, backgroundColor: "#FFFFFF", borderWidth: 1, borderColor: "#CCDCD2", paddingHorizontal: 13, color: "#1A3E31", fontSize: 13 },
+  input: { minHeight: 48, borderRadius: 12, backgroundColor: "#FFFFFF", borderWidth: 1, borderColor: "#C8DDD0", paddingHorizontal: 15, color: "#1A3E31", fontSize: 13 },
   buttonRow: { flexDirection: "row", flexWrap: "wrap", gap: 10, marginTop: 14 },
   saveButton: { minHeight: 42, minWidth: 132, justifyContent: "center", alignItems: "center", paddingHorizontal: 15, backgroundColor: "#23765F", borderRadius: 8 },
   saveText: { color: "#FFFFFF", fontSize: 12.5, fontWeight: "700" },

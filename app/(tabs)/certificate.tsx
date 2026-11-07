@@ -1286,8 +1286,8 @@ const styles =
       width: "100%",
       maxWidth: 1050,
       alignSelf: "center",
-      padding: 24,
-      paddingBottom: 70,
+      padding: 27,
+      paddingBottom: 76,
     },
 
     loadingScreen: {
@@ -1692,12 +1692,13 @@ const styles =
     },
 
     primaryButton: {
-      paddingHorizontal: 16,
+      paddingHorizontal: 20,
       paddingVertical: 11,
-      borderRadius: 9,
+      borderRadius: 12,
       backgroundColor:
-        "#087F78",
-    },
+        "#087C61",
+    
+    minHeight: 46},
 
     primaryButtonText: {
       color: "#FFFFFF",

@@ -980,10 +980,10 @@ const styles = StyleSheet.create({
   } as any,
   page: {
     width: "100%",
-    maxWidth: 1450,
+    maxWidth: 1520,
     alignSelf: "center",
-    padding: 24,
-    paddingBottom: 70,
+    padding: 28,
+    paddingBottom: 76,
   },
   center: {
     flex: 1,
@@ -1160,7 +1160,7 @@ const styles = StyleSheet.create({
     flex: 1,
     minWidth: 0,
     color: "#173D32",
-    fontSize: 12.5,
+    fontSize: 14,
     outlineStyle: "none",
   } as any,
   errorCard: {
@@ -1292,12 +1292,17 @@ const styles = StyleSheet.create({
     fontSize: 9.5,
   },
   detailPanel: {
-    padding: 18,
-    borderRadius: 9,
+    padding: 22,
+    borderRadius: 17,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: "#DAE8DF",
     backgroundColor: "#FFFFFF",
-  },
+  
+    shadowColor: "#153C2F",
+    shadowOpacity: 0.04,
+    shadowRadius: 12,
+    shadowOffset: {width:0,height:4},
+    elevation: 1},
   detailPanelWide: {
     flex: 1,
     minWidth: 0,

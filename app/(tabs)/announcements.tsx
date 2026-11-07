@@ -353,11 +353,11 @@ const styles = StyleSheet.create({
 
   content: {
     width: "100%",
-    maxWidth: 1000,
+    maxWidth: 1120,
     alignSelf: "center",
 
-    paddingHorizontal: 24,
-    paddingTop: 28,
+    paddingHorizontal: 26,
+    paddingTop: 30,
     paddingBottom: 60,
   },
 
@@ -412,11 +412,11 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#C7EAE5",
 
-    borderRadius: 15,
+    borderRadius: 17,
 
-    padding: 16,
+    padding: 20,
 
-    marginBottom: 18,
+    marginBottom: 22,
   },
 
   areaLabel: {
@@ -469,11 +469,11 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFFFF",
 
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: "#DCE8DF",
 
-    borderRadius: 16,
+    borderRadius: 18,
 
-    padding: 30,
+    padding: 36,
 
     alignItems: "center",
   },
@@ -518,14 +518,19 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFFFF",
 
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: "#DCE8DF",
 
-    borderRadius: 16,
+    borderRadius: 18,
 
-    padding: 18,
+    padding: 22,
 
-    marginBottom: 13,
-  },
+    marginBottom: 15,
+  
+    shadowColor: "#153C2F",
+    shadowOpacity: 0.04,
+    shadowRadius: 12,
+    shadowOffset: {width:0,height:4},
+    elevation: 1},
 
   cardTopRow: {
     flexDirection: "row",
