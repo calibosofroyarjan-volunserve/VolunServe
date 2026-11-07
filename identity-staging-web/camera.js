@@ -1,4 +1,4 @@
-import {evaluateLighting,assessFaceBoxes,frameDifference} from "./camera-metrics.mjs";
+import {evaluateLighting,assessFaceBoxes,frameDifference,assessDocumentFrame} from "./camera-metrics.mjs";
 // Staging-only live camera guidance. Camera tracking != liveness or ID authentication.
 const $=id=>document.getElementById(id);
 if(location.hostname!=="volunserve-identity-test-staging.onrender.com")throw Error("Staging-only camera guard");
@@ -45,7 +45,7 @@ function preview(stage,file){
  }
 }
 const modal=document.createElement("dialog");modal.id="scanModal";
-modal.innerHTML='<div class="scan-modal-head"><h3 id="scanTitle">Live camera</h3><button type="button" class="alt" id="scanClose">✕ Close</button></div><div class="cam-view"><video id="scanVideo" autoplay playsinline muted></video><canvas id="scanOverlay"></canvas><div id="scanGuide" class="frame-guide"></div></div><div class="scan-modal-body"><div id="scanStatus" class="cam-status" role="status">Starting...</div><div class="cam-note" id="scanNote"></div><label class="check" style="margin:12px 0"><input type="checkbox" id="scanAuto" checked><span>Auto-capture centered selfie when stable (experimental). Retake is always available.</span></label><div class="scan-controls"><button type="button" id="scanCapture">Capture now</button><button type="button" class="alt" id="scanCancel">Cancel</button></div></div>';
+modal.innerHTML='<div class="scan-modal-head"><h3 id="scanTitle">Live camera</h3><button type="button" class="alt" id="scanClose">✕ Close</button></div><div class="cam-view"><video id="scanVideo" autoplay playsinline muted></video><canvas id="scanOverlay"></canvas><div id="scanGuide" class="frame-guide"></div></div><div class="scan-modal-body"><div id="scanStatus" class="cam-status" role="status">Starting...</div><div class="cam-note" id="scanNote"></div><label class="check" style="margin:12px 0"><input type="checkbox" id="scanAuto" checked><span>Auto-capture when framing is stable (experimental). Retake is always available.</span></label><div class="scan-controls"><button type="button" id="scanCapture">Capture now</button><button type="button" class="alt" id="scanCancel">Cancel</button></div></div>';
 document.body.append(modal);
 const video=$("scanVideo"),canvas=$("scanOverlay"),ctx=canvas.getContext("2d");
 let stream=null,timer=null,mode=null,session=0,stable=0,previous=null,detector=null,detectorLoading=null,detectorUnavailable=false,capturing=false;
@@ -74,9 +74,9 @@ async function start(stage){
  $("scanTitle").textContent=TYPES[stage].label;
  $("scanGuide").classList.toggle("face",stage==="selfie");
  video.classList.toggle("mirror",stage==="selfie");canvas.classList.toggle("mirror",stage==="selfie");
- $("scanAuto").closest("label").classList.toggle("hidden",stage!=="selfie");
+ $("scanAuto").closest("label").classList.remove("hidden");
  $("scanAuto").checked=true;
- $("scanNote").textContent=stage==="selfie"?"Center one face. Face boxes are local guidance only, NOT liveness detection.":"Keep the full ID in the green guide. Document presence and authenticity are NOT detected here.";
+ $("scanNote").textContent=stage==="selfie"?"Center one face. Face boxes are local guidance only, NOT liveness detection.":"Align all four edges of the ID against a contrasting background. Auto-capture uses approximate rectangle, lighting and stillness only, NOT government-ID identification or authenticity.";
  $("scanCapture").disabled=true;status("Requesting camera permission...");
  try{
   modal.showModal();
@@ -115,10 +115,15 @@ function check(current){
       message=!check.acceptable?check.message:steady?"One centered face detected — hold still.":"One face detected — stop moving.";
     }else{drawFaces([]);message="Live detection unavailable; use Capture now. Server face comparison still applies."}
   }else{
-    drawFaces([]);message=steady?"Hold ID fully in view, then tap Capture now.":"Keep the ID steady inside the guide.";
+    drawFaces([]);
+    const card=assessDocumentFrame(pixels,meter.width,meter.height);
+    good=card.acceptable&&steady;
+    message=!card.acceptable?card.message:steady
+      ?"Card-like edges found. Hold still — automatic capture in "+Math.max(1,Math.ceil((13-stable)*.24))+"s."
+      :"Card-like edges found. Keep the ID steady.";
   }
   status(message);stable=good?stable+1:0;
-  if(mode==="selfie"&&detector&&$("scanAuto").checked&&stable>=9){$("scanAuto").checked=false;void capture()}
+  if($("scanAuto").checked&&stable>=(mode==="selfie"?9:13)&&(mode!=="selfie"||detector)){$("scanAuto").checked=false;void capture()}
  }catch{stable=0;status("Live tracking interrupted. Try Capture now, or use image fallback.")}
 }
 async function capture(){
