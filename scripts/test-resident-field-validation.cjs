@@ -114,6 +114,9 @@ test("signup screen shows the same per-field errors, retains optional Google and
     assert(source.includes("registrationErrors."+field),"visible error "+field);
   }
   assert(source.includes("getResidentRegistrationFieldErrors"));
+  assert(source.includes('phoneDigits.startsWith("63")'));
+  assert(source.includes('phoneDigits.startsWith("0")'));
+  assert(source.includes('placeholder="09XXXXXXXXX or +639XXXXXXXXX"'));
   assert(source.includes("if (!user.emailVerified)"));
   assert(source.includes("Continue to Email Verification"));
   assert(source.includes("Continue with Google"));
