@@ -38,12 +38,15 @@ function chromeRun(url,viewport,args){
   for(const shot of shots)for(const view of ["desktop","mobile"]){
     const viewport=view==="desktop"?"1440,960":"390,844";
     const url=origin+"/public/preview?role="+shot.role+"&module=home";
-    const html=chromeRun(url,viewport,["--dump-dom"]);
-    assert(html.includes(shot.title),"Rendered preview missing "+shot.role+" headline at "+view);
-    assert(html.includes("Read-only interactive design preview"),"Unsafe/unlabeled preview: "+shot.role+" "+view);
     const file=path.resolve(outputDir,shot.role+"-"+view+".png");
     chromeRun(url,viewport,["--screenshot="+file,"--hide-scrollbars"]);
     assert(fs.statSync(file).size>6000,"Screenshot appears empty "+file);
+    const html=chromeRun(url,viewport,["--dump-dom"]);
+    if (!html.includes(shot.title)) {
+      console.log("DEBUG "+shot.role+"/"+view+" dom="+html.length+" publicLanding="+html.includes("Choose the workspace")+" designReview="+html.includes("DESIGN REVIEW")+" rootContents="+html.slice(-1900));
+    }
+    assert(html.includes(shot.title),"Rendered preview missing "+shot.role+" headline at "+view);
+    assert(html.includes("Read-only interactive design preview"),"Unsafe/unlabeled preview: "+shot.role+" "+view);
     console.log("PASS screenshot "+shot.role+" "+view+" -> "+file);
   }
   const route=origin+"/public/preview?role=admin&module=announcements";
