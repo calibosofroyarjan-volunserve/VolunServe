@@ -167,7 +167,7 @@ function harness(source, enabled, options = {}) {
     const generated=load(read("lib/disposableEmailDomains.generated.ts"));
     const policy=load(read("lib/registrationEmailPolicy.ts"),{"./disposableEmailDomains.generated":generated});
     for(const value of ["person@yahoo.com.ph","person@outlook.com","person@department.gov.ph","person@legitimate.co"]) assert.equal(policy.getRegistrationEmailError(value),null);
-    for(const value of ["","bad@gmail..com","bad@gmail.con","bad@sub.mailinator.com","person@en2ch.com"]) assert.equal(typeof policy.getRegistrationEmailError(value),"string");
+    for(const value of ["","bad@gmail..com","bad@gmail.con","bad@sub.mailinator.com","person@en2ch.com","person+tag@gmail.com","person+tag@googlemail.com"]) assert.equal(typeof policy.getRegistrationEmailError(value),"string");
     for(const [wrong,right] of Object.entries(policy.KNOWN_PROVIDER_TYPO_CORRECTIONS)) assert(policy.getRegistrationEmailError("person@"+wrong).includes(right));
   });
   await check("disposable domain rejects Firebase UID before creation and profile write",async()=>{
