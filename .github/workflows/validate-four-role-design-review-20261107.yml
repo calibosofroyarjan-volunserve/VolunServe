@@ -1,0 +1,69 @@
+name: Validate Responsive Four-Role Design Review (NO DEPLOY)
+on:
+  push:
+    branches: [design/web-mobile-unified-roles-20261107]
+permissions:
+  contents: read
+jobs:
+  preview:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      CI: 'true'
+      EXPO_NO_TELEMETRY: '1'
+      EXPO_PUBLIC_VOLUNSERVE_STAGING_MODE: '1'
+      EXPO_PUBLIC_STAGING_FIREBASE_API_KEY: 'AIzaDevelopmentPlaceholderNotARealFirebaseProjectKey'
+      EXPO_PUBLIC_STAGING_FIREBASE_AUTH_DOMAIN: 'volunserve-staging-review.firebaseapp.com'
+      EXPO_PUBLIC_STAGING_FIREBASE_PROJECT_ID: 'volunserve-staging-review'
+      EXPO_PUBLIC_STAGING_FIREBASE_STORAGE_BUCKET: 'volunserve-staging-review.firebasestorage.app'
+      EXPO_PUBLIC_STAGING_FIREBASE_SENDER_ID: '999999999999'
+      EXPO_PUBLIC_STAGING_FIREBASE_APP_ID: '1:999999999999:web:0000000000000000000000'
+      EXPO_PUBLIC_STAGING_BACKEND_URL: 'https://volunserve-staging-api-shell.onrender.com'
+    steps:
+      - name: Retrieve exact review revision without submodules
+        run: |
+          set -euo pipefail
+          mkdir source && cd source
+          git init
+          git remote add origin https://github.com/calibosofroyarjan-volunserve/VolunServe.git
+          git fetch --depth=1 --no-recurse-submodules origin "$GITHUB_SHA"
+          git checkout --detach FETCH_HEAD
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: source/package-lock.json
+      - name: Install exact project dependencies
+        working-directory: source
+        run: npm ci --no-audit --no-fund
+      - name: Verify every role and every sample action is explicitly nonproduction
+        working-directory: source
+        run: |
+          node scripts/test-four-role-design-review-20261107.cjs
+          node scripts/test-isolated-staging-config-20261107.cjs
+          node scripts/test-staging-backend-isolation-20261107.cjs
+          node scripts/audit-staging-external-endpoints-20261107.cjs
+          node scripts/test-readonly-preview-auth-guard-20261107.cjs
+      - name: Existing UI and route regression guards
+        working-directory: source
+        run: |
+          node scripts/test-live-controls-consistency-20261107.cjs
+          node scripts/test-portal-resident-volunteer-ui-flow.cjs
+          node scripts/test-guest-readonly-preview.cjs
+          node scripts/test-admin-navigation-contract.cjs
+      - name: Compile TypeScript
+        working-directory: source
+        run: npx tsc --noEmit --pretty false
+      - name: Verify staging build cannot connect to production
+        working-directory: source
+        run: node scripts/require-isolated-preview-build-20261107.cjs
+      - name: Actual Expo web export (no hosting or deployment)
+        working-directory: source
+        run: npx expo export --platform web
+      - name: Publish review build
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: volunserve-four-role-design-review
+          path: source/dist/
+          retention-days: 7
