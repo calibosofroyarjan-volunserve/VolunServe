@@ -178,6 +178,8 @@ export default function IdentityVerification() {
     useState<IdentityDocumentType>("national_id");
   const [idDocument, setIdDocument] =
     useState<CapturedIdentityMedia | null>(null);
+  const [idBackDocument, setIdBackDocument] =
+    useState<CapturedIdentityMedia | null>(null);
   const [selfie, setSelfie] =
     useState<CapturedIdentityMedia | null>(null);
 
@@ -329,7 +331,7 @@ export default function IdentityVerification() {
     identityStatus,
   ]);
 
-  const chooseIdDocument = async () => {
+  const captureIdSide = async (side: "front" | "back") => {
     if (pickingId || submitting) return;
     try {
       setPickingId(true);
@@ -345,7 +347,9 @@ export default function IdentityVerification() {
         cameraType: ImagePicker.CameraType.back,
       });
       if (!result.canceled && result.assets[0]) {
-        setIdDocument(mediaFromAsset(result.assets[0], "government-id-camera"));
+        const captured = mediaFromAsset(result.assets[0], `government-id-${side}`);
+        if (side === "front") setIdDocument(captured);
+        else setIdBackDocument(captured);
         setLocalMessage("");
       }
     } catch (error: any) {
@@ -355,6 +359,9 @@ export default function IdentityVerification() {
     }
   };
 
+  const chooseIdDocument = () => captureIdSide("front");
+  const chooseIdBackDocument = () => captureIdSide("back");
+
   const openFaceScan =
     async () => {
       if (!idDocument) {
@@ -362,6 +369,11 @@ export default function IdentityVerification() {
           "Government ID Required",
           "Place the physical ID alone on a flat, well-lit surface. Keep all four corners and the printed portrait visible; avoid glare or other people in the frame.",
         );
+        return;
+      }
+
+      if (idType !== "passport" && !idBackDocument) {
+        Alert.alert("Back of ID Required", "Scan the back of the same government ID before proceeding.");
         return;
       }
 
@@ -473,6 +485,12 @@ export default function IdentityVerification() {
         return;
       }
 
+      if (idType !== "passport" && !idBackDocument) {
+        setStep(1);
+        Alert.alert("Back of ID Required", "Scan the back of the same physical ID.");
+        return;
+      }
+
       if (!selfie) {
         setStep(2);
         Alert.alert(
@@ -503,6 +521,7 @@ export default function IdentityVerification() {
             {
               idType,
               idDocument,
+              idBackDocument: idType === "passport" ? null : idBackDocument,
               selfie,
             },
           );
@@ -541,6 +560,7 @@ export default function IdentityVerification() {
           "verified"
         ) {
           setIdDocument(null);
+          setIdBackDocument(null);
           setSelfie(null);
           setConsent(false);
         }
@@ -852,12 +872,17 @@ export default function IdentityVerification() {
           idType={
             idType
           }
-          setIdType={
-            setIdType
-          }
+          setIdType={(value) => {
+            if (value !== idType) {
+              setIdDocument(null);
+              setIdBackDocument(null);
+            }
+            setIdType(value);
+          }}
           idDocument={
             idDocument
           }
+          idBackDocument={idBackDocument}
           selectedIdLabel={
             selectedIdLabel
           }
@@ -867,6 +892,8 @@ export default function IdentityVerification() {
           onPick={() =>
             void chooseIdDocument()
           }
+          onPickBack={() => void chooseIdBackDocument()}
+          onRemoveBack={() => setIdBackDocument(null)}
           onNext={() =>
             void openFaceScan()
           }
@@ -1084,9 +1111,12 @@ function UploadIdStep({
   idType,
   setIdType,
   idDocument,
+  idBackDocument,
   selectedIdLabel,
   picking,
   onPick,
+  onPickBack,
+  onRemoveBack,
   onNext,
   onRemove,
 }: {
@@ -1097,12 +1127,15 @@ function UploadIdStep({
   ) => void;
   idDocument:
     CapturedIdentityMedia | null;
+  idBackDocument: CapturedIdentityMedia | null;
   selectedIdLabel:
     string;
   picking:
     boolean;
   onPick:
     () => void;
+  onPickBack: () => void;
+  onRemoveBack: () => void;
   onNext:
     () => void;
   onRemove:
@@ -1150,8 +1183,8 @@ function UploadIdStep({
               styles.stepSubtitle
             }
           >
-            Take or choose a clear photo of a valid government-issued
-            ID with a visible face.
+            Scan the front and back of the same physical ID, then
+            take a selfie. For passports, capture the bio page only.
           </Text>
         </View>
       </View>
@@ -1242,7 +1275,7 @@ function UploadIdStep({
           styles.fieldLabel
         }
       >
-        ID Photo
+        {idType === "passport" ? "Passport Bio Page" : "ID Front Photo"}
       </Text>
 
       {idDocument ? (
@@ -1378,6 +1411,56 @@ function UploadIdStep({
         </TouchableOpacity>
       )}
 
+      {idType !== "passport" ? (
+        <>
+          <Text style={styles.fieldLabel}>ID Back Photo</Text>
+          {idBackDocument ? (
+            <View style={styles.mediaPreviewCard}>
+              <Image
+                source={{ uri: idBackDocument.uri }}
+                style={styles.idPreview}
+                resizeMode="cover"
+              />
+              <View style={styles.mediaPreviewInfo}>
+                <View style={styles.mediaSuccessIcon}>
+                  <Ionicons name="checkmark" size={17} color="#FFFFFF" />
+                </View>
+                <View style={styles.mediaPreviewCopy}>
+                  <Text style={styles.mediaPreviewTitle}>Back of ID captured</Text>
+                  <Text style={styles.mediaPreviewText} numberOfLines={1}>
+                    {idBackDocument.name}
+                  </Text>
+                </View>
+                <TouchableOpacity style={styles.iconButton} onPress={onRemoveBack}>
+                  <Ionicons name="trash-outline" size={18} color={COLORS.danger} />
+                </TouchableOpacity>
+              </View>
+            </View>
+          ) : (
+            <TouchableOpacity
+              style={styles.uploadZone}
+              activeOpacity={0.84}
+              onPress={onPickBack}
+              disabled={picking}
+            >
+              {picking ? (
+                <ActivityIndicator color={COLORS.blue} />
+              ) : (
+                <>
+                  <View style={styles.uploadIcon}>
+                    <Ionicons name="scan-outline" size={29} color={COLORS.blue} />
+                  </View>
+                  <Text style={styles.uploadTitle}>Tap to scan the back of the same ID</Text>
+                  <Text style={styles.uploadText}>
+                    Show the full back side with clear text and QR code when present.
+                  </Text>
+                </>
+              )}
+            </TouchableOpacity>
+          )}
+        </>
+      ) : null}
+
       <View
         style={
           styles.stepFooter
@@ -1386,12 +1469,10 @@ function UploadIdStep({
         <TouchableOpacity
           style={[
             styles.nextButton,
-            !idDocument &&
+            (!idDocument || (idType !== "passport" && !idBackDocument)) &&
               styles.disabledButton,
           ]}
-          disabled={
-            !idDocument
-          }
+          disabled={!idDocument || (idType !== "passport" && !idBackDocument)}
           activeOpacity={
             0.85
           }
