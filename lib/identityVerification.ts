@@ -88,11 +88,14 @@ export type SubmitIdentityVerificationInput = {
 const FALLBACK_BACKEND_URL = "https://volunserve.onrender.com";
 
 function getBackendBaseUrl() {
-  // The Resident app must always call the main VolunServe backend.
-  // The separate AI service is private and is reached only server-to-server.
-  let value =
-    process.env.EXPO_PUBLIC_IDENTITY_VERIFICATION_API_URL?.trim() ||
-    FALLBACK_BACKEND_URL;
+  // The separate Python AI service is private; clients use the Node backend.
+  // A staging build must NEVER silently send ID or selfie images to production.
+  const staging = process.env.EXPO_PUBLIC_VOLUNSERVE_ENV === "staging";
+  const configured = process.env.EXPO_PUBLIC_IDENTITY_VERIFICATION_API_URL?.trim();
+  if (staging && !configured) {
+    throw new Error("Staging identity backend URL is required before verification.");
+  }
+  let value = configured || FALLBACK_BACKEND_URL;
 
   value = value.replace(/\/+$/, "");
 
@@ -105,6 +108,24 @@ function getBackendBaseUrl() {
 
   if (value.endsWith(statusSuffix)) {
     value = value.slice(0, -statusSuffix.length);
+  }
+
+  if (staging) {
+    let parsed: URL;
+    try {
+      parsed = new URL(value);
+    } catch {
+      throw new Error("Staging identity backend URL is invalid.");
+    }
+    const blockedHosts = [
+      "volunserve.onrender.com",
+      "volunserve.com",
+      "www.volunserve.com",
+      "volunserve-identity-ai.onrender.com",
+    ];
+    if (parsed.protocol !== "https:" || blockedHosts.includes(parsed.hostname.toLowerCase())) {
+      throw new Error("Staging verification cannot use the production identity endpoint.");
+    }
   }
 
   return value;
