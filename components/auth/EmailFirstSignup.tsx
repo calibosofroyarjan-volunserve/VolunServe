@@ -573,10 +573,10 @@ export default function EmailFirstSignup() {
             <View style={styles.legacySelectedRoleBanner}>
               <View style={styles.legacySelectedRoleCopy}>
                 <Text style={styles.legacySelectedRoleLabel}>ACCOUNT LEVEL</Text>
-                <Text style={styles.legacySelectedRoleName}>Basic Account</Text>
+                <Text style={styles.legacySelectedRoleName}>{completedProfile ? "Basic Account" : "Registration Pending"}</Text>
               </View>
               <View style={styles.legacyRoleChoiceBadge}>
-                <Text style={styles.legacyRoleChoiceBadgeText}>No approval required</Text>
+                <Text style={styles.legacyRoleChoiceBadgeText}>{completedProfile ? "Active Resident" : "Not yet a Resident profile"}</Text>
               </View>
             </View>
             <View style={styles.legacyStepperCard}>
@@ -616,7 +616,7 @@ export default function EmailFirstSignup() {
                 <Text style={styles.legacyInfoTitle}>Basic Account registration</Text>
                 <Text style={styles.legacyInfoText}>
                   {resumeMode
-                    ? "Already created an account but did not finish? Enter the same email and VolunServe password to continue where you left off. No new account will be created."
+                    ? "Started email verification but did not finish? Enter the same email and VolunServe password to resume. A pending Firebase login is not yet a Resident or Guest account."
                     : "Enter an accessible email and a VolunServe password. We'll send a verification link before collecting your personal details."}
                 </Text>
               </View>
