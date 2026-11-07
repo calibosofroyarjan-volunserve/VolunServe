@@ -85,7 +85,7 @@ async function waitFor(browser,text,route){
 (async()=>{
   let reachable=false;
   for(let i=0;i<30;i++){
-    try{if((await fetch(origin+"/public/preview")).ok){reachable=true;break;}}catch{}
+    try{if((await fetch(origin+"/public/design-review")).ok){reachable=true;break;}}catch{}
     await sleep(250);
   }
   assert(reachable,"Expo review static server is unavailable");
@@ -98,7 +98,7 @@ async function waitFor(browser,text,route){
         screenWidth:width,screenHeight:height,
       });
       for(const item of roles){
-        const url=origin+"/public/preview?role="+item.role+"&module=home";
+        const url=origin+"/public/design-review?role="+item.role+"&module=home";
         await browserSession.call("Page.navigate",{url});
         await waitFor(browserSession,item.headline,item.role+"/"+view);
         const visible=await browserSession.evaluate("document.body.innerText");
@@ -118,7 +118,7 @@ async function waitFor(browser,text,route){
       }
     }
     await browserSession.call("Emulation.setDeviceMetricsOverride",{width:390,height:844,deviceScaleFactor:1,mobile:true});
-    await browserSession.call("Page.navigate",{url:origin+"/public/preview?role=admin&module=announcements"});
+    await browserSession.call("Page.navigate",{url:origin+"/public/design-review?role=admin&module=announcements"});
     await waitFor(browserSession,"Draft announcement","Admin mobile announcements");
     assert((await browserSession.evaluate("document.body.innerText")).includes("Validate sample form"),
       "Admin sample form must expose validation");
