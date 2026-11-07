@@ -1,0 +1,157 @@
+# INERT REVIEW TEMPLATE: stored in docs/, NOT .github/workflows/.
+# DO NOT activate until the cutover checklist and explicit owner approval.
+# Control workflow may be stored on default branch, but the WEBSITE BUILD
+# always checks out the exact approved live-descendant candidate, NEVER main.
+name: VolunServe Protected Hosting Release — PROPOSAL
+on:
+  workflow_dispatch:
+    inputs:
+      live_sha:
+        description: "Current Hosting SHA, reverified immediately before approval"
+        required: true
+        type: string
+      candidate_sha:
+        description: "Reviewed release branch HEAD (full SHA)"
+        required: true
+        type: string
+      approved_files_json:
+        description: 'Exact approved changed paths JSON, e.g. ["app/(tabs)/volunteer.tsx"]'
+        required: true
+        type: string
+      review_reference:
+        description: "Link/ID of staging tests and human code review"
+        required: true
+        type: string
+permissions:
+  contents: read
+concurrency:
+  group: volunserve-production-hosting-release
+  cancel-in-progress: false
+jobs:
+  verify:
+    if: ${{ github.repository == 'calibosofroyarjan-volunserve/VolunServe' && github.ref == 'refs/heads/release/production-hosting' && inputs.review_reference != '' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    env:
+      CI: 'true'
+      EXPO_NO_TELEMETRY: '1'
+      VOLUNSERVE_APPROVED_LIVE_SHA: ${{ inputs.live_sha }}
+      VOLUNSERVE_APPROVED_CANDIDATE_SHA: ${{ inputs.candidate_sha }}
+      VOLUNSERVE_APPROVED_FILES_JSON: ${{ inputs.approved_files_json }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.candidate_sha }}
+          path: app
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Load separately reviewed immutable release guard (not app source)
+        uses: actions/checkout@v4
+        with:
+          ref: b6babc3f16948a8e858186d07c5b42d789fbcc6d
+          path: control
+          persist-credentials: false
+      - name: Reject any release branch change after review
+        working-directory: app
+        shell: bash
+        run: |
+          set -euo pipefail
+          REMOTE_SHA="$(git ls-remote origin refs/heads/release/production-hosting | cut -f1)"
+          test "$REMOTE_SHA" = "$VOLUNSERVE_APPROVED_CANDIDATE_SHA" || {
+            echo "::error::Candidate no longer equals approved release branch HEAD"; exit 1;
+          }
+      - name: Require both LIVE domains and approved exact source
+        working-directory: app
+        run: node ../control/scripts/guard-live-hosting-source.cjs
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+      - name: Build and validate current candidate only
+        working-directory: app
+        env:
+          GITHUB_SHA: ${{ inputs.candidate_sha }}
+        run: |
+          npm ci --no-audit --no-fund
+          node scripts/test-admin-navigation-contract.cjs
+          node scripts/test-portal-resident-volunteer-ui-flow.cjs
+          node scripts/test-profile-certificates-account-menu.cjs
+          npx tsc --noEmit --incremental false
+          npx expo export --platform web --clear
+          node scripts/verify-hosting-release.cjs
+      - uses: actions/upload-artifact@v4
+        with:
+          name: approved-hosting-dist
+          path: app/dist/
+          if-no-files-found: error
+          retention-days: 7
+  deploy:
+    name: Human approval required before acquiring production credentials
+    needs: verify
+    environment:
+      name: volunserve-production-hosting
+      url: https://volunserve.com
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      VOLUNSERVE_APPROVED_LIVE_SHA: ${{ inputs.live_sha }}
+      VOLUNSERVE_APPROVED_CANDIDATE_SHA: ${{ inputs.candidate_sha }}
+      VOLUNSERVE_APPROVED_FILES_JSON: ${{ inputs.approved_files_json }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.candidate_sha }}
+          path: app
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          ref: b6babc3f16948a8e858186d07c5b42d789fbcc6d
+          path: control
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: approved-hosting-dist
+          path: app/dist/
+      - name: Recheck live and approved source immediately before release
+        working-directory: app
+        run: node ../control/scripts/guard-live-hosting-source.cjs
+      - name: Verify artifact and expected Firebase project
+        working-directory: app
+        env:
+          PRODUCTION_SA: ${{ secrets.FIREBASE_PRODUCTION_HOSTING_SA }}
+        run: |
+          node - <<'NODE'
+          const assert=require("node:assert/strict");
+          const fs=require("node:fs");
+          const m=JSON.parse(fs.readFileSync("dist/volunserve-release.json","utf8"));
+          assert.equal(m.revision,process.env.VOLUNSERVE_APPROVED_CANDIDATE_SHA);
+          assert.equal(m.firebaseProject,"volunserve-3aa5b");
+          const key=JSON.parse(process.env.PRODUCTION_SA||"{}");
+          assert.equal(key.type,"service_account");
+          assert.equal(key.project_id,"volunserve-3aa5b");
+          NODE
+      - name: Hosting ONLY (NO Firebase Rules, Functions, Storage or Render)
+        uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          entryPoint: app
+          firebaseServiceAccount: ${{ secrets.FIREBASE_PRODUCTION_HOSTING_SA }}
+          projectId: volunserve-3aa5b
+          channelId: live
+      - name: Verify deployed candidate marker and required public pages
+        working-directory: app
+        env:
+          VOLUNSERVE_EXPECTED_SHA: ${{ inputs.candidate_sha }}
+        run: |
+          for attempt in 1 2 3 4 5 6; do
+            if node scripts/check-live-hosting.cjs; then exit 0; fi
+            sleep 10
+          done
+          echo "::error::Production verification failed - investigate rollback"; exit 1
+# INTENTIONALLY NOT ACTIVE: This template is not executable by GitHub Actions.
+# Before promotion:
+# - Finish legacy deployment workflow & credential inventory.
+# - Configure restricted GitHub Environment + reviewers and environment-only key.
+# - Have staging acceptance, role-based QA, rollback reference and authorized cutover.
+# - Old broadly available Firebase secrets MUST be removed/revoked after migration.
