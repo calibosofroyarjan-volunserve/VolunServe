@@ -14,16 +14,30 @@ const chrome = execFileSync("bash",["-lc",
 ],{encoding:"utf8"}).trim().split("\n")[0];
 const cases = [
   ["resident","home","RESIDENT OPERATIONS CENTER"],
+  ["resident","emergency-reports","Emergency Reports"],
+  ["resident","request-assistance","Request Assistance"],
+  ["resident","community-events","Community Events"],
+  ["resident","donations","Donations"],
   ["volunteer","home","VOLUNTEER OPERATIONS CENTER"],
+  ["volunteer","emergency-tasks","Emergency Tasks"],
+  ["volunteer","community-events","Community Events"],
+  ["volunteer","certificates","My Profile"],
   ["admin","command-center","Command Center"],
-  ["superadmin","overview","System Overview"],
-  ["admin","admin-cases","Emergency Reports"],
   ["admin","identity-reviews","Resident Identity Reviews"],
+  ["admin","lgu-attendance","LGU Operations"],
+  ["admin","admin-cases","Emergency Reports"],
+  ["admin","assistance-requests","Assistance Requests"],
   ["admin","community-events","Community Events"],
+  ["admin","community-attendance","Event Attendance"],
+  ["admin","certificates","Certificates"],
   ["admin","donor-monitoring","Donation Management"],
+  ["admin","create-announcement","Announcements"],
+  ["superadmin","overview","System Overview"],
   ["superadmin","admin-accounts","Admin Accounts"],
+  ["superadmin","admin-logs","Admin Activity & Audit Logs"],
+  ["superadmin","all-records","System Records"],
   ["superadmin","system-settings","System Settings"]
-];
+
 const screens = [
   {name:"desktop",width:1440,height:900},
   {name:"phone",width:390,height:844},
