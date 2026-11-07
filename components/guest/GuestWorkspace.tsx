@@ -2,12 +2,14 @@ import Ionicons from "@expo/vector-icons/Ionicons";
 import { LinearGradient } from "expo-linear-gradient";
 import { router, useLocalSearchParams } from "expo-router";
 import React, { useState } from "react";
+import AdministrativePreviewModules, { ADMIN_PREVIEW_MODULES, SUPERADMIN_PREVIEW_MODULES } from "./AdministrativePreviewModules";
+import { liveUi as ui } from "../../constants/volunserveLiveUi";
 import {
   Image, ImageBackground, Pressable, ScrollView, StyleSheet,
   Text, useWindowDimensions, View,
 } from "react-native";
 
-type Role = "resident" | "volunteer";
+type Role = "resident" | "volunteer" | "admin" | "superadmin";
 type Module = "home" | "emergency-reports" | "request-assistance" | "community-events" |
   "donations" | "emergency-tasks" | "profile" | "progress" | "certificates" | "updates";
 type Icon = React.ComponentProps<typeof Ionicons>["name"];
@@ -29,7 +31,7 @@ const VALID_MODULES = new Set<Module>([
   ...RESIDENT_NAV.map(item => item.key), ...VOLUNTEER_NAV.map(item => item.key),
   "profile", "progress", "certificates", "updates",
 ]);
-const P = { ink: "#102D4D", green: "#078364", teal: "#0B6655", muted: "#64819A", line: "#E0EAF0" };
+const P = { ink: ui.color.text, green: ui.color.primary, teal: ui.color.primaryHover, muted: ui.color.secondary, line: ui.color.border };
 const open = (role: Role, module: Module = "home") =>
   router.push({ pathname: "/public/preview", params: { role, module } } as any);
 
@@ -310,14 +312,22 @@ function OtherModule({ role, module, narrow }: { role: Role; module: Module; nar
 
 export default function GuestWorkspace({ landing = false }: { landing?: boolean }) {
   const params = useLocalSearchParams<{ role?: string; module?: string }>();
-  const role: Role = params.role === "volunteer" ? "volunteer" : "resident";
+  const role: Role = params.role === "admin" ? "admin" : params.role === "superadmin" ? "superadmin" : params.role === "volunteer" ? "volunteer" : "resident";
   const requested = params.module as Module;
-  const allowed = role === "volunteer" ? VOLUNTEER_NAV : RESIDENT_NAV;
-  const module: Module = VALID_MODULES.has(requested) &&
-    (allowed.some(item => item.key === requested) || ["profile", "progress", "certificates", "updates"].includes(requested))
-    ? requested : "home";
+  const allowed: NavItem[] = role === "admin"
+    ? ADMIN_PREVIEW_MODULES.map(item => ({name:item.label,key:item.key as Module,label:item.label,icon:item.icon,selected:item.icon}))
+    : role === "superadmin"
+    ? SUPERADMIN_PREVIEW_MODULES.map(item => ({name:item.label,key:item.key as Module,label:item.label,icon:item.icon,selected:item.icon}))
+    : role === "volunteer" ? VOLUNTEER_NAV : RESIDENT_NAV;
+  const isAdmin = role === "admin" || role === "superadmin";
+  const module: Module = (isAdmin
+    ? (allowed.some(item=>item.key===requested) ? requested : allowed[0].key)
+    : (VALID_MODULES.has(requested) &&
+      (allowed.some(item => item.key === requested) || ["profile", "progress", "certificates", "updates"].includes(requested))
+      ? requested : "home"));
   const { width } = useWindowDimensions();
   const narrow = width < 1040;
+  const smallPhone = width < 420;
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
   if (landing) {
@@ -333,15 +343,17 @@ export default function GuestWorkspace({ landing = false }: { landing?: boolean 
       </ImageBackground>
       <Text style={styles.chooseTitle}>Which workspace would you like to preview?</Text>
       <View style={[styles.twoColumns, narrow && styles.stackColumns]}>
-        {(["resident", "volunteer"] as const).map(value =>
+        {(["resident", "volunteer", "admin", "superadmin"] as const).map(value =>
           <Pressable key={value} accessibilityRole="button" accessibilityLabel={"Preview " + value + " workspace"}
             style={({pressed}) => [styles.choiceCard, pressed && { opacity: 0.8 }]} onPress={() => open(value, "home")}>
-            <Mark icon={value === "resident" ? "home-outline" : "people-outline"} color="#087F6D" size={29} />
-            <Text style={styles.choiceTitle}>{value === "resident" ? "Verified Resident" : "Volunteer"} Workspace</Text>
+            <Mark icon={value === "resident" ? "home-outline" : value === "volunteer" ? "hand-left-outline" : value === "admin" ? "shield-checkmark-outline" : "settings-outline"} color={ui.color.primary} size={27} />
+            <Text style={styles.choiceTitle}>{value === "resident" ? "Verified Resident" : value === "volunteer" ? "Volunteer" : value === "admin" ? "LGU Admin" : "Super Admin"} Workspace</Text>
             <Text style={styles.choiceDescription}>{value === "resident"
               ? "Home · Emergency Reports · Request Assistance · Community Events · Donations"
-              : "Home · Emergency Tasks · Community Events · Profile Progress · Certificates"}</Text>
-            <View style={styles.choiceAction}><Text style={styles.choiceActionText}>Preview {value === "resident" ? "Resident" : "Volunteer"}</Text>
+              : value === "volunteer" ? "Home · Emergency Tasks · Community Events · Profile Progress · Certificates"
+              : value === "admin" ? "Command Center · Identity Reviews · Emergency Reports · Events · Donations"
+              : "System Overview · Admin Accounts · Audit Logs · Records · Settings"}</Text>
+            <View style={styles.choiceAction}><Text style={styles.choiceActionText}>Preview {value === "resident" ? "Resident" : value === "volunteer" ? "Volunteer" : value === "admin" ? "Admin" : "Super Admin"}</Text>
               <Ionicons name="arrow-forward" color="#087F6D" size={21} /></View>
           </Pressable>)}
       </View>
@@ -358,7 +370,7 @@ export default function GuestWorkspace({ landing = false }: { landing?: boolean 
       <Image source={require("../../assets/images/logo.png")} style={styles.sidebarLogo} />
       <View><Text style={styles.sidebarName}>VolunServe</Text><Text style={styles.sidebarSub}>CITY OF SAN JOSE DEL MONTE</Text></View>
     </View>
-    <Text style={styles.sidebarLabel}>{role === "resident" ? "RESIDENT SERVICES" : "VOLUNTEER WORKSPACE"}</Text>
+    <Text style={styles.sidebarLabel}>{role === "resident" ? "RESIDENT SERVICES" : role === "volunteer" ? "VOLUNTEER WORKSPACE" : role === "admin" ? "ADMIN OPERATIONS" : "SYSTEM GOVERNANCE"}</Text>
     <ScrollView style={styles.navScroll} contentContainerStyle={styles.navContent}>
       {allowed.map(item => <Pressable key={item.key} accessibilityRole="button"
         accessibilityState={{selected:module === item.key}} accessibilityLabel={item.label}
@@ -385,7 +397,7 @@ export default function GuestWorkspace({ landing = false }: { landing?: boolean 
         <Pressable style={styles.account} accessibilityRole="button" accessibilityLabel="Guest account menu" accessibilityState={{expanded:accountOpen}}
           onPress={() => setAccountOpen(v => !v)}>
           <Mark icon="person-circle-outline" size={22} color="#3474C4" tint="#E1ECFF" />
-          {!narrow ? <View><Text style={styles.accountName}>Guest Preview</Text><Text style={styles.accountRole}>{role === "resident" ? "Resident view" : "Volunteer view"}</Text></View> : null}
+          {!narrow ? <View><Text style={styles.accountName}>Guest Preview</Text><Text style={styles.accountRole}>{role === "resident" ? "Resident view" : role === "volunteer" ? "Volunteer view" : role === "admin" ? "Admin view" : "Super Admin view"}</Text></View> : null}
           <Ionicons name="chevron-down" size={17} color="#1F4260" /></Pressable>
       </View>
       {accountOpen ? <View style={styles.accountDropdown}>
@@ -399,8 +411,10 @@ export default function GuestWorkspace({ landing = false }: { landing?: boolean 
         <Pressable accessibilityRole="button" style={styles.accountOption} onPress={() => router.push("/login")}><Text style={styles.accountOptionText}>Log in</Text><Ionicons name="log-in-outline" size={16} color="#81909E" /></Pressable>
       </View> : null}
       <ScrollView style={styles.contentScroll} contentContainerStyle={styles.content} key={role + ":" + module}>
-        {module === "home" ? <Home role={role} narrow={narrow} /> : <OtherModule key={role + ":" + module} role={role} module={module} narrow={narrow} />}
-        <View style={styles.bottomBar}><Text style={styles.bottomText}>GUEST PREVIEW · Sample screens only. No account permissions or production data.</Text>
+        {isAdmin ? <AdministrativePreviewModules key={role+":"+module} role={role as "admin" | "superadmin"} module={module} onNavigate={(next)=>open(role,next as Module)}/>
+          : module === "home" ? <Home role={role} narrow={narrow} />
+          : <OtherModule key={role + ":" + module} role={role} module={module} narrow={narrow} />}
+        <View style={styles.bottomBar}><Text style={styles.bottomText}>DESIGN PREVIEW · Sample screens only. No account permissions or production data.</Text>
           <Pressable onPress={() => router.push("/signup")} accessibilityRole="button"><Text style={styles.linkText}>Create an account  ›</Text></Pressable></View>
       </ScrollView>
     </View>
