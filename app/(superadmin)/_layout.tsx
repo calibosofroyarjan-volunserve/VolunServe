@@ -8,6 +8,7 @@ import {
 } from "expo-router";
 import React, { useRef, useState } from "react";
 import { AppAlert } from "../../lib/appDialog";
+import AccountConnectionFallback from "../../components/ui/AccountConnectionFallback";
 import {
   ActivityIndicator,
   Alert,
@@ -66,7 +67,7 @@ const navItems: NavItem[] = [
 ];
 
 export default function SuperAdminLayout() {
-  const { loading, user, profile } = useUserSession();
+  const { loading, user, profile, connectionError, retryProfile } = useUserSession();
   const { width } = useWindowDimensions();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
@@ -80,6 +81,10 @@ export default function SuperAdminLayout() {
         <Text style={styles.loadingText}>Checking Super Admin access...</Text>
       </View>
     );
+  }
+
+  if (connectionError && user && !profile) {
+    return <AccountConnectionFallback message={connectionError} onRetry={retryProfile} />;
   }
 
   if (!user || !profile || !isApprovedProfile(profile)) {
