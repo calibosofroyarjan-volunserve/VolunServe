@@ -37,6 +37,13 @@ jobs:
               '--disable-background-networking','--virtual-time-budget=14000',
               '--dump-dom',origin+route
             ],{encoding:'utf8',timeout:80000,maxBuffer:16*1024*1024,stdio:['ignore','pipe','ignore']});
+            if(!page.includes('Sign-in is disabled on this preview')) {
+              console.log('DEBUG route',route,
+                'DOM bytes',page.length,'generic preview',page.includes('Preview'),
+                'old login',page.includes('Welcome Back'),
+                'JS',page.includes('<script'), 'title',page.match(/<title[^>]*>(.*?)<\\/title>/)?.[1]);
+              console.log('DEBUG sanitized DOM first chars',page.slice(0,2800));
+            }
             assert(page.includes('Sign-in is disabled on this preview'),
               route+' does not display the staging warning after JavaScript renders');
             assert(!/<input[^>]+(?:type|name)=["']password["']/i.test(page),
