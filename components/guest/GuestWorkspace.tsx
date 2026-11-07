@@ -399,6 +399,21 @@ export default function GuestWorkspace({ landing = false }: { landing?: boolean 
         <Pressable accessibilityRole="button" style={styles.accountOption} onPress={() => router.push("/login")}><Text style={styles.accountOptionText}>Log in</Text><Ionicons name="log-in-outline" size={16} color="#81909E" /></Pressable>
       </View> : null}
       <ScrollView style={styles.contentScroll} contentContainerStyle={styles.content} key={role + ":" + module}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Open redesigned four-role interactive UI review"
+          onPress={() => router.push("/public/design-review")}
+          style={{ minHeight: 56, borderRadius: 12, borderWidth: 1, borderColor: "#B5DCC8",
+            backgroundColor: "#E8F3ED", paddingHorizontal: 15, paddingVertical: 12,
+            flexDirection: "row", alignItems: "center", gap: 12 }}
+        >
+          <Ionicons name="color-palette-outline" size={22} color="#176B52" />
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <Text style={{ color: "#17382E", fontSize: 14, fontWeight: "700" }}>View new 4-role desktop & mobile design</Text>
+            <Text style={{ color: "#536B60", fontSize: 12, lineHeight: 18 }}>Resident · Volunteer · Admin · Super Admin — interactive sample UI</Text>
+          </View>
+          <Ionicons name="arrow-forward-outline" size={21} color="#176B52"/>
+        </Pressable>
         {module === "home" ? <Home role={role} narrow={narrow} /> : <OtherModule key={role + ":" + module} role={role} module={module} narrow={narrow} />}
         <View style={styles.bottomBar}><Text style={styles.bottomText}>GUEST PREVIEW · Sample screens only. No account permissions or production data.</Text>
           <Pressable onPress={() => router.push("/signup")} accessibilityRole="button"><Text style={styles.linkText}>Create an account  ›</Text></Pressable></View>
