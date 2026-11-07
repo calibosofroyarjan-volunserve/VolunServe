@@ -145,8 +145,8 @@ jobs:
         uses: google-github-actions/auth@v3
         with:
           project_id: volunserve-3aa5b
-          # Verify exact provider ID in Google Cloud before promoting this example.
-          workload_identity_provider: projects/233201250762/locations/global/workloadIdentityPools/volunserve-github-hosting/providers/github-actions
+          # Provider ID verified from Google Cloud edit-provider URL, 2026-11-07.
+          workload_identity_provider: projects/233201250762/locations/global/workloadIdentityPools/volunserve-github-hosting/providers/volunserve-github-actions
           service_account: volunserve-protected-hostin@volunserve-3aa5b.iam.gserviceaccount.com
           create_credentials_file: true
           export_environment_variables: true
