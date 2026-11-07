@@ -1,0 +1,35 @@
+name: Browser Inspect All Role Layouts (Nonproduction Only)
+on:
+  push:
+    branches: [design/responsive-all-role-web-20261107]
+permissions:
+  contents: read
+jobs:
+  browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out preview branch without submodules
+        run: |
+          set -euo pipefail
+          mkdir source && cd source
+          git init
+          git remote add origin https://github.com/calibosofroyarjan-volunserve/VolunServe.git
+          git fetch --depth=1 --no-recurse-submodules origin "$GITHUB_SHA"
+          git checkout --detach FETCH_HEAD
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install headless browser client without modifying lockfile
+        working-directory: source
+        run: npm install --no-save --ignore-scripts --no-package-lock --no-audit --no-fund playwright-core
+      - name: Check actual desktop, phone, and tablet module layout and navigation
+        working-directory: source
+        run: node scripts/test-four-role-browser-layout-20261107.cjs
+      - name: Save screenshot evidence of all four portals at each width
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: volunserve-four-role-pc-mobile-screenshots
+          path: source/reports/visual-screenshots/
+          if-no-files-found: warn
