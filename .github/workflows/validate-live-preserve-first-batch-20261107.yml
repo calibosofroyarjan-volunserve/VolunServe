@@ -89,7 +89,46 @@ jobs:
         run: |
           node scripts/test-admin-navigation-contract.cjs
           node scripts/test-admin-response-workspace-ux.cjs
-          node scripts/test-profile-certificates-account-menu.cjs
+          # Baseline's unmodified test has ONE obsolete sidebar expectation: it
+          # forbids the volunteer Certificates link added to CURRENT LIVE later.
+          # Run the three still-valid certificate/account checks from that suite.
+          node --test --test-name-pattern='Top-right account dropdown|Profile retains secure progress|Home Certificates shortcuts' scripts/test-profile-certificates-account-menu.cjs
+
+      - name: Retain live Certificates navigation and exact live behavior sources
+        working-directory: source
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          'use strict';
+          const assert=require('node:assert/strict');
+          const fs=require('node:fs');
+          const cp=require('node:child_process');
+          const live=process.env.VERIFIED_LIVE_SHA;
+          const files=[
+            'app/(tabs)/_layout.tsx',
+            'app/(tabs)/certificate.tsx',
+            'app/(tabs)/profile.tsx',
+            'components/home/Home.web.tsx',
+            'components/home/Home.native.tsx'
+          ];
+          for(const p of files){
+            const source=fs.readFileSync(p,'utf8');
+            const deployedSource=cp.execFileSync('git',['show',live+':'+p],{encoding:'utf8'});
+            assert.equal(source,deployedSource,'BLOCKED: LIVE behavior source changed: '+p);
+          }
+          const tabs=fs.readFileSync('app/(tabs)/_layout.tsx','utf8');
+          const start=tabs.indexOf('const volunteerDesktopTabs: TabDefinition[] = [');
+          assert.ok(start>=0,'Missing volunteer desktop navigation');
+          const end=tabs.indexOf('];',start);
+          assert.ok(end>start,'Broken volunteer sidebar definition');
+          const volunteerMenu=tabs.slice(start,end);
+          assert.match(volunteerMenu,/name:"certificate",label:"My Certificates"/,
+            'BLOCKED: verified LIVE Volunteer Certificates link would be removed');
+          const certificate=fs.readFileSync('app/(tabs)/certificate.tsx','utf8');
+          assert.match(certificate,/verifiedServiceMinutes/);
+          console.log('PASS: exact LIVE certificate route, sidebar, profile & home links all retained.');
+          NODE
 
       - name: Full TypeScript check (NO DEPLOY)
         working-directory: source
