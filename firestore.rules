@@ -13,6 +13,15 @@ service cloud.firestore {
     function approved() {
       let p = signedIn() ? profile() : {};
       return signedIn()
+        // Email-only Firebase Auth UIDs are NOT completed Resident profiles.
+        // Staff accounts retain their independent administrative login policy.
+        && (
+          p.get('role', '') in ['admin', 'superadmin', 'lgu_personnel']
+          || (
+            request.auth.token.get('email_verified', false) == true
+            && request.auth.token.get('email', '') == p.get('email', '')
+          )
+        )
         && (
           p.get('status', null) == 'approved'
           || (!('status' in p) && p.get('role', 'applicant') != 'applicant')
