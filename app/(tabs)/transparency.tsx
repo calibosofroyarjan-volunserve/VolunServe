@@ -88,21 +88,25 @@ export default function Transparency() {
 }
 
 const styles = StyleSheet.create({
-  container: { padding: 20 },
+  container: { padding: 26},
   title: { fontSize: designUi.type.page.fontSize, fontWeight: designUi.type.page.fontWeight, marginBottom: 20, lineHeight: designUi.type.page.lineHeight,},
   card: {
-    backgroundColor: "#f1f5f9",
-    padding: 15,
-    borderRadius: 12,
+    backgroundColor: "#FFFFFF",
+    padding: 20,
+    borderRadius: 18,
     marginBottom: 15,
-  },
+  ,
+    borderWidth: 1,
+    borderColor: "#DCE8DF"},
   big: { fontSize: 20, fontWeight: "bold", marginTop: 5 },
   section: { marginTop: 20, fontWeight: "bold" },
   listCard: {
     backgroundColor: "#ffffff",
-    padding: 15,
-    borderRadius: 12,
+    padding: 20,
+    borderRadius: 17,
     marginBottom: 10,
-  },
+  ,
+    borderWidth: 1,
+    borderColor: "#DCE8DF"},
   amount: { fontWeight: "bold", marginBottom: 5 },
 });

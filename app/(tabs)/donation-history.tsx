@@ -112,8 +112,8 @@ export default function DonationHistory() {
 
 const styles = StyleSheet.create({
   container: {
-    padding: 20,
-    backgroundColor: "#f4f7fb",
+    padding: 26,
+    backgroundColor: "#F5F8F6",
   },
   title: {
     fontSize: designUi.type.page.fontSize,
@@ -123,11 +123,18 @@ const styles = StyleSheet.create({
     color: "#6b7280",
   },
   card: {
-    backgroundColor: "#F6F8F7",
-    padding: 15,
-    borderRadius: 12,
+    backgroundColor: "#FFFFFF",
+    padding: 22,
+    borderRadius: 18,
     marginBottom: 15,
-  },
+  ,
+    borderWidth: 1,
+    borderColor: "#DCE8DF",
+    shadowColor: "#153C2F",
+    shadowOpacity: 0.04,
+    shadowRadius: 12,
+    shadowOffset: {width:0,height:4},
+    elevation: 1},
   amount: {
     fontSize: 18,
     fontWeight: "700",
