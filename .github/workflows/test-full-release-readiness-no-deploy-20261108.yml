@@ -26,16 +26,16 @@ jobs:
         with:
           node-version: '22'
           cache: npm
-      - name: Verify exact live ancestry and ZERO app changes
+      - name: Verify exact live ancestry and ZERO application changes
         shell: bash
         run: |
           set -euo pipefail
           git merge-base --is-ancestor "$EXPECTED_LIVE" HEAD
-          if git diff --name-only "$EXPECTED_LIVE" HEAD | grep -Ev '^(\.github/workflows/|scripts/guard-live-protected-release\.cjs$|docs/LIVE_PROTECTED_DEPLOYMENT\.md$)' ; then
+          if git diff --name-only "$EXPECTED_LIVE" HEAD | grep -Ev '^(\.github/workflows/|scripts/guard-live-protected-release\.cjs$|docs/LIVE_PROTECTED_DEPLOYMENT\.md$|scripts/test-resident-volunteer-sidebar\.cjs$|scripts/test-profile-certificates-account-menu\.cjs$)' ; then
             echo "::error::Application or unapproved source differs from actual live baseline"
             exit 1
           fi
-          echo "PASS: current release-safety source is live-derived; ZERO app changes"
+          echo "PASS: live-derived code with only safety/test-contract differences; ZERO application changes"
       - name: Verify release guard tests, including block of outdated main
         run: |
           node --check scripts/guard-live-protected-release.cjs
@@ -55,6 +55,7 @@ jobs:
           node scripts/test-unified-login-routing.cjs
           node scripts/test-admin-navigation-contract.cjs
           node scripts/test-resident-volunteer-sidebar.cjs
+          node scripts/test-profile-certificates-account-menu.cjs
           node scripts/test-embedded-emergency-map-navigation.cjs
           node scripts/test-volunteer-community-event-join-20261106.cjs
           node scripts/test-volunteer-time-controls-20261106.cjs
