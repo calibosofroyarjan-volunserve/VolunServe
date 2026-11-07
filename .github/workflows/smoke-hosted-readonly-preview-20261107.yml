@@ -23,20 +23,24 @@ jobs:
       - name: Read-only HTTP smoke of Render preview (no sign-ins or writes)
         working-directory: source
         run: node scripts/smoke-staging-public-preview-20261107.cjs
-      - name: Verify hosted preview login never renders credential forms
+      - name: Verify browser-rendered Login, Signup and Staff pages contain no credential inputs
         run: |
           node <<'NODE'
           const assert=require('node:assert/strict');
-          const base='https://volunserve-readonly-ui-preview.onrender.com';
-          (async()=>{
-            for(const path of ['/login','/signup','/admin-request']){
-              const res=await fetch(base+path,{signal:AbortSignal.timeout(23000)});
-              const html=await res.text();
-              assert.equal(res.status,200,path+' did not load');
-              assert(html.includes('Sign-in is disabled on this preview'),path+' still lacks staging notice');
-              assert(!html.includes('type="password"'),path+' renders a password input');
-              assert(!html.includes('name="password"'),path+' renders a password input');
-              console.log('PASS hosted staging-only credential suppression '+base+path);
-            }
-          })().catch(e=>{console.error(e);process.exitCode=1});
+          const cp=require('node:child_process');
+          const origin='https://volunserve-readonly-ui-preview.onrender.com';
+          const chrome=cp.execFileSync('bash',['-lc','command -v google-chrome || command -v chromium || command -v chromium-browser'],{encoding:'utf8'}).trim().split('\n')[0];
+          assert(chrome,'Browser rendering test requires Chrome/Chromium');
+          for(const route of ['/login','/signup','/admin-request']) {
+            const page=cp.execFileSync(chrome,[
+              '--headless=new','--no-sandbox','--disable-gpu','--disable-dev-shm-usage',
+              '--disable-background-networking','--virtual-time-budget=14000',
+              '--dump-dom',origin+route
+            ],{encoding:'utf8',timeout:80000,maxBuffer:16*1024*1024,stdio:['ignore','pipe','ignore']});
+            assert(page.includes('Sign-in is disabled on this preview'),
+              route+' does not display the staging warning after JavaScript renders');
+            assert(!/<input[^>]+(?:type|name)=["']password["']/i.test(page),
+              route+' still exposes a password field');
+            console.log('PASS browser-rendered staging auth disabled '+origin+route);
+          }
           NODE
