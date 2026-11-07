@@ -178,7 +178,7 @@ export default function DesignReviewWorkspace() {
     selected.key==="emergency"&&role==="resident"?"Preview report form" :
     selected.key==="assistance"&&role==="resident"?"Preview assistance form" :
     isReadOnlyModule?"View sample details":"Try sample action";
-  const filtered=moduleRows.filter(x=>>
+  const filtered=moduleRows.filter(x=>
     (filter==="All"||x.status===filter) &&
     (x.title+" "+x.person).toLowerCase().includes(search.toLowerCase())
   );
