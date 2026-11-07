@@ -98,6 +98,12 @@ export function getRegistrationEmailError(email: string): string | null {
     return "Enter a complete, valid email address, for example name@example.com.";
   }
 
+  // Gmail +tags are aliases of the same mailbox. Disallow alias-tag signup
+  // to reduce easy duplicate registrations, but never label ordinary Gmail
+  // addresses as disposable without evidence.
+  if ((domain === "gmail.com" || domain === "googlemail.com") && local.includes("+")) {
+    return "Gmail +tag aliases are not accepted. Enter your main Gmail address without the +tag.";
+  }
   const suggestedProvider = KNOWN_PROVIDER_TYPO_CORRECTIONS[domain];
   if (suggestedProvider) {
     return `Check your email domain. Did you mean @${suggestedProvider}? Please correct it to continue.`;
