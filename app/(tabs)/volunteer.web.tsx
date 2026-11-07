@@ -1461,11 +1461,10 @@ const styles = StyleSheet.create({
   },
   mobileTaskTitle: {
     color: ui.color.text,
-    fontSize: 22,
-    fontWeight: "700",
-    lineHeight: 29,
-    letterSpacing: -0.35,
-   ...ui.type.section, },
+    fontSize: ui.type.section.fontSize,
+    fontWeight: ui.type.section.fontWeight,
+    lineHeight: ui.type.section.lineHeight,
+    letterSpacing: -0.35, },
   mobileTaskDescription: {
     width: "100%",
     fontSize: 14,
@@ -1527,10 +1526,9 @@ const styles = StyleSheet.create({
     flexShrink: 1,
   },
   subtitleMobile: {
-    fontSize: 12.5,
-    lineHeight: 18,
-    flexShrink: 1,
-   ...ui.type.body, },
+    fontSize: ui.type.body.fontSize,
+    lineHeight: ui.type.body.lineHeight,
+    flexShrink: 1, fontWeight: ui.type.body.fontWeight,},
   liveMapButtonMobile: {
     alignSelf: "stretch",
     width: "100%",
@@ -1730,14 +1728,12 @@ const styles = StyleSheet.create({
     color: ui.color.text,
     fontSize: ui.type.page.fontSize,
     lineHeight: ui.type.page.lineHeight,
-    fontWeight: "700",
-   ...ui.type.page, },
+    fontWeight: ui.type.page.fontWeight, },
   subtitle: {
     color: ui.color.secondary,
-    fontSize: 14,
-    lineHeight: 21,
-    marginTop: 3,
-   ...ui.type.body, },
+    fontSize: ui.type.body.fontSize,
+    lineHeight: ui.type.body.lineHeight,
+    marginTop: 3, fontWeight: ui.type.body.fontWeight,},
   liveMapButton: {
     minHeight: 44,
     flexDirection: "row",
@@ -1842,9 +1838,8 @@ const styles = StyleSheet.create({
   statLabel: {
     marginTop: 3,
     color: "#5f7284",
-    fontSize: 11,
-    fontWeight: "800",
-   ...ui.type.label, },
+    fontSize: ui.type.label.fontSize,
+    fontWeight: ui.type.label.fontWeight, lineHeight: ui.type.label.lineHeight,},
   toolbar: {
     flexDirection: "row",
     alignItems: "center",

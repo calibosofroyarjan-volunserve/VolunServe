@@ -2014,18 +2014,18 @@ const styles = StyleSheet.create({
   title: {
     marginTop: 4,
     color: ui.color.text,
-    fontSize: 27,
+    fontSize: ui.type.page.fontSize,
     
   
-    fontFamily: "DonationInterBold", ...ui.type.page, },
+    fontFamily: "DonationInterBold", lineHeight: ui.type.page.lineHeight, fontWeight: ui.type.page.fontWeight,},
   subtitle: {
     maxWidth: 820,
     marginTop: 7,
     color: ui.color.secondary,
-    fontSize: 13,
-    lineHeight: 20,
+    fontSize: ui.type.body.fontSize,
+    lineHeight: ui.type.body.lineHeight,
   
-    fontFamily: "DonationInterRegular", ...ui.type.body, },
+    fontFamily: "DonationInterRegular", fontWeight: ui.type.body.fontWeight,},
   heroTrustBadge: {
     flexDirection: "row",
     alignItems: "center",
@@ -2087,10 +2087,10 @@ const styles = StyleSheet.create({
   summaryLabel: {
     marginTop: 2,
     color: ui.color.secondary,
-    fontSize: 10.5,
+    fontSize: ui.type.label.fontSize,
     
   
-    fontFamily: "DonationInterBold", ...ui.type.label, },
+    fontFamily: "DonationInterBold", lineHeight: ui.type.label.lineHeight, fontWeight: ui.type.label.fontWeight,},
 
   filterPanel: {
     marginTop: 22,
@@ -2110,18 +2110,18 @@ const styles = StyleSheet.create({
   sectionTitle: {
     marginTop: 3,
     color: ui.color.text,
-    fontSize: 20,
+    fontSize: ui.type.section.fontSize,
     
   
-    fontFamily: "DonationInterBold", ...ui.type.section, },
+    fontFamily: "DonationInterBold", lineHeight: ui.type.section.lineHeight, fontWeight: ui.type.section.fontWeight,},
   sectionSubtitle: {
     maxWidth: 850,
     marginTop: 5,
     color: ui.color.secondary,
-    fontSize: 11.5,
-    lineHeight: 18,
+    fontSize: ui.type.body.fontSize,
+    lineHeight: ui.type.body.lineHeight,
   
-    fontFamily: "DonationInterRegular", ...ui.type.body, },
+    fontFamily: "DonationInterRegular", fontWeight: ui.type.body.fontWeight,},
   filterRow: {
     flexDirection: "row",
     flexWrap: "wrap",
@@ -2145,10 +2145,10 @@ const styles = StyleSheet.create({
   },
   filterChipText: {
     color: "#475569",
-    fontSize: 10,
+    fontSize: ui.type.label.fontSize,
     
   
-    fontFamily: "DonationInterBold", ...ui.type.label, },
+    fontFamily: "DonationInterBold", lineHeight: ui.type.label.lineHeight, fontWeight: ui.type.label.fontWeight,},
   filterChipTextActive: {
     color: "#FFFFFF",
   },

@@ -4583,15 +4583,13 @@ const styles = StyleSheet.create({
     marginBottom: 14,
   },
   pageTitle: {
-    fontSize: 23,
-    fontWeight: "700",
-    color: colors.ink,
-   ...ui.type.page, },
+    fontSize: ui.type.page.fontSize,
+    fontWeight: ui.type.page.fontWeight,
+    color: colors.ink, lineHeight: ui.type.page.lineHeight,},
   pageSubtitle: {
     color: colors.muted,
-    fontSize: 12,
-    marginTop: 3,
-   ...ui.type.body, },
+    fontSize: ui.type.body.fontSize,
+    marginTop: 3, lineHeight: ui.type.body.lineHeight, fontWeight: ui.type.body.fontWeight,},
   modeTag: {
     flexDirection: "row",
     alignItems: "center",
@@ -4693,13 +4691,11 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     color: colors.ink,
-    fontSize: 16,
-    fontWeight: "700",
-   ...ui.type.section, },
+    fontSize: ui.type.section.fontSize,
+    fontWeight: ui.type.section.fontWeight, lineHeight: ui.type.section.lineHeight,},
   sectionHint: {
     color: colors.muted,
-    fontSize: 11,
-   ...ui.type.body, },
+    fontSize: ui.type.body.fontSize, lineHeight: ui.type.body.lineHeight, fontWeight: ui.type.body.fontWeight,},
   searchInput: {
     backgroundColor: "white",
     borderWidth: 1,
@@ -4775,10 +4771,9 @@ const styles = StyleSheet.create({
   },
   eventTitle: {
     color: colors.ink,
-    fontSize: 14,
-    fontWeight: "900",
-    flexShrink: 1,
-   ...ui.type.card, },
+    fontSize: ui.type.card.fontSize,
+    fontWeight: ui.type.card.fontWeight,
+    flexShrink: 1, lineHeight: ui.type.card.lineHeight,},
   tag: {
     backgroundColor: "#DDF4EA",
     borderRadius: 7,
@@ -4801,9 +4796,8 @@ const styles = StyleSheet.create({
   },
   metaText: {
     color: colors.muted,
-    fontSize: 11,
-    lineHeight: 16,
-   ...ui.type.meta, },
+    fontSize: ui.type.meta.fontSize,
+    lineHeight: ui.type.meta.lineHeight, fontWeight: ui.type.meta.fontWeight,},
   cardFooter: {
     flexDirection: "row",
     justifyContent: "space-between",

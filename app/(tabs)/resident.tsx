@@ -6292,10 +6292,9 @@ const styles =
       color:
         "#475569",
       fontWeight:
-        "800",
+        ui.type.label.fontWeight,
       fontSize:
-        13,
-     ...ui.type.label, },
+        ui.type.label.fontSize, lineHeight: ui.type.label.lineHeight,},
 
     modeTabTextActive: {
       color:
@@ -6324,12 +6323,11 @@ const styles =
 
     modeCountText: {
       fontSize:
-        11,
+        ui.type.meta.fontSize,
       fontWeight:
-        "900",
+        ui.type.meta.fontWeight,
       color:
-        "#475569",
-     ...ui.type.meta, },
+        "#475569", lineHeight: ui.type.meta.lineHeight,},
 
     modeCountTextActive: {
       color:
@@ -6423,10 +6421,9 @@ const styles =
       color:
         "#172033",
       fontSize:
-        13,
+        ui.type.card.fontSize,
       fontWeight:
-        "900",
-     ...ui.type.card, },
+        ui.type.card.fontWeight, lineHeight: ui.type.card.lineHeight,},
 
     infoCardText: {
       fontFamily:"AssistanceInter",
@@ -6434,10 +6431,9 @@ const styles =
         5,
       color: ui.color.secondary,
       fontSize:
-        12,
+        ui.type.body.fontSize,
       lineHeight:
-        18,
-     ...ui.type.body, },
+        ui.type.body.lineHeight, fontWeight: ui.type.body.fontWeight,},
 
     emergencyNotice: {
       marginTop:
@@ -6490,10 +6486,9 @@ const styles =
       color:
         "#8A463E",
       fontSize:
-        12,
+        ui.type.body.fontSize,
       lineHeight:
-        18,
-     ...ui.type.body, },
+        ui.type.body.lineHeight, fontWeight: ui.type.body.fontWeight,},
 
     emergencyButton: {
       minHeight:

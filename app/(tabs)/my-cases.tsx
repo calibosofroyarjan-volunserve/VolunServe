@@ -2962,17 +2962,15 @@ const styles =
     title: {
       marginTop: 6,
       color: ui.color.text,
-      fontSize: 28,
-      lineHeight: 36,
-      fontWeight: "700",
-     ...ui.type.page, },
+      fontSize: ui.type.page.fontSize,
+      lineHeight: ui.type.page.lineHeight,
+      fontWeight: ui.type.page.fontWeight, },
 
     subtitle: {
       marginTop: 6,
       color: "#627785",
-      fontSize: 14,
-      lineHeight: 21,
-     ...ui.type.body, },
+      fontSize: ui.type.body.fontSize,
+      lineHeight: ui.type.body.lineHeight, fontWeight: ui.type.body.fontWeight,},
 
     errorBox: {
       marginBottom: 14,
@@ -3040,10 +3038,9 @@ const styles =
 
     caseTitle: {
       color: "#102A3A",
-      fontSize: 18,
-      lineHeight: 24,
-      fontWeight: "900",
-     ...ui.type.card, },
+      fontSize: ui.type.card.fontSize,
+      lineHeight: ui.type.card.lineHeight,
+      fontWeight: ui.type.card.fontWeight, },
 
     reference: {
       marginTop: 4,
@@ -3090,10 +3087,9 @@ const styles =
 
     metaLabel: {
       color: "#91A1AD",
-      fontSize: 8,
-      fontWeight: "900",
-      letterSpacing: 0.8,
-     ...ui.type.meta, },
+      fontSize: ui.type.meta.fontSize,
+      fontWeight: ui.type.meta.fontWeight,
+      letterSpacing: 0.8, lineHeight: ui.type.meta.lineHeight,},
 
     metaValue: {
       marginTop: 3,
@@ -3118,9 +3114,8 @@ const styles =
     infoText: {
       marginTop: 4,
       color: "#36515F",
-      fontSize: 12,
-      lineHeight: 18,
-     ...ui.type.body, },
+      fontSize: ui.type.body.fontSize,
+      lineHeight: ui.type.body.lineHeight, fontWeight: ui.type.body.fontWeight,},
 
     needsBox: {
       marginTop: 14,
