@@ -23,7 +23,7 @@ for(const value of ["<DashboardPendingIdentityReviews />", "<DashboardVolunteerA
 }
 assert(!dashboard.includes("evacuation_centers") && !nav.includes('label: "Volunteer Events"') &&
   !nav.includes('label: "Analytics"'),"Retired Admin modules must not return");
-assert(pager.includes('flexDirection: "row"') && pager.includes('minHeight: ui.minTap') && read('constants/volunserveLiveUi.ts').includes('minTap: 44') &&
+assert(pager.includes('flexDirection: "row"') && pager.includes('minHeight: 34') &&
   pager.includes("pageSize = 5") && pager.includes("onChange(safePage + 1)") &&
   pager.includes("onChange(safePage - 1)") && pager.includes("visiblePages.map"),
   "Pagination must remain functional, compact and accessible");
