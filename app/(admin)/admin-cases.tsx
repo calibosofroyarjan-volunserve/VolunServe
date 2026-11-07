@@ -1,3 +1,4 @@
+import { getSafeVolunServeBackendBaseUrl } from "../../lib/stagingBackendSafety";
 import { useRouter } from "expo-router";
 import { getAuth } from "firebase/auth";
 import {
@@ -36,7 +37,7 @@ import EmergencyIncidentMap from "../../components/admin/EmergencyIncidentMap";
 import { db } from "../../lib/firebase";
 import { emergencyTaskStatusLabel } from "../../lib/emergencyTaskStatus";
 
-const BACKEND_URL = "https://volunserve.onrender.com";
+const BACKEND_URL = getSafeVolunServeBackendBaseUrl();
 
 type Severity = "low" | "medium" | "high" | "critical";
 type CaseStatus =
