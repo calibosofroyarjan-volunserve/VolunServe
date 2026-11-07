@@ -1,0 +1,99 @@
+# NONPRODUCTION TESTING ONLY. Firebase Auth + Firestore EMULATORS on 127.0.0.1.
+# No access to cloud Firebase, Render or PayMongo. No live deployment.
+name: VolunServe — Isolated Four-Role Auth & Firestore Emulator QA (NO DEPLOY)
+
+on:
+  push:
+    branches:
+      - test/isolated-four-role-emulators-20261107
+    paths:
+      - '.github/workflows/validate-isolated-four-role-emulators-20261107.yml'
+      - 'scripts/qa-four-role-emulator-only-20261107.cjs'
+permissions:
+  contents: read
+
+jobs:
+  isolated-synthetic-auth-and-rules:
+    if: ${{ github.repository == 'calibosofroyarjan-volunserve/VolunServe' && github.ref == 'refs/heads/test/isolated-four-role-emulators-20261107' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 32
+    env:
+      CI: 'true'
+      VOLUNSERVE_EMULATOR_PROJECT: demo-volunserve
+      EXPO_PUBLIC_VOLUNSERVE_STAGING_MODE: '0'
+      APPROVED_UI_REVIEW_SHA: 4d0950a8f8e1327c596fe91c3c94b98df2cd4357
+    steps:
+      - name: Check out exact tested UI review baseline without legacy nested gitlink
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir source
+          git -C source init
+          git -C source remote add origin https://github.com/calibosofroyarjan-volunserve/VolunServe.git
+          git -C source fetch --no-recurse-submodules --depth=1 origin "$GITHUB_SHA"
+          git -C source checkout --detach FETCH_HEAD
+          git -C source fetch --no-recurse-submodules --depth=1 origin "$APPROVED_UI_REVIEW_SHA"
+          test "$(git -C source rev-parse HEAD)" = "$GITHUB_SHA"
+
+      - name: Fail closed unless ONLY emulator test files were added to green UI baseline
+        working-directory: source
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          'use strict';
+          const assert=require('node:assert/strict');
+          const cp=require('node:child_process');
+          const fs=require('node:fs');
+          const baseline=process.env.APPROVED_UI_REVIEW_SHA;
+          const diff=cp.execFileSync('git',['diff','--name-status',baseline,'HEAD'],{encoding:'utf8'}).trim();
+          const expected=[
+            'A\t.github/workflows/validate-isolated-four-role-emulators-20261107.yml',
+            'A\tscripts/qa-four-role-emulator-only-20261107.cjs'
+          ].sort();
+          assert.deepEqual(diff.split('\n').sort(),expected,
+            'STOP: production application source or baseline has changed');
+          const source=fs.readFileSync('scripts/qa-four-role-emulator-only-20261107.cjs','utf8');
+          assert.match(source,/FIRESTORE_EMULATOR_HOST/);
+          assert.match(source,/FIREBASE_AUTH_EMULATOR_HOST/);
+          assert.match(source,/demo-volunserve/);
+          assert.match(source,/GOOGLE_APPLICATION_CREDENTIALS/);
+          console.log('PASS: green four-portal UI code is byte-for-byte unchanged; exactly two local QA files added.');
+          NODE
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: source/package-lock.json
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Install exact locked dependencies for emulator-only tests
+        working-directory: source
+        run: npm ci --no-audit --no-fund
+
+      - name: Fail before start if cloud credentials or production project are present
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -z "${GOOGLE_APPLICATION_CREDENTIALS:-}"
+          test -z "${FIREBASE_TOKEN:-}"
+          test "$VOLUNSERVE_EMULATOR_PROJECT" = "demo-volunserve"
+          test "${EXPO_PUBLIC_VOLUNSERVE_STAGING_MODE}" = "0"
+          echo 'PASS: runner has no passed-in cloud credentials. Project is reserved demo-volunserve.'
+
+      - name: Run real local Auth & Firestore emulator smoke suite with synthetic accounts and records
+        working-directory: source
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx firebase-tools emulators:exec --only auth,firestore --project demo-volunserve --non-interactive \
+            "node scripts/qa-four-role-emulator-only-20261107.cjs"
+
+      - name: Print test scope and constraints
+        if: success()
+        run: |
+          echo 'PASS: LOCAL emulator user/auth and Firestore role permissions. No production access.'
+          echo 'NOT tested: actual browser clicks, remote backend, PayMongo, Cloudinary, ID scan, real email or deployed staging.'
