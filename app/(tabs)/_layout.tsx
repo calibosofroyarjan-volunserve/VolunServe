@@ -926,7 +926,7 @@ const styles = StyleSheet.create({
     borderRadius: 13,
   },
   desktopNavItemActive: {
-    backgroundColor: "#147D61",
+    backgroundColor: ui.color.sidebarActive,
   },
   desktopNavIcon: {
     width: 34,
@@ -1001,7 +1001,7 @@ const styles = StyleSheet.create({
   },
   residentSectionLabel: { marginTop: 10, color: "#83D8C8", letterSpacing: 2 },
   residentNavItem: { minHeight: 49, overflow: "hidden", gap: 11, paddingHorizontal: 8, borderRadius: 9 },
-  residentNavItemActive: { backgroundColor: "#147D61", borderWidth: 1, borderColor: "#219E79" },
+  residentNavItemActive: { backgroundColor: ui.color.sidebarActive, borderWidth: 1, borderColor: ui.color.sidebarActive },
   residentNavSelectedGradient: { ...StyleSheet.absoluteFillObject, borderRadius: 14 },
   residentNavIcon: {
     width: 40, height: 40, borderRadius: 13, overflow: "hidden", backgroundColor: "#075A4B",
