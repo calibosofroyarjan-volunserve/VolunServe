@@ -28,6 +28,7 @@ const unresolved = issues.filter(x=>
 );
 fs.mkdirSync("reports",{recursive:true});
 fs.writeFileSync("reports/staging-external-endpoints.json",JSON.stringify({issues,unresolved},null,2));
+const formatCandidate = x => "- " + x.file + ":" + x.line + " — " + x.text.replaceAll("\u0060", "'");
 const md=[
 "# VolunServe — staging external endpoint source audit",
 "",
@@ -36,11 +37,11 @@ const md=[
 "",
 "## Possible direct production Render references",
 "",
-...(!unresolved.length?["No unresolved literal Render backend URLs in app/lib/components were found."]:unresolved.map(x=>`- \`${x.file}:${x.line}\` — \`${x.text.replaceAll("`","'")}` `)),
+...(!unresolved.length ? ["No unresolved literal Render backend URLs in app/lib/components were found."] : unresolved.map(formatCandidate)),
 "",
 "## All external call / URL candidates",
 "",
-...issues.map(x=>`- \`${x.file}:${x.line}\` — \`${x.text.replaceAll("`","'")}` `),
+...issues.map(formatCandidate),
 "",
 "Do not deploy this code until separate Firebase, Render, identity AI, Cloudinary and payment-sandbox routing is verified."
 ].join("\n");
