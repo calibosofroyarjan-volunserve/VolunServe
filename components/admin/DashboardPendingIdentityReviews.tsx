@@ -1,3 +1,4 @@
+import { getSafeVolunServeBackendBaseUrl } from "../../lib/stagingBackendSafety";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { useRouter } from "expo-router";
 import React, { useCallback, useEffect, useState } from "react";
@@ -13,7 +14,7 @@ type PendingIdentity = {
   manualReviewDecision?: string;
   resident?: { fullName?: string; email?: string; barangay?: string; };
 };
-const API = "https://volunserve.onrender.com/api/admin/identity/reviews";
+const API = getSafeVolunServeBackendBaseUrl() + "/api/admin/identity/reviews";
 const PAGE_SIZE = 5;
 const pendingReview = (item: PendingIdentity) =>
   item.requiresManualReview === true && item.status === "pending" &&
