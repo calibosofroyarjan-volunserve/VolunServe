@@ -6,6 +6,7 @@ const path = require("node:path");
 const {classifyRegistrationEmail} = require("./registrationEmailScreening");
 test("known temporary and subdomain emails blocked on trusted server", () => {
   for (const value of [
+    "person+alias@gmail.com", "person+alias@googlemail.com",
     "person@en2ch.com", "person@MAILINATOR.COM", "person@sub.yopmail.com",
     "person@mail.tm", "person@guerrillamail.com", "person@10minutemail.com",
     "person@0-30-24.com",
