@@ -37,7 +37,9 @@ jobs:
         run: |
           node scripts/test-login-field-validation.cjs
           node scripts/test-login-ui-release.cjs
-          node scripts/test-signup-prod.cjs
+          # Legacy test-signup-prod compares the entire signup stylesheet byte-for-byte with an old SHA;
+          # this design-only PR instead gates unchanged non-style code in the route audit.
+          node scripts/test-signup-email-first-middle-optional.cjs
           node scripts/test-route-entrypoints.cjs
           node scripts/test-portal-resident-volunteer-ui-flow.cjs
           node scripts/test-resident-volunteer-sidebar.cjs
