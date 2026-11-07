@@ -10,11 +10,12 @@ const adminNav = read("app/(admin)/_layout.tsx");
 const signup = read("app/signup.web.tsx");
 const map = read("app/(tabs)/disaster-response.tsx");
 
-assert(hero.includes('backgroundColor: "#E5F5ED"') &&
-       hero.includes('name="leaf-outline"') &&
+assert(hero.includes("backgroundColor: ui.color.surface") &&
+       hero.includes("const compact = width < 760") &&
+       !hero.includes('name="leaf-outline"') &&
        hero.includes("title") && hero.includes("subtitle") &&
        hero.includes("eyebrow"),
-  "LGU Admin pages must share the premium emerald/mint botanical visual identity");
+  "LGU Admin pages must share the clean responsive emerald UI design");
 assert(identities.includes("<AdminReviewHero") && identities.includes("LGU OPERATIONS / PEOPLE & VERIFICATION") &&
   identities.includes("pageSize={PAGE_SIZE}") && identities.includes("setPage(1)"),
   "Secure Resident Identity Reviews must retain branded header and five-row pagination");
