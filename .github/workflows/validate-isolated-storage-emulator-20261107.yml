@@ -1,0 +1,81 @@
+# Local fake-image upload rules QA only, no Blaze billing, no Firebase cloud credentials.
+name: VolunServe — Storage Emulator Incident and Announcement Image QA (NO DEPLOY)
+on:
+  push:
+    branches:
+      - test/isolated-four-role-emulators-20261107
+    paths:
+      - '.github/workflows/validate-isolated-storage-emulator-20261107.yml'
+      - 'scripts/qa-storage-emulator-only-20261107.cjs'
+permissions:
+  contents: read
+jobs:
+  local-storage-only:
+    if: ${{ github.repository == 'calibosofroyarjan-volunserve/VolunServe' && github.ref == 'refs/heads/test/isolated-four-role-emulators-20261107' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      CI: 'true'
+      VOLUNSERVE_EMULATOR_PROJECT: demo-volunserve
+      BASELINE_SAFE_UI_SHA: 4d0950a8f8e1327c596fe91c3c94b98df2cd4357
+    steps:
+      - name: Exact test branch checkout with no submodules or deployment keys
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir source
+          git -C source init
+          git -C source remote add origin https://github.com/calibosofroyarjan-volunserve/VolunServe.git
+          git -C source fetch --no-recurse-submodules --depth=1 origin "$GITHUB_SHA"
+          git -C source checkout --detach FETCH_HEAD
+          git -C source fetch --no-recurse-submodules --depth=1 origin "$BASELINE_SAFE_UI_SHA"
+          test "$(git -C source rev-parse HEAD)" = "$GITHUB_SHA"
+      - name: BLOCK if any LIVE application source/rules modified after green review
+        working-directory: source
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          'use strict';
+          const assert=require('node:assert/strict');
+          const cp=require('node:child_process');
+          const expected=[
+            'A\t.github/workflows/validate-isolated-four-role-emulators-20261107.yml',
+            'A\t.github/workflows/validate-isolated-storage-emulator-20261107.yml',
+            'A\tscripts/qa-four-role-emulator-only-20261107.cjs',
+            'A\tscripts/qa-storage-emulator-only-20261107.cjs',
+          ].sort();
+          const diff=cp.execFileSync('git',['diff','--name-status',process.env.BASELINE_SAFE_UI_SHA,'HEAD'],{encoding:'utf8'}).trim().split('\n').sort();
+          assert.deepEqual(diff,expected,'STOP: unexpected application change in emulator-only branch');
+          console.log('PASS: all app, existing Firestore rules, Storage rules and backend files byte-identical to green UI review');
+          NODE
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: source/package-lock.json
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Install locked dependencies for local emulator
+        working-directory: source
+        run: npm ci --no-audit --no-fund
+      - name: Reject cloud credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -z "${GOOGLE_APPLICATION_CREDENTIALS:-}"
+          test -z "${FIREBASE_TOKEN:-}"
+          test "$VOLUNSERVE_EMULATOR_PROJECT" = "demo-volunserve"
+          echo "PASS: no cloud credentials; local demo project only"
+      - name: Run synthetic image upload/read permission tests on local Storage emulator
+        working-directory: source
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx firebase-tools emulators:exec --only auth,firestore,storage --project demo-volunserve --non-interactive \
+            "node scripts/qa-storage-emulator-only-20261107.cjs"
+      - name: This test does NOT authorize cloud uploads or Hosting release
+        if: success()
+        run: echo 'PASS LOCAL Storage only; Blaze and live production untouched; browser E2E still pending.'
