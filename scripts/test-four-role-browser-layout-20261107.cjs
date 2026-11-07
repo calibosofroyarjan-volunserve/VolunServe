@@ -36,8 +36,8 @@ const cases = [
   ["superadmin","admin-accounts","Admin Accounts"],
   ["superadmin","admin-logs","Admin Activity & Audit Logs"],
   ["superadmin","all-records","System Records"],
-  ["superadmin","system-settings","System Settings"]
-
+  ["superadmin","system-settings","System Settings"],
+];
 const screens = [
   {name:"desktop",width:1440,height:900},
   {name:"phone",width:390,height:844},
