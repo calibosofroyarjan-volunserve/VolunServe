@@ -7,9 +7,10 @@ const title = source("components/admin/AdminReviewHero.tsx");
 const pager = source("components/ui/ListPagination.tsx");
 const layout = app("_layout");
 
-assert(title.includes('backgroundColor: "#E5F5ED"') &&
-  title.includes('name="leaf-outline"') &&
-  title.includes("compact"), "Common mint/emerald header must stay responsive");
+assert(title.includes("backgroundColor: ui.color.surface") &&
+  title.includes("const compact = width < 760") &&
+  title.includes("titleCompact") && !title.includes('name="leaf-outline"'),
+  "Shared Admin header must remain clean, readable and responsive");
 assert(pager.includes("onChange") && pager.includes("pageSize"), "Shared paginated records navigation is functional");
 
 for (const name of [
