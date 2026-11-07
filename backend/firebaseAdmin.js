@@ -15,6 +15,7 @@ const {
   getFirestore,
   FieldValue,
 } = require("firebase-admin/firestore");
+const { validateStagingEnvironment } = require("./stagingIsolation");
 
 function getServiceAccount() {
   const raw =
@@ -52,15 +53,21 @@ function getServiceAccount() {
 }
 
 function getFirebaseApp() {
-  const existingApps =
-    getApps();
+  const serviceAccount = getServiceAccount();
+  // Before touching Firebase Auth/Firestore, reject accidental staging use
+  // of production credentials or the production Python AI endpoint.
+  validateStagingEnvironment(process.env, serviceAccount);
 
+  const existingApps = getApps();
   if (existingApps.length > 0) {
+    if (
+      process.env.VOLUNSERVE_DEPLOYMENT_ENV === "staging" &&
+      existingApps[0].options.projectId !== "volunserve-auth-staging"
+    ) {
+      throw new Error("Unsafe staging config: Firebase app is not the staging project.");
+    }
     return existingApps[0];
   }
-
-  const serviceAccount =
-    getServiceAccount();
 
   if (serviceAccount) {
     return initializeApp({
