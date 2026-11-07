@@ -26,6 +26,7 @@ import {
   signUpUser,
 } from "../../lib/firebaseAuth";
 import {getRegistrationEmailError} from "../../lib/registrationEmailPolicy";
+import {getResidentRegistrationFieldErrors} from "../../lib/requireCompleteResidentRegistration";
 import { userFacingError } from "../../lib/userFacingError";
 import {
   REGISTRATION_EMAIL_CONFLICT_MESSAGE,
@@ -238,15 +239,19 @@ export default function EmailFirstSignup() {
     signedInUser.providerData.some(p => p.providerId === "google.com") &&
     !signedInUser.providerData.some(p => p.providerId === "password");
   const emailCanEdit = !signedInUser;
-  const personalOk = validName(firstName) && validName(lastName) &&
-    (noMiddleName || validMiddleName(middleName)) &&
-    age !== null && age >= 18 && age <= 100 &&
-    /^9\d{9}$/.test(phoneClean);
-  const addressOk = SJDM_BARANGAYS.includes(barangay) &&
-    !!occupation &&
-    (!needsSpecialization || !!specialization) &&
-    (occupation !== "Other (Specify)" || occupationOther.trim().length >= 2) &&
-    reviewed;
+  const registrationErrors = getResidentRegistrationFieldErrors({
+    firstName, lastName, middleName: noMiddleName ? "" : middleName,
+    age: age ?? -1, phoneNumber: "+63" + phoneClean,
+    region: "Region III – Central Luzon", province: "Bulacan",
+    city: "City of San Jose del Monte", barangay,
+    occupationCategory: occupation, occupationSpecialization: specialization,
+    occupationOther,
+  });
+  const personalOk = !["firstName","lastName","middleName","age","phoneNumber"]
+    .some(field => !!registrationErrors[field as keyof typeof registrationErrors]);
+  const addressOk = !["region","city","barangay","occupationCategory",
+    "occupationSpecialization","occupationOther"]
+    .some(field => !!registrationErrors[field as keyof typeof registrationErrors]) && reviewed;
 
   const showRegistrationState = useCallback(({user, profileExists}: {user: User; profileExists: boolean}) => {
     setSignedInUser(user);
@@ -435,11 +440,11 @@ export default function EmailFirstSignup() {
     }
     if (!personalOk) {
       setStep(3);
-      setError("Complete your name, date of birth, and Philippine mobile number.");
+      setError("Review the highlighted Personal Details. Each field explains what needs correcting.");
       return;
     }
     if (!addressOk) {
-      setError("Choose your SJDM barangay and occupation, then confirm your details.");
+      setError("Review the highlighted Address & Profile fields, then confirm your details.");
       return;
     }
     if (busy) return;
@@ -801,22 +806,18 @@ export default function EmailFirstSignup() {
                 <Field
                   label="First Name *" value={firstName}
                   onChange={setFirstName} placeholder="First name"
-                  error={(showErrors || !!firstName) && !validName(firstName)
-                    ? "Enter at least two valid letters." : null}
+                  error={(showErrors || !!firstName) ? registrationErrors.firstName : null}
                 />
                 <Field
                   label="Last Name *" value={lastName}
                   onChange={setLastName} placeholder="Last name"
-                  error={(showErrors || !!lastName) && !validName(lastName)
-                    ? "Enter at least two valid letters." : null}
+                  error={(showErrors || !!lastName) ? registrationErrors.lastName : null}
                 />
                 <Field
                   label="Middle Name (optional)" value={middleName}
                   onChange={setMiddleName} disabled={noMiddleName}
                   placeholder="Optional"
-                  error={(showErrors || !!middleName) && !noMiddleName &&
-                    !!middleName.trim() && !validMiddleName(middleName)
-                    ? "Enter a valid middle name or leave blank." : null}
+                  error={(showErrors || !!middleName) && !noMiddleName ? registrationErrors.middleName : null}
                 />
                 <Pressable
                   accessibilityRole="checkbox"
@@ -832,15 +833,13 @@ export default function EmailFirstSignup() {
                   onChange={v => setBirth(formatBirthday(v))} placeholder="YYYY-MM-DD"
                   keyboardType="phone-pad"
                   hint="Type 8 digits (year, month, day). The dashes appear automatically."
-                  error={(showErrors || !!birth) && (age === null || age < 18 || age > 100)
-                    ? "Use a valid birth date. Registration requires ages 18–100." : null}
+                  error={(showErrors || !!birth) ? registrationErrors.age : null}
                 />
                 <Field
                   label="Mobile Number *" value={phone}
                   onChange={v => setPhone(v.replace(/\D/g, "").slice(0, 10))}
                   placeholder="9XXXXXXXXX" keyboardType="phone-pad"
-                  error={(showErrors || !!phone) && !/^9\d{9}$/.test(phoneClean)
-                    ? "Enter a valid 10-digit PH mobile number beginning with 9." : null}
+                  error={(showErrors || !!phone) ? registrationErrors.phoneNumber : null}
                 />
                 {checkButton("Continue to Address & Profile", () => {
                   setShowErrors(true);
@@ -864,7 +863,7 @@ export default function EmailFirstSignup() {
                 <Text style={styles.label}>City</Text>
                 <Text style={styles.readonly}>City of San Jose del Monte</Text>
                 <Text style={styles.label}>Barangay *</Text>
-                <View style={[styles.pickerBox, showErrors && !barangay && styles.inputError]}>
+                <View style={[styles.pickerBox, showErrors && !!registrationErrors.barangay && styles.inputError]}>
                   <Picker
                     selectedValue={barangay}
                     onValueChange={v => setBarangay(String(v))}
@@ -875,10 +874,10 @@ export default function EmailFirstSignup() {
                     )}
                   </Picker>
                 </View>
-                {showErrors && !barangay &&
-                  <Text style={styles.error}>Please select your SJDM barangay.</Text>}
+                {showErrors && registrationErrors.barangay &&
+                  <Text accessibilityRole="alert" style={styles.error}>{registrationErrors.barangay}</Text>}
                 <Text style={styles.label}>Occupation *</Text>
-                <View style={[styles.pickerBox, showErrors && !occupation && styles.inputError]}>
+                <View style={[styles.pickerBox, showErrors && !!registrationErrors.occupationCategory && styles.inputError]}>
                   <Picker
                     selectedValue={occupation}
                     onValueChange={v => {
@@ -891,12 +890,12 @@ export default function EmailFirstSignup() {
                     )}
                   </Picker>
                 </View>
-                {showErrors && !occupation &&
-                  <Text style={styles.error}>Please select an occupation.</Text>}
+                {showErrors && registrationErrors.occupationCategory &&
+                  <Text accessibilityRole="alert" style={styles.error}>{registrationErrors.occupationCategory}</Text>}
                 {needsSpecialization && (
                   <>
                     <Text style={styles.label}>Specialization *</Text>
-                    <View style={[styles.pickerBox, showErrors && !specialization && styles.inputError]}>
+                    <View style={[styles.pickerBox, showErrors && !!registrationErrors.occupationSpecialization && styles.inputError]}>
                       <Picker
                         selectedValue={specialization}
                         onValueChange={v => setSpecialization(String(v))}
@@ -907,15 +906,14 @@ export default function EmailFirstSignup() {
                         )}
                       </Picker>
                     </View>
-                    {showErrors && !specialization &&
-                      <Text style={styles.error}>Please select a specialization.</Text>}
+                    {showErrors && registrationErrors.occupationSpecialization &&
+                      <Text accessibilityRole="alert" style={styles.error}>{registrationErrors.occupationSpecialization}</Text>}
                   </>
                 )}
                 {occupation === "Other (Specify)" && (
                   <Field label="Specify Occupation *" value={occupationOther}
                     onChange={setOccupationOther} placeholder="Your occupation"
-                    error={(showErrors || !!occupationOther) && occupationOther.trim().length < 2
-                      ? "Please specify your occupation." : null}/>
+                    error={(showErrors || !!occupationOther) ? registrationErrors.occupationOther : null}/>
                 )}
                 <Pressable
                   accessibilityRole="checkbox"
