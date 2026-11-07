@@ -69,6 +69,12 @@ test("only actual SJDM barangays, occupations and required specializations pass"
     assert.throws(()=>guard.requireCompleteResidentRegistration(sample),/Step 4/);
   }
   assert.throws(()=>guard.requireCompleteResidentRegistration({
+    ...good,occupationCategory:"Student",occupationOther:"Unrelated occupation",
+  }),/Step 4/);
+  assert.throws(()=>guard.requireCompleteResidentRegistration({
+    ...good,occupationCategory:"Unemployed",occupationSpecialization:"Doctor",
+  }),/Step 4/);
+  assert.throws(()=>guard.requireCompleteResidentRegistration({
     ...good,occupationCategory:"Other (Specify)",
     occupationSpecialization:"",occupationOther:""
   }),/Step 4/);
