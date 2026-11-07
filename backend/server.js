@@ -11,7 +11,7 @@ const {
 const { reconcileCommunityEventCertificates } = require("./communityCertificates");
 const { combineApprovedBudget } = require("./assistanceDonationBudget");
 const { probeIdentityAiReadiness } = require("./identityAiReadiness");
-const {isVerifiedFirebaseToken} = require("./verifiedFirebaseToken");
+const {isVerifiedFirebaseToken, isCompletedVolunServeProfile} = require("./verifiedFirebaseToken");
 const {
   getProfileRole,
   isApprovedAccount,
@@ -792,6 +792,37 @@ async function requireFirebaseUser(
         message: "Verify your email and complete registration before using VolunServe services.",
       });
       return;
+    }
+    // A verified mailbox is not necessarily a completed VolunServe account.
+    // Unprivileged LGU application + proof upload stay available to verified
+    // applicants so onboarding can finish; all service endpoints require an
+    // approved Resident/Volunteer/staff profile.
+    const path = String(request.path || "");
+    const isStaffApplication = path === "/api/lgu-staff/application";
+    const isStaffProof = path.startsWith("/api/lgu-staff/credentials/");
+    if (!isStaffApplication) {
+      let storedProfile = null;
+      try {
+        storedProfile = await loadUserProfile(decodedToken.uid);
+      } catch (profileError) {
+        if (profileError?.statusCode !== 404) {
+          response.status(503).json({
+            error: "profile_check_unavailable",
+            message: "Unable to verify your VolunServe profile right now.",
+          });
+          return;
+        }
+      }
+      const validStaffProof = isStaffProof &&
+        storedProfile?.role === "applicant" &&
+        storedProfile?.status === "pending_review";
+      if (!isCompletedVolunServeProfile(storedProfile) && !validStaffProof) {
+        response.status(403).json({
+          error: "registration_incomplete",
+          message: "Complete your verified VolunServe registration to access services.",
+        });
+        return;
+      }
     }
     request.firebaseUser =
       decodedToken;
