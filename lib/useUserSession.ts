@@ -38,9 +38,11 @@ export function useUserSession(): SessionState {
     let unsubscribeProfile:
       | (() => void)
       | undefined;
+    let profileListenerVersion = 0;
 
     const unsubscribeAuth =
       onAuthChange((user) => {
+        const version = ++profileListenerVersion;
         unsubscribeProfile?.();
         unsubscribeProfile = undefined;
 
@@ -55,15 +57,17 @@ export function useUserSession(): SessionState {
         }
 
         setState((current) => ({
-          ...current,
           loading: true,
           user,
+          // Do not expose a previous account's profile on auth changes.
+          profile: current.user?.uid === user.uid ? current.profile : null,
         }));
 
         unsubscribeProfile = onSnapshot(
           doc(db, "users", user.uid),
 
           (snapshot) => {
+            if (profileListenerVersion !== version) return;
             const profileData =
               snapshot.exists()
                 ? (snapshot.data() as UserProfile)
@@ -77,16 +81,22 @@ export function useUserSession(): SessionState {
           },
 
           () => {
-            setState({
+            if (profileListenerVersion !== version) return;
+            // A transient Firestore listener failure does not revoke the
+            // current user's previously verified profile. Only a real
+            // signed-out event or verified account-status change can do that.
+            // Server rules still enforce all protected reads/writes.
+            setState((current) => ({
               loading: false,
               user,
-              profile: null,
-            });
+              profile: current.user?.uid === user.uid ? current.profile : null,
+            }));
           }
         );
       });
 
     return () => {
+      profileListenerVersion++;
       unsubscribeProfile?.();
       unsubscribeAuth();
     };
