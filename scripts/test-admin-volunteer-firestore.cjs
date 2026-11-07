@@ -22,14 +22,14 @@ async function main() {
     await env.withSecurityRulesDisabled(async ctx => {
       const db = ctx.firestore();
       for (const [uid,data] of seedUsers) {
-        await setDoc(doc(db,"users",uid),{uid,...data});
+        await setDoc(doc(db,"users",uid),{uid,...data,...(data.role==="resident"?{email:uid+"@gmail.com"}:{})});
       }
       await setDoc(doc(db,"disasterCases","case-a"),{reporterUid:"resident-with-primary-admin",status:"validated"});
       await setDoc(doc(db,"disasterCases","case-b"),{reporterUid:"resident-with-primary-admin",status:"validated"});
       await setDoc(doc(db,"responseAssignments","assign-a"),{caseId:"case-a",volunteerId:"vol-a",status:"offered"});
       await setDoc(doc(db,"responseAssignments","assign-b"),{caseId:"case-b",volunteerId:"vol-b",status:"offered"});
     });
-    const dbFor = uid => env.authenticatedContext(uid).firestore();
+    const dbFor = uid => env.authenticatedContext(uid,{email:uid+"@gmail.com",email_verified:true}).firestore();
     const assignments = uid => collection(dbFor(uid),"responseAssignments");
     const own = uid => getDocs(query(assignments(uid),where("volunteerId","==",uid)));
     await assertSucceeds(own("vol-a")); // approved volunteer, active resident mode
