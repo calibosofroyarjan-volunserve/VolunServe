@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {evaluateLighting,assessFaceBoxes,frameDifference} from "./camera-metrics.mjs";
+import {evaluateLighting,assessFaceBoxes,frameDifference,assessDocumentFrame} from "./camera-metrics.mjs";
 function detection(x,y,w,h){return {boundingBox:{originX:x,originY:y,width:w,height:h}}}
 test("exactly one centered face is eligible for framing guidance",()=>{
  assert.equal(assessFaceBoxes([detection(270,90,260,350)],800,600).acceptable,true);
@@ -22,4 +22,35 @@ test("very dark image fails light guidance",()=>{
 test("sufficient contrast and brightness enable framing guidance",()=>{
  const p=Uint8ClampedArray.from({length:128},(_,i)=>i%4===3?255:(i%8<4?55:200));
  assert.equal(evaluateLighting(p).acceptable,true);
+});
+
+function documentPixels(w=120,h=90,rect=null) {
+ const pixels=new Uint8ClampedArray(w*h*4);
+ for(let y=0;y<h;y++) for(let x=0;x<w;x++) {
+   const i=(y*w+x)*4;
+   const inside=rect&&x>=rect.x1&&x<=rect.x2&&y>=rect.y1&&y<=rect.y2;
+   pixels[i]=pixels[i+1]=pixels[i+2]=inside?208:90;
+   pixels[i+3]=255;
+ }
+ return pixels;
+}
+test("automatic ID framing finds a centered high-contrast document-shaped rectangle",()=>{
+ const result=assessDocumentFrame(documentPixels(120,90,{x1:20,x2:100,y1:20,y2:70}),120,90);
+ assert.equal(result.acceptable,true,JSON.stringify(result));
+});
+test("plain background must not auto-capture an ID",()=>{
+ const result=assessDocumentFrame(documentPixels(120,90),120,90);
+ assert.equal(result.acceptable,false);
+});
+test("too-small card does not trigger automatic ID capture",()=>{
+ const result=assessDocumentFrame(documentPixels(120,90,{x1:42,x2:78,y1:34,y2:57}),120,90);
+ assert.equal(result.acceptable,false);
+});
+test("a strongly off-center rectangle does not auto-capture",()=>{
+ const result=assessDocumentFrame(documentPixels(120,90,{x1:9,x2:82,y1:20,y2:65}),120,90);
+ assert.equal(result.acceptable,false);
+});
+test("invalid camera frame fails closed",()=>{
+ assert.equal(assessDocumentFrame(null,120,90).acceptable,false);
+ assert.equal(assessDocumentFrame(new Uint8ClampedArray(10),120,90).acceptable,false);
 });
