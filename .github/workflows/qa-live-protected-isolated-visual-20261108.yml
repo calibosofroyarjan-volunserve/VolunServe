@@ -45,24 +45,12 @@ jobs:
           fs.writeFileSync(f,s);
           if(!s.includes("const ENABLE_LOCAL_TESTING = true;"))throw Error("Emulator setting not applied");
           NODE
-      - name: Start isolated Auth and Firestore emulators (demo project only)
+      - name: Run entire visual QA inside emulator lifetime (no production)
         shell: bash
         run: |
           set -euo pipefail
-          npx firebase-tools emulators:start --only auth,firestore --project demo-volunserve --non-interactive > /tmp/volunserve-demo-emulators.log 2>&1 &
-          for i in $(seq 1 90); do
-            if curl --silent --fail "http://127.0.0.1:4400/emulators" >/dev/null; then break; fi
-            sleep 2
-          done
-          curl --fail --silent http://127.0.0.1:4400/emulators
-      - name: Seed synthetic accounts and advisory ONLY to demo emulators
-        run: node scripts/qa-seed-demo-roles-20261108.cjs
-      - name: Type check untouched production source
-        run: npx tsc --noEmit --pretty false
-      - name: Export actual Expo web in temporary CI workspace (no publish)
-        run: npx expo export --platform web
-      - name: Capture real four-role pages in desktop and phone browser
-        run: node scripts/qa-screenshot-live-roles-20261108.cjs
+          npx firebase-tools emulators:exec --only auth,firestore --project demo-volunserve \
+            "node scripts/qa-seed-demo-roles-20261108.cjs && npx tsc --noEmit --pretty false && npx expo export --platform web && node scripts/qa-screenshot-live-roles-20261108.cjs"
       - name: Always upload real screenshot evidence and session summary
         if: always()
         uses: actions/upload-artifact@v4
