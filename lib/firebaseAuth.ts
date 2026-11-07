@@ -488,6 +488,16 @@ export const signUpUser = async (
         );
       }
       user = auth.currentUser;
+      if (usesGoogle) {
+        await reload(user);
+        // Google's verified provider can authenticate without a duplicate
+        // VolunServe password; registration still needs all personal details.
+        if (auth.currentUser?.uid !== user.uid || !user.emailVerified ||
+            !user.providerData.some(provider => provider.providerId === "google.com")) {
+          throw new Error("Connect a verified Google account to continue registration.");
+        }
+        await getIdToken(user, true);
+      }
       if (usesVerifiedEmail) {
         await reload(user);
         if (auth.currentUser?.uid !== user.uid || !user.emailVerified) {
