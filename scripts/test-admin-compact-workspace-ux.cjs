@@ -30,7 +30,8 @@ assert(pager.includes('flexDirection: "row"') && pager.includes('minHeight: 34')
 assert(hero.includes("minHeight: 110") && hero.includes("backgroundColor: ui.color.surface") &&
   hero.includes("const compact = width < 760") && !hero.includes('name="leaf-outline"'),
   "Shared Admin headers must be compact and responsive without excess decoration");
-for(const t of ["pagedCases", "pageFive(onDutyPersonnel", "pageFive(volunteerCandidates",
+// The verified LIVE emergency flow has no retired LGU personnel roster.
+for(const t of ["pagedCases", "pageFive(volunteerCandidates",
   "pageFive(activeAssignments", "pageFive(incidentAssignments", "pageFive(imageEvidence",
   "pageFive(videoEvidence"]) assert(emergency.includes(t),"Emergency nested pagination missing: "+t);
 assert(attendance.includes("pagedEvents.map") && attendance.includes("pagedVolunteers.map") &&
