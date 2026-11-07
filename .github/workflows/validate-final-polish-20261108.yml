@@ -43,7 +43,7 @@ jobs:
             return {prefix:text.slice(0,found.start),suffix:text.slice(found.end)};
           }
           for(const file of files){
-            if(!file.startsWith("app/")||!file.endsWith(".tsx")&&!file.startsWith(".github/workflows/"))throw Error("Unexpected changed path "+file);
+            if(!((file.startsWith("app/")&&file.endsWith(".tsx"))||file===".github/workflows/validate-final-polish-20261108.yml"))throw Error("Unexpected changed path "+file);
             if(file.startsWith(".github/workflows/"))continue;
             if(file==="components/home/Home.web.tsx")throw Error("Original Home source touched");
             const a=cp.execFileSync("git",["show",base+":"+file],{encoding:"utf8",maxBuffer:15e6});
