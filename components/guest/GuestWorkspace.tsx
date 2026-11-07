@@ -315,9 +315,9 @@ export default function GuestWorkspace({ landing = false }: { landing?: boolean 
   const role: Role = params.role === "admin" ? "admin" : params.role === "superadmin" ? "superadmin" : params.role === "volunteer" ? "volunteer" : "resident";
   const requested = params.module as Module;
   const allowed: NavItem[] = role === "admin"
-    ? ADMIN_PREVIEW_MODULES.map(item => ({name:item.label,key:item.key as Module,label:item.label,icon:item.icon,selected:item.icon}))
+    ? ADMIN_PREVIEW_MODULES.map(item => ({key:item.key as Module,label:item.label,icon:item.icon,selected:item.icon}))
     : role === "superadmin"
-    ? SUPERADMIN_PREVIEW_MODULES.map(item => ({name:item.label,key:item.key as Module,label:item.label,icon:item.icon,selected:item.icon}))
+    ? SUPERADMIN_PREVIEW_MODULES.map(item => ({key:item.key as Module,label:item.label,icon:item.icon,selected:item.icon}))
     : role === "volunteer" ? VOLUNTEER_NAV : RESIDENT_NAV;
   const isAdmin = role === "admin" || role === "superadmin";
   const module: Module = (isAdmin
