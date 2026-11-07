@@ -5,6 +5,7 @@ const read = file => fs.readFileSync(file, "utf8");
 const button = read("components/ui/VolunServeButton.tsx");
 const field = read("components/ui/VolunServeField.tsx");
 const pager = read("components/ui/ListPagination.tsx");
+const dialogs = read("components/ui/AppDialogHost.tsx");
 const admin = read("app/(admin)/create-announcement.tsx");
 const superadmin = read("app/(superadmin)/system-settings.tsx");
 const resident = read("app/(tabs)/volunteer-application.tsx");
@@ -18,6 +19,10 @@ assert(button.includes('accessibilityRole="button"') &&
   button.includes("minHeight: ui.minTap") &&
   button.includes("onPress={onPress}"),
   "Shared button must be a real action with loading, disabled and accessible states");
+assert(dialogs.includes("if (request && cancelable) dismissAppDialog(request.id)") &&
+  dialogs.includes("backgroundColor: ui.color.primary") &&
+  dialogs.includes("minHeight: ui.minTap"),
+  "Shared popups must honor non-cancelable confirmations with consistent actions");
 assert(field.includes("onChangeText") === false, "Field should pass event handlers without intercepting submission");
 assert(field.includes("accessibilityLabel={accessibilityLabel || label}") &&
   field.includes('accessibilityRole="alert"') &&
