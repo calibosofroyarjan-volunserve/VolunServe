@@ -12,6 +12,31 @@ Status: **PLAN ONLY**. This document does not provision a service, deploy a rele
 - Current frontend defaults to the production Firebase project because `lib/firebase.ts` has `ENABLE_LOCAL_TESTING = false`; simply changing the backend URL does **NOT** isolate user data.
 - `lib/identityVerification.ts` uses `EXPO_PUBLIC_IDENTITY_VERIFICATION_API_URL`, with production backend fallback.
 
+## Opt-in staging frontend configuration (implemented in isolated branch only)
+
+Set the following environment variables when building a **staging-only** frontend.
+These are Firebase **web app configuration values**, not Firebase Admin credentials:
+
+```env
+EXPO_PUBLIC_VOLUNSERVE_ENV=staging
+EXPO_PUBLIC_FIREBASE_API_KEY=<test-project-web-api-key>
+EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN=<test-project-id>.firebaseapp.com
+EXPO_PUBLIC_FIREBASE_PROJECT_ID=<test-project-id>
+EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET=<test-project-id>.firebasestorage.app
+EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=<test-project-sender-id>
+EXPO_PUBLIC_FIREBASE_APP_ID=<test-project-web-app-id>
+EXPO_PUBLIC_IDENTITY_VERIFICATION_API_URL=https://<separate-staging-backend-host>
+```
+
+The app refuses staging Firebase initialization when these settings are missing,
+inconsistent, or identify the production project. Its identity verification
+client also refuses the live production backend and Python AI endpoints.
+
+**Important:** Some other application modules may still use production URLs
+independently. Until those are audited, **do not deploy or broadly use a full
+staging UI**. Limit staging tests to a deliberately isolated identity flow
+and verify Firebase/Render request destinations before any test uploads.
+
 ## Stop / do not proceed until isolation is proven
 
 1. Set up a separate **test Firebase project** (or properly isolated local Firebase emulators) with no production users, credentials, documents, or donations. Confirm Auth, Firestore and Storage all point to test resources.
