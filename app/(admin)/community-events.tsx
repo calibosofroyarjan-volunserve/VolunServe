@@ -1038,7 +1038,7 @@ const styles = StyleSheet.create({
   detailsButton: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 7, borderWidth: 1, borderColor: "#CFE6DE", backgroundColor: "#F2FAF7", borderRadius: 9, minHeight: 38, marginTop: 12 },
   detailsButtonText: { fontSize: 12, color: GREEN, fontWeight: "800" },
   modalBackdrop: { flex: 1, backgroundColor: "rgba(18,39,49,0.62)", alignItems: "center", justifyContent: "center", padding: 12 },
-  detailPanel: { backgroundColor: "white", width: "100%", maxWidth: 680, maxHeight: "92%", borderRadius: 16, padding: 20 },
+  detailPanel: { backgroundColor: "white", width: "100%", maxWidth: 680, maxHeight: "92%", borderRadius: 17, padding: 20 },
   detailPanelCompact: { padding: 13 },
   modalHeader: { flexDirection: "row", alignItems: "center", gap: 12, marginBottom: 12 },
   modalTitle: { fontSize: 21, fontWeight: "900", color: INK },
@@ -1208,7 +1208,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#DEE8E6",
     backgroundColor: "white",
-    borderRadius: 14,
+    borderRadius: 16,
     padding: 15,
   },
   cardTop: {
@@ -1285,7 +1285,7 @@ const styles = StyleSheet.create({
   },
   outlineButton: {
     flexGrow: 1,
-    minHeight: 38,
+    minHeight: 44,
     justifyContent: "center",
     alignItems: "center",
     paddingHorizontal: 12,
@@ -1300,7 +1300,7 @@ const styles = StyleSheet.create({
   },
   approveButton: {
     flexGrow: 1,
-    minHeight: 38,
+    minHeight: 44,
     justifyContent: "center",
     alignItems: "center",
     backgroundColor: GREEN,
@@ -1309,7 +1309,7 @@ const styles = StyleSheet.create({
   },
   rejectButton: {
     flexGrow: 1,
-    minHeight: 38,
+    minHeight: 44,
     justifyContent: "center",
     alignItems: "center",
     backgroundColor: "#C83F40",
