@@ -123,8 +123,8 @@ async function main() {
 
     const resident = env.authenticatedContext(residentUid,{email:residentUid+"@gmail.com",email_verified:true}).firestore();
     const volunteer = env.authenticatedContext(volunteerUid,{email:volunteerUid+"@gmail.com",email_verified:true}).firestore();
-    const admin = env.authenticatedContext(adminUid).firestore();
-    const superAdmin = env.authenticatedContext(superAdminUid).firestore();
+    const admin = env.authenticatedContext(adminUid,{email:adminUid+"@gmail.com",email_verified:true}).firestore();
+    const superAdmin = env.authenticatedContext(superAdminUid,{email:superAdminUid+"@gmail.com",email_verified:true}).firestore();
     const other = env.authenticatedContext(otherUid,{email:otherUid+"@gmail.com",email_verified:true}).firestore();
     const anonymous = env.unauthenticatedContext().firestore();
 
