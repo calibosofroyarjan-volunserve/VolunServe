@@ -64,7 +64,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p reports/ui-screenshots
-          python3 -m http.server 8765 --directory dist > /tmp/volunserve-static-server.log 2>&1 &
+          node scripts/serve-four-role-review-20261107.cjs > /tmp/volunserve-static-server.log 2>&1 &
           serverPid=$!
           trap 'kill $serverPid || true' EXIT
           node scripts/screenshot-four-role-design-review-20261107.cjs
