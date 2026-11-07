@@ -667,7 +667,7 @@ const styles = StyleSheet.create({
   },
   mobileHeaderLogo: { width: 31, height: 31 },
   mobileBrandText: { flex: 1, minWidth: 0 },
-  mobileBrandName: { color: ui.color.text, fontWeight: "700", fontSize: 16 },
+  mobileBrandName: { color: ui.color.text, fontWeight: "700", fontSize: 16 , ...ui.type.card, },
   mobileBrandMode: { color: ui.color.secondary, fontSize: 11, fontWeight: "600" },
   mobileHeaderStatus: {
     minWidth: 37, flexDirection: "row", alignItems: "center", gap: 4,
@@ -900,7 +900,7 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: "700",
     letterSpacing: 0.7,
-  },
+   ...ui.type.eyebrow, },
   desktopNavigationScroll: {
     flex: 1,
     minHeight: 0,
@@ -944,7 +944,7 @@ const styles = StyleSheet.create({
     color: "#E6F5F2",
     fontSize: 13,
     fontWeight: "500",
-  },
+   ...ui.type.label, },
   desktopNavTextActive: {
     color: "#FFFFFF",
     fontWeight: "900",
@@ -1008,8 +1008,8 @@ const styles = StyleSheet.create({
   },
   residentIconGradient: { ...StyleSheet.absoluteFillObject, borderRadius: 13, opacity: 1 },
   residentNavCopy: { flex: 1, minWidth: 0, justifyContent: "center" },
-  residentNavTitle: { fontSize: 13, color: "#F1FAF4", fontWeight: "700" },
-  residentNavSubtitle: { fontSize: 9.5, lineHeight: 13, color: "#BBDFD8", marginTop: 3 },
+  residentNavTitle: { fontSize: 13, color: "#F1FAF4", fontWeight: "700" , ...ui.type.label, },
+  residentNavSubtitle: { fontSize: 9.5, lineHeight: 13, color: "#BBDFD8", marginTop: 3 , ...ui.type.meta, },
   desktopPressed: {
     opacity: 0.72,
   },

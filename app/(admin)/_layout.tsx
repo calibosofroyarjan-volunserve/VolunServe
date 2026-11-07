@@ -565,14 +565,14 @@ const styles =
   StyleSheet.create({
     profileLink: { minHeight: ui.minTap, flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 10, borderRadius: 9, marginBottom: 7 },
     profileLinkActive: { backgroundColor: ui.color.sidebarActive },
-    profileLinkText: { flex: 1, fontSize: 12.5, color: "#DDEEE7", fontWeight: "600" },
+    profileLinkText: { flex: 1, fontSize: 12.5, color: "#DDEEE7", fontWeight: "600" , ...ui.type.label, },
     profileAreaSelected: { backgroundColor: "#F0F6F2" },
 
     navSection: { marginBottom: 6 },
     overviewNavItem: { marginHorizontal: 17, marginBottom: 10 },
     navGroupHeader: { minHeight: 46, flexDirection: "row", alignItems: "center", gap: 11, paddingHorizontal: 13, borderRadius: 9 },
     navGroupHeaderCurrent: { backgroundColor: "rgba(130,207,169,0.10)" },
-    navGroupTitle: { flex: 1, color: "#C4DDD0", fontSize: 12.5, fontWeight: "600" },
+    navGroupTitle: { flex: 1, color: "#C4DDD0", fontSize: 12.5, fontWeight: "600" , ...ui.type.label, },
     navGroupTitleCurrent: { color: "#FFFFFF", fontWeight: "700" },
     navGroupChildren: { paddingTop: 2, paddingLeft: 16 },
     groupNavItem: { minHeight: ui.minTap, marginBottom: 1, gap: 10, paddingHorizontal: 12 },
@@ -655,7 +655,7 @@ const styles =
       fontSize: 10,
       fontWeight: "700",
       letterSpacing: 0.65,
-    },
+     ...ui.type.eyebrow, },
 
     sidebarScroll: {
       flex: 1,
@@ -682,7 +682,7 @@ const styles =
       fontSize: 10,
       fontWeight: "700",
       letterSpacing: 1.1,
-    },
+     ...ui.type.eyebrow, },
 
     navItem: {
       minHeight: 49,
@@ -705,7 +705,7 @@ const styles =
       color: ui.color.sidebarText,
       fontSize: ui.type.label.fontSize,
       fontWeight: "600",
-    },
+     ...ui.type.label, },
 
     navLabelActive: {
       color: "#FFFFFF",
@@ -839,7 +839,7 @@ const styles =
       color: "#173D32",
       fontSize: 13,
       fontWeight: "700",
-    },
+     ...ui.type.label, },
 
     profileRole: {
       marginTop: 3,

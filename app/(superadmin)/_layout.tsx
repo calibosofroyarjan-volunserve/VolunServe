@@ -392,7 +392,7 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: "600",
     letterSpacing: 0.65,
-  },
+   ...ui.type.eyebrow, },
   sidebarDecoration: { position: "absolute", right: -65, bottom: 55, opacity: 0.05 },
   sidebarTitle: { color: "#D9FFF1", fontSize: 11, fontWeight: "700", letterSpacing: 1.15, marginLeft: 26, marginTop: 4, marginBottom: 0 },
   sidebarLabel: {
@@ -404,7 +404,7 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: "700",
     letterSpacing: 1.1,
-  },
+   ...ui.type.eyebrow, },
   sidebarScroll: {
     flex: 1,
     minHeight: 0,
@@ -448,7 +448,7 @@ const styles = StyleSheet.create({
     color: ui.color.sidebarText,
     fontSize: ui.type.label.fontSize,
     fontWeight: "600",
-  },
+   ...ui.type.label, },
   navTextActive: {
     color: "#FFFFFF",
     fontWeight: "700",
@@ -499,7 +499,7 @@ const styles = StyleSheet.create({
   },
   breadcrumb: { flex: 1, minWidth: 0, flexDirection: "row", alignItems: "center", gap: 8 },
   breadcrumbParent: { color: "#537569", fontSize: 12, fontWeight: "700" },
-  breadcrumbCurrent: { color: ui.color.text, fontSize: 12, fontWeight: "700", flexShrink: 1 },
+  breadcrumbCurrent: { color: ui.color.text, fontSize: 12, fontWeight: "700", flexShrink: 1 , ...ui.type.label, },
   menuButton: {
     width: ui.minTap,
     height: ui.minTap,
@@ -519,7 +519,7 @@ const styles = StyleSheet.create({
   },
   profileMenuAction: { flexDirection: "row", alignItems: "center", gap: 10,
     minHeight: 46, paddingHorizontal: 11, borderRadius: 9 },
-  profileMenuText: { flex: 1, color: "#174B3E", fontWeight: "800", fontSize: 13 },
+  profileMenuText: { flex: 1, color: "#174B3E", fontWeight: "800", fontSize: 13 , ...ui.type.label, },
   profileMenuSignOut: { flex: 1, color: "#B42318", fontWeight: "800", fontSize: 13 },
   profileMenuDivider: { height: 1, backgroundColor: "#E5EEE9", marginVertical: 5, marginHorizontal: 8 },
   accountArea: {
@@ -549,7 +549,7 @@ const styles = StyleSheet.create({
     color: "#0F172A",
     fontSize: 13,
     fontWeight: "700",
-  },
+   ...ui.type.label, },
   accountRole: {
     color: "#64748B",
     fontSize: 10.5,

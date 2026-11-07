@@ -4923,14 +4923,14 @@ const styles = StyleSheet.create({
     color: "#0f172a",
     fontSize: 28,
     fontWeight: "700",
-  },
+   ...ui.type.page, },
   subtitle: {
     marginTop: 4,
     maxWidth: 760,
     color: ui.color.secondary,
     fontSize: 13.5,
     lineHeight: 20,
-  },
+   ...ui.type.body, },
   liveSummary: {
     minWidth: 108,
     backgroundColor: ui.color.surface,
@@ -4951,7 +4951,7 @@ const styles = StyleSheet.create({
     color: ui.color.secondary,
     fontSize: 10,
     fontWeight: "800",
-  },
+   ...ui.type.meta, },
 
   filterCard: {
     backgroundColor: ui.color.surface,
@@ -4975,7 +4975,7 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: "900",
     letterSpacing: 1,
-  },
+   ...ui.type.label, },
   pillRow: {
     flexDirection: "row",
     flexWrap: "wrap",
@@ -5097,7 +5097,7 @@ const styles = StyleSheet.create({
     color: "#0f172a",
     fontSize: 12.5,
     fontWeight: "900",
-  },
+   ...ui.type.section, },
   overviewPrimary: {
     color: "#0f172a",
     fontSize: 13,
@@ -5175,7 +5175,7 @@ const styles = StyleSheet.create({
     fontWeight: "900",
     textTransform: "uppercase",
     letterSpacing: 0.5,
-  },
+   ...ui.type.meta, },
   needChipRow: {
     marginTop: 7,
     flexDirection: "row",

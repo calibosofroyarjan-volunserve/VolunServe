@@ -1015,7 +1015,7 @@ const styles = StyleSheet.create({
   queueHeading: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 12,
     backgroundColor: ui.color.surface, borderRadius: 14, borderWidth: 1, borderColor: "#D8E9E0",
     padding: 15, marginBottom: 13 },
-  queueTitle: { color: "#153D32", fontWeight: "900", fontSize: 17 },
+  queueTitle: { color: "#153D32", fontWeight: "900", fontSize: 17 , ...ui.type.section, },
   queueSubheading: { color: "#647E71", fontSize: 12, lineHeight: 19, marginTop: 4 },
   header: {
     flexDirection: "row",
@@ -1051,14 +1051,14 @@ const styles = StyleSheet.create({
     color: ui.color.text,
     fontSize: 25,
     fontWeight: "700",
-  },
+   ...ui.type.page, },
   subtitle: {
     marginTop: 5,
     maxWidth: 760,
     color: ui.color.secondary,
     fontSize: 12,
     lineHeight: 18,
-  },
+   ...ui.type.body, },
   refreshButton: {
     minHeight: 42,
     flexDirection: "row",
@@ -1097,7 +1097,7 @@ const styles = StyleSheet.create({
     color: "#475569",
     fontSize: 11.5,
     lineHeight: 17,
-  },
+   ...ui.type.body, },
   filterRow: {
     flexDirection: "row",
     flexWrap: "wrap",
@@ -1123,7 +1123,7 @@ const styles = StyleSheet.create({
     color: "#475569",
     fontSize: 11.5,
     fontWeight: "800",
-  },
+   ...ui.type.label, },
   filterButtonTextActive: {
     color: "#FFFFFF",
   },
@@ -1208,7 +1208,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "900",
     textAlign: "center",
-  },
+   ...ui.type.section, },
   workspace: {
     gap: 14,
   },
@@ -1261,7 +1261,7 @@ const styles = StyleSheet.create({
     marginTop: 2,
     color: ui.color.secondary,
     fontSize: 10.5,
-  },
+   ...ui.type.meta, },
   statusChip: {
     paddingHorizontal: 9,
     paddingVertical: 5,
