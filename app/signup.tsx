@@ -1,3 +1,4 @@
+import { liveUi as designUi } from "../constants/volunserveLiveUi";
 import EmailFirstSignup from "../components/auth/EmailFirstSignup";
 import { userFacingError } from "../lib/userFacingError";
 import { EMAIL_FIRST_SIGNUP_ENABLED } from "../lib/signupFeature";
@@ -1080,8 +1081,8 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   sectionHeaderWrap: { marginBottom: 14 },
-  sectionHeader: { fontSize: 16, fontWeight: "900", color: COLORS.text },
-  sectionSubheader: { fontSize: 12.5, color: COLORS.muted, fontWeight: "600", marginTop: 4, lineHeight: 18 },
+  sectionHeader: { fontSize: designUi.type.section.fontSize, fontWeight: designUi.type.section.fontWeight, color: COLORS.text, lineHeight: designUi.type.section.lineHeight,},
+  sectionSubheader: { fontSize: designUi.type.body.fontSize, color: COLORS.muted, fontWeight: designUi.type.body.fontWeight, marginTop: 4, lineHeight: designUi.type.body.lineHeight},
 
   googleBtn: { flexDirection: "row", gap: 12, minHeight: 48, justifyContent: "center", backgroundColor: "#fff", paddingVertical: 13, borderRadius: 14, borderWidth: 1, borderColor: COLORS.border, alignItems: "center" },
   googleBtnDisabled: { opacity: 0.82 },
@@ -1090,7 +1091,7 @@ const styles = StyleSheet.create({
   signupDividerRow: { flexDirection: "row", alignItems: "center", gap: 14, marginVertical: 18 },
   signupDividerLine: { flex: 1, height: 1, backgroundColor: "#BDCFC7" },
   signupDividerText: { color: "#154A3D", fontSize: 13, fontWeight: "900", letterSpacing: 1.8 },
-  emailVerifyHint: { color: "#4B6B61", fontSize: 12, fontWeight: "600", lineHeight: 19, marginBottom: 3 },
+  emailVerifyHint: { color: "#4B6B61", fontSize: designUi.type.body.fontSize, fontWeight: designUi.type.body.fontWeight, lineHeight: designUi.type.body.lineHeight, marginBottom: 3 },
   personalDetailsHeader: { marginTop: 24, paddingTop: 18, borderTopWidth: 1, borderTopColor: "#DFEBE6" },
   step1TermsBox: { marginTop: 12, paddingVertical: 8, paddingHorizontal: 12, backgroundColor: "#F2FAF7", borderWidth: 1, borderColor: "#D7E8E0", borderRadius: 12 },
   step1TermsLink: { color: "#006B56", fontSize: 12, fontWeight: "800", textDecorationLine: "underline", marginLeft: 32, marginBottom: 4 },
@@ -1103,7 +1104,7 @@ const styles = StyleSheet.create({
   passwordEyeButton: { position: "absolute", right: 4, top: 0, bottom: 0, minWidth: 48, alignItems: "center", justifyContent: "center" },
   fixedLocationField: { minHeight: 54, borderWidth: 1, borderColor: COLORS.border, borderRadius: 14, backgroundColor: "#f1f5f9", paddingHorizontal: 14, justifyContent: "center" },
   fixedLocationText: { fontSize: 15, color: COLORS.text, fontWeight: "700" },
-  label: { fontSize: 14, fontWeight: "800", color: "#1f2937", marginBottom: 8 },
+  label: { fontSize: designUi.type.label.fontSize, fontWeight: designUi.type.label.fontWeight, color: "#1f2937", marginBottom: 8, lineHeight: designUi.type.label.lineHeight,},
   input: { backgroundColor: COLORS.field, borderWidth: 1, borderColor: COLORS.border, borderRadius: 14, paddingVertical: 15, paddingHorizontal: 14, fontSize: 15, color: COLORS.text, fontWeight: "700" },
   inputFocused: { borderColor: COLORS.primary, backgroundColor: "#fff" },
   inputInvalid: { borderColor: COLORS.danger },
@@ -1111,7 +1112,7 @@ const styles = StyleSheet.create({
 
   validation: { fontSize: 12, marginBottom: 10, fontWeight: "700" },
   checkRow: { flexDirection: "row", alignItems: "center", marginBottom: 12 },
-  checkLabel: { flex: 1, fontSize: 13, color: COLORS.text, fontWeight: "700", lineHeight: 18 },
+  checkLabel: { flex: 1, fontSize: designUi.type.label.fontSize, color: COLORS.text, fontWeight: designUi.type.label.fontWeight, lineHeight: designUi.type.label.lineHeight},
   checkbox: { width: 22, height: 22, borderWidth: 2, borderColor: "#cbd5e1", borderRadius: 7, marginRight: 10, justifyContent: "center", alignItems: "center", backgroundColor: "#fff" },
   checkboxOn: { backgroundColor: COLORS.primary, borderColor: COLORS.primary },
   checkboxTick: { color: "#fff", fontWeight: "900", fontSize: 13 },
