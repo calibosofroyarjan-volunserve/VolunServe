@@ -1,3 +1,4 @@
+import { liveUi as ui } from "../../constants/volunserveLiveUi";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import {
@@ -1008,7 +1009,7 @@ function StatusPanel({
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: "#F6F8F7",
+    backgroundColor: ui.color.canvas,
   },
   scrollContent: {
     flexGrow: 1,
@@ -1025,7 +1026,7 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#F6F8F7",
+    backgroundColor: ui.color.canvas,
   },
   centerText: {
     marginTop: 10,
@@ -1059,9 +1060,9 @@ const styles = StyleSheet.create({
   },
   title: {
     marginTop: 5,
-    color: "#173D32",
-    fontSize: 28,
-    lineHeight: 36,
+    color: ui.color.text,
+    fontSize: ui.type.page.fontSize,
+    lineHeight: ui.type.page.lineHeight,
     fontWeight: "700",
   },
   subtitle: {
@@ -1083,19 +1084,19 @@ const styles = StyleSheet.create({
   mainCard: {
     flex: 1,
     minWidth: 0,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: ui.color.surface,
     borderWidth: 1,
-    borderColor: "#DFE8ED",
-    borderRadius: 18,
+    borderColor: ui.color.border,
+    borderRadius: ui.radius.card,
     padding: 24,
   },
   sideCard: {
     width: 340,
     maxWidth: "100%",
-    backgroundColor: "#FFFFFF",
+    backgroundColor: ui.color.surface,
     borderWidth: 1,
-    borderColor: "#DFE8ED",
-    borderRadius: 18,
+    borderColor: ui.color.border,
+    borderRadius: ui.radius.card,
     padding: 22,
   },
   sideIcon: {
@@ -1108,9 +1109,9 @@ const styles = StyleSheet.create({
   },
   sideTitle: {
     marginTop: 15,
-    color: "#0F172A",
-    fontSize: 19,
-    fontWeight: "900",
+    color: ui.color.text,
+    fontSize: ui.type.section.fontSize,
+    fontWeight: "700",
   },
   sideText: {
     marginTop: 7,
@@ -1320,17 +1321,7 @@ const styles = StyleSheet.create({
     lineHeight: 18,
     fontWeight: "700",
   },
-  primaryButton: {
-    minHeight: 48,
-    marginTop: 20,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 9,
-    paddingHorizontal: 18,
-    borderRadius: 11,
-    backgroundColor: "#0F766E",
-  },
+  primaryButton: { marginTop: 20 },
   primaryButtonText: {
     color: "#FFFFFF",
     fontSize: 13,

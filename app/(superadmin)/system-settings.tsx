@@ -1,3 +1,4 @@
+import { liveUi as ui } from "../../constants/volunserveLiveUi";
 import { Ionicons } from "@expo/vector-icons";
 
 import {
@@ -647,11 +648,11 @@ const styles =
 
     card: {
       marginTop: 15,
-      padding: 17,
-      borderRadius: 17,
-      backgroundColor: "#FFFFFF",
+      padding: 20,
+      borderRadius: ui.radius.card,
+      backgroundColor: ui.color.surface,
       borderWidth: 1,
-      borderColor: "#E2E8F0",
+      borderColor: ui.color.border,
     },
 
     cardHeader: {
@@ -675,34 +676,34 @@ const styles =
     },
 
     cardTitle: {
-      color: "#173D32",
-      fontSize: 18,
-      fontWeight: "900",
+      color: ui.color.text,
+      fontSize: ui.type.section.fontSize,
+      fontWeight: "700",
     },
 
     cardSubtitle: {
       marginTop: 3,
-      color: "#64748B",
-      lineHeight: 18,
-      fontSize: 12.5,
+      color: ui.color.secondary,
+      lineHeight: 20,
+      fontSize: 13,
     },
 
     label: {
       marginTop: 13,
       marginBottom: 6,
-      color: "#334155",
-      fontSize: 12,
-      fontWeight: "900",
+      color: ui.color.text,
+      fontSize: ui.type.label.fontSize,
+      fontWeight: "600",
     },
 
     input: {
       minHeight: 47,
       borderWidth: 1,
-      borderColor: "#CBD5E1",
-      borderRadius: 11,
+      borderColor: ui.color.border,
+      borderRadius: ui.radius.control,
       paddingHorizontal: 12,
-      color: "#173D32",
-      backgroundColor: "#F8FAFC",
+      color: ui.color.text,
+      backgroundColor: ui.color.surface,
       outlineStyle: "none",
     } as any,
 
@@ -713,7 +714,7 @@ const styles =
 
     helper: {
       marginTop: 8,
-      color: "#64748B",
+      color: ui.color.secondary,
       fontSize: 12,
       lineHeight: 18,
     },
@@ -735,16 +736,7 @@ const styles =
       lineHeight: 18,
     },
 
-    button: {
-      minHeight: 52,
-      marginTop: 18,
-      borderRadius: 12,
-      alignItems: "center",
-      justifyContent: "center",
-      flexDirection: "row",
-      gap: 8,
-      backgroundColor: "#078F82",
-    },
+    saveAction: { marginTop: 18 },
 
     buttonText: {
       color: "#FFFFFF",

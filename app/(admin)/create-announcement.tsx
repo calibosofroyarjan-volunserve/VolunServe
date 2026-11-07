@@ -1,3 +1,4 @@
+import { liveUi as ui } from "../../constants/volunserveLiveUi";
 import AdminReviewHero from "../../components/admin/AdminReviewHero";
 import React, { useState } from "react";
 
@@ -264,7 +265,7 @@ export default function CreateAnnouncement() {
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: "#F6F8F7",
+    backgroundColor: ui.color.canvas,
   },
 
   content: {
@@ -280,7 +281,7 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#F6F8F7",
+    backgroundColor: ui.color.canvas,
   },
 
   loadingText: {
@@ -342,10 +343,10 @@ const styles = StyleSheet.create({
   },
 
   formCard: {
-    backgroundColor: "#FFFFFF",
+    backgroundColor: ui.color.surface,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
-    borderRadius: 9,
+    borderColor: ui.color.border,
+    borderRadius: ui.radius.card,
     padding: 20,
   },
 
@@ -410,23 +411,23 @@ const styles = StyleSheet.create({
 
   noteCard: {
     marginTop: 16,
-    borderRadius: 8,
-    backgroundColor: "#F8FAFC",
+    borderRadius: ui.radius.card,
+    backgroundColor: ui.color.mutedSurface,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: ui.color.border,
     padding: 15,
   },
 
   noteTitle: {
-    color: "#334155",
-    fontSize: 13,
-    fontWeight: "900",
+    color: ui.color.text,
+    fontSize: 16,
+    fontWeight: "700",
   },
 
   noteText: {
-    color: "#64748B",
-    fontSize: 12,
-    lineHeight: 18,
+    color: ui.color.secondary,
+    fontSize: 13,
+    lineHeight: 20,
     marginTop: 4,
   },
 });
