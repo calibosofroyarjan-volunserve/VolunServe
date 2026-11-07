@@ -58,7 +58,7 @@ for(const [label,source] of [["Admin",hero],["Volunteer web",web],["Volunteer mo
   assert(source.includes('VolunServeText'),label+" must use a shared typography component");
 }
 assert(card.includes("ui.radius.card") && card.includes("ui.color.border"));
-assert(type.includes("ui.typography[role]"));
+assert(type.includes("ui.typography[variant]"));
 assert(home.includes("borderRadius: ui.radius.card") && home.includes("borderColor: ui.color.border"));
 assert(web.includes("borderRadius: ui.radius.card") && native.includes("borderRadius: ui.radius.card"));
 assert(tabs.includes('label:"Emergency Tasks",icon:"hand-left-outline"'));
