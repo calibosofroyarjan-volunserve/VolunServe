@@ -5,7 +5,7 @@ These tests do not process real government IDs or biometric data.
 """
 import unittest
 
-from main import deduplicate_face_boxes
+from face_boxes import deduplicate_face_boxes
 
 
 class FaceBoxDedupTests(unittest.TestCase):
