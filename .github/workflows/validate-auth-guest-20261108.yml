@@ -2,7 +2,7 @@ name: Validate Disposable Email and Guest Signup Guards (NO DEPLOY)
 on:
   push:
     branches:
-      - fix/signup-disposable-guest-guards-20261108
+      - security/live-verified-email-guest-20261108
   pull_request:
     paths:
       - 'lib/registrationEmailPolicy.ts'
