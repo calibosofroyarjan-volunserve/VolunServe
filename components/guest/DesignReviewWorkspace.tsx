@@ -201,7 +201,7 @@ function Overview({ role, mobile }: { role: Role; mobile: boolean }) {
             {opened === item.title ? <Text style={styles.recordExpanded}>Sample only. No live record, status change, or personal data was accessed.</Text> : null}
           </View>
           <Ionicons name={opened === item.title ? "chevron-up" : "chevron-forward"} color={ui.color.secondary} size={18}/>
-        </Press>)}
+        </Pressable>)}
       </Section>
       <Section icon="megaphone-outline" title="Community updates" subtitle="Public notices and reminders">
         <EmptyNotice title="Demo advisory preview"
