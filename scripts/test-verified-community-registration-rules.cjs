@@ -28,6 +28,10 @@ async function main() {
     };
     await env.withSecurityRulesDisabled(async context => {
       const db = context.firestore();
+      await setDoc(doc(db, "users", "admin"), {
+        uid: "admin", role: "admin", status: "approved",
+        email: "admin@gmail.com", adminStatus: "active",
+      });
       await setDoc(doc(db, "users", "existing-resident"), {
         uid: "existing-resident", email: "existing@gmail.com",
         role: "resident", status: "approved", residentAccess: true,
@@ -43,11 +47,16 @@ async function main() {
     await assertFails(getDoc(doc(as("existing-resident","other@gmail.com",true),"announcements","published")));
     await assertSucceeds(getDoc(doc(as("existing-resident","existing@gmail.com",true),"announcements","published")));
 
+    // Staff role in a user document must NOT bypass Firebase's verified-email
+    // claim by invoking Firestore directly, outside the normal Login UI.
+    await assertFails(getDoc(doc(as("admin", "admin@gmail.com", false),"users","existing-resident")));
+    await assertSucceeds(getDoc(doc(as("admin", "admin@gmail.com", true),"users","existing-resident")));
+
     await assertFails(setDoc(doc(as("new-resident","real@gmail.com",false),"users","new-resident"),validProfile));
     await assertFails(setDoc(doc(as("new-resident","other@gmail.com",true),"users","new-resident"),validProfile));
     await assertSucceeds(setDoc(doc(as("new-resident","real@gmail.com",true),"users","new-resident"),validProfile));
     assert.ok(true);
-    console.log("PASS Firestore: unverified/mismatched community emails denied, verified complete Resident permitted.");
+    console.log("PASS Firestore: unverified community/staff emails denied; verified complete Resident and staff access permitted.");
   } finally {
     await env.cleanup();
   }
