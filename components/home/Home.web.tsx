@@ -1,4 +1,5 @@
 import { AppAlert } from "../../lib/appDialog";
+import { volunserveUi as ui } from "../../constants/volunserveUi";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
@@ -1394,7 +1395,7 @@ const styles = StyleSheet.create({
   dropdownVerifiedText: { color: "#087B55", fontSize: 9, fontWeight: "800" },
   dropdownAction: {
     flexDirection: "row", alignItems: "center", gap: 13,
-    minHeight: 45, paddingHorizontal: 12, borderRadius: 11,
+    minHeight: ui.minTouchHeight, paddingHorizontal: 12, borderRadius: ui.radius.control,
   },
   dropdownActionPressed: { backgroundColor: "#F0F8F8" },
   dropdownActionText: { color: "#1A3156", fontSize: 12.5, fontWeight: "700" },
@@ -1775,15 +1776,11 @@ const styles = StyleSheet.create({
   panel: {
     flex: 1,
     minWidth: 0,
-    padding: 21,
-    borderRadius: 20,
-    backgroundColor: "#FFFFFF",
+    padding: ui.spacing.lg,
+    borderRadius: ui.radius.card,
+    backgroundColor: ui.color.surface,
     borderWidth: 1,
-    borderColor: "#DEEDF2",
-    shadowColor: "#0D506A",
-    shadowOpacity: 0.035,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 4 },
+    borderColor: ui.color.border,
   },
   panelHeader: {
     flexDirection: "row",
