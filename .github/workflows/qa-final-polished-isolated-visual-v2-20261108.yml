@@ -1,0 +1,63 @@
+name: Isolated Final UI v2 Desktop and Mobile (NO DEPLOY)
+on:
+  push:
+    branches: [qa/final-polished-isolated-visual-v2-20261108]
+permissions:
+  contents: read
+jobs:
+  visual:
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    env:
+      CI: "true"
+      EXPO_NO_TELEMETRY: "1"
+      GCLOUD_PROJECT: demo-volunserve
+      FIREBASE_AUTH_EMULATOR_HOST: 127.0.0.1:9099
+      FIRESTORE_EMULATOR_HOST: 127.0.0.1:8080
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - name: Install exact project dependencies and visual test-only tools
+        run: |
+          npm ci --no-audit --no-fund
+          npm install --no-save --no-package-lock --ignore-scripts firebase-admin playwright-core
+          google-chrome --version
+      - name: Reject modified application behavior and verify every polished TSX file parses
+        run: node scripts/qa-assert-polish-source-only-20261108.cjs
+      - name: Enable emulator-only runtime on CI machine without committing changes
+        shell: bash
+        run: |
+          set -euo pipefail
+          node - <<'NODE'
+          const fs=require("fs");
+          const f="lib/firebase.ts";
+          let s=fs.readFileSync(f,"utf8");
+          if(!s.includes("const ENABLE_LOCAL_TESTING = false;"))throw Error("Unexpected Firebase config; abort");
+          s=s.replace("const ENABLE_LOCAL_TESTING = false;","const ENABLE_LOCAL_TESTING = true;");
+          fs.writeFileSync(f,s);
+          if(!s.includes("const ENABLE_LOCAL_TESTING = true;"))throw Error("Emulator setting not applied");
+          NODE
+      - name: Run entire visual QA inside emulator lifetime (no production)
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx firebase-tools emulators:exec --only auth,firestore --project demo-volunserve \
+            "node scripts/qa-seed-demo-roles-20261108.cjs && npx tsc --noEmit --pretty false && npx expo export --platform web && node scripts/qa-screenshot-live-roles-20261108.cjs"
+      - name: Always upload real screenshot evidence and session summary
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: volunserve-final-polished-real-module-screenshots
+          path: reports/real-ui-screens/
+          if-no-files-found: warn
+          retention-days: 14
