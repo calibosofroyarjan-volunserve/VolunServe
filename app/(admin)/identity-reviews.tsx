@@ -1,3 +1,4 @@
+import { liveUi as ui } from "../../constants/volunserveLiveUi";
 import { getSafeVolunServeBackendBaseUrl } from "../../lib/stagingBackendSafety";
 import { Ionicons } from "@expo/vector-icons";
 import React, { useEffect, useMemo, useState } from "react";
@@ -966,7 +967,7 @@ const styles = StyleSheet.create({
   screen: {
     flex: 1,
     minHeight: 0,
-    backgroundColor: "#F4F8F5",
+    backgroundColor: ui.color.canvas,
   },
   scroll: {
     flex: 1,
@@ -991,7 +992,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     padding: 24,
-    backgroundColor: "#F5F7FB",
+    backgroundColor: ui.color.canvas,
   },
   centerText: {
     marginTop: 9,
@@ -1006,15 +1007,15 @@ const styles = StyleSheet.create({
   },
   summaryMetrics: { flexDirection: "row", flexWrap: "wrap", gap: 11, marginBottom: 17 },
   summaryMetric: { flexGrow: 1, flexBasis: 175, minWidth: 150, padding: 16, backgroundColor: "#FFFFFF",
-    borderRadius: 15, borderWidth: 1, borderColor: "#D8E9E0" },
+    borderRadius: ui.radius.card, borderWidth: 1, borderColor: ui.color.border },
   summaryIcon: { width: 38, height: 38, borderRadius: 10, backgroundColor: "#E2F5EA",
     alignItems: "center", justifyContent: "center", marginBottom: 9 },
   summaryLabel: { color: "#315A4C", fontSize: 11, fontWeight: "800" },
   summaryValue: { color: "#123F32", fontSize: 25, fontWeight: "900", marginTop: 5 },
   queueHeading: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 12,
-    backgroundColor: "#FFFFFF", borderRadius: 14, borderWidth: 1, borderColor: "#D8E9E0",
+    backgroundColor: "#FFFFFF", borderRadius: ui.radius.card, borderWidth: 1, borderColor: ui.color.border,
     padding: 15, marginBottom: 13 },
-  queueTitle: { color: "#153D32", fontWeight: "900", fontSize: 17 },
+  queueTitle: { color: ui.color.text, fontWeight: "700", fontSize: 17 },
   queueSubheading: { color: "#647E71", fontSize: 12, lineHeight: 19, marginTop: 4 },
   header: {
     flexDirection: "row",

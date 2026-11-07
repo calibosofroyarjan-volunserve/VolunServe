@@ -662,8 +662,8 @@ const styles = StyleSheet.create({
   },
   mobileMain: { flex: 1 },
   mobileHeaderButton: {
-    width: 35, height: 38, alignItems: "center", justifyContent: "center",
-    borderRadius: 10, backgroundColor: "#F0F8F3",
+    width: 42, height: ui.minTap, alignItems: "center", justifyContent: "center",
+    borderRadius: ui.radius.control, backgroundColor: ui.color.primarySoft,
   },
   mobileHeaderLogo: { width: 31, height: 31 },
   mobileBrandText: { flex: 1, minWidth: 0 },
@@ -690,8 +690,8 @@ const styles = StyleSheet.create({
   mobileAccountMenu: {
     position: "absolute", right: 12, top: 66,
     width: 284, maxWidth: "95%",
-    borderRadius: 16, padding: 12, backgroundColor: "#FFFFFF",
-    borderWidth: 1, borderColor: "#E5EFF2",
+    borderRadius: ui.radius.card, padding: 12, backgroundColor: ui.color.surface,
+    borderWidth: 1, borderColor: ui.color.border,
     shadowColor: "#061F32", shadowOffset: { width: 0, height: 9 },
     shadowOpacity: 0.18, shadowRadius: 25, elevation: 14,
   },
@@ -700,7 +700,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8, paddingVertical: 11,
     borderBottomWidth: 1, borderBottomColor: "#E7EEF4", marginBottom: 6,
   },
-  mobileAccountName: { fontSize: 13, fontWeight: "700", color: "#173D32" },
+  mobileAccountName: { fontSize: 13, fontWeight: "700", color: ui.color.text },
   mobileAccountRole: { fontSize: 10, color: "#6B829D", marginTop: 3 },
   mobileAccountAction: {
     flexDirection: "row", alignItems: "center", gap: 13,
@@ -722,7 +722,7 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#F8FAFC",
+    backgroundColor: ui.color.canvas,
   },
   loadingText: {
     marginTop: 10,
@@ -831,10 +831,10 @@ const styles = StyleSheet.create({
     backgroundColor: ui.color.sidebar,
     borderRightWidth: 1,
     borderRightColor: ui.color.sidebarActive,
-    shadowColor: "#183153",
+    shadowColor: ui.color.sidebar,
     shadowOffset: { width: 5, height: 0 },
-    shadowOpacity: 0.04,
-    shadowRadius: 14,
+    shadowOpacity: 0.03,
+    shadowRadius: 10,
   },
   desktopBrand: {
     flexDirection: "row",
@@ -923,7 +923,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 11,
     paddingHorizontal: 9,
-    borderRadius: 13,
+    borderRadius: ui.radius.control,
   },
   desktopNavItemActive: {
     backgroundColor: ui.color.sidebarActive,
