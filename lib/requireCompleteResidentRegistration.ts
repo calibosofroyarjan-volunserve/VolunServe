@@ -69,9 +69,15 @@ export function getResidentRegistrationFieldErrors(data: RequiredResidentDetails
     errors.occupationCategory = "Choose a valid occupation from the list.";
   } else {
     const specializations = SPECIALIZATIONS[category] || [];
-    if (specializations.length > 0 &&
-        !specializations.includes(String(data.occupationSpecialization || "").trim())) {
-      errors.occupationSpecialization = "Choose the specialization for your occupation.";
+    const specialization = String(data.occupationSpecialization || "").trim();
+    if ((specializations.length > 0 && !specializations.includes(specialization)) ||
+        (specializations.length === 0 && !!specialization)) {
+      errors.occupationSpecialization = specializations.length > 0
+        ? "Choose the specialization for your occupation."
+        : "This occupation does not require a specialization.";
+    }
+    if (category !== "Other (Specify)" && String(data.occupationOther || "").trim()) {
+      errors.occupationOther = "Remove the custom occupation when selecting a listed occupation.";
     }
     if (category === "Other (Specify)") {
       const other = String(data.occupationOther || "").trim();
