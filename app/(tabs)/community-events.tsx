@@ -4586,12 +4586,12 @@ const styles = StyleSheet.create({
     fontSize: 23,
     fontWeight: "700",
     color: colors.ink,
-  },
+   ...ui.type.page, },
   pageSubtitle: {
     color: colors.muted,
     fontSize: 12,
     marginTop: 3,
-  },
+   ...ui.type.body, },
   modeTag: {
     flexDirection: "row",
     alignItems: "center",
@@ -4695,11 +4695,11 @@ const styles = StyleSheet.create({
     color: colors.ink,
     fontSize: 16,
     fontWeight: "700",
-  },
+   ...ui.type.section, },
   sectionHint: {
     color: colors.muted,
     fontSize: 11,
-  },
+   ...ui.type.body, },
   searchInput: {
     backgroundColor: "white",
     borderWidth: 1,
@@ -4778,7 +4778,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "900",
     flexShrink: 1,
-  },
+   ...ui.type.card, },
   tag: {
     backgroundColor: "#DDF4EA",
     borderRadius: 7,
@@ -4803,7 +4803,7 @@ const styles = StyleSheet.create({
     color: colors.muted,
     fontSize: 11,
     lineHeight: 16,
-  },
+   ...ui.type.meta, },
   cardFooter: {
     flexDirection: "row",
     justifyContent: "space-between",

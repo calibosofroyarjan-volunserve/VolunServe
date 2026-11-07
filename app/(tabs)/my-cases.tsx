@@ -2965,14 +2965,14 @@ const styles =
       fontSize: 28,
       lineHeight: 36,
       fontWeight: "700",
-    },
+     ...ui.type.page, },
 
     subtitle: {
       marginTop: 6,
       color: "#627785",
       fontSize: 14,
       lineHeight: 21,
-    },
+     ...ui.type.body, },
 
     errorBox: {
       marginBottom: 14,
@@ -3043,7 +3043,7 @@ const styles =
       fontSize: 18,
       lineHeight: 24,
       fontWeight: "900",
-    },
+     ...ui.type.card, },
 
     reference: {
       marginTop: 4,
@@ -3093,7 +3093,7 @@ const styles =
       fontSize: 8,
       fontWeight: "900",
       letterSpacing: 0.8,
-    },
+     ...ui.type.meta, },
 
     metaValue: {
       marginTop: 3,
@@ -3120,7 +3120,7 @@ const styles =
       color: "#36515F",
       fontSize: 12,
       lineHeight: 18,
-    },
+     ...ui.type.body, },
 
     needsBox: {
       marginTop: 14,

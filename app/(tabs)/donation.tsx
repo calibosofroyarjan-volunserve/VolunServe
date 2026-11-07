@@ -2017,7 +2017,7 @@ const styles = StyleSheet.create({
     fontSize: 27,
     
   
-    fontFamily: "DonationInterBold",},
+    fontFamily: "DonationInterBold", ...ui.type.page, },
   subtitle: {
     maxWidth: 820,
     marginTop: 7,
@@ -2025,7 +2025,7 @@ const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 20,
   
-    fontFamily: "DonationInterRegular",},
+    fontFamily: "DonationInterRegular", ...ui.type.body, },
   heroTrustBadge: {
     flexDirection: "row",
     alignItems: "center",
@@ -2090,7 +2090,7 @@ const styles = StyleSheet.create({
     fontSize: 10.5,
     
   
-    fontFamily: "DonationInterBold",},
+    fontFamily: "DonationInterBold", ...ui.type.label, },
 
   filterPanel: {
     marginTop: 22,
@@ -2113,7 +2113,7 @@ const styles = StyleSheet.create({
     fontSize: 20,
     
   
-    fontFamily: "DonationInterBold",},
+    fontFamily: "DonationInterBold", ...ui.type.section, },
   sectionSubtitle: {
     maxWidth: 850,
     marginTop: 5,
@@ -2121,7 +2121,7 @@ const styles = StyleSheet.create({
     fontSize: 11.5,
     lineHeight: 18,
   
-    fontFamily: "DonationInterRegular",},
+    fontFamily: "DonationInterRegular", ...ui.type.body, },
   filterRow: {
     flexDirection: "row",
     flexWrap: "wrap",
@@ -2148,7 +2148,7 @@ const styles = StyleSheet.create({
     fontSize: 10,
     
   
-    fontFamily: "DonationInterBold",},
+    fontFamily: "DonationInterBold", ...ui.type.label, },
   filterChipTextActive: {
     color: "#FFFFFF",
   },

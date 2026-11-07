@@ -1465,7 +1465,7 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     lineHeight: 29,
     letterSpacing: -0.35,
-  },
+   ...ui.type.section, },
   mobileTaskDescription: {
     width: "100%",
     fontSize: 14,
@@ -1530,7 +1530,7 @@ const styles = StyleSheet.create({
     fontSize: 12.5,
     lineHeight: 18,
     flexShrink: 1,
-  },
+   ...ui.type.body, },
   liveMapButtonMobile: {
     alignSelf: "stretch",
     width: "100%",
@@ -1731,13 +1731,13 @@ const styles = StyleSheet.create({
     fontSize: ui.type.page.fontSize,
     lineHeight: ui.type.page.lineHeight,
     fontWeight: "700",
-  },
+   ...ui.type.page, },
   subtitle: {
     color: ui.color.secondary,
     fontSize: 14,
     lineHeight: 21,
     marginTop: 3,
-  },
+   ...ui.type.body, },
   liveMapButton: {
     minHeight: 44,
     flexDirection: "row",
@@ -1844,7 +1844,7 @@ const styles = StyleSheet.create({
     color: "#5f7284",
     fontSize: 11,
     fontWeight: "800",
-  },
+   ...ui.type.label, },
   toolbar: {
     flexDirection: "row",
     alignItems: "center",

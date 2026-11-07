@@ -6295,7 +6295,7 @@ const styles =
         "800",
       fontSize:
         13,
-    },
+     ...ui.type.label, },
 
     modeTabTextActive: {
       color:
@@ -6329,7 +6329,7 @@ const styles =
         "900",
       color:
         "#475569",
-    },
+     ...ui.type.meta, },
 
     modeCountTextActive: {
       color:
@@ -6426,7 +6426,7 @@ const styles =
         13,
       fontWeight:
         "900",
-    },
+     ...ui.type.card, },
 
     infoCardText: {
       fontFamily:"AssistanceInter",
@@ -6437,7 +6437,7 @@ const styles =
         12,
       lineHeight:
         18,
-    },
+     ...ui.type.body, },
 
     emergencyNotice: {
       marginTop:
@@ -6493,7 +6493,7 @@ const styles =
         12,
       lineHeight:
         18,
-    },
+     ...ui.type.body, },
 
     emergencyButton: {
       minHeight:

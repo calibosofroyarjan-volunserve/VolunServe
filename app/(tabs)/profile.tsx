@@ -2855,13 +2855,13 @@ const styles =
       fontSize: 28,
       fontWeight: "700",
       letterSpacing: -0.6,
-    },
+     ...ui.type.page, },
 
     pageSubtitle: {
       marginTop: 5,
       color: ui.color.secondary,
       fontSize: 14,
-    },
+     ...ui.type.body, },
 
     profileCard: {
       overflow: "hidden",
@@ -3116,7 +3116,7 @@ const styles =
       color: "#0F172A",
       fontSize: 18,
       fontWeight: "900",
-    },
+     ...ui.type.card, },
 
     identityCardText: {
       marginTop: 6,
@@ -3124,7 +3124,7 @@ const styles =
       fontSize: 12.5,
       lineHeight: 19,
       maxWidth: 720,
-    },
+     ...ui.type.body, },
 
     identityStatusBadge: {
       minHeight: 30,
@@ -3165,7 +3165,7 @@ const styles =
       textTransform:
         "uppercase",
       letterSpacing: 0.4,
-    },
+     ...ui.type.label, },
 
     accessValue: {
       marginTop: 4,

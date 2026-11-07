@@ -2145,14 +2145,14 @@ const styles = StyleSheet.create({
     color: ui.color.text,
     fontSize: 23,
     fontWeight: "700",
-  },
+   ...ui.type.page, },
 
   subtitle: {
     marginTop: 3,
     color: ui.color.secondary,
     fontSize: 14,
     lineHeight: 21,
-  },
+   ...ui.type.body, },
 
   liveMapButton: {
     minHeight: 46,
@@ -2199,7 +2199,7 @@ const styles = StyleSheet.create({
     color: ui.color.secondary,
     fontSize: 12,
     fontWeight: "600",
-  },
+   ...ui.type.label, },
 
   filterRow: {
     gap: 7,
@@ -2334,7 +2334,7 @@ const styles = StyleSheet.create({
     fontSize: 17,
     lineHeight: 22,
     fontWeight: "900",
-  },
+   ...ui.type.card, },
 
   locationText: {
     marginTop: 4,
@@ -2402,7 +2402,7 @@ const styles = StyleSheet.create({
     fontSize: 8.5,
     fontWeight: "900",
     letterSpacing: 0.4,
-  },
+   ...ui.type.meta, },
 
   metaValue: {
     marginTop: 4,

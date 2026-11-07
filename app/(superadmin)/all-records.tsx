@@ -1653,13 +1653,13 @@ const styles =
       fontSize: 30,
       fontWeight: "700",
       color: ui.color.text,
-    },
+     ...ui.type.page, },
 
     subtitle: {
       marginTop: 5,
       color: ui.color.secondary,
       lineHeight: 20,
-    },
+     ...ui.type.body, },
 
     summaryRow: {
       flexDirection: "row",
@@ -1836,7 +1836,7 @@ const styles =
       fontSize: 18,
       fontWeight: "900",
       color: ui.color.text,
-    },
+     ...ui.type.section, },
 
     recordCount: {
       color: ui.color.secondary,
@@ -1874,13 +1874,13 @@ const styles =
       fontSize: 16,
       fontWeight: "900",
       color: ui.color.text,
-    },
+     ...ui.type.card, },
 
     recordSubtitle: {
       marginTop: 3,
       color: ui.color.secondary,
       fontSize: 12,
-    },
+     ...ui.type.body, },
 
     statusBadge: {
       borderRadius: 999,
@@ -1914,7 +1914,7 @@ const styles =
       fontWeight: "900",
       color: "#94A3B8",
       letterSpacing: 0.5,
-    },
+     ...ui.type.label, },
 
     detailValue: {
       marginTop: 4,

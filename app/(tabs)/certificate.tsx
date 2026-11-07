@@ -1343,14 +1343,14 @@ const styles =
       fontSize: 28,
       lineHeight: 36,
       fontWeight: "700",
-    },
+     ...ui.type.page, },
 
     subtitle: {
       marginTop: 5,
       color: ui.color.secondary,
       fontSize: 13,
       lineHeight: 20,
-    },
+     ...ui.type.body, },
 
     errorBox: {
       marginBottom: 14,
@@ -1391,7 +1391,7 @@ const styles =
       color: "#173748",
       fontSize: 17,
       fontWeight: "900",
-    },
+     ...ui.type.section, },
 
     pendingText: {
       marginTop: 6,
@@ -1399,7 +1399,7 @@ const styles =
       color: ui.color.secondary,
       fontSize: 11.5,
       lineHeight: 18,
-    },
+     ...ui.type.body, },
 
     certificateWrapper: {
       marginBottom: 24,
@@ -1570,7 +1570,7 @@ const styles =
       textTransform:
         "uppercase",
       letterSpacing: 0.5,
-    },
+     ...ui.type.label, },
 
     breakdownSection: {
       alignSelf: "center",
