@@ -1,0 +1,74 @@
+name: Validate Final VolunServe UI Polish (NO DEPLOY)
+on:
+  push:
+    branches: [design/final-polish-protected-live-20261108]
+  pull_request:
+    branches: [live-protected]
+permissions:
+  contents: read
+jobs:
+  polish-regression:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      CI: "true"
+      EXPO_NO_TELEMETRY: "1"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - name: Install locked project dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Guard protected-live source and rule out non-style application edits
+        shell: bash
+        run: |
+          node - <<'NODE'
+          const fs=require("fs");
+          const cp=require("child_process");
+          const ts=require("typescript");
+          const base="a6f832da13f89ef70bf7a19204dadf4f5c9cdb4e";
+          const files=cp.execFileSync("git",["diff","--name-only",base,"HEAD"],{encoding:"utf8"}).trim().split("\n").filter(Boolean);
+          if(!files.length)throw Error("No source changes");
+          function styles(file,text){
+            const sf=ts.createSourceFile(file,text,ts.ScriptTarget.Latest,true,ts.ScriptKind.TSX);
+            if(sf.parseDiagnostics.length)throw Error(file+": syntax diagnostic "+sf.parseDiagnostics.map(d=>ts.flattenDiagnosticMessageText(d.messageText," ")).join("; "));
+            let found=null;
+            function walk(n){if(ts.isCallExpression(n)&&ts.isPropertyAccessExpression(n.expression)&&n.expression.expression.getText(sf)==="StyleSheet"&&n.expression.name.text==="create"){found={start:n.getStart(sf),end:n.getEnd()};}ts.forEachChild(n,walk)}
+            walk(sf);if(!found)throw Error(file+": missing StyleSheet.create");
+            return {prefix:text.slice(0,found.start),suffix:text.slice(found.end)};
+          }
+          for(const file of files){
+            if(!file.startsWith("app/")||!file.endsWith(".tsx")&&!file.startsWith(".github/workflows/"))throw Error("Unexpected changed path "+file);
+            if(file.startsWith(".github/workflows/"))continue;
+            if(file==="components/home/Home.web.tsx")throw Error("Original Home source touched");
+            const a=cp.execFileSync("git",["show",base+":"+file],{encoding:"utf8",maxBuffer:15e6});
+            const b=fs.readFileSync(file,"utf8");
+            const x=styles(file,a),y=styles(file,b);
+            if(x.prefix!==y.prefix||x.suffix!==y.suffix)throw Error("Non-style JSX/runtime logic changed: "+file);
+          }
+          console.log("PASS: "+files.filter(x=>x.endsWith(".tsx")).length+" modules only change StyleSheet.create presentation; no auth, Firebase, or Home changes.");
+          NODE
+      - name: Existing role, navigation and form contract regression
+        run: |
+          node scripts/test-login-field-validation.cjs
+          node scripts/test-login-ui-release.cjs
+          node scripts/test-signup-email-first-middle-optional.cjs
+          node scripts/test-route-entrypoints.cjs
+          node scripts/test-portal-resident-volunteer-ui-flow.cjs
+          node scripts/test-resident-volunteer-sidebar.cjs
+          node scripts/test-admin-navigation-contract.cjs
+          node scripts/test-lgu-admin-global-ui-pagination.cjs
+          node scripts/test-superadmin-accounts-directory.cjs
+          node scripts/test-profile-certificates-account-menu.cjs
+          node scripts/test-volunteer-time-controls-20261106.cjs
+          node scripts/test-volunteer-community-event-join-20261106.cjs
+          node scripts/test-embedded-emergency-map-navigation.cjs
+      - name: TypeScript full codebase
+        run: npx tsc --noEmit --pretty false
+      - name: Export complete actual web app (artifact only)
+        run: npx expo export --platform web
