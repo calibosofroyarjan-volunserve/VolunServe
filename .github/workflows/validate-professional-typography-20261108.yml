@@ -59,7 +59,7 @@ jobs:
       - name: Confirm real role styles use shared typography tokens
         working-directory: source
         run: |
-          node -e "const fs=require('fs');const roleFiles=['app/(admin)/_layout.tsx','app/(superadmin)/_layout.tsx','app/(tabs)/_layout.tsx','app/(admin)/command-center.tsx','app/(superadmin)/index.tsx','app/(tabs)/volunteer.web.tsx','app/(tabs)/community-events.tsx'];for(const p of roleFiles){const s=fs.readFileSync(p,'utf8');if(!s.includes('...ui.type.'))throw Error(p+' missing shared styles');}console.log('Role-level typography tokens present.')"
+          node -e "const fs=require('fs');const roleFiles=['app/(admin)/_layout.tsx','app/(superadmin)/_layout.tsx','app/(tabs)/_layout.tsx','app/(admin)/command-center.tsx','app/(superadmin)/index.tsx','app/(tabs)/volunteer.web.tsx','app/(tabs)/community-events.tsx'];for(const p of roleFiles){const s=fs.readFileSync(p,'utf8');if(!s.includes('ui.type.'))throw Error(p+' missing shared styles');}console.log('Role-level typography tokens present.')"
       - name: Test all four preview roles, module navigation, responsive UI and existing login guards
         working-directory: source
         run: |
