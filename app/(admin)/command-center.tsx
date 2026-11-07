@@ -551,7 +551,7 @@ const styles =
       justifyContent: "center", gap: 7, paddingHorizontal: 11, paddingVertical: 10,
       borderBottomWidth: 2, borderBottomColor: "transparent" },
     workspaceTabActive: { borderBottomColor: ui.color.primary, backgroundColor: ui.color.primarySoft, borderTopLeftRadius: 8, borderTopRightRadius: 8 },
-    workspaceTabText: { fontSize: 12, color: "#61776B", fontWeight: "600" , ...ui.type.label, },
+    workspaceTabText: { fontSize: ui.type.label.fontSize, color: "#61776B", fontWeight: ui.type.label.fontWeight, lineHeight: ui.type.label.lineHeight,},
     workspaceTabTextActive: { color: ui.color.primary, fontWeight: "700" },
     // Xacton-inspired clarity: restrained KPI cards below one evergreen hero.
     kpiGrid: {flexDirection:"row",flexWrap:"wrap",gap:9,marginBottom:9},
@@ -561,10 +561,10 @@ const styles =
     kpiCardCompact: {minWidth:136,padding:13},
     kpiCardFeatured: {backgroundColor:ui.color.primary,borderColor:ui.color.primary},
     kpiCardHeader: {flexDirection:"row",justifyContent:"space-between",alignItems:"flex-start",gap:8},
-    kpiCardLabel: {fontSize:12,fontWeight:"600",color:ui.color.secondary,flex:1,lineHeight:16, ...ui.type.label, },
+    kpiCardLabel: {fontSize:ui.type.label.fontSize,fontWeight:ui.type.label.fontWeight,color:ui.color.secondary,flex:1,lineHeight:ui.type.label.lineHeight, },
     kpiCardValue: {fontSize:25,fontWeight:"700",color:ui.color.text,marginTop:5,fontVariant:["tabular-nums"]},
     kpiCardFoot: {flexDirection:"row",justifyContent:"space-between",gap:7,alignItems:"center",marginTop:5},
-    kpiCardHint: {flex:1,fontSize:12,color:ui.color.secondary, ...ui.type.meta, },
+    kpiCardHint: {flex:1,fontSize:ui.type.meta.fontSize,color:ui.color.secondary, lineHeight: ui.type.meta.lineHeight, fontWeight: ui.type.meta.fontWeight,},
     kpiFeaturedText: {color:"#FFFFFF"},
     kpiFeaturedHint: {color:"#C5EDDF"},
     // VolunServe identity: one rich evergreen masthead, not a field of cards.
@@ -599,7 +599,7 @@ const styles =
     heroLocalityText: { color: "#BADDCB", fontSize: 9.5, letterSpacing: 0.6, fontWeight: "700" },
     heroDivider: { height: 1, backgroundColor: "rgba(204,238,217,0.21)" },
     metricItemDivider: { borderLeftWidth: 1, borderLeftColor: "rgba(204,238,217,0.18)" },
-    sectionEyebrow: { flexDirection: "row", alignItems: "center", gap: 9, marginBottom: 9 , ...ui.type.eyebrow, },
+    sectionEyebrow: { flexDirection: "row", alignItems: "center", gap: 9, marginBottom: 9 , fontSize: ui.type.eyebrow.fontSize, lineHeight: ui.type.eyebrow.lineHeight, fontWeight: ui.type.eyebrow.fontWeight,},
     sectionEyebrowLine: { height: 2, width: 21, backgroundColor: "#3C9072" },
     sectionEyebrowText: { fontSize: 11, fontWeight: "700", color: ui.color.primary, letterSpacing: 1.0 },
     chartHeadingAccent: { width: 34, height: 3, borderRadius: 2, backgroundColor: "#2F8468", marginBottom: 11 },
@@ -806,9 +806,8 @@ const styles =
 
     sectionTitle: {
       color: "#173D32",
-      fontSize: 17,
-      fontWeight: "700",
-     ...ui.type.section, },
+      fontSize: ui.type.section.fontSize,
+      fontWeight: ui.type.section.fontWeight, lineHeight: ui.type.section.lineHeight,},
 
     sectionSubtitle: {
       marginTop: 3,

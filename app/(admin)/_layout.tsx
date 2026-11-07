@@ -565,14 +565,14 @@ const styles =
   StyleSheet.create({
     profileLink: { minHeight: ui.minTap, flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 10, borderRadius: 9, marginBottom: 7 },
     profileLinkActive: { backgroundColor: ui.color.sidebarActive },
-    profileLinkText: { flex: 1, fontSize: 12.5, color: "#DDEEE7", fontWeight: "600" , ...ui.type.label, },
+    profileLinkText: { flex: 1, fontSize: ui.type.label.fontSize, color: "#DDEEE7", fontWeight: ui.type.label.fontWeight, lineHeight: ui.type.label.lineHeight,},
     profileAreaSelected: { backgroundColor: "#F0F6F2" },
 
     navSection: { marginBottom: 6 },
     overviewNavItem: { marginHorizontal: 17, marginBottom: 10 },
     navGroupHeader: { minHeight: 46, flexDirection: "row", alignItems: "center", gap: 11, paddingHorizontal: 13, borderRadius: 9 },
     navGroupHeaderCurrent: { backgroundColor: "rgba(130,207,169,0.10)" },
-    navGroupTitle: { flex: 1, color: "#C4DDD0", fontSize: 12.5, fontWeight: "600" , ...ui.type.label, },
+    navGroupTitle: { flex: 1, color: "#C4DDD0", fontSize: ui.type.label.fontSize, fontWeight: ui.type.label.fontWeight, lineHeight: ui.type.label.lineHeight,},
     navGroupTitleCurrent: { color: "#FFFFFF", fontWeight: "700" },
     navGroupChildren: { paddingTop: 2, paddingLeft: 16 },
     groupNavItem: { minHeight: ui.minTap, marginBottom: 1, gap: 10, paddingHorizontal: 12 },
@@ -652,10 +652,9 @@ const styles =
     brandTagline: {
       marginTop: 2,
       color: "#B6E9DF",
-      fontSize: 10,
-      fontWeight: "700",
-      letterSpacing: 0.65,
-     ...ui.type.eyebrow, },
+      fontSize: ui.type.eyebrow.fontSize,
+      fontWeight: ui.type.eyebrow.fontWeight,
+      letterSpacing: 0.65, lineHeight: ui.type.eyebrow.lineHeight,},
 
     sidebarScroll: {
       flex: 1,
@@ -679,10 +678,9 @@ const styles =
       marginBottom: 8,
       marginLeft: 27,
       color: "#91C8B2",
-      fontSize: 10,
-      fontWeight: "700",
-      letterSpacing: 1.1,
-     ...ui.type.eyebrow, },
+      fontSize: ui.type.eyebrow.fontSize,
+      fontWeight: ui.type.eyebrow.fontWeight,
+      letterSpacing: 1.1, lineHeight: ui.type.eyebrow.lineHeight,},
 
     navItem: {
       minHeight: 49,
@@ -704,8 +702,7 @@ const styles =
       flex: 1,
       color: ui.color.sidebarText,
       fontSize: ui.type.label.fontSize,
-      fontWeight: "600",
-     ...ui.type.label, },
+      fontWeight: ui.type.label.fontWeight, lineHeight: ui.type.label.lineHeight,},
 
     navLabelActive: {
       color: "#FFFFFF",
@@ -837,9 +834,8 @@ const styles =
 
     profileName: {
       color: "#173D32",
-      fontSize: 13,
-      fontWeight: "700",
-     ...ui.type.label, },
+      fontSize: ui.type.label.fontSize,
+      fontWeight: ui.type.label.fontWeight, lineHeight: ui.type.label.lineHeight,},
 
     profileRole: {
       marginTop: 3,

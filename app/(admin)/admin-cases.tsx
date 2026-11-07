@@ -4921,16 +4921,14 @@ const styles = StyleSheet.create({
   title: {
     marginTop: 2,
     color: "#0f172a",
-    fontSize: 28,
-    fontWeight: "700",
-   ...ui.type.page, },
+    fontSize: ui.type.page.fontSize,
+    fontWeight: ui.type.page.fontWeight, lineHeight: ui.type.page.lineHeight,},
   subtitle: {
     marginTop: 4,
     maxWidth: 760,
     color: ui.color.secondary,
-    fontSize: 13.5,
-    lineHeight: 20,
-   ...ui.type.body, },
+    fontSize: ui.type.body.fontSize,
+    lineHeight: ui.type.body.lineHeight, fontWeight: ui.type.body.fontWeight,},
   liveSummary: {
     minWidth: 108,
     backgroundColor: ui.color.surface,
@@ -4949,9 +4947,8 @@ const styles = StyleSheet.create({
   liveSummaryLabel: {
     marginTop: 2,
     color: ui.color.secondary,
-    fontSize: 10,
-    fontWeight: "800",
-   ...ui.type.meta, },
+    fontSize: ui.type.meta.fontSize,
+    fontWeight: ui.type.meta.fontWeight, lineHeight: ui.type.meta.lineHeight,},
 
   filterCard: {
     backgroundColor: ui.color.surface,
@@ -4972,10 +4969,9 @@ const styles = StyleSheet.create({
   },
   filterLabel: {
     color: "#94a3b8",
-    fontSize: 10,
-    fontWeight: "900",
-    letterSpacing: 1,
-   ...ui.type.label, },
+    fontSize: ui.type.label.fontSize,
+    fontWeight: ui.type.label.fontWeight,
+    letterSpacing: 1, lineHeight: ui.type.label.lineHeight,},
   pillRow: {
     flexDirection: "row",
     flexWrap: "wrap",
@@ -5095,9 +5091,8 @@ const styles = StyleSheet.create({
   },
   overviewCardTitle: {
     color: "#0f172a",
-    fontSize: 12.5,
-    fontWeight: "900",
-   ...ui.type.section, },
+    fontSize: ui.type.section.fontSize,
+    fontWeight: ui.type.section.fontWeight, lineHeight: ui.type.section.lineHeight,},
   overviewPrimary: {
     color: "#0f172a",
     fontSize: 13,
@@ -5171,11 +5166,10 @@ const styles = StyleSheet.create({
   overviewLabel: {
     marginTop: 11,
     color: ui.color.secondary,
-    fontSize: 10,
-    fontWeight: "900",
+    fontSize: ui.type.meta.fontSize,
+    fontWeight: ui.type.meta.fontWeight,
     textTransform: "uppercase",
-    letterSpacing: 0.5,
-   ...ui.type.meta, },
+    letterSpacing: 0.5, lineHeight: ui.type.meta.lineHeight,},
   needChipRow: {
     marginTop: 7,
     flexDirection: "row",

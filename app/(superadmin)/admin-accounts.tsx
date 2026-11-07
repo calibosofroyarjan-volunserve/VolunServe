@@ -1830,7 +1830,7 @@ const styles =
 
     directoryPanel:{backgroundColor: ui.color.surface,borderRadius:12,borderWidth:1,borderColor:"#DCE9E1",overflow:"hidden"},
     dirHeading:{flexDirection:"row",alignItems:"center",gap:12,padding:18},
-    dirTitle:{fontSize:16,fontWeight:"800",color: ui.color.text, ...ui.type.section, },
+    dirTitle:{fontSize:ui.type.section.fontSize,fontWeight:ui.type.section.fontWeight,color: ui.color.text, lineHeight: ui.type.section.lineHeight,},
     dirNote:{color:"#6A8579",fontSize:11,marginTop:3,lineHeight:17},
     dirTag:{fontSize:11,fontWeight:"800",color:"#087859",backgroundColor:"#E9F7EF",paddingHorizontal:11,paddingVertical:8,borderRadius:9},
     dirResults:{flexDirection:"row",justifyContent:"space-between",flexWrap:"wrap",gap:8,padding:14,borderTopWidth:1,borderColor:"#E5EEE9"},
@@ -1861,19 +1861,19 @@ const styles =
     reviewHelp: { color: "#556E61", fontSize: 13, lineHeight: 21, marginTop: 8, marginBottom: 12 },
     reviewScroll: { width: "100%" },
     reviewField: { marginBottom: 17 },
-    reviewLabel: { fontSize: 13, fontWeight: "700", color: "#294C3C", marginBottom: 7 , ...ui.type.label, },
+    reviewLabel: { fontSize: ui.type.label.fontSize, fontWeight: ui.type.label.fontWeight, color: "#294C3C", marginBottom: 7 , lineHeight: ui.type.label.lineHeight,},
     reviewInput: { backgroundColor: ui.color.surface, borderWidth: 1, borderColor: "#D5E3DB", borderRadius: 11, paddingHorizontal: 14, minHeight: 50, fontSize: 14, color: ui.color.text },
     confirmReview: { flexDirection: "row", alignItems: "flex-start", gap: 12, marginVertical: 5, borderWidth: 1, borderColor: "#E0EBE4", padding: 13, backgroundColor: "#FAFCFB", borderRadius: 12 },
     confirmReviewText: { flex: 1, color: "#355749", fontSize: 13, lineHeight: 20 },
     reviewHint: { color: "#75867D", fontSize: 11, lineHeight: 16 },
     confirmDisabled: { opacity: 0.5 },
     accessFlow: { paddingVertical: 16, paddingHorizontal: 0, borderTopWidth: 1, borderBottomWidth: 1, borderColor: "#DDE6E1", marginBottom: 18 },
-    accessFlowTitle: { color: "#426658", fontSize: 10, fontWeight: "800", letterSpacing: 1, marginBottom: 11 , ...ui.type.section, },
+    accessFlowTitle: { color: "#426658", fontSize: ui.type.section.fontSize, fontWeight: ui.type.section.fontWeight, letterSpacing: 1, marginBottom: 11 , lineHeight: ui.type.section.lineHeight,},
     accessFlowSteps: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 9 },
     accessStep: { flexDirection: "row", alignItems: "center", gap: 7, flexShrink: 1 },
     stepNumber: { color: "#23765F", fontSize: 11, fontWeight: "800" },
     stepText: { color: "#2B453B", fontSize: 12, fontWeight: "600", flexShrink: 1 },
-    flowHint: { color: "#667F74", fontSize: 11.5, lineHeight: 18, marginTop: 12, maxWidth: 850 , ...ui.type.body, },
+    flowHint: { color: "#667F74", fontSize: ui.type.body.fontSize, lineHeight: ui.type.body.lineHeight, marginTop: 12, maxWidth: 850 , fontWeight: ui.type.body.fontWeight,},
     container: {
       padding: 24,
       paddingBottom: 60,
@@ -1931,17 +1931,15 @@ const styles =
     },
 
     title: {
-      fontSize: 30,
-      fontWeight: "700",
-      color: ui.color.text,
-     ...ui.type.page, },
+      fontSize: ui.type.page.fontSize,
+      fontWeight: ui.type.page.fontWeight,
+      color: ui.color.text, lineHeight: ui.type.page.lineHeight,},
 
     subtitle: {
       color: ui.color.secondary,
       marginTop: 5,
-      lineHeight: 20,
-      maxWidth: 600,
-     ...ui.type.body, },
+      lineHeight: ui.type.body.lineHeight,
+      maxWidth: 600, fontSize: ui.type.body.fontSize, fontWeight: ui.type.body.fontWeight,},
 
     addButton: {
       minHeight: 44,
@@ -1995,8 +1993,7 @@ const styles =
     statLabel: {
       marginTop: 2,
       color: ui.color.secondary,
-      fontWeight: "700",
-     ...ui.type.label, },
+      fontWeight: ui.type.label.fontWeight, fontSize: ui.type.label.fontSize, lineHeight: ui.type.label.lineHeight,},
 
     searchBar: {
       flexDirection: "row",

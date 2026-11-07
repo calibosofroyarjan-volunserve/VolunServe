@@ -667,7 +667,7 @@ const styles = StyleSheet.create({
   },
   mobileHeaderLogo: { width: 31, height: 31 },
   mobileBrandText: { flex: 1, minWidth: 0 },
-  mobileBrandName: { color: ui.color.text, fontWeight: "700", fontSize: 16 , ...ui.type.card, },
+  mobileBrandName: { color: ui.color.text, fontWeight: ui.type.card.fontWeight, fontSize: ui.type.card.fontSize, lineHeight: ui.type.card.lineHeight,},
   mobileBrandMode: { color: ui.color.secondary, fontSize: 11, fontWeight: "600" },
   mobileHeaderStatus: {
     minWidth: 37, flexDirection: "row", alignItems: "center", gap: 4,
@@ -897,10 +897,9 @@ const styles = StyleSheet.create({
     marginBottom: 9,
     paddingHorizontal: 10,
     color: "#A7DCD4",
-    fontSize: 10,
-    fontWeight: "700",
-    letterSpacing: 0.7,
-   ...ui.type.eyebrow, },
+    fontSize: ui.type.eyebrow.fontSize,
+    fontWeight: ui.type.eyebrow.fontWeight,
+    letterSpacing: 0.7, lineHeight: ui.type.eyebrow.lineHeight,},
   desktopNavigationScroll: {
     flex: 1,
     minHeight: 0,
@@ -942,9 +941,8 @@ const styles = StyleSheet.create({
   desktopNavText: {
     flex: 1,
     color: "#E6F5F2",
-    fontSize: 13,
-    fontWeight: "500",
-   ...ui.type.label, },
+    fontSize: ui.type.label.fontSize,
+    fontWeight: ui.type.label.fontWeight, lineHeight: ui.type.label.lineHeight,},
   desktopNavTextActive: {
     color: "#FFFFFF",
     fontWeight: "900",
@@ -1008,8 +1006,8 @@ const styles = StyleSheet.create({
   },
   residentIconGradient: { ...StyleSheet.absoluteFillObject, borderRadius: 13, opacity: 1 },
   residentNavCopy: { flex: 1, minWidth: 0, justifyContent: "center" },
-  residentNavTitle: { fontSize: 13, color: "#F1FAF4", fontWeight: "700" , ...ui.type.label, },
-  residentNavSubtitle: { fontSize: 9.5, lineHeight: 13, color: "#BBDFD8", marginTop: 3 , ...ui.type.meta, },
+  residentNavTitle: { fontSize: ui.type.label.fontSize, color: "#F1FAF4", fontWeight: ui.type.label.fontWeight, lineHeight: ui.type.label.lineHeight,},
+  residentNavSubtitle: { fontSize: ui.type.meta.fontSize, lineHeight: ui.type.meta.lineHeight, color: "#BBDFD8", marginTop: 3 , fontWeight: ui.type.meta.fontWeight,},
   desktopPressed: {
     opacity: 0.72,
   },
