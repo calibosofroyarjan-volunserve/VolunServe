@@ -82,6 +82,7 @@ export type IdentityVerificationResult = {
 export type SubmitIdentityVerificationInput = {
   idType: IdentityDocumentType;
   idDocument: CapturedIdentityMedia;
+  idBackDocument?: CapturedIdentityMedia | null;
   selfie: CapturedIdentityMedia;
 };
 
@@ -322,6 +323,15 @@ export const submitIdentityVerification = async (
     "Government ID image",
   );
 
+  if (input.idType !== "passport") {
+    validateMedia(
+      input.idBackDocument || undefined,
+      "Government ID back image",
+    );
+  } else if (input.idBackDocument) {
+    validateMedia(input.idBackDocument, "Passport supplementary image");
+  }
+
   validateMedia(
     input.selfie,
     "Live selfie",
@@ -342,6 +352,14 @@ export const submitIdentityVerification = async (
     "idDocument",
     input.idDocument,
   );
+
+  if (input.idBackDocument) {
+    appendMedia(
+      formData,
+      "idBackDocument",
+      input.idBackDocument,
+    );
+  }
 
   appendMedia(
     formData,
