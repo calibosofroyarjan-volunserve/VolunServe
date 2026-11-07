@@ -1073,11 +1073,11 @@ export default function VolunteerTasks() {
             VOLUNSERVE · VOLUNTEER MODE
           </Text>
 
-          <VolunServeText role="pageTitle" style={styles.title}>
+          <VolunServeText variant="pageTitle" style={styles.title}>
             Emergency Tasks
           </VolunServeText>
 
-          <VolunServeText role="body" color="muted" style={styles.subtitle}>
+          <VolunServeText variant="body" color="muted" style={styles.subtitle}>
             Optional Volunteer support assignments coordinated by LGU/Admin.
           </VolunServeText>
         </View>
