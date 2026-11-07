@@ -1725,11 +1725,13 @@ exports.issueVolunteerCertificate = onCall(
         );
 
       const hasVolunteerAccess =
-        volunteerRole ===
-          "volunteer" ||
-        volunteerProfile
-            .volunteerAccess ===
-          true;
+        // Never let a legacy Guest record with a stale volunteerAccess
+        // flag be treated as a participant for certificate issuance.
+        ["resident", "volunteer"].includes(volunteerRole) &&
+        (
+          volunteerRole === "volunteer" ||
+          volunteerProfile.volunteerAccess === true
+        );
 
       if (
         !volunteerApproved ||
@@ -2623,7 +2625,8 @@ exports.registerAndroidPushToken = onCall(
       const user = await database.collection("users").doc(uid).get();
       if (!user.exists || user.data()?.status === "suspended" ||
           user.data()?.adminStatus === "suspended" ||
-          user.data()?.role === "applicant") {
+          !["resident", "volunteer", "admin", "superadmin", "lgu_personnel"]
+              .includes(user.data()?.role)) {
         throw new HttpsError("permission-denied", "Account is not push eligible.");
       }
       const digest = crypto.createHash("sha256").update(token).digest("hex");
