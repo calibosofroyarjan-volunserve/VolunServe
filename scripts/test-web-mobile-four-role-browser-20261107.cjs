@@ -27,7 +27,15 @@ fs.mkdirSync("reports/design-review-screenshots",{recursive:true});
        failed.push("Production request: "+url.slice(0,100));
    });
    try {
-    await page.goto(base+"/public/design-review",{waitUntil:"domcontentloaded",timeout:45000});
+    let loaded=false;
+    for(let retry=0;retry<6;retry++){
+      try{
+        const res=await page.goto(base+"/public/design-review",{waitUntil:"domcontentloaded",timeout:45000});
+        if(res?.ok()){loaded=true;break;}
+      }catch(e){if(retry===5)throw e;}
+      await page.waitForTimeout(5000);
+    }
+    assert(loaded,"The isolated review site is not yet published");
     await page.getByText("Interactive visual review", {exact:false}).first().waitFor({timeout:25000});
     const size=await page.evaluate(()=>({
       width:innerWidth,root:document.documentElement.scrollWidth,body:document.body.scrollWidth,
