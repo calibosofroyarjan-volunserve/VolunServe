@@ -11,6 +11,9 @@ on:
       - 'app/identity-verification.tsx'
       - 'lib/identityVerification.ts'
       - '.github/workflows/identity-ai-safe-tests.yml'
+  pull_request:
+    branches:
+      - review/identity-live-backend-base-20261107
   workflow_dispatch:
 
 permissions:
