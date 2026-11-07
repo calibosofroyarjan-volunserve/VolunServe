@@ -1,4 +1,5 @@
 import asyncio
+import hashlib
 import logging
 import math
 import os
@@ -9,7 +10,7 @@ from io import BytesIO
 import cv2
 import mediapipe as mp
 import pytesseract
-from document_screening import assess_document_text, document_ocr_unavailable
+from document_screening import assess_document_sides, assess_document_text, document_ocr_unavailable
 from face_boxes import deduplicate_face_boxes
 import numpy as np
 from fastapi import FastAPI, Header, HTTPException, Request
@@ -875,38 +876,50 @@ def failed_attempt_result(
     }
 
 
-def screen_government_id(*, declared_type, id_document_bytes):
-    """OCR checks ID *type plausibility* only; it cannot authenticate issuance.
-
-    No OCR text, names, ID numbers, or face data are returned or persisted.
-    Every result requires an independent LGU document-authenticity review.
-    """
-    try:
-        image = decode_image(id_document_bytes, "Government ID image")
-        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-        # Bound processing size while sharpening smaller photographed labels.
-        longest = max(gray.shape[:2])
-        if longest < 1500:
-            factor = min(1.6, 2100.0 / float(longest))
-            gray = cv2.resize(
-                gray, None, fx=factor, fy=factor,
-                interpolation=cv2.INTER_CUBIC,
-            )
-        # Complement sparse-card OCR with an adaptive-contrast OCR pass.
-        # No resulting text is logged, retained, or sent back to clients.
-        contrast = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8)).apply(gray)
-        processed = cv2.adaptiveThreshold(
-            contrast, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
-            cv2.THRESH_BINARY, 31, 11,
+def extract_government_id_text(id_document_bytes, label):
+    """Transient OCR only; never log, persist, or return raw ID content."""
+    image = decode_image(id_document_bytes, label)
+    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    longest = max(gray.shape[:2])
+    if longest < 1500:
+        factor = min(1.6, 2100.0 / float(longest))
+        gray = cv2.resize(
+            gray, None, fx=factor, fy=factor,
+            interpolation=cv2.INTER_CUBIC,
         )
-        extracted = pytesseract.image_to_string(gray, config="--psm 11")
-        enhanced = pytesseract.image_to_string(processed, config="--psm 6")
-        return assess_document_text(declared_type, extracted + "\n" + enhanced)
+    contrast = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8)).apply(gray)
+    processed = cv2.adaptiveThreshold(
+        contrast, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
+        cv2.THRESH_BINARY, 31, 11,
+    )
+    return (
+        pytesseract.image_to_string(gray, config="--psm 11")
+        + "\n"
+        + pytesseract.image_to_string(processed, config="--psm 6")
+    )
+
+
+def screen_government_id(
+    *, declared_type, id_document_bytes, id_back_document_bytes=None
+):
+    """OCR plausibility on both card sides; never proof of valid issuance."""
+    try:
+        front_text = extract_government_id_text(
+            id_document_bytes, "Government ID front image"
+        )
+        back_text = (
+            extract_government_id_text(
+                id_back_document_bytes, "Government ID back image"
+            )
+            if id_back_document_bytes is not None else None
+        )
+        return assess_document_sides(declared_type, front_text, back_text)
     except Exception:
-        # OCR depends on local Tesseract assets and camera image quality.
-        # Fail closed: no automatic rejection or claims of genuine IDs.
-        logging.warning("Government ID keyword screening unavailable")
-        return document_ocr_unavailable(declared_type)
+        logging.warning("Government ID OCR screening unavailable")
+        result = document_ocr_unavailable(declared_type)
+        result["backSideProvided"] = id_back_document_bytes is not None
+        result["backSideScreened"] = False
+        return result
 
 
 def run_face_verification(
@@ -1110,6 +1123,7 @@ def health():
             get_match_threshold(),
         "livenessImplemented": False,
         "idDocumentScreeningImplemented": True,
+        "idFrontBackScreeningImplemented": True,
         "idDocumentAuthenticityVerified": False,
         "time": datetime.now(
             timezone.utc
@@ -1133,7 +1147,7 @@ def capabilities():
             "governmentIdOcr": {
                 "planned": True,
                 "active": True,
-                "method": "ocr_keyword_screen_not_document_authentication",
+                "method": "front_back_ocr_type_screen_not_document_authentication",
             },
             "idFaceDetection": {
                 "planned": False,
@@ -1225,6 +1239,14 @@ async def verify_identity(
     selfie_upload = form.get(
         "selfie"
     )
+    back_upload = form.get("idBackDocument")
+    if id_type != "passport" and not isinstance(
+        back_upload, StarletteUploadFile
+    ):
+        raise HTTPException(
+            status_code=400,
+            detail="Scan both the front and back of the same government ID.",
+        )
     try:
         id_document_bytes = (
             await read_upload(
@@ -1236,6 +1258,14 @@ async def verify_identity(
                     MAX_ID_DOCUMENT_BYTES
                 ),
             )
+        )
+        id_back_document_bytes = (
+            await read_upload(
+                back_upload,
+                label="Government ID back image",
+                maximum_bytes=MAX_ID_DOCUMENT_BYTES,
+            )
+            if isinstance(back_upload, StarletteUploadFile) else None
         )
         selfie_bytes = (
             await read_upload(
@@ -1257,6 +1287,20 @@ async def verify_identity(
             StarletteUploadFile,
         ):
             await selfie_upload.close()
+        if isinstance(back_upload, StarletteUploadFile):
+            await back_upload.close()
+    if (
+        id_back_document_bytes is not None
+        and hashlib.sha256(id_document_bytes).digest()
+        == hashlib.sha256(id_back_document_bytes).digest()
+    ):
+        raise HTTPException(
+            status_code=400,
+            detail="The ID front and back must be different photographs.",
+        )
+    if id_back_document_bytes is not None:
+        # Reject corrupt or too-small back images before charging an attempt.
+        decode_image(id_back_document_bytes, "Government ID back image")
     if not face_mesh_engine_ready():
         raise HTTPException(
             status_code=503,
@@ -1278,6 +1322,7 @@ async def verify_identity(
             screen_government_id,
             declared_type=id_type,
             id_document_bytes=id_document_bytes,
+            id_back_document_bytes=id_back_document_bytes,
         )
     except HTTPException:
         raise
