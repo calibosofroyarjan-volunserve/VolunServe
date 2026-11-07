@@ -107,26 +107,30 @@ function Placeholder({ icon, title, description }: { icon: Icon; title: string; 
   </View>;
 }
 function Hero({ role, narrow }: { role: Role; narrow: boolean }) {
-  return <ImageBackground source={require("../../assets/images/sjdm-aerial.png")}
-    imageStyle={styles.heroPicture} style={styles.hero}>
-    <LinearGradient pointerEvents="none" colors={["rgba(5,32,45,0.79)", "rgba(5,32,45,0.26)", "rgba(6,41,48,0.75)"]}
-      start={{ x: 0, y: 0.4 }} end={{ x: 1, y: 0.6 }} style={StyleSheet.absoluteFill} />
-    <View style={[styles.heroInner, narrow && styles.heroInnerNarrow]}>
-      <View style={styles.heroLeft}>
-        <Text style={styles.heroEyebrow}>{role === "resident" ? "RESIDENT OPERATIONS CENTER" : "VOLUNTEER OPERATIONS CENTER"}</Text>
-        <Text style={[styles.heroTitle, narrow && styles.heroTitleSmall]}>Good day, <Text style={styles.heroAccent}>Guest!</Text></Text>
-        <Text style={styles.heroSub}>Explore what VolunServe offers in San Jose del Monte.</Text>
-        <View style={styles.locationStrip}>
-          <Ionicons name="location" size={20} color="#FFF" />
-          <Text style={styles.locationCopy}>San Jose del Monte, Bulacan</Text>
-        </View>
-        <Text style={styles.heroFoot}>Public demonstration · No live personal records</Text>
-      </View>
-      {!narrow ? <View style={styles.citySealWrap}><Image source={require("../../assets/images/sjdm-rising-city.png")} style={styles.citySeal} resizeMode="contain" /></View> : null}
-      {!narrow ? <View style={styles.heroRight}><Text style={styles.heroRightTitle}>A Safer, Stronger{"\n"}San Jose del Monte</Text>
-        <Text style={styles.heroRightSub}>One community. One platform. Greater impact.</Text><View style={styles.heroAccentBar}/></View> : null}
+  const volunteer = role === "volunteer";
+  return <View style={[styles.dashboardHero, narrow && styles.dashboardHeroCompact]}>
+    <View style={styles.dashboardHeroIcon}>
+      <Ionicons name={volunteer ? "hand-left-outline" : "home-outline"} size={27} color={ui.color.primary} />
     </View>
-  </ImageBackground>;
+    <View style={styles.dashboardHeroCopy}>
+      <Text style={styles.dashboardEyebrow}>{volunteer ? "VOLUNTEER OPERATIONS CENTER" : "RESIDENT OPERATIONS CENTER"} · DESIGN PREVIEW</Text>
+      <Text style={[styles.dashboardTitle, narrow && styles.dashboardTitleCompact]}>
+        {volunteer ? "Ready to serve your community" : "Your community, at a glance"}
+      </Text>
+      <Text style={styles.dashboardDescription}>
+        {volunteer
+          ? "Explore emergency task coordination, event participation and verified service records."
+          : "Explore emergency reports, assistance requests, events and community support."}
+      </Text>
+      <View style={styles.dashboardBadges}>
+        <View style={styles.dashboardBadge}><Ionicons name="location-outline" color={ui.color.primary} size={16}/><Text style={styles.dashboardBadgeText}>San Jose del Monte, Bulacan</Text></View>
+        <View style={styles.dashboardBadge}><Ionicons name="shield-checkmark-outline" color={ui.color.primary} size={16}/><Text style={styles.dashboardBadgeText}>Safe read-only preview</Text></View>
+      </View>
+    </View>
+    {!narrow && <View style={styles.dashboardSealWrap}>
+      <Image source={require("../../assets/images/sjdm-rising-city.png")} style={styles.dashboardSeal} resizeMode="contain"/>
+    </View>}
+  </View>;
 }
 
 function Home({ role, narrow }: { role: Role; narrow: boolean }) {
@@ -428,6 +432,34 @@ export default function GuestWorkspace({ landing = false }: { landing?: boolean 
 }
 
 const styles = StyleSheet.create({
+  dashboardHero: {
+    minHeight: 205, flexDirection: "row", alignItems: "flex-start", gap: 16,
+    backgroundColor: ui.color.surface, borderWidth: 1, borderColor: ui.color.border,
+    borderRadius: ui.radius.card, padding: 22,
+  },
+  dashboardHeroCompact: { minHeight: 0, padding: 16, gap: 12 },
+  dashboardHeroIcon: {
+    width: 48, height: 48, flexShrink: 0, borderRadius: ui.radius.control,
+    backgroundColor: ui.color.primarySoft, justifyContent: "center", alignItems: "center",
+  },
+  dashboardHeroCopy: { flex: 1, minWidth: 0, gap: 8 },
+  dashboardEyebrow: { fontSize: 11, lineHeight: 16, fontWeight: "700", letterSpacing: 0.65, color: ui.color.primary },
+  dashboardTitle: { fontSize: 26, lineHeight: 34, fontWeight: "700", color: ui.color.text },
+  dashboardTitleCompact: { fontSize: 21, lineHeight: 29 },
+  dashboardDescription: { fontSize: 14, lineHeight: 21, color: ui.color.secondary, maxWidth: 650 },
+  dashboardBadges: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 8 },
+  dashboardBadge: {
+    minHeight: 34, flexDirection: "row", alignItems: "center", gap: 7,
+    backgroundColor: ui.color.primarySoft, paddingHorizontal: 10,
+    paddingVertical: 6, borderRadius: ui.radius.control,
+  },
+  dashboardBadgeText: { fontSize: 11, lineHeight: 17, color: ui.color.primary, fontWeight: "600" },
+  dashboardSealWrap: {
+    width: 110, height: 110, flexShrink: 0, borderRadius: ui.radius.card,
+    backgroundColor: ui.color.mutedSurface, justifyContent: "center", alignItems: "center",
+  },
+  dashboardSeal: { width: 92, height: 92 },
+
   root:{flex:1,flexDirection:"row",backgroundColor:ui.color.canvas},
   sidebar:{width:"100%",height:"100%",backgroundColor:ui.color.sidebar,paddingHorizontal:16,paddingTop:20,paddingBottom:18,overflow:"hidden"},
   sidebarLeaf:{position:"absolute",bottom:80,left:-70,opacity:0.08},
