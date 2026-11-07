@@ -237,7 +237,12 @@ export default function EmailFirstSignup() {
   const [reviewed, setReviewed] = useState(false);
 
   const age = useMemo(() => dateAge(birth), [birth]);
-  const phoneClean = phone.replace(/\D/g, "");
+  // Accept familiar 09xxxxxxxxx, +639xxxxxxxxx and 9xxxxxxxxx input.
+  // Firestore always receives the canonical +639xxxxxxxxx form.
+  const phoneDigits = phone.replace(/\D/g, "");
+  const phoneClean = phoneDigits.startsWith("63")
+    ? phoneDigits.slice(2)
+    : phoneDigits.startsWith("0") ? phoneDigits.slice(1) : phoneDigits;
   const emailErr = getRegistrationEmailError(email);
   const passwordErr = passwordError(password, email);
   const needsSpecialization = (SPECIALIZATIONS[occupation] || []).length > 0;
@@ -844,8 +849,9 @@ export default function EmailFirstSignup() {
                 />
                 <Field
                   label="Mobile Number *" value={phone}
-                  onChange={v => setPhone(v.replace(/\D/g, "").slice(0, 10))}
-                  placeholder="9XXXXXXXXX" keyboardType="phone-pad"
+                  onChange={v => setPhone(v.replace(/[^\d+]/g, "").slice(0, 13))}
+                  placeholder="09XXXXXXXXX or +639XXXXXXXXX" keyboardType="phone-pad"
+                  hint="Use 09, +639 or 9 at the start. We'll format it automatically."
                   error={(showErrors || !!phone) ? registrationErrors.phoneNumber : null}
                 />
                 {checkButton("Continue to Address & Profile", () => {
