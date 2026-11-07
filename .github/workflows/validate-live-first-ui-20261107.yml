@@ -1,0 +1,55 @@
+name: Validate UI Built ONLY from Verified Live VolunServe (No Deploy)
+on:
+  push:
+    branches: [design/live-verified-ui-20261107]
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      CI: 'true'
+      EXPO_NO_TELEMETRY: '1'
+      VERIFIED_LIVE_SOURCE_SHA: e83f4a72c7cb733ff7bb888a6ac19bf3c0f076c4
+    steps:
+      - name: Fetch exact candidate and verified live baseline (no checkout action, no submodules)
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p source
+          git -C source init
+          git -C source remote add origin https://github.com/calibosofroyarjan-volunserve/VolunServe.git
+          git -C source fetch --no-recurse-submodules --depth=1 origin "$GITHUB_SHA"
+          git -C source checkout --detach FETCH_HEAD
+          git -C source fetch --no-recurse-submodules --depth=1 origin "$VERIFIED_LIVE_SOURCE_SHA"
+          git -C source rev-parse HEAD
+          git -C source cat-file -e "$VERIFIED_LIVE_SOURCE_SHA^{commit}"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: source/package-lock.json
+      - name: Install exact locked dependencies
+        working-directory: source
+        run: npm ci --no-audit --no-fund
+      - name: Ensure UI-only diff and preserve high-risk live modules
+        working-directory: source
+        run: node scripts/test-live-first-ui-only-20261107.cjs
+      - name: Admin, Volunteer, Resident functional regression contracts
+        working-directory: source
+        run: |
+          node scripts/test-portal-resident-volunteer-ui-flow.cjs
+          node scripts/test-lgu-admin-global-ui-pagination.cjs
+          node scripts/test-admin-response-workspace-ux.cjs
+          node scripts/test-admin-compact-workspace-ux.cjs
+          node scripts/test-admin-people-verification-premium-ui.cjs
+          node scripts/test-admin-navigation-contract.cjs
+          node --test scripts/test-resident-volunteer-sidebar.cjs
+          node --test scripts/test-volunteer-donations-sidebar-removal.cjs
+      - name: TypeScript compile check
+        working-directory: source
+        run: npx tsc --noEmit --pretty false
+      - name: Build browser artifacts only — DO NOT DEPLOY
+        working-directory: source
+        run: npx expo export --platform web
