@@ -34,6 +34,17 @@ assert(session.includes("profileListenerVersion !== version") &&
   "Ignore outdated listeners and never use another account's profile");
 assert(session.includes("if (!user)") && session.includes("unsubscribeAuth()"),
   "Preserve real logout handling and cleanup");
+assert(session.includes("connectionError: current.user?.uid === user.uid && current.profile") &&
+  session.includes("retryProfile: () => setReloadKey("),
+  "A listener error before profile load must offer retry rather than trigger incorrect login redirects");
+const fallback = read("components/ui/AccountConnectionFallback.tsx");
+assert(fallback.includes('accessibilityLabel="Retry loading account"'));
+for (const path of ["app/(tabs)/_layout.tsx","app/(admin)/_layout.tsx","app/(superadmin)/_layout.tsx"]) {
+  const shell=read(path);
+  assert(shell.includes("connectionError && user && !profile") &&
+    shell.includes("<AccountConnectionFallback message={connectionError} onRetry={retryProfile} />"),
+    "Missing retryable account guard on role layout: "+path);
+}
 
 const admin=read("app/(admin)/_layout.tsx");
 const superAdmin=read("app/(superadmin)/_layout.tsx");
