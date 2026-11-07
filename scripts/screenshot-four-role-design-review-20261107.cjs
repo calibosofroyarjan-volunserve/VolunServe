@@ -131,7 +131,7 @@ async function waitFor(browser,text,route){
       "(()=>{const el=document.querySelector('[aria-label=\"Preview Volunteer\"]');if(!el)return false;el.click();return true})()"
     );
     assert(switched,"Volunteer selector must be clickable");
-    await waitFor(browserSession,"Ready to make a difference?","role switch");
+    await waitFor(browserSession,"Ready to serve your community","role switch");
     const navButton=await browserSession.evaluate(
       "(()=>{const el=document.querySelector('[aria-label=\"Open navigation\"]');if(!el)return false;el.click();return true})()"
     );
