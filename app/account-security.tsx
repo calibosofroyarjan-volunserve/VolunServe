@@ -1,3 +1,4 @@
+import { liveUi as designUi } from "../constants/volunserveLiveUi";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { onAuthStateChanged, User } from "firebase/auth";
@@ -318,16 +319,14 @@ const styles = StyleSheet.create({
   emptyTitle: {
     marginTop: 12,
     color: "#0f172a",
-    fontSize: 22,
-    fontWeight: "900",
-  },
+    fontSize: designUi.type.section.fontSize,
+    fontWeight: designUi.type.section.fontWeight, lineHeight: designUi.type.section.lineHeight,},
   emptyText: {
     marginTop: 7,
     maxWidth: 460,
     color: "#64748b",
     textAlign: "center",
-    lineHeight: 21,
-  },
+    lineHeight: designUi.type.body.lineHeight, fontSize: designUi.type.body.fontSize, fontWeight: designUi.type.body.fontWeight,},
   backButton: {
     marginTop: 18,
     minHeight: 48,
@@ -366,17 +365,15 @@ const styles = StyleSheet.create({
   title: {
     marginTop: 15,
     color: "#0f172a",
-    fontSize: 27,
-    fontWeight: "900",
-    textAlign: "center",
-  },
+    fontSize: designUi.type.page.fontSize,
+    fontWeight: designUi.type.page.fontWeight,
+    textAlign: "center", lineHeight: designUi.type.page.lineHeight,},
   subtitle: {
     marginTop: 8,
     color: "#64748b",
-    fontSize: 14,
-    lineHeight: 21,
-    textAlign: "center",
-  },
+    fontSize: designUi.type.body.fontSize,
+    lineHeight: designUi.type.body.lineHeight,
+    textAlign: "center", fontWeight: designUi.type.body.fontWeight,},
   accountBox: {
     marginTop: 22,
     flexDirection: "row",
@@ -393,10 +390,9 @@ const styles = StyleSheet.create({
   },
   accountLabel: {
     color: "#0f766e",
-    fontSize: 10,
+    fontSize: designUi.type.label.fontSize,
     letterSpacing: 0.8,
-    fontWeight: "900",
-  },
+    fontWeight: designUi.type.label.fontWeight, lineHeight: designUi.type.label.lineHeight,},
   accountEmail: {
     marginTop: 2,
     color: "#0f172a",
@@ -418,9 +414,8 @@ const styles = StyleSheet.create({
   },
   providerLabel: {
     color: "#475569",
-    fontSize: 11,
-    fontWeight: "800",
-  },
+    fontSize: designUi.type.label.fontSize,
+    fontWeight: designUi.type.label.fontWeight, lineHeight: designUi.type.label.lineHeight,},
   providerStatus: {
     marginTop: 3,
     fontSize: 13,
@@ -453,9 +448,8 @@ const styles = StyleSheet.create({
     marginTop: 17,
     marginBottom: 7,
     color: "#0f172a",
-    fontSize: 13,
-    fontWeight: "800",
-  },
+    fontSize: designUi.type.label.fontSize,
+    fontWeight: designUi.type.label.fontWeight, lineHeight: designUi.type.label.lineHeight,},
   inputWrap: {
     minHeight: 56,
     flexDirection: "row",

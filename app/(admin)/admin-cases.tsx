@@ -1,3 +1,4 @@
+import { liveUi as designUi } from "../../constants/volunserveLiveUi";
 import { useRouter } from "expo-router";
 import { getAuth } from "firebase/auth";
 import {
@@ -4919,16 +4920,14 @@ const styles = StyleSheet.create({
   title: {
     marginTop: 2,
     color: "#0f172a",
-    fontSize: 28,
-    fontWeight: "700",
-  },
+    fontSize: designUi.type.page.fontSize,
+    fontWeight: designUi.type.page.fontWeight, lineHeight: designUi.type.page.lineHeight,},
   subtitle: {
     marginTop: 4,
     maxWidth: 760,
     color: "#64748b",
-    fontSize: 13.5,
-    lineHeight: 20,
-  },
+    fontSize: designUi.type.body.fontSize,
+    lineHeight: designUi.type.body.lineHeight, fontWeight: designUi.type.body.fontWeight,},
   liveSummary: {
     minWidth: 108,
     backgroundColor: "#ffffff",
@@ -4947,9 +4946,8 @@ const styles = StyleSheet.create({
   liveSummaryLabel: {
     marginTop: 2,
     color: "#64748b",
-    fontSize: 10,
-    fontWeight: "800",
-  },
+    fontSize: designUi.type.label.fontSize,
+    fontWeight: designUi.type.label.fontWeight, lineHeight: designUi.type.label.lineHeight,},
 
   filterCard: {
     backgroundColor: "#ffffff",
@@ -4970,10 +4968,9 @@ const styles = StyleSheet.create({
   },
   filterLabel: {
     color: "#94a3b8",
-    fontSize: 10,
-    fontWeight: "900",
-    letterSpacing: 1,
-  },
+    fontSize: designUi.type.label.fontSize,
+    fontWeight: designUi.type.label.fontWeight,
+    letterSpacing: 1, lineHeight: designUi.type.label.lineHeight,},
   pillRow: {
     flexDirection: "row",
     flexWrap: "wrap",
@@ -5093,9 +5090,8 @@ const styles = StyleSheet.create({
   },
   overviewCardTitle: {
     color: "#0f172a",
-    fontSize: 12.5,
-    fontWeight: "900",
-  },
+    fontSize: designUi.type.section.fontSize,
+    fontWeight: designUi.type.section.fontWeight, lineHeight: designUi.type.section.lineHeight,},
   overviewPrimary: {
     color: "#0f172a",
     fontSize: 13,
@@ -5169,11 +5165,10 @@ const styles = StyleSheet.create({
   overviewLabel: {
     marginTop: 11,
     color: "#64748b",
-    fontSize: 10,
-    fontWeight: "900",
+    fontSize: designUi.type.meta.fontSize,
+    fontWeight: designUi.type.meta.fontWeight,
     textTransform: "uppercase",
-    letterSpacing: 0.5,
-  },
+    letterSpacing: 0.5, lineHeight: designUi.type.meta.lineHeight,},
   needChipRow: {
     marginTop: 7,
     flexDirection: "row",
@@ -8972,15 +8967,13 @@ const styles = StyleSheet.create({
   },
   emptyTitle: {
     color: "#0f172a",
-    fontSize: 18,
-    fontWeight: "800",
-  },
+    fontSize: designUi.type.section.fontSize,
+    fontWeight: designUi.type.section.fontWeight, lineHeight: designUi.type.section.lineHeight,},
   emptyText: {
     marginTop: 4,
     color: "#64748b",
-    fontSize: 11,
-    textAlign: "center",
-  },
+    fontSize: designUi.type.body.fontSize,
+    textAlign: "center", lineHeight: designUi.type.body.lineHeight, fontWeight: designUi.type.body.fontWeight,},
   criticalNavigateButton: { marginTop: 12, minHeight: 42, alignItems: "center", justifyContent: "center", borderRadius: 10, backgroundColor: "#b91c1c", paddingHorizontal: 14 },
   criticalNavigateButtonText: { color: "#ffffff", fontSize: 12, fontWeight: "900" },
 });

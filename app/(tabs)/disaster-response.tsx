@@ -1,3 +1,4 @@
+import { liveUi as designUi } from "../../constants/volunserveLiveUi";
 import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import React from "react";
@@ -61,12 +62,12 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1, borderBottomColor: "#DBE8E0" },
   heading: { gap: 3, flexGrow: 1 },
   eyebrow: { fontSize: 11, fontWeight: "900", letterSpacing: 1.1, color: "#075F4D" },
-  subtitle: { fontSize: 11, color: "#577B69" },
+  subtitle: { fontSize: designUi.type.body.fontSize, color: "#577B69", lineHeight: designUi.type.body.lineHeight, fontWeight: designUi.type.body.fontWeight,},
   switchTabs: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   tab: { flexDirection: "row", alignItems: "center", gap: 7, minHeight: 38, paddingHorizontal: 13,
     backgroundColor: "#EAF5EE", borderRadius: 9, borderWidth: 1, borderColor: "#D6E9DF" },
   activeTab: { backgroundColor: "#087A62", borderColor: "#087A62" },
-  tabLabel: { fontSize: 12, fontWeight: "800", color: "#246958" },
-  activeLabel: { color: "#FFFFFF" },
+  tabLabel: { fontSize: designUi.type.label.fontSize, fontWeight: designUi.type.label.fontWeight, color: "#246958", lineHeight: designUi.type.label.lineHeight,},
+  activeLabel: { color: "#FFFFFF", fontSize: designUi.type.label.fontSize, lineHeight: designUi.type.label.lineHeight, fontWeight: designUi.type.label.fontWeight,},
   content: { flex: 1, minHeight: 0 },
 });

@@ -1,3 +1,4 @@
+import { liveUi as designUi } from "../../constants/volunserveLiveUi";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { useRouter } from "expo-router";
 
@@ -1340,17 +1341,16 @@ const styles =
     title: {
       marginTop: 5,
       color: "#173D32",
-      fontSize: 28,
-      lineHeight: 36,
-      fontWeight: "700",
+      fontSize: designUi.type.page.fontSize,
+      lineHeight: designUi.type.page.lineHeight,
+      fontWeight: designUi.type.page.fontWeight,
     },
 
     subtitle: {
       marginTop: 5,
       color: "#64748B",
-      fontSize: 13,
-      lineHeight: 20,
-    },
+      fontSize: designUi.type.body.fontSize,
+      lineHeight: designUi.type.body.lineHeight, fontWeight: designUi.type.body.fontWeight,},
 
     errorBox: {
       marginBottom: 14,
@@ -1390,9 +1390,8 @@ const styles =
     pendingTitle: {
       marginTop: 5,
       color: "#173748",
-      fontSize: 17,
-      fontWeight: "900",
-    },
+      fontSize: designUi.type.section.fontSize,
+      fontWeight: designUi.type.section.fontWeight, lineHeight: designUi.type.section.lineHeight,},
 
     pendingText: {
       marginTop: 6,
@@ -1565,9 +1564,9 @@ const styles =
     metricLabel: {
       marginTop: 4,
       color: "#607984",
-      fontSize: 8.5,
-      lineHeight: 13,
-      fontWeight: "800",
+      fontSize: designUi.type.label.fontSize,
+      lineHeight: designUi.type.label.lineHeight,
+      fontWeight: designUi.type.label.fontWeight,
       textAlign: "center",
       textTransform:
         "uppercase",
@@ -1837,7 +1836,7 @@ const styles =
       marginTop: 14, marginBottom: 12,
     },
     communityEyebrow: { color: "#078F82", fontSize: 10, fontWeight: "900", letterSpacing: 1.3 },
-    communitySectionTitle: { marginTop: 4, color: "#173747", fontSize: 19, fontWeight: "900" },
+    communitySectionTitle: { marginTop: 4, color: "#173747", fontSize: designUi.type.section.fontSize, fontWeight: designUi.type.section.fontWeight, lineHeight: designUi.type.section.lineHeight,},
     communitySectionSub: { marginTop: 4, color: "#667F8A", fontSize: 11, lineHeight: 17 },
     communityCount: { width: 34, height: 34, borderRadius: 17, alignItems: "center", justifyContent: "center", backgroundColor: "#E2F5EE" },
     communityCountText: { color: "#078F82", fontWeight: "900", fontSize: 14 },
@@ -1886,9 +1885,9 @@ const styles =
     dashHero: {minHeight: 135, overflow: "hidden", flexDirection: "row", justifyContent: "space-between", alignItems: "center", position: "relative"},
     dashHeroText: {flex: 1, minWidth: 0, paddingTop: 1, paddingBottom: 10, zIndex: 2},
     dashEyebrow: {fontSize: 11, fontWeight: "900", color: "#048D80", letterSpacing: 1.2},
-    dashTitle: {fontSize: 38, fontWeight: "900", color: "#102F46", marginTop: 6, letterSpacing: -0.8},
+    dashTitle: {fontSize: designUi.type.page.fontSize, fontWeight: designUi.type.page.fontWeight, color: "#102F46", marginTop: 6, letterSpacing: -0.8, lineHeight: designUi.type.page.lineHeight,},
     dashTitleMobile: {fontSize: 30},
-    dashSubtitle: {fontSize: 13, color: "#58738A", lineHeight: 22, marginTop: 7, maxWidth: 770},
+    dashSubtitle: {fontSize: designUi.type.body.fontSize, color: "#58738A", lineHeight: designUi.type.body.lineHeight, marginTop: 7, maxWidth: 770, fontWeight: designUi.type.body.fontWeight,},
     dashHeroGraphic: {height: 144, width: 295, position: "relative", flexShrink: 0, justifyContent: "center", alignItems: "center", overflow: "hidden"},
     dashHeroHalo: {position: "absolute", width: 240, height: 170, right: -38, top: 12, backgroundColor: "#E0F3F2", borderTopLeftRadius: 120, borderTopRightRadius: 90},
     dashHeroLeafOne: {position: "absolute", height: 65, width: 37, top: 27, right: 18, transform: [{rotate: "-32deg"}], borderTopLeftRadius: 42, borderBottomRightRadius: 42, backgroundColor: "#4EB6A5"},
@@ -1909,7 +1908,7 @@ const styles =
     dashSectionInfo: {flex: 1, minWidth: 0, flexDirection: "row", alignItems: "center", gap: 13},
     dashSectionTitleWrap: {flex: 1, minWidth: 0},
     dashSectionIcon: {width: 49, height: 49, backgroundColor: "#058C80", borderRadius: 13, alignItems: "center", justifyContent: "center", shadowColor: "#068D83", shadowOpacity: 0.12, shadowRadius: 8},
-    dashSectionTitle: {fontSize: 18, fontWeight: "900", color: "#12324C"},
+    dashSectionTitle: {fontSize: designUi.type.section.fontSize, fontWeight: designUi.type.section.fontWeight, color: "#12324C", lineHeight: designUi.type.section.lineHeight,},
     dashSectionDescription: {color: "#58738B", fontSize: 12, lineHeight: 18, marginTop: 5},
     dashSectionControls: {flexDirection: "row", alignItems: "center", gap: 10},
     dashViewAll: {flexDirection: "row", alignItems: "center", gap: 8, borderWidth: 1, borderColor: "#D0E0E8", borderRadius: 9, paddingHorizontal: 13, paddingVertical: 10, backgroundColor: "#FFFFFF"},
@@ -1922,8 +1921,8 @@ const styles =
     dashEmptyCloudLeft: {position: "absolute", width: 135, height: 45, borderTopLeftRadius: 90, borderTopRightRadius: 90, bottom: 0, left: 9, backgroundColor: "#EFF5FA"},
     dashEmptyCloudRight: {position: "absolute", width: 135, height: 48, borderTopLeftRadius: 90, borderTopRightRadius: 90, bottom: 0, right: 9, backgroundColor: "#EAF2F8"},
     dashEmptyDocument: {height: 66, width: 67, backgroundColor: "#FFFFFF", borderWidth: 2, borderColor: "#B7D3DC", borderRadius: 9, justifyContent: "center", alignItems: "center", shadowColor: "#345566", shadowOpacity: 0.07, shadowRadius: 5},
-    dashEmptyTitle: {fontSize: 14, fontWeight: "900", color: "#16374F", textAlign: "center"},
-    dashEmptyText: {marginTop: 7, fontSize: 12, lineHeight: 20, color: "#58738B", textAlign: "center", maxWidth: 580},
+    dashEmptyTitle: {fontSize: designUi.type.section.fontSize, fontWeight: designUi.type.section.fontWeight, color: "#16374F", textAlign: "center", lineHeight: designUi.type.section.lineHeight,},
+    dashEmptyText: {marginTop: 7, fontSize: designUi.type.body.fontSize, lineHeight: designUi.type.body.lineHeight, color: "#58738B", textAlign: "center", maxWidth: 580, fontWeight: designUi.type.body.fontWeight,},
     dashBrowseButton: {marginTop: 17, borderRadius: 9, backgroundColor: "#087F78", minHeight: 37, paddingHorizontal: 16, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8},
     dashBrowseText: {color: "#FFFFFF", fontSize: 12, fontWeight: "900"},
     dashCardGrid: {flexDirection: "row", flexWrap: "wrap", gap: 13},

@@ -1,3 +1,4 @@
+import { liveUi as designUi } from "../../constants/volunserveLiveUi";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 
@@ -1189,18 +1190,17 @@ const styles =
     title: {
       marginTop: 5,
       color: "#102A3A",
-      fontSize: 30,
-      lineHeight: 36,
-      fontWeight: "900",
+      fontSize: designUi.type.page.fontSize,
+      lineHeight: designUi.type.page.lineHeight,
+      fontWeight: designUi.type.page.fontWeight,
     },
 
     subtitle: {
       marginTop: 5,
       maxWidth: 650,
       color: "#64748B",
-      fontSize: 13,
-      lineHeight: 20,
-    },
+      fontSize: designUi.type.body.fontSize,
+      lineHeight: designUi.type.body.lineHeight, fontWeight: designUi.type.body.fontWeight,},
 
     purposeCard: {
       marginBottom: 14,
@@ -1234,9 +1234,8 @@ const styles =
 
     purposeTitle: {
       color: "#08786F",
-      fontSize: 12.5,
-      fontWeight: "900",
-    },
+      fontSize: designUi.type.section.fontSize,
+      fontWeight: designUi.type.section.fontWeight, lineHeight: designUi.type.section.lineHeight,},
 
     purposeText: {
       marginTop: 3,
@@ -1342,17 +1341,15 @@ const styles =
 
     scannerTitle: {
       color: "#173748",
-      fontSize: 14,
-      fontWeight: "900",
-    },
+      fontSize: designUi.type.section.fontSize,
+      fontWeight: designUi.type.section.fontWeight, lineHeight: designUi.type.section.lineHeight,},
 
     scannerHint: {
       marginTop: 3,
       maxWidth: 570,
       color: "#7A8E99",
-      fontSize: 10.5,
-      lineHeight: 16,
-    },
+      fontSize: designUi.type.body.fontSize,
+      lineHeight: designUi.type.body.lineHeight, fontWeight: designUi.type.body.fontWeight,},
 
     liveBadge: {
       flexDirection: "row",
@@ -1570,9 +1567,8 @@ const styles =
 
     manualTitle: {
       color: "#173748",
-      fontSize: 13,
-      fontWeight: "900",
-    },
+      fontSize: designUi.type.section.fontSize,
+      fontWeight: designUi.type.section.fontWeight, lineHeight: designUi.type.section.lineHeight,},
 
     manualSubtitle: {
       marginTop: 2,
@@ -1583,10 +1579,9 @@ const styles =
     inputLabel: {
       marginTop: 15,
       color: "#71858F",
-      fontSize: 8.5,
-      fontWeight: "900",
-      letterSpacing: 0.6,
-    },
+      fontSize: designUi.type.label.fontSize,
+      fontWeight: designUi.type.label.fontWeight,
+      letterSpacing: 0.6, lineHeight: designUi.type.label.lineHeight,},
 
     input: {
       marginTop: 6,
@@ -1639,9 +1634,8 @@ const styles =
     flowTitle: {
       marginBottom: 12,
       color: "#173748",
-      fontSize: 13,
-      fontWeight: "900",
-    },
+      fontSize: designUi.type.section.fontSize,
+      fontWeight: designUi.type.section.fontWeight, lineHeight: designUi.type.section.lineHeight,},
 
     flowRow: {
       flexDirection: "row",

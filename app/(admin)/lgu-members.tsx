@@ -1,3 +1,4 @@
+import { liveUi as designUi } from "../../constants/volunserveLiveUi";
 import { Redirect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import ListPagination from "../../components/ui/ListPagination";
@@ -1251,8 +1252,8 @@ const styles = StyleSheet.create({
   header: { flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", gap: 20, marginBottom: 18 },
   headerCopy: { flex: 1, minWidth: 0 },
   eyebrow: { color: "#0F766E", fontSize: 10, fontWeight: "900", letterSpacing: 1.2 },
-  title: { marginTop: 4, color: "#173D32", fontSize: 29, fontWeight: "700" },
-  subtitle: { marginTop: 6, color: "#64748B", fontSize: 13.5, lineHeight: 20, maxWidth: 760 },
+  title: { marginTop: 4, color: "#173D32", fontSize: designUi.type.page.fontSize, fontWeight: designUi.type.page.fontWeight, lineHeight: designUi.type.page.lineHeight,},
+  subtitle: { marginTop: 6, color: "#64748B", fontSize: designUi.type.body.fontSize, lineHeight: designUi.type.body.lineHeight, maxWidth: 760, fontWeight: designUi.type.body.fontWeight,},
   headerActions: { flexDirection: "row", alignItems: "center", gap: 8 },
   testHeaderButton: { minHeight: 40, paddingHorizontal: 12, borderRadius: 9, borderWidth: 1, borderColor: "#CBD5E1", backgroundColor: "#FFFFFF", flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6 },
   testHeaderButtonText: { color: "#475569", fontSize: 11.5, fontWeight: "900" },
@@ -1262,7 +1263,7 @@ const styles = StyleSheet.create({
   statsRow: { flexDirection: "row", gap: 10, marginBottom: 14 },
   statCard: { flex: 1, minHeight: 78, paddingHorizontal: 16, paddingVertical: 13, borderRadius: 12, borderWidth: 1, borderColor: "#E2E8F0", backgroundColor: "#FFFFFF" },
   statValue: { color: "#0F172A", fontSize: 22, fontWeight: "900" },
-  statLabel: { marginTop: 4, color: "#64748B", fontSize: 11.5, fontWeight: "700" },
+  statLabel: { marginTop: 4, color: "#64748B", fontSize: designUi.type.label.fontSize, fontWeight: designUi.type.label.fontWeight, lineHeight: designUi.type.label.lineHeight,},
   toolbar: { minHeight: 58, padding: 10, marginBottom: 12, borderRadius: 12, borderWidth: 1, borderColor: "#E2E8F0", backgroundColor: "#FFFFFF", flexDirection: "row", alignItems: "center", gap: 10 },
   searchBox: { flex: 1, minHeight: 38, borderRadius: 9, borderWidth: 1, borderColor: "#E2E8F0", backgroundColor: "#F8FAFC", flexDirection: "row", alignItems: "center", paddingHorizontal: 11, gap: 8 },
   searchInput: { flex: 1, color: "#0F172A", fontSize: 12.5, outlineStyle: "none" } as any,
@@ -1315,8 +1316,8 @@ const styles = StyleSheet.create({
   resetButtonText: { color: "#92400E", fontSize: 9.5, fontWeight: "900" },
   notAvailableText: { color: "#94A3B8", fontSize: 11, fontWeight: "700" },
   emptyState: { minHeight: 220, alignItems: "center", justifyContent: "center", padding: 24 },
-  emptyTitle: { marginTop: 8, color: "#334155", fontSize: 14, fontWeight: "900" },
-  emptyText: { marginTop: 6, color: "#94A3B8", fontSize: 12, textAlign: "center" },
+  emptyTitle: { marginTop: 8, color: "#334155", fontSize: designUi.type.section.fontSize, fontWeight: designUi.type.section.fontWeight, lineHeight: designUi.type.section.lineHeight,},
+  emptyText: { marginTop: 6, color: "#94A3B8", fontSize: designUi.type.body.fontSize, textAlign: "center", lineHeight: designUi.type.body.lineHeight, fontWeight: designUi.type.body.fontWeight,},
   modalBackdrop: { flex: 1, alignItems: "center", justifyContent: "center", padding: 24, backgroundColor: "rgba(15,23,42,0.46)" },
   modalCard: { width: "100%", maxWidth: 760, borderRadius: 16, borderWidth: 1, borderColor: "#E2E8F0", backgroundColor: "#FFFFFF", padding: 20, shadowColor: "#000000", shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.16, shadowRadius: 30, elevation: 12 },
   manageModalCard: { width: "100%", maxWidth: 820, maxHeight: "90%", borderRadius: 16, borderWidth: 1, borderColor: "#E2E8F0", backgroundColor: "#FFFFFF", shadowColor: "#000000", shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.16, shadowRadius: 30, elevation: 12, overflow: "hidden" },

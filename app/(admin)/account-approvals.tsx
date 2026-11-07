@@ -1,3 +1,4 @@
+import { liveUi as designUi } from "../../constants/volunserveLiveUi";
 import { Ionicons } from "@expo/vector-icons";
 import { Redirect, useLocalSearchParams } from "expo-router";
 
@@ -798,7 +799,7 @@ const styles =
       borderWidth: 1, borderColor: "#DBE9E0", padding: 18 },
     metricIcon: { width: 42, height: 42, borderRadius: 12, backgroundColor: "#E2F5EB",
       alignItems: "center", justifyContent: "center", marginBottom: 12 },
-    metricLabel: { color: "#32594B", fontSize: 12, fontWeight: "800" },
+    metricLabel: { color: "#32594B", fontSize: designUi.type.label.fontSize, fontWeight: designUi.type.label.fontWeight, lineHeight: designUi.type.label.lineHeight,},
     metricValue: { color: "#124234", fontSize: 28, fontWeight: "900", marginTop: 5 },
     metricCaption: { color: "#698576", fontSize: 11, marginTop: 3 },
     recordsPanel: { backgroundColor: "#FFFFFF", borderWidth: 1, borderColor: "#D8E7DE",
@@ -844,16 +845,14 @@ const styles =
     },
 
     title: {
-      fontSize: 24,
-      fontWeight: "700",
-      color: "#173D32",
-    },
+      fontSize: designUi.type.page.fontSize,
+      fontWeight: designUi.type.page.fontWeight,
+      color: "#173D32", lineHeight: designUi.type.page.lineHeight,},
 
     subtitle: {
       color: "#64748B",
       marginTop: 4,
-      lineHeight: 19,
-    },
+      lineHeight: designUi.type.body.lineHeight, fontSize: designUi.type.body.fontSize, fontWeight: designUi.type.body.fontWeight,},
 
     countBadge: {
       width: 44,
@@ -919,9 +918,8 @@ const styles =
 
     emptyTitle: {
       marginTop: 8,
-      fontWeight: "800",
-      color: "#334155",
-    },
+      fontWeight: designUi.type.section.fontWeight,
+      color: "#334155", fontSize: designUi.type.section.fontSize, lineHeight: designUi.type.section.lineHeight,},
 
     card: {
       backgroundColor: "#FFFFFF",

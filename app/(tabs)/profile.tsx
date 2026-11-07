@@ -1,3 +1,4 @@
+import { liveUi as designUi } from "../../constants/volunserveLiveUi";
 import { AppAlert } from "../../lib/appDialog";
 import VolunteerImpact from "./volunteer-impact";
 import { Ionicons } from "@expo/vector-icons";
@@ -2851,16 +2852,14 @@ const styles =
 
     pageTitle: {
       color: "#173D32",
-      fontSize: 28,
-      fontWeight: "700",
-      letterSpacing: -0.6,
-    },
+      fontSize: designUi.type.page.fontSize,
+      fontWeight: designUi.type.page.fontWeight,
+      letterSpacing: -0.6, lineHeight: designUi.type.page.lineHeight,},
 
     pageSubtitle: {
       marginTop: 5,
       color: "#64748B",
-      fontSize: 14,
-    },
+      fontSize: designUi.type.body.fontSize, lineHeight: designUi.type.body.lineHeight, fontWeight: designUi.type.body.fontWeight,},
 
     profileCard: {
       overflow: "hidden",
@@ -3270,9 +3269,8 @@ const styles =
 
     sectionTitle: {
       color: "#173D32",
-      fontSize: 17,
-      fontWeight: "700",
-    },
+      fontSize: designUi.type.section.fontSize,
+      fontWeight: designUi.type.section.fontWeight, lineHeight: designUi.type.section.lineHeight,},
 
     infoRow: {
       flexDirection: "row",
@@ -3368,12 +3366,11 @@ const styles =
 
     metaLabel: {
       color: "#94A3B8",
-      fontSize: 10.5,
-      fontWeight: "700",
+      fontSize: designUi.type.meta.fontSize,
+      fontWeight: designUi.type.meta.fontWeight,
       textTransform:
         "uppercase",
-      letterSpacing: 0.45,
-    },
+      letterSpacing: 0.45, lineHeight: designUi.type.meta.lineHeight,},
 
     metaValue: {
       marginTop: 3,
@@ -3429,9 +3426,8 @@ const styles =
 
     certificateTitle: {
       color: "#0F172A",
-      fontSize: 15,
-      fontWeight: "900",
-    },
+      fontSize: designUi.type.card.fontSize,
+      fontWeight: designUi.type.card.fontWeight, lineHeight: designUi.type.card.lineHeight,},
 
     certificateId: {
       marginTop: 4,
@@ -3452,12 +3448,11 @@ const styles =
 
     metricLabel: {
       color: "#94A3B8",
-      fontSize: 10,
-      fontWeight: "800",
+      fontSize: designUi.type.label.fontSize,
+      fontWeight: designUi.type.label.fontWeight,
       textTransform:
         "uppercase",
-      letterSpacing: 0.4,
-    },
+      letterSpacing: 0.4, lineHeight: designUi.type.label.lineHeight,},
 
     metricValue: {
       marginTop: 3,
@@ -3488,19 +3483,17 @@ const styles =
 
     emptyTitle: {
       color: "#0F172A",
-      fontSize: 15,
-      fontWeight: "900",
-      textAlign: "center",
-    },
+      fontSize: designUi.type.section.fontSize,
+      fontWeight: designUi.type.section.fontWeight,
+      textAlign: "center", lineHeight: designUi.type.section.lineHeight,},
 
     emptyText: {
       marginTop: 5,
       color: "#64748B",
-      fontSize: 12.5,
-      lineHeight: 18,
+      fontSize: designUi.type.body.fontSize,
+      lineHeight: designUi.type.body.lineHeight,
       textAlign: "center",
-      maxWidth: 430,
-    },
+      maxWidth: 430, fontWeight: designUi.type.body.fontWeight,},
 
     inlineLoading: {
       minHeight: 150,
@@ -3539,8 +3532,8 @@ const styles =
     },
     modalHeaderCopy:{flex:1,minWidth:0},
     modalEyebrow:{fontSize:10,fontWeight:"900",letterSpacing:1.3,color:"#1A7860",marginBottom:3},
-    modalTitle:{fontSize:21,fontWeight:"900",color:"#0D3429",letterSpacing:-0.5},
-    modalSubtitle:{fontSize:12,color:"#537366",lineHeight:17,marginTop:3},
+    modalTitle:{fontSize: designUi.type.section.fontSize,fontWeight: designUi.type.section.fontWeight,color:"#0D3429",letterSpacing:-0.5, lineHeight: designUi.type.section.lineHeight,},
+    modalSubtitle:{fontSize: designUi.type.body.fontSize,color:"#537366",lineHeight: designUi.type.body.lineHeight,marginTop:3, fontWeight: designUi.type.body.fontWeight,},
     modalClose:{
       height:36,width:36,borderRadius:9,backgroundColor:"#FFFFFF",
       alignItems:"center",justifyContent:"center",borderWidth:1,borderColor:"#D9EAE0",
@@ -3556,7 +3549,7 @@ const styles =
     nameGrid:{flexDirection:"row",flexWrap:"wrap",gap:11},
     nameField:{flexGrow:1,flexBasis:"29%",minWidth:145},
     inputGroup:{marginBottom:13},
-    inputLabel:{fontSize:12,fontWeight:"800",color:"#2C5041",marginBottom:7},
+    inputLabel:{fontSize: designUi.type.label.fontSize,fontWeight: designUi.type.label.fontWeight,color:"#2C5041",marginBottom:7, lineHeight: designUi.type.label.lineHeight,},
     requiredAsterisk:{color:"#D4413A"},
     input:{
       minHeight:45,borderRadius:10,borderColor:"#D7E6DD",borderWidth:1,

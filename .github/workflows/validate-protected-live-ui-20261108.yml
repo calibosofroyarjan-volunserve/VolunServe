@@ -1,0 +1,74 @@
+name: Validate Protected-Live VolunServe All-Module UI (No Deploy)
+on:
+  push:
+    branches:
+      - design/live-protected-all-modules-ui-20261108
+  pull_request:
+    branches:
+      - live-protected
+permissions:
+  contents: read
+concurrency:
+  group: protected-live-ui-checks
+  cancel-in-progress: true
+jobs:
+  ui-regression:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      CI: "true"
+      EXPO_NO_TELEMETRY: "1"
+      VOLUNSERVE_LIVE_BASE: "8ea1d1a1f3a50ce7468180b948e94254416914bf"
+    steps:
+      - name: Checkout candidate and verified protected-live baseline
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Setup Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Audit every route's inputs and buttons; reject changes outside presentation styles
+        run: node scripts/audit-protected-live-ui-20261108.cjs
+      - name: Existing login/signup and portal UI contracts
+        run: |
+          node scripts/test-login-field-validation.cjs
+          node scripts/test-login-ui-release.cjs
+          # Legacy test-signup-prod compares the entire signup stylesheet byte-for-byte with an old SHA;
+          # this design-only PR instead gates unchanged non-style code in the route audit.
+          node scripts/test-signup-email-first-middle-optional.cjs
+          node scripts/test-route-entrypoints.cjs
+          node scripts/test-portal-resident-volunteer-ui-flow.cjs
+          node scripts/test-resident-volunteer-sidebar.cjs
+      - name: Admin, Super Admin and pagination UI contract tests
+        run: |
+          node scripts/test-admin-navigation-contract.cjs
+          node scripts/test-lgu-admin-global-ui-pagination.cjs
+          node scripts/test-superadmin-accounts-directory.cjs
+          node scripts/test-profile-certificates-account-menu.cjs
+      - name: Prepare Java for isolated Firestore emulator tests
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - name: Volunteer, attendance, donations and emergency UI contracts
+        run: |
+          node scripts/test-volunteer-time-controls-20261106.cjs
+          node scripts/test-volunteer-community-event-join-20261106.cjs
+          npx firebase-tools emulators:exec --only firestore --project demo-volunserve "node scripts/test-community-events-rules.cjs"
+          node scripts/test-embedded-emergency-map-navigation.cjs
+      - name: TypeScript check for all actual web and native modules
+        run: npx tsc --noEmit --pretty false
+      - name: Export Expo web as a CI artifact only (never publish)
+        run: npx expo export --platform web
+      - name: Publish route-by-route validation inventory
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: volunserve-protected-live-all-route-ui-audit
+          path: reports/live-protected-ui-audit.*
+          if-no-files-found: warn
+          retention-days: 14

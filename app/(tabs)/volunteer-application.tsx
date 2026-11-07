@@ -1,3 +1,4 @@
+import { liveUi as designUi } from "../../constants/volunserveLiveUi";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import {
@@ -1060,17 +1061,17 @@ const styles = StyleSheet.create({
   title: {
     marginTop: 5,
     color: "#173D32",
-    fontSize: 28,
-    lineHeight: 36,
-    fontWeight: "700",
+    fontSize: designUi.type.page.fontSize,
+    lineHeight: designUi.type.page.lineHeight,
+    fontWeight: designUi.type.page.fontWeight,
   },
   subtitle: {
     marginTop: 6,
     maxWidth: 760,
     color: "#64748B",
-    fontSize: 14,
-    lineHeight: 21,
-    fontWeight: "600",
+    fontSize: designUi.type.body.fontSize,
+    lineHeight: designUi.type.body.lineHeight,
+    fontWeight: designUi.type.body.fontWeight,
   },
   layout: {
     flexDirection: "row",
@@ -1109,9 +1110,8 @@ const styles = StyleSheet.create({
   sideTitle: {
     marginTop: 15,
     color: "#0F172A",
-    fontSize: 19,
-    fontWeight: "900",
-  },
+    fontSize: designUi.type.section.fontSize,
+    fontWeight: designUi.type.section.fontWeight, lineHeight: designUi.type.section.lineHeight,},
   sideText: {
     marginTop: 7,
     marginBottom: 18,
@@ -1205,15 +1205,14 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     color: "#173D32",
-    fontSize: 15,
-    fontWeight: "700",
-  },
+    fontSize: designUi.type.section.fontSize,
+    fontWeight: designUi.type.section.fontWeight, lineHeight: designUi.type.section.lineHeight,},
   sectionText: {
     marginTop: 3,
     color: "#64748B",
-    fontSize: 12,
-    lineHeight: 17,
-    fontWeight: "600",
+    fontSize: designUi.type.body.fontSize,
+    lineHeight: designUi.type.body.lineHeight,
+    fontWeight: designUi.type.body.fontWeight,
   },
   chipGrid: {
     flexDirection: "row",
@@ -1289,9 +1288,8 @@ const styles = StyleSheet.create({
   label: {
     marginBottom: 7,
     color: "#334155",
-    fontSize: 12.5,
-    fontWeight: "900",
-  },
+    fontSize: designUi.type.label.fontSize,
+    fontWeight: designUi.type.label.fontWeight, lineHeight: designUi.type.label.lineHeight,},
   input: {
     height: 46,
     paddingHorizontal: 13,
@@ -1316,9 +1314,9 @@ const styles = StyleSheet.create({
   noticeText: {
     flex: 1,
     color: "#166534",
-    fontSize: 12,
-    lineHeight: 18,
-    fontWeight: "700",
+    fontSize: designUi.type.body.fontSize,
+    lineHeight: designUi.type.body.lineHeight,
+    fontWeight: designUi.type.body.fontWeight,
   },
   primaryButton: {
     minHeight: 48,
@@ -1350,10 +1348,9 @@ const styles = StyleSheet.create({
   statusTitle: {
     marginTop: 13,
     color: "#0F172A",
-    fontSize: 22,
-    fontWeight: "900",
-    textAlign: "center",
-  },
+    fontSize: designUi.type.section.fontSize,
+    fontWeight: designUi.type.section.fontWeight,
+    textAlign: "center", lineHeight: designUi.type.section.lineHeight,},
   statusDescription: {
     marginTop: 8,
     maxWidth: 620,

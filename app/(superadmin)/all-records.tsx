@@ -1,3 +1,4 @@
+import { liveUi as designUi } from "../../constants/volunserveLiveUi";
 import { Ionicons } from "@expo/vector-icons";
 import ListPagination from "../../components/ui/ListPagination";
 
@@ -1649,16 +1650,14 @@ const styles =
 
     title: {
       marginTop: 4,
-      fontSize: 30,
-      fontWeight: "700",
-      color: "#173D32",
-    },
+      fontSize: designUi.type.page.fontSize,
+      fontWeight: designUi.type.page.fontWeight,
+      color: "#173D32", lineHeight: designUi.type.page.lineHeight,},
 
     subtitle: {
       marginTop: 5,
       color: "#64748B",
-      lineHeight: 20,
-    },
+      lineHeight: designUi.type.body.lineHeight, fontSize: designUi.type.body.fontSize, fontWeight: designUi.type.body.fontWeight,},
 
     summaryRow: {
       flexDirection: "row",
@@ -1833,10 +1832,9 @@ const styles =
     },
 
     sectionTitle: {
-      fontSize: 18,
-      fontWeight: "900",
-      color: "#173D32",
-    },
+      fontSize: designUi.type.section.fontSize,
+      fontWeight: designUi.type.section.fontWeight,
+      color: "#173D32", lineHeight: designUi.type.section.lineHeight,},
 
     recordCount: {
       color: "#64748B",
@@ -1872,16 +1870,14 @@ const styles =
     },
 
     recordTitle: {
-      fontSize: 16,
-      fontWeight: "900",
-      color: "#173D32",
-    },
+      fontSize: designUi.type.card.fontSize,
+      fontWeight: designUi.type.card.fontWeight,
+      color: "#173D32", lineHeight: designUi.type.card.lineHeight,},
 
     recordSubtitle: {
       marginTop: 3,
       color: "#64748B",
-      fontSize: 12,
-    },
+      fontSize: designUi.type.body.fontSize, lineHeight: designUi.type.body.lineHeight, fontWeight: designUi.type.body.fontWeight,},
 
     statusBadge: {
       borderRadius: 999,
@@ -1911,11 +1907,10 @@ const styles =
     },
 
     detailLabel: {
-      fontSize: 9,
-      fontWeight: "900",
+      fontSize: designUi.type.label.fontSize,
+      fontWeight: designUi.type.label.fontWeight,
       color: "#94A3B8",
-      letterSpacing: 0.5,
-    },
+      letterSpacing: 0.5, lineHeight: designUi.type.label.lineHeight,},
 
     detailValue: {
       marginTop: 4,

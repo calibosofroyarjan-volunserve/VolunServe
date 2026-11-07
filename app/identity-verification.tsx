@@ -1,3 +1,4 @@
+import { liveUi as designUi } from "../constants/volunserveLiveUi";
 import DocumentScreeningSummary from "../components/identity/DocumentScreeningSummary";
 import type { DocumentScreening } from "../lib/identityVerification";
 import { Ionicons } from "@expo/vector-icons";
@@ -2331,13 +2332,10 @@ const styles =
         5,
       color:
         COLORS.navy,
-      fontSize:
-        29,
-      fontWeight:
-        "900",
+      fontSize: designUi.type.page.fontSize,
+      fontWeight: designUi.type.page.fontWeight,
       letterSpacing:
-        -0.4,
-    },
+        -0.4, lineHeight: designUi.type.page.lineHeight,},
 
     subtitle: {
       marginTop:
@@ -2346,11 +2344,8 @@ const styles =
         760,
       color:
         COLORS.muted,
-      fontSize:
-        13,
-      lineHeight:
-        20,
-    },
+      fontSize: designUi.type.body.fontSize,
+      lineHeight: designUi.type.body.lineHeight, fontWeight: designUi.type.body.fontWeight,},
 
     progressCard: {
       width:
@@ -2566,22 +2561,16 @@ const styles =
     stepTitle: {
       color:
         COLORS.navy,
-      fontSize:
-        18,
-      fontWeight:
-        "900",
-    },
+      fontSize: designUi.type.section.fontSize,
+      fontWeight: designUi.type.section.fontWeight, lineHeight: designUi.type.section.lineHeight,},
 
     stepSubtitle: {
       marginTop:
         4,
       color:
         COLORS.muted,
-      fontSize:
-        12,
-      lineHeight:
-        18,
-    },
+      fontSize: designUi.type.body.fontSize,
+      lineHeight: designUi.type.body.lineHeight, fontWeight: designUi.type.body.fontWeight,},
 
     fieldLabel: {
       marginTop:
@@ -2590,11 +2579,8 @@ const styles =
         8,
       color:
         "#334155",
-      fontSize:
-        11,
-      fontWeight:
-        "900",
-    },
+      fontSize: designUi.type.label.fontSize,
+      fontWeight: designUi.type.label.fontWeight, lineHeight: designUi.type.label.lineHeight,},
 
     idTypeGrid: {
       flexDirection:
@@ -3107,11 +3093,8 @@ const styles =
         10,
       color:
         COLORS.navy,
-      fontSize:
-        12.5,
-      fontWeight:
-        "900",
-    },
+      fontSize: designUi.type.section.fontSize,
+      fontWeight: designUi.type.section.fontWeight, lineHeight: designUi.type.section.lineHeight,},
 
     requirementRow: {
       minHeight:
@@ -3592,13 +3575,10 @@ const styles =
         14,
       color:
         COLORS.navy,
-      fontSize:
-        24,
-      fontWeight:
-        "900",
+      fontSize: designUi.type.section.fontSize,
+      fontWeight: designUi.type.section.fontWeight,
       textAlign:
-        "center",
-    },
+        "center", lineHeight: designUi.type.section.lineHeight,},
 
     statusMessage: {
       marginTop:

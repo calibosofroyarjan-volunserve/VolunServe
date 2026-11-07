@@ -1,3 +1,4 @@
+import { liveUi as designUi } from "../../constants/volunserveLiveUi";
 import { collection, onSnapshot } from "firebase/firestore";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { router } from "expo-router";
@@ -319,9 +320,9 @@ const styles = StyleSheet.create({
   heroLeafRight:{position:"absolute",right:-18,bottom:-41,opacity:.42,transform:[{rotate:"-28deg"}]},
   heroLeafBack:{position:"absolute",right:"31%",top:-48,opacity:.28,transform:[{rotate:"25deg"}]},
   eyebrow:{color:"#146D54",fontSize:10,fontWeight:"900",letterSpacing:1,marginBottom:7},
-  title:{fontSize:30,lineHeight:37,letterSpacing:-.5,color:"#102E2B",fontWeight:"900"},
+  title:{fontSize: designUi.type.page.fontSize,lineHeight: designUi.type.page.lineHeight,letterSpacing:-.5,color:"#102E2B",fontWeight: designUi.type.page.fontWeight},
   compactTitle:{fontSize:26,lineHeight:32},
-  subtitle:{color:"#486C62",fontSize:12.5,lineHeight:18,marginTop:5},
+  subtitle:{color:"#486C62",fontSize: designUi.type.body.fontSize,lineHeight: designUi.type.body.lineHeight,marginTop:5, fontWeight: designUi.type.body.fontWeight,},
   heroQuote:{width:270,marginLeft:20,marginRight:70},
   quoteText:{fontSize:14,fontStyle:"italic",fontWeight:"700",lineHeight:21,color:"#124B3A"},
   quoteAccent:{height:3,width:34,backgroundColor:"#168A71",marginTop:12,borderRadius:2},
@@ -332,7 +333,7 @@ const styles = StyleSheet.create({
   metricCompact:{flexBasis:"47%",minWidth:145,paddingHorizontal:10,paddingVertical:12,gap:8,minHeight:98},
   metricIcon:{width:53,height:53,borderRadius:17,backgroundColor:"#DBF5E9",alignItems:"center",justifyContent:"center"},
   metricText:{flex:1,minWidth:0},
-  metricLabel:{fontSize:12,fontWeight:"800",color:"#1F3932",lineHeight:17},
+  metricLabel:{fontSize: designUi.type.label.fontSize,fontWeight: designUi.type.label.fontWeight,color:"#1F3932",lineHeight: designUi.type.label.lineHeight},
   metricValue:{fontSize:29,fontWeight:"900",color:"#0B3027",lineHeight:36,marginTop:1,fontVariant:["tabular-nums"]},
   metricDetail:{fontSize:10.5,color:"#6C817A",lineHeight:15},
   graphCard:{backgroundColor:"#FFFFFF",borderColor:"#E0EBE5",borderWidth:1,borderRadius:13,padding:12},
@@ -342,7 +343,7 @@ const styles = StyleSheet.create({
     backgroundColor:"#FFFFFF",borderRadius:13,padding:15,overflow:"hidden"},
   activityHead:{flexDirection:"row",alignItems:"center",gap:8,marginBottom:14},
   activityCopy:{flex:1,minWidth:0},
-  sectionTitle:{fontSize:16,fontWeight:"900",color:"#17382E",letterSpacing:-.25},
+  sectionTitle:{fontSize: designUi.type.section.fontSize,fontWeight: designUi.type.section.fontWeight,color:"#17382E",letterSpacing:-.25, lineHeight: designUi.type.section.lineHeight,},
   sectionHint:{fontSize:11.2,color:"#81938D",lineHeight:17,marginTop:3},
   viewAllButton:{minHeight:34,flexDirection:"row",gap:3,paddingHorizontal:11,
     alignItems:"center",borderWidth:1,borderColor:"#DDE8E2",backgroundColor:"#FFFFFF",borderRadius:8},
@@ -351,11 +352,11 @@ const styles = StyleSheet.create({
   tableInner:{width:"100%",minWidth:540},
   tableHeader:{minHeight:29,flexDirection:"row",alignItems:"center",backgroundColor:"#F2F6F4",
     borderTopLeftRadius:7,borderTopRightRadius:7,paddingHorizontal:8},
-  tableHeading:{fontSize:10,fontWeight:"900",color:"#34564B"},
+  tableHeading:{fontSize: designUi.type.label.fontSize,fontWeight: designUi.type.label.fontWeight,color:"#34564B", lineHeight: designUi.type.label.lineHeight,},
   tableRow:{minHeight:47,flexDirection:"row",alignItems:"center",paddingHorizontal:8,paddingVertical:5,
     borderBottomWidth:1,borderBottomColor:"#ECF1EE"},
   alternateRow:{backgroundColor:"#FBFDFC"},
-  tableText:{fontSize:10.5,color:"#304940",lineHeight:15},
+  tableText:{fontSize: designUi.type.body.fontSize,color:"#304940",lineHeight: designUi.type.body.lineHeight, fontWeight: designUi.type.body.fontWeight,},
   dateCell:{flex:1.2,paddingRight:5},
   actorCell:{flex:1,paddingRight:5},
   actionCell:{flex:1.05,paddingRight:5,alignItems:"flex-start"},

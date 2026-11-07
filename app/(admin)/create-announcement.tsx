@@ -1,3 +1,4 @@
+import { liveUi as designUi } from "../../constants/volunserveLiveUi";
 import AdminReviewHero from "../../components/admin/AdminReviewHero";
 import React, { useState } from "react";
 
@@ -298,18 +299,16 @@ const styles = StyleSheet.create({
 
   title: {
     color: "#173D32",
-    fontSize: 30,
-    fontWeight: "700",
-    marginTop: 5,
-  },
+    fontSize: designUi.type.page.fontSize,
+    fontWeight: designUi.type.page.fontWeight,
+    marginTop: 5, lineHeight: designUi.type.page.lineHeight,},
 
   subtitle: {
     color: "#64748B",
-    fontSize: 14,
-    lineHeight: 21,
+    fontSize: designUi.type.body.fontSize,
+    lineHeight: designUi.type.body.lineHeight,
     marginTop: 6,
-    marginBottom: 20,
-  },
+    marginBottom: 20, fontWeight: designUi.type.body.fontWeight,},
 
   scopeCard: {
     backgroundColor: "#EAF8F6",
@@ -322,10 +321,9 @@ const styles = StyleSheet.create({
 
   scopeLabel: {
     color: "#087F78",
-    fontSize: 10,
-    fontWeight: "900",
-    letterSpacing: 1,
-  },
+    fontSize: designUi.type.label.fontSize,
+    fontWeight: designUi.type.label.fontWeight,
+    letterSpacing: 1, lineHeight: designUi.type.label.lineHeight,},
 
   scopeValue: {
     color: "#173D32",
@@ -351,12 +349,11 @@ const styles = StyleSheet.create({
 
   inputLabel: {
     color: "#475569",
-    fontSize: 10,
-    fontWeight: "900",
+    fontSize: designUi.type.label.fontSize,
+    fontWeight: designUi.type.label.fontWeight,
     letterSpacing: 0.9,
     marginBottom: 7,
-    marginTop: 6,
-  },
+    marginTop: 6, lineHeight: designUi.type.label.lineHeight,},
 
   input: {
     width: "100%",
@@ -388,7 +385,7 @@ const styles = StyleSheet.create({
   notice: { borderWidth: 1, borderRadius: 9, padding: 13, marginBottom: 14 },
   noticeError: { backgroundColor: "#FEF2F2", borderColor: "#FECACA" },
   noticeSuccess: { backgroundColor: "#ECFDF5", borderColor: "#A7F3D0" },
-  noticeText: { color: "#163F34", fontSize: 14, fontWeight: "600" },
+  noticeText: { color: "#163F34", fontSize: designUi.type.body.fontSize, fontWeight: designUi.type.body.fontWeight, lineHeight: designUi.type.body.lineHeight,},
   submitButton: {
     minHeight: 48,
     backgroundColor: "#087F78",
@@ -419,14 +416,12 @@ const styles = StyleSheet.create({
 
   noteTitle: {
     color: "#334155",
-    fontSize: 13,
-    fontWeight: "900",
-  },
+    fontSize: designUi.type.section.fontSize,
+    fontWeight: designUi.type.section.fontWeight, lineHeight: designUi.type.section.lineHeight,},
 
   noteText: {
     color: "#64748B",
-    fontSize: 12,
-    lineHeight: 18,
-    marginTop: 4,
-  },
+    fontSize: designUi.type.body.fontSize,
+    lineHeight: designUi.type.body.lineHeight,
+    marginTop: 4, fontWeight: designUi.type.body.fontWeight,},
 });

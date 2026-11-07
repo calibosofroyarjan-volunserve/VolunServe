@@ -1,3 +1,4 @@
+import { liveUi as designUi } from "../../constants/volunserveLiveUi";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import {
@@ -5755,7 +5756,7 @@ const styles = StyleSheet.create({
   assistanceCaseSnapshot: { padding: 16, gap: 7, borderRadius: 12, backgroundColor: "#F7FAF8", borderWidth: 1, borderColor: "#E0EAE4" },
   assistanceContextLabel: { color: "#047857", fontSize: 10, fontWeight: "900", letterSpacing: 0.9 },
   assistanceContextTitle: { color: "#102A20", fontSize: 16, fontWeight: "800", lineHeight: 22 },
-  assistanceContextMeta: { color: "#526477", fontSize: 12, fontWeight: "600" },
+  assistanceContextMeta: { color: "#526477", fontSize: designUi.type.meta.fontSize, fontWeight: designUi.type.meta.fontWeight, lineHeight: designUi.type.meta.lineHeight,},
   assistanceContextDesc: { color: "#334155", fontSize: 13, lineHeight: 20 },
   simpleLink: { flexDirection: "row", alignItems: "center", gap: 7, borderRadius: 10, paddingVertical: 11, paddingHorizontal: 14, backgroundColor: "#FFFFFF", borderWidth: 1, borderColor: "#D8E9DF" },
   simpleLinkText: { fontSize: 12, fontWeight: "700", color: "#0F766E" },
@@ -5772,7 +5773,7 @@ const styles = StyleSheet.create({
   simpleFinancial: { gap: 14, padding: 16, borderWidth: 1, borderColor: "#E0EAE4", borderRadius: 12, backgroundColor: "#FBFCFB" },
   simpleNotice: { flexDirection: "row", gap: 9, backgroundColor: "#FFFBEB", borderColor: "#FDE68A", borderWidth: 1, borderRadius: 9, padding: 12 },
   simpleNoticeTitle: { color: "#92400E", fontSize: 12, fontWeight: "800" },
-  simpleNoticeText: { color: "#92400E", fontSize: 11, lineHeight: 17 },
+  simpleNoticeText: { color: "#92400E", fontSize: designUi.type.body.fontSize, lineHeight: designUi.type.body.lineHeight, fontWeight: designUi.type.body.fontWeight,},
   simpleDecision: { gap: 14, borderTopWidth: 1, borderTopColor: "#E6EDE8", paddingTop: 20 },
   simpleButtons: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 9 },
   simpleSecondary: { flexDirection: "row", flexWrap: "wrap", gap: 24, paddingVertical: 10 },
@@ -5853,16 +5854,14 @@ const styles = StyleSheet.create({
     backgroundColor: "#E0F5EA",
   },
   assistancePageHeading: {
-    fontSize: 26,
-    fontWeight: "900",
+    fontSize: designUi.type.page.fontSize,
+    fontWeight: designUi.type.page.fontWeight,
     color: "#101828",
-    marginBottom: 4,
-  },
+    marginBottom: 4, lineHeight: designUi.type.page.lineHeight,},
   assistanceSubtext: {
     color: "#64748B",
-    fontSize: 12,
-    lineHeight: 18,
-  },
+    fontSize: designUi.type.body.fontSize,
+    lineHeight: designUi.type.body.lineHeight, fontWeight: designUi.type.body.fontWeight,},
   assistanceSplitWorkspace: {
     flex: 1,
     minHeight: 0,
@@ -5899,13 +5898,11 @@ const styles = StyleSheet.create({
     minHeight: 36,
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
-  },
+    justifyContent: "space-between", fontSize: designUi.type.section.fontSize, lineHeight: designUi.type.section.lineHeight, fontWeight: designUi.type.section.fontWeight,},
   assistanceQueueTitle: {
-    fontSize: 19,
-    fontWeight: "900",
-    color: "#101828",
-  },
+    fontSize: designUi.type.card.fontSize,
+    fontWeight: designUi.type.card.fontWeight,
+    color: "#101828", lineHeight: designUi.type.card.lineHeight,},
   assistanceSearchField: {
     minHeight: 45,
     flexDirection: "row",
@@ -6002,10 +5999,9 @@ const styles = StyleSheet.create({
     padding: 22,
   },
   assistanceSectionTitle: {
-    fontSize: 16,
-    fontWeight: "900",
-    color: "#102A20",
-  },
+    fontSize: designUi.type.section.fontSize,
+    fontWeight: designUi.type.section.fontWeight,
+    color: "#102A20", lineHeight: designUi.type.section.lineHeight,},
   assistanceReviewScroll: {
     flex: 1,
     minHeight: 0,

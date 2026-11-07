@@ -1,3 +1,4 @@
+import { liveUi as designUi } from "../../constants/volunserveLiveUi";
 import * as ImagePicker from "expo-image-picker";
 import { useRouter } from "expo-router";
 import {
@@ -2962,17 +2963,16 @@ const styles =
     title: {
       marginTop: 6,
       color: "#173D32",
-      fontSize: 28,
-      lineHeight: 36,
-      fontWeight: "700",
+      fontSize: designUi.type.page.fontSize,
+      lineHeight: designUi.type.page.lineHeight,
+      fontWeight: designUi.type.page.fontWeight,
     },
 
     subtitle: {
       marginTop: 6,
       color: "#627785",
-      fontSize: 14,
-      lineHeight: 21,
-    },
+      fontSize: designUi.type.body.fontSize,
+      lineHeight: designUi.type.body.lineHeight, fontWeight: designUi.type.body.fontWeight,},
 
     errorBox: {
       marginBottom: 14,
@@ -3005,16 +3005,14 @@ const styles =
 
     emptyTitle: {
       color: "#173748",
-      fontSize: 17,
-      fontWeight: "800",
-    },
+      fontSize: designUi.type.section.fontSize,
+      fontWeight: designUi.type.section.fontWeight, lineHeight: designUi.type.section.lineHeight,},
 
     emptyText: {
       marginTop: 6,
       color: "#64748B",
       textAlign: "center",
-      lineHeight: 20,
-    },
+      lineHeight: designUi.type.body.lineHeight, fontSize: designUi.type.body.fontSize, fontWeight: designUi.type.body.fontWeight,},
 
     caseCard: {
       marginBottom: 18,
@@ -3042,9 +3040,9 @@ const styles =
 
     caseTitle: {
       color: "#102A3A",
-      fontSize: 18,
-      lineHeight: 24,
-      fontWeight: "900",
+      fontSize: designUi.type.card.fontSize,
+      lineHeight: designUi.type.card.lineHeight,
+      fontWeight: designUi.type.card.fontWeight,
     },
 
     reference: {
@@ -3092,10 +3090,9 @@ const styles =
 
     metaLabel: {
       color: "#91A1AD",
-      fontSize: 8,
-      fontWeight: "900",
-      letterSpacing: 0.8,
-    },
+      fontSize: designUi.type.meta.fontSize,
+      fontWeight: designUi.type.meta.fontWeight,
+      letterSpacing: 0.8, lineHeight: designUi.type.meta.lineHeight,},
 
     metaValue: {
       marginTop: 3,
@@ -3110,12 +3107,11 @@ const styles =
 
     infoLabel: {
       color: "#526B79",
-      fontSize: 10,
-      fontWeight: "900",
+      fontSize: designUi.type.label.fontSize,
+      fontWeight: designUi.type.label.fontWeight,
       textTransform:
         "uppercase",
-      letterSpacing: 0.5,
-    },
+      letterSpacing: 0.5, lineHeight: designUi.type.label.lineHeight,},
 
     infoText: {
       marginTop: 4,
@@ -3432,9 +3428,8 @@ const styles =
     sectionTitle: {
       marginBottom: 10,
       color: "#173D32",
-      fontSize: 14,
-      fontWeight: "700",
-    },
+      fontSize: designUi.type.section.fontSize,
+      fontWeight: designUi.type.section.fontWeight, lineHeight: designUi.type.section.lineHeight,},
 
     waitingBox: {
       padding: 13,

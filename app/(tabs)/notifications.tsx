@@ -1,3 +1,4 @@
+import { liveUi as designUi } from "../../constants/volunserveLiveUi";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { onAuthStateChanged } from "firebase/auth";
@@ -220,11 +221,11 @@ const styles = StyleSheet.create({
   headingIcon: { backgroundColor: "#ffffff25", borderRadius: 15, padding: 13 },
   headingText: { flex: 1 },
   kicker: { color: "#C4F4DE", fontSize: 10, fontWeight: "800", letterSpacing: 1.4 },
-  title: { color: "#FFFFFF", fontSize: 26, fontWeight: "900", marginTop: 3 },
-  subtitle: { color: "#E4FAEB", fontSize: 12, marginTop: 4, lineHeight: 18 },
+  title: { color: "#FFFFFF", fontSize: designUi.type.page.fontSize, fontWeight: designUi.type.page.fontWeight, marginTop: 3, lineHeight: designUi.type.page.lineHeight,},
+  subtitle: { color: "#E4FAEB", fontSize: designUi.type.body.fontSize, marginTop: 4, lineHeight: designUi.type.body.lineHeight, fontWeight: designUi.type.body.fontWeight,},
   summary: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: 10, backgroundColor: "#FFFFFF", padding: 17, marginTop: 16, borderRadius: 15, borderWidth: 1, borderColor: "#DCEAE1" },
   metric: { fontSize: 27, fontWeight: "900", color: "#0D7557" },
-  metricLabel: { fontSize: 11, color: "#5C7B6B", fontWeight: "700" },
+  metricLabel: { fontSize: designUi.type.label.fontSize, color: "#5C7B6B", fontWeight: designUi.type.label.fontWeight, lineHeight: designUi.type.label.lineHeight,},
   markAll: { flexDirection: "row", alignItems: "center", padding: 10, borderRadius: 10, backgroundColor: "#E8F7EE", gap: 5 },
   markAllText: { color: "#087D60", fontSize: 12, fontWeight: "800" },
   disabled: { opacity: 0.35 },
@@ -253,7 +254,7 @@ const styles = StyleSheet.create({
   typeIconUnread: { backgroundColor: "#D9F3E3" },
   cardContent: { flex: 1 },
   titleRow: { flexDirection: "row", alignItems: "flex-start", gap: 7 },
-  cardTitle: { color: "#173F31", fontSize: 14, fontWeight: "900", flex: 1 },
+  cardTitle: { color: "#173F31", fontSize: designUi.type.card.fontSize, fontWeight: designUi.type.card.fontWeight, flex: 1, lineHeight: designUi.type.card.lineHeight,},
   newDot: { width: 8, height: 8, borderRadius: 99, backgroundColor: "#0E9B6D", marginTop: 5 },
   category: { color: "#6D887A", fontSize: 11, marginTop: 5, fontWeight: "700" },
   message: { color: "#435F51", fontSize: 13, marginTop: 10, lineHeight: 20 },
@@ -266,6 +267,6 @@ const styles = StyleSheet.create({
   error: { marginTop: 12, padding: 12, color: "#9D3535", backgroundColor: "#FFF0EE", borderRadius: 10, fontSize: 12 },
   state: { backgroundColor: "#FFFFFF", marginTop: 12, borderRadius: 16, alignItems: "center", gap: 9, padding: 35, borderWidth: 1, borderColor: "#E0EBE4" },
   center: { flex: 1, justifyContent: "center", alignItems: "center", padding: 25, gap: 10, backgroundColor: "#F3F8F5" },
-  emptyTitle: { color: "#214C3A", fontSize: 15, fontWeight: "900", textAlign: "center" },
-  emptyText: { color: "#6B8577", fontSize: 12, textAlign: "center", lineHeight: 18 },
+  emptyTitle: { color: "#214C3A", fontSize: designUi.type.section.fontSize, fontWeight: designUi.type.section.fontWeight, textAlign: "center", lineHeight: designUi.type.section.lineHeight,},
+  emptyText: { color: "#6B8577", fontSize: designUi.type.body.fontSize, textAlign: "center", lineHeight: designUi.type.body.lineHeight, fontWeight: designUi.type.body.fontWeight,},
 });

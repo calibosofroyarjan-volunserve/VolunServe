@@ -1,3 +1,4 @@
+import { liveUi as designUi } from "../../constants/volunserveLiveUi";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { Redirect, useRouter, type Href } from "expo-router";
 import {
@@ -1532,8 +1533,8 @@ const styles = StyleSheet.create({
   titleRowPhone: {flexDirection: "column", alignItems: "flex-start"},
   pageIntro: {flex: 1, minWidth: 0},
   eyebrow: {fontSize: 11, fontWeight: "900", letterSpacing: 0.65, color: GREEN, marginBottom: 7},
-  title: {fontSize: 29, letterSpacing: -0.65, lineHeight: 35, fontWeight: "700", color: NAVY},
-  subtitle: {fontSize: 13, color: MUTED, marginTop: 5, lineHeight: 20},
+  title: {fontSize: designUi.type.page.fontSize, letterSpacing: -0.65, lineHeight: designUi.type.page.lineHeight, fontWeight: designUi.type.page.fontWeight, color: NAVY},
+  subtitle: {fontSize: designUi.type.body.fontSize, color: MUTED, marginTop: 5, lineHeight: designUi.type.body.lineHeight, fontWeight: designUi.type.body.fontWeight,},
   headerNote: {flexDirection: "row", alignItems: "center", gap: 12, backgroundColor: "#E8F6F2", borderRadius: 15, padding: 13, width: 285},
   headerNoteIcon: {width: 52, height: 52, borderRadius: 12, backgroundColor: "#DAEEE7", alignItems: "center", justifyContent: "center"},
   headerNoteTitle: {fontSize: 12, fontWeight: "900", color: "#145A4E"},
@@ -1547,7 +1548,7 @@ const styles = StyleSheet.create({
   panelHeading: {flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8},
   headingWithIcon: {flexDirection: "row", alignItems: "center", gap: 10},
   headingIcon: {width: 34, height: 34, borderRadius: 10, backgroundColor: "#E8F6F1", alignItems: "center", justifyContent: "center"},
-  panelTitle: {fontSize: 15, fontWeight: "800", color: NAVY, letterSpacing: -0.15},
+  panelTitle: {fontSize: designUi.type.section.fontSize, fontWeight: designUi.type.section.fontWeight, color: NAVY, letterSpacing: -0.15, lineHeight: designUi.type.section.lineHeight,},
   smallAction: {backgroundColor: GREEN, borderRadius: 8, flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 11, minHeight: 34},
   smallActionText: {color: "white", fontSize: 11, fontWeight: "800"},
   searchField: {minHeight: 40, flexDirection: "row", alignItems: "center", borderWidth: 1, borderColor: "#D9E4E8", borderRadius: 9, paddingHorizontal: 10, gap: 8, marginTop: 13, backgroundColor: "#FCFDFD"},
@@ -1581,7 +1582,7 @@ const styles = StyleSheet.create({
   mutedNote: {fontSize: 10, color: MUTED, flex: 1},
   loader: {paddingVertical: 25},
   emptyState: {padding: 30, minHeight: 130, gap: 6, alignItems: "center", justifyContent: "center"},
-  emptyTitle: {fontSize: 13, fontWeight: "900", color: INK, textAlign: "center", marginTop: 3},
+  emptyTitle: {fontSize: designUi.type.section.fontSize, fontWeight: designUi.type.section.fontWeight, color: INK, textAlign: "center", marginTop: 3, lineHeight: designUi.type.section.lineHeight,},
   emptySub: {fontSize: 11, color: MUTED, textAlign: "center", lineHeight: 17},
   heroRow: {flexDirection: "row", alignItems: "flex-start", gap: 15},
   heroRowPhone: {flexDirection: "column"},
@@ -1606,7 +1607,7 @@ const styles = StyleSheet.create({
   statPhone: {minWidth: "47%"},
   statIcon: {width: 43, height: 43, borderRadius: 22, alignItems: "center", justifyContent: "center"},
   statText: {flex: 1, minWidth: 0},
-  statLabel: {fontSize: 10, color: MUTED, fontWeight: "700"},
+  statLabel: {fontSize: designUi.type.label.fontSize, color: MUTED, fontWeight: designUi.type.label.fontWeight, lineHeight: designUi.type.label.lineHeight,},
   number: {fontSize: 22, fontWeight: "900", lineHeight: 28},
   primaryButton: {minHeight: 39, backgroundColor: GREEN, paddingHorizontal: 15, paddingVertical: 10, borderRadius: 9, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 7},
   wideButton: {width: "100%", minHeight: 44},

@@ -1,3 +1,4 @@
+import { liveUi as designUi } from "../../constants/volunserveLiveUi";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { Redirect, useRouter } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
@@ -2012,18 +2013,18 @@ const styles = StyleSheet.create({
   title: {
     marginTop: 4,
     color: "#173D32",
-    fontSize: 27,
+    fontSize: designUi.type.page.fontSize,
     
   
-    fontFamily: "DonationInterBold",},
+    fontFamily: "DonationInterBold", lineHeight: designUi.type.page.lineHeight, fontWeight: designUi.type.page.fontWeight,},
   subtitle: {
     maxWidth: 820,
     marginTop: 7,
     color: "#64748B",
-    fontSize: 13,
-    lineHeight: 20,
+    fontSize: designUi.type.body.fontSize,
+    lineHeight: designUi.type.body.lineHeight,
   
-    fontFamily: "DonationInterRegular",},
+    fontFamily: "DonationInterRegular", fontWeight: designUi.type.body.fontWeight,},
   heroTrustBadge: {
     flexDirection: "row",
     alignItems: "center",
@@ -2085,10 +2086,10 @@ const styles = StyleSheet.create({
   summaryLabel: {
     marginTop: 2,
     color: "#64748B",
-    fontSize: 10.5,
+    fontSize: designUi.type.label.fontSize,
     
   
-    fontFamily: "DonationInterBold",},
+    fontFamily: "DonationInterBold", lineHeight: designUi.type.label.lineHeight, fontWeight: designUi.type.label.fontWeight,},
 
   filterPanel: {
     marginTop: 22,
@@ -2108,18 +2109,18 @@ const styles = StyleSheet.create({
   sectionTitle: {
     marginTop: 3,
     color: "#173D32",
-    fontSize: 20,
+    fontSize: designUi.type.section.fontSize,
     
   
-    fontFamily: "DonationInterBold",},
+    fontFamily: "DonationInterBold", lineHeight: designUi.type.section.lineHeight, fontWeight: designUi.type.section.fontWeight,},
   sectionSubtitle: {
     maxWidth: 850,
     marginTop: 5,
     color: "#64748B",
-    fontSize: 11.5,
-    lineHeight: 18,
+    fontSize: designUi.type.body.fontSize,
+    lineHeight: designUi.type.body.lineHeight,
   
-    fontFamily: "DonationInterRegular",},
+    fontFamily: "DonationInterRegular", fontWeight: designUi.type.body.fontWeight,},
   filterRow: {
     flexDirection: "row",
     flexWrap: "wrap",
@@ -2306,11 +2307,11 @@ const styles = StyleSheet.create({
   campaignTitle: {
     marginTop: 10,
     color: "#0F172A",
-    fontSize: 16.5,
-    lineHeight: 23,
+    fontSize: designUi.type.card.fontSize,
+    lineHeight: designUi.type.card.lineHeight,
     
   
-    fontFamily: "DonationInterBold",},
+    fontFamily: "DonationInterBold", fontWeight: designUi.type.card.fontWeight,},
   locationLine: {
     flexDirection: "row",
     alignItems: "center",
@@ -2613,10 +2614,10 @@ const styles = StyleSheet.create({
   storyTitle: {
     marginTop: 2,
     color: "#0F172A",
-    fontSize: 13,
+    fontSize: designUi.type.section.fontSize,
     
   
-    fontFamily: "DonationInterBold",},
+    fontFamily: "DonationInterBold", lineHeight: designUi.type.section.lineHeight, fontWeight: designUi.type.section.fontWeight,},
   storyText: {
     marginTop: 13,
     color: "#475569",
@@ -2652,11 +2653,11 @@ const styles = StyleSheet.create({
   },
   factLabel: {
     color: "#94A3B8",
-    fontSize: 7.8,
+    fontSize: designUi.type.label.fontSize,
     
     textTransform: "uppercase",
   
-    fontFamily: "DonationInterBold",},
+    fontFamily: "DonationInterBold", lineHeight: designUi.type.label.lineHeight, fontWeight: designUi.type.label.fontWeight,},
   factValue: {
     marginTop: 2,
     color: "#334155",
@@ -2816,10 +2817,10 @@ const styles = StyleSheet.create({
   needCardMeta: {
     marginTop: 2,
     color: "#64748B",
-    fontSize: 8.5,
-    lineHeight: 12.5,
+    fontSize: designUi.type.meta.fontSize,
+    lineHeight: designUi.type.meta.lineHeight,
   
-    fontFamily: "DonationInterRegular",},
+    fontFamily: "DonationInterRegular", fontWeight: designUi.type.meta.fontWeight,},
   needEmptyText: {
     color: "#64748B",
     fontSize: 9.5,
@@ -2991,11 +2992,11 @@ const styles = StyleSheet.create({
   },
   infoRowLabel: {
     color: "#94A3B8",
-    fontSize: 7.8,
+    fontSize: designUi.type.label.fontSize,
     
     textTransform: "uppercase",
   
-    fontFamily: "DonationInterBold",},
+    fontFamily: "DonationInterBold", lineHeight: designUi.type.label.lineHeight, fontWeight: designUi.type.label.fontWeight,},
   infoRowValue: {
     marginTop: 3,
     color: "#334155",
@@ -3245,10 +3246,10 @@ const styles = StyleSheet.create({
     marginTop: 12,
     marginBottom: 5,
     color: "#334155",
-    fontSize: 10,
+    fontSize: designUi.type.label.fontSize,
     
   
-    fontFamily: "DonationInterBold",},
+    fontFamily: "DonationInterBold", lineHeight: designUi.type.label.lineHeight, fontWeight: designUi.type.label.fontWeight,},
   input: {
     minHeight: 43,
     paddingHorizontal: 11,
@@ -3671,19 +3672,19 @@ const styles = StyleSheet.create({
   emptyTitle: {
     marginTop: 8,
     color: "#0F172A",
-    fontSize: 12.5,
+    fontSize: designUi.type.section.fontSize,
     
   
-    fontFamily: "DonationInterBold",},
+    fontFamily: "DonationInterBold", lineHeight: designUi.type.section.lineHeight, fontWeight: designUi.type.section.fontWeight,},
   emptyText: {
     maxWidth: 580,
     marginTop: 4,
     color: "#64748B",
-    fontSize: 10,
-    lineHeight: 15,
+    fontSize: designUi.type.body.fontSize,
+    lineHeight: designUi.type.body.lineHeight,
     textAlign: "center",
   
-    fontFamily: "DonationInterRegular",},
+    fontFamily: "DonationInterRegular", fontWeight: designUi.type.body.fontWeight,},
   // Mobile-only overrides; preserve existing desktop layout and donation behavior.
   mobileContainer: {
     paddingHorizontal: 14,

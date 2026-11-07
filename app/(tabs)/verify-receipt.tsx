@@ -1,3 +1,4 @@
+import { liveUi as designUi } from "../../constants/volunserveLiveUi";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import {
@@ -180,13 +181,13 @@ const styles = StyleSheet.create({
   container: { padding: 20, backgroundColor: "#f4f7fb", paddingBottom: 40 },
 
   topRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
-  title: { fontSize: 24, fontWeight: "900" },
+  title: { fontSize: designUi.type.page.fontSize, fontWeight: designUi.type.page.fontWeight, lineHeight: designUi.type.page.lineHeight,},
   backBtn: { backgroundColor: "#111827", paddingHorizontal: 14, paddingVertical: 10, borderRadius: 12 },
 
-  subtitle: { color: "#64748b", marginTop: 10, marginBottom: 14, fontWeight: "600" },
+  subtitle: { color: "#64748b", marginTop: 10, marginBottom: 14, fontWeight: designUi.type.body.fontWeight, fontSize: designUi.type.body.fontSize, lineHeight: designUi.type.body.lineHeight,},
 
   card: { width: CARD_WIDTH, alignSelf: "center", backgroundColor: "#fff", padding: 16, borderRadius: 18, elevation: 2 },
-  label: { fontSize: 12, color: "#64748b", fontWeight: "700" },
+  label: { fontSize: designUi.type.label.fontSize, color: "#64748b", fontWeight: designUi.type.label.fontWeight, lineHeight: designUi.type.label.lineHeight,},
   input: { marginTop: 8, borderWidth: 1, borderColor: "#e2e8f0", borderRadius: 14, padding: 12, fontSize: 16, backgroundColor: "#fff" },
 
   button: { marginTop: 12, height: 54, borderRadius: 16, justifyContent: "center", alignItems: "center" },
@@ -196,7 +197,7 @@ const styles = StyleSheet.create({
   validCard: { backgroundColor: "#ecfdf5", borderWidth: 1, borderColor: "#a7f3d0" },
   invalidCard: { backgroundColor: "#fff1f2", borderWidth: 1, borderColor: "#fecdd3" },
 
-  resultTitle: { fontSize: 16, fontWeight: "900", marginBottom: 8 },
+  resultTitle: { fontSize: designUi.type.section.fontSize, fontWeight: designUi.type.section.fontWeight, marginBottom: 8, lineHeight: designUi.type.section.lineHeight,},
   small: { color: "#0f172a", fontWeight: "600", marginTop: 4 },
   bold: { fontWeight: "900" },
 

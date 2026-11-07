@@ -1,3 +1,4 @@
+import { liveUi as designUi } from "../../constants/volunserveLiveUi";
 import { AppAlert } from "../../lib/appDialog";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { Redirect, router, Tabs, useSegments, type Href } from "expo-router";
@@ -666,7 +667,7 @@ const styles = StyleSheet.create({
   },
   mobileHeaderLogo: { width: 31, height: 31 },
   mobileBrandText: { flex: 1, minWidth: 0 },
-  mobileBrandName: { color: "#113E30", fontWeight: "900", fontSize: 16 },
+  mobileBrandName: { color: "#113E30", fontWeight: designUi.type.card.fontWeight, fontSize: designUi.type.card.fontSize, lineHeight: designUi.type.card.lineHeight,},
   mobileBrandMode: { color: "#45765E", fontSize: 9, fontWeight: "800" },
   mobileHeaderStatus: {
     minWidth: 37, flexDirection: "row", alignItems: "center", gap: 4,
@@ -896,10 +897,9 @@ const styles = StyleSheet.create({
     marginBottom: 9,
     paddingHorizontal: 10,
     color: "#A7DCD4",
-    fontSize: 9,
-    fontWeight: "900",
-    letterSpacing: 1.1,
-  },
+    fontSize: designUi.type.eyebrow.fontSize,
+    fontWeight: designUi.type.eyebrow.fontWeight,
+    letterSpacing: 1.1, lineHeight: designUi.type.eyebrow.lineHeight,},
   desktopNavigationScroll: {
     flex: 1,
     minHeight: 0,
@@ -941,9 +941,8 @@ const styles = StyleSheet.create({
   desktopNavText: {
     flex: 1,
     color: "#E6F5F2",
-    fontSize: 13,
-    fontWeight: "500",
-  },
+    fontSize: designUi.type.label.fontSize,
+    fontWeight: designUi.type.label.fontWeight, lineHeight: designUi.type.label.lineHeight,},
   desktopNavTextActive: {
     color: "#FFFFFF",
     fontWeight: "900",
@@ -1007,8 +1006,8 @@ const styles = StyleSheet.create({
   },
   residentIconGradient: { ...StyleSheet.absoluteFillObject, borderRadius: 13, opacity: 1 },
   residentNavCopy: { flex: 1, minWidth: 0, justifyContent: "center" },
-  residentNavTitle: { fontSize: 13, color: "#F1FAF4", fontWeight: "700" },
-  residentNavSubtitle: { fontSize: 9.5, lineHeight: 13, color: "#BBDFD8", marginTop: 3 },
+  residentNavTitle: { fontSize: designUi.type.label.fontSize, color: "#F1FAF4", fontWeight: designUi.type.label.fontWeight, lineHeight: designUi.type.label.lineHeight,},
+  residentNavSubtitle: { fontSize: designUi.type.meta.fontSize, lineHeight: designUi.type.meta.lineHeight, color: "#BBDFD8", marginTop: 3, fontWeight: designUi.type.meta.fontWeight,},
   desktopPressed: {
     opacity: 0.72,
   },

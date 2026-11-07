@@ -1,3 +1,4 @@
+import { liveUi as designUi } from "../../constants/volunserveLiveUi";
 import AdminReviewHero from "../../components/admin/AdminReviewHero";
 
 import Ionicons from "@expo/vector-icons/Ionicons";
@@ -1047,17 +1048,15 @@ const styles = StyleSheet.create({
   },
 
   title: {
-    fontSize: 24,
-    fontWeight: "700",
+    fontSize: designUi.type.page.fontSize,
+    fontWeight: designUi.type.page.fontWeight,
     color: DARK,
-    marginTop: 4,
-  },
+    marginTop: 4, lineHeight: designUi.type.page.lineHeight,},
 
   subtitle: {
-    fontSize: 12,
+    fontSize: designUi.type.body.fontSize,
     color: MUTED,
-    marginTop: 5,
-  },
+    marginTop: 5, lineHeight: designUi.type.body.lineHeight, fontWeight: designUi.type.body.fontWeight,},
 
   note: {
     flexDirection: "row",
@@ -1072,9 +1071,8 @@ const styles = StyleSheet.create({
   noteText: {
     flex: 1,
     color: "#315A55",
-    fontSize: 11.5,
-    lineHeight: 18,
-  },
+    fontSize: designUi.type.body.fontSize,
+    lineHeight: designUi.type.body.lineHeight, fontWeight: designUi.type.body.fontWeight,},
 
   error: {
     padding: 11,
@@ -1099,10 +1097,9 @@ const styles = StyleSheet.create({
   },
 
   emptyTitle: {
-    fontSize: 14,
-    fontWeight: "900",
-    color: DARK,
-  },
+    fontSize: designUi.type.section.fontSize,
+    fontWeight: designUi.type.section.fontWeight,
+    color: DARK, lineHeight: designUi.type.section.lineHeight,},
 
   small: {
     color: MUTED,
@@ -1112,9 +1109,8 @@ const styles = StyleSheet.create({
 
   sectionTitle: {
     color: DARK,
-    fontSize: 14,
-    fontWeight: "900",
-  },
+    fontSize: designUi.type.section.fontSize,
+    fontWeight: designUi.type.section.fontWeight, lineHeight: designUi.type.section.lineHeight,},
 
   peopleRow: {
     paddingVertical: 12,

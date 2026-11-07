@@ -1,3 +1,4 @@
+import { liveUi as designUi } from "../../constants/volunserveLiveUi";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { Redirect } from "expo-router";
 import {
@@ -1096,16 +1097,14 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
   },
   title: {
-    fontSize: 23,
-    fontWeight: "900",
+    fontSize: designUi.type.page.fontSize,
+    fontWeight: designUi.type.page.fontWeight,
     color: INK,
-    marginTop: 3,
-  },
+    marginTop: 3, lineHeight: designUi.type.page.lineHeight,},
   subtitle: {
     color: MUTED,
-    fontSize: 12,
-    marginTop: 3,
-  },
+    fontSize: designUi.type.body.fontSize,
+    marginTop: 3, lineHeight: designUi.type.body.lineHeight, fontWeight: designUi.type.body.fontWeight,},
   headingIcon: {
     width: 48,
     height: 48,
@@ -1134,10 +1133,9 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   statLabel: {
-    fontSize: 10,
+    fontSize: designUi.type.label.fontSize,
     color: MUTED,
-    marginTop: 2,
-  },
+    marginTop: 2, lineHeight: designUi.type.label.lineHeight, fontWeight: designUi.type.label.fontWeight,},
   toolbar: {
     marginBottom: 12,
   },
@@ -1233,11 +1231,10 @@ const styles = StyleSheet.create({
     fontWeight: "800",
   },
   cardTitle: {
-    fontSize: 14,
+    fontSize: designUi.type.card.fontSize,
     color: INK,
-    fontWeight: "900",
-    marginTop: 3,
-  },
+    fontWeight: designUi.type.card.fontWeight,
+    marginTop: 3, lineHeight: designUi.type.card.lineHeight,},
   statusPill: {
     paddingHorizontal: 7,
     paddingVertical: 5,
@@ -1338,7 +1335,6 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   emptyText: {
-    fontSize: 12,
-    color: MUTED,
-  },
+    fontSize: designUi.type.body.fontSize,
+    color: MUTED, lineHeight: designUi.type.body.lineHeight, fontWeight: designUi.type.body.fontWeight,},
 });

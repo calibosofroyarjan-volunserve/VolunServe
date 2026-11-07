@@ -1,3 +1,4 @@
+import { liveUi as designUi } from "../constants/volunserveLiveUi";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import GoogleBrandMark from "../components/auth/GoogleBrandMark";
@@ -343,15 +344,15 @@ export default function WebLogin() {
 
 const styles = StyleSheet.create({
   root: {flex:1,backgroundColor:"#E8FBEF"},
-  label: {position:"absolute",opacity:0,height:0,width:0},
-  passwordLabel: {},
+  label: {position:"absolute",opacity:0,height:0,width:0, fontSize: designUi.type.label.fontSize, lineHeight: designUi.type.label.lineHeight, fontWeight: designUi.type.label.fontWeight,},
+  passwordLabel: { fontSize: designUi.type.label.fontSize, lineHeight: designUi.type.label.lineHeight, fontWeight: designUi.type.label.fontWeight,},
   inputBox: {minHeight:57,flexDirection:"row",alignItems:"center",paddingHorizontal:17,
     gap:12,backgroundColor:"rgba(255,255,255,.84)",borderColor:"#C8E0D2",
     borderRadius:13,borderWidth:1,marginBottom:2},
   input: {flex:1,minWidth:0,fontSize:15,paddingVertical:14,color:"#103F33"},
   focused: {borderColor:"#068064",backgroundColor:"#FFFFFF",borderWidth:2},
   invalidInput: {borderColor:"#D33434",borderWidth:2,backgroundColor:"#FFFFFF"},
-  fieldError: {color:"#C62828",fontSize:12,lineHeight:18,fontWeight:"600",marginTop:5,marginBottom:5},
+  fieldError: {color:"#C62828",fontSize: designUi.type.meta.fontSize,lineHeight: designUi.type.meta.lineHeight,fontWeight: designUi.type.meta.fontWeight,marginTop:5,marginBottom:5},
   fieldSuggestion: {color:"#9A4C15",fontSize:12,lineHeight:18,fontWeight:"600",marginTop:5,marginBottom:5},
   googleProgress: {fontSize:12,color:"#075B44",fontWeight:"700",textAlign:"center",marginTop:7},
   eye:{padding:7},
