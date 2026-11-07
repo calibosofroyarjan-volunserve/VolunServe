@@ -19,13 +19,17 @@ export type DocumentScreening = {
   authenticityVerified: false;
   livenessVerified: false;
   manualReviewRequired: true;
+  backSideProvided?: boolean;
+  backSideScreened?: boolean;
   warningCodes: string[];
 };
 
 export function documentScreeningLabel(value?: DocumentScreening | null): string {
   switch (value?.status) {
     case "text_consistent_unverified":
-      return "ID type matches recognized text, but authenticity is not verified.";
+      return value?.backSideScreened
+        ? "ID text recognized and both sides screened for conflicting document labels. Authenticity is not verified."
+        : "ID type matches recognized text, but authenticity is not verified.";
     case "mismatch":
       return "Selected ID type does not match recognized document text. Review required.";
     default:
@@ -46,6 +50,8 @@ function parseDocumentScreening(value: unknown): DocumentScreening | undefined {
     authenticityVerified: false,
     livenessVerified: false,
     manualReviewRequired: true,
+    backSideProvided: raw.backSideProvided === true,
+    backSideScreened: raw.backSideScreened === true,
     warningCodes: Array.isArray(raw.warningCodes)
       ? raw.warningCodes.filter((x): x is string => typeof x === "string").slice(0, 4) : [],
   };
