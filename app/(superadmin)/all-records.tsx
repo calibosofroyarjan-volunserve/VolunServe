@@ -1618,7 +1618,7 @@ const styles =
       padding: 24,
       paddingBottom: 60,
       backgroundColor:
-        "#F1F5F9",
+        ui.color.canvas,
       minHeight: "100%",
     },
 
@@ -1650,9 +1650,9 @@ const styles =
 
     title: {
       marginTop: 4,
-      fontSize: 30,
+      fontSize: ui.type.page.fontSize,
       fontWeight: "700",
-      color: "#173D32",
+      color: ui.color.text,
     },
 
     subtitle: {
@@ -1671,11 +1671,11 @@ const styles =
     summaryCard: {
       flexGrow: 1,
       minWidth: 150,
-      backgroundColor: "transparent",
-      borderRadius: 0,
-      padding: 14,
-      borderBottomWidth: 1,
-      borderColor: "#E2E8F0",
+      backgroundColor: ui.color.surface,
+      borderRadius: ui.radius.card,
+      padding: 16,
+      borderWidth: 1,
+      borderColor: ui.color.border,
     },
 
     summaryIcon: {
@@ -1692,8 +1692,8 @@ const styles =
 
     summaryValue: {
       fontSize: 23,
-      fontWeight: "900",
-      color: "#173D32",
+      fontWeight: "700",
+      color: ui.color.text,
     },
 
     summaryLabel: {
