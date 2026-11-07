@@ -13,6 +13,7 @@ on:
       - 'functions/registrationBlocking.js'
       - 'functions/verifiedCallableEmail.js'
       - 'functions/test-verified-callable-email.js'
+      - 'scripts/test-identity-blocking-opt-in.cjs'
       - 'functions/registrationEmailScreening.js'
       - 'functions/disposable-email-domains.txt'
       - 'functions/test-registration-email-screening.js'
@@ -55,6 +56,7 @@ jobs:
           java-version: '21'
       - run: npm ci --no-audit --no-fund
       - run: node --test functions/test-registration-email-screening.js
+      - run: node --test scripts/test-identity-blocking-opt-in.cjs
       - run: node --test functions/test-verified-callable-email.js
       - run: node --test backend/tests/verifiedFirebaseToken.test.js
       - run: node --check backend/server.js
