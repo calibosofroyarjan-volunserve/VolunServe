@@ -66,10 +66,12 @@ function harness(source, enabled, options = {}) {
     const ios=load(read("lib/signupFeature.ts"),{"react-native":{Platform:{OS:"ios"}}},{EXPO_PUBLIC_EMAIL_FIRST_SIGNUP:""});
     assert.equal(ios.EMAIL_FIRST_SIGNUP_ENABLED,false);
   });
-  await check("original signup rendered layouts and styles match main",()=>{
+  await check("legacy signup layouts remain unchanged relative to current live-protected source",()=>{
     for(const file of ["app/signup.tsx","app/signup.web.tsx"]) {
       const extract=text=>text.replace(/\r\n/g,"\n").slice(text.replace(/\r\n/g,"\n").indexOf("  const currentMeta = STEP_META[step];")).replace(/\nexport default function Signup\(\) \{[\s\S]*$/,'').trimEnd();
-      assert.equal(extract(read(file)),extract(cp.execFileSync("git",["show","e7c2cc8:"+file],{encoding:"utf8"})));
+      const hasLiveProtectedRef=cp.spawnSync("git",["show-ref","--verify","--quiet","refs/remotes/origin/live-protected"]).status===0;
+      const baseRef=hasLiveProtectedRef ? "origin/live-protected" : "e7c2cc8";
+      assert.equal(extract(read(file)),extract(cp.execFileSync("git",["show",baseRef+":"+file],{encoding:"utf8"})));
     }
   });
   for(const enabled of [false,true]) {
@@ -272,7 +274,7 @@ function harness(source, enabled, options = {}) {
     assert(read("lib/useSignupGoogle.web.ts").includes("signInWithPopup"));
     const ui=read("components/auth/EmailFirstSignup.tsx");
     assert(ui.includes("await signInGoogle()"));assert(ui.includes("authRevision.current === revision"));
-    assert(ui.includes("sendEmailVerification(user)"));assert(ui.includes('authProvider: "verified_email"'));
+    assert(ui.includes("sendEmailVerification(user)"));assert(ui.includes('authProvider: googleOnlyAccount ? "google" : "verified_email"'));
   });
   console.log(checks+" signup production regression cases passed");
 })().catch(e=>{console.error(e);process.exitCode=1;});
