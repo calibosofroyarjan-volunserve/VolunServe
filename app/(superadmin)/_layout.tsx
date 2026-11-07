@@ -6,7 +6,8 @@ import {
   Stack,
   usePathname,
 } from "expo-router";
-import React, { useState } from "react";
+import React, { useRef, useState } from "react";
+import { AppAlert } from "../../lib/appDialog";
 import {
   ActivityIndicator,
   Alert,
@@ -69,6 +70,7 @@ export default function SuperAdminLayout() {
   const { width } = useWindowDimensions();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
+  const logoutPromptOpen = useRef(false);
   const pathname = usePathname();
 
   if (loading) {
@@ -113,16 +115,21 @@ export default function SuperAdminLayout() {
     : "SA";
 
   const signOut = async () => {
+    if (logoutPromptOpen.current) return;
+    logoutPromptOpen.current = true;
     try {
+      const confirmed = await AppAlert.confirm(
+        "Log Out", "Sign out of your VolunServe Super Admin account?", "Log Out"
+      );
+      if (!confirmed) return;
       setDrawerOpen(false);
       setAccountOpen(false);
       await logoutUser();
       router.replace("/admin-login" as Href);
     } catch (error: any) {
-      Alert.alert(
-        "Sign Out Failed",
-        error?.message || "Unable to sign out. Please try again."
-      );
+      AppAlert.alert("Sign Out Failed", error?.message || "Unable to sign out. Please try again.");
+    } finally {
+      logoutPromptOpen.current = false;
     }
   };
 
