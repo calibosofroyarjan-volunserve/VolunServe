@@ -658,7 +658,7 @@ const styles = StyleSheet.create({
   mobileHeader: {
     height: 60, flexDirection: "row", alignItems: "center", gap: 5,
     backgroundColor: "#FFFFFF", paddingHorizontal: 7,
-    borderBottomWidth: 1, borderBottomColor: "#DCEAE1", zIndex: 2,
+    borderBottomWidth: 1, borderBottomColor: "#DCE8E0", zIndex: 2,
   },
   mobileMain: { flex: 1 },
   mobileHeaderButton: {
@@ -712,7 +712,7 @@ const styles = StyleSheet.create({
   mobileDrawerSub: { color: "#B5E9D9", fontSize: 9, fontWeight: "800" },
   mobileDrawerLabel: { paddingTop: 17, paddingBottom: 9, color: "#90DBC8", fontWeight: "800", letterSpacing: 1.8, fontSize: 9.5 },
   mobileDrawerScroll: { flex: 1 },
-  mobileDrawerItem: { minHeight: 48, flexDirection: "row", alignItems: "center", gap: 11, paddingHorizontal: 9, borderRadius: 12, marginBottom: 4, overflow: "hidden" },
+  mobileDrawerItem: { minHeight: 48, flexDirection: "row", alignItems: "center", gap: 11, paddingHorizontal: 12, borderRadius: 12, marginBottom: 4, overflow: "hidden" },
   mobileDrawerItemOverlay: { ...StyleSheet.absoluteFillObject, borderRadius: 12 },
   mobileDrawerIconBadge: { width: 30, height: 30, borderRadius: 8, alignItems: "center", justifyContent: "center" },
   mobileDrawerSubtitle: { color: "#B8DED3", fontSize: 9, marginTop: 2 },
@@ -917,12 +917,12 @@ const styles = StyleSheet.create({
   // whenever the viewport is too short for all modules.
   desktopResidentNavigation: { flexGrow: 0, paddingVertical: 10 },
   desktopNavItem: {
-    minHeight: 49,
+    minHeight: 48,
     flexDirection: "row",
     alignItems: "center",
     gap: 11,
-    paddingHorizontal: 9,
-    borderRadius: 13,
+    paddingHorizontal: 12,
+    borderRadius: 12,
   },
   desktopNavItemActive: {
     backgroundColor: "#147D61",
@@ -962,12 +962,12 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   desktopUtilityButton: {
-    minHeight: 42,
+    minHeight: 44,
     flexDirection: "row",
     alignItems: "center",
     gap: 11,
     paddingHorizontal: 10,
-    borderRadius: 11,
+    borderRadius: 12,
   },
   desktopPortalButton: {
     backgroundColor: "#F5F3FF",
@@ -998,7 +998,7 @@ const styles = StyleSheet.create({
     fontWeight: "800",
   },
   residentSectionLabel: { marginTop: 10, color: "#83D8C8", letterSpacing: 2 },
-  residentNavItem: { minHeight: 49, overflow: "hidden", gap: 11, paddingHorizontal: 8, borderRadius: 9 },
+  residentNavItem: { minHeight: 48, overflow: "hidden", gap: 11, paddingHorizontal: 11, borderRadius: 12},
   residentNavItemActive: { backgroundColor: "#147D61", borderWidth: 1, borderColor: "#219E79" },
   residentNavSelectedGradient: { ...StyleSheet.absoluteFillObject, borderRadius: 14 },
   residentNavIcon: {

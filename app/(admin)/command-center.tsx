@@ -556,8 +556,13 @@ const styles =
     // Xacton-inspired clarity: restrained KPI cards below one evergreen hero.
     kpiGrid: {flexDirection:"row",flexWrap:"wrap",gap:9,marginBottom:9},
     kpiGridCompact: {gap:9},
-    kpiCard: {flex:1,minWidth:165,backgroundColor:"#FFFFFF",borderRadius:12,
-      padding:12,borderWidth:1,borderColor:"#D9E7DF"},
+    kpiCard: {flex:1,minWidth:165,backgroundColor:"#FFFFFF",borderRadius:17,
+      padding:18,borderWidth:1,borderColor:"#DCE8E1",
+    shadowColor: "#153D2D",
+    shadowOpacity: 0.05,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 5 },
+    elevation: 1},
     kpiCardCompact: {minWidth:136,padding:13},
     kpiCardFeatured: {backgroundColor:"#087B60",borderColor:"#087B60"},
     kpiCardHeader: {flexDirection:"row",justifyContent:"space-between",alignItems:"flex-start",gap:8},
@@ -570,8 +575,8 @@ const styles =
     // VolunServe identity: one rich evergreen masthead, not a field of cards.
     premiumHero: {
       overflow: "hidden", position: "relative", backgroundColor: "#103E33",
-      borderRadius: 11, paddingHorizontal: 20, paddingTop: 13, paddingBottom: 10,
-      marginBottom: 10, borderWidth: 1, borderColor: "#235D4E",
+      borderRadius: 20, paddingHorizontal: 26, paddingTop: 24, paddingBottom: 22,
+      marginBottom: 20, borderWidth: 1, borderColor: "#245E4E",
     },
     heroOrbLarge: {
       position: "absolute", right: -105, top: -180, width: 375, height: 375,
@@ -657,9 +662,9 @@ const styles =
 
     page: {
       width: "100%",
-      paddingHorizontal: 20,
-      paddingTop: 12,
-      paddingBottom: 10,
+      paddingHorizontal: 24,
+      paddingTop: 20,
+      paddingBottom: 36,
     },
 
     content: {
@@ -794,7 +799,7 @@ const styles =
     },
 
     sectionHeader: {
-      marginBottom: 13,
+      marginBottom: 17,
     },
 
     overviewHeader: {
@@ -821,14 +826,19 @@ const styles =
 
     moduleCard: {
       minHeight: 196,
-      padding: 18,
-      borderRadius: 15,
+      padding: 20,
+      borderRadius: 18,
       backgroundColor:
         "#FFFFFF",
       borderWidth: 1,
       borderColor:
-        "#DCEAE8",
-    },
+        "#DCE8E1", 
+    
+    ,shadowColor: "#153D2D",
+    shadowOpacity: 0.045,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 1},
 
     moduleTop: {
       minHeight: 44,
@@ -904,17 +914,22 @@ const styles =
 
     overviewCard: {
       minHeight: 132,
-      padding: 17,
+      padding: 20,
       flexDirection: "row",
       alignItems: "center",
       gap: 13,
-      borderRadius: 15,
+      borderRadius: 18,
       backgroundColor:
         "#FFFFFF",
       borderWidth: 1,
       borderColor:
-        "#DCEAE8",
-    },
+        "#DCE8E1", 
+    
+    ,shadowColor: "#153D2D",
+    shadowOpacity: 0.04,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 1},
 
     overviewIcon: {
       width: 48,

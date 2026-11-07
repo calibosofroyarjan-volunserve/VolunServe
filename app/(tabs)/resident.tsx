@@ -6145,9 +6145,9 @@ const styles =
       alignSelf:
         "center",
       paddingHorizontal:
-        24,
+        26,
       paddingTop:
-        22,
+        26,
       paddingBottom:
         60,
     },
@@ -6396,16 +6396,21 @@ const styles =
       gap:
         11,
       padding:
-        16,
+        19,
       borderRadius:
-        15,
+        18,
       borderWidth:
         1,
       borderColor:
-        "#E2E8F0",
+        "#DAE7DF",
       backgroundColor:
-        "#FFFFFF",
-    },
+        "#FFFFFF", 
+    
+    ,shadowColor: "#153C2F",
+    shadowOpacity: 0.04,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 1},
 
     infoCardIcon: {
       width:
@@ -6612,16 +6617,21 @@ const styles =
       marginTop:
         16,
       padding:
-        22,
+        25,
       borderRadius:
-        18,
+        19,
       borderWidth:
         1,
       borderColor:
-        "#E2E8F0",
+        "#DCE8E1",
       backgroundColor:
-        "#FFFFFF",
-    },
+        "#FFFFFF", 
+    
+    ,shadowColor: "#153C2F",
+    shadowOpacity: 0.045,
+    shadowRadius: 15,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 1},
 
     formHeading: {
       marginBottom:
@@ -6687,13 +6697,13 @@ const styles =
       gap:
         12,
       padding:
-        15,
+        18,
       borderRadius:
-        14,
+        17,
       borderWidth:
         1,
       borderColor:
-        "#DFE6EF",
+        "#DCE8E1",
       backgroundColor:
         "#FFFFFF",
     },
@@ -6752,17 +6762,17 @@ const styles =
     input: {
       fontFamily:"AssistanceInter",
       minHeight:
-        46,
+        48,
       borderRadius:
-        10,
+        12,
       borderWidth:
         1,
       borderColor:
-        "#D3E6DC",
+        "#C8DDD0",
       backgroundColor:
         "#FFFFFF",
       paddingHorizontal:
-        13,
+        15,
       color:
         "#172033",
       fontSize:
@@ -7092,9 +7102,9 @@ const styles =
       minWidth:
         130,
       minHeight:
-        44,
+        46,
       borderRadius:
-        10,
+        12,
       backgroundColor:
         "#078A68",
       flexDirection:
@@ -7538,9 +7548,9 @@ const styles =
       minWidth:
         200,
       minHeight:
-        46,
+        48,
       borderRadius:
-        10,
+        12,
       backgroundColor:
         "#078A68",
       flexDirection:

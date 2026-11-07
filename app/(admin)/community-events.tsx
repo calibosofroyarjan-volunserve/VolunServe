@@ -1038,7 +1038,7 @@ const styles = StyleSheet.create({
   detailsButton: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 7, borderWidth: 1, borderColor: "#CFE6DE", backgroundColor: "#F2FAF7", borderRadius: 9, minHeight: 38, marginTop: 12 },
   detailsButtonText: { fontSize: 12, color: GREEN, fontWeight: "800" },
   modalBackdrop: { flex: 1, backgroundColor: "rgba(18,39,49,0.62)", alignItems: "center", justifyContent: "center", padding: 12 },
-  detailPanel: { backgroundColor: "white", width: "100%", maxWidth: 680, maxHeight: "92%", borderRadius: 16, padding: 20 },
+  detailPanel: { backgroundColor: "white", width: "100%", maxWidth: 680, maxHeight: "92%", borderRadius: 20, padding: 24},
   detailPanelCompact: { padding: 13 },
   modalHeader: { flexDirection: "row", alignItems: "center", gap: 12, marginBottom: 12 },
   modalTitle: { fontSize: 21, fontWeight: "900", color: INK },
@@ -1071,10 +1071,10 @@ const styles = StyleSheet.create({
   },
   content: {
     width: "100%",
-    maxWidth: 1190,
+    maxWidth: 1320,
     alignSelf: "center",
-    padding: 22,
-    paddingBottom: 36,
+    padding: 26,
+    paddingBottom: 54,
   },
   compact: {
     padding: 13,
@@ -1137,7 +1137,7 @@ const styles = StyleSheet.create({
     color: MUTED,
     marginTop: 2, lineHeight: designUi.type.label.lineHeight, fontWeight: designUi.type.label.fontWeight,},
   toolbar: {
-    marginBottom: 12,
+    marginBottom: 18,
   },
   search: {
     minHeight: 43,
@@ -1156,12 +1156,12 @@ const styles = StyleSheet.create({
     paddingBottom: 3,
   },
   chip: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 18,
+    paddingHorizontal: 15,
+    paddingVertical: 10,
+    borderRadius: 12,
     backgroundColor: "white",
     borderWidth: 1,
-    borderColor: "#DCE8E4",
+    borderColor: "#D9E7DE",
   },
   chipActive: {
     backgroundColor: GREEN,
@@ -1177,8 +1177,8 @@ const styles = StyleSheet.create({
   },
   notice: {
     backgroundColor: "#E7F6F1",
-    padding: 12,
-    borderRadius: 9,
+    padding: 16,
+    borderRadius: 14,
     marginBottom: 10,
   },
   noticeText: {
@@ -1206,11 +1206,16 @@ const styles = StyleSheet.create({
     flexBasis: 320,
     maxWidth: 560,
     borderWidth: 1,
-    borderColor: "#DEE8E6",
+    borderColor: "#DCE8E1",
     backgroundColor: "white",
-    borderRadius: 14,
-    padding: 15,
-  },
+    borderRadius: 18,
+    padding: 19, 
+  
+    ,shadowColor: "#153C2F",
+    shadowOpacity: 0.045,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 1},
   cardTop: {
     flexDirection: "row",
     alignItems: "center",
@@ -1300,12 +1305,12 @@ const styles = StyleSheet.create({
   },
   approveButton: {
     flexGrow: 1,
-    minHeight: 38,
+    minHeight: 44,
     justifyContent: "center",
     alignItems: "center",
     backgroundColor: GREEN,
     paddingHorizontal: 13,
-    borderRadius: 9,
+    borderRadius: 12,
   },
   rejectButton: {
     flexGrow: 1,
