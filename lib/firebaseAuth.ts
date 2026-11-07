@@ -1,4 +1,5 @@
 import { authenticateEmailSignup } from "./signupRegistration";
+import {requireCompleteResidentRegistration} from "./requireCompleteResidentRegistration";
 import {getRegistrationEmailError, isKnownDisposableEmail} from "./registrationEmailPolicy";
 import { EMAIL_FIRST_SIGNUP_ENABLED } from "./signupFeature";
 import {
@@ -524,6 +525,9 @@ export const signUpUser = async (
       }
       return user;
     }
+    // An Auth UID or successful email verification must NEVER be treated
+    // as completed Basic Resident registration without all wizard details.
+    requireCompleteResidentRegistration(data);
     await getIdToken(user, true);
     const fullName = [
       data.lastName,
