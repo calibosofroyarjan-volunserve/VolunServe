@@ -24,6 +24,7 @@ const allow = new Set([
   "scripts/test-volunteer-donations-sidebar-removal.cjs",
   "scripts/test-profile-certificates-account-menu.cjs",
   "components/ui/VolunServeButton.tsx",
+  "components/ui/AppDialogHost.tsx",
   "components/ui/VolunServeField.tsx",
   "components/ui/ListPagination.tsx",
   "app/(admin)/create-announcement.tsx",
