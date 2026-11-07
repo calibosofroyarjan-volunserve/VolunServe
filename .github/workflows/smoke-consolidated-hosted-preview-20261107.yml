@@ -2,57 +2,43 @@ name: Smoke Test Hosted Consolidated Four-Role VolunServe (No Production)
 on:
   push:
     branches: [design/consolidated-four-role-desktop-mobile-20261107]
-permissions: {}
+permissions:
+  contents: read
 jobs:
   smoke-hosted-review:
     runs-on: ubuntu-latest
-    timeout-minutes: 8
+    timeout-minutes: 18
     steps:
-      - name: Verify the new public Render preview URLs serve isolated pages
+      - name: Fetch exact reviewed source without submodules
         run: |
-          node <<'NODE'
-          const assert=require("node:assert/strict");
-          const cp=require("node:child_process");
-          const base="https://volunserve-consolidated-pc-mobile-review.onrender.com";
-          const routes=[
-            "/public/preview?role=resident&module=home",
-            "/public/preview?role=volunteer&module=emergency-tasks",
-            "/public/preview?role=admin&module=command-center",
-            "/public/preview?role=superadmin&module=overview",
-            "/public/design-review",
-          ];
-          async function check(url) {
-            for(let i=1;i<=4;i++){
-              try{
-                const r=await fetch(url,{redirect:"follow",signal:AbortSignal.timeout(18000)});
-                const body=await r.text();
-                assert(r.url.startsWith(base),"Preview redirected to an unexpected host");
-                assert.equal(r.status,200,"No HTTP 200 from "+url);
-                assert((r.headers.get("content-type")||"").includes("html"),"Expected HTML");
-                assert(body.toLowerCase().includes("<html"),"Missing Expo web document");
-                return;
-              }catch(e){if(i===4)throw e;console.log("Retry public preview",i,e.message);}
-            }
-          }
-          (async()=>{
-            for(const route of routes){await check(base+route);console.log("PASS public URL "+route);}
-            const chrome=cp.execFileSync("bash",["-lc","command -v google-chrome || command -v chromium || command -v chromium-browser"],{encoding:"utf8"}).trim().split("\n")[0];
-            for(const [route,label] of [
-              ["/public/preview?role=admin&module=command-center","Workflow and records"],
-              ["/public/preview?role=superadmin&module=overview","System Overview"],
-            ]){
-              let matched=false, last="";
-              for(let attempt=1;attempt<=3;attempt++){
-                const doc=cp.execFileSync(chrome,["--headless=new","--no-sandbox","--disable-gpu",
-                  "--disable-dev-shm-usage","--disable-background-networking","--virtual-time-budget=16000",
-                  "--dump-dom",base+route],{encoding:"utf8",timeout:70000,maxBuffer:15*1024*1024,
-                  stdio:["ignore","pipe","ignore"]});
-                matched=doc.includes(label)&&!/<input[^>]+type=["']password["']/i.test(doc);
-                last="attempt "+attempt+" htmlBytes="+doc.length+" label="+doc.includes(label);
-                if(matched)break;
-              }
-              assert(matched,"Hosted preview did not hydrate isolated "+route+" "+last);
-              console.log("PASS hydrated UI "+route+" "+label);
-            }
-          })().catch(e=>{console.error(e);process.exitCode=1;});
-          NODE
+          set -euo pipefail
+          mkdir source && cd source
+          git init
+          git remote add origin https://github.com/calibosofroyarjan-volunserve/VolunServe.git
+          git fetch --depth=1 --no-recurse-submodules origin "$GITHUB_SHA"
+          git checkout --detach FETCH_HEAD
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install isolated headless-browser driver only
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/volunserve-preview-browser
+          cd /tmp/volunserve-preview-browser
+          npm install --no-save --ignore-scripts --no-package-lock --no-audit --no-fund playwright-core
+      - name: Check all deployed role routes, layout widths and actual browser clicks
+        working-directory: source
+        env:
+          NODE_PATH: /tmp/volunserve-preview-browser/node_modules
+          VS_BROWSER_ORIGIN: https://volunserve-consolidated-pc-mobile-review.onrender.com
+        run: |
+          set -euo pipefail
+          node scripts/test-four-role-browser-layout-20261107.cjs
+      - name: Attach live-hosted browser QA screenshots (sample data only)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: hosted-consolidated-four-role-pc-mobile-screenshots
+          path: source/reports/visual-screenshots/
+          if-no-files-found: warn
+          retention-days: 7
