@@ -12,6 +12,7 @@ for(const f of ["identity-staging-web/camera.js","identity-staging-web/camera-me
 }
 if(!html.includes('<script type="module" src="./camera.js"></script>'))throw Error("Staging camera module not loaded.");
 const camera=fs.readFileSync("identity-staging-web/camera.js","utf8");
+if(/scanCapture|scanAuto|Capture now/.test(camera))throw Error("Manual shutter must be absent from staging camera");
 for(const key of ["getUserMedia","detectForVideo","capture","showModal","MediaPipe".toLowerCase(),"assessDocumentFrame","mode===\"selfie\"?9:13"]){
  if(!camera.toLowerCase().includes(key.toLowerCase()))throw Error("Camera path missing: "+key);
 }
