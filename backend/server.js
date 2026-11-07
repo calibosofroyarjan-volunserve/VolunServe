@@ -730,6 +730,9 @@ function normalizeIdDocumentScreening(value) {
     manualReviewRequired: true,
     backSideProvided: value?.backSideProvided === true,
     backSideScreened: value?.backSideScreened === true,
+    profileNameCompared: value?.profileNameCompared === true,
+    profileNameCheck: ["possible_match", "inconclusive", "not_checked"].includes(value?.profileNameCheck)
+      ? value.profileNameCheck : "not_checked",
     warningCodes: Array.isArray(value?.warningCodes)
       ? value.warningCodes.filter(code => warnings.includes(code)).slice(0, 4)
       : ["ocr_unavailable"],
@@ -4588,6 +4591,18 @@ function getIdentityAiHeaders(
     ] =
       internalKey;
   }
+  // Trusted account profile from Firestore, never supplied by client input.
+  // Transient private HTTPS headers only; do not log or store these fields.
+  const safeNameHeader = (value) => cleanText(value, 100)
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^A-Za-z .'-]/g, "");
+  const first = safeNameHeader(request.identityExpectedName?.firstName);
+  const last = safeNameHeader(request.identityExpectedName?.lastName);
+  if (first && last) {
+    headers["X-VolunServe-Profile-First-Name"] = first;
+    headers["X-VolunServe-Profile-Last-Name"] = last;
+  }
   return headers;
 }
 async function readJsonResponse(
@@ -4987,6 +5002,11 @@ app.post(
           throw makeHttpError(404, "profile_not_found", "Your VolunServe profile was not found.");
         }
         const profile = userSnapshot.data() || {};
+        // Use names authenticated by Firebase profile, never user-supplied form fields.
+        request.identityExpectedName = {
+          firstName: profile.firstName || "",
+          lastName: profile.lastName || "",
+        };
         const verification = verificationSnapshot.exists ? verificationSnapshot.data() || {} : {};
         if (cleanText(profile.status || "approved", 40).toLowerCase() !== "approved") {
           throw makeHttpError(403, "account_not_active", "This VolunServe account is not active.");
