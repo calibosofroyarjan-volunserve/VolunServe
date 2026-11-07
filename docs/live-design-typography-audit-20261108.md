@@ -12,8 +12,10 @@
 ## Professional reference
 Atlassian Design System typography (principles, text role, weights, line height and reusable tokens): https://atlassian.design/foundations/typography
 
+Ant Design typography guidance (structured enterprise UI hierarchy and restrained weights): https://ant.design/docs/spec/font/
+
 ## Files and scope
-The two commits contain 21 actual source files across Admin, Super Admin, Resident, Volunteer and shared shells. This is **not a claim of completion of all 68+ route screens or bug-free operations**. Larger module-specific UI refinements remain a separate visual and authenticated-flow QA task.
+The design pass now covers 34 actual source files across Admin, Super Admin, Resident, Volunteer and shared shells. This is **not a claim of completion of all 68+ route screens or bug-free operations**. Larger module-specific UI refinements remain a separate visual and authenticated-flow QA task.
 
 ## QA required before a release
 1. Inspect resulting diff for presentation-only changes; verify Home source and hero assets are unchanged.
@@ -34,3 +36,8 @@ The two commits contain 21 actual source files across Admin, Super Admin, Reside
 - `app/(tabs)/notifications.tsx`: title, subtitle, cardTitle, emptyTitle, filterLabel, metricLabel
 - `app/(tabs)/profile.tsx`: pageTitle, pageSubtitle, identityCardTitle, identityCardText, accessLabel | skipped: sectionCardTitle:not found
 - `app/(tabs)/certificate.tsx`: title, subtitle, pendingTitle, pendingText, metricLabel
+
+
+## Additional real-screen coverage
+
+Subsequent style-only commits also apply the shared type scale to Admin Announcements, Community Attendance, Account Approvals, LGU Attendance, Admin Profile and Certificates; Super Admin System Settings and Profile; Resident/Volunteer-facing Announcements, Volunteer Application, Donation History, Transparency and Certificate Verification. No production deployment or authentication/data writes were performed.
