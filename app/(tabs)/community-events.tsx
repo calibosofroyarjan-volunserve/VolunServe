@@ -1,3 +1,4 @@
+import { liveUi as designUi } from "../../constants/volunserveLiveUi";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { LinearGradient } from "expo-linear-gradient";
 import {useFonts} from "expo-font";
@@ -4581,15 +4582,13 @@ const styles = StyleSheet.create({
     marginBottom: 14,
   },
   pageTitle: {
-    fontSize: 23,
-    fontWeight: "700",
-    color: colors.ink,
-  },
+    fontSize: designUi.type.page.fontSize,
+    fontWeight: designUi.type.page.fontWeight,
+    color: colors.ink, lineHeight: designUi.type.page.lineHeight,},
   pageSubtitle: {
     color: colors.muted,
-    fontSize: 12,
-    marginTop: 3,
-  },
+    fontSize: designUi.type.body.fontSize,
+    marginTop: 3, lineHeight: designUi.type.body.lineHeight, fontWeight: designUi.type.body.fontWeight,},
   modeTag: {
     flexDirection: "row",
     alignItems: "center",
@@ -4691,13 +4690,11 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     color: colors.ink,
-    fontSize: 16,
-    fontWeight: "700",
-  },
+    fontSize: designUi.type.section.fontSize,
+    fontWeight: designUi.type.section.fontWeight, lineHeight: designUi.type.section.lineHeight,},
   sectionHint: {
     color: colors.muted,
-    fontSize: 11,
-  },
+    fontSize: designUi.type.body.fontSize, lineHeight: designUi.type.body.lineHeight, fontWeight: designUi.type.body.fontWeight,},
   searchInput: {
     backgroundColor: "white",
     borderWidth: 1,
@@ -4773,10 +4770,9 @@ const styles = StyleSheet.create({
   },
   eventTitle: {
     color: colors.ink,
-    fontSize: 14,
-    fontWeight: "900",
-    flexShrink: 1,
-  },
+    fontSize: designUi.type.card.fontSize,
+    fontWeight: designUi.type.card.fontWeight,
+    flexShrink: 1, lineHeight: designUi.type.card.lineHeight,},
   tag: {
     backgroundColor: "#DDF4EA",
     borderRadius: 7,
@@ -4799,9 +4795,8 @@ const styles = StyleSheet.create({
   },
   metaText: {
     color: colors.muted,
-    fontSize: 11,
-    lineHeight: 16,
-  },
+    fontSize: designUi.type.meta.fontSize,
+    lineHeight: designUi.type.meta.lineHeight, fontWeight: designUi.type.meta.fontWeight,},
   cardFooter: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -4949,11 +4944,10 @@ const styles = StyleSheet.create({
   },
   fieldLabel: {
     color: colors.ink,
-    fontSize: 11,
-    fontWeight: "800",
+    fontSize: designUi.type.label.fontSize,
+    fontWeight: designUi.type.label.fontWeight,
     marginTop: 11,
-    marginBottom: 5,
-  },
+    marginBottom: 5, lineHeight: designUi.type.label.lineHeight,},
   input: {
     borderWidth: 1,
     borderColor: colors.border,
@@ -5302,7 +5296,7 @@ const styles = StyleSheet.create({
   webStatusDone: { backgroundColor: "#EEF0FF" },
   webStatusText: { color: "#047A70", fontSize: 9.5, fontWeight: "900" },
   webCardBody: { padding: 13, gap: 8 },
-  webCardTitle: { fontFamily:"EventInterBold", fontSize: 16, fontWeight: "900", color: "#17483C" },
+  webCardTitle: { fontFamily:"EventInterBold", fontSize: designUi.type.card.fontSize, fontWeight: designUi.type.card.fontWeight, color: "#17483C", lineHeight: designUi.type.card.lineHeight,},
   webCategoryRow: { flexDirection: "row", gap: 6, alignItems: "center", flexWrap: "wrap" },
   webCategoryTag: { backgroundColor: "#E3F6F0", paddingHorizontal: 9, paddingVertical: 5, borderRadius: 6 },
   webCategoryTagText: { color: "#087A6C", fontWeight: "800", fontSize: 10 },
@@ -5329,7 +5323,7 @@ const styles = StyleSheet.create({
   webDetailRow: { flexDirection: "row", alignItems: "flex-start", gap: 9, marginBottom: 10 },
   webDetailText: { fontSize: 12, color: "#546E80", lineHeight: 18, flex: 1 },
   webDivider: { height: 1, backgroundColor: "#E7EEEC", marginTop: 6, marginBottom: 13 },
-  webDetailSectionTitle: { color: "#0F3048", fontSize: 13, fontWeight: "900", marginBottom: 7 },
+  webDetailSectionTitle: { color: "#0F3048", fontSize: designUi.type.section.fontSize, fontWeight: designUi.type.section.fontWeight, marginBottom: 7, lineHeight: designUi.type.section.lineHeight,},
   webDetailDescription: { color: "#536E80", fontSize: 11.5, lineHeight: 18 },
   webDetailActions: { flexDirection: "row", gap: 8, marginTop: 18 },
   webJoinButton: { flex: 1, backgroundColor: "#068E81", minHeight: 42, borderRadius: 9, alignItems: "center", justifyContent: "center", flexDirection: "row", gap: 7 },
@@ -5376,7 +5370,7 @@ const styles = StyleSheet.create({
   webErrorText: { flex: 1, color: "#B42318", fontSize: 12 },
   webLoading: { minHeight: 150, alignItems: "center", justifyContent: "center" },
   webEmptyCard: { backgroundColor: "#FFFFFF", borderRadius: 14, minHeight: 200, padding: 25, alignItems: "center", justifyContent: "center", gap: 10, borderWidth: 1, borderColor: "#DFEBE8", marginTop: 5 },
-  webEmptyTitle: { fontFamily:"EventInterBold", fontWeight: "900", color: "#214051", fontSize: 15, textAlign: "center" },
+  webEmptyTitle: { fontFamily:"EventInterBold", fontWeight: designUi.type.section.fontWeight, color: "#214051", fontSize: designUi.type.section.fontSize, textAlign: "center", lineHeight: designUi.type.section.lineHeight,},
   webEmptySubtitle: { fontSize: 12, color: "#6B8290", textAlign: "center" },
   webEmptyAction: { backgroundColor: "#048E81", borderRadius: 8, paddingHorizontal: 15, paddingVertical: 10 },
   webEmptyActionText: { color: "white", fontWeight: "900", fontSize: 12 },

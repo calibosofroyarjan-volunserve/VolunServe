@@ -1,3 +1,4 @@
+import { liveUi as designUi } from "../../constants/volunserveLiveUi";
 import React, {
   useEffect,
   useState,
@@ -392,20 +393,18 @@ const styles = StyleSheet.create({
   title: {
     color: "#173D32",
 
-    fontSize: 28,
-    fontWeight: "700",
+    fontSize: designUi.type.page.fontSize,
+    fontWeight: designUi.type.page.fontWeight,
 
-    marginTop: 5,
-  },
+    marginTop: 5, lineHeight: designUi.type.page.lineHeight,},
 
   subtitle: {
     color: "#64748B",
 
-    fontSize: 14,
-    lineHeight: 21,
+    fontSize: designUi.type.body.fontSize,
+    lineHeight: designUi.type.body.lineHeight,
 
-    marginTop: 6,
-  },
+    marginTop: 6, fontWeight: designUi.type.body.fontWeight,},
 
   areaCard: {
     backgroundColor: "#EAF8F6",
@@ -423,11 +422,10 @@ const styles = StyleSheet.create({
   areaLabel: {
     color: "#087F78",
 
-    fontSize: 10,
-    fontWeight: "900",
+    fontSize: designUi.type.label.fontSize,
+    fontWeight: designUi.type.label.fontWeight,
 
-    letterSpacing: 1,
-  },
+    letterSpacing: 1, lineHeight: designUi.type.label.lineHeight,},
 
   areaValue: {
     color: "#123047",
@@ -504,19 +502,17 @@ const styles = StyleSheet.create({
   emptyTitle: {
     color: "#123047",
 
-    fontSize: 17,
-    fontWeight: "900",
-  },
+    fontSize: designUi.type.section.fontSize,
+    fontWeight: designUi.type.section.fontWeight, lineHeight: designUi.type.section.lineHeight,},
 
   emptyText: {
     color: "#64748B",
 
-    fontSize: 13,
+    fontSize: designUi.type.body.fontSize,
 
     marginTop: 5,
 
-    textAlign: "center",
-  },
+    textAlign: "center", lineHeight: designUi.type.body.lineHeight, fontWeight: designUi.type.body.fontWeight,},
 
   announcementCard: {
     backgroundColor: "#FFFFFF",
@@ -582,18 +578,16 @@ const styles = StyleSheet.create({
   cardTitle: {
     color: "#123047",
 
-    fontSize: 18,
-    fontWeight: "900",
-  },
+    fontSize: designUi.type.card.fontSize,
+    fontWeight: designUi.type.card.fontWeight, lineHeight: designUi.type.card.lineHeight,},
 
   cardMessage: {
     color: "#475569",
 
-    fontSize: 14,
-    lineHeight: 22,
+    fontSize: designUi.type.body.fontSize,
+    lineHeight: designUi.type.body.lineHeight,
 
-    marginTop: 7,
-  },
+    marginTop: 7, fontWeight: designUi.type.body.fontWeight,},
 
   cardFooter: {
     marginTop: 15,

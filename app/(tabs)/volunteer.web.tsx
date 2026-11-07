@@ -1,3 +1,4 @@
+import { liveUi as designUi } from "../../constants/volunserveLiveUi";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { Redirect, useRouter } from "expo-router";
@@ -1467,9 +1468,9 @@ const styles = StyleSheet.create({
   },
   mobileTaskTitle: {
     color: "#173D32",
-    fontSize: 23,
-    fontWeight: "700",
-    lineHeight: 29,
+    fontSize: designUi.type.section.fontSize,
+    fontWeight: designUi.type.section.fontWeight,
+    lineHeight: designUi.type.section.lineHeight,
     letterSpacing: -0.35,
   },
   mobileTaskDescription: {
@@ -1735,16 +1736,15 @@ const styles = StyleSheet.create({
   },
   title: {
     color: "#173D32",
-    fontSize: 28,
-    lineHeight: 33,
-    fontWeight: "900",
+    fontSize: designUi.type.page.fontSize,
+    lineHeight: designUi.type.page.lineHeight,
+    fontWeight: designUi.type.page.fontWeight,
   },
   subtitle: {
     color: "#55786A",
-    fontSize: 13,
-    lineHeight: 19,
-    marginTop: 3,
-  },
+    fontSize: designUi.type.body.fontSize,
+    lineHeight: designUi.type.body.lineHeight,
+    marginTop: 3, fontWeight: designUi.type.body.fontWeight,},
   liveMapButton: {
     minHeight: 44,
     flexDirection: "row",
@@ -1849,9 +1849,8 @@ const styles = StyleSheet.create({
   statLabel: {
     marginTop: 3,
     color: "#5f7284",
-    fontSize: 11,
-    fontWeight: "800",
-  },
+    fontSize: designUi.type.label.fontSize,
+    fontWeight: designUi.type.label.fontWeight, lineHeight: designUi.type.label.lineHeight,},
   toolbar: {
     flexDirection: "row",
     alignItems: "center",
@@ -2032,9 +2031,9 @@ const styles = StyleSheet.create({
   },
   assignmentTitle: {
     color: "#10283d",
-    fontSize: 17,
-    lineHeight: 22,
-    fontWeight: "900",
+    fontSize: designUi.type.card.fontSize,
+    lineHeight: designUi.type.card.lineHeight,
+    fontWeight: designUi.type.card.fontWeight,
   },
   locationRow: {
     flexDirection: "row",
@@ -2118,11 +2117,10 @@ const styles = StyleSheet.create({
   },
   metaLabel: {
     color: "#7d8f9f",
-    fontSize: 8.5,
-    fontWeight: "900",
+    fontSize: designUi.type.meta.fontSize,
+    fontWeight: designUi.type.meta.fontWeight,
     textTransform: "uppercase",
-    letterSpacing: 0.45,
-  },
+    letterSpacing: 0.45, lineHeight: designUi.type.meta.lineHeight,},
   metaValue: {
     color: "#294256",
     fontSize: 10.5,
@@ -2290,16 +2288,14 @@ const styles = StyleSheet.create({
   completionTitle: {
     marginTop: 3,
     color: "#183448",
-    fontSize: 15,
-    fontWeight: "900",
-  },
+    fontSize: designUi.type.section.fontSize,
+    fontWeight: designUi.type.section.fontWeight, lineHeight: designUi.type.section.lineHeight,},
   completionLabel: {
     marginTop: 9,
     marginBottom: 6,
     color: "#334155",
-    fontSize: 10.5,
-    fontWeight: "900",
-  },
+    fontSize: designUi.type.label.fontSize,
+    fontWeight: designUi.type.label.fontWeight, lineHeight: designUi.type.label.lineHeight,},
   completionTypeGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
@@ -2458,16 +2454,14 @@ const styles = StyleSheet.create({
   },
   emptyTitle: {
     color: "#183448",
-    fontSize: 15,
-    fontWeight: "900",
-    marginTop: 12,
-  },
+    fontSize: designUi.type.section.fontSize,
+    fontWeight: designUi.type.section.fontWeight,
+    marginTop: 12, lineHeight: designUi.type.section.lineHeight,},
   emptyText: {
     maxWidth: 520,
     color: "#74889a",
-    fontSize: 11.5,
-    lineHeight: 18,
+    fontSize: designUi.type.body.fontSize,
+    lineHeight: designUi.type.body.lineHeight,
     textAlign: "center",
-    marginTop: 5,
-  },
+    marginTop: 5, fontWeight: designUi.type.body.fontWeight,},
 });

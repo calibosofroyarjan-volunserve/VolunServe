@@ -1,3 +1,4 @@
+import { liveUi as designUi } from "../../constants/volunserveLiveUi";
 import { Ionicons } from "@expo/vector-icons";
 import { Redirect, useRouter } from "expo-router";
 import {
@@ -2150,16 +2151,14 @@ const styles = StyleSheet.create({
   title: {
     marginTop: 2,
     color: "#173D32",
-    fontSize: 25,
-    fontWeight: "900",
-  },
+    fontSize: designUi.type.page.fontSize,
+    fontWeight: designUi.type.page.fontWeight, lineHeight: designUi.type.page.lineHeight,},
 
   subtitle: {
     marginTop: 3,
     color: "#567D6B",
-    fontSize: 12,
-    lineHeight: 17,
-  },
+    fontSize: designUi.type.body.fontSize,
+    lineHeight: designUi.type.body.lineHeight, fontWeight: designUi.type.body.fontWeight,},
 
   liveMapButton: {
     minHeight: 46,
@@ -2204,9 +2203,8 @@ const styles = StyleSheet.create({
   statLabel: {
     marginTop: 2,
     color: "#64748b",
-    fontSize: 10,
-    fontWeight: "800",
-  },
+    fontSize: designUi.type.label.fontSize,
+    fontWeight: designUi.type.label.fontWeight, lineHeight: designUi.type.label.lineHeight,},
 
   filterRow: {
     gap: 7,
@@ -2338,9 +2336,9 @@ const styles = StyleSheet.create({
 
   cardTitle: {
     color: "#10283d",
-    fontSize: 17,
-    lineHeight: 22,
-    fontWeight: "900",
+    fontSize: designUi.type.card.fontSize,
+    lineHeight: designUi.type.card.lineHeight,
+    fontWeight: designUi.type.card.fontWeight,
   },
 
   locationText: {
@@ -2406,10 +2404,9 @@ const styles = StyleSheet.create({
 
   metaLabel: {
     color: "#7d8f9f",
-    fontSize: 8.5,
-    fontWeight: "900",
-    letterSpacing: 0.4,
-  },
+    fontSize: designUi.type.meta.fontSize,
+    fontWeight: designUi.type.meta.fontWeight,
+    letterSpacing: 0.4, lineHeight: designUi.type.meta.lineHeight,},
 
   metaValue: {
     marginTop: 4,
@@ -2565,9 +2562,8 @@ const styles = StyleSheet.create({
 
   completionTitle: {
     color: "#183448",
-    fontSize: 15,
-    fontWeight: "900",
-  },
+    fontSize: designUi.type.section.fontSize,
+    fontWeight: designUi.type.section.fontWeight, lineHeight: designUi.type.section.lineHeight,},
 
   completionHint: {
     marginTop: 3,
@@ -2581,9 +2577,8 @@ const styles = StyleSheet.create({
     marginTop: 10,
     marginBottom: 6,
     color: "#334155",
-    fontSize: 10.5,
-    fontWeight: "900",
-  },
+    fontSize: designUi.type.label.fontSize,
+    fontWeight: designUi.type.label.fontWeight, lineHeight: designUi.type.label.lineHeight,},
 
   typeGrid: {
     flexDirection: "row",
@@ -2735,16 +2730,14 @@ const styles = StyleSheet.create({
   emptyTitle: {
     marginTop: 10,
     color: "#183448",
-    fontSize: 15,
-    fontWeight: "900",
-    textAlign: "center",
-  },
+    fontSize: designUi.type.section.fontSize,
+    fontWeight: designUi.type.section.fontWeight,
+    textAlign: "center", lineHeight: designUi.type.section.lineHeight,},
 
   emptyText: {
     marginTop: 5,
     color: "#74889a",
-    fontSize: 11.5,
-    lineHeight: 18,
-    textAlign: "center",
-  },
+    fontSize: designUi.type.body.fontSize,
+    lineHeight: designUi.type.body.lineHeight,
+    textAlign: "center", fontWeight: designUi.type.body.fontWeight,},
 });

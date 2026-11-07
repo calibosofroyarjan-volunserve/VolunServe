@@ -1,3 +1,4 @@
+import { liveUi as designUi } from "../../constants/volunserveLiveUi";
 import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 import { LinearGradient } from "expo-linear-gradient";
@@ -6425,11 +6426,8 @@ const styles =
       fontFamily:"AssistanceInterBold",
       color:
         "#172033",
-      fontSize:
-        13,
-      fontWeight:
-        "900",
-    },
+      fontSize: designUi.type.card.fontSize,
+      fontWeight: designUi.type.card.fontWeight, lineHeight: designUi.type.card.lineHeight,},
 
     infoCardText: {
       fontFamily:"AssistanceInter",
@@ -6493,11 +6491,8 @@ const styles =
         3,
       color:
         "#8A463E",
-      fontSize:
-        12,
-      lineHeight:
-        18,
-    },
+      fontSize: designUi.type.body.fontSize,
+      lineHeight: designUi.type.body.lineHeight, fontWeight: designUi.type.body.fontWeight,},
 
     emergencyButton: {
       minHeight:
@@ -6651,11 +6646,8 @@ const styles =
         5,
       color:
         "#17463A",
-      fontSize:
-        23,
-      fontWeight:
-        "900",
-    },
+      fontSize: designUi.type.section.fontSize,
+      fontWeight: designUi.type.section.fontWeight, lineHeight: designUi.type.section.lineHeight,},
 
     formText: {
       fontFamily:"AssistanceInter",
@@ -6749,11 +6741,8 @@ const styles =
         7,
       color:
         "#334155",
-      fontSize:
-        12,
-      fontWeight:
-        "800",
-    },
+      fontSize: designUi.type.label.fontSize,
+      fontWeight: designUi.type.label.fontWeight, lineHeight: designUi.type.label.lineHeight,},
 
     requiredStar: {
       color:
@@ -7420,13 +7409,10 @@ const styles =
         13,
       color:
         "#64748B",
-      fontSize:
-        11,
-      fontWeight:
-        "800",
+      fontSize: designUi.type.label.fontSize,
+      fontWeight: designUi.type.label.fontWeight,
       backgroundColor:
-        "#F8FAFC",
-    },
+        "#F8FAFC", lineHeight: designUi.type.label.lineHeight,},
 
     reviewValue: {
       fontFamily:"AssistanceInterMedium",
@@ -7726,13 +7712,10 @@ const styles =
     miniLabel: {
       color:
         "#94A3B8",
-      fontSize:
-        9,
-      fontWeight:
-        "900",
+      fontSize: designUi.type.meta.fontSize,
+      fontWeight: designUi.type.meta.fontWeight,
       letterSpacing:
-        0.8,
-    },
+        0.8, lineHeight: designUi.type.meta.lineHeight,},
 
     successReference: {
       marginTop:
@@ -7775,24 +7758,18 @@ const styles =
         5,
       color:
         "#172033",
-      fontSize:
-        23,
-      fontWeight:
-        "900",
-    },
+      fontSize: designUi.type.section.fontSize,
+      fontWeight: designUi.type.section.fontWeight, lineHeight: designUi.type.section.lineHeight,},
 
     historySubtitle: {
       marginTop:
         5,
       color:
         "#64748B",
-      fontSize:
-        12,
-      lineHeight:
-        18,
+      fontSize: designUi.type.body.fontSize,
+      lineHeight: designUi.type.body.lineHeight,
       maxWidth:
-        760,
-    },
+        760, fontWeight: designUi.type.body.fontWeight,},
 
     newRequestButton: {
       minHeight:
@@ -7920,20 +7897,15 @@ const styles =
         2,
       color:
         "#27364B",
-      fontSize:
-        13,
-      fontWeight:
-        "900",
-    },
+      fontSize: designUi.type.card.fontSize,
+      fontWeight: designUi.type.card.fontWeight, lineHeight: designUi.type.card.lineHeight,},
 
     requestCardMeta: {
       marginTop:
         3,
       color:
         "#64748B",
-      fontSize:
-        10,
-    },
+      fontSize: designUi.type.meta.fontSize, lineHeight: designUi.type.meta.lineHeight, fontWeight: designUi.type.meta.fontWeight,},
 
     statusBadge: {
       minHeight:
@@ -7974,11 +7946,8 @@ const styles =
         10,
       color:
         "#334155",
-      fontSize:
-        15,
-      fontWeight:
-        "900",
-    },
+      fontSize: designUi.type.section.fontSize,
+      fontWeight: designUi.type.section.fontWeight, lineHeight: designUi.type.section.lineHeight,},
 
     emptyText: {
       marginTop:
@@ -7987,11 +7956,8 @@ const styles =
         "#64748B",
       textAlign:
         "center",
-      fontSize:
-        12,
-      lineHeight:
-        18,
-    },
+      fontSize: designUi.type.body.fontSize,
+      lineHeight: designUi.type.body.lineHeight, fontWeight: designUi.type.body.fontWeight,},
 
     modalOverlay: {
       flex:
