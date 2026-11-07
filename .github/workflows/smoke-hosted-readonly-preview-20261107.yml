@@ -23,3 +23,20 @@ jobs:
       - name: Read-only HTTP smoke of Render preview (no sign-ins or writes)
         working-directory: source
         run: node scripts/smoke-staging-public-preview-20261107.cjs
+      - name: Verify hosted preview login never renders credential forms
+        run: |
+          node <<'NODE'
+          const assert=require('node:assert/strict');
+          const base='https://volunserve-readonly-ui-preview.onrender.com';
+          (async()=>{
+            for(const path of ['/login','/signup','/admin-request']){
+              const res=await fetch(base+path,{signal:AbortSignal.timeout(23000)});
+              const html=await res.text();
+              assert.equal(res.status,200,path+' did not load');
+              assert(html.includes('Sign-in is disabled on this preview'),path+' still lacks staging notice');
+              assert(!html.includes('type="password"'),path+' renders a password input');
+              assert(!html.includes('name="password"'),path+' renders a password input');
+              console.log('PASS hosted staging-only credential suppression '+base+path);
+            }
+          })().catch(e=>{console.error(e);process.exitCode=1});
+          NODE
