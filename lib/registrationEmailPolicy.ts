@@ -10,7 +10,7 @@
 import { GENERATED_DISPOSABLE_EMAIL_DOMAINS } from "./disposableEmailDomains.generated";
 
 export const KNOWN_DISPOSABLE_EMAIL_DOMAINS = new Set([
-  "mailinator.com", "yopmail.com", "guerrillamail.com", "guerrillamailblock.com",
+  "en2ch.com", "mailinator.com", "yopmail.com", "guerrillamail.com", "guerrillamailblock.com",
   "sharklasers.com", "10minutemail.com", "temp-mail.org", "tempmail.com",
   "tempmail.net", "trashmail.com", "dispostable.com", "getnada.com",
   "maildrop.cc", "minuteinbox.com", "mohmal.com", "emailondeck.com",
@@ -98,6 +98,12 @@ export function getRegistrationEmailError(email: string): string | null {
     return "Enter a complete, valid email address, for example name@example.com.";
   }
 
+  // Gmail +tags are aliases of the same mailbox. Disallow alias-tag signup
+  // to reduce easy duplicate registrations, but never label ordinary Gmail
+  // addresses as disposable without evidence.
+  if ((domain === "gmail.com" || domain === "googlemail.com") && local.includes("+")) {
+    return "Gmail +tag aliases are not accepted. Enter your main Gmail address without the +tag.";
+  }
   const suggestedProvider = KNOWN_PROVIDER_TYPO_CORRECTIONS[domain];
   if (suggestedProvider) {
     return `Check your email domain. Did you mean @${suggestedProvider}? Please correct it to continue.`;
