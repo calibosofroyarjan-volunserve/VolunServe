@@ -1,0 +1,50 @@
+# AUTHENTICATION-ONLY SMOKE TEST. NO Firebase/Render deployment.
+# Push is restricted to this exact workflow file on this protected release branch.
+# All credentials are short-lived; no private keys, app source modifications or cloud writes.
+name: VolunServe — Protected Hosting OIDC Auth Smoke Test (NO DEPLOY)
+
+on:
+  push:
+    branches:
+      - release/production-hosting
+    paths:
+      - '.github/workflows/verify-protected-hosting-oidc.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  authentication-only:
+    if: ${{ github.repository == 'calibosofroyarjan-volunserve/VolunServe' && github.ref == 'refs/heads/release/production-hosting' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment:
+      name: volunserve-production-hosting
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Exchange approved GitHub OIDC identity for short-lived Google token
+        id: auth
+        uses: google-github-actions/auth@v3
+        with:
+          project_id: volunserve-3aa5b
+          workload_identity_provider: projects/233201250762/locations/global/workloadIdentityPools/volunserve-github-hosting/providers/volunserve-github-actions
+          service_account: volunserve-protected-hostin@volunserve-3aa5b.iam.gserviceaccount.com
+          token_format: access_token
+          access_token_lifetime: 300s
+          create_credentials_file: false
+          export_environment_variables: false
+
+      - name: Confirm short-lived token exists without displaying token contents
+        shell: bash
+        env:
+          AUTH_ACCESS_TOKEN: ${{ steps.auth.outputs.access_token }}
+        run: |
+          set -euo pipefail
+          test -n "$AUTH_ACCESS_TOKEN" || {
+            echo "::error::OIDC token exchange or service-account impersonation failed"
+            exit 1
+          }
+          echo "PASS: protected environment approved GitHub OIDC and issued temporary Google access."
+          echo "NO DEPLOY performed. No Firebase or Render resource modified."
