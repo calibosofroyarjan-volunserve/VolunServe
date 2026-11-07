@@ -33,6 +33,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { auth, db } from "../../lib/firebase";
+import { getSafeVolunServeBackendBaseUrl } from "../../lib/stagingBackendSafety";
 import { getUserProfile } from "../../lib/firebaseAuth";
 
 type AssistanceCategory =
@@ -160,7 +161,7 @@ type AssistanceRequest = {
   updatedAt?: any;
 };
 
-const ASSISTANCE_BACKEND_URL = "https://volunserve.onrender.com";
+const ASSISTANCE_BACKEND_URL = getSafeVolunServeBackendBaseUrl();
 const MAX_DOCUMENT_BYTES = 10 * 1024 * 1024;
 
 const CATEGORY_CONFIGS: CategoryConfig[] = [
