@@ -41,7 +41,7 @@ jobs:
               console.log('DEBUG route',route,
                 'DOM bytes',page.length,'generic preview',page.includes('Preview'),
                 'old login',page.includes('Welcome Back'),
-                'JS',page.includes('<script'), 'title',page.match(/<title[^>]*>(.*?)<\\/title>/)?.[1]);
+                'JS',page.includes('<script'), 'hasTitle',page.includes('<title'));
               console.log('DEBUG sanitized DOM first chars',page.slice(0,2800));
             }
             assert(page.includes('Sign-in is disabled on this preview'),
