@@ -6100,7 +6100,7 @@ const styles = StyleSheet.create({
 
   page: {
     flex: 1,
-    backgroundColor: "#F6F8F7",
+    backgroundColor: "#F5F8F6",
   },
 
   pageScroll: {
@@ -6234,12 +6234,17 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 12,
-    padding: 15,
-    borderRadius: 15,
+    padding: 18,
+    borderRadius: 17,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: "#DBE8DF",
     backgroundColor: "#FFFFFF",
-  },
+  ,
+    shadowColor: "#153C2F",
+    shadowOpacity: 0.04,
+    shadowRadius: 12,
+    shadowOffset: {width:0,height:4},
+    elevation: 1},
 
   statIcon: {
     width: 39,
@@ -6313,12 +6318,12 @@ const styles = StyleSheet.create({
   },
 
   filterChip: {
-    minHeight: 36,
+    minHeight: 44,
     justifyContent: "center",
     paddingHorizontal: 13,
-    borderRadius: 999,
+    borderRadius: 12,
     borderWidth: 1,
-    borderColor: "#CBD5E1",
+    borderColor: "#D6E6DB",
     backgroundColor: "#FFFFFF",
   },
 
@@ -6674,12 +6679,17 @@ const styles = StyleSheet.create({
   },
 
   sectionCard: {
-    padding: 16,
-    borderRadius: 15,
+    padding: 21,
+    borderRadius: 18,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: "#DAE7DE",
     backgroundColor: "#FFFFFF",
-  },
+  ,
+    shadowColor: "#153C2F",
+    shadowOpacity: 0.04,
+    shadowRadius: 12,
+    shadowOffset: {width:0,height:4},
+    elevation: 1},
 
   sectionHeader: {
     flexDirection: "row",
@@ -6704,8 +6714,8 @@ const styles = StyleSheet.create({
 
   sectionTitle: {
     color: "#0F172A",
-    fontSize: 14,
-    fontWeight: "900",
+    fontSize: 18,
+    fontWeight: "700",
   },
 
   sectionSubtitle: {
@@ -7183,13 +7193,13 @@ const styles = StyleSheet.create({
   },
 
   input: {
-    minHeight: 44,
-    paddingHorizontal: 12,
-    borderRadius: 10,
+    minHeight: 46,
+    paddingHorizontal: 15,
+    borderRadius: 12,
     borderWidth: 1,
-    borderColor: "#CBD5E1",
+    borderColor: "#C9DED2",
     color: "#0F172A",
-    fontSize: 11.5,
+    fontSize: 14,
     backgroundColor: "#FFFFFF",
     outlineStyle: "none" as any,
   },

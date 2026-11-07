@@ -215,7 +215,7 @@ export default function NotificationsScreen() {
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: "#F3F8F5" },
-  container: { width: "100%", maxWidth: 980, alignSelf: "center", paddingHorizontal: 24, paddingVertical: 28, paddingBottom: 58},
+  container: { width: "100%", maxWidth: 1080, alignSelf: "center", paddingHorizontal: 24, paddingVertical: 28, paddingBottom: 58},
   heading: { flexDirection: "row", alignItems: "center", gap: 14, paddingVertical: 23, paddingHorizontal: 24, backgroundColor: "#0D7557", borderRadius: 20, overflow: "hidden" },
   heroDecor: { position: "absolute", right: -16, top: -25, opacity: 0.95 },
   headingIcon: { backgroundColor: "#ffffff25", borderRadius: 15, padding: 13 },

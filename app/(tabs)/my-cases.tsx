@@ -2904,8 +2904,8 @@ const styles =
       width: "100%",
       maxWidth: 1180,
       alignSelf: "center",
-      padding: 24,
-      paddingBottom: 60,
+      padding: 27,
+      paddingBottom: 68,
     },
 
     loadingScreen: {
@@ -3688,12 +3688,12 @@ const styles =
     },
 
     primaryButton: {
-      minHeight: 38,
+      minHeight: 46,
       paddingHorizontal: 14,
       paddingVertical: 10,
-      borderRadius: 9,
+      borderRadius: 12,
       backgroundColor:
-        "#087F78",
+        "#087C61",
       alignItems: "center",
       justifyContent:
         "center",

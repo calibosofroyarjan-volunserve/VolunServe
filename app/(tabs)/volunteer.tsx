@@ -2091,7 +2091,7 @@ export default function VolunteerTasks() {
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: "#F6F8F7",
+    backgroundColor: "#F5F8F6",
   },
 
   page: {

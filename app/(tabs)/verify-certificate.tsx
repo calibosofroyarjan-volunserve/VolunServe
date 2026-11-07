@@ -499,7 +499,7 @@ const styles = StyleSheet.create({
   decoLeafTwo: { position: "absolute", width: 23, height: 54, borderRadius: 60, backgroundColor: "#23BFA8", right: 7, top: 2, transform: [{ rotate: "26deg" }] },
   searchCard: { backgroundColor: C.paper, borderWidth: 1, borderColor: C.border, borderRadius: 17, padding: 17, marginBottom: 16 },
   inputLabel: { color: C.muted, letterSpacing: 1, fontWeight: designUi.type.label.fontWeight, fontSize: designUi.type.label.fontSize, marginBottom: 9, lineHeight: designUi.type.label.lineHeight,},
-  input: { borderWidth: 1, borderColor: "#D2E0E9", borderRadius: 10, minHeight: 52, paddingHorizontal: 15, paddingVertical: 11, color: C.heading, fontSize: 14, fontWeight: "700", backgroundColor: "#FBFDFE" },
+  input: { borderWidth: 1, borderColor: "#C7DCD0", borderRadius: 12, minHeight: 52, paddingHorizontal: 15, paddingVertical: 11, color: C.heading, fontSize: 14, fontWeight: "600", backgroundColor: "#FBFDFE" },
   inputHint: { fontSize: 12, color: C.muted, marginTop: 10, marginBottom: 13 },
   actionRow: { flexDirection: "row", gap: 9 },
   actionRowMobile: { flexDirection: "column" },

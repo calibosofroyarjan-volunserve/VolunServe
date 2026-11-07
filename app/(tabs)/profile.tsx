@@ -2824,9 +2824,9 @@ const styles =
       width: "100%",
       maxWidth: 1180,
       alignSelf: "center",
-      paddingHorizontal: 24,
-      paddingTop: 28,
-      paddingBottom: 70,
+      paddingHorizontal: 27,
+      paddingTop: 30,
+      paddingBottom: 76,
     },
 
     loadingScreen: {
@@ -3240,14 +3240,19 @@ const styles =
     sectionCard: {
       flex: 1,
       width: "100%",
-      padding: 22,
-      borderRadius: 16,
+      padding: 25,
+      borderRadius: 19,
       backgroundColor:
         "#FFFFFF",
       borderWidth: 1,
       borderColor:
-        "#E2E8F0",
-    },
+        "#DAE7DE",
+    ,
+    shadowColor: "#153C2F",
+    shadowOpacity: 0.045,
+    shadowRadius: 14,
+    shadowOffset: {width:0,height:4},
+    elevation: 1},
 
     sectionHeading: {
       flexDirection: "row",
@@ -3552,8 +3557,8 @@ const styles =
     inputLabel:{fontSize: designUi.type.label.fontSize,fontWeight: designUi.type.label.fontWeight,color:"#2C5041",marginBottom:7, lineHeight: designUi.type.label.lineHeight,},
     requiredAsterisk:{color:"#D4413A"},
     input:{
-      minHeight:45,borderRadius:10,borderColor:"#D7E6DD",borderWidth:1,
-      backgroundColor:"#FCFEFD",paddingHorizontal:12,fontSize:13,color:"#173A2B",
+      minHeight:48,borderRadius:12,borderColor:"#C6DDD0",borderWidth:1,
+      backgroundColor:"#FCFEFD",paddingHorizontal:15,fontSize:14,color:"#173A2B",
     },
     dropdownTrigger:{
       minHeight:46,borderRadius:10,borderColor:"#D7E6DD",borderWidth:1,
