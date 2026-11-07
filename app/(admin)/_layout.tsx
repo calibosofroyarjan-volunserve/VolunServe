@@ -10,6 +10,7 @@ import {
 import React, {
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import {
@@ -27,6 +28,7 @@ import {
   useWindowDimensions,
   View,
 } from "react-native";
+import { AppAlert } from "../../lib/appDialog";
 import {
   isApprovedProfile,
   logoutUser,
@@ -111,6 +113,7 @@ export default function AdminLayout() {
     usePathname();
 
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const logoutPromptOpen = useRef(false);
   const [expandedSection, setExpandedSection] = useState<NavSectionId | "none" | null>(null);
   const currentSection = NAV_SECTIONS.find((section) =>
     NAV_ITEMS.some((item) => section.labels.includes(item.label) && navActive(item, pathname))
@@ -159,28 +162,23 @@ export default function AdminLayout() {
     );
   };
 
-  const signOut =
-    async () => {
-      try {
-        setMobileMenuOpen(
-          false,
-        );
-
-        await logoutUser();
-
-        router.replace(
-          "/admin-login" as Href,
-        );
-      } catch (
-        error: any
-      ) {
-        Alert.alert(
-          "Sign Out Failed",
-          error?.message ||
-            "Unable to sign out.",
-        );
-      }
-    };
+  const signOut = async () => {
+    if (logoutPromptOpen.current) return;
+    logoutPromptOpen.current = true;
+    try {
+      const confirmed = await AppAlert.confirm(
+        "Log Out", "Sign out of your VolunServe Admin account?", "Log Out"
+      );
+      if (!confirmed) return;
+      setMobileMenuOpen(false);
+      await logoutUser();
+      router.replace("/admin-login" as Href);
+    } catch (error: any) {
+      AppAlert.alert("Sign Out Failed", error?.message || "Unable to sign out.");
+    } finally {
+      logoutPromptOpen.current = false;
+    }
+  };
 
   if (loading) {
     return (
