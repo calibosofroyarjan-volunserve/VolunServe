@@ -1,3 +1,4 @@
+import { liveUi as ui } from "../../constants/volunserveLiveUi";
 import { Ionicons } from "@expo/vector-icons";
 
 import {
@@ -1827,9 +1828,9 @@ export default function AdminAccounts() {
 const styles =
   StyleSheet.create({
 
-    directoryPanel:{backgroundColor:"#FFFFFF",borderRadius:12,borderWidth:1,borderColor:"#DCE9E1",overflow:"hidden"},
+    directoryPanel:{backgroundColor: ui.color.surface,borderRadius:12,borderWidth:1,borderColor:"#DCE9E1",overflow:"hidden"},
     dirHeading:{flexDirection:"row",alignItems:"center",gap:12,padding:18},
-    dirTitle:{fontSize:16,fontWeight:"800",color:"#173D32"},
+    dirTitle:{fontSize:16,fontWeight:"800",color: ui.color.text},
     dirNote:{color:"#6A8579",fontSize:11,marginTop:3,lineHeight:17},
     dirTag:{fontSize:11,fontWeight:"800",color:"#087859",backgroundColor:"#E9F7EF",paddingHorizontal:11,paddingVertical:8,borderRadius:9},
     dirResults:{flexDirection:"row",justifyContent:"space-between",flexWrap:"wrap",gap:8,padding:14,borderTopWidth:1,borderColor:"#E5EEE9"},
@@ -1848,10 +1849,10 @@ const styles =
     dirManage:{width:100,minHeight:36,flexDirection:"row",alignItems:"center",justifyContent:"center",gap:5,borderWidth:1,borderColor:"#D1E8DC",backgroundColor:"#F4FAF6",borderRadius:9},
     dirManageText:{fontSize:11,fontWeight:"800",color:"#08795B"},
     dirExpanded:{padding:16,backgroundColor:"#F5FAF7",borderTopWidth:1,borderColor:"#E0ECE4",flexDirection:"row",flexWrap:"wrap",alignItems:"center",gap:14},
-    dirAction:{minHeight:39,flexDirection:"row",alignItems:"center",gap:6,paddingHorizontal:13,borderWidth:1,borderColor:"#D0E7DA",borderRadius:9,backgroundColor:"#FFFFFF"},
+    dirAction:{minHeight:39,flexDirection:"row",alignItems:"center",gap:6,paddingHorizontal:13,borderWidth:1,borderColor:"#D0E7DA",borderRadius:9,backgroundColor: ui.color.surface},
     dirActionText:{color:"#087C5E",fontSize:11,fontWeight:"800"},
     dirPaging:{flexDirection:"row",justifyContent:"flex-end",alignItems:"center",flexWrap:"wrap",padding:15,gap:7},
-    dirPage:{minHeight:36,paddingHorizontal:12,borderWidth:1,borderColor:"#D5E7DC",borderRadius:8,backgroundColor:"#FFFFFF",justifyContent:"center",alignItems:"center"},
+    dirPage:{minHeight:36,paddingHorizontal:12,borderWidth:1,borderColor:"#D5E7DC",borderRadius:8,backgroundColor: ui.color.surface,justifyContent:"center",alignItems:"center"},
     dirPageText:{fontSize:11,fontWeight:"800",color:"#08785C"},
 
     credentialReview: { marginTop: 20, marginBottom: 12, borderTopWidth: 1, borderColor: "#E0EAE4", paddingTop: 19 },
@@ -1861,7 +1862,7 @@ const styles =
     reviewScroll: { width: "100%" },
     reviewField: { marginBottom: 17 },
     reviewLabel: { fontSize: 13, fontWeight: "700", color: "#294C3C", marginBottom: 7 },
-    reviewInput: { backgroundColor: "#FFFFFF", borderWidth: 1, borderColor: "#D5E3DB", borderRadius: 11, paddingHorizontal: 14, minHeight: 50, fontSize: 14, color: "#173D32" },
+    reviewInput: { backgroundColor: ui.color.surface, borderWidth: 1, borderColor: "#D5E3DB", borderRadius: 11, paddingHorizontal: 14, minHeight: 50, fontSize: 14, color: ui.color.text },
     confirmReview: { flexDirection: "row", alignItems: "flex-start", gap: 12, marginVertical: 5, borderWidth: 1, borderColor: "#E0EBE4", padding: 13, backgroundColor: "#FAFCFB", borderRadius: 12 },
     confirmReviewText: { flex: 1, color: "#355749", fontSize: 13, lineHeight: 20 },
     reviewHint: { color: "#75867D", fontSize: 11, lineHeight: 16 },
@@ -1891,13 +1892,13 @@ const styles =
 
     loadingText: {
       marginTop: 12,
-      color: "#64748B",
+      color: ui.color.secondary,
       fontWeight: "600",
     },
 
     accessDeniedTitle: {
       marginTop: 14,
-      color: "#173D32",
+      color: ui.color.text,
       fontSize: 20,
       fontWeight: "900",
       textAlign: "center",
@@ -1906,7 +1907,7 @@ const styles =
     accessDeniedText: {
       marginTop: 8,
       maxWidth: 520,
-      color: "#64748B",
+      color: ui.color.secondary,
       fontSize: 13,
       lineHeight: 20,
       textAlign: "center",
@@ -1932,11 +1933,11 @@ const styles =
     title: {
       fontSize: 30,
       fontWeight: "700",
-      color: "#173D32",
+      color: ui.color.text,
     },
 
     subtitle: {
-      color: "#64748B",
+      color: ui.color.secondary,
       marginTop: 5,
       lineHeight: 20,
       maxWidth: 600,
@@ -1972,7 +1973,7 @@ const styles =
       backgroundColor: "transparent",
       borderRadius: 0,
       borderBottomWidth: 1,
-      borderColor: "#E2E8F0",
+      borderColor: ui.color.border,
       padding: 16,
     },
 
@@ -1988,12 +1989,12 @@ const styles =
     statValue: {
       fontSize: 25,
       fontWeight: "700",
-      color: "#173D32",
+      color: ui.color.text,
     },
 
     statLabel: {
       marginTop: 2,
-      color: "#64748B",
+      color: ui.color.secondary,
       fontWeight: "700",
     },
 
@@ -2001,8 +2002,7 @@ const styles =
       flexDirection: "row",
       alignItems: "center",
       gap: 9,
-      backgroundColor:
-        "#FFFFFF",
+      backgroundColor: ui.color.surface,
       borderWidth: 1,
       borderColor: "#CBD5E1",
       borderRadius: 13,
@@ -2013,7 +2013,7 @@ const styles =
     searchInput: {
       flex: 1,
       minHeight: 46,
-      color: "#173D32",
+      color: ui.color.text,
       outlineStyle: "none",
     } as any,
 
@@ -2027,8 +2027,7 @@ const styles =
       paddingHorizontal: 16,
       paddingVertical: 10,
       borderRadius: 999,
-      backgroundColor:
-        "#FFFFFF",
+      backgroundColor: ui.color.surface,
       borderWidth: 1,
       borderColor: "#CBD5E1",
     },
@@ -2050,11 +2049,10 @@ const styles =
     },
 
     adminCard: {
-      backgroundColor:
-        "#FFFFFF",
+      backgroundColor: ui.color.surface,
       borderRadius: 3,
       borderBottomWidth: 1,
-      borderColor: "#E2E8F0",
+      borderColor: ui.color.border,
       padding: 17,
       marginBottom: 8,
     },
@@ -2084,12 +2082,12 @@ const styles =
     adminName: {
       fontSize: 17,
       fontWeight: "900",
-      color: "#173D32",
+      color: ui.color.text,
     },
 
     adminEmail: {
       marginTop: 3,
-      color: "#64748B",
+      color: ui.color.secondary,
     },
 
     statusBadge: {
@@ -2190,11 +2188,10 @@ const styles =
 
     emptyCard: {
       padding: 32,
-      backgroundColor:
-        "#FFFFFF",
+      backgroundColor: ui.color.surface,
       borderRadius: 9,
       borderWidth: 1,
-      borderColor: "#E2E8F0",
+      borderColor: ui.color.border,
       alignItems: "center",
     },
 
@@ -2210,14 +2207,14 @@ const styles =
 
     emptyTitle: {
       marginTop: 13,
-      color: "#173D32",
+      color: ui.color.text,
       fontSize: 17,
       fontWeight: "900",
     },
 
     emptyText: {
       marginTop: 5,
-      color: "#64748B",
+      color: ui.color.secondary,
       textAlign: "center",
       lineHeight: 19,
     },
@@ -2234,8 +2231,7 @@ const styles =
       width: "100%",
       maxWidth: 720,
       alignSelf: "center",
-      backgroundColor:
-        "#FFFFFF",
+      backgroundColor: ui.color.surface,
       borderRadius: 10,
       padding: 18,
     },
@@ -2249,12 +2245,12 @@ const styles =
     modalTitle: {
       fontSize: 22,
       fontWeight: "900",
-      color: "#173D32",
+      color: ui.color.text,
     },
 
     modalSubtitle: {
       marginTop: 4,
-      color: "#64748B",
+      color: ui.color.secondary,
       lineHeight: 19,
     },
 
@@ -2285,8 +2281,7 @@ const styles =
       gap: 11,
       paddingVertical: 12,
       borderBottomWidth: 1,
-      borderBottomColor:
-        "#E2E8F0",
+      borderBottomColor: ui.color.border,
     },
 
     smallAvatar: {
@@ -2305,13 +2300,13 @@ const styles =
     },
 
     userName: {
-      color: "#173D32",
+      color: ui.color.text,
       fontWeight: "900",
     },
 
     userMeta: {
       marginTop: 2,
-      color: "#64748B",
+      color: ui.color.secondary,
       fontSize: 12,
     },
 
@@ -2358,13 +2353,11 @@ const styles =
       width: "100%",
       maxWidth: 880,
       alignSelf: "center",
-      backgroundColor:
-        "#FFFFFF",
+      backgroundColor: ui.color.surface,
       borderRadius: 10,
       padding: 24,
       borderWidth: 1,
-      borderColor:
-        "#E2E8F0",
+      borderColor: ui.color.border,
     },
 
     confirmIcon: {
@@ -2379,14 +2372,14 @@ const styles =
     },
 
     confirmTitle: {
-      color: "#173D32",
+      color: ui.color.text,
       fontSize: 26,
       fontWeight: "900",
     },
 
     confirmMessage: {
       marginTop: 7,
-      color: "#64748B",
+      color: ui.color.secondary,
       fontSize: 13,
       lineHeight: 20,
     },
@@ -2398,19 +2391,18 @@ const styles =
       backgroundColor:
         "#F8FAFC",
       borderWidth: 1,
-      borderColor:
-        "#E2E8F0",
+      borderColor: ui.color.border,
     },
 
     confirmAccountName: {
-      color: "#173D32",
+      color: ui.color.text,
       fontSize: 14,
       fontWeight: "900",
     },
 
     confirmAccountMeta: {
       marginTop: 3,
-      color: "#64748B",
+      color: ui.color.secondary,
       fontSize: 12,
     },
 
@@ -2452,8 +2444,7 @@ const styles =
     },
 
     confirmCancelButton: {
-      backgroundColor:
-        "#FFFFFF",
+      backgroundColor: ui.color.surface,
       borderWidth: 1,
       borderColor:
         "#CBD5E1",
