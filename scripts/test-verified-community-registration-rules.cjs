@@ -74,6 +74,8 @@ async function main() {
     await invalidCreate({barangay:"Quezon City"});
     await invalidCreate({occupationCategory:"Unknown"});
     await invalidCreate({occupationCategory:"Student",occupationSpecialization:"Doctor"});
+    await invalidCreate({occupationCategory:"Student",occupationOther:"Unrelated occupation"});
+    await invalidCreate({occupationCategory:"Unemployed",occupationSpecialization:"Doctor"});
     await invalidCreate({occupationCategory:"Student",occupationSpecialization:""});
     await invalidCreate({occupationCategory:"Other (Specify)",occupationSpecialization:"",occupationOther:""});
     await invalidCreate({firstName:"A"});
