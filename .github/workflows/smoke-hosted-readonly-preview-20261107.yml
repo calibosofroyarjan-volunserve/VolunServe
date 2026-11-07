@@ -41,7 +41,7 @@ jobs:
             if(route==='/login') {
               assert(notice, '/login must show a staging notice instead of a form');
             }
-            const inputTags=page.match(/<input\\b[^>]*>/gi)||[];
+            const inputTags=page.match(/<input[^>]*>/gi)||[];
             assert(!inputTags.some(tag=>/(?:type|name)=["'](?:password|email)["']/i.test(tag)),
               route+' still renders a credential input');
             if(!notice) {
