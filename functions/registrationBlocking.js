@@ -4,8 +4,7 @@
 // login regression tests pass. Deploy ONLY the two exports after upgrade.
 // Pre-sign-in cannot blanket reject unverified email: it also runs before
 // the first registration token, which is needed to send a verification link.
-const {beforeUserCreated, beforeUserSignedIn} = require("firebase-functions/v2/identity");
-const {HttpsError} = require("firebase-functions/v2/https");
+const {beforeUserCreated, beforeUserSignedIn, HttpsError} = require("firebase-functions/v2/identity");
 const {getFirestore} = require("firebase-admin/firestore");
 const {classifyRegistrationEmail} = require("./registrationEmailScreening");
 
