@@ -32,6 +32,7 @@ on:
       - 'app/login.tsx'
       - 'firestore.rules'
       - 'scripts/test-signup-prod.cjs'
+      - 'scripts/test-resident-field-validation.cjs'
       - '.github/workflows/validate-auth-guest-20261108.yml'
 permissions:
   contents: read
@@ -64,6 +65,7 @@ jobs:
       - run: npx firebase-tools emulators:exec --only firestore --project demo-volunserve-verified-signup "node scripts/test-verified-community-registration-rules.cjs"
       - run: npx firebase-tools emulators:exec --only firestore,storage --project demo-volunserve-storage-verified "node scripts/test-verified-storage-rules.cjs"
       - run: node scripts/test-signup-prod.cjs
+      - run: node --test scripts/test-resident-field-validation.cjs
       - run: node scripts/test-guest-readonly-preview.cjs
       - run: node scripts/test-guest-auth-route-isolation.cjs
       - run: npx tsc --noEmit --incremental false
