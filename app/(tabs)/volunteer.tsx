@@ -2184,22 +2184,22 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 1,
-    borderColor: "#e1e8ee",
-    borderRadius: 12,
-    backgroundColor: "#ffffff",
+    borderColor: ui.color.border,
+    borderRadius: ui.radius.card,
+    backgroundColor: ui.color.surface,
   },
 
   statValue: {
-    color: "#123047",
+    color: ui.color.text,
     fontSize: 22,
-    fontWeight: "900",
+    fontWeight: "700",
   },
 
   statLabel: {
     marginTop: 2,
-    color: "#64748b",
-    fontSize: 10,
-    fontWeight: "800",
+    color: ui.color.muted,
+    fontSize: 12,
+    fontWeight: "600",
   },
 
   filterRow: {
