@@ -1,0 +1,66 @@
+# READ-ONLY Firebase Hosting IAM/CLI smoke test. NEVER deploys websites.
+# Triggers only when this specific workflow file is added/changed on the live-based release branch.
+# Requires the protected GitHub Environment's human approval.
+name: VolunServe — Hosting CLI Read-Only Permission Test (NO DEPLOY)
+
+on:
+  push:
+    branches:
+      - release/production-hosting
+    paths:
+      - '.github/workflows/verify-protected-hosting-readonly.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  hosting-readonly-check:
+    if: ${{ github.repository == 'calibosofroyarjan-volunserve/VolunServe' && github.ref == 'refs/heads/release/production-hosting' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment:
+      name: volunserve-production-hosting
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Checkout approved release code (read only)
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Prepare Node.js for isolated Firebase CLI install
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install pinned Firebase CLI only into ephemeral runner directory
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install --prefix "$RUNNER_TEMP/volunserve-firebase-cli" --no-save --ignore-scripts --no-audit --no-fund firebase-tools@15.31.0
+          "$RUNNER_TEMP/volunserve-firebase-cli/node_modules/.bin/firebase" --version
+
+      - name: Authenticate only through approved GitHub OIDC (no JSON service-account key)
+        uses: google-github-actions/auth@v3
+        with:
+          project_id: volunserve-3aa5b
+          workload_identity_provider: projects/233201250762/locations/global/workloadIdentityPools/volunserve-github-hosting/providers/volunserve-github-actions
+          service_account: volunserve-protected-hostin@volunserve-3aa5b.iam.gserviceaccount.com
+          create_credentials_file: true
+          export_environment_variables: true
+
+      - name: List Firebase Hosting sites — READ ONLY (no deploy, writes, or changes)
+        shell: bash
+        env:
+          CI: 'true'
+          FIREBASE_CLI_EXPERIMENTS: ''
+        run: |
+          set -euo pipefail
+          test -n "${GOOGLE_APPLICATION_CREDENTIALS:-}" || {
+            echo "::error::OIDC Application Default Credentials are missing"
+            exit 1
+          }
+          "$RUNNER_TEMP/volunserve-firebase-cli/node_modules/.bin/firebase" hosting:sites:list --project volunserve-3aa5b --non-interactive --json
+          echo "PASS: protected keyless identity can READ Firebase Hosting sites."
+          echo "NO DEPLOY, no Firebase Rules/Functions/Storage updates, no Render actions."
