@@ -60,6 +60,16 @@ export default function DocumentScreeningSummary({
           </Text>
         </View>
         <View style={styles.row}>
+          <Text style={styles.label}>Account name vs ID text</Text>
+          <Text style={styles.value}>
+            {screening.profileNameCheck === "possible_match"
+              ? "Name appears in ID text"
+              : screening.profileNameCheck === "inconclusive"
+                ? "Not confirmed by OCR"
+                : "Not checked"}
+          </Text>
+        </View>
+        <View style={styles.row}>
           <Text style={styles.label}>Identity decision</Text>
           <Text style={styles.value}>Pending LGU validation</Text>
         </View>
