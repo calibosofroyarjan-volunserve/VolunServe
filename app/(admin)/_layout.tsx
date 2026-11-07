@@ -34,6 +34,7 @@ import {
 import {
   useUserSession,
 } from "../../lib/useUserSession";
+import { liveUi as ui } from "../../constants/volunserveLiveUi";
 
 const WEB_PORTAL_URL =
   "https://volunserve-3aa5b.web.app";
@@ -53,9 +54,9 @@ const NAV_ITEMS: NavItem[] = [
   { label: "Command Center", icon: "home-outline", route: "/(admin)/command-center" },
   { label: "Resident Identity Reviews", icon: "shield-checkmark-outline", route: "/(admin)/identity-reviews" },
   { label: "LGU Operations", icon: "time-outline", route: "/(admin)/lgu-attendance" },
-  { label: "Emergency Reports", icon: "warning-outline", route: "/(admin)/admin-cases" },
+  { label: "Emergency Reports", icon: "alert-circle-outline", route: "/(admin)/admin-cases" },
   { label: "Assistance Requests", icon: "hand-left-outline", route: "/(admin)/assistance-requests" },
-  { label: "Community Events", icon: "leaf-outline", route: "/(admin)/community-events" },
+  { label: "Community Events", icon: "calendar-outline", route: "/(admin)/community-events" },
   { label: "Event Attendance", icon: "checkmark-done-outline", route: "/(admin)/community-attendance" },
   { label: "Certificates", icon: "ribbon-outline", route: "/(admin)/certificates" },
   { label: "Donation Management", icon: "heart-outline", route: "/(admin)/donor-monitoring" },
@@ -605,9 +606,9 @@ const styles =
       minHeight: 0,
       flexShrink: 0,
       overflow: "hidden",
-      backgroundColor: "#0F392F",
+      backgroundColor: ui.color.sidebar,
       borderRightWidth: 1,
-      borderRightColor: "#1D5547",
+      borderRightColor: ui.color.sidebarActive,
     },
 
     brand: {
@@ -632,7 +633,7 @@ const styles =
       borderRadius:
         10,
       backgroundColor:
-        "#635BDE",
+        ui.color.primary,
       alignItems:
         "center",
       justifyContent:
@@ -696,7 +697,7 @@ const styles =
     navSelectedGradient: { ...StyleSheet.absoluteFillObject, borderRadius: 13 },
 
     navItemActive: {
-      backgroundColor: "#257C61",
+      backgroundColor: ui.color.sidebarActive,
     },
 
     navLabel: {
@@ -724,10 +725,10 @@ const styles =
 
     navIcon: { width: 30, height: 30, borderRadius: 8, overflow: "hidden", backgroundColor: "rgba(255,255,255,0.07)", alignItems: "center", justifyContent: "center" },
     navIconGradient: { ...StyleSheet.absoluteFillObject, borderRadius: 12 },
-    navIconActive: { backgroundColor: "#226859" },
+    navIconActive: { backgroundColor: ui.color.sidebarActive },
     activeIndicator: { width: 4, height: 24, borderRadius: 3, backgroundColor: "#E1FFF6" },
     sidebarUtility: { flexShrink: 0, marginHorizontal: 17, paddingTop: 11, paddingBottom: 15, borderTopWidth: 1, borderTopColor: "rgba(220,245,230,0.16)" },
-    logoutButton: { minHeight: 43, borderRadius: 11, flexDirection: "row", gap: 12, alignItems: "center", paddingHorizontal: 11 },
+    logoutButton: { minHeight: ui.minTap, borderRadius: 11, flexDirection: "row", gap: 12, alignItems: "center", paddingHorizontal: 11 },
     signOutLabel: {
       color: "#FFCFCF",
       fontSize: 12,
