@@ -28,7 +28,14 @@ def deduplicate_face_boxes(boxes):
             union = cw * ch + ew * eh - intersection
             overlap = intersection / union if union else 0
             containment = intersection / min(cw * ch, ew * eh)
-            if overlap >= 0.65 or containment >= 0.90:
+            area_ratio = min(cw * ch, ew * eh) / max(cw * ch, ew * eh)
+            centers_close = (
+                abs((cx + cw / 2) - (ex + ew / 2)) <= max(cw, ew) * 0.15
+                and abs((cy + ch / 2) - (ey + eh / 2)) <= max(ch, eh) * 0.15
+            )
+            if overlap >= 0.65 or (
+                containment >= 0.90 and area_ratio >= 0.70 and centers_close
+            ):
                 duplicate = True
                 break
         if not duplicate:
