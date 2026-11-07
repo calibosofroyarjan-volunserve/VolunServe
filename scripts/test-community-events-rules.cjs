@@ -57,7 +57,7 @@ function skip(name) {
 
 function residentProfile(uid) {
   return {
-    uid, role: "resident", status: "approved",
+    uid, email: uid + "@gmail.com", role: "resident", status: "approved",
     residentAccess: true, activeMode: "resident",
     volunteerAccess: false, volunteerStatus: "not_applied",
     fullName: "Example Resident",
@@ -121,11 +121,11 @@ async function main() {
       await db.doc("users/" + superAdminUid).set({uid:superAdminUid,role:"superadmin",status:"approved",fullName:"System Programmer"});
     });
 
-    const resident = env.authenticatedContext(residentUid).firestore();
-    const volunteer = env.authenticatedContext(volunteerUid).firestore();
+    const resident = env.authenticatedContext(residentUid,{email:residentUid+"@gmail.com",email_verified:true}).firestore();
+    const volunteer = env.authenticatedContext(volunteerUid,{email:volunteerUid+"@gmail.com",email_verified:true}).firestore();
     const admin = env.authenticatedContext(adminUid).firestore();
     const superAdmin = env.authenticatedContext(superAdminUid).firestore();
-    const other = env.authenticatedContext(otherUid).firestore();
+    const other = env.authenticatedContext(otherUid,{email:otherUid+"@gmail.com",email_verified:true}).firestore();
     const anonymous = env.unauthenticatedContext().firestore();
 
     const proposalRef = resident.doc("communityEventProposals/" + eventId);
