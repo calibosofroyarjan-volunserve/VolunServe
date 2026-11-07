@@ -6,6 +6,9 @@
 // the first registration token, which is needed to send a verification link.
 const {beforeUserCreated, beforeUserSignedIn, HttpsError} = require("firebase-functions/v2/identity");
 const {getFirestore} = require("firebase-admin/firestore");
+const {defineSecret} = require("firebase-functions/params");
+const {enforceSignupIpRateLimit, RegistrationRateLimitError} = require("./registrationIpRateLimiter");
+const signupRateLimitSecret = defineSecret("VOLUNSERVE_REGISTRATION_RATE_LIMIT_SECRET");
 const {classifyRegistrationEmail} = require("./registrationEmailScreening");
 
 function rejectEmail() {
@@ -14,8 +17,32 @@ function rejectEmail() {
       "This email cannot be used for VolunServe registration. Use a permanent address."
   );
 }
-const beforeCreate = beforeUserCreated({region: "us-central1"}, (event) => {
+const beforeCreate = beforeUserCreated({
+  region: "us-central1",
+  secrets: [signupRateLimitSecret],
+}, async (event) => {
+  // Block the fake mailbox BEFORE creating a Firebase Auth UID.
   if (!classifyRegistrationEmail(event.data?.email).allowed) rejectEmail();
+  // This is genuine server-side rate limiting: distributed Firestore
+  // transaction keyed by HMAC(IP + time window), not a bypassable UI timer.
+  // It is STAGED ONLY until Identity Platform and the secret + TTL policy are
+  // configured and verified. Do not use this on normal sign-ins.
+  try {
+    await enforceSignupIpRateLimit({
+      db: getFirestore(),
+      ipAddress: event.ipAddress,
+      eventId: event.eventId,
+      secret: signupRateLimitSecret.value(),
+    });
+  } catch (error) {
+    if (error instanceof RegistrationRateLimitError) {
+      throw new HttpsError("resource-exhausted",
+        "Too many registrations from this network. Please try again later.");
+    }
+    // Never allow an unverified Auth UID through when the required
+    // rate-limit check unexpectedly fails.
+    throw new HttpsError("unavailable", "Registration is temporarily unavailable. Please try again later.");
+  }
 });
 const beforeSignIn = beforeUserSignedIn({region: "us-central1"}, async (event) => {
   const email = event.data?.email;
