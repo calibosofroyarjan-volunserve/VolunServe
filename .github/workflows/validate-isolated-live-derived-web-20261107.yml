@@ -56,6 +56,9 @@ jobs:
           node scripts/test-live-controls-consistency-20261107.cjs
           node scripts/test-portal-resident-volunteer-ui-flow.cjs
           node scripts/test-guest-readonly-preview.cjs
+      - name: Ensure read-only sign-in, sign-up and staff forms cannot capture credentials
+        working-directory: source
+        run: node scripts/test-readonly-preview-auth-guard-20261107.cjs
       - name: Compile TypeScript for every web/mobile screen
         working-directory: source
         run: npx tsc --noEmit --pretty false
