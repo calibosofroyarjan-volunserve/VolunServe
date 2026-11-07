@@ -39,6 +39,9 @@ import {
 import {
   useUserSession,
 } from "../../lib/useUserSession";
+import { liveUi as ui } from "../../constants/volunserveLiveUi";
+import VolunServeButton from "../../components/ui/VolunServeButton";
+import VolunServeField from "../../components/ui/VolunServeField";
 
 export default function SystemSettings() {
   const {
@@ -452,33 +455,14 @@ export default function SystemSettings() {
         </Text>
       </View>
 
-      <TouchableOpacity
-        disabled={saving}
-        style={[
-          styles.button,
-          saving &&
-            styles.disabled,
-        ]}
+      <VolunServeButton
+        label="Save System Settings"
+        icon="save-outline"
         onPress={saveSettings}
-      >
-        {saving ? (
-          <ActivityIndicator
-            color="#FFFFFF"
-          />
-        ) : (
-          <>
-            <Ionicons
-              name="save-outline"
-              size={18}
-              color="#FFFFFF"
-            />
-
-            <Text style={styles.buttonText}>
-              Save System Settings
-            </Text>
-          </>
-        )}
-      </TouchableOpacity>
+        loading={saving}
+        disabled={saving}
+        style={styles.saveAction}
+      />
     </ScrollView>
   );
 }
@@ -499,20 +483,20 @@ function PresetField({
       <TouchableOpacity accessibilityRole="button" accessibilityLabel={label + " options"}
         accessibilityState={{ expanded }} onPress={() => setExpanded(!expanded)}
         style={[styles.input, { flexDirection: "row", alignItems: "center", justifyContent: "space-between" }]}>
-        <Text style={{ flex: 1, color: "#173D32" }} numberOfLines={2}>
+        <Text style={{ flex: 1, color: ui.color.text }} numberOfLines={2}>
           {customMode ? "Others — specify" : (value || "Select an option")}
         </Text>
-        <Ionicons name={expanded ? "chevron-up" : "chevron-down"} size={18} color="#23765F"/>
+        <Ionicons name={expanded ? "chevron-up" : "chevron-down"} size={18} color={ui.color.primary}/>
       </TouchableOpacity>
-      {expanded && <View style={{ borderWidth: 1, borderColor: "#DCE9E3", borderRadius: 11, marginTop: 4, overflow: "hidden" }}>
+      {expanded && <View style={{ borderWidth: 1, borderColor: ui.color.border, borderRadius: ui.radius.control, marginTop: 4, overflow: "hidden" }}>
         {[...options, "Others — specify"].map((option) =>
           <TouchableOpacity key={option} accessibilityRole="button" onPress={() => {
             const other = option === "Others — specify";
             setCustomMode(other); setExpanded(false);
             if (!other) onChangeText(option);
             else if (options.includes(value)) onChangeText("");
-          }} style={{ padding: 13, backgroundColor: "#FFFFFF", borderBottomWidth: 1, borderColor: "#EDF3EF" }}>
-            <Text style={{ color: "#173D32" }}>{option}</Text>
+          }} style={{ padding: 13, minHeight: ui.minTap, justifyContent: "center", backgroundColor: ui.color.surface, borderBottomWidth: 1, borderColor: ui.color.border }}>
+            <Text style={{ color: ui.color.text }}>{option}</Text>
           </TouchableOpacity>)}
       </View>}
       {customMode && <TextInput value={value} onChangeText={onChangeText}
@@ -526,33 +510,8 @@ function PresetField({
   );
 }
 
-function Field({
-  label,
-  multiline,
-  ...props
-}: any) {
-  return (
-    <>
-      <Text style={styles.label}>
-        {label}
-      </Text>
-
-      <TextInput
-        {...props}
-        multiline={multiline}
-        textAlignVertical={
-          multiline
-            ? "top"
-            : "center"
-        }
-        style={[
-          styles.input,
-          multiline &&
-            styles.multiline,
-        ]}
-      />
-    </>
-  );
+function Field({ label, multiline, ...props }: any) {
+  return <VolunServeField label={label} multiline={multiline} {...props} />;
 }
 
 const styles =
@@ -647,11 +606,11 @@ const styles =
 
     card: {
       marginTop: 15,
-      padding: 17,
-      borderRadius: 17,
-      backgroundColor: "#FFFFFF",
+      padding: 20,
+      borderRadius: ui.radius.card,
+      backgroundColor: ui.color.surface,
       borderWidth: 1,
-      borderColor: "#E2E8F0",
+      borderColor: ui.color.border,
     },
 
     cardHeader: {
@@ -675,34 +634,34 @@ const styles =
     },
 
     cardTitle: {
-      color: "#173D32",
-      fontSize: 18,
-      fontWeight: "900",
+      color: ui.color.text,
+      fontSize: ui.type.section.fontSize,
+      fontWeight: "700",
     },
 
     cardSubtitle: {
       marginTop: 3,
-      color: "#64748B",
-      lineHeight: 18,
-      fontSize: 12.5,
+      color: ui.color.secondary,
+      lineHeight: 20,
+      fontSize: 13,
     },
 
     label: {
       marginTop: 13,
       marginBottom: 6,
-      color: "#334155",
-      fontSize: 12,
-      fontWeight: "900",
+      color: ui.color.text,
+      fontSize: ui.type.label.fontSize,
+      fontWeight: "600",
     },
 
     input: {
       minHeight: 47,
       borderWidth: 1,
-      borderColor: "#CBD5E1",
-      borderRadius: 11,
+      borderColor: ui.color.border,
+      borderRadius: ui.radius.control,
       paddingHorizontal: 12,
-      color: "#173D32",
-      backgroundColor: "#F8FAFC",
+      color: ui.color.text,
+      backgroundColor: ui.color.surface,
       outlineStyle: "none",
     } as any,
 
@@ -713,7 +672,7 @@ const styles =
 
     helper: {
       marginTop: 8,
-      color: "#64748B",
+      color: ui.color.secondary,
       fontSize: 12,
       lineHeight: 18,
     },
@@ -735,16 +694,7 @@ const styles =
       lineHeight: 18,
     },
 
-    button: {
-      minHeight: 52,
-      marginTop: 18,
-      borderRadius: 12,
-      alignItems: "center",
-      justifyContent: "center",
-      flexDirection: "row",
-      gap: 8,
-      backgroundColor: "#078F82",
-    },
+    saveAction: { marginTop: 18 },
 
     buttonText: {
       color: "#FFFFFF",
