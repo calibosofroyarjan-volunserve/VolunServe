@@ -10,6 +10,9 @@ on:
       - 'identity-ai/**'
       - 'app/identity-verification.tsx'
       - 'lib/identityVerification.ts'
+      - 'backend/firebaseAdmin.js'
+      - 'backend/stagingIsolation.js'
+      - 'backend/test-stagingIsolation.js'
       - '.github/workflows/identity-ai-safe-tests.yml'
   pull_request:
     branches:
@@ -50,6 +53,19 @@ jobs:
       - name: Smoke-test actual MediaPipe with synthetic images
         working-directory: identity-ai
         run: python -m unittest -v test_ai_runtime_smoke.py
+
+  backend-staging-safety:
+    name: Backend staging isolation (no credentials)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Syntax checks
+        run: node --check backend/firebaseAdmin.js && node --check backend/stagingIsolation.js
+      - name: Production boundary regression tests
+        run: node --test backend/test-stagingIsolation.js
 
   frontend-types:
     name: Frontend TypeScript check
