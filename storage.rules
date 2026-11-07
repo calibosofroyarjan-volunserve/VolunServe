@@ -15,6 +15,9 @@ service firebase.storage {
       // even when callers bypass the login UI and use Firebase SDK directly.
       return signedIn()
         && request.auth.token.get('email_verified', false) == true
+        && profile().role in [
+          'resident', 'volunteer', 'admin', 'superadmin', 'lgu_personnel'
+        ]
         && (profile().status == 'approved'
           || (!('status' in profile()) && profile().role != 'applicant'));
     }
