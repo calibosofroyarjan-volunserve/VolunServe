@@ -1,0 +1,80 @@
+name: Identity AI isolated checks
+
+# Deliberately scoped to the isolated identity branch.
+# No deploy jobs, Firebase credentials, Render keys, or production writes.
+on:
+  push:
+    branches:
+      - fix/identity-full-hardening-live-base-20261107
+    paths:
+      - 'identity-ai/**'
+      - 'app/identity-verification.tsx'
+      - 'lib/identityVerification.ts'
+      - 'backend/firebaseAdmin.js'
+      - 'backend/stagingIsolation.js'
+      - 'backend/test-stagingIsolation.js'
+      - '.github/workflows/identity-ai-safe-tests.yml'
+  pull_request:
+    branches:
+      - review/identity-live-backend-base-20261107
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  ai-unit:
+    name: Face-box and ID screening tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Syntax check (no imports)
+        run: python -m py_compile identity-ai/main.py identity-ai/face_boxes.py identity-ai/document_screening.py
+      - name: Regression tests (no personal images)
+        working-directory: identity-ai
+        run: python -m unittest -v test_face_box_dedup.py test_document_screening.py
+
+  ai-runtime:
+    name: Real MediaPipe runtime smoke tests (synthetic only)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+          cache-dependency-path: identity-ai/requirements.txt
+      - name: Install pinned identity engine dependencies
+        run: python -m pip install -r identity-ai/requirements.txt
+      - name: Smoke-test actual MediaPipe with synthetic images
+        working-directory: identity-ai
+        run: python -m unittest -v test_ai_runtime_smoke.py
+
+  backend-staging-safety:
+    name: Backend staging isolation (no credentials)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Syntax checks
+        run: node --check backend/firebaseAdmin.js && node --check backend/stagingIsolation.js
+      - name: Production boundary regression tests
+        run: node --test backend/test-stagingIsolation.js
+
+  frontend-types:
+    name: Frontend TypeScript check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npx tsc --noEmit --pretty false

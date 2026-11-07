@@ -34,6 +34,7 @@ import {
 } from "../lib/firebaseAuth";
 import {
   CapturedIdentityMedia,
+  checkIdentityEngineReady,
   getIdentityVerificationStatus,
   IdentityDocumentType,
   IdentityVerificationStatusResult,
@@ -359,7 +360,7 @@ export default function IdentityVerification() {
       if (!idDocument) {
         Alert.alert(
           "Government ID Required",
-          "Scan a clear government ID using your camera before starting the face scan.",
+          "Place the physical ID alone on a flat, well-lit surface. Keep all four corners and the printed portrait visible; avoid glare or other people in the frame.",
         );
         return;
       }
@@ -450,7 +451,7 @@ export default function IdentityVerification() {
         Alert.alert(
           "Unable to Capture Face",
           error?.message ||
-            "The face scan photo could not be captured.",
+            "The face scan photo could not be captured. Keep one face inside the oval, look straight ahead in even lighting, and retry.",
         );
       } finally {
         setPickingSelfie(false);
@@ -490,9 +491,12 @@ export default function IdentityVerification() {
       }
 
       try {
-        setStep(3);
+        // A readiness failure must not submit ID/selfie files or consume
+        // one of the Resident's three AI verification attempts.
         setSubmitting(true);
         setLocalMessage("");
+        await checkIdentityEngineReady();
+        setStep(3);
 
         const result =
           await submitIdentityVerification(
@@ -544,12 +548,15 @@ export default function IdentityVerification() {
         error: any
       ) {
         setStep(2);
-
-        Alert.alert(
-          "Verification Not Completed",
+        const explanation =
           error?.message ||
-            "Identity verification could not be completed.",
-        );
+          "Identity verification could not be completed. Your captured photos are still available. Wait for the AI service to become ready, then retry.";
+        // Inline feedback is required on React Native Web: Alert.alert may
+        // not show a native dialog in web browsers.
+        setLocalMessage(explanation);
+        if (Platform.OS !== "web") {
+          Alert.alert("Verification Not Completed", explanation);
+        }
       } finally {
         setSubmitting(false);
       }
@@ -871,6 +878,17 @@ export default function IdentityVerification() {
         />
       ) : null}
 
+      {step === 2 && localMessage ? (
+        <View style={styles.failedNotice}>
+          <Ionicons
+            name="alert-circle-outline"
+            size={20}
+            color={COLORS.danger}
+          />
+          <Text style={styles.failedNoticeText}>{localMessage}</Text>
+        </View>
+      ) : null}
+
       {step === 2 ? (
         <FaceScanStep
           cameraRef={
@@ -894,6 +912,7 @@ export default function IdentityVerification() {
           pickingSelfie={
             pickingSelfie
           }
+          submitting={submitting}
           consent={
             consent
           }
@@ -1406,6 +1425,7 @@ function FaceScanStep({
   setCameraReady,
   selfie,
   pickingSelfie,
+  submitting,
   consent,
   setConsent,
   onCapture,
@@ -1432,6 +1452,8 @@ function FaceScanStep({
   selfie:
     CapturedIdentityMedia | null;
   pickingSelfie:
+    boolean;
+  submitting:
     boolean;
   consent:
     boolean;
@@ -1819,13 +1841,15 @@ function FaceScanStep({
           styles.verifyButton,
           (
             !selfie ||
-            !consent
+            !consent ||
+            submitting
           ) &&
             styles.disabledButton,
         ]}
         disabled={
           !selfie ||
-          !consent
+          !consent ||
+          submitting
         }
         activeOpacity={
           0.85
@@ -1834,17 +1858,21 @@ function FaceScanStep({
           onVerify
         }
       >
-        <Ionicons
-          name="scan-outline"
-          size={19}
-          color="#FFFFFF"
-        />
+        {submitting ? (
+          <ActivityIndicator color="#FFFFFF" size="small" />
+        ) : (
+          <Ionicons
+            name="scan-outline"
+            size={19}
+            color="#FFFFFF"
+          />
+        )}
         <Text
           style={
             styles.verifyButtonText
           }
         >
-          Start AI Verification
+          {submitting ? "Checking AI Service..." : "Start AI Verification"}
         </Text>
         <Ionicons
           name="arrow-forward"

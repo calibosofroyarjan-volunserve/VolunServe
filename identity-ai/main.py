@@ -10,6 +10,7 @@ import cv2
 import mediapipe as mp
 import pytesseract
 from document_screening import assess_document_text, document_ocr_unavailable
+from face_boxes import deduplicate_face_boxes
 import numpy as np
 from fastapi import FastAPI, Header, HTTPException, Request
 from starlette.datastructures import UploadFile as StarletteUploadFile
@@ -442,6 +443,7 @@ def largest_face_crop(
         minNeighbors=5,
         minSize=(60, 60),
     )
+    faces = deduplicate_face_boxes(faces)
     if len(faces) == 0:
         return image, 0
     x, y, width, height = max(
