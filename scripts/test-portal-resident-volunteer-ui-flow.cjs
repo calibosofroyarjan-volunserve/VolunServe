@@ -8,6 +8,8 @@ const assistance=read("app/(tabs)/resident.tsx");
 const home=read("components/home/Home.web.tsx");
 const community=read("app/(tabs)/community-events.tsx");
 const signup=read("app/signup.web.tsx");
+const tokens=read("constants/volunserveLiveUi.ts");
+assert(tokens.includes('sidebar: "#103D30"') && tokens.includes('sidebarActive: "#1B604B"'), "Shared premium emerald palette must remain defined");
 
 const inOrder=(source,items)=>{
  let pos=-1;
@@ -20,9 +22,9 @@ inOrder(nav,['{name:"index",label:"Home"', '{name:"disaster-response",label:"Eme
  '{name:"donation",label:"Donations"']);
 inOrder(nav,['{name:"index",label:"Home"', '{name:"volunteer",label:"Emergency Tasks"',
  '{name:"community-events",label:"Community Events"']);
-assert(nav.includes('backgroundColor: "#0B3F34"') &&
- nav.includes('residentNavItemActive: { backgroundColor: "#147D61"') &&
- nav.includes('mobileDrawerActive: { backgroundColor: "#147D61"'),
+assert(nav.includes('backgroundColor: ui.color.sidebar') &&
+ nav.includes('residentNavItemActive: { backgroundColor: ui.color.sidebarActive') &&
+ nav.includes('mobileDrawerActive: { backgroundColor: ui.color.sidebarActive'),
  "Resident and Volunteer sidebars should use the same premium emerald style");
 assert(nav.includes('volunteerOnlyRoutes') &&
  nav.includes('residentOnlyRoutes') &&
@@ -39,7 +41,7 @@ assert(volunteerWeb.includes('openLiveMap()') &&
  volunteerWeb.includes('runTransaction('),
  "Keep all live response map, task and Firestore handling unchanged");
 assert(volunteerNative.includes('styles.headerLeaf') &&
- volunteerNative.includes('backgroundColor: "#E9F8F0"') &&
+ volunteerNative.includes('backgroundColor: ui.color.surface') &&
  volunteerNative.includes('openLiveMap()'),
  "Native Volunteer header must match without losing map action");
 assert(assistance.includes('colors={["#F1FCF6","#E4F7EB","#D7F2E3","#E9F9F1"]}') &&
