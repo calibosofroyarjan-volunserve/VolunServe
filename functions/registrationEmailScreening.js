@@ -26,7 +26,14 @@ function classifyRegistrationEmail(email) {
   if (!normalized || normalized.length > 254 || !EMAIL_FORMAT.test(normalized)) {
     return {allowed: false, reason: "invalid"};
   }
-  const domain = normalized.slice(normalized.lastIndexOf("@") + 1);
+  const at = normalized.lastIndexOf("@");
+  const local = normalized.slice(0, at);
+  const domain = normalized.slice(at + 1);
+  // Block Gmail +tags, which point to the same underlying inbox and are
+  // often used to register many accounts. Ordinary Gmail stays accepted.
+  if ((domain === "gmail.com" || domain === "googlemail.com") && local.includes("+")) {
+    return {allowed: false, reason: "gmail_alias"};
+  }
   const pieces = domain.split(".");
   for (let i = 0; i < pieces.length - 1; i += 1) {
     if (domains.has(pieces.slice(i).join("."))) {
