@@ -1,3 +1,5 @@
+import { isStagingPreview } from "../lib/stagingBackendSafety";
+import ReadOnlyPreviewAuthNotice from "../components/auth/ReadOnlyPreviewAuthNotice";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import GoogleBrandMark from "../components/auth/GoogleBrandMark";
@@ -38,6 +40,11 @@ import {
 } from "../lib/firebaseAuth";
 
 export default function Login() {
+  if (isStagingPreview) return <ReadOnlyPreviewAuthNotice />;
+  return <ProductionLogin />;
+}
+
+function ProductionLogin() {
   const router = useRouter();
   const signInGoogle = useSignupGoogle();
   const emailInputRef = useRef<TextInput>(null);
