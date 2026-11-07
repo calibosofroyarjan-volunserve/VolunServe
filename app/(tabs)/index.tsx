@@ -1,3 +1,4 @@
+// Live-protected Hosting release canary (2026-11-08): deployment verification only; no runtime/UI change.
 import { Platform } from "react-native";
 
 import HomeNative from "../../components/home/Home.native";
