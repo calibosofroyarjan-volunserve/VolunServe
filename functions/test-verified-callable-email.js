@@ -23,3 +23,15 @@ test("existing authenticated Callable Functions explicitly enforce shared gate",
     assert(block.includes("requireVerifiedCallableEmail(request)"),name);
   }
 });
+
+test("legacy Guest flags cannot enable certificates or push notification registration", () => {
+  const source = fs.readFileSync(path.join(__dirname, "index.js"), "utf8");
+  const issuer = source.slice(source.indexOf('exports.issueVolunteerCertificate = onCall('),
+    source.indexOf('exports.issueCommunityCertificatesOnEventCompletion'));
+  assert(issuer.includes('["resident", "volunteer"].includes(volunteerRole)'),
+    "a volunteerAccess flag on Guest must not qualify for a certificate");
+  const push = source.slice(source.indexOf('exports.registerAndroidPushToken = onCall('),
+    source.indexOf('exports.unregisterAndroidPushToken = onCall('));
+  assert(push.includes('["resident", "volunteer", "admin", "superadmin", "lgu_personnel"]'),
+    "push registration must only accept actual registered roles");
+});
