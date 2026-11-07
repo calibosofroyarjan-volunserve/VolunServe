@@ -1,5 +1,4 @@
 import { Ionicons } from "@expo/vector-icons";
-import { LinearGradient } from "expo-linear-gradient";
 import { Redirect, useRouter } from "expo-router";
 import {
   collection,
@@ -24,6 +23,7 @@ import {
 } from "react-native";
 
 import { db } from "../../lib/firebase";
+import { volunserveUi as ui } from "../../constants/volunserveUi";
 import {
   activeModeForProfile,
   hasVolunteerAccess,
@@ -787,10 +787,7 @@ export default function VolunteerTasksWeb() {
       {/* On phones, render the header as independently sized blocks.
           Keeping the button outside title row prevents RN Web flex overlap. */}
       {mobile ? (
-        <LinearGradient colors={["#EFFBF5", "#DDF4E8", "#F8FDFA"]}
-          start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
-          style={styles.mobileTaskHeader}>
-          <View pointerEvents="none" style={styles.botanicalMobile}><Ionicons name="leaf-outline" size={105} color="rgba(13,133,94,0.13)" /></View>
+        <View style={styles.mobileTaskHeader}>
           <Text style={styles.mobileTaskEyebrow}>
             VOLUNSERVE · VOLUNTEER MODE
           </Text>
@@ -814,12 +811,9 @@ export default function VolunteerTasksWeb() {
             <Text style={styles.mobileTaskMapText}>Open Live Response Map</Text>
             <Ionicons name="arrow-forward-outline" size={17} color="#FFFFFF" />
           </TouchableOpacity>
-        </LinearGradient>
+        </View>
       ) : (
-        <LinearGradient colors={["#EFFBF5", "#DFF4E9", "#F7FDF9"]}
-          start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
-          style={styles.headerRow}>
-          <View pointerEvents="none" style={styles.botanicalDesktop}><Ionicons name="leaf-outline" size={155} color="rgba(12,130,92,0.18)" /></View>
+        <View style={styles.headerRow}>
           <View style={styles.headerCopy}>
             <Text style={styles.eyebrow}>VOLUNSERVE · VOLUNTEER MODE</Text>
             <View style={styles.titleRow}>
@@ -842,7 +836,7 @@ export default function VolunteerTasksWeb() {
             <Ionicons name="map-outline" size={18} color="#ffffff" />
             <Text style={styles.liveMapButtonText}>Open Live Response Map</Text>
           </TouchableOpacity>
-        </LinearGradient>
+        </View>
       )}
 
       <View style={[styles.liveStrip, mobile && styles.liveStripMobile]}>
@@ -1433,17 +1427,17 @@ const styles = StyleSheet.create({
     paddingTop: 16,
     paddingBottom: 16,
     marginBottom: 14,
-    borderRadius: 18,
-    backgroundColor: "#E8F8EF",
+    borderRadius: ui.radius.card,
+    backgroundColor: ui.color.surface,
     borderWidth: 1,
-    borderColor: "#D2E8DA",
+    borderColor: ui.color.border,
     overflow: "hidden",
   },
   mobileTaskEyebrow: {
-    fontSize: 10,
-    fontWeight: "800",
-    letterSpacing: 0.8,
-    color: "#087F74",
+    fontSize: 11,
+    fontWeight: "700",
+    letterSpacing: 0.4,
+    color: ui.color.primary,
     marginBottom: 12,
   },
   mobileTaskTitleRow: {
@@ -1466,7 +1460,7 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
   mobileTaskTitle: {
-    color: "#173D32",
+    color: ui.color.text,
     fontSize: 23,
     fontWeight: "700",
     lineHeight: 29,
@@ -1484,8 +1478,8 @@ const styles = StyleSheet.create({
     minHeight: 48,
     paddingHorizontal: 12,
     paddingVertical: 12,
-    borderRadius: 12,
-    backgroundColor: "#087D60",
+    borderRadius: ui.radius.control,
+    backgroundColor: ui.color.primary,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
@@ -1693,8 +1687,6 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: "700",
   },
-  botanicalDesktop: { position: "absolute", right: 70, bottom: -23, opacity: 1, transform: [{ rotate: "-25deg" }] },
-  botanicalMobile: { position: "absolute", right: -25, top: -24, transform: [{ rotate: "20deg" }] },
   headerRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -1702,11 +1694,12 @@ const styles = StyleSheet.create({
     gap: 18,
     marginBottom: 16,
     paddingHorizontal: 25,
-    paddingVertical: 26,
-    minHeight: 159,
-    borderRadius: 17,
+    paddingVertical: 20,
+    minHeight: 132,
+    borderRadius: ui.radius.card,
+    backgroundColor: ui.color.surface,
     borderWidth: 1,
-    borderColor: "#D4E8DC",
+    borderColor: ui.color.border,
     overflow: "hidden",
   },
   headerCopy: {
@@ -1714,9 +1707,9 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
   eyebrow: {
-    color: "#11765A",
-    fontSize: 10,
-    fontWeight: "900",
+    color: ui.color.primary,
+    fontSize: 11,
+    fontWeight: "700",
     letterSpacing: 1.1,
     marginBottom: 7,
   },
@@ -1734,10 +1727,10 @@ const styles = StyleSheet.create({
     backgroundColor: "#D2EFDF",
   },
   title: {
-    color: "#173D32",
-    fontSize: 28,
-    lineHeight: 33,
-    fontWeight: "900",
+    color: ui.color.text,
+    fontSize: 26,
+    lineHeight: 32,
+    fontWeight: "700",
   },
   subtitle: {
     color: "#55786A",
@@ -1752,13 +1745,13 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     gap: 8,
     paddingHorizontal: 17,
-    borderRadius: 11,
-    backgroundColor: "#087D60",
+    borderRadius: ui.radius.control,
+    backgroundColor: ui.color.primary,
   },
   liveMapButtonText: {
     color: "#ffffff",
     fontSize: 12,
-    fontWeight: "900",
+    fontWeight: "700",
   },
   liveStrip: {
     alignSelf: "flex-start",

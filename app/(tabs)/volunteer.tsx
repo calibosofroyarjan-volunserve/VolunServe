@@ -27,6 +27,7 @@ import {
 } from "react-native";
 
 import { db } from "../../lib/firebase";
+import { volunserveUi as ui } from "../../constants/volunserveUi";
 import {
   activeModeForProfile,
   hasVolunteerAccess,
@@ -1058,9 +1059,6 @@ export default function VolunteerTasks() {
       showsVerticalScrollIndicator
     >
       <View style={styles.header}>
-        <View pointerEvents="none" style={styles.headerLeaf}>
-          <Ionicons name="leaf-outline" size={115} color="rgba(13,133,94,0.13)" />
-        </View>
         <View style={styles.titleIcon}>
           <Ionicons
             name="people"
@@ -2117,48 +2115,43 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 12,
     marginBottom: 14,
-    minHeight: 147,
+    minHeight: 126,
     paddingHorizontal: 17,
     paddingVertical: 19,
-    borderRadius: 17,
+    borderRadius: ui.radius.card,
     borderWidth: 1,
-    borderColor: "#D3E8DC",
-    backgroundColor: "#E9F8F0",
+    borderColor: ui.color.border,
+    backgroundColor: ui.color.surface,
     overflow: "hidden",
   },
-  headerLeaf: {
-    position: "absolute", right: -19, top: -20,
-    transform: [{ rotate: "20deg" }],
-  },
-
   titleIcon: {
     width: 46,
     height: 46,
     borderRadius: 14,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#D5EFE0",
+    backgroundColor: ui.color.primarySoft,
   },
 
   eyebrow: {
-    color: "#08765B",
-    fontSize: 9,
-    fontWeight: "900",
+    color: ui.color.primary,
+    fontSize: 11,
+    fontWeight: "700",
     letterSpacing: 0.9,
   },
 
   title: {
     marginTop: 2,
-    color: "#173D32",
-    fontSize: 25,
-    fontWeight: "900",
+    color: ui.color.text,
+    fontSize: 24,
+    fontWeight: "700",
   },
 
   subtitle: {
     marginTop: 3,
-    color: "#567D6B",
-    fontSize: 12,
-    lineHeight: 17,
+    color: ui.color.muted,
+    fontSize: 13,
+    lineHeight: 19,
   },
 
   liveMapButton: {
@@ -2167,15 +2160,15 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     gap: 8,
-    borderRadius: 12,
-    backgroundColor: "#087D60",
+    borderRadius: ui.radius.control,
+    backgroundColor: ui.color.primary,
     marginBottom: 14,
   },
 
   liveMapButtonText: {
     color: "#ffffff",
     fontSize: 12,
-    fontWeight: "900",
+    fontWeight: "700",
   },
 
   statsRow: {

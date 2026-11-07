@@ -27,9 +27,9 @@ assert(pager.includes('flexDirection: "row"') && pager.includes('minHeight: 34')
   pager.includes("pageSize = 5") && pager.includes("onChange(safePage + 1)") &&
   pager.includes("onChange(safePage - 1)") && pager.includes("visiblePages.map"),
   "Pagination must remain functional, compact and accessible");
-assert(hero.includes('minHeight: 118') && hero.includes('backgroundColor: "#E5F5ED"') &&
-  hero.includes('name="leaf-outline"'),
-  "Shared LGU headers must retain identity but avoid oversized whitespace");
+assert(hero.includes('minHeight: 112') && hero.includes("backgroundColor: ui.color.surface") &&
+  hero.includes("const compact = width < 760") && !hero.includes('name="leaf-outline"'),
+  "Shared Admin headers must remain compact, responsive and visually restrained");
 for(const t of ["pagedCases", "pageFive(onDutyPersonnel", "pageFive(volunteerCandidates",
   "pageFive(activeAssignments", "pageFive(incidentAssignments", "pageFive(imageEvidence",
   "pageFive(videoEvidence"]) assert(emergency.includes(t),"Emergency nested pagination missing: "+t);

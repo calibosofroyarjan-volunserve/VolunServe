@@ -8,6 +8,7 @@ import {
   AppDialogButton, AppDialogRequest,
   closeAppDialog, dismissAppDialog, subscribeAppDialog,
 } from "../../lib/appDialog";
+import { volunserveUi as ui } from "../../constants/volunserveUi";
 
 export default function AppDialogHost() {
   const [request, setRequest] = useState<AppDialogRequest | null>(null);
@@ -24,7 +25,7 @@ export default function AppDialogHost() {
       transparent
       animationType="fade"
       statusBarTranslucent
-      onRequestClose={() => request && dismissAppDialog(request.id)}
+      onRequestClose={() => { if (request && cancelable) dismissAppDialog(request.id); }}
     >
       <View style={styles.backdrop}>
         <Pressable
@@ -32,7 +33,7 @@ export default function AppDialogHost() {
           accessibilityRole="button"
           accessibilityLabel="Dismiss dialog"
           disabled={!cancelable}
-          onPress={() => request && dismissAppDialog(request.id)}
+          onPress={() => { if (request && cancelable) dismissAppDialog(request.id); }}
         />
         {request && (
           <View
@@ -90,7 +91,7 @@ const styles = StyleSheet.create({
   },
   card: {
     maxHeight: "85%", backgroundColor: "#FFFFFF",
-    borderRadius: 20, padding: 22, borderWidth: 1, borderColor: "#E1ECE8",
+    borderRadius: ui.radius.card, padding: 22, borderWidth: 1, borderColor: ui.color.border,
     shadowColor: "#031B15", shadowOffset: { width: 0, height: 12 },
     shadowOpacity: 0.2, shadowRadius: 24, elevation: 10,
   },
@@ -102,19 +103,19 @@ const styles = StyleSheet.create({
   symbolInfo: { backgroundColor: "#E7F7F2" },
   symbolWarn: { backgroundColor: "#FFF1E8" },
   headings: { flex: 1, minWidth: 0 },
-  title: { fontSize: 19, lineHeight: 25, fontWeight: "800", color: "#103A31" },
+  title: { fontSize: 19, lineHeight: 25, fontWeight: "700", color: ui.color.text },
   messageArea: { maxHeight: 260, marginTop: 8 },
-  message: { fontSize: 14, lineHeight: 22, color: "#48635E" },
+  message: { fontSize: 14, lineHeight: 22, color: ui.color.muted },
   actions: {
     flexDirection: "row", flexWrap: "wrap", gap: 9, marginTop: 22,
     justifyContent: "flex-end",
   },
   action: {
-    minHeight: 46, minWidth: 90, paddingHorizontal: 17, borderRadius: 11,
-    backgroundColor: "#087C66", justifyContent: "center", alignItems: "center",
+    minHeight: ui.minTouchHeight, minWidth: 90, paddingHorizontal: 17, borderRadius: ui.radius.control,
+    backgroundColor: ui.color.primary, justifyContent: "center", alignItems: "center",
   },
-  cancelAction: { backgroundColor: "#ECF4F1" },
-  dangerAction: { backgroundColor: "#B42318" },
-  actionLabel: { color: "#FFFFFF", fontSize: 13, fontWeight: "800" },
-  cancelLabel: { color: "#385950" },
+  cancelAction: { backgroundColor: ui.color.primarySoft },
+  dangerAction: { backgroundColor: ui.color.danger },
+  actionLabel: { color: "#FFFFFF", fontSize: 13, fontWeight: "700" },
+  cancelLabel: { color: ui.color.text },
 });

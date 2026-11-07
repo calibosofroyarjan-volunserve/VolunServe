@@ -21,9 +21,10 @@ for (const [title, source, label] of [
     title + " must continue using real Firestore records");
   assert(nav.includes('label: "' + label + '"'), title + " must match the Admin sidebar and thesis workflow");
 }
-assert(hero.includes('backgroundColor: "#E5F5ED"') &&
-  hero.includes('name="leaf-outline"') &&
-  hero.includes("subtitle"), "Branded LGU Admin hero must retain its emerald/mint design");
+assert(hero.includes("backgroundColor: ui.color.surface") &&
+  hero.includes("color: ui.color.primary") &&
+  hero.includes("subtitle") &&
+  !hero.includes('name="leaf-outline"'), "Branded Admin header must use the restrained shared design");
 
 assert(emergency.includes("setSelectedCaseId(item.id)") &&
   emergency.includes("filterSeverity") &&
