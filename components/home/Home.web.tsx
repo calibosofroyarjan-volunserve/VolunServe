@@ -1,4 +1,5 @@
 import { AppAlert } from "../../lib/appDialog";
+import { liveUi as ui } from "../../constants/volunserveLiveUi";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
@@ -1391,10 +1392,10 @@ const styles = StyleSheet.create({
   dropdownVerifiedText: { color: "#087B55", fontSize: 9, fontWeight: "800" },
   dropdownAction: {
     flexDirection: "row", alignItems: "center", gap: 13,
-    minHeight: 45, paddingHorizontal: 12, borderRadius: 11,
+    minHeight: ui.minTap, paddingHorizontal: 12, borderRadius: ui.radius.control,
   },
   dropdownActionPressed: { backgroundColor: "#F0F8F8" },
-  dropdownActionText: { color: "#1A3156", fontSize: 12.5, fontWeight: "700" },
+  dropdownActionText: { color: ui.color.text, fontSize: 13, fontWeight: "600" },
   dropdownActionDanger: { color: "#D53242" },
   dropdownDivider: { height: 1, backgroundColor: "#E7EDF2", marginVertical: 8, marginHorizontal: 9 },
   heroTop: {
@@ -1772,15 +1773,11 @@ const styles = StyleSheet.create({
   panel: {
     flex: 1,
     minWidth: 0,
-    padding: 21,
-    borderRadius: 20,
-    backgroundColor: "#FFFFFF",
+    padding: ui.spacing.section,
+    borderRadius: ui.radius.card,
+    backgroundColor: ui.color.surface,
     borderWidth: 1,
-    borderColor: "#DEEDF2",
-    shadowColor: "#0D506A",
-    shadowOpacity: 0.035,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 4 },
+    borderColor: ui.color.border,
   },
   panelHeader: {
     flexDirection: "row",
@@ -1808,16 +1805,16 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
   panelTitle: {
-    color: "#102C50",
-    fontSize: 17,
-    fontWeight: "800",
-    letterSpacing: -0.3,
+    color: ui.color.text,
+    fontSize: ui.type.card.fontSize,
+    fontWeight: "700",
+    letterSpacing: -0.2,
   },
   panelSubtitle: {
     marginTop: 4,
-    color: "#6B8297",
-    fontSize: 11,
-    lineHeight: 17,
+    color: ui.color.secondary,
+    fontSize: 12,
+    lineHeight: 18,
   },
   viewAll: {
     color: "#1178F3",
