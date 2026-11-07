@@ -1,4 +1,4 @@
-name: Validate Community Events Permissions (Guarded Rules-Only Release)
+name: Validate Community Events Permissions (NO DEPLOY)
 
 on:
   push:
@@ -14,7 +14,6 @@ on:
       - 'app/(tabs)/community-events.tsx'
       - 'scripts/test-community-events-rules.cjs'
       - '.github/workflows/validate-community-events-permissions.yml'
-  workflow_dispatch:
 
 permissions:
   contents: read
@@ -63,44 +62,5 @@ jobs:
         run: |
           node --test scripts/test-admin-volunteer-authorization.cjs
           npx firebase-tools emulators:exec --only firestore --project demo-volunserve-authorization-tests "node scripts/test-admin-volunteer-firestore.cjs"
-      - name: Verify latest main and reviewed Firestore rules before manual release
-        if: (github.event_name == 'workflow_dispatch' || github.event_name == 'push') && github.ref == 'refs/heads/main'
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          CURRENT_MAIN="$(gh api "repos/${GITHUB_REPOSITORY}/branches/main" --jq .commit.sha)"
-          test "$SOURCE_SHA" = "$CURRENT_MAIN" || {
-            echo "::error::Main advanced during the run. Retry with latest sources."
-            exit 1
-          }
-          CURRENT_RULES_BLOB="$(gh api "repos/${GITHUB_REPOSITORY}/contents/firestore.rules?ref=main" --jq .sha)"
-          test "$CURRENT_RULES_BLOB" = "0eeb7c431bb3157f0d2b4eae77c44c35d6262a3a" || {
-            echo "::error::Rules changed since the security review. STOP."
-            exit 1
-          }
-          test "$(node -p "require('./.firebaserc').projects.default" 2>/dev/null || node -e "const fs=require('fs');const p=JSON.parse(fs.readFileSync('.firebaserc','utf8'));process.stdout.write(p.projects.default)")" = "volunserve-3aa5b" || {
-            echo "::error::Firebase project mismatch. STOP."
-            exit 1
-          }
-      - name: Manually deploy reviewed Firestore rules ONLY to the correct project
-        if: (github.event_name == 'workflow_dispatch' || github.event_name == 'push') && github.ref == 'refs/heads/main'
-        env:
-          FIREBASE_SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_VOLUNSERVE_3AA5B || secrets.FIREBASE_SERVICE_ACCOUNT }}
-        run: |
-          set -euo pipefail
-          if [ -z "$FIREBASE_SA" ]; then
-            echo "::error::Firebase service-account secret not configured. No deployment attempted."
-            exit 1
-          fi
-          node <<'NODE'
-          const fs=require('node:fs');
-          const serviceAccount=JSON.parse(process.env.FIREBASE_SA);
-          if(serviceAccount.type!=='service_account'||serviceAccount.project_id!=='volunserve-3aa5b'){
-            throw new Error('Deployment blocked: wrong Firebase project credentials');
-          }
-          fs.writeFileSync(process.env.RUNNER_TEMP+'/volunserve-rules-sa.json',process.env.FIREBASE_SA,{mode:0o600});
-          NODE
-          export GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/volunserve-rules-sa.json"
-          npx firebase-tools deploy --only firestore:rules --project volunserve-3aa5b --non-interactive
-          echo 'Rules-only release completed. No Hosting, Auth, user data, Functions, Storage, or Maps deployment.'
+      - name: Confirm validation-only workflow
+        run: echo 'Firestore emulator tests only; no production rules deployment or credentials.'

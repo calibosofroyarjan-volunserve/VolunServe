@@ -1,64 +1,15 @@
-name: Restore Clean Admin Navigation - Hosting Only
+# Legacy production deployment permanently frozen on default branch 2026-11-08.
+# IMPORTANT: Other branches may retain older copies. Disable old workflows in
+# GitHub Actions UI and restrict production credentials/environment separately.
+# Historical implementation is available in Git history; never revive directly.
+name: "[FROZEN] release-admin-navigation-20261106.yml - no production deploy"
 on:
-  push:
-    branches: [main]
-    paths:
-      - .github/workflows/release-admin-navigation-20261106.yml
   workflow_dispatch:
 permissions:
   contents: read
-concurrency:
-  group: volunserve-production-hosting-release
-  cancel-in-progress: false
 jobs:
-  verify-and-deploy:
-    if: github.repository == 'calibosofroyarjan-volunserve/VolunServe'
+  permanently-disabled:
+    if: ${{ false }}
     runs-on: ubuntu-latest
-    timeout-minutes: 40
-    env:
-      FIREBASE_SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_VOLUNSERVE_3AA5B || secrets.FIREBASE_SERVICE_ACCOUNT }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-          cache: npm
-      - name: Verify Admin scoped menu with latest Login Signup and Super Admin preserved
-        run: |
-          node <<'NODE'
-          const fs=require('fs'),assert=require('node:assert/strict');
-          const admin=fs.readFileSync('app/(admin)/_layout.tsx','utf8');
-          assert(!admin.includes('Communication & Reports') && !admin.includes('label: "Disputes"'));
-          assert(admin.includes('title: "Announcements"') && admin.includes('route: "/(admin)/create-announcement"'));
-          assert(admin.includes('route: "/(admin)/admin-cases"'));
-          for(const p of ['app/login.tsx','app/login.web.tsx','app/signup.tsx','app/signup.web.tsx','app/(superadmin)/_layout.tsx','app/(admin)/assistance-requests.tsx','app/(admin)/community-events.tsx']) assert(fs.existsSync(p),'Protected file missing: '+p);
-          NODE
-      - name: Install exact dependencies
-        run: npm ci --no-audit --no-fund
-      - name: Regression tests and production build
-        run: |
-          node scripts/test-lgu-admin-navigation-groups.cjs
-          node scripts/test-admin-navigation-contract.cjs
-          node scripts/test-final-admin-scope.cjs
-          npx tsc --noEmit --incremental false
-          npx expo export --platform web --clear
-          node scripts/verify-hosting-release.cjs
-      - name: Require production Firebase credentials
-        run: test -n "$FIREBASE_SA"
-      - name: Deploy Firebase Hosting only (never Firestore rules, Auth, or backend)
-        uses: FirebaseExtended/action-hosting-deploy@v0
-        with:
-          firebaseServiceAccount: ${{ env.FIREBASE_SA }}
-          projectId: volunserve-3aa5b
-          channelId: live
-      - name: Verify exact production revision
-        env:
-          VOLUNSERVE_HOSTING_URL: https://volunserve.com
-          VOLUNSERVE_EXPECTED_SHA: ${{ github.sha }}
-        run: |
-          for attempt in 1 2 3 4 5 6; do
-            if node scripts/check-live-hosting.cjs; then exit 0; fi
-            sleep 10
-          done
-          echo "::error::Production revision not confirmed"
-          exit 1
+      - run: echo "Legacy VolunServe deployment blocked. Use approved live-first release process."
