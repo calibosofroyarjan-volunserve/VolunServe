@@ -1,8 +1,8 @@
 "use strict";
 const fs=require("fs"),cp=require("child_process"),ts=require("typescript");
 const BASE="a6f832da13f89ef70bf7a19204dadf4f5c9cdb4e";
-const git=(...a)=>cp.execFileSync("git",a,{encoding:"utf8",maxBuffer:25*1024*1024}).trim();
-const changed=git("diff","--name-only",BASE,"HEAD").split("\n").filter(Boolean);
+const git=(...a)=>cp.execFileSync("git",a,{encoding:"utf8",maxBuffer:25*1024*1024});
+const changed=git("diff","--name-only",BASE,"HEAD").trim().split("\n").filter(Boolean);
 const qaAllowed=new Set([
  ".github/workflows/qa-final-polished-isolated-visual-20261108.yml",
  "scripts/qa-seed-demo-roles-20261108.cjs",
