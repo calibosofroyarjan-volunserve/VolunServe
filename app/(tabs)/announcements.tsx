@@ -525,7 +525,7 @@ const styles = StyleSheet.create({
     padding: 22,
 
     marginBottom: 15,
-  ,
+  
     shadowColor: "#153C2F",
     shadowOpacity: 0.04,
     shadowRadius: 12,

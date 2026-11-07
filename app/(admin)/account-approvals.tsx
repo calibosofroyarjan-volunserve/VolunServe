@@ -928,7 +928,7 @@ const styles =
       marginBottom: 15,
       borderWidth: 1,
       borderColor: "#DBE8DF",
-    ,
+    
     shadowColor: "#153C2F",
     shadowOpacity: 0.04,
     shadowRadius: 12,

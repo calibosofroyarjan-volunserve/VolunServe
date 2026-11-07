@@ -834,7 +834,7 @@ const styles =
       borderColor:
         "#DCE8E1", 
     
-    ,shadowColor: "#153D2D",
+    shadowColor: "#153D2D",
     shadowOpacity: 0.045,
     shadowRadius: 12,
     shadowOffset: { width: 0, height: 4 },
@@ -925,7 +925,7 @@ const styles =
       borderColor:
         "#DCE8E1", 
     
-    ,shadowColor: "#153D2D",
+    shadowColor: "#153D2D",
     shadowOpacity: 0.04,
     shadowRadius: 12,
     shadowOffset: { width: 0, height: 4 },

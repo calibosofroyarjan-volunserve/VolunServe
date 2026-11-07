@@ -6239,7 +6239,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#DBE8DF",
     backgroundColor: "#FFFFFF",
-  ,
+  
     shadowColor: "#153C2F",
     shadowOpacity: 0.04,
     shadowRadius: 12,
@@ -6684,7 +6684,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#DAE7DE",
     backgroundColor: "#FFFFFF",
-  ,
+  
     shadowColor: "#153C2F",
     shadowOpacity: 0.04,
     shadowRadius: 12,

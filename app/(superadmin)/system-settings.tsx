@@ -650,7 +650,7 @@ const styles =
       backgroundColor: "#FFFFFF",
       borderWidth: 1,
       borderColor: "#DCE8DF",
-    ,
+    
     shadowColor: "#153C2F",
     shadowOpacity: 0.045,
     shadowRadius: 13,

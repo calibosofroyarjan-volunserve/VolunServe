@@ -3515,7 +3515,7 @@ const styles = StyleSheet.create({
     borderColor: "#D4E6DB",
     borderRadius: 19,
     backgroundColor: "#FFFFFF",
-  ,
+  
     shadowColor: "#153C2F",
     shadowOpacity: 0.045,
     shadowRadius: 13,
