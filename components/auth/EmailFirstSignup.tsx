@@ -76,8 +76,15 @@ function passwordError(value: string): string | null {
 }
 
 function validName(s: string) {
-  return /^[A-Za-z][A-Za-z '-]*[A-Za-z]$/.test(s.trim()) &&
-    s.trim().replace(/[^A-Za-z]/g, "").length >= 2;
+  return /^[\p{L}][\p{L}\s'-]*[\p{L}]$/u.test(s.trim()) &&
+    (s.trim().match(/\p{L}/gu) || []).length >= 2;
+}
+function validMiddleName(s: string) {
+  const clean = s.trim();
+  return !clean || (
+    /^[\p{L}][\p{L}\s.'-]*$/u.test(clean) &&
+    (clean.match(/\p{L}/gu) || []).length >= 1
+  );
 }
 function dateAge(value: string): number | null {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
@@ -162,6 +169,13 @@ function Field({
           autoCapitalize={secret || keyboardType === "email-address" ? "none" : "words"}
           autoCorrect={false}
           keyboardType={keyboardType}
+          autoComplete={
+            low.includes("email") ? "email" :
+            low.includes("first name") ? "given-name" :
+            low.includes("last name") ? "family-name" :
+            low.includes("phone") || low.includes("mobile") ? "tel" :
+            secret ? "new-password" : "off"
+          }
           editable={!disabled}
           onFocus={() => setFocused(true)}
           onBlur={() => { setFocused(false); setTouched(true); }}
@@ -225,7 +239,7 @@ export default function EmailFirstSignup() {
     !signedInUser.providerData.some(p => p.providerId === "password");
   const emailCanEdit = !signedInUser;
   const personalOk = validName(firstName) && validName(lastName) &&
-    (noMiddleName || middleName.trim() === "" || validName(middleName)) &&
+    (noMiddleName || validMiddleName(middleName)) &&
     age !== null && age >= 18 && age <= 100 &&
     /^9\d{9}$/.test(phoneClean);
   const addressOk = SJDM_BARANGAYS.includes(barangay) &&
@@ -238,11 +252,27 @@ export default function EmailFirstSignup() {
     setSignedInUser(user);
     setEmail((user.email || "").toLowerCase());
     setCompletedProfile(profileExists && user.emailVerified);
-    if (!user.emailVerified) setStep(2);
-    else if (user.providerData.some(p => p.providerId === "google.com") &&
-             !user.providerData.some(p => p.providerId === "password")) setStep(1);
-    else setStep(3);
+    // Google already verifies mailbox ownership: skip creating a second password.
+    // All providers still MUST complete Personal Details and Address & Profile.
+    setStep(user.emailVerified ? 3 : 2);
   }, []);
+
+  // Google display names can save two fields without making them immutable.
+  // Never overwrite what a person has already typed.
+  useEffect(() => {
+    if (!signedInUser?.emailVerified ||
+        !signedInUser.providerData.some(p => p.providerId === "google.com")) return;
+    const name = (signedInUser.displayName || "").trim().split(/\s+/).filter(Boolean);
+    if (name.length < 2) return;
+    const suggestedFirst = name.slice(0, -1).filter(part =>
+      (part.match(/\p{L}/gu) || []).length >= 2
+    ).join(" ");
+    const suggestedLast = name[name.length - 1].replace(/\.+$/, "");
+    // Ignore middle initials such as "P." rather than prefill an invalid first
+    // name; users can correct either suggestion before finishing registration.
+    if (validName(suggestedFirst)) setFirstName(current => current || suggestedFirst);
+    if (validName(suggestedLast)) setLastName(current => current || suggestedLast);
+  }, [signedInUser?.uid, signedInUser?.displayName, signedInUser?.emailVerified]);
 
   useEffect(() => {
     let active = true;
@@ -276,7 +306,7 @@ export default function EmailFirstSignup() {
     setShowErrors(true);
     setError("");
     setMessage("");
-    if (resumeMode ? !email.trim() : !!emailErr) return;
+    if (emailErr) return;
     // Existing accounts may have older passwords; only new credentials
     // must pass the current complexity policy.
     if (resumeMode ? !password.trim() : !!passwordErr) return;
@@ -305,7 +335,7 @@ export default function EmailFirstSignup() {
           if (!resumeMode) {
             try {
               await sendEmailVerification(user);
-              setMessage(EMAIL_VERIFICATION_REQUESTED_MESSAGE);
+              setMessage("Verification email sent. This is only a pending Firebase login, NOT a Guest or Basic Resident account. After verifying, finish Personal Details and Address & Profile.");
             } catch {
               setError("Your registration is saved, but verification email could not be requested. Choose Resend Verification Email or use a different address.");
             }
@@ -324,13 +354,16 @@ export default function EmailFirstSignup() {
     setBusy(true); setError(""); setMessage("");
     try {
       const user = await signInGoogle();
+      const googleEmailError = getRegistrationEmailError(user.email || "");
+      if (googleEmailError) {
+        if (auth.currentUser?.uid === user.uid) await signOut(auth);
+        throw new Error(googleEmailError);
+      }
       const state = await inspectSignupUser(user);
       showRegistrationState(state);
       if (!user.emailVerified) setMessage("Verify your Google email to continue registration.");
       else if (!state.profileExists) setMessage(
-        user.providerData.some(p => p.providerId === "password")
-          ? "Google email verified. Complete your resident details."
-          : "Google email verified. Create a VolunServe password to use both sign-in methods."
+        "Google verified! Continue with your personal details. No extra password is needed when signing in with Google."
       );
     } catch (e) {setError(safeAuthError(e));}
     finally {setBusy(false);}
@@ -348,7 +381,7 @@ export default function EmailFirstSignup() {
         return;
       }
       showRegistrationState(state);
-      setMessage(state.profileExists ? "Email verified. Continue to Login." : "Email verified! Continue your registration.");
+      setMessage(state.profileExists ? "Email verified. Continue to Login." : "Email verified! Complete Personal Details (Step 3) and Address & Profile (Step 4) to finish your Resident registration.");
     } catch (e) { setError(safeAuthError(e)); }
     finally { setBusy(false); }
   }
@@ -371,6 +404,13 @@ export default function EmailFirstSignup() {
     finally { setBusy(false); }
   }
 
+  function formatBirthday(value: string) {
+    // Auto-add separators so people can simply type eight date digits.
+    const digits = value.replace(/\D/g, "").slice(0, 8);
+    return [digits.slice(0, 4), digits.slice(4, 6), digits.slice(6, 8)]
+      .filter(Boolean).join("-");
+  }
+
   async function changeEmail() {
     // Does not delete or modify the pending Auth user; its owner may resume later.
     if (busy) return;
@@ -389,6 +429,10 @@ export default function EmailFirstSignup() {
   async function complete() {
     setShowErrors(true);
     setError(""); setMessage("");
+    if (!consent) {
+      setError("Please agree to the Terms of Use and Privacy Notice to finish registration.");
+      return;
+    }
     if (!personalOk) {
       setStep(3);
       setError("Complete your name, date of birth, and Philippine mobile number.");
@@ -409,8 +453,10 @@ export default function EmailFirstSignup() {
         throw new Error("Email verification is required before creating a Basic Resident profile.");
       }
       await getIdToken(user, true);
+      const googleOnlyAccount = user.providerData.some(p => p.providerId === "google.com") &&
+        !user.providerData.some(p => p.providerId === "password");
       await signUpUser({
-        authProvider: "verified_email",
+        authProvider: googleOnlyAccount ? "google" : "verified_email",
         email: (user.email || "").toLowerCase(),
         password: "", // The verified Auth UID already owns its credential.
         firstName: firstName.trim(),
@@ -557,21 +603,21 @@ export default function EmailFirstSignup() {
               </Text>
               <Text style={styles.legacySignupSubtitle}>
                 {step === 1
-                ? "Verify your email first before completing your Basic Resident profile."
+                ? "Choose Google for faster signup, or use email and password."
                 : step === 2
-                  ? "Open your verification link to continue registration."
+                  ? "Verify your inbox, then come back to continue."
                   : step === 3
-                    ? "Tell us about yourself."
-                    : "Confirm your San Jose del Monte address and profile."}
+                    ? "Just a few details about you."
+                    : "Select your barangay and finish your Basic Resident profile."}
               </Text>
             </View>
             <View style={styles.legacySelectedRoleBanner}>
               <View style={styles.legacySelectedRoleCopy}>
                 <Text style={styles.legacySelectedRoleLabel}>ACCOUNT LEVEL</Text>
-                <Text style={styles.legacySelectedRoleName}>Basic Account</Text>
+                <Text style={styles.legacySelectedRoleName}>{completedProfile ? "Basic Account" : "Registration Pending"}</Text>
               </View>
               <View style={styles.legacyRoleChoiceBadge}>
-                <Text style={styles.legacyRoleChoiceBadgeText}>No approval required</Text>
+                <Text style={styles.legacyRoleChoiceBadgeText}>{completedProfile ? "Active Resident" : "Not yet a Resident profile"}</Text>
               </View>
             </View>
             <View style={styles.legacyStepperCard}>
@@ -611,7 +657,7 @@ export default function EmailFirstSignup() {
                 <Text style={styles.legacyInfoTitle}>Basic Account registration</Text>
                 <Text style={styles.legacyInfoText}>
                   {resumeMode
-                    ? "Already created an account but did not finish? Enter the same email and VolunServe password to continue where you left off. No new account will be created."
+                    ? "Started email verification but did not finish? Enter the same email and VolunServe password to resume. A pending Firebase login is not yet a Resident or Guest account."
                     : "Enter an accessible email and a VolunServe password. We'll send a verification link before collecting your personal details."}
                 </Text>
               </View>
@@ -639,12 +685,21 @@ export default function EmailFirstSignup() {
             )}
             {step === 1 && (
               <View>
-                <Text style={styles.sectionTitle}>Step 1 — Email & Password</Text>
-                <Text style={styles.helper}>
-                  {resumeMode
-                    ? "Use the SAME email and VolunServe password you created earlier. We'll check whether you still need to verify your email or finish your profile."
-                    : "Use any accessible email (Yahoo, Outlook, Gmail, school or work). You must verify it before entering personal details."}
-                </Text>
+                <Text style={styles.sectionTitle}>Step 1 — Get Started</Text>
+                {resumeMode ? (
+                  <Text style={styles.helper}>Use your original email and password to continue unfinished registration.</Text>
+                ) : (
+                  <>
+                    {!signedInUser && (
+                      <>
+                        <Text style={styles.helper}>Fastest way: use Google. No new password or separate verification link needed for a verified Google email.</Text>
+                        {checkButton("Continue with Google", () => {void continueWithGoogle();}, true)}
+                        <Text style={styles.orText}>OR SIGN UP WITH EMAIL</Text>
+                      </>
+                    )}
+                    <Text style={styles.helper}>Prefer email? Create a password and verify your inbox before providing personal details.</Text>
+                  </>
+                )}
                 <Field
                   label="Email Address *" value={email}
                   onChange={v => {setEmail(v.trim().toLowerCase()); setError("");}}
@@ -693,14 +748,8 @@ export default function EmailFirstSignup() {
                 )}
                 {checkButton(
                   googleOnly ? "Link Password & Continue" :
-                    resumeMode ? "Resume Registration" : "Create Account & Verify Email",
+                    resumeMode ? "Resume Registration" : "Continue to Email Verification",
                   () => {void startEmail();}
-                )}
-                {!signedInUser && !resumeMode && (
-                  <>
-                    <Text style={styles.orText}>OR</Text>
-                    {checkButton("Continue with Google", () => {void continueWithGoogle();}, true)}
-                  </>
                 )}
                 {!googleOnly && (
                   <Pressable style={styles.inlineButton} onPress={() => {
@@ -721,6 +770,7 @@ export default function EmailFirstSignup() {
             {step === 2 && (
               <View>
                 <Text style={styles.sectionTitle}>Step 2 — Verify Your Email</Text>
+                <Text style={styles.helper}>Your Resident profile is not created yet. You must finish Steps 3 and 4 after verification.</Text>
                 <Text style={styles.helper}>
                   Open your email and click the verification link sent to:
                 </Text>
@@ -767,7 +817,7 @@ export default function EmailFirstSignup() {
                   onChange={setMiddleName} disabled={noMiddleName}
                   placeholder="Optional"
                   error={(showErrors || !!middleName) && !noMiddleName &&
-                    !!middleName.trim() && !validName(middleName)
+                    !!middleName.trim() && !validMiddleName(middleName)
                     ? "Enter a valid middle name or leave blank." : null}
                 />
                 <Pressable
@@ -781,9 +831,11 @@ export default function EmailFirstSignup() {
                 </Pressable>
                 <Field
                   label="Date of Birth *" value={birth}
-                  onChange={setBirth} placeholder="YYYY-MM-DD"
+                  onChange={v => setBirth(formatBirthday(v))} placeholder="YYYY-MM-DD"
+                  keyboardType="phone-pad"
+                  hint="Type 8 digits (year, month, day). The dashes appear automatically."
                   error={(showErrors || !!birth) && (age === null || age < 18 || age > 100)
-                    ? "Use YYYY-MM-DD. Registration requires ages 18–100." : null}
+                    ? "Use a valid birth date. Registration requires ages 18–100." : null}
                 />
                 <Field
                   label="Mobile Number *" value={phone}
@@ -871,11 +923,19 @@ export default function EmailFirstSignup() {
                   accessibilityRole="checkbox"
                   accessibilityState={{checked: reviewed}}
                   style={styles.check}
-                  onPress={() => setReviewed(v => !v)}
+                  onPress={() => {
+                    const next = !reviewed;
+                    setReviewed(next);
+                    // Google OAuth users did not see the password signup consent.
+                    // The final confirmation explicitly obtains it instead.
+                    if (!consent) setConsent(next);
+                  }}
                 >
                   <Text style={styles.checkBox}>{reviewed ? "☑" : "☐"}</Text>
                   <Text style={styles.checkText}>
-                    I confirm my name, birthday, contact, and address are accurate.
+                    {consent
+                      ? "I confirm my name, birthday, contact, and address are accurate."
+                      : "I confirm my details are accurate and agree to the Terms of Use and Privacy Notice."}
                   </Text>
                 </Pressable>
                 {showErrors && !reviewed &&
