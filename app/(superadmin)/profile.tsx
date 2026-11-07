@@ -1,3 +1,4 @@
+import { liveUi as designUi } from "../../constants/volunserveLiveUi";
 import { Ionicons } from "@expo/vector-icons";
 import { Redirect } from "expo-router";
 import React from "react";
@@ -103,8 +104,8 @@ const styles = StyleSheet.create({
   headingIcon: { width: 50, height: 50, borderRadius: 14, backgroundColor: "#CFF1E1", alignItems: "center", justifyContent: "center" },
   headingCopy: { flex: 1, gap: 5 },
   eyebrow: { color: "#087A62", fontWeight: "900", fontSize: 10, letterSpacing: 1.8 },
-  title: { color: "#073E32", fontSize: 27, fontWeight: "900" },
-  subtitle: { fontSize: 12, color: "#648276" },
+  title: { color: "#073E32", fontSize: designUi.type.page.fontSize, fontWeight: designUi.type.page.fontWeight, lineHeight: designUi.type.page.lineHeight,},
+  subtitle: { fontSize: designUi.type.body.fontSize, color: "#648276", lineHeight: designUi.type.body.lineHeight, fontWeight: designUi.type.body.fontWeight,},
   profileCard: { padding: 24, borderRadius: 16, borderColor: "#DCE9E1", borderWidth: 1, backgroundColor: "#FFFFFF", gap: 21 },
   profileHeader: { flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 17 },
   avatar: { width: 70, height: 70, borderRadius: 35, backgroundColor: EMERALD, alignItems: "center", justifyContent: "center" },
@@ -116,12 +117,12 @@ const styles = StyleSheet.create({
   statusBadge: { flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 12, paddingVertical: 9, borderRadius: 20, backgroundColor: "#E2F8EB" },
   statusText: { color: "#087A62", fontSize: 11, fontWeight: "800" },
   divider: { height: 1, backgroundColor: "#E8F0EA" },
-  sectionTitle: { fontSize: 15, fontWeight: "900", color: "#153E33" },
+  sectionTitle: { fontSize: designUi.type.section.fontSize, fontWeight: designUi.type.section.fontWeight, color: "#153E33", lineHeight: designUi.type.section.lineHeight,},
   infoGrid: { flexDirection: "row", flexWrap: "wrap", gap: 13 },
   detail: { flexBasis: "47%", flexGrow: 1, minWidth: 205, minHeight: 90, padding: 14, borderWidth: 1, borderColor: "#E5EEE8", backgroundColor: "#F8FBF9", borderRadius: 11, gap: 10 },
   detailWide: { flexBasis: "100%", minWidth: 0 },
-  detailLabel: { fontSize: 10, fontWeight: "800", color: "#688477", textTransform: "uppercase", letterSpacing: 0.7 },
+  detailLabel: { fontSize: designUi.type.label.fontSize, fontWeight: designUi.type.label.fontWeight, color: "#688477", textTransform: "uppercase", letterSpacing: 0.7, lineHeight: designUi.type.label.lineHeight,},
   detailValue: { fontSize: 13, fontWeight: "700", color: "#1E4939" },
   notice: { flexDirection: "row", alignItems: "flex-start", gap: 10, padding: 15, borderRadius: 11, borderColor: "#DBECE2", borderWidth: 1, backgroundColor: "#EDF6F0" },
-  noticeText: { flex: 1, fontSize: 12, lineHeight: 19, color: "#456D5B" },
+  noticeText: { flex: 1, fontSize: designUi.type.body.fontSize, lineHeight: designUi.type.body.lineHeight, color: "#456D5B", fontWeight: designUi.type.body.fontWeight,},
 });

@@ -565,16 +565,14 @@ const styles =
     title: {
       marginTop: 8,
       color: "#FFFFFF",
-      fontSize: 26,
-      fontWeight: "700",
-    },
+      fontSize: ui.type.page.fontSize,
+      fontWeight: ui.type.page.fontWeight, lineHeight: ui.type.page.lineHeight,},
 
     subtitle: {
       marginTop: 5,
       maxWidth: 700,
       color: "#E6F7F1",
-      lineHeight: 20,
-    },
+      lineHeight: ui.type.body.lineHeight, fontSize: ui.type.body.fontSize, fontWeight: ui.type.body.fontWeight,},
 
     notice: {
       marginTop: 15,
@@ -594,15 +592,13 @@ const styles =
 
     noticeTitle: {
       color: "#08766C",
-      fontWeight: "900",
-    },
+      fontWeight: ui.type.section.fontWeight, fontSize: ui.type.section.fontSize, lineHeight: ui.type.section.lineHeight,},
 
     noticeText: {
       marginTop: 4,
       color: "#64748B",
-      lineHeight: 18,
-      fontSize: 12.5,
-    },
+      lineHeight: ui.type.body.lineHeight,
+      fontSize: ui.type.body.fontSize, fontWeight: ui.type.body.fontWeight,},
 
     card: {
       marginTop: 15,
@@ -636,23 +632,20 @@ const styles =
     cardTitle: {
       color: ui.color.text,
       fontSize: ui.type.section.fontSize,
-      fontWeight: "700",
-    },
+      fontWeight: ui.type.section.fontWeight, lineHeight: ui.type.section.lineHeight,},
 
     cardSubtitle: {
       marginTop: 3,
       color: ui.color.secondary,
-      lineHeight: 20,
-      fontSize: 13,
-    },
+      lineHeight: ui.type.body.lineHeight,
+      fontSize: ui.type.body.fontSize, fontWeight: ui.type.body.fontWeight,},
 
     label: {
       marginTop: 13,
       marginBottom: 6,
       color: ui.color.text,
       fontSize: ui.type.label.fontSize,
-      fontWeight: "600",
-    },
+      fontWeight: ui.type.label.fontWeight, lineHeight: ui.type.label.lineHeight,},
 
     input: {
       minHeight: 47,
@@ -690,9 +683,8 @@ const styles =
     securityText: {
       flex: 1,
       color: "#075985",
-      fontSize: 12,
-      lineHeight: 18,
-    },
+      fontSize: ui.type.body.fontSize,
+      lineHeight: ui.type.body.lineHeight, fontWeight: ui.type.body.fontWeight,},
 
     saveAction: { marginTop: 18 },
 

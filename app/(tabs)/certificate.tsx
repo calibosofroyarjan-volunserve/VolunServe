@@ -1340,17 +1340,15 @@ const styles =
     title: {
       marginTop: 5,
       color: ui.color.text,
-      fontSize: 28,
-      lineHeight: 36,
-      fontWeight: "700",
-    },
+      fontSize: ui.type.page.fontSize,
+      lineHeight: ui.type.page.lineHeight,
+      fontWeight: ui.type.page.fontWeight, },
 
     subtitle: {
       marginTop: 5,
       color: ui.color.secondary,
-      fontSize: 13,
-      lineHeight: 20,
-    },
+      fontSize: ui.type.body.fontSize,
+      lineHeight: ui.type.body.lineHeight, fontWeight: ui.type.body.fontWeight,},
 
     errorBox: {
       marginBottom: 14,
@@ -1389,17 +1387,15 @@ const styles =
     pendingTitle: {
       marginTop: 5,
       color: "#173748",
-      fontSize: 17,
-      fontWeight: "900",
-    },
+      fontSize: ui.type.section.fontSize,
+      fontWeight: ui.type.section.fontWeight, lineHeight: ui.type.section.lineHeight,},
 
     pendingText: {
       marginTop: 6,
       maxWidth: 680,
       color: ui.color.secondary,
-      fontSize: 11.5,
-      lineHeight: 18,
-    },
+      fontSize: ui.type.body.fontSize,
+      lineHeight: ui.type.body.lineHeight, fontWeight: ui.type.body.fontWeight,},
 
     certificateWrapper: {
       marginBottom: 24,
@@ -1563,14 +1559,13 @@ const styles =
     metricLabel: {
       marginTop: 4,
       color: "#607984",
-      fontSize: 8.5,
-      lineHeight: 13,
-      fontWeight: "800",
+      fontSize: ui.type.label.fontSize,
+      lineHeight: ui.type.label.lineHeight,
+      fontWeight: ui.type.label.fontWeight,
       textAlign: "center",
       textTransform:
         "uppercase",
-      letterSpacing: 0.5,
-    },
+      letterSpacing: 0.5, },
 
     breakdownSection: {
       alignSelf: "center",

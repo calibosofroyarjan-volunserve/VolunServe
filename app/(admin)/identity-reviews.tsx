@@ -1015,7 +1015,7 @@ const styles = StyleSheet.create({
   queueHeading: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 12,
     backgroundColor: ui.color.surface, borderRadius: 14, borderWidth: 1, borderColor: "#D8E9E0",
     padding: 15, marginBottom: 13 },
-  queueTitle: { color: "#153D32", fontWeight: "900", fontSize: 17 },
+  queueTitle: { color: "#153D32", fontWeight: ui.type.section.fontWeight, fontSize: ui.type.section.fontSize, lineHeight: ui.type.section.lineHeight,},
   queueSubheading: { color: "#647E71", fontSize: 12, lineHeight: 19, marginTop: 4 },
   header: {
     flexDirection: "row",
@@ -1049,16 +1049,14 @@ const styles = StyleSheet.create({
   title: {
     marginTop: 3,
     color: ui.color.text,
-    fontSize: 25,
-    fontWeight: "700",
-  },
+    fontSize: ui.type.page.fontSize,
+    fontWeight: ui.type.page.fontWeight, lineHeight: ui.type.page.lineHeight,},
   subtitle: {
     marginTop: 5,
     maxWidth: 760,
     color: ui.color.secondary,
-    fontSize: 12,
-    lineHeight: 18,
-  },
+    fontSize: ui.type.body.fontSize,
+    lineHeight: ui.type.body.lineHeight, fontWeight: ui.type.body.fontWeight,},
   refreshButton: {
     minHeight: 42,
     flexDirection: "row",
@@ -1095,9 +1093,8 @@ const styles = StyleSheet.create({
   noticeText: {
     marginTop: 3,
     color: "#475569",
-    fontSize: 11.5,
-    lineHeight: 17,
-  },
+    fontSize: ui.type.body.fontSize,
+    lineHeight: ui.type.body.lineHeight, fontWeight: ui.type.body.fontWeight,},
   filterRow: {
     flexDirection: "row",
     flexWrap: "wrap",
@@ -1121,9 +1118,8 @@ const styles = StyleSheet.create({
   },
   filterButtonText: {
     color: "#475569",
-    fontSize: 11.5,
-    fontWeight: "800",
-  },
+    fontSize: ui.type.label.fontSize,
+    fontWeight: ui.type.label.fontWeight, lineHeight: ui.type.label.lineHeight,},
   filterButtonTextActive: {
     color: "#FFFFFF",
   },
@@ -1205,10 +1201,9 @@ const styles = StyleSheet.create({
   emptyTitle: {
     marginTop: 10,
     color: ui.color.text,
-    fontSize: 16,
-    fontWeight: "900",
-    textAlign: "center",
-  },
+    fontSize: ui.type.section.fontSize,
+    fontWeight: ui.type.section.fontWeight,
+    textAlign: "center", lineHeight: ui.type.section.lineHeight,},
   workspace: {
     gap: 14,
   },
@@ -1260,8 +1255,7 @@ const styles = StyleSheet.create({
   residentMeta: {
     marginTop: 2,
     color: ui.color.secondary,
-    fontSize: 10.5,
-  },
+    fontSize: ui.type.meta.fontSize, lineHeight: ui.type.meta.lineHeight, fontWeight: ui.type.meta.fontWeight,},
   statusChip: {
     paddingHorizontal: 9,
     paddingVertical: 5,

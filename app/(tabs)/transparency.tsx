@@ -1,3 +1,4 @@
+import { liveUi as designUi } from "../../constants/volunserveLiveUi";
 import {
     collection,
     onSnapshot,
@@ -88,7 +89,7 @@ export default function Transparency() {
 
 const styles = StyleSheet.create({
   container: { padding: 20 },
-  title: { fontSize: 24, fontWeight: "bold", marginBottom: 20 },
+  title: { fontSize: designUi.type.page.fontSize, fontWeight: designUi.type.page.fontWeight, marginBottom: 20, lineHeight: designUi.type.page.lineHeight,},
   card: {
     backgroundColor: "#f1f5f9",
     padding: 15,

@@ -2852,16 +2852,14 @@ const styles =
 
     pageTitle: {
       color: ui.color.text,
-      fontSize: 28,
-      fontWeight: "700",
-      letterSpacing: -0.6,
-    },
+      fontSize: ui.type.page.fontSize,
+      fontWeight: ui.type.page.fontWeight,
+      letterSpacing: -0.6, lineHeight: ui.type.page.lineHeight,},
 
     pageSubtitle: {
       marginTop: 5,
       color: ui.color.secondary,
-      fontSize: 14,
-    },
+      fontSize: ui.type.body.fontSize, lineHeight: ui.type.body.lineHeight, fontWeight: ui.type.body.fontWeight,},
 
     profileCard: {
       overflow: "hidden",
@@ -3114,17 +3112,15 @@ const styles =
     identityCardTitle: {
       marginTop: 3,
       color: "#0F172A",
-      fontSize: 18,
-      fontWeight: "900",
-    },
+      fontSize: ui.type.card.fontSize,
+      fontWeight: ui.type.card.fontWeight, lineHeight: ui.type.card.lineHeight,},
 
     identityCardText: {
       marginTop: 6,
       color: ui.color.secondary,
-      fontSize: 12.5,
-      lineHeight: 19,
-      maxWidth: 720,
-    },
+      fontSize: ui.type.body.fontSize,
+      lineHeight: ui.type.body.lineHeight,
+      maxWidth: 720, fontWeight: ui.type.body.fontWeight,},
 
     identityStatusBadge: {
       minHeight: 30,
@@ -3160,12 +3156,11 @@ const styles =
 
     accessLabel: {
       color: "#94A3B8",
-      fontSize: 10,
-      fontWeight: "800",
+      fontSize: ui.type.label.fontSize,
+      fontWeight: ui.type.label.fontWeight,
       textTransform:
         "uppercase",
-      letterSpacing: 0.4,
-    },
+      letterSpacing: 0.4, lineHeight: ui.type.label.lineHeight,},
 
     accessValue: {
       marginTop: 4,

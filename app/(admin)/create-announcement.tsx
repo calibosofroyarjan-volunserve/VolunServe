@@ -279,18 +279,16 @@ const styles = StyleSheet.create({
 
   title: {
     color: "#173D32",
-    fontSize: 30,
-    fontWeight: "700",
-    marginTop: 5,
-  },
+    fontSize: ui.type.page.fontSize,
+    fontWeight: ui.type.page.fontWeight,
+    marginTop: 5, lineHeight: ui.type.page.lineHeight,},
 
   subtitle: {
     color: "#64748B",
-    fontSize: 14,
-    lineHeight: 21,
+    fontSize: ui.type.body.fontSize,
+    lineHeight: ui.type.body.lineHeight,
     marginTop: 6,
-    marginBottom: 20,
-  },
+    marginBottom: 20, fontWeight: ui.type.body.fontWeight,},
 
   scopeCard: {
     backgroundColor: "#EAF8F6",
@@ -303,10 +301,9 @@ const styles = StyleSheet.create({
 
   scopeLabel: {
     color: "#087F78",
-    fontSize: 10,
-    fontWeight: "900",
-    letterSpacing: 1,
-  },
+    fontSize: ui.type.label.fontSize,
+    fontWeight: ui.type.label.fontWeight,
+    letterSpacing: 1, lineHeight: ui.type.label.lineHeight,},
 
   scopeValue: {
     color: "#173D32",
@@ -332,12 +329,11 @@ const styles = StyleSheet.create({
 
   inputLabel: {
     color: "#475569",
-    fontSize: 10,
-    fontWeight: "900",
+    fontSize: ui.type.label.fontSize,
+    fontWeight: ui.type.label.fontWeight,
     letterSpacing: 0.9,
     marginBottom: 7,
-    marginTop: 6,
-  },
+    marginTop: 6, lineHeight: ui.type.label.lineHeight,},
 
   input: {
     width: "100%",
@@ -369,7 +365,7 @@ const styles = StyleSheet.create({
   notice: { borderWidth: 1, borderRadius: 9, padding: 13, marginBottom: 14 },
   noticeError: { backgroundColor: "#FEF2F2", borderColor: "#FECACA" },
   noticeSuccess: { backgroundColor: "#ECFDF5", borderColor: "#A7F3D0" },
-  noticeText: { color: "#163F34", fontSize: 14, fontWeight: "600" },
+  noticeText: { color: "#163F34", fontSize: ui.type.body.fontSize, fontWeight: ui.type.body.fontWeight, lineHeight: ui.type.body.lineHeight,},
   submitButton: {
     minHeight: 48,
     backgroundColor: "#087F78",
@@ -385,9 +381,8 @@ const styles = StyleSheet.create({
 
   submitText: {
     color: "#FFFFFF",
-    fontSize: 14,
-    fontWeight: "900",
-  },
+    fontSize: ui.type.label.fontSize,
+    fontWeight: ui.type.label.fontWeight, lineHeight: ui.type.label.lineHeight,},
 
   noteCard: {
     marginTop: 16,
@@ -400,14 +395,12 @@ const styles = StyleSheet.create({
 
   noteTitle: {
     color: ui.color.text,
-    fontSize: 16,
-    fontWeight: "700",
-  },
+    fontSize: ui.type.section.fontSize,
+    fontWeight: ui.type.section.fontWeight, lineHeight: ui.type.section.lineHeight,},
 
   noteText: {
     color: ui.color.secondary,
-    fontSize: 13,
-    lineHeight: 20,
-    marginTop: 4,
-  },
+    fontSize: ui.type.body.fontSize,
+    lineHeight: ui.type.body.lineHeight,
+    marginTop: 4, fontWeight: ui.type.body.fontWeight,},
 });
