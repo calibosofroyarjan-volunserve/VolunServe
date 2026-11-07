@@ -28,6 +28,10 @@ class FaceBoxDedupTests(unittest.TestCase):
         result = deduplicate_face_boxes([(10, 10, 100, 100), (15, 15, 85, 85)])
         self.assertEqual(len(result), 1)
 
+    def test_distinct_small_face_inside_large_box_is_not_discarded(self):
+        result = deduplicate_face_boxes([(10, 10, 160, 160), (20, 20, 65, 65)])
+        self.assertEqual(len(result), 2)
+
     def test_invalid_boxes_cannot_count_as_faces(self):
         self.assertEqual(deduplicate_face_boxes([(1, 1, 0, 100), (1, 1, 10, -1)]), [])
 
