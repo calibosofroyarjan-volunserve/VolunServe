@@ -10,7 +10,7 @@ from io import BytesIO
 import cv2
 import mediapipe as mp
 import pytesseract
-from document_screening import assess_document_sides, assess_document_text, document_ocr_unavailable
+from document_screening import assess_document_sides, assess_profile_name, document_ocr_unavailable
 from face_boxes import deduplicate_face_boxes
 import numpy as np
 from fastapi import FastAPI, Header, HTTPException, Request
@@ -93,6 +93,8 @@ app.add_middleware(
         "Content-Type",
         "X-VolunServe-User-Id",
         "X-VolunServe-Internal-Key",
+        "X-VolunServe-Profile-First-Name",
+        "X-VolunServe-Profile-Last-Name",
     ],
 )
 
@@ -168,6 +170,16 @@ def require_internal_backend(
     | None = Header(
         default=None,
         alias="X-VolunServe-Internal-Key",
+    ),
+    x_volunserve_profile_first_name: str
+    | None = Header(
+        default=None,
+        alias="X-VolunServe-Profile-First-Name",
+    ),
+    x_volunserve_profile_last_name: str
+    | None = Header(
+        default=None,
+        alias="X-VolunServe-Profile-Last-Name",
     ),
 ):
     configured_key = get_internal_key()
@@ -900,7 +912,8 @@ def extract_government_id_text(id_document_bytes, label):
 
 
 def screen_government_id(
-    *, declared_type, id_document_bytes, id_back_document_bytes=None
+    *, declared_type, id_document_bytes, id_back_document_bytes=None,
+    expected_first_name="", expected_last_name="",
 ):
     """OCR plausibility on both card sides; never proof of valid issuance."""
     try:
@@ -913,12 +926,18 @@ def screen_government_id(
             )
             if id_back_document_bytes is not None else None
         )
-        return assess_document_sides(declared_type, front_text, back_text)
+        result = assess_document_sides(declared_type, front_text, back_text)
+        result.update(assess_profile_name(
+            expected_first_name, expected_last_name, front_text + "\n" + (back_text or "")
+        ))
+        return result
     except Exception:
         logging.warning("Government ID OCR screening unavailable")
         result = document_ocr_unavailable(declared_type)
         result["backSideProvided"] = id_back_document_bytes is not None
         result["backSideScreened"] = False
+        result["profileNameCheck"] = "inconclusive"
+        result["profileNameCompared"] = False
         return result
 
 
@@ -1169,8 +1188,9 @@ def capabilities():
                 ),
             },
             "profileDataMatching": {
-                "planned": True,
-                "active": False,
+                "planned": False,
+                "active": True,
+                "method": "conservative_ocr_name_presence_not_document_authentication",
             },
             "manualReviewFallback": {
                 "planned": False,
@@ -1323,6 +1343,8 @@ async def verify_identity(
             declared_type=id_type,
             id_document_bytes=id_document_bytes,
             id_back_document_bytes=id_back_document_bytes,
+            expected_first_name=x_volunserve_profile_first_name or "",
+            expected_last_name=x_volunserve_profile_last_name or "",
         )
     except HTTPException:
         raise
