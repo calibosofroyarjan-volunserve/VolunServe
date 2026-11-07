@@ -185,6 +185,7 @@ service cloud.firestore {
           && d.get('occupationSpecialization', '') is string
           && d.get('occupationOther', '') is string
           && d.get('occupationOther', '').size() <= 80
+          && (d.occupationCategory == 'Other (Specify)' || d.get('occupationOther', '') == '')
           && (
           (d.occupationCategory == 'Medical Professional' && d.get('occupationSpecialization', '') in ['Doctor', 'Nurse', 'Midwife', 'Medical Technologist', 'Pharmacist', 'Other Medical Staff']) ||
           (d.occupationCategory == 'Emergency Responder' && d.get('occupationSpecialization', '') in ['Firefighter', 'EMT', 'Rescue Volunteer', 'DRRM Officer', 'Other Responder']) ||
