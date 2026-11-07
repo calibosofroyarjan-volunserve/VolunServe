@@ -1,3 +1,4 @@
+import { liveUi as ui } from "../../constants/volunserveLiveUi";
 import { AppAlert } from "../../lib/appDialog";
 import VolunteerImpact from "./volunteer-impact";
 import { Ionicons } from "@expo/vector-icons";
@@ -2816,7 +2817,7 @@ const styles =
   StyleSheet.create({
     screen: {
       flex: 1,
-      backgroundColor: "#F6F8F7",
+      backgroundColor: ui.color.canvas,
     },
 
     page: {
@@ -2834,13 +2835,13 @@ const styles =
       alignItems: "center",
       justifyContent:
         "center",
-      backgroundColor: "#F6F8F7",
+      backgroundColor: ui.color.canvas,
       padding: 24,
     },
 
     loadingText: {
       marginTop: 12,
-      color: "#64748B",
+      color: ui.color.secondary,
       fontSize: 13,
       fontWeight: "600",
     },
@@ -2850,7 +2851,7 @@ const styles =
     },
 
     pageTitle: {
-      color: "#173D32",
+      color: ui.color.text,
       fontSize: 28,
       fontWeight: "700",
       letterSpacing: -0.6,
@@ -2858,18 +2859,16 @@ const styles =
 
     pageSubtitle: {
       marginTop: 5,
-      color: "#64748B",
+      color: ui.color.secondary,
       fontSize: 14,
     },
 
     profileCard: {
       overflow: "hidden",
       borderRadius: 18,
-      backgroundColor:
-        "#FFFFFF",
+      backgroundColor: ui.color.surface,
       borderWidth: 1,
-      borderColor:
-        "#E2E8F0",
+      borderColor: ui.color.border,
     },
 
     cover: {
@@ -2902,8 +2901,7 @@ const styles =
       height: 116,
       borderRadius: 58,
       marginTop: -58,
-      backgroundColor:
-        "#FFFFFF",
+      backgroundColor: ui.color.surface,
       padding: 5,
       position: "relative",
       shadowColor:
@@ -2994,7 +2992,7 @@ const styles =
 
     identityLine: {
       marginTop: 6,
-      color: "#64748B",
+      color: ui.color.secondary,
       fontSize: 13,
     },
 
@@ -3032,11 +3030,9 @@ const styles =
       alignSelf:
         "flex-start",
       borderRadius: 12,
-      backgroundColor:
-        "#FFFFFF",
+      backgroundColor: ui.color.surface,
       borderWidth: 1,
-      borderColor:
-        "#E2E8F0",
+      borderColor: ui.color.border,
     },
 
     tab: {
@@ -3079,11 +3075,9 @@ const styles =
       marginBottom: 14,
       padding: 20,
       borderRadius: 16,
-      backgroundColor:
-        "#FFFFFF",
+      backgroundColor: ui.color.surface,
       borderWidth: 1,
-      borderColor:
-        "#E2E8F0",
+      borderColor: ui.color.border,
     },
 
     identityCardTop: {
@@ -3126,7 +3120,7 @@ const styles =
 
     identityCardText: {
       marginTop: 6,
-      color: "#64748B",
+      color: ui.color.secondary,
       fontSize: 12.5,
       lineHeight: 19,
       maxWidth: 720,
@@ -3161,8 +3155,7 @@ const styles =
       backgroundColor:
         "#F8FAFC",
       borderWidth: 1,
-      borderColor:
-        "#E2E8F0",
+      borderColor: ui.color.border,
     },
 
     accessLabel: {
@@ -3211,7 +3204,7 @@ const styles =
     identityActionHint: {
       flex: 1,
       minWidth: 220,
-      color: "#64748B",
+      color: ui.color.secondary,
       fontSize: 11.5,
       lineHeight: 17,
     },
@@ -3227,8 +3220,7 @@ const styles =
       backgroundColor:
         "#F8FAFC",
       borderWidth: 1,
-      borderColor:
-        "#E2E8F0",
+      borderColor: ui.color.border,
     },
 
     identityNoticeText: {
@@ -3243,11 +3235,9 @@ const styles =
       width: "100%",
       padding: 22,
       borderRadius: 16,
-      backgroundColor:
-        "#FFFFFF",
+      backgroundColor: ui.color.surface,
       borderWidth: 1,
-      borderColor:
-        "#E2E8F0",
+      borderColor: ui.color.border,
     },
 
     sectionHeading: {
@@ -3269,7 +3259,7 @@ const styles =
     },
 
     sectionTitle: {
-      color: "#173D32",
+      color: ui.color.text,
       fontSize: 17,
       fontWeight: "700",
     },
@@ -3293,7 +3283,7 @@ const styles =
 
     infoLabel: {
       width: "38%",
-      color: "#64748B",
+      color: ui.color.secondary,
       fontSize: 12.5,
       lineHeight: 18,
     },
@@ -3339,7 +3329,7 @@ const styles =
 
     activitySubtitle: {
       marginTop: 4,
-      color: "#64748B",
+      color: ui.color.secondary,
       fontSize: 12,
       lineHeight: 17,
     },
@@ -3435,7 +3425,7 @@ const styles =
 
     certificateId: {
       marginTop: 4,
-      color: "#64748B",
+      color: ui.color.secondary,
       fontSize: 11,
     },
 
@@ -3495,7 +3485,7 @@ const styles =
 
     emptyText: {
       marginTop: 5,
-      color: "#64748B",
+      color: ui.color.secondary,
       fontSize: 12.5,
       lineHeight: 18,
       textAlign: "center",
@@ -3512,7 +3502,7 @@ const styles =
     },
 
     inlineLoadingText: {
-      color: "#64748B",
+      color: ui.color.secondary,
       fontSize: 12.5,
       fontWeight: "700",
     },
@@ -3524,7 +3514,7 @@ const styles =
     modalCard: {
       width:"100%",maxWidth:660,maxHeight:"91%",
       alignSelf:"center",borderRadius:18,overflow:"hidden",
-      backgroundColor:"#FFFFFF",borderWidth:1,borderColor:"#CFE6D9",
+      backgroundColor: ui.color.surface,borderWidth:1,borderColor:"#CFE6D9",
       shadowColor:"#082A1C",shadowOffset:{width:0,height:12},
       shadowOpacity:0.22,shadowRadius:28,elevation:8,
     },
@@ -3542,7 +3532,7 @@ const styles =
     modalTitle:{fontSize:21,fontWeight:"900",color:"#0D3429",letterSpacing:-0.5},
     modalSubtitle:{fontSize:12,color:"#537366",lineHeight:17,marginTop:3},
     modalClose:{
-      height:36,width:36,borderRadius:9,backgroundColor:"#FFFFFF",
+      height:36,width:36,borderRadius:9,backgroundColor: ui.color.surface,
       alignItems:"center",justifyContent:"center",borderWidth:1,borderColor:"#D9EAE0",
     },
     modalScroll:{flexShrink:1,minHeight:0},
@@ -3572,7 +3562,7 @@ const styles =
     dropdownPlaceholder:{fontWeight:"500",color:"#799588"},
     dropdownPanel:{
       borderWidth:1,borderColor:"#CDE4D6",borderRadius:10,
-      backgroundColor:"#FFFFFF",marginTop:6,overflow:"hidden",
+      backgroundColor: ui.color.surface,marginTop:6,overflow:"hidden",
     },
     dropdownSearch:{
       minHeight:42,flexDirection:"row",alignItems:"center",gap:8,
@@ -3597,7 +3587,7 @@ const styles =
     modalActions:{flexDirection:"row",alignItems:"center",gap:9},
     cancelButton:{
       minHeight:43,justifyContent:"center",alignItems:"center",paddingHorizontal:16,
-      borderRadius:9,borderWidth:1,borderColor:"#CFE1D7",backgroundColor:"#FFFFFF",
+      borderRadius:9,borderWidth:1,borderColor:"#CFE1D7",backgroundColor: ui.color.surface,
     },
     cancelButtonText:{color:"#355C4B",fontSize:12.5,fontWeight:"800"},
     saveButton:{
@@ -3790,7 +3780,7 @@ const styles =
       borderRadius: 12,
       borderWidth: 1,
       borderColor: "#93C5FD",
-      backgroundColor: "#FFFFFF",
+      backgroundColor: ui.color.surface,
     },
 
     verifyLearnButtonText: {
@@ -3943,7 +3933,7 @@ const styles =
       borderRadius: 11,
       borderWidth: 1,
       borderColor: "#FCA5A5",
-      backgroundColor: "#FFFFFF",
+      backgroundColor: ui.color.surface,
     },
 
     verifyRetryButtonText: {

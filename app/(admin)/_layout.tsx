@@ -563,8 +563,8 @@ export default function AdminLayout() {
 
 const styles =
   StyleSheet.create({
-    profileLink: { minHeight: 43, flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 10, borderRadius: 9, marginBottom: 7 },
-    profileLinkActive: { backgroundColor: "#257C61" },
+    profileLink: { minHeight: ui.minTap, flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 10, borderRadius: 9, marginBottom: 7 },
+    profileLinkActive: { backgroundColor: ui.color.sidebarActive },
     profileLinkText: { flex: 1, fontSize: 12.5, color: "#DDEEE7", fontWeight: "600" },
     profileAreaSelected: { backgroundColor: "#F0F6F2" },
 
@@ -575,11 +575,11 @@ const styles =
     navGroupTitle: { flex: 1, color: "#C4DDD0", fontSize: 12.5, fontWeight: "600" },
     navGroupTitleCurrent: { color: "#FFFFFF", fontWeight: "700" },
     navGroupChildren: { paddingTop: 2, paddingLeft: 16 },
-    groupNavItem: { minHeight: 41, marginBottom: 1, gap: 10, paddingHorizontal: 12 },
+    groupNavItem: { minHeight: ui.minTap, marginBottom: 1, gap: 10, paddingHorizontal: 12 },
     shell: {
       flex: 1,
       flexDirection: "row",
-      backgroundColor: "#F6F8F7",
+      backgroundColor: ui.color.canvas,
     },
 
     center: {
@@ -702,9 +702,9 @@ const styles =
 
     navLabel: {
       flex: 1,
-      color: "#D7EDE1",
-      fontSize: 13,
-      fontWeight: "500",
+      color: ui.color.sidebarText,
+      fontSize: ui.type.label.fontSize,
+      fontWeight: "600",
     },
 
     navLabelActive: {
@@ -758,7 +758,7 @@ const styles =
     main: {
       flex: 1,
       minWidth: 0,
-      backgroundColor: "#F6F8F7",
+      backgroundColor: ui.color.canvas,
     },
 
     topBar: {

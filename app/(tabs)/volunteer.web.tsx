@@ -1664,7 +1664,7 @@ const styles = StyleSheet.create({
 
   screen: {
     flex: 1,
-    backgroundColor: "#F6F8F7",
+    backgroundColor: ui.color.canvas,
   },
   page: {
     width: "100%",
@@ -1679,11 +1679,11 @@ const styles = StyleSheet.create({
     minHeight: 520,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#F6F8F7",
+    backgroundColor: ui.color.canvas,
   },
   loadingText: {
     marginTop: 12,
-    color: "#64748b",
+    color: ui.color.secondary,
     fontSize: 13,
     fontWeight: "700",
   },
@@ -1870,7 +1870,7 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     borderWidth: 1,
     borderColor: "#e3e9ef",
-    backgroundColor: "#ffffff",
+    backgroundColor: ui.color.surface,
   },
   filterButtonActive: {
     borderColor: "#a9ded1",
@@ -1894,7 +1894,7 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     borderWidth: 1,
     borderColor: "#e3e9ef",
-    backgroundColor: "#ffffff",
+    backgroundColor: ui.color.surface,
   },
   sortButtonText: {
     color: "#526779",
@@ -1931,7 +1931,7 @@ const styles = StyleSheet.create({
     borderRadius: 15,
     borderWidth: 1,
     borderColor: "#dfe7ee",
-    backgroundColor: "#ffffff",
+    backgroundColor: ui.color.surface,
   },
   assignmentCardCompact: {
     flexWrap: "wrap",
@@ -2105,7 +2105,7 @@ const styles = StyleSheet.create({
     borderRadius: 9,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#ffffff",
+    backgroundColor: ui.color.surface,
     borderWidth: 1,
     borderColor: "#e6ebef",
   },
@@ -2160,7 +2160,7 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     borderWidth: 1,
     borderColor: "#9db5c4",
-    backgroundColor: "#ffffff",
+    backgroundColor: ui.color.surface,
   },
   declineButtonText: {
     color: "#123047",
@@ -2208,7 +2208,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#f1f4f7",
   },
   inactiveBoxText: {
-    color: "#64748b",
+    color: ui.color.secondary,
     fontSize: 11,
     fontWeight: "900",
   },
@@ -2305,14 +2305,14 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     borderWidth: 1,
     borderColor: "#cbd5e1",
-    backgroundColor: "#ffffff",
+    backgroundColor: ui.color.surface,
   },
   completionTypeButtonActive: {
     borderColor: "#078F82",
     backgroundColor: "#e8f6f2",
   },
   completionTypeText: {
-    color: "#64748b",
+    color: ui.color.secondary,
     fontSize: 9.5,
     fontWeight: "800",
   },
@@ -2346,7 +2346,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#d7e0e7",
     borderRadius: 10,
-    backgroundColor: "#ffffff",
+    backgroundColor: ui.color.surface,
     color: "#183448",
     fontSize: 11,
   },
@@ -2374,7 +2374,7 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     borderWidth: 1,
     borderColor: "#d7e0e7",
-    backgroundColor: "#ffffff",
+    backgroundColor: ui.color.surface,
   },
   followUpButtonWarning: {
     borderColor: "#d97706",
@@ -2408,7 +2408,7 @@ const styles = StyleSheet.create({
   },
   completionNotice: {
     flex: 1,
-    color: "#64748b",
+    color: ui.color.secondary,
     fontSize: 10,
     lineHeight: 15,
     fontWeight: "600",
@@ -2439,7 +2439,7 @@ const styles = StyleSheet.create({
     borderRadius: 15,
     borderWidth: 1,
     borderColor: "#dfe7ee",
-    backgroundColor: "#ffffff",
+    backgroundColor: ui.color.surface,
   },
   emptyIcon: {
     width: 62,

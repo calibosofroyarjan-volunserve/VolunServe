@@ -1,3 +1,4 @@
+import { liveUi as ui } from "../../constants/volunserveLiveUi";
 import { Ionicons } from "@expo/vector-icons";
 import ListPagination from "../../components/ui/ListPagination";
 
@@ -1632,7 +1633,7 @@ const styles =
 
     loadingText: {
       marginTop: 12,
-      color: "#64748B",
+      color: ui.color.secondary,
       fontWeight: "600",
     },
 
@@ -1651,12 +1652,12 @@ const styles =
       marginTop: 4,
       fontSize: 30,
       fontWeight: "700",
-      color: "#173D32",
+      color: ui.color.text,
     },
 
     subtitle: {
       marginTop: 5,
-      color: "#64748B",
+      color: ui.color.secondary,
       lineHeight: 20,
     },
 
@@ -1674,7 +1675,7 @@ const styles =
       borderRadius: 0,
       padding: 14,
       borderBottomWidth: 1,
-      borderColor: "#E2E8F0",
+      borderColor: ui.color.border,
     },
 
     summaryIcon: {
@@ -1692,12 +1693,12 @@ const styles =
     summaryValue: {
       fontSize: 23,
       fontWeight: "900",
-      color: "#173D32",
+      color: ui.color.text,
     },
 
     summaryLabel: {
       marginTop: 2,
-      color: "#64748B",
+      color: ui.color.secondary,
       fontWeight: "700",
     },
 
@@ -1733,7 +1734,7 @@ const styles =
       borderRadius: 10,
       borderWidth: 1,
       borderColor: "#C7DCD1",
-      backgroundColor: "#FFFFFF",
+      backgroundColor: ui.color.surface,
       paddingHorizontal: 12,
       flexDirection: "row",
       alignItems: "center",
@@ -1757,7 +1758,7 @@ const styles =
       padding: 5,
       borderWidth: 1,
       borderColor: "#D2E4D8",
-      backgroundColor: "#FFFFFF",
+      backgroundColor: ui.color.surface,
       shadowColor: "#143F31",
       shadowOpacity: 0.12,
       shadowRadius: 12,
@@ -1808,8 +1809,7 @@ const styles =
       flexDirection: "row",
       alignItems: "center",
       gap: 8,
-      backgroundColor:
-        "#FFFFFF",
+      backgroundColor: ui.color.surface,
       borderWidth: 1,
       borderColor: "#CBD5E1",
       borderRadius: 12,
@@ -1820,7 +1820,7 @@ const styles =
     searchInput: {
       flex: 1,
       minHeight: 45,
-      color: "#173D32",
+      color: ui.color.text,
       outlineStyle: "none",
     } as any,
 
@@ -1835,20 +1835,19 @@ const styles =
     sectionTitle: {
       fontSize: 18,
       fontWeight: "900",
-      color: "#173D32",
+      color: ui.color.text,
     },
 
     recordCount: {
-      color: "#64748B",
+      color: ui.color.secondary,
       fontSize: 12,
       fontWeight: "700",
     },
 
     recordCard: {
-      backgroundColor:
-        "#FFFFFF",
+      backgroundColor: ui.color.surface,
       borderBottomWidth: 1,
-      borderColor: "#E2E8F0",
+      borderColor: ui.color.border,
       borderRadius: 3,
       padding: 16,
       marginBottom: 8,
@@ -1874,12 +1873,12 @@ const styles =
     recordTitle: {
       fontSize: 16,
       fontWeight: "900",
-      color: "#173D32",
+      color: ui.color.text,
     },
 
     recordSubtitle: {
       marginTop: 3,
-      color: "#64748B",
+      color: ui.color.secondary,
       fontSize: 12,
     },
 
@@ -1925,10 +1924,9 @@ const styles =
     },
 
     emptyCard: {
-      backgroundColor:
-        "#FFFFFF",
+      backgroundColor: ui.color.surface,
       borderWidth: 1,
-      borderColor: "#E2E8F0",
+      borderColor: ui.color.border,
       borderRadius: 9,
       padding: 30,
       alignItems: "center",
@@ -1936,14 +1934,14 @@ const styles =
 
     emptyTitle: {
       marginTop: 10,
-      color: "#173D32",
+      color: ui.color.text,
       fontWeight: "900",
       fontSize: 16,
     },
 
     emptyText: {
       marginTop: 4,
-      color: "#64748B",
+      color: ui.color.secondary,
       textAlign: "center",
     },
 
