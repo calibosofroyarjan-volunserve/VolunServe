@@ -1,3 +1,4 @@
+import { liveUi as designUi } from "../../constants/volunserveLiveUi";
 import { Ionicons } from "@expo/vector-icons";
 import {
   Href,
@@ -400,10 +401,9 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     marginLeft: 27,
     color: "#A7DCD4",
-    fontSize: 10,
-    fontWeight: "700",
-    letterSpacing: 1.1,
-  },
+    fontSize: designUi.type.eyebrow.fontSize,
+    fontWeight: designUi.type.eyebrow.fontWeight,
+    letterSpacing: 1.1, lineHeight: designUi.type.eyebrow.lineHeight,},
   sidebarScroll: {
     flex: 1,
     minHeight: 0,
@@ -445,9 +445,8 @@ const styles = StyleSheet.create({
   navText: {
     flex: 1,
     color: "#D8E6E1",
-    fontSize: 13,
-    fontWeight: "500",
-  },
+    fontSize: designUi.type.label.fontSize,
+    fontWeight: designUi.type.label.fontWeight, lineHeight: designUi.type.label.lineHeight,},
   navTextActive: {
     color: "#FFFFFF",
     fontWeight: "700",
@@ -498,7 +497,7 @@ const styles = StyleSheet.create({
   },
   breadcrumb: { flex: 1, minWidth: 0, flexDirection: "row", alignItems: "center", gap: 8 },
   breadcrumbParent: { color: "#537569", fontSize: 12, fontWeight: "700" },
-  breadcrumbCurrent: { color: "#124A39", fontSize: 12, fontWeight: "900", flexShrink: 1 },
+  breadcrumbCurrent: { color: "#124A39", fontSize: designUi.type.label.fontSize, fontWeight: designUi.type.label.fontWeight, flexShrink: 1, lineHeight: designUi.type.label.lineHeight,},
   menuButton: {
     width: 42,
     height: 42,
@@ -518,7 +517,7 @@ const styles = StyleSheet.create({
   },
   profileMenuAction: { flexDirection: "row", alignItems: "center", gap: 10,
     minHeight: 46, paddingHorizontal: 11, borderRadius: 9 },
-  profileMenuText: { flex: 1, color: "#174B3E", fontWeight: "800", fontSize: 13 },
+  profileMenuText: { flex: 1, color: "#174B3E", fontWeight: designUi.type.label.fontWeight, fontSize: designUi.type.label.fontSize, lineHeight: designUi.type.label.lineHeight,},
   profileMenuSignOut: { flex: 1, color: "#B42318", fontWeight: "800", fontSize: 13 },
   profileMenuDivider: { height: 1, backgroundColor: "#E5EEE9", marginVertical: 5, marginHorizontal: 8 },
   accountArea: {
@@ -546,9 +545,8 @@ const styles = StyleSheet.create({
   },
   accountName: {
     color: "#0F172A",
-    fontSize: 13,
-    fontWeight: "700",
-  },
+    fontSize: designUi.type.label.fontSize,
+    fontWeight: designUi.type.label.fontWeight, lineHeight: designUi.type.label.lineHeight,},
   accountRole: {
     color: "#64748B",
     fontSize: 10.5,

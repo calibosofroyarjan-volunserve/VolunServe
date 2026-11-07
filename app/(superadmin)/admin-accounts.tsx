@@ -1,3 +1,4 @@
+import { liveUi as designUi } from "../../constants/volunserveLiveUi";
 import { Ionicons } from "@expo/vector-icons";
 
 import {
@@ -1930,17 +1931,15 @@ const styles =
     },
 
     title: {
-      fontSize: 30,
-      fontWeight: "700",
-      color: "#173D32",
-    },
+      fontSize: designUi.type.page.fontSize,
+      fontWeight: designUi.type.page.fontWeight,
+      color: "#173D32", lineHeight: designUi.type.page.lineHeight,},
 
     subtitle: {
       color: "#64748B",
       marginTop: 5,
-      lineHeight: 20,
-      maxWidth: 600,
-    },
+      lineHeight: designUi.type.body.lineHeight,
+      maxWidth: 600, fontSize: designUi.type.body.fontSize, fontWeight: designUi.type.body.fontWeight,},
 
     addButton: {
       minHeight: 44,
@@ -1994,8 +1993,7 @@ const styles =
     statLabel: {
       marginTop: 2,
       color: "#64748B",
-      fontWeight: "700",
-    },
+      fontWeight: designUi.type.label.fontWeight, fontSize: designUi.type.label.fontSize, lineHeight: designUi.type.label.lineHeight,},
 
     searchBar: {
       flexDirection: "row",
@@ -2138,11 +2136,10 @@ const styles =
     },
 
     detailLabel: {
-      fontSize: 9,
+      fontSize: designUi.type.label.fontSize,
       letterSpacing: 0.8,
-      fontWeight: "900",
-      color: "#94A3B8",
-    },
+      fontWeight: designUi.type.label.fontWeight,
+      color: "#94A3B8", lineHeight: designUi.type.label.lineHeight,},
 
     detailValue: {
       marginTop: 5,
@@ -2211,9 +2208,8 @@ const styles =
     emptyTitle: {
       marginTop: 13,
       color: "#173D32",
-      fontSize: 17,
-      fontWeight: "900",
-    },
+      fontSize: designUi.type.section.fontSize,
+      fontWeight: designUi.type.section.fontWeight, lineHeight: designUi.type.section.lineHeight,},
 
     emptyText: {
       marginTop: 5,

@@ -1,3 +1,4 @@
+import { liveUi as designUi } from "../../constants/volunserveLiveUi";
 import { Ionicons } from "@expo/vector-icons";
 import React, { useEffect, useMemo, useState } from "react";
 import { useLocalSearchParams } from "expo-router";
@@ -1013,7 +1014,7 @@ const styles = StyleSheet.create({
   queueHeading: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 12,
     backgroundColor: "#FFFFFF", borderRadius: 14, borderWidth: 1, borderColor: "#D8E9E0",
     padding: 15, marginBottom: 13 },
-  queueTitle: { color: "#153D32", fontWeight: "900", fontSize: 17 },
+  queueTitle: { color: "#153D32", fontWeight: designUi.type.section.fontWeight, fontSize: designUi.type.section.fontSize, lineHeight: designUi.type.section.lineHeight,},
   queueSubheading: { color: "#647E71", fontSize: 12, lineHeight: 19, marginTop: 4 },
   header: {
     flexDirection: "row",
@@ -1047,16 +1048,14 @@ const styles = StyleSheet.create({
   title: {
     marginTop: 3,
     color: "#173D32",
-    fontSize: 25,
-    fontWeight: "700",
-  },
+    fontSize: designUi.type.page.fontSize,
+    fontWeight: designUi.type.page.fontWeight, lineHeight: designUi.type.page.lineHeight,},
   subtitle: {
     marginTop: 5,
     maxWidth: 760,
     color: "#64748B",
-    fontSize: 12,
-    lineHeight: 18,
-  },
+    fontSize: designUi.type.body.fontSize,
+    lineHeight: designUi.type.body.lineHeight, fontWeight: designUi.type.body.fontWeight,},
   refreshButton: {
     minHeight: 42,
     flexDirection: "row",
@@ -1203,10 +1202,9 @@ const styles = StyleSheet.create({
   emptyTitle: {
     marginTop: 10,
     color: "#173D32",
-    fontSize: 16,
-    fontWeight: "900",
-    textAlign: "center",
-  },
+    fontSize: designUi.type.section.fontSize,
+    fontWeight: designUi.type.section.fontWeight,
+    textAlign: "center", lineHeight: designUi.type.section.lineHeight,},
   workspace: {
     gap: 14,
   },
@@ -1454,9 +1452,8 @@ const styles = StyleSheet.create({
   inputLabel: {
     marginBottom: 6,
     color: "#334155",
-    fontSize: 10.5,
-    fontWeight: "800",
-  },
+    fontSize: designUi.type.label.fontSize,
+    fontWeight: designUi.type.label.fontWeight, lineHeight: designUi.type.label.lineHeight,},
   notesInput: {
     minHeight: 105,
     padding: 12,

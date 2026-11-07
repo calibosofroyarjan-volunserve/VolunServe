@@ -1,3 +1,4 @@
+import { liveUi as designUi } from "../../constants/volunserveLiveUi";
 
 import { Ionicons } from "@expo/vector-icons";
 import {
@@ -564,14 +565,14 @@ const styles =
   StyleSheet.create({
     profileLink: { minHeight: 43, flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 10, borderRadius: 9, marginBottom: 7 },
     profileLinkActive: { backgroundColor: "#257C61" },
-    profileLinkText: { flex: 1, fontSize: 12.5, color: "#DDEEE7", fontWeight: "600" },
+    profileLinkText: { flex: 1, fontSize: designUi.type.label.fontSize, color: "#DDEEE7", fontWeight: designUi.type.label.fontWeight, lineHeight: designUi.type.label.lineHeight,},
     profileAreaSelected: { backgroundColor: "#F0F6F2" },
 
     navSection: { marginBottom: 6 },
     overviewNavItem: { marginHorizontal: 17, marginBottom: 10 },
     navGroupHeader: { minHeight: 46, flexDirection: "row", alignItems: "center", gap: 11, paddingHorizontal: 13, borderRadius: 9 },
     navGroupHeaderCurrent: { backgroundColor: "rgba(130,207,169,0.10)" },
-    navGroupTitle: { flex: 1, color: "#C4DDD0", fontSize: 12.5, fontWeight: "600" },
+    navGroupTitle: { flex: 1, color: "#C4DDD0", fontSize: designUi.type.label.fontSize, fontWeight: designUi.type.label.fontWeight, lineHeight: designUi.type.label.lineHeight,},
     navGroupTitleCurrent: { color: "#FFFFFF", fontWeight: "700" },
     navGroupChildren: { paddingTop: 2, paddingLeft: 16 },
     groupNavItem: { minHeight: 41, marginBottom: 1, gap: 10, paddingHorizontal: 12 },
@@ -678,10 +679,9 @@ const styles =
       marginBottom: 8,
       marginLeft: 27,
       color: "#91C8B2",
-      fontSize: 10,
-      fontWeight: "700",
-      letterSpacing: 1.1,
-    },
+      fontSize: designUi.type.eyebrow.fontSize,
+      fontWeight: designUi.type.eyebrow.fontWeight,
+      letterSpacing: 1.1, lineHeight: designUi.type.eyebrow.lineHeight,},
 
     navItem: {
       minHeight: 49,
@@ -702,9 +702,8 @@ const styles =
     navLabel: {
       flex: 1,
       color: "#D7EDE1",
-      fontSize: 13,
-      fontWeight: "500",
-    },
+      fontSize: designUi.type.label.fontSize,
+      fontWeight: designUi.type.label.fontWeight, lineHeight: designUi.type.label.lineHeight,},
 
     navLabelActive: {
       color: "#FFFFFF",
@@ -836,9 +835,8 @@ const styles =
 
     profileName: {
       color: "#173D32",
-      fontSize: 13,
-      fontWeight: "700",
-    },
+      fontSize: designUi.type.label.fontSize,
+      fontWeight: designUi.type.label.fontWeight, lineHeight: designUi.type.label.lineHeight,},
 
     profileRole: {
       marginTop: 3,

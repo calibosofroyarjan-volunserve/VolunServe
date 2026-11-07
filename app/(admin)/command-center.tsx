@@ -1,3 +1,4 @@
+import { liveUi as designUi } from "../../constants/volunserveLiveUi";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { Redirect, useLocalSearchParams, useRouter } from "expo-router";
 import {
@@ -560,7 +561,7 @@ const styles =
     kpiCardCompact: {minWidth:136,padding:13},
     kpiCardFeatured: {backgroundColor:"#087B60",borderColor:"#087B60"},
     kpiCardHeader: {flexDirection:"row",justifyContent:"space-between",alignItems:"flex-start",gap:8},
-    kpiCardLabel: {fontSize:11,fontWeight:"700",color:"#688073",flex:1,lineHeight:16},
+    kpiCardLabel: {fontSize: designUi.type.label.fontSize,fontWeight: designUi.type.label.fontWeight,color:"#688073",flex:1,lineHeight: designUi.type.label.lineHeight},
     kpiCardValue: {fontSize:25,fontWeight:"800",color:"#164535",marginTop:5,fontVariant:["tabular-nums"]},
     kpiCardFoot: {flexDirection:"row",justifyContent:"space-between",gap:7,alignItems:"center",marginTop:5},
     kpiCardHint: {flex:1,fontSize:10.5,color:"#829B8E"},
@@ -600,7 +601,7 @@ const styles =
     metricItemDivider: { borderLeftWidth: 1, borderLeftColor: "rgba(204,238,217,0.18)" },
     sectionEyebrow: { flexDirection: "row", alignItems: "center", gap: 9, marginBottom: 9 },
     sectionEyebrowLine: { height: 2, width: 21, backgroundColor: "#3C9072" },
-    sectionEyebrowText: { fontSize: 10, fontWeight: "800", color: "#53836D", letterSpacing: 1.0 },
+    sectionEyebrowText: { fontSize: designUi.type.eyebrow.fontSize, fontWeight: designUi.type.eyebrow.fontWeight, color: "#53836D", letterSpacing: 1.0, lineHeight: designUi.type.eyebrow.lineHeight,},
     chartHeadingAccent: { width: 34, height: 3, borderRadius: 2, backgroundColor: "#2F8468", marginBottom: 11 },
     overviewEyebrow: { flexDirection: "row", alignItems: "center", gap: 7, paddingBottom: 13 },
     overviewEyebrowDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: "#23765F" },
@@ -700,17 +701,15 @@ const styles =
 
     title: {
       color: "#173D32",
-      fontSize: 30,
-      fontWeight: "700",
-      letterSpacing: -0.5,
-    },
+      fontSize: designUi.type.page.fontSize,
+      fontWeight: designUi.type.page.fontWeight,
+      letterSpacing: -0.5, lineHeight: designUi.type.page.lineHeight,},
 
     subtitle: {
       marginTop: 5,
       color: "#64748B",
-      fontSize: 13,
-      lineHeight: 19,
-    },
+      fontSize: designUi.type.body.fontSize,
+      lineHeight: designUi.type.body.lineHeight, fontWeight: designUi.type.body.fontWeight,},
 
     adminBadge: {
       minHeight: 34,
@@ -804,9 +803,8 @@ const styles =
 
     sectionTitle: {
       color: "#173D32",
-      fontSize: 17,
-      fontWeight: "700",
-    },
+      fontSize: designUi.type.section.fontSize,
+      fontWeight: designUi.type.section.fontWeight, lineHeight: designUi.type.section.lineHeight,},
 
     sectionSubtitle: {
       marginTop: 3,
