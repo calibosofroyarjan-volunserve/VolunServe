@@ -26,9 +26,9 @@ export default function AdminReviewHero({ eyebrow, title, subtitle, icon, tag }:
         <Ionicons name={icon} size={22} color={ui.color.primary} />
       </View>
       <View style={styles.copy}>
-        <VolunServeText role="label" color="primary" style={styles.eyebrow}>{eyebrow}</VolunServeText>
-        <VolunServeText role="pageTitle" style={[styles.title, compact && styles.titleCompact]}>{title}</VolunServeText>
-        <VolunServeText role="body" color="muted" style={styles.subtitle}>{subtitle}</VolunServeText>
+        <VolunServeText variant="label" color="primary" style={styles.eyebrow}>{eyebrow}</VolunServeText>
+        <VolunServeText variant="pageTitle" style={[styles.title, compact && styles.titleCompact]}>{title}</VolunServeText>
+        <VolunServeText variant="body" color="muted" style={styles.subtitle}>{subtitle}</VolunServeText>
         {compact && !!tag && <Text style={styles.tagCompact}>{tag}</Text>}
       </View>
       {!compact && !!tag && <Text style={styles.tag}>{tag}</Text>}
