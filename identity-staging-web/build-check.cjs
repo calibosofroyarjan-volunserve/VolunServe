@@ -18,4 +18,7 @@ for(const key of ["getUserMedia","detectForVideo","capture","showModal","MediaPi
 for(const forbidden of ["https://volunserve.onrender.com","volunserve-3aa5b","https://volunserve-identity-ai.onrender.com","https://volunserve.com"]){
  if(camera.includes(forbidden))throw Error("Production connection found in camera module: "+forbidden);
 }
+const {execFileSync}=require("node:child_process");
+execFileSync(process.execPath,["--check","--input-type=module"],{input:camera,stdio:["pipe","inherit","inherit"]});
+execFileSync(process.execPath,["--test","identity-staging-web/test-camera-metrics.mjs"],{stdio:"inherit"});
 console.log("Staging-only camera and identity integration checks passed.");
