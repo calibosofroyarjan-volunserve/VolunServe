@@ -1,3 +1,4 @@
+import { liveUi as ui } from "../../constants/volunserveLiveUi";
 import { getSafeVolunServeBackendBaseUrl } from "../../lib/stagingBackendSafety";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { Redirect, useRouter, type Href } from "expo-router";
@@ -1524,7 +1525,7 @@ export default function CommunityAttendanceAdmin() {
 }
 
 const styles = StyleSheet.create({
-  page: {flex: 1, backgroundColor: "#F6F8F7"},
+  page: {flex: 1, backgroundColor: ui.color.canvas},
   scroll: {flex: 1},
   content: {width: "100%", maxWidth: 1560, alignSelf: "center", padding: 16, paddingBottom: 22},
   contentPhone: {padding: 12, paddingBottom: 22},
@@ -1613,7 +1614,7 @@ const styles = StyleSheet.create({
   wideButton: {width: "100%", minHeight: 44},
   primaryButtonText: {color: "#FFFFFF", fontSize: 12, fontWeight: "900"},
   disabled: {opacity: 0.5},
-  outlineButton: {minHeight: 39, paddingHorizontal: 15, paddingVertical: 10, backgroundColor: "#FFFFFF", borderWidth: 1, borderColor: "#A4CFC9", borderRadius: 9, alignItems: "center", justifyContent: "center"},
+  outlineButton: {minHeight: 39, paddingHorizontal: 15, paddingVertical: 10, backgroundColor: ui.color.surface, borderWidth: 1, borderColor: "#A4CFC9", borderRadius: 9, alignItems: "center", justifyContent: "center"},
   outlineText: {fontSize: 12, color: GREEN, fontWeight: "900"},
   buttonRow: {flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 8, justifyContent: "flex-end", marginTop: 11},
   confirmBox: {padding: 13, backgroundColor: "#FFF7EA", borderWidth: 1, borderColor: "#F5DFC0", borderRadius: 9, marginTop: 7},
@@ -1640,7 +1641,7 @@ const styles = StyleSheet.create({
   table: {minWidth: 1100, borderWidth: 1, borderColor: "#E6ECEF", borderRadius: 11, overflow: "hidden"},
   tableHeader: {minHeight: 43, backgroundColor: "#F0F5F8", flexDirection: "row", alignItems: "center", paddingHorizontal: 10, gap: 8},
   tableHeadText: {fontSize: 10.5, fontWeight: "900", color: "#425E78"},
-  tableRow: {minHeight: 70, flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 10, borderTopWidth: 1, borderTopColor: "#ECF0F2", backgroundColor: "#FFFFFF"},
+  tableRow: {minHeight: 70, flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 10, borderTopWidth: 1, borderTopColor: "#ECF0F2", backgroundColor: ui.color.surface},
   tableText: {fontSize: 11, color: "#526D84"},
   colNumber: {width: 21},
   colPerson: {width: 245},
@@ -1667,12 +1668,12 @@ const styles = StyleSheet.create({
   attendancePending: {backgroundColor: "#FFF3DB"},
   attendancePendingText: {color: "#AD7121"},
   actionsCell: {flexDirection: "row", gap: 5, alignItems: "center"},
-  profileOutlineButton: {minHeight: 33, flexDirection: "row", gap: 5, alignItems: "center", justifyContent: "center", borderRadius: 7, borderWidth: 1, borderColor: "#9AD3CB", paddingHorizontal: 9, backgroundColor: "#FFFFFF"},
+  profileOutlineButton: {minHeight: 33, flexDirection: "row", gap: 5, alignItems: "center", justifyContent: "center", borderRadius: 7, borderWidth: 1, borderColor: "#9AD3CB", paddingHorizontal: 9, backgroundColor: ui.color.surface},
   profileOutlineText: {fontSize: 10, fontWeight: "900", color: GREEN},
   rowAction: {minHeight: 33, paddingHorizontal: 9, paddingVertical: 8},
   rowActionText: {fontSize: 10, color: "#FFFFFF", fontWeight: "900"},
   mobileRosterList: {gap: 11},
-  mobileRosterCard: {padding: 13, borderWidth: 1, borderColor: "#E1ECEC", borderRadius: 12, backgroundColor: "#FFFFFF", gap: 13},
+  mobileRosterCard: {padding: 13, borderWidth: 1, borderColor: "#E1ECEC", borderRadius: 12, backgroundColor: ui.color.surface, gap: 13},
   mobileRosterHeading: {flexDirection: "row", alignItems: "flex-start", gap: 9, flexWrap: "wrap"},
   mobileRosterIdentity: {flex: 1, minWidth: 130, paddingTop: 2},
   mobileTimes: {flexDirection: "row", flexWrap: "wrap", gap: 7},
