@@ -40,9 +40,19 @@ jobs:
       - name: Install locked build dependencies
         working-directory: source
         run: npm ci --no-audit --no-fund
-      - name: Verify staging is isolated from live Firebase
+      - name: Verify staging Firebase and backend isolation
         working-directory: source
-        run: node scripts/test-isolated-staging-config-20261107.cjs
+        run: |
+          node scripts/test-isolated-staging-config-20261107.cjs
+          node scripts/test-staging-backend-isolation-20261107.cjs
+          node scripts/audit-staging-external-endpoints-20261107.cjs
+      - name: Package the staging endpoint audit report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: volunserve-staging-external-endpoint-audit
+          path: source/reports/staging-external-endpoints.*
+          if-no-files-found: warn
       - name: Verify live-based controls and preserve roles
         working-directory: source
         run: |
