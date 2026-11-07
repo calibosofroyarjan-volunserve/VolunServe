@@ -1,3 +1,4 @@
+import { liveUi as ui } from "../../constants/volunserveLiveUi";
 import { Ionicons } from "@expo/vector-icons";
 import {
   Href,
@@ -332,13 +333,13 @@ const styles = StyleSheet.create({
   shell: {
     flex: 1,
     flexDirection: "row",
-    backgroundColor: "#F2F9FC",
+    backgroundColor: ui.color.canvas,
   },
   center: {
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#F2F9FC",
+    backgroundColor: ui.color.canvas,
   },
   loadingText: {
     marginTop: 10,
@@ -351,9 +352,9 @@ const styles = StyleSheet.create({
     minHeight: 0,
     flexShrink: 0,
     overflow: "hidden",
-    backgroundColor: "#083E34",
+    backgroundColor: ui.color.sidebar,
     borderRightWidth: 1,
-    borderRightColor: "#DDE8E3",
+    borderRightColor: ui.color.sidebarActive,
   },
   sidebarCompact: {
     width: 268,
@@ -383,17 +384,17 @@ const styles = StyleSheet.create({
   brandName: {
     color: "#FFFFFF",
     fontSize: 20,
-    fontWeight: "800",
+    fontWeight: "700",
   },
   brandTagline: {
     marginTop: 2,
     color: "#B6E9DF",
     fontSize: 10,
-    fontWeight: "700",
+    fontWeight: "600",
     letterSpacing: 0.65,
   },
-  sidebarDecoration: { position: "absolute", right: -65, bottom: 55, opacity: 0.16 },
-  sidebarTitle: { color: "#D9FFF1", fontSize: 11, fontWeight: "900", letterSpacing: 1.15, marginLeft: 26, marginTop: 4, marginBottom: 0 },
+  sidebarDecoration: { position: "absolute", right: -65, bottom: 55, opacity: 0.05 },
+  sidebarTitle: { color: "#D9FFF1", fontSize: 11, fontWeight: "700", letterSpacing: 1.15, marginLeft: 26, marginTop: 4, marginBottom: 0 },
   sidebarLabel: {
     flexShrink: 0,
     marginTop: 5,
@@ -427,7 +428,7 @@ const styles = StyleSheet.create({
   },
   navSelectedGradient: { ...StyleSheet.absoluteFillObject, borderRadius: 13 },
   navItemActive: {
-    backgroundColor: "#126E59",
+    backgroundColor: ui.color.sidebarActive,
   },
   navIcon: {
     width: 35,
@@ -440,13 +441,13 @@ const styles = StyleSheet.create({
   },
   navIconGradient: { ...StyleSheet.absoluteFillObject, borderRadius: 12 },
   navIconActive: {
-    backgroundColor: "#126E59",
+    backgroundColor: ui.color.sidebarActive,
   },
   navText: {
     flex: 1,
-    color: "#D8E6E1",
-    fontSize: 13,
-    fontWeight: "500",
+    color: ui.color.sidebarText,
+    fontSize: ui.type.label.fontSize,
+    fontWeight: "600",
   },
   navTextActive: {
     color: "#FFFFFF",
@@ -467,7 +468,7 @@ const styles = StyleSheet.create({
     borderTopColor: "rgba(255,255,255,0.18)",
   },
   logoutButton: {
-    minHeight: 43,
+    minHeight: ui.minTap,
     borderRadius: 11,
     flexDirection: "row",
     gap: 12,
@@ -483,7 +484,7 @@ const styles = StyleSheet.create({
     position: "relative",
     flex: 1,
     minWidth: 0,
-    backgroundColor: "#F2F9FC",
+    backgroundColor: ui.color.canvas,
   },
   topbar: {
     minHeight: 65,
@@ -492,17 +493,17 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
     paddingHorizontal: 24,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: ui.color.surface,
     borderBottomWidth: 1,
-    borderBottomColor: "#E5EAF1",
+    borderBottomColor: ui.color.border,
   },
   breadcrumb: { flex: 1, minWidth: 0, flexDirection: "row", alignItems: "center", gap: 8 },
   breadcrumbParent: { color: "#537569", fontSize: 12, fontWeight: "700" },
-  breadcrumbCurrent: { color: "#124A39", fontSize: 12, fontWeight: "900", flexShrink: 1 },
+  breadcrumbCurrent: { color: ui.color.text, fontSize: 12, fontWeight: "700", flexShrink: 1 },
   menuButton: {
-    width: 42,
-    height: 42,
-    borderRadius: 12,
+    width: ui.minTap,
+    height: ui.minTap,
+    borderRadius: ui.radius.control,
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 1,

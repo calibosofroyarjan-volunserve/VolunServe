@@ -1,3 +1,4 @@
+import { liveUi as ui } from "../../constants/volunserveLiveUi";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { Redirect, useRouter } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
@@ -1955,7 +1956,7 @@ function DonationHistoryCard({ donation }: { donation: MyDonation }) {
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: "#F6F8F7",
+    backgroundColor: ui.color.canvas,
   },
   container: {
     width: "100%",
@@ -1970,7 +1971,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     gap: 10,
-    backgroundColor: "#F6F8F7",
+    backgroundColor: ui.color.canvas,
   },
   loadingText: {
     color: "#64748B",
@@ -1985,9 +1986,9 @@ const styles = StyleSheet.create({
     gap: 14,
     padding: 22,
     borderWidth: 1,
-    borderColor: "#DCE7E4",
-    borderRadius: 18,
-    backgroundColor: "#FFFFFF",
+    borderColor: ui.color.border,
+    borderRadius: ui.radius.card,
+    backgroundColor: ui.color.surface,
     shadowColor: "#0F172A",
     shadowOpacity: 0.04,
     shadowRadius: 14,
@@ -2094,9 +2095,9 @@ const styles = StyleSheet.create({
     marginTop: 22,
     padding: 18,
     borderWidth: 1,
-    borderColor: "#DDE6EC",
-    borderRadius: 16,
-    backgroundColor: "#FFFFFF",
+    borderColor: ui.color.border,
+    borderRadius: ui.radius.card,
+    backgroundColor: ui.color.surface,
   },
   sectionEyebrow: {
     color: "#0F766E",

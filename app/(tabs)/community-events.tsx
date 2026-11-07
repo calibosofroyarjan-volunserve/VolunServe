@@ -1,3 +1,4 @@
+import { liveUi as ui } from "../../constants/volunserveLiveUi";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { LinearGradient } from "expo-linear-gradient";
 import {useFonts} from "expo-font";
@@ -4553,14 +4554,14 @@ export default function CommunityEventsScreen() {
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: colors.bg,
+    backgroundColor: ui.color.canvas,
   },
   center: {
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
     padding: 24,
-    backgroundColor: colors.bg,
+    backgroundColor: ui.color.canvas,
   },
   content: {
     width: "100%",
@@ -4581,7 +4582,7 @@ const styles = StyleSheet.create({
     marginBottom: 14,
   },
   pageTitle: {
-    fontSize: 23,
+    fontSize: ui.type.page.fontSize,
     fontWeight: "700",
     color: colors.ink,
   },
@@ -4632,12 +4633,13 @@ const styles = StyleSheet.create({
   },
   statsRow: {
     flexDirection: "row",
+    flexWrap: "wrap",
     gap: 9,
     marginTop: 12,
   },
   statCard: {
     flex: 1,
-    minWidth: 0,
+    minWidth: 128,
     backgroundColor: "#FFFFFF",
     borderWidth: 1,
     borderColor: colors.border,
@@ -4647,7 +4649,7 @@ const styles = StyleSheet.create({
   },
   statValue: {
     color: colors.ink,
-    fontWeight: "900",
+    fontWeight: "700",
     fontSize: 20,
     marginTop: 3,
   },
@@ -4665,6 +4667,7 @@ const styles = StyleSheet.create({
     marginBottom: 13,
   },
   sectionTab: {
+    minHeight: ui.minTap,
     paddingVertical: 10,
     paddingHorizontal: 11,
     borderBottomWidth: 3,
