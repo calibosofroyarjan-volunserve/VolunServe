@@ -10,8 +10,10 @@ const ui=fs.readFileSync("constants/volunserveLiveUi.ts","utf8");
 const file=ts.createSourceFile("DesignReviewWorkspace.tsx",src,ts.ScriptTarget.Latest,true,ts.ScriptKind.TSX);
 assert.equal(file.parseDiagnostics.length,0,"Four role preview has TypeScript parse errors: "+
   file.parseDiagnostics.map(x=>x.messageText).join("; "));
-assert(route.includes("<GuestWorkspace designReview />"),"Public preview must use the actual four-role renderer");
-assert(guest.includes("return <DesignReviewWorkspace />"),"Legacy guest mode must safely delegate only for preview");
+assert(route.includes("<GuestWorkspace />"),"Public preview must use clickable four-role workspace");
+const legacyRoute=fs.readFileSync("app/public/design-review.tsx","utf8");
+assert(legacyRoute.includes("<DesignReviewWorkspace />"),"Dedicated design-review route must remain available");
+assert(guest.includes("AdministrativePreviewModules"),"Actual Guest preview must include the additional Admin/Super Admin module designs");
 for(const role of ["resident","volunteer","admin","superadmin"]){
   assert(src.includes(role+": ["),"Missing "+role+" navigation");
 }
