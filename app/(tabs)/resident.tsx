@@ -6397,8 +6397,7 @@ const styles =
         11,
       padding:
         16,
-      borderRadius:
-        15,
+      borderRadius: 17,
       borderWidth:
         1,
       borderColor:
@@ -6613,8 +6612,7 @@ const styles =
         16,
       padding:
         22,
-      borderRadius:
-        18,
+      borderRadius: 18,
       borderWidth:
         1,
       borderColor:
@@ -6751,10 +6749,8 @@ const styles =
 
     input: {
       fontFamily:"AssistanceInter",
-      minHeight:
-        46,
-      borderRadius:
-        10,
+      minHeight: 46,
+      borderRadius: 11,
       borderWidth:
         1,
       borderColor:
@@ -7537,8 +7533,7 @@ const styles =
     submitButton: {
       minWidth:
         200,
-      minHeight:
-        46,
+      minHeight: 48,
       borderRadius:
         10,
       backgroundColor:
@@ -7859,8 +7854,7 @@ const styles =
         12,
       padding:
         13,
-      borderRadius:
-        13,
+      borderRadius: 16,
       borderWidth:
         1,
       borderColor:

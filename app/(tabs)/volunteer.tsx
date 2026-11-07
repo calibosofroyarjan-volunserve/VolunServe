@@ -2190,7 +2190,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     borderWidth: 1,
     borderColor: "#e1e8ee",
-    borderRadius: 12,
+    borderRadius: 16,
     backgroundColor: "#ffffff",
   },
 
@@ -2260,7 +2260,7 @@ const styles = StyleSheet.create({
     overflow: "hidden",
     borderWidth: 1,
     borderColor: "#dfe7ee",
-    borderRadius: 15,
+    borderRadius: 16,
     backgroundColor: "#ffffff",
   },
 
