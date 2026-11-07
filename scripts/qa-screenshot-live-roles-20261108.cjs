@@ -41,7 +41,7 @@ async function main(){
   throw Error("BLOCKED: local demo emulators only");
  }
  await new Promise(resolve=>server.listen(port,"127.0.0.1",resolve));
- const browser=await chromium.launch({headless:true,args:["--no-sandbox"]});
+ const browser=await chromium.launch({channel:"chrome",headless:true,args:["--no-sandbox"]});
  try{
   for(const size of sizes){
    // Each viewport gets a separate clean context per user, no cross-role persistence.
