@@ -2,6 +2,7 @@ import { Ionicons } from "@expo/vector-icons";
 import React from "react";
 import { StyleSheet, Text, View, useWindowDimensions } from "react-native";
 import { volunserveUi as ui } from "../../constants/volunserveUi";
+import VolunServeText from "../ui/VolunServeText";
 
 type Props = {
   eyebrow: string;
@@ -25,9 +26,9 @@ export default function AdminReviewHero({ eyebrow, title, subtitle, icon, tag }:
         <Ionicons name={icon} size={22} color={ui.color.primary} />
       </View>
       <View style={styles.copy}>
-        <Text style={styles.eyebrow}>{eyebrow}</Text>
-        <Text style={[styles.title, compact && styles.titleCompact]}>{title}</Text>
-        <Text style={styles.subtitle}>{subtitle}</Text>
+        <VolunServeText role="label" color="primary" style={styles.eyebrow}>{eyebrow}</VolunServeText>
+        <VolunServeText role="pageTitle" style={[styles.title, compact && styles.titleCompact]}>{title}</VolunServeText>
+        <VolunServeText role="body" color="muted" style={styles.subtitle}>{subtitle}</VolunServeText>
         {compact && !!tag && <Text style={styles.tagCompact}>{tag}</Text>}
       </View>
       {!compact && !!tag && <Text style={styles.tag}>{tag}</Text>}
@@ -69,11 +70,11 @@ const styles = StyleSheet.create({
   },
   title: {
     color: ui.color.text,
-    fontSize: 23,
-    lineHeight: 29,
+    fontSize: ui.typography.pageTitle.fontSize,
+    lineHeight: ui.typography.pageTitle.lineHeight,
     fontWeight: "700",
   },
-  titleCompact: { fontSize: 20, lineHeight: 26 },
+  titleCompact: { fontSize: 22, lineHeight: 28 },
   subtitle: {
     color: ui.color.muted,
     fontSize: 13,
