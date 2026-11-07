@@ -28,7 +28,8 @@ const beforeSignIn = beforeUserSignedIn({region: "us-central1"}, async (event) =
     const snapshot = await getFirestore().doc("users/" + uid).get();
     const p = snapshot.exists ? snapshot.data() : null;
     if (p && (p.role === "admin" || p.role === "superadmin") &&
-        p.status === "approved" && p.adminStatus !== "suspended") return;
+        (p.status === "approved" || p.status == null) &&
+        p.adminStatus !== "suspended") return;
   }
   rejectEmail();
 });
