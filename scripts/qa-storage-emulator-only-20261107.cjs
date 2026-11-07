@@ -52,7 +52,7 @@ const syntheticJpeg=new Uint8Array([255,216,255,224,0,16,74,70,73,70,0,1,255,217
      await db.doc("users/"+admin).set({role:"admin",status:"approved"});
      await db.doc("users/"+outsider).set({role:"resident",status:"pending",volunteerAccess:false});
    });
-   const bucket="demo-volunserve.appspot.com";
+   const bucket="gs://demo-volunserve.appspot.com";
    const residentStore=env.authenticatedContext(uid).storage(bucket);
    const adminStore=env.authenticatedContext(admin).storage(bucket);
    const unverifiedStore=env.authenticatedContext(outsider).storage(bucket);
