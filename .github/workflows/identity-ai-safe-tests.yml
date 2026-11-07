@@ -10,6 +10,8 @@ on:
       - 'identity-ai/**'
       - 'app/identity-verification.tsx'
       - 'lib/identityVerification.ts'
+      - 'components/identity/DocumentScreeningSummary.tsx'
+      - 'backend/server.js'
       - 'backend/firebaseAdmin.js'
       - 'backend/stagingIsolation.js'
       - 'backend/test-stagingIsolation.js'
@@ -63,7 +65,7 @@ jobs:
         with:
           node-version: '22'
       - name: Syntax checks
-        run: node --check backend/firebaseAdmin.js && node --check backend/stagingIsolation.js
+        run: node --check backend/firebaseAdmin.js && node --check backend/stagingIsolation.js && node --check backend/server.js
       - name: Production boundary regression tests
         run: node --test backend/test-stagingIsolation.js
 
