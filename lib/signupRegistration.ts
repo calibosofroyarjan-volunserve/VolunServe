@@ -1,6 +1,6 @@
 import {
   createUserWithEmailAndPassword, getIdToken, reload,
-  signInWithEmailAndPassword, type User,
+  signInWithEmailAndPassword, signOut, type User,
 } from "firebase/auth";
 import {doc, getDoc} from "firebase/firestore";
 import {auth, db} from "./firebase";
@@ -38,6 +38,12 @@ export async function inspectSignupUser(user: User): Promise<{user: User; profil
   }
   if (user.emailVerified) await getIdToken(user, true);
   const profile = await getDoc(doc(db, "users", user.uid));
+  if (profile.exists() && profile.data()?.role === "guest") {
+    // Preserve legacy data for administrator review but never treat a Guest
+    // preview record as a finished Resident account or signup session.
+    if (auth.currentUser?.uid === user.uid) await signOut(auth);
+    throw new Error("Guest Preview has no account. Start a new Resident registration or ask an administrator to migrate a legacy Guest record.");
+  }
   if (auth.currentUser?.uid !== user.uid) {
     throw new Error("Your registration session changed. Sign in again to resume.");
   }
