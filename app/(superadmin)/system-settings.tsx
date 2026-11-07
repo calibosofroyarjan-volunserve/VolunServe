@@ -746,4 +746,14 @@ const styles =
     disabled: {
       opacity: 0.6,
     },
-  });
+      button: {
+      minHeight: 52,
+      marginTop: 18,
+      borderRadius: 12,
+      alignItems: "center",
+      justifyContent: "center",
+      flexDirection: "row",
+      gap: 8,
+      backgroundColor: "#078F82",
+    },
+});
