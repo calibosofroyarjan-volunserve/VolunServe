@@ -1,2 +1,2 @@
 import GuestWorkspace from "../../components/guest/GuestWorkspace";
-export default function GuestPreview() { return <GuestWorkspace designReview />; }
+export default function GuestPreview() { return <GuestWorkspace />; }
