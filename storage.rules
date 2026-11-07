@@ -11,7 +11,10 @@ service firebase.storage {
     }
 
     function approved() {
+      // Verified email is mandatory for protected Storage reads and writes
+      // even when callers bypass the login UI and use Firebase SDK directly.
       return signedIn()
+        && request.auth.token.get('email_verified', false) == true
         && (profile().status == 'approved'
           || (!('status' in profile()) && profile().role != 'applicant'));
     }
