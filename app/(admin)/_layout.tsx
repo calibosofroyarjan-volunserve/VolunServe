@@ -29,6 +29,7 @@ import {
   View,
 } from "react-native";
 import { AppAlert } from "../../lib/appDialog";
+import AccountConnectionFallback from "../../components/ui/AccountConnectionFallback";
 import {
   isApprovedProfile,
   logoutUser,
@@ -103,6 +104,8 @@ export default function AdminLayout() {
     loading,
     user,
     profile,
+    connectionError,
+    retryProfile,
   } = useUserSession();
 
   const {
@@ -201,6 +204,10 @@ export default function AdminLayout() {
         </Text>
       </View>
     );
+  }
+
+  if (connectionError && user && !profile) {
+    return <AccountConnectionFallback message={connectionError} onRetry={retryProfile} />;
   }
 
   if (!user) {
