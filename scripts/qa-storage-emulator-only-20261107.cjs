@@ -75,7 +75,7 @@ const syntheticJpeg=new Uint8Array([255,216,255,224,0,16,74,70,73,70,0,1,255,217
    await assertFails(anonymous.ref(announcement).put(syntheticJpeg,{contentType:"image/jpeg"}));
    await assertFails(adminStore.ref("private/admin-photo.jpg")
      .put(syntheticJpeg,{contentType:"image/jpeg"}));
-   console.log("PASS 11 local-only Firebase Storage scenarios: authorized incident uploads/reads, anonymous and unverified denials, file ownership, content type, Admin announcement uploads, public announcement reads, default private write denial.");
+   console.log("PASS 12 local-only Firebase Storage scenarios: authorized incident uploads/reads, anonymous and unverified denials, file ownership, content type, Admin announcement uploads, public announcement reads, default private write denial.");
  }finally{
    await env.cleanup();
  }
