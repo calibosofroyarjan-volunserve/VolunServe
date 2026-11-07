@@ -52,7 +52,7 @@ fs.mkdirSync("reports/design-review-screenshots",{recursive:true});
       await page.getByRole("button",{name:"Open sidebar"}).click();
     }
     await page.getByRole("button",{name:"Resident Identity Reviews",exact:true}).click();
-    await page.getByRole("button",{name:"New sample record"}).click();
+    await page.getByRole("button",{name:"Try sample action"}).click();
     await page.getByRole("button",{name:"Validate sample"}).click();
     await page.getByText("Enter at least 3 characters",{exact:false}).first().waitFor();
     await page.getByRole("textbox",{name:"Sample title"}).fill("Example Review");
