@@ -4,11 +4,14 @@ import {
 } from "firebase/auth";
 import {doc, getDoc} from "firebase/firestore";
 import {auth, db} from "./firebase";
+import {getRegistrationEmailError} from "./registrationEmailPolicy";
 
 /** No profile writes, credential linking, password changes, or local PII storage. */
 export async function authenticateEmailSignup(email: string, password: string, resumeOnly = false, rejectExisting = false): Promise<User> {
   const normalized = email.trim().toLowerCase();
   if (!normalized || !password) throw new Error("Enter your registration email and password.");
+  const emailError = getRegistrationEmailError(normalized);
+  if (emailError) throw new Error(emailError);
   let user: User;
   if (resumeOnly) {
     user = (await signInWithEmailAndPassword(auth, normalized, password)).user;
