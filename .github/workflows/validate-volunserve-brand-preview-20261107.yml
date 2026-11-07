@@ -1,0 +1,33 @@
+name: VolunServe Brand & Validation Preview (No Deploy)
+on:
+  push:
+    branches: [feat/volunserve-identity-validation-preview-20261107]
+  pull_request:
+    branches: [fix/ui-consistency-dialog-20261107]
+permissions:
+  contents: read
+jobs:
+  preview-validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      CI: 'true'
+      EXPO_NO_TELEMETRY: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Shared brand and validation tests
+        run: |
+          node scripts/test-volunserve-brand-validation-preview-20261107.cjs
+          node scripts/test-volunserve-ui-consistency-20261107.cjs
+          node scripts/test-portal-resident-volunteer-ui-flow.cjs
+          node --test scripts/test-live-dialog-hotfix.cjs
+      - name: Typecheck all screens
+        run: npx tsc --noEmit --pretty false
+      - name: Export preview-only web bundle
+        run: npx expo export --platform web
