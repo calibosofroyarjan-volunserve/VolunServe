@@ -1,3 +1,4 @@
+import { liveUi as ui } from "../../constants/volunserveLiveUi";
 import React from "react";
 import { Platform, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 
@@ -69,18 +70,18 @@ const styles = StyleSheet.create({
     width: "100%", flexDirection: "row", flexWrap: "wrap", alignItems: "center",
     justifyContent: "space-between", gap: 8, minHeight: 38,
     marginTop: 8, marginBottom: 9, paddingTop: 7,
-    borderTopWidth: 1, borderTopColor: "#E5EBE7",
+    borderTopWidth: 1, borderTopColor: ui.color.border,
   },
   summaryRow: { flex: 1, minWidth: 134, justifyContent: "center" },
-  caption: { fontSize: 11, lineHeight: 17, color: "#60756B", fontWeight: "600" },
-  controlsRow: { minHeight: 34, alignItems: "flex-end", justifyContent: "center" },
-  pageStatusText: { fontSize: 11, color: "#64786C", fontWeight: "600" },
-  buttons: { minHeight: 34, flexDirection: "row", flexWrap: "wrap", alignItems: "center", justifyContent: "flex-end", gap: 4 },
-  button: { minHeight: 34, paddingHorizontal: 11, borderWidth: 1, borderColor: "#D8E5DC", borderRadius: 7, backgroundColor: "#FFFFFF", alignItems: "center", justifyContent: "center" },
-  text: { color: "#205B45", fontSize: 11, fontWeight: "700" },
-  pagePill: { minWidth: 34, minHeight: 34, paddingHorizontal: 7, borderWidth: 1, borderColor: "#D8E5DC", borderRadius: 7, backgroundColor: "#FFFFFF", alignItems: "center", justifyContent: "center" },
-  pageSelected: { backgroundColor: "#176E55", borderColor: "#176E55" },
-  pagePillText: { color: "#205B45", fontSize: 11, fontWeight: "700" },
+  caption: { fontSize: ui.type.meta.fontSize, lineHeight: ui.type.meta.lineHeight, color: ui.color.secondary, fontWeight: "500" },
+  controlsRow: { minHeight: ui.minTap, alignItems: "flex-end", justifyContent: "center" },
+  pageStatusText: { fontSize: ui.type.meta.fontSize, color: ui.color.secondary, fontWeight: "600" },
+  buttons: { minHeight: ui.minTap, flexDirection: "row", flexWrap: "wrap", alignItems: "center", justifyContent: "flex-end", gap: 4 },
+  button: { minHeight: ui.minTap, paddingHorizontal: 12, borderWidth: 1, borderColor: ui.color.border, borderRadius: ui.radius.control, backgroundColor: ui.color.surface, alignItems: "center", justifyContent: "center" },
+  text: { color: ui.color.primary, fontSize: 12, fontWeight: "700" },
+  pagePill: { minWidth: ui.minTap, minHeight: ui.minTap, paddingHorizontal: 8, borderWidth: 1, borderColor: ui.color.border, borderRadius: ui.radius.control, backgroundColor: ui.color.surface, alignItems: "center", justifyContent: "center" },
+  pageSelected: { backgroundColor: ui.color.primary, borderColor: ui.color.primary },
+  pagePillText: { color: ui.color.primary, fontSize: 12, fontWeight: "700" },
   pageSelectedText: { color: "#FFFFFF" },
   disabled: { opacity: 0.35 },
 });
