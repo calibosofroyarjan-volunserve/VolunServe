@@ -115,3 +115,28 @@ test("beforeCreate enforces screening + shared rate limit, with production opt-i
   assert(!index.slice(0,index.indexOf('process.env.VOLUNSERVE_ENABLE_IDENTITY_BLOCKING === "true"'))
     .includes("exports.volunserveBlockDisposableBeforeCreate"));
 });
+
+test("staging-only reCAPTCHA AUDIT script cannot be used on production",()=>{
+  const cp=require("node:child_process");
+  const script="functions/scripts/configureRecaptchaAudit.cjs";
+  const root=process.env;
+  for (const project of ["volunserve-3aa5b","my-prod-project"]) {
+    const x=cp.spawnSync(process.execPath,[script],{
+      env:{...root,VOLUNSERVE_STAGING_PROJECT_ID:project,
+        VOLUNSERVE_CONFIRM_STAGING_AUDIT:""},
+      encoding:"utf8",
+    });
+    assert.notEqual(x.status,0,project);
+    assert(x.stderr.includes("Production is blocked."));
+  }
+  const x=cp.spawnSync(process.execPath,[script],{
+    env:{...root,VOLUNSERVE_STAGING_PROJECT_ID:"volunserve-staging-test",
+      VOLUNSERVE_CONFIRM_STAGING_AUDIT:""},
+    encoding:"utf8",
+  });
+  assert.equal(x.status,0);
+  assert(x.stdout.includes("emailPasswordEnforcementState"));
+  assert(x.stdout.includes('"AUDIT"'));
+  assert(x.stdout.includes("DRY RUN only."));
+  assert(!x.stdout.includes('"ENFORCE"'));
+});
