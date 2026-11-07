@@ -12,8 +12,10 @@ const reg = read("lib/signupRegistration.ts");
 const signup = read("lib/firebaseAuth.ts");
 const ui = read("components/auth/EmailFirstSignup.tsx");
 const rules = read("firestore.rules");
+const staff = read("app/admin-request.tsx");
 
 for (const [name, condition] of [
+  ["LGU new applicant rejects disposable email before UID creation", staff.includes("getRegistrationEmailError(email)") && staff.indexOf("getRegistrationEmailError(email)") < staff.indexOf("createUserWithEmailAndPassword(candidateAuth")],
   ["Guest URL gates on Firebase Auth resolution", publicLayout.includes("onAuthStateChanged(auth")],
   ["Guest URL signs out an inherited account session", publicLayout.includes("void signOut(auth)")],
   ["Guest URL shows preview only after confirmed signout", publicLayout.includes("!ready || auth.currentUser")],
