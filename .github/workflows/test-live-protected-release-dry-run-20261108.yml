@@ -1,0 +1,62 @@
+# Test-only workflow. No production credentials, no Firebase deployment and no Render deployment.
+name: Live-Protected Release Dry Run (NO DEPLOY)
+on:
+  push:
+    branches:
+      - test/live-protected-release-dry-run-20261108
+permissions:
+  contents: read
+jobs:
+  dry-run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout exact test branch with live-source ancestry
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Prove test source descends from actual live Hosting revision
+        run: |
+          git merge-base --is-ancestor e83f4a72c7cb733ff7bb888a6ac19bf3c0f076c4 HEAD
+          echo "PASS: test source descends from verified actual live code, not outdated main"
+      - name: Run release gate self tests (includes successful and blocked cases)
+        run: |
+          node --check scripts/guard-live-protected-release.cjs
+          node scripts/guard-live-protected-release.cjs --self-test
+      - name: Reject any release attempt from outdated main
+        env:
+          GITHUB_REF: refs/heads/main
+          EXPECTED_LIVE_SHA: e83f4a72c7cb733ff7bb888a6ac19bf3c0f076c4
+          APPROVED_FILES: '["app/login.web.tsx"]'
+        run: |
+          set -eu
+          if node scripts/guard-live-protected-release.cjs --check > "$RUNNER_TEMP/main-gate.log" 2>&1; then
+            echo "::error::Unsafe: outdated main was accepted"
+            exit 1
+          fi
+          grep -q 'BLOCKED: release must come from live-protected, not main' "$RUNNER_TEMP/main-gate.log"
+          echo "PASS: direct deployment from outdated main was BLOCKED"
+      - name: Reject a release that has no approved application change
+        env:
+          GITHUB_REF: refs/heads/live-protected
+          EXPECTED_LIVE_SHA: e83f4a72c7cb733ff7bb888a6ac19bf3c0f076c4
+          APPROVED_FILES: '["app/login.web.tsx"]'
+        run: |
+          set -eu
+          if node scripts/guard-live-protected-release.cjs --check > "$RUNNER_TEMP/unapproved-gate.log" 2>&1; then
+            echo "::error::Unsafe: unapproved changed files were accepted"
+            exit 1
+          fi
+          grep -q 'BLOCKED:' "$RUNNER_TEMP/unapproved-gate.log"
+          echo "PASS: changes outside approved application list were BLOCKED"
+      - name: Verify current actual live site (public URLs, READ ONLY)
+        env:
+          VOLUNSERVE_HOSTING_URL: https://volunserve.com
+          VOLUNSERVE_EXPECTED_SHA: e83f4a72c7cb733ff7bb888a6ac19bf3c0f076c4
+        run: node scripts/check-live-hosting.cjs
+      - name: Confirm no deploy
+        run: echo "DRY RUN FINISHED. No production keys were used and no production changes were made."
