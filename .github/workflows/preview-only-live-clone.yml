@@ -1,0 +1,143 @@
+# PROTECTED PREVIEW-ONLY FIREBASE HOSTING WORKFLOW. NEVER deploys to live.
+# Creates one public temporary channel by cloning the CURRENT LIVE version.
+# The protected GitHub Environment requires explicit manual reviewer approval.
+# Does NOT build web assets, touch Firestore, Cloud Functions, Render or main.
+name: VolunServe — Clone CURRENT Live to Preview ONLY (APPROVAL REQUIRED)
+on:
+  push:
+    branches: [release/production-hosting]
+    paths:
+      - '.github/workflows/preview-only-live-clone.yml'
+permissions:
+  contents: read
+concurrency:
+  group: volunserve-protected-preview-clone
+  cancel-in-progress: false
+jobs:
+  preview-clone:
+    if: ${{ github.repository == 'calibosofroyarjan-volunserve/VolunServe' && github.ref == 'refs/heads/release/production-hosting' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment:
+      name: volunserve-production-hosting
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      FIREBASE_PROJECT: volunserve-3aa5b
+      HOSTING_SITE: volunserve-3aa5b
+      PREVIEW_CHANNEL: vs-oidc-smoke-20261107
+      CI: 'true'
+    steps:
+      - name: Checkout workflow file only (avoid unrelated VolunServe gitlink)
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+          submodules: false
+          sparse-checkout: |
+            .github/workflows/preview-only-live-clone.yml
+          sparse-checkout-cone-mode: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Verify fixed preview target and matching CURRENT live markers
+        id: source
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const assert=require('node:assert/strict');
+          const {appendFileSync}=require('node:fs');
+          assert.equal(process.env.HOSTING_SITE,'volunserve-3aa5b');
+          assert.equal(process.env.PREVIEW_CHANNEL,'vs-oidc-smoke-20261107');
+          assert.notEqual(process.env.PREVIEW_CHANNEL,'live');
+          const origins=['https://volunserve.com','https://volunserve-3aa5b.web.app'];
+          (async()=>{
+            const markers=[];
+            for(const origin of origins){
+              const r=await fetch(origin+'/volunserve-release.json',{
+                redirect:'error',headers:{accept:'application/json','cache-control':'no-cache'},
+                signal:AbortSignal.timeout(12000)
+              });
+              assert.equal(r.status,200,origin);
+              assert.match(r.headers.get('content-type')||'',/json/);
+              const m=await r.json();
+              assert.equal(m.app,'VolunServe');
+              assert.equal(m.firebaseProject,process.env.HOSTING_SITE);
+              assert.equal(m.releaseType,'firebase-hosting-web');
+              assert.match(m.revision,/^[a-f0-9]{40}$/);
+              markers.push(m.revision);
+            }
+            assert.equal(markers[0],markers[1],'Live Hosting domains disagree');
+            appendFileSync(process.env.GITHUB_OUTPUT,'live_sha='+markers[0]+'\n');
+            console.log('PASS: both LIVE domains have the same source',markers[0]);
+          })().catch(e=>{console.error(e);process.exitCode=1});
+          NODE
+
+      - name: Install pinned Firebase CLI into temporary runner directory
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install --prefix "$RUNNER_TEMP/volunserve-firebase-cli" \
+            --no-save --ignore-scripts --no-audit --no-fund firebase-tools@15.31.0
+
+      - name: Keyless OIDC authentication (Google Cloud service-account impersonation)
+        uses: google-github-actions/auth@v3
+        with:
+          project_id: volunserve-3aa5b
+          workload_identity_provider: projects/233201250762/locations/global/workloadIdentityPools/volunserve-github-hosting/providers/volunserve-github-actions
+          service_account: volunserve-protected-hostin@volunserve-3aa5b.iam.gserviceaccount.com
+          create_credentials_file: true
+          export_environment_variables: true
+
+      - name: CLONE EXISTING LIVE VERSION TO PREVIEW CHANNEL ONLY
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$HOSTING_SITE" = 'volunserve-3aa5b'
+          test "$PREVIEW_CHANNEL" = 'vs-oidc-smoke-20261107'
+          test "$PREVIEW_CHANNEL" != 'live'
+          # Fixed destination is a distinct preview channel. Live is SOURCE only.
+          "$RUNNER_TEMP/volunserve-firebase-cli/node_modules/.bin/firebase" \
+            hosting:clone \
+            "${HOSTING_SITE}:live" "${HOSTING_SITE}:${PREVIEW_CHANNEL}" \
+            --project "$FIREBASE_PROJECT" --non-interactive
+          echo 'PREVIEW ONLY. LIVE channel has not been deployed by this workflow.'
+
+      - name: Show created preview channel (read only)
+        shell: bash
+        run: |
+          "$RUNNER_TEMP/volunserve-firebase-cli/node_modules/.bin/firebase" \
+            hosting:channel:list --site "$HOSTING_SITE" --project "$FIREBASE_PROJECT" \
+            --non-interactive --json
+
+      - name: Verify both live markers remain unchanged (read only)
+        shell: bash
+        env:
+          EXPECTED_LIVE_SHA: ${{ steps.source.outputs.live_sha }}
+        run: |
+          node <<'NODE'
+          const assert=require('node:assert/strict');
+          (async()=>{
+            for(const origin of ['https://volunserve.com','https://volunserve-3aa5b.web.app']){
+              const r=await fetch(origin+'/volunserve-release.json',{
+                redirect:'error',headers:{accept:'application/json','cache-control':'no-cache'},
+                signal:AbortSignal.timeout(12000)
+              });
+              assert.equal(r.status,200);
+              assert.equal((await r.json()).revision,process.env.EXPECTED_LIVE_SHA,
+                'Live source changed while preparing preview; inspect external deploys');
+            }
+            console.log('PASS: LIVE release markers match preflight source.');
+          })().catch(e=>{console.error(e);process.exitCode=1});
+          NODE
+
+# PREVIEW READINESS NOTES:
+# - Fixed destination is not live; never use firebase deploy or rules/functions deploy.
+# - A preview URL is public and uses real project Auth/Firestore/Functions.
+# - This is a temporary permission smoke test; clone uses current live version.
+# - Default preview expiry is 7 days; verify/retire channel when test is complete.
+# - Human GitHub Environment approval is required before acquiring credentials.
+# - Do not promote until code/credentials/rollback reviewed and owner explicitly agrees.
