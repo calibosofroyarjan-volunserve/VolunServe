@@ -24,10 +24,17 @@ jobs:
       contents: read
       id-token: write
     steps:
-      - name: Checkout approved release code (read only)
+      - name: Checkout only this read-only test (avoid unrelated broken nested submodule)
         uses: actions/checkout@v4
         with:
-          persist-credentials: false
+          # Read-only GITHUB_TOKEN; default temporary credentials are removed in post-job.
+          # Disabling persistence caused checkout to run git submodule credential cleanup
+          # against an unrelated VolunServe gitlink without a .gitmodules URL.
+          persist-credentials: true
+          submodules: false
+          sparse-checkout: |
+            .github/workflows/verify-protected-hosting-readonly.yml
+          sparse-checkout-cone-mode: false
 
       - name: Prepare Node.js for isolated Firebase CLI install
         uses: actions/setup-node@v4
