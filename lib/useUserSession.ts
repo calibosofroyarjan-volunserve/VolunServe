@@ -24,14 +24,17 @@ type SessionState = {
   loading: boolean;
   user: User | null;
   profile: UserProfile | null;
+  connectionError: string | null;
 };
 
-export function useUserSession(): SessionState {
+export function useUserSession(): SessionState & { retryProfile: () => void } {
+  const [reloadKey, setReloadKey] = useState(0);
   const [state, setState] =
     useState<SessionState>({
       loading: true,
       user: auth.currentUser,
       profile: null,
+      connectionError: null,
     });
 
   useEffect(() => {
@@ -51,6 +54,7 @@ export function useUserSession(): SessionState {
             loading: false,
             user: null,
             profile: null,
+            connectionError: null,
           });
 
           return;
@@ -61,6 +65,7 @@ export function useUserSession(): SessionState {
           user,
           // Do not expose a previous account's profile on auth changes.
           profile: current.user?.uid === user.uid ? current.profile : null,
+          connectionError: null,
         }));
 
         unsubscribeProfile = onSnapshot(
@@ -77,6 +82,7 @@ export function useUserSession(): SessionState {
               loading: false,
               user,
               profile: profileData,
+              connectionError: null,
             });
           },
 
@@ -90,6 +96,8 @@ export function useUserSession(): SessionState {
               loading: false,
               user,
               profile: current.user?.uid === user.uid ? current.profile : null,
+              connectionError: current.user?.uid === user.uid && current.profile
+                ? null : "We couldn't load your account profile. Check your connection and try again.",
             }));
           }
         );
@@ -100,7 +108,7 @@ export function useUserSession(): SessionState {
       unsubscribeProfile?.();
       unsubscribeAuth();
     };
-  }, []);
+  }, [reloadKey]);
 
-  return state;
+  return { ...state, retryProfile: () => setReloadKey((value) => value + 1) };
 }
