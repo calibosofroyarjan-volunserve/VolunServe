@@ -1,0 +1,38 @@
+name: Validate Disposable Email and Guest Signup Guards (NO DEPLOY)
+on:
+  push:
+    branches:
+      - fix/signup-disposable-guest-guards-20261108
+  pull_request:
+    paths:
+      - 'lib/registrationEmailPolicy.ts'
+      - 'lib/signupRegistration.ts'
+      - 'lib/firebaseAuth.ts'
+      - 'components/auth/EmailFirstSignup.tsx'
+      - 'app/login.web.tsx'
+      - 'app/login.tsx'
+      - 'firestore.rules'
+      - 'scripts/test-signup-prod.cjs'
+      - '.github/workflows/validate-auth-guest-20261108.yml'
+permissions:
+  contents: read
+jobs:
+  validate-only:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      CI: 'true'
+      EXPO_NO_TELEMETRY: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - run: node scripts/test-signup-prod.cjs
+      - run: npx tsc --noEmit --incremental false
+      - run: npx expo export --platform web --clear
+# Intentionally no credentials, emulator database writes, Firebase deploy or Render calls.
