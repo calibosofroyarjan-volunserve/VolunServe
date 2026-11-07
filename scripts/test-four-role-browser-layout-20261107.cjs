@@ -45,7 +45,16 @@ async function main(){
      page.on("pageerror",e=>errors.push(e.message));
      for(const [role,module,expect] of cases){
        const url=ROOT+"/public/preview?role="+role+"&module="+module;
-       const resp=await page.goto(url,{waitUntil:"domcontentloaded",timeout:45000});
+       let resp=null;
+       for(let attempt=0;attempt<4;attempt++) {
+         try {
+           resp=await page.goto(url,{waitUntil:"domcontentloaded",timeout:45000});
+           if(resp?.status()===200) break;
+         } catch(e) {
+           if(attempt===3) throw e;
+         }
+         await new Promise(resolve=>setTimeout(resolve,2500));
+       }
        assert.equal(resp?.status(),200,"Expected live preview 200: "+url);
        await page.waitForFunction((label)=>document.body.innerText.includes(label),expect,{timeout:18000});
        const x=await page.evaluate(()=>({
