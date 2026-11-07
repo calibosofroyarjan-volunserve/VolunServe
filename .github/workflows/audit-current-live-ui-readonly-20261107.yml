@@ -2,34 +2,37 @@ name: Read-only Verify Current Live VolunServe Hosting Revision
 on:
   push:
     branches: [audit/verify-current-live-ui-20261107]
-permissions:
-  contents: read
+permissions: {}
 jobs:
   inspect-live:
     if: github.repository == 'calibosofroyarjan-volunserve/VolunServe'
     runs-on: ubuntu-latest
     timeout-minutes: 12
     steps:
-      - uses: actions/checkout@v4
-        with:
-          persist-credentials: false
-          submodules: false
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-      - name: Read-only check of live domain, production release marker and public routes
-        env:
-          VOLUNSERVE_HOSTING_URL: https://volunserve.com
-        run: node scripts/check-live-hosting.cjs
-      - name: Read-only compare hosting aliases (no write, no credentials)
+      - name: Inspect public Hosting release markers and static route responses (no checkout, no secrets, no writes)
         run: |
           node <<'NODE'
-          const targets=["https://volunserve.com/volunserve-release.json",
-            "https://volunserve-3aa5b.web.app/volunserve-release.json"];
-          (async()=>{for(const url of targets){try{
-            const res=await fetch(url,{signal:AbortSignal.timeout(12000),headers:{"cache-control":"no-cache"}});
-            const data=await res.json();
-            if(!res.ok||!/^([0-9a-f]{40})$/.test(data.revision||""))throw Error("invalid marker");
-            console.log("VERIFIED LIVE REVISION "+new URL(url).hostname+" "+data.revision+" BUILT "+data.builtAt);
-          }catch(e){console.log("CHECK FAILED "+url+": "+e.message);process.exitCode=1;}}})();
+          const targets=["https://volunserve.com","https://volunserve-3aa5b.web.app"];
+          async function check(base){
+            const marker=await fetch(base+"/volunserve-release.json",{
+              signal:AbortSignal.timeout(15000),
+              headers:{"cache-control":"no-cache"}
+            });
+            const type=marker.headers.get("content-type")||"";
+            const data=await marker.json();
+            if(!marker.ok||!type.includes("json")||
+              data.app!=="VolunServe"||data.firebaseProject!=="volunserve-3aa5b"||
+              !/^[0-9a-f]{40}$/.test(data.revision||""))throw Error("Invalid release metadata: "+base);
+            console.log("VERIFIED LIVE REVISION "+new URL(base).hostname+" "+data.revision+" BUILT "+data.builtAt);
+            for(const route of ["/","/login","/community-events"]){
+              const response=await fetch(base+route,{signal:AbortSignal.timeout(12000)});
+              const html=await response.text();
+              if(!response.ok||!html.includes("<html"))throw Error("Route unavailable: "+base+route);
+              console.log("PASS HTTP "+response.status+" "+base+route);
+            }
+          }
+          (async()=>{for(const base of targets)await check(base)})().catch(error=>{
+            console.error("READ-ONLY LIVE CHECK FAILED "+error.message);
+            process.exitCode=1;
+          });
           NODE
