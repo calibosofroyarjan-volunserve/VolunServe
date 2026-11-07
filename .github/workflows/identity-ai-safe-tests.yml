@@ -34,6 +34,23 @@ jobs:
         working-directory: identity-ai
         run: python -m unittest -v test_face_box_dedup.py test_document_screening.py
 
+  ai-runtime:
+    name: Real MediaPipe runtime smoke tests (synthetic only)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+          cache-dependency-path: identity-ai/requirements.txt
+      - name: Install pinned identity engine dependencies
+        run: python -m pip install -r identity-ai/requirements.txt
+      - name: Smoke-test actual MediaPipe with synthetic images
+        working-directory: identity-ai
+        run: python -m unittest -v test_ai_runtime_smoke.py
+
   frontend-types:
     name: Frontend TypeScript check
     runs-on: ubuntu-latest
