@@ -305,7 +305,7 @@ export default function EmailFirstSignup() {
           if (!resumeMode) {
             try {
               await sendEmailVerification(user);
-              setMessage(EMAIL_VERIFICATION_REQUESTED_MESSAGE);
+              setMessage("Verification email sent. This is only a pending Firebase login, NOT a Guest or Basic Resident account. After verifying, finish Personal Details and Address & Profile.");
             } catch {
               setError("Your registration is saved, but verification email could not be requested. Choose Resend Verification Email or use a different address.");
             }
@@ -353,7 +353,7 @@ export default function EmailFirstSignup() {
         return;
       }
       showRegistrationState(state);
-      setMessage(state.profileExists ? "Email verified. Continue to Login." : "Email verified! Continue your registration.");
+      setMessage(state.profileExists ? "Email verified. Continue to Login." : "Email verified! Complete Personal Details (Step 3) and Address & Profile (Step 4) to finish your Resident registration.");
     } catch (e) { setError(safeAuthError(e)); }
     finally { setBusy(false); }
   }
@@ -698,7 +698,7 @@ export default function EmailFirstSignup() {
                 )}
                 {checkButton(
                   googleOnly ? "Link Password & Continue" :
-                    resumeMode ? "Resume Registration" : "Create Account & Verify Email",
+                    resumeMode ? "Resume Registration" : "Continue to Email Verification",
                   () => {void startEmail();}
                 )}
                 {!signedInUser && !resumeMode && (
@@ -726,6 +726,7 @@ export default function EmailFirstSignup() {
             {step === 2 && (
               <View>
                 <Text style={styles.sectionTitle}>Step 2 — Verify Your Email</Text>
+                <Text style={styles.helper}>Your Resident profile is not created yet. You must finish Steps 3 and 4 after verification.</Text>
                 <Text style={styles.helper}>
                   Open your email and click the verification link sent to:
                 </Text>
