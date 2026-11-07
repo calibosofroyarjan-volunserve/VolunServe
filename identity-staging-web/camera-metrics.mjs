@@ -31,3 +31,59 @@ export function frameDifference(a,b) {
   }
   return n?total/n:Infinity;
 }
+
+
+/**
+ * Lightweight, local, best-effort rectangular card-framing heuristic.
+ * Detects contrasting card-like borders; it does NOT identify a government ID
+ * or validate any document. All pixels stay inside the browser.
+ */
+export function assessDocumentFrame(pixels, width, height) {
+  if (!pixels || !Number.isInteger(width) || !Number.isInteger(height)
+      || width < 40 || height < 30 || pixels.length !== width * height * 4) {
+    return {acceptable:false,message:"Camera frame unavailable."};
+  }
+  const gray = new Float32Array(width * height);
+  for (let j=0,p=0;j<gray.length;j++,p+=4) {
+    gray[j]=0.2126*pixels[p]+0.7152*pixels[p+1]+0.0722*pixels[p+2];
+  }
+  const lum=(x,y)=>gray[y*width+x];
+  const verticalStrength=(x)=>{
+    let sum=0,n=0;
+    for(let y=Math.round(height*.28);y<=Math.round(height*.72);y+=2){
+      sum+=Math.abs(lum(x+2,y)-lum(x-2,y));n++;
+    }
+    return n?sum/n:0;
+  };
+  const horizontalStrength=(y)=>{
+    let sum=0,n=0;
+    for(let x=Math.round(width*.29);x<=Math.round(width*.71);x+=2){
+      sum+=Math.abs(lum(x,y+2)-lum(x,y-2));n++;
+    }
+    return n?sum/n:0;
+  };
+  function findPeak(from,to,strength){
+    let best={pos:-1,score:0};
+    for(let i=Math.round(from);i<=Math.round(to);i++){
+      const score=strength(i);
+      if(score>best.score)best={pos:i,score};
+    }
+    return best;
+  }
+  const left=findPeak(width*.07,width*.36,verticalStrength);
+  const right=findPeak(width*.64,width*.93,verticalStrength);
+  const top=findPeak(height*.10,height*.43,horizontalStrength);
+  const bottom=findPeak(height*.57,height*.90,horizontalStrength);
+  if([left,right,top,bottom].some(b=>b.pos<0||b.score<15)){
+    return {acceptable:false,message:"Place the ID against a contrasting background, fully inside the guide."};
+  }
+  const w=right.pos-left.pos,h=bottom.pos-top.pos;
+  const aspect=w/h,cx=(right.pos+left.pos)/(2*width),cy=(top.pos+bottom.pos)/(2*height);
+  if(w/width<.45||h/height<.30||w/width>.93||h/height>.80||aspect<1.32||aspect>2.30){
+    return {acceptable:false,message:"Move the ID closer and keep its four edges visible."};
+  }
+  if(Math.abs(cx-.5)>.10||Math.abs(cy-.5)>.12){
+    return {acceptable:false,message:"Center the ID within the green frame."};
+  }
+  return {acceptable:true,message:"Card-like edges visible. Hold steady for automatic capture."};
+}
