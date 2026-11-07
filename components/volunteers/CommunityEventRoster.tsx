@@ -1,3 +1,4 @@
+import { getSafeVolunServeBackendBaseUrl } from "../../lib/stagingBackendSafety";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import React, { useEffect, useState } from "react";
 import { ActivityIndicator, Image, Pressable, StyleSheet, Text, View } from "react-native";
@@ -7,7 +8,7 @@ type Response = {
   ok?: boolean; total?: number; totalPages?: number; volunteers?: Entry[]; message?: string;
 };
 type AuthUser = { getIdToken: () => Promise<string> };
-const API_URL = "https://volunserve.onrender.com";
+const API_URL = getSafeVolunServeBackendBaseUrl();
 
 export default function CommunityEventRoster({
   eventId, viewer, participantsCount,
