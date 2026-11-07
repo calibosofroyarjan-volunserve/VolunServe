@@ -1,0 +1,29 @@
+# SAFE CI ONLY. Originated from the exact 2026-11-08 verified live Hosting SHA.
+# This workflow never publishes to Firebase, Render or production.
+name: Verify Live-First Source Gate (NO DEPLOY)
+on:
+  push:
+    branches:
+      - safety/live-first-gate-review-20261108
+    paths:
+      - 'scripts/guard-live-deploy-provenance-20261108.cjs'
+      - '.github/workflows/verify-live-first-source-no-deploy-20261108.yml'
+permissions:
+  contents: read
+jobs:
+  verify-live-first-guard:
+    if: github.repository == 'calibosofroyarjan-volunserve/VolunServe'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout without submodules
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Reject stale/unapproved/code-deleting deployments (OFFLINE)
+        run: node scripts/guard-live-deploy-provenance-20261108.cjs --self-test
+      - name: No deploy or production credentials
+        run: echo "Review only. The live website and backend were not modified."
