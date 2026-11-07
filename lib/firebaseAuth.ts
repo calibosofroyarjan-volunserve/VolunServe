@@ -668,7 +668,7 @@ export const loginUser = async (
     }
     const profile =
       profileSnapshot.data() as UserProfile;
-    if (profile.role === "guest") {
+    if (String(profile.role) === "guest") {
       await signOut(auth);
       throw new Error("Guest Preview has no registered account. Complete a new Resident registration, or ask an administrator to migrate a legacy Guest record.");
     }
@@ -740,7 +740,7 @@ export const getUserProfile = async (
     throw new Error("Profile not found.");
   }
   const p = snapshot.data() as UserProfile;
-  if (p.role === "guest") {
+  if (String(p.role) === "guest") {
     throw new Error("Guest Preview is not a registered account. Use Resident signup, or contact an administrator about a legacy Guest record.");
   }
   const currentUser = auth.currentUser;
