@@ -28,6 +28,10 @@ async function main() {
     };
     await env.withSecurityRulesDisabled(async context => {
       const db = context.firestore();
+      await setDoc(doc(db, "users", "legacy-guest"), {
+        uid: "legacy-guest", role: "guest", status: "approved",
+        email: "guest@gmail.com",residentAccess:true,activeMode:"resident",
+      });
       await setDoc(doc(db, "users", "admin"), {
         uid: "admin", role: "admin", status: "approved",
         email: "admin@gmail.com", adminStatus: "active",
@@ -46,6 +50,7 @@ async function main() {
     await assertFails(getDoc(doc(as("existing-resident","existing@gmail.com",false),"announcements","published")));
     await assertFails(getDoc(doc(as("existing-resident","other@gmail.com",true),"announcements","published")));
     await assertSucceeds(getDoc(doc(as("existing-resident","existing@gmail.com",true),"announcements","published")));
+    await assertFails(getDoc(doc(as("legacy-guest","guest@gmail.com",true),"announcements","published")));
 
     // Staff role in a user document must NOT bypass Firebase's verified-email
     // claim by invoking Firestore directly, outside the normal Login UI.
