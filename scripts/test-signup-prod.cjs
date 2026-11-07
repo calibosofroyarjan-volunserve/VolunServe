@@ -264,6 +264,12 @@ function harness(source, enabled, options = {}) {
     assert(ui.includes('authProvider: googleOnlyAccount ? "google" : "verified_email"'));
     assert(ui.includes('if (!consent)'));
     assert(ui.includes('Continue with Google'));
+    const stepOne = ui.slice(ui.indexOf('Step 1 — Get Started'), ui.indexOf('Step 2 — Verify Your Email'));
+    assert(stepOne.includes('label="Email Address *"'));
+    assert(stepOne.includes('Continue to Email Verification'));
+    assert(stepOne.includes('checkButton("Continue with Google"'));
+    assert(stepOne.indexOf('Continue to Email Verification') < stepOne.indexOf('checkButton("Continue with Google"'),
+      "Email & Password must be primary; Google is optional and below the email form");
     assert(ui.includes('formatBirthday'));
     assert(ui.includes('autoComplete={'));
     assert(ui.includes('setFirstName(current => current ||'));
