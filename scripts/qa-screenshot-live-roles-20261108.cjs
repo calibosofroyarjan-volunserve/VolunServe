@@ -84,7 +84,23 @@ async function main(){
      };
      if(landed && pagesByRole[role]) for(const [label,pathName] of pagesByRole[role]){
        try{
-         await page.goto(BASE+pathName,{waitUntil:"domcontentloaded",timeout:30000});
+         // Colliding Expo Router group paths must be exercised through their
+         // actual navigation controls, not a fresh direct URL request.
+         const viaMenu=(role==="resident"&&(label==="events"||label==="profile"))||
+           (role==="volunteer"&&label==="events");
+         if(viaMenu){
+           await page.goto(BASE+"/",{waitUntil:"domcontentloaded",timeout:30000});
+           await page.waitForTimeout(2800);
+           if(label==="events"){
+             if(size.name==="phone") await page.getByRole("button",{name:"Open sidebar"}).first().click({timeout:12000});
+             await page.getByText("Community Events",{exact:true}).first().click({timeout:12000});
+           }else{
+             await page.getByRole("button",{name:"Open account menu"}).first().click({timeout:12000});
+             await page.getByText("My Profile",{exact:true}).first().click({timeout:12000});
+           }
+         }else{
+           await page.goto(BASE+pathName,{waitUntil:"domcontentloaded",timeout:30000});
+         }
          await page.waitForTimeout(2300);
          const pathActual=new URL(page.url()).pathname;
          const bodyText=(await page.locator("body").innerText().catch(()=>"")).toLowerCase();
