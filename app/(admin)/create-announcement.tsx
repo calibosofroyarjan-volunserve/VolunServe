@@ -1,4 +1,6 @@
 import AdminReviewHero from "../../components/admin/AdminReviewHero";
+import { volunserveUi as ui } from "../../constants/volunserveUi";
+import { announcementValidation, validateValues } from "../../lib/volunserveValidation";
 import React, { useState } from "react";
 
 import {
@@ -40,6 +42,7 @@ export default function CreateAnnouncement() {
 
   const [title, setTitle] = useState("");
   const [message, setMessage] = useState("");
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [templateOpen, setTemplateOpen] = useState(false);
   const [customAnnouncement, setCustomAnnouncement] = useState(true);
   const ANNOUNCEMENT_TEMPLATES = [
@@ -108,24 +111,9 @@ export default function CreateAnnouncement() {
   const handleSubmit = async () => {
     const cleanTitle = title.trim();
     const cleanMessage = message.trim();
-
-    if (cleanTitle.length < 3) {
-      Alert.alert(
-        "Invalid Title",
-        "Please enter a clear announcement title."
-      );
-
-      return;
-    }
-
-    if (cleanMessage.length < 10) {
-      Alert.alert(
-        "Invalid Message",
-        "Write at least 10 characters so the announcement meets the official publishing rules."
-      );
-
-      return;
-    }
+    const errors = validateValues(announcementValidation, { title: cleanTitle, message: cleanMessage });
+    setFieldErrors(errors);
+    if (Object.keys(errors).length) return;
 
     try {
       setSubmitting(true);
@@ -162,6 +150,7 @@ export default function CreateAnnouncement() {
 
       setTitle("");
       setMessage("");
+      setFieldErrors({});
 
       Alert.alert(
         "Announcement Posted",
@@ -207,35 +196,40 @@ export default function CreateAnnouncement() {
         </View>}
         <Text style={styles.scopeHelp}>Templates are editable. Confirm accurate information before publishing to all residents and volunteers.</Text>
         <Text style={styles.inputLabel}>
-          TITLE
+          TITLE <Text style={styles.required}>*</Text>
         </Text>
 
         <TextInput
-          style={styles.input}
+          accessibilityLabel="Announcement title"
+          style={[styles.input, !!fieldErrors.title && styles.inputInvalid]}
           value={title}
-          onChangeText={setTitle}
+          onChangeText={(value) => { setTitle(value); if (fieldErrors.title) setFieldErrors((prev) => ({ ...prev, title: "" })); }}
           placeholder="Announcement title"
           placeholderTextColor="#94A3B8"
           maxLength={120}
         />
+        {!!fieldErrors.title && <Text accessibilityRole="alert" style={styles.errorText}>{fieldErrors.title}</Text>}
 
         <Text style={styles.inputLabel}>
-          MESSAGE
+          MESSAGE <Text style={styles.required}>*</Text>
         </Text>
 
         <TextInput
           style={[
             styles.input,
             styles.messageInput,
+            !!fieldErrors.message && styles.inputInvalid,
           ]}
+          accessibilityLabel="Announcement message"
           value={message}
-          onChangeText={setMessage}
+          onChangeText={(value) => { setMessage(value); if (fieldErrors.message) setFieldErrors((prev) => ({ ...prev, message: "" })); }}
           placeholder="Write the announcement..."
           placeholderTextColor="#94A3B8"
           multiline
           textAlignVertical="top"
           maxLength={2000}
         />
+        {!!fieldErrors.message && <Text accessibilityRole="alert" style={styles.errorText}>{fieldErrors.message}</Text>}
 
         <Text style={styles.characterCount}>
           {message.length}/2000
@@ -350,16 +344,16 @@ const styles = StyleSheet.create({
   formCard: {
     backgroundColor: "#FFFFFF",
     borderWidth: 1,
-    borderColor: "#E2E8F0",
-    borderRadius: 9,
+    borderColor: ui.color.border,
+    borderRadius: ui.radius.card,
     padding: 20,
   },
 
   inputLabel: {
-    color: "#475569",
-    fontSize: 10,
-    fontWeight: "900",
-    letterSpacing: 0.9,
+    color: ui.color.text,
+    fontSize: 13,
+    fontWeight: "600",
+    letterSpacing: 0.1,
     marginBottom: 7,
     marginTop: 6,
   },
@@ -368,13 +362,13 @@ const styles = StyleSheet.create({
     width: "100%",
     minHeight: 48,
     borderWidth: 1,
-    borderColor: "#CBD5E1",
-    backgroundColor: "#FFFFFF",
-    borderRadius: 10,
+    borderColor: ui.color.borderStrong,
+    backgroundColor: ui.color.surface,
+    borderRadius: ui.radius.control,
     paddingHorizontal: 13,
     paddingVertical: 11,
     fontSize: 14,
-    color: "#1E293B",
+    color: ui.color.text,
     marginBottom: 14,
   },
 
@@ -393,8 +387,8 @@ const styles = StyleSheet.create({
 
   submitButton: {
     minHeight: 48,
-    backgroundColor: "#087F78",
-    borderRadius: 10,
+    backgroundColor: ui.color.primary,
+    borderRadius: ui.radius.control,
     alignItems: "center",
     justifyContent: "center",
     paddingHorizontal: 18,
@@ -407,8 +401,12 @@ const styles = StyleSheet.create({
   submitText: {
     color: "#FFFFFF",
     fontSize: 14,
-    fontWeight: "900",
+    fontWeight: "700",
   },
+
+  required: { color: ui.color.danger },
+  inputInvalid: { borderColor: ui.color.danger, backgroundColor: "#FFFBFA" },
+  errorText: { color: ui.color.danger, fontSize: 12, lineHeight: 18, marginTop: -8, marginBottom: 12 },
 
   noteCard: {
     marginTop: 16,
