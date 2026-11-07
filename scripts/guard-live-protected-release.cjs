@@ -9,6 +9,7 @@ const assert = require("node:assert/strict");
 const cp = require("node:child_process");
 const fs = require("node:fs");
 const INITIAL_LIVE = "e83f4a72c7cb733ff7bb888a6ac19bf3c0f076c4";
+const LOCKED_POLICY_COMMIT = "2c6757c57ff2f7cf3c584a346cfcd02aac1ceac0";
 const LIVE_URL = "https://volunserve.com/volunserve-release.json";
 const REQUIRED_REF = "refs/heads/live-protected";
 const FROZEN = [
@@ -71,6 +72,12 @@ function validate({live,candidate,expected,branch,approved,changes,ancestral,has
     "BLOCKED: unreviewed critical file change");
 }
 function checkPolicyFiles() {
+  assert.ok(ancestor(LOCKED_POLICY_COMMIT, git("rev-parse","HEAD")),
+    "BLOCKED: release has not descended from verified live-protected safety checkpoint");
+  for (const path of POLICY.filter(p=>p!=="scripts/guard-live-protected-release.cjs")) {
+    assert.equal(git("rev-parse", "HEAD:"+path), git("rev-parse", LOCKED_POLICY_COMMIT+":"+path),
+      "BLOCKED: frozen production safety policy file changed: "+path);
+  }
   for (const path of FROZEN) {
     const value=fs.readFileSync(path,"utf8");
     assert.ok(value.includes("if: \${{ false }}"),"BLOCKED: historic release unfrozen: "+path);
