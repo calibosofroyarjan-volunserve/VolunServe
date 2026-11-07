@@ -22,6 +22,7 @@ const allow = new Set([
   "scripts/test-portal-resident-volunteer-ui-flow.cjs",
   "scripts/test-resident-volunteer-sidebar.cjs",
   "scripts/test-volunteer-donations-sidebar-removal.cjs",
+  "scripts/test-profile-certificates-account-menu.cjs",
   "scripts/test-live-first-ui-only-20261107.cjs",
   "docs/LIVE_FIRST_UI_REVIEW_20261107.md",
   ".github/workflows/validate-live-first-ui-20261107.yml",
