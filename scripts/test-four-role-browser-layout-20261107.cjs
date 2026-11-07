@@ -57,6 +57,10 @@ async function main(){
      const page=await context.newPage();
      const errors=[];
      page.on("pageerror",e=>errors.push(e.message));
+     const failedResources=[];
+     page.on("requestfailed",request=>failedResources.push(request.url()+" "+request.failure()?.errorText));
+     page.on("response",response=>{if(response.status()>=400) failedResources.push(response.status()+" "+response.url());});
+
      for(const [role,module,expect] of cases){
        const url=ROOT+"/public/preview?role="+role+"&module="+module;
        let resp=null;
@@ -70,7 +74,22 @@ async function main(){
          await new Promise(resolve=>setTimeout(resolve,2500));
        }
        assert.equal(resp?.status(),200,"Expected live preview 200: "+url);
-       await page.waitForFunction((label)=>document.body.innerText.includes(label),expect,{timeout:18000});
+       try {
+         await page.waitForFunction((label)=>document.body.innerText.includes(label),expect,{timeout:18000});
+       } catch(error) {
+         const diagnostic=await page.evaluate(()=>({
+           title:document.title,route:location.href,
+           readyState:document.readyState,
+           rootText:document.getElementById("root")?.innerText.slice(0,700)||"",
+           bodyText:document.body?.innerText.slice(0,900)||"",
+           scripts:[...document.scripts].slice(0,8).map(el=>el.src),
+         }));
+         console.error("RENDERED PREVIEW DEBUG",JSON.stringify({
+           viewport:screen.name,role,module,expect,diagnostic,failedResources:failedResources.slice(-16),
+           runtimeErrors:errors.slice(-12),
+         }));
+         throw error;
+       }
        const x=await page.evaluate(()=>({
           viewport:window.innerWidth,
           htmlWidth:document.documentElement.scrollWidth,
