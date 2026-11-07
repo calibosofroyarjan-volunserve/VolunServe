@@ -1931,9 +1931,9 @@ const styles =
     },
 
     title: {
-      fontSize: 30,
+      fontSize: ui.type.page.fontSize,
       fontWeight: "700",
-      color: "#173D32",
+      color: ui.color.text,
     },
 
     subtitle: {
