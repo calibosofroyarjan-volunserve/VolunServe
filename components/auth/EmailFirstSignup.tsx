@@ -603,7 +603,7 @@ export default function EmailFirstSignup() {
               </Text>
               <Text style={styles.legacySignupSubtitle}>
                 {step === 1
-                ? "Choose Google for faster signup, or use email and password."
+                ? "Sign up with email and password, or choose optional Google sign-in below."
                 : step === 2
                   ? "Verify your inbox, then come back to continue."
                   : step === 3
@@ -686,20 +686,11 @@ export default function EmailFirstSignup() {
             {step === 1 && (
               <View>
                 <Text style={styles.sectionTitle}>Step 1 — Get Started</Text>
-                {resumeMode ? (
-                  <Text style={styles.helper}>Use your original email and password to continue unfinished registration.</Text>
-                ) : (
-                  <>
-                    {!signedInUser && (
-                      <>
-                        <Text style={styles.helper}>Fastest way: use Google. No new password or separate verification link needed for a verified Google email.</Text>
-                        {checkButton("Continue with Google", () => {void continueWithGoogle();}, true)}
-                        <Text style={styles.orText}>OR SIGN UP WITH EMAIL</Text>
-                      </>
-                    )}
-                    <Text style={styles.helper}>Prefer email? Create a password and verify your inbox before providing personal details.</Text>
-                  </>
-                )}
+                <Text style={styles.helper}>
+                  {resumeMode
+                    ? "Use your original email and password to continue unfinished registration."
+                    : "Create a password and verify your email. No Google account is required."}
+                </Text>
                 <Field
                   label="Email Address *" value={email}
                   onChange={v => {setEmail(v.trim().toLowerCase()); setError("");}}
@@ -750,6 +741,13 @@ export default function EmailFirstSignup() {
                   googleOnly ? "Link Password & Continue" :
                     resumeMode ? "Resume Registration" : "Continue to Email Verification",
                   () => {void startEmail();}
+                )}
+                {!signedInUser && !resumeMode && (
+                  <>
+                    <Text style={styles.orText}>OR</Text>
+                    <Text style={styles.helper}>Optional: continue with Google instead of creating a VolunServe password.</Text>
+                    {checkButton("Continue with Google", () => {void continueWithGoogle();}, true)}
+                  </>
                 )}
                 {!googleOnly && (
                   <Pressable style={styles.inlineButton} onPress={() => {
