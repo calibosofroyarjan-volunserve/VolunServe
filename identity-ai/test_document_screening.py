@@ -1,9 +1,58 @@
 import unittest
 
-from document_screening import assess_document_text, document_ocr_unavailable
+from document_screening import assess_document_text, assess_document_sides, document_ocr_unavailable
 
 
 class GovernmentIdScreeningTests(unittest.TestCase):
+    def test_matching_front_back_remains_unverified(self):
+        result = assess_document_sides(
+            "national_id",
+            "PHILIPPINE IDENTIFICATION CARD GIVEN NAMES",
+            "REPUBLIKA NG PILIPINAS PSN QR CODE",
+        )
+        self.assertEqual(result["status"], "text_consistent_unverified")
+        self.assertTrue(result["backSideProvided"])
+        self.assertTrue(result["backSideScreened"])
+        self.assertFalse(result["authenticityVerified"])
+        self.assertTrue(result["manualReviewRequired"])
+
+    def test_wrong_type_back_flags_mismatch(self):
+        result = assess_document_sides(
+            "national_id",
+            "PHILIPPINE IDENTIFICATION CARD",
+            "DRIVER'S LICENSE LAND TRANSPORTATION OFFICE",
+        )
+        self.assertEqual(result["status"], "mismatch")
+        self.assertIn("document_back_type_conflict", result["warningCodes"])
+        self.assertFalse(result["authenticityVerified"])
+
+    def test_unreadable_back_is_not_reported_as_authenticated(self):
+        result = assess_document_sides(
+            "national_id",
+            "PHILIPPINE IDENTIFICATION CARD",
+            "",
+        )
+        self.assertIn("document_back_ocr_inconclusive", result["warningCodes"])
+        self.assertFalse(result["authenticityVerified"])
+
+    def test_no_raw_private_id_data_survives_two_side_screening(self):
+        result = assess_document_sides(
+            "national_id",
+            "PHILIPPINE IDENTIFICATION CARD SAMPLE PERSON 1988-11-21",
+            "PSN 9999-8888-7777",
+        )
+        for forbidden in ("SAMPLE", "1988", "9999"):
+            self.assertNotIn(forbidden, repr(result))
+
+    def test_passport_bio_page_does_not_require_back_scan(self):
+        result = assess_document_sides(
+            "passport",
+            "PASSPORT REPUBLIC OF THE PHILIPPINES",
+            None,
+        )
+        self.assertFalse(result["backSideProvided"])
+        self.assertEqual(result["status"], "text_consistent_unverified")
+
     def test_national_id_header(self):
         actual = assess_document_text("national_id", "REPUBLIKA NG PILIPINAS PHILIPPINE IDENTIFICATION CARD")
         self.assertEqual(actual["status"], "text_consistent_unverified")
