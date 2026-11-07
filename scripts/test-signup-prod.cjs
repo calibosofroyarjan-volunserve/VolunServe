@@ -229,6 +229,44 @@ function harness(source, enabled, options = {}) {
     assert.equal(h.profile(),null);
     assert(!h.calls.includes("transaction"));
   });
+  await check("Google-only signup skips password, still requires details, and preserves same verified UID",async()=>{
+    const google=harness(current,true,{providers:["google.com"]});
+    await google.api.signUpUser({...data,authProvider:"google",password:""});
+    assert.equal(google.profile().uid,google.user.uid);
+    assert.equal(google.profile().role,"resident");
+    assert(google.calls.includes("transaction"));
+    assert(!google.calls.includes("create") && !google.calls.includes("link") && !google.calls.includes("first-password"));
+    const missing=harness(current,true,{providers:["google.com"]});
+    await assert.rejects(
+      missing.api.signUpUser({...data,firstName:"",authProvider:"google",password:""}),
+      /Step 3/
+    );
+    assert(!missing.calls.includes("transaction"));
+    const unverified=harness(current,true,{providers:["google.com"],verified:false});
+    await assert.rejects(
+      unverified.api.signUpUser({...data,authProvider:"google",password:""}),
+      /verified Google/
+    );
+    assert(!unverified.calls.includes("transaction"));
+    const fake=harness(current,true,{providers:["password"]});
+    await assert.rejects(
+      fake.api.signUpUser({...data,authProvider:"google",password:""}),
+      /verified Google/
+    );
+    assert(!fake.calls.includes("transaction"));
+  });
+  await check("Google onboarding shows Personal Details without forced password and keeps explicit privacy consent",()=>{
+    const ui=read("components/auth/EmailFirstSignup.tsx");
+    assert(ui.includes("setStep(user.emailVerified ? 3 : 2)"));
+    assert(ui.includes("No extra password is needed"));
+    assert(ui.includes('authProvider: googleOnlyAccount ? "google" : "verified_email"'));
+    assert(ui.includes('if (!consent)'));
+    assert(ui.includes('Continue with Google'));
+    assert(ui.includes('formatBirthday'));
+    assert(ui.includes('autoComplete={'));
+    assert(ui.includes('setFirstName(current => current ||'));
+    assert(ui.includes('setLastName(current => current ||'));
+  });
   await check("native Google signup owns OAuth and never bounces pending users to Login",()=>{
     assert(read("lib/useSignupGoogle.ts").includes("signInWithCredential"));
     assert(read("lib/useSignupGoogle.web.ts").includes("signInWithPopup"));
