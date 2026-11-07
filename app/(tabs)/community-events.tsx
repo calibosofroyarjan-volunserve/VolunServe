@@ -1,3 +1,4 @@
+import { getSafeVolunServeBackendBaseUrl, isStagingPreview } from "../../lib/stagingBackendSafety";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { LinearGradient } from "expo-linear-gradient";
 import {useFonts} from "expo-font";
@@ -485,7 +486,7 @@ const errorText = (error: unknown) => {
 
 // Cloudinary media proxy on the authenticated VolunServe backend (not Firebase Storage).
 const COMMUNITY_EVENT_PHOTO_BACKEND_URL = String(
-  process.env.EXPO_PUBLIC_VOLUNSERVE_BACKEND_URL || "https://volunserve.onrender.com"
+  isStagingPreview ? getSafeVolunServeBackendBaseUrl() : (process.env.EXPO_PUBLIC_VOLUNSERVE_BACKEND_URL || getSafeVolunServeBackendBaseUrl())
 ).replace(/\/$/, "");
 
 async function uploadResidentEventPhoto(
