@@ -1,0 +1,25 @@
+name: Validate Live-First Release Guard (NO DEPLOY)
+on:
+  push:
+    branches: [safety/live-first-release-guard-20261107]
+    paths:
+      - 'scripts/guard-live-hosting-source.cjs'
+      - 'scripts/test-guard-live-hosting-source.cjs'
+      - '.github/workflows/validate-live-first-release-guard-20261107.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  test-release-guard:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Test fail-closed release guard with synthetic markers only
+        run: node --test scripts/test-guard-live-hosting-source.cjs
+# Intentional: no secrets, Firebase auth, deployment, rules, writes or Render API.
