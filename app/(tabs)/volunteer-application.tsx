@@ -20,6 +20,7 @@ import {
 } from "react-native";
 
 import { db } from "../../lib/firebase";
+import { volunteerApplicationValidation, validateValues } from "../../lib/volunserveValidation";
 import {
   hasVolunteerAccess,
   setActiveUserMode,
@@ -186,6 +187,10 @@ export default function VolunteerApplication() {
     );
   }, [user]);
 
+  const formErrors = useMemo(() => validateValues(volunteerApplicationValidation, {
+    skills, availability, preferredActivity, experienceTraining, motivation, emergencyContact,
+  }), [skills, availability, preferredActivity, experienceTraining, motivation, emergencyContact]);
+
   const formValid = useMemo(() => {
     const experienceLength =
       experienceTraining.trim().length;
@@ -205,7 +210,8 @@ export default function VolunteerApplication() {
       experienceLength <= 1500 &&
       motivationLength >= 15 &&
       motivationLength <= 2000 &&
-      emergencyContactLength <= 60
+      emergencyContactLength <= 60 &&
+      Object.keys(formErrors).length === 0
     );
   }, [
     availability,
@@ -214,6 +220,7 @@ export default function VolunteerApplication() {
     motivation,
     preferredActivity,
     skills,
+    formErrors,
   ]);
 
   const submitApplication = async () => {
@@ -269,7 +276,7 @@ export default function VolunteerApplication() {
     if (!formValid) {
       Alert.alert(
         "Complete the form",
-        "Select at least one skill and availability, choose a preferred activity, and complete your experience and motivation within the allowed lengths."
+        Object.values(formErrors)[0] || "Check the selected skills and availability, then complete every required field."
       );
       return;
     }

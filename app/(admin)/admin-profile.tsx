@@ -1,4 +1,5 @@
 import AdminReviewHero from "../../components/admin/AdminReviewHero";
+import { moduleValidationPolicies, validateValues } from "../../lib/volunserveValidation";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { Href, Redirect, useRouter } from "expo-router";
 import { doc, updateDoc } from "firebase/firestore";
@@ -71,12 +72,12 @@ export default function AdminProfile() {
   const saveContact = async () => {
     const nextName = name.trim();
     const nextPhone = phone.trim();
-    if (nextName.length < 2 || nextName.length > 120) {
-      setError("Enter a name between 2 and 120 characters.");
-      return;
-    }
-    if (nextPhone.length > 30) {
-      setError("Contact number must be 30 characters or fewer.");
+    const errors = validateValues(moduleValidationPolicies["admin-profile"], {
+      fullName: nextName,
+      phoneNumber: nextPhone,
+    });
+    if (Object.keys(errors).length) {
+      setError(Object.values(errors)[0]);
       return;
     }
     setSaving(true);
