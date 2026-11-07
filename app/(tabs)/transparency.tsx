@@ -95,7 +95,7 @@ const styles = StyleSheet.create({
     padding: 20,
     borderRadius: 18,
     marginBottom: 15,
-  ,
+  
     borderWidth: 1,
     borderColor: "#DCE8DF"},
   big: { fontSize: 20, fontWeight: "bold", marginTop: 5 },
@@ -105,7 +105,7 @@ const styles = StyleSheet.create({
     padding: 20,
     borderRadius: 17,
     marginBottom: 10,
-  ,
+  
     borderWidth: 1,
     borderColor: "#DCE8DF"},
   amount: { fontWeight: "bold", marginBottom: 5 },

@@ -1089,7 +1089,7 @@ const styles = StyleSheet.create({
     borderColor: "#DAE8DF",
     borderRadius: 20,
     padding: 28,
-  ,
+  
     shadowColor: "#153C2F",
     shadowOpacity: 0.045,
     shadowRadius: 13,

@@ -1810,7 +1810,7 @@ const styles = StyleSheet.create({
     borderColor: "#DDE9E1",
     backgroundColor: "#ffffff", 
   
-    ,shadowColor: "#153C2F",
+    shadowColor: "#153C2F",
     shadowOpacity: 0.045,
     shadowRadius: 12,
     shadowOffset: { width: 0, height: 4 },
@@ -1944,7 +1944,7 @@ const styles = StyleSheet.create({
     borderColor: "#DAE8E0",
     backgroundColor: "#ffffff", 
   
-    ,shadowColor: "#153C2F",
+    shadowColor: "#153C2F",
     shadowOpacity: 0.045,
     shadowRadius: 13,
     shadowOffset: { width: 0, height: 5 },

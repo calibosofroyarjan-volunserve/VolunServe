@@ -3247,7 +3247,7 @@ const styles =
       borderWidth: 1,
       borderColor:
         "#DAE7DE",
-    ,
+    
     shadowColor: "#153C2F",
     shadowOpacity: 0.045,
     shadowRadius: 14,

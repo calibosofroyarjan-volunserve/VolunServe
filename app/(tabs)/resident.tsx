@@ -6406,7 +6406,7 @@ const styles =
       backgroundColor:
         "#FFFFFF", 
     
-    ,shadowColor: "#153C2F",
+    shadowColor: "#153C2F",
     shadowOpacity: 0.04,
     shadowRadius: 10,
     shadowOffset: { width: 0, height: 4 },
@@ -6627,7 +6627,7 @@ const styles =
       backgroundColor:
         "#FFFFFF", 
     
-    ,shadowColor: "#153C2F",
+    shadowColor: "#153C2F",
     shadowOpacity: 0.045,
     shadowRadius: 15,
     shadowOffset: { width: 0, height: 4 },

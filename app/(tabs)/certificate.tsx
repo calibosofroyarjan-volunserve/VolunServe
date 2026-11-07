@@ -1697,7 +1697,7 @@ const styles =
       borderRadius: 12,
       backgroundColor:
         "#087C61",
-    ,
+    
     minHeight: 46},
 
     primaryButtonText: {
