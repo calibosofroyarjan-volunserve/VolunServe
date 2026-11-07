@@ -169,3 +169,22 @@ def assess_document_sides(
     result["authenticityVerified"] = False
     result["manualReviewRequired"] = True
     return result
+
+
+def assess_profile_name(first_name: str, last_name: str, ocr_text: str) -> dict:
+    """Conservative text-presence check against server-supplied account name.
+
+    It cannot authenticate an ID or extract a reliable full legal name from
+    arbitrary layouts. Missing tokens are inconclusive, never proof of fraud.
+    Raw names and OCR strings are not returned.
+    """
+    first = [part for part in _normalized(first_name).split() if len(part) >= 3]
+    last = [part for part in _normalized(last_name).split() if len(part) >= 3]
+    if not first or not last:
+        return {"profileNameCheck": "not_checked", "profileNameCompared": False}
+    text = _normalized(ocr_text)
+    matches = all(_contains(text, part) for part in first + last)
+    return {
+        "profileNameCheck": "possible_match" if matches else "inconclusive",
+        "profileNameCompared": True,
+    }
