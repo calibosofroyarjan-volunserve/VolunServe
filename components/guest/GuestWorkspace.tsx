@@ -1,14 +1,15 @@
 import Ionicons from "@expo/vector-icons/Ionicons";
-import DesignReviewWorkspace from "./DesignReviewWorkspace";
 import { LinearGradient } from "expo-linear-gradient";
 import { router, useLocalSearchParams } from "expo-router";
 import React, { useState } from "react";
+import AdministrativePreviewModules, { ADMIN_PREVIEW_MODULES, SUPERADMIN_PREVIEW_MODULES } from "./AdministrativePreviewModules";
+import { liveUi as ui } from "../../constants/volunserveLiveUi";
 import {
   Image, ImageBackground, Pressable, ScrollView, StyleSheet,
   Text, useWindowDimensions, View,
 } from "react-native";
 
-type Role = "resident" | "volunteer";
+type Role = "resident" | "volunteer" | "admin" | "superadmin";
 type Module = "home" | "emergency-reports" | "request-assistance" | "community-events" |
   "donations" | "emergency-tasks" | "profile" | "progress" | "certificates" | "updates";
 type Icon = React.ComponentProps<typeof Ionicons>["name"];
@@ -30,7 +31,7 @@ const VALID_MODULES = new Set<Module>([
   ...RESIDENT_NAV.map(item => item.key), ...VOLUNTEER_NAV.map(item => item.key),
   "profile", "progress", "certificates", "updates",
 ]);
-const P = { ink: "#102D4D", green: "#078364", teal: "#0B6655", muted: "#64819A", line: "#E0EAF0" };
+const P = { ink: ui.color.text, green: ui.color.primary, teal: ui.color.primaryHover, muted: ui.color.secondary, line: ui.color.border };
 const open = (role: Role, module: Module = "home") =>
   router.push({ pathname: "/public/preview", params: { role, module } } as any);
 
@@ -106,26 +107,30 @@ function Placeholder({ icon, title, description }: { icon: Icon; title: string; 
   </View>;
 }
 function Hero({ role, narrow }: { role: Role; narrow: boolean }) {
-  return <ImageBackground source={require("../../assets/images/sjdm-aerial.png")}
-    imageStyle={styles.heroPicture} style={styles.hero}>
-    <LinearGradient pointerEvents="none" colors={["rgba(5,32,45,0.79)", "rgba(5,32,45,0.26)", "rgba(6,41,48,0.75)"]}
-      start={{ x: 0, y: 0.4 }} end={{ x: 1, y: 0.6 }} style={StyleSheet.absoluteFill} />
-    <View style={[styles.heroInner, narrow && styles.heroInnerNarrow]}>
-      <View style={styles.heroLeft}>
-        <Text style={styles.heroEyebrow}>{role === "resident" ? "RESIDENT OPERATIONS CENTER" : "VOLUNTEER OPERATIONS CENTER"}</Text>
-        <Text style={[styles.heroTitle, narrow && styles.heroTitleSmall]}>Good day, <Text style={styles.heroAccent}>Guest!</Text></Text>
-        <Text style={styles.heroSub}>Explore what VolunServe offers in San Jose del Monte.</Text>
-        <View style={styles.locationStrip}>
-          <Ionicons name="location" size={20} color="#FFF" />
-          <Text style={styles.locationCopy}>San Jose del Monte, Bulacan</Text>
-        </View>
-        <Text style={styles.heroFoot}>Public demonstration · No live personal records</Text>
-      </View>
-      {!narrow ? <View style={styles.citySealWrap}><Image source={require("../../assets/images/sjdm-rising-city.png")} style={styles.citySeal} resizeMode="contain" /></View> : null}
-      {!narrow ? <View style={styles.heroRight}><Text style={styles.heroRightTitle}>A Safer, Stronger{"\n"}San Jose del Monte</Text>
-        <Text style={styles.heroRightSub}>One community. One platform. Greater impact.</Text><View style={styles.heroAccentBar}/></View> : null}
+  const volunteer = role === "volunteer";
+  return <View style={[styles.dashboardHero, narrow && styles.dashboardHeroCompact]}>
+    <View style={styles.dashboardHeroIcon}>
+      <Ionicons name={volunteer ? "hand-left-outline" : "home-outline"} size={27} color={ui.color.primary} />
     </View>
-  </ImageBackground>;
+    <View style={styles.dashboardHeroCopy}>
+      <Text style={styles.dashboardEyebrow}>{volunteer ? "VOLUNTEER OPERATIONS CENTER" : "RESIDENT OPERATIONS CENTER"} · DESIGN PREVIEW</Text>
+      <Text style={[styles.dashboardTitle, narrow && styles.dashboardTitleCompact]}>
+        {volunteer ? "Ready to serve your community" : "Your community, at a glance"}
+      </Text>
+      <Text style={styles.dashboardDescription}>
+        {volunteer
+          ? "Explore emergency task coordination, event participation and verified service records."
+          : "Explore emergency reports, assistance requests, events and community support."}
+      </Text>
+      <View style={styles.dashboardBadges}>
+        <View style={styles.dashboardBadge}><Ionicons name="location-outline" color={ui.color.primary} size={16}/><Text style={styles.dashboardBadgeText}>San Jose del Monte, Bulacan</Text></View>
+        <View style={styles.dashboardBadge}><Ionicons name="shield-checkmark-outline" color={ui.color.primary} size={16}/><Text style={styles.dashboardBadgeText}>Safe read-only preview</Text></View>
+      </View>
+    </View>
+    {!narrow && <View style={styles.dashboardSealWrap}>
+      <Image source={require("../../assets/images/sjdm-rising-city.png")} style={styles.dashboardSeal} resizeMode="contain"/>
+    </View>}
+  </View>;
 }
 
 function Home({ role, narrow }: { role: Role; narrow: boolean }) {
@@ -309,21 +314,24 @@ function OtherModule({ role, module, narrow }: { role: Role; module: Module; nar
   </>;
 }
 
-export default function GuestWorkspace({ landing = false, designReview = false }: { landing?: boolean; designReview?: boolean }) {
-  if (designReview) return <DesignReviewWorkspace />;
-  return <LegacyGuestWorkspace landing={landing} />;
-}
-
-function LegacyGuestWorkspace({ landing = false }: { landing?: boolean }) {
+export default function GuestWorkspace({ landing = false }: { landing?: boolean }) {
   const params = useLocalSearchParams<{ role?: string; module?: string }>();
-  const role: Role = params.role === "volunteer" ? "volunteer" : "resident";
+  const role: Role = params.role === "admin" ? "admin" : params.role === "superadmin" ? "superadmin" : params.role === "volunteer" ? "volunteer" : "resident";
   const requested = params.module as Module;
-  const allowed = role === "volunteer" ? VOLUNTEER_NAV : RESIDENT_NAV;
-  const module: Module = VALID_MODULES.has(requested) &&
-    (allowed.some(item => item.key === requested) || ["profile", "progress", "certificates", "updates"].includes(requested))
-    ? requested : "home";
+  const allowed: NavItem[] = role === "admin"
+    ? ADMIN_PREVIEW_MODULES.map(item => ({key:item.key as Module,label:item.label,icon:item.icon,selected:item.icon}))
+    : role === "superadmin"
+    ? SUPERADMIN_PREVIEW_MODULES.map(item => ({key:item.key as Module,label:item.label,icon:item.icon,selected:item.icon}))
+    : role === "volunteer" ? VOLUNTEER_NAV : RESIDENT_NAV;
+  const isAdmin = role === "admin" || role === "superadmin";
+  const module: Module = (isAdmin
+    ? (allowed.some(item=>item.key===requested) ? requested : allowed[0].key)
+    : (VALID_MODULES.has(requested) &&
+      (allowed.some(item => item.key === requested) || ["profile", "progress", "certificates", "updates"].includes(requested))
+      ? requested : "home"));
   const { width } = useWindowDimensions();
   const narrow = width < 1040;
+  const smallPhone = width < 420;
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
   if (landing) {
@@ -339,15 +347,17 @@ function LegacyGuestWorkspace({ landing = false }: { landing?: boolean }) {
       </ImageBackground>
       <Text style={styles.chooseTitle}>Which workspace would you like to preview?</Text>
       <View style={[styles.twoColumns, narrow && styles.stackColumns]}>
-        {(["resident", "volunteer"] as const).map(value =>
+        {(["resident", "volunteer", "admin", "superadmin"] as const).map(value =>
           <Pressable key={value} accessibilityRole="button" accessibilityLabel={"Preview " + value + " workspace"}
             style={({pressed}) => [styles.choiceCard, pressed && { opacity: 0.8 }]} onPress={() => open(value, "home")}>
-            <Mark icon={value === "resident" ? "home-outline" : "people-outline"} color="#087F6D" size={29} />
-            <Text style={styles.choiceTitle}>{value === "resident" ? "Verified Resident" : "Volunteer"} Workspace</Text>
+            <Mark icon={value === "resident" ? "home-outline" : value === "volunteer" ? "hand-left-outline" : value === "admin" ? "shield-checkmark-outline" : "settings-outline"} color={ui.color.primary} size={27} />
+            <Text style={styles.choiceTitle}>{value === "resident" ? "Verified Resident" : value === "volunteer" ? "Volunteer" : value === "admin" ? "LGU Admin" : "Super Admin"} Workspace</Text>
             <Text style={styles.choiceDescription}>{value === "resident"
               ? "Home · Emergency Reports · Request Assistance · Community Events · Donations"
-              : "Home · Emergency Tasks · Community Events · Profile Progress · Certificates"}</Text>
-            <View style={styles.choiceAction}><Text style={styles.choiceActionText}>Preview {value === "resident" ? "Resident" : "Volunteer"}</Text>
+              : value === "volunteer" ? "Home · Emergency Tasks · Community Events · Profile Progress · Certificates"
+              : value === "admin" ? "Command Center · Identity Reviews · Emergency Reports · Events · Donations"
+              : "System Overview · Admin Accounts · Audit Logs · Records · Settings"}</Text>
+            <View style={styles.choiceAction}><Text style={styles.choiceActionText}>Preview {value === "resident" ? "Resident" : value === "volunteer" ? "Volunteer" : value === "admin" ? "Admin" : "Super Admin"}</Text>
               <Ionicons name="arrow-forward" color="#087F6D" size={21} /></View>
           </Pressable>)}
       </View>
@@ -364,7 +374,7 @@ function LegacyGuestWorkspace({ landing = false }: { landing?: boolean }) {
       <Image source={require("../../assets/images/logo.png")} style={styles.sidebarLogo} />
       <View><Text style={styles.sidebarName}>VolunServe</Text><Text style={styles.sidebarSub}>CITY OF SAN JOSE DEL MONTE</Text></View>
     </View>
-    <Text style={styles.sidebarLabel}>{role === "resident" ? "RESIDENT SERVICES" : "VOLUNTEER WORKSPACE"}</Text>
+    <Text style={styles.sidebarLabel}>{role === "resident" ? "RESIDENT SERVICES" : role === "volunteer" ? "VOLUNTEER WORKSPACE" : role === "admin" ? "ADMIN OPERATIONS" : "SYSTEM GOVERNANCE"}</Text>
     <ScrollView style={styles.navScroll} contentContainerStyle={styles.navContent}>
       {allowed.map(item => <Pressable key={item.key} accessibilityRole="button"
         accessibilityState={{selected:module === item.key}} accessibilityLabel={item.label}
@@ -391,7 +401,7 @@ function LegacyGuestWorkspace({ landing = false }: { landing?: boolean }) {
         <Pressable style={styles.account} accessibilityRole="button" accessibilityLabel="Guest account menu" accessibilityState={{expanded:accountOpen}}
           onPress={() => setAccountOpen(v => !v)}>
           <Mark icon="person-circle-outline" size={22} color="#3474C4" tint="#E1ECFF" />
-          {!narrow ? <View><Text style={styles.accountName}>Guest Preview</Text><Text style={styles.accountRole}>{role === "resident" ? "Resident view" : "Volunteer view"}</Text></View> : null}
+          {!narrow ? <View><Text style={styles.accountName}>Guest Preview</Text><Text style={styles.accountRole}>{role === "resident" ? "Resident view" : role === "volunteer" ? "Volunteer view" : role === "admin" ? "Admin view" : "Super Admin view"}</Text></View> : null}
           <Ionicons name="chevron-down" size={17} color="#1F4260" /></Pressable>
       </View>
       {accountOpen ? <View style={styles.accountDropdown}>
@@ -405,8 +415,10 @@ function LegacyGuestWorkspace({ landing = false }: { landing?: boolean }) {
         <Pressable accessibilityRole="button" style={styles.accountOption} onPress={() => router.push("/login")}><Text style={styles.accountOptionText}>Log in</Text><Ionicons name="log-in-outline" size={16} color="#81909E" /></Pressable>
       </View> : null}
       <ScrollView style={styles.contentScroll} contentContainerStyle={styles.content} key={role + ":" + module}>
-        {module === "home" ? <Home role={role} narrow={narrow} /> : <OtherModule key={role + ":" + module} role={role} module={module} narrow={narrow} />}
-        <View style={styles.bottomBar}><Text style={styles.bottomText}>GUEST PREVIEW · Sample screens only. No account permissions or production data.</Text>
+        {isAdmin ? <AdministrativePreviewModules key={role+":"+module} role={role as "admin" | "superadmin"} module={module} onNavigate={(next)=>open(role,next as Module)}/>
+          : module === "home" ? <Home role={role} narrow={narrow} />
+          : <OtherModule key={role + ":" + module} role={role} module={module} narrow={narrow} />}
+        <View style={styles.bottomBar}><Text style={styles.bottomText}>DESIGN PREVIEW · Sample screens only. No account permissions or production data.</Text>
           <Pressable onPress={() => router.push("/signup")} accessibilityRole="button"><Text style={styles.linkText}>Create an account  ›</Text></Pressable></View>
       </ScrollView>
     </View>
@@ -420,32 +432,60 @@ function LegacyGuestWorkspace({ landing = false }: { landing?: boolean }) {
 }
 
 const styles = StyleSheet.create({
-  root:{flex:1,flexDirection:"row",backgroundColor:"#EEF8FD"},
-  sidebar:{width:"100%",height:"100%",backgroundColor:"#063E33",paddingHorizontal:20,paddingTop:22,paddingBottom:22,overflow:"hidden"},
-  sidebarLeaf:{position:"absolute",bottom:80,left:-70,opacity:0.4},
+  dashboardHero: {
+    minHeight: 205, flexDirection: "row", alignItems: "flex-start", gap: 16,
+    backgroundColor: ui.color.surface, borderWidth: 1, borderColor: ui.color.border,
+    borderRadius: ui.radius.card, padding: 22,
+  },
+  dashboardHeroCompact: { minHeight: 0, padding: 16, gap: 12 },
+  dashboardHeroIcon: {
+    width: 48, height: 48, flexShrink: 0, borderRadius: ui.radius.control,
+    backgroundColor: ui.color.primarySoft, justifyContent: "center", alignItems: "center",
+  },
+  dashboardHeroCopy: { flex: 1, minWidth: 0, gap: 8 },
+  dashboardEyebrow: { fontSize: 11, lineHeight: 16, fontWeight: "700", letterSpacing: 0.65, color: ui.color.primary },
+  dashboardTitle: { fontSize: 26, lineHeight: 34, fontWeight: "700", color: ui.color.text },
+  dashboardTitleCompact: { fontSize: 21, lineHeight: 29 },
+  dashboardDescription: { fontSize: 14, lineHeight: 21, color: ui.color.secondary, maxWidth: 650 },
+  dashboardBadges: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 8 },
+  dashboardBadge: {
+    minHeight: 34, flexDirection: "row", alignItems: "center", gap: 7,
+    backgroundColor: ui.color.primarySoft, paddingHorizontal: 10,
+    paddingVertical: 6, borderRadius: ui.radius.control,
+  },
+  dashboardBadgeText: { fontSize: 11, lineHeight: 17, color: ui.color.primary, fontWeight: "600" },
+  dashboardSealWrap: {
+    width: 110, height: 110, flexShrink: 0, borderRadius: ui.radius.card,
+    backgroundColor: ui.color.mutedSurface, justifyContent: "center", alignItems: "center",
+  },
+  dashboardSeal: { width: 92, height: 92 },
+
+  root:{flex:1,flexDirection:"row",backgroundColor:ui.color.canvas},
+  sidebar:{width:"100%",height:"100%",backgroundColor:ui.color.sidebar,paddingHorizontal:16,paddingTop:20,paddingBottom:18,overflow:"hidden"},
+  sidebarLeaf:{position:"absolute",bottom:80,left:-70,opacity:0.08},
   sidebarBrand:{flexDirection:"row",alignItems:"center",gap:10,marginBottom:23,paddingLeft:5},
-  sidebarLogo:{width:49,height:49,borderRadius:25},sidebarName:{fontSize:21,fontWeight:"900",color:"#FFF"},
-  sidebarSub:{fontSize:9,fontWeight:"800",color:"#A8EDE0"},
-  sidebarLabel:{fontSize:11,letterSpacing:1.5,fontWeight:"900",color:"#83E4C8",marginBottom:18,marginLeft:8},
-  navScroll:{flex:1},navContent:{gap:9,paddingBottom:14},
-  navItem:{minHeight:49,borderRadius:11,flexDirection:"row",alignItems:"center",paddingHorizontal:10,gap:11},
-  navItemSelected:{backgroundColor:"#147D66",borderWidth:1,borderColor:"#289F82"},
-  navIcon:{backgroundColor:"#096353",width:40,height:40,borderRadius:10,alignItems:"center",justifyContent:"center"},
-  navLabel:{fontSize:12,color:"#FFF",fontWeight:"800",flex:1},
+  sidebarLogo:{width:46,height:46,borderRadius:23},sidebarName:{fontSize:20,fontWeight:"700",color:ui.color.white},
+  sidebarSub:{fontSize:10,fontWeight:"600",color:ui.color.sidebarText},
+  sidebarLabel:{fontSize:11,letterSpacing:0.9,fontWeight:"700",color:ui.color.sidebarText,marginBottom:16,marginLeft:8},
+  navScroll:{flex:1},navContent:{gap:5,paddingBottom:14},
+  navItem:{minHeight:ui.minTap+5,borderRadius:ui.radius.control,flexDirection:"row",alignItems:"center",paddingHorizontal:9,gap:10},
+  navItemSelected:{backgroundColor:ui.color.sidebarActive,borderWidth:1,borderColor:ui.color.sidebarActive},
+  navIcon:{backgroundColor:"rgba(255,255,255,0.08)",width:38,height:38,borderRadius:ui.radius.control,alignItems:"center",justifyContent:"center"},
+  navLabel:{fontSize:13,lineHeight:19,color:ui.color.sidebarText,fontWeight:"600",flex:1},
   navMark:{width:4,height:23,borderRadius:2,backgroundColor:"#C5FFEB"},
   switchSide:{flexDirection:"row",alignItems:"center",gap:9,paddingVertical:13},
-  switchSideText:{color:"#CCFAEA",fontSize:12,fontWeight:"700"},
-  main:{flex:1,minWidth:0,position:"relative"},top:{height:79,flexDirection:"row",alignItems:"center",justifyContent:"flex-end",paddingHorizontal:20,gap:13},
-  topStatus:{height:44,flexDirection:"row",alignItems:"center",gap:9,backgroundColor:"#E7FFF4",borderWidth:1,borderColor:"#ABE7CF",borderRadius:13,paddingHorizontal:16},
+  switchSideText:{color:ui.color.sidebarText,fontSize:13,fontWeight:"600"},
+  main:{flex:1,minWidth:0,position:"relative"},top:{minHeight:70,flexDirection:"row",alignItems:"center",justifyContent:"flex-end",paddingHorizontal:16,gap:10,flexWrap:"wrap"},
+  topStatus:{minHeight:ui.minTap,flexDirection:"row",alignItems:"center",gap:8,backgroundColor:ui.color.primarySoft,borderWidth:1,borderColor:ui.color.border,borderRadius:ui.radius.control,paddingHorizontal:12},
   statusDot:{width:9,height:9,borderRadius:5,backgroundColor:"#00A277"},
-  topStatusText:{fontSize:12,fontWeight:"800",color:"#06684E"},
-  topIcon:{width:44,height:44,borderRadius:13,backgroundColor:"#FFF",borderWidth:1,borderColor:"#E0EBF2",alignItems:"center",justifyContent:"center"},
-  account:{minHeight:48,borderRadius:14,flexDirection:"row",alignItems:"center",gap:9,paddingHorizontal:11,backgroundColor:"#FFF",borderWidth:1,borderColor:"#DCE9F0"},
-  accountName:{fontSize:11,fontWeight:"900",color:P.ink},accountRole:{fontSize:10,color:P.muted},
-  accountDropdown:{position:"absolute",top:72,right:20,zIndex:10,width:225,backgroundColor:"#FFF",borderColor:"#D8E8E1",borderWidth:1,borderRadius:14,padding:8,elevation:5},
-  accountOption:{minHeight:43,paddingHorizontal:12,flexDirection:"row",alignItems:"center",justifyContent:"space-between"},
-  accountOptionText:{fontSize:12,fontWeight:"700",color:P.ink},
-  contentScroll:{flex:1},content:{paddingHorizontal:20,paddingBottom:35,gap:19},
+  topStatusText:{fontSize:12,fontWeight:"600",color:ui.color.primary},
+  topIcon:{width:ui.minTap,height:ui.minTap,borderRadius:ui.radius.control,backgroundColor:ui.color.surface,borderWidth:1,borderColor:ui.color.border,alignItems:"center",justifyContent:"center"},
+  account:{minHeight:ui.minTap,borderRadius:ui.radius.control,flexDirection:"row",alignItems:"center",gap:7,paddingHorizontal:9,backgroundColor:ui.color.surface,borderWidth:1,borderColor:ui.color.border},
+  accountName:{fontSize:12,fontWeight:"700",color:P.ink},accountRole:{fontSize:11,color:P.muted},
+  accountDropdown:{position:"absolute",top:68,right:12,zIndex:10,width:220,maxWidth:"95%",backgroundColor:ui.color.surface,borderColor:ui.color.border,borderWidth:1,borderRadius:ui.radius.card,padding:7,elevation:5},
+  accountOption:{minHeight:ui.minTap,paddingHorizontal:12,flexDirection:"row",alignItems:"center",justifyContent:"space-between"},
+  accountOptionText:{fontSize:13,fontWeight:"600",color:P.ink},
+  contentScroll:{flex:1},content:{paddingHorizontal:16,paddingBottom:32,gap:16},
   hero:{minHeight:285,borderRadius:19,overflow:"hidden",justifyContent:"center",backgroundColor:"#204B56"},
   heroPicture:{borderRadius:19},
   heroInner:{minHeight:285,padding:29,flexDirection:"row",alignItems:"center",justifyContent:"space-between",gap:15},
@@ -461,53 +501,53 @@ const styles = StyleSheet.create({
   workflow:{padding:12,borderBottomWidth:1,borderColor:"#D7E6E9",flexDirection:"row",gap:14,alignItems:"center",flexWrap:"wrap"},
   workflowStrong:{fontSize:11,fontWeight:"900",color:"#076F56",letterSpacing:0.4},
   workflowText:{fontSize:12,color:"#466F62"},
-  twoColumns:{flexDirection:"row",alignItems:"stretch",gap:16},stackColumns:{flexDirection:"column"},
-  panel:{flex:1,minWidth:0,backgroundColor:"#FFF",borderWidth:1,borderColor:"#DDEAF1",borderRadius:19,padding:19,gap:14},
+  twoColumns:{flexDirection:"row",alignItems:"stretch",gap:14},stackColumns:{flexDirection:"column"},
+  panel:{flex:1,minWidth:0,backgroundColor:ui.color.surface,borderWidth:1,borderColor:ui.color.border,borderRadius:ui.radius.card,padding:18,gap:14},
   panelHeading:{flexDirection:"row",alignItems:"center",gap:11,marginBottom:2},
   mark:{width:45,height:45,borderRadius:18,alignItems:"center",justifyContent:"center",flexShrink:0},
-  panelTitle:{fontSize:17,fontWeight:"900",color:P.ink},panelSub:{fontSize:11,color:P.muted,marginTop:4,lineHeight:16},
+  panelTitle:{fontSize:ui.type.card.fontSize,lineHeight:ui.type.card.lineHeight,fontWeight:"700",color:P.ink},panelSub:{fontSize:12,color:P.muted,marginTop:4,lineHeight:18},
   demoRow:{flexDirection:"row",alignItems:"center",gap:11,paddingVertical:12,borderBottomWidth:1,borderBottomColor:"#E8EFF4"},
-  rowTitle:{fontSize:12,color:P.ink,fontWeight:"900"},rowSub:{fontSize:11,color:P.muted,marginTop:5,lineHeight:17},
-  rowBadge:{backgroundColor:"#EEF3F8",borderRadius:9,paddingHorizontal:11,paddingVertical:9},
-  rowBadgeText:{color:"#265079",fontSize:10,fontWeight:"900"},
+  rowTitle:{fontSize:13,color:P.ink,fontWeight:"700"},rowSub:{fontSize:12,color:P.muted,marginTop:4,lineHeight:18},
+  rowBadge:{backgroundColor:ui.color.primarySoft,borderRadius:ui.radius.control,paddingHorizontal:10,paddingVertical:8},
+  rowBadgeText:{color:ui.color.primary,fontSize:11,fontWeight:"600"},
   placeholder:{minHeight:175,alignItems:"center",justifyContent:"center",padding:18,gap:9},
-  placeholderTitle:{color:"#163A60",fontSize:14,fontWeight:"900",textAlign:"center"},
-  placeholderDescription:{color:"#7890A4",fontSize:11,lineHeight:17,textAlign:"center",maxWidth:330},
-  textButton:{alignSelf:"flex-end",padding:5},linkText:{color:"#077B65",fontWeight:"900",fontSize:12},
-  gate:{borderRadius:15,padding:15,backgroundColor:"#E9F8EF",borderWidth:1,borderColor:"#C8E6D6",flexDirection:"row",alignItems:"center",gap:11,flexWrap:"wrap"},
-  gateTitle:{fontSize:12,color:"#0F5F4D",fontWeight:"900"},gateDetail:{fontSize:11,color:"#51786B",lineHeight:17,marginTop:3},
-  gateButton:{backgroundColor:"#09775B",borderRadius:10,paddingHorizontal:16,paddingVertical:11},
-  gateButtonText:{color:"#FFF",fontSize:12,fontWeight:"900"},
-  sectionHeading:{backgroundColor:"#FFF",borderColor:"#DCECF1",borderWidth:1,borderRadius:18,flexDirection:"row",alignItems:"center",flexWrap:"wrap",gap:12,padding:18},
-  sectionTitle:{fontSize:23,color:P.ink,fontWeight:"900"},sectionDescription:{fontSize:12,color:P.muted,lineHeight:18,marginTop:3},
+  placeholderTitle:{color:ui.color.text,fontSize:15,fontWeight:"700",textAlign:"center"},
+  placeholderDescription:{color:ui.color.secondary,fontSize:12,lineHeight:18,textAlign:"center",maxWidth:330},
+  textButton:{alignSelf:"flex-end",padding:11,minHeight:ui.minTap,justifyContent:"center"},linkText:{color:ui.color.primary,fontWeight:"700",fontSize:13},
+  gate:{borderRadius:ui.radius.card,padding:15,backgroundColor:ui.color.primarySoft,borderWidth:1,borderColor:ui.color.border,flexDirection:"row",alignItems:"center",gap:11,flexWrap:"wrap"},
+  gateTitle:{fontSize:13,color:ui.color.text,fontWeight:"700"},gateDetail:{fontSize:12,color:ui.color.secondary,lineHeight:18,marginTop:3},
+  gateButton:{backgroundColor:ui.color.primary,borderRadius:ui.radius.control,paddingHorizontal:16,paddingVertical:11,minHeight:ui.minTap,justifyContent:"center"},
+  gateButtonText:{color:ui.color.white,fontSize:13,fontWeight:"700"},
+  sectionHeading:{backgroundColor:ui.color.surface,borderColor:ui.color.border,borderWidth:1,borderRadius:ui.radius.card,flexDirection:"row",alignItems:"center",flexWrap:"wrap",gap:12,padding:18},
+  sectionTitle:{fontSize:ui.type.page.fontSize,lineHeight:ui.type.page.lineHeight,color:P.ink,fontWeight:"700"},sectionDescription:{fontSize:13,color:P.muted,lineHeight:20,marginTop:3},
   pill:{flexDirection:"row",gap:5,alignSelf:"flex-start",alignItems:"center",paddingHorizontal:9,paddingVertical:6,borderRadius:999,backgroundColor:"#E4F7ED"},
-  pillText:{fontSize:10,fontWeight:"900"},
+  pillText:{fontSize:11,fontWeight:"700"},
   fields:{gap:13},demoField:{gap:6,flex:1,minWidth:0},
-  fieldLabel:{fontSize:11,fontWeight:"800",color:"#3B5465"},
+  fieldLabel:{fontSize:ui.type.label.fontSize,fontWeight:"600",color:ui.color.text},
   fieldContent:{minHeight:45,backgroundColor:"#F7FAFB",borderWidth:1,borderColor:"#DCE6E9",borderRadius:10,padding:12,flexDirection:"row",alignItems:"center",justifyContent:"space-between",gap:6},
-  fieldText:{fontSize:11,color:"#7C929D",flex:1},
+  fieldText:{fontSize:13,color:ui.color.secondary,flex:1},
   steps:{flexDirection:"row",flexWrap:"wrap",gap:10,paddingBottom:10},
   step:{flexDirection:"row",alignItems:"center",gap:6},stepNumber:{width:22,height:22,overflow:"hidden",borderRadius:11,backgroundColor:"#0B8368",color:"#FFF",fontSize:11,fontWeight:"900",textAlign:"center",textAlignVertical:"center"},
   stepText:{fontSize:11,fontWeight:"700",color:"#246A56"},
   chipRow:{flexDirection:"row",alignItems:"center",gap:8,flexWrap:"wrap"},
-  chip:{paddingVertical:9,paddingHorizontal:14,borderColor:"#DBE9EB",borderWidth:1,borderRadius:10,backgroundColor:"#FFF"},
-  chipSelected:{backgroundColor:"#087F69",borderColor:"#087F69"},
-  chipText:{color:"#486A77",fontSize:11,fontWeight:"800"},chipTextSelected:{color:"#FFF"},
-  sampleCard:{padding:14,borderRadius:13,backgroundColor:"#F7FBF9",borderWidth:1,borderColor:"#D8EDE3",gap:11},
-  sampleTitle:{fontSize:17,fontWeight:"900",color:P.ink},sampleText:{fontSize:12,color:"#60798D",lineHeight:18},
-  minorButton:{backgroundColor:"#E4F7ED",borderRadius:10,padding:11,alignSelf:"flex-start",flexDirection:"row",alignItems:"center",gap:7},
-  minorButtonText:{color:"#087864",fontSize:11,fontWeight:"900"},
+  chip:{minHeight:ui.minTap,justifyContent:"center",paddingVertical:9,paddingHorizontal:14,borderColor:ui.color.border,borderWidth:1,borderRadius:ui.radius.control,backgroundColor:ui.color.surface},
+  chipSelected:{backgroundColor:ui.color.primary,borderColor:ui.color.primary},
+  chipText:{color:ui.color.secondary,fontSize:12,fontWeight:"600"},chipTextSelected:{color:ui.color.white},
+  sampleCard:{padding:15,borderRadius:ui.radius.card,backgroundColor:ui.color.mutedSurface,borderWidth:1,borderColor:ui.color.border,gap:11},
+  sampleTitle:{fontSize:16,fontWeight:"700",color:P.ink},sampleText:{fontSize:13,color:ui.color.secondary,lineHeight:20},
+  minorButton:{backgroundColor:ui.color.primarySoft,borderRadius:ui.radius.control,padding:11,minHeight:ui.minTap,alignSelf:"flex-start",flexDirection:"row",alignItems:"center",gap:7},
+  minorButtonText:{color:ui.color.primary,fontSize:13,fontWeight:"700"},
   detailBox:{backgroundColor:"#FFF",borderRadius:9,padding:12,gap:5},
   progressTrack:{height:12,borderRadius:7,backgroundColor:"#CDE5D7",overflow:"hidden"},
   progressBar:{width:"42%",height:"100%",backgroundColor:"#0B9574"},
   bottomBar:{borderTopColor:"#DAE8EF",borderTopWidth:1,paddingTop:18,flexDirection:"row",alignItems:"center",justifyContent:"space-between",gap:10,flexWrap:"wrap"},
-  bottomText:{color:"#6E8A91",fontSize:10,fontWeight:"700",maxWidth:"75%"},
+  bottomText:{color:ui.color.secondary,fontSize:11,fontWeight:"600",flexShrink:1},
   mobileOverlay:{...StyleSheet.absoluteFillObject,zIndex:20,flexDirection:"row"},
   scrim:{...StyleSheet.absoluteFillObject,backgroundColor:"rgba(0,20,25,0.55)"},
   mobileSidebar:{width:278,height:"100%",position:"relative"},
   closeMobile:{position:"absolute",right:8,top:7,padding:5},
-  landing:{flex:1,backgroundColor:"#EEF8FD"},
-  landingContents:{width:"100%",maxWidth:1120,alignSelf:"center",padding:22,gap:23},
+  landing:{flex:1,backgroundColor:ui.color.canvas},
+  landingContents:{width:"100%",maxWidth:1120,alignSelf:"center",padding:20,gap:20},
   landingBrand:{flexDirection:"row",alignItems:"center",gap:12,flexWrap:"wrap"},
   landingLogo:{width:55,height:55},brandTitleDark:{fontSize:26,color:"#063E33",fontWeight:"900"},
   brandCaptionDark:{fontSize:10,color:"#0D745C",fontWeight:"800"},
@@ -516,11 +556,11 @@ const styles = StyleSheet.create({
   landingTitle:{color:"#FFF",fontWeight:"900",fontSize:33},
   landingSubtitle:{color:"#E5F3F2",fontSize:14,maxWidth:580,lineHeight:22},
   chooseTitle:{fontSize:21,color:P.ink,fontWeight:"900"},
-  choiceCard:{flex:1,backgroundColor:"#FFF",borderColor:"#DDEAE7",borderWidth:1,borderRadius:19,padding:24,gap:13,minHeight:220},
-  choiceTitle:{fontSize:21,fontWeight:"900",color:P.ink},
+  choiceCard:{flex:1,minWidth:220,backgroundColor:ui.color.surface,borderColor:ui.color.border,borderWidth:1,borderRadius:ui.radius.card,padding:20,gap:13,minHeight:205},
+  choiceTitle:{fontSize:19,fontWeight:"700",color:P.ink},
   choiceDescription:{color:P.muted,fontSize:13,lineHeight:20,flex:1},
   choiceAction:{flexDirection:"row",alignItems:"center",justifyContent:"space-between"},
-  choiceActionText:{color:"#087F6D",fontSize:13,fontWeight:"900"},
+  choiceActionText:{color:ui.color.primary,fontSize:13,fontWeight:"700"},
   landingFooter:{borderTopWidth:1,borderColor:"#D6E9E3",paddingTop:16,flexDirection:"row",flexWrap:"wrap",alignItems:"center",gap:10},
   landingFooterText:{color:"#52796F",fontSize:11,flex:1,minWidth:200},
 });
