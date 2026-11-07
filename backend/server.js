@@ -11,6 +11,7 @@ const {
 const { reconcileCommunityEventCertificates } = require("./communityCertificates");
 const { combineApprovedBudget } = require("./assistanceDonationBudget");
 const { probeIdentityAiReadiness } = require("./identityAiReadiness");
+const {isVerifiedFirebaseToken} = require("./verifiedFirebaseToken");
 const {
   getProfileRole,
   isApprovedAccount,
@@ -783,6 +784,15 @@ async function requireFirebaseUser(
         token,
         true,
       );
+    // Auth-only registration UIDs must not bypass email verification by
+    // calling Render API endpoints directly instead of the Signup wizard.
+    if (!isVerifiedFirebaseToken(decodedToken)) {
+      response.status(403).json({
+        error: "email_not_verified",
+        message: "Verify your email and complete registration before using VolunServe services.",
+      });
+      return;
+    }
     request.firebaseUser =
       decodedToken;
     next();
