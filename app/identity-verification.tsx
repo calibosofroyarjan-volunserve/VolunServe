@@ -34,6 +34,7 @@ import {
 } from "../lib/firebaseAuth";
 import {
   CapturedIdentityMedia,
+  checkIdentityEngineReady,
   getIdentityVerificationStatus,
   IdentityDocumentType,
   IdentityVerificationStatusResult,
@@ -359,7 +360,7 @@ export default function IdentityVerification() {
       if (!idDocument) {
         Alert.alert(
           "Government ID Required",
-          "Scan a clear government ID using your camera before starting the face scan.",
+          "Place the physical ID alone on a flat, well-lit surface. Keep all four corners and the printed portrait visible; avoid glare or other people in the frame.",
         );
         return;
       }
@@ -450,7 +451,7 @@ export default function IdentityVerification() {
         Alert.alert(
           "Unable to Capture Face",
           error?.message ||
-            "The face scan photo could not be captured.",
+            "The face scan photo could not be captured. Keep one face inside the oval, look straight ahead in even lighting, and retry.",
         );
       } finally {
         setPickingSelfie(false);
@@ -490,9 +491,12 @@ export default function IdentityVerification() {
       }
 
       try {
-        setStep(3);
+        // A readiness failure must not submit ID/selfie files or consume
+        // one of the Resident's three AI verification attempts.
         setSubmitting(true);
         setLocalMessage("");
+        await checkIdentityEngineReady();
+        setStep(3);
 
         const result =
           await submitIdentityVerification(
@@ -548,7 +552,7 @@ export default function IdentityVerification() {
         Alert.alert(
           "Verification Not Completed",
           error?.message ||
-            "Identity verification could not be completed.",
+            "Identity verification could not be completed. Your photos are still available for a retry; if the AI engine is warming up, wait and try again.",
         );
       } finally {
         setSubmitting(false);
