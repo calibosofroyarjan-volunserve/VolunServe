@@ -1,3 +1,4 @@
+import { liveUi as designUi } from "../../constants/volunserveLiveUi";
 import AdminReviewHero from "../../components/admin/AdminReviewHero";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { Href, Redirect, useRouter } from "expo-router";
@@ -196,8 +197,8 @@ const styles = StyleSheet.create({
   muted: { color: "#708278", fontSize: 13 },
   pageHeader: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 14, marginBottom: 26 },
   eyebrow: { fontSize: 10, fontWeight: "700", letterSpacing: 1.1, color: "#42816B", marginBottom: 8 },
-  pageTitle: { fontSize: 29, fontWeight: "700", letterSpacing: -0.4, color: "#163D30" },
-  subtitle: { fontSize: 13, lineHeight: 19, color: "#6F8276", marginTop: 5 },
+  pageTitle: { fontSize: designUi.type.page.fontSize, fontWeight: designUi.type.page.fontWeight, letterSpacing: -0.4, color: "#163D30", lineHeight: designUi.type.page.lineHeight,},
+  subtitle: { fontSize: designUi.type.body.fontSize, lineHeight: designUi.type.body.lineHeight, color: "#6F8276", marginTop: 5, fontWeight: designUi.type.body.fontWeight,},
   backButton: { flexDirection: "row", gap: 6, alignItems: "center", minHeight: 40, paddingHorizontal: 11, borderRadius: 8, borderWidth: 1, borderColor: "#D6E5DB" },
   backText: { color: "#23765F", fontSize: 12, fontWeight: "600" },
   identity: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 17, paddingVertical: 22, borderTopWidth: 1, borderBottomWidth: 1, borderColor: "#DCE8DF", marginBottom: 31 },
@@ -215,15 +216,15 @@ const styles = StyleSheet.create({
   primaryColumn: { flex: 1.12, minWidth: 0 },
   secondaryColumn: { flex: 1, minWidth: 0 },
   sectionTitleRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12 },
-  sectionTitle: { color: "#183E32", fontSize: 16, fontWeight: "700" },
-  sectionDescription: { color: "#75877D", fontSize: 12, lineHeight: 18, marginTop: 5, marginBottom: 13 },
+  sectionTitle: { color: "#183E32", fontSize: designUi.type.section.fontSize, fontWeight: designUi.type.section.fontWeight, lineHeight: designUi.type.section.lineHeight,},
+  sectionDescription: { color: "#75877D", fontSize: designUi.type.body.fontSize, lineHeight: designUi.type.body.lineHeight, marginTop: 5, marginBottom: 13, fontWeight: designUi.type.body.fontWeight,},
   editButton: { paddingHorizontal: 11, minHeight: 37, borderRadius: 8, borderWidth: 1, borderColor: "#D6E5DB", flexDirection: "row", alignItems: "center", gap: 7 },
   editText: { color: "#23765F", fontSize: 12, fontWeight: "700" },
   detail: { paddingVertical: 13, borderBottomWidth: 1, borderColor: "#E0E9E3" },
-  detailLabel: { color: "#778A7F", fontSize: 11.5, fontWeight: "500", marginBottom: 6 },
+  detailLabel: { color: "#778A7F", fontSize: designUi.type.label.fontSize, fontWeight: designUi.type.label.fontWeight, marginBottom: 6, lineHeight: designUi.type.label.lineHeight,},
   detailValue: { color: "#233F34", fontSize: 13, fontWeight: "600", lineHeight: 20 },
   form: { gap: 8, marginTop: 5 },
-  fieldLabel: { color: "#395F4F", fontSize: 12, fontWeight: "600", marginTop: 5 },
+  fieldLabel: { color: "#395F4F", fontSize: designUi.type.label.fontSize, fontWeight: designUi.type.label.fontWeight, marginTop: 5, lineHeight: designUi.type.label.lineHeight,},
   input: { minHeight: 44, borderRadius: 8, backgroundColor: "#FFFFFF", borderWidth: 1, borderColor: "#CCDCD2", paddingHorizontal: 13, color: "#1A3E31", fontSize: 13 },
   buttonRow: { flexDirection: "row", flexWrap: "wrap", gap: 10, marginTop: 14 },
   saveButton: { minHeight: 42, minWidth: 132, justifyContent: "center", alignItems: "center", paddingHorizontal: 15, backgroundColor: "#23765F", borderRadius: 8 },

@@ -1,3 +1,4 @@
+import { liveUi as designUi } from "../../constants/volunserveLiveUi";
 import { Ionicons } from "@expo/vector-icons";
 
 import {
@@ -606,16 +607,14 @@ const styles =
     title: {
       marginTop: 8,
       color: "#FFFFFF",
-      fontSize: 26,
-      fontWeight: "700",
-    },
+      fontSize: designUi.type.page.fontSize,
+      fontWeight: designUi.type.page.fontWeight, lineHeight: designUi.type.page.lineHeight,},
 
     subtitle: {
       marginTop: 5,
       maxWidth: 700,
       color: "#E6F7F1",
-      lineHeight: 20,
-    },
+      lineHeight: designUi.type.body.lineHeight, fontSize: designUi.type.body.fontSize, fontWeight: designUi.type.body.fontWeight,},
 
     notice: {
       marginTop: 15,
@@ -641,9 +640,8 @@ const styles =
     noticeText: {
       marginTop: 4,
       color: "#64748B",
-      lineHeight: 18,
-      fontSize: 12.5,
-    },
+      lineHeight: designUi.type.body.lineHeight,
+      fontSize: designUi.type.body.fontSize, fontWeight: designUi.type.body.fontWeight,},
 
     card: {
       marginTop: 15,
@@ -676,9 +674,8 @@ const styles =
 
     cardTitle: {
       color: "#173D32",
-      fontSize: 18,
-      fontWeight: "900",
-    },
+      fontSize: designUi.type.section.fontSize,
+      fontWeight: designUi.type.section.fontWeight, lineHeight: designUi.type.section.lineHeight,},
 
     cardSubtitle: {
       marginTop: 3,
@@ -691,9 +688,8 @@ const styles =
       marginTop: 13,
       marginBottom: 6,
       color: "#334155",
-      fontSize: 12,
-      fontWeight: "900",
-    },
+      fontSize: designUi.type.label.fontSize,
+      fontWeight: designUi.type.label.fontWeight, lineHeight: designUi.type.label.lineHeight,},
 
     input: {
       minHeight: 47,

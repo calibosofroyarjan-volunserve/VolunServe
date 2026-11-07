@@ -1,3 +1,4 @@
+import { liveUi as designUi } from "../../constants/volunserveLiveUi";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { collection, onSnapshot, type Timestamp } from "firebase/firestore";
@@ -162,8 +163,8 @@ const styles = StyleSheet.create({
   denied: { fontWeight: "700", color: "#475569", textAlign: "center" },
   header: { flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 12, marginBottom: 20 },
   eyebrow: { fontSize: 11, fontWeight: "800", color: "#087657", letterSpacing: 1 },
-  title: { fontSize: 27, fontWeight: "700", color: "#14392F", marginTop: 4 },
-  subtitle: { fontSize: 12, color: "#657A80", marginTop: 4, lineHeight: 18 },
+  title: { fontSize: designUi.type.page.fontSize, fontWeight: designUi.type.page.fontWeight, color: "#14392F", marginTop: 4, lineHeight: designUi.type.page.lineHeight,},
+  subtitle: { fontSize: designUi.type.body.fontSize, color: "#657A80", marginTop: 4, lineHeight: designUi.type.body.lineHeight, fontWeight: designUi.type.body.fontWeight,},
   back: { flexDirection: "row", alignItems: "center", gap: 8, borderRadius: 10, backgroundColor: "#E2F2ED", padding: 12 },
   backText: { color: "#086F55", fontWeight: "800" },
   summary: { flexDirection: "row", alignItems: "center", gap: 12, padding: 18, borderRadius: 16, backgroundColor: "#FFFFFF", borderWidth: 1, borderColor: "#DDEAE7", marginBottom: 14 },
@@ -173,7 +174,7 @@ const styles = StyleSheet.create({
   error: { backgroundColor: "#FEF2F2", padding: 12, marginBottom: 10, borderRadius: 9 },
   errorText: { color: "#B91C1C", fontSize: 12 },
   empty: { padding: 35, alignItems: "center", gap: 10 },
-  emptyText: { color: "#64748B", textAlign: "center" },
+  emptyText: { color: "#64748B", textAlign: "center", fontSize: designUi.type.body.fontSize, lineHeight: designUi.type.body.lineHeight, fontWeight: designUi.type.body.fontWeight,},
   event: { backgroundColor: "#FFFFFF", borderWidth: 1, borderColor: "#DDEAE7", borderRadius: 14, marginBottom: 10, padding: 18 },
   eventHeader: { flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between", gap: 10, marginBottom: 8 },
   action: { color: "#087657", fontSize: 14, fontWeight: "900", flexShrink: 1 },

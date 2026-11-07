@@ -1,3 +1,4 @@
+import { liveUi as designUi } from "../../constants/volunserveLiveUi";
 import AdminReviewHero from "../../components/admin/AdminReviewHero";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import * as ImagePicker from "expo-image-picker";
@@ -3414,8 +3415,8 @@ const styles = StyleSheet.create({
   },
   headerTextWrap: { flex: 1 },
   eyebrow: { color: "#0F766E", fontSize: 9, fontWeight: "900", letterSpacing: 1 },
-  title: { marginTop: 3, color: "#173D32", fontSize: 27, fontWeight: "700" },
-  subtitle: { marginTop: 5, maxWidth: 780, color: "#64748B", fontSize: 12, lineHeight: 18 },
+  title: { marginTop: 3, color: "#173D32", fontSize: designUi.type.page.fontSize, fontWeight: designUi.type.page.fontWeight, lineHeight: designUi.type.page.lineHeight,},
+  subtitle: { marginTop: 5, maxWidth: 780, color: "#64748B", fontSize: designUi.type.body.fontSize, lineHeight: designUi.type.body.lineHeight, fontWeight: designUi.type.body.fontWeight,},
   flowCard: {
     flexDirection: "row",
     flexWrap: "wrap",
@@ -3494,8 +3495,8 @@ const styles = StyleSheet.create({
   },
   sectionHeader: { marginTop: 24, marginBottom: 10 },
   sectionEyebrow: { color: "#0F766E", fontSize: 9, fontWeight: "900", letterSpacing: 0.8 },
-  sectionTitle: { marginTop: 2, color: "#0F172A", fontSize: 17, fontWeight: "900" },
-  helperText: { marginTop: 5, maxWidth: 780, color: "#64748B", fontSize: 10.5, lineHeight: 16 },
+  sectionTitle: { marginTop: 2, color: "#0F172A", fontSize: designUi.type.section.fontSize, fontWeight: designUi.type.section.fontWeight, lineHeight: designUi.type.section.lineHeight,},
+  helperText: { marginTop: 5, maxWidth: 780, color: "#64748B", fontSize: designUi.type.body.fontSize, lineHeight: designUi.type.body.lineHeight, fontWeight: designUi.type.body.fontWeight,},
   primaryButton: {
     minHeight: 42,
     flexDirection: "row",
@@ -3525,8 +3526,8 @@ const styles = StyleSheet.create({
     backgroundColor: "#0F766E",
   },
   stepBadgeText: { color: "#FFFFFF", fontSize: 11, fontWeight: "900" },
-  formTitle: { color: "#0F172A", fontSize: 13, fontWeight: "900" },
-  formSubtitle: { marginTop: 2, color: "#64748B", fontSize: 10, lineHeight: 15 },
+  formTitle: { color: "#0F172A", fontSize: designUi.type.section.fontSize, fontWeight: designUi.type.section.fontWeight, lineHeight: designUi.type.section.lineHeight,},
+  formSubtitle: { marginTop: 2, color: "#64748B", fontSize: designUi.type.body.fontSize, lineHeight: designUi.type.body.lineHeight, fontWeight: designUi.type.body.fontWeight,},
   formDivider: { height: 1, marginVertical: 18, backgroundColor: "#E2E8F0" },
   selectedSourceCard: {
     flexDirection: "row",
@@ -3549,7 +3550,7 @@ const styles = StyleSheet.create({
   },
   selectedSourceLabel: { color: "#0F766E", fontSize: 8.5, fontWeight: "900", textTransform: "uppercase" },
   selectedSourceTitle: { marginTop: 2, color: "#0F172A", fontSize: 13, fontWeight: "900" },
-  selectedSourceMeta: { marginTop: 2, color: "#64748B", fontSize: 9.5 },
+  selectedSourceMeta: { marginTop: 2, color: "#64748B", fontSize: designUi.type.meta.fontSize, lineHeight: designUi.type.meta.lineHeight, fontWeight: designUi.type.meta.fontWeight,},
   needChoiceList: { marginTop: 12, gap: 8 },
   needChoice: {
     flexDirection: "row",
