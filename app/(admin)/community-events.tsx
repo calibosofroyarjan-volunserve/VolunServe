@@ -1,3 +1,4 @@
+import { getSafeVolunServeBackendBaseUrl } from "../../lib/stagingBackendSafety";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { Redirect } from "expo-router";
 import {
@@ -934,7 +935,7 @@ export default function CommunityEventAdminScreen() {
                       try {
                         const authToken = await user?.getIdToken();
                         const response = await fetch(
-                          `https://volunserve.onrender.com/api/community-events/credentials/${encodeURIComponent(selectedProposal.id)}/access`,
+                          `${getSafeVolunServeBackendBaseUrl()}/api/community-events/credentials/${encodeURIComponent(selectedProposal.id)}/access`,
                           {headers:{Authorization:`Bearer ${authToken || ""}`}},
                         );
                         const body = await response.json().catch(() => null);
