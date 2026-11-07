@@ -9,10 +9,30 @@ service cloud.firestore {
         /databases/$(database)/documents/users/$(request.auth.uid)
       ).data;
     }
+    // Firebase Auth sign-in alone never grants Firestore permissions.
+    // Staff and community routes require a verified mailbox in the token.
+    function verifiedEmailSession() {
+      return signedIn()
+        && request.auth.token.get('email_verified', false) == true;
+    }
     // Reuse profile data inside role helpers instead of repeating get() expressions.
     function approved() {
       let p = signedIn() ? profile() : {};
-      return signedIn()
+      return verifiedEmailSession()
+        // Explicitly prohibit legacy Guest/unknown roles even if their old
+        // profile happens to contain status == approved.
+        && p.get('role', '') in [
+          'resident', 'volunteer', 'admin', 'superadmin', 'lgu_personnel'
+        ]
+        // Email-only Firebase Auth UIDs are NOT completed Resident profiles.
+        // Staff accounts retain their independent administrative login policy.
+        && (
+          p.get('role', '') in ['admin', 'superadmin', 'lgu_personnel']
+          || (
+            request.auth.token.get('email_verified', false) == true
+            && request.auth.token.get('email', '') == p.get('email', '')
+          )
+        )
         && (
           p.get('status', null) == 'approved'
           || (!('status' in p) && p.get('role', 'applicant') != 'applicant')
@@ -20,7 +40,7 @@ service cloud.firestore {
     }
     function isAdmin() {
       let p = signedIn() ? profile() : {};
-      return signedIn()
+      return verifiedEmailSession()
         && p.get('role', '') == 'admin'
         && p.get('status', 'approved') == 'approved'
         // A suspended LGU administrator must lose operational access immediately.
@@ -28,14 +48,14 @@ service cloud.firestore {
     }
     function isSuperAdmin() {
       let p = signedIn() ? profile() : {};
-      return signedIn()
+      return verifiedEmailSession()
         && p.get('role', '') == 'superadmin'
         && p.get('status', 'approved') == 'approved';
     }
     // One role test, not isAdmin() || isSuperAdmin().
     function isAdminOrSuperAdmin() {
       let p = signedIn() ? profile() : {};
-      return signedIn()
+      return verifiedEmailSession()
         && p.get('role', '') in ['admin', 'superadmin']
         && p.get('status', 'approved') == 'approved'
         && (p.get('role', '') == 'superadmin'
@@ -102,6 +122,26 @@ service cloud.firestore {
       }
       allow create: if signedIn()
         && request.auth.uid == uid
+        && request.auth.token.get("email_verified", false) == true
+        && request.auth.token.get("email", "") == request.resource.data.email
+        && !request.resource.data.email.matches(".*@en2ch[.]com")
+        && request.resource.data.keys().hasAll([
+          "uid", "email", "fullName", "firstName", "lastName",
+          "age", "phoneNumber", "barangay", "occupationCategory"
+        ])
+        && request.resource.data.firstName is string
+        && request.resource.data.firstName.size() >= 2
+        && request.resource.data.lastName is string
+        && request.resource.data.lastName.size() >= 2
+        && request.resource.data.age is int
+        && request.resource.data.age >= 18
+        && request.resource.data.age <= 100
+        && request.resource.data.phoneNumber is string
+        && request.resource.data.phoneNumber.size() >= 11
+        && request.resource.data.barangay is string
+        && request.resource.data.barangay.size() >= 2
+        && request.resource.data.occupationCategory is string
+        && request.resource.data.occupationCategory.size() >= 2
         && request.resource.data.uid == uid
         && request.resource.data.province in [
           'Bulacan',
