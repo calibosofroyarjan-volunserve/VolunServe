@@ -345,7 +345,7 @@ export default function WebLogin() {
 const styles = StyleSheet.create({
   root: {flex:1,backgroundColor:"#E8FBEF"},
   label: {position:"absolute",opacity:0,height:0,width:0, fontSize: designUi.type.label.fontSize, lineHeight: designUi.type.label.lineHeight, fontWeight: designUi.type.label.fontWeight,},
-  passwordLabel: {, fontSize: designUi.type.label.fontSize, lineHeight: designUi.type.label.lineHeight, fontWeight: designUi.type.label.fontWeight,},
+  passwordLabel: { fontSize: designUi.type.label.fontSize, lineHeight: designUi.type.label.lineHeight, fontWeight: designUi.type.label.fontWeight,},
   inputBox: {minHeight:57,flexDirection:"row",alignItems:"center",paddingHorizontal:17,
     gap:12,backgroundColor:"rgba(255,255,255,.84)",borderColor:"#C8E0D2",
     borderRadius:13,borderWidth:1,marginBottom:2},
