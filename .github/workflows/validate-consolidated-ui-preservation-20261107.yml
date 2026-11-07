@@ -1,0 +1,130 @@
+# Consolidated UI review of four existing VolunServe roles, NO PROD DEPLOY.
+# Source must be exact live descendant; all operational render/handlers remain from live.
+name: VolunServe — Consolidated Live-Preserve UI Review (NO DEPLOY)
+on:
+  push:
+    branches:
+      - review/live-preserve-integration-20261107
+    paths:
+      - '.github/workflows/validate-consolidated-ui-preservation-20261107.yml'
+      - 'app/**'
+      - 'components/**'
+      - 'constants/volunserveLiveUi.ts'
+
+permissions:
+  contents: read
+
+jobs:
+  protect-all-live-modules:
+    if: ${{ github.repository == 'calibosofroyarjan-volunserve/VolunServe' && github.ref == 'refs/heads/review/live-preserve-integration-20261107' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    env:
+      CI: 'true'
+      EXPO_NO_TELEMETRY: '1'
+      EXPO_PUBLIC_VOLUNSERVE_STAGING_MODE: '0'
+      VERIFIED_LIVE_SHA: e83f4a72c7cb733ff7bb888a6ac19bf3c0f076c4
+    steps:
+      - name: Checkout reviewed HEAD and exact previously verified LIVE source without submodules
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir source
+          git -C source init
+          git -C source remote add origin https://github.com/calibosofroyarjan-volunserve/VolunServe.git
+          git -C source fetch --no-recurse-submodules --depth=1 origin "$GITHUB_SHA"
+          git -C source checkout --detach FETCH_HEAD
+          git -C source fetch --no-recurse-submodules --depth=1 origin "$VERIFIED_LIVE_SHA"
+          test "$(git -C source rev-parse HEAD)" = "$GITHUB_SHA"
+
+      - name: Strict changed-file manifest plus exact live module logic preservation
+        working-directory: source
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          'use strict';
+          const assert=require('node:assert/strict');
+          const fs=require('node:fs');
+          const cp=require('node:child_process');
+          const live=process.env.VERIFIED_LIVE_SHA;
+          const git=(...args)=>cp.execFileSync('git',args,{encoding:'utf8'}).trim();
+          const files=git('diff','--name-only',live,'HEAD').split('\n').filter(Boolean).sort();
+          const expected=[".github/workflows/validate-consolidated-ui-preservation-20261107.yml",".github/workflows/validate-live-preserve-first-batch-20261107.yml","app/(admin)/_layout.tsx","app/(admin)/admin-cases.tsx","app/(admin)/assistance-requests.tsx","app/(admin)/community-events.tsx","app/(admin)/create-announcement.tsx","app/(admin)/identity-reviews.tsx","app/(superadmin)/_layout.tsx","app/(superadmin)/admin-accounts.tsx","app/(superadmin)/admin-logs.tsx","app/(superadmin)/all-records.tsx","app/(superadmin)/index.tsx","app/(superadmin)/system-settings.tsx","app/(tabs)/_layout.tsx","app/(tabs)/community-events.tsx","app/(tabs)/donation.tsx","app/(tabs)/resident.tsx","app/(tabs)/volunteer-application.tsx","app/(tabs)/volunteer.tsx","app/(tabs)/volunteer.web.tsx","components/admin/AdminReviewHero.tsx","components/home/Home.web.tsx","components/ui/AppDialogHost.tsx","components/ui/ListPagination.tsx","constants/volunserveLiveUi.ts"];
+          assert.deepEqual(files,expected,'BLOCKED: unapproved extra/missing file compared with LIVE');
+          assert(!/(^|\n)[DRCU]\s/m.test(git('diff','--name-status',live,'HEAD')),
+            'BLOCKED: source delete/rename/copy');
+          const liveFile=path=>cp.execFileSync('git',['show',live+':'+path],{encoding:'utf8'});
+          for(const p of ["firebase.json","firestore.rules","storage.rules","functions/index.js","backend/server.js","lib/firebase.ts","lib/identityVerification.ts","app/login.tsx","app/login.web.tsx","app/signup.tsx","app/signup.web.tsx","app/(tabs)/certificate.tsx","app/(tabs)/notifications.tsx","app/(tabs)/profile.tsx","app/(tabs)/my-cases.tsx","app/(admin)/account-approvals.tsx","app/(admin)/command-center.tsx","components/home/Home.native.tsx"]) {
+            assert.equal(fs.readFileSync(p,'utf8'),liveFile(p),'BLOCKED: critical live source changed: '+p);
+          }
+          const hero='components/admin/AdminReviewHero.tsx';
+          const oldHero=liveFile(hero);
+          const newHero=fs.readFileSync(hero,'utf8');
+          assert.equal(oldHero.replace('titleCompact: { fontSize: 21, lineHeight: 27 }',
+            'titleCompact: { fontSize: 21, lineHeight: 28 }'),newHero,
+            'BLOCKED: live Admin mint hero structure changed');
+          const tokenFile=fs.readFileSync('constants/volunserveLiveUi.ts','utf8');
+          assert(tokenFile.includes('export const liveUi')&&tokenFile.includes('minTap: 44'));
+          const paths=["app/(admin)/_layout.tsx","app/(admin)/admin-cases.tsx","app/(admin)/assistance-requests.tsx","app/(admin)/community-events.tsx","app/(admin)/create-announcement.tsx","app/(admin)/identity-reviews.tsx","app/(superadmin)/_layout.tsx","app/(superadmin)/admin-accounts.tsx","app/(superadmin)/admin-logs.tsx","app/(superadmin)/all-records.tsx","app/(superadmin)/index.tsx","app/(superadmin)/system-settings.tsx","app/(tabs)/_layout.tsx","app/(tabs)/community-events.tsx","app/(tabs)/donation.tsx","app/(tabs)/resident.tsx","app/(tabs)/volunteer-application.tsx","app/(tabs)/volunteer.tsx","app/(tabs)/volunteer.web.tsx","components/home/Home.web.tsx","components/ui/AppDialogHost.tsx","components/ui/ListPagination.tsx"];
+          for(const p of paths){
+            const old=liveFile(p),curr=fs.readFileSync(p,'utf8');
+            const marker='StyleSheet.create({';
+            const atOld=old.indexOf(marker),atNew=curr.indexOf(marker);
+            assert(atOld>=0&&atNew>=0,'BLOCKED: UI stylesheet missing: '+p);
+            const operational=curr.slice(0,atNew).replace(
+              /^import \{ liveUi as ui \} from "\.\.\/\.\.\/constants\/volunserveLiveUi";\r?\n/m,'');
+            assert.equal(operational,old.slice(0,atOld),
+              'BLOCKED: live screens, handlers, routes, API logic or JSX changed: '+p);
+            const styleKeys=s=>new Set([...s.matchAll(/^  ([A-Za-z0-9_]+):/gm)].map(m=>m[1]));
+            const oldStyleKeys=styleKeys(old.slice(atOld));
+            const newStyleKeys=styleKeys(curr.slice(atNew));
+            const references=[...curr.slice(0,atNew).matchAll(/styles\.([A-Za-z0-9_]+)/g)].map(m=>m[1]);
+            for(const key of oldStyleKeys){
+              if(references.includes(key)) assert(newStyleKeys.has(key),
+                'BLOCKED: removed LIVE style still used by JSX: '+p+' :: '+key);
+            }
+            assert(!/from ["']\.\.\/\.\.\/lib\/stagingBackendSafety["']/.test(curr),
+              'BLOCKED: staging backend helper slipped into live-preserve review: '+p);
+            console.log('PASS: exact live behavior/JSX retained; styles only',p);
+          }
+          console.log('PASS: all LIVE operational code and protected modules preserved in source.');
+          NODE
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: source/package-lock.json
+      - name: Install locked dependencies
+        working-directory: source
+        run: npm ci --no-audit --no-fund
+
+      - name: Existing Admin, Resident, Volunteer, Auth and UI regression tests
+        working-directory: source
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/test-admin-navigation-contract.cjs
+          node scripts/test-admin-response-workspace-ux.cjs
+          node scripts/test-admin-compact-workspace-ux.cjs
+          node scripts/test-admin-people-verification-premium-ui.cjs
+          node scripts/test-lgu-admin-global-ui-pagination.cjs
+          node scripts/test-portal-resident-volunteer-ui-flow.cjs
+          node scripts/test-guest-readonly-preview.cjs
+          node --test --test-name-pattern='Top-right account dropdown|Profile retains secure progress|Home Certificates shortcuts' scripts/test-profile-certificates-account-menu.cjs
+
+      - name: TypeScript complete app check (NO DEPLOY)
+        working-directory: source
+        run: npx tsc --noEmit --incremental false --pretty false
+      - name: Expo production-mode web compile on runner only (NO DEPLOY)
+        working-directory: source
+        run: npx expo export --platform web --clear
+      - name: Confirm compiled web artifact and zero deployment actions
+        working-directory: source
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f dist/index.html
+          echo 'PASS: compiled four-portal review only; production and Firebase data untouched.'
+          echo 'NO deploy credentials, hosting, Render, or data updates in this workflow.'
