@@ -1,3 +1,4 @@
+import { getSafeVolunServeBackendBaseUrl } from "../../lib/stagingBackendSafety";
 import AdminReviewHero from "../../components/admin/AdminReviewHero";
 import { useLocalSearchParams } from "expo-router";
 import { LguPersonnelPanel } from "./lgu-members";
@@ -6,7 +7,7 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import ListPagination from "../../components/ui/ListPagination";
 import { useUserSession } from "../../lib/useUserSession";
-const BACKEND_URL = "https://volunserve.onrender.com";
+const BACKEND_URL = getSafeVolunServeBackendBaseUrl();
 type Personnel = {
   uid: string;
   fullName: string;
