@@ -1799,10 +1799,10 @@ const styles = StyleSheet.create({
     gap: 13,
     paddingHorizontal: 15,
     paddingVertical: 13,
-    borderRadius: 14,
+    borderRadius: ui.radius.card,
     borderWidth: 1,
-    borderColor: "#e1e8ee",
-    backgroundColor: "#ffffff",
+    borderColor: ui.color.border,
+    backgroundColor: ui.color.surface,
   },
   statIcon: {
     width: 45,
