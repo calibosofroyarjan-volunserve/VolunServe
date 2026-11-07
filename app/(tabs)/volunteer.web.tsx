@@ -797,10 +797,10 @@ export default function VolunteerTasksWeb() {
               <Ionicons name="people" size={22} color="#087F74" />
             </View>
             <View style={styles.mobileTaskTitleContainer}>
-              <VolunServeText role="pageTitle" style={styles.mobileTaskTitle}>Emergency Tasks</VolunServeText>
+              <VolunServeText variant="pageTitle" style={styles.mobileTaskTitle}>Emergency Tasks</VolunServeText>
             </View>
           </View>
-          <VolunServeText role="body" color="muted" style={styles.mobileTaskDescription}>
+          <VolunServeText variant="body" color="muted" style={styles.mobileTaskDescription}>
             Optional volunteer support assignments coordinated by LGU/Admin.
           </VolunServeText>
           <TouchableOpacity
@@ -822,8 +822,8 @@ export default function VolunteerTasksWeb() {
                 <Ionicons name="people" size={24} color="#078F82" />
               </View>
               <View style={{ flex: 1, minWidth: 0 }}>
-                <VolunServeText role="pageTitle" style={styles.title}>Emergency Tasks</VolunServeText>
-                <VolunServeText role="body" color="muted" style={styles.subtitle}>
+                <VolunServeText variant="pageTitle" style={styles.title}>Emergency Tasks</VolunServeText>
+                <VolunServeText variant="body" color="muted" style={styles.subtitle}>
                   Optional Volunteer support assignments coordinated by LGU/Admin.
                 </VolunServeText>
               </View>
