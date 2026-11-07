@@ -241,9 +241,14 @@ function getAllowedOrigins() {
     .split(",")
     .map((value) => value.trim())
     .filter(Boolean);
+  // Isolated identity testing UI is allowed ONLY when staging is explicit.
+  const stagingTestOrigins = process.env.VOLUNSERVE_DEPLOYMENT_ENV === "staging"
+    ? ["https://volunserve-identity-test-staging.onrender.com"]
+    : [];
   return new Set([
     ...DEFAULT_ALLOWED_ORIGINS,
     ...configured,
+    ...stagingTestOrigins,
   ]);
 }
 const allowedOrigins =
