@@ -1,9 +1,9 @@
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
-import React, { useEffect, useState } from "react";
+import React, { useState } from "react";
 import {
   Image, Pressable, ScrollView, StyleSheet, Text, TextInput,
-  useWindowDimensions, View,
+  useWindowDimensions, View, type DimensionValue,
 } from "react-native";
 import VolunServeButton from "../ui/VolunServeButton";
 import VolunServeField from "../ui/VolunServeField";
@@ -95,7 +95,7 @@ function Surface({ title, subtitle, icon, children }: {
     {children}
   </View>;
 }
-function Metric({ value, label, icon, width }: { value: string; label: string; icon: Icon; width: number }) {
+function Metric({ value, label, icon, width }: { value: string; label: string; icon: Icon; width: DimensionValue }) {
   return <View style={[s.metric,{width}]}>
     <IconTile name={icon}/>
     <Text style={s.metricValue}>{value}</Text>
@@ -133,7 +133,7 @@ export default function DesignReviewWorkspace() {
     setFormError("");setFormTitle("");setFormMessage("");setDialog(false);
   };
   const pickRole=(r:Role)=>{setRole(r);navTo("home")};
-  const gridWidth=mobile||small? "100%" : "31.5%";
+  const gridWidth: DimensionValue=mobile? "100%" : "31.5%";
   const filtered=sampleRows.filter(x=>
     (filter==="All"||x.status===filter) &&
     (x.title+" "+x.person).toLowerCase().includes(search.toLowerCase())
@@ -228,9 +228,9 @@ export default function DesignReviewWorkspace() {
           </Pressable>
         </View>:null}
         <View style={s.metricRow}>
-          <Metric width={gridWidth as number} icon="layers-outline" value={role==="admin"?"24":role==="superadmin"?"08":"06"} label="Sample records"/>
-          <Metric width={gridWidth as number} icon="time-outline" value={role==="volunteer"?"03":"04"} label="Pending items"/>
-          <Metric width={gridWidth as number} icon="checkmark-circle-outline" value="12" label="Completed actions"/>
+          <Metric width={gridWidth} icon="layers-outline" value={role==="admin"?"24":role==="superadmin"?"08":"06"} label="Sample records"/>
+          <Metric width={gridWidth} icon="time-outline" value={role==="volunteer"?"03":"04"} label="Pending items"/>
+          <Metric width={gridWidth} icon="checkmark-circle-outline" value="12" label="Completed actions"/>
         </View>
         {selected.key==="home"?<>
           <View style={[s.twoColumns,mobile&&s.stacked]}>
@@ -238,7 +238,7 @@ export default function DesignReviewWorkspace() {
               <Surface title="Activity overview" subtitle="Illustrative weekly volume" icon="stats-chart-outline">
                 <View style={s.chart}>
                   {bars.map((h,i)=><View key={i} style={s.chartCol}>
-                    <View style={[s.chartBar,{height:h+"%"}]}/>
+                    <View style={[s.chartBar,{height:(h+"%") as DimensionValue}]}/>
                     <Text style={s.chartLabel}>{["M","T","W","T","F","S","S"][i]}</Text>
                   </View>)}
                 </View>
