@@ -7,4 +7,15 @@ for(const required of ["volunserve-auth-staging","volunserve-backend-staging.onr
 for(const forbidden of ["https://volunserve.onrender.com","volunserve-3aa5b","https://volunserve-identity-ai.onrender.com","https://volunserve.com"]){
  if(html.includes(forbidden))throw Error("Production endpoint in staging page: "+forbidden);
 }
-console.log("Staging-only identity website checks passed.");
+for(const f of ["identity-staging-web/camera.js","identity-staging-web/camera-metrics.mjs"]){
+ if(!fs.existsSync(f))throw Error("Missing live camera module: "+f);
+}
+if(!html.includes('<script type="module" src="./camera.js"></script>'))throw Error("Staging camera module not loaded.");
+const camera=fs.readFileSync("identity-staging-web/camera.js","utf8");
+for(const key of ["getUserMedia","detectForVideo","capture","showModal","MediaPipe".toLowerCase()]){
+ if(!camera.toLowerCase().includes(key.toLowerCase()))throw Error("Camera path missing: "+key);
+}
+for(const forbidden of ["https://volunserve.onrender.com","volunserve-3aa5b","https://volunserve-identity-ai.onrender.com","https://volunserve.com"]){
+ if(camera.includes(forbidden))throw Error("Production connection found in camera module: "+forbidden);
+}
+console.log("Staging-only camera and identity integration checks passed.");
