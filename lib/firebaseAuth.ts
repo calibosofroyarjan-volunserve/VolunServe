@@ -242,7 +242,8 @@ export interface SignupData {
 export const isApprovedProfile = (
   profile: UserProfile | null | undefined
 ) => {
-  if (!profile) {
+  if (!profile || !["resident", "volunteer", "admin", "superadmin", "lgu_personnel"].includes(profile.role)) {
+    // A Guest preview or unknown role is never a completed registered account.
     return false;
   }
   return (
@@ -667,6 +668,10 @@ export const loginUser = async (
     }
     const profile =
       profileSnapshot.data() as UserProfile;
+    if (profile.role === "guest") {
+      await signOut(auth);
+      throw new Error("Guest Preview has no registered account. Complete a new Resident registration, or ask an administrator to migrate a legacy Guest record.");
+    }
     // Do not disable historic privileged staff accounts through a community
     // domain policy. Existing disposable-email Resident/Volunteer accounts
     // must migrate to a permanent address before signing in again.
@@ -735,6 +740,9 @@ export const getUserProfile = async (
     throw new Error("Profile not found.");
   }
   const p = snapshot.data() as UserProfile;
+  if (p.role === "guest") {
+    throw new Error("Guest Preview is not a registered account. Use Resident signup, or contact an administrator about a legacy Guest record.");
+  }
   const currentUser = auth.currentUser;
   if (currentUser?.uid === uid &&
       (p.role === "resident" || p.role === "volunteer")) {
