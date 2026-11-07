@@ -2,16 +2,16 @@ import React from "react";
 import { Platform, Text, type TextProps, type TextStyle, type StyleProp } from "react-native";
 import { volunserveUi as ui } from "../../constants/volunserveUi";
 
-export type VolunServeTextRole = keyof typeof ui.typography;
+export type VolunServeTextRole = "pageTitle" | "sectionTitle" | "cardTitle" | "body" | "caption" | "label";
 type Props = TextProps & {
-  role?: VolunServeTextRole;
+  variant?: VolunServeTextRole;
   color?: "primary" | "default" | "muted" | "danger";
 };
 const webFont = Platform.OS === "web" ? ui.typography.webStack : undefined;
 
 /** One controlled type scale across Admin, Volunteer and Resident UI. */
 export default function VolunServeText({
-  role = "body",
+  variant = "body",
   color = "default",
   style,
   children,
@@ -23,7 +23,7 @@ export default function VolunServeText({
     muted: ui.color.muted,
     danger: ui.color.danger,
   };
-  const typography = ui.typography[role];
+  const typography = ui.typography[variant];
   const foundation: TextStyle = {
     fontFamily: webFont,
     fontSize: typography.fontSize,
