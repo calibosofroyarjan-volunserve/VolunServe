@@ -609,7 +609,7 @@ const styles =
     overviewColumnsStack: { flexDirection: "column", gap: 10 },
     overviewPrimary: { flex: 1, minWidth: 0, padding: 18, borderRadius: 16, borderWidth: 1, borderColor: "#DFE9E1", backgroundColor: "#FFFFFF" },
     overviewSecondary: { flex: 1, minWidth: 0 },
-    overviewFullWidth: { flex: 0, width: "100%" },
+    overviewFullWidth: { flexGrow: 0, flexShrink: 0, flexBasis: "auto", width: "100%" },
     overviewSectionHeader: { marginBottom: 10 },
     overviewSectionSubtitle: { color: "#6C8076", fontSize: 11.5, lineHeight: 17, marginTop: 3 },
     overviewAction: {
