@@ -39,7 +39,8 @@ const DEFAULT_ALLOWED_ORIGINS = [
   "http\://127.0.0.1:19006",
   "http\://127.0.0.1:3000",
 ];
-const IDENTITY_UPLOAD_LIMIT = "20mb";
+// Max 10MB front + 10MB back + 10MB selfie, plus multipart overhead.
+const IDENTITY_UPLOAD_LIMIT = "32mb";
 const IDENTITY_RETRY_DELAY_MS = 8000;
 const MAX_IDENTITY_AI_ATTEMPTS = 3;
 const IDENTITY_PROCESSING_LEASE_MS = 3 * 60 * 1000;
@@ -712,6 +713,9 @@ function normalizeIdDocumentScreening(value) {
     "document_type_not_recognized",
     "multiple_document_type_signals",
     "ocr_unavailable",
+    "document_back_type_conflict",
+    "document_front_type_inconclusive",
+    "document_back_ocr_inconclusive",
   ];
   const declared = String(value?.declaredIdType || "");
   const detected = String(value?.detectedIdType || "");
@@ -724,6 +728,8 @@ function normalizeIdDocumentScreening(value) {
     authenticityVerified: false, // Keyword OCR is NOT an issuance registry.
     livenessVerified: false, // Still image is NOT a liveness proof.
     manualReviewRequired: true,
+    backSideProvided: value?.backSideProvided === true,
+    backSideScreened: value?.backSideScreened === true,
     warningCodes: Array.isArray(value?.warningCodes)
       ? value.warningCodes.filter(code => warnings.includes(code)).slice(0, 4)
       : ["ocr_unavailable"],
