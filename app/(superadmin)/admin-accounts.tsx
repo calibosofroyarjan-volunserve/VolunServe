@@ -1828,7 +1828,7 @@ export default function AdminAccounts() {
 const styles =
   StyleSheet.create({
 
-    directoryPanel:{backgroundColor:"#FFFFFF",borderRadius:12,borderWidth:1,borderColor:"#DCE9E1",overflow:"hidden"},
+    directoryPanel:{backgroundColor:"#FFFFFF",borderRadius: 18,borderWidth:1,borderColor:"#DCE9E1",overflow:"hidden"},
     dirHeading:{flexDirection:"row",alignItems:"center",gap:12,padding:18},
     dirTitle:{fontSize:16,fontWeight:"800",color:"#173D32"},
     dirNote:{color:"#6A8579",fontSize:11,marginTop:3,lineHeight:17},
@@ -1968,12 +1968,11 @@ const styles =
     statCard: {
       flexGrow: 1,
       minWidth: 140,
-      backgroundColor: "transparent",
-      borderRadius: 0,
+      backgroundColor: "#FFFFFF",
+      borderRadius: 15,
       borderBottomWidth: 1,
       borderColor: "#E2E8F0",
-      padding: 16,
-    },
+      padding: 16, borderWidth: 1,},
 
     statIcon: {
       width: 42,
@@ -2028,8 +2027,7 @@ const styles =
       backgroundColor:
         "#FFFFFF",
       borderWidth: 1,
-      borderColor: "#CBD5E1",
-    },
+      borderColor: "#CBD5E1", minHeight: 44,},
 
     filterButtonActive: {
       backgroundColor:
@@ -2050,12 +2048,11 @@ const styles =
     adminCard: {
       backgroundColor:
         "#FFFFFF",
-      borderRadius: 3,
+      borderRadius: 15,
       borderBottomWidth: 1,
       borderColor: "#E2E8F0",
       padding: 17,
-      marginBottom: 8,
-    },
+      marginBottom: 10, borderWidth: 1,},
 
     adminTop: {
       flexDirection: "row",
