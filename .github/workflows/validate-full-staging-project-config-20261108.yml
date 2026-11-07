@@ -1,0 +1,61 @@
+# No deployment or connected cloud credentials. Validates the user's staging project identity offline.
+name: VolunServe — Verify Full Staging Project Isolation (NO DEPLOY)
+on:
+  push:
+    branches:
+      - test/full-firebase-staging-config-20261108
+    paths:
+      - '.github/workflows/validate-full-staging-project-config-20261108.yml'
+      - 'scripts/check-full-staging-config-20261108.cjs'
+      - 'docs/FULL_STAGING_PROJECT_CONNECTION_READINESS_20261108.md'
+permissions:
+  contents: read
+jobs:
+  safe-project-identity:
+    if: ${{ github.repository == 'calibosofroyarjan-volunserve/VolunServe' && github.ref == 'refs/heads/test/full-firebase-staging-config-20261108' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    env:
+      APPROVED_UI_SHA: 4d0950a8f8e1327c596fe91c3c94b98df2cd4357
+    steps:
+      - name: Checkout exact no-deploy staging review branch without submodules
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir source
+          git -C source init
+          git -C source remote add origin https://github.com/calibosofroyarjan-volunserve/VolunServe.git
+          git -C source fetch --no-recurse-submodules --depth=1 origin "$GITHUB_SHA"
+          git -C source checkout --detach FETCH_HEAD
+          git -C source fetch --no-recurse-submodules --depth=1 origin "$APPROVED_UI_SHA"
+          test "$(git -C source rev-parse HEAD)" = "$GITHUB_SHA"
+      - name: Exact three-file add-only manifest, no app source or rules change
+        working-directory: source
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          'use strict';
+          const assert=require('node:assert/strict');
+          const cp=require('node:child_process');
+          const got=cp.execFileSync('git',['diff','--name-status',
+            process.env.APPROVED_UI_SHA,'HEAD'],{encoding:'utf8'}).trim().split('\n').sort();
+          const wanted=[
+            'A\t.github/workflows/validate-full-staging-project-config-20261108.yml',
+            'A\tdocs/FULL_STAGING_PROJECT_CONNECTION_READINESS_20261108.md',
+            'A\tscripts/check-full-staging-config-20261108.cjs'
+          ].sort();
+          assert.deepEqual(got,wanted,
+            'BLOCKED: Application files, Firebase Rules, backend or live code changed in staging-only config branch');
+          console.log('PASS: exactly three staging config documentation/QA files added, no app source modified.');
+          NODE
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify registered staging Firebase project and reject production env values (OFFLINE)
+        working-directory: source
+        run: node scripts/check-full-staging-config-20261108.cjs --self-test
+      - name: Completion does not enable hosted staging or live deployment
+        run: |
+          echo 'PASS offline Firebase Full Staging contract only.'
+          echo 'Firestore still deny-all; Storage Blaze unavailable; app runtime not yet wired.'
