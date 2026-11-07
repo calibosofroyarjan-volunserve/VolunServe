@@ -18,6 +18,9 @@ function load(source, imports = {}, env = process.env) {
 const read = file => fs.readFileSync(file,"utf8");
 const current = read("lib/firebaseAuth.ts");
 const baseline = cp.execFileSync("git",["show","e7c2cc8:lib/firebaseAuth.ts"],{encoding:"utf8"});
+const emailPolicy = load(read("lib/registrationEmailPolicy.ts"), {
+  "./disposableEmailDomains.generated": load(read("lib/disposableEmailDomains.generated.ts")),
+});
 const data = {firstName:"Maria",lastName:"Santos",middleName:"",email:"resident@example.com",password:"Password1!",age:25,phoneNumber:"+639171234567",region:"Region III ? Central Luzon",province:"Bulacan",city:"City of San Jose del Monte",barangay:"Muzon",occupationCategory:"Student",occupationSpecialization:"College",occupationOther:"",role:"volunteer"};
 function harness(source, enabled, options = {}) {
   const calls = [];
@@ -39,7 +42,7 @@ function harness(source, enabled, options = {}) {
     linkWithCredential:async()=>{calls.push("link");if(options.sdkLinkError)throw Object.assign(new Error("Link rejected"),{code:options.sdkLinkError});user.providerData.push({providerId:"password"});return {user};},
   };
   const store = {doc:(_,collection,uid)=>({collection,uid}),getDoc:async()=>{calls.push("read");return snapshot();},serverTimestamp:()=>"timestamp",writeBatch:()=>({set:(_,value)=>{saved=value;},commit:async()=>{calls.push("commit");profile=saved;}}),runTransaction:async(_,fn)=>{calls.push("transaction");await fn({get:async()=>options.raceExisting ? {exists:()=>true} : snapshot(),set:(_,value)=>{saved=value;profile=value;}});}};
-  const imports = {"./firebase":{auth,db:{}},"./signupFeature":{EMAIL_FIRST_SIGNUP_ENABLED:enabled},"firebase/auth":authSdk,"firebase/firestore":store,"react-native":{Platform:{OS:"web"}},"./androidNativePush":{disableAndroidPhoneAlerts:async()=>{}}};
+  const imports = {"./registrationEmailPolicy":emailPolicy,"./firebase":{auth,db:{}},"./signupFeature":{EMAIL_FIRST_SIGNUP_ENABLED:enabled},"firebase/auth":authSdk,"firebase/firestore":store,"react-native":{Platform:{OS:"web"}},"./androidNativePush":{disableAndroidPhoneAlerts:async()=>{}}};
   imports["./signupRegistration"]=load(read("lib/signupRegistration.ts"),imports);
   return {registration:imports["./signupRegistration"],api:load(source,imports),link:load(read("lib/emailFirstSignupAuth.ts"),imports),calls,user,auth,profile:()=>profile};
 }
@@ -158,8 +161,36 @@ function harness(source, enabled, options = {}) {
     const generated=load(read("lib/disposableEmailDomains.generated.ts"));
     const policy=load(read("lib/registrationEmailPolicy.ts"),{"./disposableEmailDomains.generated":generated});
     for(const value of ["person@yahoo.com.ph","person@outlook.com","person@department.gov.ph","person@legitimate.co"]) assert.equal(policy.getRegistrationEmailError(value),null);
-    for(const value of ["","bad@gmail..com","bad@gmail.con","bad@sub.mailinator.com"]) assert.equal(typeof policy.getRegistrationEmailError(value),"string");
+    for(const value of ["","bad@gmail..com","bad@gmail.con","bad@sub.mailinator.com","person@en2ch.com"]) assert.equal(typeof policy.getRegistrationEmailError(value),"string");
     for(const [wrong,right] of Object.entries(policy.KNOWN_PROVIDER_TYPO_CORRECTIONS)) assert(policy.getRegistrationEmailError("person@"+wrong).includes(right));
+  });
+  await check("disposable domain rejects Firebase UID before creation and profile write",async()=>{
+    const h=harness(current,true,{noUser:true});
+    await assert.rejects(h.registration.authenticateEmailSignup("person@en2ch.com","Password1!",false,true),/Temporary email/);
+    assert(!h.calls.includes("create")); assert(!h.calls.includes("transaction"));
+    const verified=harness(current,true);
+    await assert.rejects(verified.api.signUpUser({...data,email:"person@en2ch.com",authProvider:"verified_email"}),/Temporary email/);
+    assert(!verified.calls.includes("transaction"));
+  });
+  await check("known temporary email Resident cannot access login; staff remains compatible",async()=>{
+    const resident=harness(current,true,{existing:{role:"resident",status:"approved"}});
+    resident.user.email="person@en2ch.com";
+    await assert.rejects(resident.api.loginUser(resident.user.email,"Password1!"),/Temporary email/);
+    assert(resident.calls.includes("signout"));
+    const staff=harness(current,true,{existing:{role:"admin",status:"approved"}});
+    staff.user.email="person@en2ch.com";
+    await staff.api.loginUser(staff.user.email,"Password1!");
+    assert(!staff.calls.includes("signout"));
+  });
+  await check("guest mode clears Firebase session, and resident profile Rules enforce verification + details",()=>{
+    for(const file of ["app/login.tsx","app/login.web.tsx"]) {
+      const screen=read(file);
+      assert(screen.includes("signOut(auth).then(() => router.replace(\"/public\"))"));
+    }
+    const rules=read("firestore.rules");
+    assert(rules.includes('request.auth.token.get("email_verified", false) == true'));
+    assert(rules.includes('request.auth.token.get("email", "") == request.resource.data.email'));
+    assert(rules.includes('request.resource.data.keys().hasAll(['));
   });
   await check("native Google signup owns OAuth and never bounces pending users to Login",()=>{
     assert(read("lib/useSignupGoogle.ts").includes("signInWithCredential"));
