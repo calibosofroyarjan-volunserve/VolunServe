@@ -590,18 +590,18 @@ const styles =
 
     container: {
       width: "100%",
-      maxWidth: 1000,
+      maxWidth: 1180,
       alignSelf: "center",
       flexGrow: 1,
-      padding: 24,
-      paddingBottom: 60,
-      backgroundColor: "#F6F8F7",
+      padding: 28,
+      paddingBottom: 70,
+      backgroundColor: "#F5F8F6",
     },
 
     hero: {
-      padding: 21,
-      borderRadius: 10,
-      backgroundColor: "#078F82",
+      padding: 27,
+      borderRadius: 20,
+      backgroundColor: "#0A7759",
     },
 
     title: {
@@ -644,13 +644,18 @@ const styles =
       fontSize: designUi.type.body.fontSize, fontWeight: designUi.type.body.fontWeight,},
 
     card: {
-      marginTop: 15,
-      padding: 17,
-      borderRadius: 17,
+      marginTop: 18,
+      padding: 24,
+      borderRadius: 19,
       backgroundColor: "#FFFFFF",
       borderWidth: 1,
-      borderColor: "#E2E8F0",
-    },
+      borderColor: "#DCE8DF",
+    ,
+    shadowColor: "#153C2F",
+    shadowOpacity: 0.045,
+    shadowRadius: 13,
+    shadowOffset: {width:0,height:4},
+    elevation: 1},
 
     cardHeader: {
       flexDirection: "row",
@@ -692,13 +697,13 @@ const styles =
       fontWeight: designUi.type.label.fontWeight, lineHeight: designUi.type.label.lineHeight,},
 
     input: {
-      minHeight: 47,
+      minHeight: 49,
       borderWidth: 1,
-      borderColor: "#CBD5E1",
-      borderRadius: 11,
-      paddingHorizontal: 12,
+      borderColor: "#C9DDD0",
+      borderRadius: 12,
+      paddingHorizontal: 15,
       color: "#173D32",
-      backgroundColor: "#F8FAFC",
+      backgroundColor: "#FFFFFF",
       outlineStyle: "none",
     } as any,
 
@@ -739,7 +744,7 @@ const styles =
       justifyContent: "center",
       flexDirection: "row",
       gap: 8,
-      backgroundColor: "#078F82",
+      backgroundColor: "#0A7759",
     },
 
     buttonText: {

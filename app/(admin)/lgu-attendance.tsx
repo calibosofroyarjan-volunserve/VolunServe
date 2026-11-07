@@ -387,7 +387,7 @@ export function LguAttendancePanel() {
 }
 const styles = StyleSheet.create({
   page: { flex: 1, backgroundColor: "#F6F8F7" },
-  content: { padding: 24, paddingBottom: 40 },
+  content: { padding: 27, paddingBottom: 54},
   header: { flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", gap: 20, marginBottom: 18 },
   headerCopy: { flex: 1, minWidth: 0 },
   eyebrow: { color: "#0F766E", fontSize: 10, fontWeight: "900", letterSpacing: 1.2 },
@@ -396,7 +396,7 @@ const styles = StyleSheet.create({
   refreshButton: { minHeight: 40, paddingHorizontal: 13, borderRadius: 9, borderWidth: 1, borderColor: "#CBD5E1", backgroundColor: "#FFFFFF", flexDirection: "row", alignItems: "center", gap: 6 },
   refreshText: { color: "#334155", fontSize: 12, fontWeight: "800" },
   statsRow: { flexDirection: "row", gap: 10, marginBottom: 14 },
-  statCard: { flex: 1, minHeight: 78, paddingHorizontal: 16, paddingVertical: 13, borderRadius: 12, borderWidth: 1, borderColor: "#E2E8F0", backgroundColor: "#FFFFFF" },
+  statCard: { flex: 1, minHeight: 90, paddingHorizontal: 19, paddingVertical: 16, borderRadius: 17, borderWidth: 1, borderColor: "#DDE8E0", backgroundColor: "#FFFFFF" },
   statValue: { color: "#0F172A", fontSize: 22, fontWeight: "900" },
   statLabel: { marginTop: 4, color: "#64748B", fontSize: designUi.type.label.fontSize, fontWeight: designUi.type.label.fontWeight, lineHeight: designUi.type.label.lineHeight,},
   toolbar: { minHeight: 58, padding: 10, marginBottom: 12, borderRadius: 12, borderWidth: 1, borderColor: "#E2E8F0", backgroundColor: "#FFFFFF", flexDirection: "row", alignItems: "center", gap: 10 },
@@ -410,8 +410,8 @@ const styles = StyleSheet.create({
   errorBanner: { marginBottom: 12, paddingHorizontal: 12, paddingVertical: 10, borderRadius: 9, borderWidth: 1, borderColor: "#FECACA", backgroundColor: "#FEF2F2", flexDirection: "row", alignItems: "center", gap: 8 },
   errorText: { flex: 1, color: "#991B1B", fontSize: 12, lineHeight: 18, fontWeight: "600" },
   tableCard: { borderRadius: 13, borderWidth: 1, borderColor: "#E2E8F0", backgroundColor: "#FFFFFF", overflow: "hidden" },
-  tableHeader: { minHeight: 42, paddingHorizontal: 14, flexDirection: "row", alignItems: "center", backgroundColor: "#F8FAFC", borderBottomWidth: 1, borderBottomColor: "#E2E8F0" },
-  tableRow: { minHeight: 66, paddingHorizontal: 14, flexDirection: "row", alignItems: "center", borderBottomWidth: 1, borderBottomColor: "#EEF2F7" },
+  tableHeader: { minHeight: 46, paddingHorizontal: 14, flexDirection: "row", alignItems: "center", backgroundColor: "#EFF5F1", borderBottomWidth: 1, borderBottomColor: "#E2E8F0" },
+  tableRow: { minHeight: 66, paddingHorizontal: 14, flexDirection: "row", alignItems: "center", borderBottomWidth: 1, borderBottomColor: "#E8EFEA"},
   th: { color: "#7C8AA0", fontSize: 9.5, fontWeight: "900", letterSpacing: 0.6 },
   cell: { paddingRight: 10, justifyContent: "center" },
   colName: { width: "20%", flexDirection: "row", alignItems: "center" },
