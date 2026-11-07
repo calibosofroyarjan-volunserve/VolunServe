@@ -1,3 +1,4 @@
+import { liveUi as designUi } from "../constants/volunserveLiveUi";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { deleteApp, initializeApp } from "firebase/app";
@@ -129,7 +130,7 @@ const styles=StyleSheet.create({
  panel:{width:"100%",maxWidth:590,backgroundColor:"#FFFFFF",borderColor:"#DCE9E2",borderWidth:1,
    borderRadius:18,padding:25,gap:8},header:{flexDirection:"row",alignItems:"center",gap:13,marginBottom:13},
  kicker:{fontSize:10,fontWeight:"800",color:"#087D60",letterSpacing:1.4},
- title:{fontSize:23,fontWeight:"900",color:"#153B31"},requestSubtitle:{fontSize:12,color:"#527767",fontWeight:"600",marginTop:4},notice:{fontSize:12,lineHeight:19,color:"#57776A",
+ title:{fontSize: designUi.type.page.fontSize,fontWeight: designUi.type.page.fontWeight,color:"#153B31", lineHeight: designUi.type.page.lineHeight,},requestSubtitle:{fontSize:12,color:"#527767",fontWeight:"600",marginTop:4},notice:{fontSize:12,lineHeight:19,color:"#57776A",
    backgroundColor:"#EDF8F1",borderRadius:11,padding:14,marginBottom:9},
  field:{gap:6,marginBottom:6},label:{fontSize:12,fontWeight:"800",color:"#2D5747"},
  input:{borderWidth:1,borderColor:"#D6E6DD",backgroundColor:"#FAFCFA",borderRadius:10,
