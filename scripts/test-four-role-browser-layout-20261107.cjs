@@ -80,6 +80,12 @@ async function main(){
           passwordInputs:document.querySelectorAll('input[type="password"]').length,
        }));
        assert.equal(x.passwordInputs,0,role+" preview exposed credential input");
+       if(role==="resident" && module==="home")
+         assert(x.text.includes("Your community, at a glance"),
+           screen.name+" Resident preview is still showing old production-copy hero");
+       if(role==="volunteer" && module==="home")
+         assert(x.text.includes("Ready to serve your community"),
+           screen.name+" Volunteer preview is still showing old production-copy hero");
        // Web layout must never create a page-wide horizontal scrollbar.
        assert(x.htmlWidth <= screen.width+4,
           screen.name+" "+role+"/"+module+" horizontal overflow "+x.htmlWidth+" vs "+screen.width);
