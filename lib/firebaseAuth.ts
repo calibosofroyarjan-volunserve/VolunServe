@@ -720,7 +720,20 @@ export const getUserProfile = async (
   if (!snapshot.exists()) {
     throw new Error("Profile not found.");
   }
-  return snapshot.data() as UserProfile;
+  const p = snapshot.data() as UserProfile;
+  const currentUser = auth.currentUser;
+  if (currentUser?.uid === uid &&
+      (p.role === "resident" || p.role === "volunteer")) {
+    if (!currentUser.emailVerified ||
+        !currentUser.email ||
+        currentUser.email.trim().toLowerCase() !== String(p.email || "").trim().toLowerCase()) {
+      throw new Error("Verify the email linked to this Resident profile before signing in.");
+    }
+    if (isKnownDisposableEmail(currentUser.email)) {
+      throw new Error("Temporary email accounts cannot access VolunServe. Contact an administrator to migrate your profile.");
+    }
+  }
+  return p;
 };
 
 export const updateUserProfile = async (
