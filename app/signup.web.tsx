@@ -1,3 +1,5 @@
+import { isStagingPreview } from "../lib/stagingBackendSafety";
+import ReadOnlyPreviewAuthNotice from "../components/auth/ReadOnlyPreviewAuthNotice";
 import EmailFirstSignup from "../components/auth/EmailFirstSignup";
 import { userFacingError } from "../lib/userFacingError";
 import { EMAIL_FIRST_SIGNUP_ENABLED } from "../lib/signupFeature";
@@ -1750,5 +1752,10 @@ const styles = StyleSheet.create({
   }, 
 });
 export default function Signup() {
+  if (isStagingPreview) return <ReadOnlyPreviewAuthNotice />;
+  return <ProductionSignup />;
+}
+
+function ProductionSignup() {
   return EMAIL_FIRST_SIGNUP_ENABLED ? <EmailFirstSignup /> : <LegacySignup />;
 }
