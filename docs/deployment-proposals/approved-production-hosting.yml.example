@@ -94,6 +94,9 @@ jobs:
       url: https://volunserve.com
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    permissions:
+      contents: read
+      id-token: write  # OIDC only in this human-approved environment job
     env:
       VOLUNSERVE_APPROVED_LIVE_SHA: ${{ inputs.live_sha }}
       VOLUNSERVE_APPROVED_CANDIDATE_SHA: ${{ inputs.candidate_sha }}
@@ -117,10 +120,17 @@ jobs:
       - name: Recheck live and approved source immediately before release
         working-directory: app
         run: node ../control/scripts/guard-live-hosting-source.cjs
-      - name: Verify artifact and expected Firebase project
+      - name: Confirm release branch is still the reviewed candidate
         working-directory: app
-        env:
-          PRODUCTION_SA: ${{ secrets.FIREBASE_PRODUCTION_HOSTING_SA }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          REMOTE_SHA="$(git ls-remote origin refs/heads/release/production-hosting | cut -f1)"
+          test "$REMOTE_SHA" = "$VOLUNSERVE_APPROVED_CANDIDATE_SHA" || {
+            echo "::error::Release branch HEAD changed since review"; exit 1;
+          }
+      - name: Verify exact tested artifact before requesting Google credentials
+        working-directory: app
         run: |
           node - <<'NODE'
           const assert=require("node:assert/strict");
@@ -128,30 +138,53 @@ jobs:
           const m=JSON.parse(fs.readFileSync("dist/volunserve-release.json","utf8"));
           assert.equal(m.revision,process.env.VOLUNSERVE_APPROVED_CANDIDATE_SHA);
           assert.equal(m.firebaseProject,"volunserve-3aa5b");
-          const key=JSON.parse(process.env.PRODUCTION_SA||"{}");
-          assert.equal(key.type,"service_account");
-          assert.equal(key.project_id,"volunserve-3aa5b");
+          assert.equal(m.releaseType,"firebase-hosting-web");
+          assert.ok(fs.existsSync("dist/index.html"));
           NODE
-      - name: Hosting ONLY (NO Firebase Rules, Functions, Storage or Render)
-        uses: FirebaseExtended/action-hosting-deploy@v0
+      - name: Authenticate approved GitHub Environment via OIDC (NO JSON KEY)
+        uses: google-github-actions/auth@v3
         with:
-          entryPoint: app
-          firebaseServiceAccount: ${{ secrets.FIREBASE_PRODUCTION_HOSTING_SA }}
-          projectId: volunserve-3aa5b
-          channelId: live
+          project_id: volunserve-3aa5b
+          # Verify exact provider ID in Google Cloud before promoting this example.
+          workload_identity_provider: projects/233201250762/locations/global/workloadIdentityPools/volunserve-github-hosting/providers/github-actions
+          service_account: volunserve-protected-hostin@volunserve-3aa5b.iam.gserviceaccount.com
+          create_credentials_file: true
+          export_environment_variables: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+      - name: Install exact locked CLI dependencies without rebuilding web assets
+        working-directory: app
+        run: npm ci --no-audit --no-fund
+      - name: Firebase Hosting ONLY — never deploy Rules, Functions, Storage or Render
+        working-directory: app
+        run: npx --no-install firebase deploy --only hosting --project volunserve-3aa5b --non-interactive
       - name: Verify deployed candidate marker and required public pages
         working-directory: app
         env:
           VOLUNSERVE_EXPECTED_SHA: ${{ inputs.candidate_sha }}
         run: |
+          set -euo pipefail
           for attempt in 1 2 3 4 5 6; do
-            if node scripts/check-live-hosting.cjs; then exit 0; fi
+            if VOLUNSERVE_HOSTING_URL=https://volunserve.com node scripts/check-live-hosting.cjs &&
+               VOLUNSERVE_HOSTING_URL=https://volunserve-3aa5b.web.app node scripts/check-live-hosting.cjs; then
+              exit 0
+            fi
             sleep 10
           done
-          echo "::error::Production verification failed - investigate rollback"; exit 1
+          echo "::error::Production marker or public routes verification failed; investigate rollback"; exit 1
 # INTENTIONALLY NOT ACTIVE: This template is not executable by GitHub Actions.
 # Before promotion:
 # - Finish legacy deployment workflow & credential inventory.
-# - Configure restricted GitHub Environment + reviewers and environment-only key.
+# - Confirm protected GitHub Environment with required reviewer and branch restriction.
+# - Verify provider full name, repo/ref/environment claim condition, and WIF impersonation IAM grant.
+# - Test the OIDC auth step separately WITHOUT ANY deployment first.
+# - Ensure approved candidate is LIVE descendant, and migration does not discard main-only work.
+# - Validate minimum Firebase CLI permissions; do not grant other roles blindly.
 # - Have staging acceptance, role-based QA, rollback reference and authorized cutover.
-# - Old broadly available Firebase secrets MUST be removed/revoked after migration.
+# - Old broadly available Firebase secrets MUST be safely removed/revoked after the
+#   verified cutover; until then old release workflows can bypass this approval path.
+# - No service-account key secrets are used or requested by this proposal.
+# - Do not promote to executable workflow until all missing gates are reviewed.
