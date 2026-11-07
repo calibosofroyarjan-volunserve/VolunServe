@@ -1,4 +1,5 @@
 import { AppAlert } from "../../lib/appDialog";
+import AccountConnectionFallback from "../../components/ui/AccountConnectionFallback";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { Redirect, router, Tabs, useSegments, type Href } from "expo-router";
 import React from "react";
@@ -120,7 +121,7 @@ function requestConfirmedResidentLogout() {
 }
 
 export default function TabLayout() {
-  const { loading, user, profile } = useUserSession();
+  const { loading, user, profile, connectionError, retryProfile } = useUserSession();
   const { width } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const segments = useSegments();
@@ -167,6 +168,10 @@ export default function TabLayout() {
         <Text style={styles.loadingText}>Checking your account...</Text>
       </View>
     );
+  }
+
+  if (connectionError && user && !profile) {
+    return <AccountConnectionFallback message={connectionError} onRetry={retryProfile} />;
   }
 
   if (!user || !profile || !isApprovedProfile(profile)) {
