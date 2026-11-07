@@ -1,4 +1,5 @@
 import { authenticateEmailSignup } from "./signupRegistration";
+import {getRegistrationEmailError, isKnownDisposableEmail} from "./registrationEmailPolicy";
 import { EMAIL_FIRST_SIGNUP_ENABLED } from "./signupFeature";
 import {
   getIdToken,
@@ -462,6 +463,8 @@ export const signUpUser = async (
   try {
     let user;
     const submittedEmail = data.email.trim().toLowerCase();
+    const registrationEmailError = getRegistrationEmailError(submittedEmail);
+    if (registrationEmailError) throw new Error(registrationEmailError);
     const usesGoogle = data.authProvider === "google";
     const usesVerifiedEmail = data.authProvider === "verified_email";
     if (usesVerifiedEmail && !EMAIL_FIRST_SIGNUP_ENABLED) {
@@ -650,6 +653,14 @@ export const loginUser = async (
     }
     const profile =
       profileSnapshot.data() as UserProfile;
+    // Do not disable historic privileged staff accounts through a community
+    // domain policy. Existing disposable-email Resident/Volunteer accounts
+    // must migrate to a permanent address before signing in again.
+    if ((profile.role === "resident" || profile.role === "volunteer") &&
+        isKnownDisposableEmail(user.email || email)) {
+      await signOut(auth);
+      throw new Error("Temporary email accounts cannot sign in. Use a permanent email and contact an administrator to migrate an existing profile.");
+    }
     const status = profile.status;
     /**
      * Basic Accounts are valid active accounts because their status is
