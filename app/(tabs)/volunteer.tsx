@@ -2105,7 +2105,7 @@ const styles = StyleSheet.create({
 
   loadingText: {
     marginTop: 10,
-    color: "#64748b",
+    color: ui.color.secondary,
     fontSize: 13,
     fontWeight: "700",
   },
@@ -2211,9 +2211,9 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     paddingHorizontal: 14,
     borderWidth: 1,
-    borderColor: "#e2e8f0",
+    borderColor: ui.color.border,
     borderRadius: 999,
-    backgroundColor: "#ffffff",
+    backgroundColor: ui.color.surface,
   },
 
   filterButtonActive: {
@@ -2222,7 +2222,7 @@ const styles = StyleSheet.create({
   },
 
   filterText: {
-    color: "#64748b",
+    color: ui.color.secondary,
     fontSize: 11,
     fontWeight: "800",
   },
@@ -2256,7 +2256,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#dfe7ee",
     borderRadius: 15,
-    backgroundColor: "#ffffff",
+    backgroundColor: ui.color.surface,
   },
 
   mediaBox: {
@@ -2445,7 +2445,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#b7c4cf",
     borderRadius: 10,
-    backgroundColor: "#ffffff",
+    backgroundColor: ui.color.surface,
   },
 
   secondaryButtonText: {
@@ -2542,7 +2542,7 @@ const styles = StyleSheet.create({
   },
 
   inactiveText: {
-    color: "#64748b",
+    color: ui.color.secondary,
     fontSize: 11,
     fontWeight: "900",
   },
@@ -2565,7 +2565,7 @@ const styles = StyleSheet.create({
   completionHint: {
     marginTop: 3,
     marginBottom: 7,
-    color: "#64748b",
+    color: ui.color.secondary,
     fontSize: 10.5,
     lineHeight: 15,
   },
@@ -2590,7 +2590,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#cbd5e1",
     borderRadius: 999,
-    backgroundColor: "#ffffff",
+    backgroundColor: ui.color.surface,
   },
 
   typeButtonActive: {
@@ -2599,7 +2599,7 @@ const styles = StyleSheet.create({
   },
 
   typeButtonText: {
-    color: "#64748b",
+    color: ui.color.secondary,
     fontSize: 9.5,
     fontWeight: "800",
   },
@@ -2635,7 +2635,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#d7e0e7",
     borderRadius: 10,
-    backgroundColor: "#ffffff",
+    backgroundColor: ui.color.surface,
   },
 
   followUpButtonActive: {
@@ -2666,7 +2666,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#d7e0e7",
     borderRadius: 10,
-    backgroundColor: "#ffffff",
+    backgroundColor: ui.color.surface,
     color: "#183448",
     fontSize: 12,
   },
@@ -2722,7 +2722,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#dfe7ee",
     borderRadius: 15,
-    backgroundColor: "#ffffff",
+    backgroundColor: ui.color.surface,
   },
 
   emptyTitle: {

@@ -1,4 +1,5 @@
 import Ionicons from "@expo/vector-icons/Ionicons";
+import DesignReviewWorkspace from "./DesignReviewWorkspace";
 import { LinearGradient } from "expo-linear-gradient";
 import { router, useLocalSearchParams } from "expo-router";
 import React, { useState } from "react";
@@ -308,7 +309,12 @@ function OtherModule({ role, module, narrow }: { role: Role; module: Module; nar
   </>;
 }
 
-export default function GuestWorkspace({ landing = false }: { landing?: boolean }) {
+export default function GuestWorkspace({ landing = false, designReview = false }: { landing?: boolean; designReview?: boolean }) {
+  if (designReview) return <DesignReviewWorkspace />;
+  return <LegacyGuestWorkspace landing={landing} />;
+}
+
+function LegacyGuestWorkspace({ landing = false }: { landing?: boolean }) {
   const params = useLocalSearchParams<{ role?: string; module?: string }>();
   const role: Role = params.role === "volunteer" ? "volunteer" : "resident";
   const requested = params.module as Module;
