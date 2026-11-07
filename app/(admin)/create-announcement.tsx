@@ -258,7 +258,7 @@ export default function CreateAnnouncement() {
         </TouchableOpacity>
       </VolunServeCard>
 
-      <View style={styles.noteCard}><VolunServeText role="cardTitle" style={styles.noteTitle}>Community-wide announcements</VolunServeText><VolunServeText role="body" color="muted" style={styles.noteText}>Published announcements appear for residents and volunteers in Community Updates and Notifications.</VolunServeText></View>
+      <View style={styles.noteCard}><VolunServeText variant="cardTitle" style={styles.noteTitle}>Community-wide announcements</VolunServeText><VolunServeText variant="body" color="muted" style={styles.noteText}>Published announcements appear for residents and volunteers in Community Updates and Notifications.</VolunServeText></View>
     </ScrollView>
   );
 }
