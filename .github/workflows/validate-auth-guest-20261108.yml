@@ -15,6 +15,7 @@ on:
       - 'functions/test-verified-callable-email.js'
       - 'scripts/test-identity-blocking-opt-in.cjs'
       - 'functions/registrationEmailScreening.js'
+      - 'functions/providerTypoDomains.json'
       - 'functions/disposable-email-domains.txt'
       - 'functions/test-registration-email-screening.js'
       - 'scripts/test-verified-community-registration-rules.cjs'
