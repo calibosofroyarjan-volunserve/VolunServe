@@ -4,6 +4,7 @@
 // or distinguish a short-lived REAL Gmail inbox from ordinary Gmail.
 const fs = require("node:fs");
 const path = require("node:path");
+const providerTypos = require("./providerTypoDomains.json");
 
 const domains = new Set(
   fs.readFileSync(path.join(__dirname, "disposable-email-domains.txt"), "utf8")
@@ -33,6 +34,11 @@ function classifyRegistrationEmail(email) {
   // often used to register many accounts. Ordinary Gmail stays accepted.
   if ((domain === "gmail.com" || domain === "googlemail.com") && local.includes("+")) {
     return {allowed: false, reason: "gmail_alias"};
+  }
+  // The client warns on these Gmail-looking typos. Trusted Auth blocking
+  // must enforce the same exact-domain policy, even against direct SDK calls.
+  if (Object.prototype.hasOwnProperty.call(providerTypos, domain)) {
+    return {allowed: false, reason: "provider_typo"};
   }
   const pieces = domain.split(".");
   for (let i = 0; i < pieces.length - 1; i += 1) {
