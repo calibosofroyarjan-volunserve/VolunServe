@@ -1,0 +1,44 @@
+name: Identity AI isolated checks
+
+# Deliberately scoped to the isolated identity branch.
+# No deploy jobs, Firebase credentials, Render keys, or production writes.
+on:
+  push:
+    branches:
+      - fix/identity-full-hardening-live-base-20261107
+    paths:
+      - 'identity-ai/**'
+      - 'app/identity-verification.tsx'
+      - 'lib/identityVerification.ts'
+      - '.github/workflows/identity-ai-safe-tests.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  ai-unit:
+    name: Face-box and ID screening tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Syntax check (no imports)
+        run: python -m py_compile identity-ai/main.py identity-ai/face_boxes.py identity-ai/document_screening.py
+      - name: Regression tests (no personal images)
+        working-directory: identity-ai
+        run: python -m unittest -v test_face_box_dedup.py test_document_screening.py
+
+  frontend-types:
+    name: Frontend TypeScript check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npx tsc --noEmit --pretty false
