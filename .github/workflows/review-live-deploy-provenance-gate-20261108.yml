@@ -1,0 +1,27 @@
+# Read-only validation on an isolated review branch.
+# This does NOT replace existing production deployment workflows.
+name: VolunServe Live Deploy Provenance Gate Review (NO DEPLOY)
+on:
+  push:
+    branches:
+      - safety/live-deploy-provenance-gate-20261108
+    paths:
+      - 'scripts/guard-live-deploy-provenance-20261108.cjs'
+      - '.github/workflows/review-live-deploy-provenance-gate-20261108.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify-gate:
+    if: github.repository == 'calibosofroyarjan-volunserve/VolunServe'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Offline reject unsafe release cases
+        run: node scripts/guard-live-deploy-provenance-20261108.cjs --self-test
+      - name: Ensure there is no production deployment in this job
+        run: echo 'PASS no production tokens, Firebase deploy, Render deploy or writes.'
