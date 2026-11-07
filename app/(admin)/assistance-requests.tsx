@@ -43,6 +43,7 @@ import {
 } from "react-native";
 
 import { db } from "../../lib/firebase";
+import { getSafeVolunServeBackendBaseUrl } from "../../lib/stagingBackendSafety";
 import { useUserSession } from "../../lib/useUserSession";
 
 type ReviewFilter =
@@ -209,7 +210,7 @@ type PrivateReviewDraft = {
 };
 
 const PRIVATE_REVIEW_COLLECTION = "assistanceVerificationReviews";
-const SECURE_ASSISTANCE_BACKEND = "https://volunserve.onrender.com";
+const SECURE_ASSISTANCE_BACKEND = getSafeVolunServeBackendBaseUrl();
 
 const needsFacilityVerification = (category?: string) =>
   [

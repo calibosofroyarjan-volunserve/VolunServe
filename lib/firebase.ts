@@ -21,6 +21,7 @@ import {
 } from "firebase/functions";
 
 import { getStorage } from "firebase/storage";
+import { requireIsolatedStagingFirebaseConfig } from "./stagingFirebaseConfig";
 
 export const productionConfig = {
   apiKey: "AIzaSyAPPi-UxUxyMvoNeaBLUOPOls63dEDLUmI",
@@ -50,9 +51,27 @@ const isLocalBrowser =
 export const usingFirebaseEmulators =
   ENABLE_LOCAL_TESTING && isLocalBrowser;
 
-export const firebaseConfig = usingFirebaseEmulators
-  ? localConfig
-  : productionConfig;
+// Only an EXPLICITLY enabled staging build may load the separate Firebase project.
+// In production this remains the exact unchanged original Firebase config.
+export const isIsolatedStagingBuild =
+  process.env.EXPO_PUBLIC_VOLUNSERVE_STAGING_MODE === "1";
+
+const isolatedStagingConfig = isIsolatedStagingBuild
+  ? requireIsolatedStagingFirebaseConfig({
+      apiKey: process.env.EXPO_PUBLIC_STAGING_FIREBASE_API_KEY,
+      authDomain: process.env.EXPO_PUBLIC_STAGING_FIREBASE_AUTH_DOMAIN,
+      projectId: process.env.EXPO_PUBLIC_STAGING_FIREBASE_PROJECT_ID,
+      storageBucket: process.env.EXPO_PUBLIC_STAGING_FIREBASE_STORAGE_BUCKET,
+      messagingSenderId: process.env.EXPO_PUBLIC_STAGING_FIREBASE_SENDER_ID,
+      appId: process.env.EXPO_PUBLIC_STAGING_FIREBASE_APP_ID,
+    })
+  : null;
+
+export const firebaseConfig = isIsolatedStagingBuild
+  ? isolatedStagingConfig!
+  : usingFirebaseEmulators
+    ? localConfig
+    : productionConfig;
 
 const existingApp =
   getApps().length > 0 ? getApp() : null;

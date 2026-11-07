@@ -1,4 +1,5 @@
 import { auth } from "./firebase";
+import { getSafeVolunServeBackendBaseUrl, isStagingPreview } from "./stagingBackendSafety";
 
 export type IdentityVerificationStatus =
   | "basic"
@@ -85,13 +86,13 @@ export type SubmitIdentityVerificationInput = {
   selfie: CapturedIdentityMedia;
 };
 
-const FALLBACK_BACKEND_URL = "https://volunserve.onrender.com";
+const FALLBACK_BACKEND_URL = getSafeVolunServeBackendBaseUrl();
 
 function getBackendBaseUrl() {
   // The Resident app must always call the main VolunServe backend.
   // The separate AI service is private and is reached only server-to-server.
   let value =
-    process.env.EXPO_PUBLIC_IDENTITY_VERIFICATION_API_URL?.trim() ||
+    (isStagingPreview ? "" : process.env.EXPO_PUBLIC_IDENTITY_VERIFICATION_API_URL?.trim()) ||
     FALLBACK_BACKEND_URL;
 
   value = value.replace(/\/+$/, "");

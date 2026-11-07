@@ -24,6 +24,7 @@ import {
 } from "react-native";
 
 import { db } from "../../lib/firebase";
+import { getSafeVolunServeBackendBaseUrl, blockProductionEvidenceUploadDuringStaging } from "../../lib/stagingBackendSafety";
 import ListPagination from "../../components/ui/ListPagination";
 import { isApprovedProfile } from "../../lib/firebaseAuth";
 import { useUserSession } from "../../lib/useUserSession";
@@ -220,7 +221,7 @@ const sanitizeMoneyInput = (value: string) => {
   return `${safeWhole}.${decimal}`;
 };
 
-const SECURE_DONATION_BACKEND = "https://volunserve.onrender.com";
+const SECURE_DONATION_BACKEND = getSafeVolunServeBackendBaseUrl();
 const CLOUDINARY_CLOUD_NAME = "netjawtz";
 const CLOUDINARY_UPLOAD_PRESET = "volunserve_evidence";
 const CLOUDINARY_UPLOAD_URL =
@@ -1135,6 +1136,7 @@ export default function DonationAdministration() {
 
     body.append("upload_preset", CLOUDINARY_UPLOAD_PRESET);
 
+    blockProductionEvidenceUploadDuringStaging();
     const response = await fetch(CLOUDINARY_UPLOAD_URL, {
       method: "POST",
       body,
