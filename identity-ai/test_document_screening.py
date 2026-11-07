@@ -1,9 +1,29 @@
 import unittest
 
-from document_screening import assess_document_text, assess_document_sides, document_ocr_unavailable
+from document_screening import assess_document_text, assess_document_sides, assess_profile_name, document_ocr_unavailable
 
 
 class GovernmentIdScreeningTests(unittest.TestCase):
+    def test_account_name_may_appear_in_ocr_but_never_authenticates_id(self):
+        result = assess_profile_name(
+            "Maria", "Dela Cruz",
+            "PHILIPPINE IDENTIFICATION CARD SURNAME DELA CRUZ GIVEN NAMES MARIA",
+        )
+        self.assertEqual(result["profileNameCheck"], "possible_match")
+        self.assertNotIn("MARIA", repr(result))
+        self.assertNotIn("CRUZ", repr(result))
+
+    def test_ocr_missing_name_is_inconclusive_not_fraud(self):
+        result = assess_profile_name(
+            "Maria", "Dela Cruz",
+            "NATIONAL ID CARD NAME UNREADABLE",
+        )
+        self.assertEqual(result["profileNameCheck"], "inconclusive")
+
+    def test_short_or_missing_name_not_checked(self):
+        result = assess_profile_name("Jo", "Li", "PHILIPPINE IDENTIFICATION CARD")
+        self.assertEqual(result["profileNameCheck"], "not_checked")
+
     def test_matching_front_back_remains_unverified(self):
         result = assess_document_sides(
             "national_id",
