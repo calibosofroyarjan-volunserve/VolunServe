@@ -1,3 +1,4 @@
+import { liveUi as ui } from "../../constants/volunserveLiveUi";
 import { useRouter } from "expo-router";
 import { getAuth } from "firebase/auth";
 import {
@@ -4874,7 +4875,7 @@ function FormSelect({
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: "#F6F8F7",
+    backgroundColor: ui.color.canvas,
     scrollbarWidth: "thin",
     scrollbarColor: "#8CAA9A #F6F8F7",
   } as any,
@@ -4891,7 +4892,7 @@ const styles = StyleSheet.create({
     minHeight: 520,
     justifyContent: "center",
     alignItems: "center",
-    backgroundColor: "#F6F8F7",
+    backgroundColor: ui.color.canvas,
   },
   loadingText: {
     color: "#64748b",
@@ -4911,15 +4912,15 @@ const styles = StyleSheet.create({
     marginBottom: 14,
   },
   eyebrow: {
-    color: "#078f82",
+    color: ui.color.primary,
     fontSize: 11,
-    fontWeight: "800",
+    fontWeight: "700",
     letterSpacing: 1.2,
   },
   title: {
     marginTop: 2,
-    color: "#0f172a",
-    fontSize: 28,
+    color: ui.color.text,
+    fontSize: ui.type.page.fontSize,
     fontWeight: "700",
   },
   subtitle: {
@@ -4942,7 +4943,7 @@ const styles = StyleSheet.create({
   liveSummaryNumber: {
     color: "#0f172a",
     fontSize: 24,
-    fontWeight: "900",
+    fontWeight: "700",
   },
   liveSummaryLabel: {
     marginTop: 2,

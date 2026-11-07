@@ -1,3 +1,4 @@
+import { liveUi as ui } from "../../constants/volunserveLiveUi";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import {
@@ -5739,16 +5740,16 @@ const styles = StyleSheet.create({
   clearReviewDropdown: { minHeight: 44, borderRadius: 9, borderWidth: 1, borderColor: "#CBD5E1", backgroundColor: "#FFFFFF", paddingHorizontal: 12, paddingVertical: 9, flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 },
   clearReviewDropdownValue: { flex: 1, fontSize: 12, fontWeight: "700", color: "#334155" },
   clearReviewDropdownOptions: { borderRadius: 9, borderWidth: 1, borderColor: "#D8E2EA", backgroundColor: "#FFFFFF", overflow: "hidden", marginTop: 3 },
-  clearReviewDropdownOption: { minHeight: 42, borderBottomWidth: 1, borderBottomColor: "#F1F5F9", paddingHorizontal: 12, paddingVertical: 10, flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10 },
+  clearReviewDropdownOption: { minHeight: ui.minTap, borderBottomWidth: 1, borderBottomColor: "#F1F5F9", paddingHorizontal: 12, paddingVertical: 10, flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10 },
   clearReviewDropdownActive: { backgroundColor: "#EFFAF3" },
   clearReviewDropdownOptionText: { flex: 1, fontSize: 12, color: "#334155", lineHeight: 18 },
   clearReviewDropdownOptionChosen: { color: "#047857", fontWeight: "800" },
 
-  simplePanel: { padding: 20, gap: 20, backgroundColor: "#FFFFFF", borderRadius: 16, borderColor: "#DDE7E2", borderWidth: 1 },
+  simplePanel: { padding: 20, gap: 20, backgroundColor: ui.color.surface, borderRadius: ui.radius.card, borderColor: ui.color.border, borderWidth: 1 },
   simpleHead: { flexDirection: "row", alignItems: "flex-start", gap: 12 },
   simpleIcon: { width: 40, height: 40, alignItems: "center", justifyContent: "center", backgroundColor: "#ECFDF5", borderRadius: 10 },
-  simpleTitle: { color: "#102A20", fontSize: 19, fontWeight: "800" },
-  simpleSection: { color: "#102A20", fontSize: 15, fontWeight: "800" },
+  simpleTitle: { color: ui.color.text, fontSize: ui.type.section.fontSize, fontWeight: "700" },
+  simpleSection: { color: ui.color.text, fontSize: 15, fontWeight: "700" },
   simpleCopy: { color: "#526477", fontSize: 13, lineHeight: 20 },
   simpleStart: { gap: 10, padding: 13, borderRadius: 10, backgroundColor: "#F0FDF4" },
   simpleLinks: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
@@ -5853,9 +5854,9 @@ const styles = StyleSheet.create({
     backgroundColor: "#E0F5EA",
   },
   assistancePageHeading: {
-    fontSize: 26,
-    fontWeight: "900",
-    color: "#101828",
+    fontSize: ui.type.page.fontSize,
+    fontWeight: "700",
+    color: ui.color.text,
     marginBottom: 4,
   },
   assistanceSubtext: {
@@ -5902,9 +5903,9 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
   },
   assistanceQueueTitle: {
-    fontSize: 19,
-    fontWeight: "900",
-    color: "#101828",
+    fontSize: ui.type.section.fontSize,
+    fontWeight: "700",
+    color: ui.color.text,
   },
   assistanceSearchField: {
     minHeight: 45,

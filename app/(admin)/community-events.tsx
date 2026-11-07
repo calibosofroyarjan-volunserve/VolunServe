@@ -1,3 +1,4 @@
+import { liveUi as ui } from "../../constants/volunserveLiveUi";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { Redirect } from "expo-router";
 import {
@@ -1034,13 +1035,13 @@ const styles = StyleSheet.create({
   proposerName: { fontSize: 12, fontWeight: "800", color: INK },
   inlineButton: { paddingHorizontal: 10, paddingVertical: 8, borderWidth: 1, borderColor: "#C9DED7", borderRadius: 8 },
   inlineButtonText: { color: GREEN, fontWeight: "800", fontSize: 11 },
-  detailsButton: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 7, borderWidth: 1, borderColor: "#CFE6DE", backgroundColor: "#F2FAF7", borderRadius: 9, minHeight: 38, marginTop: 12 },
+  detailsButton: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 7, borderWidth: 1, borderColor: ui.color.border, backgroundColor: ui.color.primarySoft, borderRadius: ui.radius.control, minHeight: ui.minTap, marginTop: 12 },
   detailsButtonText: { fontSize: 12, color: GREEN, fontWeight: "800" },
   modalBackdrop: { flex: 1, backgroundColor: "rgba(18,39,49,0.62)", alignItems: "center", justifyContent: "center", padding: 12 },
   detailPanel: { backgroundColor: "white", width: "100%", maxWidth: 680, maxHeight: "92%", borderRadius: 16, padding: 20 },
   detailPanelCompact: { padding: 13 },
   modalHeader: { flexDirection: "row", alignItems: "center", gap: 12, marginBottom: 12 },
-  modalTitle: { fontSize: 21, fontWeight: "900", color: INK },
+  modalTitle: { fontSize: 20, fontWeight: "700", color: INK },
   closeButton: { padding: 7, borderRadius: 9 },
   detailCover: { width: "100%", height: 218, borderRadius: 12, backgroundColor: "#E6EEEB" },
   photoStrip: { flexDirection: "row", gap: 8, paddingTop: 9 },
@@ -1066,7 +1067,7 @@ const styles = StyleSheet.create({
   profilePrivacy: { color: MUTED, fontSize: 10, lineHeight: 16, marginTop: 11 },
   screen: {
     flex: 1,
-    backgroundColor: "#F5F9F8",
+    backgroundColor: ui.color.canvas,
   },
   content: {
     width: "100%",
@@ -1096,8 +1097,8 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
   },
   title: {
-    fontSize: 23,
-    fontWeight: "900",
+    fontSize: ui.type.page.fontSize,
+    fontWeight: "700",
     color: INK,
     marginTop: 3,
   },
@@ -1116,11 +1117,13 @@ const styles = StyleSheet.create({
   },
   stats: {
     flexDirection: "row",
+    flexWrap: "wrap",
     gap: 9,
     marginBottom: 14,
   },
   stat: {
     flex: 1,
+    minWidth: 130,
     padding: 12,
     backgroundColor: "white",
     borderRadius: 12,
@@ -1129,7 +1132,7 @@ const styles = StyleSheet.create({
   },
   statNumber: {
     fontSize: 22,
-    fontWeight: "900",
+    fontWeight: "700",
     color: INK,
     marginTop: 2,
   },
