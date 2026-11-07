@@ -9,10 +9,16 @@ service cloud.firestore {
         /databases/$(database)/documents/users/$(request.auth.uid)
       ).data;
     }
+    // Firebase Auth sign-in alone never grants Firestore permissions.
+    // Staff and community routes require a verified mailbox in the token.
+    function verifiedEmailSession() {
+      return signedIn()
+        && request.auth.token.get('email_verified', false) == true;
+    }
     // Reuse profile data inside role helpers instead of repeating get() expressions.
     function approved() {
       let p = signedIn() ? profile() : {};
-      return signedIn()
+      return verifiedEmailSession()
         // Email-only Firebase Auth UIDs are NOT completed Resident profiles.
         // Staff accounts retain their independent administrative login policy.
         && (
@@ -29,7 +35,7 @@ service cloud.firestore {
     }
     function isAdmin() {
       let p = signedIn() ? profile() : {};
-      return signedIn()
+      return verifiedEmailSession()
         && p.get('role', '') == 'admin'
         && p.get('status', 'approved') == 'approved'
         // A suspended LGU administrator must lose operational access immediately.
@@ -37,14 +43,14 @@ service cloud.firestore {
     }
     function isSuperAdmin() {
       let p = signedIn() ? profile() : {};
-      return signedIn()
+      return verifiedEmailSession()
         && p.get('role', '') == 'superadmin'
         && p.get('status', 'approved') == 'approved';
     }
     // One role test, not isAdmin() || isSuperAdmin().
     function isAdminOrSuperAdmin() {
       let p = signedIn() ? profile() : {};
-      return signedIn()
+      return verifiedEmailSession()
         && p.get('role', '') in ['admin', 'superadmin']
         && p.get('status', 'approved') == 'approved'
         && (p.get('role', '') == 'superadmin'
