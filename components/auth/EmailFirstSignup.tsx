@@ -26,6 +26,7 @@ import {
   signUpUser,
 } from "../../lib/firebaseAuth";
 import {getRegistrationEmailError} from "../../lib/registrationEmailPolicy";
+import {verificationCooldownSeconds} from "../../lib/verificationCooldown";
 import {getResidentRegistrationFieldErrors} from "../../lib/requireCompleteResidentRegistration";
 import { userFacingError } from "../../lib/userFacingError";
 import {
@@ -214,6 +215,8 @@ export default function EmailFirstSignup() {
   const [slideIndex, setSlideIndex] = useState(0);
   const [checking, setChecking] = useState(true);
   const [busy, setBusy] = useState(false);
+  const lastVerificationSentAtMs = useRef(0);
+  const [resendRemainingSeconds, setResendRemainingSeconds] = useState(0);
   const [showErrors, setShowErrors] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
@@ -235,6 +238,26 @@ export default function EmailFirstSignup() {
   const [specialization, setSpecialization] = useState("");
   const [occupationOther, setOccupationOther] = useState("");
   const [reviewed, setReviewed] = useState(false);
+
+  // A 60-second convenience cooldown reduces accidental verification-email
+  // spam. This is not server protection; Firebase Auth and Identity Platform
+  // independently enforce authentication quotas and abuse policies.
+  useEffect(() => {
+    if (resendRemainingSeconds <= 0) return;
+    const interval = setInterval(() => {
+      setResendRemainingSeconds(verificationCooldownSeconds(
+        lastVerificationSentAtMs.current, Date.now()
+      ));
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [resendRemainingSeconds > 0]);
+
+  function recordSuccessfulVerificationSend() {
+    lastVerificationSentAtMs.current = Date.now();
+    setResendRemainingSeconds(verificationCooldownSeconds(
+      lastVerificationSentAtMs.current, Date.now()
+    ));
+  }
 
   const age = useMemo(() => dateAge(birth), [birth]);
   // Accept familiar 09xxxxxxxxx, +639xxxxxxxxx and 9xxxxxxxxx input.
@@ -337,6 +360,7 @@ export default function EmailFirstSignup() {
         showRegistrationState(state);
         if (!current.emailVerified) {
           await sendEmailVerification(current);
+          recordSuccessfulVerificationSend();
           setMessage(EMAIL_VERIFICATION_REQUESTED_MESSAGE);
         } else setMessage("Google email verified and VolunServe password linked.");
       } else {
@@ -351,6 +375,7 @@ export default function EmailFirstSignup() {
           if (!resumeMode) {
             try {
               await sendEmailVerification(user);
+              recordSuccessfulVerificationSend();
               setMessage("Verification email sent. This is only a pending Firebase login, NOT a Guest or Basic Resident account. After verifying, finish Personal Details and Address & Profile.");
             } catch {
               setError("Your registration is saved, but verification email could not be requested. Choose Resend Verification Email or use a different address.");
@@ -404,6 +429,11 @@ export default function EmailFirstSignup() {
 
   async function resend() {
     if (busy) return;
+    const remaining = verificationCooldownSeconds(lastVerificationSentAtMs.current, Date.now());
+    if (remaining > 0) {
+      setError(`Please wait ${remaining} seconds before resending the verification email.`);
+      return;
+    }
     setBusy(true); setError(""); setMessage("");
     try {
       const user = auth.currentUser;
@@ -415,6 +445,7 @@ export default function EmailFirstSignup() {
         return;
       }
       await sendEmailVerification(user);
+      recordSuccessfulVerificationSend();
       setMessage(EMAIL_VERIFICATION_REQUESTED_MESSAGE);
     } catch (e) { setError(safeAuthError(e)); }
     finally { setBusy(false); }
@@ -436,6 +467,7 @@ export default function EmailFirstSignup() {
       setCompletedProfile(false);
       setSignedInUser(null);
       setEmail(""); setPassword(""); setConfirmPassword("");
+      lastVerificationSentAtMs.current = 0; setResendRemainingSeconds(0);
       setStep(1); setResumeMode(false); setConsent(false);
       setMessage(""); setError(""); setShowErrors(false);
     } catch (e) { setError(safeAuthError(e)); }
@@ -797,7 +829,9 @@ export default function EmailFirstSignup() {
                   After clicking the verification link, return here and choose Check Verification.
                 </Text>
                 {checkButton("I've Verified — Check Status", () => {void checkVerified();})}
-                {checkButton("Resend Verification Email", () => {void resend();}, true)}
+                {resendRemainingSeconds > 0
+                    ? <Text style={styles.helper}>For inbox safety, resend is available in {resendRemainingSeconds} seconds.</Text>
+                    : checkButton("Resend Verification Email", () => {void resend();}, true)}
                 <Pressable style={styles.inlineButton} onPress={() => {void changeEmail();}}>
                   <Text style={styles.link}>Use a different email / Start over</Text>
                 </Pressable>
