@@ -1,0 +1,38 @@
+"use strict";
+// Maintained snapshot generated from lib/disposableEmailDomains.generated.ts.
+// It reduces known throwaway-email abuse but cannot detect every new provider
+// or distinguish a short-lived REAL Gmail inbox from ordinary Gmail.
+const fs = require("node:fs");
+const path = require("node:path");
+
+const domains = new Set(
+  fs.readFileSync(path.join(__dirname, "disposable-email-domains.txt"), "utf8")
+    .split(/\r?\n/)
+    .map((entry) => entry.trim().toLowerCase())
+    .filter(Boolean)
+);
+for (const extra of [
+  "en2ch.com", "mailinator.com", "yopmail.com", "guerrillamail.com",
+  "guerrillamailblock.com", "sharklasers.com", "10minutemail.com",
+  "temp-mail.org", "tempmail.com", "tempmail.net", "trashmail.com",
+  "dispostable.com", "getnada.com", "maildrop.cc", "minuteinbox.com",
+  "mohmal.com", "emailondeck.com", "throwawaymail.com",
+  "mailnesia.com", "fakeinbox.com", "tempmailo.com",
+]) domains.add(extra);
+
+const EMAIL_FORMAT = /^[^\s@]+@(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/;
+function classifyRegistrationEmail(email) {
+  const normalized = String(email || "").trim().toLowerCase();
+  if (!normalized || normalized.length > 254 || !EMAIL_FORMAT.test(normalized)) {
+    return {allowed: false, reason: "invalid"};
+  }
+  const domain = normalized.slice(normalized.lastIndexOf("@") + 1);
+  const pieces = domain.split(".");
+  for (let i = 0; i < pieces.length - 1; i += 1) {
+    if (domains.has(pieces.slice(i).join("."))) {
+      return {allowed: false, reason: "disposable"};
+    }
+  }
+  return {allowed: true, reason: "accepted"};
+}
+module.exports = {classifyRegistrationEmail};
