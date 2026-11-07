@@ -21,6 +21,8 @@ export type DocumentScreening = {
   manualReviewRequired: true;
   backSideProvided?: boolean;
   backSideScreened?: boolean;
+  profileNameCompared?: boolean;
+  profileNameCheck?: "possible_match" | "inconclusive" | "not_checked";
   warningCodes: string[];
 };
 
@@ -52,6 +54,9 @@ function parseDocumentScreening(value: unknown): DocumentScreening | undefined {
     manualReviewRequired: true,
     backSideProvided: raw.backSideProvided === true,
     backSideScreened: raw.backSideScreened === true,
+    profileNameCompared: raw.profileNameCompared === true,
+    profileNameCheck: raw.profileNameCheck === "possible_match" || raw.profileNameCheck === "inconclusive"
+      ? raw.profileNameCheck : "not_checked",
     warningCodes: Array.isArray(raw.warningCodes)
       ? raw.warningCodes.filter((x): x is string => typeof x === "string").slice(0, 4) : [],
   };
