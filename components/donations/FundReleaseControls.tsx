@@ -1,3 +1,4 @@
+import { getSafeVolunServeBackendBaseUrl } from "../../lib/stagingBackendSafety";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
@@ -10,7 +11,7 @@ import WalletBrandLogo from "./WalletBrandLogo";
 import BeneficiaryReviewCard, {type VerifiedBeneficiary} from "./BeneficiaryReviewCard";
 import type { ReconciliationCampaign } from "./FundReconciliationPanel";
 
-const ROOT = "https://volunserve.onrender.com/api/admin/donations/fund-releases";
+const ROOT = getSafeVolunServeBackendBaseUrl() + "/api/admin/donations/fund-releases";
 type Release = {
   id: string; campaignId: string; campaignTitle: string; recipientUid: string;
   status: string; amount: number; eligibleTestAmount: number; approvedGoal: number;
