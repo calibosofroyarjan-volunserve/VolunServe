@@ -183,10 +183,10 @@ function harness(source, enabled, options = {}) {
     assert(!staff.calls.includes("signout"));
   });
   await check("guest mode clears Firebase session, and resident profile Rules enforce verification + details",()=>{
-    for(const file of ["app/login.tsx","app/login.web.tsx"]) {
-      const screen=read(file);
-      assert(screen.includes("signOut(auth).then(() => router.replace(\"/public\"))"));
-    }
+    const web=read("app/login.web.tsx");
+    const native=read("app/login.tsx");
+    assert(web.includes('signOut(auth).then(() => router.replace("/public"))'));
+    assert(native.includes('firebaseSignOut(auth).then(() => router.replace("/public"))'));
     const rules=read("firestore.rules");
     assert(rules.includes('request.auth.token.get("email_verified", false) == true'));
     assert(rules.includes('request.auth.token.get("email", "") == request.resource.data.email'));
