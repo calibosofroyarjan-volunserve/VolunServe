@@ -2,6 +2,8 @@ import { canResumeEmailFirstSignup } from "../lib/signupFeature";
 
 import { useFonts } from "expo-font";
 import AppDialogHost from "../components/ui/AppDialogHost";
+import { profileReadIssue, profileRecoveryMessage } from "../lib/profileRecovery";
+import { volunserveUi as ui } from "../constants/volunserveUi";
 import {
   Stack,
   useRouter,
@@ -17,6 +19,7 @@ import {
   ActivityIndicator,
   StyleSheet,
   Text,
+  TouchableOpacity,
   View,
 } from "react-native";
 import {
@@ -47,6 +50,7 @@ export default function RootLayout() {
   const [authChecked, setAuthChecked] = useState(false);
   const [profileLoading, setProfileLoading] = useState(false);
   const [guardLoading, setGuardLoading] = useState(false);
+  const [guardFailure, setGuardFailure] = useState<string | null>(null);
   const [authUser, setAuthUser] =
     useState<User | null>(null);
   const [profile, setProfile] =
@@ -72,6 +76,7 @@ export default function RootLayout() {
         currentAuthUidRef.current =
           user?.uid ?? null;
         profileRetryInFlightRef.current = false;
+        setGuardFailure(null);
         setAuthUser(user);
         if (!user) {
           setProfile(null);
@@ -202,7 +207,7 @@ export default function RootLayout() {
      * retry before the Firestore profile is returned.
      */
     if (!profile) {
-      if (isLoginRoute || isSignupRoute || isAdministrativeLoginRoute) {
+      if (isLoginRoute || isSignupRoute || isAdministrativeLoginRoute || guardFailure) {
         return;
       }
       if (profileRetryInFlightRef.current) {
@@ -222,27 +227,18 @@ export default function RootLayout() {
           }
           setProfile(refreshedProfile);
         } catch (error) {
-          if (currentAuthUidRef.current !== retryUid) {
-            return;
-          }
-          // A Google-authenticated user can exist before they have finished
-          // their VolunServe Basic Account registration. The protected-route
-          // guard must not sign them out or bounce them to Login.
-          const hasGoogleIdentity = authUser.providerData.some(
+          if (currentAuthUidRef.current !== retryUid) return;
+          const issue = profileReadIssue(error);
+          // Registration can finish if the profile is genuinely missing,
+          // but a timeout or network error must never force a logout.
+          const canCompleteSignup = authUser.providerData.some(
             (provider) => provider.providerId === GoogleAuthProvider.PROVIDER_ID
-          );
-          if (
-            (hasGoogleIdentity || canResumeEmailFirstSignup(authUser)) &&
-            error instanceof Error &&
-            error.message === "Profile not found."
-          ) {
+          ) || canResumeEmailFirstSignup(authUser);
+          if (issue === "missing" && canCompleteSignup) {
             router.replace("/signup");
           } else {
-            try {
-              await logoutUser();
-            } finally {
-              router.replace("/login");
-            }
+            // Fail closed. No protected content is shown until verified.
+            setGuardFailure(profileRecoveryMessage(issue));
           }
         } finally {
           if (
@@ -404,6 +400,7 @@ export default function RootLayout() {
     authUser,
     fontError,
     fontsLoaded,
+    guardFailure,
     profile,
     profileLoading,
     router,
@@ -431,6 +428,29 @@ export default function RootLayout() {
             ? "Checking your account..."
             : "Loading VolunServe..."}
         </Text>
+      </View>
+    );
+  }
+
+  if (guardFailure && authUser && !profile &&
+      !["login", "admin-login", "signup", "public", "admin-request", "verify-certificate"]
+        .includes(String(segments[0] ?? ""))) {
+    return (
+      <View style={styles.recoveryScreen}>
+        <View style={styles.recoveryCard}>
+          <Text style={styles.recoveryEyebrow}>VOLUNSERVE · ACCOUNT CHECK</Text>
+          <Text style={styles.recoveryTitle}>Your account needs attention</Text>
+          <Text style={styles.recoveryMessage}>{guardFailure}</Text>
+          <TouchableOpacity accessibilityRole="button" accessibilityLabel="Retry verifying account"
+            style={styles.recoveryButton} onPress={() => setGuardFailure(null)}>
+            <Text style={styles.recoveryButtonText}>Try again</Text>
+          </TouchableOpacity>
+          <TouchableOpacity accessibilityRole="button" accessibilityLabel="Sign out of VolunServe"
+            style={styles.recoverySecondaryButton}
+            onPress={() => { void logoutUser().then(() => router.replace("/login")).catch(() => setGuardFailure("Unable to sign out. Please try again.")); }}>
+            <Text style={styles.recoverySecondaryText}>Sign out</Text>
+          </TouchableOpacity>
+        </View>
       </View>
     );
   }
@@ -468,6 +488,15 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     backgroundColor: "#F8FAFC",
   },
+  recoveryScreen: { flex: 1, backgroundColor: ui.color.background, alignItems: "center", justifyContent: "center", padding: 18 },
+  recoveryCard: { width: "100%", maxWidth: 440, backgroundColor: ui.color.surface, borderColor: ui.color.border, borderWidth: 1, borderRadius: ui.radius.card, padding: 24 },
+  recoveryEyebrow: { color: ui.color.primary, fontSize: 11, fontWeight: "700", letterSpacing: 0.5, marginBottom: 9 },
+  recoveryTitle: { color: ui.color.text, fontSize: 22, lineHeight: 29, fontWeight: "700", marginBottom: 8 },
+  recoveryMessage: { color: ui.color.muted, fontSize: 14, lineHeight: 22, marginBottom: 20 },
+  recoveryButton: { backgroundColor: ui.color.primary, minHeight: ui.minTouchHeight, borderRadius: ui.radius.control, alignItems: "center", justifyContent: "center" },
+  recoveryButtonText: { color: ui.color.white, fontSize: 14, fontWeight: "700" },
+  recoverySecondaryButton: { marginTop: 8, minHeight: ui.minTouchHeight, alignItems: "center", justifyContent: "center" },
+  recoverySecondaryText: { color: ui.color.muted, fontSize: 13, fontWeight: "600" },
   loadingText: {
     marginTop: 10,
     color: "#64748B",
