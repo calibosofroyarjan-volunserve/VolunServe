@@ -16,6 +16,10 @@ async function main() {
   });
   try {
     await env.withSecurityRulesDisabled(async ctx => {
+      await setDoc(doc(ctx.firestore(),"users","legacy-guest"),{
+        uid:"legacy-guest",email:"guest@gmail.com",role:"guest",
+        status:"approved",residentAccess:true,
+      });
       await setDoc(doc(ctx.firestore(),"users","resident-storage"),{
         uid:"resident-storage",email:"resident@gmail.com",
         status:"approved",role:"resident",residentAccess:true,
@@ -29,6 +33,10 @@ async function main() {
     const bytes = new Uint8Array([1,2,3,4]);
     const metadata = {contentType:"image/jpeg"};
     await assertFails(uploadBytes(ref(as(false),file),bytes,metadata));
+    const guest = env.authenticatedContext("legacy-guest",{
+      email:"guest@gmail.com",email_verified:true,
+    }).storage(bucket);
+    await assertFails(uploadBytes(ref(guest,"disasterCases/test-case/legacy-guest-photo.jpg"),bytes,metadata));
     await assertSucceeds(uploadBytes(ref(as(true),file),bytes,metadata));
     await assertFails(getMetadata(ref(as(false),file)));
     await assertSucceeds(getMetadata(ref(as(true),file)));
