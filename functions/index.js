@@ -15,11 +15,15 @@ const logger = require("firebase-functions/logger");
 
 initializeApp();
 
-// These exports are STAGED ONLY and require an explicit Identity Platform
-// upgrade and isolated auth regression tests before any Functions deployment.
-const registrationBlocking = require("./registrationBlocking");
-exports.volunserveBlockDisposableBeforeCreate = registrationBlocking.beforeCreate;
-exports.volunserveBlockDisposableBeforeSignIn = registrationBlocking.beforeSignIn;
+// FAIL CLOSED: Identity Platform blocking handlers are NOT exported by
+// default. An ordinary Functions deploy must not unexpectedly activate an
+// identity trigger on a production project that has not been upgraded.
+// Activate only in a staging/reviewed environment with the explicit flag.
+if (process.env.VOLUNSERVE_ENABLE_IDENTITY_BLOCKING === "true") {
+  const registrationBlocking = require("./registrationBlocking");
+  exports.volunserveBlockDisposableBeforeCreate = registrationBlocking.beforeCreate;
+  exports.volunserveBlockDisposableBeforeSignIn = registrationBlocking.beforeSignIn;
+}
 
 setGlobalOptions({
   region: "us-central1",
