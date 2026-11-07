@@ -44,7 +44,7 @@ const residentDesktopTabs: TabDefinition[] = [
 // Progress belongs to Profile; notifications remain in the bell and announcements in updates.
 const volunteerDesktopTabs: TabDefinition[] = [
  {name:"index",label:"Home",icon:"home-outline",activeIcon:"home"},
- {name:"volunteer",label:"Emergency Tasks",icon:"people-outline",activeIcon:"people"},
+ {name:"volunteer",label:"Emergency Tasks",icon:"hand-left-outline",activeIcon:"hand-left"},
  {name:"community-events",label:"Community Events",icon:"calendar-outline",activeIcon:"calendar"},
  {name:"certificate",label:"My Certificates",icon:"ribbon-outline",activeIcon:"ribbon"},
 ];
@@ -81,7 +81,7 @@ const residentMobileTabs: TabDefinition[] = [
 ];
 const volunteerMobileTabs: TabDefinition[] = [
   {name:"index",label:"Home",icon:"home-outline",activeIcon:"home"},
-  {name:"volunteer",label:"Emergency",icon:"people-outline",activeIcon:"people"},
+  {name:"volunteer",label:"Emergency",icon:"hand-left-outline",activeIcon:"hand-left"},
   {name:"community-events",label:"Events",icon:"calendar-outline",activeIcon:"calendar"},
  ];
 
