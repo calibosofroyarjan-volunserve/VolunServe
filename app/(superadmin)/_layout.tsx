@@ -6,7 +6,9 @@ import {
   Stack,
   usePathname,
 } from "expo-router";
-import React, { useState } from "react";
+import React, { useRef, useState } from "react";
+import { AppAlert } from "../../lib/appDialog";
+import AccountConnectionFallback from "../../components/ui/AccountConnectionFallback";
 import {
   ActivityIndicator,
   Alert,
@@ -65,10 +67,11 @@ const navItems: NavItem[] = [
 ];
 
 export default function SuperAdminLayout() {
-  const { loading, user, profile } = useUserSession();
+  const { loading, user, profile, connectionError, retryProfile } = useUserSession();
   const { width } = useWindowDimensions();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
+  const logoutPromptOpen = useRef(false);
   const pathname = usePathname();
 
   if (loading) {
@@ -78,6 +81,10 @@ export default function SuperAdminLayout() {
         <Text style={styles.loadingText}>Checking Super Admin access...</Text>
       </View>
     );
+  }
+
+  if (connectionError && user && !profile) {
+    return <AccountConnectionFallback message={connectionError} onRetry={retryProfile} />;
   }
 
   if (!user || !profile || !isApprovedProfile(profile)) {
@@ -113,16 +120,21 @@ export default function SuperAdminLayout() {
     : "SA";
 
   const signOut = async () => {
+    if (logoutPromptOpen.current) return;
+    logoutPromptOpen.current = true;
     try {
+      const confirmed = await AppAlert.confirm(
+        "Log Out", "Sign out of your VolunServe Super Admin account?", "Log Out"
+      );
+      if (!confirmed) return;
       setDrawerOpen(false);
       setAccountOpen(false);
       await logoutUser();
       router.replace("/admin-login" as Href);
     } catch (error: any) {
-      Alert.alert(
-        "Sign Out Failed",
-        error?.message || "Unable to sign out. Please try again."
-      );
+      AppAlert.alert("Sign Out Failed", error?.message || "Unable to sign out. Please try again.");
+    } finally {
+      logoutPromptOpen.current = false;
     }
   };
 

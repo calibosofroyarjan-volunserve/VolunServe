@@ -1,0 +1,39 @@
+name: Validate Web & Mobile Browser Stability (No Deploy)
+on:
+  push:
+    branches: [fix/web-mobile-session-ui-safe-preview-20261107]
+  pull_request:
+    branches: [feat/volunserve-identity-validation-preview-20261107]
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      CI: 'true'
+      EXPO_NO_TELEMETRY: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Security, navigation and UI regression checks
+        run: |
+          node scripts/test-web-mobile-session-ui-20261107.cjs
+          node scripts/test-volunserve-brand-validation-preview-20261107.cjs
+          node scripts/test-volunserve-ui-consistency-20261107.cjs
+          node scripts/test-portal-resident-volunteer-ui-flow.cjs
+          node scripts/test-unified-login-routing.cjs
+          node scripts/test-admin-navigation-contract.cjs
+          node --test scripts/test-live-dialog-hotfix.cjs
+          node --test scripts/test-resident-volunteer-sidebar.cjs
+      - name: TypeScript no-emit check
+        run: npx tsc --noEmit --pretty false
+      - name: Web build only — never deploy
+        run: npx expo export --platform web

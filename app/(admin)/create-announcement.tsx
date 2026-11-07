@@ -1,4 +1,6 @@
 import AdminReviewHero from "../../components/admin/AdminReviewHero";
+import VolunServeCard from "../../components/ui/VolunServeCard";
+import VolunServeText from "../../components/ui/VolunServeText";
 import { volunserveUi as ui } from "../../constants/volunserveUi";
 import { announcementValidation, validateValues } from "../../lib/volunserveValidation";
 import React, { useState } from "react";
@@ -179,7 +181,7 @@ export default function CreateAnnouncement() {
     >
       <AdminReviewHero eyebrow="LGU OPERATIONS / COMMUNICATION & REPORTS" title="Announcements" subtitle="Prepare and publish authorized operational notices to residents and volunteers across VolunServe." icon="megaphone-outline" tag="COMMUNITY-WIDE" />
 
-      <View style={styles.formCard}>
+      <VolunServeCard style={styles.formCard}>
         <Text style={styles.inputLabel}>ANNOUNCEMENT TYPE</Text>
         <TouchableOpacity accessibilityRole="button" accessibilityLabel="Choose announcement type"
           accessibilityState={{ expanded: templateOpen }} onPress={() => setTemplateOpen(!templateOpen)}
@@ -254,9 +256,9 @@ export default function CreateAnnouncement() {
             </Text>
           )}
         </TouchableOpacity>
-      </View>
+      </VolunServeCard>
 
-      <View style={styles.noteCard}><Text style={styles.noteTitle}>Community-wide announcements</Text><Text style={styles.noteText}>Published announcements appear for residents and volunteers in Community Updates and Notifications.</Text></View>
+      <View style={styles.noteCard}><VolunServeText variant="cardTitle" style={styles.noteTitle}>Community-wide announcements</VolunServeText><VolunServeText variant="body" color="muted" style={styles.noteText}>Published announcements appear for residents and volunteers in Community Updates and Notifications.</VolunServeText></View>
     </ScrollView>
   );
 }

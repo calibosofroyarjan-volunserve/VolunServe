@@ -1,4 +1,5 @@
 import { AppAlert } from "../../lib/appDialog";
+import AccountConnectionFallback from "../../components/ui/AccountConnectionFallback";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { Redirect, router, Tabs, useSegments, type Href } from "expo-router";
 import React from "react";
@@ -44,7 +45,7 @@ const residentDesktopTabs: TabDefinition[] = [
 // Progress belongs to Profile; notifications remain in the bell and announcements in updates.
 const volunteerDesktopTabs: TabDefinition[] = [
  {name:"index",label:"Home",icon:"home-outline",activeIcon:"home"},
- {name:"volunteer",label:"Emergency Tasks",icon:"people-outline",activeIcon:"people"},
+ {name:"volunteer",label:"Emergency Tasks",icon:"hand-left-outline",activeIcon:"hand-left"},
  {name:"community-events",label:"Community Events",icon:"calendar-outline",activeIcon:"calendar"},
  {name:"certificate",label:"My Certificates",icon:"ribbon-outline",activeIcon:"ribbon"},
 ];
@@ -81,7 +82,7 @@ const residentMobileTabs: TabDefinition[] = [
 ];
 const volunteerMobileTabs: TabDefinition[] = [
   {name:"index",label:"Home",icon:"home-outline",activeIcon:"home"},
-  {name:"volunteer",label:"Emergency",icon:"people-outline",activeIcon:"people"},
+  {name:"volunteer",label:"Emergency",icon:"hand-left-outline",activeIcon:"hand-left"},
   {name:"community-events",label:"Events",icon:"calendar-outline",activeIcon:"calendar"},
  ];
 
@@ -98,7 +99,10 @@ const residentOnlyRoutes = new Set([
   "donation-history",
 ]);
 
+let residentLogoutPromptOpen = false;
 function requestConfirmedResidentLogout() {
+  if (residentLogoutPromptOpen) return;
+  residentLogoutPromptOpen = true;
   const performLogout = async () => {
     try {
       await logoutUser();
@@ -108,13 +112,16 @@ function requestConfirmedResidentLogout() {
     }
   };
   AppAlert.alert("Log Out", "Are you sure you want to log out of VolunServe?", [
-    { text: "Cancel", style: "cancel" },
-    { text: "Log Out", style: "destructive", onPress: () => void performLogout() },
-  ]);
+    { text: "Cancel", style: "cancel", onPress: () => { residentLogoutPromptOpen = false; } },
+    { text: "Log Out", style: "destructive", onPress: () => {
+      residentLogoutPromptOpen = false;
+      void performLogout();
+    } },
+  ], { cancelable: false });
 }
 
 export default function TabLayout() {
-  const { loading, user, profile } = useUserSession();
+  const { loading, user, profile, connectionError, retryProfile } = useUserSession();
   const { width } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const segments = useSegments();
@@ -161,6 +168,10 @@ export default function TabLayout() {
         <Text style={styles.loadingText}>Checking your account...</Text>
       </View>
     );
+  }
+
+  if (connectionError && user && !profile) {
+    return <AccountConnectionFallback message={connectionError} onRetry={retryProfile} />;
   }
 
   if (!user || !profile || !isApprovedProfile(profile)) {

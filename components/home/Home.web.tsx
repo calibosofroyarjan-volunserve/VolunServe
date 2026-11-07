@@ -1,4 +1,5 @@
 import { AppAlert } from "../../lib/appDialog";
+import { volunserveUi as ui } from "../../constants/volunserveUi";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
@@ -10,7 +11,7 @@ import {
   Timestamp,
   where,
 } from "firebase/firestore";
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Image,
@@ -164,6 +165,7 @@ export default function WebHome() {
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   const [notificationMenuOpen, setNotificationMenuOpen] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
+  const logoutPromptOpen = useRef(false);
 
   const compact = width < 1040;
   const narrow = width < 760;
@@ -454,18 +456,20 @@ export default function WebHome() {
   };
 
   const handleLogout = async () => {
+    if (loggingOut || logoutPromptOpen.current) return;
+    logoutPromptOpen.current = true;
     setProfileMenuOpen(false);
-    if (loggingOut) return;
-    const confirmed = await AppAlert.confirm("Log Out", "Are you sure you want to log out of VolunServe?", "Log Out");
-    if (!confirmed) return;
-    setLoggingOut(true);
     try {
+      const confirmed = await AppAlert.confirm("Log Out", "Are you sure you want to log out of VolunServe?", "Log Out");
+      if (!confirmed) return;
+      setLoggingOut(true);
       await logoutUser();
       router.replace("/login");
     } catch (error: any) {
       AppAlert.alert("Log out failed", error?.message || "Please try again.");
     } finally {
       setLoggingOut(false);
+      logoutPromptOpen.current = false;
     }
   };
 
@@ -1391,7 +1395,7 @@ const styles = StyleSheet.create({
   dropdownVerifiedText: { color: "#087B55", fontSize: 9, fontWeight: "800" },
   dropdownAction: {
     flexDirection: "row", alignItems: "center", gap: 13,
-    minHeight: 45, paddingHorizontal: 12, borderRadius: 11,
+    minHeight: ui.minTouchHeight, paddingHorizontal: 12, borderRadius: ui.radius.control,
   },
   dropdownActionPressed: { backgroundColor: "#F0F8F8" },
   dropdownActionText: { color: "#1A3156", fontSize: 12.5, fontWeight: "700" },
@@ -1772,15 +1776,11 @@ const styles = StyleSheet.create({
   panel: {
     flex: 1,
     minWidth: 0,
-    padding: 21,
-    borderRadius: 20,
-    backgroundColor: "#FFFFFF",
+    padding: ui.spacing.lg,
+    borderRadius: ui.radius.card,
+    backgroundColor: ui.color.surface,
     borderWidth: 1,
-    borderColor: "#DEEDF2",
-    shadowColor: "#0D506A",
-    shadowOpacity: 0.035,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 4 },
+    borderColor: ui.color.border,
   },
   panelHeader: {
     flexDirection: "row",

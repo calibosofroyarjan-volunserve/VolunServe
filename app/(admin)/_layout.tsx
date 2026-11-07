@@ -10,6 +10,7 @@ import {
 import React, {
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import {
@@ -27,6 +28,8 @@ import {
   useWindowDimensions,
   View,
 } from "react-native";
+import { AppAlert } from "../../lib/appDialog";
+import AccountConnectionFallback from "../../components/ui/AccountConnectionFallback";
 import {
   isApprovedProfile,
   logoutUser,
@@ -53,9 +56,9 @@ const NAV_ITEMS: NavItem[] = [
   { label: "Command Center", icon: "home-outline", route: "/(admin)/command-center" },
   { label: "Resident Identity Reviews", icon: "shield-checkmark-outline", route: "/(admin)/identity-reviews" },
   { label: "LGU Operations", icon: "time-outline", route: "/(admin)/lgu-attendance" },
-  { label: "Emergency Reports", icon: "warning-outline", route: "/(admin)/admin-cases" },
+  { label: "Emergency Reports", icon: "alert-circle-outline", route: "/(admin)/admin-cases" },
   { label: "Assistance Requests", icon: "hand-left-outline", route: "/(admin)/assistance-requests" },
-  { label: "Community Events", icon: "leaf-outline", route: "/(admin)/community-events" },
+  { label: "Community Events", icon: "calendar-outline", route: "/(admin)/community-events" },
   { label: "Event Attendance", icon: "checkmark-done-outline", route: "/(admin)/community-attendance" },
   { label: "Certificates", icon: "ribbon-outline", route: "/(admin)/certificates" },
   { label: "Donation Management", icon: "heart-outline", route: "/(admin)/donor-monitoring" },
@@ -101,6 +104,8 @@ export default function AdminLayout() {
     loading,
     user,
     profile,
+    connectionError,
+    retryProfile,
   } = useUserSession();
 
   const {
@@ -111,6 +116,7 @@ export default function AdminLayout() {
     usePathname();
 
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const logoutPromptOpen = useRef(false);
   const [expandedSection, setExpandedSection] = useState<NavSectionId | "none" | null>(null);
   const currentSection = NAV_SECTIONS.find((section) =>
     NAV_ITEMS.some((item) => section.labels.includes(item.label) && navActive(item, pathname))
@@ -159,28 +165,23 @@ export default function AdminLayout() {
     );
   };
 
-  const signOut =
-    async () => {
-      try {
-        setMobileMenuOpen(
-          false,
-        );
-
-        await logoutUser();
-
-        router.replace(
-          "/admin-login" as Href,
-        );
-      } catch (
-        error: any
-      ) {
-        Alert.alert(
-          "Sign Out Failed",
-          error?.message ||
-            "Unable to sign out.",
-        );
-      }
-    };
+  const signOut = async () => {
+    if (logoutPromptOpen.current) return;
+    logoutPromptOpen.current = true;
+    try {
+      const confirmed = await AppAlert.confirm(
+        "Log Out", "Sign out of your VolunServe Admin account?", "Log Out"
+      );
+      if (!confirmed) return;
+      setMobileMenuOpen(false);
+      await logoutUser();
+      router.replace("/admin-login" as Href);
+    } catch (error: any) {
+      AppAlert.alert("Sign Out Failed", error?.message || "Unable to sign out.");
+    } finally {
+      logoutPromptOpen.current = false;
+    }
+  };
 
   if (loading) {
     return (
@@ -203,6 +204,10 @@ export default function AdminLayout() {
         </Text>
       </View>
     );
+  }
+
+  if (connectionError && user && !profile) {
+    return <AccountConnectionFallback message={connectionError} onRetry={retryProfile} />;
   }
 
   if (!user) {
