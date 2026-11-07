@@ -45,7 +45,7 @@ function preview(stage,file){
  }
 }
 const modal=document.createElement("dialog");modal.id="scanModal";
-modal.innerHTML='<div class="scan-modal-head"><h3 id="scanTitle">Live camera</h3><button type="button" class="alt" id="scanClose">✕ Close</button></div><div class="cam-view"><video id="scanVideo" autoplay playsinline muted></video><canvas id="scanOverlay"></canvas><div id="scanGuide" class="frame-guide"></div></div><div class="scan-modal-body"><div id="scanStatus" class="cam-status" role="status">Starting...</div><div class="cam-note" id="scanNote"></div><label class="check" style="margin:12px 0"><input type="checkbox" id="scanAuto" checked><span>Auto-capture when framing is stable (experimental). Retake is always available.</span></label><div class="scan-controls"><button type="button" id="scanCapture">Capture now</button><button type="button" class="alt" id="scanCancel">Cancel</button></div></div>';
+modal.innerHTML='<div class="scan-modal-head"><h3 id="scanTitle">Live camera</h3><button type="button" class="alt" id="scanClose">✕ Close</button></div><div class="cam-view"><video id="scanVideo" autoplay playsinline muted></video><canvas id="scanOverlay"></canvas><div id="scanGuide" class="frame-guide"></div></div><div class="scan-modal-body"><div id="scanStatus" class="cam-status" role="status">Starting...</div><div class="cam-note" id="scanNote"></div><p class="cam-note">Automatic capture is on. Keep the camera steady, then review the captured image. Images are not uploaded until you run staging verification.</p><div class="scan-controls"><button type="button" class="alt" id="scanCancel">Cancel</button></div></div>';
 document.body.append(modal);
 const video=$("scanVideo"),canvas=$("scanOverlay"),ctx=canvas.getContext("2d");
 let stream=null,timer=null,mode=null,session=0,stable=0,previous=null,detector=null,detectorLoading=null,detectorUnavailable=false,capturing=false;
@@ -74,10 +74,8 @@ async function start(stage){
  $("scanTitle").textContent=TYPES[stage].label;
  $("scanGuide").classList.toggle("face",stage==="selfie");
  video.classList.toggle("mirror",stage==="selfie");canvas.classList.toggle("mirror",stage==="selfie");
- $("scanAuto").closest("label").classList.remove("hidden");
- $("scanAuto").checked=true;
  $("scanNote").textContent=stage==="selfie"?"Center one face. Face boxes are local guidance only, NOT liveness detection.":"Align all four edges of the ID against a contrasting background. Auto-capture uses approximate rectangle, lighting and stillness only, NOT government-ID identification or authenticity.";
- $("scanCapture").disabled=true;status("Requesting camera permission...");
+ status("Requesting camera permission...");
  try{
   modal.showModal();
   try{stream=await navigator.mediaDevices.getUserMedia({audio:false,video:{facingMode:{ideal:TYPES[stage].facing},width:{ideal:1280},height:{ideal:960}}})}
@@ -85,14 +83,14 @@ async function start(stage){
   if(current!==session){stream?.getTracks().forEach(t=>t.stop());return}
   video.srcObject=stream;await video.play();if(current!==session)return;
   canvas.width=video.videoWidth;canvas.height=video.videoHeight;
-  $("scanCapture").disabled=false;status("Camera ready — adjust lighting.");
+  status("Camera ready — align one face or a card-like rectangle.");
   if(stage==="selfie"){
    status("Loading local face detector...");
-   try{await faceDetector()}catch{status("Live face detector unavailable. Manual camera capture remains possible; server still checks the photo.")}
+   try{await faceDetector()}catch{status("Live face detector unavailable. Automatic selfie capture cannot proceed; close and use the test-image fallback.")}
   }
   if(current!==session)return;
   timer=setInterval(()=>check(current),240);
- }catch(e){if(current===session){status("Camera unavailable: "+String(e?.name||e?.message||"camera error")+". Allow access or use test-image fallback.");$("scanCapture").disabled=true}}
+ }catch(e){if(current===session){status("Camera unavailable: "+String(e?.name||e?.message||"camera error")+". Allow access or use test-image fallback.")}}
 }
 function drawFaces(faces){
  if(!ctx)return;ctx.clearRect(0,0,canvas.width,canvas.height);ctx.lineWidth=Math.max(3,canvas.width/350);ctx.strokeStyle="#58f0ae";
@@ -113,7 +111,7 @@ function check(current){
       drawFaces(faces);const check=assessFaceBoxes(faces,video.videoWidth,video.videoHeight);
       good=check.acceptable&&steady;
       message=!check.acceptable?check.message:steady?"One centered face detected — hold still.":"One face detected — stop moving.";
-    }else{drawFaces([]);message="Live detection unavailable; use Capture now. Server face comparison still applies."}
+    }else{drawFaces([]);message="Live face detection unavailable; close and use the test-image fallback."}
   }else{
     drawFaces([]);
     const card=assessDocumentFrame(pixels,meter.width,meter.height);
@@ -123,23 +121,23 @@ function check(current){
       :"Card-like edges found. Keep the ID steady.";
   }
   status(message);stable=good?stable+1:0;
-  if($("scanAuto").checked&&stable>=(mode==="selfie"?9:13)&&(mode!=="selfie"||detector)){$("scanAuto").checked=false;void capture()}
- }catch{stable=0;status("Live tracking interrupted. Try Capture now, or use image fallback.")}
+  if(stable>=(mode==="selfie"?9:13)&&(mode!=="selfie"||detector)){void capture()}
+ }catch{stable=0;status("Live tracking interrupted. Hold still, or close and use image fallback.")}
 }
 async function capture(){
  if(!mode||!stream||video.readyState<2||capturing)return;
- capturing=true;const stage=mode;const current=session;$("scanCapture").disabled=true;
+ capturing=true;const stage=mode;const current=session;status("Automatically capturing. Review the image before submitting.");
  const pic=document.createElement("canvas");const factor=Math.min(1,1400/video.videoWidth);
  pic.width=Math.round(video.videoWidth*factor);pic.height=Math.round(video.videoHeight*factor);
  pic.getContext("2d").drawImage(video,0,0,pic.width,pic.height);
  const blob=await new Promise(resolve=>pic.toBlob(resolve,"image/jpeg",0.88));
  if(current!==session)return;
- if(!blob||typeof DataTransfer==="undefined"){status("Could not save camera capture; use test-image fallback.");$("scanCapture").disabled=false;capturing=false;return}
+ if(!blob||typeof DataTransfer==="undefined"){status("Could not save camera capture; use test-image fallback.");capturing=false;return}
  const file=new File([blob],"staging-"+stage+"-"+Date.now()+".jpg",{type:"image/jpeg"});
  const dt=new DataTransfer();dt.items.add(file);
  $(stage).files=dt.files;$(stage).dispatchEvent(new Event("change",{bubbles:true}));stop();
 }
-$("scanCapture").addEventListener("click",()=>void capture());$("scanClose").addEventListener("click",stop);
+$("scanClose").addEventListener("click",stop);
 $("scanCancel").addEventListener("click",stop);modal.addEventListener("cancel",e=>{e.preventDefault();stop()});
 document.addEventListener("visibilitychange",()=>{if(document.hidden&&stream)stop()});
 window.addEventListener("pagehide",stop);
