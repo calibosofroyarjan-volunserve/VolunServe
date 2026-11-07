@@ -2,11 +2,11 @@ import {SJDM_BARANGAYS} from "../constants/sjdmBarangays";
 import {OCCUPATION_OPTIONS, SPECIALIZATIONS} from "../constants/occupationOptions";
 
 /**
- * Enforce completion at the profile creation boundary, not only inside the
- * visible Signup wizard. Firebase Auth-only UIDs are NOT Resident profiles.
- * Keep identity-document checks separate from Basic Resident registration.
+ * Single registration-data policy used by UI field feedback and the final
+ * profile creation boundary. Do not treat a Firebase Auth UID as a Resident
+ * until every required field passes this policy AND the email is verified.
  */
-type RequiredResidentDetails = {
+export type RequiredResidentDetails = {
   firstName: string;
   lastName: string;
   middleName?: string;
@@ -21,35 +21,73 @@ type RequiredResidentDetails = {
   occupationOther?: string;
 };
 
-export function requireCompleteResidentRegistration(data: RequiredResidentDetails): void {
-  const validName = (value: string, optional = false) => {
-    const clean = String(value || "").trim();
-    if (!clean && optional) return true;
-    return /^[\p{L}][\p{L}\s.'-]*$/u.test(clean) &&
-      (clean.match(/\p{L}/gu) || []).length >= (optional ? 1 : 2);
-  };
-  if (!validName(data.firstName) || !validName(data.lastName) ||
-      !validName(data.middleName || "", true) ||
-      !Number.isInteger(data.age) || data.age < 18 || data.age > 100 ||
-      !/^(?:\+639\d{9}|09\d{9})$/.test(String(data.phoneNumber || "").replace(/[\s-]/g, ""))) {
-    throw new Error("Complete Personal Details (Step 3) with your full name, valid age, and Philippine mobile number.");
+export type ResidentRegistrationField = keyof RequiredResidentDetails;
+export type ResidentRegistrationFieldErrors = Partial<Record<ResidentRegistrationField, string>>;
+
+const nameError = (value: unknown, label: string, optional = false): string | null => {
+  const name = String(value || "").trim();
+  if (!name && optional) return null;
+  if (!name) return `${label} is required.`;
+  if (name.length > 80) return `${label} must be 80 characters or fewer.`;
+  if (!/^[\p{L}][\p{L}\s.'-]*$/u.test(name) ||
+      (name.match(/\p{L}/gu) || []).length < (optional ? 1 : 2)) {
+    return `Enter a valid ${label.toLowerCase()} using letters, spaces, hyphens or apostrophes.`;
+  }
+  return null;
+};
+
+export function getResidentRegistrationFieldErrors(data: RequiredResidentDetails): ResidentRegistrationFieldErrors {
+  const errors: ResidentRegistrationFieldErrors = {};
+  const first = nameError(data.firstName, "First name");
+  const last = nameError(data.lastName, "Last name");
+  const middle = nameError(data.middleName, "Middle name", true);
+  if (first) errors.firstName = first;
+  if (last) errors.lastName = last;
+  if (middle) errors.middleName = middle;
+
+  if (!Number.isInteger(data.age) || data.age < 18 || data.age > 100) {
+    errors.age = "Enter a valid birth date. Resident signup requires ages 18–100.";
+  }
+  const mobile = String(data.phoneNumber || "").replace(/[\s-]/g, "");
+  if (!/^(?:\+639\d{9}|09\d{9})$/.test(mobile)) {
+    errors.phoneNumber = "Enter a valid PH mobile number starting with 09 or +639.";
   }
 
-  const city = String(data.city || "").trim().toLowerCase();
-  if (!String(data.region || "").trim() ||
-      String(data.province || "").trim().toLowerCase() !== "bulacan" ||
-      !["city of san jose del monte", "city of san jose del monte, bulacan"].includes(city) ||
-      !SJDM_BARANGAYS.includes(String(data.barangay || "").trim()) ||
-      !OCCUPATION_OPTIONS.includes(String(data.occupationCategory || "").trim())) {
-    throw new Error("Complete Address & Profile (Step 4): select your SJDM barangay and occupation.");
+  if (typeof data.region !== "string" || !data.region.trim() || data.region.length > 100) {
+    errors.region = "Select a valid Region III address.";
   }
-  const specializationOptions = SPECIALIZATIONS[data.occupationCategory] || [];
-  if (specializationOptions.length > 0 &&
-      !specializationOptions.includes(String(data.occupationSpecialization || "").trim())) {
-    throw new Error("Select the required occupation specialization in Step 4.");
+  if (String(data.province || "").trim().toLowerCase() !== "bulacan" ||
+      !["city of san jose del monte", "city of san jose del monte, bulacan"]
+        .includes(String(data.city || "").trim().toLowerCase())) {
+    errors.city = "VolunServe resident registration is for San Jose del Monte, Bulacan.";
   }
-  if (data.occupationCategory === "Other (Specify)" &&
-      String(data.occupationOther || "").trim().length < 2) {
-    throw new Error("Specify your occupation in Step 4.");
+  if (!SJDM_BARANGAYS.includes(String(data.barangay || "").trim())) {
+    errors.barangay = "Choose one of the official San Jose del Monte barangays.";
   }
+  const category = String(data.occupationCategory || "").trim();
+  if (!OCCUPATION_OPTIONS.includes(category)) {
+    errors.occupationCategory = "Choose a valid occupation from the list.";
+  } else {
+    const specializations = SPECIALIZATIONS[category] || [];
+    if (specializations.length > 0 &&
+        !specializations.includes(String(data.occupationSpecialization || "").trim())) {
+      errors.occupationSpecialization = "Choose the specialization for your occupation.";
+    }
+    if (category === "Other (Specify)") {
+      const other = String(data.occupationOther || "").trim();
+      if (other.length < 2 || other.length > 80 || !/^[\p{L}\p{N}][\p{L}\p{N}\s.,()&/'-]*$/u.test(other)) {
+        errors.occupationOther = "Specify your occupation (2–80 characters).";
+      }
+    }
+  }
+  return errors;
+}
+
+export function requireCompleteResidentRegistration(data: RequiredResidentDetails): void {
+  const errors = getResidentRegistrationFieldErrors(data);
+  const firstError = Object.entries(errors)[0];
+  if (!firstError) return;
+  const [field, message] = firstError;
+  const isPersonal = ["firstName","lastName","middleName","age","phoneNumber"].includes(field);
+  throw new Error(`Complete ${isPersonal ? "Step 3 — Personal Details" : "Step 4 — Address & Profile"}: ${message}`);
 }
