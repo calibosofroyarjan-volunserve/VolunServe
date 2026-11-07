@@ -19,6 +19,11 @@ service cloud.firestore {
     function approved() {
       let p = signedIn() ? profile() : {};
       return verifiedEmailSession()
+        // Explicitly prohibit legacy Guest/unknown roles even if their old
+        // profile happens to contain status == approved.
+        && p.get('role', '') in [
+          'resident', 'volunteer', 'admin', 'superadmin', 'lgu_personnel'
+        ]
         // Email-only Firebase Auth UIDs are NOT completed Resident profiles.
         // Staff accounts retain their independent administrative login policy.
         && (
