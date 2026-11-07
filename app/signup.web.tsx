@@ -1,3 +1,4 @@
+import { liveUi as designUi } from "../constants/volunserveLiveUi";
 import EmailFirstSignup from "../components/auth/EmailFirstSignup";
 import { userFacingError } from "../lib/userFacingError";
 import { EMAIL_FIRST_SIGNUP_ENABLED } from "../lib/signupFeature";
@@ -1398,8 +1399,8 @@ const styles = StyleSheet.create({
   mobileBrandText: { color: COLORS.primaryDark, fontSize: 20, fontWeight: "900" },
   mainCard: { backgroundColor: "#fff", borderRadius: 14, borderWidth: 1, borderColor: "#dce6eb", paddingHorizontal: 32, paddingVertical: 34, shadowColor: "#64748b", shadowOpacity: 0.12, shadowRadius: 22, elevation: 5 },
   signupHeading: { alignItems: "center", marginBottom: 22 },
-  signupTitle: { color: COLORS.text, fontSize: 31, lineHeight: 37, fontWeight: "900", textAlign: "center" },
-  signupSubtitle: { color: COLORS.muted, fontSize: 15, marginTop: 4, fontWeight: "500", textAlign: "center", lineHeight: 21 },
+  signupTitle: { color: COLORS.text, fontSize: designUi.type.page.fontSize, lineHeight: designUi.type.page.lineHeight, fontWeight: designUi.type.page.fontWeight, textAlign: "center" },
+  signupSubtitle: { color: COLORS.muted, fontSize: designUi.type.body.fontSize, marginTop: 4, fontWeight: designUi.type.body.fontWeight, textAlign: "center", lineHeight: designUi.type.body.lineHeight},
 
   roleSelectionWrap: { marginTop: 4 },
   roleSelectionGrid: { flexDirection: "row", gap: 14 },
@@ -1433,7 +1434,7 @@ const styles = StyleSheet.create({
   },
   roleChoiceIconWrapActive: { backgroundColor: COLORS.primarySoft },
   roleChoiceIcon: { fontSize: 24, color: COLORS.primaryDark },
-  roleChoiceTitle: { color: COLORS.text, fontSize: 19, fontWeight: "900", marginBottom: 8 },
+  roleChoiceTitle: { color: COLORS.text, fontSize: designUi.type.card.fontSize, fontWeight: designUi.type.card.fontWeight, marginBottom: 8, lineHeight: designUi.type.card.lineHeight,},
   roleChoiceText: { color: COLORS.muted, fontSize: 12.5, lineHeight: 19, fontWeight: "600", flex: 1 },
   roleChoiceBadge: {
     marginTop: 16,
@@ -1552,8 +1553,8 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   sectionHeaderWrap: { marginBottom: 14 },
-  sectionHeader: { fontSize: 16, fontWeight: "900", color: COLORS.text },
-  sectionSubheader: { fontSize: 12.5, color: COLORS.muted, fontWeight: "600", marginTop: 4, lineHeight: 18 },
+  sectionHeader: { fontSize: designUi.type.section.fontSize, fontWeight: designUi.type.section.fontWeight, color: COLORS.text, lineHeight: designUi.type.section.lineHeight,},
+  sectionSubheader: { fontSize: designUi.type.body.fontSize, color: COLORS.muted, fontWeight: designUi.type.body.fontWeight, marginTop: 4, lineHeight: designUi.type.body.lineHeight},
 
   roleRow: { flexDirection: "row", gap: 10, marginBottom: 14 },
   roleBtn: { flex: 1, minHeight: 56, flexDirection: "row", justifyContent: "center", backgroundColor: "#f5f8fa", borderWidth: 1.5, borderColor: "#d9e2e8", paddingVertical: 12, borderRadius: 9, alignItems: "center" },
@@ -1572,7 +1573,7 @@ const styles = StyleSheet.create({
   signupDividerRow: { flexDirection: "row", alignItems: "center", gap: 14, marginVertical: 16 },
   signupDividerLine: { flex: 1, height: 1, backgroundColor: "#BDCFC7" },
   signupDividerText: { color: "#154A3D", fontSize: 13, fontWeight: "900", letterSpacing: 1.8 },
-  emailVerifyHint: { color: "#4B6B61", fontSize: 12, fontWeight: "600", lineHeight: 19, marginBottom: 2 },
+  emailVerifyHint: { color: "#4B6B61", fontSize: designUi.type.body.fontSize, fontWeight: designUi.type.body.fontWeight, lineHeight: designUi.type.body.lineHeight, marginBottom: 2 },
   personalDetailsHeader: { marginTop: 24, paddingTop: 18, borderTopWidth: 1, borderTopColor: "#DFEBE6" },
   nameRow: { flexDirection: "row", flexWrap: "wrap", gap: 12, alignItems: "flex-start" },
   nameColumn: { flexGrow: 1, flexBasis: 145, minWidth: 140 },
@@ -1590,8 +1591,8 @@ const styles = StyleSheet.create({
   field: { marginBottom: 14 },
   fixedLocationField: { height: 52, borderWidth: 1, borderColor: "#dce5ec", borderRadius: 12, backgroundColor: "#f1f5f9", paddingHorizontal: 14, justifyContent: "center" },
   fixedLocationText: { color: COLORS.text, fontSize: 14, fontWeight: "800" },
-  label: { fontSize: 12.5, fontWeight: "800", color: "#172033", marginBottom: 7 },
-  groupLabel: { fontSize: 13, fontWeight: "900", color: "#172033", marginTop: 3, marginBottom: 7 },
+  label: { fontSize: designUi.type.label.fontSize, fontWeight: designUi.type.label.fontWeight, color: "#172033", marginBottom: 7, lineHeight: designUi.type.label.lineHeight,},
+  groupLabel: { fontSize: designUi.type.label.fontSize, fontWeight: designUi.type.label.fontWeight, color: "#172033", marginTop: 3, marginBottom: 7, lineHeight: designUi.type.label.lineHeight,},
   helperText: { color: COLORS.muted, fontSize: 11.5, fontWeight: "600", marginTop: -3, marginBottom: 10 },
   profileModeBanner: { backgroundColor: "#eff6ff", borderWidth: 1, borderColor: "#bfdbfe", borderRadius: 10, padding: 14, marginBottom: 18 },
   profileModeBannerVolunteer: { backgroundColor: "#f0fdfa", borderColor: "#99f6e4" },
@@ -1600,7 +1601,7 @@ const styles = StyleSheet.create({
   residentNotice: { flexDirection: "row", alignItems: "flex-start", backgroundColor: "#eff6ff", borderWidth: 1, borderColor: "#bfdbfe", borderRadius: 10, padding: 14, marginTop: 4 },
   residentNoticeIcon: { fontSize: 22, marginRight: 12, color: COLORS.accent },
   residentNoticeTitle: { color: COLORS.text, fontSize: 13.5, fontWeight: "900", marginBottom: 4 },
-  residentNoticeText: { color: COLORS.muted, fontSize: 12.5, lineHeight: 18, fontWeight: "600" },
+  residentNoticeText: { color: COLORS.muted, fontSize: designUi.type.body.fontSize, lineHeight: designUi.type.body.lineHeight, fontWeight: designUi.type.body.fontWeight},
   inputShell: { height: 46, flexDirection: "row", alignItems: "center", backgroundColor: "#fff", borderWidth: 1, borderColor: "#cfdbe3", borderRadius: 8, paddingLeft: 13 },
   inputIcon: { color: "#64748b", fontSize: 16, width: 25, textAlign: "center" },
   input: { height: 46, backgroundColor: "#fff", borderWidth: 1, borderColor: "#cfdbe3", borderRadius: 8, paddingVertical: 0, paddingHorizontal: 13, fontSize: 14, color: COLORS.text, fontWeight: "600" },
