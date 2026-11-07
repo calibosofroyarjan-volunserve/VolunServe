@@ -46,6 +46,12 @@ function sha(s) { assert.match(s || "", /^[a-f0-9]{40}$/, "BLOCKED: expected ful
 function ancestor(a,b) {
   try { git("merge-base","--is-ancestor",a,b);return true; } catch {return false;}
 }
+function verifyCurrentProtectedBranch(candidate, remoteHead) {
+  sha(candidate);
+  sha(remoteHead);
+  assert.equal(remoteHead,candidate,
+    "BLOCKED: newer live-protected commit exists; refusing a stale queued release");
+}
 function changed(base, head) {
   const out=git("diff","--name-status","--no-renames",base,head);
   return out ? out.split("\n").map(s=>{const [status,path]=s.split("\t");return {status,path};}) : [];
@@ -100,6 +106,8 @@ async function check() {
   const approved=JSON.parse(process.env.APPROVED_FILES || "[]");
   assert.equal(process.env.GITHUB_SHA,candidate,"BLOCKED: runner is not building exact expected candidate");
   assert.equal(process.env.GITHUB_REF,REQUIRED_REF,"BLOCKED: release must come from live-protected, not main");
+  assert.equal(process.env.GITHUB_REPOSITORY,"calibosofroyarjan-volunserve/VolunServe",
+    "BLOCKED: not the approved VolunServe repository");
   const abort=AbortSignal.timeout(12000);
   const resp=await fetch(LIVE_URL,{headers:{"Cache-Control":"no-cache","Accept":"application/json"},signal:abort,redirect:"error"});
   assert.ok(resp.ok,"BLOCKED: failed to read production Hosting release marker");
@@ -108,6 +116,10 @@ async function check() {
   assert.equal(marker.firebaseProject,"volunserve-3aa5b","BLOCKED: wrong Firebase project");
   const live=sha(marker.revision);
   assert.equal(git("rev-parse",candidate),candidate,"BLOCKED: unknown candidate");
+  // Do not publish an older queued commit if the approved source branch advanced.
+  // This read-only remote check is intentionally fail-closed.
+  const remoteHead=git("ls-remote","--heads","origin","live-protected").trim().split(/\s+/)[0];
+  verifyCurrentProtectedBranch(candidate,remoteHead);
   assert.equal(git("rev-parse",live),live,"BLOCKED: live commit missing from full Git checkout");
   assert.equal(git("rev-parse",INITIAL_LIVE),INITIAL_LIVE,"BLOCKED: initial live revision missing");
   const changes=changed(live,candidate);
@@ -127,6 +139,9 @@ function selfTest() {
     {status:"M",path:".github/workflows/release-live-protected-hosting.yml"}],
     ancestral:true,hasInitial:true};
   validate(base);
+  verifyCurrentProtectedBranch(b,b);
+  assert.throws(()=>verifyCurrentProtectedBranch(b,a),
+    /BLOCKED: newer live-protected commit exists/);
   for (const patch of [
     {branch:"refs/heads/main"},
     {ancestral:false},{hasInitial:false},{expected:b},
@@ -137,7 +152,7 @@ function selfTest() {
     {changes:[{status:"M",path:"app/login.web.tsx"},{status:"M",path:".github/workflows/unknown.yml"}]}
   ]) assert.throws(()=>validate({...base,...patch}),/BLOCKED:/);
   checkPolicyFiles();
-  console.log("PASS: blocks outdated main, stale source, unsafe modules, unapproved files, deletion");
+  console.log("PASS: blocks outdated main, changed queued branch head, stale source, unsafe modules, unapproved files, deletion");
 }
 if(require.main===module){
  (process.argv.includes("--self-test")?Promise.resolve().then(selfTest):
