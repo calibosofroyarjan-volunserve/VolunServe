@@ -692,7 +692,7 @@ const styles =
       fontWeight: designUi.type.label.fontWeight, lineHeight: designUi.type.label.lineHeight,},
 
     input: {
-      minHeight: 47,
+      minHeight: 46,
       borderWidth: 1,
       borderColor: "#CBD5E1",
       borderRadius: 11,
@@ -720,7 +720,7 @@ const styles =
       alignItems: "flex-start",
       gap: 9,
       padding: 13,
-      borderRadius: 12,
+      borderRadius: 17,
       backgroundColor: "#E0F2FE",
     },
 
@@ -732,7 +732,7 @@ const styles =
     },
 
     button: {
-      minHeight: 52,
+      minHeight: 46,
       marginTop: 18,
       borderRadius: 12,
       alignItems: "center",

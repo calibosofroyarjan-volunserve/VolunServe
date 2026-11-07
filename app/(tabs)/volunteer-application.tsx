@@ -1087,7 +1087,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFFFF",
     borderWidth: 1,
     borderColor: "#DFE8ED",
-    borderRadius: 18,
+    borderRadius: 19,
     padding: 24,
   },
   sideCard: {
@@ -1096,7 +1096,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFFFF",
     borderWidth: 1,
     borderColor: "#DFE8ED",
-    borderRadius: 18,
+    borderRadius: 19,
     padding: 22,
   },
   sideIcon: {
@@ -1298,8 +1298,7 @@ const styles = StyleSheet.create({
     borderColor: "#CBD5E1",
     backgroundColor: "#FFFFFF",
     color: "#0F172A",
-    fontSize: 13,
-  },
+    fontSize: 13, minHeight: 46,},
   notice: {
     flexDirection: "row",
     alignItems: "flex-start",

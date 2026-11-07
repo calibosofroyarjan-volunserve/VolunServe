@@ -2058,7 +2058,7 @@ const styles = StyleSheet.create({
     padding: 16,
     borderWidth: 1,
     borderColor: "#DDE6EC",
-    borderRadius: 14,
+    borderRadius: 16,
     backgroundColor: "#FFFFFF",
   },
   summaryCardDisaster: {
@@ -2200,7 +2200,7 @@ const styles = StyleSheet.create({
   },
   campaignCard: {
     width: "100%", overflow: "hidden",
-    borderWidth: 1, borderColor: "#DAEAE2", borderRadius: 17,
+    borderWidth: 1, borderColor: "#DAEAE2", borderRadius: 18,
     backgroundColor: "#FFFFFF",
     shadowColor: "#125947", shadowOpacity: 0.075,
     shadowRadius: 18, shadowOffset: { width: 0, height: 5 }, elevation: 1,
@@ -2779,7 +2779,7 @@ const styles = StyleSheet.create({
     padding: 16,
     borderWidth: 1,
     borderColor: "#DDE6EC",
-    borderRadius: 14,
+    borderRadius: 17,
     backgroundColor: "#FFFFFF",
   },
   needGrid: {
@@ -3170,11 +3170,11 @@ const styles = StyleSheet.create({
 
   donationFormCard: {
     marginTop: 13,
-    padding: 15,
+    padding: 18,
     borderWidth: 1,
     borderColor: "#DDE6EC",
-    borderRadius: 13,
-    backgroundColor: "#FBFCFD",
+    borderRadius: 17,
+    backgroundColor: "#FFFFFF",
   },
   stepHeader: {
     flexDirection: "row",
@@ -3251,7 +3251,7 @@ const styles = StyleSheet.create({
   
     fontFamily: "DonationInterBold", lineHeight: designUi.type.label.lineHeight, fontWeight: designUi.type.label.fontWeight,},
   input: {
-    minHeight: 43,
+    minHeight: 46,
     paddingHorizontal: 11,
     paddingVertical: 9,
     borderWidth: 1,
@@ -3498,7 +3498,7 @@ const styles = StyleSheet.create({
     fontFamily: "DonationInterBold",},
   submitButton: {
     marginTop: 12,
-    minHeight: 48,
+    minHeight: 46,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
