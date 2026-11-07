@@ -27,6 +27,7 @@ import {
   logoutUser,
 } from "../../lib/firebaseAuth";
 import { useUserSession } from "../../lib/useUserSession";
+import { liveUi as ui } from "../../constants/volunserveLiveUi";
 
 type IconName = React.ComponentProps<typeof Ionicons>["name"];
 
@@ -351,9 +352,9 @@ const styles = StyleSheet.create({
     minHeight: 0,
     flexShrink: 0,
     overflow: "hidden",
-    backgroundColor: "#083E34",
+    backgroundColor: ui.color.sidebar,
     borderRightWidth: 1,
-    borderRightColor: "#DDE8E3",
+    borderRightColor: ui.color.sidebarActive,
   },
   sidebarCompact: {
     width: 268,
@@ -383,16 +384,16 @@ const styles = StyleSheet.create({
   brandName: {
     color: "#FFFFFF",
     fontSize: 20,
-    fontWeight: "800",
+    fontWeight: "700",
   },
   brandTagline: {
     marginTop: 2,
     color: "#B6E9DF",
     fontSize: 10,
-    fontWeight: "700",
+    fontWeight: "600",
     letterSpacing: 0.65,
   },
-  sidebarDecoration: { position: "absolute", right: -65, bottom: 55, opacity: 0.16 },
+  sidebarDecoration: { position: "absolute", right: -65, bottom: 55, opacity: 0.05 },
   sidebarTitle: { color: "#D9FFF1", fontSize: 11, fontWeight: "900", letterSpacing: 1.15, marginLeft: 26, marginTop: 4, marginBottom: 0 },
   sidebarLabel: {
     flexShrink: 0,
@@ -427,7 +428,7 @@ const styles = StyleSheet.create({
   },
   navSelectedGradient: { ...StyleSheet.absoluteFillObject, borderRadius: 13 },
   navItemActive: {
-    backgroundColor: "#126E59",
+    backgroundColor: ui.color.sidebarActive,
   },
   navIcon: {
     width: 35,
@@ -440,7 +441,7 @@ const styles = StyleSheet.create({
   },
   navIconGradient: { ...StyleSheet.absoluteFillObject, borderRadius: 12 },
   navIconActive: {
-    backgroundColor: "#126E59",
+    backgroundColor: ui.color.sidebarActive,
   },
   navText: {
     flex: 1,
@@ -467,7 +468,7 @@ const styles = StyleSheet.create({
     borderTopColor: "rgba(255,255,255,0.18)",
   },
   logoutButton: {
-    minHeight: 43,
+    minHeight: ui.minTap,
     borderRadius: 11,
     flexDirection: "row",
     gap: 12,
