@@ -98,7 +98,10 @@ const residentOnlyRoutes = new Set([
   "donation-history",
 ]);
 
+let residentLogoutPromptOpen = false;
 function requestConfirmedResidentLogout() {
+  if (residentLogoutPromptOpen) return;
+  residentLogoutPromptOpen = true;
   const performLogout = async () => {
     try {
       await logoutUser();
@@ -108,9 +111,12 @@ function requestConfirmedResidentLogout() {
     }
   };
   AppAlert.alert("Log Out", "Are you sure you want to log out of VolunServe?", [
-    { text: "Cancel", style: "cancel" },
-    { text: "Log Out", style: "destructive", onPress: () => void performLogout() },
-  ]);
+    { text: "Cancel", style: "cancel", onPress: () => { residentLogoutPromptOpen = false; } },
+    { text: "Log Out", style: "destructive", onPress: () => {
+      residentLogoutPromptOpen = false;
+      void performLogout();
+    } },
+  ], { cancelable: false });
 }
 
 export default function TabLayout() {
