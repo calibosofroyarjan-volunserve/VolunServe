@@ -76,8 +76,15 @@ function passwordError(value: string): string | null {
 }
 
 function validName(s: string) {
-  return /^[A-Za-z][A-Za-z '-]*[A-Za-z]$/.test(s.trim()) &&
-    s.trim().replace(/[^A-Za-z]/g, "").length >= 2;
+  return /^[\p{L}][\p{L}\s'-]*[\p{L}]$/u.test(s.trim()) &&
+    (s.trim().match(/\p{L}/gu) || []).length >= 2;
+}
+function validMiddleName(s: string) {
+  const clean = s.trim();
+  return !clean || (
+    /^[\p{L}][\p{L}\s.'-]*$/u.test(clean) &&
+    (clean.match(/\p{L}/gu) || []).length >= 1
+  );
 }
 function dateAge(value: string): number | null {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
@@ -232,7 +239,7 @@ export default function EmailFirstSignup() {
     !signedInUser.providerData.some(p => p.providerId === "password");
   const emailCanEdit = !signedInUser;
   const personalOk = validName(firstName) && validName(lastName) &&
-    (noMiddleName || middleName.trim() === "" || validName(middleName)) &&
+    (noMiddleName || validMiddleName(middleName)) &&
     age !== null && age >= 18 && age <= 100 &&
     /^9\d{9}$/.test(phoneClean);
   const addressOk = SJDM_BARANGAYS.includes(barangay) &&
@@ -257,8 +264,14 @@ export default function EmailFirstSignup() {
         !signedInUser.providerData.some(p => p.providerId === "google.com")) return;
     const name = (signedInUser.displayName || "").trim().split(/\s+/).filter(Boolean);
     if (name.length < 2) return;
-    setFirstName(current => current || name.slice(0, -1).join(" "));
-    setLastName(current => current || name[name.length - 1]);
+    const suggestedFirst = name.slice(0, -1).filter(part =>
+      (part.match(/\p{L}/gu) || []).length >= 2
+    ).join(" ");
+    const suggestedLast = name[name.length - 1].replace(/\.+$/, "");
+    // Ignore middle initials such as "P." rather than prefill an invalid first
+    // name; users can correct either suggestion before finishing registration.
+    if (validName(suggestedFirst)) setFirstName(current => current || suggestedFirst);
+    if (validName(suggestedLast)) setLastName(current => current || suggestedLast);
   }, [signedInUser?.uid, signedInUser?.displayName, signedInUser?.emailVerified]);
 
   useEffect(() => {
@@ -804,7 +817,7 @@ export default function EmailFirstSignup() {
                   onChange={setMiddleName} disabled={noMiddleName}
                   placeholder="Optional"
                   error={(showErrors || !!middleName) && !noMiddleName &&
-                    !!middleName.trim() && !validName(middleName)
+                    !!middleName.trim() && !validMiddleName(middleName)
                     ? "Enter a valid middle name or leave blank." : null}
                 />
                 <Pressable
