@@ -25,5 +25,10 @@ jobs:
           node-version: '22'
       - name: Reject stale/unapproved/code-deleting deployments (OFFLINE)
         run: node scripts/guard-live-deploy-provenance-20261108.cjs --self-test
+      - name: Verify exact currently served live Hosting version (READ ONLY)
+        env:
+          VOLUNSERVE_HOSTING_URL: https://volunserve.com
+          VOLUNSERVE_EXPECTED_SHA: e83f4a72c7cb733ff7bb888a6ac19bf3c0f076c4
+        run: node scripts/check-live-hosting.cjs
       - name: No deploy or production credentials
         run: echo "Review only. The live website and backend were not modified."
