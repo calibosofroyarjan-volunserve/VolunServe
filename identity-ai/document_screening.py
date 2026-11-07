@@ -131,3 +131,41 @@ def document_ocr_unavailable(declared_type: str) -> dict:
         "manualReviewRequired": True,
         "warningCodes": ["ocr_unavailable"],
     }
+
+
+def assess_document_sides(
+    declared_type: str,
+    front_ocr_text: str,
+    back_ocr_text: str | None,
+) -> dict:
+    """Screen front/back text without exposing text or claiming authenticity.
+
+    A document-type keyword is not proof that a physical card is genuine or
+    that two images belong to the same issued document.
+    """
+    front = assess_document_text(declared_type, front_ocr_text)
+    result = dict(front)
+    result["backSideProvided"] = back_ocr_text is not None
+    result["backSideScreened"] = back_ocr_text is not None
+    if back_ocr_text is None:
+        return result
+
+    back = assess_document_text(declared_type, back_ocr_text)
+    if back["status"] == "mismatch":
+        result["status"] = "mismatch"
+        result["warningCodes"] = list(dict.fromkeys(
+            result["warningCodes"] + ["document_back_type_conflict"]
+        ))
+    elif result["status"] == "inconclusive" and back["status"] == "text_consistent_unverified":
+        # Back is recognizable but portrait-side ID type was not established.
+        # Keep manual review; never turn a weak front into a clean result.
+        result["warningCodes"] = list(dict.fromkeys(
+            result["warningCodes"] + ["document_front_type_inconclusive"]
+        ))
+    if not back_ocr_text.strip():
+        result["warningCodes"] = list(dict.fromkeys(
+            result["warningCodes"] + ["document_back_ocr_inconclusive"]
+        ))
+    result["authenticityVerified"] = False
+    result["manualReviewRequired"] = True
+    return result
