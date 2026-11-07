@@ -23,12 +23,13 @@ test("Resident navigation has five service modules; Profile stays in account men
  assert.deepEqual(found,expected);
  for(const gone of ["my-cases","notifications","announcements","map-tracking","profile","certificate"])assert.ok(!found.includes(gone));
 });
-test("Volunteer navigation exposes Emergency Tasks not redundant progress or alerts",()=>{
+test("Volunteer navigation exposes Emergency Tasks and restored Certificates without duplicate progress or alerts",()=>{
  const menuText=menu("volunteerDesktopTabs");
  const found=[...menuText.matchAll(/name:"([^"]+)"/g)].map(x=>x[1]);
- assert.deepEqual(found,["index","volunteer","community-events"]);
+ assert.deepEqual(found,["index","volunteer","community-events","certificate"]);
+ assert.match(menuText,/label:"My Certificates"/);
  assert.match(menuText,/label:"Emergency Tasks"/);
- assert.doesNotMatch(menuText,/My Progress|Volunteer Tasks|Notifications|Announcements|Certificates|My Profile/);
+ assert.doesNotMatch(menuText,/My Progress|Volunteer Tasks|Notifications|Announcements|My Profile/);
  assert.match(web,/Emergency Tasks/);
  assert.match(native,/Emergency Tasks/);
 });
