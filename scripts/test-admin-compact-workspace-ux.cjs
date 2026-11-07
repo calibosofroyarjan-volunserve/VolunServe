@@ -27,10 +27,11 @@ assert(pager.includes('flexDirection: "row"') && pager.includes('minHeight: 34')
   pager.includes("pageSize = 5") && pager.includes("onChange(safePage + 1)") &&
   pager.includes("onChange(safePage - 1)") && pager.includes("visiblePages.map"),
   "Pagination must remain functional, compact and accessible");
-assert(hero.includes('minHeight: 118') && hero.includes('backgroundColor: "#E5F5ED"') &&
-  hero.includes('name="leaf-outline"'),
-  "Shared LGU headers must retain identity but avoid oversized whitespace");
-for(const t of ["pagedCases", "pageFive(onDutyPersonnel", "pageFive(volunteerCandidates",
+assert(hero.includes("minHeight: 110") && hero.includes("backgroundColor: ui.color.surface") &&
+  hero.includes("const compact = width < 760") && !hero.includes('name="leaf-outline"'),
+  "Shared Admin headers must be compact and responsive without excess decoration");
+// The verified LIVE emergency flow has no retired LGU personnel roster.
+for(const t of ["pagedCases", "pageFive(volunteerCandidates",
   "pageFive(activeAssignments", "pageFive(incidentAssignments", "pageFive(imageEvidence",
   "pageFive(videoEvidence"]) assert(emergency.includes(t),"Emergency nested pagination missing: "+t);
 assert(attendance.includes("pagedEvents.map") && attendance.includes("pagedVolunteers.map") &&

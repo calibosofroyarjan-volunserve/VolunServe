@@ -27,6 +27,7 @@ import {
 } from "react-native";
 
 import { db } from "../../lib/firebase";
+import { liveUi as ui } from "../../constants/volunserveLiveUi";
 import {
   activeModeForProfile,
   hasVolunteerAccess,
@@ -1058,14 +1059,11 @@ export default function VolunteerTasks() {
       showsVerticalScrollIndicator
     >
       <View style={styles.header}>
-        <View pointerEvents="none" style={styles.headerLeaf}>
-          <Ionicons name="leaf-outline" size={115} color="rgba(13,133,94,0.13)" />
-        </View>
         <View style={styles.titleIcon}>
           <Ionicons
-            name="people"
+            name="hand-left-outline"
             size={24}
-            color="#078F82"
+            color={ui.color.primary}
           />
         </View>
 
@@ -2090,7 +2088,7 @@ export default function VolunteerTasks() {
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: "#F6F8F7",
+    backgroundColor: ui.color.canvas,
   },
 
   page: {
@@ -2102,7 +2100,7 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#F6F8F7",
+    backgroundColor: ui.color.canvas,
   },
 
   loadingText: {
@@ -2117,48 +2115,43 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 12,
     marginBottom: 14,
-    minHeight: 147,
+    minHeight: 122,
     paddingHorizontal: 17,
-    paddingVertical: 19,
-    borderRadius: 17,
+    paddingVertical: 18,
+    borderRadius: ui.radius.card,
     borderWidth: 1,
-    borderColor: "#D3E8DC",
-    backgroundColor: "#E9F8F0",
+    borderColor: ui.color.border,
+    backgroundColor: ui.color.surface,
     overflow: "hidden",
   },
-  headerLeaf: {
-    position: "absolute", right: -19, top: -20,
-    transform: [{ rotate: "20deg" }],
-  },
-
   titleIcon: {
     width: 46,
     height: 46,
     borderRadius: 14,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#D5EFE0",
+    backgroundColor: ui.color.primarySoft,
   },
 
   eyebrow: {
-    color: "#08765B",
-    fontSize: 9,
-    fontWeight: "900",
+    color: ui.color.primary,
+    fontSize: 11,
+    fontWeight: "700",
     letterSpacing: 0.9,
   },
 
   title: {
     marginTop: 2,
-    color: "#173D32",
-    fontSize: 25,
-    fontWeight: "900",
+    color: ui.color.text,
+    fontSize: 23,
+    fontWeight: "700",
   },
 
   subtitle: {
     marginTop: 3,
-    color: "#567D6B",
-    fontSize: 12,
-    lineHeight: 17,
+    color: ui.color.secondary,
+    fontSize: 14,
+    lineHeight: 21,
   },
 
   liveMapButton: {
@@ -2167,8 +2160,8 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     gap: 8,
-    borderRadius: 12,
-    backgroundColor: "#087D60",
+    borderRadius: ui.radius.control,
+    backgroundColor: ui.color.primary,
     marginBottom: 14,
   },
 
@@ -2190,22 +2183,22 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 1,
-    borderColor: "#e1e8ee",
-    borderRadius: 12,
-    backgroundColor: "#ffffff",
+    borderColor: ui.color.border,
+    borderRadius: ui.radius.card,
+    backgroundColor: ui.color.surface,
   },
 
   statValue: {
-    color: "#123047",
+    color: ui.color.text,
     fontSize: 22,
-    fontWeight: "900",
+    fontWeight: "700",
   },
 
   statLabel: {
     marginTop: 2,
-    color: "#64748b",
-    fontSize: 10,
-    fontWeight: "800",
+    color: ui.color.secondary,
+    fontSize: 12,
+    fontWeight: "600",
   },
 
   filterRow: {
