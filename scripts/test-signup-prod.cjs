@@ -269,6 +269,20 @@ function harness(source, enabled, options = {}) {
     assert(ui.includes('setFirstName(current => current ||'));
     assert(ui.includes('setLastName(current => current ||'));
   });
+  await check("legacy Guest profiles never become Resident accounts or link to signup",async()=>{
+    const legacy={role:"guest",status:"approved",email:data.email};
+    const h=harness(current,true,{existing:legacy});
+    assert.equal(h.api.isApprovedProfile(legacy),false);
+    await assert.rejects(h.registration.inspectSignupUser(h.user),/Guest Preview/);
+    assert(h.calls.includes("signout"));
+    assert.deepEqual(h.profile(),legacy);
+    assert(!h.calls.includes("transaction"));
+    const ui=read("components/guest/GuestWorkspace.tsx");
+    assert(ui.includes("Guest Preview · No Account"));
+    const publicLayout=read("app/public/_layout.tsx");
+    assert(publicLayout.includes("onAuthStateChanged(auth"));
+    assert(publicLayout.includes("void signOut(auth)"));
+  });
   await check("native Google signup owns OAuth and never bounces pending users to Login",()=>{
     assert(read("lib/useSignupGoogle.ts").includes("signInWithCredential"));
     assert(read("lib/useSignupGoogle.web.ts").includes("signInWithPopup"));
