@@ -1851,7 +1851,7 @@ function FaceScanStep({
           !consent ||
           submitting
         }
-        activeOpacity=
+        activeOpacity={
           0.85
         }
         onPress={
