@@ -14,12 +14,14 @@ function menu(id) {
  assert.ok(begin>-1&&end>begin,"missing "+id);
  return [...layout.slice(begin,end).matchAll(/name:\s*"([^"]+)"/g)].map(x=>x[1]);
 }
-test("Resident and Volunteer sidebar menus keep only actual service modules",()=>{
+test("Resident and Volunteer menus preserve desktop My Certificates and avoid duplicate account links",()=>{
  assert.deepEqual(menu("residentDesktopTabs"),["index","disaster-response","resident","community-events","donation"]);
- assert.deepEqual(menu("volunteerDesktopTabs"),["index","volunteer","community-events"]);
+ assert.deepEqual(menu("volunteerDesktopTabs"),["index","volunteer","community-events","certificate"]);
  for(const id of ["residentDesktopTabs","volunteerDesktopTabs","residentMobileTabs","volunteerMobileTabs"])
-   for(const duplicate of ["profile","certificate","volunteer-impact"])
+   for(const duplicate of ["profile","volunteer-impact"])
      assert.ok(!menu(id).includes(duplicate),duplicate+" leaked into "+id);
+ for(const id of ["residentDesktopTabs","residentMobileTabs","volunteerMobileTabs"])
+   assert.ok(!menu(id).includes("certificate"),"Certificates incorrectly shown in "+id);
  assert.deepEqual(menu("residentMobileTabs"),["index","disaster-response","resident","community-events"]);
  assert.deepEqual(menu("volunteerMobileTabs"),["index","volunteer","community-events"]);
 });
