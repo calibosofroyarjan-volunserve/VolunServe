@@ -49,11 +49,16 @@ jobs:
           node scripts/test-lgu-admin-global-ui-pagination.cjs
           node scripts/test-superadmin-accounts-directory.cjs
           node scripts/test-profile-certificates-account-menu.cjs
+      - name: Prepare Java for isolated Firestore emulator tests
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
       - name: Volunteer, attendance, donations and emergency UI contracts
         run: |
           node scripts/test-volunteer-time-controls-20261106.cjs
           node scripts/test-volunteer-community-event-join-20261106.cjs
-          node scripts/test-community-events-rules.cjs
+          npx firebase-tools emulators:exec --only firestore --project demo-volunserve "node scripts/test-community-events-rules.cjs"
           node scripts/test-embedded-emergency-map-navigation.cjs
       - name: TypeScript check for all actual web and native modules
         run: npx tsc --noEmit --pretty false
