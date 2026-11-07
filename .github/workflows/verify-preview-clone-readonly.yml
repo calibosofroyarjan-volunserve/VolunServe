@@ -1,0 +1,72 @@
+# VERIFY existing Hosting preview by public HTTP GET ONLY; does NOT clone or deploy.
+# This is separate from preview-only-live-clone.yml so a fix can't repeat a cloud WRITE.
+name: VolunServe — Verify Existing Preview Versus Live (READ ONLY)
+
+on:
+  push:
+    branches:
+      - release/production-hosting
+    paths:
+      - '.github/workflows/verify-preview-clone-readonly.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  verify-public-preview:
+    if: ${{ github.repository == 'calibosofroyarjan-volunserve/VolunServe' && github.ref == 'refs/heads/release/production-hosting' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check existing preview matches both unchanged live Hosting markers (GET ONLY)
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          'use strict';
+          const assert = require('node:assert/strict');
+          const origins = [
+            'https://volunserve.com',
+            'https://volunserve-3aa5b.web.app',
+            'https://volunserve-3aa5b--vs-oidc-smoke-20261107-dz0pgw7w.web.app',
+          ];
+          const fetchMarker = async origin => {
+            const url = new URL('/volunserve-release.json', origin);
+            const resp = await fetch(url, {
+              method: 'GET',
+              redirect: 'error',
+              headers: {'accept':'application/json', 'cache-control':'no-cache'},
+              signal: AbortSignal.timeout(15000)
+            });
+            assert.equal(resp.status, 200, 'Failed release marker on ' + origin);
+            assert.match(resp.headers.get('content-type')||'', /json/i, 'Wrong marker type on '+origin);
+            const data = await resp.json();
+            assert.equal(data.app, 'VolunServe');
+            assert.equal(data.firebaseProject, 'volunserve-3aa5b');
+            assert.equal(data.releaseType, 'firebase-hosting-web');
+            assert.match(data.revision, /^[0-9a-f]{40}$/);
+            return data;
+          };
+          (async()=>{
+            const markers=[];
+            for(const origin of origins){
+              const marker=await fetchMarker(origin);
+              markers.push(marker);
+              console.log('PASS public marker', new URL(origin).hostname, marker.revision);
+            }
+            assert.equal(markers[0].revision, markers[1].revision,
+              'Live custom domain and Firebase default domain have different revisions');
+            assert.equal(markers[0].revision, markers[2].revision,
+              'Preview differs from current LIVE Hosting source — investigate, do not release');
+            console.log('PASS: Preview is serving the exact same revision as both LIVE Hosting domains.');
+            const url=new URL('/',origins[2]);
+            const homepage=await fetch(url, {method:'GET',redirect:'error',
+              headers:{accept:'text/html'},signal:AbortSignal.timeout(15000)});
+            assert.equal(homepage.status,200, 'Preview home page missing');
+            assert.match(homepage.headers.get('content-type')||'',/html/i);
+            const html=(await homepage.text()).slice(0,4000);
+            assert.match(html,/<html/i, 'Preview returned non-HTML content');
+            console.log('PASS: Public preview home page responds with HTML.');
+            console.log('READ ONLY: No cloud credentials; no checkout; no Firebase / Render commands.');
+          })().catch(e=>{console.error('FAIL:',e.message);process.exitCode=1});
+          NODE
