@@ -1,4 +1,7 @@
 import AdminReviewHero from "../../components/admin/AdminReviewHero";
+import VolunServeButton from "../../components/ui/VolunServeButton";
+import VolunServeField from "../../components/ui/VolunServeField";
+import { liveUi as ui } from "../../constants/volunserveLiveUi";
 import React, { useState } from "react";
 
 import {
@@ -194,35 +197,25 @@ export default function CreateAnnouncement() {
             </TouchableOpacity>)}
         </View>}
         <Text style={styles.scopeHelp}>Templates are editable. Confirm accurate information before publishing to all residents and volunteers.</Text>
-        <Text style={styles.inputLabel}>
-          TITLE
-        </Text>
-
-        <TextInput
-          style={styles.input}
+        <VolunServeField
+          label="Title"
+          required
           value={title}
           onChangeText={value => { setTitle(value); if (formNotice) setFormNotice(null); }}
-          placeholder="Announcement title"
-          placeholderTextColor="#94A3B8"
           maxLength={120}
+          placeholder="Announcement title"
+          error={formNotice?.kind === "error" && formNotice.text.startsWith("Title is required") ? formNotice.text : null}
         />
-
-        <Text style={styles.inputLabel}>
-          MESSAGE
-        </Text>
-
-        <TextInput
-          style={[
-            styles.input,
-            styles.messageInput,
-          ]}
+        <VolunServeField
+          label="Message"
+          required
           value={message}
           onChangeText={value => { setMessage(value); if (formNotice) setFormNotice(null); }}
-          placeholder="Write the announcement..."
-          placeholderTextColor="#94A3B8"
-          multiline
-          textAlignVertical="top"
           maxLength={2000}
+          placeholder="Write the announcement..."
+          multiline
+          style={styles.messageInput}
+          error={formNotice?.kind === "error" && formNotice.text.startsWith("Message is required") ? formNotice.text : null}
         />
 
         <Text style={styles.characterCount}>
@@ -235,25 +228,13 @@ export default function CreateAnnouncement() {
           </View>
         ) : null}
 
-        <TouchableOpacity
-          style={[
-            styles.submitButton,
-            submitting &&
-              styles.submitButtonDisabled,
-          ]}
-          disabled={submitting}
+        <VolunServeButton
+          label="Publish Announcement"
+          icon="megaphone-outline"
           onPress={handleSubmit}
-        >
-          {submitting ? (
-            <ActivityIndicator
-              color="#FFFFFF"
-            />
-          ) : (
-            <Text style={styles.submitText}>
-              Publish Announcement
-            </Text>
-          )}
-        </TouchableOpacity>
+          disabled={submitting}
+          loading={submitting}
+        />
       </View>
 
       <View style={styles.noteCard}><Text style={styles.noteTitle}>Community-wide announcements</Text><Text style={styles.noteText}>Published announcements appear for residents and volunteers in Community Updates and Notifications.</Text></View>
@@ -264,7 +245,7 @@ export default function CreateAnnouncement() {
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: "#F6F8F7",
+    backgroundColor: ui.color.canvas,
   },
 
   content: {
@@ -280,7 +261,7 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#F6F8F7",
+    backgroundColor: ui.color.canvas,
   },
 
   loadingText: {
@@ -342,10 +323,10 @@ const styles = StyleSheet.create({
   },
 
   formCard: {
-    backgroundColor: "#FFFFFF",
+    backgroundColor: ui.color.surface,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
-    borderRadius: 9,
+    borderColor: ui.color.border,
+    borderRadius: ui.radius.card,
     padding: 20,
   },
 
@@ -410,23 +391,23 @@ const styles = StyleSheet.create({
 
   noteCard: {
     marginTop: 16,
-    borderRadius: 8,
-    backgroundColor: "#F8FAFC",
+    borderRadius: ui.radius.card,
+    backgroundColor: ui.color.mutedSurface,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: ui.color.border,
     padding: 15,
   },
 
   noteTitle: {
-    color: "#334155",
-    fontSize: 13,
-    fontWeight: "900",
+    color: ui.color.text,
+    fontSize: 16,
+    fontWeight: "700",
   },
 
   noteText: {
-    color: "#64748B",
-    fontSize: 12,
-    lineHeight: 18,
+    color: ui.color.secondary,
+    fontSize: 13,
+    lineHeight: 20,
     marginTop: 4,
   },
 });
