@@ -74,6 +74,40 @@ const sampleRows = [
   { title: "Resident support follow-up", person: "Sample User 06", status: "Pending", date: "Nov 2, 2026" },
   { title: "Community project planning", person: "Sample User 07", status: "In Review", date: "Nov 1, 2026" },
 ];
+/** Different fictional records make each actual module design easier to review. */
+const moduleTitles: Record<string, string[]> = {
+  emergency: ["Flood warning — Barangay Muzon","Road obstruction — Sapang Palay","Safety concern — Gaya-Gaya",
+    "Drainage inspection — Minuyan","Rainfall report — San Rafael"],
+  assistance: ["Food assistance request — Sample Household","Shelter supply inquiry — Sample Household",
+    "Relief package request — Sample Household","Assistance status follow-up","Community needs assessment"],
+  events: ["Barangay Cleanup Drive","Basic First Aid Orientation","Community Preparedness Seminar",
+    "Public Volunteer Orientation","Local Environmental Activity"],
+  donations: ["Community Relief Fund","Family Assistance Campaign","Preparedness Supplies",
+    "Flood-Affected Area Support","Emergency Supply Distribution"],
+  tasks: ["Debris clearing assignment","Relief goods distribution","Evacuation center support",
+    "Barangay emergency preparedness","Incident verification follow-up"],
+  identity: ["National ID and selfie review","Resident registration check","Identity evidence clarification",
+    "Verification decision queue","Manual document review"],
+  operations: ["Admin staff duty log","LGU office review session","Admin shift attendance","Staff duty record","Office operations update"],
+  attendance: ["Event time-in verification","Event time-out verification","Service hours review",
+    "Volunteer attendance confirmation","Event presence record"],
+  certificates: ["Service hours certificate","Community volunteer certificate",
+    "Event participation certificate","Attendance-based certificate","Certificate verification record"],
+  updates: ["Public weather advisory","Community safety announcement","Preparedness information",
+    "Scheduled activity notice","Barangay community update"],
+  announcements: ["Public advisory draft","Community events notice","Emergency preparedness post",
+    "Administrative announcement","Resident information update"],
+  accounts: ["Admin access application","Pending staff account","Role permission review",
+    "Staff approval record","Account access request"],
+  audit: ["Admin permission change","Resident review action","Announcement published",
+    "Volunteer assignment recorded","Settings update logged"],
+  records: ["Resident record summary","Emergency reports overview","Volunteer records report",
+    "Donation audit summary","Community events dataset"],
+  settings: ["Authentication policy setting","Notification preference setting","Record retention setting",
+    "System configuration history","Access control setting"],
+  profile: ["Profile information summary","Identity status","Contact information",
+    "Activity history","Account security"],
+};
 const bars = [36, 64, 46, 77, 57, 89, 68];
 function IconTile({ name, strong = false }: {name: Icon; strong?: boolean}) {
   return <View style={[s.iconTile, strong && s.iconTileStrong]}><Ionicons name={name} size={19} color={ui.color.primary} /></View>;
@@ -134,7 +168,17 @@ export default function DesignReviewWorkspace() {
   };
   const pickRole=(r:Role)=>{setRole(r);navTo("home")};
   const gridWidth: DimensionValue=mobile? "100%" : "31.5%";
-  const filtered=sampleRows.filter(x=>
+  const rowLabels=moduleTitles[selected.key] || moduleTitles.updates;
+  const moduleRows=sampleRows.map((record,i)=>({...record,title:rowLabels[i%rowLabels.length]}));
+  const isReadOnlyModule=(role==="superadmin" && ["audit","records"].includes(selected.key)) ||
+    (role==="resident" && selected.key==="events") ||
+    selected.key==="certificates";
+  const actionLabel=selected.key==="announcements"?"Preview announcement form" :
+    selected.key==="settings"?"Preview settings form" :
+    selected.key==="emergency"&&role==="resident"?"Preview report form" :
+    selected.key==="assistance"&&role==="resident"?"Preview assistance form" :
+    isReadOnlyModule?"View sample details":"Try sample action";
+  const filtered=moduleRows.filter(x=>>
     (filter==="All"||x.status===filter) &&
     (x.title+" "+x.person).toLowerCase().includes(search.toLowerCase())
   );
@@ -265,12 +309,12 @@ export default function DesignReviewWorkspace() {
           </Surface>
         </>:<>
           <View style={s.moduleActions}>
-            <VolunServeButton icon="add-outline" label={selected.key==="settings"?"Preview settings form":selected.key==="announcements"?"Create announcement":"New sample record"}
-              onPress={()=>{setDialog(true);setNotice("")}}/>
+            <VolunServeButton icon={isReadOnlyModule?"eye-outline":"add-outline"} label={actionLabel}
+              onPress={()=>{if(isReadOnlyModule)setNotice("Sample details only. This module does not create records in the preview."); else setDialog(true);}}/>
             <VolunServeButton icon="refresh-outline" label="Reset demo" variant="secondary"
               onPress={()=>{setSearch("");setFilter("All");setPageNumber(1);setSort(false);setNotice("Sample filters were reset.")}}/>
           </View>
-          <Surface title={selected.name+" queue"} subtitle="Sample five-row pagination, filtering and action states" icon={selected.icon}>
+          <Surface title={selected.name+" records"} subtitle="Fictional five-row listing with filtering, sorting and preview interactions" icon={selected.icon}>
             <View style={s.filterArea}>
               <TextInput accessible accessibilityLabel="Search sample records"
                 placeholder="Search sample records..." placeholderTextColor="#789083"
@@ -289,7 +333,7 @@ export default function DesignReviewWorkspace() {
               <Text style={s.tableHeading}>RECORD / PERSON</Text>
               {!small?<Text style={s.tableHeading}>STATUS</Text>:null}
             </View>
-            {visible.length?visible.map((x,i)=><Pressable key={x.title} accessible accessibilityRole="button"
+            {visible.length?visible.map((x,i)=><Pressable key={x.person+":"+x.title} accessible accessibilityRole="button"
               accessibilityLabel={"Open sample "+x.title} onPress={()=>setNotice("Preview detail: "+x.title+" — no real data changed.")}
               style={({pressed})=>[s.tableRow,pressed&&s.pressed]}>
               <IconTile name="document-text-outline"/>
