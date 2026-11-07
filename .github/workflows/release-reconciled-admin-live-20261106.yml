@@ -1,93 +1,13 @@
-name: Reconcile Restored Admin with Latest Live Modules - Hosting Only
+# FROZEN: Historic deploy script is intentionally disabled on this LIVE-DERIVED source branch.
+# DO NOT re-enable. All new Hosting releases must use release-live-protected-hosting.yml.
+name: FROZEN release-reconciled-admin-live-20261106.yml (NO PRODUCTION ACTION)
 on:
-  push:
-    branches: [release/reconcile-restored-admin-latest-main-20261106]
-    paths:
-      - .github/workflows/release-reconciled-admin-live-20261106.yml
+  workflow_dispatch:
 permissions:
   contents: read
-concurrency:
-  group: volunserve-production-hosting-release
-  cancel-in-progress: false
 jobs:
-  verify-and-deploy:
-    if: github.repository == 'calibosofroyarjan-volunserve/VolunServe'
+  historic-deploy-disabled:
+    if: ${{ false }}
     runs-on: ubuntu-latest
-    timeout-minutes: 50
-    env:
-      BASE: c1c216bb012583926074419f2bd3b40f547c42ec
-      PREVIOUS_LIVE: dcf0427aeb83f518a98c01985bc7eabafbbb6fab
-      FIREBASE_SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_VOLUNSERVE_3AA5B || secrets.FIREBASE_SERVICE_ACCOUNT }}
     steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-          cache: npm
-      - name: Confirm only Admin restoration changes versus latest feature complete main
-        shell: bash
-        run: |
-          set -euo pipefail
-          git merge-base --is-ancestor "$BASE" HEAD
-          git diff --name-only "$BASE" HEAD > "$RUNNER_TEMP/changes"
-          node <<'NODE'
-          const fs=require('fs'),assert=require('node:assert/strict');
-          const actual=fs.readFileSync(process.env.RUNNER_TEMP+'/changes','utf8').trim().split('\n').filter(Boolean).sort();
-          const expected=[
-            '.github/workflows/release-reconciled-admin-live-20261106.yml',
-            'app/(admin)/admin-cases.tsx',
-            'app/(admin)/assistance-requests.tsx',
-            'components/admin/EmergencyIncidentMap.native.tsx',
-            'components/admin/EmergencyIncidentMap.tsx',
-            'components/admin/EmergencyIncidentMap.web.tsx',
-            'lib/assistanceReviewQueue.ts',
-            'lib/assistanceReviewValidation.ts',
-            'lib/emergencyTaskStatus.ts'
-          ].sort();
-          assert.deepEqual(actual,expected,'Protected Login/Signup/Super Admin/Volunteer/Announcement file modified');
-          const admin=fs.readFileSync('app/(admin)/_layout.tsx','utf8');
-          assert(!admin.includes('Communication & Reports') && !admin.includes('label: "Disputes"'));
-          const announce=fs.readFileSync('app/(admin)/create-announcement.tsx','utf8');
-          assert(announce.includes('audience: "all"'),'Latest citywide Admin announcement publisher must remain');
-          const roster=fs.readFileSync('app/(tabs)/community-events.tsx','utf8');
-          assert(roster.length>500,'Volunteer event module must remain');
-          NODE
-      - name: Confirm original live restoration is currently deployed before publishing reconciliation
-        env:
-          VOLUNSERVE_HOSTING_URL: https://volunserve.com
-          VOLUNSERVE_EXPECTED_SHA: ${{ env.PREVIOUS_LIVE }}
-        run: node scripts/check-live-hosting.cjs
-      - name: Install and run safeguards
-        run: |
-          npm ci --no-audit --no-fund
-          node scripts/test-admin-navigation-contract.cjs
-          node scripts/test-lgu-admin-navigation-groups.cjs
-          node scripts/test-final-admin-scope.cjs
-          npx tsc --noEmit --incremental false
-          npx expo export --platform web --clear
-          node scripts/verify-hosting-release.cjs
-      - name: Recheck live release and credentials
-        env:
-          VOLUNSERVE_HOSTING_URL: https://volunserve.com
-          VOLUNSERVE_EXPECTED_SHA: ${{ env.PREVIOUS_LIVE }}
-        run: |
-          test -n "$FIREBASE_SA"
-          node scripts/check-live-hosting.cjs
-      - name: Publish Hosting only - no Auth rules database or Render writes
-        uses: FirebaseExtended/action-hosting-deploy@v0
-        with:
-          firebaseServiceAccount: ${{ env.FIREBASE_SA }}
-          projectId: volunserve-3aa5b
-          channelId: live
-      - name: Confirm exact new live deployment
-        env:
-          VOLUNSERVE_HOSTING_URL: https://volunserve.com
-          VOLUNSERVE_EXPECTED_SHA: ${{ github.sha }}
-        run: |
-          for attempt in 1 2 3 4 5 6; do
-            if node scripts/check-live-hosting.cjs; then exit 0; fi
-            sleep 10
-          done
-          exit 1
+      - run: echo "Disabled legacy release workflow; no production secret or deploy."

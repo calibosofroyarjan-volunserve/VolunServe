@@ -1,0 +1,30 @@
+name: Verify LIVE-PROTECTED source and gate (NO DEPLOY)
+on:
+  push:
+    branches: [live-protected]
+  pull_request:
+    branches: [live-protected]
+permissions:
+  contents: read
+jobs:
+  live-first-safeguards:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify no-deploy guards and prohibited stale source
+        run: |
+          node --check scripts/guard-live-protected-release.cjs
+          node scripts/guard-live-protected-release.cjs --self-test
+      - name: Verify actual production revision (READ ONLY)
+        env:
+          VOLUNSERVE_HOSTING_URL: https://volunserve.com
+        run: node scripts/check-live-hosting.cjs
+      - name: No deploy here
+        run: echo 'Safety checks completed; no Firebase, Render or Firestore changes.'

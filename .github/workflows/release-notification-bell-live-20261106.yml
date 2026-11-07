@@ -1,82 +1,13 @@
-name: Restore Notification Bell Dropdown - Actual Live Hosting ONLY
+# FROZEN: Historic deploy script is intentionally disabled on this LIVE-DERIVED source branch.
+# DO NOT re-enable. All new Hosting releases must use release-live-protected-hosting.yml.
+name: FROZEN release-notification-bell-live-20261106.yml (NO PRODUCTION ACTION)
 on:
-  push:
-    branches:
-      - release/live-notification-bell-dropdown-20261106
-    paths:
-      - '.github/workflows/release-notification-bell-live-20261106.yml'
+  workflow_dispatch:
 permissions:
   contents: read
-concurrency:
-  group: volunserve-production-hosting-release
-  cancel-in-progress: false
 jobs:
-  guarded-notification-dropdown:
-    if: github.repository == 'calibosofroyarjan-volunserve/VolunServe'
+  historic-deploy-disabled:
+    if: ${{ false }}
     runs-on: ubuntu-latest
-    timeout-minutes: 40
-    env:
-      LIVE_BASE: 4d19663f0469dda55f3ff86b5e1c6843923c7bad
-      FIREBASE_SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_VOLUNSERVE_3AA5B || secrets.FIREBASE_SERVICE_ACCOUNT }}
     steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          submodules: false
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-          cache: npm
-      - name: Guard exact live source, preserve other application files
-        shell: bash
-        run: |
-          set -euo pipefail
-          git merge-base --is-ancestor "$LIVE_BASE" HEAD
-          UNEXPECTED="$(git diff --name-only "$LIVE_BASE" HEAD | grep -Ev '^(components/home/Home\.web\.tsx|\.github/workflows/release-notification-bell-live-20261106\.yml)$' || true)"
-          if [ -n "$UNEXPECTED" ]; then echo "::error::Unexpected files: $UNEXPECTED"; exit 1; fi
-          node <<'NODE'
-          const fs=require('fs'), assert=require('node:assert/strict');
-          const file=fs.readFileSync('components/home/Home.web.tsx','utf8');
-          assert(file.includes('setNotificationMenuOpen(open => !open)'));
-          assert(file.includes('latestBellAlerts'));
-          assert(file.includes('View All Notifications'));
-          assert(file.includes('setProfileMenuOpen(false)'));
-          assert(file.includes('profileDropdown'));
-          assert(!file.includes('onPress={() => router.push("/notifications")}'));
-          console.log('PASS bell toggles dropdown and notification page remains accessible');
-          NODE
-      - name: Verify exact live domain revision before touching Hosting
-        env:
-          VOLUNSERVE_HOSTING_URL: https://volunserve.com
-          VOLUNSERVE_EXPECTED_SHA: ${{ env.LIVE_BASE }}
-        run: node scripts/check-live-hosting.cjs
-      - name: Install project dependencies
-        run: npm ci --no-audit --no-fund
-      - name: TypeScript, Expo web export and Hosting build checks
-        run: |
-          npx tsc --noEmit --incremental false
-          npx expo export --platform web --clear
-          node scripts/verify-hosting-release.cjs
-      - name: Recheck live domain and required project credentials
-        env:
-          VOLUNSERVE_HOSTING_URL: https://volunserve.com
-          VOLUNSERVE_EXPECTED_SHA: ${{ env.LIVE_BASE }}
-        run: |
-          test -n "$FIREBASE_SA" || { echo "::error::Missing Firebase credentials"; exit 1; }
-          node scripts/check-live-hosting.cjs
-      - name: Deploy Firebase Hosting ONLY; preserve Auth, rules, data and Render
-        uses: FirebaseExtended/action-hosting-deploy@v0
-        with:
-          firebaseServiceAccount: ${{ env.FIREBASE_SA }}
-          projectId: volunserve-3aa5b
-          channelId: live
-      - name: Verify exact production revision deployed
-        env:
-          VOLUNSERVE_HOSTING_URL: https://volunserve.com
-          VOLUNSERVE_EXPECTED_SHA: ${{ github.sha }}
-        run: |
-          for i in 1 2 3 4 5 6; do
-            if node scripts/check-live-hosting.cjs; then exit 0; fi
-            sleep 10
-          done
-          echo "::error::Live revision verification failed"; exit 1
+      - run: echo "Disabled legacy release workflow; no production secret or deploy."

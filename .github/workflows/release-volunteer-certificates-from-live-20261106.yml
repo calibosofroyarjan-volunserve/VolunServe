@@ -1,83 +1,13 @@
-name: Restore Volunteer Certificates from Actual Live Site - Hosting ONLY
+# FROZEN: Historic deploy script is intentionally disabled on this LIVE-DERIVED source branch.
+# DO NOT re-enable. All new Hosting releases must use release-live-protected-hosting.yml.
+name: FROZEN release-volunteer-certificates-from-live-20261106.yml (NO PRODUCTION ACTION)
 on:
-  push:
-    branches:
-      - release/volunteer-certificates-preserve-live-20261106
-    paths:
-      - .github/workflows/release-volunteer-certificates-from-live-20261106.yml
+  workflow_dispatch:
 permissions:
   contents: read
-concurrency:
-  group: volunserve-production-hosting-release
-  cancel-in-progress: false
 jobs:
-  guarded-sidebar-only:
-    if: github.repository == 'calibosofroyarjan-volunserve/VolunServe'
+  historic-deploy-disabled:
+    if: ${{ false }}
     runs-on: ubuntu-latest
-    timeout-minutes: 45
-    env:
-      LIVE_BASE: 6339a61645f831ac5786ca58e30165bf66e421f9
-      FIREBASE_SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_VOLUNSERVE_3AA5B || secrets.FIREBASE_SERVICE_ACCOUNT }}
     steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          submodules: false
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-          cache: npm
-      - name: Absolutely preserve live Admin, Auth, Donations, Events and all other modules
-        shell: bash
-        run: |
-          set -euo pipefail
-          git merge-base --is-ancestor "$LIVE_BASE" HEAD
-          UNEXPECTED="$(git diff --name-only "$LIVE_BASE" HEAD | grep -Ev '^((app/\(tabs\)/_layout\.tsx)|(\.github/workflows/release-volunteer-certificates-from-live-20261106\.yml))$' || true)"
-          if [ -n "$UNEXPECTED" ]; then echo "::error::Unexpected file change: $UNEXPECTED"; exit 1; fi
-          node <<'NODE'
-          const fs=require('fs'),assert=require('assert/strict');
-          const text=fs.readFileSync('app/(tabs)/_layout.tsx','utf8');
-          const start=text.indexOf('const volunteerDesktopTabs: TabDefinition[]');
-          const end=text.indexOf('];',start);
-          const sidebar=text.slice(start,end);
-          assert(sidebar.includes('name:"certificate",label:"My Certificates"'));
-          assert(sidebar.includes('name:"volunteer",label:"Emergency Tasks"'));
-          assert(sidebar.includes('name:"community-events",label:"Community Events"'));
-          assert(text.includes('const menuItems = mode === "volunteer" ? volunteerDesktopTabs : residentDesktopTabs'));
-          console.log('PASS Volunteer Certificates visible on desktop and mobile sidebar; original modules untouched');
-          NODE
-      - name: Verify exact website currently live before publishing
-        env:
-          VOLUNSERVE_HOSTING_URL: https://volunserve.com
-          VOLUNSERVE_EXPECTED_SHA: ${{ env.LIVE_BASE }}
-        run: node scripts/check-live-hosting.cjs
-      - name: Install locked frontend dependencies
-        run: npm ci --no-audit --no-fund
-      - name: TypeScript, web export and Hosting regression
-        run: |
-          npx tsc --noEmit --incremental false
-          npx expo export --platform web --clear
-          node scripts/verify-hosting-release.cjs
-      - name: Last-minute live check and project credentials
-        env:
-          VOLUNSERVE_HOSTING_URL: https://volunserve.com
-          VOLUNSERVE_EXPECTED_SHA: ${{ env.LIVE_BASE }}
-        run: |
-          test -n "$FIREBASE_SA" || { echo "::error::No Firebase credentials"; exit 1; }
-          node scripts/check-live-hosting.cjs
-      - name: Deploy Firebase Hosting ONLY (no backend, Firestore, Auth or data)
-        uses: FirebaseExtended/action-hosting-deploy@v0
-        with:
-          firebaseServiceAccount: ${{ env.FIREBASE_SA }}
-          projectId: volunserve-3aa5b
-          channelId: live
-      - name: Verify exact released frontend fingerprint
-        env:
-          VOLUNSERVE_HOSTING_URL: https://volunserve.com
-          VOLUNSERVE_EXPECTED_SHA: ${{ github.sha }}
-        run: |
-          for i in 1 2 3 4 5 6; do
-            if node scripts/check-live-hosting.cjs; then exit 0; fi
-            sleep 10
-          done
-          echo "::error::Exact live revision not verified"; exit 1
+      - run: echo "Disabled legacy release workflow; no production secret or deploy."

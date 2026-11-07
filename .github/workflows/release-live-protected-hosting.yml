@@ -1,0 +1,81 @@
+# Only workflow that may ever publish Firebase Hosting from the LIVE-DERIVED source branch.
+# Deliberately has NO repo-level Firebase secret fallback. Requires protected environment setup.
+name: LIVE-PROTECTED Firebase Hosting release (MANUAL)
+on:
+  workflow_dispatch:
+    inputs:
+      expected_live_sha:
+        description: "Full 40-character SHA currently served by volunserve.com"
+        required: true
+        type: string
+      approved_files:
+        description: 'JSON array of precisely approved APP code paths, e.g. ["app/login.web.tsx"]'
+        required: true
+        type: string
+permissions:
+  contents: read
+concurrency:
+  group: volunserve-production-hosting-release
+  cancel-in-progress: false
+jobs:
+  deploy-verified-live-descendant:
+    if: github.repository == 'calibosofroyarjan-volunserve/VolunServe' && github.ref == 'refs/heads/live-protected'
+    runs-on: ubuntu-latest
+    environment: production
+    timeout-minutes: 50
+    env:
+      CI: 'true'
+      EXPO_NO_TELEMETRY: '1'
+      CANDIDATE_SHA: ${{ github.sha }}
+      EXPECTED_LIVE_SHA: ${{ inputs.expected_live_sha }}
+      APPROVED_FILES: ${{ inputs.approved_files }}
+    steps:
+      - name: Checkout EXACT release commit (no outdated main)
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          submodules: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Reject stale main, unapproved edits and missing frozen workflows
+        run: node scripts/guard-live-protected-release.cjs --check
+      - name: Install exact project dependencies
+        run: npm ci --no-audit --no-fund
+      - name: TypeScript static validation
+        run: npx tsc --noEmit --incremental false
+      - name: Build the complete approved web application
+        run: |
+          npx expo export --platform web --clear
+          node scripts/verify-hosting-release.cjs
+      - name: Recheck exact live SHA immediately BEFORE publishing (fail-closed)
+        run: node scripts/guard-live-protected-release.cjs --check
+      - name: Require environment-only Firebase service account
+        shell: bash
+        env:
+          FIREBASE_SA: ${{ secrets.VOLUNSERVE_PRODUCTION_HOSTING_SERVICE_ACCOUNT }}
+        run: |
+          if [ -z "$FIREBASE_SA" ]; then
+            echo "::error::BLOCKED: production ENVIRONMENT secret missing; never fall back to repo-level secret"
+            exit 1
+          fi
+      - name: Publish approved Firebase Hosting ONLY; NO database/rules/functions/backend
+        uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          firebaseServiceAccount: ${{ secrets.VOLUNSERVE_PRODUCTION_HOSTING_SERVICE_ACCOUNT }}
+          projectId: volunserve-3aa5b
+          channelId: live
+      - name: Confirm exact release SHA on volunserve.com
+        shell: bash
+        env:
+          VOLUNSERVE_HOSTING_URL: https://volunserve.com
+          VOLUNSERVE_EXPECTED_SHA: ${{ github.sha }}
+        run: |
+          for attempt in 1 2 3 4 5 6; do
+            if node scripts/check-live-hosting.cjs; then exit 0; fi
+            sleep 10
+          done
+          echo "::error::BLOCKED: Hosting not serving expected release SHA"
+          exit 1

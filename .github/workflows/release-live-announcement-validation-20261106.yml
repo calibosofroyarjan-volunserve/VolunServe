@@ -1,79 +1,13 @@
-name: Live Announcement Form Validation - Guarded Hosting Only
+# FROZEN: Historic deploy script is intentionally disabled on this LIVE-DERIVED source branch.
+# DO NOT re-enable. All new Hosting releases must use release-live-protected-hosting.yml.
+name: FROZEN release-live-announcement-validation-20261106.yml (NO PRODUCTION ACTION)
 on:
-  push:
-    branches: [hotfix/live-announcement-validation-final-20261106]
-    paths:
-      - .github/workflows/release-live-announcement-validation-20261106.yml
+  workflow_dispatch:
 permissions:
   contents: read
-concurrency:
-  group: volunserve-production-hosting-release
-  cancel-in-progress: false
 jobs:
-  validate-and-deploy:
-    if: github.repository == 'calibosofroyarjan-volunserve/VolunServe'
+  historic-deploy-disabled:
+    if: ${{ false }}
     runs-on: ubuntu-latest
-    timeout-minutes: 40
-    env:
-      LIVE_BASE: e9341c6d0cdf905ee3fc0079d5bbfc5d827ce36c
-      FIREBASE_SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_VOLUNSERVE_3AA5B || secrets.FIREBASE_SERVICE_ACCOUNT }}
     steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-          cache: npm
-      - name: Strict changeset guard (do not touch other live modules)
-        shell: bash
-        run: |
-          set -euo pipefail
-          git merge-base --is-ancestor "$LIVE_BASE" HEAD
-          UNEXPECTED="$(git diff --name-only "$LIVE_BASE" HEAD | grep -Ev '^(app/\(admin\)/create-announcement\.tsx|\.github/workflows/release-live-announcement-validation-20261106\.yml)$' || true)"
-          if [ -n "$UNEXPECTED" ]; then echo "::error::Unrelated changes: $UNEXPECTED"; exit 1; fi
-          node <<'NODE'
-          const fs=require('fs'),assert=require('assert/strict');
-          const screen=fs.readFileSync('app/(admin)/create-announcement.tsx','utf8');
-          assert(screen.includes('audience: "all"'));
-          assert(screen.includes('setFormNotice({ kind: "success"'));
-          assert(screen.includes('setFormNotice({ kind: "error"'));
-          assert(!screen.includes('Alert.alert('));
-          for(const p of ['app/login.web.tsx','app/signup.web.tsx','app/(superadmin)/_layout.tsx','app/(tabs)/notifications.tsx','components/home/Home.web.tsx','lib/announcementAlerts.ts'])assert(fs.existsSync(p));
-          console.log('PASS: exact live baseline plus Admin announcement form validation only.');
-          NODE
-      - name: Check latest live revision before any Hosting change
-        env:
-          VOLUNSERVE_HOSTING_URL: https://volunserve.com
-          VOLUNSERVE_EXPECTED_SHA: ${{ env.LIVE_BASE }}
-        run: node scripts/check-live-hosting.cjs
-      - name: Install and validate web build
-        run: |
-          npm ci --no-audit --no-fund
-          npx tsc --noEmit --incremental false
-          npx expo export --platform web --clear
-          node scripts/verify-hosting-release.cjs
-      - name: Require Firebase production credentials
-        run: test -n "$FIREBASE_SA"
-      - name: Recheck exact live revision to avoid rolling back newer releases
-        env:
-          VOLUNSERVE_HOSTING_URL: https://volunserve.com
-          VOLUNSERVE_EXPECTED_SHA: ${{ env.LIVE_BASE }}
-        run: node scripts/check-live-hosting.cjs
-      - name: Deploy Hosting ONLY (no Firestore, Auth, data, Render, functions)
-        uses: FirebaseExtended/action-hosting-deploy@v0
-        with:
-          firebaseServiceAccount: ${{ env.FIREBASE_SA }}
-          projectId: volunserve-3aa5b
-          channelId: live
-      - name: Verify exact updated live revision
-        shell: bash
-        env:
-          VOLUNSERVE_HOSTING_URL: https://volunserve.com
-          VOLUNSERVE_EXPECTED_SHA: ${{ github.sha }}
-        run: |
-          for i in 1 2 3 4 5 6; do
-            if node scripts/check-live-hosting.cjs; then exit 0; fi
-            sleep 10
-          done
-          echo "::error::Deployed revision not verified"; exit 1
+      - run: echo "Disabled legacy release workflow; no production secret or deploy."

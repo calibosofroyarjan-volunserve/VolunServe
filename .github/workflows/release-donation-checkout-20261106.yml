@@ -1,68 +1,13 @@
-name: Donation checkout visibility - guarded Hosting release
+# FROZEN: Historic deploy script is intentionally disabled on this LIVE-DERIVED source branch.
+# DO NOT re-enable. All new Hosting releases must use release-live-protected-hosting.yml.
+name: FROZEN release-donation-checkout-20261106.yml (NO PRODUCTION ACTION)
 on:
-  push:
-    branches: [main]
-    paths:
-      - .github/workflows/release-donation-checkout-20261106.yml
+  workflow_dispatch:
 permissions:
   contents: read
-concurrency:
-  group: volunserve-production-hosting-release
-  cancel-in-progress: false
 jobs:
-  verify-and-publish:
-    if: github.repository == 'calibosofroyarjan-volunserve/VolunServe'
+  historic-deploy-disabled:
+    if: ${{ false }}
     runs-on: ubuntu-latest
-    timeout-minutes: 40
-    env:
-      FIREBASE_SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_VOLUNSERVE_3AA5B || secrets.FIREBASE_SERVICE_ACCOUNT }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-          cache: npm
-      - name: Verify original checkout still renders for verified campaign owner
-        run: |
-          node <<'NODE'
-          const fs=require('node:fs'), assert=require('node:assert/strict');
-          const owner=fs.readFileSync('components/donations/CampaignBeneficiaryWallet.tsx','utf8');
-          const donation=fs.readFileSync('app/(tabs)/donation.tsx','utf8');
-          const ending=owner.slice(owner.indexOf('return <View style={s.container}>'));
-          assert(ending.includes('<ResidentWalletSetup enabled/>'));
-          assert(ending.includes('{children}'), 'Owner branch must render checkout children');
-          for(const s of ['onSnapshot(', 'collection(db, "donationCampaigns")', 'Donate Now', '/api/paymongo/checkout-session', 'Proceed to Test Checkout', 'paymentStatus === "paid"']){
-            assert(donation.includes(s), 'Original realtime checkout missing '+s);
-          }
-          console.log('PASS owner checkout + existing realtime donation listener');
-          NODE
-      - name: Install locked dependencies
-        run: npm ci --no-audit --no-fund
-      - name: TypeScript check
-        run: npx tsc --noEmit
-      - name: Export original web app without replacing modules
-        run: |
-          npx expo export --platform web
-          node scripts/verify-hosting-release.cjs
-      - name: Require configured service account
-        shell: bash
-        run: |
-          if [ -z "$FIREBASE_SA" ]; then echo "::error::No Firebase service account; production unchanged"; exit 1; fi
-      - name: Deploy Hosting only to current production
-        uses: FirebaseExtended/action-hosting-deploy@v0
-        with:
-          firebaseServiceAccount: ${{ env.FIREBASE_SA }}
-          projectId: volunserve-3aa5b
-          channelId: live
-      - name: Confirm exact deployment on custom domain
-        shell: bash
-        env:
-          VOLUNSERVE_HOSTING_URL: https://volunserve.com
-          VOLUNSERVE_EXPECTED_SHA: ${{ github.sha }}
-        run: |
-          for attempt in 1 2 3 4 5 6; do
-            if node scripts/check-live-hosting.cjs; then exit 0; fi
-            sleep 10
-          done
-          echo "::error::Hosting deployment not confirmed on custom domain"
-          exit 1
+      - run: echo "Disabled legacy release workflow; no production secret or deploy."

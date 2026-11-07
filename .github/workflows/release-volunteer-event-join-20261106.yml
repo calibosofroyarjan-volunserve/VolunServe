@@ -1,89 +1,13 @@
-name: Release Volunteer Join Card Fix - Guarded Hosting ONLY
+# FROZEN: Historic deploy script is intentionally disabled on this LIVE-DERIVED source branch.
+# DO NOT re-enable. All new Hosting releases must use release-live-protected-hosting.yml.
+name: FROZEN release-volunteer-event-join-20261106.yml (NO PRODUCTION ACTION)
 on:
-  push:
-    branches: [main]
-    paths:
-      - .github/workflows/release-volunteer-event-join-20261106.yml
+  workflow_dispatch:
 permissions:
   contents: read
-concurrency:
-  group: volunserve-production-hosting-release
-  cancel-in-progress: false
 jobs:
-  deploy-scoped-join-ui:
-    if: github.repository == 'calibosofroyarjan-volunserve/VolunServe'
+  historic-deploy-disabled:
+    if: ${{ false }}
     runs-on: ubuntu-latest
-    timeout-minutes: 45
-    env:
-      CI: 'true'
-      EXPO_NO_TELEMETRY: '1'
-      VERIFIED_LIVE_BASE: 53c7d9b9bc39e15ee8c25ffe0e5384d39f3d3c2f
-      FIREBASE_SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_VOLUNSERVE_3AA5B || secrets.FIREBASE_SERVICE_ACCOUNT }}
     steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-          cache: npm
-      - uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '21'
-      - name: Guard original Login, Signup, Admin, Donations and rules
-        shell: bash
-        run: |
-          set -euo pipefail
-          git merge-base --is-ancestor "$VERIFIED_LIVE_BASE" HEAD
-          git diff --name-only "$VERIFIED_LIVE_BASE" HEAD | while IFS= read -r file; do
-            case "$file" in
-              'app/(tabs)/community-events.tsx'|lib/communityEventJoinWindow.ts|scripts/test-volunteer-community-event-join-20261106.cjs|.github/workflows/validate-volunteer-event-join-20261106.yml|.github/workflows/release-volunteer-event-join-20261106.yml) ;;
-              *) echo "::error::Unexpected unrelated change: $file"; exit 1;;
-            esac
-          done
-          git diff --exit-code "$VERIFIED_LIVE_BASE" HEAD -- 'app/login.tsx' 'app/login.web.tsx' 'app/signup.tsx' 'app/signup.web.tsx' 'app/(admin)' 'app/(superadmin)' 'components/donations' 'components/notifications' 'firestore.rules' 'firebase.json' 'functions' 'backend'
-          echo "PASS: original production functionality preserved; targeted event card fix only"
-      - name: Confirm old production live before publishing
-        env:
-          VOLUNSERVE_HOSTING_URL: https://volunserve.com
-          VOLUNSERVE_EXPECTED_SHA: ${{ env.VERIFIED_LIVE_BASE }}
-        run: node scripts/check-live-hosting.cjs
-      - name: Install exact locked dependencies
-        run: npm ci --no-audit --no-fund
-      - name: Test Join button and real Firestore transaction in emulator
-        run: |
-          node scripts/test-volunteer-community-event-join-20261106.cjs
-          npx firebase-tools emulators:exec --only firestore --project demo-volunserve "node scripts/test-community-events-rules.cjs"
-      - name: Strict TS typecheck and build exact existing app
-        run: |
-          npx tsc --noEmit --incremental false
-          npx expo export --platform web --clear
-          node scripts/verify-hosting-release.cjs
-      - name: Require correct Firebase credentials
-        shell: bash
-        run: |
-          if [ -z "$FIREBASE_SA" ]; then echo "::error::Missing credentials. No deploy."; exit 1; fi
-      - name: Recheck live SHA to prevent overwriting a newer release
-        env:
-          VOLUNSERVE_HOSTING_URL: https://volunserve.com
-          VOLUNSERVE_EXPECTED_SHA: ${{ env.VERIFIED_LIVE_BASE }}
-        run: node scripts/check-live-hosting.cjs
-      - name: Deploy Hosting ONLY - never deploy rules, data, backends or Auth
-        uses: FirebaseExtended/action-hosting-deploy@v0
-        with:
-          firebaseServiceAccount: ${{ env.FIREBASE_SA }}
-          projectId: volunserve-3aa5b
-          channelId: live
-      - name: Verify exact live revision on volunserve.com
-        shell: bash
-        env:
-          VOLUNSERVE_HOSTING_URL: https://volunserve.com
-          VOLUNSERVE_EXPECTED_SHA: ${{ github.sha }}
-        run: |
-          for attempt in 1 2 3 4 5 6; do
-            if node scripts/check-live-hosting.cjs; then exit 0; fi
-            sleep 10
-          done
-          echo "::error::Live revision verification failed"
-          exit 1
+      - run: echo "Disabled legacy release workflow; no production secret or deploy."
