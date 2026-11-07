@@ -23,30 +23,6 @@ jobs:
       - name: Read-only HTTP smoke of Render preview (no sign-ins or writes)
         working-directory: source
         run: node scripts/smoke-staging-public-preview-20261107.cjs
-      - name: Verify browser-rendered Login, Signup and Staff pages contain no credential inputs
-        run: |
-          node <<'NODE'
-          const assert=require('node:assert/strict');
-          const cp=require('node:child_process');
-          const origin='https://volunserve-readonly-ui-preview.onrender.com';
-          const chrome=cp.execFileSync('bash',['-lc','command -v google-chrome || command -v chromium || command -v chromium-browser'],{encoding:'utf8'}).trim().split('\n')[0];
-          assert(chrome,'Browser rendering test requires Chrome/Chromium');
-          for(const route of ['/login','/signup','/admin-request']) {
-            const page=cp.execFileSync(chrome,[
-              '--headless=new','--no-sandbox','--disable-gpu','--disable-dev-shm-usage',
-              '--disable-background-networking','--virtual-time-budget=14000',
-              '--dump-dom',origin+route
-            ],{encoding:'utf8',timeout:80000,maxBuffer:16*1024*1024,stdio:['ignore','pipe','ignore']});
-            const notice=page.includes('Sign-in is disabled on this preview');
-            if(route==='/login') {
-              assert(notice, '/login must show a staging notice instead of a form');
-            }
-            const inputTags=page.match(/<input[^>]*>/gi)||[];
-            assert(!inputTags.some(tag=>/(?:type|name)=["'](?:password|email)["']/i.test(tag)),
-              route+' still renders a credential input');
-            if(!notice) {
-              console.log('INFO '+route+' rendered no credential form (possibly protected/redirected before route mount)');
-            }
-            console.log('PASS browser-rendered staging auth disabled '+origin+route);
-          }
-          NODE
+      - name: Verify rendered staging account routes show no credential inputs
+        working-directory: source
+        run: node scripts/smoke-readonly-auth-browser-20261107.cjs
