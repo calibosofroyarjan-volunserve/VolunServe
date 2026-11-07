@@ -15,9 +15,9 @@ async function main() {
       firstName: "Resident", lastName: "Test", middleName: "",
       age: 23, phoneNumber: "+639171234567",
       region: "Region III – Central Luzon", province: "Bulacan",
-      city: "City of San Jose del Monte", barangay: "Muzon",
-      address: "Muzon, City of San Jose del Monte, Bulacan",
-      occupationCategory: "Student", occupationSpecialization: "",
+      city: "City of San Jose del Monte", barangay: "Muzon Proper",
+      address: "Muzon Proper, City of San Jose del Monte, Bulacan",
+      occupationCategory: "Student", occupationSpecialization: "College",
       occupationOther: "", occupation: "Student", skills: [],
       skillOther: "", availability: [], role: "resident",
       requestedRole: "resident", primaryRole: "resident",
@@ -59,6 +59,28 @@ async function main() {
 
     await assertFails(setDoc(doc(as("new-resident","real@gmail.com",false),"users","new-resident"),validProfile));
     await assertFails(setDoc(doc(as("new-resident","other@gmail.com",true),"users","new-resident"),validProfile));
+    // Every invalid registration has its own UID to test CREATE permission
+    // (rather than accidentally testing UPDATE on an existing profile).
+    let n = 0;
+    async function invalidCreate(changes) {
+      const uid = "invalid-resident-" + (++n);
+      const email = "invalid" + n + "@gmail.com";
+      const candidate = {...validProfile,uid,email,...changes};
+      await assertFails(setDoc(doc(as(uid,email,true),"users",uid),candidate));
+    }
+    await invalidCreate({phoneNumber:"0917"});
+    await invalidCreate({phoneNumber:"+639171234567999"});
+    await invalidCreate({barangay:"Muzon"});
+    await invalidCreate({barangay:"Quezon City"});
+    await invalidCreate({occupationCategory:"Unknown"});
+    await invalidCreate({occupationCategory:"Student",occupationSpecialization:"Doctor"});
+    await invalidCreate({occupationCategory:"Student",occupationSpecialization:""});
+    await invalidCreate({occupationCategory:"Other (Specify)",occupationSpecialization:"",occupationOther:""});
+    await invalidCreate({firstName:"A"});
+    await invalidCreate({lastName:"A"});
+    await invalidCreate({age:17});
+    await invalidCreate({age:101});
+    await invalidCreate({region:""});
     await assertSucceeds(setDoc(doc(as("new-resident","real@gmail.com",true),"users","new-resident"),validProfile));
     assert.ok(true);
     console.log("PASS Firestore: unverified community/staff emails denied; verified complete Resident and staff access permitted.");
