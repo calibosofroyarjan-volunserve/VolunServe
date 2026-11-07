@@ -28,3 +28,14 @@
 5. Review and confirm the new read/write Security Rules in the emulator and check native/web UX, including recovery when a user mistypes email. No data deletions.
 6. Review possible additional costs of Identity Platform, Functions and anti-abuse tooling.
 7. Only then stage explicit Hosting + rules + Functions releases through a protected manual production procedure; confirm post-release access, and retain rollback artifacts and a monitored migration procedure for legitimate users on blocked domains.
+
+## Current safe release status — latest protected-live source
+- **Branch:** `security/live-verified-email-guest-20261108`; created from `live-protected` at `a6f832da13f89ef70bf7a19204dadf4f5c9cdb4e`, incorporating newer premium design commits. Old draft PR #285 is superseded for review.
+- **No automatic deployment:** production Firebase Hosting, Auth, Functions, Rules, Storage, Render, and user data were NOT changed. Do not enable merged/auth production releases until full staged end-to-end tests pass.
+- **No temporary account is a Guest account.** Direct `/public` routes sign out Firebase Auth; legacy `role:guest` records, even with `status:approved`, cannot use protected Dashboard, Firestore, Storage or Render data and are retained for controlled migration.
+- **All protected backend APIs** require both verified email and a completed approved role-backed profile; verified pending LGU staff have only narrowly scoped application/credential paths.
+- Firebase callable certificates, map briefing and push-token operations require verified email. Public read-only pages and externally verified PayMongo webhooks remain separate.
+- **Optional Identity Platform triggers are fail-closed by default.** `functions/index.js` exports `beforeUserCreated` and `beforeUserSignedIn` only if `VOLUNSERVE_ENABLE_IDENTITY_BLOCKING=true` is explicitly set in a staging/reviewed deployment environment; otherwise the source code does not activate the handlers. Activation requires Identity Platform upgrade and testing.
+- **Strict staff rules are a rollout risk.** An existing Admin/Super Admin/LGU staff Auth user with `email_verified=false` will lose access after stricter Firestore, Storage and Render rules activate. Audit and migrate existing staff BEFORE applying these rules.
+- **Gmail limitation:** `+tag` Gmail aliases are blocked at registration; ordinary genuine Gmail and dotted variants cannot be categorically classified as throwaway, and a known-domain snapshot cannot prevent all abuse.
+- The design-only `ui-regression` workflow checks that the design PR was *only* changing styles. It is intentionally not applicable to multi-layer security changes and will still report a structural-diff failure. Do NOT disable that workflow; use the dedicated deep security CI checks plus explicit reviewer approval before any protected release.
