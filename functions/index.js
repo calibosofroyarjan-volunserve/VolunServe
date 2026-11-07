@@ -3,6 +3,12 @@ const {initializeApp} = require("firebase-admin/app");
 const {getFirestore, FieldValue} = require("firebase-admin/firestore");
 const {setGlobalOptions} = require("firebase-functions");
 const {onCall, HttpsError} = require("firebase-functions/https");
+const {isVerifiedCallableEmail} = require("./verifiedCallableEmail");
+function requireVerifiedCallableEmail(request) {
+  if (!isVerifiedCallableEmail(request)) {
+    throw new HttpsError("permission-denied", "Verify your email before using VolunServe services.");
+  }
+}
 const {onDocumentCreated, onDocumentUpdated} = require("firebase-functions/v2/firestore");
 const {defineSecret} = require("firebase-functions/params");
 const logger = require("firebase-functions/logger");
@@ -787,6 +793,7 @@ exports.generateMapBriefing = onCall(
             "Sign in before requesting an AI map briefing.",
         );
       }
+      requireVerifiedCallableEmail(request);
 
       const latitude = clampNumber(
           request.data?.latitude,
@@ -1603,6 +1610,7 @@ exports.issueVolunteerCertificate = onCall(
             "Sign in before issuing a volunteer certificate.",
         );
       }
+      requireVerifiedCallableEmail(request);
 
       const database =
         getFirestore();
@@ -2601,6 +2609,7 @@ exports.registerAndroidPushToken = onCall(
     async (request) => {
       const uid = request.auth?.uid;
       if (!uid) throw new HttpsError("unauthenticated", "Sign in first.");
+      requireVerifiedCallableEmail(request);
       const token = request.data?.token;
       if (typeof token !== "string" || !ANDROID_PUSH_TOKEN.test(token) ||
           token.startsWith("ExponentPushToken") || token.startsWith("ExpoPushToken")) {
@@ -2646,6 +2655,7 @@ exports.unregisterAndroidPushToken = onCall(
     async (request) => {
       const uid = request.auth?.uid;
       if (!uid) throw new HttpsError("unauthenticated", "Sign in first.");
+      requireVerifiedCallableEmail(request);
       const token = request.data?.token;
       if (typeof token !== "string" || !ANDROID_PUSH_TOKEN.test(token)) {
         throw new HttpsError("invalid-argument", "Invalid FCM token.");
