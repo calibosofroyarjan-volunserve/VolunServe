@@ -1,0 +1,44 @@
+name: Validate Isolated Staging Backend (No Deploy)
+on:
+  push:
+    branches: [preview/isolated-staging-backend-20261107]
+permissions:
+  contents: read
+jobs:
+  validate-shell:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Read branch without submodules or credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir source && cd source
+          git init
+          git remote add origin https://github.com/calibosofroyarjan-volunserve/VolunServe.git
+          git fetch --depth=1 --no-recurse-submodules origin "$GITHUB_SHA"
+          git checkout --detach FETCH_HEAD
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Exercise inert API - must reject ALL real writes and live credentials
+        working-directory: source
+        run: node --test staging-backend/test-isolation.cjs
+      - name: Confirm staging does not import production modules
+        working-directory: source
+        run: |
+          node - <<'NODE'
+          const fs=require('node:fs'),assert=require('node:assert/strict');
+          const s=fs.readFileSync('staging-backend/server.cjs','utf8');
+          for(const pattern of [
+            /require\(["'].*firebase/i,
+            /require\(["'].*backend\//i,
+            /require\(["'].*paymongo/i,
+            /fetch\s*\(/,
+            /axios\s*\(/,
+            /https\.request\s*\(/,
+            /fs\.writeFile/,
+          ])assert(!pattern.test(s),'Staging backend must not connect to external/prod services: '+pattern);
+          assert(s.includes('STAGING_NOT_CONFIGURED') && s.includes('VOLUNSERVE_STAGING_API_MODE'));
+          console.log('PASS: staging shell is inert, with no production or external integrations.');
+          NODE
