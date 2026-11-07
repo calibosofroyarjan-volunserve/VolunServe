@@ -1,0 +1,35 @@
+name: Read-only Verify Current Live VolunServe Hosting Revision
+on:
+  push:
+    branches: [audit/verify-current-live-ui-20261107]
+permissions:
+  contents: read
+jobs:
+  inspect-live:
+    if: github.repository == 'calibosofroyarjan-volunserve/VolunServe'
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          submodules: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Read-only check of live domain, production release marker and public routes
+        env:
+          VOLUNSERVE_HOSTING_URL: https://volunserve.com
+        run: node scripts/check-live-hosting.cjs
+      - name: Read-only compare hosting aliases (no write, no credentials)
+        run: |
+          node <<'NODE'
+          const targets=["https://volunserve.com/volunserve-release.json",
+            "https://volunserve-3aa5b.web.app/volunserve-release.json"];
+          (async()=>{for(const url of targets){try{
+            const res=await fetch(url,{signal:AbortSignal.timeout(12000),headers:{"cache-control":"no-cache"}});
+            const data=await res.json();
+            if(!res.ok||!/^([0-9a-f]{40})$/.test(data.revision||""))throw Error("invalid marker");
+            console.log("VERIFIED LIVE REVISION "+new URL(url).hostname+" "+data.revision+" BUILT "+data.builtAt);
+          }catch(e){console.log("CHECK FAILED "+url+": "+e.message);process.exitCode=1;}}})();
+          NODE
