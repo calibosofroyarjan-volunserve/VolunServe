@@ -59,6 +59,9 @@ jobs:
       - name: Compile TypeScript for every web/mobile screen
         working-directory: source
         run: npx tsc --noEmit --pretty false
+      - name: Fail closed if any staging build environment variable is unsafe
+        working-directory: source
+        run: node scripts/require-isolated-preview-build-20261107.cjs
       - name: Export actual Expo web build linked ONLY to staging shell
         working-directory: source
         run: npx expo export --platform web
