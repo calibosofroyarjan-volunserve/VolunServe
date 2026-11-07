@@ -1,3 +1,4 @@
+import { getSafeVolunServeBackendBaseUrl } from "../../lib/stagingBackendSafety";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { Redirect, useRouter, type Href } from "expo-router";
 import {
@@ -83,7 +84,7 @@ type Filter =
 // Render certificate reconciliation (Spark-compatible): authenticated Admin only.
 // This never changes attendance timestamps and must run AFTER a successful
 // Firestore completion/verification transaction, not inside one.
-const CERTIFICATE_BACKEND_URL = "https://volunserve.onrender.com";
+const CERTIFICATE_BACKEND_URL = getSafeVolunServeBackendBaseUrl();
 const CERTIFICATE_SYNC_TIMEOUT_MS = 100_000;
 
 type CertificateSyncResult = {

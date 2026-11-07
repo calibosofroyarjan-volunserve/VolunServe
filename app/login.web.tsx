@@ -1,3 +1,5 @@
+import { isStagingPreview } from "../lib/stagingBackendSafety";
+import ReadOnlyPreviewAuthNotice from "../components/auth/ReadOnlyPreviewAuthNotice";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import GoogleBrandMark from "../components/auth/GoogleBrandMark";
@@ -57,6 +59,11 @@ function consumeGoogleLoginNotice(): string {
 }
 
 export default function WebLogin() {
+  if (isStagingPreview) return <ReadOnlyPreviewAuthNotice />;
+  return <ProductionWebLogin />;
+}
+
+function ProductionWebLogin() {
   const router = useRouter();
   const signInGoogle = useSignupGoogle();
   const [email, setEmail] = useState("");

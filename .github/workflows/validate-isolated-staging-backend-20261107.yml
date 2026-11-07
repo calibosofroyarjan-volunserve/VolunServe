@@ -1,0 +1,90 @@
+name: Validate Isolated Staging Backend (No Deploy)
+on:
+  push:
+    branches: [preview/isolated-staging-backend-20261107]
+permissions:
+  contents: read
+jobs:
+  validate-shell:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Read branch without submodules or credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir source && cd source
+          git init
+          git remote add origin https://github.com/calibosofroyarjan-volunserve/VolunServe.git
+          git fetch --depth=1 --no-recurse-submodules origin "$GITHUB_SHA"
+          git checkout --detach FETCH_HEAD
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Exercise inert API - must reject ALL real writes and live credentials
+        working-directory: source
+        run: node --test staging-backend/test-isolation.cjs
+      - name: Confirm staging does not import production modules
+        working-directory: source
+        run: |
+          node - <<'NODE'
+          const fs=require('node:fs'),assert=require('node:assert/strict');
+          const s=fs.readFileSync('staging-backend/server.cjs','utf8');
+          for(const pattern of [
+            /require\(["'].*firebase/i,
+            /require\(["'].*backend\//i,
+            /require\(["'].*paymongo/i,
+            /fetch\s*\(/,
+            /axios\s*\(/,
+            /https\.request\s*\(/,
+            /fs\.writeFile/,
+          ])assert(!pattern.test(s),'Staging backend must not connect to external/prod services: '+pattern);
+          assert(s.includes('STAGING_NOT_CONFIGURED') && s.includes('VOLUNSERVE_STAGING_API_MODE'));
+          console.log('PASS: staging shell is inert, with no production or external integrations.');
+          NODE
+
+  smoke-staging-only:
+    runs-on: ubuntu-latest
+    timeout-minutes: 9
+    steps:
+      - name: Exercise only the isolated Render staging shell (no production URL)
+        env:
+          STAGING_URL: https://volunserve-staging-api-shell.onrender.com
+        run: |
+          node <<'NODE'
+          const assert=require("node:assert/strict");
+          const origin=process.env.STAGING_URL;
+          assert.equal(new URL(origin).hostname,"volunserve-staging-api-shell.onrender.com");
+          async function get(path, init) {
+            let error;
+            for(let attempt=1;attempt<=6;attempt++) {
+              try {
+                const r=await fetch(origin+path,{...init,signal:AbortSignal.timeout(22000)});
+                const value=await r.json();
+                return {status:r.status, value};
+              } catch(e){ error=e; console.log("Staging-only attempt",attempt,"error",e.message); await new Promise(resolve=>setTimeout(resolve,6500)); }
+            }
+            throw error;
+          }
+          (async()=>{
+            const health=await get("/health");
+            assert.equal(health.status,200);
+            assert.equal(health.value.mode,"isolated-staging-shell");
+            assert.equal(health.value.productionConnected,false);
+            const readiness=await get("/api/staging/readiness");
+            assert.equal(readiness.status,200);
+            assert.equal(readiness.value.stagingFirebaseConnected,false);
+            const writes=[
+              "/api/paymongo/checkout-session",
+              "/api/identity/verify",
+              "/api/assistance/evidence",
+            ];
+            for(const path of writes){
+              const r=await get(path,{method:"POST",headers:{"content-type":"application/json"},body:"{}"});
+              assert.equal(r.status,503);
+              assert.equal(r.value.code,"STAGING_NOT_CONFIGURED");
+              console.log("PASS blocked",path);
+            }
+            console.log("PASS public staging shell is healthy, inert and production-independent.");
+          })().catch(e=>{console.error(e);process.exitCode=1});
+          NODE

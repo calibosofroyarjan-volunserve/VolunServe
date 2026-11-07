@@ -1,3 +1,4 @@
+import { getSafeVolunServeBackendBaseUrl } from "../../lib/stagingBackendSafety";
 import { Redirect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import ListPagination from "../../components/ui/ListPagination";
@@ -5,7 +6,7 @@ import AdminReviewHero from "../../components/admin/AdminReviewHero";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { useUserSession } from "../../lib/useUserSession";
-const BACKEND_URL = "https://volunserve.onrender.com";
+const BACKEND_URL = getSafeVolunServeBackendBaseUrl();
 type Personnel = {
   uid: string;
   fullName: string;

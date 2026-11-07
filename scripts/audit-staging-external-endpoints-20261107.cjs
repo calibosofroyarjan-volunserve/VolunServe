@@ -48,6 +48,10 @@ const md=[
 fs.writeFileSync("reports/staging-external-endpoints.md",md);
 console.log("STAGING URL CANDIDATES",issues.length,"UNRESOLVED PROD RENDER REFERENCES",unresolved.length);
 console.log(unresolved.slice(0,40).map(x=>x.file+":"+x.line+" "+x.text).join("\n"));
+console.log("OTHER EXTERNAL ENDPOINT CANDIDATES");
+console.log(issues.filter(x=>/api\\.cloudinary\\.com|api\\.paymongo\\.com|EXPO_PUBLIC_.*URL/i.test(x.text))
+  .slice(0,45).map(x=>x.file+":"+x.line+" "+x.text).join("\n"));
+if (unresolved.length > 0) throw Error("STAGING BLOCKED: direct production Render endpoints remain");
 for(const f of known) if(!fs.readFileSync(f,"utf8").includes("getSafeVolunServeBackendBaseUrl"))
  throw Error("Staging backend routing missing in "+f);
 console.log("PASS: audited five known backend call sites; other candidates are in the downloadable report.");

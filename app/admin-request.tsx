@@ -1,3 +1,5 @@
+import { isStagingPreview } from "../lib/stagingBackendSafety";
+import ReadOnlyPreviewAuthNotice from "../components/auth/ReadOnlyPreviewAuthNotice";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { deleteApp, initializeApp } from "firebase/app";
@@ -10,6 +12,11 @@ import { firebaseConfig } from "../lib/firebase";
 
 /** Applicant registration creates NO Admin permissions. Only Super Admin can verify and grant Admin role. */
 export default function LguStaffApplication() {
+  if (isStagingPreview) return <ReadOnlyPreviewAuthNotice />;
+  return <ProductionLguStaffApplication />;
+}
+
+function ProductionLguStaffApplication() {
   const router = useRouter();
   const [form, setForm] = useState({ fullName:"",email:"",password:"",lguOffice:"",lguPosition:"",appointmentReference:"",barangay:"" });
   const [busy,setBusy]=useState(false);

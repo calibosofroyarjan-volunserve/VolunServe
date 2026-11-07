@@ -1,3 +1,4 @@
+import { getSafeVolunServeBackendBaseUrl } from "../../lib/stagingBackendSafety";
 import { Ionicons } from "@expo/vector-icons";
 import React, { useEffect, useMemo, useState } from "react";
 import { useLocalSearchParams } from "expo-router";
@@ -20,7 +21,7 @@ import {
 
 import { useUserSession } from "../../lib/useUserSession";
 
-const BACKEND_URL = "https://volunserve.onrender.com";
+const BACKEND_URL = getSafeVolunServeBackendBaseUrl();
 
 type ReviewFilter = "pending" | "verified" | "retry_required" | "all";
 

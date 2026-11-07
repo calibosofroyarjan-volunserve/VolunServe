@@ -1,3 +1,4 @@
+import { getSafeVolunServeBackendBaseUrl } from "../../lib/stagingBackendSafety";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import React, { useCallback, useEffect, useState } from "react";
 import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
@@ -11,7 +12,7 @@ type Release = {
   releaseProcessor?:string;deliveryStatus?:string;
   acknowledgedAt?:string;acknowledgmentNote?:string;
 };
-const ROOT="https://volunserve.onrender.com/api/funds/my-releases";
+const ROOT=getSafeVolunServeBackendBaseUrl()+"/api/funds/my-releases";
 const peso=(value:number) => "₱"+Number(value||0).toLocaleString("en-PH",{
   minimumFractionDigits:2,maximumFractionDigits:2,
 });

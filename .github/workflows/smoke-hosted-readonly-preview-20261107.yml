@@ -1,0 +1,28 @@
+name: Smoke Check Hosted Read-Only VolunServe Preview
+on:
+  push:
+    branches: [preview/isolated-staging-backend-20261107]
+permissions:
+  contents: read
+jobs:
+  preview-readonly:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Fetch review source without production secrets
+        run: |
+          set -euo pipefail
+          mkdir source && cd source
+          git init
+          git remote add origin https://github.com/calibosofroyarjan-volunserve/VolunServe.git
+          git fetch --no-recurse-submodules --depth=1 origin "$GITHUB_SHA"
+          git checkout --detach FETCH_HEAD
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Read-only HTTP smoke of Render preview (no sign-ins or writes)
+        working-directory: source
+        run: node scripts/smoke-staging-public-preview-20261107.cjs
+      - name: Verify rendered staging account routes show no credential inputs
+        working-directory: source
+        run: node scripts/smoke-readonly-auth-browser-20261107.cjs
