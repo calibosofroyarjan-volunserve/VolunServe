@@ -36,6 +36,7 @@ import {
 } from "react-native";
 
 import { db } from "../../lib/firebase";
+import { getSafeVolunServeBackendBaseUrl } from "../../lib/stagingBackendSafety";
 import { isApprovedProfile } from "../../lib/firebaseAuth";
 import { useUserSession } from "../../lib/useUserSession";
 
@@ -176,7 +177,7 @@ const COMMUNITY_KEYWORDS = [
   "wheelchair",
 ];
 
-const PAYMONGO_BACKEND_URL = "https://volunserve.onrender.com";
+const PAYMONGO_BACKEND_URL = getSafeVolunServeBackendBaseUrl();
 
 const sanitizeMoneyInput = (value: string) => {
   const cleaned = value.replace(/[^0-9.]/g, "");
