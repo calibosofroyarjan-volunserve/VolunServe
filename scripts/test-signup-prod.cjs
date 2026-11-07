@@ -21,7 +21,11 @@ const baseline = cp.execFileSync("git",["show","e7c2cc8:lib/firebaseAuth.ts"],{e
 const emailPolicy = load(read("lib/registrationEmailPolicy.ts"), {
   "./disposableEmailDomains.generated": load(read("lib/disposableEmailDomains.generated.ts")),
 });
-const data = {firstName:"Maria",lastName:"Santos",middleName:"",email:"resident@example.com",password:"Password1!",age:25,phoneNumber:"+639171234567",region:"Region III ? Central Luzon",province:"Bulacan",city:"City of San Jose del Monte",barangay:"Muzon",occupationCategory:"Student",occupationSpecialization:"College",occupationOther:"",role:"volunteer"};
+const residentDetailsGuard = load(read("lib/requireCompleteResidentRegistration.ts"), {
+  "../constants/sjdmBarangays": load(read("constants/sjdmBarangays.ts")),
+  "../constants/occupationOptions": load(read("constants/occupationOptions.ts")),
+});
+const data = {firstName:"Maria",lastName:"Santos",middleName:"",email:"resident@example.com",password:"Password1!",age:25,phoneNumber:"+639171234567",region:"Region III ? Central Luzon",province:"Bulacan",city:"City of San Jose del Monte",barangay:"Muzon Proper",occupationCategory:"Student",occupationSpecialization:"College",occupationOther:"",role:"volunteer"};
 function harness(source, enabled, options = {}) {
   const calls = [];
   const user = {uid:"signup-test",email:data.email,emailVerified:options.verified ?? true,providerData:(options.providers || ["password"]).map(providerId=>({providerId})),photoURL:"",reload:async()=>{calls.push("reload");}};
@@ -42,7 +46,7 @@ function harness(source, enabled, options = {}) {
     linkWithCredential:async()=>{calls.push("link");if(options.sdkLinkError)throw Object.assign(new Error("Link rejected"),{code:options.sdkLinkError});user.providerData.push({providerId:"password"});return {user};},
   };
   const store = {doc:(_,collection,uid)=>({collection,uid}),getDoc:async()=>{calls.push("read");return snapshot();},serverTimestamp:()=>"timestamp",writeBatch:()=>({set:(_,value)=>{saved=value;},commit:async()=>{calls.push("commit");profile=saved;}}),runTransaction:async(_,fn)=>{calls.push("transaction");await fn({get:async()=>options.raceExisting ? {exists:()=>true} : snapshot(),set:(_,value)=>{saved=value;profile=value;}});}};
-  const imports = {"./registrationEmailPolicy":emailPolicy,"./firebase":{auth,db:{}},"./signupFeature":{EMAIL_FIRST_SIGNUP_ENABLED:enabled},"firebase/auth":authSdk,"firebase/firestore":store,"react-native":{Platform:{OS:"web"}},"./androidNativePush":{disableAndroidPhoneAlerts:async()=>{}}};
+  const imports = {"./requireCompleteResidentRegistration":residentDetailsGuard,"./registrationEmailPolicy":emailPolicy,"./firebase":{auth,db:{}},"./signupFeature":{EMAIL_FIRST_SIGNUP_ENABLED:enabled},"firebase/auth":authSdk,"firebase/firestore":store,"react-native":{Platform:{OS:"web"}},"./androidNativePush":{disableAndroidPhoneAlerts:async()=>{}}};
   imports["./signupRegistration"]=load(read("lib/signupRegistration.ts"),imports);
   return {registration:imports["./signupRegistration"],api:load(source,imports),link:load(read("lib/emailFirstSignupAuth.ts"),imports),calls,user,auth,profile:()=>profile};
 }
@@ -191,6 +195,39 @@ function harness(source, enabled, options = {}) {
     assert(rules.includes('request.auth.token.get("email_verified", false) == true'));
     assert(rules.includes('request.auth.token.get("email", "") == request.resource.data.email'));
     assert(rules.includes('request.resource.data.keys().hasAll(['));
+  });
+  await check("verified Auth-only UID without Step 3 and Step 4 cannot create Basic Resident",async()=>{
+    for(const incomplete of [
+      {firstName:""},
+      {lastName:""},
+      {age:0},
+      {phoneNumber:""},
+      {barangay:""},
+      {barangay:"Outside SJDM"},
+      {occupationCategory:""},
+      {occupationSpecialization:""},
+    ]) {
+      const h=harness(current,true);
+      await assert.rejects(
+        h.api.signUpUser({...data,...incomplete,authProvider:"verified_email",password:""}),
+        /Step 3|Step 4/
+      );
+      assert(!h.calls.includes("transaction"), "Incomplete registration must not write users/{uid}");
+      assert.equal(h.profile(),null);
+    }
+    const unverified=harness(current,true,{verified:false});
+    await assert.rejects(
+      unverified.api.signUpUser({...data,authProvider:"verified_email",password:""}),
+      /Verify your email/
+    );
+    assert(!unverified.calls.includes("transaction"));
+  });
+  await check("email verification alone still leaves a pending Auth UID, never a Resident profile",async()=>{
+    const h=harness(current,true,{verified:false,noUser:true});
+    const user=await h.registration.authenticateEmailSignup(data.email,data.password,false,true);
+    assert.equal(user.uid,h.user.uid);
+    assert.equal(h.profile(),null);
+    assert(!h.calls.includes("transaction"));
   });
   await check("native Google signup owns OAuth and never bounces pending users to Login",()=>{
     assert(read("lib/useSignupGoogle.ts").includes("signInWithCredential"));
