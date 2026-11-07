@@ -64,14 +64,20 @@ const GREEN = "#047857";
 const RED = "#b91c1c";
 const PALE = "#f0fdf4";
 
-function passwordError(value: string): string | null {
+function passwordError(value: string, emailAddress = ""): string | null {
   if (!value) return "Create your VolunServe password.";
-  if (
-    value.length < 8 || !/[A-Z]/.test(value) ||
-    !/[a-z]/.test(value) || !/\d/.test(value) ||
-    !/[^A-Za-z0-9]/.test(value)
-  ) {
-    return "Use 8+ characters with uppercase, lowercase, a number and a symbol.";
+  if (value.length < 8) return "Use at least 8 characters.";
+  if (value.length > 128) return "Password must be 128 characters or fewer.";
+  if (!/[A-Z]/.test(value) || !/[a-z]/.test(value) ||
+      !/\d/.test(value) || !/[^A-Za-z0-9]/.test(value)) {
+    return "Include uppercase, lowercase, a number and a symbol.";
+  }
+  const localPart = emailAddress.trim().split("@")[0]?.toLowerCase() || "";
+  if (localPart.length >= 4 && value.toLowerCase().includes(localPart)) {
+    return "Avoid using your email name in your password.";
+  }
+  if (/(?:password|qwerty|12345678|volunserve|admin123)/i.test(value)) {
+    return "Choose a less predictable password; avoid common words and patterns.";
   }
   return null;
 }
@@ -233,7 +239,7 @@ export default function EmailFirstSignup() {
   const age = useMemo(() => dateAge(birth), [birth]);
   const phoneClean = phone.replace(/\D/g, "");
   const emailErr = getRegistrationEmailError(email);
-  const passwordErr = passwordError(password);
+  const passwordErr = passwordError(password, email);
   const needsSpecialization = (SPECIALIZATIONS[occupation] || []).length > 0;
   const googleOnly = !!signedInUser &&
     signedInUser.providerData.some(p => p.providerId === "google.com") &&
@@ -711,6 +717,7 @@ export default function EmailFirstSignup() {
                   label={resumeMode ? "Your VolunServe Password *" : "Create VolunServe Password *"}
                   value={password} onChange={setPassword} secret
                   placeholder={resumeMode ? "Enter your existing VolunServe password" : "At least 8 characters"}
+                  hint={resumeMode ? "Use your original password." : "8–128 characters, with upper/lowercase letters, a number and a symbol."}
                   error={resumeMode
                     ? !password.trim() ? "Enter the VolunServe password you created earlier." : null
                     : passwordErr}
