@@ -76,13 +76,16 @@ jobs:
               /^import \{ liveUi as ui \} from "\.\.\/\.\.\/constants\/volunserveLiveUi";\r?\n/m,'');
             assert.equal(operational,old.slice(0,atOld),
               'BLOCKED: live screens, handlers, routes, API logic or JSX changed: '+p);
-            const styleKeys=s=>new Set([...s.matchAll(/^  ([A-Za-z0-9_]+):/gm)].map(m=>m[1]));
-            const oldStyleKeys=styleKeys(old.slice(atOld));
-            const newStyleKeys=styleKeys(curr.slice(atNew));
+            // Preserve every original JSX-referenced style, including
+            // styles declared with four-space indentation in nested style blocks.
             const references=[...curr.slice(0,atNew).matchAll(/styles\.([A-Za-z0-9_]+)/g)].map(m=>m[1]);
-            for(const key of oldStyleKeys){
-              if(references.includes(key)) assert(newStyleKeys.has(key),
-                'BLOCKED: removed LIVE style still used by JSX: '+p+' :: '+key);
+            const containsStyle=(css,key)=>css.split('\n').some(line=>
+              line.startsWith('  ') && line.trimStart().startsWith(key+':'));
+            for(const key of new Set(references)){
+              if(containsStyle(old.slice(atOld),key)){
+                assert(containsStyle(curr.slice(atNew),key),
+                  'BLOCKED: original LIVE stylesheet key removed: '+p+' :: '+key);
+              }
             }
             assert(!/from ["']\.\.\/\.\.\/lib\/stagingBackendSafety["']/.test(curr),
               'BLOCKED: staging backend helper slipped into live-preserve review: '+p);
