@@ -1,0 +1,109 @@
+# Review-only, NO credentials, NO cloud writes, NO live Hosting deploy.
+# Verifies tiny presentation-only diff from exact last-verified live source.
+name: VolunServe — Validate Safe Live-Preserve UI Batch (NO DEPLOY)
+
+on:
+  push:
+    branches:
+      - review/live-preserve-integration-20261107
+    paths:
+      - 'constants/volunserveLiveUi.ts'
+      - 'components/admin/AdminReviewHero.tsx'
+      - '.github/workflows/validate-live-preserve-first-batch-20261107.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  source-and-web:
+    if: ${{ github.repository == 'calibosofroyarjan-volunserve/VolunServe' && github.ref == 'refs/heads/review/live-preserve-integration-20261107' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      CI: 'true'
+      EXPO_NO_TELEMETRY: '1'
+      EXPO_PUBLIC_VOLUNSERVE_STAGING_MODE: '0'
+      VERIFIED_LIVE_SHA: e83f4a72c7cb733ff7bb888a6ac19bf3c0f076c4
+    steps:
+      - name: Checkout the actual review SHA with NO submodule checkout
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir source
+          git -C source init
+          git -C source remote add origin https://github.com/calibosofroyarjan-volunserve/VolunServe.git
+          git -C source fetch --no-recurse-submodules --depth=1 origin "$GITHUB_SHA"
+          git -C source checkout --detach FETCH_HEAD
+          git -C source fetch --no-recurse-submodules --depth=1 origin "$VERIFIED_LIVE_SHA"
+          test "$(git -C source rev-parse HEAD)" = "$GITHUB_SHA"
+
+      - name: EXACT changed-path allowlist; forbid lost live application files
+        working-directory: source
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          'use strict';
+          const assert = require('node:assert/strict');
+          const fs = require('node:fs');
+          const cp = require('node:child_process');
+          const live = process.env.VERIFIED_LIVE_SHA;
+          const git = (...args) => cp.execFileSync('git',args,{encoding:'utf8'}).trim();
+          const changed = git('diff','--name-only',live,'HEAD').split('\n').filter(Boolean).sort();
+          const expected = [
+            '.github/workflows/validate-live-preserve-first-batch-20261107.yml',
+            'components/admin/AdminReviewHero.tsx',
+            'constants/volunserveLiveUi.ts'
+          ].sort();
+          assert.deepEqual(changed,expected,'BLOCKED: review changed unexpected live source');
+          const status = git('diff','--name-status',live,'HEAD');
+          assert.match(status,/A\s+constants\/volunserveLiveUi\.ts/);
+          assert.match(status,/M\s+components\/admin\/AdminReviewHero\.tsx/);
+          assert.ok(!/(^|\n)[DRCU]\s/m.test(status),'BLOCKED: deletion, rename or copy');
+          const header = fs.readFileSync('components/admin/AdminReviewHero.tsx','utf8');
+          const old = git('show',live+':components/admin/AdminReviewHero.tsx');
+          const props = x => /type Props = \{([\s\S]*?)\};/.exec(x)?.[1]||'';
+          assert.ok(props(header)&&props(header)===props(old),'BLOCKED: changed AdminReviewHero public Props');
+          assert.ok(header.includes('function AdminReviewHero({ eyebrow, title, subtitle, icon, tag }: Props)'));
+          assert.ok(header.includes('width < 760'));
+          for(const prop of ['{eyebrow}','{title}','{subtitle}','{tag}']) assert.ok(header.includes(prop),'Missing displayed Admin header field '+prop);
+          for(const forbidden of ['fetch(', 'addDoc(', 'setDoc(', 'runTransaction(', 'useEffect(', 'router.', 'onPress=']) {
+            assert.ok(!header.includes(forbidden),'Unexpected operational logic in visual header: '+forbidden);
+          }
+          const tokens = fs.readFileSync('constants/volunserveLiveUi.ts','utf8');
+          assert.ok(tokens.includes('export const liveUi')&&tokens.includes('minTap: 44'));
+          console.log('PASS exact three-path diff and identical live Admin header props. NO live feature source changed.');
+          NODE
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: source/package-lock.json
+      - name: Install exact locked project dependencies
+        working-directory: source
+        run: npm ci --no-audit --no-fund
+
+      - name: Existing navigation, Admin screen and certificate contracts
+        working-directory: source
+        run: |
+          node scripts/test-admin-navigation-contract.cjs
+          node scripts/test-admin-response-workspace-ux.cjs
+          node scripts/test-profile-certificates-account-menu.cjs
+
+      - name: Full TypeScript check (NO DEPLOY)
+        working-directory: source
+        run: npx tsc --noEmit --incremental false --pretty false
+
+      - name: Build web assets LOCALLY on ephemeral GitHub runner (NO DEPLOY)
+        working-directory: source
+        run: npx expo export --platform web --clear
+
+      - name: Confirm local build exists; no production actions taken
+        working-directory: source
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f dist/index.html
+          echo "PASS: first tiny UI batch builds and retains unchanged live app source."
+          echo "NO Hosting, Render, Functions, Rules, Storage or database deployment performed."
