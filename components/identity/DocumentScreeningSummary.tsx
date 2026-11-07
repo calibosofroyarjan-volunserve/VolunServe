@@ -48,6 +48,18 @@ export default function DocumentScreeningSummary({
           <Text style={styles.value}>{NAMES[screening.detectedIdType || ""] || "Not recognized"}</Text>
         </View>
         <View style={styles.row}>
+          <Text style={styles.label}>ID back</Text>
+          <Text style={styles.value}>
+            {screening.declaredIdType === "passport"
+              ? "Bio page only"
+              : screening.backSideScreened
+                ? "Captured and OCR screened"
+                : screening.backSideProvided
+                  ? "Captured; OCR unavailable"
+                  : "Not confirmed"}
+          </Text>
+        </View>
+        <View style={styles.row}>
           <Text style={styles.label}>Identity decision</Text>
           <Text style={styles.value}>Pending LGU validation</Text>
         </View>
