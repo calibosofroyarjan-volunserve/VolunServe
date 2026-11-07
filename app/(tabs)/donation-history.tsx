@@ -1,3 +1,4 @@
+import { liveUi as designUi } from "../../constants/volunserveLiveUi";
 import { useRouter } from "expo-router";
 import { onAuthStateChanged } from "firebase/auth";
 import { collection, onSnapshot, orderBy, query, where } from "firebase/firestore";
@@ -115,10 +116,9 @@ const styles = StyleSheet.create({
     backgroundColor: "#f4f7fb",
   },
   title: {
-    fontSize: 24,
-    fontWeight: "bold",
-    marginBottom: 20,
-  },
+    fontSize: designUi.type.page.fontSize,
+    fontWeight: designUi.type.page.fontWeight,
+    marginBottom: 20, lineHeight: designUi.type.page.lineHeight,},
   empty: {
     color: "#6b7280",
   },
@@ -144,7 +144,6 @@ const styles = StyleSheet.create({
   },
   receiptText: {
     color: "#ffffff",
-    fontWeight: "800",
-  },
+    fontWeight: designUi.type.body.fontWeight, fontSize: designUi.type.body.fontSize, lineHeight: designUi.type.body.lineHeight,},
 });
 
