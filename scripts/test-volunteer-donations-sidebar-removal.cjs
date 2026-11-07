@@ -13,10 +13,9 @@ function names(menu) {
   assert.ok(start>=0&&end>start,"Menu not found: "+menu);
   return [...tabs.slice(start,end).matchAll(/name:\s*"([^"]+)"/g)].map(x=>x[1]);
 }
-test("Volunteer desktop and mobile menus contain only three scope-focused modules",()=>{
-  for(const menu of ["volunteerDesktopTabs","volunteerMobileTabs"]) {
-    assert.deepEqual(names(menu),["index","volunteer","community-events"]);
-  }
+test("Volunteer desktop retains live Certificates and mobile keeps focused navigation",()=>{
+  assert.deepEqual(names("volunteerDesktopTabs"),["index","volunteer","community-events","certificate"]);
+  assert.deepEqual(names("volunteerMobileTabs"),["index","volunteer","community-events"]);
 });
 test("Resident donations remain accessible through Resident mode",()=>{
   assert.deepEqual(names("residentDesktopTabs"),["index","disaster-response","resident","community-events","donation"]);
