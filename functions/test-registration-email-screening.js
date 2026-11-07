@@ -32,3 +32,20 @@ test("server snapshot matches the exact client generated denylist", () => {
   assert.ok(serverDomains.length >= 50000);
   assert.deepEqual(serverDomains, appDomains);
 });
+
+test("server rejects Gmail-looking fake provider domains and matches client corrections", () => {
+  const typos = require("./providerTypoDomains.json");
+  const client = fs.readFileSync(path.join(__dirname, "../lib/registrationEmailPolicy.ts"),"utf8");
+  const block = client.split("KNOWN_PROVIDER_TYPO_CORRECTIONS: Readonly<Record<string, string>> = Object.freeze({")[1].split("});")[0];
+  const keys = [...block.matchAll(/"([^"]+)":\s*"([^"]+)"/g)].map(match => [match[1],match[2]]);
+  assert.deepEqual(Object.fromEntries(keys),typos,"Client and server fake-provider corrections must match");
+  assert(Object.keys(typos).length >= 40);
+  for(const domain of Object.keys(typos)) {
+    const v=classifyRegistrationEmail("candidate@"+domain);
+    assert.equal(v.allowed,false,"Fake provider @"+domain+" must not create Auth UID");
+    assert.equal(v.reason,"provider_typo");
+  }
+  for(const domain of ["gmail.com","googlemail.com","yahoo.com","outlook.com","hotmail.com","icloud.com"]) {
+    assert.equal(classifyRegistrationEmail("candidate@"+domain).allowed,true,domain);
+  }
+});
