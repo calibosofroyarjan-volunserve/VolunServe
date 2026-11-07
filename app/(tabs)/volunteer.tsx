@@ -28,6 +28,7 @@ import {
 
 import { db } from "../../lib/firebase";
 import { volunserveUi as ui } from "../../constants/volunserveUi";
+import VolunServeText from "../../components/ui/VolunServeText";
 import {
   activeModeForProfile,
   hasVolunteerAccess,
@@ -1072,13 +1073,13 @@ export default function VolunteerTasks() {
             VOLUNSERVE · VOLUNTEER MODE
           </Text>
 
-          <Text style={styles.title}>
+          <VolunServeText role="pageTitle" style={styles.title}>
             Emergency Tasks
-          </Text>
+          </VolunServeText>
 
-          <Text style={styles.subtitle}>
+          <VolunServeText role="body" color="muted" style={styles.subtitle}>
             Optional Volunteer support assignments coordinated by LGU/Admin.
-          </Text>
+          </VolunServeText>
         </View>
       </View>
 
@@ -2143,15 +2144,15 @@ const styles = StyleSheet.create({
   title: {
     marginTop: 2,
     color: ui.color.text,
-    fontSize: 24,
+    fontSize: 22,
     fontWeight: "700",
   },
 
   subtitle: {
     marginTop: 3,
     color: ui.color.muted,
-    fontSize: 13,
-    lineHeight: 19,
+    fontSize: 14,
+    lineHeight: 21,
   },
 
   liveMapButton: {
