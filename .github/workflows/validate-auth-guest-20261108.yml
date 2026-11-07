@@ -15,6 +15,9 @@ on:
       - 'functions/disposable-email-domains.txt'
       - 'functions/test-registration-email-screening.js'
       - 'scripts/test-verified-community-registration-rules.cjs'
+      - 'app/public/_layout.tsx'
+      - 'components/guest/GuestWorkspace.tsx'
+      - 'scripts/test-guest-auth-route-isolation.cjs'
       - 'components/auth/EmailFirstSignup.tsx'
       - 'app/login.web.tsx'
       - 'app/login.tsx'
@@ -47,6 +50,8 @@ jobs:
       - run: node --check functions/index.js && node --check functions/registrationBlocking.js
       - run: npx firebase-tools emulators:exec --only firestore --project demo-volunserve-verified-signup "node scripts/test-verified-community-registration-rules.cjs"
       - run: node scripts/test-signup-prod.cjs
+      - run: node scripts/test-guest-readonly-preview.cjs
+      - run: node scripts/test-guest-auth-route-isolation.cjs
       - run: npx tsc --noEmit --incremental false
       - run: npx expo export --platform web --clear
 # Only the disposable local emulator is used. No production credentials, Firebase deploy or Render calls.
