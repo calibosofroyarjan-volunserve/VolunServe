@@ -1,14 +1,66 @@
-# Legacy community-event Firestore rules RELEASE frozen on default branch.
-# The rules-validation tests can be run locally; cloud rules must not auto-deploy.
-# Old workflow copies on other branches still require GitHub UI disabling.
-name: "[FROZEN] validate-community-events-permissions.yml - no production Firestore rules deployment"
+name: Validate Community Events Permissions (NO DEPLOY)
+
 on:
-  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'firestore.rules'
+      - 'scripts/test-community-events-rules.cjs'
+      - '.github/workflows/validate-community-events-permissions.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'firestore.rules'
+      - 'app/(tabs)/community-events.tsx'
+      - 'scripts/test-community-events-rules.cjs'
+      - '.github/workflows/validate-community-events-permissions.yml'
+
 permissions:
   contents: read
+
+concurrency:
+  group: volunserve-community-event-rules-only
+  cancel-in-progress: false
+
 jobs:
-  permanently-disabled:
-    if: ${{ false }}
+  verify-and-optionally-release:
+    if: github.repository == 'calibosofroyarjan-volunserve/VolunServe'
     runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+      GH_TOKEN: ${{ github.token }}
     steps:
-      - run: echo "Legacy production rules deploy blocked pending explicit reviewed release."
+      # This repository contains a broken legacy Git gitlink named VolunServe,
+      # without a matching .gitmodules URL. Standard checkout fails during
+      # credentials cleanup even with submodules: false; use the exact ref tarball.
+      - name: Extract exact current source without legacy gitlink checkout
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --location --retry 3 \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/tarball/${SOURCE_SHA}" \
+            -o "$RUNNER_TEMP/volunserve-source.tar.gz"
+          tar -xzf "$RUNNER_TEMP/volunserve-source.tar.gz" --strip-components=1 -C "$GITHUB_WORKSPACE"
+          test -f firestore.rules
+          test -f package-lock.json
+          test -f scripts/test-community-events-rules.cjs
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - run: npm ci --no-audit --no-fund
+      - name: Test Community Events owner queries and role security in emulator
+        run: npx firebase-tools emulators:exec --only firestore --project demo-volunserve "node scripts/test-community-events-rules.cjs"
+      - name: Protect existing Admin and Volunteer authorization
+        run: |
+          node --test scripts/test-admin-volunteer-authorization.cjs
+          npx firebase-tools emulators:exec --only firestore --project demo-volunserve-authorization-tests "node scripts/test-admin-volunteer-firestore.cjs"
+      - name: Confirm validation-only workflow
+        run: echo 'Firestore emulator tests only; no production rules deployment or credentials.'
