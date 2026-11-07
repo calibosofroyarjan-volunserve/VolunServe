@@ -10,7 +10,7 @@ import {
   Timestamp,
   where,
 } from "firebase/firestore";
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Image,
@@ -164,6 +164,7 @@ export default function WebHome() {
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   const [notificationMenuOpen, setNotificationMenuOpen] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
+  const logoutPromptOpen = useRef(false);
 
   const compact = width < 1040;
   const narrow = width < 760;
@@ -454,18 +455,20 @@ export default function WebHome() {
   };
 
   const handleLogout = async () => {
+    if (loggingOut || logoutPromptOpen.current) return;
+    logoutPromptOpen.current = true;
     setProfileMenuOpen(false);
-    if (loggingOut) return;
-    const confirmed = await AppAlert.confirm("Log Out", "Are you sure you want to log out of VolunServe?", "Log Out");
-    if (!confirmed) return;
-    setLoggingOut(true);
     try {
+      const confirmed = await AppAlert.confirm("Log Out", "Are you sure you want to log out of VolunServe?", "Log Out");
+      if (!confirmed) return;
+      setLoggingOut(true);
       await logoutUser();
       router.replace("/login");
     } catch (error: any) {
       AppAlert.alert("Log out failed", error?.message || "Please try again.");
     } finally {
       setLoggingOut(false);
+      logoutPromptOpen.current = false;
     }
   };
 
