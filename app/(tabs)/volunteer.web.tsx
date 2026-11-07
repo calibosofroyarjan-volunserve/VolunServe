@@ -24,6 +24,7 @@ import {
 
 import { db } from "../../lib/firebase";
 import { volunserveUi as ui } from "../../constants/volunserveUi";
+import VolunServeText from "../../components/ui/VolunServeText";
 import {
   activeModeForProfile,
   hasVolunteerAccess,
@@ -796,12 +797,12 @@ export default function VolunteerTasksWeb() {
               <Ionicons name="people" size={22} color="#087F74" />
             </View>
             <View style={styles.mobileTaskTitleContainer}>
-              <Text style={styles.mobileTaskTitle}>Emergency Tasks</Text>
+              <VolunServeText role="pageTitle" style={styles.mobileTaskTitle}>Emergency Tasks</VolunServeText>
             </View>
           </View>
-          <Text style={styles.mobileTaskDescription}>
+          <VolunServeText role="body" color="muted" style={styles.mobileTaskDescription}>
             Optional volunteer support assignments coordinated by LGU/Admin.
-          </Text>
+          </VolunServeText>
           <TouchableOpacity
             style={styles.mobileTaskMapButton}
             onPress={() => openLiveMap()}
@@ -821,10 +822,10 @@ export default function VolunteerTasksWeb() {
                 <Ionicons name="people" size={24} color="#078F82" />
               </View>
               <View style={{ flex: 1, minWidth: 0 }}>
-                <Text style={styles.title}>Emergency Tasks</Text>
-                <Text style={styles.subtitle}>
+                <VolunServeText role="pageTitle" style={styles.title}>Emergency Tasks</VolunServeText>
+                <VolunServeText role="body" color="muted" style={styles.subtitle}>
                   Optional Volunteer support assignments coordinated by LGU/Admin.
-                </Text>
+                </VolunServeText>
               </View>
             </View>
           </View>
@@ -1461,16 +1462,16 @@ const styles = StyleSheet.create({
   },
   mobileTaskTitle: {
     color: ui.color.text,
-    fontSize: 23,
+    fontSize: 22,
     fontWeight: "700",
     lineHeight: 29,
     letterSpacing: -0.35,
   },
   mobileTaskDescription: {
     width: "100%",
-    fontSize: 13,
-    lineHeight: 19,
-    color: "#607588",
+    fontSize: 14,
+    lineHeight: 21,
+    color: ui.color.muted,
     marginBottom: 14,
   },
   mobileTaskMapButton: {
