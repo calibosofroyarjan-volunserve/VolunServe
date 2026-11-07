@@ -1,3 +1,4 @@
+import { liveUi as ui } from "../../constants/volunserveLiveUi";
 import * as ImagePicker from "expo-image-picker";
 import { useRouter } from "expo-router";
 import {
@@ -2896,7 +2897,7 @@ const styles =
   StyleSheet.create({
     screen: {
       flex: 1,
-      backgroundColor: "#F6F8F7",
+      backgroundColor: ui.color.canvas,
     },
 
     container: {
@@ -2912,12 +2913,12 @@ const styles =
       alignItems: "center",
       justifyContent:
         "center",
-      backgroundColor: "#F6F8F7",
+      backgroundColor: ui.color.canvas,
       gap: 10,
     },
 
     loadingText: {
-      color: "#64748B",
+      color: ui.color.secondary,
       fontSize: 13,
     },
 
@@ -2925,8 +2926,7 @@ const styles =
       margin: 24,
       padding: 24,
       borderRadius: 16,
-      backgroundColor:
-        "#FFFFFF",
+      backgroundColor: ui.color.surface,
       borderWidth: 1,
       borderColor:
         "#DCE5EA",
@@ -2940,7 +2940,7 @@ const styles =
 
     centerText: {
       marginTop: 8,
-      color: "#64748B",
+      color: ui.color.secondary,
       lineHeight: 20,
     },
 
@@ -2961,7 +2961,7 @@ const styles =
 
     title: {
       marginTop: 6,
-      color: "#173D32",
+      color: ui.color.text,
       fontSize: 28,
       lineHeight: 36,
       fontWeight: "700",
@@ -2998,8 +2998,7 @@ const styles =
       borderWidth: 1,
       borderColor:
         "#DCE5EA",
-      backgroundColor:
-        "#FFFFFF",
+      backgroundColor: ui.color.surface,
       alignItems: "center",
     },
 
@@ -3011,7 +3010,7 @@ const styles =
 
     emptyText: {
       marginTop: 6,
-      color: "#64748B",
+      color: ui.color.secondary,
       textAlign: "center",
       lineHeight: 20,
     },
@@ -3023,8 +3022,7 @@ const styles =
       borderWidth: 1,
       borderColor:
         "#DCE5EA",
-      backgroundColor:
-        "#FFFFFF",
+      backgroundColor: ui.color.surface,
     },
 
     caseTopRow: {
@@ -3197,7 +3195,7 @@ const styles =
       marginTop: 12,
       padding: 12,
       borderRadius: 10,
-      backgroundColor: "#FFFFFF",
+      backgroundColor: ui.color.surface,
       borderWidth: 1,
       borderColor: "#E9D89F",
     },
@@ -3270,7 +3268,7 @@ const styles =
       maxWidth: "100%",
       borderRadius: 10,
       overflow: "hidden",
-      backgroundColor: "#FFFFFF",
+      backgroundColor: ui.color.surface,
       borderWidth: 1,
       borderColor: "#DCE5EA",
     },
@@ -3310,7 +3308,7 @@ const styles =
       borderWidth: 1,
       borderStyle: "dashed",
       borderColor: "#D1DDE2",
-      backgroundColor: "#FFFFFF",
+      backgroundColor: ui.color.surface,
     },
 
     evidenceEmptyText: {
@@ -3354,7 +3352,7 @@ const styles =
       borderRadius: 9,
       borderWidth: 1,
       borderColor: "#BFD9D5",
-      backgroundColor: "#FFFFFF",
+      backgroundColor: ui.color.surface,
     },
 
     evidenceSecondaryButtonText: {
@@ -3431,7 +3429,7 @@ const styles =
 
     sectionTitle: {
       marginBottom: 10,
-      color: "#173D32",
+      color: ui.color.text,
       fontSize: 14,
       fontWeight: "700",
     },
@@ -3529,7 +3527,7 @@ const styles =
 
     contributionMeta: {
       marginTop: 5,
-      color: "#64748B",
+      color: ui.color.secondary,
       fontSize: 12,
       lineHeight: 18,
     },
@@ -3627,8 +3625,7 @@ const styles =
       borderWidth: 1,
       borderColor:
         "#D4DFE4",
-      backgroundColor:
-        "#FFFFFF",
+      backgroundColor: ui.color.surface,
     },
 
     outcomeButtonActive: {
@@ -3670,8 +3667,7 @@ const styles =
       borderWidth: 1,
       borderColor:
         "#CDD9E0",
-      backgroundColor:
-        "#FFFFFF",
+      backgroundColor: ui.color.surface,
       color: "#173748",
       fontSize: 12,
     },
