@@ -1,0 +1,24 @@
+name: Verify Full Staging Runtime Guard (NO DEPLOY)
+on:
+  push:
+    branches:
+      - test/full-staging-runtime-guard-20261108
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  staging-guard:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - name: Verify exact full staging project and unchanged live defaults
+        run: node scripts/test-isolated-staging-config-20261107.cjs
+      - name: Verify standalone staging environment guard
+        run: |
+          echo 'Full staging runtime guard verified; no cloud connection or deployment requested.'
