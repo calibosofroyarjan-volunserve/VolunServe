@@ -1,0 +1,37 @@
+name: Browser Test VolunServe Desktop and Mobile Design (No Production)
+on:
+  push:
+    branches: [design/web-mobile-unified-roles-20261107]
+permissions:
+  contents: read
+jobs:
+  browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 22
+    steps:
+      - name: Fetch design review test without submodule checkout
+        run: |
+          set -euo pipefail
+          mkdir source && cd source
+          git init
+          git remote add origin https://github.com/calibosofroyarjan-volunserve/VolunServe.git
+          git fetch --depth=1 --no-recurse-submodules origin "$GITHUB_SHA"
+          git checkout --detach FETCH_HEAD
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install headless browser test harness outside project
+        run: npm install --prefix /tmp/volunserve-browser-test --no-save --no-audit --no-fund playwright-core@1.56.1
+      - name: Exercise real Expo UI at five viewport widths (no login or writes)
+        working-directory: source
+        env:
+          NODE_PATH: /tmp/volunserve-browser-test/node_modules
+        run: node scripts/test-web-mobile-four-role-browser-20261107.cjs
+      - name: Attach full-page screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: volunserve-desktop-mobile-four-role-screenshots
+          path: source/reports/design-review-screenshots/
+          if-no-files-found: warn
+          retention-days: 7
