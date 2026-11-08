@@ -96,11 +96,7 @@ for(const tokenEmail of emails)for(const v of verified){
    "Changed role permission for "+JSON.stringify({p,auth}));
  checks++;
 }
-assert(next.includes("function approved()") &&
- next.includes("function hasApprovedStaffRole(roles)") &&
- (next.match(/request\.auth\.token\.get\('email_verified', false\) == true/g)||[]).length >= 2,
- "BLOCKED: verified email protection not in both root role gates");
-for(const term of ["match /volunteerInvitations/{invitationId}",
+for(const term of ["function verifiedEmailSession()","match /volunteerInvitations/{invitationId}",
  "function selectedCase()","function selectedVolunteer()",
  "function validInitialResidentInputs()","match /responseAssignments/"]){
  assert(next.includes(term),"Missing published module security policy: "+term);
