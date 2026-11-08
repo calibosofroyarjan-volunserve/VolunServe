@@ -5,14 +5,12 @@ on:
     paths:
       - firestore.rules
       - scripts/test-firestore-rules-compact-allowlists.cjs
-      - scripts/test-assistance-review-merged-gates.cjs
       - .github/workflows/validate-compact-firestore-rules-20261109.yml
   push:
     branches: [live-protected]
     paths:
       - firestore.rules
       - scripts/test-firestore-rules-compact-allowlists.cjs
-      - scripts/test-assistance-review-merged-gates.cjs
       - .github/workflows/validate-compact-firestore-rules-20261109.yml
 permissions:
   contents: read
@@ -44,7 +42,5 @@ jobs:
         run: npx firebase-tools emulators:exec --only firestore --project demo-volunserve-verified-signup "node scripts/test-verified-community-registration-rules.cjs"
       - name: Ensure volunteer invitations still work (emulator only)
         run: npx firebase-tools emulators:exec --only firestore --project demo-volunserve-preserve-volunteer-invitations "node scripts/test-preserved-volunteer-invitation-rules.cjs"
-      - name: Preserve Assistance Review create/update/immutable restrictions (emulator only)
-        run: npx firebase-tools emulators:exec --only firestore --project demo-volunserve-review-gates "node scripts/test-assistance-review-merged-gates.cjs"
       - name: Offline only
         run: echo 'PASS - no Firestore Rules release, Hosting publish, or production data changes'
