@@ -76,15 +76,15 @@ function optimizedRules(input) {
  const k=create.indexOf("        && rd.requestGroup in [");
  const z=create.indexOf("        && validAssistanceCategoryPair()",k);
  assert(k>0&&z>k&&create.slice(k,z).includes("'other_community_assistance'"));
- create=create.slice(0,k)+"        // Both enums are enforced by the category-pair validator below.\\n".replace("\\n","\n")+create.slice(z);
+ create=create.slice(0,k)+"        // Both enums are enforced by the category-pair validator below.\n".replace("\n","\n")+create.slice(z);
  result=result.slice(0,a)+create+result.slice(b);
  const i=result.indexOf("      function validAdminAssistanceUpdate()");
  const j=result.indexOf("        && rd.status in [",i);
  assert(i>0&&j>i);
  let part=result.slice(i,j);
- const fields=part.match(/\\.hasOnly\\(\\[([\\s\\S]*?)\\]\\)/)[1];
+ const fields=part.match(/\.hasOnly\(\[([\s\S]*?)\]\)/)[1];
  let count=0;
- part=part.replace(/\\n        && rd\\.(\\w+)\\s*== resource\\.data\\.\\1/g,(full,key)=>{
+ part=part.replace(/\n        && rd\.(\w+)\s*== resource\.data\.\1/g,(full,key)=>{
   assert(!fields.includes("'"+key+"'"),"Mutable Assistance key removed "+key);
   count++;return "";
  });
@@ -97,9 +97,9 @@ function optimizedRules(input) {
  const u=allocation.indexOf("      allow update: if isAdmin()");
  const v=allocation.indexOf("        && request.resource.data.updatedBy",u);
  assert(u>0&&v>u);
- const whitelist=allocation.slice(v).match(/\\.hasOnly\\(\\[([\\s\\S]*?)\\]\\)/)[1];
+ const whitelist=allocation.slice(v).match(/\.hasOnly\(\[([\s\S]*?)\]\)/)[1];
  let chunk=allocation.slice(u,v),countAlloc=0;
- chunk=chunk.replace(/\\n        && request\\.resource\\.data\\.(\\w+)\\s*== resource\\.data\\.\\1/g,(full,key)=>{
+ chunk=chunk.replace(/\n        && request\.resource\.data\.(\w+)\s*== resource\.data\.\1/g,(full,key)=>{
   assert(!whitelist.includes("'"+key+"'"),"Mutable Allocation key removed "+key);
   countAlloc++;return "";
  });
