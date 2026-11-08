@@ -3226,7 +3226,7 @@ service cloud.firestore {
       }
       function validDonationSubmission() {
         let rd = request.resource.data;
-        let campaign = campaign;
+        let campaign = submissionCampaign();
         return rd.keys().hasOnly([
           'donationId',
           'source',
