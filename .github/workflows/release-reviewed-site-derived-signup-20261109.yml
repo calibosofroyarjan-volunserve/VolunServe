@@ -60,9 +60,12 @@ jobs:
       - name: Prove compact Rules are equivalent to previous official lists and account guard
         working-directory: controller
         run: node scripts/test-firestore-rules-compact-allowlists.cjs
-      - name: Prove staff helpers were relocated verbatim, without changing a single permission
+      - name: Prove consolidated staff-role helpers retain all Admin and Super Admin restrictions
         working-directory: controller
-        run: node scripts/test-localized-staff-rule-helpers.cjs
+        run: |
+          node scripts/test-localized-staff-rule-helpers.cjs
+          node -e 'const fs=require("fs");const s=fs.readFileSync("firestore.rules","utf8");const root=s.slice(0,s.indexOf("    match /"));if(!root.includes("function hasApprovedStaffRole(roles)")||["isAdmin","isSuperAdmin","isAdminOrSuperAdmin"].some(name=>[...s.matchAll(new RegExp("\\bfunction "+name+"\\(","g"))].length!==1))process.exit(1);console.log("PASS: only one shared staff gate, no per-match role function duplication")'
+
       - name: Stage ONLY reviewed compact protected Firestore Rules with exact published-site-derived UI
         working-directory: site
         run: |
