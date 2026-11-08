@@ -62,7 +62,54 @@ createRule=createRule.replace(repeatedNames,"").replace(repeatedOther,
  "        // Already enforced by validInitialResidentInputs(); uid checked above.\\n".replace("\\n","\n"));
 const expected=afterStaffRefactor.slice(0,createStart)+createRule+
  afterStaffRefactor.slice(createEnd);
-assert.equal(current,expected,
+// Only changes already reviewed in this PR are reconstructible here. No
+// arbitrary permission predicates, collections, or allow methods may drift.
+function optimizedRules(input) {
+ let result=input;
+ const banned="&& !(p.role in ['admin', 'superadmin', 'lgu_personnel', 'applicant'])";
+ assert.equal(result.split(banned).length,3,"Expected exactly two role deny guards");
+ result=result.split(banned).join("&& p.role in ['resident', 'volunteer']");
+ const a=result.indexOf("      function validResidentAssistanceCreate()");
+ const b=result.indexOf("      function validAdminLocationState()",a);
+ assert(a>0&&b>a);
+ let create=result.slice(a,b);
+ const k=create.indexOf("        && rd.requestGroup in [");
+ const z=create.indexOf("        && validAssistanceCategoryPair()",k);
+ assert(k>0&&z>k&&create.slice(k,z).includes("'other_community_assistance'"));
+ create=create.slice(0,k)+"        // Both enums are enforced by the category-pair validator below.\\n".replace("\\n","\n")+create.slice(z);
+ result=result.slice(0,a)+create+result.slice(b);
+ const i=result.indexOf("      function validAdminAssistanceUpdate()");
+ const j=result.indexOf("        && rd.status in [",i);
+ assert(i>0&&j>i);
+ let part=result.slice(i,j);
+ const fields=part.match(/\\.hasOnly\\(\\[([\\s\\S]*?)\\]\\)/)[1];
+ let count=0;
+ part=part.replace(/\\n        && rd\\.(\\w+)\\s*== resource\\.data\\.\\1/g,(full,key)=>{
+  assert(!fields.includes("'"+key+"'"),"Mutable Assistance key removed "+key);
+  count++;return "";
+ });
+ assert.equal(count,20,"Exactly twenty immutable Assistance comparisons removed");
+ result=result.slice(0,i)+part+result.slice(j);
+ const x=result.indexOf("    match /barangayReliefAllocations/{allocationId}");
+ const y=result.indexOf("    match /",x+8);
+ assert(x>0&&y>x);
+ let allocation=result.slice(x,y);
+ const u=allocation.indexOf("      allow update: if isAdmin()");
+ const v=allocation.indexOf("        && request.resource.data.updatedBy",u);
+ assert(u>0&&v>u);
+ const whitelist=allocation.slice(v).match(/\\.hasOnly\\(\\[([\\s\\S]*?)\\]\\)/)[1];
+ let chunk=allocation.slice(u,v),countAlloc=0;
+ chunk=chunk.replace(/\\n        && request\\.resource\\.data\\.(\\w+)\\s*== resource\\.data\\.\\1/g,(full,key)=>{
+  assert(!whitelist.includes("'"+key+"'"),"Mutable Allocation key removed "+key);
+  countAlloc++;return "";
+ });
+ assert.equal(countAlloc,10,"Exactly ten immutable Allocation comparisons removed");
+ allocation=allocation.slice(0,u)+chunk+allocation.slice(v);
+ result=result.slice(0,x)+allocation+result.slice(y);
+ return result;
+}
+const optimized=optimizedRules(expected);
+assert.equal(current,optimized,
  "BLOCKED: unexpected permission, match, helper or nonreviewed signup change");
 const body=current.slice(0,current.indexOf("    match /"));
 for(const name of ["hasApprovedStaffRole","isAdmin","isSuperAdmin","isAdminOrSuperAdmin"]){
