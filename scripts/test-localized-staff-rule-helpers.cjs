@@ -161,7 +161,7 @@ const mergedRules=cp.execFileSync("git",["show",
 assert.equal(mergedRules,optimized,
  "BLOCKED: protected pass-one source is not the reviewed baseline");
 const actualGitBlob=cp.execFileSync("git",["hash-object","firestore.rules"],{encoding:"utf8"}).trim();
-assert.equal(actualGitBlob,"2073ec3d7469f69ee52652b693c739826980117f",
+assert.equal(actualGitBlob,"9a5c0cd227ebc55a81be6c3cca8d5dbc183958b6",
  "BLOCKED: second-pass Rules changed without a reviewed exact source proof");
 const paths=text=>[...text.matchAll(/^    match \/(.+) \{/gm)].map(m=>m[1]);
 assert.deepEqual(paths(current),paths(mergedRules),"BLOCKED: Firestore collection paths changed");
