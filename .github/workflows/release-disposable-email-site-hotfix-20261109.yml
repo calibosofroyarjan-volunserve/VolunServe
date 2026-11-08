@@ -55,9 +55,10 @@ jobs:
         working-directory: site
         run: npm ci --no-audit --no-fund
       - name: Full patched email-first Signup and trusted screening regression
+        working-directory: site
         run: |
-          node site/scripts/test-signup-prod.cjs
-          node --test controller/functions/test-registration-email-screening.js
+          node scripts/test-signup-prod.cjs
+          node --test ../controller/functions/test-registration-email-screening.js
       - name: Test protected Firestore Rules for direct SDK Signup bypass (EMULATOR ONLY)
         working-directory: site
         run: |
