@@ -1,0 +1,50 @@
+name: QA Login Hero Carousel Cover (No Deploy)
+on:
+  push:
+    branches: [fix/live-login-carousel-cover-20261108]
+permissions:
+  contents: read
+jobs:
+  web-login-carousel:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      CI: 'true'
+      EXPO_NO_TELEMETRY: '1'
+    steps:
+      - name: Checkout exact UI fix
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Confirm only auth-shell presentation changed from live frontend
+        run: |
+          test "$(git diff --name-status --no-renames 9ffe1840b942a4b2f47aa2508d923d2a03f5fe3e HEAD -- app components)" = "$(printf 'M\tcomponents/auth/PremiumAuthShell.tsx')"
+          node - <<'NODE'
+          const assert = require('node:assert/strict');
+          const fs = require('node:fs');
+          const code = fs.readFileSync('components/auth/PremiumAuthShell.tsx','utf8');
+          assert(code.includes('width: heroBounds.width') && code.includes('height: heroBounds.height'));
+          assert(code.includes('resizeMode="cover"'));
+          assert(code.includes('heroSlideImage'));
+          assert(code.includes('onLayout='));
+          console.log('PASS: slide fills measured login carousel panel across responsive widths');
+          NODE
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+      - name: TypeScript and login regression tests
+        run: |
+          npx tsc --noEmit --incremental false
+          node scripts/test-login-field-validation.cjs
+          node scripts/test-login-ui-release.cjs
+          node scripts/test-signup-email-first-middle-optional.cjs
+          node scripts/test-route-entrypoints.cjs
+          node scripts/test-portal-resident-volunteer-ui-flow.cjs
+      - name: Build web release without publishing
+        run: |
+          npx expo export --platform web --clear
+          node scripts/verify-hosting-release.cjs
