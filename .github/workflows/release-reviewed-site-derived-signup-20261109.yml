@@ -57,11 +57,25 @@ jobs:
       - name: Assert the published Admin, Volunteer, Resident, donations and branded UI are preserved
         working-directory: site
         run: node scripts/test-site-derived-signup-candidate.cjs
+      - name: Prove compact Rules are equivalent to previous official lists and account guard
+        working-directory: controller
+        run: node scripts/test-firestore-rules-compact-allowlists.cjs
+      - name: Stage ONLY reviewed compact protected Firestore Rules with exact published-site-derived UI
+        working-directory: site
+        run: |
+          set -euo pipefail
+          test -f ../controller/firestore.rules
+          cp ../controller/firestore.rules firestore.rules
+          cmp --silent ../controller/firestore.rules firestore.rules
+          grep -q 'match /volunteerInvitations/{invitationId}' firestore.rules
+          grep -q 'function validInitialResidentInputs()' firestore.rules
+          echo 'PASS: published branded site source preserved; only the security policy is compacted'
       - name: Run complete signup protection and no regression tests
         working-directory: site
         run: |
           node scripts/test-signup-prod.cjs
           npx firebase-tools emulators:exec --only firestore --project demo-volunserve-verified-signup "node scripts/test-verified-community-registration-rules.cjs"
+          npx firebase-tools emulators:exec --only firestore --project demo-volunserve-account-compatibility "node scripts/test-existing-account-compatibility.cjs"
           npx firebase-tools emulators:exec --only firestore --project demo-volunserve-preserve-volunteer-invitations "node scripts/test-preserved-volunteer-invitation-rules.cjs"
       - name: Compile complete published-site-derived web app
         working-directory: site
@@ -86,6 +100,11 @@ jobs:
         env:
           VOLUNSERVE_PRODUCTION_HOSTING_SERVICE_ACCOUNT: ${{ secrets.VOLUNSERVE_PRODUCTION_HOSTING_SERVICE_ACCOUNT }}
         run: node scripts/release-signup-production-preflight.cjs --check
+      - name: Compile/check optimized Rules using Firebase API with ZERO DB test cases, NO RELEASE
+        working-directory: site
+        env:
+          VOLUNSERVE_PRODUCTION_HOSTING_SERVICE_ACCOUNT: ${{ secrets.VOLUNSERVE_PRODUCTION_HOSTING_SERVICE_ACCOUNT }}
+        run: node scripts/release-signup-production-preflight.cjs --compile-rules
       - name: Publish coordinated, reversible verified Signup Rules and Hosting
         working-directory: site
         env:

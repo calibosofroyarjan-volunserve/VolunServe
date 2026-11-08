@@ -137,7 +137,7 @@ async function selfPermissions(token){
 }
 async function main() {
  const mode=process.argv[2]||"--check";
- assert(["--self-test","--check","--check-channels","--backup-rules","--publish-rules","--restore-rules","--after-rules","--verify"].includes(mode),"Unknown mode");
+ assert(["--self-test","--check","--compile-rules","--check-channels","--backup-rules","--publish-rules","--restore-rules","--after-rules","--verify"].includes(mode),"Unknown mode");
  if(mode==="--self-test"){
   const name="projects/volunserve-3aa5b/rulesets/example_123";
   assert.deepEqual(releasePatchPayload(name),{
@@ -179,6 +179,28 @@ async function main() {
    "BLOCKED: live Firestore Rules changed — do not overwrite");
   await selfPermissions(token);
   console.log("PASS: production source, IAM and current live Rules/Hosting baselines");
+ } else if(mode==="--compile-rules"){
+  assert.equal(state.marker.revision,EXPECTED_SITE,"BLOCKED: website changed before compile preflight");
+  assert.equal(state.rulesHash,EXPECTED_RULES_HASH,"BLOCKED: current active Firestore Rules changed");
+  // The Firebase projects.test endpoint validates source without releasing it.
+  // No test cases means no production Firestore document reads or writes.
+  const source=fs.readFileSync("firestore.rules","utf8");
+  const response=await fetch(rulesApiRoot+"projects/"+PROJECT+":test",{
+    method:"POST",headers:{
+      Authorization:"Bearer "+token,"Content-Type":"application/json"
+    },body:JSON.stringify({
+      source:{files:[{name:"firestore.rules",content:source}]},
+      testSuite:{testCases:[]}
+    }),signal:AbortSignal.timeout(30000)
+  });
+  const data=await response.json().catch(()=>({}));
+  assert(response.ok,"BLOCKED: Firebase Rules source compile preflight HTTP "+response.status+
+    " "+String(data?.error?.message||"").slice(0,220));
+  const problems=(data.issues||[]).filter(x=>x.severity==="ERROR");
+  assert.equal(problems.length,0,
+    "BLOCKED: Firebase Rules semantic/compilation diagnostics: "+JSON.stringify(problems.slice(0,3)));
+  console.log("PASS: Firebase Rules API validated candidate source without a production Rules release or database tests");
+  console.log("NOTE: executable activation size is enforced again at controlled PATCH");
  } else if(mode==="--check-channels"){
   assert.equal(state.marker.revision,EXPECTED_SITE,"BLOCKED: live Hosting baseline moved");
   assert.equal(state.rulesHash,EXPECTED_RULES_HASH,"BLOCKED: live Rules baseline moved");
