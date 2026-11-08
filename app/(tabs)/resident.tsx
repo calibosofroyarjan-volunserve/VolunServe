@@ -6284,7 +6284,7 @@ const styles =
     },
 
     modeTabText: {
-      fontFamily:"AssistanceInterBold",
+      fontFamily: vsType.family,
       color:
         "#475569",
       fontWeight:
@@ -6412,14 +6412,14 @@ const styles =
     },
 
     infoCardTitle: {
-      fontFamily:"AssistanceInterBold",
+      fontFamily: vsType.family,
       color:
         "#172033",
       fontSize: designUi.type.card.fontSize,
       fontWeight: designUi.type.card.fontWeight, lineHeight: designUi.type.card.lineHeight,},
 
     infoCardText: {
-      fontFamily:"AssistanceInter",
+      fontFamily: vsType.family,
       marginTop:
         5,
       color:
@@ -6557,7 +6557,7 @@ const styles =
     },
 
     progressLabel: {
-      fontFamily:"AssistanceInterSemiBold",
+      fontFamily: vsType.family,
       marginTop:
         5,
       fontSize: vsType.size.caption,
@@ -6611,7 +6611,7 @@ const styles =
     },
 
     formEyebrow: {
-      fontFamily:"AssistanceInterBold",
+      fontFamily: vsType.family,
       color:
         "#0B916F",
       fontSize: vsType.size.caption,
@@ -6621,7 +6621,7 @@ const styles =
     },
 
     formTitle: {
-      fontFamily:"AssistanceInterExtraBold",
+      fontFamily: vsType.family,
       marginTop:
         5,
       color:
@@ -6630,7 +6630,7 @@ const styles =
       fontWeight: designUi.type.section.fontWeight, lineHeight: designUi.type.section.lineHeight,},
 
     formText: {
-      fontFamily:"AssistanceInter",
+      fontFamily: vsType.family,
       marginTop:
         6,
       color:
@@ -6691,7 +6691,7 @@ const styles =
     },
 
     categoryTitle: {
-      fontFamily:"AssistanceInterBold",
+      fontFamily: vsType.family,
       color:
         "#17463A",
       fontSize: vsType.size.body,
@@ -6699,7 +6699,7 @@ const styles =
     },
 
     categoryText: {
-      fontFamily:"AssistanceInter",
+      fontFamily: vsType.family,
       marginTop:
         4,
       color:
@@ -6710,7 +6710,7 @@ const styles =
     },
 
     fieldLabel: {
-      fontFamily:"AssistanceInterSemiBold",
+      fontFamily: vsType.family,
       marginTop:
         15,
       marginBottom:
@@ -6726,7 +6726,7 @@ const styles =
     },
 
     input: {
-      fontFamily:"AssistanceInter",
+      fontFamily: vsType.family,
       minHeight: 46,
       borderRadius: 11,
       borderWidth:
@@ -6807,7 +6807,7 @@ const styles =
     },
 
     accountContactHelper: {
-      fontFamily:"AssistanceInter",
+      fontFamily: vsType.family,
       marginTop:
         3,
       color:
@@ -7043,7 +7043,7 @@ const styles =
     },
 
     backButtonText: {
-      fontFamily:"AssistanceInterSemiBold",
+      fontFamily: vsType.family,
       color:
         "#475569",
       fontWeight:
@@ -7072,7 +7072,7 @@ const styles =
     },
 
     nextButtonText: {
-      fontFamily:"AssistanceInterBold",
+      fontFamily: vsType.family,
       color:
         "#FFFFFF",
       fontWeight: "800",
@@ -7127,7 +7127,7 @@ const styles =
     },
 
     documentTitle: {
-      fontFamily:"AssistanceInterBold",
+      fontFamily: vsType.family,
       color:
         "#172033",
       fontWeight: "800",
@@ -7165,7 +7165,7 @@ const styles =
     },
 
     documentHelper: {
-      fontFamily:"AssistanceInter",
+      fontFamily: vsType.family,
       marginTop:
         4,
       color:
@@ -7201,7 +7201,7 @@ const styles =
     },
 
     uploadButtonText: {
-      fontFamily:"AssistanceInterBold",
+      fontFamily: vsType.family,
       color:
         "#1769E0",
       fontSize: vsType.size.caption,
@@ -7351,7 +7351,7 @@ const styles =
     },
 
     reviewLabel: {
-      fontFamily:"AssistanceInterSemiBold",
+      fontFamily: vsType.family,
       width:
         160,
       padding:
@@ -7364,7 +7364,7 @@ const styles =
         "#F8FAFC", lineHeight: designUi.type.label.lineHeight,},
 
     reviewValue: {
-      fontFamily:"AssistanceInterMedium",
+      fontFamily: vsType.family,
       flex:
         1,
       padding:
@@ -7379,7 +7379,7 @@ const styles =
     },
 
     reviewSideTitle: {
-      fontFamily:"AssistanceInterBold",
+      fontFamily: vsType.family,
       color:
         "#172033",
       fontSize: vsType.size.label,
@@ -7495,7 +7495,7 @@ const styles =
     },
 
     submitButtonText: {
-      fontFamily:"AssistanceInterBold",
+      fontFamily: vsType.family,
       color:
         "#FFFFFF",
       fontWeight: "800",
@@ -7587,7 +7587,7 @@ const styles =
     },
 
     successTitle: {
-      fontFamily:"AssistanceInterExtraBold",
+      fontFamily: vsType.family,
       color:
         "#172033",
       fontSize: vsType.size.page,
@@ -7685,7 +7685,7 @@ const styles =
     },
 
     historyTitle: {
-      fontFamily:"AssistanceInterBold",
+      fontFamily: vsType.family,
       marginTop:
         5,
       color:
@@ -7816,7 +7816,7 @@ const styles =
     },
 
     requestCardTitle: {
-      fontFamily:"AssistanceInterBold",
+      fontFamily: vsType.family,
       marginTop:
         2,
       color:
@@ -7847,7 +7847,7 @@ const styles =
     },
 
     statusBadgeText: {
-      fontFamily:"AssistanceInterBold",
+      fontFamily: vsType.family,
       fontSize: vsType.size.micro,
       fontWeight: "800",
     },
@@ -8438,7 +8438,7 @@ const styles =
     },
 
     publicPhotoSectionTitle: {
-      fontFamily:"AssistanceInterBold",
+      fontFamily: vsType.family,
       color:
         "#312E81",
       fontSize: vsType.size.label,
@@ -8446,7 +8446,7 @@ const styles =
     },
 
     publicPhotoSectionText: {
-      fontFamily:"AssistanceInter",
+      fontFamily: vsType.family,
       marginTop:
         3,
       color:
@@ -8867,38 +8867,38 @@ const styles =
     premiumEmblemCheck:{position:"absolute",right:6,bottom:6,width:23,height:23,borderRadius:13,backgroundColor:"#FFFFFF",alignItems:"center",justifyContent:"center"},
     premiumHeroCopy:{flex:1,minWidth:0,gap:5},
     premiumHeroCopyMobile:{width:"100%",alignSelf:"stretch",flex:0},
-    premiumHeroEyebrow:{fontFamily:"AssistanceInterBold",fontSize: vsType.size.micro,color:"#08775D",letterSpacing:1.1},
-    premiumHeroTitle:{fontFamily:"AssistanceInterExtraBold",fontSize: vsType.size.display,lineHeight:40,letterSpacing:-0.9,color:"#064638"},
+    premiumHeroEyebrow:{fontFamily: vsType.family,fontSize: vsType.size.micro,color:"#08775D",letterSpacing:1.1},
+    premiumHeroTitle:{fontFamily: vsType.family,fontSize: vsType.size.display,lineHeight:40,letterSpacing:-0.9,color:"#064638"},
     premiumHeroTitleMobile:{fontSize: vsType.size.page,lineHeight:33,letterSpacing:-0.5},
-    premiumHeroTagline:{fontFamily:"AssistanceInterBold",fontSize: vsType.size.label,color:"#0F6E52"},
-    premiumHeroDescription:{fontFamily:"AssistanceInter",fontSize: vsType.size.meta,lineHeight:18,color:"#4C766B",maxWidth:460},
+    premiumHeroTagline:{fontFamily: vsType.family,fontSize: vsType.size.label,color:"#0F6E52"},
+    premiumHeroDescription:{fontFamily: vsType.family,fontSize: vsType.size.meta,lineHeight:18,color:"#4C766B",maxWidth:460},
     premiumHeroRight:{width:"33%",minWidth:215,maxWidth:310,gap:14,alignItems:"stretch"},
     premiumHeroRightMobile:{width:"100%",minWidth:0,maxWidth:"100%"},
     premiumVerified:{alignSelf:"flex-end",paddingHorizontal:11,paddingVertical:7,backgroundColor:"rgba(255,255,255,0.91)",borderRadius:19,flexDirection:"row",alignItems:"center",gap:7},
-    premiumVerifiedText:{fontFamily:"AssistanceInterBold",fontSize: vsType.size.micro,color:"#087C5D"},
+    premiumVerifiedText:{fontFamily: vsType.family,fontSize: vsType.size.micro,color:"#087C5D"},
     premiumHeroFacts:{flexDirection:"row",gap:9},
     premiumHeroFact:{flex:1,minHeight:63,padding:10,borderRadius:11,backgroundColor:"rgba(255,255,255,0.91)",alignItems:"center",justifyContent:"center",gap:6},
-    premiumHeroFactText:{fontFamily:"AssistanceInterSemiBold",color:"#27594B",fontSize: vsType.size.micro,textAlign:"center"},
-    premiumStepNumber:{fontFamily:"AssistanceInterBold",fontSize: vsType.size.label,color:"#FFFFFF"},
+    premiumHeroFactText:{fontFamily: vsType.family,color:"#27594B",fontSize: vsType.size.micro,textAlign:"center"},
+    premiumStepNumber:{fontFamily: vsType.family,fontSize: vsType.size.label,color:"#FFFFFF"},
     amountPresetRow:{flexDirection:"row",flexWrap:"wrap",gap:7,marginTop:9},
     amountPreset:{paddingHorizontal:11,paddingVertical:8,backgroundColor:"#F4FAF7",borderWidth:1,borderColor:"#D9E9E1",borderRadius:9},
     amountPresetActive:{backgroundColor:"#E5F8EE",borderColor:"#129976"},
-    amountPresetText:{fontFamily:"AssistanceInterSemiBold",fontSize: vsType.size.caption,color:"#597D6E"},
+    amountPresetText:{fontFamily: vsType.family,fontSize: vsType.size.caption,color:"#597D6E"},
     amountPresetTextActive:{color:"#087558"},
-    amountHelp:{fontFamily:"AssistanceInter",fontSize: vsType.size.caption,color:"#76958A",marginTop:7,lineHeight:16},
+    amountHelp:{fontFamily: vsType.family,fontSize: vsType.size.caption,color:"#76958A",marginTop:7,lineHeight:16},
     releaseSection:{marginTop:22,padding:17,borderRadius:15,backgroundColor:"#F7FCF9",borderWidth:1,borderColor:"#DCEDE4",gap:13},
     releaseHeader:{flexDirection:"row",alignItems:"center",gap:9},
     releaseHeaderCopy:{flex:1,gap:4},
-    releaseTitle:{fontFamily:"AssistanceInterBold",fontSize: vsType.size.body,color:"#16483A"},
-    releaseDesc:{fontFamily:"AssistanceInter",fontSize: vsType.size.caption,color:"#6E887E",lineHeight:17},
+    releaseTitle:{fontFamily: vsType.family,fontSize: vsType.size.body,color:"#16483A"},
+    releaseDesc:{fontFamily: vsType.family,fontSize: vsType.size.caption,color:"#6E887E",lineHeight:17},
     releaseOptions:{flexDirection:"row",flexWrap:"wrap",gap:10},
     releaseOption:{flex:1,minWidth:170,minHeight:85,flexDirection:"row",gap:9,alignItems:"center",padding:12,borderRadius:12,backgroundColor:"#FFFFFF",borderWidth:1,borderColor:"#D6E7DE"},
     releaseOptionSelected:{backgroundColor:"#E9F9F0",borderColor:"#0C9773"},
     releaseIcon:{width:36,height:36,borderRadius:10,backgroundColor:"#E6F3ED",alignItems:"center",justifyContent:"center"},
     releaseIconActive:{backgroundColor:"#D0F0E0"},
     releaseOptionCopy:{flex:1,minWidth:0,gap:4},
-    releaseOptionTitle:{fontFamily:"AssistanceInterBold",fontSize: vsType.size.meta,color:"#214C3E"},
-    releaseOptionHint:{fontFamily:"AssistanceInter",fontSize: vsType.size.micro,color:"#728F80",lineHeight:14},
+    releaseOptionTitle:{fontFamily: vsType.family,fontSize: vsType.size.meta,color:"#214C3E"},
+    releaseOptionHint:{fontFamily: vsType.family,fontSize: vsType.size.micro,color:"#728F80",lineHeight:14},
     releasePrivacy:{flexDirection:"row",gap:8,alignItems:"flex-start",borderRadius:9,backgroundColor:"#ECF8F2",padding:10},
-    releasePrivacyText:{flex:1,fontFamily:"AssistanceInter",fontSize: vsType.size.micro,lineHeight:16,color:"#577E6F"},
+    releasePrivacyText:{flex:1,fontFamily: vsType.family,fontSize: vsType.size.micro,lineHeight:16,color:"#577E6F"},
   });
