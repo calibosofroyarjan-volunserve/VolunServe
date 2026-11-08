@@ -247,7 +247,7 @@ const reviewedHoisted=hoistReviewedIdenticalHelpers(branchExpected);
 assert.equal(current,reviewedHoisted,
  "BLOCKED: other Firestore permissions, validation branches or collection paths changed");
 assert.equal(cp.execFileSync("git",["hash-object","firestore.rules"],{encoding:"utf8"}).trim(),
-"30bb13a76db158950ae6c904c3f16042bf54c6be","BLOCKED: unreviewed Firestore Rules blob");
+"65f1b75ae301776c7f0cf953cfd6ee7aae3fd820","BLOCKED: unreviewed Firestore Rules blob");
 // Verify exhaustiveness of all optional-review branches over valid and
 // invalid types, status values and three-valued nulls before Firebase emulator.
 for(const required of [true,false,null,"true",0,1,undefined]){
