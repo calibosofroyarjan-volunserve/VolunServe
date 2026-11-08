@@ -1,4 +1,5 @@
 import {evaluateLighting,assessFaceBoxes,frameDifference,assessDocumentFrame} from "./camera-metrics.mjs";
+import {ACTIONS,generateChallenge,faceSignals,createChallengeState,advanceChallenge} from "./face-challenge.mjs";
 // Staging-only live camera guidance. Camera tracking != liveness or ID authentication.
 const $=id=>document.getElementById(id);
 if(location.hostname!=="volunserve-identity-test-staging.onrender.com")throw Error("Staging-only camera guard");
@@ -48,14 +49,14 @@ const modal=document.createElement("dialog");modal.id="scanModal";
 modal.innerHTML='<div class="scan-modal-head"><h3 id="scanTitle">Live camera</h3><button type="button" class="alt" id="scanClose">✕ Close</button></div><div class="cam-view"><video id="scanVideo" autoplay playsinline muted></video><canvas id="scanOverlay"></canvas><div id="scanGuide" class="frame-guide"></div></div><div class="scan-modal-body"><div id="scanStatus" class="cam-status" role="status">Starting...</div><div class="cam-note" id="scanNote"></div><p class="cam-note">Automatic capture is on. Keep the camera steady, then review the captured image. Images are not uploaded until you run staging verification.</p><div class="scan-controls"><button type="button" class="alt" id="scanCancel">Cancel</button></div></div>';
 document.body.append(modal);
 const video=$("scanVideo"),canvas=$("scanOverlay"),ctx=canvas.getContext("2d");
-let stream=null,timer=null,mode=null,session=0,stable=0,previous=null,detector=null,detectorLoading=null,detectorUnavailable=false,capturing=false;
+let stream=null,timer=null,mode=null,session=0,stable=0,previous=null,detector=null,detectorLoading=null,detectorUnavailable=false,capturing=false,challenge=null;
 const meter=document.createElement("canvas");meter.width=120;meter.height=90;
 const meterCtx=meter.getContext("2d",{willReadFrequently:true});
 function status(s){$("scanStatus").textContent=s}
 function stop(){
  session++;if(timer!==null){clearInterval(timer);timer=null}
  if(stream){for(const t of stream.getTracks())t.stop();stream=null}
- video.pause();video.srcObject=null;mode=null;stable=0;previous=null;capturing=false;
+ video.pause();video.srcObject=null;mode=null;stable=0;previous=null;capturing=false;challenge=null;
  if(ctx)ctx.clearRect(0,0,canvas.width,canvas.height);
  if(modal.open)modal.close();
 }
@@ -64,17 +65,19 @@ async function faceDetector(){
  if(!detectorLoading)detectorLoading=(async()=>{
   const pkg=await import("https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.2.2/vision_bundle.mjs");
   const vision=await pkg.FilesetResolver.forVisionTasks("https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.2.2/wasm");
-  return pkg.FaceDetector.createFromOptions(vision,{baseOptions:{modelAssetPath:"https://storage.googleapis.com/mediapipe-models/face_detector/blaze_face_short_range/float16/1/blaze_face_short_range.tflite",delegate:"CPU"},runningMode:"VIDEO",minDetectionConfidence:0.65});
+  return pkg.FaceLandmarker.createFromOptions(vision,{baseOptions:{modelAssetPath:"https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task",delegate:"CPU"},runningMode:"VIDEO",numFaces:2,minFaceDetectionConfidence:0.6,outputFaceBlendshapes:true});
  })();
  try{detector=await detectorLoading;return detector}catch(e){detectorUnavailable=true;throw e}finally{detectorLoading=null}
 }
 async function start(stage){
  if(!navigator.mediaDevices?.getUserMedia){alert("Camera requires HTTPS and supported browser. Use the image fallback.");return}
  stop();mode=stage;const current=++session;capturing=false;
+ const random=()=>crypto.getRandomValues(new Uint32Array(1))[0]/4294967296;
+ challenge=stage==="selfie"?createChallengeState(generateChallenge(random)):null;
  $("scanTitle").textContent=TYPES[stage].label;
  $("scanGuide").classList.toggle("face",stage==="selfie");
  video.classList.toggle("mirror",stage==="selfie");canvas.classList.toggle("mirror",stage==="selfie");
- $("scanNote").textContent=stage==="selfie"?"Center one face. Face boxes are local guidance only, NOT liveness detection.":"Align all four edges of the ID against a contrasting background. Auto-capture uses approximate rectangle, lighting and stillness only, NOT government-ID identification or authenticity.";
+ $("scanNote").textContent=stage==="selfie"?"Center one face and follow two random facial movement prompts (blink, smile or open mouth). Local challenge only, NOT validated anti-spoofing.":"Align all four edges of the ID against a contrasting background. Auto-capture uses approximate rectangle, lighting and stillness only, NOT government-ID identification or authenticity.";
  status("Requesting camera permission...");
  try{
   modal.showModal();
@@ -85,7 +88,7 @@ async function start(stage){
   canvas.width=video.videoWidth;canvas.height=video.videoHeight;
   status("Camera ready — align one face or a card-like rectangle.");
   if(stage==="selfie"){
-   status("Loading local face detector...");
+   status("Loading face landmark and facial-expression model...");
    try{await faceDetector()}catch{status("Live face detector unavailable. Automatic selfie capture cannot proceed; close and use the test-image fallback.")}
   }
   if(current!==session)return;
@@ -107,11 +110,30 @@ function check(current){
   if(!light.acceptable)message=light.brightness<58?"Too dark; move into brighter light.":light.brightness>215?"Too bright; avoid glare.":"Low contrast; improve lighting.";
   else if(mode==="selfie"){
     if(detector){
-      const faces=detector.detectForVideo(video,performance.now())?.detections||[];
-      drawFaces(faces);const check=assessFaceBoxes(faces,video.videoWidth,video.videoHeight);
-      good=check.acceptable&&steady;
-      message=!check.acceptable?check.message:steady?"One centered face detected — hold still.":"One face detected — stop moving.";
-    }else{drawFaces([]);message="Live face detection unavailable; close and use the test-image fallback."}
+      const detected=detector.detectForVideo(video,performance.now());
+      const allLandmarks=detected?.faceLandmarks||[];
+      const boxes=allLandmarks.map(points=>{
+        const xs=points.map(p=>p.x*video.videoWidth),ys=points.map(p=>p.y*video.videoHeight);
+        const minX=Math.min(...xs),minY=Math.min(...ys),maxX=Math.max(...xs),maxY=Math.max(...ys);
+        return {boundingBox:{originX:minX,originY:minY,width:maxX-minX,height:maxY-minY}};
+      });
+      drawFaces(boxes);
+      const face=assessFaceBoxes(boxes,video.videoWidth,video.videoHeight);
+      if(!face.acceptable){good=false;message=face.message}
+      else if(!challenge){message="Preparing facial-expression challenge..."}
+      else if(challenge.expired){message="Challenge expired. Close and reopen the face camera to retry."}
+      else if(!challenge.completed){
+        challenge=advanceChallenge(challenge,faceSignals(detected),Date.now());
+        message=challenge.expired?"Challenge expired. Close and reopen to retry.":challenge.completed
+          ?"Facial movement challenge complete (local-only). Hold still for capture."
+          :"Step "+(challenge.step+1)+"/"+challenge.steps.length+": "+ACTIONS[challenge.steps[challenge.step]]
+             +(challenge.phase==="waiting_for_release"?" — now relax":"");
+        good=false;
+      }else{
+        good=steady;
+        message=steady?"Face centered, challenge complete. Hold still for capture.":"Challenge complete. Keep your face centered and still.";
+      }
+    }else{drawFaces([]);message="Live face tracking unavailable; auto capture disabled. Close and use test-image fallback (not liveness checked)."}
   }else{
     drawFaces([]);
     const card=assessDocumentFrame(pixels,meter.width,meter.height);
@@ -121,7 +143,7 @@ function check(current){
       :"Card-like edges found. Keep the ID steady.";
   }
   status(message);stable=good?stable+1:0;
-  if(stable>=(mode==="selfie"?9:13)&&(mode!=="selfie"||detector)){void capture()}
+  if(stable>=(mode==="selfie"?9:13)&&(mode!=="selfie"||detector)&&(mode!=="selfie"||challenge?.completed)){void capture()}
  }catch{stable=0;status("Live tracking interrupted. Hold still, or close and use image fallback.")}
 }
 async function capture(){
@@ -135,7 +157,12 @@ async function capture(){
  if(!blob||typeof DataTransfer==="undefined"){status("Could not save camera capture; use test-image fallback.");capturing=false;return}
  const file=new File([blob],"staging-"+stage+"-"+Date.now()+".jpg",{type:"image/jpeg"});
  const dt=new DataTransfer();dt.items.add(file);
- $(stage).files=dt.files;$(stage).dispatchEvent(new Event("change",{bubbles:true}));stop();
+ $(stage).files=dt.files;$(stage).dispatchEvent(new Event("change",{bubbles:true}));
+ if(stage==="selfie"){
+   const card=document.querySelector('[data-stage="selfie"] .scan-sub');
+   if(card)card.textContent=challenge?.completed?"Captured after local facial challenge — NOT certified liveness":"Captured — active challenge unverified";
+ }
+ stop();
 }
 $("scanClose").addEventListener("click",stop);
 $("scanCancel").addEventListener("click",stop);modal.addEventListener("cancel",e=>{e.preventDefault();stop()});
