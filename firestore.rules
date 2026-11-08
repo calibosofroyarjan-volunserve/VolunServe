@@ -16,29 +16,23 @@ service cloud.firestore {
         && request.auth.token.get('email_verified', false) == true;
     }
     // Reuse profile data inside role helpers instead of repeating get() expressions.
+    // Equivalent to the previously deployed approved() predicate:
+    // 1) verifiedEmailSession already guarantees email_verified == true;
+    // 2) the explicit role allow-list excludes 'applicant', so a missing
+    //    status field is 'approved' but a present null/nonapproved status is not.
+    // This reduces repeated compiled expressions across role-sensitive rules.
     function approved() {
       let p = signedIn() ? profile() : {};
+      let role = p.get('role', '');
       return verifiedEmailSession()
-        // Explicitly prohibit legacy Guest/unknown roles even if their old
-        // profile happens to contain status == approved.
-        && p.get('role', '') in [
+        && role in [
           'resident', 'volunteer', 'admin', 'superadmin', 'lgu_personnel'
         ]
-        // Email-only Firebase Auth UIDs are NOT completed Resident profiles.
-        // Staff accounts retain their independent administrative login policy.
         && (
-          p.get('role', '') in ['admin', 'superadmin', 'lgu_personnel']
-          || (
-            request.auth.token.get('email_verified', false) == true
-            && request.auth.token.get('email', '') == p.get('email', '')
-          )
+          role in ['admin', 'superadmin', 'lgu_personnel']
+          || request.auth.token.get('email', '') == p.get('email', '')
         )
-        && (
-          p.get('status', null) == 'approved'
-          || (!('status' in p) && p.get('role', 'applicant') != 'applicant')
-        )
-        // Historical suspended staff must not retain community-wide reads
-        // through the generic approved() helper.
+        && p.get('status', 'approved') == 'approved'
         && p.get('adminStatus', 'active') != 'suspended';
     }
     function isAdmin() {
