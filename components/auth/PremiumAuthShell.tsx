@@ -34,6 +34,7 @@ export default function PremiumAuthShell({ children }: Props) {
   const compact = width < 900;
   const narrow = width < 480;
   const [slide, setSlide] = useState(1);
+  const [heroBounds, setHeroBounds] = useState({ width: 0, height: 0 });
 
   useEffect(() => {
     const timer = setInterval(() => setSlide(current => (current + 1) % SLIDES.length), 6500);
@@ -45,8 +46,29 @@ export default function PremiumAuthShell({ children }: Props) {
   return (
     <ScrollView style={styles.page} contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
       <View style={[styles.split, compact && styles.splitCompact]}>
-        <View style={[styles.hero, { minHeight: heroHeight }, compact && styles.heroCompact]}>
-          <Image source={SLIDES[slide]} resizeMode="cover" style={StyleSheet.absoluteFillObject} />
+        <View
+          style={[styles.hero, { minHeight: heroHeight }, compact && styles.heroCompact]}
+          onLayout={({ nativeEvent: { layout } }) => {
+            const width = Math.ceil(layout.width);
+            const height = Math.ceil(layout.height);
+            setHeroBounds(current =>
+              current.width === width && current.height === height ? current : { width, height }
+            );
+          }}
+        >
+          {/* A background Image can keep its intrinsic image dimensions on RN Web
+              when styled with absoluteFillObject alone. Explicitly size it to
+              the *measured hero panel* so each carousel slide fills the entire
+              desktop and mobile panel while preserving cover cropping. */}
+          <Image
+            source={SLIDES[slide]}
+            resizeMode="cover"
+            accessibilityIgnoresInvertColors
+            style={[styles.heroSlideImage, heroBounds.width > 0 && {
+              width: heroBounds.width,
+              height: heroBounds.height,
+            }]}
+          />
           <LinearGradient
             colors={["rgba(5,41,32,0.42)", "rgba(0,44,38,0.64)", "rgba(0,43,37,0.98)"]}
             locations={[0, 0.46, 1]}
@@ -166,6 +188,10 @@ const styles = StyleSheet.create({
   splitCompact: { flexDirection: "column" },
   hero: { flex: 1.33, backgroundColor: "#064B3B", overflow: "hidden", minWidth: 0 },
   heroCompact: { flex: 0, width: "100%" },
+  heroSlideImage: {
+    position: "absolute", top: 0, left: 0,
+    width: "100%", height: "100%",
+  },
   heroContent: { flex: 1, paddingHorizontal: 47, paddingTop: 36, paddingBottom: 34, justifyContent: "space-between" },
   heroContentCompact: { paddingHorizontal: 24, paddingTop: 22, paddingBottom: 26 },
   brand: { flexDirection: "row", alignItems: "center", gap: 13 },
