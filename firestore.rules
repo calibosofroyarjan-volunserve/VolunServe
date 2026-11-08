@@ -21,6 +21,19 @@ service cloud.firestore {
     // 2) the explicit role allow-list excludes 'applicant', so a missing
     //    status field is 'approved' but a present null/nonapproved status is not.
     // This reduces repeated compiled expressions across role-sensitive rules.
+    // Typed bounds preserve the exact field requirements across all modules.
+    function sizedText(value, minLength, maxLength) {
+      return value is string && value.size() >= minLength && value.size() <= maxLength;
+    }
+    function maxText(value, maxLength) {
+      return value is string && value.size() <= maxLength;
+    }
+    function boundedInt(value, minValue, maxValue) {
+      return value is int && value >= minValue && value <= maxValue;
+    }
+    function boundedNumber(value, minValue, maxValue) {
+      return value is number && value >= minValue && value <= maxValue;
+    }
     function approved() {
       let p = signedIn() ? profile() : {};
       let role = p.get('role', '');
@@ -105,12 +118,12 @@ service cloud.firestore {
       // These lists are synchronized against the local SJDM/occupation constants.
       function validInitialResidentInputs() {
         let d = request.resource.data;
-        return d.firstName is string && d.firstName.size() >= 2 && d.firstName.size() <= 80
-          && d.lastName is string && d.lastName.size() >= 2 && d.lastName.size() <= 80
+        return sizedText(d.firstName, 2, 80)
+          && sizedText(d.lastName, 2, 80)
           && d.get('middleName', '') is string && d.get('middleName', '').size() <= 80
           && d.phoneNumber is string
           && d.phoneNumber.matches('^([+]639[0-9]{9}|09[0-9]{9})$')
-          && d.region is string && d.region.size() >= 5 && d.region.size() <= 100
+          && sizedText(d.region, 5, 100)
           && d.barangay is string && d.barangay.matches('^(Assumption|Bagong Buhay I|Bagong Buhay II|Bagong Buhay III|Citrus|Ciudad Real|Dulong Bayan|Fatima I|Fatima II|Fatima III|Fatima IV|Fatima V|Francisco Homes-Guijo|Francisco Homes-Mulawin|Francisco Homes-Narra|Francisco Homes-Yakal|Gaya-gaya|Graceville|Gumaoc Central|Gumaoc East|Gumaoc West|Kaybanban|Kaypian|Lawang Pari|Maharlika|Minuyan I|Minuyan II|Minuyan III|Minuyan IV|Minuyan Proper|Minuyan V|Muzon East|Muzon Proper|Muzon South|Muzon West|Paradise III|Poblacion|Poblacion I|San Isidro|San Manuel|San Martin de Porres|San Martin I|San Martin II|San Martin III|San Martin IV|San Pedro|San Rafael I|San Rafael II|San Rafael III|San Rafael IV|San Rafael V|San Roque|Santa Cruz I|Santa Cruz II|Santa Cruz III|Santa Cruz IV|Santa Cruz V|Santo Cristo|Santo Niño I|Santo Niño II|Sapang Palay|Tungkong Mangga)$')
           && d.occupationCategory is string && d.occupationCategory.matches('^(Medical Professional|Emergency Responder|Government Employee|Student|Private Sector Employee|NGO Worker|Skilled Worker|Unemployed|Retired|Other [(]Specify[)])$')
           && d.get('occupationSpecialization', '') is string
@@ -157,9 +170,7 @@ service cloud.firestore {
         && request.resource.data.firstName.size() >= 2
         && request.resource.data.lastName is string
         && request.resource.data.lastName.size() >= 2
-        && request.resource.data.age is int
-        && request.resource.data.age >= 18
-        && request.resource.data.age <= 100
+        && boundedInt(request.resource.data.age, 18, 100)
         && request.resource.data.phoneNumber is string
         && request.resource.data.phoneNumber.size() >= 11
         && request.resource.data.barangay is string
@@ -249,19 +260,11 @@ service cloud.firestore {
         && request.resource.data.status == 'pending_review'
         && request.resource.data.residentAccess == false
         && request.resource.data.volunteerAccess == false
-        && request.resource.data.fullName is string
-        && request.resource.data.fullName.size() >= 5
-        && request.resource.data.fullName.size() <= 160
+        && sizedText(request.resource.data.fullName, 5, 160)
         && request.resource.data.email is string
-        && request.resource.data.lguOffice is string
-        && request.resource.data.lguOffice.size() >= 3
-        && request.resource.data.lguOffice.size() <= 160
-        && request.resource.data.lguPosition is string
-        && request.resource.data.lguPosition.size() >= 3
-        && request.resource.data.lguPosition.size() <= 120
-        && request.resource.data.appointmentReference is string
-        && request.resource.data.appointmentReference.size() >= 5
-        && request.resource.data.appointmentReference.size() <= 160
+        && sizedText(request.resource.data.lguOffice, 3, 160)
+        && sizedText(request.resource.data.lguPosition, 3, 120)
+        && sizedText(request.resource.data.appointmentReference, 5, 160)
         && request.resource.data.province == 'Bulacan'
         && request.resource.data.city == 'City of San Jose del Monte'
         && request.resource.data.createdAt == request.time;
@@ -433,9 +436,7 @@ service cloud.firestore {
             request.resource.data.identityStatus == 'failed'
             && request.resource.data.identityVerified == false
             && request.resource.data.identityVerifiedAt == null
-            && request.resource.data.identityFailureReason is string
-            && request.resource.data.identityFailureReason.size() >= 3
-            && request.resource.data.identityFailureReason.size() <= 500
+            && sizedText(request.resource.data.identityFailureReason, 3, 500)
             && identitySubmissionAfter().status == 'failed'
             && identitySubmissionAfter().reviewedBy == request.auth.uid
           )
@@ -740,20 +741,11 @@ service cloud.firestore {
           'updatedAt',
           'updatedBy'
         ])
-        && request.resource.data.cityName is string
-        && request.resource.data.cityName.size() >= 3
-        && request.resource.data.cityName.size() <= 120
-        && request.resource.data.emergencyHotline is string
-        && request.resource.data.emergencyHotline.size() >= 3
-        && request.resource.data.emergencyHotline.size() <= 160
-        && request.resource.data.supportEmail is string
-        && request.resource.data.supportEmail.size() <= 160
-        && request.resource.data.publicServiceNotice is string
-        && request.resource.data.publicServiceNotice.size() >= 10
-        && request.resource.data.publicServiceNotice.size() <= 500
-        && request.resource.data.liveLocationRetentionHours is int
-        && request.resource.data.liveLocationRetentionHours >= 1
-        && request.resource.data.liveLocationRetentionHours <= 720
+        && sizedText(request.resource.data.cityName, 3, 120)
+        && sizedText(request.resource.data.emergencyHotline, 3, 160)
+        && maxText(request.resource.data.supportEmail, 160)
+        && sizedText(request.resource.data.publicServiceNotice, 10, 500)
+        && boundedInt(request.resource.data.liveLocationRetentionHours, 1, 720)
         && request.resource.data.updatedAt is timestamp
         && request.resource.data.updatedBy == request.auth.uid;
       allow delete: if false;
@@ -778,12 +770,8 @@ service cloud.firestore {
           'createdAt',
           'updatedAt'
         ])
-        && request.resource.data.title is string
-        && request.resource.data.title.size() >= 3
-        && request.resource.data.title.size() <= 120
-        && request.resource.data.message is string
-        && request.resource.data.message.size() >= 10
-        && request.resource.data.message.size() <= 2000
+        && sizedText(request.resource.data.title, 3, 120)
+        && sizedText(request.resource.data.message, 10, 2000)
         && request.resource.data.linkUrl is string
         && request.resource.data.imageUrl is string
         && request.resource.data.priority in [
@@ -836,12 +824,8 @@ service cloud.firestore {
           'passport',
           'other_government_id'
         ]
-        && request.resource.data.idDocumentUrl is string
-        && request.resource.data.idDocumentUrl.size() >= 10
-        && request.resource.data.idDocumentUrl.size() <= 2048
-        && request.resource.data.selfieUrl is string
-        && request.resource.data.selfieUrl.size() >= 10
-        && request.resource.data.selfieUrl.size() <= 2048
+        && sizedText(request.resource.data.idDocumentUrl, 10, 2048)
+        && sizedText(request.resource.data.selfieUrl, 10, 2048)
         && request.resource.data.status == 'pending'
         && request.resource.data.submittedAt is timestamp
         && request.resource.data.updatedAt is timestamp
@@ -875,12 +859,8 @@ service cloud.firestore {
           'passport',
           'other_government_id'
         ]
-        && request.resource.data.idDocumentUrl is string
-        && request.resource.data.idDocumentUrl.size() >= 10
-        && request.resource.data.idDocumentUrl.size() <= 2048
-        && request.resource.data.selfieUrl is string
-        && request.resource.data.selfieUrl.size() >= 10
-        && request.resource.data.selfieUrl.size() <= 2048
+        && sizedText(request.resource.data.idDocumentUrl, 10, 2048)
+        && sizedText(request.resource.data.selfieUrl, 10, 2048)
         && request.resource.data.status == 'pending'
         && request.resource.data.submittedAt is timestamp
         && request.resource.data.updatedAt is timestamp
@@ -914,8 +894,7 @@ service cloud.firestore {
         ]
         && request.resource.data.reviewedAt is timestamp
         && request.resource.data.reviewedBy == request.auth.uid
-        && request.resource.data.reviewNote is string
-        && request.resource.data.reviewNote.size() <= 500
+        && maxText(request.resource.data.reviewNote, 500)
         && request.resource.data.updatedAt is timestamp
         && userAfterReview().identityStatus
           == request.resource.data.status
@@ -985,41 +964,24 @@ service cloud.firestore {
         ]
         && rd.applicantType == 'existing_resident'
         && rd.requestedRole == 'volunteer'
-        && rd.fullName is string
-        && rd.fullName.size() >= 1
-        && rd.fullName.size() <= 120
-        && rd.email is string
-        && rd.email.size() <= 160
-        && rd.barangay is string
-        && rd.barangay.size() <= 120
-        && rd.phone is string
-        && rd.phone.size() <= 30
-        && rd.phoneNumber is string
-        && rd.phoneNumber.size() >= 8
-        && rd.phoneNumber.size() <= 30
-        && rd.occupationCategory is string
-        && rd.occupationCategory.size() <= 120
-        && rd.occupationSpecialization is string
-        && rd.occupationSpecialization.size() <= 160
-        && rd.occupationOther is string
-        && rd.occupationOther.size() <= 160
+        && sizedText(rd.fullName, 1, 120)
+        && maxText(rd.email, 160)
+        && maxText(rd.barangay, 120)
+        && maxText(rd.phone, 30)
+        && sizedText(rd.phoneNumber, 8, 30)
+        && maxText(rd.occupationCategory, 120)
+        && maxText(rd.occupationSpecialization, 160)
+        && maxText(rd.occupationOther, 160)
         && rd.skills is list
         && rd.skills.size() >= 1
         && rd.skills.size() <= 20
         && rd.availability is list
         && rd.availability.size() >= 1
         && rd.availability.size() <= 20
-        && rd.experienceTraining is string
-        && rd.experienceTraining.size() >= 5
-        && rd.experienceTraining.size() <= 1500
-        && rd.preferredActivity is string
-        && rd.preferredActivity.size() >= 1
-        && rd.preferredActivity.size() <= 160
-        && rd.emergencyContact is string
-        && rd.emergencyContact.size() <= 60
-        && rd.motivation is string
-        && rd.motivation.size() >= 15
-        && rd.motivation.size() <= 2000
+        && sizedText(rd.experienceTraining, 5, 1500)
+        && sizedText(rd.preferredActivity, 1, 160)
+        && maxText(rd.emergencyContact, 60)
+        && sizedText(rd.motivation, 15, 2000)
         && rd.status == 'pending'
         && rd.createdAt is timestamp
         && rd.updatedAt is timestamp;
@@ -1076,8 +1038,7 @@ service cloud.firestore {
         && request.resource.data.activeMode == 'resident'
         && request.resource.data.reviewedAt is timestamp
         && request.resource.data.reviewedBy == request.auth.uid
-        && request.resource.data.rejectedReason is string
-        && request.resource.data.rejectedReason.size() <= 500;
+        && maxText(request.resource.data.rejectedReason, 500);
       allow delete: if false;
     }
     match /assistanceEvidenceAssets/{evidenceId} {
@@ -1129,16 +1090,11 @@ service cloud.firestore {
             'unable_to_confirm',
             'inconsistent'
           ]
-          && rd.facilityName is string
-          && rd.facilityName.size() <= 160
-          && rd.facilityType is string
-          && rd.facilityType.size() <= 80
-          && rd.facilityDepartment is string
-          && rd.facilityDepartment.size() <= 160
-          && rd.professionalName is string
-          && rd.professionalName.size() <= 160
-          && rd.facilityReferenceNumber is string
-          && rd.facilityReferenceNumber.size() <= 160
+          && maxText(rd.facilityName, 160)
+          && maxText(rd.facilityType, 80)
+          && maxText(rd.facilityDepartment, 160)
+          && maxText(rd.professionalName, 160)
+          && maxText(rd.facilityReferenceNumber, 160)
           && rd.facilityVerificationMethod in [
             'not_applicable',
             'official_phone',
@@ -1147,14 +1103,12 @@ service cloud.firestore {
             'in_person',
             'other'
           ]
-          && rd.facilityVerifiedWith is string
-          && rd.facilityVerifiedWith.size() <= 160
+          && maxText(rd.facilityVerifiedWith, 160)
           && (
             rd.facilityVerifiedAt == null
             || rd.facilityVerifiedAt is timestamp
           )
-          && rd.facilityNotes is string
-          && rd.facilityNotes.size() <= 2000
+          && maxText(rd.facilityNotes, 2000)
           && (
             !sourceNeedsFacilityVerification()
             || rd.facilityVerificationRequired == true
@@ -1188,30 +1142,20 @@ service cloud.firestore {
       function validCostVerificationState() {
         let rd = request.resource.data;
         return rd.costVerificationRequired is bool
-          && rd.residentEstimatedAmount is number
-          && rd.residentEstimatedAmount >= 0
-          && rd.residentEstimatedAmount <= 100000000
+          && boundedNumber(rd.residentEstimatedAmount, 0, 100000000)
           && rd.residentEstimatedAmount
             == sourceAssistance().estimatedAmount
-          && rd.verifiedGrossCost is number
-          && rd.verifiedGrossCost >= 0
-          && rd.verifiedGrossCost <= 100000000
-          && rd.confirmedExistingAssistanceAmount is number
-          && rd.confirmedExistingAssistanceAmount >= 0
-          && rd.confirmedExistingAssistanceAmount <= 100000000
-          && rd.verifiedUncoveredAmount is number
-          && rd.verifiedUncoveredAmount >= 0
-          && rd.verifiedUncoveredAmount <= 100000000
+          && boundedNumber(rd.verifiedGrossCost, 0, 100000000)
+          && boundedNumber(rd.confirmedExistingAssistanceAmount, 0, 100000000)
+          && boundedNumber(rd.verifiedUncoveredAmount, 0, 100000000)
           && rd.costVerificationStatus in [
             'not_required',
             'pending',
             'confirmed',
             'inconsistent'
           ]
-          && rd.costReferenceNumber is string
-          && rd.costReferenceNumber.size() <= 160
-          && rd.costNotes is string
-          && rd.costNotes.size() <= 2000
+          && maxText(rd.costReferenceNumber, 160)
+          && maxText(rd.costNotes, 2000)
           && (
             !sourceNeedsCostVerification()
             || rd.costVerificationRequired == true
@@ -1262,17 +1206,14 @@ service cloud.firestore {
             'site_visit',
             'other'
           ]
-          && rd.privateAddressSnapshot is string
-          && rd.privateAddressSnapshot.size() <= 300
+          && maxText(rd.privateAddressSnapshot, 300)
           && validPrivateCoordinates()
           && (
             rd.locationVerifiedAt == null
             || rd.locationVerifiedAt is timestamp
           )
-          && rd.locationVerifiedBy is string
-          && rd.locationVerifiedBy.size() <= 160
-          && rd.residencyNotes is string
-          && rd.residencyNotes.size() <= 2000
+          && maxText(rd.locationVerifiedBy, 160)
+          && maxText(rd.residencyNotes, 2000)
           && (
             rd.residencyVerificationStatus != 'verified'
             || (
@@ -1297,8 +1238,7 @@ service cloud.firestore {
             rd.videoVerificationAt == null
             || rd.videoVerificationAt is timestamp
           )
-          && rd.videoVerificationNotes is string
-          && rd.videoVerificationNotes.size() <= 2000
+          && maxText(rd.videoVerificationNotes, 2000)
           && rd.siteVisitRequired is bool
           && rd.siteVisitStatus in [
             'not_required',
@@ -1311,10 +1251,8 @@ service cloud.firestore {
             rd.siteVisitAt == null
             || rd.siteVisitAt is timestamp
           )
-          && rd.siteVisitBy is string
-          && rd.siteVisitBy.size() <= 160
-          && rd.siteVisitNotes is string
-          && rd.siteVisitNotes.size() <= 2000
+          && maxText(rd.siteVisitBy, 160)
+          && maxText(rd.siteVisitNotes, 2000)
           && (
             (
               rd.videoVerificationRequired == false
@@ -1426,8 +1364,7 @@ service cloud.firestore {
           'inconsistent',
           'needs_more_information'
         ]
-        && rd.documentConsistencyNotes is string
-        && rd.documentConsistencyNotes.size() <= 2000
+        && maxText(rd.documentConsistencyNotes, 2000)
         && rd.duplicateCheckStatus in [
           'pending',
           'clear',
@@ -1436,41 +1373,35 @@ service cloud.firestore {
         ]
         && rd.duplicateRequestIds is list
         && rd.duplicateRequestIds.size() <= 20
-        && rd.duplicateCheckNotes is string
-        && rd.duplicateCheckNotes.size() <= 2000
+        && maxText(rd.duplicateCheckNotes, 2000)
         && rd.beneficiaryCheckStatus in [
           'pending',
           'confirmed',
           'needs_more_information',
           'inconsistent'
         ]
-        && rd.beneficiaryCheckNotes is string
-        && rd.beneficiaryCheckNotes.size() <= 2000
+        && maxText(rd.beneficiaryCheckNotes, 2000)
         && validFacilityVerificationState()
         && validCostVerificationState()
         && validResidencyVerificationState()
         && validOptionalVerificationState()
         && rd.riskFlags is list
         && rd.riskFlags.size() <= 20
-        && rd.internalNotes is string
-        && rd.internalNotes.size() <= 3000
+        && maxText(rd.internalNotes, 3000)
         && rd.finalDecision in [
           'pending',
           'needs_more_information',
           'verified',
           'rejected'
         ]
-        && rd.finalDecisionReason is string
-        && rd.finalDecisionReason.size() <= 2000
+        && maxText(rd.finalDecisionReason, 2000)
         && (
           rd.finalDecisionAt == null
           || rd.finalDecisionAt is timestamp
         )
-        && rd.finalDecisionBy is string
-        && rd.finalDecisionBy.size() <= 160
+        && maxText(rd.finalDecisionBy, 160)
         && rd.createdAt is timestamp
-        && rd.createdBy is string
-        && rd.createdBy.size() <= 160
+        && maxText(rd.createdBy, 160)
         && rd.updatedAt is timestamp
         && rd.updatedBy == request.auth.uid;
       }
@@ -1606,18 +1537,12 @@ service cloud.firestore {
             'fileName'
           ])
           && document.documentType is string && document.documentType.matches('^(damage_evidence|barangay_incident_reference|medical_certificate|hospital_estimate|other_medical_support|treatment_estimate|other_treatment_support|diagnosis_document|treatment_plan_or_bill|other_illness_support|animal_case_photo|vet_assessment|other_animal_support|elderly_need_evidence|elderly_supporting_document|basic_need_evidence|barangay_social_welfare_reference|other_supporting_evidence)$')
-          && document.label is string
-          && document.label.size() >= 2
-          && document.label.size() <= 160
-          && document.url is string
-          && document.url.size() >= 40
-          && document.url.size() <= 500
+          && sizedText(document.label, 2, 160)
+          && sizedText(document.url, 40, 500)
           && document.url.matches(
             '^https://volunserve[.]onrender[.]com/api/assistance/evidence/evidence_[A-Za-z0-9]+/access$'
           )
-          && document.fileName is string
-          && document.fileName.size() >= 1
-          && document.fileName.size() <= 180;
+          && sizedText(document.fileName, 1, 180);
       }
       function validSecureAssistanceDocuments() {
         let rd = request.resource.data;
@@ -1716,29 +1641,17 @@ service cloud.firestore {
         ])
         && rd.requestId == requestId
         && rd.requesterUid == request.auth.uid
-        && rd.requesterName is string
-        && rd.requesterName.size() >= 1
-        && rd.requesterName.size() <= 160
-        && rd.requesterEmail is string
-        && rd.requesterEmail.size() <= 160
-        && rd.requesterBarangay is string
-        && rd.requesterBarangay.size() >= 1
-        && rd.requesterBarangay.size() <= 120
-        && rd.requesterAddress is string
-        && rd.requesterAddress.size() <= 240
-        && rd.contactNumber is string
-        && rd.contactNumber.size() >= 8
-        && rd.contactNumber.size() <= 30
+        && sizedText(rd.requesterName, 1, 160)
+        && maxText(rd.requesterEmail, 160)
+        && sizedText(rd.requesterBarangay, 1, 120)
+        && maxText(rd.requesterAddress, 240)
+        && sizedText(rd.contactNumber, 8, 30)
         && rd.beneficiaryType in [
           'self',
           'someone_else'
         ]
-        && rd.beneficiaryName is string
-        && rd.beneficiaryName.size() >= 1
-        && rd.beneficiaryName.size() <= 160
-        && rd.relationshipToBeneficiary is string
-        && rd.relationshipToBeneficiary.size() >= 1
-        && rd.relationshipToBeneficiary.size() <= 120
+        && sizedText(rd.beneficiaryName, 1, 160)
+        && sizedText(rd.relationshipToBeneficiary, 1, 120)
         && (
           rd.beneficiaryType != 'self'
           || rd.relationshipToBeneficiary == 'self'
@@ -1758,21 +1671,11 @@ service cloud.firestore {
           'other_community_assistance'
         ]
         && validAssistanceCategoryPair()
-        && rd.categoryLabel is string
-        && rd.categoryLabel.size() >= 2
-        && rd.categoryLabel.size() <= 120
-        && rd.title is string
-        && rd.title.size() >= 3
-        && rd.title.size() <= 160
-        && rd.description is string
-        && rd.description.size() >= 10
-        && rd.description.size() <= 2000
-        && rd.estimatedAmount is number
-        && rd.estimatedAmount >= 0
-        && rd.estimatedAmount <= 100000000
-        && rd.currentSituation is string
-        && rd.currentSituation.size() >= 2
-        && rd.currentSituation.size() <= 240
+        && sizedText(rd.categoryLabel, 2, 120)
+        && sizedText(rd.title, 3, 160)
+        && sizedText(rd.description, 10, 2000)
+        && boundedNumber(rd.estimatedAmount, 0, 100000000)
+        && sizedText(rd.currentSituation, 2, 240)
         && rd.preferredAssistanceTypes is list
         && rd.preferredAssistanceTypes.size() >= 1
         && rd.preferredAssistanceTypes.size() <= 2
@@ -1819,14 +1722,9 @@ service cloud.firestore {
             'vet_clinic',
             'authorized_public_point'
           ]
-          && rd.assignedLocationName is string
-          && rd.assignedLocationName.size() >= 3
-          && rd.assignedLocationName.size() <= 160
-          && rd.assignedLocationAddress is string
-          && rd.assignedLocationAddress.size() >= 5
-          && rd.assignedLocationAddress.size() <= 300
-          && rd.assignedLocationNotes is string
-          && rd.assignedLocationNotes.size() <= 1000
+          && sizedText(rd.assignedLocationName, 3, 160)
+          && sizedText(rd.assignedLocationAddress, 5, 300)
+          && maxText(rd.assignedLocationNotes, 1000)
           && rd.assignedLocationSetBy is string
           && rd.assignedLocationSetBy.size() > 0
           && rd.assignedLocationSetAt is timestamp
@@ -1909,9 +1807,7 @@ service cloud.firestore {
               && rd.verifiedAt == null
               && rd.verifiedBy == ''
               && rd.rejectedAt is timestamp
-              && rd.rejectionReason is string
-              && rd.rejectionReason.size() >= 3
-              && rd.rejectionReason.size() <= 1000
+              && sizedText(rd.rejectionReason, 3, 1000)
               && (
                 (
                   resource.data.verificationStatus == 'rejected'
@@ -2079,13 +1975,9 @@ service cloud.firestore {
           'not_required',
           'rejected'
         ]
-        && rd.remainingAmount is number
-        && rd.remainingAmount >= 0
-        && rd.remainingAmount <= 100000000
-        && rd.donationCampaignId is string
-        && rd.donationCampaignId.size() <= 200
-        && rd.adminNote is string
-        && rd.adminNote.size() <= 2000
+        && boundedNumber(rd.remainingAmount, 0, 100000000)
+        && maxText(rd.donationCampaignId, 200)
+        && maxText(rd.adminNote, 2000)
         && rd.reviewedAt is timestamp
         && rd.reviewedBy == request.auth.uid
         && rd.updatedAt is timestamp
@@ -2246,32 +2138,19 @@ service cloud.firestore {
           'updatedAt'
         ])
         && request.resource.data.reporterUid == request.auth.uid
-        && request.resource.data.reporterName is string
-        && request.resource.data.reporterName.size() >= 1
-        && request.resource.data.reporterName.size() <= 120
-        && request.resource.data.reporterEmail is string
-        && request.resource.data.reporterEmail.size() <= 160
-        && request.resource.data.reporterBarangay is string
-        && request.resource.data.reporterBarangay.size() <= 120
-        && request.resource.data.reporterAddress is string
-        && request.resource.data.reporterAddress.size() <= 240
-        && request.resource.data.contactNumber is string
-        && request.resource.data.contactNumber.size() >= 8
-        && request.resource.data.contactNumber.size() <= 30
-        && request.resource.data.emergencyContact is string
-        && request.resource.data.emergencyContact.size() <= 30
-        && request.resource.data.reporterProfilePictureUrl is string
-        && request.resource.data.reporterProfilePictureUrl.size() <= 2048
+        && sizedText(request.resource.data.reporterName, 1, 120)
+        && maxText(request.resource.data.reporterEmail, 160)
+        && maxText(request.resource.data.reporterBarangay, 120)
+        && maxText(request.resource.data.reporterAddress, 240)
+        && sizedText(request.resource.data.contactNumber, 8, 30)
+        && maxText(request.resource.data.emergencyContact, 30)
+        && maxText(request.resource.data.reporterProfilePictureUrl, 2048)
         && request.resource.data.source
           == 'resident_emergency_assistance'
         && request.resource.data.requestKind
           == 'emergency_assistance'
-        && request.resource.data.title is string
-        && request.resource.data.title.size() >= 3
-        && request.resource.data.title.size() <= 120
-        && request.resource.data.category is string
-        && request.resource.data.category.size() >= 2
-        && request.resource.data.category.size() <= 80
+        && sizedText(request.resource.data.title, 3, 120)
+        && sizedText(request.resource.data.category, 2, 80)
         && request.resource.data.severity in [
           'low',
           'medium',
@@ -2283,9 +2162,7 @@ service cloud.firestore {
           == 'pending_verification'
         && request.resource.data.evidenceReviewStatus
           == 'pending_review'
-        && request.resource.data.location is string
-        && request.resource.data.location.size() >= 3
-        && request.resource.data.location.size() <= 240
+        && sizedText(request.resource.data.location, 3, 240)
         && request.resource.data.latitude is number
         && request.resource.data.latitude >= -90
         && request.resource.data.latitude <= 90
@@ -2297,9 +2174,7 @@ service cloud.firestore {
           || request.resource.data.gpsAccuracyMeters is number
         )
         && request.resource.data.locationCapturedAt is timestamp
-        && request.resource.data.details is string
-        && request.resource.data.details.size() >= 10
-        && request.resource.data.details.size() <= 2000
+        && sizedText(request.resource.data.details, 10, 2000)
         && request.resource.data.affectedPeople is int
         && request.resource.data.affectedPeople >= 1
         && request.resource.data.assistanceTypes is list
@@ -2311,20 +2186,13 @@ service cloud.firestore {
         && request.resource.data.neededGoods is list
         && request.resource.data.neededGoods.size() >= 1
         && request.resource.data.neededGoods.size() <= 12
-        && request.resource.data.needsNote is string
-        && request.resource.data.needsNote.size() <= 1500
-        && request.resource.data.needs is string
-        && request.resource.data.needs.size() >= 2
-        && request.resource.data.needs.size() <= 2500
+        && maxText(request.resource.data.needsNote, 1500)
+        && sizedText(request.resource.data.needs, 2, 2500)
         && request.resource.data.attachments is list
         && request.resource.data.attachments.size() >= 1
         && request.resource.data.attachments.size() <= 6
-        && request.resource.data.photoEvidenceCount is int
-        && request.resource.data.photoEvidenceCount >= 1
-        && request.resource.data.photoEvidenceCount <= 5
-        && request.resource.data.videoEvidenceCount is int
-        && request.resource.data.videoEvidenceCount >= 0
-        && request.resource.data.videoEvidenceCount <= 1
+        && boundedInt(request.resource.data.photoEvidenceCount, 1, 5)
+        && boundedInt(request.resource.data.videoEvidenceCount, 0, 1)
         && request.resource.data.verification is map
         && request.resource.data.residentConfirmationAccepted == true
         && request.resource.data.residentConfirmationAt is timestamp
@@ -2431,12 +2299,8 @@ service cloud.firestore {
           'publishedAt'
         ])
         && request.resource.data.caseId == caseId
-        && request.resource.data.title is string
-        && request.resource.data.title.size() >= 3
-        && request.resource.data.title.size() <= 120
-        && request.resource.data.category is string
-        && request.resource.data.category.size() >= 2
-        && request.resource.data.category.size() <= 80
+        && sizedText(request.resource.data.title, 3, 120)
+        && sizedText(request.resource.data.category, 2, 80)
         && request.resource.data.severity in [
           'low',
           'medium',
@@ -2493,24 +2357,16 @@ service cloud.firestore {
           'closedAt'
         ])
         && rd.assessmentId == assessmentId
-        && rd.barangay is string
-        && rd.barangay.size() >= 2
-        && rd.barangay.size() <= 120
+        && sizedText(rd.barangay, 2, 120)
         && rd.sourceType in [
           'incident_review',
           'volunteer_field_report',
           'lgu_direct_assessment'
         ]
-        && rd.sourceCaseId is string
-        && rd.sourceCaseId.size() <= 160
-        && rd.sourceFieldReportId is string
-        && rd.sourceFieldReportId.size() <= 160
-        && rd.affectedHouseholds is int
-        && rd.affectedHouseholds >= 1
-        && rd.affectedHouseholds <= 1000000
-        && rd.affectedPeople is int
-        && rd.affectedPeople >= 1
-        && rd.affectedPeople <= 10000000
+        && maxText(rd.sourceCaseId, 160)
+        && maxText(rd.sourceFieldReportId, 160)
+        && boundedInt(rd.affectedHouseholds, 1, 1000000)
+        && boundedInt(rd.affectedPeople, 1, 10000000)
         && rd.peopleNeedingFood is int
         && rd.peopleNeedingFood >= 0
         && rd.peopleNeedingFood
@@ -2535,16 +2391,14 @@ service cloud.firestore {
         && rd.householdsNeedingHygiene >= 0
         && rd.householdsNeedingHygiene
           <= rd.affectedHouseholds
-        && rd.otherNeedDescription is string
-        && rd.otherNeedDescription.size() <= 1000
+        && maxText(rd.otherNeedDescription, 1000)
         && rd.status in [
           'verified',
           'partially_allocated',
           'fulfilled',
           'closed'
         ]
-        && rd.adminNote is string
-        && rd.adminNote.size() <= 1500
+        && maxText(rd.adminNote, 1500)
         && rd.createdBy is string
         && rd.createdBy.size() > 0
         && rd.createdAt is timestamp
@@ -2621,12 +2475,8 @@ service cloud.firestore {
           'medical',
           'other'
         ]
-        && rd.itemName is string
-        && rd.itemName.size() >= 2
-        && rd.itemName.size() <= 160
-        && rd.unit is string
-        && rd.unit.size() >= 1
-        && rd.unit.size() <= 60
+        && sizedText(rd.itemName, 2, 160)
+        && sizedText(rd.unit, 1, 60)
         && rd.quantityReceived is number
         && rd.quantityReceived >= 0
         && rd.quantityAvailable is number
@@ -2646,15 +2496,13 @@ service cloud.firestore {
           'government_transfer',
           'other'
         ]
-        && rd.sourceReferenceId is string
-        && rd.sourceReferenceId.size() <= 200
+        && maxText(rd.sourceReferenceId, 200)
         && rd.status in [
           'active',
           'held',
           'depleted'
         ]
-        && rd.notes is string
-        && rd.notes.size() <= 1000
+        && maxText(rd.notes, 1000)
         && rd.createdBy is string
         && rd.createdBy.size() > 0
         && rd.createdAt is timestamp
@@ -2736,9 +2584,7 @@ service cloud.firestore {
           'cancelledAt'
         ])
         && rd.allocationId == allocationId
-        && rd.barangay is string
-        && rd.barangay.size() >= 2
-        && rd.barangay.size() <= 120
+        && sizedText(rd.barangay, 2, 120)
         && rd.needAssessmentIds is list
         && rd.needAssessmentIds.size() >= 1
         && rd.needAssessmentIds.size() <= 50
@@ -2754,12 +2600,8 @@ service cloud.firestore {
           'medical',
           'other'
         ]
-        && rd.itemName is string
-        && rd.itemName.size() >= 2
-        && rd.itemName.size() <= 160
-        && rd.unit is string
-        && rd.unit.size() >= 1
-        && rd.unit.size() <= 40
+        && sizedText(rd.itemName, 2, 160)
+        && sizedText(rd.unit, 1, 40)
         && rd.quantityAllocated is number
         && rd.quantityAllocated > 0
         && rd.quantityDistributed is number
@@ -2775,8 +2617,7 @@ service cloud.firestore {
         && rd.volunteerSupportRequested is bool
         && rd.assignedVolunteerIds is list
         && rd.assignedVolunteerIds.size() <= 50
-        && rd.distributionNote is string
-        && rd.distributionNote.size() <= 1500
+        && maxText(rd.distributionNote, 1500)
         && rd.createdBy is string
         && rd.createdBy.size() > 0
         && rd.createdAt is timestamp
@@ -3057,28 +2898,20 @@ service cloud.firestore {
           'closedAt'
         ])
         && rd.campaignId == campaignId
-        && rd.title is string
-        && rd.title.size() >= 5
-        && rd.title.size() <= 160
-        && rd.description is string
-        && rd.description.size() >= 15
-        && rd.description.size() <= 1200
+        && sizedText(rd.title, 5, 160)
+        && sizedText(rd.description, 15, 1200)
         && rd.status in [
           'published',
           'closed'
         ]
         && rd.sourceType == 'disaster_relief_need'
         && rd.campaignGroup == 'disaster_affected'
-        && rd.campaignCategory is string
-        && rd.campaignCategory.size() >= 2
-        && rd.campaignCategory.size() <= 80
+        && sizedText(rd.campaignCategory, 2, 80)
         && rd.beneficiaryType in [
           'Household Relief',
           'Community Relief'
         ]
-        && rd.generalArea is string
-        && rd.generalArea.size() >= 3
-        && rd.generalArea.size() <= 240
+        && sizedText(rd.generalArea, 3, 240)
         && rd.sourceNeedAssessmentIds is list
         && rd.sourceNeedAssessmentIds.size() == 1
         && rd.barangays is list
@@ -3104,43 +2937,28 @@ service cloud.firestore {
         )
         && rd.acceptedCategories is list
         && rd.acceptedCategories.size() <= 7
-        && rd.officialChannelLabel is string
-        && rd.officialChannelLabel.size() <= 160
-        && rd.officialChannelInstructions is string
-        && rd.officialChannelInstructions.size() <= 1000
+        && maxText(rd.officialChannelLabel, 160)
+        && maxText(rd.officialChannelInstructions, 1000)
         && rd.monetaryGoal is number
         && rd.monetaryGoal >= 0
         && rd.verifiedAmountReceived is number
         && rd.verifiedAmountReceived >= 0
-        && rd.inKindInstructions is string
-        && rd.inKindInstructions.size() <= 1000
+        && maxText(rd.inKindInstructions, 1000)
         && rd.handoffMode in [
           'receiving_point',
           'coordinated_handover',
           'both'
         ]
-        && rd.handoffLocationType is string
-        && rd.handoffLocationType.size() <= 80
-        && rd.handoffLocationName is string
-        && rd.handoffLocationName.size() <= 180
-        && rd.handoffAddress is string
-        && rd.handoffAddress.size() <= 320
-        && rd.handoffNotes is string
-        && rd.handoffNotes.size() <= 600
-        && rd.publicStory is string
-        && rd.publicStory.size() >= 30
-        && rd.publicStory.size() <= 1200
-        && rd.publicLocationLabel is string
-        && rd.publicLocationLabel.size() >= 3
-        && rd.publicLocationLabel.size() <= 240
+        && maxText(rd.handoffLocationType, 80)
+        && maxText(rd.handoffLocationName, 180)
+        && maxText(rd.handoffAddress, 320)
+        && maxText(rd.handoffNotes, 600)
+        && sizedText(rd.publicStory, 30, 1200)
+        && sizedText(rd.publicLocationLabel, 3, 240)
         && rd.generalArea
           == rd.publicLocationLabel
-        && rd.publicIncidentType is string
-        && rd.publicIncidentType.size() >= 2
-        && rd.publicIncidentType.size() <= 120
-        && rd.publicSeverity is string
-        && rd.publicSeverity.size() >= 2
-        && rd.publicSeverity.size() <= 80
+        && sizedText(rd.publicIncidentType, 2, 120)
+        && sizedText(rd.publicSeverity, 2, 80)
         && rd.publicPhotoUrls is list
         && rd.publicPhotoUrls.size() <= 5
         && rd.affectedHouseholds is int
@@ -3326,32 +3144,23 @@ service cloud.firestore {
         && rd.campaignBarangays
           == submissionCampaign().barangays
         && rd.donorUid == request.auth.uid
-        && rd.donorName is string
-        && rd.donorName.size() >= 1
-        && rd.donorName.size() <= 160
-        && rd.donorDisplayName is string
-        && rd.donorDisplayName.size() >= 1
-        && rd.donorDisplayName.size() <= 160
+        && sizedText(rd.donorName, 1, 160)
+        && sizedText(rd.donorDisplayName, 1, 160)
         && rd.donationType in [
           'monetary',
           'in_kind'
         ]
         && rd.donationType
           in submissionCampaign().acceptedDonationTypes
-        && rd.category is string
-        && rd.category.size() <= 80
-        && rd.itemName is string
-        && rd.itemName.size() <= 160
-        && rd.unit is string
-        && rd.unit.size() <= 60
+        && maxText(rd.category, 80)
+        && maxText(rd.itemName, 160)
+        && maxText(rd.unit, 60)
         && rd.quantityPledged is number
         && rd.quantityPledged >= 0
         && rd.amount is number
         && rd.amount >= 0
-        && rd.transactionReference is string
-        && rd.transactionReference.size() <= 160
-        && rd.donorNote is string
-        && rd.donorNote.size() <= 600
+        && maxText(rd.transactionReference, 160)
+        && maxText(rd.donorNote, 600)
         && rd.proofUrls is list
         && rd.proofUrls.size() <= 5
         && rd.status == 'submitted'
@@ -3404,9 +3213,7 @@ service cloud.firestore {
               'updatedAt',
               'rejectionReason'
             ])
-          && rd.officialReceiptReference is string
-          && rd.officialReceiptReference.size() >= 3
-          && rd.officialReceiptReference.size() <= 160
+          && sizedText(rd.officialReceiptReference, 3, 160)
           && rd.verifiedBy == request.auth.uid
           && rd.receivedBy == request.auth.uid
           && rd.verifiedAt is timestamp
@@ -3441,9 +3248,7 @@ service cloud.firestore {
               'rejectedAt',
               'updatedAt'
             ])
-          && request.resource.data.rejectionReason is string
-          && request.resource.data.rejectionReason.size() >= 5
-          && request.resource.data.rejectionReason.size() <= 600
+          && sizedText(request.resource.data.rejectionReason, 5, 600)
           && request.resource.data.rejectedBy == request.auth.uid
           && request.resource.data.rejectedAt is timestamp
           && request.resource.data.updatedAt is timestamp;
@@ -3491,9 +3296,7 @@ service cloud.firestore {
         && request.resource.data.userId.size() > 0
         && request.resource.data.volunteerId
           == request.resource.data.userId
-        && request.resource.data.volunteerName is string
-        && request.resource.data.volunteerName.size() >= 1
-        && request.resource.data.volunteerName.size() <= 120
+        && sizedText(request.resource.data.volunteerName, 1, 120)
         && request.resource.data.verificationStatus == 'issued'
         && request.resource.data.verifiedHelps is int
         && request.resource.data.verifiedHelps >= 1
@@ -3521,9 +3324,7 @@ service cloud.firestore {
           ])
         && resource.data.verificationStatus == 'issued'
         && request.resource.data.verificationStatus == 'revoked'
-        && request.resource.data.revocationReason is string
-        && request.resource.data.revocationReason.size() >= 10
-        && request.resource.data.revocationReason.size() <= 500
+        && sizedText(request.resource.data.revocationReason, 10, 500)
         && request.resource.data.revokedBy == request.auth.uid
         && request.resource.data.revokedAt is timestamp
         && request.resource.data.updatedAt is timestamp;
@@ -3576,9 +3377,7 @@ service cloud.firestore {
           !('certificateTitle' in request.resource.data)
           || request.resource.data.certificateTitle is string
         )
-        && request.resource.data.volunteerName is string
-        && request.resource.data.volunteerName.size() >= 1
-        && request.resource.data.volunteerName.size() <= 120
+        && sizedText(request.resource.data.volunteerName, 1, 120)
         && request.resource.data.verificationStatus == 'issued'
         && request.resource.data.verifiedHelps is int
         && request.resource.data.verifiedHelps >= 1
@@ -3645,9 +3444,7 @@ service cloud.firestore {
           ])
         && resource.data.verificationStatus == 'issued'
         && request.resource.data.verificationStatus == 'revoked'
-        && request.resource.data.revocationReason is string
-        && request.resource.data.revocationReason.size() >= 10
-        && request.resource.data.revocationReason.size() <= 500
+        && sizedText(request.resource.data.revocationReason, 10, 500)
         && request.resource.data.revokedByName is string
         && request.resource.data.revokedAt is timestamp
         && request.resource.data.updatedAt is timestamp;
@@ -3793,9 +3590,7 @@ service cloud.firestore {
         && request.resource.data.assignmentId == assignmentId
         && request.resource.data.residentId == request.auth.uid
         && request.resource.data.status == 'open'
-        && request.resource.data.residentNote is string
-        && request.resource.data.residentNote.size() >= 10
-        && request.resource.data.residentNote.size() <= 1000
+        && sizedText(request.resource.data.residentNote, 10, 1000)
         && disputeAssignment().status == 'completed'
         && disputeAssignment().caseId
           == request.resource.data.caseId
@@ -3879,15 +3674,9 @@ service cloud.firestore {
         && request.resource.data.caseId is string
         && request.resource.data.assignmentId is string
         && request.resource.data.responderId == request.auth.uid
-        && request.resource.data.responderName is string
-        && request.resource.data.responderName.size() >= 1
-        && request.resource.data.responderName.size() <= 120
-        && request.resource.data.title is string
-        && request.resource.data.title.size() >= 3
-        && request.resource.data.title.size() <= 160
-        && request.resource.data.message is string
-        && request.resource.data.message.size() >= 3
-        && request.resource.data.message.size() <= 1000
+        && sizedText(request.resource.data.responderName, 1, 120)
+        && sizedText(request.resource.data.title, 3, 160)
+        && sizedText(request.resource.data.message, 3, 1000)
         && request.resource.data.type == 'resident_response_update'
         && request.resource.data.status in [
           'accepted',
@@ -3948,12 +3737,8 @@ service cloud.firestore {
           'emergency',
           'other'
         ]
-        && request.resource.data.subject is string
-        && request.resource.data.subject.size() >= 5
-        && request.resource.data.subject.size() <= 120
-        && request.resource.data.description is string
-        && request.resource.data.description.size() >= 10
-        && request.resource.data.description.size() <= 1500
+        && sizedText(request.resource.data.subject, 5, 120)
+        && sizedText(request.resource.data.description, 10, 1500)
         && request.resource.data.status == 'open'
         && request.resource.data.priority == 'normal';
       allow read: if isAdmin()
@@ -3969,12 +3754,8 @@ service cloud.firestore {
       // LGU has supplied independent verification and official coordinates.
       function validCenterPayload() {
         let rd = request.resource.data;
-        return rd.name is string
-          && rd.name.size() >= 3
-          && rd.name.size() <= 160
-          && rd.address is string
-          && rd.address.size() >= 3
-          && rd.address.size() <= 320
+        return sizedText(rd.name, 3, 160)
+          && sizedText(rd.address, 3, 320)
           && rd.barangay is string
           && rd.barangay.size() >= 2
           && rd.latitude is number && rd.latitude >= -90 && rd.latitude <= 90
@@ -3986,8 +3767,7 @@ service cloud.firestore {
           && rd.updatedAt is timestamp
           && rd.status in ['active', 'pending_verification', 'inactive', 'closed']
           && rd.verificationStatus in ['pending', 'verified']
-          && rd.verificationSource is string
-          && rd.verificationSource.size() <= 300
+          && maxText(rd.verificationSource, 300)
           && (
             rd.status != 'active'
             || (
@@ -4077,17 +3857,13 @@ service cloud.firestore {
         && request.resource.data.assignmentId is string
         && request.resource.data.assignmentId.size() > 0
         && request.resource.data.senderUid == request.auth.uid
-        && request.resource.data.senderName is string
-        && request.resource.data.senderName.size() >= 1
-        && request.resource.data.senderName.size() <= 120
+        && sizedText(request.resource.data.senderName, 1, 120)
         && request.resource.data.senderRole in [
           'resident',
           'volunteer',
           'admin'
         ]
-        && request.resource.data.text is string
-        && request.resource.data.text.size() >= 1
-        && request.resource.data.text.size() <= 1000
+        && sizedText(request.resource.data.text, 1, 1000)
         && request.resource.data.createdAt is timestamp
         && chatCase().status in [
           'assigned',
@@ -4144,12 +3920,8 @@ service cloud.firestore {
         && request.resource.data.volunteerId is string
         && request.resource.data.volunteerId.size() > 0
         && invitationId == request.resource.data.caseId + '_' + request.resource.data.volunteerId
-        && request.resource.data.caseTitle is string
-        && request.resource.data.caseTitle.size() >= 1
-        && request.resource.data.caseTitle.size() <= 200
-        && request.resource.data.volunteerName is string
-        && request.resource.data.volunteerName.size() >= 1
-        && request.resource.data.volunteerName.size() <= 160
+        && sizedText(request.resource.data.caseTitle, 1, 200)
+        && sizedText(request.resource.data.volunteerName, 1, 160)
         && request.resource.data.status == 'invited'
         && request.resource.data.createdBy == request.auth.uid
         && request.resource.data.createdAt == request.time
@@ -4272,14 +4044,9 @@ service cloud.firestore {
           && rd.contributionType is string
           && rd.contributionType.size() > 0
           && rd.contributionType.size() <= 100
-          && rd.contributionSummary is string
-          && rd.contributionSummary.size() >= 10
-          && rd.contributionSummary.size() <= 1200
-          && rd.peopleHelped is int
-          && rd.peopleHelped >= 0
-          && rd.peopleHelped <= 999
-          && rd.completionNotes is string
-          && rd.completionNotes.size() <= 600
+          && sizedText(rd.contributionSummary, 10, 1200)
+          && boundedInt(rd.peopleHelped, 0, 999)
+          && maxText(rd.completionNotes, 600)
           && rd.completedAt is timestamp
           && rd.residentConfirmationStatus
             == 'pending'
@@ -4500,25 +4267,14 @@ service cloud.firestore {
         && request.resource.data.caseId.size() > 0
         && request.resource.data.caseId.size() <= 160
         && request.resource.data.volunteerId == request.auth.uid
-        && request.resource.data.volunteerName is string
-        && request.resource.data.volunteerName.size() >= 1
-        && request.resource.data.volunteerName.size() <= 120
-        && request.resource.data.barangay is string
-        && request.resource.data.barangay.size() >= 2
-        && request.resource.data.barangay.size() <= 120
-        && request.resource.data.situationSummary is string
-        && request.resource.data.situationSummary.size() >= 10
-        && request.resource.data.situationSummary.size() <= 2000
-        && request.resource.data.assistanceProvided is string
-        && request.resource.data.assistanceProvided.size() >= 5
-        && request.resource.data.assistanceProvided.size() <= 2000
-        && request.resource.data.peopleHelped is int
-        && request.resource.data.peopleHelped >= 0
-        && request.resource.data.peopleHelped <= 10000
+        && sizedText(request.resource.data.volunteerName, 1, 120)
+        && sizedText(request.resource.data.barangay, 2, 120)
+        && sizedText(request.resource.data.situationSummary, 10, 2000)
+        && sizedText(request.resource.data.assistanceProvided, 5, 2000)
+        && boundedInt(request.resource.data.peopleHelped, 0, 10000)
         && request.resource.data.remainingNeeds is list
         && request.resource.data.remainingNeeds.size() <= 12
-        && request.resource.data.remainingNeedsNote is string
-        && request.resource.data.remainingNeedsNote.size() <= 1500
+        && maxText(request.resource.data.remainingNeedsNote, 1500)
         && request.resource.data.lguFollowUpRequired is bool
         && request.resource.data.evidenceUrls is list
         && request.resource.data.evidenceUrls.size() <= 6
@@ -4562,8 +4318,7 @@ service cloud.firestore {
           'incorporated',
           'dismissed'
         ]
-        && request.resource.data.adminReviewNote is string
-        && request.resource.data.adminReviewNote.size() <= 1500
+        && maxText(request.resource.data.adminReviewNote, 1500)
         && request.resource.data.reviewedAt is timestamp
         && request.resource.data.reviewedBy == request.auth.uid
         && request.resource.data.updatedAt is timestamp;
@@ -4613,8 +4368,7 @@ service cloud.firestore {
           'partially_helped',
           'not_helped'
         ]
-        && request.resource.data.residentNote is string
-        && request.resource.data.residentNote.size() <= 1000
+        && maxText(request.resource.data.residentNote, 1000)
         && (
           request.resource.data.outcome != 'not_helped'
           || request.resource.data.residentNote.size() >= 10
@@ -4850,9 +4604,7 @@ service cloud.firestore {
         && rd.caseId == caseId
         && rd.responderUid
           == request.auth.uid
-        && rd.responderName is string
-        && rd.responderName.size() >= 1
-        && rd.responderName.size() <= 120
+        && sizedText(rd.responderName, 1, 120)
         && rd.responderRole == 'lgu'
         && rd.latitude is number
         && rd.latitude >= -90
@@ -5110,21 +4862,11 @@ service cloud.firestore {
           ])
           && request.resource.data.targetUid == targetUid
           && request.resource.data.reviewStatus == 'verified'
-          && request.resource.data.accountEmail is string
-          && request.resource.data.accountEmail.size() >= 5
-          && request.resource.data.accountEmail.size() <= 254
-          && request.resource.data.office is string
-          && request.resource.data.office.size() >= 3
-          && request.resource.data.office.size() <= 160
-          && request.resource.data.position is string
-          && request.resource.data.position.size() >= 3
-          && request.resource.data.position.size() <= 120
-          && request.resource.data.credentialReference is string
-          && request.resource.data.credentialReference.size() >= 5
-          && request.resource.data.credentialReference.size() <= 160
-          && request.resource.data.verificationMethod is string
-          && request.resource.data.verificationMethod.size() >= 8
-          && request.resource.data.verificationMethod.size() <= 200
+          && sizedText(request.resource.data.accountEmail, 5, 254)
+          && sizedText(request.resource.data.office, 3, 160)
+          && sizedText(request.resource.data.position, 3, 120)
+          && sizedText(request.resource.data.credentialReference, 5, 160)
+          && sizedText(request.resource.data.verificationMethod, 8, 200)
           && request.resource.data.verifiedBy == request.auth.uid
           && request.resource.data.verifiedAt == request.time;
       }
@@ -5200,9 +4942,7 @@ service cloud.firestore {
         && request.resource.data.latitude <= 90
         && request.resource.data.longitude >= -180
         && request.resource.data.longitude <= 180
-        && request.resource.data.accuracyMeters is number
-        && request.resource.data.accuracyMeters >= 0
-        && request.resource.data.accuracyMeters <= 5000
+        && boundedNumber(request.resource.data.accuracyMeters, 0, 5000)
         && request.resource.data.updatedAt == request.time
         && request.resource.data.expiresAt is timestamp
         && request.resource.data.expiresAt > request.time
@@ -5248,9 +4988,7 @@ service cloud.firestore {
       // Resident site photos can be uploaded to an owner-scoped Storage path
       // or provided as HTTPS URLs; Admin must review them before publication.
       function validPhotoUrl(url) {
-        return url is string
-          && url.size() >= 12
-          && url.size() <= 2048
+        return sizedText(url, 12, 2048)
           && url.matches('^https://[^ ]+$');
       }
       function validPhotoUrls(photos) {
@@ -5261,8 +4999,7 @@ service cloud.firestore {
           && (photos.size() < 3 || validPhotoUrl(photos[2]));
       }
       function validVideoUrl(url) {
-        return url is string
-          && url.size() <= 2048
+        return maxText(url, 2048)
           && (
             url == ''
             || url.matches('^https://(www[.]|m[.])?youtube[.]com/.+')
@@ -5325,23 +5062,15 @@ service cloud.firestore {
         && request.resource.data.proposedBy == request.auth.uid
         && request.resource.data.status == 'pending'
         && request.resource.data.adminNote == ''
-        && request.resource.data.title is string
-        && request.resource.data.title.size() >= 5
-        && request.resource.data.title.size() <= 100
-        && request.resource.data.description is string
-        && request.resource.data.description.size() >= 20
-        && request.resource.data.description.size() <= 1500
+        && sizedText(request.resource.data.title, 5, 100)
+        && sizedText(request.resource.data.description, 20, 1500)
         && request.resource.data.category in [
           'Clean-up Drive', 'Tree Planting',
           'Feeding Program', 'Pet Welfare',
           'Community Outreach', 'Other'
         ]
-        && request.resource.data.barangay is string
-        && request.resource.data.barangay.size() >= 1
-        && request.resource.data.barangay.size() <= 90
-        && request.resource.data.location is string
-        && request.resource.data.location.size() >= 1
-        && request.resource.data.location.size() <= 150
+        && sizedText(request.resource.data.barangay, 1, 90)
+        && sizedText(request.resource.data.location, 1, 150)
         && request.resource.data.date is string
         && request.resource.data.date.matches(
           '^[0-9]{4}-[0-9]{2}-[0-9]{2}$'
@@ -5350,11 +5079,8 @@ service cloud.firestore {
         && request.resource.data.time.matches(
           '^([01][0-9]|2[0-3]):[0-5][0-9]$'
         )
-        && request.resource.data.capacity is int
-        && request.resource.data.capacity >= 1
-        && request.resource.data.capacity <= 500
-        && request.resource.data.proposerName is string
-        && request.resource.data.proposerName.size() <= 120
+        && boundedInt(request.resource.data.capacity, 1, 500)
+        && maxText(request.resource.data.proposerName, 120)
         && request.resource.data.createdAt == request.time
         && request.resource.data.updatedAt == request.time;
 
@@ -5370,9 +5096,7 @@ service cloud.firestore {
         && request.resource.data.reviewedBy == request.auth.uid
         && request.resource.data.reviewedAt == request.time
         && request.resource.data.updatedAt == request.time
-        && request.resource.data.adminNote is string
-        && request.resource.data.adminNote.size() >= 5
-        && request.resource.data.adminNote.size() <= 500
+        && sizedText(request.resource.data.adminNote, 5, 500)
         && (
           (
             request.resource.data.status == 'rejected'
@@ -5424,9 +5148,7 @@ service cloud.firestore {
         && request.resource.data.sourceProposalId == eventId
         && request.resource.data.status == 'upcoming'
         && request.resource.data.publicationStatus == 'published'
-        && request.resource.data.capacity is int
-        && request.resource.data.capacity >= 1
-        && request.resource.data.capacity <= 500
+        && boundedInt(request.resource.data.capacity, 1, 500)
         && request.resource.data.participantsCount == 0
         && request.resource.data.approvedBy == request.auth.uid
         && request.resource.data.approvedAt == request.time
@@ -5585,8 +5307,7 @@ service cloud.firestore {
               'checkedOutAt', 'attendanceVerified',
               'attendanceVerifiedAt', 'updatedAt'
             ])
-            && request.resource.data.fullName is string
-            && request.resource.data.fullName.size() <= 120
+            && maxText(request.resource.data.fullName, 120)
             && request.resource.data.joinedAt == request.time
             && request.resource.data.declinedAt == null
             && request.resource.data.checkedInAt == null
@@ -5644,8 +5365,7 @@ service cloud.firestore {
                     'checkedInAt', 'checkedOutAt', 'attendanceVerified',
                     'attendanceVerifiedAt', 'updatedAt'
                   ])
-                && request.resource.data.fullName is string
-                && request.resource.data.fullName.size() <= 120
+                && maxText(request.resource.data.fullName, 120)
                 && request.resource.data.joinedAt == request.time
                 && request.resource.data.declinedAt == null
                 && request.resource.data.checkedInAt == null
