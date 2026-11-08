@@ -5042,8 +5042,10 @@ const styles = StyleSheet.create({
   },
   filterGroup: {
     flexGrow: 1,
+    flexShrink: 1,
     flexBasis: 295,
     minWidth: 0,
+    maxWidth: "100%",
     gap: 7,
   },
   filterLabel: {
