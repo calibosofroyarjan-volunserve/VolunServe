@@ -5479,6 +5479,18 @@ app.post(
             "This identity verification is no longer waiting for manual review.",
           );
         }
+        if (action === "verify") {
+          const selectedIdCheck = normalizeIdDocumentScreening(verification.documentScreening);
+          if (selectedIdCheck.status !== "text_consistent_unverified" ||
+              !selectedIdCheck.declaredIdType ||
+              selectedIdCheck.declaredIdType !== selectedIdCheck.detectedIdType) {
+            throw makeHttpError(
+              409,
+              "selected_government_id_not_recognized",
+              "The selected supported government ID was not recognized. Require a new scan before approval.",
+            );
+          }
+        }
         const commonReviewFields = {
           requiresManualReview: false,
           manualReviewDecision:
