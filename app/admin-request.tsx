@@ -1,3 +1,4 @@
+import { volunserveTypography as vsType } from "../constants/volunserveLiveUi";
 import { liveUi as designUi } from "../constants/volunserveLiveUi";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
@@ -101,7 +102,7 @@ export default function LguStaffApplication() {
               {SJDM_BARANGAYS.map(name=><TouchableOpacity key={name} accessibilityRole="radio"
                 accessibilityState={{checked:form.barangay===name}}
                 onPress={()=>update("barangay",name)} style={[styles.option,form.barangay===name&&styles.selected]}>
-                <Text style={{color:form.barangay===name?"#FFFFFF":"#245644",fontSize:12}}>{name}</Text>
+                <Text style={{color:form.barangay===name?"#FFFFFF":"#245644",fontSize: vsType.size.meta, fontFamily: vsType.family}}>{name}</Text>
               </TouchableOpacity>)}
             </ScrollView>
             {!!form.barangay&&<Text style={styles.selection}>Selected: {form.barangay}</Text>}
@@ -123,17 +124,17 @@ const styles=StyleSheet.create({
  root:{flex:1,backgroundColor:"#F3F8F5"},screen:{padding:18,minHeight:"100%",justifyContent:"center",alignItems:"center"},
  panel:{width:"100%",maxWidth:590,backgroundColor:"#FFFFFF",borderColor:"#DCE9E2",borderWidth:1,
    borderRadius:18,padding:25,gap:8},header:{flexDirection:"row",alignItems:"center",gap:13,marginBottom:13},
- kicker:{fontSize:10,fontWeight:"800",color:"#087D60",letterSpacing:1.4},
- title:{fontSize: designUi.type.page.fontSize,fontWeight: designUi.type.page.fontWeight,color:"#153B31", lineHeight: designUi.type.page.lineHeight,},requestSubtitle:{fontSize:12,color:"#527767",fontWeight:"600",marginTop:4},notice:{fontSize:12,lineHeight:19,color:"#57776A",
+ kicker:{fontSize: vsType.size.micro, fontFamily: vsType.family,fontWeight:"800",color:"#087D60",letterSpacing:1.4},
+ title:{fontSize: designUi.type.page.fontSize,fontWeight: designUi.type.page.fontWeight,color:"#153B31", lineHeight: designUi.type.page.lineHeight,},requestSubtitle:{fontSize: vsType.size.meta, fontFamily: vsType.family,color:"#527767",fontWeight:"600",marginTop:4},notice:{fontSize: vsType.size.meta, fontFamily: vsType.family,lineHeight:19,color:"#57776A",
    backgroundColor:"#EDF8F1",borderRadius:11,padding:14,marginBottom:9},
- field:{gap:6,marginBottom:6},label:{fontSize:12,fontWeight:"800",color:"#2D5747"},
+ field:{gap:6,marginBottom:6},label:{fontSize: vsType.size.meta, fontFamily: vsType.family,fontWeight:"800",color:"#2D5747"},
  input:{borderWidth:1,borderColor:"#D6E6DD",backgroundColor:"#FAFCFA",borderRadius:10,
    paddingHorizontal:13,minHeight:45,color:"#173B2E"},
  barangays:{maxHeight:142,borderWidth:1,borderColor:"#D6E6DD",borderRadius:10},
  option:{paddingVertical:10,paddingHorizontal:13,borderBottomWidth:1,borderBottomColor:"#EAF3ED"},
- selected:{backgroundColor:"#087D60"},selection:{color:"#087D60",fontSize:11},
- error:{fontSize:12,color:"#AD2733",backgroundColor:"#FFF3F1",borderRadius:9,padding:11},
- success:{color:"#185C47",fontSize:13,lineHeight:22,padding:17,backgroundColor:"#E7F8ED",borderRadius:12},
+ selected:{backgroundColor:"#087D60"},selection:{color:"#087D60",fontSize: vsType.size.caption, fontFamily: vsType.family},
+ error:{fontSize: vsType.size.meta, fontFamily: vsType.family,color:"#AD2733",backgroundColor:"#FFF3F1",borderRadius:9,padding:11},
+ success:{color:"#185C47",fontSize: vsType.size.label, fontFamily: vsType.family,lineHeight:22,padding:17,backgroundColor:"#E7F8ED",borderRadius:12},
  submit:{backgroundColor:"#087D60",borderRadius:10,alignItems:"center",justifyContent:"center",
-   paddingVertical:14,minHeight:49,marginTop:10},submitText:{color:"#FFFFFF",fontSize:13,fontWeight:"800"}
+   paddingVertical:14,minHeight:49,marginTop:10},submitText:{color:"#FFFFFF",fontSize: vsType.size.label, fontFamily: vsType.family,fontWeight:"800"}
 });
