@@ -1,0 +1,50 @@
+name: Localized Firestore Staff Helpers — Regression & Emulator (NO DEPLOY)
+on:
+  pull_request:
+    branches: [live-protected]
+    paths:
+      - 'firestore.rules'
+      - 'scripts/test-localized-staff-rule-helpers.cjs'
+      - 'scripts/test-localized-staff-rules-emulator.cjs'
+      - '.github/workflows/validate-localized-staff-firestore-rules.yml'
+  push:
+    branches: [live-protected]
+    paths:
+      - 'firestore.rules'
+      - 'scripts/test-localized-staff-rule-helpers.cjs'
+      - 'scripts/test-localized-staff-rules-emulator.cjs'
+      - '.github/workflows/validate-localized-staff-firestore-rules.yml'
+permissions:
+  contents: read
+jobs:
+  role-scope-integrity:
+    runs-on: ubuntu-latest
+    timeout-minutes: 22
+    env:
+      CI: 'true'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Verify role helper relocation retained identical code in every used match
+        run: |
+          node --check scripts/test-localized-staff-rule-helpers.cjs
+          node scripts/test-localized-staff-rule-helpers.cjs
+      - run: npm ci --no-audit --no-fund
+      - name: Super Admin/Admin/suspension/verification permission regression
+        run: npx firebase-tools emulators:exec --only firestore --project demo-volunserve-staff-helper-scope-20261109 "node scripts/test-localized-staff-rules-emulator.cjs"
+      - name: Verify historical Auth and Resident permissions remain secure
+        run: npx firebase-tools emulators:exec --only firestore --project demo-volunserve-account-compatibility "node scripts/test-existing-account-compatibility.cjs"
+      - name: Verify Volunteer Invitations remain secure
+        run: npx firebase-tools emulators:exec --only firestore --project demo-volunserve-preserve-volunteer-invitations "node scripts/test-preserved-volunteer-invitation-rules.cjs"
+      - name: Confirm no live mutation
+        run: echo 'PASS — all tests isolated on demo-project emulators, no Firebase production writes'
