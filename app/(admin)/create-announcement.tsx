@@ -314,7 +314,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#EAF8F6",
     borderWidth: 1,
     borderColor: "#C7EAE5",
-    borderRadius: 9,
+    borderRadius: 16,
     padding: 16,
     marginBottom: 16,
   },
@@ -343,7 +343,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFFFF",
     borderWidth: 1,
     borderColor: "#E2E8F0",
-    borderRadius: 9,
+    borderRadius: 17,
     padding: 20,
   },
 
@@ -357,11 +357,11 @@ const styles = StyleSheet.create({
 
   input: {
     width: "100%",
-    minHeight: 48,
+    minHeight: 46,
     borderWidth: 1,
     borderColor: "#CBD5E1",
     backgroundColor: "#FFFFFF",
-    borderRadius: 10,
+    borderRadius: 11,
     paddingHorizontal: 13,
     paddingVertical: 11,
     fontSize: 14,
@@ -407,7 +407,7 @@ const styles = StyleSheet.create({
 
   noteCard: {
     marginTop: 16,
-    borderRadius: 8,
+    borderRadius: 15,
     backgroundColor: "#F8FAFC",
     borderWidth: 1,
     borderColor: "#E2E8F0",

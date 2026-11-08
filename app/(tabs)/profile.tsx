@@ -3077,7 +3077,7 @@ const styles =
       width: "100%",
       marginBottom: 14,
       padding: 20,
-      borderRadius: 16,
+      borderRadius: 17,
       backgroundColor:
         "#FFFFFF",
       borderWidth: 1,
@@ -3241,7 +3241,7 @@ const styles =
       flex: 1,
       width: "100%",
       padding: 22,
-      borderRadius: 16,
+      borderRadius: 17,
       backgroundColor:
         "#FFFFFF",
       borderWidth: 1,
@@ -3516,7 +3516,7 @@ const styles =
     },
     modalCard: {
       width:"100%",maxWidth:660,maxHeight:"91%",
-      alignSelf:"center",borderRadius:18,overflow:"hidden",
+      alignSelf:"center",borderRadius: 18,overflow:"hidden",
       backgroundColor:"#FFFFFF",borderWidth:1,borderColor:"#CFE6D9",
       shadowColor:"#082A1C",shadowOffset:{width:0,height:12},
       shadowOpacity:0.22,shadowRadius:28,elevation:8,
@@ -3552,7 +3552,7 @@ const styles =
     inputLabel:{fontSize: designUi.type.label.fontSize,fontWeight: designUi.type.label.fontWeight,color:"#2C5041",marginBottom:7, lineHeight: designUi.type.label.lineHeight,},
     requiredAsterisk:{color:"#D4413A"},
     input:{
-      minHeight:45,borderRadius:10,borderColor:"#D7E6DD",borderWidth:1,
+      minHeight: 46,borderRadius:10,borderColor:"#D7E6DD",borderWidth:1,
       backgroundColor:"#FCFEFD",paddingHorizontal:12,fontSize:13,color:"#173A2B",
     },
     dropdownTrigger:{
@@ -3594,7 +3594,7 @@ const styles =
     },
     cancelButtonText:{color:"#355C4B",fontSize:12.5,fontWeight:"800"},
     saveButton:{
-      minHeight:43,flexDirection:"row",alignItems:"center",justifyContent:"center",gap:7,
+      minHeight: 46,flexDirection:"row",alignItems:"center",justifyContent:"center",gap:7,
       paddingHorizontal:18,borderRadius:9,backgroundColor:"#087C61",
     },
     buttonSaving:{opacity:.7},

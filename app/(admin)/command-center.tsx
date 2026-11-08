@@ -547,17 +547,17 @@ const styles =
   StyleSheet.create({
     workspaceTabs: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 5,
       borderBottomWidth: 1, borderBottomColor: "#DDE8E1", marginBottom: 10 },
-    workspaceTab: { flexGrow: 1, minHeight: 43, flexDirection: "row", alignItems: "center",
+    workspaceTab: { flexGrow: 1, minHeight: 46, flexDirection: "row", alignItems: "center",
       justifyContent: "center", gap: 7, paddingHorizontal: 11, paddingVertical: 10,
-      borderBottomWidth: 2, borderBottomColor: "transparent" },
+      borderBottomWidth: 2, borderBottomColor: "transparent", borderRadius: 10,},
     workspaceTabActive: { borderBottomColor: "#167456", backgroundColor: "#EAF4ED", borderTopLeftRadius: 8, borderTopRightRadius: 8 },
     workspaceTabText: { fontSize: 12, color: "#61776B", fontWeight: "600" },
     workspaceTabTextActive: { color: "#135E48", fontWeight: "800" },
     // Xacton-inspired clarity: restrained KPI cards below one evergreen hero.
     kpiGrid: {flexDirection:"row",flexWrap:"wrap",gap:9,marginBottom:9},
     kpiGridCompact: {gap:9},
-    kpiCard: {flex:1,minWidth:165,backgroundColor:"#FFFFFF",borderRadius:12,
-      padding:12,borderWidth:1,borderColor:"#D9E7DF"},
+    kpiCard: {flex:1,minWidth:165,backgroundColor:"#FFFFFF",borderRadius: 16,
+      padding: 17,borderWidth:1,borderColor:"#D9E7DF", minHeight: 114,},
     kpiCardCompact: {minWidth:136,padding:13},
     kpiCardFeatured: {backgroundColor:"#087B60",borderColor:"#087B60"},
     kpiCardHeader: {flexDirection:"row",justifyContent:"space-between",alignItems:"flex-start",gap:8},
@@ -570,7 +570,7 @@ const styles =
     // VolunServe identity: one rich evergreen masthead, not a field of cards.
     premiumHero: {
       overflow: "hidden", position: "relative", backgroundColor: "#103E33",
-      borderRadius: 11, paddingHorizontal: 20, paddingTop: 13, paddingBottom: 10,
+      borderRadius: 17, paddingHorizontal: 20, paddingTop: 20, paddingBottom: 18,
       marginBottom: 10, borderWidth: 1, borderColor: "#235D4E",
     },
     heroOrbLarge: {
@@ -607,9 +607,9 @@ const styles =
     overviewEyebrowDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: "#23765F" },
     overviewColumns: { flexDirection: "row", gap: 12, alignItems: "flex-start", marginBottom: 6 },
     overviewColumnsStack: { flexDirection: "column", gap: 10 },
-    overviewPrimary: { flex: 1, minWidth: 0, padding: 13, borderRadius: 11, borderWidth: 1, borderColor: "#DFE9E1", backgroundColor: "#FFFFFF" },
+    overviewPrimary: { flex: 1, minWidth: 0, padding: 18, borderRadius: 16, borderWidth: 1, borderColor: "#DFE9E1", backgroundColor: "#FFFFFF" },
     overviewSecondary: { flex: 1, minWidth: 0 },
-    overviewFullWidth: { flex: 0, width: "100%" },
+    overviewFullWidth: { flexGrow: 0, flexShrink: 0, flexBasis: "auto", width: "100%" },
     overviewSectionHeader: { marginBottom: 10 },
     overviewSectionSubtitle: { color: "#6C8076", fontSize: 11.5, lineHeight: 17, marginTop: 3 },
     overviewAction: {
