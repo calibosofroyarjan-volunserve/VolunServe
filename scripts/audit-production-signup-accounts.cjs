@@ -82,8 +82,8 @@ async function main() {
   assert(!process.env.FIREBASE_AUTH_EMULATOR_HOST,
     "BLOCKED: emulator is not production");
 
-  const raw = process.env.VOLUNSERVE_PRODUCTION_READONLY_SERVICE_ACCOUNT;
-  assert(raw, "BLOCKED: missing production read-only audit credential");
+  const raw = process.env.VOLUNSERVE_PRODUCTION_AUDIT_CREDENTIAL;
+  assert(raw, "BLOCKED: missing production audit credential");
   const credentials = JSON.parse(raw);
   assert.equal(credentials.project_id,PROJECT_ID,
     "BLOCKED: Firebase credential project mismatch");
