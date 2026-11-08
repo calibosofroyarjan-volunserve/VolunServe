@@ -4825,51 +4825,55 @@ service cloud.firestore {
         )
         && rd.updatedAt is timestamp;
       }
-      allow read: if isAdmin()
-        || (
-          isLguPersonnel()
-          && 'assignedLguPersonnelIds' in lguCaseForRead()
-          && lguCaseForRead().assignedLguPersonnelIds is list
-          && request.auth.uid in lguCaseForRead().assignedLguPersonnelIds
-          && lguCaseForRead().status in [
+      function canReadAssignedLguCase() {
+        let caseData = lguCaseForRead();
+        return 'assignedLguPersonnelIds' in caseData
+          && caseData.assignedLguPersonnelIds is list
+          && request.auth.uid in caseData.assignedLguPersonnelIds
+          && caseData.status in [
             'validated',
             'assigned',
             'in_progress',
             'resolved'
-          ]
-        )
-        || (
-          isResident()
-          && lguCaseForRead().reporterUid == request.auth.uid
-          && lguCaseForRead().status in [
+          ];
+      }
+      function canReadResidentCase() {
+        let caseData = lguCaseForRead();
+        return caseData.reporterUid == request.auth.uid
+          && caseData.status in [
             'reported',
             'validated',
             'assigned',
             'in_progress'
-          ]
-        )
-        || (
-          isVolunteer()
-          && 'activeVolunteerSupportUid' in lguCaseForRead()
-          && lguCaseForRead().activeVolunteerSupportUid
+          ];
+      }
+      function canReadVolunteerSupportCase() {
+        let caseData = lguCaseForRead();
+        let assignmentData = lguVolunteerAssignmentForRead();
+        return 'activeVolunteerSupportUid' in caseData
+          && caseData.activeVolunteerSupportUid
             == request.auth.uid
-          && 'activeVolunteerSupportAssignmentId' in lguCaseForRead()
-          && lguCaseForRead().activeVolunteerSupportAssignmentId is string
-          && lguCaseForRead().activeVolunteerSupportAssignmentId.size() > 0
-          && lguVolunteerAssignmentForRead().caseId == caseId
-          && lguVolunteerAssignmentForRead().volunteerId
+          && 'activeVolunteerSupportAssignmentId' in caseData
+          && caseData.activeVolunteerSupportAssignmentId is string
+          && caseData.activeVolunteerSupportAssignmentId.size() > 0
+          && assignmentData.caseId == caseId
+          && assignmentData.volunteerId
             == request.auth.uid
-          && lguVolunteerAssignmentForRead().status in [
+          && assignmentData.status in [
             'accepted',
             'responding',
             'on_site'
           ]
-          && lguCaseForRead().status in [
+          && caseData.status in [
             'validated',
             'assigned',
             'in_progress'
-          ]
-        );
+          ];
+      }
+      allow read: if isAdmin()
+        || (isLguPersonnel() && canReadAssignedLguCase())
+        || (isResident() && canReadResidentCase())
+        || (isVolunteer() && canReadVolunteerSupportCase());
       allow create, update: if isOperationalLgu()
         && validLguLocationPayload()
         && lguCaseForWrite().activeLguResponderUid == request.auth.uid
