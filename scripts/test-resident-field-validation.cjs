@@ -83,7 +83,7 @@ test("only actual SJDM barangays, occupations and required specializations pass"
     occupationSpecialization:"",occupationOther:"Self-employed baker",
   }));
 });
-test("Firestore create rules contain official SJDM and occupation lists, not only non-empty fields",()=>{
+test("Firestore Signup Rules accept exactly official SJDM barangays and occupation labels",()=>{
   const rules=read("firestore.rules");
   const start=rules.indexOf("function validInitialResidentInputs()");
   assert(start>0);
@@ -91,9 +91,23 @@ test("Firestore create rules contain official SJDM and occupation lists, not onl
   assert(end>start);
   const block=rules.slice(start,end);
   assert(block.includes("d.phoneNumber.matches("));
-  assert(block.includes("d.barangay in ["));
-  for(const item of barangays.SJDM_BARANGAYS) assert(block.includes("'"+item+"'"),item);
-  for(const item of occupations.OCCUPATION_OPTIONS) assert(block.includes("'"+item+"'"),item);
+  for(const [field,values] of [
+    ["d.barangay",barangays.SJDM_BARANGAYS],
+    ["d.occupationCategory",occupations.OCCUPATION_OPTIONS]
+  ]){
+    const marker=field+" is string && "+field+".matches('";
+    const begin=block.indexOf(marker);
+    assert(begin>=0,"Missing string-safe rule allowlist for "+field);
+    const end=block.indexOf("')",begin+marker.length);
+    assert(end>begin,"Missing anchored pattern for "+field);
+    const pattern=block.slice(begin+marker.length,end);
+    assert(pattern.startsWith("^(")&&pattern.endsWith(")$"));
+    const re=new RegExp(pattern);
+    for(const item of values)assert(re.test(item),"Denied approved "+field+": "+item);
+    for(const invalid of ["garbage"," "+values[0],values[0]+"x"]){
+      assert(!re.test(invalid),"Rule allowed invalid "+field+": "+invalid);
+    }
+  }
   assert(rules.includes("&& validInitialResidentInputs()"));
 });
 test("known temporary inboxes, malformed emails, Gmail +tag are blocked; real Gmail stays allowed",()=>{

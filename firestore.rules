@@ -16,29 +16,23 @@ service cloud.firestore {
         && request.auth.token.get('email_verified', false) == true;
     }
     // Reuse profile data inside role helpers instead of repeating get() expressions.
+    // Equivalent to the previously deployed approved() predicate:
+    // 1) verifiedEmailSession already guarantees email_verified == true;
+    // 2) the explicit role allow-list excludes 'applicant', so a missing
+    //    status field is 'approved' but a present null/nonapproved status is not.
+    // This reduces repeated compiled expressions across role-sensitive rules.
     function approved() {
       let p = signedIn() ? profile() : {};
+      let role = p.get('role', '');
       return verifiedEmailSession()
-        // Explicitly prohibit legacy Guest/unknown roles even if their old
-        // profile happens to contain status == approved.
-        && p.get('role', '') in [
+        && role in [
           'resident', 'volunteer', 'admin', 'superadmin', 'lgu_personnel'
         ]
-        // Email-only Firebase Auth UIDs are NOT completed Resident profiles.
-        // Staff accounts retain their independent administrative login policy.
         && (
-          p.get('role', '') in ['admin', 'superadmin', 'lgu_personnel']
-          || (
-            request.auth.token.get('email_verified', false) == true
-            && request.auth.token.get('email', '') == p.get('email', '')
-          )
+          role in ['admin', 'superadmin', 'lgu_personnel']
+          || request.auth.token.get('email', '') == p.get('email', '')
         )
-        && (
-          p.get('status', null) == 'approved'
-          || (!('status' in p) && p.get('role', 'applicant') != 'applicant')
-        )
-        // Historical suspended staff must not retain community-wide reads
-        // through the generic approved() helper.
+        && p.get('status', 'approved') == 'approved'
         && p.get('adminStatus', 'active') != 'suspended';
     }
     function isAdmin() {
@@ -120,71 +114,8 @@ service cloud.firestore {
           && d.phoneNumber is string
           && d.phoneNumber.matches('^([+]639[0-9]{9}|09[0-9]{9})$')
           && d.region is string && d.region.size() >= 5 && d.region.size() <= 100
-          && d.barangay in [
-            'Assumption',
-            'Bagong Buhay I',
-            'Bagong Buhay II',
-            'Bagong Buhay III',
-            'Citrus',
-            'Ciudad Real',
-            'Dulong Bayan',
-            'Fatima I',
-            'Fatima II',
-            'Fatima III',
-            'Fatima IV',
-            'Fatima V',
-            'Francisco Homes-Guijo',
-            'Francisco Homes-Mulawin',
-            'Francisco Homes-Narra',
-            'Francisco Homes-Yakal',
-            'Gaya-gaya',
-            'Graceville',
-            'Gumaoc Central',
-            'Gumaoc East',
-            'Gumaoc West',
-            'Kaybanban',
-            'Kaypian',
-            'Lawang Pari',
-            'Maharlika',
-            'Minuyan I',
-            'Minuyan II',
-            'Minuyan III',
-            'Minuyan IV',
-            'Minuyan Proper',
-            'Minuyan V',
-            'Muzon East',
-            'Muzon Proper',
-            'Muzon South',
-            'Muzon West',
-            'Paradise III',
-            'Poblacion',
-            'Poblacion I',
-            'San Isidro',
-            'San Manuel',
-            'San Martin de Porres',
-            'San Martin I',
-            'San Martin II',
-            'San Martin III',
-            'San Martin IV',
-            'San Pedro',
-            'San Rafael I',
-            'San Rafael II',
-            'San Rafael III',
-            'San Rafael IV',
-            'San Rafael V',
-            'San Roque',
-            'Santa Cruz I',
-            'Santa Cruz II',
-            'Santa Cruz III',
-            'Santa Cruz IV',
-            'Santa Cruz V',
-            'Santo Cristo',
-            'Santo Niño I',
-            'Santo Niño II',
-            'Sapang Palay',
-            'Tungkong Mangga'
-          ]
-          && d.occupationCategory in ['Medical Professional', 'Emergency Responder', 'Government Employee', 'Student', 'Private Sector Employee', 'NGO Worker', 'Skilled Worker', 'Unemployed', 'Retired', 'Other (Specify)']
+          && d.barangay is string && d.barangay.matches('^(Assumption|Bagong Buhay I|Bagong Buhay II|Bagong Buhay III|Citrus|Ciudad Real|Dulong Bayan|Fatima I|Fatima II|Fatima III|Fatima IV|Fatima V|Francisco Homes-Guijo|Francisco Homes-Mulawin|Francisco Homes-Narra|Francisco Homes-Yakal|Gaya-gaya|Graceville|Gumaoc Central|Gumaoc East|Gumaoc West|Kaybanban|Kaypian|Lawang Pari|Maharlika|Minuyan I|Minuyan II|Minuyan III|Minuyan IV|Minuyan Proper|Minuyan V|Muzon East|Muzon Proper|Muzon South|Muzon West|Paradise III|Poblacion|Poblacion I|San Isidro|San Manuel|San Martin de Porres|San Martin I|San Martin II|San Martin III|San Martin IV|San Pedro|San Rafael I|San Rafael II|San Rafael III|San Rafael IV|San Rafael V|San Roque|Santa Cruz I|Santa Cruz II|Santa Cruz III|Santa Cruz IV|Santa Cruz V|Santo Cristo|Santo Niño I|Santo Niño II|Sapang Palay|Tungkong Mangga)$')
+          && d.occupationCategory is string && d.occupationCategory.matches('^(Medical Professional|Emergency Responder|Government Employee|Student|Private Sector Employee|NGO Worker|Skilled Worker|Unemployed|Retired|Other [(]Specify[)])$')
           && d.get('occupationSpecialization', '') is string
           && d.get('occupationOther', '') is string
           && d.get('occupationOther', '').size() <= 80
@@ -1677,26 +1608,7 @@ service cloud.firestore {
             'url',
             'fileName'
           ])
-          && document.documentType in [
-            'damage_evidence',
-            'barangay_incident_reference',
-            'medical_certificate',
-            'hospital_estimate',
-            'other_medical_support',
-            'treatment_estimate',
-            'other_treatment_support',
-            'diagnosis_document',
-            'treatment_plan_or_bill',
-            'other_illness_support',
-            'animal_case_photo',
-            'vet_assessment',
-            'other_animal_support',
-            'elderly_need_evidence',
-            'elderly_supporting_document',
-            'basic_need_evidence',
-            'barangay_social_welfare_reference',
-            'other_supporting_evidence'
-          ]
+          && document.documentType is string && document.documentType.matches('^(damage_evidence|barangay_incident_reference|medical_certificate|hospital_estimate|other_medical_support|treatment_estimate|other_treatment_support|diagnosis_document|treatment_plan_or_bill|other_illness_support|animal_case_photo|vet_assessment|other_animal_support|elderly_need_evidence|elderly_supporting_document|basic_need_evidence|barangay_social_welfare_reference|other_supporting_evidence)$')
           && document.label is string
           && document.label.size() >= 2
           && document.label.size() <= 160
