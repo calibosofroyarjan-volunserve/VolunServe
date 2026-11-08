@@ -20,6 +20,7 @@ async function main() {
     ["superadmin", {role:"superadmin",status:"approved"}],
     ["legacy-superadmin", {role:"superadmin"}],
     ["suspended-admin", {role:"admin",status:"approved",adminStatus:"suspended"}],
+    ["suspended-superadmin", {role:"superadmin",status:"approved",adminStatus:"suspended"}],
     ["pending-admin", {role:"admin",status:"pending_review"}],
     ["resident", {role:"resident",status:"approved",residentAccess:true,activeMode:"resident"}],
     ["legacy-resident", {role:"resident",status:"approved",residentAccess:true,activeMode:"resident"}],
@@ -72,10 +73,10 @@ async function main() {
       await fails(listUsers(uid,false));
     }
     for(const uid of ["resident","volunteer","lgu","legacy-guest","applicant",
-      "pending-admin","suspended-admin","resident-pending"]){
+      "pending-admin","suspended-admin","suspended-superadmin","resident-pending"]){
       await fails(listUsers(uid));
     }
-    for(const uid of ["legacy-guest","applicant","resident-pending","pending-admin","suspended-admin"]){
+    for(const uid of ["legacy-guest","applicant","resident-pending","pending-admin","suspended-admin","suspended-superadmin"]){
       await fails(ann(uid));
       await fails(event(uid));
     }
