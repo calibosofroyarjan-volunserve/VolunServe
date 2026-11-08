@@ -50,9 +50,41 @@ const isLocalBrowser =
 export const usingFirebaseEmulators =
   ENABLE_LOCAL_TESTING && isLocalBrowser;
 
+/**
+ * Staging is always explicit. A staging build MUST NEVER silently fall back
+ * to the production project when its separate Firebase environment is missing.
+ * These are Firebase's public WEB config fields, not service-account secrets.
+ */
+const useStagingFirebase = process.env.EXPO_PUBLIC_VOLUNSERVE_FIREBASE_TARGET === "staging";
+const stagingConfig = useStagingFirebase ? {
+  apiKey: process.env.EXPO_PUBLIC_VOLUNSERVE_STAGING_FIREBASE_API_KEY || "",
+  authDomain: process.env.EXPO_PUBLIC_VOLUNSERVE_STAGING_FIREBASE_AUTH_DOMAIN || "",
+  projectId: process.env.EXPO_PUBLIC_VOLUNSERVE_STAGING_FIREBASE_PROJECT_ID || "",
+  storageBucket: process.env.EXPO_PUBLIC_VOLUNSERVE_STAGING_FIREBASE_STORAGE_BUCKET || "",
+  messagingSenderId: process.env.EXPO_PUBLIC_VOLUNSERVE_STAGING_FIREBASE_MESSAGING_SENDER_ID || "",
+  appId: process.env.EXPO_PUBLIC_VOLUNSERVE_STAGING_FIREBASE_APP_ID || "",
+} : null;
+
+if (useStagingFirebase) {
+  const stage = stagingConfig!;
+  if (Object.values(stage).some(v => !v || typeof v !== "string") ||
+      !/^[a-z][a-z0-9-]{4,29}$/.test(stage.projectId) ||
+      stage.projectId === productionConfig.projectId ||
+      /(?:^|[-_])prod(?:uction)?(?:$|[-_])/.test(stage.projectId) ||
+      stage.apiKey === productionConfig.apiKey ||
+      stage.authDomain === productionConfig.authDomain ||
+      stage.authDomain !== stage.projectId + ".firebaseapp.com" ||
+      ![stage.projectId + ".appspot.com", stage.projectId + ".firebasestorage.app"]
+        .includes(stage.storageBucket)) {
+    throw new Error(
+      "STAGING FIREBASE CONFIG REQUIRED. Refusing to connect staging signup to production Firebase."
+    );
+  }
+}
+
 export const firebaseConfig = usingFirebaseEmulators
   ? localConfig
-  : productionConfig;
+  : (useStagingFirebase ? stagingConfig! : productionConfig);
 
 const existingApp =
   getApps().length > 0 ? getApp() : null;
