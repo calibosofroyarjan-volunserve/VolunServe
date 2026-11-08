@@ -94,3 +94,21 @@ test("staging signup still permits the registered full staging hostname with iso
   assert.equal(x.db.app.options.projectId,"volunserve-full-staging");
   assert.equal(x.functions.app.options.projectId,"volunserve-full-staging");
 });
+
+test("full staging hostname rejects older or mismatched staging Firebase applications",()=>{
+  assert.throws(
+    ()=>load(stageEnv(),"volunserve-full-staging.web.app"),
+    /Full staging Hosting requires the matching Full Staging Firebase Web App/
+  );
+  const env=stageEnv({
+    EXPO_PUBLIC_VOLUNSERVE_STAGING_FIREBASE_PROJECT_ID:"volunserve-full-staging",
+    EXPO_PUBLIC_VOLUNSERVE_STAGING_FIREBASE_AUTH_DOMAIN:"volunserve-full-staging.firebaseapp.com",
+    EXPO_PUBLIC_VOLUNSERVE_STAGING_FIREBASE_STORAGE_BUCKET:"volunserve-full-staging.firebasestorage.app",
+    EXPO_PUBLIC_VOLUNSERVE_STAGING_FIREBASE_MESSAGING_SENDER_ID:"429213950126",
+    EXPO_PUBLIC_VOLUNSERVE_STAGING_FIREBASE_APP_ID:"1:429213950126:web:955dbf575697826b674d3f",
+  });
+  assert.throws(
+    ()=>load({...env,EXPO_PUBLIC_VOLUNSERVE_STAGING_FIREBASE_APP_ID:"1:429213950126:web:other"},"volunserve-full-staging.firebaseapp.com"),
+    /Full staging Hosting requires the matching Full Staging Firebase Web App/
+  );
+});
