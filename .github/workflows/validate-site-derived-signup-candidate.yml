@@ -49,8 +49,18 @@ jobs:
         with:
           node-version: '22'
           cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
       - run: npm ci --no-audit --no-fund
-      - name: Enforce client + Firestore policy together — fail until rules are reconciled
+      - name: Verify full Signup regression and matching secured Firestore policy
+        run: node scripts/test-signup-prod.cjs
+      - name: Verify direct-SDK Resident creation and verified-email denial (Firebase Emulator only)
         run: |
-          node scripts/test-signup-prod.cjs
-          echo 'PASS: complete Verified Signup client AND matching Rules policy'
+          npx firebase-tools emulators:exec --only firestore --project demo-volunserve-verified-signup "node scripts/test-verified-community-registration-rules.cjs"
+      - name: Preserve live Admin invitations and Volunteer acceptance (Firebase Emulator only)
+        run: |
+          npx firebase-tools emulators:exec --only firestore --project demo-volunserve-preserve-volunteer-invitations "node scripts/test-preserved-volunteer-invitation-rules.cjs"
+      - name: No deployment
+        run: echo 'PASS — candidate Rules and web code tested offline; no production changes'
