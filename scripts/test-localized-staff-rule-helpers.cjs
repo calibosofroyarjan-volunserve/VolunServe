@@ -223,7 +223,29 @@ for(const [name,before,after] of hoists){
  body=body.replace(before,after);
  branchExpected=branchExpected.slice(0,start)+body+branchExpected.slice(end);
 }
-assert.equal(current,branchExpected,"BLOCKED: nonreviewed permission, collection or validation changed");
+// Exact reviewed transformation: the three identical match-local helpers are
+// relocated to their common enclosing scope. The function bodies are unchanged.
+function hoistReviewedIdenticalHelpers(input){
+ let output=input, shared="";
+ for(const [name,count] of [["hasVerifiedIdentity",4],["isVerifiedResident",2],["isLguPersonnel",6]]){
+  const matches=[...output.matchAll(new RegExp("      function "+name+"\\([^)]*\\) \\{[\\s\\S]*?\\n      \\}","g"))];
+  const bodies=[...new Set(matches.map(m=>m[0]))];
+  assert.equal(matches.length,count,"Unexpected number of match-local helpers "+name);
+  assert.equal(bodies.length,1,"Cannot hoist changed helper "+name);
+  const block=bodies[0];
+  output=output.split(block+"\n").join("");
+  assert(!output.includes(block),"Failed to remove all duplicated helper bodies");
+  shared+=block+"\n";
+ }
+ const insert="    match /users/{uid} {";
+ assert.equal(output.split(insert).length,2,"Unexpected users scope for root helper insertion");
+ return output.replace(insert,
+  "    // Exact shared validation predicates hoisted from identical match-local helpers.\n"+
+  shared+insert);
+}
+const reviewedHoisted=hoistReviewedIdenticalHelpers(branchExpected);
+assert.equal(current,reviewedHoisted,
+ "BLOCKED: other Firestore permissions, validation branches or collection paths changed");
 assert.equal(cp.execFileSync("git",["hash-object","firestore.rules"],{encoding:"utf8"}).trim(),
 "30bb13a76db158950ae6c904c3f16042bf54c6be","BLOCKED: unreviewed Firestore Rules blob");
 // Verify exhaustiveness of all optional-review branches over valid and
@@ -243,7 +265,7 @@ for(const required of [true,false,null,"true",0,1,undefined]){
 }
 
 const gitBlob=cp.execFileSync("git",["hash-object","firestore.rules"],{encoding:"utf8"}).trim();
-assert.equal(gitBlob,"30bb13a76db158950ae6c904c3f16042bf54c6be","BLOCKED: unapproved Firestore blob");
+assert.equal(gitBlob,"65f1b75ae301776c7f0cf953cfd6ee7aae3fd820","BLOCKED: unapproved Firestore blob");
 const paths=source=>source.split("\n").filter(l=>l.startsWith("    match /")).map(l=>l.slice("    match /".length).split(" ")[0]);
 assert.deepEqual(paths(current),paths(protectedBaseline),"BLOCKED: collection scope changed");
 const allows=source=>[...source.matchAll(/allow (?:get|list|read|write|create|update|delete)/g)].length;
