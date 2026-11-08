@@ -12,6 +12,7 @@ const allowed=new Set([
  "components/guest/GuestWorkspace.tsx","lib/firebaseAuth.ts",
  "lib/registrationEmailPolicy.ts","lib/requireCompleteResidentRegistration.ts",
  "lib/signupRegistration.ts","lib/userFacingError.ts","lib/verificationCooldown.ts",
+ "scripts/test-signup-prod.cjs",
  "scripts/test-site-derived-signup-candidate.cjs",
  ".github/workflows/validate-site-derived-signup-candidate.yml",
 ]);
