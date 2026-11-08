@@ -13,6 +13,8 @@ on:
       - 'functions/registrationBlocking.js'
       - 'functions/registrationIpRateLimiter.js'
       - 'lib/verificationCooldown.ts'
+      - 'lib/firebase.ts'
+      - 'scripts/test-staging-firebase-isolation.cjs'
       - 'scripts/test-signup-abuse-controls.cjs'
       - 'functions/verifiedCallableEmail.js'
       - 'functions/test-verified-callable-email.js'
@@ -62,6 +64,7 @@ jobs:
       - run: npm ci --no-audit --no-fund
       - run: node --test functions/test-registration-email-screening.js
       - run: node --test scripts/test-signup-abuse-controls.cjs
+      - run: node --test scripts/test-staging-firebase-isolation.cjs
       - run: node --test scripts/test-identity-blocking-opt-in.cjs
       - run: node --test functions/test-verified-callable-email.js
       - run: node --test backend/tests/verifiedFirebaseToken.test.js
