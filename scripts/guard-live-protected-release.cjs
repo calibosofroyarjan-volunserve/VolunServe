@@ -15,7 +15,7 @@ const REQUIRED_REF = "refs/heads/live-protected";
 // Pin reviewed Hosting-only automation as release POLICY, not application code.
 // Introduced after LOCKED_POLICY_COMMIT, so it has a separate exact blob check.
 const AUTO_HOSTING_POLICY = ".github/workflows/auto-publish-protected-live-hosting.yml";
-const AUTO_HOSTING_POLICY_BLOB = "528be167478b07dd6aba4e31c62f75b5a4b23474";
+const AUTO_HOSTING_POLICY_BLOB = "ca5251b2cff8f1fc12f5a319f59aa12630fedb8c";
 const FROZEN = [
 "deploy-verified-dialog-hotfix.yml",
 "emergency-facility-scoped-production.yml",
