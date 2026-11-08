@@ -1,3 +1,4 @@
+import { volunserveTypography as vsType } from "../../constants/volunserveLiveUi";
 import { AppAlert } from "../../lib/appDialog";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
@@ -1231,8 +1232,8 @@ const styles = StyleSheet.create({
     flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 12,
   },
   journeyBarCompact: { paddingVertical: 13, paddingHorizontal: 4, gap: 5 },
-  journeyLabel: { fontSize: 10, letterSpacing: 1, fontWeight: "800", color: "#23765F" },
-  journeyText: { fontSize: 12, lineHeight: 19, fontWeight: "500", color: "#385E50", flexShrink: 1 },
+  journeyLabel: { fontSize: vsType.size.micro, fontFamily: vsType.family, letterSpacing: 1, fontWeight: "800", color: "#23765F" },
+  journeyText: { fontSize: vsType.size.meta, fontFamily: vsType.family, lineHeight: 19, fontWeight: "500", color: "#385E50", flexShrink: 1 },
 
   mobileHero: {
     minHeight: 335, borderRadius: 18, overflow: "hidden",
@@ -1241,30 +1242,30 @@ const styles = StyleSheet.create({
   mobileHeroImage: { borderRadius: 18 },
   mobileHeroShade: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(2, 21, 32, 0.55)" },
   mobileHeroBody: { zIndex: 1, paddingTop: 6, minHeight: 245, justifyContent: "center" },
-  mobileHeroEyebrow: { color: "#E9F9FC", fontSize: 9, fontWeight: "900", letterSpacing: 1.4, marginBottom: 8 },
-  mobileHeroGreeting: { color: "#FFFFFF", fontSize: 29, lineHeight: 34, fontWeight: "900", letterSpacing: -0.6 },
-  mobileHeroDescription: { color: "#FFFFFF", fontSize: 12.5, lineHeight: 18.5, fontWeight: "600", marginTop: 8, maxWidth: 370 },
+  mobileHeroEyebrow: { color: "#E9F9FC", fontSize: vsType.size.micro, fontFamily: vsType.family, fontWeight: "800", letterSpacing: 1.4, marginBottom: 8 },
+  mobileHeroGreeting: { color: "#FFFFFF", fontSize: vsType.size.hero, fontFamily: vsType.family, lineHeight: 34, fontWeight: "800", letterSpacing: -0.6 },
+  mobileHeroDescription: { color: "#FFFFFF", fontSize: vsType.size.label, fontFamily: vsType.family, lineHeight: 18.5, fontWeight: "600", marginTop: 8, maxWidth: 370 },
   mobileWeatherCard: {
     flexDirection: "row", alignItems: "center", gap: 7, marginTop: 15,
     backgroundColor: "rgba(4, 35, 53, 0.84)", borderRadius: 12,
     paddingHorizontal: 10, paddingVertical: 11,
     borderWidth: 1, borderColor: "rgba(255,255,255,0.28)",
   },
-  mobileWeatherLocation: { color: "#FFFFFF", fontSize: 11, fontWeight: "800" },
-  mobileWeatherMeta: { color: "#D0EAF1", fontSize: 8.5, marginTop: 3 },
-  mobileWeatherTemp: { color: "#FFFFFF", fontWeight: "900", fontSize: 19 },
-  mobileWeatherLabel: { color: "#FFFFFF", fontSize: 9, maxWidth: 66 },
-  mobileWeatherSource: { color: "#EAF6F8", fontSize: 9, textDecorationLine: "underline", marginTop: 6 },
-  mobileHeroSlogan: { marginTop: 16, fontSize: 11, color: "#FFFFFF", fontWeight: "800" },
+  mobileWeatherLocation: { color: "#FFFFFF", fontSize: vsType.size.caption, fontFamily: vsType.family, fontWeight: "800" },
+  mobileWeatherMeta: { color: "#D0EAF1", fontSize: vsType.size.micro, fontFamily: vsType.family, marginTop: 3 },
+  mobileWeatherTemp: { color: "#FFFFFF", fontWeight: "800", fontSize: vsType.size.section, fontFamily: vsType.family },
+  mobileWeatherLabel: { color: "#FFFFFF", fontSize: vsType.size.micro, fontFamily: vsType.family, maxWidth: 66 },
+  mobileWeatherSource: { color: "#EAF6F8", fontSize: vsType.size.micro, fontFamily: vsType.family, textDecorationLine: "underline", marginTop: 6 },
+  mobileHeroSlogan: { marginTop: 16, fontSize: vsType.size.caption, fontFamily: vsType.family, color: "#FFFFFF", fontWeight: "800" },
   mobileSmallSeal: { width: 64, height: 64, marginTop: 14, borderRadius: 32 },
   mobileSlideAction: { flexDirection: "row", alignSelf: "flex-start", alignItems: "center", gap: 8, padding: 11, backgroundColor: "#087F70", borderRadius: 10, marginTop: 18 },
-  mobileSlideActionText: { color: "#FFFFFF", fontSize: 11.5, fontWeight: "800" },
+  mobileSlideActionText: { color: "#FFFFFF", fontSize: vsType.size.meta, fontFamily: vsType.family, fontWeight: "800" },
   mobileSlideControls: { flexDirection: "row", alignItems: "center", justifyContent: "center", zIndex: 2, gap: 10, marginTop: 10 },
   mobileSlideArrow: { width: 31, height: 31, borderRadius: 16, backgroundColor: "rgba(10,30,46,0.6)", borderColor: "rgba(255,255,255,0.45)", borderWidth: 1, alignItems: "center", justifyContent: "center" },
   mobileSlideDots: { flexDirection: "row", alignItems: "center", gap: 6 },
   mobileSlideDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: "rgba(255,255,255,0.45)" },
   mobileSlideDotActive: { width: 20, backgroundColor: "#FFFFFF" },
-  mobileSlideCount: { color: "#FFFFFF", fontSize: 10, fontWeight: "800" },
+  mobileSlideCount: { color: "#FFFFFF", fontSize: vsType.size.micro, fontFamily: vsType.family, fontWeight: "800" },
   mobilePanel: { padding: 13, borderRadius: 17 },
   mobileActivityRow: { gap: 8, paddingHorizontal: 0, paddingVertical: 10 },
   mobileStatusPill: { minWidth: 70, maxWidth: 92, paddingHorizontal: 6 },
@@ -1336,21 +1337,21 @@ const styles = StyleSheet.create({
     elevation: 24,
   },
   bellDropdownHeading: {flexDirection: "row", justifyContent: "space-between", alignItems: "center", padding: 10, borderBottomWidth: 1, borderBottomColor: "#EAF1F3"},
-  bellDropdownTitle: {fontSize: 15, fontWeight: "800", color: "#173847"},
-  bellDropdownSub: {fontSize: 11, color: "#6B808D", marginTop: 3},
+  bellDropdownTitle: {fontSize: vsType.size.bodyStrong, fontFamily: vsType.family, fontWeight: "800", color: "#173847"},
+  bellDropdownSub: {fontSize: vsType.size.caption, fontFamily: vsType.family, color: "#6B808D", marginTop: 3},
   bellCloseButton: {padding: 6},
   bellAlertRow: {flexDirection: "row", alignItems: "center", padding: 10, gap: 10, borderBottomWidth: 1, borderBottomColor: "#EFF3F5", borderRadius: 8},
   bellAlertUnread: {backgroundColor: "#F1FAF6"},
   bellAlertIcon: {height: 35, width: 35, borderRadius: 18, alignItems: "center", justifyContent: "center", backgroundColor: "#E2F3EC"},
   bellAlertText: {flex: 1, minWidth: 0},
-  bellAlertTitle: {color: "#203B4B", fontSize: 12, fontWeight: "800"},
-  bellAlertMessage: {color: "#506879", fontSize: 11, lineHeight: 16, marginTop: 3},
-  bellAlertDate: {color: "#81949E", fontSize: 10, marginTop: 4},
+  bellAlertTitle: {color: "#203B4B", fontSize: vsType.size.meta, fontFamily: vsType.family, fontWeight: "800"},
+  bellAlertMessage: {color: "#506879", fontSize: vsType.size.caption, fontFamily: vsType.family, lineHeight: 16, marginTop: 3},
+  bellAlertDate: {color: "#81949E", fontSize: vsType.size.micro, fontFamily: vsType.family, marginTop: 4},
   bellUnreadDot: {backgroundColor: "#0B9277", width: 7, height: 7, borderRadius: 4},
   bellEmpty: {alignItems: "center", padding: 20, gap: 8},
-  bellEmptyText: {color: "#68818E", textAlign: "center", fontSize: 11},
+  bellEmptyText: {color: "#68818E", textAlign: "center", fontSize: vsType.size.caption, fontFamily: vsType.family},
   bellViewAll: {flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, marginTop: 6, paddingVertical: 11},
-  bellViewAllText: {fontSize: 12, fontWeight: "800", color: "#087F74"},
+  bellViewAllText: {fontSize: vsType.size.meta, fontFamily: vsType.family, fontWeight: "800", color: "#087F74"},
   profileDropdown: {
     position: "absolute",
     top: 57,
@@ -1379,22 +1380,22 @@ const styles = StyleSheet.create({
     width: 38, height: 38, borderRadius: 19,
     alignItems: "center", justifyContent: "center", backgroundColor: "#E1F1FD",
   },
-  dropdownAvatarInitial: { color: "#1178CE", fontSize: 19, fontWeight: "900" },
+  dropdownAvatarInitial: { color: "#1178CE", fontSize: vsType.size.section, fontFamily: vsType.family, fontWeight: "800" },
   dropdownIdentityCopy: { flex: 1, minWidth: 0 },
-  dropdownName: { fontSize: 12.5, fontWeight: "900", color: "#102850" },
-  dropdownRole: { fontSize: 10.5, color: "#647C9B", marginTop: 3 },
+  dropdownName: { fontSize: vsType.size.label, fontFamily: vsType.family, fontWeight: "800", color: "#102850" },
+  dropdownRole: { fontSize: vsType.size.caption, fontFamily: vsType.family, color: "#647C9B", marginTop: 3 },
   dropdownVerified: {
     flexDirection: "row", alignItems: "center", gap: 3,
     paddingHorizontal: 7, paddingVertical: 5,
     borderRadius: 16, backgroundColor: "#DDF8EB",
   },
-  dropdownVerifiedText: { color: "#087B55", fontSize: 9, fontWeight: "800" },
+  dropdownVerifiedText: { color: "#087B55", fontSize: vsType.size.micro, fontFamily: vsType.family, fontWeight: "800" },
   dropdownAction: {
     flexDirection: "row", alignItems: "center", gap: 13,
     minHeight: 45, paddingHorizontal: 12, borderRadius: 11,
   },
   dropdownActionPressed: { backgroundColor: "#F0F8F8" },
-  dropdownActionText: { color: "#1A3156", fontSize: 12.5, fontWeight: "700" },
+  dropdownActionText: { color: "#1A3156", fontSize: vsType.size.label, fontFamily: vsType.family, fontWeight: "700" },
   dropdownActionDanger: { color: "#D53242" },
   dropdownDivider: { height: 1, backgroundColor: "#E7EDF2", marginVertical: 8, marginHorizontal: 9 },
   heroTop: {
@@ -1426,7 +1427,7 @@ const styles = StyleSheet.create({
   },
   operationalText: {
     color: "#08735C",
-    fontSize: 12,
+    fontSize: vsType.size.meta, fontFamily: vsType.family,
     fontWeight: "800",
   },
   topActions: {
@@ -1449,7 +1450,7 @@ const styles = StyleSheet.create({
   },
   modeSwitchText: {
     color: "#122B55",
-    fontSize: 12,
+    fontSize: vsType.size.meta, fontFamily: vsType.family,
     fontWeight: "800",
   },
   notificationButton: {
@@ -1478,8 +1479,8 @@ const styles = StyleSheet.create({
   },
   notificationBadgeText: {
     color: "#FFFFFF",
-    fontSize: 9,
-    fontWeight: "900",
+    fontSize: vsType.size.micro, fontFamily: vsType.family,
+    fontWeight: "800",
   },
   profileButtonOpen: { borderColor: "#77C9C0", backgroundColor: "#FFFFFF" },
   profileButton: {
@@ -1510,8 +1511,8 @@ const styles = StyleSheet.create({
   },
   profileInitial: {
     color: "#FFFFFF",
-    fontSize: 15,
-    fontWeight: "900",
+    fontSize: vsType.size.bodyStrong, fontFamily: vsType.family,
+    fontWeight: "800",
   },
   profileCopy: {
     flex: 1,
@@ -1519,13 +1520,13 @@ const styles = StyleSheet.create({
   },
   profileName: {
     color: "#0F2552",
-    fontSize: 12,
-    fontWeight: "900",
+    fontSize: vsType.size.meta, fontFamily: vsType.family,
+    fontWeight: "800",
   },
   profileRole: {
     marginTop: 2,
     color: "#6B7F9B",
-    fontSize: 10,
+    fontSize: vsType.size.micro, fontFamily: vsType.family,
   },
   heroContent: {
     zIndex: 2,
@@ -1550,7 +1551,7 @@ const styles = StyleSheet.create({
   },
   eyebrow: {
     color: "#E4FFF5",
-    fontSize: 10,
+    fontSize: vsType.size.micro, fontFamily: vsType.family,
     fontWeight: "800",
     letterSpacing: 2,
     opacity: 0.96,
@@ -1558,7 +1559,7 @@ const styles = StyleSheet.create({
   greeting: {
     marginTop: 7,
     color: "#FFFFFF",
-    fontSize: 40,
+    fontSize: vsType.size.xl, fontFamily: vsType.family,
     lineHeight: 46,
     fontWeight: "800",
     letterSpacing: -1.1,
@@ -1568,13 +1569,13 @@ const styles = StyleSheet.create({
   },
   greetingAccent: { color: "#75F2BC" },
   greetingNarrow: {
-    fontSize: 38,
+    fontSize: vsType.size.xl, fontFamily: vsType.family,
     lineHeight: 44,
   },
   heroSubtitle: {
     marginTop: 7,
     color: "#F3FFFD",
-    fontSize: 14,
+    fontSize: vsType.size.body, fontFamily: vsType.family,
     lineHeight: 20,
     fontWeight: "500",
     textShadowColor: "rgba(0,0,0,0.22)",
@@ -1608,7 +1609,7 @@ const styles = StyleSheet.create({
   },
   locationText: {
     color: "#FFFFFF",
-    fontSize: 14,
+    fontSize: vsType.size.body, fontFamily: vsType.family,
     fontWeight: "700",
   },
   weatherMeta: {
@@ -1617,11 +1618,11 @@ const styles = StyleSheet.create({
   },
   weatherMetaText: {
     color: "#FFFFFF",
-    fontSize: 11,
+    fontSize: vsType.size.caption, fontFamily: vsType.family,
   },
   weatherSource: {
     color: "#FFFFFF",
-    fontSize: 10,
+    fontSize: vsType.size.micro, fontFamily: vsType.family,
     textDecorationLine: "underline",
   },
   weatherDivider: {
@@ -1637,12 +1638,12 @@ const styles = StyleSheet.create({
   },
   temperatureText: {
     color: "#FFFFFF",
-    fontSize: 19,
-    fontWeight: "900",
+    fontSize: vsType.size.section, fontFamily: vsType.family,
+    fontWeight: "800",
   },
   weatherLabel: {
     color: "rgba(255,255,255,0.80)",
-    fontSize: 11,
+    fontSize: vsType.size.caption, fontFamily: vsType.family,
     fontWeight: "600",
   },
   heroCenter: {
@@ -1719,7 +1720,7 @@ const styles = StyleSheet.create({
   heroRightTitle: {
     marginTop: 0,
     color: "#FFFFFF",
-    fontSize: 23,
+    fontSize: vsType.size.title, fontFamily: vsType.family,
     lineHeight: 29,
     fontWeight: "800",
     letterSpacing: -0.5,
@@ -1731,7 +1732,7 @@ const styles = StyleSheet.create({
     marginTop: 7,
     maxWidth: 260,
     color: "#F0FFF9",
-    fontSize: 12,
+    fontSize: vsType.size.meta, fontFamily: vsType.family,
     lineHeight: 19,
     textShadowColor: "rgba(0,0,0,0.28)",
     textShadowOffset: { width: 0, height: 1 },
@@ -1757,7 +1758,7 @@ const styles = StyleSheet.create({
   },
   slogan: {
     color: "#FFFFFF",
-    fontSize: 12,
+    fontSize: vsType.size.meta, fontFamily: vsType.family,
     fontWeight: "700",
   },
   mainGrid: {
@@ -1809,19 +1810,19 @@ const styles = StyleSheet.create({
   },
   panelTitle: {
     color: "#102C50",
-    fontSize: 17,
+    fontSize: vsType.size.card, fontFamily: vsType.family,
     fontWeight: "800",
     letterSpacing: -0.3,
   },
   panelSubtitle: {
     marginTop: 4,
     color: "#6B8297",
-    fontSize: 11,
+    fontSize: vsType.size.caption, fontFamily: vsType.family,
     lineHeight: 17,
   },
   viewAll: {
     color: "#1178F3",
-    fontSize: 11.5,
+    fontSize: vsType.size.meta, fontFamily: vsType.family,
     fontWeight: "800",
   },
   activityRow: {
@@ -1860,13 +1861,13 @@ const styles = StyleSheet.create({
   },
   activityTitle: {
     color: "#12315A",
-    fontSize: 12.5,
+    fontSize: vsType.size.label, fontFamily: vsType.family,
     fontWeight: "800",
   },
   activitySubtitle: {
     marginTop: 3,
     color: "#6A7FA3",
-    fontSize: 11.5,
+    fontSize: vsType.size.meta, fontFamily: vsType.family,
   },
   statusPill: {
     minWidth: 104,
@@ -1880,7 +1881,7 @@ const styles = StyleSheet.create({
   },
   statusText: {
     color: "#123A78",
-    fontSize: 10.5,
+    fontSize: vsType.size.caption, fontFamily: vsType.family,
     fontWeight: "800",
   },
   statusPillPending: { backgroundColor: "#FFF0E7" },
@@ -1906,20 +1907,20 @@ const styles = StyleSheet.create({
   },
   updateTitle: {
     color: "#092665",
-    fontSize: 12.5,
-    fontWeight: "900",
+    fontSize: vsType.size.label, fontFamily: vsType.family,
+    fontWeight: "800",
   },
   updateMessage: {
     marginTop: 3,
     color: "#58709B",
-    fontSize: 11.5,
+    fontSize: vsType.size.meta, fontFamily: vsType.family,
     lineHeight: 16,
   },
   updateDate: {
     width: 118,
     textAlign: "right",
     color: "#6980A8",
-    fontSize: 10.5,
+    fontSize: vsType.size.caption, fontFamily: vsType.family,
     lineHeight: 15,
   },
   loadingRow: {
@@ -1930,7 +1931,7 @@ const styles = StyleSheet.create({
   },
   loadingText: {
     color: "#6A7FA3",
-    fontSize: 12,
+    fontSize: vsType.size.meta, fontFamily: vsType.family,
   },
   emptyUpdates: {
     minHeight: 210,
@@ -1954,13 +1955,13 @@ const styles = StyleSheet.create({
   },
   emptyUpdatesTitle: {
     color: "#092665",
-    fontSize: 14,
-    fontWeight: "900",
+    fontSize: vsType.size.body, fontFamily: vsType.family,
+    fontWeight: "800",
   },
   emptyUpdatesText: {
     marginTop: 4,
     color: "#6A7FA3",
-    fontSize: 12,
+    fontSize: vsType.size.meta, fontFamily: vsType.family,
   },
   emergencyPanel: {
     marginTop: 16,
@@ -1993,13 +1994,13 @@ const styles = StyleSheet.create({
   },
   emergencyTitle: {
     color: "#092665",
-    fontSize: 18,
-    fontWeight: "900",
+    fontSize: vsType.size.section, fontFamily: vsType.family,
+    fontWeight: "800",
   },
   emergencySubtitle: {
     marginTop: 2,
     color: "#6A7FA3",
-    fontSize: 11.5,
+    fontSize: vsType.size.meta, fontFamily: vsType.family,
   },
   contactGrid: {
     flexDirection: "row",
@@ -2032,7 +2033,7 @@ const styles = StyleSheet.create({
   },
   nationalContactIcon: { backgroundColor: "#DDEFFC" },
   localContactTitle: { color: "#8F1528" },
-  contactAgency: { color: "#6B5261", fontSize: 10.5, marginTop: 3 },
+  contactAgency: { color: "#6B5261", fontSize: vsType.size.caption, fontFamily: vsType.family, marginTop: 3 },
   contactNumberGrid: {
     flexDirection: "row", flexWrap: "wrap", alignItems: "center",
     gap: 11, marginTop: 13,
@@ -2044,10 +2045,10 @@ const styles = StyleSheet.create({
     width: 1, height: 31, backgroundColor: "#F6BFCA",
   },
   contactNumberCopy: { gap: 2 },
-  contactNumberLabel: { color: "#5B6580", fontSize: 10 },
+  contactNumberLabel: { color: "#5B6580", fontSize: vsType.size.micro, fontFamily: vsType.family },
   nationalHotlineValue: {
-    marginTop: 2, fontSize: 30, lineHeight: 34,
-    color: "#E92F47", fontWeight: "900",
+    marginTop: 2, fontSize: vsType.size.hero, fontFamily: vsType.family, lineHeight: 34,
+    color: "#E92F47", fontWeight: "800",
   },
   contactCopy: {
     flex: 1,
@@ -2055,18 +2056,18 @@ const styles = StyleSheet.create({
   },
   contactTitle: {
     color: "#092665",
-    fontSize: 12.5,
-    fontWeight: "900",
+    fontSize: vsType.size.label, fontFamily: vsType.family,
+    fontWeight: "800",
   },
   contactValue: {
     marginTop: 4,
     color: "#142D55",
-    fontSize: 20,
+    fontSize: vsType.size.subheading, fontFamily: vsType.family,
     lineHeight: 25,
-    fontWeight: "900",
+    fontWeight: "800",
   },
-  contactLocalNumber: { color: "#24405B", fontSize: 12.5, lineHeight: 20 },
-  contactLocalNumberStrong: { fontWeight: "900", fontSize: 14, color: "#143052" },
+  contactLocalNumber: { color: "#24405B", fontSize: vsType.size.label, fontFamily: vsType.family, lineHeight: 20 },
+  contactLocalNumberStrong: { fontWeight: "800", fontSize: vsType.size.body, fontFamily: vsType.family, color: "#143052" },
   contactCallAction: {
     width: 43, height: 43, borderRadius: 22,
     alignItems: "center", justifyContent: "center",
@@ -2076,7 +2077,7 @@ const styles = StyleSheet.create({
   contactSubtitle: {
     marginTop: 2,
     color: "#6A7FA3",
-    fontSize: 10.5,
+    fontSize: vsType.size.caption, fontFamily: vsType.family,
   },
   pressed: {
     opacity: 0.72,
