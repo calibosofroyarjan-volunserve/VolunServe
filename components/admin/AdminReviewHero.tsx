@@ -85,7 +85,7 @@ const styles = StyleSheet.create({
   },
   iconCircle: {
     width: 54, height: 54, borderRadius: 15, alignItems: "center", justifyContent: "center",
-    backgroundColor: "#ECF8EF", borderWidth: 1, borderColor: "#D9F1E0",
+    backgroundColor: "#E5F5ED", borderWidth: 1, borderColor: "#D9F1E0",
   },
   tag: { color: "#C7F2DD", fontWeight: "800", fontSize: 10, letterSpacing: 0.5 },
 });
