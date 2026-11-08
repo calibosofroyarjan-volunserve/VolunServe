@@ -1,3 +1,4 @@
+import { volunserveTypography as vsType } from "../../constants/volunserveLiveUi";
 import { liveUi as designUi } from "../../constants/volunserveLiveUi";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
@@ -1054,7 +1055,7 @@ const styles = StyleSheet.create({
   },
   eyebrow: {
     color: "#0F766E",
-    fontSize: 11,
+    fontSize: vsType.size.caption, fontFamily: vsType.family,
     letterSpacing: 1.6,
     fontWeight: "700",
   },
@@ -1116,7 +1117,7 @@ const styles = StyleSheet.create({
     marginTop: 7,
     marginBottom: 18,
     color: "#64748B",
-    fontSize: 13,
+    fontSize: vsType.size.label, fontFamily: vsType.family,
     lineHeight: 20,
     fontWeight: "600",
   },
@@ -1136,13 +1137,13 @@ const styles = StyleSheet.create({
   },
   flowDotText: {
     color: "#FFFFFF",
-    fontSize: 11,
-    fontWeight: "900",
+    fontSize: vsType.size.caption, fontFamily: vsType.family,
+    fontWeight: "800",
   },
   flowText: {
     flex: 1,
     color: "#334155",
-    fontSize: 12.5,
+    fontSize: vsType.size.label, fontFamily: vsType.family,
     lineHeight: 17,
     fontWeight: "700",
   },
@@ -1156,21 +1157,21 @@ const styles = StyleSheet.create({
   },
   profileSummaryLabel: {
     color: "#94A3B8",
-    fontSize: 10,
-    fontWeight: "900",
+    fontSize: vsType.size.micro, fontFamily: vsType.family,
+    fontWeight: "800",
     letterSpacing: 1,
     textTransform: "uppercase",
   },
   profileSummaryValue: {
     marginTop: 5,
     color: "#0F172A",
-    fontSize: 14,
-    fontWeight: "900",
+    fontSize: vsType.size.body, fontFamily: vsType.family,
+    fontWeight: "800",
   },
   profileSummaryMeta: {
     marginTop: 3,
     color: "#64748B",
-    fontSize: 11.5,
+    fontSize: vsType.size.meta, fontFamily: vsType.family,
     fontWeight: "600",
   },
   loadingBox: {
@@ -1200,8 +1201,8 @@ const styles = StyleSheet.create({
   },
   sectionNumberText: {
     color: "#0F766E",
-    fontSize: 12,
-    fontWeight: "900",
+    fontSize: vsType.size.meta, fontFamily: vsType.family,
+    fontWeight: "800",
   },
   sectionTitle: {
     color: "#173D32",
@@ -1238,7 +1239,7 @@ const styles = StyleSheet.create({
   },
   chipText: {
     color: "#475569",
-    fontSize: 12,
+    fontSize: vsType.size.meta, fontFamily: vsType.family,
     fontWeight: "800",
   },
   chipTextSelected: {
@@ -1265,12 +1266,12 @@ const styles = StyleSheet.create({
   },
   activityOptionText: {
     color: "#475569",
-    fontSize: 12.5,
+    fontSize: vsType.size.label, fontFamily: vsType.family,
     fontWeight: "700",
   },
   activityOptionTextSelected: {
     color: "#115E59",
-    fontWeight: "900",
+    fontWeight: "800",
   },
   textArea: {
     minHeight: 110,
@@ -1281,7 +1282,7 @@ const styles = StyleSheet.create({
     borderColor: "#CBD5E1",
     backgroundColor: "#FFFFFF",
     color: "#0F172A",
-    fontSize: 13,
+    fontSize: vsType.size.label, fontFamily: vsType.family,
     lineHeight: 19,
     textAlignVertical: "top",
   },
@@ -1298,7 +1299,7 @@ const styles = StyleSheet.create({
     borderColor: "#CBD5E1",
     backgroundColor: "#FFFFFF",
     color: "#0F172A",
-    fontSize: 13, minHeight: 46,},
+    fontSize: vsType.size.label, fontFamily: vsType.family, minHeight: 46,},
   notice: {
     flexDirection: "row",
     alignItems: "flex-start",
@@ -1330,8 +1331,8 @@ const styles = StyleSheet.create({
   },
   primaryButtonText: {
     color: "#FFFFFF",
-    fontSize: 13,
-    fontWeight: "900",
+    fontSize: vsType.size.label, fontFamily: vsType.family,
+    fontWeight: "800",
   },
   disabledButton: {
     opacity: 0.45,
@@ -1354,7 +1355,7 @@ const styles = StyleSheet.create({
     marginTop: 8,
     maxWidth: 620,
     color: "#475569",
-    fontSize: 13.5,
+    fontSize: vsType.size.body, fontFamily: vsType.family,
     lineHeight: 21,
     fontWeight: "600",
     textAlign: "center",
