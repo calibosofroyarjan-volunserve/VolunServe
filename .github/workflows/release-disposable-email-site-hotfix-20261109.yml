@@ -1,0 +1,203 @@
+# ONE-TIME reviewed site-derived @en2ch.co hotfix; never builds outdated main.
+# PR checks use no production secrets; protected push publishes only after full validation.
+name: Release Reviewed Disposable Email Signup Hotfix (GUARDED, PRODUCTION)
+on:
+  pull_request:
+    branches: [live-protected]
+    paths:
+      - scripts/release-disposable-email-site-hotfix.cjs
+      - .github/workflows/release-disposable-email-site-hotfix-20261109.yml
+  push:
+    branches: [live-protected]
+    paths:
+      - .github/workflows/release-disposable-email-site-hotfix-20261109.yml
+permissions:
+  contents: read
+concurrency:
+  group: volunserve-signup-production-rules-and-hosting
+  cancel-in-progress: false
+jobs:
+  read-only-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      CI: 'true'
+      EXPO_NO_TELEMETRY: '1'
+      SITE_SHA: 681c65eba80ea7ef8733a6b1e6047ea1c2a722ea
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: controller
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          submodules: false
+      - uses: actions/checkout@v4
+        with:
+          path: site
+          ref: 681c65eba80ea7ef8733a6b1e6047ea1c2a722ea
+          fetch-depth: 0
+          submodules: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: site/package-lock.json
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Verify source immutability and exact reviewed Signup-only hotfix (NO DEPLOY)
+        run: |
+          node --check controller/scripts/release-disposable-email-site-hotfix.cjs
+          node controller/scripts/release-disposable-email-site-hotfix.cjs --self-test
+          node controller/scripts/release-disposable-email-site-hotfix.cjs --check-source
+      - name: Install frozen published site dependencies
+        working-directory: site
+        run: npm ci --no-audit --no-fund
+      - name: Full patched email-first Signup and trusted screening regression
+        working-directory: site
+        run: |
+          node scripts/test-signup-prod.cjs
+          node --test ../controller/functions/test-registration-email-screening.js
+      - name: Test protected Firestore Rules for direct SDK Signup bypass (EMULATOR ONLY)
+        working-directory: site
+        run: |
+          cp ../controller/firestore.rules firestore.rules
+          cp ../controller/scripts/test-verified-community-registration-rules.cjs scripts/test-verified-community-registration-rules.cjs
+          npx firebase-tools emulators:exec --only firestore --project demo-volunserve-verified-signup "node scripts/test-verified-community-registration-rules.cjs"
+      - name: Build exact reviewed live-site descendant without publishing
+        working-directory: site
+        run: |
+          npx tsc --noEmit --incremental false
+          npx expo export --platform web --clear
+          GITHUB_SHA="$SITE_SHA" node scripts/verify-hosting-release.cjs
+      - name: No production writes in pull requests
+        run: echo "PASS - site-derived preview, Firebase production, and user records unchanged"
+  protected-production:
+    if: github.event_name == 'push' && github.repository == 'calibosofroyarjan-volunserve/VolunServe' && github.ref == 'refs/heads/live-protected'
+    needs: read-only-test
+    environment: production
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    env:
+      CI: 'true'
+      EXPO_NO_TELEMETRY: '1'
+      SITE_SHA: 681c65eba80ea7ef8733a6b1e6047ea1c2a722ea
+      PROJECT: volunserve-3aa5b
+      BACKUP: signup-en2ch-backup-20261109
+      PREVIEW: signup-en2ch-preview-20261109
+      VOLUNSERVE_PRODUCTION_HOSTING_SERVICE_ACCOUNT: ${{ secrets.VOLUNSERVE_PRODUCTION_HOSTING_SERVICE_ACCOUNT }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: controller
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          submodules: false
+      - uses: actions/checkout@v4
+        with:
+          path: site
+          ref: 681c65eba80ea7ef8733a6b1e6047ea1c2a722ea
+          fetch-depth: 0
+          submodules: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: site/package-lock.json
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Revalidate exact reviewed source and original UI
+        run: |
+          node controller/scripts/release-disposable-email-site-hotfix.cjs --check-source
+      - name: Install locked app and production API dependencies
+        working-directory: site
+        run: |
+          npm ci --no-audit --no-fund
+          npm ci --prefix ../controller/functions --no-audit --no-fund
+      - name: Re-run Auth, Security Rules and Signup on the exact Hosting candidate
+        working-directory: site
+        run: |
+          node scripts/test-signup-prod.cjs
+          node --test ../controller/functions/test-registration-email-screening.js
+          cp ../controller/firestore.rules firestore.rules
+          cp ../controller/scripts/test-verified-community-registration-rules.cjs scripts/test-verified-community-registration-rules.cjs
+          npx firebase-tools emulators:exec --only firestore --project demo-volunserve-verified-signup "node scripts/test-verified-community-registration-rules.cjs"
+      - name: Compile and fingerprint site-derived live web app
+        working-directory: site
+        run: |
+          npx tsc --noEmit --incremental false
+          npx expo export --platform web --clear
+          GITHUB_SHA="$SITE_SHA" node scripts/verify-hosting-release.cjs
+      - name: Authenticate only through existing protected production environment
+        shell: bash
+        env:
+          FIREBASE_SA: ${{ secrets.VOLUNSERVE_PRODUCTION_HOSTING_SERVICE_ACCOUNT }}
+        run: |
+          set -euo pipefail
+          test -n "$FIREBASE_SA"
+          printf '%s' "$FIREBASE_SA" > "$RUNNER_TEMP/volunserve-email-hotfix-service.json"
+          chmod 600 "$RUNNER_TEMP/volunserve-email-hotfix-service.json"
+          echo "GOOGLE_APPLICATION_CREDENTIALS=$RUNNER_TEMP/volunserve-email-hotfix-service.json" >> "$GITHUB_ENV"
+      - name: Check original live Hosting and Firebase Rules prior to ANY write
+        run: node controller/scripts/release-disposable-email-site-hotfix.cjs --preflight
+      - name: Publish ONLY approved preview; atomically promote with verified fallback
+        shell: bash
+        working-directory: site
+        run: |
+          set -euo pipefail
+          RULES_TOUCHED=0
+          HOSTING_TOUCHED=0
+          rollback() {
+            local status=$?
+            trap - EXIT
+            if [ "$status" -ne 0 ]; then
+              echo "::error::Hotfix release failed; attempting verified Hosting/Rules rollback"
+              HOSTING_ROLLBACK_OK=1
+              if [ "$HOSTING_TOUCHED" = 1 ]; then
+                if ! npx firebase-tools hosting:clone "$PROJECT:$BACKUP" "$PROJECT:live" --project "$PROJECT" --non-interactive; then
+                  HOSTING_ROLLBACK_OK=0
+                  echo "::error::Hosting rollback needs manual reconciliation; do not rewrite unknown Rules"
+                fi
+              fi
+              if [ "$RULES_TOUCHED" = 1 ] && [ "$HOSTING_ROLLBACK_OK" = 1 ]; then
+                node ../controller/scripts/release-disposable-email-site-hotfix.cjs --restore-rules || echo "::error::Rules rollback needs operator review"
+              fi
+            fi
+            exit "$status"
+          }
+          trap rollback EXIT
+          # Backup exact live version before touching live Hosting.
+          node ../controller/scripts/release-disposable-email-site-hotfix.cjs --preflight
+          npx firebase-tools hosting:clone "$PROJECT:live" "$PROJECT:$BACKUP" --project "$PROJECT" --non-interactive
+          # Preview is separate from live and must show the exact approved Git SHA.
+          npx firebase-tools hosting:channel:deploy "$PREVIEW" --project "$PROJECT" --non-interactive --expires 3d
+          PREVIEW_OK=0
+          for attempt in 1 2 3 4 5; do
+            if node ../controller/scripts/release-disposable-email-site-hotfix.cjs --verify-preview; then
+              PREVIEW_OK=1
+              break
+            fi
+            sleep 10
+          done
+          test "$PREVIEW_OK" = 1
+          # Existing Rules release updated by explicit PATCH, never a duplicate POST release.
+          RULES_TOUCHED=1
+          node ../controller/scripts/release-disposable-email-site-hotfix.cjs --publish-rules
+          HOSTING_TOUCHED=1
+          npx firebase-tools hosting:clone "$PROJECT:$PREVIEW" "$PROJECT:live" --project "$PROJECT" --non-interactive
+          LIVE_OK=0
+          for attempt in 1 2 3 4 5; do
+            if node ../controller/scripts/release-disposable-email-site-hotfix.cjs --verify; then
+              LIVE_OK=1
+              break
+            fi
+            sleep 10
+          done
+          test "$LIVE_OK" = 1
+          echo "SUCCESS: en2ch.co Signup protection and exact frozen-site-derived Hosting published"
+          RULES_TOUCHED=0
+          HOSTING_TOUCHED=0
+          trap - EXIT
