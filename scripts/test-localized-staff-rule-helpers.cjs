@@ -153,8 +153,14 @@ function optimizedRules(input) {
  return result;
 }
 const optimized=optimizedRules(expected);
-assert.equal(current,optimized,
- "BLOCKED: unexpected permission, match, helper or nonreviewed signup change");
+if(current!==optimized){
+ let index=0;
+ while(index<current.length&&index<optimized.length&&current[index]===optimized[index])index++;
+ throw Error("BLOCKED: unexpected Rules change at char "+index+
+  " (actualLength="+current.length+", expectedLength="+optimized.length+") "+
+  " actual="+JSON.stringify(current.slice(Math.max(index-50,0),index+190))+
+  " expected="+JSON.stringify(optimized.slice(Math.max(index-50,0),index+190)));
+}
 const body=current.slice(0,current.indexOf("    match /"));
 for(const name of ["hasApprovedStaffRole","isAdmin","isSuperAdmin","isAdminOrSuperAdmin"]){
  assert(body.includes("function "+name+"("),"Missing consolidated root helper "+name);
