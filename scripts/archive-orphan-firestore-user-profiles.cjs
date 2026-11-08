@@ -119,6 +119,13 @@ async function run(){
   // Scan all root collections and nested records. If a UID is referenced
   // anywhere, keep that user profile instead of breaking historical data.
   const referenced=new Set(),subcollections=new Set();
+  // Surviving users' profiles can contain references to previous accounts.
+  // Treat these as dependencies too; do not erase someone they still reference.
+  for(const doc of users.docs){
+    if(activeIds.has(doc.id)){
+      findUidReferences(doc.data(),orphanIds,referenced);
+    }
+  }
   let scanned=0;
   const roots=await db.listCollections();
   async function scanCollection(ref){
