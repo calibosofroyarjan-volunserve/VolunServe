@@ -6,6 +6,19 @@
  * Prints ONLY aggregate counts, never UID, email, user names or document data.
  */
 const assert = require("node:assert/strict");
+const {createRequire} = require("node:module");
+const path = require("node:path");
+// Resolve scoped package exports from Functions' own installed dependencies.
+// A relative require("../functions/node_modules/firebase-admin/app") incorrectly
+// bypasses Node package "exports" and failed in GitHub Actions.
+const requireFunctions = createRequire(path.resolve(__dirname,"../functions/package.json"));
+function loadAdminSdk() {
+  return {
+    ...requireFunctions("firebase-admin/app"),
+    ...requireFunctions("firebase-admin/auth"),
+    ...requireFunctions("firebase-admin/firestore"),
+  };
+}
 
 const PROJECT_ID = "volunserve-3aa5b";
 const STAFF_ROLES = new Set(["admin", "superadmin", "lgu_personnel"]);
@@ -91,9 +104,7 @@ async function main() {
   assert.equal(credentials.project_id,PROJECT_ID,
     "BLOCKED: Firebase credential project mismatch");
 
-  const {initializeApp,cert} = require("../functions/node_modules/firebase-admin/app");
-  const {getAuth} = require("../functions/node_modules/firebase-admin/auth");
-  const {getFirestore} = require("../functions/node_modules/firebase-admin/firestore");
+  const {initializeApp,cert,getAuth,getFirestore} = loadAdminSdk();
   const app = initializeApp({credential:cert(credentials),projectId:PROJECT_ID});
   const auth = getAuth(app);
   const firestore = getFirestore(app);
@@ -128,7 +139,14 @@ async function main() {
   console.log("PASS: approved Auth/Firestore profiles compatible with verified-email rollout");
 }
 if (require.main===module) {
-  (process.argv.includes("--self-test") ? Promise.resolve().then(selfTest) : main())
+  (process.argv.includes("--self-test") ? Promise.resolve().then(selfTest) :
+    process.argv.includes("--sdk-check") ? Promise.resolve().then(()=>{
+      const sdk = loadAdminSdk();
+      assert.equal(typeof sdk.initializeApp,"function");
+      assert.equal(typeof sdk.getAuth,"function");
+      assert.equal(typeof sdk.getFirestore,"function");
+      console.log("PASS: Functions Firebase Admin SDK package imports resolve");
+    }) : main())
     .catch(err=>{console.error(err.message);process.exitCode=1;});
 }
 module.exports = {auditOne,emptyCounters,blockers};
