@@ -2,6 +2,7 @@
 "use strict";
 /**
  * One-time guarded live-site-derived disposable-mail Signup release.
+ * The exact existing reviewed Signup channel is our Hosting rollback target.
  * Full code and Hosting changes are restricted to a frozen approved site SHA.
  * Modes are read-only except --publish-rules and --restore-rules.
  * No user-record, Auth UID, Storage, functions, or Render writes.
@@ -19,7 +20,6 @@ const SITE_CANDIDATE="681c65eba80ea7ef8733a6b1e6047ea1c2a722ea";
 const PREVIOUS_RULES_COMMIT="de2fac77d54c4cb0def3092c3fe4569404353d0e";
 const RULES_CANDIDATE_BLOB="6f65f4d54624020138111c6358d031100d06ec26";
 const BACKUP="signup-reviewed-preview-20261109";
-const PREVIEW="signup-en2ch-preview-20261109";
 const ROOT=path.resolve(__dirname,"..");
 const SITE=path.resolve(ROOT,"../site");
 const SHA=s=>crypto.createHash("sha256").update(s).digest("hex");
@@ -137,7 +137,6 @@ async function main(){
   "--verify","--restore-rules"].includes(mode),"Unknown mode");
  if(mode==="--self-test"){
   assert.equal(BACKUP,"signup-reviewed-preview-20261109");
-  assert.equal(PREVIEW,"signup-en2ch-preview-20261109");
   assert.equal(SITE_CANDIDATE.length,40);
   console.log("PASS: controlled site-derived hotfix constants");
   return;
