@@ -31,8 +31,39 @@ const replacement=`    // Reuse one verified-active staff role gate for all thre
       return hasApprovedStaffRole(['admin', 'superadmin']);
     }
 `;
-assert.equal(current,original.slice(0,a)+replacement+original.slice(b),
- "BLOCKED: a non-staff permission, collection match or validation was modified");
+const afterStaffRefactor=original.slice(0,a)+replacement+original.slice(b);
+// The reviewed resident-create reduction removes guards already implied by
+// validInitialResidentInputs(): exact validator remains, along with the UID
+// equality above it, email verification, phone format and SJDM allowlists.
+const repeatedNames=`        && request.resource.data.firstName is string
+        && request.resource.data.firstName.size() >= 2
+        && request.resource.data.lastName is string
+        && request.resource.data.lastName.size() >= 2
+`;
+const repeatedOther=`        && request.resource.data.phoneNumber is string
+        && request.resource.data.phoneNumber.size() >= 11
+        && request.resource.data.barangay is string
+        && request.resource.data.barangay.size() >= 2
+        && request.resource.data.occupationCategory is string
+        && request.resource.data.occupationCategory.size() >= 2
+        && request.resource.data.uid == uid
+`;
+const createStart=afterStaffRefactor.indexOf("      allow create: if signedIn()");
+const createEnd=afterStaffRefactor.indexOf("      // Staff applications",createStart);
+assert(createStart>0&&createEnd>createStart,"Expected basic Resident signup permission");
+let createRule=afterStaffRefactor.slice(createStart,createEnd);
+assert.equal(createRule.split(repeatedNames).length,2,"Exactly one duplicate name group");
+assert.equal(createRule.split(repeatedOther).length,2,"Exactly one duplicate phone/location/uid group");
+assert(createRule.includes("&& validInitialResidentInputs()") &&
+ createRule.includes("&& request.auth.uid == uid") &&
+ createRule.includes("&& request.auth.token.get(\"email_verified\", false) == true"),
+ "Actual reviewed validation and identity authorization must remain");
+createRule=createRule.replace(repeatedNames,"").replace(repeatedOther,
+ "        // Already enforced by validInitialResidentInputs(); uid checked above.\\n".replace("\\n","\n"));
+const expected=afterStaffRefactor.slice(0,createStart)+createRule+
+ afterStaffRefactor.slice(createEnd);
+assert.equal(current,expected,
+ "BLOCKED: unexpected permission, match, helper or nonreviewed signup change");
 const body=current.slice(0,current.indexOf("    match /"));
 for(const name of ["hasApprovedStaffRole","isAdmin","isSuperAdmin","isAdminOrSuperAdmin"]){
  assert(body.includes("function "+name+"("),"Missing consolidated root helper "+name);
@@ -74,4 +105,4 @@ for(const [fn,allowed] of [
   "Staff permission changed for "+fn+JSON.stringify({p,verified}));
  checks++;
 }
-console.log("PASS: "+checks+" staff-role combination checks, exact unmodified non-staff Rules source; no live writes.");
+console.log("PASS: "+checks+" staff-role checks and exact reviewed redundant signup cleanup; no other Rules bytes changed or live writes.");
