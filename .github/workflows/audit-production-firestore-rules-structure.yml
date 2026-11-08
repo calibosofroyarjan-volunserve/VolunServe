@@ -5,11 +5,13 @@ on:
   push:
     branches: [live-protected]
     paths:
+      - firestore.rules
       - scripts/audit-production-firestore-rules-structure.cjs
       - .github/workflows/audit-production-firestore-rules-structure.yml
   pull_request:
     branches: [live-protected]
     paths:
+      - firestore.rules
       - scripts/audit-production-firestore-rules-structure.cjs
       - .github/workflows/audit-production-firestore-rules-structure.yml
 permissions:
