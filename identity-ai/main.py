@@ -171,16 +171,6 @@ def require_internal_backend(
         default=None,
         alias="X-VolunServe-Internal-Key",
     ),
-    x_volunserve_profile_first_name: str
-    | None = Header(
-        default=None,
-        alias="X-VolunServe-Profile-First-Name",
-    ),
-    x_volunserve_profile_last_name: str
-    | None = Header(
-        default=None,
-        alias="X-VolunServe-Profile-Last-Name",
-    ),
 ):
     configured_key = get_internal_key()
     if not configured_key:
