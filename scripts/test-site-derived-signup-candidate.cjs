@@ -12,6 +12,7 @@ const allowed=new Set([
  "components/guest/GuestWorkspace.tsx","lib/firebaseAuth.ts",
  "lib/registrationEmailPolicy.ts","lib/requireCompleteResidentRegistration.ts",
  "lib/signupRegistration.ts","lib/userFacingError.ts","lib/verificationCooldown.ts",
+ "firestore.rules",
  "scripts/test-signup-prod.cjs",
  "scripts/test-site-derived-signup-candidate.cjs",
  ".github/workflows/validate-site-derived-signup-candidate.yml",
@@ -19,7 +20,7 @@ const allowed=new Set([
 assert(changed.length>0);
 for(const p of changed) assert(allowed.has(p),"BLOCKED: unrelated published-website file modified: "+p);
 for(const protectedPrefix of ["app/(admin)/","app/(superadmin)/","app/(tabs)/",
-  "functions/","backend/","firebase.json","firestore.rules","storage.rules",
+  "functions/","backend/","firebase.json","storage.rules",
   "constants/","package.json","package-lock.json"]){
  assert(!changed.some(p=>p===protectedPrefix||p.startsWith(protectedPrefix)),
     "BLOCKED: protected deployed module/security/dependency changed: "+protectedPrefix);
@@ -45,6 +46,13 @@ assert(auth.includes("getRegistrationEmailError(submittedEmail)"));
 assert(reg.includes("getRegistrationEmailError(normalized)"));
 assert(guest.includes("onAuthStateChanged(auth"));
 assert(guest.includes("signOut(auth"));
+const rules=read("firestore.rules");
+assert(rules.includes("function validInitialResidentInputs()"),
+ "BLOCKED: staged Rules lost complete verified Basic Resident registration policy");
+assert(rules.includes("match /volunteerInvitations/{invitationId}"),
+ "BLOCKED: staged Rules would delete existing live Volunteer Invitations");
+assert(rules.includes("function selectedCase()") && rules.includes("function selectedVolunteer()"),
+ "BLOCKED: staged Rules lost existing emergency invitation helpers");
 assert(read("app/login.web.tsx").includes('signOut(auth).then(() => router.replace("/public"))'));
 assert(read("app/login.tsx").includes('firebaseSignOut(auth).then(() => router.replace("/public"))'));
 console.log(JSON.stringify({
@@ -52,6 +60,7 @@ console.log(JSON.stringify({
  baseline:BASE,
  changedFiles:changed,
  protectedAdminVolunteerAndSystemFilesChanged:0,
+  stagedRulesChange:"TESTED OFFLINE ONLY — not published",
  publishedBrandedTypography:"PRESERVED",
  verifiedSignupAndGuestGuards:"PRESENT",
  pending:"Verify compatibility with actual deployed Firestore Rules and complete live auth test before production release"
