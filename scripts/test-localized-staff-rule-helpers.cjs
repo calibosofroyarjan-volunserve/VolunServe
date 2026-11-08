@@ -160,22 +160,32 @@ const mergedRules=cp.execFileSync("git",["show",
  "f25ce81ce951d86fa7fe692c4be056c898810981:firestore.rules"],{encoding:"utf8"});
 assert.equal(mergedRules,optimized,
  "BLOCKED: protected pass-one source is not the reviewed baseline");
-// Guarded compiler optimization, no other permission changes permitted.
-const frozenPassTwo=cp.execFileSync("git",["show","5dd65a7f1e65b281e277d051b5e60ca09fbaaaa6:firestore.rules"],{encoding:"utf8"});
-const oldReviewAllow="      allow create: if isAdmin()\n        && validReviewPayload()\n        && request.resource.data.reviewStatus == 'in_progress'\n        && request.resource.data.finalDecision == 'pending'\n        && request.resource.data.finalDecisionReason == ''\n        && request.resource.data.finalDecisionAt == null\n        && request.resource.data.finalDecisionBy == ''\n        && request.resource.data.createdBy == request.auth.uid\n        && validFinalDecisionState();\n      allow update: if isAdmin()\n        && resource.data.finalDecision in [\n          'pending',\n          'needs_more_information'\n        ]\n        && request.resource.data.requestId == resource.data.requestId\n        && request.resource.data.requesterUid == resource.data.requesterUid\n        && request.resource.data.category == resource.data.category\n        && request.resource.data.createdAt == resource.data.createdAt\n        && request.resource.data.createdBy == resource.data.createdBy\n        && validReviewPayload()\n        && validFinalDecisionState();\n";
-const sharedReviewAllow="      // Shared validations are compiled once; the method-specific gates below\n      // reproduce the original create and update conditions without overlap.\n      allow create, update: if isAdmin()\n        && validReviewPayload()\n        && validFinalDecisionState()\n        && (\n          (\n            request.method == 'create'\n            && request.resource.data.reviewStatus == 'in_progress'\n            && request.resource.data.finalDecision == 'pending'\n            && request.resource.data.finalDecisionReason == ''\n            && request.resource.data.finalDecisionAt == null\n            && request.resource.data.finalDecisionBy == ''\n            && request.resource.data.createdBy == request.auth.uid\n          )\n          ||\n          (\n            request.method == 'update'\n            && resource.data.finalDecision in [\n              'pending',\n              'needs_more_information'\n            ]\n            && request.resource.data.requestId == resource.data.requestId\n            && request.resource.data.requesterUid == resource.data.requesterUid\n            && request.resource.data.category == resource.data.category\n            && request.resource.data.createdAt == resource.data.createdAt\n            && request.resource.data.createdBy == resource.data.createdBy\n          )\n        );\n";
-assert.equal(frozenPassTwo.split(oldReviewAllow).length,2,"Original staff-assisted review gates unexpectedly changed");
-const expectedOptimized=frozenPassTwo.replace(oldReviewAllow,sharedReviewAllow);
-assert.equal(current,expectedOptimized,"BLOCKED: outside reviewed create/update Rules permission gates changed");
-assert(current.includes("request.method == 'create'") && current.includes("request.method == 'update'"),"BLOCKED: create/update operation gates missing");
-const actualGitBlob=cp.execFileSync("git",["hash-object","firestore.rules"],{encoding:"utf8"}).trim();
-assert.equal(actualGitBlob,"afd5adca77292d01e6aeab13465736aa2f6882f4","BLOCKED: optimized Rules blob differs from approved revision");
-const paths=source=>source.split("\n")
- .filter(line=>line.startsWith("    match /"))
- .map(line=>line.slice("    match /".length).split(" ")[0]);
-assert.deepEqual(paths(current),paths(frozenPassTwo),"BLOCKED: an original Firestore match was changed");
-const statements=source=>[...source.matchAll(/allow (?:get|list|read|write|create|update|delete)/g)].length;
-assert.equal(statements(current),statements(frozenPassTwo)-1,"BLOCKED: unrelated allow methods were changed");
+const protectedBaseline=cp.execFileSync("git",["show","5dd65a7f1e65b281e277d051b5e60ca09fbaaaa6:firestore.rules"],{encoding:"utf8"});
+const originalRoleGate="    function approved() {\n      let p = signedIn() ? profile() : {};\n      let role = p.get('role', '');\n      return verifiedEmailSession()\n        && role in [\n          'resident', 'volunteer', 'admin', 'superadmin', 'lgu_personnel'\n        ]\n        && (\n          role in ['admin', 'superadmin', 'lgu_personnel']\n          || request.auth.token.get('email', '') == p.get('email', '')\n        )\n        && p.get('status', 'approved') == 'approved'\n        && p.get('adminStatus', 'active') != 'suspended';\n    }\n    // Reuse one verified-active staff role gate for all three staff helpers.\n    // Same semantics as the previous independent isAdmin/isSuperAdmin helpers:\n    // only a verified Firebase email, approved/non-suspended user profile,\n    // and the exact allowed role can pass. Other roles never get staff access.\n    function hasApprovedStaffRole(roles) {\n      let p = signedIn() ? profile() : {};\n      return verifiedEmailSession()\n        && p.get('role', '') in roles\n        && p.get('status', 'approved') == 'approved'\n        && p.get('adminStatus', 'active') != 'suspended';\n    }\n";
+const compactRoleGate="    function approved() {\n      let p = signedIn() ? profile() : {};\n      let role = p.get('role', '');\n      // Exactly the original five-role allowlist: staff bypass profile-email\n      // matching; only Resident/Volunteer require the Firebase email match.\n      return verifiedEmailSession()\n        && (\n          role in ['admin', 'superadmin', 'lgu_personnel']\n          || (\n            role in ['resident', 'volunteer']\n            && request.auth.token.get('email', '') == p.get('email', '')\n          )\n        )\n        && p.get('status', 'approved') == 'approved'\n        && p.get('adminStatus', 'active') != 'suspended';\n    }\n    // Reuse one verified-active staff role gate for all three staff helpers.\n    // Same semantics as the previous independent isAdmin/isSuperAdmin helpers:\n    // only a verified Firebase email, approved/non-suspended user profile,\n    // and the exact allowed role can pass. Other roles never get staff access.\n    function hasApprovedStaffRole(roles) {\n      let p = signedIn() ? profile() : {};\n      // roles is always a subset of ['admin','superadmin'] at call sites.\n      // Therefore approved() already enforces verified mailbox and active\n      // approved/non-suspended staff state. Keep exact role restriction.\n      return approved()\n        && p.get('role', '') in roles;\n    }\n";
+assert.equal(protectedBaseline.split(originalRoleGate).length,2,"Reviewed original role gate moved");
+assert.equal(current,protectedBaseline.replace(originalRoleGate,compactRoleGate),"BLOCKED: unrelated Rules permission modified");
+const gitBlob=cp.execFileSync("git",["hash-object","firestore.rules"],{encoding:"utf8"}).trim();
+assert.equal(gitBlob,"4afcbc2567dc60bbb7da9f2584e70ba412881c04","BLOCKED: unapproved Firestore blob");
+const paths=source=>source.split("\n").filter(l=>l.startsWith("    match /")).map(l=>l.slice("    match /".length).split(" ")[0]);
+assert.deepEqual(paths(current),paths(protectedBaseline),"BLOCKED: collection scope changed");
+const allows=source=>[...source.matchAll(/allow (?:get|list|read|write|create|update|delete)/g)].length;
+assert.equal(allows(current),allows(protectedBaseline),"BLOCKED: allow methods changed");
+for(const role of [undefined,null,"","admin","superadmin","lgu_personnel","resident","volunteer","applicant","other",false])
+ for(const verified of [true,false])for(const status of [undefined,"approved","suspended","pending_review",null])
+ for(const adminState of [undefined,"active","suspended",null])for(const matchEmail of [true,false]){
+  const staff=["admin","superadmin","lgu_personnel"].includes(role);
+  const approvedState=(status===undefined?"approved":status)==="approved";
+  const active=(adminState===undefined?"active":adminState)!=="suspended";
+  const originalApproved=verified&&["resident","volunteer","admin","superadmin","lgu_personnel"].includes(role)&&(staff||matchEmail)&&approvedState&&active;
+  const newApproved=verified&&(staff||(["resident","volunteer"].includes(role)&&matchEmail))&&approvedState&&active;
+  assert.equal(originalApproved,newApproved,"Approved role changed");
+  for(const roles of [["admin"],["superadmin"],["admin","superadmin"]]){
+    const oldStaff=verified&&roles.includes(role)&&approvedState&&active;
+    const newStaff=newApproved&&roles.includes(role);
+    assert.equal(oldStaff,newStaff,"Staff role changed");
+  }
+ }
 const body=current.slice(0,current.indexOf("    match /"));
 for(const name of ["hasApprovedStaffRole","isAdmin","isSuperAdmin","isAdminOrSuperAdmin"]){
  assert(body.includes("function "+name+"("),"Missing consolidated root helper "+name);
