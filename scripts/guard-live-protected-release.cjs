@@ -12,6 +12,10 @@ const INITIAL_LIVE = "e83f4a72c7cb733ff7bb888a6ac19bf3c0f076c4";
 const LOCKED_POLICY_COMMIT = "2c6757c57ff2f7cf3c584a346cfcd02aac1ceac0";
 const LIVE_URL = "https://volunserve.com/volunserve-release.json";
 const REQUIRED_REF = "refs/heads/live-protected";
+// Pin reviewed Hosting-only automation as release POLICY, not application code.
+// Introduced after LOCKED_POLICY_COMMIT, so it has a separate exact blob check.
+const AUTO_HOSTING_POLICY = ".github/workflows/auto-publish-protected-live-hosting.yml";
+const AUTO_HOSTING_POLICY_BLOB = "528be167478b07dd6aba4e31c62f75b5a4b23474";
 const FROZEN = [
 "deploy-verified-dialog-hotfix.yml",
 "emergency-facility-scoped-production.yml",
@@ -36,6 +40,7 @@ const POLICY = [
 ".github/workflows/release-live-protected-hosting.yml",
 ".github/workflows/verify-live-protected-source.yml",
 "scripts/guard-live-protected-release.cjs",
+AUTO_HOSTING_POLICY,
 "docs/LIVE_PROTECTED_DEPLOYMENT.md"
 ];
 const POLICY_SET = new Set(POLICY);
@@ -80,7 +85,9 @@ function validate({live,candidate,expected,branch,approved,changes,ancestral,has
 function checkPolicyFiles() {
   assert.ok(ancestor(LOCKED_POLICY_COMMIT, git("rev-parse","HEAD")),
     "BLOCKED: release has not descended from verified live-protected safety checkpoint");
-  for (const path of POLICY.filter(p=>p!=="scripts/guard-live-protected-release.cjs")) {
+  assert.equal(git("rev-parse", "HEAD:"+AUTO_HOSTING_POLICY), AUTO_HOSTING_POLICY_BLOB,
+    "BLOCKED: auto Hosting workflow changed since reviewed policy; separate release review required");
+  for (const path of POLICY.filter(p=>p!=="scripts/guard-live-protected-release.cjs" && p!==AUTO_HOSTING_POLICY)) {
     assert.equal(git("rev-parse", "HEAD:"+path), git("rev-parse", LOCKED_POLICY_COMMIT+":"+path),
       "BLOCKED: frozen production safety policy file changed: "+path);
   }
@@ -147,9 +154,11 @@ function selfTest() {
     {ancestral:false},{hasInitial:false},{expected:b},
     {approved:["app/signup.tsx"]},{approved:[]},{approved:["backend/server.js"]},
     {approved:["firebase.json"]},{approved:[".github/workflows/other.yml"]},
+    {approved:[AUTO_HOSTING_POLICY]},
     {changes:[{status:"D",path:"app/login.web.tsx"}]},
     {changes:[{status:"M",path:"app/login.web.tsx"},{status:"M",path:"backend/server.js"}]},
-    {changes:[{status:"M",path:"app/login.web.tsx"},{status:"M",path:".github/workflows/unknown.yml"}]}
+    {changes:[{status:"M",path:"app/login.web.tsx"},{status:"M",path:".github/workflows/unknown.yml"}]},
+    {changes:[{status:"M",path:"app/login.web.tsx"},{status:"M",path:"firestore.rules"}]}
   ]) assert.throws(()=>validate({...base,...patch}),/BLOCKED:/);
   checkPolicyFiles();
   console.log("PASS: blocks outdated main, changed queued branch head, stale source, unsafe modules, unapproved files, deletion");
