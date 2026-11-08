@@ -11,10 +11,6 @@ service cloud.firestore {
     }
     // Firebase Auth sign-in alone never grants Firestore permissions.
     // Staff and community routes require a verified mailbox in the token.
-    function verifiedEmailSession() {
-      return signedIn()
-        && request.auth.token.get('email_verified', false) == true;
-    }
     // Reuse profile data inside role helpers instead of repeating get() expressions.
     // Equivalent to the previously deployed approved() predicate:
     // 1) verifiedEmailSession already guarantees email_verified == true;
@@ -24,7 +20,7 @@ service cloud.firestore {
     function approved() {
       let p = signedIn() ? profile() : {};
       let role = p.get('role', '');
-      return verifiedEmailSession()
+      return signedIn() && request.auth.token.get('email_verified', false) == true
         && role in [
           'resident', 'volunteer', 'admin', 'superadmin', 'lgu_personnel'
         ]
@@ -41,7 +37,7 @@ service cloud.firestore {
     // and the exact allowed role can pass. Other roles never get staff access.
     function hasApprovedStaffRole(roles) {
       let p = signedIn() ? profile() : {};
-      return verifiedEmailSession()
+      return signedIn() && request.auth.token.get('email_verified', false) == true
         && p.get('role', '') in roles
         && p.get('status', 'approved') == 'approved'
         && p.get('adminStatus', 'active') != 'suspended';
@@ -1057,9 +1053,6 @@ service cloud.firestore {
         && request.resource.data.rejectedReason is string
         && request.resource.data.rejectedReason.size() <= 500;
       allow delete: if false;
-    }
-    match /assistanceEvidenceAssets/{evidenceId} {
-      allow read, write: if false;
     }
     match /assistanceVerificationReviews/{requestId} {
       function sourceAssistanceExists() {
@@ -2938,9 +2931,6 @@ service cloud.firestore {
     }
     // Backend Admin SDK only: private review/approval/acknowledgment audit.
     // Clients must use role-validated API, never write or inspect direct records.
-    match /fundReleaseDemos/{releaseId} {
-      allow read, write: if false;
-    }
     match /donationCampaigns/{campaignId} {
       function campaignSourceNeed() {
         return get(
@@ -5108,9 +5098,6 @@ service cloud.firestore {
     match /aiMapBriefings/{briefingId} {
       allow read: if isAdmin();
       allow create, update, delete: if false;
-    }
-    match /aiMapRateLimits/{uid} {
-      allow read, write: if false;
     }
     // =========================================================
     // COMMUNITY SERVICE EVENTS

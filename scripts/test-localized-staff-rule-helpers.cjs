@@ -160,14 +160,42 @@ const mergedRules=cp.execFileSync("git",["show",
  "f25ce81ce951d86fa7fe692c4be056c898810981:firestore.rules"],{encoding:"utf8"});
 assert.equal(mergedRules,optimized,
  "BLOCKED: protected pass-one source is not the reviewed baseline");
+// Third-pass exact transformation proof from immutable protected PR #335.
+const passTwo=cp.execFileSync("git",["show",
+ "5dd65a7f1e65b281e277d051b5e60ca09fbaaaa6:firestore.rules"],{encoding:"utf8"});
+const knownDenyScopes=[
+ "assistanceEvidenceAssets/{evidenceId}",
+ "fundReleaseDemos/{releaseId}",
+ "aiMapRateLimits/{uid}"
+];
+let transformed=passTwo;
+for(const scope of knownDenyScopes){
+ const declaration="    match /"+scope+" {\n      allow read, write: if false;\n    }\n";
+ assert.equal(transformed.split(declaration).length,2,
+  "BLOCKED: redundant deny scope unexpectedly modified "+scope);
+ transformed=transformed.replace(declaration,"");
+}
+const verifiedFunction="    function verifiedEmailSession() {\n"+
+ "      return signedIn()\n"+
+ "        && request.auth.token.get('email_verified', false) == true;\n"+
+ "    }\n";
+assert.equal(transformed.split(verifiedFunction).length,2,
+ "BLOCKED: verified session predicate changed");
+assert.equal((transformed.match(/verifiedEmailSession\(\)/g)||[]).length,3,
+ "BLOCKED: verification helper used by unreviewed permissions");
+transformed=transformed.replace(verifiedFunction,"");
+transformed=transformed.replaceAll("return verifiedEmailSession()",
+ "return signedIn() && request.auth.token.get('email_verified', false) == true");
+assert.equal(current,transformed,
+ "BLOCKED: any other Firestore security expression, allow statement or module changed");
+const globalFallback="    match /{document=**} {\n      allow read, write: if false;\n    }";
+assert(current.includes(globalFallback),
+ "BLOCKED: default-deny fallback was removed");
+assert.equal([...current.matchAll(/^    match \//gm)].length,51,
+ "BLOCKED: expected remaining collection-specific routes");
 const actualGitBlob=cp.execFileSync("git",["hash-object","firestore.rules"],{encoding:"utf8"}).trim();
-assert.equal(actualGitBlob,"9a5c0cd227ebc55a81be6c3cca8d5dbc183958b6",
- "BLOCKED: second-pass Rules changed without a reviewed exact source proof");
-const paths=text=>[...text.matchAll(/^    match \/(.+) \{/gm)].map(m=>m[1]);
-assert.deepEqual(paths(current),paths(mergedRules),"BLOCKED: Firestore collection paths changed");
-assert.equal((current.match(/\ballow (?:get|list|read|write|create|update|delete)/g)||[]).length,
- (mergedRules.match(/\ballow (?:get|list|read|write|create|update|delete)/g)||[]).length,
- "BLOCKED: allow statements added or removed");
+assert.equal(actualGitBlob,"bbff78cd781932086a17386083731e5e1b0dddf5",
+ "BLOCKED: third-pass Rules changed without a reviewed exact source proof");
 const body=current.slice(0,current.indexOf("    match /"));
 for(const name of ["hasApprovedStaffRole","isAdmin","isSuperAdmin","isAdminOrSuperAdmin"]){
  assert(body.includes("function "+name+"("),"Missing consolidated root helper "+name);
@@ -209,4 +237,4 @@ for(const [fn,allowed] of [
   "Staff permission changed for "+fn+JSON.stringify({p,verified}));
  checks++;
 }
-console.log("PASS: "+checks+" staff-role checks, immutable merged baseline and hash-pinned second-pass Rules; no live writes.");
+console.log("PASS: "+checks+" staff-role checks; exact third-pass transform; global deny fallback retained; no live writes.");
