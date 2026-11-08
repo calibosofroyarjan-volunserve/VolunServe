@@ -1,3 +1,4 @@
+import { volunserveTypography as vsType } from "../../constants/volunserveLiveUi";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import React, { useEffect, useState } from "react";
 import { ActivityIndicator, Image, Pressable, StyleSheet, Text, View } from "react-native";
@@ -85,14 +86,14 @@ export default function CommunityEventRoster({
 const s=StyleSheet.create({
  card:{padding:16,borderWidth:1,borderColor:"#D6E9E1",borderRadius:14,backgroundColor:"#FFFFFF",gap:12,marginTop:12},
  heading:{flexDirection:"row",alignItems:"center",gap:9},icon:{padding:8,backgroundColor:"#E8F7F0",borderRadius:10},
- title:{fontSize:15,fontWeight:"800",color:"#153F45"},desc:{fontSize:11,color:"#698087",marginTop:3},
- refresh:{flexDirection:"row",alignItems:"center",gap:4,padding:7},refreshText:{fontSize:11,fontWeight:"700",color:"#087C69"},
+ title:{fontSize: vsType.size.bodyStrong, fontFamily: vsType.family,fontWeight:"800",color:"#153F45"},desc:{fontSize: vsType.size.caption, fontFamily: vsType.family,color:"#698087",marginTop:3},
+ refresh:{flexDirection:"row",alignItems:"center",gap:4,padding:7},refreshText:{fontSize: vsType.size.caption, fontFamily: vsType.family,fontWeight:"700",color:"#087C69"},
  person:{flexDirection:"row",alignItems:"center",gap:10,borderTopWidth:1,borderTopColor:"#E9F0ED",paddingTop:11},
  avatar:{width:39,height:39,borderRadius:20},fallback:{width:39,height:39,borderRadius:20,backgroundColor:"#D7F2E7",alignItems:"center",justifyContent:"center"},
- initials:{fontWeight:"800",color:"#087C69",fontSize:13},name:{fontSize:13,fontWeight:"700",color:"#203F48"},role:{fontSize:10,color:"#607D7E",marginTop:3},
- errorBox:{padding:12,backgroundColor:"#FFF3F0",borderRadius:8,gap:7},error:{color:"#AE3029",fontSize:11},
- retry:{fontWeight:"800",color:"#087C69",fontSize:12},empty:{fontSize:12,color:"#698087"},
+ initials:{fontWeight:"800",color:"#087C69",fontSize: vsType.size.label, fontFamily: vsType.family},name:{fontSize: vsType.size.label, fontFamily: vsType.family,fontWeight:"700",color:"#203F48"},role:{fontSize: vsType.size.micro, fontFamily: vsType.family,color:"#607D7E",marginTop:3},
+ errorBox:{padding:12,backgroundColor:"#FFF3F0",borderRadius:8,gap:7},error:{color:"#AE3029",fontSize: vsType.size.caption, fontFamily: vsType.family},
+ retry:{fontWeight:"800",color:"#087C69",fontSize: vsType.size.meta, fontFamily: vsType.family},empty:{fontSize: vsType.size.meta, fontFamily: vsType.family,color:"#698087"},
  paging:{flexDirection:"row",justifyContent:"space-between",alignItems:"center",gap:10},
- pageBtn:{padding:8,backgroundColor:"#E8F7F0",borderRadius:8},disabled:{opacity:.4},pageText:{color:"#087C69",fontWeight:"700",fontSize:11},
- pageLabel:{color:"#4F6B74",fontSize:11},privacy:{color:"#799093",fontSize:10,lineHeight:15},
+ pageBtn:{padding:8,backgroundColor:"#E8F7F0",borderRadius:8},disabled:{opacity:.4},pageText:{color:"#087C69",fontWeight:"700",fontSize: vsType.size.caption, fontFamily: vsType.family},
+ pageLabel:{color:"#4F6B74",fontSize: vsType.size.caption, fontFamily: vsType.family},privacy:{color:"#799093",fontSize: vsType.size.micro, fontFamily: vsType.family,lineHeight:15},
 });
