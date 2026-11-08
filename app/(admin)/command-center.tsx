@@ -1,3 +1,4 @@
+import { volunserveTypography as vsType } from "../../constants/volunserveLiveUi";
 import { liveUi as designUi } from "../../constants/volunserveLiveUi";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { Redirect, useLocalSearchParams, useRouter } from "expo-router";
@@ -551,7 +552,7 @@ const styles =
       justifyContent: "center", gap: 7, paddingHorizontal: 11, paddingVertical: 10,
       borderBottomWidth: 2, borderBottomColor: "transparent", borderRadius: 10,},
     workspaceTabActive: { borderBottomColor: "#167456", backgroundColor: "#EAF4ED", borderTopLeftRadius: 8, borderTopRightRadius: 8 },
-    workspaceTabText: { fontSize: 12, color: "#61776B", fontWeight: "600" },
+    workspaceTabText: { fontSize: vsType.size.meta, fontFamily: vsType.family, color: "#61776B", fontWeight: "600" },
     workspaceTabTextActive: { color: "#135E48", fontWeight: "800" },
     // Xacton-inspired clarity: restrained KPI cards below one evergreen hero.
     kpiGrid: {flexDirection:"row",flexWrap:"wrap",gap:9,marginBottom:9},
@@ -562,9 +563,9 @@ const styles =
     kpiCardFeatured: {backgroundColor:"#087B60",borderColor:"#087B60"},
     kpiCardHeader: {flexDirection:"row",justifyContent:"space-between",alignItems:"flex-start",gap:8},
     kpiCardLabel: {fontSize: designUi.type.label.fontSize,fontWeight: designUi.type.label.fontWeight,color:"#688073",flex:1,lineHeight: designUi.type.label.lineHeight},
-    kpiCardValue: {fontSize:25,fontWeight:"800",color:"#164535",marginTop:5,fontVariant:["tabular-nums"]},
+    kpiCardValue: {fontSize: vsType.size.title, fontFamily: vsType.family,fontWeight:"800",color:"#164535",marginTop:5,fontVariant:["tabular-nums"]},
     kpiCardFoot: {flexDirection:"row",justifyContent:"space-between",gap:7,alignItems:"center",marginTop:5},
-    kpiCardHint: {flex:1,fontSize:10.5,color:"#829B8E"},
+    kpiCardHint: {flex:1,fontSize: vsType.size.caption, fontFamily: vsType.family,color:"#829B8E"},
     kpiFeaturedText: {color:"#FFFFFF"},
     kpiFeaturedHint: {color:"#C5EDDF"},
     // VolunServe identity: one rich evergreen masthead, not a field of cards.
@@ -590,13 +591,13 @@ const styles =
     heroCopy: { flex: 1, minWidth: 0, zIndex: 1 },
     heroEyebrow: { flexDirection: "row", alignItems: "center", gap: 9, marginBottom: 5 },
     heroEyebrowMark: { width: 6, height: 6, borderRadius: 3, backgroundColor: "#AFD7A0" },
-    heroEyebrowText: { color: "#A9D9C5", letterSpacing: 1.35, fontSize: 10.5, fontWeight: "700" },
-    heroTitle: { color: "#FFFFFF", fontSize: 26, lineHeight: 32, letterSpacing: -0.7, fontWeight: "700" },
-    heroSubtitle: { color: "#C0DED0", maxWidth: 570, marginTop: 4, fontSize: 12, lineHeight: 17 },
+    heroEyebrowText: { color: "#A9D9C5", letterSpacing: 1.35, fontSize: vsType.size.caption, fontFamily: vsType.family, fontWeight: "700" },
+    heroTitle: { color: "#FFFFFF", fontSize: vsType.size.page, fontFamily: vsType.family, lineHeight: 32, letterSpacing: -0.7, fontWeight: "700" },
+    heroSubtitle: { color: "#C0DED0", maxWidth: 570, marginTop: 4, fontSize: vsType.size.meta, fontFamily: vsType.family, lineHeight: 17 },
     heroLocality: {
       flexDirection: "row", alignItems: "center", gap: 7, paddingTop: 8, zIndex: 1,
     },
-    heroLocalityText: { color: "#BADDCB", fontSize: 9.5, letterSpacing: 0.6, fontWeight: "700" },
+    heroLocalityText: { color: "#BADDCB", fontSize: vsType.size.micro, fontFamily: vsType.family, letterSpacing: 0.6, fontWeight: "700" },
     heroDivider: { height: 1, backgroundColor: "rgba(204,238,217,0.21)" },
     metricItemDivider: { borderLeftWidth: 1, borderLeftColor: "rgba(204,238,217,0.18)" },
     sectionEyebrow: { flexDirection: "row", alignItems: "center", gap: 9, marginBottom: 9 },
@@ -611,19 +612,19 @@ const styles =
     overviewSecondary: { flex: 1, minWidth: 0 },
     overviewFullWidth: { flexGrow: 0, flexShrink: 0, flexBasis: "auto", width: "100%" },
     overviewSectionHeader: { marginBottom: 10 },
-    overviewSectionSubtitle: { color: "#6C8076", fontSize: 11.5, lineHeight: 17, marginTop: 3 },
+    overviewSectionSubtitle: { color: "#6C8076", fontSize: vsType.size.meta, fontFamily: vsType.family, lineHeight: 17, marginTop: 3 },
     overviewAction: {
       flexDirection: "row", gap: 10, alignItems: "center", paddingVertical: 8, paddingHorizontal: 2,
       borderBottomWidth: 1, borderColor: "#EDF1ED", minHeight: 49,
     },
     overviewActionIcon: { width: 32, height: 32, borderRadius: 8, backgroundColor: "#EAF4ED", alignItems: "center", justifyContent: "center" },
     overviewActionContent: { flex: 1, minWidth: 0 },
-    overviewActionTitle: { fontSize: 12.5, fontWeight: "700", color: "#173E31" },
-    overviewActionDetail: { fontSize: 11, lineHeight: 16, color: "#708579", marginTop: 2 },
+    overviewActionTitle: { fontSize: vsType.size.label, fontFamily: vsType.family, fontWeight: "700", color: "#173E31" },
+    overviewActionDetail: { fontSize: vsType.size.caption, fontFamily: vsType.family, lineHeight: 16, color: "#708579", marginTop: 2 },
     metricItemCritical: {},
     metricItemValueCritical: { color: "#EBC18B" },
     overline: {
-      fontSize: 10, letterSpacing: 1.2, color: "#688076", fontWeight: "700", marginBottom: 9,
+      fontSize: vsType.size.micro, fontFamily: vsType.family, letterSpacing: 1.2, color: "#688076", fontWeight: "700", marginBottom: 9,
     },
     flatSummary: { marginBottom: 26 },
     metricStrip: {
@@ -631,8 +632,8 @@ const styles =
     },
     metricStripCompact: { flexWrap: "wrap" },
     metricItem: { flexGrow: 1, flexBasis: "24%", minWidth: 138, paddingVertical: 20, paddingHorizontal: 17 },
-    metricItemLabel: { fontSize: 11.5, color: "#B6D5C4", fontWeight: "600" },
-    metricItemValue: { fontSize: 31, lineHeight: 40, fontWeight: "700", color: "#FFFFFF", marginTop: 5, fontVariant: ["tabular-nums"] },
+    metricItemLabel: { fontSize: vsType.size.meta, fontFamily: vsType.family, color: "#B6D5C4", fontWeight: "600" },
+    metricItemValue: { fontSize: vsType.size.hero, fontFamily: vsType.family, lineHeight: 40, fontWeight: "700", color: "#FFFFFF", marginTop: 5, fontVariant: ["tabular-nums"] },
     queueSection: { marginTop: 31 },
     queueHeader: { marginBottom: 15 },
     queueRow: {
@@ -640,8 +641,8 @@ const styles =
       borderTopWidth: 1, borderTopColor: "#DDE6E1", minHeight: 65,
     },
     queueContent: { flex: 1, minWidth: 0 },
-    queueTitle: { fontSize: 13, fontWeight: "700", color: "#173D32" },
-    queueSummary: { fontSize: 12, color: "#6C7F77", lineHeight: 18, marginTop: 4 },
+    queueTitle: { fontSize: vsType.size.label, fontFamily: vsType.family, fontWeight: "700", color: "#173D32" },
+    queueSummary: { fontSize: vsType.size.meta, fontFamily: vsType.family, color: "#6C7F77", lineHeight: 18, marginTop: 4 },
     screen: {
       flex: 1,
       minHeight: 0,
@@ -680,7 +681,7 @@ const styles =
     loadingText: {
       marginTop: 12,
       color: "#64748B",
-      fontSize: 13,
+      fontSize: vsType.size.label, fontFamily: vsType.family,
       fontWeight: "600",
     },
 
@@ -727,8 +728,8 @@ const styles =
 
     adminBadgeText: {
       color: "#0F766E",
-      fontSize: 11,
-      fontWeight: "900",
+      fontSize: vsType.size.caption, fontFamily: vsType.family,
+      fontWeight: "800",
       letterSpacing: 0.5,
     },
 
@@ -749,7 +750,7 @@ const styles =
     warningText: {
       flex: 1,
       color: "#92400E",
-      fontSize: 12,
+      fontSize: vsType.size.meta, fontFamily: vsType.family,
       lineHeight: 18,
       fontWeight: "600",
     },
@@ -781,14 +782,14 @@ const styles =
 
     lguDoctrineTitle: {
       color: "#065F46",
-      fontSize: 14,
-      fontWeight: "900",
+      fontSize: vsType.size.body, fontFamily: vsType.family,
+      fontWeight: "800",
     },
 
     lguDoctrineText: {
       marginTop: 4,
       color: "#3F6F62",
-      fontSize: 12,
+      fontSize: vsType.size.meta, fontFamily: vsType.family,
       lineHeight: 18,
       fontWeight: "600",
     },
@@ -809,7 +810,7 @@ const styles =
     sectionSubtitle: {
       marginTop: 3,
       color: "#64748B",
-      fontSize: 12.5,
+      fontSize: vsType.size.label, fontFamily: vsType.family,
     },
 
     moduleGrid: {
@@ -863,22 +864,22 @@ const styles =
 
     countBadgeText: {
       color: "#334155",
-      fontSize: 11,
-      fontWeight: "900",
+      fontSize: vsType.size.caption, fontFamily: vsType.family,
+      fontWeight: "800",
     },
 
     moduleTitle: {
       marginTop: 17,
       color: "#0F172A",
-      fontSize: 15,
-      fontWeight: "900",
+      fontSize: vsType.size.bodyStrong, fontFamily: vsType.family,
+      fontWeight: "800",
     },
 
     moduleDescription: {
       marginTop: 6,
       minHeight: 38,
       color: "#64748B",
-      fontSize: 12,
+      fontSize: vsType.size.meta, fontFamily: vsType.family,
       lineHeight: 18,
     },
 
@@ -891,7 +892,7 @@ const styles =
 
     openText: {
       color: "#078F82",
-      fontSize: 12,
+      fontSize: vsType.size.meta, fontFamily: vsType.family,
       fontWeight: "800",
     },
 
@@ -932,21 +933,21 @@ const styles =
 
     overviewLabel: {
       color: "#334155",
-      fontSize: 12,
+      fontSize: vsType.size.meta, fontFamily: vsType.family,
       fontWeight: "800",
     },
 
     overviewValue: {
       marginTop: 3,
       color: "#0F172A",
-      fontSize: 27,
-      fontWeight: "900",
+      fontSize: vsType.size.page, fontFamily: vsType.family,
+      fontWeight: "800",
     },
 
     overviewDescription: {
       marginTop: 4,
       color: "#64748B",
-      fontSize: 11.5,
+      fontSize: vsType.size.meta, fontFamily: vsType.family,
       lineHeight: 16,
     },
 
