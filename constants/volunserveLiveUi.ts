@@ -1,3 +1,22 @@
+import { Platform } from "react-native";
+
+/** VolunServe cross-platform typography foundation. No external font assets. */
+export const volunserveTypography = {
+  family: Platform.select({
+    web: 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+    ios: "System",
+    android: "sans-serif",
+    default: "System",
+  }) || "System",
+  size: {
+    micro: 10, caption: 11, meta: 12, label: 13, body: 14,
+    bodyStrong: 15, card: 16, section: 18, subheading: 20,
+    titleSmall: 22, title: 24, page: 26, hero: 30,
+    display: 34, xl: 40, giant: 48,
+  },
+  weight: { regular: "400", medium: "500", semibold: "600", bold: "700", heavy: "800" },
+} as const;
+
 /**
  * VolunServe production-aligned design tokens.
  *
@@ -23,11 +42,11 @@ export const liveUi = {
   },
   type: {
     eyebrow: { fontSize: 11, lineHeight: 16, fontWeight: "700" },
-    page: { fontSize: 25, lineHeight: 32, fontWeight: "700" },
-    section: { fontSize: 18, lineHeight: 25, fontWeight: "700" },
-    card: { fontSize: 16, lineHeight: 23, fontWeight: "700" },
-    body: { fontSize: 14, lineHeight: 21, fontWeight: "400" },
-    label: { fontSize: 13, lineHeight: 19, fontWeight: "600" },
+    page: { fontSize: 26, lineHeight: 34, fontWeight: "700" },
+    section: { fontSize: 18, lineHeight: 26, fontWeight: "700" },
+    card: { fontSize: 16, lineHeight: 24, fontWeight: "700" },
+    body: { fontSize: 14, lineHeight: 22, fontWeight: "400" },
+    label: { fontSize: 13, lineHeight: 20, fontWeight: "600" },
     meta: { fontSize: 12, lineHeight: 18, fontWeight: "500" },
   },
   space: { xs: 4, sm: 8, md: 12, lg: 16, xl: 24, xxl: 32 },
