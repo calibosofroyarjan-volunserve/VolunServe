@@ -94,6 +94,14 @@ if (useStagingFirebase) {
       "STAGING FIREBASE CONFIG REQUIRED. Refusing to connect staging signup to production Firebase."
     );
   }
+  // The dedicated Full Staging Hosting site must use its own Firebase Web App,
+  // never a different staging project (including the older auth-only project).
+  if (fullStagingHosts.includes(currentHost) &&
+      (stage.projectId !== "volunserve-full-staging" ||
+       stage.messagingSenderId !== "429213950126" ||
+       stage.appId !== "1:429213950126:web:955dbf575697826b674d3f")) {
+    throw new Error("Full staging Hosting requires the matching Full Staging Firebase Web App.");
+  }
 }
 
 export const firebaseConfig = usingFirebaseEmulators
