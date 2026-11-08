@@ -29,13 +29,44 @@ function structuralDelta(live,candidate){
   caution:"Identical names and paths do NOT prove identical permissions or existing-module compatibility",
  };
 }
+function getRuleBlock(source,label,pattern){
+ const match=pattern.exec(source);
+ if(!match)return {label,error:"MISSING_LIVE_BLOCK"};
+ const start=match.index;
+ const open=source.indexOf("{",start+match[0].length-1);
+ if(open<0)return {label,error:"MISSING_BRACE"};
+ let depth=0,end=-1;
+ for(let i=open;i<source.length;i++){
+   const c=source[i];
+   if(c==="{")depth++;
+   if(c==="}"){
+     depth--;
+     if(depth===0){end=i+1;break;}
+   }
+ }
+ if(end<0||end-start>20000)return {label,error:"MISSING_OR_OVERSIZED_BLOCK"};
+ const body=source.slice(start,end);
+ const prev=source.slice(0,start).split("\n").slice(-5).join("\n");
+ const next=source.slice(end).split("\n").slice(0,4).join("\n");
+ return {label,nearbyBefore:prev,code:body,nearbyAfter:next};
+}
+function missingVolunteerBlocks(live){
+ return [
+  getRuleBlock(live,"selectedCase",/function\s+selectedCase\s*\([^)]*\)\s*\{/),
+  getRuleBlock(live,"selectedVolunteer",/function\s+selectedVolunteer\s*\([^)]*\)\s*\{/),
+  getRuleBlock(live,"volunteerInvitations",/match\s+\/volunteerInvitations\/\{[^}]+\}\s*\{/),
+ ];
+}
 function selfTest(){
  const a='service cloud.firestore { match /databases/{database}/documents { match /users/{uid} { function old() {return true;} allow read: if true; } } }';
  const b='service cloud.firestore { match /databases/{database}/documents { match /users/{uid} { function newer() {return true;} allow read: if false; } } }';
  const d=structuralDelta(a,b);
  assert.deepEqual(d.removedFunctionNames,["old"]);assert.deepEqual(d.addedFunctionNames,["newer"]);
  assert.deepEqual(d.removedMatchPaths,[]);
- console.log("PASS: structural Rules inventory, scoped read only");
+ const b=getRuleBlock("match /volunteerInvitations/{inviteId} { allow read: if true; }",
+    "volunteerInvitations",/match\s+\/volunteerInvitations\/\{[^}]+\}\s*\{/);
+ assert(b.code.includes("allow read: if true"));
+ console.log("PASS: structural Rules inventory and safe scoped block extraction");
 }
 async function main(){
  assert.equal(process.env.GITHUB_REPOSITORY,"calibosofroyarjan-volunserve/VolunServe");
@@ -65,6 +96,13 @@ async function main(){
   rulesPublish:"NOT ATTEMPTED",
   note:"This is a structural inventory only; review changed permission logic before applying",
  },null,2));
+ if(process.argv.includes("--missing-live-blocks")){
+   const blocks=missingVolunteerBlocks(actual);
+   for(const item of blocks){
+     if(item.error)throw Error("BLOCKED: cannot extract "+item.label+": "+item.error);
+     console.log("LIVE_POLICY_BLOCK "+JSON.stringify(item));
+   }
+ }
  if(result.removedFunctionNames.length||result.removedMatchPaths.length){
   console.error("BLOCKED: target removes live Rules functions or match paths");
   process.exitCode=1;
@@ -74,4 +112,4 @@ if(require.main===module){
  (process.argv.includes("--self-test")?Promise.resolve().then(selfTest):main())
    .catch(e=>{console.error(e.message);process.exitCode=1;});
 }
-module.exports={structuralDelta};
+module.exports={structuralDelta,getRuleBlock,missingVolunteerBlocks};
