@@ -36,7 +36,10 @@ service cloud.firestore {
         && (
           p.get('status', null) == 'approved'
           || (!('status' in p) && p.get('role', 'applicant') != 'applicant')
-        );
+        )
+        // Historical suspended staff must not retain community-wide reads
+        // through the generic approved() helper.
+        && p.get('adminStatus', 'active') != 'suspended';
     }
     function isAdmin() {
       let p = signedIn() ? profile() : {};
@@ -50,7 +53,8 @@ service cloud.firestore {
       let p = signedIn() ? profile() : {};
       return verifiedEmailSession()
         && p.get('role', '') == 'superadmin'
-        && p.get('status', 'approved') == 'approved';
+        && p.get('status', 'approved') == 'approved'
+        && p.get('adminStatus', 'active') != 'suspended';
     }
     // One role test, not isAdmin() || isSuperAdmin().
     function isAdminOrSuperAdmin() {
@@ -58,8 +62,7 @@ service cloud.firestore {
       return verifiedEmailSession()
         && p.get('role', '') in ['admin', 'superadmin']
         && p.get('status', 'approved') == 'approved'
-        && (p.get('role', '') == 'superadmin'
-          || p.get('adminStatus', 'active') != 'suspended');
+        && p.get('adminStatus', 'active') != 'suspended';
     }
     function hasResidentAccess() {
       let p = signedIn() ? profile() : {};
