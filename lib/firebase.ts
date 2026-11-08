@@ -55,7 +55,11 @@ export const usingFirebaseEmulators =
  * to the production project when its separate Firebase environment is missing.
  * These are Firebase's public WEB config fields, not service-account secrets.
  */
-const useStagingFirebase = process.env.EXPO_PUBLIC_VOLUNSERVE_FIREBASE_TARGET === "staging";
+const firebaseTarget = process.env.EXPO_PUBLIC_VOLUNSERVE_FIREBASE_TARGET || "production";
+if (firebaseTarget !== "production" && firebaseTarget !== "staging") {
+  throw new Error("Invalid Firebase target. Choose explicit 'staging' or 'production'.");
+}
+const useStagingFirebase = firebaseTarget === "staging";
 const stagingConfig = useStagingFirebase ? {
   apiKey: process.env.EXPO_PUBLIC_VOLUNSERVE_STAGING_FIREBASE_API_KEY || "",
   authDomain: process.env.EXPO_PUBLIC_VOLUNSERVE_STAGING_FIREBASE_AUTH_DOMAIN || "",
