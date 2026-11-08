@@ -16,11 +16,11 @@ const mocks={
   "firebase/functions":{getFunctions:(app,region)=>({app,region}),connectFunctionsEmulator:()=>{}},
   "firebase/storage":{getStorage:app=>({app})},
 };
-function load(env={}) {
+function load(env={},hostname) {
   const module={exports:{}};
   new Function("require","module","exports","process","window","console",js)(
     name=>{if(!(name in mocks))throw Error("Unexpected module "+name);return mocks[name];},
-    module,module.exports,{env},undefined,{log:()=>{}}
+    module,module.exports,{env},hostname?{location:{hostname}}:undefined,{log:()=>{}}
   );
   return module.exports;
 }
@@ -69,4 +69,28 @@ test("complete distinct staging config stays isolated from production Auth and F
   assert.equal(x.db.app.options.projectId,"volunserve-staging-test");
   assert.equal(x.functions.app.options.projectId,"volunserve-staging-test");
   assert.notEqual(x.firebaseConfig.projectId,x.productionConfig.projectId);
+});
+
+test("staging signup cannot run on live VolunServe hostname",()=>{
+  for(const host of ["volunserve.com","www.volunserve.com","volunserve-3aa5b.web.app"]) {
+    assert.throws(()=>load(stageEnv(),host),/Firebase target does not match website host/);
+  }
+});
+test("live Firebase cannot run on full staging Hosting hostname",()=>{
+  for(const host of ["volunserve-full-staging.web.app","volunserve-full-staging.firebaseapp.com"]) {
+    assert.throws(()=>load({},host),/Firebase target does not match website host/);
+  }
+});
+test("staging signup still permits the registered full staging hostname with isolated configuration",()=>{
+  const stage=stageEnv({
+    EXPO_PUBLIC_VOLUNSERVE_STAGING_FIREBASE_PROJECT_ID:"volunserve-full-staging",
+    EXPO_PUBLIC_VOLUNSERVE_STAGING_FIREBASE_AUTH_DOMAIN:"volunserve-full-staging.firebaseapp.com",
+    EXPO_PUBLIC_VOLUNSERVE_STAGING_FIREBASE_STORAGE_BUCKET:"volunserve-full-staging.firebasestorage.app",
+    EXPO_PUBLIC_VOLUNSERVE_STAGING_FIREBASE_MESSAGING_SENDER_ID:"429213950126",
+    EXPO_PUBLIC_VOLUNSERVE_STAGING_FIREBASE_APP_ID:"1:429213950126:web:955dbf575697826b674d3f",
+  });
+  const x=load(stage,"volunserve-full-staging.web.app");
+  assert.equal(x.auth.app.options.projectId,"volunserve-full-staging");
+  assert.equal(x.db.app.options.projectId,"volunserve-full-staging");
+  assert.equal(x.functions.app.options.projectId,"volunserve-full-staging");
 });
