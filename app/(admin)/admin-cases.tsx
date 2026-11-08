@@ -569,7 +569,8 @@ const lguResponseFieldLabel = (personnel?: LguPersonnelCandidate | null) => {
 export default function AdminCases() {
   const router = useRouter();
   const { width } = useWindowDimensions();
-  const compact = width < 920;
+  // The Admin sidebar takes 268px on desktop; use a content-aware breakpoint.
+  const compact = width < 1360;
 
   const [role, setRole] = useState<string | null>(null);
   const [loadingRole, setLoadingRole] = useState(true);
@@ -584,6 +585,7 @@ export default function AdminCases() {
   );
   const [filterStatus, setFilterStatus] = useState<CaseStatus | "all">("all");
   const [filterSeverity, setFilterSeverity] = useState<Severity | "all">("all");
+  const [filtersExpanded, setFiltersExpanded] = useState(false);
   const [caseSearch, setCaseSearch] = useState("");
   const [recordPage, setRecordPage] = useState(1);
   const [volunteerPage, setVolunteerPage] = useState(1);
@@ -3023,6 +3025,26 @@ export default function AdminCases() {
         </View>
   
         <View style={styles.filterCard}>
+          <View style={styles.filterToolbar}>
+            <View style={styles.filterToolbarCopy}>
+              <Text style={styles.filterToolbarTitle}>Refine reports</Text>
+              <Text style={styles.filterToolbarSubtitle}>Search above or narrow the report list.</Text>
+            </View>
+            <TouchableOpacity
+              accessibilityRole="button"
+              accessibilityLabel={filtersExpanded ? "Hide emergency report filters" : "Show emergency report filters"}
+              accessibilityState={{ expanded: filtersExpanded }}
+              style={styles.filterToggle}
+              onPress={() => setFiltersExpanded((current) => !current)}
+            >
+              <Text style={styles.filterToggleText}>
+                {filtersExpanded ? "Hide filters" : "Show filters"}
+                {filterStatus !== "all" || filterSeverity !== "all" ? " · Active" : ""}
+              </Text>
+            </TouchableOpacity>
+          </View>
+          {filtersExpanded ? (
+            <View style={styles.filterContent}>
           <View style={styles.filterGroup}>
             <Text style={styles.filterLabel}>STATUS</Text>
             <View style={styles.pillRow}>
@@ -3086,6 +3108,12 @@ export default function AdminCases() {
               )}
             </View>
           </View>
+            </View>
+          ) : (
+            <Text style={styles.filterHint}>
+              {labelOfStatus(filterStatus)} · {filterSeverity === "all" ? "All severities" : severityLabel(filterSeverity)}
+            </Text>
+          )}
         </View>
 
       <ListPagination page={activeCasePage} total={visibleCases.length} pageSize={5} onChange={setRecordPage} />
@@ -4905,11 +4933,11 @@ const styles = StyleSheet.create({
   },
 
   pageHeader: {
+    width: "100%",
     flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: 16,
-    marginBottom: 14,
+    alignItems: "stretch",
+    gap: 12,
+    marginBottom: 12,
   },
   eyebrow: {
     color: "#078f82",
@@ -4930,17 +4958,21 @@ const styles = StyleSheet.create({
     lineHeight: designUi.type.body.lineHeight, fontWeight: designUi.type.body.fontWeight,},
   liveSummary: {
     minWidth: 108,
-    backgroundColor: "#ffffff",
+    minHeight: 46,
+    backgroundColor: "#f0faf5",
     borderWidth: 1,
-    borderColor: "#dfe7ee",
-    borderRadius: 15,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    borderColor: "#c7e9d7",
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    flexDirection: "row",
+    justifyContent: "center",
     alignItems: "center",
+    gap: 7,
   },
   liveSummaryNumber: {
-    color: "#0f172a",
-    fontSize: 24,
+    color: "#086b54",
+    fontSize: 19,
     fontWeight: "900",
   },
   liveSummaryLabel: {
@@ -4954,16 +4986,66 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#dfe7ee",
     borderRadius: 12,
-    paddingHorizontal: 12,
+    paddingHorizontal: 14,
     paddingVertical: 10,
     marginBottom: 12,
+    gap: 9,
+    minWidth: 0,
+  },
+  filterToolbar: {
     flexDirection: "row",
-    flexWrap: "wrap",
     alignItems: "center",
     justifyContent: "space-between",
-    gap: 14,
+    flexWrap: "wrap",
+    gap: 10,
+  },
+  filterToolbarCopy: {
+    flexGrow: 1,
+    flexBasis: 190,
+    minWidth: 0,
+  },
+  filterToolbarTitle: {
+    color: "#15372c",
+    fontSize: 13,
+    fontWeight: "800",
+  },
+  filterToolbarSubtitle: {
+    color: "#64748b",
+    marginTop: 3,
+    fontSize: 11,
+  },
+  filterToggle: {
+    borderRadius: 9,
+    borderWidth: 1,
+    borderColor: "#b7ddca",
+    backgroundColor: "#edf9f2",
+    paddingHorizontal: 14,
+    minHeight: 40,
+    justifyContent: "center",
+  },
+  filterToggleText: {
+    color: "#076b54",
+    fontSize: 12,
+    fontWeight: "800",
+  },
+  filterHint: {
+    color: "#65766d",
+    fontSize: 11,
+  },
+  filterContent: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 16,
+    borderTopWidth: 1,
+    borderTopColor: "#eef1f2",
+    paddingTop: 12,
   },
   filterGroup: {
+    flexGrow: 1,
+    flexShrink: 1,
+    flexBasis: 295,
+    minWidth: 0,
+    maxWidth: "100%",
     gap: 7,
   },
   filterLabel: {
@@ -4998,12 +5080,17 @@ const styles = StyleSheet.create({
   },
 
   headerTools: {
+    flex: 1,
+    minWidth: 0,
     flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
+    flexWrap: "wrap",
+    alignItems: "stretch",
+    gap: 10,
   },
   searchBox: {
-    width: 300,
+    flexGrow: 1,
+    flexBasis: 260,
+    minWidth: 0,
     minHeight: 46,
     flexDirection: "row",
     alignItems: "center",
@@ -6502,15 +6589,18 @@ const styles = StyleSheet.create({
   },
 
   caseWorkspace: {
+    width: "100%",
+    minWidth: 0,
     flexDirection: "row",
     alignItems: "flex-start",
-    gap: 10,
+    gap: 12,
   },
   caseWorkspaceCompact: {
     flexDirection: "column",
+    alignItems: "stretch",
   },
   caseListPane: {
-    width: 400,
+    width: 380,
     flexShrink: 0,
     backgroundColor: "#ffffff",
     borderWidth: 1,
@@ -6523,6 +6613,7 @@ const styles = StyleSheet.create({
   },
   caseListPaneCompact: {
     width: "100%",
+    flexShrink: 1,
   },
   caseListHeader: {
     minHeight: 58,
@@ -6570,8 +6661,8 @@ const styles = StyleSheet.create({
     borderColor: "#37b8aa",
   },
   caseListThumb: {
-    width: 70,
-    height: 58,
+    width: 60,
+    height: 54,
     flexShrink: 0,
     borderRadius: 8,
     overflow: "hidden",
@@ -6595,6 +6686,7 @@ const styles = StyleSheet.create({
   },
   caseListTitleRow: {
     flexDirection: "row",
+    flexWrap: "wrap",
     alignItems: "center",
     gap: 7,
   },
@@ -6633,7 +6725,7 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
   caseListRight: {
-    width: 78,
+    width: 62,
     flexShrink: 0,
     alignItems: "flex-end",
     justifyContent: "space-between",
@@ -6681,9 +6773,13 @@ const styles = StyleSheet.create({
     backgroundColor: "#e8eef2",
   },
   mediaBoxCompact: {
-    width: "100%",
-    height: 210,
-    minHeight: 210,
+    width: "auto",
+    alignSelf: "stretch",
+    height: 160,
+    minHeight: 160,
+    marginLeft: 12,
+    marginRight: 12,
+    marginBottom: 0,
   },
   incidentImage: {
     width: "100%",
@@ -6714,11 +6810,13 @@ const styles = StyleSheet.create({
 
   caseContent: {
     flex: 1,
+    minWidth: 0,
     padding: 14,
   },
   caseTopRow: {
     flexDirection: "row",
-    gap: 12,
+    flexWrap: "wrap",
+    gap: 10,
     alignItems: "flex-start",
   },
   caseTitle: {
