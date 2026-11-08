@@ -382,17 +382,16 @@ export default function GuestWorkspace({ landing = false }: { landing?: boolean 
         <View style={styles.topStatus}><View style={styles.statusDot} /><Text style={styles.topStatusText}>Guest · Read-only</Text></View>
         <Pressable style={styles.topIcon} accessibilityRole="button" accessibilityLabel="Community updates preview" onPress={() => open(role, "updates")}>
           <Ionicons name="notifications-outline" size={22} color={P.ink} /></Pressable>
-        <Pressable style={styles.account} accessibilityRole="button" accessibilityLabel="Guest account menu" accessibilityState={{expanded:accountOpen}}
+        <Pressable style={styles.account} accessibilityRole="button" accessibilityLabel="Guest preview options (no account)" accessibilityState={{expanded:accountOpen}}
           onPress={() => setAccountOpen(v => !v)}>
           <Mark icon="person-circle-outline" size={22} color="#3474C4" tint="#E1ECFF" />
-          {!narrow ? <View><Text style={styles.accountName}>Guest Preview</Text><Text style={styles.accountRole}>{role === "resident" ? "Resident view" : "Volunteer view"}</Text></View> : null}
+          {!narrow ? <View><Text style={styles.accountName}>Guest Preview · No Account</Text><Text style={styles.accountRole}>{role === "resident" ? "Resident view" : "Volunteer view"}</Text></View> : null}
           <Ionicons name="chevron-down" size={17} color="#1F4260" /></Pressable>
       </View>
       {accountOpen ? <View style={styles.accountDropdown}>
-        {([["profile", "View Profile"], ["progress", "My Progress"], ["certificates", "Certificates"]] as const).map(([key, label]) =>
-          <Pressable accessibilityRole="button" key={key} style={styles.accountOption} onPress={() => {setAccountOpen(false);open(role,key);}}>
-            <Text style={styles.accountOptionText}>{label}</Text><Ionicons name="chevron-forward" size={15} color="#81909E" />
-          </Pressable>)}
+        <View style={styles.accountOption}>
+          <Text style={styles.accountOptionText}>Guest preview only · No account or saved profile</Text>
+        </View>
         <Pressable accessibilityRole="button" style={styles.accountOption} onPress={() => {setAccountOpen(false);router.push("/public");}}>
           <Text style={styles.accountOptionText}>Switch workspace</Text><Ionicons name="swap-horizontal-outline" size={16} color="#81909E" />
         </Pressable>

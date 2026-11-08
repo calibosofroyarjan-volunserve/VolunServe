@@ -294,17 +294,16 @@ export default function RootLayout() {
       return;
     }
 
-    // Public email/password accounts must confirm inbox ownership before
-    // entering Resident/Volunteer routes. Staff and Google OAuth are handled
-    // by their independent authentication and authorization flows.
+    // All community accounts, including Google OAuth, must prove ownership
+    // of the exact email stored in users/{uid} before protected routing.
+    // Independent staff accounts retain their existing login policy.
     const communityAccount =
       profile.role === "resident" ||
       profile.role === "volunteer" ||
       profile.role === "applicant";
-    const usesPassword = authUser.providerData.some(
-      provider => provider.providerId === "password"
-    );
-    if (communityAccount && usesPassword && !authUser.emailVerified) {
+    const communityEmailMatches = !!authUser.email && !!profile.email &&
+      authUser.email.trim().toLowerCase() === profile.email.trim().toLowerCase();
+    if (communityAccount && (!authUser.emailVerified || !communityEmailMatches)) {
       if (!isLoginRoute && !isSignupRoute) {
         void logoutUser().finally(() => router.replace("/login"));
       }
