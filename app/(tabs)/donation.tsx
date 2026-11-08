@@ -1979,7 +1979,7 @@ const styles = StyleSheet.create({
     fontSize: vsType.size.label,
     
   
-    fontFamily: "DonationInterSemiBold",},
+    fontFamily: vsType.family,},
 
   heroCard: {
     flexDirection: "row",
@@ -2010,14 +2010,14 @@ const styles = StyleSheet.create({
     
     letterSpacing: 0.9,
   
-    fontFamily: "DonationInterBold",},
+    fontFamily: vsType.family,},
   title: {
     marginTop: 4,
     color: "#173D32",
     fontSize: designUi.type.page.fontSize,
     
   
-    fontFamily: "DonationInterBold", lineHeight: designUi.type.page.lineHeight, fontWeight: designUi.type.page.fontWeight,},
+    fontFamily: vsType.family, lineHeight: designUi.type.page.lineHeight, fontWeight: designUi.type.page.fontWeight,},
   subtitle: {
     maxWidth: 820,
     marginTop: 7,
@@ -2025,7 +2025,7 @@ const styles = StyleSheet.create({
     fontSize: designUi.type.body.fontSize,
     lineHeight: designUi.type.body.lineHeight,
   
-    fontFamily: "DonationInterRegular", fontWeight: designUi.type.body.fontWeight,},
+    fontFamily: vsType.family, fontWeight: designUi.type.body.fontWeight,},
   heroTrustBadge: {
     flexDirection: "row",
     alignItems: "center",
@@ -2040,7 +2040,7 @@ const styles = StyleSheet.create({
     fontSize: vsType.size.micro,
     
   
-    fontFamily: "DonationInterBold",},
+    fontFamily: vsType.family,},
 
   summaryGrid: {
     flexDirection: "row",
@@ -2083,14 +2083,14 @@ const styles = StyleSheet.create({
     fontSize: vsType.size.titleSmall,
     
   
-    fontFamily: "DonationInterBold",},
+    fontFamily: vsType.family,},
   summaryLabel: {
     marginTop: 2,
     color: "#64748B",
     fontSize: designUi.type.label.fontSize,
     
   
-    fontFamily: "DonationInterBold", lineHeight: designUi.type.label.lineHeight, fontWeight: designUi.type.label.fontWeight,},
+    fontFamily: vsType.family, lineHeight: designUi.type.label.lineHeight, fontWeight: designUi.type.label.fontWeight,},
 
   filterPanel: {
     marginTop: 22,
@@ -2106,14 +2106,14 @@ const styles = StyleSheet.create({
     
     letterSpacing: 0.8,
   
-    fontFamily: "DonationInterBold",},
+    fontFamily: vsType.family,},
   sectionTitle: {
     marginTop: 3,
     color: "#173D32",
     fontSize: designUi.type.section.fontSize,
     
   
-    fontFamily: "DonationInterBold", lineHeight: designUi.type.section.lineHeight, fontWeight: designUi.type.section.fontWeight,},
+    fontFamily: vsType.family, lineHeight: designUi.type.section.lineHeight, fontWeight: designUi.type.section.fontWeight,},
   sectionSubtitle: {
     maxWidth: 850,
     marginTop: 5,
@@ -2121,7 +2121,7 @@ const styles = StyleSheet.create({
     fontSize: designUi.type.body.fontSize,
     lineHeight: designUi.type.body.lineHeight,
   
-    fontFamily: "DonationInterRegular", fontWeight: designUi.type.body.fontWeight,},
+    fontFamily: vsType.family, fontWeight: designUi.type.body.fontWeight,},
   filterRow: {
     flexDirection: "row",
     flexWrap: "wrap",
@@ -2148,7 +2148,7 @@ const styles = StyleSheet.create({
     fontSize: vsType.size.micro,
     
   
-    fontFamily: "DonationInterBold",},
+    fontFamily: vsType.family,},
   filterChipTextActive: {
     color: "#FFFFFF",
   },
@@ -2169,7 +2169,7 @@ const styles = StyleSheet.create({
     fontSize: vsType.size.micro,
     
   
-    fontFamily: "DonationInterBold",},
+    fontFamily: vsType.family,},
   filterCountTextActive: {
     color: "#FFFFFF",
   },
@@ -2191,7 +2191,7 @@ const styles = StyleSheet.create({
     fontSize: vsType.size.caption,
     lineHeight: 16,
   
-    fontFamily: "DonationInterRegular",},
+    fontFamily: vsType.family,},
 
   campaignGrid: {
     flexDirection: "row",
@@ -2231,7 +2231,7 @@ const styles = StyleSheet.create({
     fontSize: vsType.size.micro,
     
   
-    fontFamily: "DonationInterBold",},
+    fontFamily: vsType.family,},
   campaignVisualPlaceholder: {
     height: 148,
     alignItems: "center",
@@ -2257,14 +2257,14 @@ const styles = StyleSheet.create({
     
     textTransform: "capitalize",
   
-    fontFamily: "DonationInterBold",},
+    fontFamily: vsType.family,},
   campaignVisualPlaceholderText: {
     marginTop: 3,
     color: "#64748B",
     fontSize: vsType.size.micro,
     textAlign: "center",
   
-    fontFamily: "DonationInterRegular",},
+    fontFamily: vsType.family,},
   campaignCardBody: { padding: 18, flex: 1 },
   badgeRow: {
     flexDirection: "row",
@@ -2286,7 +2286,7 @@ const styles = StyleSheet.create({
     fontSize: vsType.size.micro,
     
   
-    fontFamily: "DonationInterBold",},
+    fontFamily: vsType.family,},
   groupBadge: {
     paddingHorizontal: 8,
     paddingVertical: 5,
@@ -2301,7 +2301,7 @@ const styles = StyleSheet.create({
     fontSize: vsType.size.micro,
     
   
-    fontFamily: "DonationInterBold",},
+    fontFamily: vsType.family,},
   groupBadgeTextCommunity: {
     color: "#7C3AED",
   },
@@ -2312,7 +2312,7 @@ const styles = StyleSheet.create({
     lineHeight: designUi.type.card.lineHeight,
     
   
-    fontFamily: "DonationInterBold", fontWeight: designUi.type.card.fontWeight,},
+    fontFamily: vsType.family, fontWeight: designUi.type.card.fontWeight,},
   locationLine: {
     flexDirection: "row",
     alignItems: "center",
@@ -2325,14 +2325,14 @@ const styles = StyleSheet.create({
     fontSize: vsType.size.caption,
     
   
-    fontFamily: "DonationInterSemiBold",},
+    fontFamily: vsType.family,},
   campaignDescription: {
     marginTop: 9,
     color: "#64748B",
     fontSize: vsType.size.micro,
     lineHeight: 15.5,
   
-    fontFamily: "DonationInterRegular",},
+    fontFamily: vsType.family,},
   cardProgressWrap: {
     marginTop: 13,
   },
@@ -2346,13 +2346,13 @@ const styles = StyleSheet.create({
     fontSize: vsType.size.caption,
     
   
-    fontFamily: "DonationInterBold",},
+    fontFamily: vsType.family,},
   cardProgressGoal: {
     color: "#94A3B8",
     fontSize: vsType.size.micro,
     
   
-    fontFamily: "DonationInterSemiBold",},
+    fontFamily: vsType.family,},
   progressTrack: {
     height: 7,
     overflow: "hidden",
@@ -2371,7 +2371,7 @@ const styles = StyleSheet.create({
     fontSize: vsType.size.micro,
     
   
-    fontFamily: "DonationInterBold",},
+    fontFamily: vsType.family,},
   cardFooter: {
     flexDirection: "row",
     alignItems: "center",
@@ -2389,17 +2389,17 @@ const styles = StyleSheet.create({
     
     textTransform: "capitalize",
   
-    fontFamily: "DonationInterBold",},
+    fontFamily: vsType.family,},
   campaignStatusFunded: { color: "#8D5300", fontSize: vsType.size.micro, 
-    fontFamily: "DonationInterBold",},
+    fontFamily: vsType.family,},
   campaignStatusActive: { color: "#087F67", fontSize: vsType.size.micro, 
-    fontFamily: "DonationInterBold",},
+    fontFamily: vsType.family,},
   cardPrimaryAction: {
     minHeight: 43, marginTop: 13, borderRadius: 9, backgroundColor: "#009775",
     flexDirection: "row", justifyContent: "center", alignItems: "center", gap: 9,
   },
   cardPrimaryActionText: { color: "#FFFFFF", fontSize: vsType.size.meta, 
-    fontFamily: "DonationInterBold",},
+    fontFamily: vsType.family,},
   viewCampaignButton: {
     flexDirection: "row",
     alignItems: "center",
@@ -2410,7 +2410,7 @@ const styles = StyleSheet.create({
     fontSize: vsType.size.micro,
     
   
-    fontFamily: "DonationInterBold",},
+    fontFamily: vsType.family,},
 
   detailShell: {
     marginTop: 24,
@@ -2434,21 +2434,21 @@ const styles = StyleSheet.create({
     
     letterSpacing: 0.8,
   
-    fontFamily: "DonationInterBold",},
+    fontFamily: vsType.family,},
   detailTitle: {
     marginTop: 3,
     color: "#0F172A",
     fontSize: vsType.size.titleSmall,
     
   
-    fontFamily: "DonationInterBold",},
+    fontFamily: vsType.family,},
   detailLocation: {
     flex: 1,
     color: "#64748B",
     fontSize: vsType.size.caption,
     
   
-    fontFamily: "DonationInterSemiBold",},
+    fontFamily: vsType.family,},
   openSupportBadge: {
     flexDirection: "row",
     alignItems: "center",
@@ -2469,7 +2469,7 @@ const styles = StyleSheet.create({
     fontSize: vsType.size.micro,
     
   
-    fontFamily: "DonationInterBold",},
+    fontFamily: vsType.family,},
   detailGrid: {
     flexDirection: "row",
     alignItems: "flex-start",
@@ -2510,7 +2510,7 @@ const styles = StyleSheet.create({
     
     textTransform: "capitalize",
   
-    fontFamily: "DonationInterBold",},
+    fontFamily: vsType.family,},
   detailPhotoPlaceholderText: {
     maxWidth: 520,
     marginTop: 6,
@@ -2519,7 +2519,7 @@ const styles = StyleSheet.create({
     lineHeight: 16,
     textAlign: "center",
   
-    fontFamily: "DonationInterRegular",},
+    fontFamily: vsType.family,},
   galleryWrap: {
     position: "relative",
     overflow: "hidden",
@@ -2547,7 +2547,7 @@ const styles = StyleSheet.create({
     fontSize: vsType.size.micro,
     
   
-    fontFamily: "DonationInterBold",},
+    fontFamily: vsType.family,},
   galleryVerifiedBadge: {
     position: "absolute",
     left: 12,
@@ -2565,7 +2565,7 @@ const styles = StyleSheet.create({
     fontSize: vsType.size.micro,
     
   
-    fontFamily: "DonationInterBold",},
+    fontFamily: vsType.family,},
   galleryThumbRow: {
     gap: 8,
     padding: 10,
@@ -2611,21 +2611,21 @@ const styles = StyleSheet.create({
     
     letterSpacing: 0.7,
   
-    fontFamily: "DonationInterBold",},
+    fontFamily: vsType.family,},
   storyTitle: {
     marginTop: 2,
     color: "#0F172A",
     fontSize: designUi.type.section.fontSize,
     
   
-    fontFamily: "DonationInterBold", lineHeight: designUi.type.section.lineHeight, fontWeight: designUi.type.section.fontWeight,},
+    fontFamily: vsType.family, lineHeight: designUi.type.section.lineHeight, fontWeight: designUi.type.section.fontWeight,},
   storyText: {
     marginTop: 13,
     color: "#475569",
     fontSize: vsType.size.caption,
     lineHeight: 18,
   
-    fontFamily: "DonationInterRegular",},
+    fontFamily: vsType.family,},
   factGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
@@ -2658,7 +2658,7 @@ const styles = StyleSheet.create({
     
     textTransform: "uppercase",
   
-    fontFamily: "DonationInterBold", lineHeight: designUi.type.label.lineHeight, fontWeight: designUi.type.label.fontWeight,},
+    fontFamily: vsType.family, lineHeight: designUi.type.label.lineHeight, fontWeight: designUi.type.label.fontWeight,},
   factValue: {
     marginTop: 2,
     color: "#334155",
@@ -2666,7 +2666,7 @@ const styles = StyleSheet.create({
     lineHeight: 13,
     
   
-    fontFamily: "DonationInterBold",},
+    fontFamily: vsType.family,},
 
   updatesCard: {
     padding: 16,
@@ -2693,14 +2693,14 @@ const styles = StyleSheet.create({
     fontSize: vsType.size.label,
     
   
-    fontFamily: "DonationInterBold",},
+    fontFamily: vsType.family,},
   blockSubtitle: {
     marginTop: 3,
     color: "#64748B",
     fontSize: vsType.size.micro,
     lineHeight: 14.5,
   
-    fontFamily: "DonationInterRegular",},
+    fontFamily: vsType.family,},
   noUpdatesBox: {
     flexDirection: "row",
     alignItems: "flex-start",
@@ -2715,14 +2715,14 @@ const styles = StyleSheet.create({
     fontSize: vsType.size.micro,
     
   
-    fontFamily: "DonationInterBold",},
+    fontFamily: vsType.family,},
   noUpdatesText: {
     marginTop: 3,
     color: "#64748B",
     fontSize: vsType.size.micro,
     lineHeight: 14,
   
-    fontFamily: "DonationInterRegular",},
+    fontFamily: vsType.family,},
   storyTimeline: {
     marginTop: 13,
     gap: 10,
@@ -2755,26 +2755,26 @@ const styles = StyleSheet.create({
     fontSize: vsType.size.caption,
     
   
-    fontFamily: "DonationInterBold",},
+    fontFamily: vsType.family,},
   storyUpdateDate: {
     color: "#94A3B8",
     fontSize: vsType.size.micro,
   
-    fontFamily: "DonationInterRegular",},
+    fontFamily: vsType.family,},
   storyUpdateBody: {
     marginTop: 5,
     color: "#475569",
     fontSize: vsType.size.micro,
     lineHeight: 15,
   
-    fontFamily: "DonationInterRegular",},
+    fontFamily: vsType.family,},
   storyUpdateAuthor: {
     marginTop: 6,
     color: "#0F766E",
     fontSize: vsType.size.micro,
     
   
-    fontFamily: "DonationInterBold",},
+    fontFamily: vsType.family,},
 
   needsCard: {
     padding: 16,
@@ -2814,20 +2814,20 @@ const styles = StyleSheet.create({
     fontSize: vsType.size.micro,
     
   
-    fontFamily: "DonationInterBold",},
+    fontFamily: vsType.family,},
   needCardMeta: {
     marginTop: 2,
     color: "#64748B",
     fontSize: designUi.type.meta.fontSize,
     lineHeight: designUi.type.meta.lineHeight,
   
-    fontFamily: "DonationInterRegular", fontWeight: designUi.type.meta.fontWeight,},
+    fontFamily: vsType.family, fontWeight: designUi.type.meta.fontWeight,},
   needEmptyText: {
     color: "#64748B",
     fontSize: vsType.size.micro,
     lineHeight: 15,
   
-    fontFamily: "DonationInterRegular",},
+    fontFamily: vsType.family,},
 
   fundingCard: {
     padding: 16,
@@ -2855,28 +2855,28 @@ const styles = StyleSheet.create({
     
     letterSpacing: 0.7,
   
-    fontFamily: "DonationInterBold",},
+    fontFamily: vsType.family,},
   fundingTitle: {
     marginTop: 2,
     color: "#0F172A",
     fontSize: vsType.size.caption,
     
   
-    fontFamily: "DonationInterBold",},
+    fontFamily: vsType.family,},
   fundingAmount: {
     marginTop: 15,
     color: "#0F172A",
     fontSize: vsType.size.page,
     
   
-    fontFamily: "DonationInterBold",},
+    fontFamily: vsType.family,},
   fundingGoal: {
     marginTop: 2,
     color: "#64748B",
     fontSize: vsType.size.micro,
     
   
-    fontFamily: "DonationInterSemiBold",},
+    fontFamily: vsType.family,},
   progressTrackLarge: {
     height: 10,
     overflow: "hidden",
@@ -2900,14 +2900,14 @@ const styles = StyleSheet.create({
     fontSize: vsType.size.caption,
     
   
-    fontFamily: "DonationInterBold",},
+    fontFamily: vsType.family,},
   fundingStatLabel: {
     marginTop: 2,
     color: "#94A3B8",
     fontSize: vsType.size.micro,
     
   
-    fontFamily: "DonationInterBold",},
+    fontFamily: vsType.family,},
   fundingStatDivider: {
     width: 1,
     height: 30,
@@ -2928,7 +2928,7 @@ const styles = StyleSheet.create({
     fontSize: vsType.size.micro,
     lineHeight: 14,
   
-    fontFamily: "DonationInterRegular",},
+    fontFamily: vsType.family,},
   fundingTrustNote: {
     flexDirection: "row",
     alignItems: "flex-start",
@@ -2944,7 +2944,7 @@ const styles = StyleSheet.create({
     fontSize: vsType.size.micro,
     lineHeight: 13.5,
   
-    fontFamily: "DonationInterRegular",},
+    fontFamily: vsType.family,},
 
   locationCard: {
     padding: 16,
@@ -2972,7 +2972,7 @@ const styles = StyleSheet.create({
     
     letterSpacing: 0.7,
   
-    fontFamily: "DonationInterBold",},
+    fontFamily: vsType.family,},
   locationCardTitle: {
     marginTop: 2,
     color: "#0F172A",
@@ -2980,7 +2980,7 @@ const styles = StyleSheet.create({
     
     lineHeight: 16,
   
-    fontFamily: "DonationInterBold",},
+    fontFamily: vsType.family,},
   locationInfoRows: {
     marginTop: 12,
     borderTopWidth: 1,
@@ -2997,7 +2997,7 @@ const styles = StyleSheet.create({
     
     textTransform: "uppercase",
   
-    fontFamily: "DonationInterBold", lineHeight: designUi.type.label.lineHeight, fontWeight: designUi.type.label.fontWeight,},
+    fontFamily: vsType.family, lineHeight: designUi.type.label.lineHeight, fontWeight: designUi.type.label.fontWeight,},
   infoRowValue: {
     marginTop: 3,
     color: "#334155",
@@ -3005,7 +3005,7 @@ const styles = StyleSheet.create({
     lineHeight: 14,
     
   
-    fontFamily: "DonationInterSemiBold",},
+    fontFamily: vsType.family,},
   handoffNotesBox: {
     marginTop: 10,
     padding: 10,
@@ -3018,14 +3018,14 @@ const styles = StyleSheet.create({
     
     textTransform: "uppercase",
   
-    fontFamily: "DonationInterBold",},
+    fontFamily: vsType.family,},
   handoffNotesText: {
     marginTop: 4,
     color: "#64748B",
     fontSize: vsType.size.micro,
     lineHeight: 14,
   
-    fontFamily: "DonationInterRegular",},
+    fontFamily: vsType.family,},
   privacyNotice: {
     flexDirection: "row",
     alignItems: "flex-start",
@@ -3041,7 +3041,7 @@ const styles = StyleSheet.create({
     fontSize: vsType.size.micro,
     lineHeight: 13.5,
   
-    fontFamily: "DonationInterRegular",},
+    fontFamily: vsType.family,},
 
   areaCard: {
     padding: 15,
@@ -3060,21 +3060,21 @@ const styles = StyleSheet.create({
     fontSize: vsType.size.caption,
     
   
-    fontFamily: "DonationInterBold",},
+    fontFamily: vsType.family,},
   areaValue: {
     marginTop: 9,
     color: "#0F766E",
     fontSize: vsType.size.meta,
     
   
-    fontFamily: "DonationInterBold",},
+    fontFamily: vsType.family,},
   areaHelp: {
     marginTop: 4,
     color: "#64748B",
     fontSize: vsType.size.micro,
     lineHeight: 13,
   
-    fontFamily: "DonationInterRegular",},
+    fontFamily: vsType.family,},
 
   supportSection: {
     marginTop: 18,
@@ -3088,14 +3088,14 @@ const styles = StyleSheet.create({
     
     letterSpacing: 0.8,
   
-    fontFamily: "DonationInterBold",},
+    fontFamily: vsType.family,},
   supportSectionTitle: {
     marginTop: 3,
     color: "#0F172A",
     fontSize: vsType.size.section,
     
   
-    fontFamily: "DonationInterBold",},
+    fontFamily: vsType.family,},
   supportSectionText: {
     maxWidth: 800,
     marginTop: 5,
@@ -3103,7 +3103,7 @@ const styles = StyleSheet.create({
     fontSize: vsType.size.caption,
     lineHeight: 16,
   
-    fontFamily: "DonationInterRegular",},
+    fontFamily: vsType.family,},
   supportTypeGrid: {
     flexDirection: "row",
     gap: 10,
@@ -3141,7 +3141,7 @@ const styles = StyleSheet.create({
     fontSize: vsType.size.meta,
     
   
-    fontFamily: "DonationInterBold",},
+    fontFamily: vsType.family,},
   supportTypeTitleSelected: {
     color: "#0F766E",
   },
@@ -3151,7 +3151,7 @@ const styles = StyleSheet.create({
     fontSize: vsType.size.micro,
     lineHeight: 14,
   
-    fontFamily: "DonationInterRegular",},
+    fontFamily: vsType.family,},
   infoBox: {
     flexDirection: "row",
     alignItems: "flex-start",
@@ -3167,7 +3167,7 @@ const styles = StyleSheet.create({
     fontSize: vsType.size.micro,
     lineHeight: 14,
   
-    fontFamily: "DonationInterRegular",},
+    fontFamily: vsType.family,},
 
   donationFormCard: {
     marginTop: 13,
@@ -3197,20 +3197,20 @@ const styles = StyleSheet.create({
     fontSize: vsType.size.micro,
     
   
-    fontFamily: "DonationInterBold",},
+    fontFamily: vsType.family,},
   stepTitle: {
     color: "#0F172A",
     fontSize: vsType.size.meta,
     
   
-    fontFamily: "DonationInterBold",},
+    fontFamily: vsType.family,},
   stepText: {
     marginTop: 2,
     color: "#64748B",
     fontSize: vsType.size.micro,
     lineHeight: 14,
   
-    fontFamily: "DonationInterRegular",},
+    fontFamily: vsType.family,},
 
   instructionsBox: {
     marginTop: 8,
@@ -3227,21 +3227,21 @@ const styles = StyleSheet.create({
     
     letterSpacing: 0.6,
   
-    fontFamily: "DonationInterBold",},
+    fontFamily: vsType.family,},
   instructionsTitle: {
     marginTop: 3,
     color: "#0F172A",
     fontSize: vsType.size.caption,
     
   
-    fontFamily: "DonationInterBold",},
+    fontFamily: vsType.family,},
   instructionsText: {
     marginTop: 5,
     color: "#64748B",
     fontSize: vsType.size.micro,
     lineHeight: 15,
   
-    fontFamily: "DonationInterRegular",},
+    fontFamily: vsType.family,},
 
   label: {
     marginTop: 12,
@@ -3250,7 +3250,7 @@ const styles = StyleSheet.create({
     fontSize: designUi.type.label.fontSize,
     
   
-    fontFamily: "DonationInterBold", lineHeight: designUi.type.label.lineHeight, fontWeight: designUi.type.label.fontWeight,},
+    fontFamily: vsType.family, lineHeight: designUi.type.label.lineHeight, fontWeight: designUi.type.label.fontWeight,},
   input: {
     minHeight: 46,
     paddingHorizontal: 11,
@@ -3262,14 +3262,14 @@ const styles = StyleSheet.create({
     color: "#0F172A",
     fontSize: vsType.size.caption,
   
-    fontFamily: "DonationInterRegular",},
+    fontFamily: vsType.family,},
   helperText: {
     marginTop: 5,
     color: "#64748B",
     fontSize: vsType.size.micro,
     lineHeight: 14,
   
-    fontFamily: "DonationInterRegular",},
+    fontFamily: vsType.family,},
   multiline: {
     minHeight: 82,
     textAlignVertical: "top",
@@ -3308,7 +3308,7 @@ const styles = StyleSheet.create({
     
     textTransform: "capitalize",
   
-    fontFamily: "DonationInterBold",},
+    fontFamily: vsType.family,},
   choiceTextSelected: {
     color: "#0F766E",
   },
@@ -3335,12 +3335,12 @@ const styles = StyleSheet.create({
     fontSize: vsType.size.caption,
     
   
-    fontFamily: "DonationInterSemiBold",},
+    fontFamily: vsType.family,},
   selectFieldPlaceholder: {
     color: "#94A3B8",
     
   
-    fontFamily: "DonationInterMedium",},
+    fontFamily: vsType.family,},
   modalOverlay: {
     flex: 1,
     alignItems: "center",
@@ -3369,7 +3369,7 @@ const styles = StyleSheet.create({
     fontSize: vsType.size.label,
     
   
-    fontFamily: "DonationInterBold",},
+    fontFamily: vsType.family,},
   selectModalScroll: {
     maxHeight: 430,
   },
@@ -3392,19 +3392,19 @@ const styles = StyleSheet.create({
     fontSize: vsType.size.caption,
     
   
-    fontFamily: "DonationInterSemiBold",},
+    fontFamily: vsType.family,},
   selectOptionTextActive: {
     color: "#0F766E",
     
   
-    fontFamily: "DonationInterBold",},
+    fontFamily: vsType.family,},
   selectModalEmpty: {
     padding: 18,
     color: "#64748B",
     fontSize: vsType.size.micro,
     textAlign: "center",
   
-    fontFamily: "DonationInterRegular",},
+    fontFamily: vsType.family,},
 
   removeProofButton: {
     alignSelf: "flex-start",
@@ -3418,7 +3418,7 @@ const styles = StyleSheet.create({
     fontSize: vsType.size.micro,
     
   
-    fontFamily: "DonationInterBold",},
+    fontFamily: vsType.family,},
 
   handoffSummaryCard: {
     marginTop: 6,
@@ -3449,14 +3449,14 @@ const styles = StyleSheet.create({
     
     letterSpacing: 0.6,
   
-    fontFamily: "DonationInterBold",},
+    fontFamily: vsType.family,},
   handoffSummaryTitle: {
     marginTop: 2,
     color: "#0F172A",
     fontSize: vsType.size.caption,
     
   
-    fontFamily: "DonationInterBold",},
+    fontFamily: vsType.family,},
 
   submitSection: {
     marginTop: 13,
@@ -3496,7 +3496,7 @@ const styles = StyleSheet.create({
     
     textAlign: "center",
   
-    fontFamily: "DonationInterBold",},
+    fontFamily: vsType.family,},
   submitButton: {
     marginTop: 12,
     minHeight: 46,
@@ -3514,7 +3514,7 @@ const styles = StyleSheet.create({
     
     textAlign: "center",
   
-    fontFamily: "DonationInterBold",},
+    fontFamily: vsType.family,},
   disabled: {
     opacity: 0.5,
   },
@@ -3542,20 +3542,20 @@ const styles = StyleSheet.create({
     fontSize: vsType.size.label,
     
   
-    fontFamily: "DonationInterBold",},
+    fontFamily: vsType.family,},
   historyMeta: {
     marginTop: 2,
     color: "#779098",
     fontSize: vsType.size.micro,
   
-    fontFamily: "DonationInterRegular",},
+    fontFamily: vsType.family,},
   historyValue: {
     marginTop: 10,
     color: "#194B45",
     fontSize: vsType.size.bodyStrong,
     
   
-    fontFamily: "DonationInterBold",},
+    fontFamily: vsType.family,},
   statusBadge: {
     paddingHorizontal: 10, paddingVertical: 7, borderRadius: 7,
   },
@@ -3569,7 +3569,7 @@ const styles = StyleSheet.create({
     fontSize: vsType.size.micro,
     
   
-    fontFamily: "DonationInterBold",},
+    fontFamily: vsType.family,},
   historyReceiptAction: {
     alignSelf: "flex-start", flexDirection: "row", alignItems: "center", gap: 7,
     paddingHorizontal: 12, paddingVertical: 10, marginTop: 12,
@@ -3577,7 +3577,7 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: "#D6EBDD",
   },
   historyReceiptActionText: {
-    fontSize: vsType.size.caption, fontFamily: "DonationInterSemiBold", color: "#087D5E",
+    fontSize: vsType.size.caption, fontFamily: vsType.family, color: "#087D5E",
   },
   historyTracker: {
     flexDirection: "row", flexWrap: "wrap", alignItems: "center",
@@ -3595,7 +3595,7 @@ const styles = StyleSheet.create({
     borderRadius: 6,
   },
   historyMilestoneText: {
-    color: "#39645D", fontSize: vsType.size.caption, fontFamily: "DonationInterMedium",
+    color: "#39645D", fontSize: vsType.size.caption, fontFamily: vsType.family,
   },
   historyMilestonePendingText: {
     color: "#907035",
@@ -3618,7 +3618,7 @@ const styles = StyleSheet.create({
     fontSize: vsType.size.micro,
     lineHeight: 16,
   
-    fontFamily: "DonationInterRegular",},
+    fontFamily: vsType.family,},
   historyMessageReceived: {
     flexDirection: "row",
     alignItems: "flex-start",
@@ -3634,14 +3634,14 @@ const styles = StyleSheet.create({
     lineHeight: 16,
     
   
-    fontFamily: "DonationInterBold",},
+    fontFamily: vsType.family,},
   receiptReferenceText: {
     marginTop: 3,
     color: "#64748B",
     fontSize: vsType.size.micro,
     lineHeight: 13,
   
-    fontFamily: "DonationInterRegular",},
+    fontFamily: vsType.family,},
   historyMessageRejected: {
     flexDirection: "row",
     alignItems: "flex-start",
@@ -3657,7 +3657,7 @@ const styles = StyleSheet.create({
     fontSize: vsType.size.micro,
     lineHeight: 16,
   
-    fontFamily: "DonationInterRegular",},
+    fontFamily: vsType.family,},
 
   emptyCard: {
     minHeight: 145,
@@ -3676,7 +3676,7 @@ const styles = StyleSheet.create({
     fontSize: designUi.type.section.fontSize,
     
   
-    fontFamily: "DonationInterBold", lineHeight: designUi.type.section.lineHeight, fontWeight: designUi.type.section.fontWeight,},
+    fontFamily: vsType.family, lineHeight: designUi.type.section.lineHeight, fontWeight: designUi.type.section.fontWeight,},
   emptyText: {
     maxWidth: 580,
     marginTop: 4,
@@ -3685,7 +3685,7 @@ const styles = StyleSheet.create({
     lineHeight: designUi.type.body.lineHeight,
     textAlign: "center",
   
-    fontFamily: "DonationInterRegular", fontWeight: designUi.type.body.fontWeight,},
+    fontFamily: vsType.family, fontWeight: designUi.type.body.fontWeight,},
   // Mobile-only overrides; preserve existing desktop layout and donation behavior.
   mobileContainer: {
     paddingHorizontal: 14,
@@ -3729,7 +3729,7 @@ const styles = StyleSheet.create({
     
     color: "#0F766E",
   
-    fontFamily: "DonationInterBold",},
+    fontFamily: vsType.family,},
   // Premium botanical donation layout, with responsive and data-grounded surfaces.
   donationCardContent: { flex: 1 },
   donationCardContentLandscape: { flexDirection: "row", minHeight: 242 },
@@ -3747,7 +3747,7 @@ const styles = StyleSheet.create({
     minHeight: 24, borderRadius: 99, backgroundColor: "#DBF8EA",
   },
   donationVerifiedText: { color: "#00825D", fontSize: vsType.size.micro, 
-    fontFamily: "DonationInterBold",},
+    fontFamily: vsType.family,},
   donationCardFooterCompact: { flex: 1, minWidth: 0, marginRight: 6 },
   donationEmptyState: {
     minHeight: 132, borderRadius: 17, borderWidth: 1,
@@ -3763,18 +3763,18 @@ const styles = StyleSheet.create({
   },
   donationEmptyCopy: { flex: 1, minWidth: 210, gap: 6 },
   donationEmptyTitle: { fontSize: vsType.size.section,  color: "#064D41", 
-    fontFamily: "DonationInterBold",},
+    fontFamily: vsType.family,},
   donationEmptyDescription: {
     maxWidth: 510, fontSize: vsType.size.meta, lineHeight: 19, color: "#4F786F",
   
-    fontFamily: "DonationInterRegular",},
+    fontFamily: vsType.family,},
   donationEmptyExplore: {
     flexDirection: "row", alignItems: "center", gap: 9,
     minHeight: 42, borderRadius: 11,
     paddingHorizontal: 14, backgroundColor: "#008A69",
   },
   donationEmptyExploreText: { fontSize: vsType.size.caption,  color: "#FFFFFF", 
-    fontFamily: "DonationInterBold",},
+    fontFamily: vsType.family,},
   donationStepNumber: {
     position: "absolute", top: 9, right: 9,
     height: 23, width: 23, borderRadius: 12,
@@ -3782,7 +3782,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#0B8E70",
   },
   donationStepNumberText: { fontSize: vsType.size.caption,  color: "#FFFFFF", 
-    fontFamily: "DonationInterBold",},
+    fontFamily: vsType.family,},
   donationRecentStatusChip: {
     flex: 1, minWidth: 86, flexDirection: "row",
     alignItems: "center", justifyContent: "center", gap: 6,
@@ -3840,12 +3840,12 @@ const styles = StyleSheet.create({
     fontSize: vsType.size.micro, letterSpacing: 1.2,
      color: "#08724F",
   
-    fontFamily: "DonationInterBold",},
+    fontFamily: vsType.family,},
   donationHeroTitle: {
     marginTop: 2, fontSize: vsType.size.xl, lineHeight: 51,
     letterSpacing: -1.25, color: "#07442F", 
   
-    fontFamily: "DonationInterBold",},
+    fontFamily: vsType.family,},
   donationHeroTitleMobile: {
     fontSize: vsType.size.hero, lineHeight: 37, letterSpacing: -0.9,
   },
@@ -3853,12 +3853,12 @@ const styles = StyleSheet.create({
     fontSize: vsType.size.body, 
     lineHeight: 21, color: "#0A5A43", marginTop: 1,
   
-    fontFamily: "DonationInterBold",},
+    fontFamily: vsType.family,},
   donationHeroDescription: {
     fontSize: vsType.size.meta, lineHeight: 18, color: "#4F7274",
     marginTop: 6, maxWidth: 415,
   
-    fontFamily: "DonationInterRegular",},
+    fontFamily: vsType.family,},
   donationHeroStats: {
     zIndex: 1,
     width: "43%",
@@ -3903,13 +3903,13 @@ const styles = StyleSheet.create({
     color: "#16354B", fontSize: vsType.size.card,
      fontVariant: ["tabular-nums"],
   
-    fontFamily: "DonationInterBold",},
+    fontFamily: vsType.family,},
   donationHeroAmountValue: { fontSize: vsType.size.body },
   donationHeroStatCaption: {
     color: "#557A82", fontSize: vsType.size.micro,
     marginTop: 2, textAlign: "center",
   
-    fontFamily: "DonationInterRegular",},
+    fontFamily: vsType.family,},
   donationToolbar: {
     flexDirection: "row", alignItems: "center", justifyContent: "space-between",
     flexWrap: "wrap", gap: 12, marginTop: 2, marginBottom: 5,
@@ -3926,7 +3926,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFFFF",
   },
   donationFilterButtonText: { color: "#193951",  fontSize: vsType.size.meta, 
-    fontFamily: "DonationInterBold",},
+    fontFamily: vsType.family,},
   donationFilterMenu: {
     flexDirection: "row", flexWrap: "wrap", gap: 6,
     alignSelf: "flex-end", marginBottom: 10, padding: 8,
@@ -3939,18 +3939,18 @@ const styles = StyleSheet.create({
   },
   donationFilterOptionActive: { backgroundColor: "#EAF9F3" },
   donationFilterOptionText: { color: "#26465A",  fontSize: vsType.size.caption, 
-    fontFamily: "DonationInterSemiBold",},
+    fontFamily: vsType.family,},
   donationPastHint: { color:"#567580",fontSize: vsType.size.meta,lineHeight: 18.5,marginVertical:6, 
-    fontFamily: "DonationInterRegular",},
+    fontFamily: vsType.family,},
   donationCardDescription: { color: "#5A7882", fontSize: vsType.size.caption, lineHeight: 17, marginTop: 6, minHeight: 34, 
-    fontFamily: "DonationInterRegular",},
+    fontFamily: vsType.family,},
   donationCardFooter: {
     borderTopWidth: 1, borderColor: "#DFEEE9", paddingTop: 8, marginTop: 9,
     flexDirection: "row", alignItems: "center", justifyContent: "space-between",
   },
   donationCardFooterCopy: { flexDirection: "row", alignItems: "center", gap: 6 },
   donationCardFooterText: { color:"#087A66",fontSize: vsType.size.caption, 
-    fontFamily: "DonationInterBold",},
+    fontFamily: vsType.family,},
   donationCardFooterArrow: {
     width: 33, height: 33, borderRadius: 10, alignItems: "center", justifyContent: "center",
     backgroundColor: "#009879",
@@ -3961,7 +3961,7 @@ const styles = StyleSheet.create({
     backgroundColor:"#DDF8EC",
   },
   donationHowSubtitle: { fontSize: vsType.size.caption, color:"#718A98",marginTop:3, 
-    fontFamily: "DonationInterRegular",},
+    fontFamily: vsType.family,},
   donationHowStepIcon: {
     width: 44, height: 44, borderRadius: 13,
     alignItems: "center", justifyContent: "center",
@@ -3982,34 +3982,34 @@ const styles = StyleSheet.create({
     backgroundColor: "#F1FAF6",
   },
   donationRecentViewText: { color:"#187F65",fontSize: vsType.size.caption,
-    fontFamily: "DonationInterBold",},
+    fontFamily: vsType.family,},
   donationRecentEmpty: {
     flexDirection:"row",gap:11,alignItems:"center",backgroundColor:"#F7FAFB",
     borderRadius:10,padding:16,
   },
   donationRecentEmptyText: { flex:1,color:"#688293",fontSize: vsType.size.caption,lineHeight:16, 
-    fontFamily: "DonationInterRegular",},
+    fontFamily: vsType.family,},
   donationRecentTable: { borderWidth:1,borderColor:"#E8EEF0",borderRadius:11,overflow:"hidden" },
   donationRecentTableHead: {
     flexDirection: "row", alignItems: "center", gap: 10,
     backgroundColor: "#F3F8F5", padding: 13,
   },
   donationRecentHeadText: {flex:1,fontSize: vsType.size.micro,color:"#6D8991",
-    fontFamily: "DonationInterBold",},
+    fontFamily: vsType.family,},
   donationRecentRow: {
     flexDirection: "row", alignItems: "center", gap: 10, padding: 13,
     borderTopWidth: 1, borderColor: "#ECF1EF",
   },
   donationRecentRowMobile: {flexWrap:"wrap",gap:8},
   donationRecentCellText: {flex:1,color:"#61798C",fontSize: vsType.size.caption,
-    fontFamily: "DonationInterRegular",},
+    fontFamily: vsType.family,},
   donationRecentCampaignText: {flex:1,color:"#1C4952",
-    fontFamily: "DonationInterBold",
+    fontFamily: vsType.family,
     fontSize: vsType.size.caption,},
   donationRecentAmount: {flex:1,color:"#21414A",fontSize: vsType.size.caption,
-    fontFamily: "DonationInterBold",},
+    fontFamily: vsType.family,},
   donationRecentStatus: {fontSize: vsType.size.micro,
-    fontFamily: "DonationInterBold",},
+    fontFamily: vsType.family,},
   donationRecentStatusPaid: {color:"#008B69"},
   donationRecentStatusPending: {color:"#A7730D"},
   donationReceiptLink: {
@@ -4017,7 +4017,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#EAF6F0", alignItems: "center", justifyContent: "center",
   },
   donationReceiptLinkText: {color:"#167D63",fontSize: vsType.size.micro,
-    fontFamily: "DonationInterBold",},
+    fontFamily: vsType.family,},
   donationModalShade: {
     flex: 1, justifyContent: "center", alignItems: "center",
     backgroundColor: "rgba(7,31,38,0.76)", padding: 14,
@@ -4044,11 +4044,11 @@ const styles = StyleSheet.create({
   premiumModalHeaderText: { flex: 1, minWidth: 0 },
   donationModalTopTitle: {
     fontSize: vsType.size.card, lineHeight: 22, color: "#21424D",
-    fontFamily: "DonationInterBold", letterSpacing: -0.25,
+    fontFamily: vsType.family, letterSpacing: -0.25,
   },
   premiumModalHeaderSubtitle: {
     fontSize: vsType.size.caption, lineHeight: 16, color: "#5D7A83", marginTop: 3,
-    fontFamily: "DonationInterRegular",
+    fontFamily: vsType.family,
   },
   premiumModalClose: {
     width: 40, height: 40, borderRadius: 20,
@@ -4086,7 +4086,7 @@ const styles = StyleSheet.create({
     
     letterSpacing: 0.9,
   
-    fontFamily: "DonationInterBold",},
+    fontFamily: vsType.family,},
   webPageTitle: {
     marginTop: 3,
     color: "#0F172A",
@@ -4094,14 +4094,14 @@ const styles = StyleSheet.create({
     lineHeight: 38,
     
   
-    fontFamily: "DonationInterBold",},
+    fontFamily: vsType.family,},
   webPageSubtitle: {
     marginTop: 3,
     color: "#64748B",
     fontSize: vsType.size.caption,
     lineHeight: 16,
   
-    fontFamily: "DonationInterRegular",},
+    fontFamily: vsType.family,},
   webHeaderActions: {
     flexDirection: "row",
     alignItems: "center",
@@ -4126,7 +4126,7 @@ const styles = StyleSheet.create({
     fontSize: vsType.size.caption,
     outlineStyle: "none" as any,
   
-    fontFamily: "DonationInterRegular",},
+    fontFamily: vsType.family,},
   webHistoryButton: {
     minHeight: 42,
     flexDirection: "row",
@@ -4148,7 +4148,7 @@ const styles = StyleSheet.create({
     fontSize: vsType.size.micro,
     
   
-    fontFamily: "DonationInterBold",},
+    fontFamily: vsType.family,},
   webHistoryButtonTextActive: {
     color: "#FFFFFF",
   },
@@ -4168,14 +4168,14 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 3 }, elevation: 1,
   },
   webPrimaryTabText: { color: "#294A52", fontSize: vsType.size.meta, 
-    fontFamily: "DonationInterBold",},
+    fontFamily: vsType.family,},
   webPrimaryTabTextActive: { color: "#FFFFFF" },
   webTabCount: {
     paddingHorizontal: 7, paddingVertical: 3, overflow: "hidden",
     borderRadius: 99, backgroundColor: "#F0F5F6", color: "#64748B",
     fontSize: vsType.size.micro, 
   
-    fontFamily: "DonationInterBold",},
+    fontFamily: vsType.family,},
   webTabCountActive: { backgroundColor: "rgba(255,255,255,0.22)", color: "#FFFFFF" },
   webFilterBar: {
     flexDirection: "row",
@@ -4205,7 +4205,7 @@ const styles = StyleSheet.create({
     fontSize: vsType.size.micro,
     
   
-    fontFamily: "DonationInterBold",},
+    fontFamily: vsType.family,},
   webFilterChipTextActive: {
     color: "#FFFFFF",
   },
@@ -4225,7 +4225,7 @@ const styles = StyleSheet.create({
     fontSize: vsType.size.micro,
     
   
-    fontFamily: "DonationInterBold",},
+    fontFamily: vsType.family,},
   webFilterCountTextActive: {
     color: "#FFFFFF",
   },
@@ -4258,14 +4258,14 @@ const styles = StyleSheet.create({
     fontSize: vsType.size.section,
     
   
-    fontFamily: "DonationInterBold",},
+    fontFamily: vsType.family,},
   webSectionSubtitle: {
     marginTop: 2,
     color: "#64748B",
     fontSize: vsType.size.meta,
     lineHeight: 18,
   
-    fontFamily: "DonationInterRegular",},
+    fontFamily: vsType.family,},
   webCampaignCount: {
     minWidth: 30,
     paddingHorizontal: 9,
@@ -4278,7 +4278,7 @@ const styles = StyleSheet.create({
     fontSize: vsType.size.micro,
     
   
-    fontFamily: "DonationInterBold",},
+    fontFamily: vsType.family,},
   webHowItWorks: {
     marginTop: 18, padding: 21, borderRadius: 17,
     backgroundColor: "#FCFEFD",
@@ -4287,7 +4287,7 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 4 }, elevation: 1,
   },
   webHowItWorksTitle: { color: "#21434A", fontSize: vsType.size.card, 
-    fontFamily: "DonationInterBold",},
+    fontFamily: vsType.family,},
   webHowSteps: { flexDirection: "row", flexWrap: "wrap", gap: 10, marginTop: 15 },
   webHowStep: {
     position: "relative",
@@ -4298,11 +4298,11 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: "#E4EEE9",
   },
   webHowStepTitle: { fontSize: vsType.size.meta,  color: "#173B49", 
-    fontFamily: "DonationInterBold",},
+    fontFamily: vsType.family,},
   webHowStepBody: { fontSize: vsType.size.caption, lineHeight: 16.8, color: "#557383", 
-    fontFamily: "DonationInterRegular",},
+    fontFamily: vsType.family,},
   webHowDisclaimer: { marginTop: 12, color: "#658090", fontSize: vsType.size.micro, 
-    fontFamily: "DonationInterRegular",},
+    fontFamily: vsType.family,},
   webDetailNavRow: {
     flexDirection: "row", justifyContent: "space-between", alignItems: "center",
     paddingVertical: 12, paddingHorizontal: 15, gap: 10,
@@ -4310,9 +4310,9 @@ const styles = StyleSheet.create({
   },
   webBackToCampaigns: { flexDirection: "row", alignItems: "center", gap: 6, minHeight: 24 },
   webBackToCampaignsText: { color: "#087E69", fontSize: vsType.size.caption, 
-    fontFamily: "DonationInterBold",},
+    fontFamily: vsType.family,},
   webDetailNavLabel: { color: "#77909D", fontSize: vsType.size.caption, 
-    fontFamily: "DonationInterBold",},
+    fontFamily: vsType.family,},
   webDetailCard: {
     overflow: "hidden",
     borderWidth: 1,
@@ -4340,7 +4340,7 @@ const styles = StyleSheet.create({
     fontSize: vsType.size.micro,
     
   
-    fontFamily: "DonationInterBold",},
+    fontFamily: vsType.family,},
   webDetailTitle: {
     marginTop: 10,
     color: "#0F172A",
@@ -4348,7 +4348,7 @@ const styles = StyleSheet.create({
     lineHeight: 26,
     
   
-    fontFamily: "DonationInterBold",},
+    fontFamily: vsType.family,},
   webGeneralAreaCard: {
     marginTop: 8,
     padding: 10,
@@ -4363,14 +4363,14 @@ const styles = StyleSheet.create({
     
     letterSpacing: 0.7,
   
-    fontFamily: "DonationInterBold",},
+    fontFamily: vsType.family,},
   webGeneralAreaNote: {
     marginTop: 5,
     color: "#64748B",
     fontSize: vsType.size.micro,
     lineHeight: 12,
   
-    fontFamily: "DonationInterRegular",},
+    fontFamily: vsType.family,},
   webLocationLine: {
     flexDirection: "row",
     alignItems: "center",
@@ -4383,14 +4383,14 @@ const styles = StyleSheet.create({
     fontSize: vsType.size.micro,
     
   
-    fontFamily: "DonationInterSemiBold",},
+    fontFamily: vsType.family,},
   webStoryText: {
     marginTop: 10,
     color: "#475569",
     fontSize: vsType.size.micro,
     lineHeight: 16,
   
-    fontFamily: "DonationInterRegular",},
+    fontFamily: vsType.family,},
   webProgressCard: {
     marginTop: 13,
     padding: 12,
@@ -4409,19 +4409,19 @@ const styles = StyleSheet.create({
     fontSize: vsType.size.card,
     
   
-    fontFamily: "DonationInterBold",},
+    fontFamily: vsType.family,},
   webProgressLabel: {
     marginTop: 1,
     color: "#64748B",
     fontSize: vsType.size.micro,
   
-    fontFamily: "DonationInterRegular",},
+    fontFamily: vsType.family,},
   webProgressPercent: {
     color: "#0F766E",
     fontSize: vsType.size.meta,
     
   
-    fontFamily: "DonationInterBold",},
+    fontFamily: vsType.family,},
   webCoordinationRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -4438,12 +4438,12 @@ const styles = StyleSheet.create({
     lineHeight: 16,
     color: "#52766B",
   
-    fontFamily: "DonationInterRegular",},
+    fontFamily: vsType.family,},
   webCoordinationName: {
     color: "#0A5947",
     
   
-    fontFamily: "DonationInterBold",},
+    fontFamily: vsType.family,},
   webSupportTypesRow: {
     flexDirection: "row",
     flexWrap: "wrap",
@@ -4464,7 +4464,7 @@ const styles = StyleSheet.create({
     fontSize: vsType.size.micro,
     
   
-    fontFamily: "DonationInterBold",},
+    fontFamily: vsType.family,},
   webDonateButton: {
     minHeight: 46,
     flexDirection: "row",
@@ -4480,7 +4480,7 @@ const styles = StyleSheet.create({
     fontSize: vsType.size.caption,
     
   
-    fontFamily: "DonationInterBold",},
+    fontFamily: vsType.family,},
   webFundedNotice: {
     marginTop: 0, padding: 16, flexDirection: "row", alignItems: "flex-start",
     gap: 11, borderRadius: 12, backgroundColor: "#FAFDFB",
@@ -4488,10 +4488,10 @@ const styles = StyleSheet.create({
     borderLeftWidth: 3, borderLeftColor: "#159E77",
   },
   webFundedTitle: {
-    fontSize: vsType.size.label, lineHeight: 20, fontFamily: "DonationInterSemiBold", color: "#17664F",
+    fontSize: vsType.size.label, lineHeight: 20, fontFamily: vsType.family, color: "#17664F",
   },
   webFundedText: {
-    fontSize: vsType.size.caption, lineHeight: 17, fontFamily: "DonationInterRegular",
+    fontSize: vsType.size.caption, lineHeight: 17, fontFamily: vsType.family,
     color: "#57756C", marginTop: 4,
   },
   webDonationStepper: { flexDirection: "row", justifyContent: "space-between", gap: 7, marginBottom: 15 },
@@ -4502,10 +4502,10 @@ const styles = StyleSheet.create({
   },
   webStepperCircleActive: { backgroundColor: "#009879" },
   webStepperNumber: { color: "#64748B", fontSize: vsType.size.meta, 
-    fontFamily: "DonationInterBold",},
+    fontFamily: vsType.family,},
   webStepperNumberActive: { color: "#FFFFFF" },
   webStepperLabel: { color: "#677E90", fontSize: vsType.size.micro, 
-    fontFamily: "DonationInterBold",},
+    fontFamily: vsType.family,},
   webDonatePanel: {
     marginTop: 13,
     paddingTop: 13,
@@ -4518,7 +4518,7 @@ const styles = StyleSheet.create({
     borderColor: "#DCE7E9", backgroundColor: "#F8FAFB",
     fontSize: vsType.size.meta, color: "#162E41",
   
-    fontFamily: "DonationInterRegular",},
+    fontFamily: vsType.family,},
   webDonatePanelHeader: {
     flexDirection: "row",
     alignItems: "center",
@@ -4530,7 +4530,7 @@ const styles = StyleSheet.create({
     fontSize: vsType.size.card,
     
   
-    fontFamily: "DonationInterBold",},
+    fontFamily: vsType.family,},
   webCloseButton: {
     width: 34,
     height: 34,
@@ -4567,7 +4567,7 @@ const styles = StyleSheet.create({
     fontSize: vsType.size.micro,
     
   
-    fontFamily: "DonationInterBold",},
+    fontFamily: vsType.family,},
   webDonationTypeTextActive: {
     color: "#FFFFFF",
   },
@@ -4580,7 +4580,7 @@ const styles = StyleSheet.create({
     fontSize: vsType.size.micro,
     
   
-    fontFamily: "DonationInterBold",},
+    fontFamily: vsType.family,},
   webAmountGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
@@ -4606,7 +4606,7 @@ const styles = StyleSheet.create({
     fontSize: vsType.size.micro,
     
   
-    fontFamily: "DonationInterBold",},
+    fontFamily: vsType.family,},
   webAmountButtonTextActive: {
     color: "#FFFFFF",
   },
@@ -4623,14 +4623,14 @@ const styles = StyleSheet.create({
     fontSize: vsType.size.micro,
     
   
-    fontFamily: "DonationInterBold",},
+    fontFamily: vsType.family,},
   webOfficialChannelText: {
     marginTop: 2,
     color: "#64748B",
     fontSize: vsType.size.micro,
     lineHeight: 13,
   
-    fontFamily: "DonationInterRegular",},
+    fontFamily: vsType.family,},
   webSubmitButton: {
     minHeight: 44,
     flexDirection: "row",
@@ -4646,7 +4646,7 @@ const styles = StyleSheet.create({
     fontSize: vsType.size.caption,
     
   
-    fontFamily: "DonationInterBold",},
+    fontFamily: vsType.family,},
   webDetailEmpty: {
     minHeight: 300,
     alignItems: "center",
@@ -4663,13 +4663,13 @@ const styles = StyleSheet.create({
     fontSize: vsType.size.body,
     
   
-    fontFamily: "DonationInterBold",},
+    fontFamily: vsType.family,},
   webDetailEmptyText: {
     marginTop: 3,
     color: "#64748B",
     fontSize: vsType.size.micro,
   
-    fontFamily: "DonationInterRegular",},
+    fontFamily: vsType.family,},
   webReturnBanner: {
     flexDirection: "row", alignItems: "flex-start", gap: 12,
     borderRadius: 13, padding: 14, marginBottom: 13,
@@ -4677,9 +4677,9 @@ const styles = StyleSheet.create({
   },
   webReturnCancelled: { backgroundColor: "#FFF8E9", borderColor: "#F2DEAF" },
   webReturnTitle: { color: "#0E4C42", fontSize: vsType.size.body, 
-    fontFamily: "DonationInterBold",},
+    fontFamily: vsType.family,},
   webReturnText: { marginTop: 4, color: "#416E68", lineHeight: 17, fontSize: vsType.size.caption, 
-    fontFamily: "DonationInterRegular",},
+    fontFamily: vsType.family,},
   webHistoryPanel: {
     padding: 20, borderWidth: 1, borderColor: "#DFEBE6",
     borderRadius: 16, backgroundColor: "#FFFFFF",
