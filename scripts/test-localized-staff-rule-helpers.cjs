@@ -106,6 +106,50 @@ function optimizedRules(input) {
  assert.equal(countAlloc,10,"Exactly ten immutable Allocation comparisons removed");
  allocation=allocation.slice(0,u)+chunk+allocation.slice(v);
  result=result.slice(0,x)+allocation+result.slice(y);
+ // Reconstruct exact caching of repeated read functions within same match.
+ for(const [fn,deps] of [
+  ["incomingVolunteerIsApproved",["incomingVolunteerProfile"]],
+  ["validInventoryReservation",["allocationInventoryBefore","allocationInventoryAfter"]],
+  ["validCompletedInventoryReconciliation",["allocationInventoryBefore","allocationInventoryAfter"]],
+  ["validCancelledInventoryReconciliation",["allocationInventoryBefore","allocationInventoryAfter"]]
+ ]){
+  const start=result.indexOf("      function "+fn+"() {");
+  const end=result.indexOf("      }",start);
+  assert(start>0&&end>start,"Reviewed helper missing "+fn);
+  let content=result.slice(start,end+7);
+  const variable={incomingVolunteerProfile:"volunteer",
+   allocationInventoryBefore:"inventoryBefore",allocationInventoryAfter:"inventoryAfter"};
+  for(const name of deps){
+   assert(content.split(name+"()").length>=3,"Must cache repeated reads of "+name);
+   content=content.replaceAll(name+"()",variable[name]);
+  }
+  const defs=deps.map(name=>"        let "+variable[name]+" = "+name+"();").join("\n");
+  content=content.replace("      function "+fn+"() {\n",
+   "      function "+fn+"() {\n"+defs+"\n");
+  result=result.slice(0,start)+content+result.slice(end+7);
+ }
+ // One loaded proposal snapshot replaces twenty-seven identical getAfter reads
+ // while preserving every allow-create condition in original order.
+ const es=result.indexOf("    match /communityEvents/{eventId} {");
+ const ee=result.indexOf("    match /",es+8);
+ assert(es>0&&ee>es);
+ let eventRules=result.slice(es,ee);
+ const first=eventRules.indexOf("        && proposalAfter().status == 'approved'");
+ const last=eventRules.indexOf("        && request.resource.data.proposerName == proposalAfter().proposerName;",first);
+ assert(first>0&&last>first);
+ const tailEnd=last+"        && request.resource.data.proposerName == proposalAfter().proposerName;".length;
+ const tailOriginal=eventRules.slice(first,tailEnd);
+ assert.equal((tailOriginal.match(/proposalAfter\(\)/g)||[]).length,27);
+ const tail=tailOriginal.replaceAll("proposalAfter()","proposal")
+  .replace(/^        && proposal\.status/,"        return proposal.status");
+ const helper="      // Keep approved proposal state loaded once for the entire guarded creation.\n"+
+  "      function validApprovedProposalCopy() {\n"+
+  "        let proposal = proposalAfter();\n"+tail+"\n      }\n\n";
+ const insert=eventRules.indexOf("      // The query on the client");
+ assert(insert>=0&&insert<first);
+ eventRules=eventRules.slice(0,first)+"        && validApprovedProposalCopy();"+eventRules.slice(tailEnd);
+ eventRules=eventRules.slice(0,insert)+helper+eventRules.slice(insert);
+ result=result.slice(0,es)+eventRules+result.slice(ee);
  return result;
 }
 const optimized=optimizedRules(expected);
