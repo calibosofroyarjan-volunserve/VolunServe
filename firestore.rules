@@ -1503,35 +1503,27 @@ service cloud.firestore {
           && rd.finalDecisionBy == request.auth.uid
         );
       }
-      // Shared validations are compiled once; the method-specific gates below
-      // reproduce the original create and update conditions without overlap.
-      allow create, update: if isAdmin()
+      allow create: if isAdmin()
         && validReviewPayload()
-        && validFinalDecisionState()
-        && (
-          (
-            request.method == 'create'
-            && request.resource.data.reviewStatus == 'in_progress'
-            && request.resource.data.finalDecision == 'pending'
-            && request.resource.data.finalDecisionReason == ''
-            && request.resource.data.finalDecisionAt == null
-            && request.resource.data.finalDecisionBy == ''
-            && request.resource.data.createdBy == request.auth.uid
-          )
-          ||
-          (
-            request.method == 'update'
-            && resource.data.finalDecision in [
-              'pending',
-              'needs_more_information'
-            ]
-            && request.resource.data.requestId == resource.data.requestId
-            && request.resource.data.requesterUid == resource.data.requesterUid
-            && request.resource.data.category == resource.data.category
-            && request.resource.data.createdAt == resource.data.createdAt
-            && request.resource.data.createdBy == resource.data.createdBy
-          )
-        );
+        && request.resource.data.reviewStatus == 'in_progress'
+        && request.resource.data.finalDecision == 'pending'
+        && request.resource.data.finalDecisionReason == ''
+        && request.resource.data.finalDecisionAt == null
+        && request.resource.data.finalDecisionBy == ''
+        && request.resource.data.createdBy == request.auth.uid
+        && validFinalDecisionState();
+      allow update: if isAdmin()
+        && resource.data.finalDecision in [
+          'pending',
+          'needs_more_information'
+        ]
+        && request.resource.data.requestId == resource.data.requestId
+        && request.resource.data.requesterUid == resource.data.requesterUid
+        && request.resource.data.category == resource.data.category
+        && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.createdBy == resource.data.createdBy
+        && validReviewPayload()
+        && validFinalDecisionState();
       allow read: if isAdminOrSuperAdmin();
       allow delete: if false;
     }
