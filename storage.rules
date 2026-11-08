@@ -19,7 +19,8 @@ service firebase.storage {
           'resident', 'volunteer', 'admin', 'superadmin', 'lgu_personnel'
         ]
         && (profile().status == 'approved'
-          || (!('status' in profile()) && profile().role != 'applicant'));
+          || (!('status' in profile()) && profile().role != 'applicant'))
+        && (!('adminStatus' in profile()) || profile().adminStatus != 'suspended');
     }
 
     function isAdmin() {
