@@ -160,42 +160,20 @@ const mergedRules=cp.execFileSync("git",["show",
  "f25ce81ce951d86fa7fe692c4be056c898810981:firestore.rules"],{encoding:"utf8"});
 assert.equal(mergedRules,optimized,
  "BLOCKED: protected pass-one source is not the reviewed baseline");
-// Third-pass exact transformation proof from immutable protected PR #335.
-const passTwo=cp.execFileSync("git",["show",
- "5dd65a7f1e65b281e277d051b5e60ca09fbaaaa6:firestore.rules"],{encoding:"utf8"});
-const knownDenyScopes=[
- "assistanceEvidenceAssets/{evidenceId}",
- "fundReleaseDemos/{releaseId}",
- "aiMapRateLimits/{uid}"
-];
-let transformed=passTwo;
-for(const scope of knownDenyScopes){
- const declaration="    match /"+scope+" {\n      allow read, write: if false;\n    }\n";
- assert.equal(transformed.split(declaration).length,2,
-  "BLOCKED: redundant deny scope unexpectedly modified "+scope);
- transformed=transformed.replace(declaration,"");
-}
-const verifiedFunction="    function verifiedEmailSession() {\n"+
- "      return signedIn()\n"+
- "        && request.auth.token.get('email_verified', false) == true;\n"+
- "    }\n";
-assert.equal(transformed.split(verifiedFunction).length,2,
- "BLOCKED: verified session predicate changed");
-assert.equal((transformed.match(/verifiedEmailSession\(\)/g)||[]).length,3,
- "BLOCKED: verification helper used by unreviewed permissions");
-transformed=transformed.replace(verifiedFunction,"");
-transformed=transformed.replaceAll("return verifiedEmailSession()",
- "return signedIn() && request.auth.token.get('email_verified', false) == true");
-assert.equal(current,transformed,
- "BLOCKED: any other Firestore security expression, allow statement or module changed");
-const globalFallback="    match /{document=**} {\n      allow read, write: if false;\n    }";
-assert(current.includes(globalFallback),
- "BLOCKED: default-deny fallback was removed");
-assert.equal([...current.matchAll(/^    match \//gm)].length,51,
- "BLOCKED: expected remaining collection-specific routes");
+// Guarded compiler optimization, no other permission changes permitted.
+const frozenPassTwo=cp.execFileSync("git",["show","5dd65a7f1e65b281e277d051b5e60ca09fbaaaa6:firestore.rules"],{encoding:"utf8"});
+const oldReviewAllow="      allow create: if isAdmin()\n        && validReviewPayload()\n        && request.resource.data.reviewStatus == 'in_progress'\n        && request.resource.data.finalDecision == 'pending'\n        && request.resource.data.finalDecisionReason == ''\n        && request.resource.data.finalDecisionAt == null\n        && request.resource.data.finalDecisionBy == ''\n        && request.resource.data.createdBy == request.auth.uid\n        && validFinalDecisionState();\n      allow update: if isAdmin()\n        && resource.data.finalDecision in [\n          'pending',\n          'needs_more_information'\n        ]\n        && request.resource.data.requestId == resource.data.requestId\n        && request.resource.data.requesterUid == resource.data.requesterUid\n        && request.resource.data.category == resource.data.category\n        && request.resource.data.createdAt == resource.data.createdAt\n        && request.resource.data.createdBy == resource.data.createdBy\n        && validReviewPayload()\n        && validFinalDecisionState();\n";
+const sharedReviewAllow="      // Shared validations are compiled once; the method-specific gates below\n      // reproduce the original create and update conditions without overlap.\n      allow create, update: if isAdmin()\n        && validReviewPayload()\n        && validFinalDecisionState()\n        && (\n          (\n            request.method == 'create'\n            && request.resource.data.reviewStatus == 'in_progress'\n            && request.resource.data.finalDecision == 'pending'\n            && request.resource.data.finalDecisionReason == ''\n            && request.resource.data.finalDecisionAt == null\n            && request.resource.data.finalDecisionBy == ''\n            && request.resource.data.createdBy == request.auth.uid\n          )\n          ||\n          (\n            request.method == 'update'\n            && resource.data.finalDecision in [\n              'pending',\n              'needs_more_information'\n            ]\n            && request.resource.data.requestId == resource.data.requestId\n            && request.resource.data.requesterUid == resource.data.requesterUid\n            && request.resource.data.category == resource.data.category\n            && request.resource.data.createdAt == resource.data.createdAt\n            && request.resource.data.createdBy == resource.data.createdBy\n          )\n        );\n";
+assert.equal(frozenPassTwo.split(oldReviewAllow).length,2,"Original staff-assisted review gates unexpectedly changed");
+const expectedOptimized=frozenPassTwo.replace(oldReviewAllow,sharedReviewAllow);
+assert.equal(current,expectedOptimized,"BLOCKED: outside reviewed create/update Rules permission gates changed");
+assert(current.includes("request.method == 'create'") && current.includes("request.method == 'update'"),"BLOCKED: create/update operation gates missing");
 const actualGitBlob=cp.execFileSync("git",["hash-object","firestore.rules"],{encoding:"utf8"}).trim();
-assert.equal(actualGitBlob,"bbff78cd781932086a17386083731e5e1b0dddf5",
- "BLOCKED: third-pass Rules changed without a reviewed exact source proof");
+assert.equal(actualGitBlob,"afd5adca77292d01e6aeab13465736aa2f6882f4","BLOCKED: optimized Rules blob differs from approved revision");
+const paths=text=>[...text.matchAll(/^    match \\/(.+) \\{/gm)].map(m=>m[1]);
+assert.deepEqual(paths(current),paths(frozenPassTwo),"BLOCKED: an original Firestore match was changed");
+const statements=text=>[...text.matchAll(/\\ballow (?:get|list|read|write|create|update|delete)/g)].length;
+assert.equal(statements(current),statements(frozenPassTwo)-1,"BLOCKED: unrelated allow methods were changed");
 const body=current.slice(0,current.indexOf("    match /"));
 for(const name of ["hasApprovedStaffRole","isAdmin","isSuperAdmin","isAdminOrSuperAdmin"]){
  assert(body.includes("function "+name+"("),"Missing consolidated root helper "+name);
@@ -237,4 +215,4 @@ for(const [fn,allowed] of [
   "Staff permission changed for "+fn+JSON.stringify({p,verified}));
  checks++;
 }
-console.log("PASS: "+checks+" staff-role checks; exact third-pass transform; global deny fallback retained; no live writes.");
+console.log("PASS: "+checks+" staff-role checks, immutable merged baseline and hash-pinned second-pass Rules; no live writes.");
