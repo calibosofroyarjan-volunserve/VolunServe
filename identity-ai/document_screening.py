@@ -10,7 +10,7 @@ import re
 import unicodedata
 
 SUPPORTED = frozenset({
-    "national_id", "drivers_license", "passport", "other_government_id",
+    "national_id", "drivers_license", "passport", "umid",
 })
 # Preserve backend's allowlisted method identifier for existing clients.
 METHOD = "ph_government_id_ocr_keyword_screen_v1"
@@ -84,13 +84,24 @@ def _document_signals(text: str) -> set[str]:
         found.add("passport")
     if any(_contains(t, term) for term in (
         "UNIFIED MULTI PURPOSE ID",
-        "SOCIAL SECURITY SYSTEM",
-        "PROFESSIONAL REGULATION COMMISSION",
-        "GOVERNMENT SERVICE INSURANCE SYSTEM",
+        "UNIFIED MULTI PURPOSE IDENTIFICATION",
         "UMID",
     )):
-        found.add("other_government_id")
+        found.add("umid")
     return found
+
+
+def _school_id_signal(text: str) -> bool:
+    """Clear school-only ID labels must never count as government-ID evidence."""
+    t = _normalized(text)
+    return any(_contains(t, term) for term in (
+        "SCHOOL ID",
+        "STUDENT ID",
+        "STUDENT IDENTIFICATION CARD",
+        "SCHOOL IDENTIFICATION CARD",
+        "UNIVERSITY ID",
+        "CAMPUS ID",
+    ))
 
 
 def assess_document_text(declared_type: str, ocr_text: str) -> dict:
@@ -99,7 +110,12 @@ def assess_document_text(declared_type: str, ocr_text: str) -> dict:
         raise ValueError("Unsupported government ID type.")
     found = _document_signals(ocr_text)
     detected = next(iter(found)) if len(found) == 1 else None
-    if len(found) > 1:
+    if _school_id_signal(ocr_text):
+        # If a student/school card label appears, never let a government-ID
+        # keyword elsewhere in the image override that clear conflict.
+        status, warning = "unsupported", "school_id_not_supported"
+        detected = None
+    elif len(found) > 1:
         status, warning = "inconclusive", "multiple_document_type_signals"
     elif detected is None:
         status, warning = "inconclusive", "document_type_not_recognized"
@@ -151,7 +167,12 @@ def assess_document_sides(
         return result
 
     back = assess_document_text(declared_type, back_ocr_text)
-    if back["status"] == "mismatch":
+    if back["status"] == "unsupported":
+        result["status"] = "unsupported"
+        result["warningCodes"] = list(dict.fromkeys(
+            result["warningCodes"] + ["school_id_not_supported"]
+        ))
+    elif back["status"] == "mismatch" and result["status"] != "unsupported":
         result["status"] = "mismatch"
         result["warningCodes"] = list(dict.fromkeys(
             result["warningCodes"] + ["document_back_type_conflict"]
