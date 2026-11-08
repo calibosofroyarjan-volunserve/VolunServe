@@ -35,7 +35,7 @@ ACCEPTED_ID_TYPES = {
     "national_id",
     "drivers_license",
     "passport",
-    "other_government_id",
+    "umid",
 }
 ALLOWED_IMAGE_TYPES = {
     "image/jpeg",
@@ -1217,6 +1217,16 @@ async def verify_identity(
         default=None,
         alias="X-VolunServe-Internal-Key",
     ),
+    x_volunserve_profile_first_name: str
+    | None = Header(
+        default=None,
+        alias="X-VolunServe-Profile-First-Name",
+    ),
+    x_volunserve_profile_last_name: str
+    | None = Header(
+        default=None,
+        alias="X-VolunServe-Profile-Last-Name",
+    ),
 ):
     require_internal_backend(
         x_volunserve_internal_key
@@ -1346,6 +1356,23 @@ async def verify_identity(
             expected_first_name=x_volunserve_profile_first_name or "",
             expected_last_name=x_volunserve_profile_last_name or "",
         )
+        if document_screening.get("status") != "text_consistent_unverified":
+            # A face match NEVER overrules the selected document type.
+            # Fail closed on unrecognized, inconsistent or school IDs;
+            # the Resident may retry with the selected supported ID.
+            screening_status = document_screening.get("status")
+            if screening_status == "unsupported":
+                reason = "School IDs are not supported. Select and scan a valid government-issued ID."
+            elif screening_status == "mismatch":
+                reason = "The scanned document does not match the selected government ID type. Select the correct ID and retry."
+            else:
+                reason = "The selected government ID type could not be confirmed from the scan. Retake a clear photo and retry."
+            result.update({
+                "ok": True,
+                "status": "failed",
+                "decision": "failed",
+                "message": reason,
+            })
     except HTTPException:
         raise
     except Exception:
