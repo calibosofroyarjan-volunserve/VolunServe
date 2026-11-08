@@ -1,0 +1,26 @@
+# Validation only: NO cloud credentials and NO production changes.
+name: Check Reviewed Orphan User Profile Cleanup (NO DEPLOY)
+on:
+  pull_request:
+    branches: [live-protected]
+    paths:
+      - scripts/archive-orphan-firestore-user-profiles.cjs
+      - .github/workflows/check-orphan-user-profile-cleanup.yml
+permissions:
+  contents: read
+jobs:
+  check-cleanup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm ci --prefix functions --no-audit --no-fund
+      - name: Verify cleanup script syntax and protected-profile logic (SYNTHETIC)
+        run: |
+          node --check scripts/archive-orphan-firestore-user-profiles.cjs
+          node scripts/archive-orphan-firestore-user-profiles.cjs --self-test
