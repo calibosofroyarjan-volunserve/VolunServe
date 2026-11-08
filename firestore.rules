@@ -9,18 +9,41 @@ service cloud.firestore {
         /databases/$(database)/documents/users/$(request.auth.uid)
       ).data;
     }
+    // Firebase Auth sign-in alone never grants Firestore permissions.
+    // Staff and community routes require a verified mailbox in the token.
+    function verifiedEmailSession() {
+      return signedIn()
+        && request.auth.token.get('email_verified', false) == true;
+    }
     // Reuse profile data inside role helpers instead of repeating get() expressions.
     function approved() {
       let p = signedIn() ? profile() : {};
-      return signedIn()
+      return verifiedEmailSession()
+        // Explicitly prohibit legacy Guest/unknown roles even if their old
+        // profile happens to contain status == approved.
+        && p.get('role', '') in [
+          'resident', 'volunteer', 'admin', 'superadmin', 'lgu_personnel'
+        ]
+        // Email-only Firebase Auth UIDs are NOT completed Resident profiles.
+        // Staff accounts retain their independent administrative login policy.
+        && (
+          p.get('role', '') in ['admin', 'superadmin', 'lgu_personnel']
+          || (
+            request.auth.token.get('email_verified', false) == true
+            && request.auth.token.get('email', '') == p.get('email', '')
+          )
+        )
         && (
           p.get('status', null) == 'approved'
           || (!('status' in p) && p.get('role', 'applicant') != 'applicant')
-        );
+        )
+        // Historical suspended staff must not retain community-wide reads
+        // through the generic approved() helper.
+        && p.get('adminStatus', 'active') != 'suspended';
     }
     function isAdmin() {
       let p = signedIn() ? profile() : {};
-      return signedIn()
+      return verifiedEmailSession()
         && p.get('role', '') == 'admin'
         && p.get('status', 'approved') == 'approved'
         // A suspended LGU administrator must lose operational access immediately.
@@ -28,18 +51,18 @@ service cloud.firestore {
     }
     function isSuperAdmin() {
       let p = signedIn() ? profile() : {};
-      return signedIn()
+      return verifiedEmailSession()
         && p.get('role', '') == 'superadmin'
-        && p.get('status', 'approved') == 'approved';
+        && p.get('status', 'approved') == 'approved'
+        && p.get('adminStatus', 'active') != 'suspended';
     }
     // One role test, not isAdmin() || isSuperAdmin().
     function isAdminOrSuperAdmin() {
       let p = signedIn() ? profile() : {};
-      return signedIn()
+      return verifiedEmailSession()
         && p.get('role', '') in ['admin', 'superadmin']
         && p.get('status', 'approved') == 'approved'
-        && (p.get('role', '') == 'superadmin'
-          || p.get('adminStatus', 'active') != 'suspended');
+        && p.get('adminStatus', 'active') != 'suspended';
     }
     function hasResidentAccess() {
       let p = signedIn() ? profile() : {};
@@ -87,6 +110,98 @@ service cloud.firestore {
           /databases/$(database)/documents/volunteerApplications/$(uid)
         ).data;
       }
+      // Firestore creation must enforce the same required inputs as the wizard.
+      // These lists are synchronized against the local SJDM/occupation constants.
+      function validInitialResidentInputs() {
+        let d = request.resource.data;
+        return d.firstName is string && d.firstName.size() >= 2 && d.firstName.size() <= 80
+          && d.lastName is string && d.lastName.size() >= 2 && d.lastName.size() <= 80
+          && d.get('middleName', '') is string && d.get('middleName', '').size() <= 80
+          && d.phoneNumber is string
+          && d.phoneNumber.matches('^([+]639[0-9]{9}|09[0-9]{9})$')
+          && d.region is string && d.region.size() >= 5 && d.region.size() <= 100
+          && d.barangay in [
+            'Assumption',
+            'Bagong Buhay I',
+            'Bagong Buhay II',
+            'Bagong Buhay III',
+            'Citrus',
+            'Ciudad Real',
+            'Dulong Bayan',
+            'Fatima I',
+            'Fatima II',
+            'Fatima III',
+            'Fatima IV',
+            'Fatima V',
+            'Francisco Homes-Guijo',
+            'Francisco Homes-Mulawin',
+            'Francisco Homes-Narra',
+            'Francisco Homes-Yakal',
+            'Gaya-gaya',
+            'Graceville',
+            'Gumaoc Central',
+            'Gumaoc East',
+            'Gumaoc West',
+            'Kaybanban',
+            'Kaypian',
+            'Lawang Pari',
+            'Maharlika',
+            'Minuyan I',
+            'Minuyan II',
+            'Minuyan III',
+            'Minuyan IV',
+            'Minuyan Proper',
+            'Minuyan V',
+            'Muzon East',
+            'Muzon Proper',
+            'Muzon South',
+            'Muzon West',
+            'Paradise III',
+            'Poblacion',
+            'Poblacion I',
+            'San Isidro',
+            'San Manuel',
+            'San Martin de Porres',
+            'San Martin I',
+            'San Martin II',
+            'San Martin III',
+            'San Martin IV',
+            'San Pedro',
+            'San Rafael I',
+            'San Rafael II',
+            'San Rafael III',
+            'San Rafael IV',
+            'San Rafael V',
+            'San Roque',
+            'Santa Cruz I',
+            'Santa Cruz II',
+            'Santa Cruz III',
+            'Santa Cruz IV',
+            'Santa Cruz V',
+            'Santo Cristo',
+            'Santo Niño I',
+            'Santo Niño II',
+            'Sapang Palay',
+            'Tungkong Mangga'
+          ]
+          && d.occupationCategory in ['Medical Professional', 'Emergency Responder', 'Government Employee', 'Student', 'Private Sector Employee', 'NGO Worker', 'Skilled Worker', 'Unemployed', 'Retired', 'Other (Specify)']
+          && d.get('occupationSpecialization', '') is string
+          && d.get('occupationOther', '') is string
+          && d.get('occupationOther', '').size() <= 80
+          && (d.occupationCategory == 'Other (Specify)' || d.get('occupationOther', '') == '')
+          && (
+          (d.occupationCategory == 'Medical Professional' && d.get('occupationSpecialization', '') in ['Doctor', 'Nurse', 'Midwife', 'Medical Technologist', 'Pharmacist', 'Other Medical Staff']) ||
+          (d.occupationCategory == 'Emergency Responder' && d.get('occupationSpecialization', '') in ['Firefighter', 'EMT', 'Rescue Volunteer', 'DRRM Officer', 'Other Responder']) ||
+          (d.occupationCategory == 'Government Employee' && d.get('occupationSpecialization', '') in ['Health Office', 'Social Welfare', 'Public Safety', 'Administrative Staff', 'Other Office']) ||
+          (d.occupationCategory == 'Student' && d.get('occupationSpecialization', '') in ['Senior High School', 'College', 'Fresh Graduate', 'Technical-Vocational']) ||
+          (d.occupationCategory == 'Private Sector Employee' && d.get('occupationSpecialization', '') in ['Operations', 'Customer Service', 'Engineering', 'Management', 'Other Department']) ||
+          (d.occupationCategory == 'NGO Worker' && d.get('occupationSpecialization', '') in ['Program Officer', 'Field Coordinator', 'Volunteer Manager', 'Other Role']) ||
+          (d.occupationCategory == 'Skilled Worker' && d.get('occupationSpecialization', '') in ['Electrician', 'Plumber', 'Driver', 'Welder', 'Carpenter', 'Other Skill']) ||
+          (d.occupationCategory in ['Unemployed', 'Retired', 'Other (Specify)']
+            && d.get('occupationSpecialization', '') == '')
+          )
+          && (d.occupationCategory != 'Other (Specify)' || d.get('occupationOther', '').size() >= 2);
+      }
       // A role grant is only valid with a same-commit, reviewed LGU credential record.
       // getAfter + verifiedAt == request.time requires a fresh review in the same batch,
       // rather than a stale record from an earlier promotion.
@@ -102,6 +217,27 @@ service cloud.firestore {
       }
       allow create: if signedIn()
         && request.auth.uid == uid
+        && request.auth.token.get("email_verified", false) == true
+        && request.auth.token.get("email", "") == request.resource.data.email
+        && validInitialResidentInputs()
+        && !request.resource.data.email.matches(".*@en2ch[.]com")
+        && request.resource.data.keys().hasAll([
+          "uid", "email", "fullName", "firstName", "lastName",
+          "age", "phoneNumber", "barangay", "occupationCategory"
+        ])
+        && request.resource.data.firstName is string
+        && request.resource.data.firstName.size() >= 2
+        && request.resource.data.lastName is string
+        && request.resource.data.lastName.size() >= 2
+        && request.resource.data.age is int
+        && request.resource.data.age >= 18
+        && request.resource.data.age <= 100
+        && request.resource.data.phoneNumber is string
+        && request.resource.data.phoneNumber.size() >= 11
+        && request.resource.data.barangay is string
+        && request.resource.data.barangay.size() >= 2
+        && request.resource.data.occupationCategory is string
+        && request.resource.data.occupationCategory.size() >= 2
         && request.resource.data.uid == uid
         && request.resource.data.province in [
           'Bulacan',
@@ -4068,6 +4204,77 @@ service cloud.firestore {
         );
       allow update, delete: if false;
     }
+    // Preserve the exact previously deployed volunteer-invitation policy.
+    // This invitation is consent/availability only, not dispatch or live GPS.
+    match /volunteerInvitations/{invitationId} {
+      function selectedVolunteer() {
+        return get(
+          /databases/$(database)/documents/users/$(request.resource.data.volunteerId)
+        ).data;
+      }
+
+      function selectedCase() {
+        return get(
+          /databases/$(database)/documents/disasterCases/$(request.resource.data.caseId)
+        ).data;
+      }
+
+      allow read: if isAdmin()
+        || (hasVolunteerAccess() && resource.data.volunteerId == request.auth.uid);
+      allow create: if isAdmin()
+        && request.resource.data.keys().hasOnly([
+          'caseId', 'caseTitle', 'volunteerId', 'volunteerName',
+          'status', 'createdBy', 'createdAt', 'updatedAt'
+        ])
+        && request.resource.data.keys().hasAll([
+          'caseId', 'caseTitle', 'volunteerId', 'volunteerName',
+          'status', 'createdBy', 'createdAt', 'updatedAt'
+        ])
+        && request.resource.data.caseId is string
+        && request.resource.data.caseId.size() > 0
+        && request.resource.data.volunteerId is string
+        && request.resource.data.volunteerId.size() > 0
+        && invitationId == request.resource.data.caseId + '_' + request.resource.data.volunteerId
+        && request.resource.data.caseTitle is string
+        && request.resource.data.caseTitle.size() >= 1
+        && request.resource.data.caseTitle.size() <= 200
+        && request.resource.data.volunteerName is string
+        && request.resource.data.volunteerName.size() >= 1
+        && request.resource.data.volunteerName.size() <= 160
+        && request.resource.data.status == 'invited'
+        && request.resource.data.createdBy == request.auth.uid
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.updatedAt == request.time
+        && exists(
+          /databases/$(database)/documents/users/$(request.resource.data.volunteerId)
+        )
+        && exists(
+          /databases/$(database)/documents/disasterCases/$(request.resource.data.caseId)
+        )
+        && selectedCase().reporterUid != request.resource.data.volunteerId
+        && !(selectedCase().status in ['resolved', 'closed'])
+        && selectedCase().get('verificationStatus', 'pending_verification') != 'rejected'
+        && selectedVolunteer().get('status', '') == 'approved'
+        && selectedVolunteer().get('volunteerAccess', false) == true
+        && selectedVolunteer().get('volunteerStatus', '') == 'approved'
+        && !(selectedVolunteer().get('role', '') in [
+          'admin', 'superadmin', 'lgu_personnel', 'applicant'
+        ]);
+      allow update: if request.resource.data
+          .diff(resource.data).affectedKeys().hasOnly(['status', 'updatedAt'])
+        && request.resource.data.updatedAt == request.time
+        && (
+          (isAdmin()
+            && resource.data.status == 'declined'
+            && request.resource.data.status == 'invited')
+          || (hasVolunteerAccess()
+            && resource.data.volunteerId == request.auth.uid
+            && resource.data.status == 'invited'
+            && request.resource.data.status in ['accepted', 'declined'])
+        );
+      allow delete: if false;
+    }
+
     match /responseAssignments/{assignmentId} {
 
       function hasVerifiedIdentity(data) {

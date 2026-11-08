@@ -15,6 +15,7 @@ import {
   browserLocalPersistence,
   browserSessionPersistence,
   setPersistence,
+  signOut,
 } from "firebase/auth";
 import { useEffect, useState } from "react";
 import {
@@ -307,7 +308,9 @@ export default function WebLogin() {
             onDismiss={() => { setGoogleFeedback(""); consumeGoogleLoginNotice(); }}
           />
         )}
-        <TouchableOpacity accessibilityRole="button" onPress={() => router.replace("/public")}
+        <TouchableOpacity accessibilityRole="button" onPress={() => {
+          void signOut(auth).then(() => router.replace("/public")).catch(() => showError("Could not open Guest Mode. Please try again."));
+        }}
           disabled={loading}
           style={[styles.outlineButton, authCornerCut(10), (loading) && styles.disabled]}>
           <View style={styles.centerRow}>

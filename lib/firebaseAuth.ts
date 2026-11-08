@@ -1,4 +1,6 @@
 import { authenticateEmailSignup } from "./signupRegistration";
+import {requireCompleteResidentRegistration} from "./requireCompleteResidentRegistration";
+import {getRegistrationEmailError, isKnownDisposableEmail} from "./registrationEmailPolicy";
 import { EMAIL_FIRST_SIGNUP_ENABLED } from "./signupFeature";
 import {
   getIdToken,
@@ -240,7 +242,12 @@ export interface SignupData {
 export const isApprovedProfile = (
   profile: UserProfile | null | undefined
 ) => {
-  if (!profile) {
+  if (!profile || !["resident", "volunteer", "admin", "superadmin", "lgu_personnel"].includes(profile.role)) {
+    // A Guest preview or unknown role is never a completed registered account.
+    return false;
+  }
+  if (profile.adminStatus === "suspended") {
+    // A staff suspension must never route through a generic approved role.
     return false;
   }
   return (
@@ -462,6 +469,8 @@ export const signUpUser = async (
   try {
     let user;
     const submittedEmail = data.email.trim().toLowerCase();
+    const registrationEmailError = getRegistrationEmailError(submittedEmail);
+    if (registrationEmailError) throw new Error(registrationEmailError);
     const usesGoogle = data.authProvider === "google";
     const usesVerifiedEmail = data.authProvider === "verified_email";
     if (usesVerifiedEmail && !EMAIL_FIRST_SIGNUP_ENABLED) {
@@ -484,6 +493,16 @@ export const signUpUser = async (
         );
       }
       user = auth.currentUser;
+      if (usesGoogle) {
+        await reload(user);
+        // Google's verified provider can authenticate without a duplicate
+        // VolunServe password; registration still needs all personal details.
+        if (auth.currentUser?.uid !== user.uid || !user.emailVerified ||
+            !user.providerData.some(provider => provider.providerId === "google.com")) {
+          throw new Error("Connect a verified Google account to continue registration.");
+        }
+        await getIdToken(user, true);
+      }
       if (usesVerifiedEmail) {
         await reload(user);
         if (auth.currentUser?.uid !== user.uid || !user.emailVerified) {
@@ -521,6 +540,9 @@ export const signUpUser = async (
       }
       return user;
     }
+    // An Auth UID or successful email verification must NEVER be treated
+    // as completed Basic Resident registration without all wizard details.
+    requireCompleteResidentRegistration(data);
     await getIdToken(user, true);
     const fullName = [
       data.lastName,
@@ -650,6 +672,18 @@ export const loginUser = async (
     }
     const profile =
       profileSnapshot.data() as UserProfile;
+    if (String(profile.role) === "guest") {
+      await signOut(auth);
+      throw new Error("Guest Preview has no registered account. Complete a new Resident registration, or ask an administrator to migrate a legacy Guest record.");
+    }
+    // Do not disable historic privileged staff accounts through a community
+    // domain policy. Existing disposable-email Resident/Volunteer accounts
+    // must migrate to a permanent address before signing in again.
+    if ((profile.role === "resident" || profile.role === "volunteer") &&
+        isKnownDisposableEmail(user.email || email)) {
+      await signOut(auth);
+      throw new Error("Temporary email accounts cannot sign in. Use a permanent email and contact an administrator to migrate an existing profile.");
+    }
     const status = profile.status;
     /**
      * Basic Accounts are valid active accounts because their status is
@@ -709,7 +743,23 @@ export const getUserProfile = async (
   if (!snapshot.exists()) {
     throw new Error("Profile not found.");
   }
-  return snapshot.data() as UserProfile;
+  const p = snapshot.data() as UserProfile;
+  if (String(p.role) === "guest") {
+    throw new Error("Guest Preview is not a registered account. Use Resident signup, or contact an administrator about a legacy Guest record.");
+  }
+  const currentUser = auth.currentUser;
+  if (currentUser?.uid === uid &&
+      (p.role === "resident" || p.role === "volunteer")) {
+    if (!currentUser.emailVerified ||
+        !currentUser.email ||
+        currentUser.email.trim().toLowerCase() !== String(p.email || "").trim().toLowerCase()) {
+      throw new Error("Verify the email linked to this Resident profile before signing in.");
+    }
+    if (isKnownDisposableEmail(currentUser.email)) {
+      throw new Error("Temporary email accounts cannot access VolunServe. Contact an administrator to migrate your profile.");
+    }
+  }
+  return p;
 };
 
 export const updateUserProfile = async (
