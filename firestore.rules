@@ -35,15 +35,26 @@ service cloud.firestore {
         && p.get('status', 'approved') == 'approved'
         && p.get('adminStatus', 'active') != 'suspended';
     }
-    function isAdmin() {
+    // Reuse one verified-active staff role gate for all three staff helpers.
+    // Same semantics as the previous independent isAdmin/isSuperAdmin helpers:
+    // only a verified Firebase email, approved/non-suspended user profile,
+    // and the exact allowed role can pass. Other roles never get staff access.
+    function hasApprovedStaffRole(roles) {
       let p = signedIn() ? profile() : {};
       return verifiedEmailSession()
-        && p.get('role', '') == 'admin'
+        && p.get('role', '') in roles
         && p.get('status', 'approved') == 'approved'
-        // A suspended LGU administrator must lose operational access immediately.
         && p.get('adminStatus', 'active') != 'suspended';
     }
-    // One role test, not isAdmin() || isSuperAdmin().
+    function isAdmin() {
+      return hasApprovedStaffRole(['admin']);
+    }
+    function isSuperAdmin() {
+      return hasApprovedStaffRole(['superadmin']);
+    }
+    function isAdminOrSuperAdmin() {
+      return hasApprovedStaffRole(['admin', 'superadmin']);
+    }
     function hasResidentAccess() {
       let p = signedIn() ? profile() : {};
       return approved()
@@ -66,22 +77,6 @@ service cloud.firestore {
       return hasResidentAccess() && p.get('activeMode', 'resident') == 'resident';
     }
     match /users/{uid} {
-      function isSuperAdmin() {
-        let p = signedIn() ? profile() : {};
-        return verifiedEmailSession()
-          && p.get('role', '') == 'superadmin'
-          && p.get('status', 'approved') == 'approved'
-          && p.get('adminStatus', 'active') != 'suspended';
-      }
-
-      function isAdminOrSuperAdmin() {
-        let p = signedIn() ? profile() : {};
-        return verifiedEmailSession()
-          && p.get('role', '') in ['admin', 'superadmin']
-          && p.get('status', 'approved') == 'approved'
-          && p.get('adminStatus', 'active') != 'suspended';
-      }
-
 
       function hasVerifiedIdentity(data) {
         return (
@@ -687,14 +682,6 @@ service cloud.firestore {
       allow delete: if false;
     }
     match /lguDutyStatus/{uid} {
-      function isAdminOrSuperAdmin() {
-        let p = signedIn() ? profile() : {};
-        return verifiedEmailSession()
-          && p.get('role', '') in ['admin', 'superadmin']
-          && p.get('status', 'approved') == 'approved'
-          && p.get('adminStatus', 'active') != 'suspended';
-      }
-
 
       function isLguPersonnel() {
         return approved()
@@ -708,14 +695,6 @@ service cloud.firestore {
       allow write: if false;
     }
     match /lguAttendance/{attendanceId} {
-      function isAdminOrSuperAdmin() {
-        let p = signedIn() ? profile() : {};
-        return verifiedEmailSession()
-          && p.get('role', '') in ['admin', 'superadmin']
-          && p.get('status', 'approved') == 'approved'
-          && p.get('adminStatus', 'active') != 'suspended';
-      }
-
 
       function isLguPersonnel() {
         return approved()
@@ -729,14 +708,6 @@ service cloud.firestore {
       allow write: if false;
     }
     match /lguAssignments/{assignmentId} {
-      function isAdminOrSuperAdmin() {
-        let p = signedIn() ? profile() : {};
-        return verifiedEmailSession()
-          && p.get('role', '') in ['admin', 'superadmin']
-          && p.get('status', 'approved') == 'approved'
-          && p.get('adminStatus', 'active') != 'suspended';
-      }
-
 
       function isLguPersonnel() {
         return approved()
@@ -753,26 +724,10 @@ service cloud.firestore {
       allow write: if false;
     }
     match /address_regions/{document=**} {
-      function isSuperAdmin() {
-        let p = signedIn() ? profile() : {};
-        return verifiedEmailSession()
-          && p.get('role', '') == 'superadmin'
-          && p.get('status', 'approved') == 'approved'
-          && p.get('adminStatus', 'active') != 'suspended';
-      }
-
       allow read: if true;
       allow write: if isSuperAdmin();
     }
     match /systemSettings/{settingId} {
-      function isSuperAdmin() {
-        let p = signedIn() ? profile() : {};
-        return verifiedEmailSession()
-          && p.get('role', '') == 'superadmin'
-          && p.get('status', 'approved') == 'approved'
-          && p.get('adminStatus', 'active') != 'suspended';
-      }
-
       allow read: if settingId == 'public';
       allow create, update: if isSuperAdmin()
         && settingId == 'public'
@@ -804,14 +759,6 @@ service cloud.firestore {
       allow delete: if false;
     }
     match /announcements/{announcementId} {
-      function isAdminOrSuperAdmin() {
-        let p = signedIn() ? profile() : {};
-        return verifiedEmailSession()
-          && p.get('role', '') in ['admin', 'superadmin']
-          && p.get('status', 'approved') == 'approved'
-          && p.get('adminStatus', 'active') != 'suspended';
-      }
-
       allow read: if isAdminOrSuperAdmin()
         || (
           approved()
@@ -987,14 +934,6 @@ service cloud.firestore {
       allow delete: if false;
     }
     match /volunteerApplications/{uid} {
-      function isAdminOrSuperAdmin() {
-        let p = signedIn() ? profile() : {};
-        return verifiedEmailSession()
-          && p.get('role', '') in ['admin', 'superadmin']
-          && p.get('status', 'approved') == 'approved'
-          && p.get('adminStatus', 'active') != 'suspended';
-      }
-
 
       function hasVerifiedIdentity(data) {
         return (
@@ -1145,14 +1084,6 @@ service cloud.firestore {
       allow read, write: if false;
     }
     match /assistanceVerificationReviews/{requestId} {
-      function isAdminOrSuperAdmin() {
-        let p = signedIn() ? profile() : {};
-        return verifiedEmailSession()
-          && p.get('role', '') in ['admin', 'superadmin']
-          && p.get('status', 'approved') == 'approved'
-          && p.get('adminStatus', 'active') != 'suspended';
-      }
-
       function sourceAssistanceExists() {
         return exists(
           /databases/$(database)/documents/assistanceRequests/$(requestId)
@@ -1619,14 +1550,6 @@ service cloud.firestore {
       allow delete: if false;
     }
     match /assistanceRequests/{requestId} {
-      function isAdminOrSuperAdmin() {
-        let p = signedIn() ? profile() : {};
-        return verifiedEmailSession()
-          && p.get('role', '') in ['admin', 'superadmin']
-          && p.get('status', 'approved') == 'approved'
-          && p.get('adminStatus', 'active') != 'suspended';
-      }
-
 
       function hasVerifiedIdentity(data) {
         return (
@@ -2239,14 +2162,6 @@ service cloud.firestore {
       allow delete: if false;
     }
     match /disasterCases/{caseId} {
-      function isAdminOrSuperAdmin() {
-        let p = signedIn() ? profile() : {};
-        return verifiedEmailSession()
-          && p.get('role', '') in ['admin', 'superadmin']
-          && p.get('status', 'approved') == 'approved'
-          && p.get('adminStatus', 'active') != 'suspended';
-      }
-
 
       function isLguPersonnel() {
         return approved()
@@ -2552,14 +2467,6 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
     match /barangayNeedAssessments/{assessmentId} {
-      function isAdminOrSuperAdmin() {
-        let p = signedIn() ? profile() : {};
-        return verifiedEmailSession()
-          && p.get('role', '') in ['admin', 'superadmin']
-          && p.get('status', 'approved') == 'approved'
-          && p.get('adminStatus', 'active') != 'suspended';
-      }
-
       function validBarangayNeedPayload() {
         let rd = request.resource.data;
         return rd.keys().hasOnly([
@@ -2679,14 +2586,6 @@ service cloud.firestore {
       allow delete: if false;
     }
     match /lguReliefInventory/{itemId} {
-      function isAdminOrSuperAdmin() {
-        let p = signedIn() ? profile() : {};
-        return verifiedEmailSession()
-          && p.get('role', '') in ['admin', 'superadmin']
-          && p.get('status', 'approved') == 'approved'
-          && p.get('adminStatus', 'active') != 'suspended';
-      }
-
       function donationInventorySourceAfter() {
         return getAfter(
           /databases/$(database)/documents/donations/$(request.resource.data.sourceReferenceId)
@@ -2803,14 +2702,6 @@ service cloud.firestore {
       allow delete: if false;
     }
     match /barangayReliefAllocations/{allocationId} {
-      function isAdminOrSuperAdmin() {
-        let p = signedIn() ? profile() : {};
-        return verifiedEmailSession()
-          && p.get('role', '') in ['admin', 'superadmin']
-          && p.get('status', 'approved') == 'approved'
-          && p.get('adminStatus', 'active') != 'suspended';
-      }
-
       function allocationInventoryBefore() {
         return get(
           /databases/$(database)/documents/lguReliefInventory/$(request.resource.data.inventoryItemId)
@@ -3094,14 +2985,6 @@ service cloud.firestore {
       }
     }
     match /caseInvitations/{invitationId} {
-      function isAdminOrSuperAdmin() {
-        let p = signedIn() ? profile() : {};
-        return verifiedEmailSession()
-          && p.get('role', '') in ['admin', 'superadmin']
-          && p.get('status', 'approved') == 'approved'
-          && p.get('adminStatus', 'active') != 'suspended';
-      }
-
       allow create, delete: if isAdmin();
       allow read: if isAdminOrSuperAdmin()
         || (
@@ -3592,14 +3475,6 @@ service cloud.firestore {
       allow create, update, delete: if false;
     }
     match /certificates/{certificateId} {
-      function isAdminOrSuperAdmin() {
-        let p = signedIn() ? profile() : {};
-        return verifiedEmailSession()
-          && p.get('role', '') in ['admin', 'superadmin']
-          && p.get('status', 'approved') == 'approved'
-          && p.get('adminStatus', 'active') != 'suspended';
-      }
-
       allow read: if isAdminOrSuperAdmin()
         || (
           approved()
@@ -3783,14 +3658,6 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
     match /verifiedContributions/{assignmentId} {
-      function isAdminOrSuperAdmin() {
-        let p = signedIn() ? profile() : {};
-        return verifiedEmailSession()
-          && p.get('role', '') in ['admin', 'superadmin']
-          && p.get('status', 'approved') == 'approved'
-          && p.get('adminStatus', 'active') != 'suspended';
-      }
-
       function contributionAssignment() {
         return get(
           /databases/$(database)/documents/responseAssignments/$(assignmentId)
@@ -3886,14 +3753,6 @@ service cloud.firestore {
       allow update, delete: if false;
     }
     match /responseDisputes/{assignmentId} {
-      function isAdminOrSuperAdmin() {
-        let p = signedIn() ? profile() : {};
-        return verifiedEmailSession()
-          && p.get('role', '') in ['admin', 'superadmin']
-          && p.get('status', 'approved') == 'approved'
-          && p.get('adminStatus', 'active') != 'suspended';
-      }
-
       function disputeAssignment() {
         return get(
           /databases/$(database)/documents/responseAssignments/$(assignmentId)
@@ -3987,14 +3846,6 @@ service cloud.firestore {
       allow delete: if false;
     }
     match /responseAuditLogs/{logId} {
-      function isAdminOrSuperAdmin() {
-        let p = signedIn() ? profile() : {};
-        return verifiedEmailSession()
-          && p.get('role', '') in ['admin', 'superadmin']
-          && p.get('status', 'approved') == 'approved'
-          && p.get('adminStatus', 'active') != 'suspended';
-      }
-
       allow read: if isAdminOrSuperAdmin();
       allow create, update, delete: if false;
     }
@@ -4334,14 +4185,6 @@ service cloud.firestore {
     }
 
     match /responseAssignments/{assignmentId} {
-      function isAdminOrSuperAdmin() {
-        let p = signedIn() ? profile() : {};
-        return verifiedEmailSession()
-          && p.get('role', '') in ['admin', 'superadmin']
-          && p.get('status', 'approved') == 'approved'
-          && p.get('adminStatus', 'active') != 'suspended';
-      }
-
 
       function hasVerifiedIdentity(data) {
         return (
@@ -4616,14 +4459,6 @@ service cloud.firestore {
       allow delete: if false;
     }
     match /volunteerFieldReports/{assignmentId} {
-      function isAdminOrSuperAdmin() {
-        let p = signedIn() ? profile() : {};
-        return verifiedEmailSession()
-          && p.get('role', '') in ['admin', 'superadmin']
-          && p.get('status', 'approved') == 'approved'
-          && p.get('adminStatus', 'active') != 'suspended';
-      }
-
       function fieldReportAssignmentAfter() {
         return getAfter(
           /databases/$(database)/documents/responseAssignments/$(assignmentId)
@@ -4735,14 +4570,6 @@ service cloud.firestore {
       allow delete: if false;
     }
     match /assistanceConfirmations/{assignmentId} {
-      function isAdminOrSuperAdmin() {
-        let p = signedIn() ? profile() : {};
-        return verifiedEmailSession()
-          && p.get('role', '') in ['admin', 'superadmin']
-          && p.get('status', 'approved') == 'approved'
-          && p.get('adminStatus', 'active') != 'suspended';
-      }
-
       function confirmationAssignment() {
         return get(
           /databases/$(database)/documents/responseAssignments/$(assignmentId)
@@ -4837,14 +4664,6 @@ service cloud.firestore {
       allow update, delete: if false;
     }
     match /responderLocks/{uid} {
-      function isAdminOrSuperAdmin() {
-        let p = signedIn() ? profile() : {};
-        return verifiedEmailSession()
-          && p.get('role', '') in ['admin', 'superadmin']
-          && p.get('status', 'approved') == 'approved'
-          && p.get('adminStatus', 'active') != 'suspended';
-      }
-
       function lockAssignmentAfter() {
         return getAfter(
           /databases/$(database)/documents/responseAssignments/$(request.resource.data.assignmentId)
@@ -5278,14 +5097,6 @@ service cloud.firestore {
     // Private human-verified LGU credentials: reference only, never ID scans.
     // Admin access requires a fresh review in the same commit as role promotion.
     match /lguAdminCredentialReviews/{targetUid} {
-      function isSuperAdmin() {
-        let p = signedIn() ? profile() : {};
-        return verifiedEmailSession()
-          && p.get('role', '') == 'superadmin'
-          && p.get('status', 'approved') == 'approved'
-          && p.get('adminStatus', 'active') != 'suspended';
-      }
-
       function validReview() {
         return isSuperAdmin()
           && request.auth.uid != targetUid
@@ -5322,43 +5133,11 @@ service cloud.firestore {
       allow delete: if false;
     }
     match /adminLogs/{logId} {
-      function isSuperAdmin() {
-        let p = signedIn() ? profile() : {};
-        return verifiedEmailSession()
-          && p.get('role', '') == 'superadmin'
-          && p.get('status', 'approved') == 'approved'
-          && p.get('adminStatus', 'active') != 'suspended';
-      }
-
-      function isAdminOrSuperAdmin() {
-        let p = signedIn() ? profile() : {};
-        return verifiedEmailSession()
-          && p.get('role', '') in ['admin', 'superadmin']
-          && p.get('status', 'approved') == 'approved'
-          && p.get('adminStatus', 'active') != 'suspended';
-      }
-
       allow read: if isSuperAdmin();
       allow create: if isAdminOrSuperAdmin();
       allow update, delete: if false;
     }
     match /adminActivityLogs/{logId} {
-      function isSuperAdmin() {
-        let p = signedIn() ? profile() : {};
-        return verifiedEmailSession()
-          && p.get('role', '') == 'superadmin'
-          && p.get('status', 'approved') == 'approved'
-          && p.get('adminStatus', 'active') != 'suspended';
-      }
-
-      function isAdminOrSuperAdmin() {
-        let p = signedIn() ? profile() : {};
-        return verifiedEmailSession()
-          && p.get('role', '') in ['admin', 'superadmin']
-          && p.get('status', 'approved') == 'approved'
-          && p.get('adminStatus', 'active') != 'suspended';
-      }
-
       allow read: if isSuperAdmin();
       allow create: if isAdminOrSuperAdmin();
       allow update, delete: if false;
@@ -5460,14 +5239,6 @@ service cloud.firestore {
     }
 
     match /communityEventProposals/{proposalId} {
-      function isAdminOrSuperAdmin() {
-        let p = signedIn() ? profile() : {};
-        return verifiedEmailSession()
-          && p.get('role', '') in ['admin', 'superadmin']
-          && p.get('status', 'approved') == 'approved'
-          && p.get('adminStatus', 'active') != 'suspended';
-      }
-
       function publishedEventAfter() {
         return getAfter(
           /databases/$(database)/documents/communityEvents/$(proposalId)
@@ -5621,14 +5392,6 @@ service cloud.firestore {
     }
 
     match /communityEvents/{eventId} {
-      function isAdminOrSuperAdmin() {
-        let p = signedIn() ? profile() : {};
-        return verifiedEmailSession()
-          && p.get('role', '') in ['admin', 'superadmin']
-          && p.get('status', 'approved') == 'approved'
-          && p.get('adminStatus', 'active') != 'suspended';
-      }
-
       function proposalAfter() {
         return getAfter(
           /databases/$(database)/documents/communityEventProposals/$(eventId)
@@ -5770,14 +5533,6 @@ service cloud.firestore {
     }
 
     match /communityEventParticipants/{participantId} {
-      function isAdminOrSuperAdmin() {
-        let p = signedIn() ? profile() : {};
-        return verifiedEmailSession()
-          && p.get('role', '') in ['admin', 'superadmin']
-          && p.get('status', 'approved') == 'approved'
-          && p.get('adminStatus', 'active') != 'suspended';
-      }
-
       function eventBefore() {
         return get(
           /databases/$(database)/documents/communityEvents/$(request.resource.data.eventId)
