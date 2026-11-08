@@ -1,0 +1,57 @@
+# One-time cleanup planning, not deployment. Absolutely no mutations.
+name: Inventory Orphan Firestore User Profiles (READ ONLY)
+on:
+  pull_request:
+    branches: [live-protected]
+    paths:
+      - scripts/inventory-orphan-firestore-user-profiles.cjs
+      - .github/workflows/inventory-orphan-firestore-user-profiles.yml
+  push:
+    branches: [live-protected]
+    paths:
+      - scripts/inventory-orphan-firestore-user-profiles.cjs
+      - .github/workflows/inventory-orphan-firestore-user-profiles.yml
+permissions:
+  contents: read
+jobs:
+  test-orphan-inventory:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm ci --prefix functions --no-audit --no-fund
+      - name: Validate inventory code and preservation contract
+        run: |
+          node --check scripts/inventory-orphan-firestore-user-profiles.cjs
+          node scripts/inventory-orphan-firestore-user-profiles.cjs --sdk-check
+          node scripts/inventory-orphan-firestore-user-profiles.cjs --self-test
+  read-only-production-inventory:
+    if: github.event_name == 'push' && github.repository == 'calibosofroyarjan-volunserve/VolunServe' && github.ref == 'refs/heads/live-protected'
+    needs: test-orphan-inventory
+    environment: production
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          submodules: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: functions/package-lock.json
+      - run: |
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(git ls-remote --heads origin live-protected | cut -f1)" = "$GITHUB_SHA"
+      - run: npm ci --prefix functions --no-audit --no-fund
+      - name: Count orphan Firestore user profiles; no deletion or exports
+        env:
+          VOLUNSERVE_PRODUCTION_AUDIT_CREDENTIAL: ${{ secrets.VOLUNSERVE_PRODUCTION_READONLY_SERVICE_ACCOUNT }}
+        run: node scripts/inventory-orphan-firestore-user-profiles.cjs
