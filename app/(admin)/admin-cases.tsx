@@ -569,8 +569,9 @@ const lguResponseFieldLabel = (personnel?: LguPersonnelCandidate | null) => {
 export default function AdminCases() {
   const router = useRouter();
   const { width } = useWindowDimensions();
-  // The Admin sidebar takes 268px on desktop; use a content-aware breakpoint.
-  const compact = width < 1360;
+  // Preserve the branded two-column Admin desk on laptops while keeping
+  // readable stacked panes when sidebar + content cannot fit comfortably.
+  const compact = width < 1200;
 
   const [role, setRole] = useState<string | null>(null);
   const [loadingRole, setLoadingRole] = useState(true);
@@ -4982,9 +4983,9 @@ const styles = StyleSheet.create({
     fontWeight: designUi.type.label.fontWeight, lineHeight: designUi.type.label.lineHeight,},
 
   filterCard: {
-    backgroundColor: "#ffffff",
+    backgroundColor: "#FFFFFF",
     borderWidth: 1,
-    borderColor: "#dfe7ee",
+    borderColor: "#DAE8DF",
     borderRadius: 12,
     paddingHorizontal: 14,
     paddingVertical: 10,
@@ -5067,8 +5068,8 @@ const styles = StyleSheet.create({
     borderRadius: 999,
   },
   pillActive: {
-    borderColor: "#078f82",
-    backgroundColor: "#078f82",
+    borderColor: "#176B52",
+    backgroundColor: "#176B52",
   },
   pillText: {
     color: "#475569",
@@ -5137,7 +5138,7 @@ const styles = StyleSheet.create({
     borderBottomColor: "transparent",
   },
   detailTabButtonActive: {
-    borderBottomColor: "#2563eb",
+    borderBottomColor: "#17805E",
   },
   detailTabText: {
     color: "#64748b",
@@ -5145,7 +5146,7 @@ const styles = StyleSheet.create({
     fontWeight: "800",
   },
   detailTabTextActive: {
-    color: "#1d4ed8",
+    color: "#106848",
   },
   overviewDashboard: {
     flexDirection: "row",
@@ -5171,7 +5172,7 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   overviewCardIcon: {
-    color: "#2563eb",
+    color: "#17765A",
     fontSize: 15,
     fontWeight: "900",
   },
@@ -6600,7 +6601,7 @@ const styles = StyleSheet.create({
     alignItems: "stretch",
   },
   caseListPane: {
-    width: 380,
+    width: 340,
     flexShrink: 0,
     backgroundColor: "#ffffff",
     borderWidth: 1,
@@ -6609,31 +6610,32 @@ const styles = StyleSheet.create({
     overflow: "hidden",
   },
   caseListPaneAssignments: {
-    width: 305,
+    width: 290,
   },
   caseListPaneCompact: {
     width: "100%",
     flexShrink: 1,
   },
   caseListHeader: {
-    minHeight: 58,
+    minHeight: 64,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
     gap: 10,
     paddingHorizontal: 14,
+    backgroundColor: "#EEF8F1",
     borderBottomWidth: 1,
-    borderBottomColor: "#edf1f5",
+    borderBottomColor: "#D4E8DC",
   },
   caseListTitle: {
-    color: "#0f172a",
+    color: "#153E30",
     fontSize: 17,
     fontWeight: "900",
   },
   caseListCount: {
     marginTop: 2,
-    color: "#2563eb",
-    fontSize: 10,
+    color: "#17765A",
+    fontSize: 11,
     fontWeight: "800",
   },
   caseListSort: {
@@ -6657,8 +6659,8 @@ const styles = StyleSheet.create({
     borderRadius: 10,
   },
   caseListItemActive: {
-    backgroundColor: "#effcf9",
-    borderColor: "#37b8aa",
+    backgroundColor: "#E8F6EE",
+    borderColor: "#198566",
   },
   caseListThumb: {
     width: 60,
@@ -6693,7 +6695,7 @@ const styles = StyleSheet.create({
   caseListItemTitle: {
     flex: 1,
     minWidth: 0,
-    color: "#0f172a",
+    color: "#173D32",
     fontSize: 12.5,
     fontWeight: "900",
   },
@@ -6748,9 +6750,9 @@ const styles = StyleSheet.create({
   },
 
   caseCard: {
-    backgroundColor: "#ffffff",
+    backgroundColor: "#FFFFFF",
     borderWidth: 1,
-    borderColor: "#dfe7ee",
+    borderColor: "#D6E5DC",
     borderRadius: 14,
     marginBottom: 0,
     overflow: "hidden",
@@ -6775,8 +6777,8 @@ const styles = StyleSheet.create({
   mediaBoxCompact: {
     width: "auto",
     alignSelf: "stretch",
-    height: 160,
-    minHeight: 160,
+    height: 136,
+    minHeight: 136,
     marginLeft: 12,
     marginRight: 12,
     marginBottom: 0,
