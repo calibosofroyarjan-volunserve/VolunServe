@@ -328,6 +328,20 @@ export default function EmailFirstSignup() {
         lastUid.current = user?.uid ?? null;
       }
       setCompletedProfile(false);
+      // Do not resume a pending Auth UID with a newly blocked disposable domain.
+      const blockedEmail = user ? getRegistrationEmailError(user.email || "") : null;
+      if (blockedEmail && user) {
+        setSignedInUser(null);
+        setStep(1);
+        setError(blockedEmail);
+        setChecking(false);
+        if (auth.currentUser?.uid === user.uid) {
+          void signOut(auth).catch(() => {
+            // Never expose this unapproved account in the signup wizard.
+          });
+        }
+        return;
+      }
       setSignedInUser(user);
       if (!user) { setStep(1); setChecking(false); return; }
       try {
