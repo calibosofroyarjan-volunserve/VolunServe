@@ -1,0 +1,30 @@
+name: Validate Admin Emergency Reports Responsive UI (No Deploy)
+on:
+  push:
+    branches: [design/admin-emergency-responsive-20261108]
+permissions:
+  contents: read
+jobs:
+  validate-admin-cases:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      CI: 'true'
+      EXPO_NO_TELEMETRY: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci --no-audit --no-fund
+      - name: TypeScript regression validation
+        run: npx tsc --noEmit --incremental false --pretty false
+      - name: Admin and Resident navigation regression
+        run: |
+          node scripts/test-admin-navigation-contract.cjs
+          node scripts/test-lgu-admin-global-ui-pagination.cjs
+          node scripts/test-portal-resident-volunteer-ui-flow.cjs
+      - name: Build actual web app (no publish)
+        run: npx expo export --platform web
