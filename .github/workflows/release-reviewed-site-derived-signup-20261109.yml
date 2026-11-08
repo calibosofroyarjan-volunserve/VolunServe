@@ -100,6 +100,11 @@ jobs:
         env:
           VOLUNSERVE_PRODUCTION_HOSTING_SERVICE_ACCOUNT: ${{ secrets.VOLUNSERVE_PRODUCTION_HOSTING_SERVICE_ACCOUNT }}
         run: node scripts/release-signup-production-preflight.cjs --check
+      - name: Compile/check optimized Rules using Firebase API with ZERO DB test cases, NO RELEASE
+        working-directory: site
+        env:
+          VOLUNSERVE_PRODUCTION_HOSTING_SERVICE_ACCOUNT: ${{ secrets.VOLUNSERVE_PRODUCTION_HOSTING_SERVICE_ACCOUNT }}
+        run: node scripts/release-signup-production-preflight.cjs --compile-rules
       - name: Publish coordinated, reversible verified Signup Rules and Hosting
         working-directory: site
         env:
