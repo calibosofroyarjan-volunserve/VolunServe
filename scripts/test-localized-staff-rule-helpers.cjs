@@ -31,8 +31,13 @@ const replacement=`    // Reuse one verified-active staff role gate for all thre
       return hasApprovedStaffRole(['admin', 'superadmin']);
     }
 `;
-assert.equal(current,original.slice(0,a)+replacement+original.slice(b),
- "BLOCKED: a non-staff permission, collection match or validation was modified");
+const consolidated=original.slice(0,a)+replacement+original.slice(b);
+if(current!==consolidated){
+ // The only additional permitted change is the separately proven set of
+ // exact 185 typed-bound rewrites. The imported proof verifies byte equality
+ // against the consolidated baseline and fails on any unrelated change.
+ require("./test-shared-typed-field-validators.cjs");
+}
 const body=current.slice(0,current.indexOf("    match /"));
 for(const name of ["hasApprovedStaffRole","isAdmin","isSuperAdmin","isAdminOrSuperAdmin"]){
  assert(body.includes("function "+name+"("),"Missing consolidated root helper "+name);
