@@ -711,8 +711,8 @@ function normalizeAiDecision(
 function normalizeIdDocumentScreening(value) {
   // Explicit allowlist: never store OCR text, full ID numbers, names,
   // face templates, or photos in Firestore or Admin-visible JSON.
-  const types = ["national_id", "drivers_license", "passport", "other_government_id"];
-  const statuses = ["text_consistent_unverified", "mismatch", "inconclusive"];
+  const types = ["national_id", "drivers_license", "passport", "umid"];
+  const statuses = ["text_consistent_unverified", "mismatch", "inconclusive", "unsupported"];
   const warnings = [
     "selected_id_type_conflicts_with_ocr",
     "document_type_not_recognized",
@@ -721,6 +721,7 @@ function normalizeIdDocumentScreening(value) {
     "document_back_type_conflict",
     "document_front_type_inconclusive",
     "document_back_ocr_inconclusive",
+    "school_id_not_supported",
   ];
   const declared = String(value?.declaredIdType || "");
   const detected = String(value?.detectedIdType || "");
@@ -5056,13 +5057,20 @@ app.post(
       const aiResult = await callIdentityAiService(request);
       const documentScreening = normalizeIdDocumentScreening(aiResult?.documentScreening);
       const rawDecision = normalizeAiDecision(aiResult?.decision || aiResult?.status);
-      // Face comparison and keyword OCR cannot authenticate a government ID
-      // or prove liveness. Never auto-verify without both verified assurances.
-      const decision = rawDecision === "verified" &&
+      // A face match cannot compensate for an unsupported, unknown or
+      // mismatched selected government ID. Only recognized, selected types
+      // can proceed to manual identity review; all others require a retry.
+      const recognizedSelectedId =
+        documentScreening.status === "text_consistent_unverified" &&
+        documentScreening.declaredIdType !== null &&
+        documentScreening.detectedIdType === documentScreening.declaredIdType;
+      const decision = !recognizedSelectedId
+        ? "failed"
+        : rawDecision === "verified" &&
           (documentScreening.authenticityVerified !== true ||
             aiResult?.livenessImplemented !== true)
-        ? "manual_review"
-        : rawDecision;
+          ? "manual_review"
+          : rawDecision;
       const matchScore = numberOrNull(aiResult?.matchScore);
       const livenessScore = numberOrNull(aiResult?.livenessScore);
       const verificationId = cleanText(
@@ -5089,11 +5097,17 @@ app.post(
         const result = identityAttemptOutcome(decision, attemptCount);
         const resultMessage = result.requiresManualReview && decision === "failed"
           ? "Three identity verification attempts were unsuccessful. Your case has been referred for Admin review."
-          : cleanText(aiResult?.message || (
-            decision === "verified" ? "Identity verification completed successfully." :
-            decision === "failed" ? "Identity verification attempt failed. Please retry with clear, valid images." :
-            "The submission requires LGU/Admin manual review."
-          ), 500);
+          : !recognizedSelectedId
+            ? documentScreening.status === "unsupported"
+              ? "School IDs are not accepted. Select and scan a supported government-issued ID."
+              : documentScreening.status === "mismatch"
+                ? "The scanned document does not match the government ID selected. Please retry."
+                : "The selected government ID type was not clearly recognized. Retake a clearer scan and retry."
+            : cleanText(aiResult?.message || (
+              decision === "verified" ? "Identity verification completed successfully." :
+              decision === "failed" ? "Identity verification attempt failed. Please retry with clear, valid images." :
+              "The submission requires LGU/Admin manual review."
+            ), 500);
         const previousReview = current.reviewedAt || current.manualReviewDecision ? {
           previousDecision: cleanText(current.manualReviewDecision || current.decision, 80),
           previousValidationMethod: cleanText(current.manualValidationMethod, 120),
