@@ -21,6 +21,31 @@ function isAncestor(base,head) {
   if(!validSha(base)||!validSha(head))return false;
   return child.spawnSync("git",["merge-base","--is-ancestor",base,head]).status===0;
 }
+function identifySourceCommit(sourceText,filePath,maxRevisions=200) {
+  const refs=child.execFileSync("git",["log","--all","--format=%H","--",filePath],
+      {encoding:"utf8",maxBuffer:1024*1024}).trim().split("\n").filter(validSha).slice(0,maxRevisions);
+  const liveDigest=sha(sourceText);
+  for(const ref of refs){
+    const result=child.spawnSync("git",["show",ref+":"+filePath],{encoding:"utf8",maxBuffer:2*1024*1024});
+    if(result.status===0&&sha(result.stdout)===liveDigest)return ref;
+  }
+  return null;
+}
+function websiteFileDrift(liveSha,headSha) {
+  if(!validSha(liveSha)||!validSha(headSha))return {status:"INVALID_SHA"};
+  // Determine which user-visible screens differ without printing file contents.
+  const changed=child.spawnSync("git",["diff","--name-only",liveSha,headSha,"--",
+    "app/","components/","constants/","lib/"],{encoding:"utf8",maxBuffer:1024*1024});
+  if(changed.status!==0)return {status:"MISSING_GIT_OBJECT"};
+  const filenames=changed.stdout.trim().split("\n").filter(Boolean);
+  const sensitive=filenames.filter(name=>/signup|login|auth|firebase|guest|_layout/i.test(name));
+  return {
+    status:"OK",changedFrontendFiles:filenames.length,
+    authOrLayoutDrift:sensitive,
+    changedPaths:filenames.slice(0,100),
+    note:"Inspect and reconcile changes, not a deployment allowlist or proof of behavior",
+  };
+}
 function classifyRelease(name){
   if(/\/releases\/cloud\.firestore(?:\/|$)/.test(name))return "firestore";
   if(/\/releases\/firebase\.storage(?:\/|$)/.test(name))return "storage";
@@ -31,6 +56,7 @@ function selfTest(){
   assert.equal(classifyRelease("projects/a/releases/firebase.storage/a.appspot.com"),"storage");
   assert.equal(classifyRelease("projects/a/releases/unrelated"),null);
   assert.equal(sha("a"),sha("a"));assert.notEqual(sha("a"),sha("b"));
+  assert.equal(websiteFileDrift("bad","bad").status,"INVALID_SHA");
   console.log("PASS: production preflight scope and digest helpers");
 }
 async function main(){
@@ -76,6 +102,8 @@ async function main(){
       if(extra.errorStatus){rulesInfo.paginationStatus=extra.errorStatus;break;}
       releases.push(...(extra.releases||[]));page=extra.nextPageToken;
     }
+    rulesInfo.activeReleaseNames=releases.map(x=>x.name).filter(Boolean).sort();
+    rulesInfo.activeReleaseCount=releases.length;
     for(const release of releases){
       const type=classifyRelease(release.name||"");
       if(!type||!release.rulesetName)continue;
@@ -91,16 +119,28 @@ async function main(){
         liveSourceHash:sha(liveContent),
         targetSourceHash:sha(target),
         identical: texts.length===1&&liveContent===target,
+        historicalRepoSourceCommit:identifySourceCommit(liveContent,targetFile),
         releaseUpdated:release.updateTime,
       });
     }
   }
   const safeAncestor=isAncestor(marker.revision,head);
+  const websiteDrift=websiteFileDrift(marker.revision,head);
+  if(rulesInfo.access==="OK"){
+    for(const product of ["firestore","storage"]){
+      if(!rulesInfo[product]?.length){
+        rulesInfo[product+"Status"]="NO_ACTIVE_RELEASE_IDENTIFIED — inspect active releases/bucket before any publish";
+      }else{
+        rulesInfo[product+"Status"]="SOURCE_READ";
+      }
+    }
+  }
   console.log(JSON.stringify({
     mode:"READ_ONLY",project:PROJECT,websiteRevision:marker.revision,
     protectedHead:head,
     websiteIsAncestorOfProtectedSource:safeAncestor,
     historyStatus:safeAncestor?"DIRECT DESCENDANT":"DIVERGED — no blind full Hosting overwrite",
+    websiteDrift,
     firebaseRules:rulesInfo,
     actionsTaken:"NONE — no releases, users, functions or records updated",
   },null,2));
@@ -126,4 +166,4 @@ if(require.main===module){
   (process.argv.includes("--self-test")?Promise.resolve().then(selfTest):main())
     .catch(err=>{console.error(String(err?.message||err));process.exitCode=1;});
 }
-module.exports={classifyRelease,isAncestor};
+module.exports={classifyRelease,isAncestor,websiteFileDrift,identifySourceCommit};
