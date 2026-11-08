@@ -1,0 +1,40 @@
+name: Verify Published Volunteer Invitation Rules Are Preserved (NO DEPLOY)
+on:
+  pull_request:
+    branches: [live-protected]
+    paths:
+      - firestore.rules
+      - scripts/test-preserved-volunteer-invitation-rules.cjs
+      - .github/workflows/verify-preserved-volunteer-invitation-rules.yml
+  push:
+    branches: [live-protected]
+    paths:
+      - firestore.rules
+      - scripts/test-preserved-volunteer-invitation-rules.cjs
+      - .github/workflows/verify-preserved-volunteer-invitation-rules.yml
+permissions:
+  contents: read
+jobs:
+  emulator:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      CI: 'true'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - run: npm ci --no-audit --no-fund
+      - name: Verify live volunteer invitations keep working with secured Signup Rules
+        run: |
+          npx firebase-tools emulators:exec --only firestore --project demo-volunserve-preserve-volunteer-invitations "node scripts/test-preserved-volunteer-invitation-rules.cjs"
+      - name: No deployment
+        run: echo 'PASS — isolated Firestore emulator only; production preserved'
