@@ -63,9 +63,9 @@ function selfTest(){
  const d=structuralDelta(a,b);
  assert.deepEqual(d.removedFunctionNames,["old"]);assert.deepEqual(d.addedFunctionNames,["newer"]);
  assert.deepEqual(d.removedMatchPaths,[]);
- const b=getRuleBlock("match /volunteerInvitations/{inviteId} { allow read: if true; }",
+ const extracted=getRuleBlock("match /volunteerInvitations/{inviteId} { allow read: if true; }",
     "volunteerInvitations",/match\s+\/volunteerInvitations\/\{[^}]+\}\s*\{/);
- assert(b.code.includes("allow read: if true"));
+ assert(extracted.code.includes("allow read: if true"));
  console.log("PASS: structural Rules inventory and safe scoped block extraction");
 }
 async function main(){
