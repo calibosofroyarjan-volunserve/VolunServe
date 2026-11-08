@@ -66,6 +66,10 @@ jobs:
           set -euo pipefail
           test -f ../controller/firestore.rules
           cp ../controller/firestore.rules firestore.rules
+          # The immutable 7d14 site snapshot predates the historical account
+          # compatibility test. Copy the reviewed test ONLY into the isolated
+          # runner; it is not part of Hosting dist or published web artifacts.
+          cp ../controller/scripts/test-existing-account-compatibility.cjs scripts/test-existing-account-compatibility.cjs
           cmp --silent ../controller/firestore.rules firestore.rules
           grep -q 'match /volunteerInvitations/{invitationId}' firestore.rules
           grep -q 'function validInitialResidentInputs()' firestore.rules
