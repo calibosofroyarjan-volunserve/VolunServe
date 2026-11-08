@@ -1,3 +1,4 @@
+import { volunserveTypography as vsType } from "../../constants/volunserveLiveUi";
 import React, { useEffect, useState } from "react";
 import { Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
@@ -290,7 +291,7 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(6,37,33,0.84)", borderRadius: 7,
   },
   counterText: {
-    fontFamily: "DonationInterSemiBold", fontSize: 10.5, color: "#FFFFFF",
+    fontFamily: "DonationInterSemiBold", fontSize: vsType.size.caption, color: "#FFFFFF",
   },
   galleryArrows: {
     position: "absolute", top: "42%", left: 10, right: 10,
@@ -309,7 +310,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 9, paddingVertical: 6,
   },
   photoCaptionText: {
-    fontFamily: "DonationInterMedium", fontSize: 9, color: "#EAF8F2",
+    fontFamily: "DonationInterMedium", fontSize: vsType.size.micro, color: "#EAF8F2",
   },
   thumbs: { paddingVertical: 3, gap: 9 },
   thumbFrame: {
@@ -325,10 +326,10 @@ const styles = StyleSheet.create({
     alignItems: "center", justifyContent: "center", gap: 5, padding: 18,
   },
   photoFallbackTitle: {
-    fontFamily: "DonationInterSemiBold", color: "#245844", fontSize: 13,
+    fontFamily: "DonationInterSemiBold", color: "#245844", fontSize: vsType.size.label,
   },
   photoFallbackNote: {
-    fontFamily: "DonationInterRegular", fontSize: 11, color: "#627E73",
+    fontFamily: "DonationInterRegular", fontSize: vsType.size.caption, color: "#627E73",
   },
   badges: {
     flexDirection: "row", alignItems: "center", flexWrap: "wrap",
@@ -340,32 +341,32 @@ const styles = StyleSheet.create({
   },
   verifiedBadge: { backgroundColor: "#E3F5EB" },
   verifiedText: {
-    fontFamily: "DonationInterSemiBold", color: "#11734F", fontSize: 9,
+    fontFamily: "DonationInterSemiBold", color: "#11734F", fontSize: vsType.size.micro,
     letterSpacing: 0.2,
   },
   categoryBadge: { backgroundColor: "#FFF2E8" },
   categoryText: {
-    fontFamily: "DonationInterSemiBold", color: "#9C572B", fontSize: 9,
+    fontFamily: "DonationInterSemiBold", color: "#9C572B", fontSize: vsType.size.micro,
     letterSpacing: 0.2,
   },
   pastBadge: { backgroundColor: "#E9F8EF" },
   campaignEyebrow: {
     fontFamily: "DonationInterSemiBold", color: "#0C8A65",
-    fontSize: 10, letterSpacing: 1.4, marginTop: 21,
+    fontSize: vsType.size.micro, letterSpacing: 1.4, marginTop: 21,
   },
   campaignTitle: {
     marginTop: 6, color: "#173744",
-    fontFamily: "DonationInterBold", fontSize: 28,
+    fontFamily: "DonationInterBold", fontSize: vsType.size.hero,
     lineHeight: 37, letterSpacing: -0.35,
   },
   areaLine: { flexDirection: "row", gap: 7, alignItems: "flex-start", marginTop: 13 },
   area: {
     flex: 1, fontFamily: "DonationInterSemiBold",
-    fontSize: 12, lineHeight: 19, color: "#3C6270",
+    fontSize: vsType.size.meta, lineHeight: 19, color: "#3C6270",
   },
   privacyNote: {
     marginTop: 5, marginLeft: 26, fontFamily: "DonationInterRegular",
-    fontSize: 10.5, lineHeight: 16.5, color: "#778F94",
+    fontSize: vsType.size.caption, lineHeight: 16.5, color: "#778F94",
   },
   sectionHead: { flexDirection: "row", alignItems: "center", gap: 10 },
   sectionIcon: {
@@ -373,7 +374,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#E6F6ED", alignItems: "center", justifyContent: "center",
   },
   sectionTitle: {
-    fontFamily: "DonationInterSemiBold", fontSize: 14,
+    fontFamily: "DonationInterSemiBold", fontSize: vsType.size.body,
     lineHeight: 21, color: "#203D48", letterSpacing: -0.15,
   },
   overviewCard: {
@@ -383,7 +384,7 @@ const styles = StyleSheet.create({
   },
   overviewText: {
     marginTop: 12, fontFamily: "DonationInterRegular",
-    fontSize: 12, lineHeight: 20, color: "#4D6772",
+    fontSize: vsType.size.meta, lineHeight: 20, color: "#4D6772",
   },
   supportStrip: {
     flexDirection: "row", alignItems: "center", gap: 11,
@@ -398,11 +399,11 @@ const styles = StyleSheet.create({
   supportStripCopy: { flex: 1, minWidth: 0 },
   supportStripLabel: {
     fontFamily: "DonationInterSemiBold", color: "#728B90",
-    fontSize: 9, letterSpacing: 0.8,
+    fontSize: vsType.size.micro, letterSpacing: 0.8,
   },
   supportStripValue: {
     fontFamily: "DonationInterMedium", color: "#355864",
-    fontSize: 11, lineHeight: 18, marginTop: 3,
+    fontSize: vsType.size.caption, lineHeight: 18, marginTop: 3,
   },
 
   fundingCard: {
@@ -420,10 +421,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8, paddingVertical: 6,
   },
   statusText: {
-    fontFamily: "DonationInterSemiBold", fontSize: 9, color: "#086D4C",
+    fontFamily: "DonationInterSemiBold", fontSize: vsType.size.micro, color: "#086D4C",
   },
   bigAmount: {
-    fontFamily: "DonationInterBold", fontSize: 30,
+    fontFamily: "DonationInterBold", fontSize: vsType.size.hero,
     lineHeight: 39, letterSpacing: -0.55,
     color: "#163947", marginTop: 22,
   },
@@ -432,10 +433,10 @@ const styles = StyleSheet.create({
     alignItems: "center", marginTop: 4, gap: 8,
   },
   goalText: {
-    fontFamily: "DonationInterRegular", fontSize: 11, color: "#587685",
+    fontFamily: "DonationInterRegular", fontSize: vsType.size.caption, color: "#587685",
   },
   percentText: {
-    fontFamily: "DonationInterSemiBold", fontSize: 13, color: "#0B7455",
+    fontFamily: "DonationInterSemiBold", fontSize: vsType.size.label, color: "#0B7455",
   },
   track: {
     height: 9, borderRadius: 999, overflow: "hidden",
@@ -449,11 +450,11 @@ const styles = StyleSheet.create({
   },
   fundingStat: { flex: 1, minWidth: 0 },
   fundingStatAmount: {
-    fontFamily: "DonationInterSemiBold", fontSize: 12,
+    fontFamily: "DonationInterSemiBold", fontSize: vsType.size.meta,
     color: "#294954", fontVariant: ["tabular-nums"],
   },
   fundingStatLabel: {
-    fontFamily: "DonationInterRegular", fontSize: 10,
+    fontFamily: "DonationInterRegular", fontSize: vsType.size.micro,
     color: "#78909A", marginTop: 5,
   },
   testNotice: {
@@ -463,7 +464,7 @@ const styles = StyleSheet.create({
   },
   testNoticeText: {
     flex: 1, fontFamily: "DonationInterRegular",
-    fontSize: 9.7, lineHeight: 15, color: "#627C84",
+    fontSize: vsType.size.micro, lineHeight: 15, color: "#627C84",
   },
 
   coordinationCard: {
@@ -471,11 +472,11 @@ const styles = StyleSheet.create({
     borderColor: "#E0EAE7", borderRadius: 13, padding: 18,
   },
   coordinationLabel: {
-    fontFamily: "DonationInterMedium", fontSize: 9,
+    fontFamily: "DonationInterMedium", fontSize: vsType.size.micro,
     color: "#63818A", marginTop: 15, letterSpacing: 0.75,
   },
   coordinationName: {
-    fontFamily: "DonationInterBold", fontSize: 16,
+    fontFamily: "DonationInterBold", fontSize: vsType.size.card,
     color: "#234753", marginTop: 4,
   },
   coordPrivacy: {
@@ -485,7 +486,7 @@ const styles = StyleSheet.create({
   },
   coordPrivacyText: {
     flex: 1, fontFamily: "DonationInterRegular",
-    fontSize: 10.5, lineHeight: 16.5, color: "#5B7F90",
+    fontSize: vsType.size.caption, lineHeight: 16.5, color: "#5B7F90",
   },
 
   detailsCard: {
@@ -498,19 +499,19 @@ const styles = StyleSheet.create({
   },
   detailLabel: {
     flex: 1, minWidth: 0, fontFamily: "DonationInterRegular",
-    color: "#718893", fontSize: 10.5, lineHeight: 16,
+    color: "#718893", fontSize: vsType.size.caption, lineHeight: 16,
   },
   detailValue: {
     flex: 1.2, minWidth: 0, fontFamily: "DonationInterSemiBold",
-    color: "#2E535D", fontSize: 10.5,
+    color: "#2E535D", fontSize: vsType.size.caption,
     lineHeight: 16, textAlign: "right",
   },
   detailId: {
     flex: 1.2, minWidth: 0, fontFamily: "DonationInterRegular",
-    color: "#53707B", fontSize: 10, lineHeight: 16, textAlign: "right",
+    color: "#53707B", fontSize: vsType.size.micro, lineHeight: 16, textAlign: "right",
   },
   detailVerified: {
     flex: 1.2, fontFamily: "DonationInterSemiBold",
-    color: "#087D5E", fontSize: 10.5, lineHeight: 16, textAlign: "right",
+    color: "#087D5E", fontSize: vsType.size.caption, lineHeight: 16, textAlign: "right",
   },
 });
