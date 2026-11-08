@@ -24,13 +24,15 @@ service cloud.firestore {
     function approved() {
       let p = signedIn() ? profile() : {};
       let role = p.get('role', '');
+      // Exactly the original five-role allowlist: staff bypass profile-email
+      // matching; only Resident/Volunteer require the Firebase email match.
       return verifiedEmailSession()
-        && role in [
-          'resident', 'volunteer', 'admin', 'superadmin', 'lgu_personnel'
-        ]
         && (
           role in ['admin', 'superadmin', 'lgu_personnel']
-          || request.auth.token.get('email', '') == p.get('email', '')
+          || (
+            role in ['resident', 'volunteer']
+            && request.auth.token.get('email', '') == p.get('email', '')
+          )
         )
         && p.get('status', 'approved') == 'approved'
         && p.get('adminStatus', 'active') != 'suspended';
@@ -41,10 +43,11 @@ service cloud.firestore {
     // and the exact allowed role can pass. Other roles never get staff access.
     function hasApprovedStaffRole(roles) {
       let p = signedIn() ? profile() : {};
-      return verifiedEmailSession()
-        && p.get('role', '') in roles
-        && p.get('status', 'approved') == 'approved'
-        && p.get('adminStatus', 'active') != 'suspended';
+      // roles is always a subset of ['admin','superadmin'] at call sites.
+      // Therefore approved() already enforces verified mailbox and active
+      // approved/non-suspended staff state. Keep exact role restriction.
+      return approved()
+        && p.get('role', '') in roles;
     }
     function isAdmin() {
       return hasApprovedStaffRole(['admin']);
