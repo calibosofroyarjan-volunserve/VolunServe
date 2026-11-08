@@ -1,3 +1,4 @@
+import { volunserveTypography as vsType } from "../../constants/volunserveLiveUi";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { useRouter } from "expo-router";
 import React, { useCallback, useEffect, useState } from "react";
@@ -78,16 +79,16 @@ const styles = StyleSheet.create({
   panel:{ backgroundColor:"#FFFFFF", borderColor:"#D7E7DE", borderWidth:1, borderRadius:14, padding:18, marginBottom:15 },
   heading:{ flexDirection:"row", alignItems:"center", flexWrap:"wrap", gap:12 },
   copy:{ flex:1, minWidth:170 },
-  eyebrow:{ color:"#087A60", fontSize:10, fontWeight:"800", letterSpacing:1 },
-  title:{ color:"#123F31", fontSize:17, fontWeight:"800", marginTop:5 },
-  subtitle:{ color:"#5F7D6E", fontSize:12, lineHeight:18, marginTop:5 },
+  eyebrow:{ color:"#087A60", fontSize: vsType.size.micro, fontFamily: vsType.family, fontWeight:"800", letterSpacing:1 },
+  title:{ color:"#123F31", fontSize: vsType.size.card, fontFamily: vsType.family, fontWeight:"800", marginTop:5 },
+  subtitle:{ color:"#5F7D6E", fontSize: vsType.size.meta, fontFamily: vsType.family, lineHeight:18, marginTop:5 },
   refresh:{ minHeight:44, flexDirection:"row", alignItems:"center", gap:6, paddingHorizontal:10, borderRadius:10, backgroundColor:"#EBF6F0" },
-  refreshText:{ color:"#14745A", fontWeight:"800", fontSize:12 },
+  refreshText:{ color:"#14745A", fontWeight:"800", fontSize: vsType.size.meta, fontFamily: vsType.family },
   row:{ flexDirection:"row", flexWrap:"wrap", alignItems:"center", gap:12, borderTopWidth:1, borderTopColor:"#E6EEE9", paddingVertical:12 },
-  name:{ color:"#194633", fontWeight:"800", fontSize:13 },
-  meta:{ color:"#6B8074", fontSize:11, marginTop:4 },
+  name:{ color:"#194633", fontWeight:"800", fontSize: vsType.size.label, fontFamily: vsType.family },
+  meta:{ color:"#6B8074", fontSize: vsType.size.caption, fontFamily: vsType.family, marginTop:4 },
   action:{ minHeight:44, paddingHorizontal:12, alignItems:"center", justifyContent:"center", borderRadius:10, backgroundColor:"#E9F5EE" },
-  actionText:{ color:"#087A60", fontWeight:"700", fontSize:12 },
-  error:{ color:"#A23A37", paddingVertical:12, fontSize:12 },
-  empty:{ color:"#627E6D", paddingVertical:12, fontSize:12 },
+  actionText:{ color:"#087A60", fontWeight:"700", fontSize: vsType.size.meta, fontFamily: vsType.family },
+  error:{ color:"#A23A37", paddingVertical:12, fontSize: vsType.size.meta, fontFamily: vsType.family },
+  empty:{ color:"#627E6D", paddingVertical:12, fontSize: vsType.size.meta, fontFamily: vsType.family },
 });
