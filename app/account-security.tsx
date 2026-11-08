@@ -1,3 +1,4 @@
+import { volunserveTypography as vsType } from "../constants/volunserveLiveUi";
 import { liveUi as designUi } from "../constants/volunserveLiveUi";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
@@ -396,7 +397,7 @@ const styles = StyleSheet.create({
   accountEmail: {
     marginTop: 2,
     color: "#0f172a",
-    fontSize: 14,
+    fontSize: vsType.size.body, fontFamily: vsType.family,
     fontWeight: "700",
   },
   providerRow: {
@@ -418,8 +419,8 @@ const styles = StyleSheet.create({
     fontWeight: designUi.type.label.fontWeight, lineHeight: designUi.type.label.lineHeight,},
   providerStatus: {
     marginTop: 3,
-    fontSize: 13,
-    fontWeight: "900",
+    fontSize: vsType.size.label, fontFamily: vsType.family,
+    fontWeight: "800",
   },
   statusOk: {
     color: "#15803d",
@@ -441,7 +442,7 @@ const styles = StyleSheet.create({
     flex: 1,
     marginLeft: 8,
     color: "#92400e",
-    fontSize: 12,
+    fontSize: vsType.size.meta, fontFamily: vsType.family,
     lineHeight: 18,
   },
   label: {
@@ -464,7 +465,7 @@ const styles = StyleSheet.create({
     flex: 1,
     marginHorizontal: 10,
     color: "#0f172a",
-    fontSize: 14,
+    fontSize: vsType.size.body, fontFamily: vsType.family,
     outlineStyle: "none",
   } as any,
   rulesBox: {
@@ -477,7 +478,7 @@ const styles = StyleSheet.create({
   },
   rule: {
     color: "#64748b",
-    fontSize: 12,
+    fontSize: vsType.size.meta, fontFamily: vsType.family,
     lineHeight: 19,
     fontWeight: "600",
   },
@@ -495,7 +496,7 @@ const styles = StyleSheet.create({
     flex: 1,
     marginLeft: 8,
     color: "#991b1b",
-    fontSize: 12,
+    fontSize: vsType.size.meta, fontFamily: vsType.family,
     lineHeight: 18,
   },
   saveButton: {
@@ -513,13 +514,13 @@ const styles = StyleSheet.create({
   },
   saveButtonText: {
     color: "#ffffff",
-    fontSize: 14,
-    fontWeight: "900",
+    fontSize: vsType.size.body, fontFamily: vsType.family,
+    fontWeight: "800",
   },
   note: {
     marginTop: 12,
     color: "#64748b",
-    fontSize: 11,
+    fontSize: vsType.size.caption, fontFamily: vsType.family,
     lineHeight: 17,
     textAlign: "center",
   },
