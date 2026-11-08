@@ -1,0 +1,83 @@
+name: Auto Publish VolunServe Web (Protected Live)
+on:
+  push:
+    branches:
+      - live-protected
+    paths:
+      - 'app/**'
+      - 'components/**'
+      - 'assets/**'
+      - 'constants/**'
+      - 'hooks/**'
+      - 'lib/**'
+      - 'services/**'
+      - 'utils/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'app.json'
+      - 'app.config.*'
+      - 'firebase.json'
+      - '.firebaserc'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: volunserve-production-hosting
+  cancel-in-progress: false
+
+jobs:
+  validate-and-publish:
+    if: github.repository == 'calibosofroyarjan-volunserve/VolunServe' && github.ref == 'refs/heads/live-protected'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      CI: 'true'
+      EXPO_NO_TELEMETRY: '1'
+    steps:
+      - name: Checkout protected-live
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Set up Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Check TypeScript
+        run: npx tsc --noEmit --pretty false
+      - name: Regression tests for all roles
+        run: |
+          node scripts/test-login-field-validation.cjs
+          node scripts/test-login-ui-release.cjs
+          node scripts/test-signup-email-first-middle-optional.cjs
+          node scripts/test-route-entrypoints.cjs
+          node scripts/test-portal-resident-volunteer-ui-flow.cjs
+          node scripts/test-resident-volunteer-sidebar.cjs
+          node scripts/test-admin-navigation-contract.cjs
+          node scripts/test-lgu-admin-global-ui-pagination.cjs
+          node scripts/test-superadmin-accounts-directory.cjs
+          node scripts/test-profile-certificates-account-menu.cjs
+          node scripts/test-volunteer-time-controls-20261106.cjs
+          node scripts/test-volunteer-community-event-join-20261106.cjs
+          node scripts/test-embedded-emergency-map-navigation.cjs
+      - name: Export actual Expo web application
+        run: npx expo export --platform web
+      - name: Confirm website artifact exists
+        run: test -f dist/index.html
+      - name: Require Firebase Hosting service account
+        env:
+          FIREBASE_SA_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_VOLUNSERVE_3AA5B }}
+        run: |
+          if [ -z "$FIREBASE_SA_JSON" ]; then
+            echo "::error::Missing FIREBASE_SERVICE_ACCOUNT_VOLUNSERVE_3AA5B GitHub Actions secret."
+            exit 1
+          fi
+      - name: Authenticate to Firebase
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_VOLUNSERVE_3AA5B }}
+      - name: Publish Hosting only (never deploy Firestore rules, Auth or Functions)
+        run: npx firebase-tools deploy --only hosting --project volunserve-3aa5b --non-interactive
