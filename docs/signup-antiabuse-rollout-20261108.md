@@ -32,3 +32,28 @@
 - Firestore and Storage security rule emulators, Community Events permission tests, TypeScript and Expo production web export.
 
 Firebase docs: https://firebase.google.com/docs/auth/limits and https://firebase.google.com/docs/functions/auth-blocking-events .
+
+
+## Separate Firebase staging web client (no live credentials)
+The `lib/firebase.ts` app config now supports `EXPO_PUBLIC_VOLUNSERVE_FIREBASE_TARGET=staging` only with **all six separate staging Firebase web config fields**. It refuses missing fields, production project ID, production API key, production authDomain, mismatched authDomain/bucket, and misspelled target names. This is an opt-in web/mobile build flag, not a production mutation.
+
+Obtain the dedicated **web-app config** from a newly created staging Firebase project. Do not put service-account JSON, private key, Admin SDK tokens, passwords, or actual Resident information in environment variables or GitHub files.
+
+For staging web preview builds, set these values in a trusted, staging-only build environment:
+
+```sh
+EXPO_PUBLIC_VOLUNSERVE_FIREBASE_TARGET=staging
+EXPO_PUBLIC_VOLUNSERVE_STAGING_FIREBASE_API_KEY=<staging-web-api-key>
+EXPO_PUBLIC_VOLUNSERVE_STAGING_FIREBASE_AUTH_DOMAIN=<staging-project-id>.firebaseapp.com
+EXPO_PUBLIC_VOLUNSERVE_STAGING_FIREBASE_PROJECT_ID=<staging-project-id>
+EXPO_PUBLIC_VOLUNSERVE_STAGING_FIREBASE_STORAGE_BUCKET=<staging-project-id>.firebasestorage.app
+EXPO_PUBLIC_VOLUNSERVE_STAGING_FIREBASE_MESSAGING_SENDER_ID=<staging-sender-id>
+EXPO_PUBLIC_VOLUNSERVE_STAGING_FIREBASE_APP_ID=<staging-web-app-id>
+```
+
+Choose an actual staging project ID and copy **its exact storageBucket** from the Firebase Console; some projects use `<id>.appspot.com` instead. None of the seven values are hardcoded into the repo. A local `npx expo export --platform web` compiled with these variables targets only staging Firebase; without `TARGET=staging`, normal existing production builds are unchanged. This **does not** create a Firebase project, deploy a website, configure sign-in providers, create staging accounts, or enable blocking functions.
+
+- Before staging publish, enable Email/Password and Google providers **on staging only** and authorize the dedicated staging preview domain for OAuth.
+- Firebase CLI `.firebaserc` defaults to production and must **never** be used for staging deployment without an explicit verified `--project <staging-project-id>`; the staging app config alone does not change Firebase CLI's project.
+- `node --test scripts/test-staging-firebase-isolation.cjs` validates fail-closed behavior, staging routing and unchanged production defaults.
+- No real personal data should be copied into staging. Create fictional accounts for signup and test Admin migrations separately.
