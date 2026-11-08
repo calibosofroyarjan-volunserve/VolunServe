@@ -1,3 +1,4 @@
+# Guarded production retry for PR #334: validated compact source, immutable live-derived Hosting preview; fail closed if Firebase executable exceeds 256000 bytes.
 # ONE-TIME protected source -> immutable, site-derived Signup candidate.
 # Never uses outdated main. Fail-closed against site/rules drift & IAM denial.
 name: Release Reviewed Signup Rules + Site (GUARDED, PRODUCTION)
