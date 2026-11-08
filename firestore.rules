@@ -1102,15 +1102,7 @@ service cloud.firestore {
       }
       function validFacilityVerificationState() {
         let rd = request.resource.data;
-        return rd.facilityVerificationRequired is bool
-          && rd.facilityVerificationStatus in [
-            'not_required',
-            'pending',
-            'confirmed',
-            'unable_to_confirm',
-            'inconsistent'
-          ]
-          && rd.facilityName is string
+        return rd.facilityName is string
           && rd.facilityName.size() <= 160
           && rd.facilityType is string
           && rd.facilityType.size() <= 80
@@ -1168,8 +1160,7 @@ service cloud.firestore {
       }
       function validCostVerificationState() {
         let rd = request.resource.data;
-        return rd.costVerificationRequired is bool
-          && rd.residentEstimatedAmount is number
+        return rd.residentEstimatedAmount is number
           && rd.residentEstimatedAmount >= 0
           && rd.residentEstimatedAmount <= 100000000
           && rd.residentEstimatedAmount
@@ -1183,12 +1174,6 @@ service cloud.firestore {
           && rd.verifiedUncoveredAmount is number
           && rd.verifiedUncoveredAmount >= 0
           && rd.verifiedUncoveredAmount <= 100000000
-          && rd.costVerificationStatus in [
-            'not_required',
-            'pending',
-            'confirmed',
-            'inconsistent'
-          ]
           && rd.costReferenceNumber is string
           && rd.costReferenceNumber.size() <= 160
           && rd.costNotes is string
@@ -1266,28 +1251,12 @@ service cloud.firestore {
       }
       function validOptionalVerificationState() {
         let rd = request.resource.data;
-        return rd.videoVerificationRequired is bool
-          && rd.videoVerificationStatus in [
-            'not_required',
-            'pending',
-            'requested',
-            'completed',
-            'unable_to_complete'
-          ]
-          && (
+        return (
             rd.videoVerificationAt == null
             || rd.videoVerificationAt is timestamp
           )
           && rd.videoVerificationNotes is string
           && rd.videoVerificationNotes.size() <= 2000
-          && rd.siteVisitRequired is bool
-          && rd.siteVisitStatus in [
-            'not_required',
-            'pending',
-            'scheduled',
-            'completed',
-            'unable_to_complete'
-          ]
           && (
             rd.siteVisitAt == null
             || rd.siteVisitAt is timestamp
@@ -1395,12 +1364,6 @@ service cloud.firestore {
         && rd.requestId == requestId
         && rd.requesterUid == sourceAssistance().requesterUid
         && rd.category == sourceAssistance().category
-        && rd.reviewStatus in [
-          'in_progress',
-          'needs_more_information',
-          'verified',
-          'rejected'
-        ]
         && rd.documentConsistencyStatus in [
           'pending',
           'consistent',
@@ -1435,19 +1398,8 @@ service cloud.firestore {
         && rd.riskFlags.size() <= 20
         && rd.internalNotes is string
         && rd.internalNotes.size() <= 3000
-        && rd.finalDecision in [
-          'pending',
-          'needs_more_information',
-          'verified',
-          'rejected'
-        ]
         && rd.finalDecisionReason is string
         && rd.finalDecisionReason.size() <= 2000
-        && (
-          rd.finalDecisionAt == null
-          || rd.finalDecisionAt is timestamp
-        )
-        && rd.finalDecisionBy is string
         && rd.finalDecisionBy.size() <= 160
         && rd.createdAt is timestamp
         && rd.createdBy is string
@@ -3018,9 +2970,6 @@ service cloud.firestore {
         && rd.sourceNeedAssessmentIds.size() == 1
         && rd.barangays is list
         && rd.barangays.size() == 1
-        && rd.acceptedDonationTypes is list
-        && rd.acceptedDonationTypes.size() >= 1
-        && rd.acceptedDonationTypes.size() <= 2
         && (
           rd.acceptedDonationTypes == [
             'monetary'
@@ -3045,8 +2994,6 @@ service cloud.firestore {
         && rd.officialChannelInstructions.size() <= 1000
         && rd.monetaryGoal is number
         && rd.monetaryGoal >= 0
-        && rd.verifiedAmountReceived is number
-        && rd.verifiedAmountReceived >= 0
         && rd.inKindInstructions is string
         && rd.inKindInstructions.size() <= 1000
         && rd.handoffMode in [
@@ -3273,10 +3220,6 @@ service cloud.firestore {
         && rd.donorDisplayName is string
         && rd.donorDisplayName.size() >= 1
         && rd.donorDisplayName.size() <= 160
-        && rd.donationType in [
-          'monetary',
-          'in_kind'
-        ]
         && rd.donationType
           in campaign.acceptedDonationTypes
         && rd.category is string
@@ -3285,10 +3228,6 @@ service cloud.firestore {
         && rd.itemName.size() <= 160
         && rd.unit is string
         && rd.unit.size() <= 60
-        && rd.quantityPledged is number
-        && rd.quantityPledged >= 0
-        && rd.amount is number
-        && rd.amount >= 0
         && rd.transactionReference is string
         && rd.transactionReference.size() <= 160
         && rd.donorNote is string
