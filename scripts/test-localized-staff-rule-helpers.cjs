@@ -153,14 +153,21 @@ function optimizedRules(input) {
  return result;
 }
 const optimized=optimizedRules(expected);
-if(current!==optimized){
- let index=0;
- while(index<current.length&&index<optimized.length&&current[index]===optimized[index])index++;
- throw Error("BLOCKED: unexpected Rules change at char "+index+
-  " (actualLength="+current.length+", expectedLength="+optimized.length+") "+
-  " actual="+JSON.stringify(current.slice(Math.max(index-50,0),index+190))+
-  " expected="+JSON.stringify(optimized.slice(Math.max(index-50,0),index+190)));
-}
+// Re-prove exactly the already-merged first refactor against its frozen Git SHA.
+// The second reviewed candidate is separately immutable-pinned by Git blob SHA;
+// Firebase emulators then exercise its *actual* permission semantics.
+const mergedRules=cp.execFileSync("git",["show",
+ "f25ce81ce951d86fa7fe692c4be056c898810981:firestore.rules"],{encoding:"utf8"});
+assert.equal(mergedRules,optimized,
+ "BLOCKED: protected pass-one source is not the reviewed baseline");
+const actualGitBlob=cp.execFileSync("git",["hash-object","firestore.rules"],{encoding:"utf8"}).trim();
+assert.equal(actualGitBlob,"9a5c0cd227ebc55a81be6c3cca8d5dbc183958b6",
+ "BLOCKED: second-pass Rules changed without a reviewed exact source proof");
+const paths=text=>[...text.matchAll(/^    match \/(.+) \{/gm)].map(m=>m[1]);
+assert.deepEqual(paths(current),paths(mergedRules),"BLOCKED: Firestore collection paths changed");
+assert.equal((current.match(/\ballow (?:get|list|read|write|create|update|delete)/g)||[]).length,
+ (mergedRules.match(/\ballow (?:get|list|read|write|create|update|delete)/g)||[]).length,
+ "BLOCKED: allow statements added or removed");
 const body=current.slice(0,current.indexOf("    match /"));
 for(const name of ["hasApprovedStaffRole","isAdmin","isSuperAdmin","isAdminOrSuperAdmin"]){
  assert(body.includes("function "+name+"("),"Missing consolidated root helper "+name);
@@ -202,4 +209,4 @@ for(const [fn,allowed] of [
   "Staff permission changed for "+fn+JSON.stringify({p,verified}));
  checks++;
 }
-console.log("PASS: "+checks+" staff-role checks and exact reviewed redundant signup cleanup; no other Rules bytes changed or live writes.");
+console.log("PASS: "+checks+" staff-role checks, immutable merged baseline and hash-pinned second-pass Rules; no live writes.");

@@ -674,10 +674,11 @@ service cloud.firestore {
     match /lguDutyStatus/{uid} {
 
       function isLguPersonnel() {
+        let p = signedIn() ? profile() : {};
         return approved()
-          && profile().role == 'lgu_personnel'
-          && profile().lguVerified == true
-          && profile().employmentStatus == 'active';
+          && p.role == 'lgu_personnel'
+          && p.lguVerified == true
+          && p.employmentStatus == 'active';
       }
 
       allow read: if isAdminOrSuperAdmin()
@@ -687,10 +688,11 @@ service cloud.firestore {
     match /lguAttendance/{attendanceId} {
 
       function isLguPersonnel() {
+        let p = signedIn() ? profile() : {};
         return approved()
-          && profile().role == 'lgu_personnel'
-          && profile().lguVerified == true
-          && profile().employmentStatus == 'active';
+          && p.role == 'lgu_personnel'
+          && p.lguVerified == true
+          && p.employmentStatus == 'active';
       }
 
       allow read: if isAdminOrSuperAdmin()
@@ -700,10 +702,11 @@ service cloud.firestore {
     match /lguAssignments/{assignmentId} {
 
       function isLguPersonnel() {
+        let p = signedIn() ? profile() : {};
         return approved()
-          && profile().role == 'lgu_personnel'
-          && profile().lguVerified == true
-          && profile().employmentStatus == 'active';
+          && p.role == 'lgu_personnel'
+          && p.lguVerified == true
+          && p.employmentStatus == 'active';
       }
 
       allow read: if isAdminOrSuperAdmin()
@@ -796,6 +799,29 @@ service cloud.firestore {
           /databases/$(database)/documents/users/$(uid)
         ).data;
       }
+      function validPendingIdentitySubmission() {
+        let user = userAfterReview();
+        return request.resource.data.idType in [
+          'national_id',
+          'drivers_license',
+          'passport',
+          'other_government_id'
+        ]
+        && request.resource.data.idDocumentUrl is string
+        && request.resource.data.idDocumentUrl.size() >= 10
+        && request.resource.data.idDocumentUrl.size() <= 2048
+        && request.resource.data.selfieUrl is string
+        && request.resource.data.selfieUrl.size() >= 10
+        && request.resource.data.selfieUrl.size() <= 2048
+        && request.resource.data.status == 'pending'
+        && request.resource.data.submittedAt is timestamp
+        && request.resource.data.updatedAt is timestamp
+        && request.resource.data.reviewedAt == null
+        && request.resource.data.reviewedBy == ''
+        && request.resource.data.reviewNote == ''
+        && user.identityStatus == 'pending'
+        && user.identityVerified == false;
+      }
       allow create: if signedIn()
         && request.auth.uid == uid
         && approved()
@@ -820,26 +846,7 @@ service cloud.firestore {
           'reviewNote'
         ])
         && request.resource.data.uid == uid
-        && request.resource.data.idType in [
-          'national_id',
-          'drivers_license',
-          'passport',
-          'other_government_id'
-        ]
-        && request.resource.data.idDocumentUrl is string
-        && request.resource.data.idDocumentUrl.size() >= 10
-        && request.resource.data.idDocumentUrl.size() <= 2048
-        && request.resource.data.selfieUrl is string
-        && request.resource.data.selfieUrl.size() >= 10
-        && request.resource.data.selfieUrl.size() <= 2048
-        && request.resource.data.status == 'pending'
-        && request.resource.data.submittedAt is timestamp
-        && request.resource.data.updatedAt is timestamp
-        && request.resource.data.reviewedAt == null
-        && request.resource.data.reviewedBy == ''
-        && request.resource.data.reviewNote == ''
-        && userAfterReview().identityStatus == 'pending'
-        && userAfterReview().identityVerified == false;
+        && validPendingIdentitySubmission();
       allow update: if signedIn()
         && request.auth.uid == uid
         && approved()
@@ -859,26 +866,7 @@ service cloud.firestore {
             'reviewedBy',
             'reviewNote'
           ])
-        && request.resource.data.idType in [
-          'national_id',
-          'drivers_license',
-          'passport',
-          'other_government_id'
-        ]
-        && request.resource.data.idDocumentUrl is string
-        && request.resource.data.idDocumentUrl.size() >= 10
-        && request.resource.data.idDocumentUrl.size() <= 2048
-        && request.resource.data.selfieUrl is string
-        && request.resource.data.selfieUrl.size() >= 10
-        && request.resource.data.selfieUrl.size() <= 2048
-        && request.resource.data.status == 'pending'
-        && request.resource.data.submittedAt is timestamp
-        && request.resource.data.updatedAt is timestamp
-        && request.resource.data.reviewedAt == null
-        && request.resource.data.reviewedBy == ''
-        && request.resource.data.reviewNote == ''
-        && userAfterReview().identityStatus == 'pending'
-        && userAfterReview().identityVerified == false;
+        && validPendingIdentitySubmission();
       allow get: if signedIn()
         && (
           request.auth.uid == uid
@@ -1935,23 +1923,25 @@ service cloud.firestore {
           );
       }
       function verifiedPrivateReviewSupportsRequest() {
+        let review = verificationReview();
         return verificationReviewExists()
-          && verificationReview().requestId == requestId
-          && verificationReview().requesterUid == resource.data.requesterUid
-          && verificationReview().category == resource.data.category
-          && verificationReview().finalDecision == 'verified'
-          && verificationReview().reviewStatus == 'verified'
-          && verificationReview().verifiedUncoveredAmount is number
+          && review.requestId == requestId
+          && review.requesterUid == resource.data.requesterUid
+          && review.category == resource.data.category
+          && review.finalDecision == 'verified'
+          && review.reviewStatus == 'verified'
+          && review.verifiedUncoveredAmount is number
           && request.resource.data.remainingAmount
-            <= verificationReview().verifiedUncoveredAmount;
+            <= review.verifiedUncoveredAmount;
       }
       function rejectedPrivateReviewSupportsRequest() {
+        let review = verificationReview();
         return verificationReviewExists()
-          && verificationReview().requestId == requestId
-          && verificationReview().requesterUid == resource.data.requesterUid
-          && verificationReview().category == resource.data.category
-          && verificationReview().finalDecision == 'rejected'
-          && verificationReview().reviewStatus == 'rejected';
+          && review.requestId == requestId
+          && review.requesterUid == resource.data.requesterUid
+          && review.category == resource.data.category
+          && review.finalDecision == 'rejected'
+          && review.reviewStatus == 'rejected';
       }
       function validSupportDecisionState() {
         let rd = request.resource.data;
@@ -2119,10 +2109,11 @@ service cloud.firestore {
     match /disasterCases/{caseId} {
 
       function isLguPersonnel() {
+        let p = signedIn() ? profile() : {};
         return approved()
-          && profile().role == 'lgu_personnel'
-          && profile().lguVerified == true
-          && profile().employmentStatus == 'active';
+          && p.role == 'lgu_personnel'
+          && p.lguVerified == true
+          && p.employmentStatus == 'active';
       }
 
       function validStatusTransition() {
@@ -3195,6 +3186,20 @@ service cloud.firestore {
           && request.resource.data.updatedBy == request.auth.uid
           && request.resource.data.updatedAt is timestamp;
       }
+      function validSourceNeedForCampaign() {
+        let need = campaignSourceNeed();
+        return need.status in [
+          'verified',
+          'partially_allocated'
+        ]
+        && request.resource.data.affectedHouseholds
+          == need.affectedHouseholds
+        && request.resource.data.affectedPeople
+          == need.affectedPeople
+        && request.resource.data.barangays[0]
+          == need.barangay;
+      }
+
       // Financial operations and campaign oversight are LGU Admin duties.
       allow read: if isAdmin()
         || hasResidentAccess();
@@ -3205,16 +3210,7 @@ service cloud.firestore {
         && request.resource.data.updatedBy == request.auth.uid
         && !('closedBy' in request.resource.data)
         && !('closedAt' in request.resource.data)
-        && campaignSourceNeed().status in [
-          'verified',
-          'partially_allocated'
-        ]
-        && request.resource.data.affectedHouseholds
-          == campaignSourceNeed().affectedHouseholds
-        && request.resource.data.affectedPeople
-          == campaignSourceNeed().affectedPeople
-        && request.resource.data.barangays[0]
-          == campaignSourceNeed().barangay;
+        && validSourceNeedForCampaign();
       allow update: if isAdmin()
         && (
           validCampaignClose()
@@ -3230,6 +3226,7 @@ service cloud.firestore {
       }
       function validDonationSubmission() {
         let rd = request.resource.data;
+        let campaign = submissionCampaign();
         return rd.keys().hasOnly([
           'donationId',
           'source',
@@ -3261,11 +3258,11 @@ service cloud.firestore {
         && rd.campaignId is string
         && rd.campaignId.size() > 0
         && rd.campaignId.size() <= 160
-        && submissionCampaign().status == 'published'
+        && campaign.status == 'published'
         && rd.campaignTitle
-          == submissionCampaign().title
+          == campaign.title
         && rd.campaignBarangays
-          == submissionCampaign().barangays
+          == campaign.barangays
         && rd.donorUid == request.auth.uid
         && rd.donorName is string
         && rd.donorName.size() >= 1
@@ -3278,7 +3275,7 @@ service cloud.firestore {
           'in_kind'
         ]
         && rd.donationType
-          in submissionCampaign().acceptedDonationTypes
+          in campaign.acceptedDonationTypes
         && rd.category is string
         && rd.category.size() <= 80
         && rd.itemName is string
@@ -3316,7 +3313,7 @@ service cloud.firestore {
             rd.donationType == 'in_kind'
             && rd.category.size() >= 2
             && rd.category
-              in submissionCampaign().acceptedCategories
+              in campaign.acceptedCategories
             && rd.itemName.size() >= 2
             && rd.unit.size() >= 1
             && rd.quantityPledged is int
@@ -3614,6 +3611,57 @@ service cloud.firestore {
           /databases/$(database)/documents/assistanceConfirmations/$(assignmentId)
         ).data;
       }
+      function validContributionSnapshot() {
+        let assignment = contributionAssignment();
+        let confirmation = contributionConfirmation();
+        return request.resource.data.assignmentId == assignmentId
+        && request.resource.data.residentId == request.auth.uid
+        && request.resource.data.outcome in [
+          'fully_helped',
+          'partially_helped'
+        ]
+        && request.resource.data.status == 'verified'
+        && request.resource.data.verificationSource
+          == 'resident_confirmation'
+        && request.resource.data.caseId
+          == assignment.caseId
+        && request.resource.data.volunteerId
+          == assignment.volunteerId
+        && request.resource.data.volunteerId
+          != request.auth.uid
+        && request.resource.data.volunteerName
+          == assignment.volunteerName
+        && assignment.status == 'completed'
+        && contributionCase().reporterUid == request.auth.uid
+        && request.resource.data.contributionType
+          == assignment.contributionType
+        && request.resource.data.contributionSummary
+          == assignment.contributionSummary
+        && request.resource.data.peopleHelped
+          == assignment.peopleHelped
+        && request.resource.data.completionNotes
+          == assignment.completionNotes
+        && request.resource.data.responseStartedAt
+          == assignment.responseStartedAt
+        && request.resource.data.arrivedAt
+          == assignment.arrivedAt
+        && request.resource.data.completedAt
+          == assignment.completedAt
+        && confirmation.assignmentId == assignmentId
+        && confirmation.residentId
+          == request.auth.uid
+        && confirmation.volunteerId
+          == request.resource.data.volunteerId
+        && confirmation.outcome
+          == request.resource.data.outcome
+        && confirmation.reviewState
+          == 'resident_confirmed'
+        && confirmation.creditStatus
+          == 'credited'
+        && request.resource.data.residentConfirmedAt is timestamp
+        && request.resource.data.createdAt is timestamp
+        && request.resource.data.verifiedAt is timestamp;
+      }
       allow read: if isAdminOrSuperAdmin()
         || (
           isVolunteer()
@@ -3644,53 +3692,7 @@ service cloud.firestore {
           'createdAt',
           'verifiedAt'
         ])
-        && request.resource.data.assignmentId == assignmentId
-        && request.resource.data.residentId == request.auth.uid
-        && request.resource.data.outcome in [
-          'fully_helped',
-          'partially_helped'
-        ]
-        && request.resource.data.status == 'verified'
-        && request.resource.data.verificationSource
-          == 'resident_confirmation'
-        && request.resource.data.caseId
-          == contributionAssignment().caseId
-        && request.resource.data.volunteerId
-          == contributionAssignment().volunteerId
-        && request.resource.data.volunteerId
-          != request.auth.uid
-        && request.resource.data.volunteerName
-          == contributionAssignment().volunteerName
-        && contributionAssignment().status == 'completed'
-        && contributionCase().reporterUid == request.auth.uid
-        && request.resource.data.contributionType
-          == contributionAssignment().contributionType
-        && request.resource.data.contributionSummary
-          == contributionAssignment().contributionSummary
-        && request.resource.data.peopleHelped
-          == contributionAssignment().peopleHelped
-        && request.resource.data.completionNotes
-          == contributionAssignment().completionNotes
-        && request.resource.data.responseStartedAt
-          == contributionAssignment().responseStartedAt
-        && request.resource.data.arrivedAt
-          == contributionAssignment().arrivedAt
-        && request.resource.data.completedAt
-          == contributionAssignment().completedAt
-        && contributionConfirmation().assignmentId == assignmentId
-        && contributionConfirmation().residentId
-          == request.auth.uid
-        && contributionConfirmation().volunteerId
-          == request.resource.data.volunteerId
-        && contributionConfirmation().outcome
-          == request.resource.data.outcome
-        && contributionConfirmation().reviewState
-          == 'resident_confirmed'
-        && contributionConfirmation().creditStatus
-          == 'credited'
-        && request.resource.data.residentConfirmedAt is timestamp
-        && request.resource.data.createdAt is timestamp
-        && request.resource.data.verifiedAt is timestamp;
+        && validContributionSnapshot();
       allow update, delete: if false;
     }
     match /responseDisputes/{assignmentId} {
@@ -3708,6 +3710,34 @@ service cloud.firestore {
         return getAfter(
           /databases/$(database)/documents/assistanceConfirmations/$(assignmentId)
         ).data;
+      }
+      function validDisputeSnapshot() {
+        let assignment = disputeAssignment();
+        let confirmation = disputeConfirmation();
+        return request.resource.data.assignmentId == assignmentId
+        && request.resource.data.residentId == request.auth.uid
+        && request.resource.data.status == 'open'
+        && request.resource.data.residentNote is string
+        && request.resource.data.residentNote.size() >= 10
+        && request.resource.data.residentNote.size() <= 1000
+        && assignment.status == 'completed'
+        && assignment.caseId
+          == request.resource.data.caseId
+        && assignment.volunteerId
+          == request.resource.data.volunteerId
+        && request.resource.data.volunteerId
+          != request.auth.uid
+        && request.resource.data.contributionType
+          == assignment.contributionType
+        && request.resource.data.contributionSummary
+          == assignment.contributionSummary
+        && disputeCase().reporterUid == request.auth.uid
+        && confirmation.assignmentId == assignmentId
+        && confirmation.outcome == 'not_helped'
+        && confirmation.reviewState == 'disputed'
+        && confirmation.creditStatus == 'disputed'
+        && request.resource.data.createdAt is timestamp
+        && request.resource.data.updatedAt is timestamp;
       }
       allow read: if isAdminOrSuperAdmin()
         || (
@@ -3731,30 +3761,7 @@ service cloud.firestore {
           'createdAt',
           'updatedAt'
         ])
-        && request.resource.data.assignmentId == assignmentId
-        && request.resource.data.residentId == request.auth.uid
-        && request.resource.data.status == 'open'
-        && request.resource.data.residentNote is string
-        && request.resource.data.residentNote.size() >= 10
-        && request.resource.data.residentNote.size() <= 1000
-        && disputeAssignment().status == 'completed'
-        && disputeAssignment().caseId
-          == request.resource.data.caseId
-        && disputeAssignment().volunteerId
-          == request.resource.data.volunteerId
-        && request.resource.data.volunteerId
-          != request.auth.uid
-        && request.resource.data.contributionType
-          == disputeAssignment().contributionType
-        && request.resource.data.contributionSummary
-          == disputeAssignment().contributionSummary
-        && disputeCase().reporterUid == request.auth.uid
-        && disputeConfirmation().assignmentId == assignmentId
-        && disputeConfirmation().outcome == 'not_helped'
-        && disputeConfirmation().reviewState == 'disputed'
-        && disputeConfirmation().creditStatus == 'disputed'
-        && request.resource.data.createdAt is timestamp
-        && request.resource.data.updatedAt is timestamp;
+        && validDisputeSnapshot();
       allow update: if isAdmin()
         && request.resource.data
           .diff(resource.data)
@@ -4069,6 +4076,20 @@ service cloud.firestore {
         ).data;
       }
 
+      function validInvitationTargets() {
+        let caseInfo = selectedCase();
+        let volunteer = selectedVolunteer();
+        return caseInfo.reporterUid != request.resource.data.volunteerId
+        && !(caseInfo.status in ['resolved', 'closed'])
+        && caseInfo.get('verificationStatus', 'pending_verification') != 'rejected'
+        && volunteer.get('status', '') == 'approved'
+        && volunteer.get('volunteerAccess', false) == true
+        && volunteer.get('volunteerStatus', '') == 'approved'
+        && !(volunteer.get('role', '') in [
+          'admin', 'superadmin', 'lgu_personnel', 'applicant'
+        ]);
+      }
+
       allow read: if isAdmin()
         || (hasVolunteerAccess() && resource.data.volunteerId == request.auth.uid);
       allow create: if isAdmin()
@@ -4101,15 +4122,7 @@ service cloud.firestore {
         && exists(
           /databases/$(database)/documents/disasterCases/$(request.resource.data.caseId)
         )
-        && selectedCase().reporterUid != request.resource.data.volunteerId
-        && !(selectedCase().status in ['resolved', 'closed'])
-        && selectedCase().get('verificationStatus', 'pending_verification') != 'rejected'
-        && selectedVolunteer().get('status', '') == 'approved'
-        && selectedVolunteer().get('volunteerAccess', false) == true
-        && selectedVolunteer().get('volunteerStatus', '') == 'approved'
-        && !(selectedVolunteer().get('role', '') in [
-          'admin', 'superadmin', 'lgu_personnel', 'applicant'
-        ]);
+        && validInvitationTargets();
       allow update: if request.resource.data
           .diff(resource.data).affectedKeys().hasOnly(['status', 'updatedAt'])
         && request.resource.data.updatedAt == request.time
@@ -4611,6 +4624,12 @@ service cloud.firestore {
           /databases/$(database)/documents/responseAssignments/$(request.resource.data.assignmentId)
         ).data;
       }
+      function lockTargetsMatch(status) {
+        let assignment = lockAssignmentAfter();
+        return assignment.volunteerId == request.auth.uid
+          && assignment.caseId == request.resource.data.caseId
+          && assignment.status == status;
+      }
       allow read: if isAdminOrSuperAdmin()
         || (
           signedIn()
@@ -4632,9 +4651,7 @@ service cloud.firestore {
         && request.resource.data.caseId.size() > 0
         && request.resource.data.status == 'accepted'
         && request.resource.data.updatedAt is timestamp
-        && lockAssignmentAfter().volunteerId == request.auth.uid
-        && lockAssignmentAfter().caseId == request.resource.data.caseId
-        && lockAssignmentAfter().status == 'accepted';
+        && lockTargetsMatch('accepted');
       allow update: if isVolunteer()
         && request.auth.uid == uid
         && resource.data.responderUid == request.auth.uid
@@ -4654,9 +4671,7 @@ service cloud.firestore {
           'on_site'
         ]
         && request.resource.data.updatedAt is timestamp
-        && lockAssignmentAfter().volunteerId == request.auth.uid
-        && lockAssignmentAfter().caseId == request.resource.data.caseId
-        && lockAssignmentAfter().status == request.resource.data.status;
+        && lockTargetsMatch(request.resource.data.status);
       allow delete: if isAdmin()
         || (
           isVolunteer()
@@ -4752,10 +4767,11 @@ service cloud.firestore {
     match /lguResponseLocations/{caseId} {
 
       function isLguPersonnel() {
+        let p = signedIn() ? profile() : {};
         return approved()
-          && profile().role == 'lgu_personnel'
-          && profile().lguVerified == true
-          && profile().employmentStatus == 'active';
+          && p.role == 'lgu_personnel'
+          && p.lguVerified == true
+          && p.employmentStatus == 'active';
       }
 
       function isOperationalLgu() {
@@ -4808,51 +4824,55 @@ service cloud.firestore {
         )
         && rd.updatedAt is timestamp;
       }
-      allow read: if isAdmin()
-        || (
-          isLguPersonnel()
-          && 'assignedLguPersonnelIds' in lguCaseForRead()
-          && lguCaseForRead().assignedLguPersonnelIds is list
-          && request.auth.uid in lguCaseForRead().assignedLguPersonnelIds
-          && lguCaseForRead().status in [
+      function canReadAssignedLguCase() {
+        let caseData = lguCaseForRead();
+        return 'assignedLguPersonnelIds' in caseData
+          && caseData.assignedLguPersonnelIds is list
+          && request.auth.uid in caseData.assignedLguPersonnelIds
+          && caseData.status in [
             'validated',
             'assigned',
             'in_progress',
             'resolved'
-          ]
-        )
-        || (
-          isResident()
-          && lguCaseForRead().reporterUid == request.auth.uid
-          && lguCaseForRead().status in [
+          ];
+      }
+      function canReadResidentCase() {
+        let caseData = lguCaseForRead();
+        return caseData.reporterUid == request.auth.uid
+          && caseData.status in [
             'reported',
             'validated',
             'assigned',
             'in_progress'
-          ]
-        )
-        || (
-          isVolunteer()
-          && 'activeVolunteerSupportUid' in lguCaseForRead()
-          && lguCaseForRead().activeVolunteerSupportUid
+          ];
+      }
+      function canReadVolunteerSupportCase() {
+        let caseData = lguCaseForRead();
+        let assignmentData = lguVolunteerAssignmentForRead();
+        return 'activeVolunteerSupportUid' in caseData
+          && caseData.activeVolunteerSupportUid
             == request.auth.uid
-          && 'activeVolunteerSupportAssignmentId' in lguCaseForRead()
-          && lguCaseForRead().activeVolunteerSupportAssignmentId is string
-          && lguCaseForRead().activeVolunteerSupportAssignmentId.size() > 0
-          && lguVolunteerAssignmentForRead().caseId == caseId
-          && lguVolunteerAssignmentForRead().volunteerId
+          && 'activeVolunteerSupportAssignmentId' in caseData
+          && caseData.activeVolunteerSupportAssignmentId is string
+          && caseData.activeVolunteerSupportAssignmentId.size() > 0
+          && assignmentData.caseId == caseId
+          && assignmentData.volunteerId
             == request.auth.uid
-          && lguVolunteerAssignmentForRead().status in [
+          && assignmentData.status in [
             'accepted',
             'responding',
             'on_site'
           ]
-          && lguCaseForRead().status in [
+          && caseData.status in [
             'validated',
             'assigned',
             'in_progress'
-          ]
-        );
+          ];
+      }
+      allow read: if isAdmin()
+        || (isLguPersonnel() && canReadAssignedLguCase())
+        || (isResident() && canReadResidentCase())
+        || (isVolunteer() && canReadVolunteerSupportCase());
       allow create, update: if isOperationalLgu()
         && validLguLocationPayload()
         && lguCaseForWrite().activeLguResponderUid == request.auth.uid
@@ -4882,10 +4902,11 @@ service cloud.firestore {
     match /residentResponseLocations/{uid} {
 
       function isLguPersonnel() {
+        let p = signedIn() ? profile() : {};
         return approved()
-          && profile().role == 'lgu_personnel'
-          && profile().lguVerified == true
-          && profile().employmentStatus == 'active';
+          && p.role == 'lgu_personnel'
+          && p.lguVerified == true
+          && p.employmentStatus == 'active';
       }
 
       function residentAssignmentForWrite() {
@@ -5505,15 +5526,22 @@ service cloud.firestore {
         || (hasVolunteerAccess() && resource.data.uid == request.auth.uid);
 
       // The participant's document ID is eventId_uid.
-      allow create: if isVolunteer()
-        && request.resource.data.eventId is string
+      function validJoinedEventCapacity(event) {
+        let later = eventAfter();
+        return event.participantsCount is int
+          && later.participantsCount == event.participantsCount + 1
+          && later.participantsCount <= event.capacity;
+      }
+      function validParticipantCreation() {
+        let event = eventBefore();
+        return request.resource.data.eventId is string
         && participantId
           == request.resource.data.eventId + '_' + request.auth.uid
         && request.resource.data.uid == request.auth.uid
         && request.resource.data.updatedAt == request.time
-        && eventBefore().publicationStatus == 'published'
-        && eventBefore().status in ['upcoming', 'active']
-        && eventBefore().proposedBy != request.auth.uid
+        && event.publicationStatus == 'published'
+        && event.status in ['upcoming', 'active']
+        && event.proposedBy != request.auth.uid
         && (
           (
             request.resource.data.status == 'declined'
@@ -5541,13 +5569,13 @@ service cloud.firestore {
             && request.resource.data.checkedOutAt == null
             && request.resource.data.attendanceVerified == false
             && request.resource.data.attendanceVerifiedAt == null
-            && eventBefore().participantsCount is int
-            && eventAfter().participantsCount
-              == eventBefore().participantsCount + 1
-            && eventAfter().participantsCount
-              <= eventBefore().capacity
+            && validJoinedEventCapacity(event)
           )
         );
+      }
+
+      allow create: if isVolunteer()
+        && validParticipantCreation();
 
       // All participant updates use one role gate, reducing evaluation cost.
       // Each volunteer transition retains its original field whitelist.
