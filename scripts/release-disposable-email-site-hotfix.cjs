@@ -135,13 +135,18 @@ async function verifyChannels(t){
 }
 async function main(){
  const mode=process.argv[2]||"--self-test";
- assert(["--self-test","--preflight","--verify-preview","--publish-rules",
+ assert(["--self-test","--check-source","--preflight","--verify-preview","--publish-rules",
   "--verify","--restore-rules"].includes(mode),"Unknown mode");
  if(mode==="--self-test"){
   assert.equal(BACKUP,"signup-en2ch-backup-20261109");
   assert.equal(PREVIEW,"signup-en2ch-preview-20261109");
   assert.equal(SITE_CANDIDATE.length,40);
   console.log("PASS: controlled site-derived hotfix constants");
+  return;
+ }
+ if(mode==="--check-source") {
+  approvedSiteDiff();
+  console.log("PASS: frozen production UI unchanged beyond reviewed site-derived hotfix");
   return;
  }
  await verifyRepo();
