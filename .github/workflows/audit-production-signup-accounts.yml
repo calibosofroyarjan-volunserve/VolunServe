@@ -58,8 +58,8 @@ jobs:
         run: npm ci --prefix functions --no-audit --no-fund
       - name: Aggregate-only production Auth and Firestore read check
         env:
-          # Prefer least-privileged audit secret. Existing Hosting credential
-          # is a fallback ONLY if it already has Auth/Firestore read permission.
-          # Do not change IAM grants just to make this check pass.
-          VOLUNSERVE_PRODUCTION_AUDIT_CREDENTIAL: ${{ secrets.VOLUNSERVE_PRODUCTION_READONLY_SERVICE_ACCOUNT || secrets.VOLUNSERVE_PRODUCTION_HOSTING_SERVICE_ACCOUNT }}
+          # The owner configured a dedicated read-only Auth/Firestore audit secret.
+          # Do not fall back to Hosting deploy credentials: the audit must
+          # prove its own least-privileged access or fail without side effects.
+          VOLUNSERVE_PRODUCTION_AUDIT_CREDENTIAL: ${{ secrets.VOLUNSERVE_PRODUCTION_READONLY_SERVICE_ACCOUNT }}
         run: node scripts/audit-production-signup-accounts.cjs
