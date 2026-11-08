@@ -82,9 +82,9 @@ const s=StyleSheet.create({
   icon:{width:39,height:39,borderRadius:11,backgroundColor:"#E6F8EE",
     alignItems:"center",justifyContent:"center"},
   headingText:{flex:1,gap:4},
-  title:{fontSize: vsType.size.bodyStrong,fontFamily:"DonationInterBold",color:"#174D3B"},
-  subtitle:{fontSize: vsType.size.caption,fontFamily:"DonationInterRegular",lineHeight:17,color:"#63877A"},
-  note:{fontSize: vsType.size.micro,fontFamily:"DonationInterRegular",lineHeight:16,color:"#668276"},
+  title:{fontSize: vsType.size.bodyStrong,fontFamily: vsType.family,color:"#174D3B"},
+  subtitle:{fontSize: vsType.size.caption,fontFamily: vsType.family,lineHeight:17,color:"#63877A"},
+  note:{fontSize: vsType.size.micro,fontFamily: vsType.family,lineHeight:16,color:"#668276"},
   loading:{flexDirection:"row",alignItems:"center",padding:14,gap:9},
   info:{fontSize: vsType.size.caption,color:"#738B83"},
 });
