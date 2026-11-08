@@ -29,8 +29,6 @@ jobs:
           node --check scripts/test-site-derived-signup-candidate.cjs
           node scripts/test-site-derived-signup-candidate.cjs
       - run: npm ci --no-audit --no-fund
-      - name: Existing Signup regression tests on exact live-derived UI
-        run: node scripts/test-signup-prod.cjs
       - name: Production TypeScript compile (NO DEPLOY)
         run: npx tsc --noEmit --incremental false
       - name: Compile web candidate from published site (NO DEPLOY)
@@ -39,3 +37,20 @@ jobs:
           test -f dist/index.html
       - name: Confirm no deployment actions/credentials
         run: echo 'PASS — candidate compiled, NO Firebase Rules/Functions/Hosting/Render deploy'
+  full-signup-policy-release-gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - name: Enforce client + Firestore policy together — fail until rules are reconciled
+        run: |
+          node scripts/test-signup-prod.cjs
+          echo 'PASS: complete Verified Signup client AND matching Rules policy'
