@@ -1,0 +1,39 @@
+name: Validate VolunServe Admin Identity UI (No Deploy)
+on:
+  push:
+    branches: [design/restore-volunserve-admin-identity-20261108]
+permissions:
+  contents: read
+jobs:
+  admin-identity-ui:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      CI: 'true'
+      EXPO_NO_TELEMETRY: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Confirm UI-only changes from last verified live
+        run: |
+          test "$(git diff --name-only 6ebd3b6fba3c3d0c9088cda1c5a59da764414058 HEAD -- app components | sort)" = "$(printf '%s\n' 'app/(admin)/admin-cases.tsx' 'components/admin/AdminReviewHero.tsx')"
+      - name: Install exact dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Typecheck UI changes
+        run: npx tsc --noEmit --incremental false
+      - name: Existing Admin and cross-role regression tests
+        run: |
+          node scripts/test-admin-navigation-contract.cjs
+          node scripts/test-lgu-admin-global-ui-pagination.cjs
+          node scripts/test-portal-resident-volunteer-ui-flow.cjs
+          node scripts/test-embedded-emergency-map-navigation.cjs
+      - name: Build production-like web artifact without deploying
+        run: |
+          npx expo export --platform web --clear
+          node scripts/verify-hosting-release.cjs
