@@ -10,6 +10,7 @@ on:
       - 'identity-ai/**'
       - 'app/identity-verification.tsx'
       - 'app/identity-verification.web.tsx'
+      - 'app/(admin)/identity-reviews.tsx'
       - 'lib/identityVerification.ts'
       - 'components/identity/DocumentScreeningSummary.tsx'
       - 'backend/server.js'
@@ -18,6 +19,8 @@ on:
       - 'backend/test-stagingIsolation.js'
       - 'backend/selectedIdPolicy.js'
       - 'backend/test-selectedIdPolicy.js'
+      - 'backend/identityIssuerReviewPolicy.js'
+      - 'backend/test-identityIssuerReviewPolicy.js'
       - '.github/workflows/identity-ai-safe-tests.yml'
   pull_request:
     branches:
@@ -68,9 +71,9 @@ jobs:
         with:
           node-version: '22'
       - name: Syntax checks
-        run: node --check backend/firebaseAdmin.js && node --check backend/stagingIsolation.js && node --check backend/selectedIdPolicy.js && node --check backend/server.js
+        run: node --check backend/firebaseAdmin.js && node --check backend/stagingIsolation.js && node --check backend/selectedIdPolicy.js && node --check backend/identityIssuerReviewPolicy.js && node --check backend/server.js
       - name: Production boundary regression tests
-        run: node --test backend/test-stagingIsolation.js backend/test-selectedIdPolicy.js
+        run: node --test backend/test-stagingIsolation.js backend/test-selectedIdPolicy.js backend/test-identityIssuerReviewPolicy.js
 
   frontend-types:
     name: Frontend TypeScript check
