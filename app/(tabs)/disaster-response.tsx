@@ -1,3 +1,4 @@
+import { volunserveTypography as vsType } from "../../constants/volunserveLiveUi";
 import { liveUi as designUi } from "../../constants/volunserveLiveUi";
 import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
@@ -61,7 +62,7 @@ const styles = StyleSheet.create({
     gap: 12, paddingHorizontal: 18, paddingVertical: 12, backgroundColor: "#FFFFFF",
     borderBottomWidth: 1, borderBottomColor: "#DBE8E0" },
   heading: { gap: 3, flexGrow: 1 },
-  eyebrow: { fontSize: 11, fontWeight: "900", letterSpacing: 1.1, color: "#075F4D" },
+  eyebrow: { fontSize: vsType.size.caption, fontFamily: vsType.family, fontWeight: "800", letterSpacing: 1.1, color: "#075F4D" },
   subtitle: { fontSize: designUi.type.body.fontSize, color: "#577B69", lineHeight: designUi.type.body.lineHeight, fontWeight: designUi.type.body.fontWeight,},
   switchTabs: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   tab: { flexDirection: "row", alignItems: "center", gap: 7, minHeight: 38, paddingHorizontal: 13,
