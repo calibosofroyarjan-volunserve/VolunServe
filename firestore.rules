@@ -153,20 +153,10 @@ service cloud.firestore {
           "uid", "email", "fullName", "firstName", "lastName",
           "age", "phoneNumber", "barangay", "occupationCategory"
         ])
-        && request.resource.data.firstName is string
-        && request.resource.data.firstName.size() >= 2
-        && request.resource.data.lastName is string
-        && request.resource.data.lastName.size() >= 2
         && request.resource.data.age is int
         && request.resource.data.age >= 18
         && request.resource.data.age <= 100
-        && request.resource.data.phoneNumber is string
-        && request.resource.data.phoneNumber.size() >= 11
-        && request.resource.data.barangay is string
-        && request.resource.data.barangay.size() >= 2
-        && request.resource.data.occupationCategory is string
-        && request.resource.data.occupationCategory.size() >= 2
-        && request.resource.data.uid == uid
+        // Already enforced by validInitialResidentInputs(); uid checked above.
         && request.resource.data.province in [
           'Bulacan',
           'BULACAN',
