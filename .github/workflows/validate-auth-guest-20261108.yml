@@ -80,4 +80,16 @@ jobs:
       - run: node scripts/test-guest-auth-route-isolation.cjs
       - run: npx tsc --noEmit --incremental false
       - run: npx expo export --platform web --clear
+      # Compile the separate staging target with a synthetic public API key.
+      # This is a NO-DEPLOY build and never contacts live or staging Firebase.
+      - name: Compile isolated full-staging web signup (NO DEPLOY)
+        env:
+          EXPO_PUBLIC_VOLUNSERVE_FIREBASE_TARGET: staging
+          EXPO_PUBLIC_VOLUNSERVE_STAGING_FIREBASE_API_KEY: AIzaSySyntheticStagingWebKeyNotUsableForRequests
+          EXPO_PUBLIC_VOLUNSERVE_STAGING_FIREBASE_AUTH_DOMAIN: volunserve-full-staging.firebaseapp.com
+          EXPO_PUBLIC_VOLUNSERVE_STAGING_FIREBASE_PROJECT_ID: volunserve-full-staging
+          EXPO_PUBLIC_VOLUNSERVE_STAGING_FIREBASE_STORAGE_BUCKET: volunserve-full-staging.firebasestorage.app
+          EXPO_PUBLIC_VOLUNSERVE_STAGING_FIREBASE_MESSAGING_SENDER_ID: '429213950126'
+          EXPO_PUBLIC_VOLUNSERVE_STAGING_FIREBASE_APP_ID: '1:429213950126:web:955dbf575697826b674d3f'
+        run: npx expo export --platform web --clear
 # Only the disposable local emulator is used. No production credentials, Firebase deploy or Render calls.

@@ -60,6 +60,16 @@ if (firebaseTarget !== "production" && firebaseTarget !== "staging") {
   throw new Error("Invalid Firebase target. Choose explicit 'staging' or 'production'.");
 }
 const useStagingFirebase = firebaseTarget === "staging";
+// A staging build must never authenticate against the live domain, and the
+// dedicated full-staging Hosting domain must never silently use production.
+const currentHost = typeof window !== "undefined"
+  ? window.location.hostname.toLowerCase() : "";
+const productionHosts = ["volunserve.com", "www.volunserve.com", "volunserve-3aa5b.web.app", "volunserve-3aa5b.firebaseapp.com"];
+const fullStagingHosts = ["volunserve-full-staging.web.app", "volunserve-full-staging.firebaseapp.com"];
+if ((useStagingFirebase && productionHosts.includes(currentHost)) ||
+    (!useStagingFirebase && fullStagingHosts.includes(currentHost))) {
+  throw new Error("Firebase target does not match website host. Refusing unsafe signup connection.");
+}
 const stagingConfig = useStagingFirebase ? {
   apiKey: process.env.EXPO_PUBLIC_VOLUNSERVE_STAGING_FIREBASE_API_KEY || "",
   authDomain: process.env.EXPO_PUBLIC_VOLUNSERVE_STAGING_FIREBASE_AUTH_DOMAIN || "",
@@ -83,6 +93,14 @@ if (useStagingFirebase) {
     throw new Error(
       "STAGING FIREBASE CONFIG REQUIRED. Refusing to connect staging signup to production Firebase."
     );
+  }
+  // The dedicated Full Staging Hosting site must use its own Firebase Web App,
+  // never a different staging project (including the older auth-only project).
+  if (fullStagingHosts.includes(currentHost) &&
+      (stage.projectId !== "volunserve-full-staging" ||
+       stage.messagingSenderId !== "429213950126" ||
+       stage.appId !== "1:429213950126:web:955dbf575697826b674d3f")) {
+    throw new Error("Full staging Hosting requires the matching Full Staging Firebase Web App.");
   }
 }
 
