@@ -1,0 +1,49 @@
+name: Verify Unified VolunServe Typography (NO DEPLOY)
+on:
+  push:
+    branches: [design/unified-volunserve-typography-20261108]
+permissions:
+  contents: read
+jobs:
+  validate-web-and-role-ui:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      CI: 'true'
+      EXPO_NO_TELEMETRY: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Block any data/backend/security changes
+        run: |
+          node - <<'NODE'
+          const assert=require('node:assert/strict'),cp=require('node:child_process');
+          const files=cp.execFileSync('git',['diff','--name-only','6ebd3b6fba3c3d0c9088cda1c5a59da764414058','HEAD'],{encoding:'utf8'}).trim().split('\n').filter(Boolean);
+          assert(files.length>10,'Must update cross-role typography');
+          assert(files.every(x=>/^(app|components|constants)\/.*\.(tsx|ts)$/.test(x)||x==='.github/workflows/qa-unified-typography-20261108.yml'),'BLOCKED: non-UI change: '+files.filter(x=>!/^(app|components|constants)\/.*\.(tsx|ts)$/.test(x)).join(','));
+          console.log('PASS: only UI and shared design tokens changed:',files.length);
+          NODE
+      - name: Install locked dependencies
+        run: npm ci --no-audit --no-fund
+      - name: TypeScript type safety
+        run: npx tsc --noEmit --incremental false --pretty false
+      - name: Cross-role and auth navigation regression checks
+        run: |
+          node scripts/test-admin-navigation-contract.cjs
+          node scripts/test-lgu-admin-global-ui-pagination.cjs
+          node scripts/test-portal-resident-volunteer-ui-flow.cjs
+          node scripts/test-resident-volunteer-sidebar.cjs
+          node scripts/test-superadmin-accounts-directory.cjs
+          node scripts/test-login-field-validation.cjs
+          node scripts/test-signup-email-first-middle-optional.cjs
+          node scripts/test-embedded-emergency-map-navigation.cjs
+      - name: Export complete web app without publishing
+        run: |
+          npx expo export --platform web --clear
+          node scripts/verify-hosting-release.cjs
