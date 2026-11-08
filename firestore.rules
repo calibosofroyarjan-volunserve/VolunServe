@@ -1763,7 +1763,6 @@ service cloud.firestore {
             )
             || (
               rd.assignedLocationSetBy == request.auth.uid
-              && rd.assignedLocationSetAt is timestamp
             )
           )
         );
@@ -1896,10 +1895,10 @@ service cloud.firestore {
       }
       function validSupportDecisionState() {
         let rd = request.resource.data;
-        return (
+        return rd.donationCampaignId == '' && (
+          (
           rd.supportDecision == 'pending'
           && rd.remainingAmount == 0
-          && rd.donationCampaignId == ''
         )
         || (
           rd.supportDecision in [
@@ -1908,7 +1907,6 @@ service cloud.firestore {
           ]
           && rd.verificationStatus == 'verified'
           && rd.remainingAmount == 0
-          && rd.donationCampaignId == ''
         )
         || (
           rd.supportDecision == 'donation_support'
@@ -1918,13 +1916,12 @@ service cloud.firestore {
             || 'in_kind' in resource.data.preferredAssistanceTypes
           )
           && verifiedPrivateReviewSupportsRequest()
-          && rd.donationCampaignId == ''
         )
         || (
           rd.supportDecision == 'rejected'
           && rd.verificationStatus == 'rejected'
           && rd.remainingAmount == 0
-          && rd.donationCampaignId == ''
+        )
         );
       }
       function validAdminAssistanceUpdate() {
@@ -1965,8 +1962,6 @@ service cloud.firestore {
         && rd.remainingAmount is number
         && rd.remainingAmount >= 0
         && rd.remainingAmount <= 100000000
-        && rd.donationCampaignId is string
-        && rd.donationCampaignId.size() <= 200
         && rd.adminNote is string
         && rd.adminNote.size() <= 2000
         && rd.reviewedAt is timestamp
@@ -2929,10 +2924,6 @@ service cloud.firestore {
         && rd.description is string
         && rd.description.size() >= 15
         && rd.description.size() <= 1200
-        && rd.status in [
-          'published',
-          'closed'
-        ]
         && rd.sourceType == 'disaster_relief_need'
         && rd.campaignGroup == 'disaster_affected'
         && rd.campaignCategory is string
@@ -2971,8 +2962,6 @@ service cloud.firestore {
         && rd.officialChannelLabel.size() <= 160
         && rd.officialChannelInstructions is string
         && rd.officialChannelInstructions.size() <= 1000
-        && rd.monetaryGoal is number
-        && rd.monetaryGoal >= 0
         && rd.inKindInstructions is string
         && rd.inKindInstructions.size() <= 1000
         && rd.handoffMode in [

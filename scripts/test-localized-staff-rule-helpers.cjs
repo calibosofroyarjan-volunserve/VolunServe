@@ -207,9 +207,25 @@ for(const [n,scope] of requiredFieldScopes.entries()){
  section=section.replace(remove,"");
  branchExpected=branchExpected.slice(0,start)+section+branchExpected.slice(end);
 }
+// Preserve every previous reviewed change from the protected merge before
+// applying this pass's nine branch algebra transformations.
+assert.equal(branchExpected,cp.execFileSync("git",["show",
+ "78136d1d8447bfc1dafd159c17167582bcff7d33:firestore.rules"],{encoding:"utf8"}),
+ "BLOCKED: reviewed required-field baseline changed");
+const hoists=[["validSupportDecisionState","        return (\n          rd.supportDecision == 'pending'","        return rd.donationCampaignId == '' && (\n          (\n          rd.supportDecision == 'pending'"],["validSupportDecisionState","          && rd.donationCampaignId == ''\n        )\n        || (\n          rd.supportDecision in [","        )\n        || (\n          rd.supportDecision in ["],["validSupportDecisionState","          && rd.donationCampaignId == ''\n        )\n        || (\n          rd.supportDecision == 'donation_support'","        )\n        || (\n          rd.supportDecision == 'donation_support'"],["validSupportDecisionState","          && rd.donationCampaignId == ''\n        )\n        || (\n          rd.supportDecision == 'rejected'","        )\n        || (\n          rd.supportDecision == 'rejected'"],["validSupportDecisionState","          && rd.donationCampaignId == ''\n        );\n      }","        )\n        );\n      }"],["validAdminAssistanceUpdate","        && rd.donationCampaignId is string\n        && rd.donationCampaignId.size() <= 200\n        && rd.adminNote is string","        && rd.adminNote is string"],["validCampaignPayload","        && rd.status in [\n          'published',\n          'closed'\n        ]\n        && rd.sourceType == 'disaster_relief_need'","        && rd.sourceType == 'disaster_relief_need'"],["validCampaignPayload","        && rd.monetaryGoal is number\n        && rd.monetaryGoal >= 0\n        && rd.inKindInstructions is string","        && rd.inKindInstructions is string"],["validAdminLocationState","              rd.assignedLocationSetBy == request.auth.uid\n              && rd.assignedLocationSetAt is timestamp","              rd.assignedLocationSetBy == request.auth.uid"]];
+for(const [name,before,after] of hoists){
+ let start=branchExpected.indexOf("      function "+name+"() {");
+ let end=branchExpected.indexOf("      function ",start+20);
+ if(end<0)end=branchExpected.indexOf("      allow ",start+20);
+ assert(start>=0&&end>start,"Missing original helper "+name);
+ let body=branchExpected.slice(start,end);
+ assert.equal(body.split(before).length,2,"BLOCKED: guard changed in "+name);
+ body=body.replace(before,after);
+ branchExpected=branchExpected.slice(0,start)+body+branchExpected.slice(end);
+}
 assert.equal(current,branchExpected,"BLOCKED: nonreviewed permission, collection or validation changed");
 assert.equal(cp.execFileSync("git",["hash-object","firestore.rules"],{encoding:"utf8"}).trim(),
-"d1ca37355eddca315f56309aee231e10f7b738af","BLOCKED: unreviewed Firestore Rules blob");
+"30bb13a76db158950ae6c904c3f16042bf54c6be","BLOCKED: unreviewed Firestore Rules blob");
 // Verify exhaustiveness of all optional-review branches over valid and
 // invalid types, status values and three-valued nulls before Firebase emulator.
 for(const required of [true,false,null,"true",0,1,undefined]){
@@ -227,7 +243,7 @@ for(const required of [true,false,null,"true",0,1,undefined]){
 }
 
 const gitBlob=cp.execFileSync("git",["hash-object","firestore.rules"],{encoding:"utf8"}).trim();
-assert.equal(gitBlob,"d1ca37355eddca315f56309aee231e10f7b738af","BLOCKED: unapproved Firestore blob");
+assert.equal(gitBlob,"30bb13a76db158950ae6c904c3f16042bf54c6be","BLOCKED: unapproved Firestore blob");
 const paths=source=>source.split("\n").filter(l=>l.startsWith("    match /")).map(l=>l.slice("    match /".length).split(" ")[0]);
 assert.deepEqual(paths(current),paths(protectedBaseline),"BLOCKED: collection scope changed");
 const allows=source=>[...source.matchAll(/allow (?:get|list|read|write|create|update|delete)/g)].length;
