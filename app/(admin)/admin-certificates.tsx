@@ -1,3 +1,4 @@
+import { volunserveTypography as vsType } from "../../constants/volunserveLiveUi";
 import AdminReviewHero from "../../components/admin/AdminReviewHero";
 import { Ionicons } from "@expo/vector-icons";
 
@@ -2618,7 +2619,7 @@ const styles =
 
     loadingText: {
       color: "#64748B",
-      fontSize: 12,
+      fontSize: vsType.size.meta, fontFamily: vsType.family,
     },
 
     accessCard: {
@@ -2647,15 +2648,15 @@ const styles =
     accessTitle: {
       marginTop: 12,
       color: "#173748",
-      fontSize: 18,
-      fontWeight: "900",
+      fontSize: vsType.size.section, fontFamily: vsType.family,
+      fontWeight: "800",
     },
 
     accessText: {
       marginTop: 5,
       maxWidth: 450,
       color: "#70838E",
-      fontSize: 11,
+      fontSize: vsType.size.caption, fontFamily: vsType.family,
       lineHeight: 17,
       textAlign: "center",
     },
@@ -2678,15 +2679,15 @@ const styles =
 
     eyebrow: {
       color: "#087F78",
-      fontSize: 9.5,
-      fontWeight: "900",
+      fontSize: vsType.size.micro, fontFamily: vsType.family,
+      fontWeight: "800",
       letterSpacing: 1.2,
     },
 
     title: {
       marginTop: 5,
       color: "#102A3A",
-      fontSize: 30,
+      fontSize: vsType.size.hero, fontFamily: vsType.family,
       lineHeight: 36,
       fontWeight: "700",
     },
@@ -2695,7 +2696,7 @@ const styles =
       marginTop: 5,
       maxWidth: 690,
       color: "#64748B",
-      fontSize: 12.5,
+      fontSize: vsType.size.label, fontFamily: vsType.family,
       lineHeight: 19,
     },
 
@@ -2715,8 +2716,8 @@ const styles =
 
     adminBadgeText: {
       color: "#08786F",
-      fontSize: 8.5,
-      fontWeight: "900",
+      fontSize: vsType.size.micro, fontFamily: vsType.family,
+      fontWeight: "800",
     },
 
     flowCard: {
@@ -2751,14 +2752,14 @@ const styles =
 
     flowTitle: {
       color: "#08786F",
-      fontSize: 12.5,
-      fontWeight: "900",
+      fontSize: vsType.size.label, fontFamily: vsType.family,
+      fontWeight: "800",
     },
 
     flowText: {
       marginTop: 3,
       color: "#587174",
-      fontSize: 10.5,
+      fontSize: vsType.size.caption, fontFamily: vsType.family,
       lineHeight: 17,
     },
 
@@ -2779,7 +2780,7 @@ const styles =
     errorText: {
       flex: 1,
       color: "#A83232",
-      fontSize: 10.5,
+      fontSize: vsType.size.caption, fontFamily: vsType.family,
       fontWeight: "700",
     },
 
@@ -2805,14 +2806,14 @@ const styles =
 
     summaryValue: {
       color: "#087F78",
-      fontSize: 24,
-      fontWeight: "900",
+      fontSize: vsType.size.title, fontFamily: vsType.family,
+      fontWeight: "800",
     },
 
     summaryLabel: {
       marginTop: 3,
       color: "#6D818C",
-      fontSize: 9.5,
+      fontSize: vsType.size.micro, fontFamily: vsType.family,
       lineHeight: 14,
       fontWeight: "800",
       textTransform:
@@ -2829,14 +2830,14 @@ const styles =
 
     sectionTitle: {
       color: "#173748",
-      fontSize: 17,
-      fontWeight: "900",
+      fontSize: vsType.size.card, fontFamily: vsType.family,
+      fontWeight: "800",
     },
 
     sectionSubtitle: {
       marginTop: 3,
       color: "#7A8E99",
-      fontSize: 10.5,
+      fontSize: vsType.size.caption, fontFamily: vsType.family,
       lineHeight: 16,
     },
 
@@ -2866,15 +2867,15 @@ const styles =
     emptyTitle: {
       marginTop: 10,
       color: "#405866",
-      fontSize: 14,
-      fontWeight: "900",
+      fontSize: vsType.size.body, fontFamily: vsType.family,
+      fontWeight: "800",
     },
 
     emptyText: {
       marginTop: 4,
       maxWidth: 520,
       color: "#7A8D97",
-      fontSize: 10.5,
+      fontSize: vsType.size.caption, fontFamily: vsType.family,
       lineHeight: 17,
       textAlign: "center",
     },
@@ -2915,14 +2916,14 @@ const styles =
 
     volunteerName: {
       color: "#173748",
-      fontSize: 15,
-      fontWeight: "900",
+      fontSize: vsType.size.bodyStrong, fontFamily: vsType.family,
+      fontWeight: "800",
     },
 
     volunteerMeta: {
       marginTop: 2,
       color: "#7B8E98",
-      fontSize: 9.5,
+      fontSize: vsType.size.micro, fontFamily: vsType.family,
     },
 
     readyBadge: {
@@ -2935,8 +2936,8 @@ const styles =
 
     readyBadgeText: {
       color: "#8A6827",
-      fontSize: 7.5,
-      fontWeight: "900",
+      fontSize: vsType.size.micro, fontFamily: vsType.family,
+      fontWeight: "800",
     },
 
     issuedBadge: {
@@ -2949,8 +2950,8 @@ const styles =
 
     issuedBadgeText: {
       color: "#08786F",
-      fontSize: 7.5,
-      fontWeight: "900",
+      fontSize: vsType.size.micro, fontFamily: vsType.family,
+      fontWeight: "800",
     },
 
     revokedBadge: {
@@ -2963,8 +2964,8 @@ const styles =
 
     revokedBadgeText: {
       color: "#A83232",
-      fontSize: 7.5,
-      fontWeight: "900",
+      fontSize: vsType.size.micro, fontFamily: vsType.family,
+      fontWeight: "800",
     },
 
     metricsGrid: {
@@ -2990,23 +2991,23 @@ const styles =
 
     metricValue: {
       color: "#087F78",
-      fontSize: 19,
-      fontWeight: "900",
+      fontSize: vsType.size.section, fontFamily: vsType.family,
+      fontWeight: "800",
     },
 
     metricValueCompact: {
       color: "#087F78",
-      fontSize: 13,
+      fontSize: vsType.size.label, fontFamily: vsType.family,
       lineHeight: 17,
-      fontWeight: "900",
+      fontWeight: "800",
       textAlign: "center",
     },
 
     metricLabel: {
       marginTop: 4,
       color: "#7A8E98",
-      fontSize: 7.5,
-      fontWeight: "900",
+      fontSize: vsType.size.micro, fontFamily: vsType.family,
+      fontWeight: "800",
       letterSpacing: 0.4,
       textAlign: "center",
     },
@@ -3025,8 +3026,8 @@ const styles =
     breakdownHeading: {
       marginBottom: 5,
       color: "#405D69",
-      fontSize: 10.5,
-      fontWeight: "900",
+      fontSize: vsType.size.caption, fontFamily: vsType.family,
+      fontWeight: "800",
     },
 
     breakdownRow: {
@@ -3045,13 +3046,13 @@ const styles =
     breakdownType: {
       flex: 1,
       color: "#596F7B",
-      fontSize: 10,
+      fontSize: vsType.size.micro, fontFamily: vsType.family,
     },
 
     breakdownCount: {
       color: "#087F78",
-      fontSize: 10.5,
-      fontWeight: "900",
+      fontSize: vsType.size.caption, fontFamily: vsType.family,
+      fontWeight: "800",
     },
 
     historySection: {
@@ -3061,8 +3062,8 @@ const styles =
     historyTitle: {
       marginBottom: 8,
       color: "#405D69",
-      fontSize: 10.5,
-      fontWeight: "900",
+      fontSize: vsType.size.caption, fontFamily: vsType.family,
+      fontWeight: "800",
     },
 
     historyRow: {
@@ -3088,8 +3089,8 @@ const styles =
 
     historyNumberText: {
       color: "#087F78",
-      fontSize: 9,
-      fontWeight: "900",
+      fontSize: vsType.size.micro, fontFamily: vsType.family,
+      fontWeight: "800",
     },
 
     historyCopy: {
@@ -3098,28 +3099,28 @@ const styles =
 
     historyType: {
       color: "#294653",
-      fontSize: 10.5,
-      fontWeight: "900",
+      fontSize: vsType.size.caption, fontFamily: vsType.family,
+      fontWeight: "800",
     },
 
     historySummary: {
       marginTop: 3,
       color: "#657984",
-      fontSize: 9.5,
+      fontSize: vsType.size.micro, fontFamily: vsType.family,
       lineHeight: 15,
     },
 
     historyMeta: {
       marginTop: 4,
       color: "#08786F",
-      fontSize: 8.5,
+      fontSize: vsType.size.micro, fontFamily: vsType.family,
       fontWeight: "700",
     },
 
     historyDate: {
       marginTop: 3,
       color: "#94A3AB",
-      fontSize: 8,
+      fontSize: vsType.size.micro, fontFamily: vsType.family,
     },
 
     snapshotBox: {
@@ -3140,22 +3141,22 @@ const styles =
 
     snapshotLabel: {
       color: "#8A9AA3",
-      fontSize: 7.5,
-      fontWeight: "900",
+      fontSize: vsType.size.micro, fontFamily: vsType.family,
+      fontWeight: "800",
       letterSpacing: 0.5,
     },
 
     snapshotValue: {
       marginTop: 3,
       color: "#294653",
-      fontSize: 10.5,
-      fontWeight: "900",
+      fontSize: vsType.size.caption, fontFamily: vsType.family,
+      fontWeight: "800",
     },
 
     snapshotValueSmall: {
       marginTop: 3,
       color: "#647984",
-      fontSize: 8.5,
+      fontSize: vsType.size.micro, fontFamily: vsType.family,
       fontWeight: "700",
     },
 
@@ -3177,8 +3178,8 @@ const styles =
 
     issueButtonText: {
       color: "#FFFFFF",
-      fontSize: 10.5,
-      fontWeight: "900",
+      fontSize: vsType.size.caption, fontFamily: vsType.family,
+      fontWeight: "800",
     },
 
     buttonDisabled: {
@@ -3188,7 +3189,7 @@ const styles =
     issueHint: {
       marginTop: 6,
       color: "#8A9AA3",
-      fontSize: 8.5,
+      fontSize: vsType.size.micro, fontFamily: vsType.family,
       lineHeight: 13,
       textAlign: "center",
     },
@@ -3227,20 +3228,20 @@ const styles =
 
     existingTitle: {
       color: "#08786F",
-      fontSize: 10.5,
-      fontWeight: "900",
+      fontSize: vsType.size.caption, fontFamily: vsType.family,
+      fontWeight: "800",
     },
 
     existingRevokedTitle: {
       color: "#A83232",
-      fontSize: 10.5,
-      fontWeight: "900",
+      fontSize: vsType.size.caption, fontFamily: vsType.family,
+      fontWeight: "800",
     },
 
     existingText: {
       marginTop: 2,
       color: "#687D87",
-      fontSize: 8.5,
+      fontSize: vsType.size.micro, fontFamily: vsType.family,
     },
 
     issuedSection: {
@@ -3263,7 +3264,7 @@ const styles =
 
     smallEmptyText: {
       color: "#7B8E98",
-      fontSize: 10.5,
+      fontSize: vsType.size.caption, fontFamily: vsType.family,
     },
 
     issuedCard: {
@@ -3298,21 +3299,21 @@ const styles =
 
     issuedVolunteer: {
       color: "#294653",
-      fontSize: 11,
-      fontWeight: "900",
+      fontSize: vsType.size.caption, fontFamily: vsType.family,
+      fontWeight: "800",
     },
 
     issuedId: {
       marginTop: 2,
       color: "#087F78",
-      fontSize: 9,
+      fontSize: vsType.size.micro, fontFamily: vsType.family,
       fontWeight: "800",
     },
 
     issuedMeta: {
       marginTop: 3,
       color: "#82939C",
-      fontSize: 8.5,
+      fontSize: vsType.size.micro, fontFamily: vsType.family,
       lineHeight: 13,
     },
 
@@ -3326,8 +3327,8 @@ const styles =
 
     listVerifiedText: {
       color: "#08786F",
-      fontSize: 7.5,
-      fontWeight: "900",
+      fontSize: vsType.size.micro, fontFamily: vsType.family,
+      fontWeight: "800",
     },
 
     listRevokedBadge: {
@@ -3340,7 +3341,7 @@ const styles =
 
     listRevokedText: {
       color: "#A83232",
-      fontSize: 7.5,
-      fontWeight: "900",
+      fontSize: vsType.size.micro, fontFamily: vsType.family,
+      fontWeight: "800",
     },
   });
