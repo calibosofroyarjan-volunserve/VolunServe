@@ -246,6 +246,10 @@ export const isApprovedProfile = (
     // A Guest preview or unknown role is never a completed registered account.
     return false;
   }
+  if (profile.adminStatus === "suspended") {
+    // A staff suspension must never route through a generic approved role.
+    return false;
+  }
   return (
     profile.status === "approved" ||
     (
