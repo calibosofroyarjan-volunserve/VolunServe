@@ -5512,15 +5512,22 @@ service cloud.firestore {
         || (hasVolunteerAccess() && resource.data.uid == request.auth.uid);
 
       // The participant's document ID is eventId_uid.
-      allow create: if isVolunteer()
-        && request.resource.data.eventId is string
+      function validJoinedEventCapacity(event) {
+        let later = eventAfter();
+        return event.participantsCount is int
+          && later.participantsCount == event.participantsCount + 1
+          && later.participantsCount <= event.capacity;
+      }
+      function validParticipantCreation() {
+        let event = eventBefore();
+        return request.resource.data.eventId is string
         && participantId
           == request.resource.data.eventId + '_' + request.auth.uid
         && request.resource.data.uid == request.auth.uid
         && request.resource.data.updatedAt == request.time
-        && eventBefore().publicationStatus == 'published'
-        && eventBefore().status in ['upcoming', 'active']
-        && eventBefore().proposedBy != request.auth.uid
+        && event.publicationStatus == 'published'
+        && event.status in ['upcoming', 'active']
+        && event.proposedBy != request.auth.uid
         && (
           (
             request.resource.data.status == 'declined'
@@ -5548,13 +5555,13 @@ service cloud.firestore {
             && request.resource.data.checkedOutAt == null
             && request.resource.data.attendanceVerified == false
             && request.resource.data.attendanceVerifiedAt == null
-            && eventBefore().participantsCount is int
-            && eventAfter().participantsCount
-              == eventBefore().participantsCount + 1
-            && eventAfter().participantsCount
-              <= eventBefore().capacity
+            && validJoinedEventCapacity(event)
           )
         );
+      }
+
+      allow create: if isVolunteer()
+        && validParticipantCreation();
 
       // All participant updates use one role gate, reducing evaluation cost.
       // Each volunteer transition retains its original field whitelist.
