@@ -47,4 +47,4 @@ jobs:
       - name: Read-only live Firestore Rules structure and candidate drift
         env:
           VOLUNSERVE_PRODUCTION_HOSTING_SERVICE_ACCOUNT: ${{ secrets.VOLUNSERVE_PRODUCTION_HOSTING_SERVICE_ACCOUNT }}
-        run: node scripts/audit-production-firestore-rules-structure.cjs
+        run: node scripts/audit-production-firestore-rules-structure.cjs --missing-live-blocks
