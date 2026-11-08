@@ -36,7 +36,8 @@ async function currentState(token) {
  assert(active?.rulesetName,"BLOCKED: expected current default Firestore ruleset missing");
  const rules=await get("https://firebaserules.googleapis.com/v1/"+active.rulesetName,token);
  assert.equal(rules.source?.files?.length,1,"BLOCKED: deployed Rules source is not a single file");
- return {marker,activeRuleset:active.rulesetName,rulesHash:sha(rules.source.files[0].content)};
+ return {marker,activeRuleset:active.rulesetName,rulesHash:sha(rules.source.files[0].content),
+  rulesSource:rules.source.files[0].content};
 }
 async function selfPermissions(token){
  const perms=[
@@ -61,7 +62,7 @@ async function selfPermissions(token){
 }
 async function main() {
  const mode=process.argv[2]||"--check";
- assert(["--check","--after-rules","--verify"].includes(mode),"Unknown mode");
+ assert(["--check","--backup-rules","--after-rules","--verify"].includes(mode),"Unknown mode");
  assert.equal(process.env.GITHUB_REPOSITORY,
   "calibosofroyarjan-volunserve/VolunServe");
  assert.equal(process.env.GITHUB_REF,"refs/heads/live-protected",
@@ -90,6 +91,14 @@ async function main() {
    "BLOCKED: live Firestore Rules changed — do not overwrite");
   await selfPermissions(token);
   console.log("PASS: production source, IAM and current live Rules/Hosting baselines");
+ } else if(mode==="--backup-rules"){
+  assert.equal(state.marker.revision,EXPECTED_SITE,"BLOCKED: website changed before Rules backup");
+  assert.equal(state.rulesHash,EXPECTED_RULES_HASH,"BLOCKED: Rules changed before backup");
+  const destination=process.env.ORIGINAL_RULES_PATH;
+  assert(destination && destination.startsWith(process.env.RUNNER_TEMP+"/"),
+    "BLOCKED: original Rules backup must remain in protected runner temp");
+  fs.writeFileSync(destination,state.rulesSource,{encoding:"utf8",mode:0o600,flag:"wx"});
+  console.log("PASS: exact current live Rules source backed up to ephemeral runner");
  } else if(mode==="--after-rules"){
   assert.equal(state.marker.revision,EXPECTED_SITE,
    "BLOCKED: live Hosting changed while Rules published");
