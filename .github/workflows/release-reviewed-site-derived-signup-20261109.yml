@@ -1,0 +1,148 @@
+# ONE-TIME protected source -> immutable, site-derived Signup candidate.
+# Never uses outdated main. Fail-closed against site/rules drift & IAM denial.
+name: Release Reviewed Signup Rules + Site (GUARDED, PRODUCTION)
+on:
+  push:
+    branches: [live-protected]
+    paths:
+      - scripts/release-signup-production-preflight.cjs
+      - .github/workflows/release-reviewed-site-derived-signup-20261109.yml
+permissions:
+  contents: read
+concurrency:
+  group: volunserve-signup-production-rules-and-hosting
+  cancel-in-progress: false
+jobs:
+  release:
+    if: github.repository == 'calibosofroyarjan-volunserve/VolunServe' && github.ref == 'refs/heads/live-protected'
+    runs-on: ubuntu-latest
+    environment: production
+    timeout-minutes: 75
+    env:
+      CI: 'true'
+      EXPO_NO_TELEMETRY: '1'
+      PROJECT: volunserve-3aa5b
+      CANDIDATE_SHA: 7d14e438b34501ecfd872f1eb4244b5c225c779f
+      BACKUP_CHANNEL: signup-predeploy-backup-20261109
+      PREVIEW_CHANNEL: signup-reviewed-preview-20261109
+    steps:
+      - name: Checkout current protected production controller
+        uses: actions/checkout@v4
+        with:
+          path: controller
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          submodules: false
+      - name: Checkout immutable candidate based on CURRENT LIVE SITE, NOT main
+        uses: actions/checkout@v4
+        with:
+          path: site
+          ref: 7d14e438b34501ecfd872f1eb4244b5c225c779f
+          fetch-depth: 0
+          submodules: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: site/package-lock.json
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Install locked candidate dependencies (no production access)
+        working-directory: site
+        run: |
+          npm ci --no-audit --no-fund
+          npm ci --prefix functions --no-audit --no-fund
+      - name: Assert the published Admin, Volunteer, Resident, donations and branded UI are preserved
+        working-directory: site
+        run: node scripts/test-site-derived-signup-candidate.cjs
+      - name: Run complete signup protection and no regression tests
+        working-directory: site
+        run: |
+          node scripts/test-signup-prod.cjs
+          npx firebase-tools emulators:exec --only firestore --project demo-volunserve-verified-signup "node scripts/test-verified-community-registration-rules.cjs"
+          npx firebase-tools emulators:exec --only firestore --project demo-volunserve-preserve-volunteer-invitations "node scripts/test-preserved-volunteer-invitation-rules.cjs"
+      - name: Compile complete published-site-derived web app
+        working-directory: site
+        run: |
+          npx tsc --noEmit --incremental false
+          npx expo export --platform web --clear
+          GITHUB_SHA="$CANDIDATE_SHA" node scripts/verify-hosting-release.cjs
+      - name: Set up protected-only Firebase service account and controller
+        working-directory: site
+        env:
+          FIREBASE_SA: ${{ secrets.VOLUNSERVE_PRODUCTION_HOSTING_SERVICE_ACCOUNT }}
+        run: |
+          set -euo pipefail
+          test -n "$FIREBASE_SA"
+          printf '%s' "$FIREBASE_SA" > "$RUNNER_TEMP/volunserve-release-service.json"
+          chmod 600 "$RUNNER_TEMP/volunserve-release-service.json"
+          cp ../controller/scripts/release-signup-production-preflight.cjs scripts/release-signup-production-preflight.cjs
+          echo "GOOGLE_APPLICATION_CREDENTIALS=$RUNNER_TEMP/volunserve-release-service.json" >> "$GITHUB_ENV"
+          echo "ORIGINAL_RULES_PATH=$RUNNER_TEMP/volunserve-original-firestore.rules" >> "$GITHUB_ENV"
+      - name: Preflight exact live Hosting SHA, exact Rules source and publisher IAM before ANY write
+        working-directory: site
+        env:
+          VOLUNSERVE_PRODUCTION_HOSTING_SERVICE_ACCOUNT: ${{ secrets.VOLUNSERVE_PRODUCTION_HOSTING_SERVICE_ACCOUNT }}
+        run: node scripts/release-signup-production-preflight.cjs --check
+      - name: Publish coordinated, reversible verified Signup Rules and Hosting
+        working-directory: site
+        env:
+          VOLUNSERVE_PRODUCTION_HOSTING_SERVICE_ACCOUNT: ${{ secrets.VOLUNSERVE_PRODUCTION_HOSTING_SERVICE_ACCOUNT }}
+          VOLUNSERVE_HOSTING_URL: https://volunserve.com
+          VOLUNSERVE_EXPECTED_SHA: 7d14e438b34501ecfd872f1eb4244b5c225c779f
+        shell: bash
+        run: |
+          set -euo pipefail
+          RULES_TOUCHED=0
+          HOSTING_TOUCHED=0
+          rollback() {
+            local status=$?
+            trap - EXIT
+            if [ "$status" -ne 0 ]; then
+              echo "::error::Signup release did not complete — attempting Rules/Hosting rollback"
+              if [ "$HOSTING_TOUCHED" = "1" ]; then
+                npx firebase-tools hosting:clone "$PROJECT:$BACKUP_CHANNEL" "$PROJECT:live" \
+                  --project "$PROJECT" --non-interactive || echo "::error::Hosting rollback requires operator attention"
+              fi
+              if [ "$RULES_TOUCHED" = "1" ] && [ -f "$ORIGINAL_RULES_PATH" ]; then
+                cp "$ORIGINAL_RULES_PATH" firestore.rules
+                npx firebase-tools deploy --only firestore:rules --project "$PROJECT" \
+                  --non-interactive || echo "::error::Firestore Rules rollback requires operator attention"
+              fi
+            fi
+            exit "$status"
+          }
+          trap rollback EXIT
+          # Create a safe immutable copy of the published Hosting version BEFORE changes.
+          npx firebase-tools hosting:clone "$PROJECT:live" "$PROJECT:$BACKUP_CHANNEL" \
+            --project "$PROJECT" --non-interactive
+          # Deploy the candidate into an isolated preview channel, never live yet.
+          npx firebase-tools hosting:channel:deploy "$PREVIEW_CHANNEL" \
+            --project "$PROJECT" --non-interactive
+          # No live change can occur if the published marker or Rules changed during CI.
+          node scripts/release-signup-production-preflight.cjs --check
+          node scripts/release-signup-production-preflight.cjs --backup-rules
+          # Deploy the exact emulator-tested Rules first; old Rules backup is available.
+          RULES_TOUCHED=1
+          npx firebase-tools deploy --only firestore:rules --project "$PROJECT" --non-interactive
+          RULES_LIVE=0
+          for attempt in 1 2 3 4 5; do
+            if node scripts/release-signup-production-preflight.cjs --after-rules; then
+              RULES_LIVE=1
+              break
+            fi
+            sleep 15
+          done
+          test "$RULES_LIVE" = 1
+          # Reuse exactly the previewed web version instead of uploading an unreviewed build.
+          HOSTING_TOUCHED=1
+          npx firebase-tools hosting:clone "$PROJECT:$PREVIEW_CHANNEL" "$PROJECT:live" \
+            --project "$PROJECT" --non-interactive
+          node scripts/check-live-hosting.cjs
+          node scripts/release-signup-production-preflight.cjs --verify
+          echo "SUCCESS: Reviewed Signup Rules and Hosting live, verified exact SHA"
+          RULES_TOUCHED=0
+          HOSTING_TOUCHED=0
+          trap - EXIT
