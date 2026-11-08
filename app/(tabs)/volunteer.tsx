@@ -1,3 +1,4 @@
+import { volunserveTypography as vsType } from "../../constants/volunserveLiveUi";
 import { liveUi as designUi } from "../../constants/volunserveLiveUi";
 import { Ionicons } from "@expo/vector-icons";
 import { Redirect, useRouter } from "expo-router";
@@ -2109,7 +2110,7 @@ const styles = StyleSheet.create({
   loadingText: {
     marginTop: 10,
     color: "#64748b",
-    fontSize: 13,
+    fontSize: vsType.size.label, fontFamily: vsType.family,
     fontWeight: "700",
   },
 
@@ -2143,8 +2144,8 @@ const styles = StyleSheet.create({
 
   eyebrow: {
     color: "#08765B",
-    fontSize: 9,
-    fontWeight: "900",
+    fontSize: vsType.size.micro, fontFamily: vsType.family,
+    fontWeight: "800",
     letterSpacing: 0.9,
   },
 
@@ -2173,8 +2174,8 @@ const styles = StyleSheet.create({
 
   liveMapButtonText: {
     color: "#ffffff",
-    fontSize: 12,
-    fontWeight: "900",
+    fontSize: vsType.size.meta, fontFamily: vsType.family,
+    fontWeight: "800",
   },
 
   statsRow: {
@@ -2196,8 +2197,8 @@ const styles = StyleSheet.create({
 
   statValue: {
     color: "#123047",
-    fontSize: 22,
-    fontWeight: "900",
+    fontSize: vsType.size.titleSmall, fontFamily: vsType.family,
+    fontWeight: "800",
   },
 
   statLabel: {
@@ -2228,7 +2229,7 @@ const styles = StyleSheet.create({
 
   filterText: {
     color: "#64748b",
-    fontSize: 11,
+    fontSize: vsType.size.caption, fontFamily: vsType.family,
     fontWeight: "800",
   },
 
@@ -2251,7 +2252,7 @@ const styles = StyleSheet.create({
   errorText: {
     flex: 1,
     color: "#b42318",
-    fontSize: 11.5,
+    fontSize: vsType.size.meta, fontFamily: vsType.family,
     fontWeight: "700",
   },
 
@@ -2285,7 +2286,7 @@ const styles = StyleSheet.create({
   imageFallbackText: {
     marginTop: 6,
     color: "#587084",
-    fontSize: 11,
+    fontSize: vsType.size.caption, fontFamily: vsType.family,
     fontWeight: "800",
   },
 
@@ -2320,8 +2321,8 @@ const styles = StyleSheet.create({
 
   priorityText: {
     color: "#ffffff",
-    fontSize: 9,
-    fontWeight: "900",
+    fontSize: vsType.size.micro, fontFamily: vsType.family,
+    fontWeight: "800",
   },
 
   cardBody: {
@@ -2344,7 +2345,7 @@ const styles = StyleSheet.create({
   locationText: {
     marginTop: 4,
     color: "#587084",
-    fontSize: 11,
+    fontSize: vsType.size.caption, fontFamily: vsType.family,
     lineHeight: 16,
     fontWeight: "700",
   },
@@ -2377,14 +2378,14 @@ const styles = StyleSheet.create({
 
   statusText: {
     color: "#31475a",
-    fontSize: 8.5,
-    fontWeight: "900",
+    fontSize: vsType.size.micro, fontFamily: vsType.family,
+    fontWeight: "800",
   },
 
   details: {
     marginTop: 11,
     color: "#64788b",
-    fontSize: 12,
+    fontSize: vsType.size.meta, fontFamily: vsType.family,
     lineHeight: 18,
   },
 
@@ -2411,7 +2412,7 @@ const styles = StyleSheet.create({
   metaValue: {
     marginTop: 4,
     color: "#294256",
-    fontSize: 10.5,
+    fontSize: vsType.size.caption, fontFamily: vsType.family,
     lineHeight: 15,
     fontWeight: "800",
   },
@@ -2435,8 +2436,8 @@ const styles = StyleSheet.create({
 
   primaryButtonText: {
     color: "#ffffff",
-    fontSize: 11,
-    fontWeight: "900",
+    fontSize: vsType.size.caption, fontFamily: vsType.family,
+    fontWeight: "800",
   },
 
   secondaryButton: {
@@ -2454,8 +2455,8 @@ const styles = StyleSheet.create({
 
   secondaryButtonText: {
     color: "#334155",
-    fontSize: 11,
-    fontWeight: "900",
+    fontSize: vsType.size.caption, fontFamily: vsType.family,
+    fontWeight: "800",
   },
 
   responseButton: {
@@ -2493,8 +2494,8 @@ const styles = StyleSheet.create({
 
   actionButtonText: {
     color: "#ffffff",
-    fontSize: 11,
-    fontWeight: "900",
+    fontSize: vsType.size.caption, fontFamily: vsType.family,
+    fontWeight: "800",
   },
 
   mapButton: {
@@ -2512,8 +2513,8 @@ const styles = StyleSheet.create({
 
   mapButtonText: {
     color: "#2563eb",
-    fontSize: 11,
-    fontWeight: "900",
+    fontSize: vsType.size.caption, fontFamily: vsType.family,
+    fontWeight: "800",
   },
 
   completedBox: {
@@ -2531,8 +2532,8 @@ const styles = StyleSheet.create({
   completedText: {
     flex: 1,
     color: "#16845b",
-    fontSize: 11,
-    fontWeight: "900",
+    fontSize: vsType.size.caption, fontFamily: vsType.family,
+    fontWeight: "800",
     textAlign: "center",
   },
 
@@ -2547,8 +2548,8 @@ const styles = StyleSheet.create({
 
   inactiveText: {
     color: "#64748b",
-    fontSize: 11,
-    fontWeight: "900",
+    fontSize: vsType.size.caption, fontFamily: vsType.family,
+    fontWeight: "800",
   },
 
   completionPanel: {
@@ -2569,7 +2570,7 @@ const styles = StyleSheet.create({
     marginTop: 3,
     marginBottom: 7,
     color: "#64748b",
-    fontSize: 10.5,
+    fontSize: vsType.size.caption, fontFamily: vsType.family,
     lineHeight: 15,
   },
 
@@ -2602,7 +2603,7 @@ const styles = StyleSheet.create({
 
   typeButtonText: {
     color: "#64748b",
-    fontSize: 9.5,
+    fontSize: vsType.size.micro, fontFamily: vsType.family,
     fontWeight: "800",
   },
 
@@ -2652,8 +2653,8 @@ const styles = StyleSheet.create({
 
   followUpButtonText: {
     color: "#475569",
-    fontSize: 9.5,
-    fontWeight: "900",
+    fontSize: vsType.size.micro, fontFamily: vsType.family,
+    fontWeight: "800",
     textAlign: "center",
   },
 
@@ -2670,7 +2671,7 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     backgroundColor: "#ffffff",
     color: "#183448",
-    fontSize: 12,
+    fontSize: vsType.size.meta, fontFamily: vsType.family,
   },
 
   multilineInput: {
@@ -2696,7 +2697,7 @@ const styles = StyleSheet.create({
   trustNoticeText: {
     flex: 1,
     color: "#527267",
-    fontSize: 10,
+    fontSize: vsType.size.micro, fontFamily: vsType.family,
     lineHeight: 15,
     fontWeight: "600",
   },
