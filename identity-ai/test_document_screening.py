@@ -98,9 +98,52 @@ class GovernmentIdScreeningTests(unittest.TestCase):
         self.assertEqual(actual["status"], "text_consistent_unverified")
 
     def test_umid(self):
-        actual = assess_document_text("other_government_id", "UNIFIED MULTI-PURPOSE ID")
+        actual = assess_document_text("umid", "UNIFIED MULTI-PURPOSE ID")
         self.assertEqual(actual["status"], "text_consistent_unverified")
-        self.assertEqual(actual["detectedIdType"], "other_government_id")
+        self.assertEqual(actual["detectedIdType"], "umid")
+
+    def test_school_id_is_unsupported_for_every_selected_id(self):
+        for id_type in ("national_id", "drivers_license", "passport", "umid"):
+            with self.subTest(id_type=id_type):
+                result = assess_document_text(
+                    id_type, "UNIVERSITY STUDENT ID NAME SAMPLE DOB 2001"
+                )
+                self.assertEqual(result["status"], "unsupported")
+                self.assertIn("school_id_not_supported", result["warningCodes"])
+                self.assertFalse(result["authenticityVerified"])
+
+    def test_school_id_with_government_keywords_still_fails(self):
+        result = assess_document_text(
+            "national_id",
+            "STUDENT IDENTIFICATION CARD / NATIONAL ID CARD SAMPLE",
+        )
+        self.assertEqual(result["status"], "unsupported")
+
+    def test_unselected_real_government_id_cannot_be_accepted(self):
+        result = assess_document_text(
+            "national_id", "DRIVER S LICENSE LAND TRANSPORTATION OFFICE"
+        )
+        self.assertEqual(result["status"], "mismatch")
+
+    def test_only_specifically_supported_id_types_allowed(self):
+        for unknown in ("other_government_id", "school_id", "prc_id"):
+            with self.subTest(unknown=unknown):
+                with self.assertRaises(ValueError):
+                    assess_document_text(unknown, "NATIONAL ID CARD")
+
+    def test_school_id_on_back_forces_unsupported(self):
+        result = assess_document_sides(
+            "national_id",
+            "PHILIPPINE IDENTIFICATION CARD",
+            "SCHOOL ID UNIVERSITY",
+        )
+        self.assertEqual(result["status"], "unsupported")
+        self.assertIn("school_id_not_supported", result["warningCodes"])
+
+    def test_ocr_unrecognized_government_id_requires_retry_or_review(self):
+        result = assess_document_text("national_id", "CARD WITH PORTRAIT AND TEXT")
+        self.assertEqual(result["status"], "inconclusive")
+        self.assertNotEqual(result["status"], "text_consistent_unverified")
 
     def test_declared_type_mismatch(self):
         actual = assess_document_text("passport", "LAND TRANSPORTATION OFFICE DRIVER'S LICENSE")
