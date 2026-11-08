@@ -9,6 +9,7 @@ import React, { useState } from "react";
 import { ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { SJDM_BARANGAYS } from "../constants/sjdmBarangays";
 import { firebaseConfig } from "../lib/firebase";
+import {getRegistrationEmailError} from "../lib/registrationEmailPolicy";
 
 /** Applicant registration creates NO Admin permissions. Only Super Admin can verify and grant Admin role. */
 export default function LguStaffApplication() {
@@ -25,6 +26,11 @@ export default function LguStaffApplication() {
     const fullName=form.fullName.trim().replace(/\s+/g," ");
     const email=form.email.trim().toLowerCase();
     const office=form.lguOffice.trim(),position=form.lguPosition.trim(),reference=form.appointmentReference.trim();
+    const emailPolicyError = getRegistrationEmailError(email);
+    if (emailPolicyError) {
+      setError(emailPolicyError);
+      return;
+    }
     if(fullName.length<5||fullName.length>160||!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)||
       office.length<3||office.length>160||position.length<3||position.length>120||
       reference.length<5||reference.length>160||form.password.length<12||
