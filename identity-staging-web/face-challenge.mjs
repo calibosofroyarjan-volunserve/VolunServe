@@ -41,7 +41,7 @@ export function advanceChallenge(state,signals,now=Date.now()){
  const active=type==="blink"?signals.blink:type==="smile"?signals.smile:signals.openMouth;
  if(current.phase==="waiting_for_action"){
    current.holding=active?current.holding+1:0;
-   if(current.holding>=2){current.phase="waiting_for_release";current.holding=0}
+   if(current.holding>=(type==="blink"?1:2)){current.phase="waiting_for_release";current.holding=0}
  }else if(current.phase==="waiting_for_release"){
    current.holding=!active?current.holding+1:0;
    if(current.holding>=2){
