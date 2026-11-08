@@ -58,13 +58,13 @@ service cloud.firestore {
     function hasResidentAccess() {
       let p = signedIn() ? profile() : {};
       return approved()
-        && !(p.role in ['admin', 'superadmin', 'lgu_personnel', 'applicant'])
+        && p.role in ['resident', 'volunteer']
         && p.get('residentAccess', false) == true;
     }
     function hasVolunteerAccess() {
       let p = signedIn() ? profile() : {};
       return approved()
-        && !(p.role in ['admin', 'superadmin', 'lgu_personnel', 'applicant'])
+        && p.role in ['resident', 'volunteer']
         && p.get('volunteerAccess', false) == true
         && p.get('volunteerStatus', '') == 'approved';
     }
@@ -1733,20 +1733,7 @@ service cloud.firestore {
           rd.beneficiaryType != 'self'
           || rd.relationshipToBeneficiary == 'self'
         )
-        && rd.requestGroup in [
-          'disaster_recovery',
-          'community_need'
-        ]
-        && rd.category in [
-          'disaster_recovery',
-          'medical_health',
-          'surgery_treatment',
-          'cancer_serious_illness',
-          'animal_pet_welfare',
-          'elderly_assistance',
-          'homeless_basic_needs',
-          'other_community_assistance'
-        ]
+        // Both enums are enforced by the category-pair validator below.
         && validAssistanceCategoryPair()
         && rd.categoryLabel is string
         && rd.categoryLabel.size() >= 2
@@ -2025,28 +2012,6 @@ service cloud.firestore {
             'rejectionReason',
             'updatedAt'
           ])
-        && rd.requestId == resource.data.requestId
-        && rd.requesterUid == resource.data.requesterUid
-        && rd.requesterName == resource.data.requesterName
-        && rd.requesterEmail == resource.data.requesterEmail
-        && rd.requesterBarangay == resource.data.requesterBarangay
-        && rd.requesterAddress == resource.data.requesterAddress
-        && rd.contactNumber == resource.data.contactNumber
-        && rd.beneficiaryType == resource.data.beneficiaryType
-        && rd.beneficiaryName == resource.data.beneficiaryName
-        && rd.relationshipToBeneficiary
-          == resource.data.relationshipToBeneficiary
-        && rd.requestGroup == resource.data.requestGroup
-        && rd.category == resource.data.category
-        && rd.categoryLabel == resource.data.categoryLabel
-        && rd.title == resource.data.title
-        && rd.description == resource.data.description
-        && rd.estimatedAmount == resource.data.estimatedAmount
-        && rd.currentSituation == resource.data.currentSituation
-        && rd.preferredAssistanceTypes
-          == resource.data.preferredAssistanceTypes
-        && rd.documents == resource.data.documents
-        && rd.createdAt == resource.data.createdAt
         && rd.status in [
           'pending',
           'under_review',
@@ -2854,26 +2819,6 @@ service cloud.firestore {
         && validInventoryReservation();
       allow update: if isAdmin()
         && validAllocationPayload()
-        && request.resource.data.allocationId
-          == resource.data.allocationId
-        && request.resource.data.barangay
-          == resource.data.barangay
-        && request.resource.data.needAssessmentIds
-          == resource.data.needAssessmentIds
-        && request.resource.data.inventoryItemId
-          == resource.data.inventoryItemId
-        && request.resource.data.category
-          == resource.data.category
-        && request.resource.data.itemName
-          == resource.data.itemName
-        && request.resource.data.unit
-          == resource.data.unit
-        && request.resource.data.quantityAllocated
-          == resource.data.quantityAllocated
-        && request.resource.data.createdBy
-          == resource.data.createdBy
-        && request.resource.data.createdAt
-          == resource.data.createdAt
         && request.resource.data.updatedBy
           == request.auth.uid
         && request.resource.data
