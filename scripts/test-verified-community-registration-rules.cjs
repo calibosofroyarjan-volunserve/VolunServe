@@ -59,6 +59,15 @@ async function main() {
 
     await assertFails(setDoc(doc(as("new-resident","real@gmail.com",false),"users","new-resident"),validProfile));
     await assertFails(setDoc(doc(as("new-resident","other@gmail.com",true),"users","new-resident"),validProfile));
+    // Firebase Auth can create an unverified UID even when front-end screening
+    // is bypassed; verified disposable mailboxes must NOT create Resident data.
+    for (const domain of ["en2ch.co","en2ch.com","sub.en2ch.co"]) {
+      const uid = "blocked-disposable-" + domain.replace(/[^a-z0-9]/g,"-");
+      const email = "person@" + domain;
+      await assertFails(setDoc(doc(as(uid,email,true),"users",uid),{
+        ...validProfile,uid,email,
+      }));
+    }
     // Every invalid registration has its own UID to test CREATE permission
     // (rather than accidentally testing UPDATE on an existing profile).
     let n = 0;

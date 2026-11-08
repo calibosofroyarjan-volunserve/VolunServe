@@ -10,7 +10,7 @@
 import { GENERATED_DISPOSABLE_EMAIL_DOMAINS } from "./disposableEmailDomains.generated";
 
 export const KNOWN_DISPOSABLE_EMAIL_DOMAINS = new Set([
-  "en2ch.com", "mailinator.com", "yopmail.com", "guerrillamail.com", "guerrillamailblock.com",
+  "en2ch.com", "en2ch.co", "mailinator.com", "yopmail.com", "guerrillamail.com", "guerrillamailblock.com",
   "sharklasers.com", "10minutemail.com", "temp-mail.org", "tempmail.com",
   "tempmail.net", "trashmail.com", "dispostable.com", "getnada.com",
   "maildrop.cc", "minuteinbox.com", "mohmal.com", "emailondeck.com",

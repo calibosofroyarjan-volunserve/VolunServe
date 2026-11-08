@@ -244,10 +244,16 @@ function hoistReviewedIdenticalHelpers(input){
   shared+insert);
 }
 const reviewedHoisted=hoistReviewedIdenticalHelpers(branchExpected);
-assert.equal(current,reviewedHoisted,
+// One exact addition to the public Resident signup guard. All staff,
+// assistance, events, donation and other permission expressions stay identical.
+const historicalEmailGuard='!request.resource.data.email.matches(".*@en2ch[.]com")';
+const reviewedEmailGuard='!request.resource.data.email.matches(".*@([a-z0-9-]+[.])*en2ch[.](com|co)")';
+assert.equal(reviewedHoisted.split(historicalEmailGuard).length,2,
+ "BLOCKED: historical disposable-email guard moved");
+assert.equal(current,reviewedHoisted.replace(historicalEmailGuard,reviewedEmailGuard),
  "BLOCKED: other Firestore permissions, validation branches or collection paths changed");
 assert.equal(cp.execFileSync("git",["hash-object","firestore.rules"],{encoding:"utf8"}).trim(),
-"65f1b75ae301776c7f0cf953cfd6ee7aae3fd820","BLOCKED: unreviewed Firestore Rules blob");
+"6f65f4d54624020138111c6358d031100d06ec26","BLOCKED: unreviewed Firestore Rules blob");
 // Verify exhaustiveness of all optional-review branches over valid and
 // invalid types, status values and three-valued nulls before Firebase emulator.
 for(const required of [true,false,null,"true",0,1,undefined]){
@@ -265,7 +271,7 @@ for(const required of [true,false,null,"true",0,1,undefined]){
 }
 
 const gitBlob=cp.execFileSync("git",["hash-object","firestore.rules"],{encoding:"utf8"}).trim();
-assert.equal(gitBlob,"65f1b75ae301776c7f0cf953cfd6ee7aae3fd820","BLOCKED: unapproved Firestore blob");
+assert.equal(gitBlob,"6f65f4d54624020138111c6358d031100d06ec26","BLOCKED: unapproved Firestore blob");
 const paths=source=>source.split("\n").filter(l=>l.startsWith("    match /")).map(l=>l.slice("    match /".length).split(" ")[0]);
 assert.deepEqual(paths(current),paths(protectedBaseline),"BLOCKED: collection scope changed");
 const allows=source=>[...source.matchAll(/allow (?:get|list|read|write|create|update|delete)/g)].length;

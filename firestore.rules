@@ -163,7 +163,7 @@ service cloud.firestore {
         && request.auth.token.get("email_verified", false) == true
         && request.auth.token.get("email", "") == request.resource.data.email
         && validInitialResidentInputs()
-        && !request.resource.data.email.matches(".*@en2ch[.]com")
+        && !request.resource.data.email.matches(".*@([a-z0-9-]+[.])*en2ch[.](com|co)")
         && request.resource.data.keys().hasAll([
           "uid", "email", "fullName", "firstName", "lastName",
           "age", "phoneNumber", "barangay", "occupationCategory"
