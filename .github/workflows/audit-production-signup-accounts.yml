@@ -26,9 +26,12 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - name: Check read-only audit syntax and synthetic compatibility matrix
+      - name: Install Functions SDK and verify package exports before touching production
+        run: npm ci --prefix functions --no-audit --no-fund
+      - name: Check audit syntax, SDK resolution and synthetic compatibility matrix
         run: |
           node --check scripts/audit-production-signup-accounts.cjs
+          node scripts/audit-production-signup-accounts.cjs --sdk-check
           node scripts/audit-production-signup-accounts.cjs --self-test
   production-readonly-audit:
     if: github.event_name != 'pull_request' && github.repository == 'calibosofroyarjan-volunserve/VolunServe' && github.ref == 'refs/heads/live-protected'
