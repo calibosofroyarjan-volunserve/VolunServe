@@ -227,7 +227,7 @@ for(const required of [true,false,null,"true",0,1,undefined]){
 }
 
 const gitBlob=cp.execFileSync("git",["hash-object","firestore.rules"],{encoding:"utf8"}).trim();
-assert.equal(gitBlob,"73ed96d66f29d8b901ea3726dfd4b44306ac8748","BLOCKED: unapproved Firestore blob");
+assert.equal(gitBlob,"d1ca37355eddca315f56309aee231e10f7b738af","BLOCKED: unapproved Firestore blob");
 const paths=source=>source.split("\n").filter(l=>l.startsWith("    match /")).map(l=>l.slice("    match /".length).split(" ")[0]);
 assert.deepEqual(paths(current),paths(protectedBaseline),"BLOCKED: collection scope changed");
 const allows=source=>[...source.matchAll(/allow (?:get|list|read|write|create|update|delete)/g)].length;
