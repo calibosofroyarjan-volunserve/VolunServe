@@ -15,7 +15,7 @@ const crypto=require("node:crypto");
 const {createRequire}=require("node:module");
 const path=require("node:path");
 const reqFns=createRequire(path.resolve(__dirname,"../functions/package.json"));
-const {initializeApp,applicationDefault}=reqFns("firebase-admin/app");
+const {initializeApp,applicationDefault,cert}=reqFns("firebase-admin/app");
 const {getAuth}=reqFns("firebase-admin/auth");
 const {getFirestore,FieldValue}=reqFns("firebase-admin/firestore");
 const PROJECT="volunserve-3aa5b";
@@ -89,7 +89,16 @@ async function run(){
   assert.equal(live.firebaseProject,PROJECT);
   assert.match(live.revision||"",/^[a-f0-9]{40}$/);
 
-  const app=initializeApp({credential:applicationDefault(),projectId:PROJECT});
+  const auditJson=process.env.VOLUNSERVE_PRODUCTION_AUDIT_CREDENTIAL;
+  if(apply)assert(!auditJson,
+    "BLOCKED: GitHub read-only audit credentials cannot be used for cleanup");
+  let cloudCredential=applicationDefault();
+  if(auditJson){
+    const parsed=JSON.parse(auditJson);
+    assert.equal(parsed.project_id,PROJECT,"BLOCKED: wrong production audit project");
+    cloudCredential=cert(parsed);
+  }
+  const app=initializeApp({credential:cloudCredential,projectId:PROJECT});
   const auth=getAuth(app),db=getFirestore(app);
   const authUsers=[];let token;
   do {
