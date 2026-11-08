@@ -6,6 +6,11 @@ on:
     paths:
       - scripts/archive-orphan-firestore-user-profiles.cjs
       - .github/workflows/check-orphan-user-profile-cleanup.yml
+  push:
+    branches: [live-protected]
+    paths:
+      - scripts/archive-orphan-firestore-user-profiles.cjs
+      - .github/workflows/check-orphan-user-profile-cleanup.yml
 permissions:
   contents: read
 jobs:
@@ -24,3 +29,29 @@ jobs:
         run: |
           node --check scripts/archive-orphan-firestore-user-profiles.cjs
           node scripts/archive-orphan-firestore-user-profiles.cjs --self-test
+  read-only-production-cleanup-plan:
+    if: github.event_name == 'push' && github.repository == 'calibosofroyarjan-volunserve/VolunServe' && github.ref == 'refs/heads/live-protected'
+    needs: check-cleanup
+    environment: production
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          submodules: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: functions/package-lock.json
+      - name: Verify exact protected SHA
+        run: |
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(git ls-remote --heads origin live-protected | cut -f1)" = "$GITHUB_SHA"
+      - run: npm ci --prefix functions --no-audit --no-fund
+      - name: Read-only account and dependency cleanup plan — NEVER APPLY
+        env:
+          VOLUNSERVE_PRODUCTION_AUDIT_CREDENTIAL: ${{ secrets.VOLUNSERVE_PRODUCTION_READONLY_SERVICE_ACCOUNT }}
+        run: node scripts/archive-orphan-firestore-user-profiles.cjs --plan
