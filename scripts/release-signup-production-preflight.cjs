@@ -83,6 +83,37 @@ async function patchExistingRelease(token,rulesetName) {
  assert.equal(result.name,releaseName,"BLOCKED: Firebase Rules PATCH returned wrong release");
  assert.equal(result.rulesetName,rulesetName,"BLOCKED: PATCH did not select expected ruleset");
 }
+const HOSTING_SITE="volunserve-3aa5b";
+const EXISTING_BACKUP_CHANNEL="signup-predeploy-backup-20261109";
+const EXISTING_PREVIEW_CHANNEL="signup-reviewed-preview-20261109";
+async function verifyExistingChannels(token) {
+ const base="https://firebasehosting.googleapis.com/v1beta1/sites/"+HOSTING_SITE+"/channels/";
+ const [live,backup,preview]=await Promise.all([
+  get(base+"live",token),
+  get(base+EXISTING_BACKUP_CHANNEL,token),
+  get(base+EXISTING_PREVIEW_CHANNEL,token)
+ ]);
+ const version=channel=>channel?.release?.version?.name;
+ assert(version(live)&&version(backup)&&version(preview),
+  "BLOCKED: one Hosting channel has no active release");
+ assert.equal(version(backup),version(live),
+  "BLOCKED: previously created backup is not the actual current live Hosting version");
+ assert.notEqual(version(preview),version(live),
+  "BLOCKED: preview channel does not contain a separate reviewed Signup version");
+ for(const [channel,label,shaValue] of [
+  [backup,"backup",EXPECTED_SITE],
+  [preview,"preview",APPROVED_SOURCE]
+ ]) {
+  assert(/^https:\/\/volunserve-3aa5b--[a-z0-9-]+\.web\.app\/?$/.test(channel.url||""),
+    "BLOCKED: invalid preview Hosting origin for "+label);
+  const marker=await get(new URL("/volunserve-release.json",channel.url).href);
+  assert.equal(marker.app,"VolunServe");
+  assert.equal(marker.firebaseProject,PROJECT);
+  assert.equal(marker.revision,shaValue,
+    "BLOCKED: "+label+" Hosting version fingerprint does not match approved source");
+ }
+ console.log("PASS: existing backup channel matches LIVE Hosting version; preview channel serves immutable approved Signup SHA");
+}
 async function selfPermissions(token){
  const perms=[
   "firebaserules.rulesets.create",
@@ -106,7 +137,7 @@ async function selfPermissions(token){
 }
 async function main() {
  const mode=process.argv[2]||"--check";
- assert(["--self-test","--check","--backup-rules","--publish-rules","--restore-rules","--after-rules","--verify"].includes(mode),"Unknown mode");
+ assert(["--self-test","--check","--check-channels","--backup-rules","--publish-rules","--restore-rules","--after-rules","--verify"].includes(mode),"Unknown mode");
  if(mode==="--self-test"){
   const name="projects/volunserve-3aa5b/rulesets/example_123";
   assert.deepEqual(releasePatchPayload(name),{
@@ -148,6 +179,10 @@ async function main() {
    "BLOCKED: live Firestore Rules changed — do not overwrite");
   await selfPermissions(token);
   console.log("PASS: production source, IAM and current live Rules/Hosting baselines");
+ } else if(mode==="--check-channels"){
+  assert.equal(state.marker.revision,EXPECTED_SITE,"BLOCKED: live Hosting baseline moved");
+  assert.equal(state.rulesHash,EXPECTED_RULES_HASH,"BLOCKED: live Rules baseline moved");
+  await verifyExistingChannels(token);
  } else if(mode==="--backup-rules"){
   assert.equal(state.marker.revision,EXPECTED_SITE,"BLOCKED: website changed before Rules backup");
   assert.equal(state.rulesHash,EXPECTED_RULES_HASH,"BLOCKED: Rules changed before backup");

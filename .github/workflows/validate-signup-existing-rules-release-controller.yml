@@ -24,6 +24,9 @@ jobs:
         run: |
           node --check scripts/release-signup-production-preflight.cjs
           node scripts/release-signup-production-preflight.cjs --self-test
+      - name: Assert existing preview and backup are checked before any live Rules update
+        run: |
+          node -e 'const fs=require("fs");const s=fs.readFileSync(".github/workflows/release-reviewed-site-derived-signup-20261109.yml","utf8");if(!s.includes("--check-channels")||s.includes("firebase-tools hosting:channel:deploy")||s.includes("hosting:clone \"$PROJECT:live\" \"$PROJECT:$BACKUP_CHANNEL\""))process.exit(1);console.log("PASS: verified reuse of existing immutable Hosting backup and reviewed preview")'
       - name: Assert production workflow has required direct PATCH and original release restoration
         run: |
           node -e 'const fs=require("fs");const s=fs.readFileSync(".github/workflows/release-reviewed-site-derived-signup-20261109.yml","utf8"); if(!s.includes("scripts/release-signup-production-preflight.cjs --publish-rules")||!s.includes("scripts/release-signup-production-preflight.cjs --restore-rules")||s.includes("firebase-tools deploy --only firestore:rules")||!s.includes("environment: production"))process.exit(1); console.log("PASS: publish/restoration use explicit protected API mode, never fallback CLI create")'
