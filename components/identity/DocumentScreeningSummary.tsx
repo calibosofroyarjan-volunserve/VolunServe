@@ -7,7 +7,7 @@ const NAMES: Record<string, string> = {
   national_id: "Philippine National ID",
   drivers_license: "Driver's License",
   passport: "Philippine Passport",
-  other_government_id: "Other Government ID",
+  umid: "Unified Multi-Purpose ID (UMID)",
 };
 
 /** Shared, privacy-safe document-type assessment for Residents and LGU. */
