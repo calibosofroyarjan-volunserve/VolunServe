@@ -23,8 +23,8 @@ jobs:
       EXPO_NO_TELEMETRY: '1'
       PROJECT: volunserve-3aa5b
       CANDIDATE_SHA: 7d14e438b34501ecfd872f1eb4244b5c225c779f
-      BACKUP_CHANNEL: signup-predeploy-backup-20261109
-      PREVIEW_CHANNEL: signup-reviewed-preview-20261109
+      BACKUP_CHANNEL: signup-predeploy-backup-20261109b
+      PREVIEW_CHANNEL: signup-reviewed-preview-20261109b
     steps:
       - name: Checkout current protected production controller
         uses: actions/checkout@v4
@@ -102,15 +102,20 @@ jobs:
             trap - EXIT
             if [ "$status" -ne 0 ]; then
               echo "::error::Signup release did not complete — attempting Rules/Hosting rollback"
+              HOSTING_ROLLBACK_OK=1
               if [ "$HOSTING_TOUCHED" = "1" ]; then
-                npx firebase-tools hosting:clone "$PROJECT:$BACKUP_CHANNEL" "$PROJECT:live" \
-                  --project "$PROJECT" --non-interactive || echo "::error::Hosting rollback requires operator attention"
+                if ! npx firebase-tools hosting:clone "$PROJECT:$BACKUP_CHANNEL" "$PROJECT:live" \
+                  --project "$PROJECT" --non-interactive; then
+                  HOSTING_ROLLBACK_OK=0
+                  echo "::error::Hosting rollback requires operator attention — do not automatically change Rules under an uncertain live site"
+                fi
               fi
-              if [ "$RULES_TOUCHED" = "1" ] && [ -f "$ORIGINAL_RULES_PATH" ]; then
-                cp "$ORIGINAL_RULES_PATH" firestore.rules
-                npx firebase-tools deploy --only firestore:rules --project "$PROJECT" \
-                  --non-interactive || echo "::error::Firestore Rules rollback requires operator attention"
+              if [ "$RULES_TOUCHED" = "1" ] && [ "$HOSTING_ROLLBACK_OK" = "1" ] && [ -f "$ORIGINAL_RULES_PATH.metadata.json" ]; then
+                node scripts/release-signup-production-preflight.cjs --restore-rules \
+                  || echo "::error::Existing Rules release could not be restored; inspect live Rules before another deploy"
               fi
+              node scripts/release-signup-production-preflight.cjs --check \
+                || echo "::error::Current production Rules and Hosting baseline need verification before next action"
             fi
             exit "$status"
           }
@@ -126,7 +131,9 @@ jobs:
           node scripts/release-signup-production-preflight.cjs --backup-rules
           # Deploy the exact emulator-tested Rules first; old Rules backup is available.
           RULES_TOUCHED=1
-          npx firebase-tools deploy --only firestore:rules --project "$PROJECT" --non-interactive
+          # The CLI's updateOrCreateRelease can fall back to POST and return 409
+          # for the *existing* cloud.firestore release. Do an exact PATCH instead.
+          node scripts/release-signup-production-preflight.cjs --publish-rules
           RULES_LIVE=0
           for attempt in 1 2 3 4 5; do
             if node scripts/release-signup-production-preflight.cjs --after-rules; then
