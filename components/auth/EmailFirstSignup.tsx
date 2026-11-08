@@ -327,6 +327,21 @@ export default function EmailFirstSignup() {
         lastUid.current = user?.uid ?? null;
       }
       setCompletedProfile(false);
+      // A pending UID created before a disposable domain was classified
+      // must not keep showing Step 2 or resume a Resident registration.
+      const blockedEmail = user ? getRegistrationEmailError(user.email || "") : null;
+      if (blockedEmail && user) {
+        setSignedInUser(null);
+        setStep(1);
+        setError(blockedEmail);
+        setChecking(false);
+        if (auth.currentUser?.uid === user.uid) {
+          void signOut(auth).catch(() => {
+            // Keep the wizard blocked even if network sign-out fails.
+          });
+        }
+        return;
+      }
       setSignedInUser(user);
       if (!user) { setStep(1); setChecking(false); return; }
       try {
