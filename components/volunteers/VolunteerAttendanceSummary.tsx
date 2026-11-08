@@ -1,3 +1,4 @@
+import { volunserveTypography as vsType } from "../../constants/volunserveLiveUi";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import React, { useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
@@ -107,16 +108,16 @@ export default function VolunteerAttendanceSummary({ uid }: { uid: string }) {
 const s = StyleSheet.create({
   panel: { backgroundColor:"#FFFFFF", borderWidth:1, borderColor:"#D7EAE2", borderRadius:15, padding:17, gap:14 },
   heading: { flexDirection:"row", alignItems:"center", gap:10 },
-  headingCopy: { flex:1, gap:3 }, title:{fontSize:16, fontWeight:"800", color:"#173B43"},
-  sub:{fontSize:11, color:"#617983", lineHeight:17},
+  headingCopy: { flex:1, gap:3 }, title:{fontSize: vsType.size.card, fontFamily: vsType.family, fontWeight:"800", color:"#173B43"},
+  sub:{fontSize: vsType.size.caption, fontFamily: vsType.family, color:"#617983", lineHeight:17},
   stats:{flexDirection:"row",flexWrap:"wrap",gap:10},
   stat:{minWidth:110,flexGrow:1,flexBasis:110,backgroundColor:"#F1F9F5",padding:12,borderRadius:10},
-  number:{fontSize:21,fontWeight:"800",color:"#096E5C"},
-  caption:{fontSize:11,color:"#607B82",marginTop:4},
+  number:{fontSize: vsType.size.titleSmall, fontFamily: vsType.family,fontWeight:"800",color:"#096E5C"},
+  caption:{fontSize: vsType.size.caption, fontFamily: vsType.family,color:"#607B82",marginTop:4},
   entry:{flexDirection:"row",alignItems:"center",justifyContent:"space-between",gap:9,paddingTop:10,borderTopWidth:1,borderTopColor:"#EEF3F0"},
-  entryLeft:{flex:1},entryName:{fontSize:12,fontWeight:"700",color:"#25434B"},
-  entryHours:{fontWeight:"800",fontSize:12,color:"#0C7760"},
-  foot:{fontSize:10,color:"#6D8387",lineHeight:16},
-  empty:{fontSize:12,color:"#68818A"},
-  error:{fontSize:12,color:"#A62E2E"}
+  entryLeft:{flex:1},entryName:{fontSize: vsType.size.meta, fontFamily: vsType.family,fontWeight:"700",color:"#25434B"},
+  entryHours:{fontWeight:"800",fontSize: vsType.size.meta, fontFamily: vsType.family,color:"#0C7760"},
+  foot:{fontSize: vsType.size.micro, fontFamily: vsType.family,color:"#6D8387",lineHeight:16},
+  empty:{fontSize: vsType.size.meta, fontFamily: vsType.family,color:"#68818A"},
+  error:{fontSize: vsType.size.meta, fontFamily: vsType.family,color:"#A62E2E"}
 });
