@@ -50,6 +50,23 @@ function candidatesForCleanup(authIds,firestoreIds,referenced,withSubcollections
   return [...new Set(firestoreIds)].filter(id=>
     !auth.has(id)&&!referenced.has(id)&&!withSubcollections.has(id)).sort();
 }
+// Bind operator approval to the actual candidate identities and their stored
+// document versions, NOT the number of unrelated records in the database.
+// A new log/event can increment scannedOtherRecords without changing what we
+// are proposing to delete; its count must stay a read-only diagnostic.
+function computeReviewHash({revision,authIds,candidates,orphanIds,referencedIds,candidateVersions}){
+  const sortedValues=x=>[...x].sort();
+  const versions=[...candidateVersions].sort((a,b)=>a[0].localeCompare(b[0]));
+  return crypto.createHash("sha256").update(JSON.stringify({
+    project:PROJECT,
+    revision,
+    auth:sortedValues(authIds),
+    candidates:sortedValues(candidates),
+    orphan:sortedValues(orphanIds),
+    referenced:sortedValues(referencedIds),
+    candidateVersions:versions,
+  })).digest("hex");
+}
 function selfTest(){
   const refs=new Set(), orphan=new Set(["old01","old02","old03"]);
   findUidReferences({createdBy:"old01",records:[{ref:"users/old02"}]},orphan,refs);
@@ -57,7 +74,21 @@ function selfTest(){
   assert.deepEqual(candidatesForCleanup(["a","b","c"],["a","b","c","old01","old02","old03"],
     refs,new Set()),["old03"]);
   assert.deepEqual(candidatesForCleanup(["a"],["a"],new Set(),new Set()),[]);
-  console.log("PASS: protected account exclusion, deep cross-collection UID checks, safe candidate selection");
+  const proof={
+    revision:"a".repeat(40),authIds:["active1","active2","active3"],
+    candidates:["old01"],orphanIds:["old01","old02"],referencedIds:["old02"],
+    candidateVersions:[["old01",1731000000,123456789]],
+  };
+  const hash=computeReviewHash(proof);
+  assert.equal(hash,computeReviewHash({...proof,scannedOtherRecords:628}),
+    "Unrelated Firestore document growth must NOT invalidate a reviewed candidate set");
+  assert.notEqual(hash,computeReviewHash({...proof,candidateVersions:[["old01",1731000001,123456789]]}),
+    "Changed candidate document version must invalidate the review hash");
+  assert.notEqual(hash,computeReviewHash({...proof,referencedIds:["old01","old02"]}),
+    "Changed cross-collection references must invalidate the review hash");
+  assert.notEqual(hash,computeReviewHash({...proof,candidates:["old01","old02"]}),
+    "Changed cleanup candidates must invalidate the review hash");
+  console.log("PASS: protected UIDs, reference scan, stable unrelated-record growth, and candidate-version hash");
 }
 function option(key){
   const a=process.argv.find(v=>v.startsWith("--"+key+"="));
@@ -151,14 +182,20 @@ async function run(){
   }
   const candidates=candidatesForCleanup(activeIds,
     users.docs.map(d=>d.id),referenced,subcollections);
-  const hash=crypto.createHash("sha256").update(JSON.stringify({
-    project:PROJECT,revision:live.revision,
-    auth:[...activeIds].sort(),
+  const candidateVersions=candidates.map(id=>{
+    const document=orphan.find(d=>d.id===id);
+    assert(document && document.updateTime,
+      "BLOCKED: cleanup candidate missing an original Firestore document version");
+    return [id,document.updateTime.seconds,document.updateTime.nanoseconds];
+  });
+  const hash=computeReviewHash({
+    revision:live.revision,
+    authIds:activeIds,
     candidates,
-    orphan:[...orphanIds].sort(),
-    referenced:[...referenced].sort(),
-    scanned,
-  })).digest("hex");
+    orphanIds,
+    referencedIds:referenced,
+    candidateVersions,
+  });
   console.log(JSON.stringify({
     project:PROJECT,mode:apply?"REVIEWED_ARCHIVE_AND_DELETE":"READ_ONLY_PLAN",
     activeAuthProfiles:activeIds.size,
@@ -172,7 +209,7 @@ async function run(){
     note:"No active user, other collection, event, donation or certificate will be deleted",
   },null,2));
   if(!apply){
-    console.log("READ ONLY PLAN: no Firestore or Auth records changed.");
+    console.log("READ ONLY PLAN: no Firestore or Auth records changed. Changes to unrelated scanned records do not alter the approval hash.");
     console.log("To apply, use --apply --count="+candidates.length+
       " --hash="+hash+" --confirm=ARCHIVE_ORPHAN_USER_PROFILES");
     return;
@@ -216,4 +253,4 @@ if(require.main===module){
   (process.argv.includes("--self-test")?Promise.resolve().then(selfTest):run())
     .catch(e=>{console.error(e.message);process.exitCode=1;});
 }
-module.exports={findUidReferences,candidatesForCleanup};
+module.exports={findUidReferences,candidatesForCleanup,computeReviewHash};
