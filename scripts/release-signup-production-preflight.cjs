@@ -67,11 +67,19 @@ async function rulesWrite(method,path,token,body) {
  }
  return data;
 }
-async function patchExistingRelease(token,rulesetName) {
+function releasePatchPayload(rulesetName) {
  assert.match(rulesetName,/^projects\/volunserve-3aa5b\/rulesets\/[A-Za-z0-9_-]+$/);
- const result=await rulesWrite("PATCH",releaseName+"?updateMask=rulesetName",token,{
-  release:{name:releaseName,rulesetName},updateMask:"rulesetName"
- });
+ return {release:{name:releaseName,rulesetName},updateMask:"rulesetName"};
+}
+function rulesetCreatePayload(rulesSource) {
+ assert(typeof rulesSource==="string" && rulesSource.startsWith("rules_version"),
+  "BLOCKED: candidate Firestore policy missing v2 header");
+ assert(Buffer.byteLength(rulesSource,"utf8")<256*1024,
+  "BLOCKED: candidate Rules exceed Firebase Ruleset size limit");
+ return {source:{files:[{name:"firestore.rules",content:rulesSource}]}};
+}
+async function patchExistingRelease(token,rulesetName) {
+ const result=await rulesWrite("PATCH",releaseName,token,releasePatchPayload(rulesetName));
  assert.equal(result.name,releaseName,"BLOCKED: Firebase Rules PATCH returned wrong release");
  assert.equal(result.rulesetName,rulesetName,"BLOCKED: PATCH did not select expected ruleset");
 }
@@ -98,7 +106,20 @@ async function selfPermissions(token){
 }
 async function main() {
  const mode=process.argv[2]||"--check";
- assert(["--check","--backup-rules","--publish-rules","--restore-rules","--after-rules","--verify"].includes(mode),"Unknown mode");
+ assert(["--self-test","--check","--backup-rules","--publish-rules","--restore-rules","--after-rules","--verify"].includes(mode),"Unknown mode");
+ if(mode==="--self-test"){
+  const name="projects/volunserve-3aa5b/rulesets/example_123";
+  assert.deepEqual(releasePatchPayload(name),{
+    release:{name:releaseName,rulesetName:name},updateMask:"rulesetName"
+  });
+  assert.deepEqual(rulesetCreatePayload("rules_version = '2';"),{
+    source:{files:[{name:"firestore.rules",content:"rules_version = '2';"}]}
+  });
+  assert.throws(()=>releasePatchPayload("projects/wrong-project/rulesets/123"));
+  assert.throws(()=>rulesetCreatePayload("service cloud.firestore {}"));
+  console.log("PASS: scoped existing-release PATCH, immutable Ruleset create payload and fail-closed inputs");
+  return;
+ }
  assert.equal(process.env.GITHUB_REPOSITORY,
   "calibosofroyarjan-volunserve/VolunServe");
  assert.equal(process.env.GITHUB_REF,"refs/heads/live-protected",
@@ -147,9 +168,8 @@ async function main() {
   assert.equal(state.marker.revision,EXPECTED_SITE,"BLOCKED: Hosting changed before Rules publish");
   const rulesSource=fs.readFileSync("firestore.rules","utf8");
   assert.equal(sha(rulesSource),expectedCandidateRulesHash);
-  const ruleset=await rulesWrite("POST","projects/"+PROJECT+"/rulesets",token,{
-    source:{files:[{name:"firestore.rules",content:rulesSource}]}
-  });
+  const ruleset=await rulesWrite("POST","projects/"+PROJECT+"/rulesets",token,
+    rulesetCreatePayload(rulesSource));
   assert.match(ruleset.name||"",/^projects\/volunserve-3aa5b\/rulesets\/[A-Za-z0-9_-]+$/);
   console.log("PASS: candidate Ruleset uploaded without updating active production rules");
   await patchExistingRelease(token,ruleset.name);
