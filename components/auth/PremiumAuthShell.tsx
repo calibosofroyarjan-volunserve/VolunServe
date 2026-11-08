@@ -221,7 +221,7 @@ const styles = StyleSheet.create({
   heroIconGradient: {flex: 1, borderRadius: 40,
     alignItems: "center", justifyContent: "center"},
   formHeading: {alignItems: "center", paddingHorizontal: 15, paddingTop: 2, paddingBottom: 8},
-  formTitle: {fontFamily: Platform.select({web: "Georgia, serif", ios: "Georgia", android: "serif"}),
+  formTitle: {fontFamily: vsType.family,
     fontSize: vsType.size.page, lineHeight: 31, letterSpacing: -0.6, color: "#0B4936",
     fontWeight: "800", textAlign: "center"},
   formTitleNarrow: {fontSize: vsType.size.title, lineHeight: 29},
