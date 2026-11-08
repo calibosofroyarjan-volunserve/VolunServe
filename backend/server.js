@@ -16,6 +16,7 @@ const {
   selectedIdRecognized,
   enforceSelectedIdDecision,
 } = require("./selectedIdPolicy");
+const { reviewIssuerEvidence } = require("./identityIssuerReviewPolicy");
 const {
   getProfileRole,
   isApprovedAccount,
@@ -5372,6 +5373,9 @@ app.post(
         request.body?.validationMethod || "",
         120,
       );
+      // User-provided JSON is not issuer authentication. Only an authorized
+      // Admin may attest to an independent manual check; this is audited.
+      const issuerReviewAttested = request.body?.issuerReviewAttested === true;
       const reviewedByName = cleanText(
         request.volunServeProfile?.fullName ||
           request.firebaseUser?.name ||
@@ -5485,6 +5489,15 @@ app.post(
               "The selected supported government ID was not recognized. Require a new scan before approval.",
             );
           }
+          const evidence = reviewIssuerEvidence({
+            declaredType: selectedIdCheck.declaredIdType,
+            validationMethod,
+            confirmed: issuerReviewAttested,
+            notes,
+          });
+          if (!evidence.ok) {
+            throw makeHttpError(400, "independent_id_review_required", evidence.message);
+          }
         }
         const commonReviewFields = {
           requiresManualReview: false,
@@ -5496,6 +5509,10 @@ app.post(
             action === "verify"
               ? validationMethod
               : "",
+          independentAdminCheckAttested: action === "verify" && issuerReviewAttested,
+          // No official issuer integration currently exists: never
+          // mark the ID as cryptographically authentic from an Admin tick.
+          issuerApiAuthenticityVerified: false,
           manualReviewNotes: notes,
           reviewedAt: FieldValue.serverTimestamp(),
           reviewedBy: adminUid,
