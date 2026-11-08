@@ -1,0 +1,53 @@
+# READ-ONLY production Signup release checks. NEVER deploy/upgrade Firebase.
+name: Signup Production Rules and Hosting Reconciliation (NO DEPLOY)
+on:
+  pull_request:
+    branches: [live-protected]
+    paths:
+      - scripts/preflight-signup-production-release.cjs
+      - .github/workflows/preflight-signup-production-release.yml
+  push:
+    branches: [live-protected]
+    paths:
+      - scripts/preflight-signup-production-release.cjs
+      - .github/workflows/preflight-signup-production-release.yml
+permissions:
+  contents: read
+jobs:
+  code-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm ci --prefix functions --no-audit --no-fund
+      - name: Validate zero-mutation script, Firebase Admin credential imports, and unit contracts
+        run: |
+          node --check scripts/preflight-signup-production-release.cjs
+          node scripts/preflight-signup-production-release.cjs --self-test
+  production-readonly:
+    if: github.event_name == 'push' && github.repository == 'calibosofroyarjan-volunserve/VolunServe' && github.ref == 'refs/heads/live-protected'
+    needs: code-check
+    environment: production
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          submodules: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: functions/package-lock.json
+      - run: npm ci --prefix functions --no-audit --no-fund
+      - name: Compare actual live Hosting commit and Security Rules with target source (GET only)
+        env:
+          VOLUNSERVE_PRODUCTION_HOSTING_SERVICE_ACCOUNT: ${{ secrets.VOLUNSERVE_PRODUCTION_HOSTING_SERVICE_ACCOUNT }}
+        run: node scripts/preflight-signup-production-release.cjs
