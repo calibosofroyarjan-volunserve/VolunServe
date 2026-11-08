@@ -2748,59 +2748,65 @@ service cloud.firestore {
         );
       }
       function validInventoryReservation() {
-        return allocationInventoryBefore().itemId
+        let inventoryBefore = allocationInventoryBefore();
+        let inventoryAfter = allocationInventoryAfter();
+        return inventoryBefore.itemId
             == request.resource.data.inventoryItemId
-          && allocationInventoryBefore().category
+          && inventoryBefore.category
             == request.resource.data.category
-          && allocationInventoryBefore().itemName
+          && inventoryBefore.itemName
             == request.resource.data.itemName
-          && allocationInventoryBefore().unit
+          && inventoryBefore.unit
             == request.resource.data.unit
-          && allocationInventoryBefore().status == 'active'
-          && allocationInventoryBefore().quantityAvailable
+          && inventoryBefore.status == 'active'
+          && inventoryBefore.quantityAvailable
             >= request.resource.data.quantityAllocated
-          && allocationInventoryAfter().quantityReceived
-            == allocationInventoryBefore().quantityReceived
-          && allocationInventoryAfter().quantityAvailable
-            == allocationInventoryBefore().quantityAvailable
+          && inventoryAfter.quantityReceived
+            == inventoryBefore.quantityReceived
+          && inventoryAfter.quantityAvailable
+            == inventoryBefore.quantityAvailable
               - request.resource.data.quantityAllocated
-          && allocationInventoryAfter().quantityAllocated
-            == allocationInventoryBefore().quantityAllocated
+          && inventoryAfter.quantityAllocated
+            == inventoryBefore.quantityAllocated
               + request.resource.data.quantityAllocated
-          && allocationInventoryAfter().quantityDistributed
-            == allocationInventoryBefore().quantityDistributed;
+          && inventoryAfter.quantityDistributed
+            == inventoryBefore.quantityDistributed;
       }
       function validCompletedInventoryReconciliation() {
-        return allocationInventoryBefore().quantityAllocated
+        let inventoryBefore = allocationInventoryBefore();
+        let inventoryAfter = allocationInventoryAfter();
+        return inventoryBefore.quantityAllocated
             >= resource.data.quantityAllocated
-          && allocationInventoryAfter().quantityReceived
-            == allocationInventoryBefore().quantityReceived
-          && allocationInventoryAfter().quantityAvailable
-            == allocationInventoryBefore().quantityAvailable
+          && inventoryAfter.quantityReceived
+            == inventoryBefore.quantityReceived
+          && inventoryAfter.quantityAvailable
+            == inventoryBefore.quantityAvailable
               + (
                 resource.data.quantityAllocated
                 - request.resource.data.quantityDistributed
               )
-          && allocationInventoryAfter().quantityAllocated
-            == allocationInventoryBefore().quantityAllocated
+          && inventoryAfter.quantityAllocated
+            == inventoryBefore.quantityAllocated
               - resource.data.quantityAllocated
-          && allocationInventoryAfter().quantityDistributed
-            == allocationInventoryBefore().quantityDistributed
+          && inventoryAfter.quantityDistributed
+            == inventoryBefore.quantityDistributed
               + request.resource.data.quantityDistributed;
       }
       function validCancelledInventoryReconciliation() {
-        return allocationInventoryBefore().quantityAllocated
+        let inventoryBefore = allocationInventoryBefore();
+        let inventoryAfter = allocationInventoryAfter();
+        return inventoryBefore.quantityAllocated
             >= resource.data.quantityAllocated
-          && allocationInventoryAfter().quantityReceived
-            == allocationInventoryBefore().quantityReceived
-          && allocationInventoryAfter().quantityAvailable
-            == allocationInventoryBefore().quantityAvailable
+          && inventoryAfter.quantityReceived
+            == inventoryBefore.quantityReceived
+          && inventoryAfter.quantityAvailable
+            == inventoryBefore.quantityAvailable
               + resource.data.quantityAllocated
-          && allocationInventoryAfter().quantityAllocated
-            == allocationInventoryBefore().quantityAllocated
+          && inventoryAfter.quantityAllocated
+            == inventoryBefore.quantityAllocated
               - resource.data.quantityAllocated
-          && allocationInventoryAfter().quantityDistributed
-            == allocationInventoryBefore().quantityDistributed;
+          && inventoryAfter.quantityDistributed
+            == inventoryBefore.quantityDistributed;
       }
       allow read: if isAdminOrSuperAdmin()
         || (
@@ -4236,17 +4242,18 @@ service cloud.firestore {
         ).data;
       }
       function incomingVolunteerIsApproved() {
-        return 'status' in incomingVolunteerProfile()
-          && incomingVolunteerProfile().status == 'approved'
-          && incomingVolunteerProfile().role != 'admin'
-          && incomingVolunteerProfile().role != 'superadmin'
-          && incomingVolunteerProfile().role != 'lgu_personnel'
-          && incomingVolunteerProfile().role != 'applicant'
-          && 'volunteerAccess' in incomingVolunteerProfile()
-          && incomingVolunteerProfile().volunteerAccess == true
-          && 'volunteerStatus' in incomingVolunteerProfile()
-          && incomingVolunteerProfile().volunteerStatus == 'approved'
-          && hasVerifiedIdentity(incomingVolunteerProfile());
+        let volunteer = incomingVolunteerProfile();
+        return 'status' in volunteer
+          && volunteer.status == 'approved'
+          && volunteer.role != 'admin'
+          && volunteer.role != 'superadmin'
+          && volunteer.role != 'lgu_personnel'
+          && volunteer.role != 'applicant'
+          && 'volunteerAccess' in volunteer
+          && volunteer.volunteerAccess == true
+          && 'volunteerStatus' in volunteer
+          && volunteer.volunteerStatus == 'approved'
+          && hasVerifiedIdentity(volunteer);
       }
       // Read access belongs to an approved capability + document ownership,
       // not the user's active UI mode (which can change between sessions).
@@ -5338,6 +5345,58 @@ service cloud.firestore {
         return /databases/$(database)/documents/communityEventParticipants/$(participationId);
       }
 
+      // Keep approved proposal state loaded once for the entire guarded creation.
+      function validApprovedProposalCopy() {
+        let proposal = proposalAfter();
+        return proposal.status == 'approved'
+        && proposal.publishedEventId == eventId
+        && proposal.reviewedBy == request.auth.uid
+        && proposal.reviewedAt == request.time
+        && request.resource.data.title == proposal.title
+        && request.resource.data.description == proposal.description
+        // Admin can only copy these fields from the approved proposal.
+        // Defaults preserve compatibility with proposals made before this update.
+        && request.resource.data.volunteerTasks == proposal.get('volunteerTasks', '')
+        && request.resource.data.lookingFor == proposal.get('lookingFor', '')
+        && request.resource.data.requiredRoles == proposal.get('requiredRoles', [])
+        && request.resource.data.requiredSkills == proposal.get('requiredSkills', [])
+        && request.resource.data.qualificationNotes == proposal.get('qualificationNotes', '')
+        && request.resource.data.whatToBring == proposal.get('whatToBring', '')
+        && request.resource.data.photoUrls == proposal.get('photoUrls', [])
+        && request.resource.data.videoUrl == proposal.get('videoUrl', '')
+        && request.resource.data.coverImageUrl == proposal.get('coverPhotoUrl', '')
+        && request.resource.data.category == proposal.category
+        && request.resource.data.barangay == proposal.barangay
+        && request.resource.data.location == proposal.location
+        && request.resource.data.date == proposal.date
+        && request.resource.data.time == proposal.time
+        && request.resource.data.get('endTime', '') == proposal.get('endTime', '')
+        && request.resource.data.get('latitude', null) == proposal.get('latitude', null)
+        && request.resource.data.get('longitude', null) == proposal.get('longitude', null)
+        && request.resource.data.get('coordinates', null) == proposal.get('coordinates', null)
+        && (
+          !('endTime' in request.resource.data)
+          || (
+            request.resource.data.endTime is string
+            && request.resource.data.endTime.matches('^([01][0-9]|2[0-3]):[0-5][0-9]$')
+            && request.resource.data.endTime > request.resource.data.time
+          )
+        )
+        && (
+          !('latitude' in request.resource.data)
+          || (
+            request.resource.data.latitude is number
+            && request.resource.data.longitude is number
+            && request.resource.data.coordinates is map
+            && request.resource.data.coordinates.latitude == request.resource.data.latitude
+            && request.resource.data.coordinates.longitude == request.resource.data.longitude
+          )
+        )
+        && request.resource.data.capacity == proposal.capacity
+        && request.resource.data.proposedBy == proposal.proposedBy
+        && request.resource.data.proposerName == proposal.proposerName;
+      }
+
       // The query on the client filters publicationStatus == published.
       allow get, list: if isAdminOrSuperAdmin()
         || (approved()
@@ -5367,53 +5426,7 @@ service cloud.firestore {
         && request.resource.data.approvedAt == request.time
         && request.resource.data.createdAt == request.time
         && request.resource.data.updatedAt == request.time
-        && proposalAfter().status == 'approved'
-        && proposalAfter().publishedEventId == eventId
-        && proposalAfter().reviewedBy == request.auth.uid
-        && proposalAfter().reviewedAt == request.time
-        && request.resource.data.title == proposalAfter().title
-        && request.resource.data.description == proposalAfter().description
-        // Admin can only copy these fields from the approved proposal.
-        // Defaults preserve compatibility with proposals made before this update.
-        && request.resource.data.volunteerTasks == proposalAfter().get('volunteerTasks', '')
-        && request.resource.data.lookingFor == proposalAfter().get('lookingFor', '')
-        && request.resource.data.requiredRoles == proposalAfter().get('requiredRoles', [])
-        && request.resource.data.requiredSkills == proposalAfter().get('requiredSkills', [])
-        && request.resource.data.qualificationNotes == proposalAfter().get('qualificationNotes', '')
-        && request.resource.data.whatToBring == proposalAfter().get('whatToBring', '')
-        && request.resource.data.photoUrls == proposalAfter().get('photoUrls', [])
-        && request.resource.data.videoUrl == proposalAfter().get('videoUrl', '')
-        && request.resource.data.coverImageUrl == proposalAfter().get('coverPhotoUrl', '')
-        && request.resource.data.category == proposalAfter().category
-        && request.resource.data.barangay == proposalAfter().barangay
-        && request.resource.data.location == proposalAfter().location
-        && request.resource.data.date == proposalAfter().date
-        && request.resource.data.time == proposalAfter().time
-        && request.resource.data.get('endTime', '') == proposalAfter().get('endTime', '')
-        && request.resource.data.get('latitude', null) == proposalAfter().get('latitude', null)
-        && request.resource.data.get('longitude', null) == proposalAfter().get('longitude', null)
-        && request.resource.data.get('coordinates', null) == proposalAfter().get('coordinates', null)
-        && (
-          !('endTime' in request.resource.data)
-          || (
-            request.resource.data.endTime is string
-            && request.resource.data.endTime.matches('^([01][0-9]|2[0-3]):[0-5][0-9]$')
-            && request.resource.data.endTime > request.resource.data.time
-          )
-        )
-        && (
-          !('latitude' in request.resource.data)
-          || (
-            request.resource.data.latitude is number
-            && request.resource.data.longitude is number
-            && request.resource.data.coordinates is map
-            && request.resource.data.coordinates.latitude == request.resource.data.latitude
-            && request.resource.data.coordinates.longitude == request.resource.data.longitude
-          )
-        )
-        && request.resource.data.capacity == proposalAfter().capacity
-        && request.resource.data.proposedBy == proposalAfter().proposedBy
-        && request.resource.data.proposerName == proposalAfter().proposerName;
+        && validApprovedProposalCopy();
 
       // Admin can advance status; completion is recorded by the Admin.
       allow update: if isAdmin()
