@@ -182,9 +182,34 @@ for(const [fn,before,after] of substitutions){
  block=block.replace(before,after);
  branchExpected=branchExpected.slice(0,start)+block+branchExpected.slice(finish);
 }
+// Five hasAll() arrays duplicate mandatory direct field accesses in the
+// same create validation. Missing keys are denied by those unchanged accesses.
+const requiredFieldScopes=["users/{uid}","publicCertificateVerifications/{certificateId}",
+ "volunteerInvitations/{invitationId}","lguAdminCredentialReviews/{targetUid}",
+ "communityEventLiveLocations/{eventId}"];
+for(const [n,scope] of requiredFieldScopes.entries()){
+ const start=branchExpected.indexOf("    match /"+scope+" {");
+ const end=branchExpected.indexOf("    match /",start+12);
+ assert(start>=0&&end>start,"Missing reviewed collection "+scope);
+ let section=branchExpected.slice(start,end);
+ const clauses=[...section.matchAll(/request\.resource\.data\.keys\(\)\.hasAll\(\[([\s\S]*?)\]\)/g)];
+ assert.equal(clauses.length,n===0?2:1,"Wrong count of mandatory-key validators");
+ const match=clauses[n===0?1:0];
+ const names=[...match[1].matchAll(/['"](\w+)['"]/g)].map(v=>v[1]);
+ const following=section.slice(match.index+match[0].length,section.indexOf(";",match.index));
+ for(const field of names)assert(following.includes("request.resource.data."+field),
+  "Required key lacks mandatory direct field validation "+scope+"."+field);
+ const lineStart=section.lastIndexOf("\n",match.index)+1;
+ const prefix=section.slice(lineStart,match.index);
+ assert(/^ +&& $/.test(prefix),"Missing required-key AND prefix "+scope);
+ const remove=prefix+match[0]+"\n";
+ assert.equal(section.split(remove).length,2,"Unreviewed key list "+scope);
+ section=section.replace(remove,"");
+ branchExpected=branchExpected.slice(0,start)+section+branchExpected.slice(end);
+}
 assert.equal(current,branchExpected,"BLOCKED: nonreviewed permission, collection or validation changed");
 assert.equal(cp.execFileSync("git",["hash-object","firestore.rules"],{encoding:"utf8"}).trim(),
-"73ed96d66f29d8b901ea3726dfd4b44306ac8748","BLOCKED: unreviewed Firestore Rules blob");
+"d1ca37355eddca315f56309aee231e10f7b738af","BLOCKED: unreviewed Firestore Rules blob");
 // Verify exhaustiveness of all optional-review branches over valid and
 // invalid types, status values and three-valued nulls before Firebase emulator.
 for(const required of [true,false,null,"true",0,1,undefined]){
@@ -202,7 +227,7 @@ for(const required of [true,false,null,"true",0,1,undefined]){
 }
 
 const gitBlob=cp.execFileSync("git",["hash-object","firestore.rules"],{encoding:"utf8"}).trim();
-assert.equal(gitBlob,"73ed96d66f29d8b901ea3726dfd4b44306ac8748","BLOCKED: unapproved Firestore blob");
+assert.equal(gitBlob,"d1ca37355eddca315f56309aee231e10f7b738af","BLOCKED: unapproved Firestore blob");
 const paths=source=>source.split("\n").filter(l=>l.startsWith("    match /")).map(l=>l.slice("    match /".length).split(" ")[0]);
 assert.deepEqual(paths(current),paths(protectedBaseline),"BLOCKED: collection scope changed");
 const allows=source=>[...source.matchAll(/allow (?:get|list|read|write|create|update|delete)/g)].length;

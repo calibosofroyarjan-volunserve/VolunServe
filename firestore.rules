@@ -233,10 +233,6 @@ service cloud.firestore {
           'residentAccess','volunteerAccess','region','province','city',
           'barangay','lguOffice','lguPosition','appointmentReference','createdAt'
         ])
-        && request.resource.data.keys().hasAll([
-          'uid','email','fullName','role','status','residentAccess',
-          'volunteerAccess','lguOffice','lguPosition','appointmentReference','createdAt'
-        ])
         && request.resource.data.uid == uid
         && request.resource.data.role == 'applicant'
         && request.resource.data.status == 'pending_review'
@@ -3418,20 +3414,6 @@ service cloud.firestore {
           'createdAt',
           'updatedAt'
         ])
-        && request.resource.data.keys().hasAll([
-          'certificateId',
-          'certificateType',
-          'volunteerName',
-          'verifiedHelps',
-          'verifiedServiceMinutes',
-          'peopleHelped',
-          'contributionBreakdown',
-          'snapshotHash',
-          'verificationStatus',
-          'issuedAt',
-          'createdAt',
-          'updatedAt'
-        ])
         && request.resource.data.certificateId == certificateId
         && request.resource.data.certificateType
           == 'verified_volunteer_service'
@@ -4019,10 +4001,6 @@ service cloud.firestore {
         || (hasVolunteerAccess() && resource.data.volunteerId == request.auth.uid);
       allow create: if isAdmin()
         && request.resource.data.keys().hasOnly([
-          'caseId', 'caseTitle', 'volunteerId', 'volunteerName',
-          'status', 'createdBy', 'createdAt', 'updatedAt'
-        ])
-        && request.resource.data.keys().hasAll([
           'caseId', 'caseTitle', 'volunteerId', 'volunteerName',
           'status', 'createdBy', 'createdAt', 'updatedAt'
         ])
@@ -4992,10 +4970,6 @@ service cloud.firestore {
             'targetUid', 'accountEmail', 'reviewStatus', 'office', 'position',
             'credentialReference', 'verificationMethod', 'verifiedBy', 'verifiedAt'
           ])
-          && request.resource.data.keys().hasAll([
-            'targetUid', 'accountEmail', 'reviewStatus', 'office', 'position',
-            'credentialReference', 'verificationMethod', 'verifiedBy', 'verifiedAt'
-          ])
           && request.resource.data.targetUid == targetUid
           && request.resource.data.reviewStatus == 'verified'
           && request.resource.data.accountEmail is string
@@ -5073,10 +5047,6 @@ service cloud.firestore {
       }
       function validLiveCoordinates() {
         return request.resource.data.keys().hasOnly([
-          'eventId', 'residentId', 'latitude', 'longitude',
-          'accuracyMeters', 'updatedAt', 'expiresAt'
-        ])
-        && request.resource.data.keys().hasAll([
           'eventId', 'residentId', 'latitude', 'longitude',
           'accuracyMeters', 'updatedAt', 'expiresAt'
         ])
