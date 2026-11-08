@@ -13,6 +13,8 @@ const allowed=new Set([
  "lib/registrationEmailPolicy.ts","lib/requireCompleteResidentRegistration.ts",
  "lib/signupRegistration.ts","lib/userFacingError.ts","lib/verificationCooldown.ts",
  "firestore.rules",
+ "scripts/test-verified-community-registration-rules.cjs",
+ "scripts/test-preserved-volunteer-invitation-rules.cjs",
  "scripts/test-signup-prod.cjs",
  "scripts/test-site-derived-signup-candidate.cjs",
  ".github/workflows/validate-site-derived-signup-candidate.yml",
