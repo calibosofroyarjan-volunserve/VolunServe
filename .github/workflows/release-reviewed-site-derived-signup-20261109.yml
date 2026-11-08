@@ -60,6 +60,9 @@ jobs:
       - name: Prove compact Rules are equivalent to previous official lists and account guard
         working-directory: controller
         run: node scripts/test-firestore-rules-compact-allowlists.cjs
+      - name: Prove staff helpers were relocated verbatim, without changing a single permission
+        working-directory: controller
+        run: node scripts/test-localized-staff-rule-helpers.cjs
       - name: Stage ONLY reviewed compact protected Firestore Rules with exact published-site-derived UI
         working-directory: site
         run: |
@@ -70,6 +73,7 @@ jobs:
           # compatibility test. Copy the reviewed test ONLY into the isolated
           # runner; it is not part of Hosting dist or published web artifacts.
           cp ../controller/scripts/test-existing-account-compatibility.cjs scripts/test-existing-account-compatibility.cjs
+          cp ../controller/scripts/test-localized-staff-rules-emulator.cjs scripts/test-localized-staff-rules-emulator.cjs
           cmp --silent ../controller/firestore.rules firestore.rules
           grep -q 'match /volunteerInvitations/{invitationId}' firestore.rules
           grep -q 'function validInitialResidentInputs()' firestore.rules
@@ -80,6 +84,7 @@ jobs:
           node scripts/test-signup-prod.cjs
           npx firebase-tools emulators:exec --only firestore --project demo-volunserve-verified-signup "node scripts/test-verified-community-registration-rules.cjs"
           npx firebase-tools emulators:exec --only firestore --project demo-volunserve-account-compatibility "node scripts/test-existing-account-compatibility.cjs"
+          npx firebase-tools emulators:exec --only firestore --project demo-volunserve-staff-helper-scope-20261109 "node scripts/test-localized-staff-rules-emulator.cjs"
           npx firebase-tools emulators:exec --only firestore --project demo-volunserve-preserve-volunteer-invitations "node scripts/test-preserved-volunteer-invitation-rules.cjs"
       - name: Compile complete published-site-derived web app
         working-directory: site
