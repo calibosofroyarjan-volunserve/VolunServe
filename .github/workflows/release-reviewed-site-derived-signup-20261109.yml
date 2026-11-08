@@ -23,8 +23,8 @@ jobs:
       EXPO_NO_TELEMETRY: '1'
       PROJECT: volunserve-3aa5b
       CANDIDATE_SHA: 7d14e438b34501ecfd872f1eb4244b5c225c779f
-      BACKUP_CHANNEL: signup-predeploy-backup-20261109b
-      PREVIEW_CHANNEL: signup-reviewed-preview-20261109b
+      BACKUP_CHANNEL: signup-predeploy-backup-20261109
+      PREVIEW_CHANNEL: signup-reviewed-preview-20261109
     steps:
       - name: Checkout current protected production controller
         uses: actions/checkout@v4
@@ -120,12 +120,10 @@ jobs:
             exit "$status"
           }
           trap rollback EXIT
-          # Create a safe immutable copy of the published Hosting version BEFORE changes.
-          npx firebase-tools hosting:clone "$PROJECT:live" "$PROJECT:$BACKUP_CHANNEL" \
-            --project "$PROJECT" --non-interactive
-          # Deploy the candidate into an isolated preview channel, never live yet.
-          npx firebase-tools hosting:channel:deploy "$PREVIEW_CHANNEL" \
-            --project "$PROJECT" --non-interactive
+          # Reuse the backup + exact reviewed preview already successfully
+          # created on 2026-11-08. No extra preview channels or Hosting writes
+          # until we verify both versions and their release marker fingerprints.
+          node scripts/release-signup-production-preflight.cjs --check-channels
           # No live change can occur if the published marker or Rules changed during CI.
           node scripts/release-signup-production-preflight.cjs --check
           node scripts/release-signup-production-preflight.cjs --backup-rules
