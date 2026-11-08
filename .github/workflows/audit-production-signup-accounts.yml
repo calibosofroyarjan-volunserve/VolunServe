@@ -1,0 +1,62 @@
+# READ ONLY. No Firebase deploy, no updates to accounts or Firestore.
+# Production env grants credentials only to trusted live-protected pushes.
+name: Audit Production Signup Account Compatibility (READ ONLY)
+on:
+  pull_request:
+    branches: [live-protected]
+    paths:
+      - scripts/audit-production-signup-accounts.cjs
+      - .github/workflows/audit-production-signup-accounts.yml
+  push:
+    branches: [live-protected]
+    paths:
+      - scripts/audit-production-signup-accounts.cjs
+      - .github/workflows/audit-production-signup-accounts.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  synthetic-audit-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Check read-only audit syntax and synthetic compatibility matrix
+        run: |
+          node --check scripts/audit-production-signup-accounts.cjs
+          node scripts/audit-production-signup-accounts.cjs --self-test
+  production-readonly-audit:
+    if: github.event_name != 'pull_request' && github.repository == 'calibosofroyarjan-volunserve/VolunServe' && github.ref == 'refs/heads/live-protected'
+    needs: synthetic-audit-tests
+    environment: production
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          submodules: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: functions/package-lock.json
+      - name: Verify exact HEAD of protected branch
+        run: |
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(git ls-remote --heads origin live-protected | cut -f1)" = "$GITHUB_SHA"
+      - name: Install exact Firebase Admin SDK dependencies
+        run: npm ci --prefix functions --no-audit --no-fund
+      - name: Aggregate-only production Auth and Firestore read check
+        env:
+          # Prefer least-privileged audit secret. Existing Hosting credential
+          # is a fallback ONLY if it already has Auth/Firestore read permission.
+          # Do not change IAM grants just to make this check pass.
+          VOLUNSERVE_PRODUCTION_AUDIT_CREDENTIAL: ${{ secrets.VOLUNSERVE_PRODUCTION_READONLY_SERVICE_ACCOUNT || secrets.VOLUNSERVE_PRODUCTION_HOSTING_SERVICE_ACCOUNT }}
+        run: node scripts/audit-production-signup-accounts.cjs
