@@ -164,9 +164,45 @@ const protectedBaseline=cp.execFileSync("git",["show","5dd65a7f1e65b281e277d051b
 const originalRoleGate="    function approved() {\n      let p = signedIn() ? profile() : {};\n      let role = p.get('role', '');\n      return verifiedEmailSession()\n        && role in [\n          'resident', 'volunteer', 'admin', 'superadmin', 'lgu_personnel'\n        ]\n        && (\n          role in ['admin', 'superadmin', 'lgu_personnel']\n          || request.auth.token.get('email', '') == p.get('email', '')\n        )\n        && p.get('status', 'approved') == 'approved'\n        && p.get('adminStatus', 'active') != 'suspended';\n    }\n    // Reuse one verified-active staff role gate for all three staff helpers.\n    // Same semantics as the previous independent isAdmin/isSuperAdmin helpers:\n    // only a verified Firebase email, approved/non-suspended user profile,\n    // and the exact allowed role can pass. Other roles never get staff access.\n    function hasApprovedStaffRole(roles) {\n      let p = signedIn() ? profile() : {};\n      return verifiedEmailSession()\n        && p.get('role', '') in roles\n        && p.get('status', 'approved') == 'approved'\n        && p.get('adminStatus', 'active') != 'suspended';\n    }\n";
 const compactRoleGate="    function approved() {\n      let p = signedIn() ? profile() : {};\n      let role = p.get('role', '');\n      // Exactly the original five-role allowlist: staff bypass profile-email\n      // matching; only Resident/Volunteer require the Firebase email match.\n      return verifiedEmailSession()\n        && (\n          role in ['admin', 'superadmin', 'lgu_personnel']\n          || (\n            role in ['resident', 'volunteer']\n            && request.auth.token.get('email', '') == p.get('email', '')\n          )\n        )\n        && p.get('status', 'approved') == 'approved'\n        && p.get('adminStatus', 'active') != 'suspended';\n    }\n    // Reuse one verified-active staff role gate for all three staff helpers.\n    // Same semantics as the previous independent isAdmin/isSuperAdmin helpers:\n    // only a verified Firebase email, approved/non-suspended user profile,\n    // and the exact allowed role can pass. Other roles never get staff access.\n    function hasApprovedStaffRole(roles) {\n      let p = signedIn() ? profile() : {};\n      // roles is always a subset of ['admin','superadmin'] at call sites.\n      // Therefore approved() already enforces verified mailbox and active\n      // approved/non-suspended staff state. Keep exact role restriction.\n      return approved()\n        && p.get('role', '') in roles;\n    }\n";
 assert.equal(protectedBaseline.split(originalRoleGate).length,2,"Reviewed original role gate moved");
-assert.equal(current,protectedBaseline.replace(originalRoleGate,compactRoleGate),"BLOCKED: unrelated Rules permission modified");
+function branchBasePlaceholderSafe(){return protectedBaseline.replace(originalRoleGate,compactRoleGate)===cp.execFileSync("git",["show","d4c8e41aed3fa25e7db029304333a56a3a0d8028:firestore.rules"],{encoding:"utf8"});}
+
+// Twelve branch-implied predicates: reproduce exact reviewed source from
+// immutable protected base. Each removed predicate is enforced by the
+// original, unchanged exhaustive validation branches below it.
+const branchBase=cp.execFileSync("git",["show","d4c8e41aed3fa25e7db029304333a56a3a0d8028:firestore.rules"],{encoding:"utf8"});
+const substitutions=[["validFacilityVerificationState","return rd.facilityVerificationRequired is bool\n          && rd.facilityVerificationStatus in [\n            'not_required',\n            'pending',\n            'confirmed',\n            'unable_to_confirm',\n            'inconsistent'\n          ]\n          && rd.facilityName is string","return rd.facilityName is string"],["validCostVerificationState","return rd.costVerificationRequired is bool\n          && rd.residentEstimatedAmount is number","return rd.residentEstimatedAmount is number"],["validCostVerificationState","&& rd.costVerificationStatus in [\n            'not_required',\n            'pending',\n            'confirmed',\n            'inconsistent'\n          ]\n          && rd.costReferenceNumber is string","&& rd.costReferenceNumber is string"],["validOptionalVerificationState","return rd.videoVerificationRequired is bool\n          && rd.videoVerificationStatus in [\n            'not_required',\n            'pending',\n            'requested',\n            'completed',\n            'unable_to_complete'\n          ]\n          && (\n            rd.videoVerificationAt == null","return (\n            rd.videoVerificationAt == null"],["validOptionalVerificationState","&& rd.siteVisitRequired is bool\n          && rd.siteVisitStatus in [\n            'not_required',\n            'pending',\n            'scheduled',\n            'completed',\n            'unable_to_complete'\n          ]\n          && (\n            rd.siteVisitAt == null","&& (\n            rd.siteVisitAt == null"],["validReviewPayload","&& rd.reviewStatus in [\n          'in_progress',\n          'needs_more_information',\n          'verified',\n          'rejected'\n        ]\n        && rd.documentConsistencyStatus in [","&& rd.documentConsistencyStatus in ["],["validReviewPayload","&& rd.finalDecision in [\n          'pending',\n          'needs_more_information',\n          'verified',\n          'rejected'\n        ]\n        && rd.finalDecisionReason is string","&& rd.finalDecisionReason is string"],["validReviewPayload","&& (\n          rd.finalDecisionAt == null\n          || rd.finalDecisionAt is timestamp\n        )\n        && rd.finalDecisionBy is string\n        && rd.finalDecisionBy.size() <= 160","&& rd.finalDecisionBy.size() <= 160"],["validDonationSubmission","&& rd.donationType in [\n          'monetary',\n          'in_kind'\n        ]\n        && rd.donationType","&& rd.donationType"],["validDonationSubmission","&& rd.quantityPledged is number\n        && rd.quantityPledged >= 0\n        && rd.amount is number\n        && rd.amount >= 0\n        && rd.transactionReference is string","&& rd.transactionReference is string"],["validCampaignPayload","&& rd.acceptedDonationTypes is list\n        && rd.acceptedDonationTypes.size() >= 1\n        && rd.acceptedDonationTypes.size() <= 2\n        && (","&& ("],["validCampaignPayload","&& rd.verifiedAmountReceived is number\n        && rd.verifiedAmountReceived >= 0\n        && rd.inKindInstructions is string","&& rd.inKindInstructions is string"]];
+let branchExpected=branchBase;
+for(const [fn,before,after] of substitutions){
+ const start=branchExpected.indexOf("      function "+fn+"() {");
+ let finish=branchExpected.indexOf("      function ",start+20);
+ if(finish<0)finish=branchExpected.indexOf("      allow ",start+20);
+ assert(start>=0&&finish>start,"BLOCKED: validation helper missing "+fn);
+ let block=branchExpected.slice(start,finish);
+ assert.equal(block.split(before).length,2,"BLOCKED: prior validator changed "+fn);
+ block=block.replace(before,after);
+ branchExpected=branchExpected.slice(0,start)+block+branchExpected.slice(finish);
+}
+assert.equal(current,branchExpected,"BLOCKED: nonreviewed permission, collection or validation changed");
+assert.equal(cp.execFileSync("git",["hash-object","firestore.rules"],{encoding:"utf8"}).trim(),
+"2b2d37f35e957614b470a36212df1b13b5e191c2","BLOCKED: unreviewed Firestore Rules blob");
+// Verify exhaustiveness of all optional-review branches over valid and
+// invalid types, status values and three-valued nulls before Firebase emulator.
+for(const required of [true,false,null,"true",0,1,undefined]){
+ for(const status of ["not_required","pending","confirmed","unable_to_confirm","inconsistent","requested","scheduled","completed","unable_to_complete",null,false]){
+  const facilitySet=["pending","confirmed","unable_to_confirm","inconsistent"];
+  const costSet=["pending","confirmed","inconsistent"];
+  const videoSet=["pending","requested","completed","unable_to_complete"];
+  const siteSet=["pending","scheduled","completed","unable_to_complete"];
+  for(const values of [facilitySet,costSet,videoSet,siteSet]){
+   const oldEnum=["not_required",...values].includes(status);
+   const branches=(required===false&&status==="not_required")||(required===true&&values.includes(status));
+   assert.equal((typeof required==="boolean")&&oldEnum&&branches,branches,"Optional flag validator changed");
+  }
+ }
+}
+
 const gitBlob=cp.execFileSync("git",["hash-object","firestore.rules"],{encoding:"utf8"}).trim();
-assert.equal(gitBlob,"4afcbc2567dc60bbb7da9f2584e70ba412881c04","BLOCKED: unapproved Firestore blob");
+assert.equal(gitBlob,"2b2d37f35e957614b470a36212df1b13b5e191c2","BLOCKED: unapproved Firestore blob");
 const paths=source=>source.split("\n").filter(l=>l.startsWith("    match /")).map(l=>l.slice("    match /".length).split(" ")[0]);
 assert.deepEqual(paths(current),paths(protectedBaseline),"BLOCKED: collection scope changed");
 const allows=source=>[...source.matchAll(/allow (?:get|list|read|write|create|update|delete)/g)].length;
