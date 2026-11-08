@@ -1,4 +1,4 @@
-name: Localized Firestore Staff Helpers — Regression & Emulator (NO DEPLOY)
+name: Consolidated Firestore Staff Roles — Regression & Emulator (NO DEPLOY)
 on:
   pull_request:
     branches: [live-protected]
@@ -17,7 +17,7 @@ on:
 permissions:
   contents: read
 jobs:
-  role-scope-integrity:
+  staff-role-integrity:
     runs-on: ubuntu-latest
     timeout-minutes: 22
     env:
@@ -35,7 +35,7 @@ jobs:
         with:
           distribution: temurin
           java-version: '21'
-      - name: Verify role helper relocation retained identical code in every used match
+      - name: Verify staff role consolidation retains every non-staff permission byte and role semantics
         run: |
           node --check scripts/test-localized-staff-rule-helpers.cjs
           node scripts/test-localized-staff-rule-helpers.cjs
