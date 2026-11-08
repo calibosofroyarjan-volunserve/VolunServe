@@ -170,9 +170,11 @@ assert.equal(current,expectedOptimized,"BLOCKED: outside reviewed create/update 
 assert(current.includes("request.method == 'create'") && current.includes("request.method == 'update'"),"BLOCKED: create/update operation gates missing");
 const actualGitBlob=cp.execFileSync("git",["hash-object","firestore.rules"],{encoding:"utf8"}).trim();
 assert.equal(actualGitBlob,"afd5adca77292d01e6aeab13465736aa2f6882f4","BLOCKED: optimized Rules blob differs from approved revision");
-const paths=text=>[...text.matchAll(/^    match \\/(.+) \\{/gm)].map(m=>m[1]);
+const paths=source=>source.split("\n")
+ .filter(line=>line.startsWith("    match /"))
+ .map(line=>line.slice("    match /".length).split(" ")[0]);
 assert.deepEqual(paths(current),paths(frozenPassTwo),"BLOCKED: an original Firestore match was changed");
-const statements=text=>[...text.matchAll(/\\ballow (?:get|list|read|write|create|update|delete)/g)].length;
+const statements=source=>[...source.matchAll(/allow (?:get|list|read|write|create|update|delete)/g)].length;
 assert.equal(statements(current),statements(frozenPassTwo)-1,"BLOCKED: unrelated allow methods were changed");
 const body=current.slice(0,current.indexOf("    match /"));
 for(const name of ["hasApprovedStaffRole","isAdmin","isSuperAdmin","isAdminOrSuperAdmin"]){
