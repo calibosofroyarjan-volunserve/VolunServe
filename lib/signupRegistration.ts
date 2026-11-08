@@ -33,6 +33,10 @@ export async function authenticateEmailSignup(email: string, password: string, r
 
 export async function inspectSignupUser(user: User): Promise<{user: User; profileExists: boolean}> {
   await reload(user);
+  // A pre-existing pending Firebase Auth UID must never resume the wizard
+  // if its domain is now recognized as disposable. Verification is not enough.
+  const screeningError = getRegistrationEmailError(user.email || "");
+  if (screeningError) throw new Error(screeningError);
   if (auth.currentUser?.uid !== user.uid) {
     throw new Error("Your registration session changed. Sign in again to resume.");
   }
