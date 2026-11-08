@@ -13,6 +13,10 @@ const { startCommunityCertificateAutoSync } = require("./communityCertificateAut
 const { combineApprovedBudget } = require("./assistanceDonationBudget");
 const { probeIdentityAiReadiness } = require("./identityAiReadiness");
 const {
+  selectedIdRecognized,
+  enforceSelectedIdDecision,
+} = require("./selectedIdPolicy");
+const {
   getProfileRole,
   isApprovedAccount,
   isOperationalAdminProfile,
@@ -5060,17 +5064,10 @@ app.post(
       // A face match cannot compensate for an unsupported, unknown or
       // mismatched selected government ID. Only recognized, selected types
       // can proceed to manual identity review; all others require a retry.
-      const recognizedSelectedId =
-        documentScreening.status === "text_consistent_unverified" &&
-        documentScreening.declaredIdType !== null &&
-        documentScreening.detectedIdType === documentScreening.declaredIdType;
-      const decision = !recognizedSelectedId
-        ? "failed"
-        : rawDecision === "verified" &&
-          (documentScreening.authenticityVerified !== true ||
-            aiResult?.livenessImplemented !== true)
-          ? "manual_review"
-          : rawDecision;
+      const recognizedSelectedId = selectedIdRecognized(documentScreening);
+      const decision = enforceSelectedIdDecision(
+        rawDecision, documentScreening, aiResult?.livenessImplemented === true,
+      );
       const matchScore = numberOrNull(aiResult?.matchScore);
       const livenessScore = numberOrNull(aiResult?.livenessScore);
       const verificationId = cleanText(
@@ -5481,9 +5478,7 @@ app.post(
         }
         if (action === "verify") {
           const selectedIdCheck = normalizeIdDocumentScreening(verification.documentScreening);
-          if (selectedIdCheck.status !== "text_consistent_unverified" ||
-              !selectedIdCheck.declaredIdType ||
-              selectedIdCheck.declaredIdType !== selectedIdCheck.detectedIdType) {
+          if (!selectedIdRecognized(selectedIdCheck)) {
             throw makeHttpError(
               409,
               "selected_government_id_not_recognized",
