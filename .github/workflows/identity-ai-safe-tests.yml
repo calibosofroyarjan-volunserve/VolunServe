@@ -9,6 +9,7 @@ on:
     paths:
       - 'identity-ai/**'
       - 'app/identity-verification.tsx'
+      - 'app/identity-verification.web.tsx'
       - 'lib/identityVerification.ts'
       - 'components/identity/DocumentScreeningSummary.tsx'
       - 'backend/server.js'
