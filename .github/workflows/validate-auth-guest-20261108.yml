@@ -3,6 +3,7 @@ on:
   push:
     branches:
       - security/live-verified-email-guest-20261108
+      - live-protected
   pull_request:
     paths:
       - 'lib/registrationEmailPolicy.ts'
