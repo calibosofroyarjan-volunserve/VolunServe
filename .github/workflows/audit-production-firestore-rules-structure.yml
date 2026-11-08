@@ -1,0 +1,50 @@
+# Public structure only, reads existing Rules with previously approved Viewer.
+# No resource writes, no raw Rules source printed or uploaded.
+name: Compare LIVE Firestore Rules Policy Structure (NO DEPLOY)
+on:
+  push:
+    branches: [live-protected]
+    paths:
+      - scripts/audit-production-firestore-rules-structure.cjs
+      - .github/workflows/audit-production-firestore-rules-structure.yml
+  pull_request:
+    branches: [live-protected]
+    paths:
+      - scripts/audit-production-firestore-rules-structure.cjs
+      - .github/workflows/audit-production-firestore-rules-structure.yml
+permissions:
+  contents: read
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm ci --prefix functions --no-audit --no-fund
+      - run: |
+          node --check scripts/audit-production-firestore-rules-structure.cjs
+          node scripts/audit-production-firestore-rules-structure.cjs --self-test
+  protected-prod-readonly:
+    if: github.event_name == 'push' && github.repository == 'calibosofroyarjan-volunserve/VolunServe' && github.ref == 'refs/heads/live-protected'
+    needs: check
+    environment: production
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          submodules: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm ci --prefix functions --no-audit --no-fund
+      - name: Read-only live Firestore Rules structure and candidate drift
+        env:
+          VOLUNSERVE_PRODUCTION_HOSTING_SERVICE_ACCOUNT: ${{ secrets.VOLUNSERVE_PRODUCTION_HOSTING_SERVICE_ACCOUNT }}
+        run: node scripts/audit-production-firestore-rules-structure.cjs
