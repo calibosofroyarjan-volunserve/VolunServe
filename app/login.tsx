@@ -283,7 +283,9 @@ export default function Login() {
             onDismiss={() => setGoogleError("")}
           />
         )}
-        <TouchableOpacity accessibilityRole="button" onPress={() => router.replace("/public")}
+        <TouchableOpacity accessibilityRole="button" onPress={() => {
+          void firebaseSignOut(auth).then(() => router.replace("/public")).catch(() => showError("Could not open Guest Mode. Please try again."));
+        }}
           disabled={loading || googleLoading}
           style={[styles.outlineButton, authCornerCut(10), (loading || googleLoading) && styles.disabled]}>
           <View style={styles.centerRow}>
