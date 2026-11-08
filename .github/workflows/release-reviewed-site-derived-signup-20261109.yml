@@ -1,3 +1,4 @@
+# Fifth guarded compiler size check for reviewed PR #339: 17 source-exact redundant predicate eliminations, no security or rollback bypass.
 # Fourth guarded compiler check for PR #337: verify role-gate refactor and restored deny-only scopes against executable <256000-byte limit. No bypass or policy permission changes.
 # Third guarded compiler check: exact verified-email inlining and default-deny redundant scope removal; fail closed if executable still >=256000 bytes.
 # Guarded production retry pass 2 after PR #334 measured 263063 compiled bytes: fail closed until <256000 and all preserved emulator/hosting checks pass.
