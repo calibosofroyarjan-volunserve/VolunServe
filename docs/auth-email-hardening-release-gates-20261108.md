@@ -17,7 +17,7 @@
 3. Firestore cannot dynamically evaluate 51k domains in rules; the optional server-side blocking triggers do that, but only **after Firebase Authentication with Identity Platform is enabled and triggers are deployed**. Source-only rules and UI checks are not a full before-create server block.
 4. **Never reject unverified accounts in beforeUserSignedIn by emailVerified alone.** This callback runs during initial registration before the verification link is sent, so doing so would break the current onboarding flow.
 5. Root/public routes and all unauthenticated Guest public pages must stay readable; existing Admin/Super Admin, account migration, donations, certificates and live dashboard must be regression tested.
-6. Rate limiting, Abuse Protection and App Check/reCAPTCHA Enterprise need separate Firebase Console and client setup. They are **not** enabled by code in this PR.
+6. The staged signup IP rate limiter requires separately reviewed Identity Platform blocking-function activation. **No CAPTCHA/reCAPTCHA is included or planned for VolunServe signup**, per the user's design choice; do not enable it silently. App Check is also not enabled by this PR.
 7. The screenshot's `oidc-smoke` Hosting URL is a preview channel; do not mistake it for the live `volunserve.com` source.
 
 ## Safe activation sequence (no automatic deployment)
