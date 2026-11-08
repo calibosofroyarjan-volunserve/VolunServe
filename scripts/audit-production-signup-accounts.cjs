@@ -22,8 +22,10 @@ function auditOne(authUser, profile, counters) {
   if (role === "applicant") counters.pendingApplicant++;
   const isStaff = STAFF_ROLES.has(role);
   const isCommunity = COMMUNITY_ROLES.has(role);
+  // Legacy role profiles without status were treated as approved by the
+  // existing application. Count them, too, to avoid missing a lockout.
   const approved = profile.status === "approved" ||
-    (profile.status == null && isStaff);
+    (profile.status == null && (isStaff || isCommunity));
   if (!approved) return;
   const verified = authUser.emailVerified === true;
   if (isStaff) {
@@ -61,15 +63,16 @@ function selfTest() {
   auditOne({emailVerified:true,email:"volunteer@example.org"}, {role:"volunteer",status:"approved",email:"wrong@example.org"},c);
   auditOne({emailVerified:false,email:"pending@example.org"}, null,c);
   auditOne({emailVerified:false,email:"guest@example.org"}, {role:"guest",status:"approved"},c);
-  assert.equal(c.authUsers,6);
+  auditOne({emailVerified:false,email:"old@example.org"}, {role:"resident",email:"old@example.org"},c);
+  assert.equal(c.authUsers,7);
   assert.equal(c.authOnly,1);
   assert.equal(c.approvedStaff,2);
   assert.equal(c.unverifiedStaff,1);
-  assert.equal(c.approvedCommunity,2);
-  assert.equal(c.unverifiedCommunity,1);
+  assert.equal(c.approvedCommunity,3);
+  assert.equal(c.unverifiedCommunity,2);
   assert.equal(c.approvedEmailMismatch,1);
   assert.equal(c.legacyGuest,1);
-  assert.equal(blockers(c),3);
+  assert.equal(blockers(c),4);
   assert.equal(blockers(emptyCounters()),0);
   console.log("PASS: production account audit classification (synthetic only)");
 }
