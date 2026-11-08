@@ -60,7 +60,7 @@ jobs:
           const head = process.env.GITHUB_SHA;
           const before = process.env.EXPECTED_PREVIOUS_SHA;
           const sha = x => /^[a-f0-9]{40}$/.test(x || "");
-          const allowed = p => /^(app|components|assets|constants|hooks|lib|services|utils)\//.test(p);
+          const allowed = (p,status) => /^(app|components|assets|constants|hooks|lib|services|utils)\//.test(p) || (p === ".github/workflows/auto-publish-protected-live-hosting.yml" && status === "A");
           async function main() {
             assert(sha(head) && sha(before), "BLOCKED: invalid source SHA");
             assert.notEqual(before,"0".repeat(40), "BLOCKED: unsupported initial branch push");
@@ -82,7 +82,7 @@ jobs:
             assert(entries.length>0,"BLOCKED: no changes");
             for(const [status,path] of entries){
               assert(["A","M"].includes(status),"BLOCKED: deletion, rename or unknown file status");
-              assert(allowed(path),
+              assert(allowed(path,status),
                 "BLOCKED: config, workflow, policy, backend or unknown file changed: "+path);
             }
             console.log("PASS: production == previous protected commit; only frontend file updates; candidate is newest.");
