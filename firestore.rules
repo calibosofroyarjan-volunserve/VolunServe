@@ -79,8 +79,7 @@ service cloud.firestore {
       let p = signedIn() ? profile() : {};
       return hasResidentAccess() && p.get('activeMode', 'resident') == 'resident';
     }
-    match /users/{uid} {
-
+    // Exact shared validation predicates hoisted from identical match-local helpers.
       function hasVerifiedIdentity(data) {
         return (
           (
@@ -93,6 +92,19 @@ service cloud.firestore {
           )
         );
       }
+      function isVerifiedResident() {
+        return isResident()
+          && hasVerifiedIdentity(profile());
+      }
+      function isLguPersonnel() {
+        let p = signedIn() ? profile() : {};
+        return approved()
+          && p.role == 'lgu_personnel'
+          && p.lguVerified == true
+          && p.employmentStatus == 'active';
+      }
+    match /users/{uid} {
+
 
       function identitySubmissionAfter() {
         return getAfter(
@@ -672,13 +684,6 @@ service cloud.firestore {
     }
     match /lguDutyStatus/{uid} {
 
-      function isLguPersonnel() {
-        let p = signedIn() ? profile() : {};
-        return approved()
-          && p.role == 'lgu_personnel'
-          && p.lguVerified == true
-          && p.employmentStatus == 'active';
-      }
 
       allow read: if isAdminOrSuperAdmin()
         || (isLguPersonnel() && request.auth.uid == uid);
@@ -686,13 +691,6 @@ service cloud.firestore {
     }
     match /lguAttendance/{attendanceId} {
 
-      function isLguPersonnel() {
-        let p = signedIn() ? profile() : {};
-        return approved()
-          && p.role == 'lgu_personnel'
-          && p.lguVerified == true
-          && p.employmentStatus == 'active';
-      }
 
       allow read: if isAdminOrSuperAdmin()
         || (isLguPersonnel() && resource.data.uid == request.auth.uid);
@@ -700,13 +698,6 @@ service cloud.firestore {
     }
     match /lguAssignments/{assignmentId} {
 
-      function isLguPersonnel() {
-        let p = signedIn() ? profile() : {};
-        return approved()
-          && p.role == 'lgu_personnel'
-          && p.lguVerified == true
-          && p.employmentStatus == 'active';
-      }
 
       allow read: if isAdminOrSuperAdmin()
         || (
@@ -912,23 +903,7 @@ service cloud.firestore {
     }
     match /volunteerApplications/{uid} {
 
-      function hasVerifiedIdentity(data) {
-        return (
-          (
-            'identityVerified' in data
-            && data.identityVerified == true
-          )
-          || (
-            'identityStatus' in data
-            && data.identityStatus == 'verified'
-          )
-        );
-      }
 
-      function isVerifiedResident() {
-        return isResident()
-          && hasVerifiedIdentity(profile());
-      }
 
       function validVolunteerApplicationPayload() {
         let rd = request.resource.data;
@@ -1480,23 +1455,7 @@ service cloud.firestore {
     }
     match /assistanceRequests/{requestId} {
 
-      function hasVerifiedIdentity(data) {
-        return (
-          (
-            'identityVerified' in data
-            && data.identityVerified == true
-          )
-          || (
-            'identityStatus' in data
-            && data.identityStatus == 'verified'
-          )
-        );
-      }
 
-      function isVerifiedResident() {
-        return isResident()
-          && hasVerifiedIdentity(profile());
-      }
 
       function verificationReviewExists() {
         return exists(
@@ -2037,13 +1996,6 @@ service cloud.firestore {
     }
     match /disasterCases/{caseId} {
 
-      function isLguPersonnel() {
-        let p = signedIn() ? profile() : {};
-        return approved()
-          && p.role == 'lgu_personnel'
-          && p.lguVerified == true
-          && p.employmentStatus == 'active';
-      }
 
       function validStatusTransition() {
         return request.resource.data.status == resource.data.status
@@ -4032,18 +3984,6 @@ service cloud.firestore {
 
     match /responseAssignments/{assignmentId} {
 
-      function hasVerifiedIdentity(data) {
-        return (
-          (
-            'identityVerified' in data
-            && data.identityVerified == true
-          )
-          || (
-            'identityStatus' in data
-            && data.identityStatus == 'verified'
-          )
-        );
-      }
 
       function validVolunteerResponseTransition() {
         return (
@@ -4658,13 +4598,6 @@ service cloud.firestore {
     }
     match /lguResponseLocations/{caseId} {
 
-      function isLguPersonnel() {
-        let p = signedIn() ? profile() : {};
-        return approved()
-          && p.role == 'lgu_personnel'
-          && p.lguVerified == true
-          && p.employmentStatus == 'active';
-      }
 
       function isOperationalLgu() {
         return isAdmin() || isLguPersonnel();
@@ -4793,13 +4726,6 @@ service cloud.firestore {
     }
     match /residentResponseLocations/{uid} {
 
-      function isLguPersonnel() {
-        let p = signedIn() ? profile() : {};
-        return approved()
-          && p.role == 'lgu_personnel'
-          && p.lguVerified == true
-          && p.employmentStatus == 'active';
-      }
 
       function residentAssignmentForWrite() {
         return get(
