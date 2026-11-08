@@ -1332,12 +1332,9 @@ async def verify_identity(
     try:
         # Both the profile's Be a Verified Resident flow and the LGU review
         # queue use this one protected endpoint; no separate visual-only AI.
-        result = await asyncio.to_thread(
-            run_face_verification,
-            uid=uid,
-            id_document_bytes=id_document_bytes,
-            selfie_bytes=selfie_bytes,
-        )
+        # First check ONLY the government ID type the user selected.
+        # Never run face matching if the document is unrecognized, a school
+        # ID or a different government ID. Fail closed and allow a retry.
         document_screening = await asyncio.to_thread(
             screen_government_id,
             declared_type=id_type,
@@ -1346,23 +1343,26 @@ async def verify_identity(
             expected_first_name=x_volunserve_profile_first_name or "",
             expected_last_name=x_volunserve_profile_last_name or "",
         )
-        if document_screening.get("status") != "text_consistent_unverified":
-            # A face match NEVER overrules the selected document type.
-            # Fail closed on unrecognized, inconsistent or school IDs;
-            # the Resident may retry with the selected supported ID.
-            screening_status = document_screening.get("status")
+        screening_status = document_screening.get("status")
+        if (screening_status != "text_consistent_unverified"
+                or document_screening.get("detectedIdType") != id_type):
             if screening_status == "unsupported":
                 reason = "School IDs are not supported. Select and scan a valid government-issued ID."
             elif screening_status == "mismatch":
                 reason = "The scanned document does not match the selected government ID type. Select the correct ID and retry."
             else:
                 reason = "The selected government ID type could not be confirmed from the scan. Retake a clear photo and retry."
-            result.update({
-                "ok": True,
-                "status": "failed",
-                "decision": "failed",
-                "message": reason,
-            })
+            result = failed_attempt_result(
+                uid=uid, message=reason,
+                warning="selected_government_id_not_recognized",
+            )
+        else:
+            result = await asyncio.to_thread(
+                run_face_verification,
+                uid=uid,
+                id_document_bytes=id_document_bytes,
+                selfie_bytes=selfie_bytes,
+            )
     except HTTPException:
         raise
     except Exception:
