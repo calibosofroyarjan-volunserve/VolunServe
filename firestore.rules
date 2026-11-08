@@ -3186,6 +3186,20 @@ service cloud.firestore {
           && request.resource.data.updatedBy == request.auth.uid
           && request.resource.data.updatedAt is timestamp;
       }
+      function validSourceNeedForCampaign() {
+        let need = campaignSourceNeed();
+        return need.status in [
+          'verified',
+          'partially_allocated'
+        ]
+        && request.resource.data.affectedHouseholds
+          == need.affectedHouseholds
+        && request.resource.data.affectedPeople
+          == need.affectedPeople
+        && request.resource.data.barangays[0]
+          == need.barangay;
+      }
+
       // Financial operations and campaign oversight are LGU Admin duties.
       allow read: if isAdmin()
         || hasResidentAccess();
@@ -3196,16 +3210,7 @@ service cloud.firestore {
         && request.resource.data.updatedBy == request.auth.uid
         && !('closedBy' in request.resource.data)
         && !('closedAt' in request.resource.data)
-        && campaignSourceNeed().status in [
-          'verified',
-          'partially_allocated'
-        ]
-        && request.resource.data.affectedHouseholds
-          == campaignSourceNeed().affectedHouseholds
-        && request.resource.data.affectedPeople
-          == campaignSourceNeed().affectedPeople
-        && request.resource.data.barangays[0]
-          == campaignSourceNeed().barangay;
+        && validSourceNeedForCampaign();
       allow update: if isAdmin()
         && (
           validCampaignClose()
@@ -3221,6 +3226,7 @@ service cloud.firestore {
       }
       function validDonationSubmission() {
         let rd = request.resource.data;
+        let campaign = campaign;
         return rd.keys().hasOnly([
           'donationId',
           'source',
@@ -3252,11 +3258,11 @@ service cloud.firestore {
         && rd.campaignId is string
         && rd.campaignId.size() > 0
         && rd.campaignId.size() <= 160
-        && submissionCampaign().status == 'published'
+        && campaign.status == 'published'
         && rd.campaignTitle
-          == submissionCampaign().title
+          == campaign.title
         && rd.campaignBarangays
-          == submissionCampaign().barangays
+          == campaign.barangays
         && rd.donorUid == request.auth.uid
         && rd.donorName is string
         && rd.donorName.size() >= 1
@@ -3269,7 +3275,7 @@ service cloud.firestore {
           'in_kind'
         ]
         && rd.donationType
-          in submissionCampaign().acceptedDonationTypes
+          in campaign.acceptedDonationTypes
         && rd.category is string
         && rd.category.size() <= 80
         && rd.itemName is string
@@ -3307,7 +3313,7 @@ service cloud.firestore {
             rd.donationType == 'in_kind'
             && rd.category.size() >= 2
             && rd.category
-              in submissionCampaign().acceptedCategories
+              in campaign.acceptedCategories
             && rd.itemName.size() >= 2
             && rd.unit.size() >= 1
             && rd.quantityPledged is int
@@ -4070,6 +4076,20 @@ service cloud.firestore {
         ).data;
       }
 
+      function validInvitationTargets() {
+        let caseInfo = selectedCase();
+        let volunteer = selectedVolunteer();
+        return caseInfo.reporterUid != request.resource.data.volunteerId
+        && !(caseInfo.status in ['resolved', 'closed'])
+        && caseInfo.get('verificationStatus', 'pending_verification') != 'rejected'
+        && volunteer.get('status', '') == 'approved'
+        && volunteer.get('volunteerAccess', false) == true
+        && volunteer.get('volunteerStatus', '') == 'approved'
+        && !(volunteer.get('role', '') in [
+          'admin', 'superadmin', 'lgu_personnel', 'applicant'
+        ]);
+      }
+
       allow read: if isAdmin()
         || (hasVolunteerAccess() && resource.data.volunteerId == request.auth.uid);
       allow create: if isAdmin()
@@ -4102,15 +4122,7 @@ service cloud.firestore {
         && exists(
           /databases/$(database)/documents/disasterCases/$(request.resource.data.caseId)
         )
-        && selectedCase().reporterUid != request.resource.data.volunteerId
-        && !(selectedCase().status in ['resolved', 'closed'])
-        && selectedCase().get('verificationStatus', 'pending_verification') != 'rejected'
-        && selectedVolunteer().get('status', '') == 'approved'
-        && selectedVolunteer().get('volunteerAccess', false) == true
-        && selectedVolunteer().get('volunteerStatus', '') == 'approved'
-        && !(selectedVolunteer().get('role', '') in [
-          'admin', 'superadmin', 'lgu_personnel', 'applicant'
-        ]);
+        && validInvitationTargets();
       allow update: if request.resource.data
           .diff(resource.data).affectedKeys().hasOnly(['status', 'updatedAt'])
         && request.resource.data.updatedAt == request.time
@@ -4612,6 +4624,12 @@ service cloud.firestore {
           /databases/$(database)/documents/responseAssignments/$(request.resource.data.assignmentId)
         ).data;
       }
+      function lockTargetsMatch(status) {
+        let assignment = lockAssignmentAfter();
+        return assignment.volunteerId == request.auth.uid
+          && assignment.caseId == request.resource.data.caseId
+          && assignment.status == status;
+      }
       allow read: if isAdminOrSuperAdmin()
         || (
           signedIn()
@@ -4633,9 +4651,7 @@ service cloud.firestore {
         && request.resource.data.caseId.size() > 0
         && request.resource.data.status == 'accepted'
         && request.resource.data.updatedAt is timestamp
-        && lockAssignmentAfter().volunteerId == request.auth.uid
-        && lockAssignmentAfter().caseId == request.resource.data.caseId
-        && lockAssignmentAfter().status == 'accepted';
+        && lockTargetsMatch('accepted');
       allow update: if isVolunteer()
         && request.auth.uid == uid
         && resource.data.responderUid == request.auth.uid
@@ -4655,9 +4671,7 @@ service cloud.firestore {
           'on_site'
         ]
         && request.resource.data.updatedAt is timestamp
-        && lockAssignmentAfter().volunteerId == request.auth.uid
-        && lockAssignmentAfter().caseId == request.resource.data.caseId
-        && lockAssignmentAfter().status == request.resource.data.status;
+        && lockTargetsMatch(request.resource.data.status);
       allow delete: if isAdmin()
         || (
           isVolunteer()
