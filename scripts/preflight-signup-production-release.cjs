@@ -39,7 +39,9 @@ async function main(){
   const head=process.env.GITHUB_SHA;
   assert(validSha(head));
   assert.equal(child.execFileSync("git",["rev-parse","HEAD"],{encoding:"utf8"}).trim(),head);
-  assert.equal(child.execFileSync("git",["ls-remote","--heads","origin","live-protected"],{encoding:"utf8"}).split(/\s+/)[0],head);
+  const latestProtected=child.execFileSync("git",["ls-remote","--heads","origin","live-protected"],{encoding:"utf8"}).split(/\s+/)[0];
+  assert.equal(latestProtected,head,
+    "BLOCKED: this GitHub Actions run is pinned to a stale protected commit; run the latest protected workflow, not a rerun of an older build");
   assert(!process.env.FIRESTORE_EMULATOR_HOST&&!process.env.FIREBASE_AUTH_EMULATOR_HOST);
   const credential=JSON.parse(process.env.VOLUNSERVE_PRODUCTION_HOSTING_SERVICE_ACCOUNT||"null");
   assert(credential&&credential.project_id===PROJECT,"BLOCKED: no matching production Hosting environment key");
@@ -104,6 +106,21 @@ async function main(){
   },null,2));
   if(!safeAncestor)process.exitCode=1;
   if(rulesInfo.access!=="OK")process.exitCode=1;
+  if(rulesInfo.access==="OK"){
+    // A list response alone is insufficient: both currently deployed rule
+    // sources must be readable before any rollout can claim verification.
+    for(const key of ["firestore","storage"]){
+      const entries=rulesInfo[key]||[];
+      if(!entries.length || entries.some(item=>item.readStatus||!item.liveSourceHash)){
+        console.error("BLOCKED: could not read existing production "+key+" Rules source");
+        process.exitCode=1;
+      }
+    }
+    if(rulesInfo.paginationStatus){
+      console.error("BLOCKED: incomplete Rules release listing");
+      process.exitCode=1;
+    }
+  }
 }
 if(require.main===module){
   (process.argv.includes("--self-test")?Promise.resolve().then(selfTest):main())
