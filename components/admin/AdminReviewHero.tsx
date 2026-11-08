@@ -24,9 +24,10 @@ export default function AdminReviewHero({ eyebrow, title, subtitle, icon, tag }:
       <View pointerEvents="none" style={styles.orbSmall} />
       <View pointerEvents="none" style={styles.orbAccent} />
       <View pointerEvents="none" style={styles.decorativeStem}>
-        <Ionicons name="leaf-outline" size={compact ? 48 : 72} color="rgba(34,122,87,0.08)" />
+        <Ionicons name="leaf-outline" size={compact ? 76 : 110} color="rgba(218,255,233,0.16)" />
       </View>
       <View style={styles.copy}>
+        <Text style={styles.brandIdentity}>VOLUNSERVE  /  LGU OPERATIONS</Text>
         <View style={styles.eyebrowRow}>
           <View style={styles.eyebrowMark} />
           <Text style={styles.eyebrow}>{eyebrow}</Text>
@@ -36,7 +37,7 @@ export default function AdminReviewHero({ eyebrow, title, subtitle, icon, tag }:
       </View>
       {!compact && (
         <View style={styles.side}>
-          <View style={styles.iconCircle}><Ionicons name={icon} size={22} color="#07765A" /></View>
+          <View style={styles.iconCircle}><Ionicons name={icon} size={24} color="#0A624A" /></View>
           {!!tag && <Text style={styles.tag}>{tag}</Text>}
         </View>
       )}
@@ -46,37 +47,45 @@ export default function AdminReviewHero({ eyebrow, title, subtitle, icon, tag }:
 
 const styles = StyleSheet.create({
   hero: {
-    width: "100%", minHeight: 118, borderRadius: 12, overflow: "hidden",
-    backgroundColor: "#E5F5ED", borderWidth: 1, borderColor: "#C6E4D5",
-    paddingHorizontal: 22, paddingVertical: 17, marginBottom: 13,
+    width: "100%", minHeight: 138, borderRadius: 16, overflow: "hidden",
+    backgroundColor: "#103D30", borderWidth: 1, borderColor: "#286B52",
+    paddingHorizontal: 24, paddingVertical: 20, marginBottom: 14,
     flexDirection: "row", alignItems: "center", justifyContent: "space-between",
   },
-  heroCompact: { paddingHorizontal: 16, paddingVertical: 14, minHeight: 105 },
+  heroCompact: { paddingHorizontal: 17, paddingVertical: 17, minHeight: 120 },
   orbLarge: {
     position: "absolute", width: 350, height: 350, borderRadius: 175,
-    backgroundColor: "rgba(79,190,145,0.10)", right: -130, top: -135,
-    borderWidth: 1, borderColor: "rgba(48,130,94,0.09)",
+    backgroundColor: "rgba(114,207,160,0.12)", right: -130, top: -135,
+    borderWidth: 1, borderColor: "rgba(206,245,224,0.12)",
   },
   orbSmall: {
-    position: "absolute", width: 210, height: 210, borderRadius: 105,
-    backgroundColor: "rgba(143,223,184,0.20)", right: 95, top: -130,
+    position: "absolute", width: 220, height: 220, borderRadius: 110,
+    backgroundColor: "rgba(133,216,171,0.10)", right: 95, top: -135,
   },
   orbAccent: {
-    position: "absolute", width: 200, height: 200, borderRadius: 100,
-    backgroundColor: "rgba(195,237,214,0.20)", left: -120, bottom: -155,
+    position: "absolute", width: 220, height: 220, borderRadius: 110,
+    backgroundColor: "rgba(195,237,214,0.06)", left: -128, bottom: -161,
   },
-  decorativeStem: { position: "absolute", right: 75, bottom: -14, transform: [{ rotate: "-24deg" }] },
+  decorativeStem: {
+    position: "absolute", right: 72, bottom: -24, transform: [{ rotate: "-24deg" }],
+  },
   copy: { flex: 1, minWidth: 0, zIndex: 1 },
-  eyebrowRow: { flexDirection: "row", alignItems: "center", gap: 7, marginBottom: 6 },
-  eyebrowMark: { width: 6, height: 6, borderRadius: 3, backgroundColor: "#0A775A" },
-  eyebrow: { color: "#0B7459", fontSize: 10, fontWeight: "800", letterSpacing: 1.0 },
-  title: { color: "#123D32", fontSize: 24, lineHeight: 30, fontWeight: "800", letterSpacing: -0.7 },
-  titleCompact: { fontSize: 21, lineHeight: 27 },
-  subtitle: { color: "#416C5C", fontSize: 12.5, lineHeight: 18, marginTop: 5, maxWidth: 660 },
-  side: { alignItems: "center", justifyContent: "center", marginLeft: 14, zIndex: 1, gap: 5 },
-  iconCircle: {
-    width: 46, height: 46, borderRadius: 12, alignItems: "center", justifyContent: "center",
-    backgroundColor: "rgba(255,255,255,0.80)", borderWidth: 1, borderColor: "#BBDCCA",
+  brandIdentity: {
+    color: "#A8E7C8", fontSize: 10, lineHeight: 15,
+    fontWeight: "800", letterSpacing: 1.3, marginBottom: 6,
   },
-  tag: { color: "#0E6C51", fontWeight: "800", fontSize: 10, letterSpacing: 0.5 },
+  eyebrowRow: { flexDirection: "row", alignItems: "center", gap: 7, marginBottom: 4 },
+  eyebrowMark: { width: 6, height: 6, borderRadius: 3, backgroundColor: "#B5E6C2" },
+  eyebrow: { color: "#D4F0DF", fontSize: 10, fontWeight: "800", letterSpacing: 0.8 },
+  title: { color: "#FFFFFF", fontSize: 27, lineHeight: 34, fontWeight: "800", letterSpacing: -0.6 },
+  titleCompact: { fontSize: 22, lineHeight: 29 },
+  subtitle: { color: "#D4EDE2", fontSize: 12.5, lineHeight: 18, marginTop: 5, maxWidth: 670 },
+  side: {
+    alignItems: "center", justifyContent: "center", marginLeft: 16, zIndex: 1, gap: 7,
+  },
+  iconCircle: {
+    width: 54, height: 54, borderRadius: 15, alignItems: "center", justifyContent: "center",
+    backgroundColor: "#ECF8EF", borderWidth: 1, borderColor: "#D9F1E0",
+  },
+  tag: { color: "#C7F2DD", fontWeight: "800", fontSize: 10, letterSpacing: 0.5 },
 });
