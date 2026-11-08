@@ -174,13 +174,29 @@ jobs:
           npx firebase-tools hosting:clone "$PROJECT:live" "$PROJECT:$BACKUP" --project "$PROJECT" --non-interactive
           # Preview is separate from live and must show the exact approved Git SHA.
           npx firebase-tools hosting:channel:deploy "$PREVIEW" --project "$PROJECT" --non-interactive --expires 3d
-          node ../controller/scripts/release-disposable-email-site-hotfix.cjs --verify-preview
+          PREVIEW_OK=0
+          for attempt in 1 2 3 4 5; do
+            if node ../controller/scripts/release-disposable-email-site-hotfix.cjs --verify-preview; then
+              PREVIEW_OK=1
+              break
+            fi
+            sleep 10
+          done
+          test "$PREVIEW_OK" = 1
           # Existing Rules release updated by explicit PATCH, never a duplicate POST release.
           RULES_TOUCHED=1
           node ../controller/scripts/release-disposable-email-site-hotfix.cjs --publish-rules
           HOSTING_TOUCHED=1
           npx firebase-tools hosting:clone "$PROJECT:$PREVIEW" "$PROJECT:live" --project "$PROJECT" --non-interactive
-          node ../controller/scripts/release-disposable-email-site-hotfix.cjs --verify
+          LIVE_OK=0
+          for attempt in 1 2 3 4 5; do
+            if node ../controller/scripts/release-disposable-email-site-hotfix.cjs --verify; then
+              LIVE_OK=1
+              break
+            fi
+            sleep 10
+          done
+          test "$LIVE_OK" = 1
           echo "SUCCESS: en2ch.co Signup protection and exact frozen-site-derived Hosting published"
           RULES_TOUCHED=0
           HOSTING_TOUCHED=0
