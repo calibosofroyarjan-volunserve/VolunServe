@@ -92,7 +92,7 @@ async function start(stage){
    try{await faceDetector()}catch{status("Live face detector unavailable. Automatic selfie capture cannot proceed; close and use the test-image fallback.")}
   }
   if(current!==session)return;
-  timer=setInterval(()=>check(current),240);
+  timer=setInterval(()=>check(current),stage==="selfie"?120:240);
  }catch(e){if(current===session){status("Camera unavailable: "+String(e?.name||e?.message||"camera error")+". Allow access or use test-image fallback.")}}
 }
 function drawFaces(faces){
