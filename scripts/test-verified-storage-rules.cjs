@@ -24,6 +24,12 @@ async function main() {
         uid:"resident-storage",email:"resident@gmail.com",
         status:"approved",role:"resident",residentAccess:true,
       });
+      for (const role of ["admin","superadmin"]) {
+        await setDoc(doc(ctx.firestore(),"users","suspended-"+role),{
+          uid:"suspended-"+role,email:"suspended-"+role+"@gmail.com",
+          status:"approved",role,adminStatus:"suspended",
+        });
+      }
     });
     const bucket = "gs://" + projectId + ".appspot.com";
     const as = verified => env.authenticatedContext("resident-storage",{
@@ -37,6 +43,14 @@ async function main() {
       email:"guest@gmail.com",email_verified:true,
     }).storage(bucket);
     await assertFails(uploadBytes(ref(guest,"disasterCases/test-case/legacy-guest-photo.jpg"),bytes,metadata));
+    for (const role of ["admin","superadmin"]) {
+      const uid="suspended-"+role;
+      const disabled=env.authenticatedContext(uid,{
+        email:uid+"@gmail.com",email_verified:true,
+      }).storage(bucket);
+      await assertFails(uploadBytes(ref(disabled,
+        "disasterCases/test-case/"+uid+"-photo.jpg"),bytes,metadata));
+    }
     await assertSucceeds(uploadBytes(ref(as(true),file),bytes,metadata));
     await assertFails(getMetadata(ref(as(false),file)));
     await assertSucceeds(getMetadata(ref(as(true),file)));
