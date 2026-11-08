@@ -1966,19 +1966,6 @@ service cloud.firestore {
           'closed'
         ]
         && validAssistanceStatusTransition()
-        && rd.verificationStatus in [
-          'pending_review',
-          'under_review',
-          'verified',
-          'rejected'
-        ]
-        && rd.supportDecision in [
-          'pending',
-          'internal_support',
-          'donation_support',
-          'not_required',
-          'rejected'
-        ]
         && rd.remainingAmount is number
         && rd.remainingAmount >= 0
         && rd.remainingAmount <= 100000000
@@ -2019,14 +2006,12 @@ service cloud.firestore {
             && rd.remainingAmount == 0
           )
         )
-        && rd.donationCampaignId == ''
         && (
           rd.status != 'rejected'
           || (
             rd.verificationStatus == 'rejected'
             && rd.supportDecision == 'rejected'
             && rd.remainingAmount == 0
-            && rejectedPrivateReviewSupportsRequest()
           )
         )
         && (
@@ -2039,13 +2024,11 @@ service cloud.firestore {
                 'not_required'
               ]
               && rd.remainingAmount == 0
-              && verifiedPrivateReviewSupportsRequest()
             )
             || (
               rd.verificationStatus == 'rejected'
               && rd.supportDecision == 'rejected'
               && rd.remainingAmount == 0
-              && rejectedPrivateReviewSupportsRequest()
             )
           )
         );
