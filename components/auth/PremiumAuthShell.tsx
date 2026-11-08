@@ -69,10 +69,27 @@ export default function PremiumAuthShell({ children }: Props) {
               height: heroBounds.height,
             }]}
           />
+          {/* Keep community volunteers visible in every photo. Darken mainly
+              the bottom for cards; add subtle left-side contrast for the white
+              brand/headline rather than obscuring the whole photograph. */}
           <LinearGradient
-            colors={["rgba(5,41,32,0.42)", "rgba(0,44,38,0.64)", "rgba(0,43,37,0.98)"]}
-            locations={[0, 0.46, 1]}
+            colors={[
+              "rgba(4,38,32,0.18)",
+              "rgba(4,39,32,0.25)",
+              "rgba(1,37,30,0.34)",
+              "rgba(0,38,31,0.70)",
+            ]}
+            locations={[0, 0.34, 0.68, 1]}
             style={StyleSheet.absoluteFillObject}
+            pointerEvents="none"
+          />
+          <LinearGradient
+            colors={["rgba(0,34,27,0.25)", "rgba(0,34,27,0.06)", "rgba(0,34,27,0)"]}
+            locations={[0, 0.57, 1]}
+            start={{ x: 0, y: 0.5 }}
+            end={{ x: 1, y: 0.5 }}
+            style={StyleSheet.absoluteFillObject}
+            pointerEvents="none"
           />
           <View style={[styles.heroContent, compact && styles.heroContentCompact]}>
             <View style={styles.brand}>
@@ -197,7 +214,8 @@ const styles = StyleSheet.create({
   brand: { flexDirection: "row", alignItems: "center", gap: 13 },
   logo: { width: 74, height: 74 },
   brandText: { flex: 1 },
-  brandTitle: { color: "#FFFFFF", fontSize: vsType.size.display, fontWeight: "800", letterSpacing: -1.4 },
+  brandTitle: { color: "#FFFFFF", fontSize: vsType.size.display, fontWeight: "800", letterSpacing: -1.4,
+    textShadowColor: "rgba(0,25,19,0.55)", textShadowOffset: { width: 0, height: 2 }, textShadowRadius: 6 },
   brandTitleCompact: { fontSize: vsType.size.title },
   brandSub: { color: "#E1FFF3", fontWeight: "600", fontSize: vsType.size.label },
   heroTextWrap: { marginTop: 56 },
@@ -205,10 +223,12 @@ const styles = StyleSheet.create({
   heroBadge: { alignSelf: "flex-start", flexDirection: "row", gap: 8, alignItems: "center",
     backgroundColor: "#CBFFEB", paddingHorizontal: 16, paddingVertical: 11, marginBottom: 25 },
   heroBadgeText: { fontSize: vsType.size.caption, fontWeight: "800", letterSpacing: 0.7, color: "#13594C" },
-  headline: { fontSize: vsType.size.xl, lineHeight: 49, fontWeight: "800", letterSpacing: -1.3, color: "#FFFFFF" },
+  headline: { fontSize: vsType.size.xl, lineHeight: 49, fontWeight: "800", letterSpacing: -1.3, color: "#FFFFFF",
+    textShadowColor: "rgba(0,23,18,0.60)", textShadowOffset: { width: 0, height: 2 }, textShadowRadius: 6 },
   headlineCompact: { fontSize: vsType.size.title, lineHeight: 32 },
   headlineMint: { color: "#83F3CD" },
-  heroCopy: { color: "#EEFFF8", fontSize: vsType.size.card, lineHeight: 25, marginTop: 18, maxWidth: 570 },
+  heroCopy: { color: "#EEFFF8", fontSize: vsType.size.card, lineHeight: 25, marginTop: 18, maxWidth: 570,
+    textShadowColor: "rgba(0,22,17,0.55)", textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 4 },
   heroCopyCompact: { fontSize: vsType.size.meta, lineHeight: 17, marginTop: 7 },
   heroBottom: { gap: 26 },
   featureRow: { flexDirection: "row", gap: 10 },
