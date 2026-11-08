@@ -1,0 +1,144 @@
+# Protected-live automation. Intentionally FAIL-CLOSED until the currently
+# published production revision equals the previous protected branch commit.
+# Never publishes the unreleased branch backlog or bypasses database/release policy.
+name: Auto Publish VolunServe Web (Protected Live)
+on:
+  push:
+    branches: [live-protected]
+    paths:
+      - 'app/**'
+      - 'components/**'
+      - 'assets/**'
+      - 'constants/**'
+      - 'hooks/**'
+      - 'lib/**'
+      - 'services/**'
+      - 'utils/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'app.json'
+      - 'app.config.*'
+      - 'firebase.json'
+      - '.firebaserc'
+      - '.github/workflows/auto-publish-protected-live-hosting.yml'
+permissions:
+  contents: read
+concurrency:
+  group: volunserve-production-hosting-release
+  cancel-in-progress: false
+jobs:
+  validate-and-publish:
+    if: github.repository == 'calibosofroyarjan-volunserve/VolunServe' && github.ref == 'refs/heads/live-protected'
+    environment: production
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    env:
+      CI: 'true'
+      EXPO_NO_TELEMETRY: '1'
+      EXPECTED_PREVIOUS_SHA: ${{ github.event.before }}
+    steps:
+      - name: Checkout exact protected-live candidate and ancestry
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Set up Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Verify frozen release guard stays functional (READ ONLY)
+        run: node scripts/guard-live-protected-release.cjs --self-test
+      - name: Block unpublished backlog, stale branch and non-frontend changes BEFORE build
+        shell: bash
+        run: |
+          node <<'NODE'
+          const assert = require("node:assert/strict");
+          const cp = require("node:child_process");
+          const git = (...args) => cp.execFileSync("git", args, {encoding:"utf8"}).trim();
+          const head = process.env.GITHUB_SHA;
+          const before = process.env.EXPECTED_PREVIOUS_SHA;
+          const sha = x => /^[a-f0-9]{40}$/.test(x || "");
+          const allowed = (p,status) => /^(app|components|assets|constants|hooks|lib|services|utils)\//.test(p) || (p === ".github/workflows/auto-publish-protected-live-hosting.yml" && status === "A");
+          async function main() {
+            assert(sha(head) && sha(before), "BLOCKED: invalid source SHA");
+            assert.notEqual(before,"0".repeat(40), "BLOCKED: unsupported initial branch push");
+            assert.equal(process.env.GITHUB_REF, "refs/heads/live-protected");
+            assert.equal(git("rev-parse","HEAD"),head,"BLOCKED: runner not at commit");
+            const remote=git("ls-remote","--heads","origin","live-protected").split(/\s+/)[0];
+            assert.equal(remote,head,"BLOCKED: newer protected branch exists");
+            cp.execFileSync("git",["merge-base","--is-ancestor",before,head]);
+            const resp=await fetch("https://volunserve.com/volunserve-release.json",
+              {headers:{"Cache-Control":"no-cache"},signal:AbortSignal.timeout(12000)});
+            assert(resp.ok,"BLOCKED: live marker unavailable");
+            const live=await resp.json();
+            assert.equal(live.app,"VolunServe","BLOCKED: wrong site marker");
+            assert.equal(live.firebaseProject,"volunserve-3aa5b","BLOCKED: wrong Firebase project");
+            assert.equal(live.revision,before,
+              "BLOCKED: production not yet synchronized with prior protected branch commit; do NOT deploy unpublished backlog automatically");
+            const diff=git("diff","--name-status","--no-renames",before,head);
+            const entries=diff.split("\n").filter(Boolean).map(line=>line.split("\t"));
+            assert(entries.length>0,"BLOCKED: no changes");
+            for(const [status,path] of entries){
+              assert(["A","M"].includes(status),"BLOCKED: deletion, rename or unknown file status");
+              assert(allowed(path,status),
+                "BLOCKED: config, workflow, policy, backend or unknown file changed: "+path);
+            }
+            console.log("PASS: production == previous protected commit; only frontend file updates; candidate is newest.");
+          }
+          main().catch(err=>{console.error(err.message);process.exitCode=1;});
+          NODE
+      - name: Install locked dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Check TypeScript
+        run: npx tsc --noEmit --incremental false
+      - name: Existing cross-role regression tests
+        run: |
+          node scripts/test-login-field-validation.cjs
+          node scripts/test-login-ui-release.cjs
+          node scripts/test-signup-email-first-middle-optional.cjs
+          node scripts/test-route-entrypoints.cjs
+          node scripts/test-portal-resident-volunteer-ui-flow.cjs
+          node scripts/test-resident-volunteer-sidebar.cjs
+          node scripts/test-admin-navigation-contract.cjs
+          node scripts/test-lgu-admin-global-ui-pagination.cjs
+          node scripts/test-superadmin-accounts-directory.cjs
+          node scripts/test-profile-certificates-account-menu.cjs
+          node scripts/test-volunteer-time-controls-20261106.cjs
+          node scripts/test-volunteer-community-event-join-20261106.cjs
+          node scripts/test-embedded-emergency-map-navigation.cjs
+      - name: Export and verify exact Expo web release artifact (no deploy)
+        run: |
+          npx expo export --platform web --clear
+          node scripts/verify-hosting-release.cjs
+      - name: Recheck production marker immediately before release
+        shell: bash
+        run: |
+          node -e 'fetch("https://volunserve.com/volunserve-release.json",{headers:{"Cache-Control":"no-cache"},signal:AbortSignal.timeout(12000)}).then(r=>{if(!r.ok)throw Error("Live unavailable");return r.json()}).then(v=>{if(v.revision!==process.env.EXPECTED_PREVIOUS_SHA)throw Error("BLOCKED: live changed before publish");console.log("PASS: production revision unchanged")}).catch(e=>{console.error(e.message);process.exitCode=1})'
+      - name: Require existing production environment-only Firebase credential
+        shell: bash
+        env:
+          FIREBASE_SA: ${{ secrets.VOLUNSERVE_PRODUCTION_HOSTING_SERVICE_ACCOUNT }}
+        run: |
+          if [ -z "$FIREBASE_SA" ]; then
+            echo "::error::Missing production environment Hosting credential; no fallback"
+            exit 1
+          fi
+      - name: Publish verified Firebase Hosting only (no database, rules or functions)
+        uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          firebaseServiceAccount: ${{ secrets.VOLUNSERVE_PRODUCTION_HOSTING_SERVICE_ACCOUNT }}
+          projectId: volunserve-3aa5b
+          channelId: live
+      - name: Verify published revision on volunserve.com
+        env:
+          VOLUNSERVE_HOSTING_URL: https://volunserve.com
+          VOLUNSERVE_EXPECTED_SHA: ${{ github.sha }}
+        run: |
+          for attempt in 1 2 3 4 5 6; do
+            if node scripts/check-live-hosting.cjs; then exit 0; fi
+            sleep 10
+          done
+          echo "::error::Production did not serve the expected exact revision"
+          exit 1
