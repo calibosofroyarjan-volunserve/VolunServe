@@ -13,7 +13,6 @@ const cp=require("node:child_process");
 const crypto=require("node:crypto");
 const {createRequire}=require("node:module");
 const req=createRequire(path.resolve(__dirname,"../functions/package.json"));
-const {cert}=req("firebase-admin/app");
 const PROJECT="volunserve-3aa5b";
 const SITE_BASE="7d14e438b34501ecfd872f1eb4244b5c225c779f";
 const SITE_CANDIDATE="681c65eba80ea7ef8733a6b1e6047ea1c2a722ea";
@@ -39,6 +38,7 @@ async function http(url,options={}){
  return data;
 }
 async function token(){
+ const {cert}=req("firebase-admin/app");
  const credential=JSON.parse(process.env.VOLUNSERVE_PRODUCTION_HOSTING_SERVICE_ACCOUNT||"null");
  assert.equal(credential?.project_id,PROJECT,"Wrong protected Firebase credential");
  return (await cert(credential).getAccessToken()).access_token;
