@@ -1,0 +1,38 @@
+# Backend release validation only, no Render/Firebase deploy.
+name: Validate Production Render Signup Guard + Certificate Recovery
+on:
+  pull_request:
+    branches:
+      - backend-live-protected
+    paths:
+      - 'backend/**'
+      - '.github/workflows/validate-render-signup-security-production.yml'
+  push:
+    branches:
+      - backend-live-protected
+    paths:
+      - 'backend/**'
+      - '.github/workflows/validate-render-signup-security-production.yml'
+permissions:
+  contents: read
+jobs:
+  secure-backend-tests:
+    if: github.repository == 'calibosofroyarjan-volunserve/VolunServe'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - run: npm ci --prefix backend --no-audit --no-fund
+      - name: Test backend syntax, signup verification and existing certificate auto-recovery
+        working-directory: backend
+        run: npm run check
+      - name: Assert preserved certificate auto-sync & approved signup guards
+        run: |
+          node -e 'const fs=require("fs");let s=fs.readFileSync("backend/server.js","utf8");if(!s.includes("startCommunityCertificateAutoSync({db,reconcile:reconcileCommunityEventCertificates});")||!s.includes("isVerifiedFirebaseToken(decodedToken)")||!s.includes("isCompletedVolunServeProfile(storedProfile)"))process.exit(1);console.log("PASS: certificate recovery and verified signup guard coexist")'
