@@ -1,0 +1,29 @@
+# Tests only. No credentials. No Firestore/Hosting changes.
+name: Validate Signup Existing-Rules PATCH Release Controller (NO DEPLOY)
+on:
+  pull_request:
+    branches: [live-protected]
+    paths:
+      - scripts/release-signup-production-preflight.cjs
+      - .github/workflows/release-reviewed-site-derived-signup-20261109.yml
+      - .github/workflows/validate-signup-existing-rules-release-controller.yml
+permissions:
+  contents: read
+jobs:
+  offline-release-controller:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Validate controller syntax and exact Firebase Rules REST payloads, no production access
+        run: |
+          node --check scripts/release-signup-production-preflight.cjs
+          node scripts/release-signup-production-preflight.cjs --self-test
+      - name: Assert production workflow has required direct PATCH and original release restoration
+        run: |
+          node -e 'const fs=require("fs");const s=fs.readFileSync(".github/workflows/release-reviewed-site-derived-signup-20261109.yml","utf8"); if(!s.includes("scripts/release-signup-production-preflight.cjs --publish-rules")||!s.includes("scripts/release-signup-production-preflight.cjs --restore-rules")||s.includes("firebase-tools deploy --only firestore:rules")||!s.includes("environment: production"))process.exit(1); console.log("PASS: publish/restoration use explicit protected API mode, never fallback CLI create")'
