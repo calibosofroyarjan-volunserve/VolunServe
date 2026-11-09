@@ -118,7 +118,7 @@ service cloud.firestore {
       return email.lower().matches('.*@(gmail[.]com|googlemail[.]com)');
     }
     function gmailMailboxKey(email) {
-      return email.lower().split('@')[0].split('+')[0].replace('[.]', '') + '@gmail.com';
+      return email.lower().split('@')[0].split('[+]')[0].replace('[.]', '') + '@gmail.com';
     }
     function hasMatchingGmailClaim(uid, email) {
       return !isGmailMailbox(email) ||
