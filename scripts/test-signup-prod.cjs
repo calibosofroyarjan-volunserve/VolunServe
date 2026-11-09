@@ -353,6 +353,19 @@ function harness(source, enabled, options = {}) {
     assert(publicLayout.includes("onAuthStateChanged(auth"));
     assert(publicLayout.includes("void signOut(auth)"));
   });
+  await check("legacy Android Google signup handles id_token and PKCE authorization-code response",()=>{
+    const native=read("app/signup.tsx");
+    assert(native.includes("response.authentication?.idToken"),
+      "OAuth authentication result token fallback missing");
+    assert(native.includes("AuthSession.exchangeCodeAsync"),
+      "OAuth authorization-code exchange missing");
+    assert(native.includes("response.params?.code") && native.includes("request?.codeVerifier"),
+      "PKCE exchange must require the original verifier");
+    assert(native.includes("shouldAutoExchangeCode: false"),
+      "Manual PKCE exchange must not race SDK auto exchange");
+    assert(native.includes("getRegistrationEmailError(googleEmail)"),
+      "Google token resolution must retain disposable-mail check");
+  });
   await check("native Google signup owns OAuth and never bounces pending users to Login",()=>{
     assert(read("lib/useSignupGoogle.ts").includes("signInWithCredential"));
     assert(read("lib/useSignupGoogle.web.ts").includes("signInWithPopup"));

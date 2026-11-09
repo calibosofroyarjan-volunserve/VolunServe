@@ -473,6 +473,8 @@ function LegacySignup() {
     androidClientId: "233201250762-d7tnic7h4q3f6ohip52a36ng22uqrvl5.apps.googleusercontent.com",
     redirectUri,
     scopes: ["openid", "profile", "email"],
+    // Resolve the authorization code with the same PKCE flow as native Login.
+    shouldAutoExchangeCode: false,
   });
 
   const today = new Date();
@@ -485,10 +487,24 @@ function LegacySignup() {
     const handleGoogleSuccess = async () => {
       if (response?.type !== "success") return;
       try {
-        const idToken = response.params?.id_token;
+        let idToken = response.params?.id_token || response.authentication?.idToken;
+        // Android Google OAuth may return an authorization code instead of an
+        // id_token. Exchange it with the exact PKCE verifier from this request.
+        // Never send an OAuth code or token to the registration profile.
+        if (!idToken && response.params?.code) {
+          if (!request?.codeVerifier) {
+            throw new Error("Google sign-in expired. Please try again.");
+          }
+          const exchanged = await AuthSession.exchangeCodeAsync({
+            clientId: request.clientId,
+            code: response.params.code,
+            redirectUri: request.redirectUri,
+            extraParams: { code_verifier: request.codeVerifier },
+          }, Google.discovery);
+          idToken = exchanged.idToken;
+        }
         if (!idToken) {
-          Alert.alert("Google Error", "No ID token returned.");
-          return;
+          throw new Error("Google did not return a sign-in token. Please try again.");
         }
 
         const credential = GoogleAuthProvider.credential(idToken);
