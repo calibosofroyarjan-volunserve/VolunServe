@@ -24,3 +24,12 @@ test("blocking callbacks use Firebase identity namespace and never reject unveri
   assert(!blocking.includes("if (!event.data?.emailVerified)"));
   assert(!blocking.includes('require("firebase-functions/v2/https")'));
 });
+
+test("separate before-create-only flag does not export a sign-in blocker", () => {
+  const gate = 'process.env.VOLUNSERVE_ENABLE_IDENTITY_BEFORE_CREATE === "true"';
+  assert(index.includes(gate), "Dedicated before-create activation must be opt-in");
+  const isolated = index.slice(index.indexOf(gate), index.indexOf("setGlobalOptions(", index.indexOf(gate)));
+  assert(isolated.includes("exports.volunserveBlockDisposableBeforeCreate"));
+  assert(!isolated.includes("exports.volunserveBlockDisposableBeforeSignIn"));
+  assert(isolated.includes('process.env.VOLUNSERVE_ENABLE_IDENTITY_BLOCKING !== "true"'));
+});
