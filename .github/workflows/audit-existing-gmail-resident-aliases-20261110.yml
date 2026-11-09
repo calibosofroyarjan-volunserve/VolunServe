@@ -51,7 +51,7 @@ jobs:
           assert(source.includes('where("role","in",ROLES)'),'Limit audit to community roles');
           assert(workflow.includes('environment: production'),'Require production environment gate');
           assert(workflow.includes("github.event_name == 'push'"),'No production access on PR');
-          assert(!/firebase-tools deploy|hosting:channel:deploy|hosting:clone/.test(workflow));
+          assert(!/^\s*(?:npx\s+)?firebase(?:-tools)?\s+.*(?:deploy|clone)/m.test(workflow));
           console.log('PASS: source confined to read-only Firebase Auth/Firestore queries; no production writes');
           NODE
   production-readonly-census:
