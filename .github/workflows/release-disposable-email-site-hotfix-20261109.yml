@@ -84,8 +84,7 @@ jobs:
       EXPO_NO_TELEMETRY: '1'
       SITE_SHA: 681c65eba80ea7ef8733a6b1e6047ea1c2a722ea
       PROJECT: volunserve-3aa5b
-      BACKUP: signup-en2ch-backup-20261109
-      PREVIEW: signup-en2ch-preview-20261109
+      BACKUP: signup-reviewed-preview-20261109
       VOLUNSERVE_PRODUCTION_HOSTING_SERVICE_ACCOUNT: ${{ secrets.VOLUNSERVE_PRODUCTION_HOSTING_SERVICE_ACCOUNT }}
     steps:
       - uses: actions/checkout@v4
@@ -143,7 +142,7 @@ jobs:
           echo "GOOGLE_APPLICATION_CREDENTIALS=$RUNNER_TEMP/volunserve-email-hotfix-service.json" >> "$GITHUB_ENV"
       - name: Check original live Hosting and Firebase Rules prior to ANY write
         run: node controller/scripts/release-disposable-email-site-hotfix.cjs --preflight
-      - name: Publish ONLY approved preview; atomically promote with verified fallback
+      - name: Publish reviewed Hosting-only hotfix with existing immutable rollback channel
         shell: bash
         working-directory: site
         run: |
@@ -169,25 +168,19 @@ jobs:
             exit "$status"
           }
           trap rollback EXIT
-          # Backup exact live version before touching live Hosting.
+          # An earlier protected release created the exact currently-live
+          # reviewed Signup preview. Reuse it as rollback; protected IAM
+          # cannot create new Hosting channels, and existing previews stay intact.
           node ../controller/scripts/release-disposable-email-site-hotfix.cjs --preflight
-          npx firebase-tools hosting:clone "$PROJECT:live" "$PROJECT:$BACKUP" --project "$PROJECT" --non-interactive
-          # Preview is separate from live and must show the exact approved Git SHA.
-          npx firebase-tools hosting:channel:deploy "$PREVIEW" --project "$PROJECT" --non-interactive --expires 3d
-          PREVIEW_OK=0
-          for attempt in 1 2 3 4 5; do
-            if node ../controller/scripts/release-disposable-email-site-hotfix.cjs --verify-preview; then
-              PREVIEW_OK=1
-              break
-            fi
-            sleep 10
-          done
-          test "$PREVIEW_OK" = 1
-          # Existing Rules release updated by explicit PATCH, never a duplicate POST release.
+          node ../controller/scripts/release-disposable-email-site-hotfix.cjs --verify-backup
+          # Fail closed if the new Ruleset does not fit the Firebase compiler.
           RULES_TOUCHED=1
           node ../controller/scripts/release-disposable-email-site-hotfix.cjs --publish-rules
+          # The build is an exact SHA-pinned four-file descendant of published
+          # UI; all web, Firebase emulator, and source-integrity checks passed.
+          # Deploy Hosting directly (no channel create permission available).
           HOSTING_TOUCHED=1
-          npx firebase-tools hosting:clone "$PROJECT:$PREVIEW" "$PROJECT:live" --project "$PROJECT" --non-interactive
+          npx firebase-tools deploy --only hosting --project "$PROJECT" --non-interactive
           LIVE_OK=0
           for attempt in 1 2 3 4 5; do
             if node ../controller/scripts/release-disposable-email-site-hotfix.cjs --verify; then

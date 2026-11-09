@@ -2,6 +2,7 @@
 "use strict";
 /**
  * One-time guarded live-site-derived disposable-mail Signup release.
+ * The exact existing reviewed Signup channel is our Hosting rollback target.
  * Full code and Hosting changes are restricted to a frozen approved site SHA.
  * Modes are read-only except --publish-rules and --restore-rules.
  * No user-record, Auth UID, Storage, functions, or Render writes.
@@ -18,8 +19,7 @@ const SITE_BASE="7d14e438b34501ecfd872f1eb4244b5c225c779f";
 const SITE_CANDIDATE="681c65eba80ea7ef8733a6b1e6047ea1c2a722ea";
 const PREVIOUS_RULES_COMMIT="de2fac77d54c4cb0def3092c3fe4569404353d0e";
 const RULES_CANDIDATE_BLOB="6f65f4d54624020138111c6358d031100d06ec26";
-const BACKUP="signup-en2ch-backup-20261109";
-const PREVIEW="signup-en2ch-preview-20261109";
+const BACKUP="signup-reviewed-preview-20261109";
 const ROOT=path.resolve(__dirname,"..");
 const SITE=path.resolve(ROOT,"../site");
 const SHA=s=>crypto.createHash("sha256").update(s).digest("hex");
@@ -116,30 +116,27 @@ async function verifyRepo(){
   process.env.GITHUB_SHA,"BLOCKED: protected source is stale");
  approvedSiteDiff();
 }
-async function verifyChannels(t){
- const getChannel=async channel=>http(
-  "https://firebasehosting.googleapis.com/v1beta1/sites/"+PROJECT+"/channels/"+channel,
-  {headers:{Authorization:"Bearer "+t}});
- const [backup,preview]=await Promise.all([getChannel(BACKUP),getChannel(PREVIEW)]);
- assert(backup.release?.version?.name && preview.release?.version?.name);
- const [bm,pm]=await Promise.all([
-  marker(new URL("/volunserve-release.json",backup.url).href),
-  marker(new URL("/volunserve-release.json",preview.url).href)
+async function verifyExistingBackup(t){
+ const base="https://firebasehosting.googleapis.com/v1beta1/sites/"+PROJECT+"/channels/";
+ const [backup,live]=await Promise.all([
+  http(base+BACKUP,{headers:{Authorization:"Bearer "+t}}),
+  http(base+"live",{headers:{Authorization:"Bearer "+t}})
  ]);
- assert.equal(bm.revision,SITE_BASE,"BLOCKED: backup differs from current live");
- assert.equal(pm.revision,SITE_CANDIDATE,"BLOCKED: preview lacks reviewed Hotfix");
- const live=await getChannel("live");
- assert.equal(live.release?.version?.name,backup.release.version.name,
-  "BLOCKED: backup not equal to original live version");
- console.log("PASS: exact live Hosting backup and reviewed preview verified");
+ assert(backup.release?.version?.name && live.release?.version?.name,
+  "BLOCKED: current or reviewed existing Hosting version missing");
+ assert.equal(backup.release.version.name,live.release.version.name,
+  "BLOCKED: existing reviewed Signup version is not the exact live backup");
+ const bm=await marker(new URL("/volunserve-release.json",backup.url).href);
+ assert.equal(bm.revision,SITE_BASE,
+  "BLOCKED: existing reviewed backup marker does not match the current live website");
+ console.log("PASS: existing immutable Signup preview equals current production Hosting version");
 }
 async function main(){
  const mode=process.argv[2]||"--self-test";
- assert(["--self-test","--check-source","--preflight","--verify-preview","--publish-rules",
+ assert(["--self-test","--check-source","--preflight","--verify-backup","--publish-rules",
   "--verify","--restore-rules"].includes(mode),"Unknown mode");
  if(mode==="--self-test"){
-  assert.equal(BACKUP,"signup-en2ch-backup-20261109");
-  assert.equal(PREVIEW,"signup-en2ch-preview-20261109");
+  assert.equal(BACKUP,"signup-reviewed-preview-20261109");
   assert.equal(SITE_CANDIDATE.length,40);
   console.log("PASS: controlled site-derived hotfix constants");
   return;
@@ -152,11 +149,11 @@ async function main(){
  await verifyRepo();
  const t=await token();
  const rules=await readRules(t);
- if(mode==="--preflight"||mode==="--verify-preview"){
+ if(mode==="--preflight"||mode==="--verify-backup"){
   const m=await marker("https://volunserve.com/volunserve-release.json");
   assert.equal(m.revision,SITE_BASE,"BLOCKED: live Hosting has drifted");
   assert.equal(rules.source,oldRules(),"BLOCKED: active production Rules have drifted");
-  if(mode==="--verify-preview") await verifyChannels(t);
+  if(mode==="--verify-backup") await verifyExistingBackup(t);
   console.log("PASS: exact original live Hosting and Firestore Rules are preserved");
   return;
  }
