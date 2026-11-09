@@ -1,0 +1,47 @@
+name: Audit Deleted Temp Mail and Orphan Resident Profile (NO DELETE)
+on:
+  pull_request:
+    branches: [live-protected]
+    paths:
+      - scripts/audit-deleted-temp-mail-profile-20261110.cjs
+      - .github/workflows/audit-deleted-temp-mail-profile-20261110.yml
+  push:
+    branches: [live-protected]
+    paths:
+      - scripts/audit-deleted-temp-mail-profile-20261110.cjs
+      - .github/workflows/audit-deleted-temp-mail-profile-20261110.yml
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: {submodules: false}
+      - uses: actions/setup-node@v4
+        with: {node-version: '22'}
+      - name: Check exact target list and no mutation calls
+        run: |
+          node --check scripts/audit-deleted-temp-mail-profile-20261110.cjs
+          node scripts/audit-deleted-temp-mail-profile-20261110.cjs --self-test
+          node -e 'const s=require("fs").readFileSync("scripts/audit-deleted-temp-mail-profile-20261110.cjs","utf8");if(/deleteUser\(|deleteUsers\(|\.delete\(|\.set\(|\.update\(|\.add\(/.test(s))process.exit(1);console.log("PASS: read only")'
+  production-readonly:
+    needs: test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/live-protected' && github.repository == 'calibosofroyarjan-volunserve/VolunServe'
+    environment: production
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with: {ref: '${{ github.sha }}',fetch-depth: 0,submodules: false}
+      - uses: actions/setup-node@v4
+        with: {node-version: '22'}
+      - name: Require latest protected head
+        run: |
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(git ls-remote --heads origin live-protected | cut -f1)" = "$GITHUB_SHA"
+      - run: npm ci --prefix functions --no-audit --no-fund
+      - name: Verify exact deleted accounts and inspect residual Firestore profile only
+        env:
+          VOLUNSERVE_PRODUCTION_AUDIT_CREDENTIAL: ${{ secrets.VOLUNSERVE_PRODUCTION_READONLY_SERVICE_ACCOUNT }}
+        run: node scripts/audit-deleted-temp-mail-profile-20261110.cjs
