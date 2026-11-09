@@ -250,10 +250,57 @@ const historicalEmailGuard='!request.resource.data.email.matches(".*@en2ch[.]com
 const reviewedEmailGuard='!request.resource.data.email.matches(".*@([a-z0-9-]+[.])*en2ch[.](com|co)")';
 assert.equal(reviewedHoisted.split(historicalEmailGuard).length,2,
  "BLOCKED: historical disposable-email guard moved");
-assert.equal(current,reviewedHoisted.replace(historicalEmailGuard,reviewedEmailGuard),
- "BLOCKED: other Firestore permissions, validation branches or collection paths changed");
+// PR #351 adds exactly TWO narrowly reviewed, deny-only predicates:
+// (1) reject @emailkeep.com (and subdomains) on Resident profile CREATE;
+// (2) deny the existing Resident/Volunteer approved() authorization for that
+//     email domain. Staff authorization is outside this branch, unchanged.
+// Keep exact reconstruction against the frozen baseline: a third predicate,
+// removed validation, changed role helper, or permission drift still fails.
+const priorReviewedRules=reviewedHoisted.replace(historicalEmailGuard,reviewedEmailGuard);
+const previousCommunityEmailMatch="            && request.auth.token.get('email', '') == p.get('email', '')";
+const newCommunityEmailMatch=previousCommunityEmailMatch+
+  `
+            && !request.auth.token.get('email', '').matches(".*@([a-z0-9-]+[.])*emailkeep[.]com")`;
+const previousCreateDeny='        && '+reviewedEmailGuard;
+const newCreateDeny=previousCreateDeny+
+  `
+        && !request.resource.data.email.matches(".*@([a-z0-9-]+[.])*emailkeep[.]com")`;
+assert.equal(priorReviewedRules.split(previousCommunityEmailMatch).length,2,
+ "BLOCKED: resident/volunteer email match moved");
+assert.equal(priorReviewedRules.split(previousCreateDeny).length,2,
+ "BLOCKED: existing Resident create denial moved");
+const expectedEmailkeepRules=priorReviewedRules
+ .replace(previousCommunityEmailMatch,newCommunityEmailMatch)
+ .replace(previousCreateDeny,newCreateDeny);
+// In addition to the two deny-only checks, the removed phone field may be
+// empty for new Resident profiles. Nonempty numbers keep their exact PH format.
+const requiredPhoneLine="          && d.phoneNumber.matches('^([+]639[0-9]{9}|09[0-9]{9})$')";
+const optionalPhoneLine="          && (d.phoneNumber == '' || d.phoneNumber.matches('^([+]639[0-9]{9}|09[0-9]{9})$'))";
+assert.equal(expectedEmailkeepRules.split(requiredPhoneLine).length,2,
+ "BLOCKED: original phone validation moved or duplicated");
+const expectedCombinedRules=expectedEmailkeepRules.replace(requiredPhoneLine,()=>optionalPhoneLine);
+const tempMailHelper="    // Recent temp-mail.org delivery domains reviewed 2026-11-10.\n    // Deny-only for community profiles; staff policies remain unchanged.\n    // This is a finite provider snapshot and cannot detect every new domain.\n    function blockedTempMailOrgAlias(email) {\n      return email.matches(\".*@([a-z0-9-]+[.])*(adujudi01[.]info|avtomaty-online[.]cc|baimengshu[.]com|bankwen[.]com|berkshireonstage[.]com|boffweb[.]com|crackclue[.]com|crystalfact[.]info|ctd[.]nl8[.]eu|digeros[.]com|doisongtinhduc[.]xyz|dragontranslation[.]net|drtall[.]com|emailgeneratorai[.]cc|ghostmailz[.]club|ghostmailz[.]online|ghostmailz[.]store|gmail[.]shagni[.]com|huanqiu6[.]cc|huicuiguan[.]com|indonesiacentral[.]info|javafs[.]com|jjwxb[.]com|jlmmarine[.]com|kxdyy[.]com|livetogelhk[.]info|luontaisterveys[.]info|macsnipe[.]com|mail[.]chosenx[.]com|mail[.]gianes[.]com|mail[.]sc2hub[.]com|mailer[.]pics|mmamemories[.]com|mpmail[.]top|nmwxb[.]com|prejuge[.]com|prestigegroupnet[.]com|sofabazar[.]com|spicylog[.]com|stebie[.]com|tobiquegaming-license[.]com|ttbtt[.]com|wandera[.]top|wbcom[.]info|wencuigu[.]com|wxfwb[.]com|yesrox[.]com|yyqzw[.]com|zymapi[.]top)\");\n    }\n";
+const tempMailApprovedDeny="\n            && !blockedTempMailOrgAlias(request.auth.token.get('email', ''))";
+const tempMailCreateDeny="\n        && !blockedTempMailOrgAlias(request.resource.data.email)";
+assert.equal(expectedCombinedRules.split("    function approved() {").length,2);
+assert.equal(expectedCombinedRules.split("            && !request.auth.token.get('email', '').matches(\".*@([a-z0-9-]+[.])*emailkeep[.]com\")").length,2);
+assert.equal(expectedCombinedRules.split("        && !request.resource.data.email.matches(\".*@([a-z0-9-]+[.])*emailkeep[.]com\")").length,2);
+const expectedProviderRules=expectedCombinedRules
+ .replace("    function approved() {",tempMailHelper+"    function approved() {")
+ .replace("            && !request.auth.token.get('email', '').matches(\".*@([a-z0-9-]+[.])*emailkeep[.]com\")","            && !request.auth.token.get('email', '').matches(\".*@([a-z0-9-]+[.])*emailkeep[.]com\")"+tempMailApprovedDeny)
+ .replace("        && !request.resource.data.email.matches(\".*@([a-z0-9-]+[.])*emailkeep[.]com\")","        && !request.resource.data.email.matches(\".*@([a-z0-9-]+[.])*emailkeep[.]com\")"+tempMailCreateDeny);
+
+const providerFold=expectedProviderRules
+ .replaceAll('matches(".*@([a-z0-9-]+[.])*emailkeep[.]com")','matches("(?i).*@([a-z0-9-]+[.])*emailkeep[.]com")')
+ .replace('matches(".*@([a-z0-9-]+[.])*en2ch[.](com|co)")','matches("(?i).*@([a-z0-9-]+[.])*en2ch[.](com|co)")')
+ .replace('return email.matches(".*@([a-z0-9-]+[.])*(adujudi01','return email.matches("(?i).*@([a-z0-9-]+[.])*(adujudi01');
+assert.equal(expectedProviderRules.split('matches(".*@([a-z0-9-]+[.])*emailkeep[.]com")').length,3);
+assert.equal(expectedProviderRules.split('matches(".*@([a-z0-9-]+[.])*en2ch[.](com|co)")').length,2);
+assert.equal(current,providerFold,
+ "BLOCKED: rules changed beyond the three case-insensitive temporary-domain guard upgrades");
+
 assert.equal(cp.execFileSync("git",["hash-object","firestore.rules"],{encoding:"utf8"}).trim(),
-"6f65f4d54624020138111c6358d031100d06ec26","BLOCKED: unreviewed Firestore Rules blob");
+"a40954b7d8716e3953483a7ca39dd9e03f7b4e9a","BLOCKED: unreviewed Firestore Rules blob");
 // Verify exhaustiveness of all optional-review branches over valid and
 // invalid types, status values and three-valued nulls before Firebase emulator.
 for(const required of [true,false,null,"true",0,1,undefined]){
@@ -271,7 +318,7 @@ for(const required of [true,false,null,"true",0,1,undefined]){
 }
 
 const gitBlob=cp.execFileSync("git",["hash-object","firestore.rules"],{encoding:"utf8"}).trim();
-assert.equal(gitBlob,"6f65f4d54624020138111c6358d031100d06ec26","BLOCKED: unapproved Firestore blob");
+assert.equal(gitBlob,"a40954b7d8716e3953483a7ca39dd9e03f7b4e9a","BLOCKED: unapproved Firestore blob");
 const paths=source=>source.split("\n").filter(l=>l.startsWith("    match /")).map(l=>l.slice("    match /".length).split(" ")[0]);
 assert.deepEqual(paths(current),paths(protectedBaseline),"BLOCKED: collection scope changed");
 const allows=source=>[...source.matchAll(/allow (?:get|list|read|write|create|update|delete)/g)].length;
