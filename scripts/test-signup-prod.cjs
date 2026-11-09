@@ -62,6 +62,12 @@ function harness(source, enabled, options = {}) {
       assert.equal(emailPolicy.getRegistrationEmailError(email),null);
     }
   });
+  await check("verified Resident signup succeeds with removed phone field",async()=>{
+    const h=harness(current,true);
+    await h.api.signUpUser({...data,phoneNumber:"",authProvider:"verified_email"});
+    assert.equal(h.profile()?.phoneNumber,"");
+    assert(h.calls.includes("transaction"));
+  });
   await check("web Signup stays premium after unrelated Hosting builds; native remains opt-in",()=>{
     for (const value of [undefined,"false","1","TRUE",""]) {
       const native=load(read("lib/signupFeature.ts"),{"react-native":{Platform:{OS:"android"}}},{EXPO_PUBLIC_EMAIL_FIRST_SIGNUP:value});
@@ -234,7 +240,6 @@ function harness(source, enabled, options = {}) {
       {firstName:""},
       {lastName:""},
       {age:0},
-      {phoneNumber:""},
       {barangay:""},
       {barangay:"Outside SJDM"},
       {occupationCategory:""},
