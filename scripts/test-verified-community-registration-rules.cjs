@@ -119,7 +119,7 @@ async function main() {
     // together; non-Gmail Resident registration needs no Gmail claim.
     async function createGmailResident(uid,email,profile) {
       const db = as(uid,email,true);
-      const canonical = email.toLowerCase().split("@")[0].split("+")[0].replace(/\\./g,"")+"@gmail.com";
+      const canonical = email.toLowerCase().split("@")[0].split("+")[0].replace(/\./g,"")+"@gmail.com";
       const batch=writeBatch(db);
       batch.set(doc(db,"gmailAliasClaims",canonical),{uid,createdAt:serverTimestamp()});
       batch.set(doc(db,"users",uid),{...profile,uid,email});
