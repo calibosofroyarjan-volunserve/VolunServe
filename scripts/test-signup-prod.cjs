@@ -152,6 +152,23 @@ function harness(source, enabled, options = {}) {
     const off=harness(current,false,{providers:["google.com"]});await assert.rejects(off.link.linkEmailFirstGooglePassword("Password1!"),/not enabled/);assert.deepEqual(off.calls,[]);
     const h=harness(current,true,{providers:["google.com"]});assert.equal((await h.link.linkEmailFirstGooglePassword("Password1!")).uid,h.user.uid);assert(h.calls.includes("link"));assert(h.calls.includes("token"));
   });
+  await check("Google provider collision links only after explicit password sign-in and same-UID checks",()=>{
+    const web=read("app/login.web.tsx");
+    assert(web.includes('collision?.code === "auth/account-exists-with-different-credential"'));
+    assert(web.includes("GoogleAuthProvider.credentialFromError(error as any)"));
+    assert(web.includes("pendingGoogleLink.current = { email: collisionEmail, credential }"));
+    assert(web.includes("const handleLogin = async (linkGoogle = false) =>"));
+    assert(web.includes("const pending = linkGoogle ? pendingGoogleLink.current : null"));
+    assert(web.includes('["resident", "volunteer"].includes(profile.role)'));
+    assert(web.includes("signedInEmail !== pending.email") && web.includes("profileEmail !== pending.email"));
+    assert(web.includes("auth.currentUser?.uid !== user.uid"));
+    assert(web.includes("await linkWithCredential(user, pending.credential)"));
+    assert(web.includes("linked.user.uid !== user.uid"));
+    assert(web.includes("onPress={() => void handleLogin(true)}"));
+    assert(web.includes("pendingGoogleLink.current = null"));
+    assert(!web.includes("sessionStorage.setItem(GOOGLE_LOGIN_NOTICE_KEY, credential"),
+      "OAuth tokens must never be persisted");
+  });
   await check("Google linking refuses disposable email before credential or profile changes",async()=>{
     const h=harness(current,true,{providers:["google.com"]});
     h.user.email="test@sub.emailkeep.com";
