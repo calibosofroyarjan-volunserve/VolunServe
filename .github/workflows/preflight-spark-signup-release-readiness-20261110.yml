@@ -1,0 +1,72 @@
+# Source-only read-only audit. Never deploys Hosting/Rules/Functions.
+# Runs on merge to protected branch or explicit manual dispatch.
+name: Audit Spark Signup Release Readiness (NO DEPLOY)
+on:
+  workflow_dispatch:
+  push:
+    branches: [live-protected]
+    paths:
+      - scripts/preflight-spark-signup-release-readiness.cjs
+      - .github/workflows/preflight-spark-signup-release-readiness-20261110.yml
+  pull_request:
+    branches: [live-protected]
+    paths:
+      - scripts/preflight-spark-signup-release-readiness.cjs
+      - .github/workflows/preflight-spark-signup-release-readiness-20261110.yml
+permissions:
+  contents: read
+jobs:
+  source-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify audit syntax and immutable read-only helper contracts
+        run: |
+          node --check scripts/preflight-spark-signup-release-readiness.cjs
+          node scripts/preflight-spark-signup-release-readiness.cjs --self-test
+          node -e 'const s=require("fs").readFileSync("scripts/preflight-spark-signup-release-readiness.cjs","utf8");if(/hosting:clone|hosting:channel:deploy|--publish-rules|--restore-rules|firebase-tools deploy|rulesets.create|releases.update/.test(s))process.exit(1);console.log("PASS: audit has no Firebase production release commands")'
+  production-readonly:
+    if: github.repository == 'calibosofroyarjan-volunserve/VolunServe' && github.ref == 'refs/heads/live-protected' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    needs: source-check
+    environment: production
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout newest protected source for audit
+        uses: actions/checkout@v4
+        with:
+          path: controller
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          submodules: false
+      - name: Checkout exact CI-reviewed LIVE-site descendant (PR 356)
+        uses: actions/checkout@v4
+        with:
+          path: site
+          ref: 44cfe41429f91d35d383bf3846fb6fd2f7e7df44
+          fetch-depth: 0
+          submodules: false
+      - name: Checkout exact CI-reviewed active-source Rules (PR 358)
+        uses: actions/checkout@v4
+        with:
+          path: rules
+          ref: 508b58b6ce888810c081dc6bfe38c237629d96d8
+          fetch-depth: 0
+          submodules: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: controller/functions/package-lock.json
+      - name: Install trusted Admin SDK only for existing service-account OAuth
+        run: npm ci --prefix controller/functions --no-audit --no-fund
+      - name: Compare exact live site, Firestore Rules, backups, preview, Auth config; test Rules compile with no testCases (NO RELEASE)
+        env:
+          VOLUNSERVE_PRODUCTION_HOSTING_SERVICE_ACCOUNT: ${{ secrets.VOLUNSERVE_PRODUCTION_HOSTING_SERVICE_ACCOUNT }}
+        run: node controller/scripts/preflight-spark-signup-release-readiness.cjs
