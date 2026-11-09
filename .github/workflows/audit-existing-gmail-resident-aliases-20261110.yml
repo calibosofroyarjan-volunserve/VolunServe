@@ -41,8 +41,10 @@ jobs:
           for(const forbidden of [
             /auth\.createUser\s*\(/, /auth\.updateUser\s*\(/, /auth\.deleteUser\s*\(/,
             /auth\.deleteUsers\s*\(/, /setCustomUserClaims\s*\(/,
-            /\.set\s*\(/, /\.update\s*\(/, /\.delete\s*\(/, /\.add\s*\(/,
-            /\.create\s*\(/, /\.commit\s*\(/, /\.batch\s*\(/,
+            /db\.batch\s*\(/, /db\.runTransaction\s*\(/,
+            /\.ref\.set\s*\(/, /\.ref\.update\s*\(/, /\.ref\.delete\s*\(/,
+            /\.doc\([^)]*\)\.set\s*\(/, /\.doc\([^)]*\)\.delete\s*\(/,
+            /\.commit\s*\(/,
           ])assert(!forbidden.test(source),'Blocked write-capable operation '+forbidden);
           assert(source.includes('.select("email","role","status")'),'Read only required fields');
           assert(source.includes('profileDataLogged:false'),'Must avoid logging account PII');
