@@ -51,12 +51,26 @@ function classifyRelease(name){
   if(/\/releases\/firebase\.storage(?:\/|$)/.test(name))return "storage";
   return null;
 }
+// Summarize ONLY whether Firebase Auth's server-side pre-create/pre-signin
+// blocking hooks are actually configured. Never print sensitive config data.
+function describeIdentityBlocking(config){
+  const hooks=config?.blockingFunctions?.triggers||{};
+  return {
+    beforeCreateActive:typeof hooks.beforeCreate?.functionUri==="string" && hooks.beforeCreate.functionUri.length>0,
+    beforeSignInActive:typeof hooks.beforeSignIn?.functionUri==="string" && hooks.beforeSignIn.functionUri.length>0,
+  };
+}
 function selfTest(){
   assert.equal(classifyRelease("projects/a/releases/cloud.firestore"),"firestore");
   assert.equal(classifyRelease("projects/a/releases/firebase.storage/a.appspot.com"),"storage");
   assert.equal(classifyRelease("projects/a/releases/unrelated"),null);
   assert.equal(sha("a"),sha("a"));assert.notEqual(sha("a"),sha("b"));
   assert.equal(websiteFileDrift("bad","bad").status,"INVALID_SHA");
+  assert.deepEqual(describeIdentityBlocking({}),{beforeCreateActive:false,beforeSignInActive:false});
+  assert.deepEqual(describeIdentityBlocking({blockingFunctions:{triggers:{
+    beforeCreate:{functionUri:"https://example.invalid/create"},
+    beforeSignIn:{functionUri:"https://example.invalid/signin"},
+  }}}),{beforeCreateActive:true,beforeSignInActive:true});
   console.log("PASS: production preflight scope and digest helpers");
 }
 async function main(){
@@ -82,12 +96,17 @@ async function main(){
   assert.equal(marker.app,"VolunServe");
   assert.equal(marker.firebaseProject,PROJECT);
   assert(validSha(marker.revision),"BLOCKED: invalid live marker");
-  // Fetch live Security Rules with only GET methods and without printing sources.
+  // Read-only Firebase APIs only. Never print full Rules/Identity sources or
+  // access tokens. Environment-protected credential is not written to disk.
   async function getJson(url){
     const response=await fetch(url,{headers:authHeader,signal:AbortSignal.timeout(15000)});
     if(!response.ok)return {errorStatus:response.status};
     return response.json();
   }
+  const identityResponse=await getJson("https://identitytoolkit.googleapis.com/admin/v2/projects/"+PROJECT+"/config");
+  const identityInfo=identityResponse.errorStatus
+    ? {access:"HTTP "+identityResponse.errorStatus+" — production Identity config unreadable"}
+    : {access:"OK",...describeIdentityBlocking(identityResponse)};
   const rulesInfo={};
   const list=await getJson(BASE+"/projects/"+PROJECT+"/releases?pageSize=100");
   if(list.errorStatus){
@@ -142,10 +161,18 @@ async function main(){
     historyStatus:safeAncestor?"DIRECT DESCENDANT":"DIVERGED — no blind full Hosting overwrite",
     websiteDrift,
     firebaseRules:rulesInfo,
-    actionsTaken:"NONE — no releases, users, functions or records updated",
+    firebaseIdentityBlocking:identityInfo,
+    actionsTaken:"NONE — authenticated GET only; no releases, users, functions or records updated",
   },null,2));
   if(!safeAncestor)process.exitCode=1;
   if(rulesInfo.access!=="OK")process.exitCode=1;
+  if(identityInfo.access!=="OK"){
+    console.error("BLOCKED: could not read production Identity Platform configuration");
+    process.exitCode=1;
+  } else if(!identityInfo.beforeCreateActive || !identityInfo.beforeSignInActive){
+    console.error("BLOCKED: server-side Firebase Auth beforeCreate/beforeSignIn not both active; direct Auth SDK creation may bypass client screening");
+    process.exitCode=1;
+  }
   if(rulesInfo.access==="OK"){
     // A list response alone is insufficient: both currently deployed rule
     // sources must be readable before any rollout can claim verification.
@@ -166,4 +193,4 @@ if(require.main===module){
   (process.argv.includes("--self-test")?Promise.resolve().then(selfTest):main())
     .catch(err=>{console.error(String(err?.message||err));process.exitCode=1;});
 }
-module.exports={classifyRelease,isAncestor,websiteFileDrift,identifySourceCommit};
+module.exports={classifyRelease,isAncestor,websiteFileDrift,identifySourceCommit,describeIdentityBlocking};
