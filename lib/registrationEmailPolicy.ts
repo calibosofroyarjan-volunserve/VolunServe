@@ -9,12 +9,74 @@
  */
 import { GENERATED_DISPOSABLE_EMAIL_DOMAINS } from "./disposableEmailDomains.generated";
 
+/**
+ * Additional temp-mail.org provider-associated delivery domains publicly
+ * reported by Check-Mail (reviewed 2026-11-10). These are domains after @,
+ * NOT the temp-mail.org website URL. Keep subdomains scoped: e.g.
+ * mail.sc2hub.com does not imply sc2hub.com is disposable.
+ * The provider rotates domains; this remains a finite snapshot, not a
+ * guarantee against unknown/new throwaway mail providers.
+ * Source: https://check-mail.org/disposable-provider/temp-mailorg
+ */
+export const TEMP_MAIL_ORG_PUBLIC_ALIASES = [
+  "adujudi01.info",
+  "avtomaty-online.cc",
+  "baimengshu.com",
+  "bankwen.com",
+  "berkshireonstage.com",
+  "boffweb.com",
+  "crackclue.com",
+  "crystalfact.info",
+  "ctd.nl8.eu",
+  "digeros.com",
+  "doisongtinhduc.xyz",
+  "dragontranslation.net",
+  "drtall.com",
+  "emailgeneratorai.cc",
+  "ghostmailz.club",
+  "ghostmailz.online",
+  "ghostmailz.store",
+  "gmail.shagni.com",
+  "huanqiu6.cc",
+  "huicuiguan.com",
+  "indonesiacentral.info",
+  "javafs.com",
+  "jjwxb.com",
+  "jlmmarine.com",
+  "kxdyy.com",
+  "livetogelhk.info",
+  "luontaisterveys.info",
+  "macsnipe.com",
+  "mail.chosenx.com",
+  "mail.gianes.com",
+  "mail.sc2hub.com",
+  "mailer.pics",
+  "mmamemories.com",
+  "mpmail.top",
+  "nmwxb.com",
+  "prejuge.com",
+  "prestigegroupnet.com",
+  "sofabazar.com",
+  "spicylog.com",
+  "stebie.com",
+  "tobiquegaming-license.com",
+  "ttbtt.com",
+  "wandera.top",
+  "wbcom.info",
+  "wencuigu.com",
+  "wxfwb.com",
+  "yesrox.com",
+  "yyqzw.com",
+  "zymapi.top",
+] as const;
+
 export const KNOWN_DISPOSABLE_EMAIL_DOMAINS = new Set([
   "en2ch.com", "en2ch.co", "emailkeep.com", "mailinator.com", "yopmail.com", "guerrillamail.com", "guerrillamailblock.com",
   "sharklasers.com", "10minutemail.com", "temp-mail.org", "tempmail.com",
   "tempmail.net", "trashmail.com", "dispostable.com", "getnada.com",
   "maildrop.cc", "minuteinbox.com", "mohmal.com", "emailondeck.com",
   "throwawaymail.com", "mailnesia.com", "fakeinbox.com", "tempmailo.com",
+  ...TEMP_MAIL_ORG_PUBLIC_ALIASES,
   ...GENERATED_DISPOSABLE_EMAIL_DOMAINS,
 ]);
 

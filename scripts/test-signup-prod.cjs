@@ -207,6 +207,25 @@ function harness(source, enabled, options = {}) {
     for(const value of ["","bad@gmail..com","bad@gmail.con","bad@sub.mailinator.com","person@en2ch.co","person@en2ch.com","person@sub.en2ch.co","person@emailkeep.com","person@sub.emailkeep.com","person@gmail.com.fake.example","person@googlemail.com.fake.example","person+tag@gmail.com","person+tag@googlemail.com"]) assert.equal(typeof policy.getRegistrationEmailError(value),"string");
     for(const [wrong,right] of Object.entries(policy.KNOWN_PROVIDER_TYPO_CORRECTIONS)) assert(policy.getRegistrationEmailError("person@"+wrong).includes(right));
   });
+  await check("temp-mail.org provider aliases are rejected with subdomains but not legitimate Gmail",()=>{
+    assert.equal(emailPolicy.TEMP_MAIL_ORG_PUBLIC_ALIASES.length,49,
+      "Expected 49 additional provider-associated domains from review");
+    for(const domain of emailPolicy.TEMP_MAIL_ORG_PUBLIC_ALIASES){
+      assert(emailPolicy.isKnownDisposableEmail("resident@"+domain),
+        "Provider-associated alias not rejected: "+domain);
+      assert(emailPolicy.isKnownDisposableEmail("resident@sub."+domain),
+        "Subdomain of known alias not rejected: "+domain);
+    }
+    for(const domain of ["mailer.pics","mpmail.top","gmail.shagni.com",
+      "mail.sc2hub.com","ctd.nl8.eu","ghostmailz.club","emailgeneratorai.cc"]){
+      assert.match(emailPolicy.getRegistrationEmailError("test@"+domain),/Temporary email/);
+    }
+    for(const email of ["real@gmail.com","real@googlemail.com","real@yahoo.com.ph",
+      "real@outlook.com"]){
+      assert.equal(emailPolicy.getRegistrationEmailError(email),null,
+        "Do not block real mail provider: "+email);
+    }
+  });
   await check("disposable domain rejects Firebase UID before creation and profile write",async()=>{
     const h=harness(current,true,{noUser:true});
     await assert.rejects(h.registration.authenticateEmailSignup("person@en2ch.com","Password1!",false,true),/Temporary email/);
