@@ -1,0 +1,86 @@
+name: Audit All VolunServe Module Contracts (NO DEPLOY)
+on:
+  pull_request:
+    branches: [live-protected]
+    paths:
+      - '.github/workflows/audit-systemwide-volunserve-20261109.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  source-module-regressions:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      CI: 'true'
+      EXPO_NO_TELEMETRY: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install locked dependency tree
+        run: npm ci --no-audit --no-fund
+      - name: TypeScript source compatibility (no publishing)
+        run: npx tsc --noEmit --incremental false
+      - name: Run cross-module offline regression checks and report every failure
+        shell: bash
+        run: |
+          set -uo pipefail
+          tests=(
+            "scripts/test-login-field-validation.cjs"
+            "scripts/test-login-ui-release.cjs"
+            "scripts/test-guest-auth-route-isolation.cjs"
+            "scripts/test-signup-prod.cjs"
+            "scripts/test-resident-field-validation.cjs"
+            "scripts/test-route-entrypoints.cjs"
+            "scripts/test-admin-navigation-contract.cjs"
+            "scripts/test-admin-compact-workspace-ux.cjs"
+            "scripts/test-admin-response-workspace-ux.cjs"
+            "scripts/test-admin-overview-ui.cjs"
+            "scripts/test-unified-admin-dashboard-and-emergency-pagination.cjs"
+            "scripts/test-admin-volunteer-authorization.cjs"
+            "scripts/test-defense-unified-lgu-volunteer-dispatch.cjs"
+            "scripts/test-final-admin-scope.cjs"
+            "scripts/test-lgu-admin-global-ui-pagination.cjs"
+            "scripts/test-superadmin-accounts-directory.cjs"
+            "scripts/test-superadmin-grouped-records.cjs"
+            "scripts/test-superadmin-settings-records-retention.cjs"
+            "scripts/test-dashboard-overviews.cjs"
+            "scripts/test-portal-resident-volunteer-ui-flow.cjs"
+            "scripts/test-resident-profile-release.cjs"
+            "scripts/test-resident-volunteer-sidebar.cjs"
+            "scripts/test-volunteer-profile-progress-shortcut.cjs"
+            "scripts/test-profile-certificates-account-menu.cjs"
+            "scripts/test-volunteer-community-event-join-20261106.cjs"
+            "scripts/test-volunteer-time-controls-20261106.cjs"
+            "scripts/test-community-organizer-gps-cleanup.cjs"
+            "scripts/test-event-pin-picker.cjs"
+            "scripts/test-event-map-route-ux.cjs"
+            "scripts/test-embedded-emergency-map-navigation.cjs"
+            "scripts/test-hospital-inapp-road-routes.cjs"
+            "scripts/test-unified-identity-ai-government-id-screening.cjs"
+            "scripts/test-admin-people-verification-premium-ui.cjs"
+            "scripts/test-no-dog-donation-demo.cjs"
+            "scripts/test-volunteer-donations-sidebar-removal.cjs"
+            "scripts/test-clean-emergency-report-header.cjs"
+          )
+          failures=0
+          echo "## VolunServe cross-module source contract audit" >> "$GITHUB_STEP_SUMMARY"
+          echo "Scope: ${#tests[@]} offline scripts; excludes live account, GPS, PayMongo, Render and production Firebase E2E." >> "$GITHUB_STEP_SUMMARY"
+          for testfile in "${tests[@]}"; do
+            if node "$testfile"; then
+              echo "- PASS `$testfile`" >> "$GITHUB_STEP_SUMMARY"
+            else
+              failures=$((failures + 1))
+              echo "- FAIL `$testfile`" >> "$GITHUB_STEP_SUMMARY"
+            fi
+          done
+          echo "Failures: $failures" >> "$GITHUB_STEP_SUMMARY"
+          if [ "$failures" -ne 0 ]; then exit 1; fi
+      - name: Confirm audit has no deployment commands
+        run: echo "No deployments, credentials, production data writes, service modifications, or Firebase Auth interactions"
