@@ -51,6 +51,12 @@ function harness(source, enabled, options = {}) {
   return {registration:imports["./signupRegistration"],api:load(source,imports),link:load(read("lib/emailFirstSignupAuth.ts"),imports),calls,user,auth,profile:()=>profile};
 }
 (async()=>{
+  await check("verified Resident signup succeeds with removed phone field",async()=>{
+    const h=harness(current,true);
+    await h.api.signUpUser({...data,phoneNumber:"",authProvider:"verified_email"});
+    assert.equal(h.profile()?.phoneNumber,"");
+    assert(h.calls.includes("transaction"));
+  });
   await check("web Signup stays premium after unrelated Hosting builds; native remains opt-in",()=>{
     for (const value of [undefined,"false","1","TRUE",""]) {
       const native=load(read("lib/signupFeature.ts"),{"react-native":{Platform:{OS:"android"}}},{EXPO_PUBLIC_EMAIL_FIRST_SIGNUP:value});
