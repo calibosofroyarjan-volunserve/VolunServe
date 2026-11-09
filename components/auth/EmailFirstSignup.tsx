@@ -544,12 +544,13 @@ export default function EmailFirstSignup() {
     }
   }
 
-  const checkButton = (label: string, onPress: () => void, alt = false) => (
+  const checkButton = (label: string, onPress: () => void, alt = false, emailBlocked = false) => (
     <Pressable
       accessibilityRole="button"
       onPress={onPress}
-      disabled={busy}
-      style={[styles.button, alt && styles.altButton, busy && styles.dim]}
+      disabled={busy || emailBlocked}
+      accessibilityState={{disabled: busy || emailBlocked}}
+      style={[styles.button, alt && styles.altButton, (busy || emailBlocked) && styles.dim]}
     >
       {busy ? <ActivityIndicator color={alt ? GREEN : "#fff"} /> :
         label === "Continue with Google" ? (
@@ -804,7 +805,7 @@ export default function EmailFirstSignup() {
                 {checkButton(
                   googleOnly ? "Link Password & Continue" :
                     resumeMode ? "Resume Registration" : "Continue to Email Verification",
-                  () => {void startEmail();}
+                  () => {void startEmail();}, false, !!emailErr
                 )}
                 {!signedInUser && !resumeMode && (
                   <>
