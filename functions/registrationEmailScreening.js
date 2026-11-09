@@ -35,6 +35,11 @@ function classifyRegistrationEmail(email) {
   if ((domain === "gmail.com" || domain === "googlemail.com") && local.includes("+")) {
     return {allowed: false, reason: "gmail_alias"};
   }
+  // gmail.com.some-other-site.example is not Gmail. Share the frontend
+  // high-confidence impersonation policy; real Gmail accounts stay allowed.
+  if (/^(?:gmail|googlemail)\.com\./.test(domain)) {
+    return {allowed: false, reason: "gmail_impersonation"};
+  }
   // The client warns on these Gmail-looking typos. Trusted Auth blocking
   // must enforce the same exact-domain policy, even against direct SDK calls.
   if (Object.prototype.hasOwnProperty.call(providerTypos, domain)) {
