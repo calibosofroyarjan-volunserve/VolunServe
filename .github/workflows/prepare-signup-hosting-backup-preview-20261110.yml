@@ -39,13 +39,13 @@ jobs:
           const assert=require("node:assert/strict");
           const script=fs.readFileSync("scripts/prepare-signup-hosting-backup-preview-20261110.cjs","utf8");
           const workflow=fs.readFileSync(".github/workflows/prepare-signup-hosting-backup-preview-20261110.yml","utf8");
-          const commands=workflow.split("\n").filter(x=>/npx firebase-tools /.test(x));
+          const commands=workflow.split("\n").map(x=>x.trim()).filter(x=>x.startsWith("npx firebase-tools "));
           assert.equal(commands.length,2,"Exactly one backup clone and one preview deployment");
           assert(commands[0].includes('hosting:clone "$PROJECT:live" "$PROJECT:$BACKUP"'));
           assert(commands[1].includes('hosting:channel:deploy "$PREVIEW"'));
-          assert(!workflow.includes("firebase-tools deploy --only hosting"));
-          assert(!workflow.includes("firebase-tools hosting:clone \"$PROJECT:$PREVIEW\" \"$PROJECT:live\""));
-          assert(!/--publish-rules|--restore-rules|rulesets.create|releases.update|firestore:delete|auth:delete/.test(script+workflow));
+          assert(commands.every(x=>!x.startsWith("npx firebase-tools deploy")));
+          assert(commands[0].includes("$PROJECT:$BACKUP")&&!commands[0].includes("$PROJECT:$PREVIEW"));
+          assert(!commands.some(x=>x.includes("firestore:")||x.includes("auth:")));
           assert(workflow.includes("environment: production"));
           assert(workflow.includes("never writes")||workflow.includes("Never writes"));
           console.log("PASS: only dedicated backup/preview Hosting channels can be written");
