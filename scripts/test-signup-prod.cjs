@@ -51,6 +51,17 @@ function harness(source, enabled, options = {}) {
   return {registration:imports["./signupRegistration"],api:load(source,imports),link:load(read("lib/emailFirstSignupAuth.ts"),imports),calls,user,auth,profile:()=>profile};
 }
 (async()=>{
+  await check("emailkeep.com and subdomains fail before Firebase Auth creation",async()=>{
+    for (const email of ["candidate@emailkeep.com", "candidate@sub.emailkeep.com", "candidate@EMAILKEEP.COM"]) {
+      assert.match(emailPolicy.getRegistrationEmailError(email), /Temporary email/i);
+      const h=harness(current,true,{noUser:true});
+      await assert.rejects(h.api.signUpUser({...data,email,authProvider:"email"}),/Temporary email/i);
+      assert(!h.calls.includes("create"),"Disposable mail must be blocked before creating Auth UID");
+    }
+    for (const email of ["resident@gmail.com","resident@yahoo.com.ph","resident@outlook.com"]) {
+      assert.equal(emailPolicy.getRegistrationEmailError(email),null);
+    }
+  });
   await check("web Signup stays premium after unrelated Hosting builds; native remains opt-in",()=>{
     for (const value of [undefined,"false","1","TRUE",""]) {
       const native=load(read("lib/signupFeature.ts"),{"react-native":{Platform:{OS:"android"}}},{EXPO_PUBLIC_EMAIL_FIRST_SIGNUP:value});
