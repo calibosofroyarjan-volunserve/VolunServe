@@ -31,7 +31,9 @@ const beforeCreate = beforeUserCreated({
     await enforceSignupIpRateLimit({
       db: getFirestore(),
       ipAddress: event.ipAddress,
-      eventId: event.eventId,
+      // v2 Identity CloudEvents provide `id`; older adapters may provide `eventId`.
+      // Deduplicate retries instead of counting the same registration twice.
+      eventId: event.id || event.eventId,
       secret: signupRateLimitSecret.value(),
     });
   } catch (error) {
