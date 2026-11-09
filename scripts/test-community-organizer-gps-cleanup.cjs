@@ -25,12 +25,12 @@ async function main() {
     const inTwoMinutes = firebase.firestore.Timestamp.fromMillis(now.toMillis() + 120000);
     const seed = async () => env.withSecurityRulesDisabled(async ctx => {
       const db = ctx.firestore();
-      await db.doc("users/" + owner).set({uid:owner,role:"volunteer",
+      await db.doc("users/" + owner).set({uid:owner,email:"organizer@example.com",role:"volunteer",
         status:"approved",activeMode:"volunteer",residentAccess:true,volunteerAccess:true,
         identityVerified:true});
-      await db.doc("users/" + superUid).set({uid:superUid,role:"superadmin",status:"approved"});
-      await db.doc("users/" + adminUid).set({uid:adminUid,role:"admin",status:"approved",adminStatus:"active"});
-      await db.doc("users/" + other).set({uid:other,role:"resident",
+      await db.doc("users/" + superUid).set({uid:superUid,email:"super@example.com",role:"superadmin",status:"approved"});
+      await db.doc("users/" + adminUid).set({uid:adminUid,email:"admin@example.com",role:"admin",status:"approved",adminStatus:"active"});
+      await db.doc("users/" + other).set({uid:other,email:"other@example.com",role:"resident",
         status:"approved",activeMode:"resident",residentAccess:true});
       await db.doc("communityEvents/" + event).set({
         proposedBy:owner,status:"upcoming",publicationStatus:"published",
@@ -40,10 +40,13 @@ async function main() {
         accuracyMeters:25,updatedAt:now,expiresAt:inTwoMinutes,
       });
     });
-    const organizer = env.authenticatedContext(owner).firestore();
-    const outsider = env.authenticatedContext(other).firestore();
-    const superDb = env.authenticatedContext(superUid).firestore();
-    const adminDb = env.authenticatedContext(adminUid).firestore();
+    // Production-approved sessions require email_verified; keep synthetic test
+    // identities compatible with the hardened role permissions.
+    const as = (uid,email) => env.authenticatedContext(uid,{email,email_verified:true}).firestore();
+    const organizer = as(owner,"organizer@example.com");
+    const outsider = as(other,"other@example.com");
+    const superDb = as(superUid,"super@example.com");
+    const adminDb = as(adminUid,"admin@example.com");
     const anonymous = env.unauthenticatedContext().firestore();
     await seed();
     await assertFails(superDb.doc(pathFor).get());
