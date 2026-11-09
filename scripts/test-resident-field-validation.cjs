@@ -37,6 +37,7 @@ test("valid Filipino personal details and actual SJDM occupation pass",()=>{
   assert.doesNotThrow(()=>guard.requireCompleteResidentRegistration(good));
   assert.doesNotThrow(()=>guard.requireCompleteResidentRegistration({...good,middleName:""}));
   assert.doesNotThrow(()=>guard.requireCompleteResidentRegistration({...good,phoneNumber:"09171234567"}));
+  assert.doesNotThrow(()=>guard.requireCompleteResidentRegistration({...good,phoneNumber:""}));
 });
 test("every missing or invalid personal detail has a specific error and blocks profile creation",()=>{
   const cases=[
@@ -90,7 +91,7 @@ test("Firestore Signup Rules accept exactly official SJDM barangays and occupati
   const end=rules.indexOf("function hasFreshLguCredentialReview()",start);
   assert(end>start);
   const block=rules.slice(start,end);
-  assert(block.includes("d.phoneNumber.matches("));
+  assert(block.includes("d.phoneNumber == '' || d.phoneNumber.matches("));
   for(const [field,values] of [
     ["d.barangay",barangays.SJDM_BARANGAYS],
     ["d.occupationCategory",occupations.OCCUPATION_OPTIONS]
@@ -123,14 +124,13 @@ test("known temporary inboxes, malformed emails, Gmail +tag are blocked; real Gm
 });
 test("signup screen shows the same per-field errors, retains optional Google and verified email gates",()=>{
   const source=read("components/auth/EmailFirstSignup.tsx");
-  for(const field of ["firstName","lastName","middleName","age","phoneNumber",
+  for(const field of ["firstName","lastName","middleName","age",
     "barangay","occupationCategory","occupationSpecialization","occupationOther"]) {
     assert(source.includes("registrationErrors."+field),"visible error "+field);
   }
   assert(source.includes("getResidentRegistrationFieldErrors"));
-  assert(source.includes('phoneDigits.startsWith("63")'));
-  assert(source.includes('phoneDigits.startsWith("0")'));
-  assert(source.includes('placeholder="09XXXXXXXXX or +639XXXXXXXXX"'));
+  assert(!source.includes('label="Mobile Number *"'),"Phone field must remain removed");
+  assert(source.includes('phoneNumber: ""'),"Registration preserves optional phone profile field");
   assert(source.includes("if (!user.emailVerified)"));
   assert(source.includes("Continue to Email Verification"));
   assert(source.includes("Continue with Google"));
