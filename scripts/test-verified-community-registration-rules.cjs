@@ -83,6 +83,22 @@ async function main() {
     await invalidCreate({age:17});
     await invalidCreate({age:101});
     await invalidCreate({region:""});
+    // A number was removed from both legacy signups, so a blank value is valid.
+    const optionalUid="new-resident-no-phone", optionalEmail="no-phone@gmail.com";
+    await assertSucceeds(setDoc(doc(as(optionalUid,optionalEmail,true),"users",optionalUid),{
+      ...validProfile,uid:optionalUid,email:optionalEmail,phoneNumber:"",
+    }));
+    // A verified real mailbox cannot be swapped for disposable email, even
+    // when a caller skips the frontend and talks directly to Firestore.
+    for(const [n,mailbox] of [
+      ["emailkeep","test@emailkeep.com"],["emailkeep-sub","test@sub.emailkeep.com"],
+      ["en2ch","test@en2ch.co"],["en2ch-sub","test@sub.en2ch.co"]
+    ]) {
+      const uid="disposable-"+n;
+      await assertFails(setDoc(doc(as(uid,mailbox,true),"users",uid),{
+        ...validProfile,uid,email:mailbox,phoneNumber:"",
+      }));
+    }
     await assertSucceeds(setDoc(doc(as("new-resident","real@gmail.com",true),"users","new-resident"),validProfile));
     assert.ok(true);
     console.log("PASS Firestore: unverified community/staff emails denied; verified complete Resident and staff access permitted.");
