@@ -1,0 +1,32 @@
+name: Gmail Alias Active-Rules Review (EMULATOR ONLY)
+on:
+  push:
+    branches: [fix/gmail-alias-claim-rules-review-20261110]
+  pull_request:
+    branches: [fix/active-production-rules-signup-compatible-20261109]
+permissions:
+  contents: read
+jobs:
+  firestore-emulator:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - run: npm ci --no-audit --no-fund
+      - name: Test verified Gmail claim, blocked domains, staff and Yahoo (Firestore emulator)
+        run: npx firebase-tools emulators:exec --only firestore --project demo-volunserve-verified-signup "node scripts/test-verified-community-registration-rules.cjs"
+      - name: Preserve Volunteer invitations and existing authorization (Firestore emulator)
+        run: npx firebase-tools emulators:exec --only firestore --project demo-volunserve-volunteer-invitation "node scripts/test-preserved-volunteer-invitation-rules.cjs"
+      - name: No production writes
+        run: echo 'PASS — only demo-* Firestore emulator used; no publish'
