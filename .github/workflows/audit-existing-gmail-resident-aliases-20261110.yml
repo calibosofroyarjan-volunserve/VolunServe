@@ -1,0 +1,81 @@
+# Narrow, account-owner-authorized read-only audit. Never deploys or mutates data.
+name: Audit Existing Gmail Resident Alias Collisions (READ ONLY)
+on:
+  pull_request:
+    branches: [live-protected]
+    paths:
+      - scripts/audit-existing-gmail-resident-aliases-20261110.cjs
+      - .github/workflows/audit-existing-gmail-resident-aliases-20261110.yml
+  push:
+    branches: [live-protected]
+    paths:
+      - scripts/audit-existing-gmail-resident-aliases-20261110.cjs
+      - .github/workflows/audit-existing-gmail-resident-aliases-20261110.yml
+permissions:
+  contents: read
+concurrency:
+  group: volunserve-readonly-existing-gmail-20261110
+  cancel-in-progress: false
+jobs:
+  safety-and-selftest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Audit source must be read-only, PII-minimal and offline-testable
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check scripts/audit-existing-gmail-resident-aliases-20261110.cjs
+          node scripts/audit-existing-gmail-resident-aliases-20261110.cjs --self-test
+          node <<'NODE'
+          const fs=require('node:fs');
+          const assert=require('node:assert/strict');
+          const source=fs.readFileSync('scripts/audit-existing-gmail-resident-aliases-20261110.cjs','utf8');
+          const workflow=fs.readFileSync('.github/workflows/audit-existing-gmail-resident-aliases-20261110.yml','utf8');
+          for(const forbidden of [
+            /auth\.createUser\s*\(/, /auth\.updateUser\s*\(/, /auth\.deleteUser\s*\(/,
+            /auth\.deleteUsers\s*\(/, /setCustomUserClaims\s*\(/,
+            /\.set\s*\(/, /\.update\s*\(/, /\.delete\s*\(/, /\.add\s*\(/,
+            /\.create\s*\(/, /\.commit\s*\(/, /\.batch\s*\(/,
+          ])assert(!forbidden.test(source),'Blocked write-capable operation '+forbidden);
+          assert(source.includes('.select("email","role","status")'),'Read only required fields');
+          assert(source.includes('profileDataLogged:false'),'Must avoid logging account PII');
+          assert(source.includes('where("role","in",ROLES)'),'Limit audit to community roles');
+          assert(workflow.includes('environment: production'),'Require production environment gate');
+          assert(workflow.includes("github.event_name == 'push'"),'No production access on PR');
+          assert(!/firebase-tools deploy|hosting:channel:deploy|hosting:clone/.test(workflow));
+          console.log('PASS: source confined to read-only Firebase Auth/Firestore queries; no production writes');
+          NODE
+  production-readonly-census:
+    needs: safety-and-selftest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/live-protected' && github.repository == 'calibosofroyarjan-volunserve/VolunServe'
+    environment: production
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          submodules: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Reject stale protected branch controller
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(git ls-remote --heads origin live-protected | cut -f1)" = "$GITHUB_SHA"
+      - name: Install exact locked Firebase Admin SDK only
+        run: npm ci --prefix functions --no-audit --no-fund
+      - name: Print aggregate counts only; read Firebase community profiles and Auth
+        env:
+          VOLUNSERVE_PRODUCTION_AUDIT_CREDENTIAL: ${{ secrets.VOLUNSERVE_PRODUCTION_READONLY_SERVICE_ACCOUNT }}
+        run: node scripts/audit-existing-gmail-resident-aliases-20261110.cjs
