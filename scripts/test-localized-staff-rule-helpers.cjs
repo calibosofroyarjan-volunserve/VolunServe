@@ -250,10 +250,15 @@ const historicalEmailGuard='!request.resource.data.email.matches(".*@en2ch[.]com
 const reviewedEmailGuard='!request.resource.data.email.matches(".*@([a-z0-9-]+[.])*en2ch[.](com|co)")';
 assert.equal(reviewedHoisted.split(historicalEmailGuard).length,2,
  "BLOCKED: historical disposable-email guard moved");
-assert.equal(current,reviewedHoisted.replace(historicalEmailGuard,reviewedEmailGuard),
- "BLOCKED: other Firestore permissions, validation branches or collection paths changed");
+const beforeOptionalPhone=reviewedHoisted.replace(historicalEmailGuard,reviewedEmailGuard);
+const requiredPhoneLine="          && d.phoneNumber.matches('^([+]639[0-9]{9}|09[0-9]{9})$')";
+const optionalPhoneLine="          && (d.phoneNumber == '' || d.phoneNumber.matches('^([+]639[0-9]{9}|09[0-9]{9})$'))";
+assert.equal(beforeOptionalPhone.split(requiredPhoneLine).length,2,
+ "BLOCKED: reviewed Resident phone policy moved or duplicated");
+assert.equal(current,beforeOptionalPhone.replace(requiredPhoneLine,()=>optionalPhoneLine),
+ "BLOCKED: Firestore drift beyond the reviewed optional-phone-only policy");
 assert.equal(cp.execFileSync("git",["hash-object","firestore.rules"],{encoding:"utf8"}).trim(),
-"6f65f4d54624020138111c6358d031100d06ec26","BLOCKED: unreviewed Firestore Rules blob");
+"b6fa6a308592994c3825f190c6bbc23561a20e48","BLOCKED: unreviewed Firestore Rules blob");
 // Verify exhaustiveness of all optional-review branches over valid and
 // invalid types, status values and three-valued nulls before Firebase emulator.
 for(const required of [true,false,null,"true",0,1,undefined]){
@@ -271,7 +276,7 @@ for(const required of [true,false,null,"true",0,1,undefined]){
 }
 
 const gitBlob=cp.execFileSync("git",["hash-object","firestore.rules"],{encoding:"utf8"}).trim();
-assert.equal(gitBlob,"6f65f4d54624020138111c6358d031100d06ec26","BLOCKED: unapproved Firestore blob");
+assert.equal(gitBlob,"b6fa6a308592994c3825f190c6bbc23561a20e48","BLOCKED: unapproved Firestore blob");
 const paths=source=>source.split("\n").filter(l=>l.startsWith("    match /")).map(l=>l.slice("    match /".length).split(" ")[0]);
 assert.deepEqual(paths(current),paths(protectedBaseline),"BLOCKED: collection scope changed");
 const allows=source=>[...source.matchAll(/allow (?:get|list|read|write|create|update|delete)/g)].length;
