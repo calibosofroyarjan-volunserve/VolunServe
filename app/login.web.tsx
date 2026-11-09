@@ -6,6 +6,7 @@ import GoogleBrandMark from "../components/auth/GoogleBrandMark";
 import AuthFeedback from "../components/auth/AuthFeedback";
 import { unifiedPasswordDestination } from "../lib/unifiedLoginRouting";
 import { getLoginEmailError, getLoginEmailSuggestion } from "../lib/loginInputValidation";
+import { isKnownDisposableEmail } from "../lib/registrationEmailPolicy";
 import { userFacingError } from "../lib/userFacingError";
 import { googleSignInErrorMessage } from "../lib/googleSignInFeedback";
 import { useSignupGoogle } from "../lib/useSignupGoogle";
@@ -145,6 +146,11 @@ export default function WebLogin() {
 
       const googleUser = await signInGoogle();
       selectedUid = googleUser.uid;
+      if (isKnownDisposableEmail(googleUser.email || "")) {
+        // Reject recognized temporary Google/OAuth mailboxes before profile routing.
+        // The catch path signs out this newly authenticated UID.
+        throw new Error("Temporary email accounts cannot sign in. Use a permanent email address.");
+      }
       setGoogleProgress("Google account connected. Checking your VolunServe account...");
 
       let profile;

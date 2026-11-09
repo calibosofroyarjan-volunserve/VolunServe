@@ -152,6 +152,13 @@ function harness(source, enabled, options = {}) {
     const off=harness(current,false,{providers:["google.com"]});await assert.rejects(off.link.linkEmailFirstGooglePassword("Password1!"),/not enabled/);assert.deepEqual(off.calls,[]);
     const h=harness(current,true,{providers:["google.com"]});assert.equal((await h.link.linkEmailFirstGooglePassword("Password1!")).uid,h.user.uid);assert(h.calls.includes("link"));assert(h.calls.includes("token"));
   });
+  await check("Google linking refuses disposable email before credential or profile changes",async()=>{
+    const h=harness(current,true,{providers:["google.com"]});
+    h.user.email="test@sub.emailkeep.com";
+    await assert.rejects(h.link.linkEmailFirstGooglePassword("Password1!"),/Temporary email/);
+    assert(!h.calls.includes("link") && !h.calls.includes("first-password") && !h.calls.includes("signin"));
+    assert.equal(h.profile(),null);
+  });
   await check("Google same-email SDK collision falls back on same UID without resetting an existing password",async()=>{
     const h=harness(current,true,{providers:["google.com"],sdkLinkError:"auth/email-already-in-use"});
     assert.equal((await h.link.linkEmailFirstGooglePassword("Password1!")).uid,h.user.uid);
@@ -195,6 +202,8 @@ function harness(source, enabled, options = {}) {
     const generated=load(read("lib/disposableEmailDomains.generated.ts"));
     const policy=load(read("lib/registrationEmailPolicy.ts"),{"./disposableEmailDomains.generated":generated});
     for(const value of ["person@yahoo.com.ph","person@outlook.com","person@department.gov.ph","person@legitimate.co","real.user@gmail.com","real.user@googlemail.com"]) assert.equal(policy.getRegistrationEmailError(value),null);
+    assert(policy.KNOWN_DISPOSABLE_EMAIL_DOMAINS.size > 30000, "Maintained disposable-domain feed must be loaded");
+    for(const value of ["test@0-mail.com","test@sub.0-mail.com","test@10minutemail.com"]) assert.equal(typeof policy.getRegistrationEmailError(value),"string");
     for(const value of ["","bad@gmail..com","bad@gmail.con","bad@sub.mailinator.com","person@en2ch.co","person@en2ch.com","person@sub.en2ch.co","person@emailkeep.com","person@sub.emailkeep.com","person@gmail.com.fake.example","person@googlemail.com.fake.example","person+tag@gmail.com","person+tag@googlemail.com"]) assert.equal(typeof policy.getRegistrationEmailError(value),"string");
     for(const [wrong,right] of Object.entries(policy.KNOWN_PROVIDER_TYPO_CORRECTIONS)) assert(policy.getRegistrationEmailError("person@"+wrong).includes(right));
   });
@@ -227,6 +236,9 @@ function harness(source, enabled, options = {}) {
     const native=read("app/login.tsx");
     assert(web.includes('signOut(auth).then(() => router.replace("/public"))'));
     assert(native.includes('firebaseSignOut(auth).then(() => router.replace("/public"))'));
+    assert(web.includes('isKnownDisposableEmail(googleUser.email || "")'));
+    assert(native.includes('isKnownDisposableEmail(user.email || "")'));
+    assert(read("app/_layout.tsx").includes('isKnownDisposableEmail(authUser.email || "")'));
     const rules=read("firestore.rules");
     assert(rules.includes('request.auth.token.get("email_verified", false) == true'));
     assert(rules.includes('request.auth.token.get("email", "") == request.resource.data.email'));

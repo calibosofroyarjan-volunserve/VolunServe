@@ -2,6 +2,7 @@ import { EmailAuthProvider, getIdToken, linkWithCredential, reload, signInWithEm
 import { doc, getDoc } from "firebase/firestore";
 import { auth, db } from "./firebase";
 import { EMAIL_FIRST_SIGNUP_ENABLED } from "./signupFeature";
+import { getRegistrationEmailError } from "./registrationEmailPolicy";
 
 /** Explicit signup consent only. Never reset a password or alter an existing profile. */
 export async function linkEmailFirstGooglePassword(password: string) {
@@ -13,6 +14,10 @@ export async function linkEmailFirstGooglePassword(password: string) {
       !user.providerData.some(p => p.providerId === "google.com")) {
     throw new Error("Verify your Google email before linking a password.");
   }
+  // Never link a password to an already authenticated disposable/alias mailbox.
+  // Linking requires the same verified Google UID, not just matching text emails.
+  const emailError = getRegistrationEmailError(user.email);
+  if (emailError) throw new Error(emailError);
   const existing = await getDoc(doc(db, "users", user.uid));
   if (existing.exists()) throw new Error("This account already has a VolunServe profile. Please sign in.");
   if (user.providerData.some(p => p.providerId === "password")) {

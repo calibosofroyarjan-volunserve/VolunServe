@@ -6,6 +6,7 @@ import GoogleBrandMark from "../components/auth/GoogleBrandMark";
 import AuthFeedback from "../components/auth/AuthFeedback";
 import { unifiedPasswordDestination } from "../lib/unifiedLoginRouting";
 import { getLoginEmailError, getLoginEmailSuggestion } from "../lib/loginInputValidation";
+import { isKnownDisposableEmail } from "../lib/registrationEmailPolicy";
 import { googleSignInErrorMessage } from "../lib/googleSignInFeedback";
 import { userFacingError } from "../lib/userFacingError";
 import { useSignupGoogle } from "../lib/useSignupGoogle";
@@ -172,6 +173,10 @@ export default function Login() {
 
       const user = await signInGoogle();
       authenticatedUid = user.uid;
+      if (isKnownDisposableEmail(user.email || "")) {
+        // Do not route a newly signed-in disposable Google identity as Resident.
+        throw new Error("Temporary email accounts cannot sign in. Use a permanent email address.");
+      }
       await routeSignedInProfile(user.uid);
     } catch (error) {
       // Do not sign out a pre-existing session when the popup was merely cancelled.
