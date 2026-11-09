@@ -805,7 +805,7 @@ export default function EmailFirstSignup() {
                 {checkButton(
                   googleOnly ? "Link Password & Continue" :
                     resumeMode ? "Resume Registration" : "Continue to Email Verification",
-                  () => {void startEmail();}, false, !!emailErr
+                  () => {void startEmail();}, false, !!email.trim() && !!emailErr
                 )}
                 {!signedInUser && !resumeMode && (
                   <>
