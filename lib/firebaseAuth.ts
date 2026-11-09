@@ -1,4 +1,5 @@
 import { authenticateEmailSignup } from "./signupRegistration";
+import { canonicalGmailAlias } from "./canonicalGmailAlias";
 import {requireCompleteResidentRegistration} from "./requireCompleteResidentRegistration";
 import {getRegistrationEmailError, isKnownDisposableEmail} from "./registrationEmailPolicy";
 import { EMAIL_FIRST_SIGNUP_ENABLED } from "./signupFeature";
@@ -622,14 +623,31 @@ export const signUpUser = async (
       createdAt:
         serverTimestamp(),
     };
-    // Atomic create on EVERY signup path, including verified legacy resubmission.
+    // Gmail dots and googlemail.com can resolve to one mailbox but Firebase
+    // Auth may issue separate UIDs. Reserve the *canonical* mailbox in the
+    // SAME atomic transaction as the Basic Resident profile to prevent races.
+    // Rules enforce the claim's key, owner and accompanying profile; a plain
+    // client-side duplicate check is never sufficient.
+    const gmailAlias = canonicalGmailAlias(submittedEmail);
+    if (/@(?:gmail|googlemail)\.com$/.test(submittedEmail) && !gmailAlias) {
+      throw new Error("Unable to verify this Gmail address. Contact support.");
+    }
+    const aliasRef = gmailAlias ? doc(db, "gmailAliasClaims", gmailAlias) : null;
     await runTransaction(db, async transaction => {
+      // All transaction reads MUST precede all writes.
       const latest = await transaction.get(profileRef);
+      const existingAlias = aliasRef ? await transaction.get(aliasRef) : null;
       if (latest.exists()) {
         throw new Error("This account already has a VolunServe profile. Please sign in.");
       }
+      if (existingAlias?.exists()) {
+        throw new Error("This Gmail inbox already belongs to a VolunServe Resident account. Use the original login or contact support.");
+      }
       if (auth.currentUser?.uid !== uid || !user.emailVerified) {
         throw new Error("Your registration session changed. Please resume registration.");
+      }
+      if (aliasRef) {
+        transaction.set(aliasRef, {uid, createdAt: serverTimestamp()});
       }
       transaction.set(profileRef, newProfile);
     });
