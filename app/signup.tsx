@@ -3,6 +3,7 @@ import { liveUi as designUi } from "../constants/volunserveLiveUi";
 import EmailFirstSignup from "../components/auth/EmailFirstSignup";
 import { userFacingError } from "../lib/userFacingError";
 import { EMAIL_FIRST_SIGNUP_ENABLED } from "../lib/signupFeature";
+import { getRegistrationEmailError } from "../lib/registrationEmailPolicy";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { Feather } from "@expo/vector-icons";
 import * as AuthSession from "expo-auth-session";
@@ -495,6 +496,11 @@ function LegacySignup() {
         const user = userCred.user;
         const parsed = splitDisplayName(user.displayName || "");
         const googleEmail = (user.email || "").trim().toLowerCase();
+        const googleEmailError = getRegistrationEmailError(googleEmail);
+        if (googleEmailError || !user.emailVerified) {
+          if (auth.currentUser?.uid === user.uid) await signOut(auth);
+          throw new Error(googleEmailError || "Verify your Google email before registration.");
+        }
 
         updateField("email", googleEmail);
         if (parsed.firstName) updateField("firstName", sanitizeName(parsed.firstName));
@@ -516,7 +522,6 @@ function LegacySignup() {
   const specializationOptions = useMemo(() => SPECIALIZATIONS[formData.occupationCategory] ?? [], [formData.occupationCategory]);
 
   const validation = useMemo(() => {
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     const nameOk = (s: string) => s.trim().length >= 2;
     const lastNameValid = nameOk(formData.lastName);
     const firstNameValid = nameOk(formData.firstName);
@@ -524,7 +529,8 @@ function LegacySignup() {
     const ageNumber = formData.dateOfBirth ? calculateAge(formData.dateOfBirth) : 0;
     const ageValid = !!formData.dateOfBirth && ageNumber >= 18;
     const phoneValid = true;
-    const emailValid = emailRegex.test(formData.email.trim().toLowerCase());
+    const emailError = getRegistrationEmailError(formData.email);
+    const emailValid = emailError === null;
     const step2Valid =
       !!formData.region &&
       isAllowedProvince(formData.province) &&
@@ -557,6 +563,7 @@ function LegacySignup() {
       ageNumber,
       phoneValid,
       emailValid,
+      emailError,
       step1Valid,
       step2Valid,
       step3Valid,
@@ -779,6 +786,9 @@ function LegacySignup() {
                 editable={!googleBound}
                 autoCapitalize="none"
               />
+              {formData.email.length > 0 && !!validation.emailError && (
+                <ValidationText ok={false}>{validation.emailError}</ValidationText>
+              )}
               {!googleBound ? (
                 <>
                   <Field
