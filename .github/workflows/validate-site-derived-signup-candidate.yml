@@ -3,7 +3,7 @@
 name: Validate Site-Derived Signup Candidate (NO DEPLOY)
 on:
   push:
-    branches: [release/signup-preserve-published-site-20261109]
+    branches: [release/signup-preserve-published-site-20261109, fix/actual-live-site-login-signup-20261109]
   pull_request:
     branches: [snapshot/live-hosting-f7bc8d12-20261109, release/site-derived-en2ch-co-hotfix-20261109]
 permissions:
