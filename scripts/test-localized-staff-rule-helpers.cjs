@@ -251,18 +251,20 @@ const reviewedEmailGuard='!request.resource.data.email.matches(".*@([a-z0-9-]+[.
 assert.equal(reviewedHoisted.split(historicalEmailGuard).length,2,
  "BLOCKED: historical disposable-email guard moved");
 // PR #351 adds exactly TWO narrowly reviewed, deny-only predicates:
- // (1) reject @emailkeep.com (and subdomains) on Resident profile CREATE;
- // (2) deny the existing Resident/Volunteer approved() authorization for that
- //     email domain. Staff authorization is outside this branch, unchanged.
- // Keep exact reconstruction against the frozen baseline: a third predicate,
- // removed validation, changed role helper, or permission drift still fails.
+// (1) reject @emailkeep.com (and subdomains) on Resident profile CREATE;
+// (2) deny the existing Resident/Volunteer approved() authorization for that
+//     email domain. Staff authorization is outside this branch, unchanged.
+// Keep exact reconstruction against the frozen baseline: a third predicate,
+// removed validation, changed role helper, or permission drift still fails.
 const priorReviewedRules=reviewedHoisted.replace(historicalEmailGuard,reviewedEmailGuard);
 const previousCommunityEmailMatch="            && request.auth.token.get('email', '') == p.get('email', '')";
 const newCommunityEmailMatch=previousCommunityEmailMatch+
-  "\\n            && !request.auth.token.get('email', '').matches(\\\".*@([a-z0-9-]+[.])*emailkeep[.]com\\\")";
+  `
+            && !request.auth.token.get('email', '').matches(".*@([a-z0-9-]+[.])*emailkeep[.]com")`;
 const previousCreateDeny='        && '+reviewedEmailGuard;
 const newCreateDeny=previousCreateDeny+
-  '\\n        && !request.resource.data.email.matches(\\\".*@([a-z0-9-]+[.])*emailkeep[.]com\\\")';
+  `
+        && !request.resource.data.email.matches(".*@([a-z0-9-]+[.])*emailkeep[.]com")`;
 assert.equal(priorReviewedRules.split(previousCommunityEmailMatch).length,2,
  "BLOCKED: resident/volunteer email match moved");
 assert.equal(priorReviewedRules.split(previousCreateDeny).length,2,
