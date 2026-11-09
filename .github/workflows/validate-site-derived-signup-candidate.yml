@@ -5,7 +5,7 @@ on:
   push:
     branches: [release/signup-preserve-published-site-20261109]
   pull_request:
-    branches: [snapshot/live-hosting-f7bc8d12-20261109]
+    branches: [snapshot/live-hosting-f7bc8d12-20261109, release/site-derived-en2ch-co-hotfix-20261109]
 permissions:
   contents: read
 jobs:
