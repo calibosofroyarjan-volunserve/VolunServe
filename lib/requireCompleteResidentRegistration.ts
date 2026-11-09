@@ -49,8 +49,9 @@ export function getResidentRegistrationFieldErrors(data: RequiredResidentDetails
     errors.age = "Enter a valid birth date. Resident signup requires ages 18–100.";
   }
   const mobile = String(data.phoneNumber || "").replace(/[\s-]/g, "");
-  if (!/^(?:\+639\d{9}|09\d{9})$/.test(mobile)) {
-    errors.phoneNumber = "Enter a valid PH mobile number starting with 09 or +639.";
+  // Contact number is optional; if supplied, it must still be a valid PH mobile.
+  if (mobile && !/^(?:\+639\d{9}|09\d{9})$/.test(mobile)) {
+    errors.phoneNumber = "If you provide a mobile number, use 09 or +639 format.";
   }
 
   if (typeof data.region !== "string" || !data.region.trim() || data.region.length > 100) {
