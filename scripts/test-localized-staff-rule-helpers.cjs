@@ -250,10 +250,10 @@ const historicalEmailGuard='!request.resource.data.email.matches(".*@en2ch[.]com
 const reviewedEmailGuard='!request.resource.data.email.matches(".*@([a-z0-9-]+[.])*en2ch[.](com|co)")';
 assert.equal(reviewedHoisted.split(historicalEmailGuard).length,2,
  "BLOCKED: historical disposable-email guard moved");
-assert.equal(current,reviewedHoisted.replace(historicalEmailGuard,reviewedEmailGuard),
- "BLOCKED: other Firestore permissions, validation branches or collection paths changed");
+const beforeOptionalPhone=reviewedHoisted.replace(historicalEmailGuard,reviewedEmailGuard);
+const requiredPhoneLine="          && d.phoneNumber.matches('^([+]639[0-9]{9}|09[0-9]{9})
 assert.equal(cp.execFileSync("git",["hash-object","firestore.rules"],{encoding:"utf8"}).trim(),
-"6f65f4d54624020138111c6358d031100d06ec26","BLOCKED: unreviewed Firestore Rules blob");
+"8fc18e4be0a9298d0b2329c10ff8d45e56aabb83","BLOCKED: unreviewed Firestore Rules blob");
 // Verify exhaustiveness of all optional-review branches over valid and
 // invalid types, status values and three-valued nulls before Firebase emulator.
 for(const required of [true,false,null,"true",0,1,undefined]){
@@ -271,7 +271,176 @@ for(const required of [true,false,null,"true",0,1,undefined]){
 }
 
 const gitBlob=cp.execFileSync("git",["hash-object","firestore.rules"],{encoding:"utf8"}).trim();
-assert.equal(gitBlob,"6f65f4d54624020138111c6358d031100d06ec26","BLOCKED: unapproved Firestore blob");
+assert.equal(gitBlob,"8fc18e4be0a9298d0b2329c10ff8d45e56aabb83","BLOCKED: unapproved Firestore blob");
+const paths=source=>source.split("\n").filter(l=>l.startsWith("    match /")).map(l=>l.slice("    match /".length).split(" ")[0]);
+assert.deepEqual(paths(current),paths(protectedBaseline),"BLOCKED: collection scope changed");
+const allows=source=>[...source.matchAll(/allow (?:get|list|read|write|create|update|delete)/g)].length;
+assert.equal(allows(current),allows(protectedBaseline),"BLOCKED: allow methods changed");
+for(const role of [undefined,null,"","admin","superadmin","lgu_personnel","resident","volunteer","applicant","other",false])
+ for(const verified of [true,false])for(const status of [undefined,"approved","suspended","pending_review",null])
+ for(const adminState of [undefined,"active","suspended",null])for(const matchEmail of [true,false]){
+  const staff=["admin","superadmin","lgu_personnel"].includes(role);
+  const approvedState=(status===undefined?"approved":status)==="approved";
+  const active=(adminState===undefined?"active":adminState)!=="suspended";
+  const originalApproved=verified&&["resident","volunteer","admin","superadmin","lgu_personnel"].includes(role)&&(staff||matchEmail)&&approvedState&&active;
+  const newApproved=verified&&(staff||(["resident","volunteer"].includes(role)&&matchEmail))&&approvedState&&active;
+  assert.equal(originalApproved,newApproved,"Approved role changed");
+  for(const roles of [["admin"],["superadmin"],["admin","superadmin"]]){
+    const oldStaff=verified&&roles.includes(role)&&approvedState&&active;
+    const newStaff=newApproved&&roles.includes(role);
+    assert.equal(oldStaff,newStaff,"Staff role changed");
+  }
+ }
+const body=current.slice(0,current.indexOf("    match /"));
+for(const name of ["hasApprovedStaffRole","isAdmin","isSuperAdmin","isAdminOrSuperAdmin"]){
+ assert(body.includes("function "+name+"("),"Missing consolidated root helper "+name);
+}
+for(const name of ["isAdmin","isSuperAdmin","isAdminOrSuperAdmin"]){
+ assert.equal([...current.matchAll(new RegExp("\\bfunction "+name+"\\(","g"))].length,1,
+  "BLOCKED: old duplicated staff function still exists "+name);
+}
+const roles=[undefined,null,"","guest","applicant","admin","superadmin",
+ "lgu_personnel","resident","volunteer","other",0,["admin"]];
+const statuses=[undefined,null,"approved","pending_review","rejected",0];
+const admins=[undefined,null,"active","suspended","pending",false];
+let checks=0;
+function val(p,key,def){
+ return Object.prototype.hasOwnProperty.call(p,key)?p[key]:def;
+}
+function oldPolicy(p,verified,allowed){
+ return verified && allowed.includes(val(p,"role",""))
+  && val(p,"status","approved")==="approved"
+  && val(p,"adminStatus","active")!=="suspended";
+}
+function newPolicy(p,verified,allowed){
+ const allowedRole=allowed.includes(val(p,"role",""));
+ return verified&&allowedRole
+  && val(p,"status","approved")==="approved"
+  && val(p,"adminStatus","active")!=="suspended";
+}
+for(const role of roles)for(const status of statuses)
+for(const adminStatus of admins)for(const verified of [true,false])
+for(const [fn,allowed] of [
+ ["isAdmin",["admin"]],
+ ["isSuperAdmin",["superadmin"]],
+ ["isAdminOrSuperAdmin",["admin","superadmin"]]
+]){
+ const p={};if(role!==undefined)p.role=role;
+ if(status!==undefined)p.status=status;
+ if(adminStatus!==undefined)p.adminStatus=adminStatus;
+ assert.equal(newPolicy(p,verified,allowed),oldPolicy(p,verified,allowed),
+  "Staff permission changed for "+fn+JSON.stringify({p,verified}));
+ checks++;
+}
+console.log("PASS: "+checks+" staff-role checks, immutable merged baseline and hash-pinned second-pass Rules; no live writes.");
+)";
+const optionalPhoneLine="          && (d.phoneNumber == '' || d.phoneNumber.matches('^([+]639[0-9]{9}|09[0-9]{9})
+assert.equal(cp.execFileSync("git",["hash-object","firestore.rules"],{encoding:"utf8"}).trim(),
+"8fc18e4be0a9298d0b2329c10ff8d45e56aabb83","BLOCKED: unreviewed Firestore Rules blob");
+// Verify exhaustiveness of all optional-review branches over valid and
+// invalid types, status values and three-valued nulls before Firebase emulator.
+for(const required of [true,false,null,"true",0,1,undefined]){
+ for(const status of ["not_required","pending","confirmed","unable_to_confirm","inconsistent","requested","scheduled","completed","unable_to_complete",null,false]){
+  const facilitySet=["pending","confirmed","unable_to_confirm","inconsistent"];
+  const costSet=["pending","confirmed","inconsistent"];
+  const videoSet=["pending","requested","completed","unable_to_complete"];
+  const siteSet=["pending","scheduled","completed","unable_to_complete"];
+  for(const values of [facilitySet,costSet,videoSet,siteSet]){
+   const oldEnum=["not_required",...values].includes(status);
+   const branches=(required===false&&status==="not_required")||(required===true&&values.includes(status));
+   assert.equal((typeof required==="boolean")&&oldEnum&&branches,branches,"Optional flag validator changed");
+  }
+ }
+}
+
+const gitBlob=cp.execFileSync("git",["hash-object","firestore.rules"],{encoding:"utf8"}).trim();
+assert.equal(gitBlob,"8fc18e4be0a9298d0b2329c10ff8d45e56aabb83","BLOCKED: unapproved Firestore blob");
+const paths=source=>source.split("\n").filter(l=>l.startsWith("    match /")).map(l=>l.slice("    match /".length).split(" ")[0]);
+assert.deepEqual(paths(current),paths(protectedBaseline),"BLOCKED: collection scope changed");
+const allows=source=>[...source.matchAll(/allow (?:get|list|read|write|create|update|delete)/g)].length;
+assert.equal(allows(current),allows(protectedBaseline),"BLOCKED: allow methods changed");
+for(const role of [undefined,null,"","admin","superadmin","lgu_personnel","resident","volunteer","applicant","other",false])
+ for(const verified of [true,false])for(const status of [undefined,"approved","suspended","pending_review",null])
+ for(const adminState of [undefined,"active","suspended",null])for(const matchEmail of [true,false]){
+  const staff=["admin","superadmin","lgu_personnel"].includes(role);
+  const approvedState=(status===undefined?"approved":status)==="approved";
+  const active=(adminState===undefined?"active":adminState)!=="suspended";
+  const originalApproved=verified&&["resident","volunteer","admin","superadmin","lgu_personnel"].includes(role)&&(staff||matchEmail)&&approvedState&&active;
+  const newApproved=verified&&(staff||(["resident","volunteer"].includes(role)&&matchEmail))&&approvedState&&active;
+  assert.equal(originalApproved,newApproved,"Approved role changed");
+  for(const roles of [["admin"],["superadmin"],["admin","superadmin"]]){
+    const oldStaff=verified&&roles.includes(role)&&approvedState&&active;
+    const newStaff=newApproved&&roles.includes(role);
+    assert.equal(oldStaff,newStaff,"Staff role changed");
+  }
+ }
+const body=current.slice(0,current.indexOf("    match /"));
+for(const name of ["hasApprovedStaffRole","isAdmin","isSuperAdmin","isAdminOrSuperAdmin"]){
+ assert(body.includes("function "+name+"("),"Missing consolidated root helper "+name);
+}
+for(const name of ["isAdmin","isSuperAdmin","isAdminOrSuperAdmin"]){
+ assert.equal([...current.matchAll(new RegExp("\\bfunction "+name+"\\(","g"))].length,1,
+  "BLOCKED: old duplicated staff function still exists "+name);
+}
+const roles=[undefined,null,"","guest","applicant","admin","superadmin",
+ "lgu_personnel","resident","volunteer","other",0,["admin"]];
+const statuses=[undefined,null,"approved","pending_review","rejected",0];
+const admins=[undefined,null,"active","suspended","pending",false];
+let checks=0;
+function val(p,key,def){
+ return Object.prototype.hasOwnProperty.call(p,key)?p[key]:def;
+}
+function oldPolicy(p,verified,allowed){
+ return verified && allowed.includes(val(p,"role",""))
+  && val(p,"status","approved")==="approved"
+  && val(p,"adminStatus","active")!=="suspended";
+}
+function newPolicy(p,verified,allowed){
+ const allowedRole=allowed.includes(val(p,"role",""));
+ return verified&&allowedRole
+  && val(p,"status","approved")==="approved"
+  && val(p,"adminStatus","active")!=="suspended";
+}
+for(const role of roles)for(const status of statuses)
+for(const adminStatus of admins)for(const verified of [true,false])
+for(const [fn,allowed] of [
+ ["isAdmin",["admin"]],
+ ["isSuperAdmin",["superadmin"]],
+ ["isAdminOrSuperAdmin",["admin","superadmin"]]
+]){
+ const p={};if(role!==undefined)p.role=role;
+ if(status!==undefined)p.status=status;
+ if(adminStatus!==undefined)p.adminStatus=adminStatus;
+ assert.equal(newPolicy(p,verified,allowed),oldPolicy(p,verified,allowed),
+  "Staff permission changed for "+fn+JSON.stringify({p,verified}));
+ checks++;
+}
+console.log("PASS: "+checks+" staff-role checks, immutable merged baseline and hash-pinned second-pass Rules; no live writes.");
+))";
+assert.equal(beforeOptionalPhone.split(requiredPhoneLine).length,2,
+ "BLOCKED: reviewed Resident phone policy moved or duplicated");
+assert.equal(current,beforeOptionalPhone.replace(requiredPhoneLine,optionalPhoneLine),
+ "BLOCKED: Firestore drift beyond the reviewed optional-phone-only policy");
+assert.equal(cp.execFileSync("git",["hash-object","firestore.rules"],{encoding:"utf8"}).trim(),
+"8fc18e4be0a9298d0b2329c10ff8d45e56aabb83","BLOCKED: unreviewed Firestore Rules blob");
+// Verify exhaustiveness of all optional-review branches over valid and
+// invalid types, status values and three-valued nulls before Firebase emulator.
+for(const required of [true,false,null,"true",0,1,undefined]){
+ for(const status of ["not_required","pending","confirmed","unable_to_confirm","inconsistent","requested","scheduled","completed","unable_to_complete",null,false]){
+  const facilitySet=["pending","confirmed","unable_to_confirm","inconsistent"];
+  const costSet=["pending","confirmed","inconsistent"];
+  const videoSet=["pending","requested","completed","unable_to_complete"];
+  const siteSet=["pending","scheduled","completed","unable_to_complete"];
+  for(const values of [facilitySet,costSet,videoSet,siteSet]){
+   const oldEnum=["not_required",...values].includes(status);
+   const branches=(required===false&&status==="not_required")||(required===true&&values.includes(status));
+   assert.equal((typeof required==="boolean")&&oldEnum&&branches,branches,"Optional flag validator changed");
+  }
+ }
+}
+
+const gitBlob=cp.execFileSync("git",["hash-object","firestore.rules"],{encoding:"utf8"}).trim();
+assert.equal(gitBlob,"8fc18e4be0a9298d0b2329c10ff8d45e56aabb83","BLOCKED: unapproved Firestore blob");
 const paths=source=>source.split("\n").filter(l=>l.startsWith("    match /")).map(l=>l.slice("    match /".length).split(" ")[0]);
 assert.deepEqual(paths(current),paths(protectedBaseline),"BLOCKED: collection scope changed");
 const allows=source=>[...source.matchAll(/allow (?:get|list|read|write|create|update|delete)/g)].length;
