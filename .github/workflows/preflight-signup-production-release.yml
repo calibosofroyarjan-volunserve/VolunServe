@@ -1,6 +1,7 @@
 # READ-ONLY production Signup release checks. NEVER deploy/upgrade Firebase.
 name: Signup Production Rules and Hosting Reconciliation (NO DEPLOY)
 on:
+  workflow_dispatch:
   pull_request:
     branches: [live-protected]
     paths:
@@ -30,7 +31,7 @@ jobs:
           node --check scripts/preflight-signup-production-release.cjs
           node scripts/preflight-signup-production-release.cjs --self-test
   production-readonly:
-    if: github.event_name == 'push' && github.repository == 'calibosofroyarjan-volunserve/VolunServe' && github.ref == 'refs/heads/live-protected'
+    if: github.repository == 'calibosofroyarjan-volunserve/VolunServe' && github.ref == 'refs/heads/live-protected' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
     needs: code-check
     environment: production
     runs-on: ubuntu-latest
@@ -47,7 +48,7 @@ jobs:
           cache: npm
           cache-dependency-path: functions/package-lock.json
       - run: npm ci --prefix functions --no-audit --no-fund
-      - name: Compare actual live Hosting commit and Security Rules with target source (GET only)
+      - name: Compare actual live Hosting, Security Rules, and Identity Platform blocking hooks (GET only)
         env:
           VOLUNSERVE_PRODUCTION_HOSTING_SERVICE_ACCOUNT: ${{ secrets.VOLUNSERVE_PRODUCTION_HOSTING_SERVICE_ACCOUNT }}
         run: node scripts/preflight-signup-production-release.cjs
