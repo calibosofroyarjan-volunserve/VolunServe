@@ -51,6 +51,19 @@ async function main() {
     await assertFails(getDoc(doc(as("existing-resident","other@gmail.com",true),"announcements","published")));
     await assertSucceeds(getDoc(doc(as("existing-resident","existing@gmail.com",true),"announcements","published")));
     await assertFails(getDoc(doc(as("legacy-guest","guest@gmail.com",true),"announcements","published")));
+    // Known provider-associated temporary domains must fail for existing
+    // verified community profiles, even when bypassing the login UI.
+    for (const [uid,email] of [
+      ["existing-temp-mailer", "person@mailer.pics"],
+      ["existing-temp-gmail-lookalike","person@gmail.shagni.com"]
+    ]) {
+      await env.withSecurityRulesDisabled(async context => {
+        await setDoc(doc(context.firestore(),"users",uid),{
+          uid,email,role:"resident",status:"approved",residentAccess:true,activeMode:"resident"
+        });
+      });
+      await assertFails(getDoc(doc(as(uid,email,true),"announcements","published")));
+    }
 
     // Staff role in a user document must NOT bypass Firebase's verified-email
     // claim by invoking Firestore directly, outside the normal Login UI.
@@ -68,7 +81,13 @@ async function main() {
         ...validProfile,uid,email,
       }));
     }
-    // Every invalid registration has its own UID to test CREATE permission
+    for(const domain of ["mailer.pics","mpmail.top","gmail.shagni.com","ghostmailz.club","mail.sc2hub.com"]){
+      const uid="blocked-provider-"+domain.replace(/[^a-z0-9]/g,"-");
+      const email="person@"+domain;
+      await assertFails(setDoc(doc(as(uid,email,true),"users",uid),{...validProfile,uid,email}));
+    }
+    // Legitimate Gmail must continue to work even though gmail.shagni.com is blocked.
+        // Every invalid registration has its own UID to test CREATE permission
     // (rather than accidentally testing UPDATE on an existing profile).
     let n = 0;
     async function invalidCreate(changes) {

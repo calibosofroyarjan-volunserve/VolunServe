@@ -279,10 +279,20 @@ const optionalPhoneLine="          && (d.phoneNumber == '' || d.phoneNumber.matc
 assert.equal(expectedEmailkeepRules.split(requiredPhoneLine).length,2,
  "BLOCKED: original phone validation moved or duplicated");
 const expectedCombinedRules=expectedEmailkeepRules.replace(requiredPhoneLine,()=>optionalPhoneLine);
-assert.equal(current,expectedCombinedRules,
- "BLOCKED: Firestore rules differ beyond two emailkeep denies and one optional-phone predicate");
+const tempMailHelper="    // Recent temp-mail.org delivery domains reviewed 2026-11-10.\n    // Deny-only for community profiles; staff policies remain unchanged.\n    // This is a finite provider snapshot and cannot detect every new domain.\n    function blockedTempMailOrgAlias(email) {\n      return email.matches(\".*@([a-z0-9-]+[.])*(adujudi01[.]info|avtomaty-online[.]cc|baimengshu[.]com|bankwen[.]com|berkshireonstage[.]com|boffweb[.]com|crackclue[.]com|crystalfact[.]info|ctd[.]nl8[.]eu|digeros[.]com|doisongtinhduc[.]xyz|dragontranslation[.]net|drtall[.]com|emailgeneratorai[.]cc|ghostmailz[.]club|ghostmailz[.]online|ghostmailz[.]store|gmail[.]shagni[.]com|huanqiu6[.]cc|huicuiguan[.]com|indonesiacentral[.]info|javafs[.]com|jjwxb[.]com|jlmmarine[.]com|kxdyy[.]com|livetogelhk[.]info|luontaisterveys[.]info|macsnipe[.]com|mail[.]chosenx[.]com|mail[.]gianes[.]com|mail[.]sc2hub[.]com|mailer[.]pics|mmamemories[.]com|mpmail[.]top|nmwxb[.]com|prejuge[.]com|prestigegroupnet[.]com|sofabazar[.]com|spicylog[.]com|stebie[.]com|tobiquegaming-license[.]com|ttbtt[.]com|wandera[.]top|wbcom[.]info|wencuigu[.]com|wxfwb[.]com|yesrox[.]com|yyqzw[.]com|zymapi[.]top)\");\n    }\n";
+const tempMailApprovedDeny="\n            && !blockedTempMailOrgAlias(request.auth.token.get('email', ''))";
+const tempMailCreateDeny="\n        && !blockedTempMailOrgAlias(request.resource.data.email)";
+assert.equal(expectedCombinedRules.split("    function approved() {").length,2);
+assert.equal(expectedCombinedRules.split("            && !request.auth.token.get('email', '').matches(\".*@([a-z0-9-]+[.])*emailkeep[.]com\")").length,2);
+assert.equal(expectedCombinedRules.split("        && !request.resource.data.email.matches(\".*@([a-z0-9-]+[.])*emailkeep[.]com\")").length,2);
+const expectedProviderRules=expectedCombinedRules
+ .replace("    function approved() {",tempMailHelper+"    function approved() {")
+ .replace("            && !request.auth.token.get('email', '').matches(\".*@([a-z0-9-]+[.])*emailkeep[.]com\")","            && !request.auth.token.get('email', '').matches(\".*@([a-z0-9-]+[.])*emailkeep[.]com\")"+tempMailApprovedDeny)
+ .replace("        && !request.resource.data.email.matches(\".*@([a-z0-9-]+[.])*emailkeep[.]com\")","        && !request.resource.data.email.matches(\".*@([a-z0-9-]+[.])*emailkeep[.]com\")"+tempMailCreateDeny);
+assert.equal(current,expectedProviderRules,
+ "BLOCKED: Firestore rules changed beyond exact reviewed temp-mail.org provider denies and original predicates");
 assert.equal(cp.execFileSync("git",["hash-object","firestore.rules"],{encoding:"utf8"}).trim(),
-"19e5254cdb667a6d935b8b03f0f707bb4c9203b9","BLOCKED: unreviewed Firestore Rules blob");
+"f3721c82169367478deb9e3c5e690636a92e1a2d","BLOCKED: unreviewed Firestore Rules blob");
 // Verify exhaustiveness of all optional-review branches over valid and
 // invalid types, status values and three-valued nulls before Firebase emulator.
 for(const required of [true,false,null,"true",0,1,undefined]){
@@ -300,7 +310,7 @@ for(const required of [true,false,null,"true",0,1,undefined]){
 }
 
 const gitBlob=cp.execFileSync("git",["hash-object","firestore.rules"],{encoding:"utf8"}).trim();
-assert.equal(gitBlob,"19e5254cdb667a6d935b8b03f0f707bb4c9203b9","BLOCKED: unapproved Firestore blob");
+assert.equal(gitBlob,"f3721c82169367478deb9e3c5e690636a92e1a2d","BLOCKED: unapproved Firestore blob");
 const paths=source=>source.split("\n").filter(l=>l.startsWith("    match /")).map(l=>l.slice("    match /".length).split(" ")[0]);
 assert.deepEqual(paths(current),paths(protectedBaseline),"BLOCKED: collection scope changed");
 const allows=source=>[...source.matchAll(/allow (?:get|list|read|write|create|update|delete)/g)].length;
