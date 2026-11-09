@@ -53,12 +53,13 @@ assert(cases.includes("return !isReporter && skillSearchMatch;") &&
   "All approved Volunteers must be visible and offline status must not prohibit offers");
 assert(cases.includes("runTransaction(db, async (transaction)") &&
   cases.includes("transaction.get(volunteerRef)") &&
-  cases.includes("hasCurrentSkillMatch") &&
+  cases.includes("const currentRequiredSkills = normalizeStringArray(") &&
+  cases.includes("volunteerEligibilityForCase(incident, volunteer)") &&
   cases.includes("currentVerification !== \"validated\"") &&
   cases.includes('status: "offered"') &&
   cases.includes('read: false') &&
   cases.includes('volunteer.uid === incident.reporterUid'),
-  "Keep atomic, validated, skill/lock-checked assignment with queued Volunteer notifications");
+  "Keep atomic, validated, reviewed-skill and duplicate-assignment checks with queued Volunteer notifications");
 assert(!cases.includes('currentVolunteerBarangay !== currentCaseBarangay') &&
   cases.includes("normalizeBarangay(currentCaseBarangayRaw)") &&
   cases.includes("!eligibility.eligible") &&
