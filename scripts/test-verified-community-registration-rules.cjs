@@ -2,7 +2,7 @@
 const fs = require("node:fs");
 const assert = require("node:assert/strict");
 const {initializeTestEnvironment, assertSucceeds, assertFails} = require("@firebase/rules-unit-testing");
-const {doc, setDoc, getDoc, Timestamp} = require("firebase/firestore");
+const {doc, setDoc, getDoc, writeBatch, serverTimestamp, Timestamp} = require("firebase/firestore");
 
 async function main() {
   const env = await initializeTestEnvironment({
@@ -115,14 +115,37 @@ async function main() {
     await invalidCreate({age:17});
     await invalidCreate({age:101});
     await invalidCreate({region:""});
+    // New Gmail Residents must create their mailbox claim and profile
+    // together; non-Gmail Resident registration needs no Gmail claim.
+    async function createGmailResident(uid,email,profile) {
+      const db = as(uid,email,true);
+      const canonical = email.toLowerCase().split("@")[0].split("+")[0].replace(/\\./g,"")+"@gmail.com";
+      const batch=writeBatch(db);
+      batch.set(doc(db,"gmailAliasClaims",canonical),{uid,createdAt:serverTimestamp()});
+      batch.set(doc(db,"users",uid),{...profile,uid,email});
+      return batch.commit();
+    }
     // The published signup form removed phone input. Verified Basic
     // Resident may register with an empty phone; malformed nonempty phones
     // remain rejected by validInitialResidentInputs().
-    await assertSucceeds(setDoc(
-      doc(as("new-resident-no-phone","no-phone@gmail.com",true),"users","new-resident-no-phone"),
-      {...validProfile,uid:"new-resident-no-phone",email:"no-phone@gmail.com",phoneNumber:""}
-    ));
-    await assertSucceeds(setDoc(doc(as("new-resident","real@gmail.com",true),"users","new-resident"),validProfile));
+    await assertSucceeds(createGmailResident("new-resident-no-phone","no-phone@gmail.com",
+      {...validProfile,phoneNumber:""}));
+    await assertSucceeds(createGmailResident("new-resident","real@gmail.com",validProfile));
+    // A raw SDK profile create must never bypass the mailbox claim.
+    await assertFails(setDoc(doc(as("direct-gmail","re.al@gmail.com",true),"users","direct-gmail"),
+      {...validProfile,uid:"direct-gmail",email:"re.al@gmail.com"}));
+    // Dot-variation and googlemail.com aliases must lose to the first writer.
+    await assertFails(createGmailResident("dot-clone","r.e.a.l@gmail.com",validProfile));
+    await assertFails(createGmailResident("domain-clone","real@googlemail.com",validProfile));
+    // A Yahoo address is not Gmail and remains valid with the original route.
+    await assertSucceeds(setDoc(doc(as("valid-yahoo","member@yahoo.com",true),"users","valid-yahoo"),
+      {...validProfile,uid:"valid-yahoo",email:"member@yahoo.com"}));
+    // Alias claims cannot be created in isolation or usurped by strangers.
+    const orphan=as("orphan","orphan@gmail.com",true);
+    await assertFails(setDoc(doc(orphan,"gmailAliasClaims","orphan@gmail.com"),
+      {uid:"orphan",createdAt:serverTimestamp()}));
+    await assertFails(setDoc(doc(as("impostor","notreal@gmail.com",true),
+      "gmailAliasClaims","real@gmail.com"),{uid:"impostor",createdAt:serverTimestamp()}));
     assert.ok(true);
     console.log("PASS Firestore: unverified community/staff emails denied; verified complete Resident and staff access permitted.");
   } finally {
