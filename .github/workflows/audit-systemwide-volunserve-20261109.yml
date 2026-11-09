@@ -4,6 +4,7 @@ on:
     branches: [live-protected]
     paths:
       - '.github/workflows/audit-systemwide-volunserve-20261109.yml'
+      - 'scripts/test-*.cjs'
   workflow_dispatch:
 permissions:
   contents: read
