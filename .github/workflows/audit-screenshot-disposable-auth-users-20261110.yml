@@ -1,0 +1,56 @@
+name: Audit Screenshot Temporary Firebase Auth Accounts (NO DELETE)
+on:
+  pull_request:
+    branches: [live-protected]
+    paths:
+      - scripts/audit-screenshot-disposable-auth-users-20261110.cjs
+      - .github/workflows/audit-screenshot-disposable-auth-users-20261110.yml
+  push:
+    branches: [live-protected]
+    paths:
+      - scripts/audit-screenshot-disposable-auth-users-20261110.cjs
+      - .github/workflows/audit-screenshot-disposable-auth-users-20261110.yml
+permissions:
+  contents: read
+jobs:
+  source-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Validate exact screenshot identity filter without Firebase access
+        run: |
+          node --check scripts/audit-screenshot-disposable-auth-users-20261110.cjs
+          node scripts/audit-screenshot-disposable-auth-users-20261110.cjs --self-test
+          node -e 'const s=require("fs").readFileSync("scripts/audit-screenshot-disposable-auth-users-20261110.cjs","utf8");if(/deleteUser\(|deleteUsers\(|\.delete\(|updateUser\(|disableUser\(/.test(s))process.exit(1);console.log("PASS: no Auth/Firestore mutation path")'
+  production-readonly:
+    if: github.event_name == 'push' && github.repository == 'calibosofroyarjan-volunserve/VolunServe' && github.ref == 'refs/heads/live-protected'
+    needs: source-check
+    environment: production
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          submodules: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Require exact newest protected revision
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(git ls-remote --heads origin live-protected | cut -f1)" = "$GITHUB_SHA"
+      - run: npm ci --prefix functions --no-audit --no-fund
+      - name: Inspect three known temporary accounts, users profile presence (NO DELETE)
+        env:
+          VOLUNSERVE_PRODUCTION_AUDIT_CREDENTIAL: ${{ secrets.VOLUNSERVE_PRODUCTION_READONLY_SERVICE_ACCOUNT }}
+        run: node scripts/audit-screenshot-disposable-auth-users-20261110.cjs
