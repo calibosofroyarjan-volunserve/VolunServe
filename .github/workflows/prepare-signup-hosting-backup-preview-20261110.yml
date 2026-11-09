@@ -1,0 +1,147 @@
+# ONE-TIME PREVIEW-ONLY PROTECTED ACTION. Never writes to :live.
+# DEDICATED preview/backup channel names preserve historical recovery points.
+name: Prepare Signup Live Backup + Isolated Preview (NO LIVE DEPLOY)
+on:
+  pull_request:
+    branches: [live-protected]
+    paths:
+      - scripts/prepare-signup-hosting-backup-preview-20261110.cjs
+      - .github/workflows/prepare-signup-hosting-backup-preview-20261110.yml
+  push:
+    branches: [live-protected]
+    paths:
+      - scripts/prepare-signup-hosting-backup-preview-20261110.cjs
+      - .github/workflows/prepare-signup-hosting-backup-preview-20261110.yml
+permissions:
+  contents: read
+concurrency:
+  group: volunserve-signup-preview-backup-20261110
+  cancel-in-progress: false
+jobs:
+  source-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify preview/backup source guards, no live publish operation
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check scripts/prepare-signup-hosting-backup-preview-20261110.cjs
+          node scripts/prepare-signup-hosting-backup-preview-20261110.cjs --self-test
+          node <<'NODE'
+          const fs=require("fs");
+          const assert=require("node:assert/strict");
+          const script=fs.readFileSync("scripts/prepare-signup-hosting-backup-preview-20261110.cjs","utf8");
+          const workflow=fs.readFileSync(".github/workflows/prepare-signup-hosting-backup-preview-20261110.yml","utf8");
+          const commands=workflow.split("\n").filter(x=>/npx firebase-tools /.test(x));
+          assert.equal(commands.length,2,"Exactly one backup clone and one preview deployment");
+          assert(commands[0].includes('hosting:clone "$PROJECT:live" "$PROJECT:$BACKUP"'));
+          assert(commands[1].includes('hosting:channel:deploy "$PREVIEW"'));
+          assert(!workflow.includes("firebase-tools deploy --only hosting"));
+          assert(!workflow.includes("firebase-tools hosting:clone \"$PROJECT:$PREVIEW\" \"$PROJECT:live\""));
+          assert(!/--publish-rules|--restore-rules|rulesets.create|releases.update|firestore:delete|auth:delete/.test(script+workflow));
+          assert(workflow.includes("environment: production"));
+          assert(workflow.includes("never writes")||workflow.includes("Never writes"));
+          console.log("PASS: only dedicated backup/preview Hosting channels can be written");
+          NODE
+  prepare-only:
+    if: github.repository == 'calibosofroyarjan-volunserve/VolunServe' && github.ref == 'refs/heads/live-protected' && github.event_name == 'push'
+    needs: source-check
+    environment: production
+    runs-on: ubuntu-latest
+    timeout-minutes: 65
+    env:
+      CI: 'true'
+      EXPO_NO_TELEMETRY: '1'
+      PROJECT: volunserve-3aa5b
+      SITE_SHA: 44cfe41429f91d35d383bf3846fb6fd2f7e7df44
+      RULES_SHA: 508b58b6ce888810c081dc6bfe38c237629d96d8
+      BACKUP: signup-live-backup-20261110
+      PREVIEW: signup-web-review-20261110
+    steps:
+      - name: Checkout exact current protected controller, no outdated main
+        uses: actions/checkout@v4
+        with:
+          path: controller
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          submodules: false
+      - name: Checkout independently reviewed published-site-derived PR 356
+        uses: actions/checkout@v4
+        with:
+          path: site
+          ref: 44cfe41429f91d35d383bf3846fb6fd2f7e7df44
+          fetch-depth: 0
+          submodules: false
+      - name: Checkout independently reviewed active-Rules-derived PR 358
+        uses: actions/checkout@v4
+        with:
+          path: rules
+          ref: 508b58b6ce888810c081dc6bfe38c237629d96d8
+          fetch-depth: 0
+          submodules: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: site/package-lock.json
+      - name: Install frozen candidate and scoped Firebase Admin SDK dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci --prefix site --no-audit --no-fund
+          npm ci --prefix controller/functions --no-audit --no-fund
+      - name: Preserve all published Admin/Resident/Volunteer/Guest modules
+        working-directory: site
+        run: node scripts/test-site-derived-signup-candidate.cjs
+      - name: Re-run complete Signup, Google and disposable-email source regressions
+        working-directory: site
+        run: node scripts/test-signup-prod.cjs
+      - name: Compile exact candidate web preview with audited release fingerprint
+        working-directory: site
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx tsc --noEmit --incremental false
+          npx expo export --platform web --clear
+          GITHUB_SHA="$SITE_SHA" node scripts/verify-hosting-release.cjs
+      - name: Write scoped GitHub production Hosting credentials to ephemeral runner
+        shell: bash
+        env:
+          FIREBASE_SA: ${{ secrets.VOLUNSERVE_PRODUCTION_HOSTING_SERVICE_ACCOUNT }}
+        run: |
+          set -euo pipefail
+          test -n "$FIREBASE_SA"
+          umask 077
+          printf '%s' "$FIREBASE_SA" > "$RUNNER_TEMP/volunserve-preview-only-hosting.json"
+          echo "GOOGLE_APPLICATION_CREDENTIALS=$RUNNER_TEMP/volunserve-preview-only-hosting.json" >> "$GITHUB_ENV"
+      - name: Verify exact LIVE revision and active Firestore Rules before any Hosting channel write
+        env:
+          VOLUNSERVE_PRODUCTION_HOSTING_SERVICE_ACCOUNT: ${{ secrets.VOLUNSERVE_PRODUCTION_HOSTING_SERVICE_ACCOUNT }}
+        run: node controller/scripts/prepare-signup-hosting-backup-preview-20261110.cjs --preflight
+      - name: Clone current live Hosting version to dedicated rollback backup (NEVER :live target)
+        working-directory: site
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx firebase-tools hosting:clone "$PROJECT:live" "$PROJECT:$BACKUP" --project "$PROJECT" --non-interactive
+      - name: Verify backup version equals live and public marker equals published SHA
+        env:
+          VOLUNSERVE_PRODUCTION_HOSTING_SERVICE_ACCOUNT: ${{ secrets.VOLUNSERVE_PRODUCTION_HOSTING_SERVICE_ACCOUNT }}
+        run: node controller/scripts/prepare-signup-hosting-backup-preview-20261110.cjs --backup-verified
+      - name: Deploy preview channel ONLY, never live, Rules, Functions or Firestore
+        working-directory: site
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx firebase-tools hosting:channel:deploy "$PREVIEW" --expires 7d --project "$PROJECT" --non-interactive
+      - name: Verify reviewed preview pages, unchanged live site, and unchanged active Rules
+        env:
+          VOLUNSERVE_PRODUCTION_HOSTING_SERVICE_ACCOUNT: ${{ secrets.VOLUNSERVE_PRODUCTION_HOSTING_SERVICE_ACCOUNT }}
+        run: node controller/scripts/prepare-signup-hosting-backup-preview-20261110.cjs --preview-verified
