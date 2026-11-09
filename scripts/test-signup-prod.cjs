@@ -51,6 +51,12 @@ function harness(source, enabled, options = {}) {
   return {registration:imports["./signupRegistration"],api:load(source,imports),link:load(read("lib/emailFirstSignupAuth.ts"),imports),calls,user,auth,profile:()=>profile};
 }
 (async()=>{
+  await check("verified Resident signup accepts removed optional phone",async()=>{
+    const h=harness(current,true);
+    await h.api.signUpUser({...data,phoneNumber:"",authProvider:"verified_email"});
+    assert.equal(h.profile()?.phoneNumber,"");
+    assert(h.calls.includes("transaction"));
+  });
   await check("web Signup stays premium after unrelated Hosting builds; native remains opt-in",()=>{
     for (const value of [undefined,"false","1","TRUE",""]) {
       const native=load(read("lib/signupFeature.ts"),{"react-native":{Platform:{OS:"android"}}},{EXPO_PUBLIC_EMAIL_FIRST_SIGNUP:value});
@@ -66,13 +72,34 @@ function harness(source, enabled, options = {}) {
     const ios=load(read("lib/signupFeature.ts"),{"react-native":{Platform:{OS:"ios"}}},{EXPO_PUBLIC_EMAIL_FIRST_SIGNUP:""});
     assert.equal(ios.EMAIL_FIRST_SIGNUP_ENABLED,false);
   });
-  await check("legacy signup layouts remain unchanged relative to published website source",()=>{
+  await check("legacy signup design matches published source apart from specific inline email errors",()=>{
+    const baseRef="f7bc8d12d8e926365175afb5288f2adf214025a5";
+    const extract=text=>text.replace(/\r\n/g,"\n").slice(text.replace(/\r\n/g,"\n").indexOf("  const currentMeta = STEP_META[step];")).replace(/\nexport default function Signup\(\) \{[\s\S]*$/,'').trimEnd();
     for(const file of ["app/signup.tsx","app/signup.web.tsx"]) {
-      const extract=text=>text.replace(/\r\n/g,"\n").slice(text.replace(/\r\n/g,"\n").indexOf("  const currentMeta = STEP_META[step];")).replace(/\nexport default function Signup\(\) \{[\s\S]*$/,'').trimEnd();
-      // Compare the unchanged legacy wizard against the REAL deployed website
-      // revision. Protected source has unshipped UI edits and is not the baseline.
-      const baseRef="f7bc8d12d8e926365175afb5288f2adf214025a5";
-      assert.equal(extract(read(file)),extract(cp.execFileSync("git",["show",baseRef+":"+file],{encoding:"utf8"})));
+      const source=read(file);
+      assert(source.includes("getRegistrationEmailError(formData.email)"),"Step 1 must screen disposable mail: "+file);
+      assert(source.includes("const emailValid = emailError === null;"),"Rejected email must block Next: "+file);
+      assert(source.includes("emailError,"),"Show the exact email validation reason: "+file);
+      let rendered=extract(source);
+      if(file.endsWith(".web.tsx")){
+        const current=`{formData.email.length > 0 && !!validation.emailError ? (
+                    <ValidationText ok={false}>{validation.emailError}</ValidationText>
+                  ) : null}`;
+        const original=`{formData.email.length > 0 && !validation.emailValid ? (
+                    <ValidationText ok={false}>Enter a valid email address.</ValidationText>
+                  ) : null}`;
+        assert.equal(rendered.split(current).length,2,"Specific web inline email error not found");
+        rendered=rendered.replace(current,original);
+      } else {
+        const newInline=`{formData.email.length > 0 && !!validation.emailError && (
+                <ValidationText ok={false}>{validation.emailError}</ValidationText>
+              )}
+              `;
+        assert.equal(rendered.split(newInline).length,2,"Native email field error not found");
+        rendered=rendered.replace(newInline,"");
+      }
+      const published=extract(cp.execFileSync("git",["show",baseRef+":"+file],{encoding:"utf8"}));
+      assert.equal(rendered,published,"Unexpected published signup layout drift: "+file);
     }
   });
   for(const enabled of [false,true]) {
@@ -125,6 +152,30 @@ function harness(source, enabled, options = {}) {
     const off=harness(current,false,{providers:["google.com"]});await assert.rejects(off.link.linkEmailFirstGooglePassword("Password1!"),/not enabled/);assert.deepEqual(off.calls,[]);
     const h=harness(current,true,{providers:["google.com"]});assert.equal((await h.link.linkEmailFirstGooglePassword("Password1!")).uid,h.user.uid);assert(h.calls.includes("link"));assert(h.calls.includes("token"));
   });
+  await check("Google provider collision links only after explicit password sign-in and same-UID checks",()=>{
+    const web=read("app/login.web.tsx");
+    assert(web.includes('collision?.code === "auth/account-exists-with-different-credential"'));
+    assert(web.includes("GoogleAuthProvider.credentialFromError(error as any)"));
+    assert(web.includes("pendingGoogleLink.current = { email: collisionEmail, credential }"));
+    assert(web.includes("const handleLogin = async (linkGoogle = false) =>"));
+    assert(web.includes("const pending = linkGoogle ? pendingGoogleLink.current : null"));
+    assert(web.includes('["resident", "volunteer"].includes(profile.role)'));
+    assert(web.includes("signedInEmail !== pending.email") && web.includes("profileEmail !== pending.email"));
+    assert(web.includes("auth.currentUser?.uid !== user.uid"));
+    assert(web.includes("await linkWithCredential(user, pending.credential)"));
+    assert(web.includes("linked.user.uid !== user.uid"));
+    assert(web.includes("onPress={() => void handleLogin(true)}"));
+    assert(web.includes("pendingGoogleLink.current = null"));
+    assert(!web.includes("sessionStorage.setItem(GOOGLE_LOGIN_NOTICE_KEY, credential"),
+      "OAuth tokens must never be persisted");
+  });
+  await check("Google linking refuses disposable email before credential or profile changes",async()=>{
+    const h=harness(current,true,{providers:["google.com"]});
+    h.user.email="test@sub.emailkeep.com";
+    await assert.rejects(h.link.linkEmailFirstGooglePassword("Password1!"),/Temporary email/);
+    assert(!h.calls.includes("link") && !h.calls.includes("first-password") && !h.calls.includes("signin"));
+    assert.equal(h.profile(),null);
+  });
   await check("Google same-email SDK collision falls back on same UID without resetting an existing password",async()=>{
     const h=harness(current,true,{providers:["google.com"],sdkLinkError:"auth/email-already-in-use"});
     assert.equal((await h.link.linkEmailFirstGooglePassword("Password1!")).uid,h.user.uid);
@@ -167,14 +218,36 @@ function harness(source, enabled, options = {}) {
   await check("signup email syntax, typo, country domain and disposable checks",()=>{
     const generated=load(read("lib/disposableEmailDomains.generated.ts"));
     const policy=load(read("lib/registrationEmailPolicy.ts"),{"./disposableEmailDomains.generated":generated});
-    for(const value of ["person@yahoo.com.ph","person@outlook.com","person@department.gov.ph","person@legitimate.co"]) assert.equal(policy.getRegistrationEmailError(value),null);
-    for(const value of ["","bad@gmail..com","bad@gmail.con","bad@sub.mailinator.com","person@en2ch.co","person@en2ch.com","person@sub.en2ch.co","person+tag@gmail.com","person+tag@googlemail.com"]) assert.equal(typeof policy.getRegistrationEmailError(value),"string");
+    for(const value of ["person@yahoo.com.ph","person@outlook.com","person@department.gov.ph","person@legitimate.co","real.user@gmail.com","real.user@googlemail.com"]) assert.equal(policy.getRegistrationEmailError(value),null);
+    assert(policy.KNOWN_DISPOSABLE_EMAIL_DOMAINS.size > 30000, "Maintained disposable-domain feed must be loaded");
+    for(const value of ["test@0-mail.com","test@sub.0-mail.com","test@10minutemail.com"]) assert.equal(typeof policy.getRegistrationEmailError(value),"string");
+    for(const value of ["","bad@gmail..com","bad@gmail.con","bad@sub.mailinator.com","person@en2ch.co","person@en2ch.com","person@sub.en2ch.co","person@emailkeep.com","person@sub.emailkeep.com","person@gmail.com.fake.example","person@googlemail.com.fake.example","person+tag@gmail.com","person+tag@googlemail.com"]) assert.equal(typeof policy.getRegistrationEmailError(value),"string");
     for(const [wrong,right] of Object.entries(policy.KNOWN_PROVIDER_TYPO_CORRECTIONS)) assert(policy.getRegistrationEmailError("person@"+wrong).includes(right));
+  });
+  await check("temp-mail.org provider aliases are rejected with subdomains but not legitimate Gmail",()=>{
+    assert.equal(emailPolicy.TEMP_MAIL_ORG_PUBLIC_ALIASES.length,49,
+      "Expected 49 additional provider-associated domains from review");
+    for(const domain of emailPolicy.TEMP_MAIL_ORG_PUBLIC_ALIASES){
+      assert(emailPolicy.isKnownDisposableEmail("resident@"+domain),
+        "Provider-associated alias not rejected: "+domain);
+      assert(emailPolicy.isKnownDisposableEmail("resident@sub."+domain),
+        "Subdomain of known alias not rejected: "+domain);
+    }
+    for(const domain of ["mailer.pics","mpmail.top","gmail.shagni.com",
+      "mail.sc2hub.com","ctd.nl8.eu","ghostmailz.club","emailgeneratorai.cc"]){
+      assert.match(emailPolicy.getRegistrationEmailError("test@"+domain),/Temporary email/);
+    }
+    for(const email of ["real@gmail.com","real@googlemail.com","real@yahoo.com.ph",
+      "real@outlook.com"]){
+      assert.equal(emailPolicy.getRegistrationEmailError(email),null,
+        "Do not block real mail provider: "+email);
+    }
   });
   await check("disposable domain rejects Firebase UID before creation and profile write",async()=>{
     const h=harness(current,true,{noUser:true});
     await assert.rejects(h.registration.authenticateEmailSignup("person@en2ch.com","Password1!",false,true),/Temporary email/);
     await assert.rejects(h.registration.authenticateEmailSignup("person@en2ch.co","Password1!",false,true),/Temporary email/);
+    await assert.rejects(h.registration.authenticateEmailSignup("person@emailkeep.com","Password1!",false,true),/Temporary email/);
     assert(!h.calls.includes("create")); assert(!h.calls.includes("transaction"));
     const existing=harness(current,true);
     existing.user.email="person@en2ch.co";
@@ -199,6 +272,9 @@ function harness(source, enabled, options = {}) {
     const native=read("app/login.tsx");
     assert(web.includes('signOut(auth).then(() => router.replace("/public"))'));
     assert(native.includes('firebaseSignOut(auth).then(() => router.replace("/public"))'));
+    assert(web.includes('isKnownDisposableEmail(googleUser.email || "")'));
+    assert(native.includes('isKnownDisposableEmail(user.email || "")'));
+    assert(read("app/_layout.tsx").includes('isKnownDisposableEmail(authUser.email || "")'));
     const rules=read("firestore.rules");
     assert(rules.includes('request.auth.token.get("email_verified", false) == true'));
     assert(rules.includes('request.auth.token.get("email", "") == request.resource.data.email'));
@@ -209,7 +285,6 @@ function harness(source, enabled, options = {}) {
       {firstName:""},
       {lastName:""},
       {age:0},
-      {phoneNumber:""},
       {barangay:""},
       {barangay:"Outside SJDM"},
       {occupationCategory:""},
@@ -294,6 +369,19 @@ function harness(source, enabled, options = {}) {
     const publicLayout=read("app/public/_layout.tsx");
     assert(publicLayout.includes("onAuthStateChanged(auth"));
     assert(publicLayout.includes("void signOut(auth)"));
+  });
+  await check("legacy Android Google signup handles id_token and PKCE authorization-code response",()=>{
+    const native=read("app/signup.tsx");
+    assert(native.includes("response.authentication?.idToken"),
+      "OAuth authentication result token fallback missing");
+    assert(native.includes("AuthSession.exchangeCodeAsync"),
+      "OAuth authorization-code exchange missing");
+    assert(native.includes("response.params?.code") && native.includes("request?.codeVerifier"),
+      "PKCE exchange must require the original verifier");
+    assert(native.includes("shouldAutoExchangeCode: false"),
+      "Manual PKCE exchange must not race SDK auto exchange");
+    assert(native.includes("getRegistrationEmailError(googleEmail)"),
+      "Google token resolution must retain disposable-mail check");
   });
   await check("native Google signup owns OAuth and never bounces pending users to Login",()=>{
     assert(read("lib/useSignupGoogle.ts").includes("signInWithCredential"));
