@@ -111,6 +111,38 @@ service cloud.firestore {
           && p.lguVerified == true
           && p.employmentStatus == 'active';
       }
+    // Gmail and googlemail.com with dots removed map to the same inbox.
+    // This is an atomic Resident PROFILE uniqueness constraint on Spark,
+    // not a Firebase Auth before-create blocker or disposable-mail detector.
+    function isGmailMailbox(email) {
+      return email.lower().matches('.*@(gmail[.]com|googlemail[.]com)');
+    }
+    function gmailMailboxKey(email) {
+      return email.lower().split('@')[0].split('+')[0].replace('[.]', '') + '@gmail.com';
+    }
+    function hasMatchingGmailClaim(uid, email) {
+      return !isGmailMailbox(email) ||
+        getAfter(/databases/$(database)/documents/gmailAliasClaims/$(gmailMailboxKey(email))).data.uid == uid;
+    }
+    // Reserve and create the account in one atomic transaction. No listing or
+    // arbitrary claim reassignment/deletion by clients is ever permitted.
+    match /gmailAliasClaims/{canonical} {
+      allow get: if verifiedEmailSession()
+        && isGmailMailbox(request.auth.token.get('email', ''))
+        && canonical == gmailMailboxKey(request.auth.token.get('email', ''));
+      allow list, update, delete: if false;
+      allow create: if verifiedEmailSession()
+        && isGmailMailbox(request.auth.token.get('email', ''))
+        && canonical == gmailMailboxKey(request.auth.token.get('email', ''))
+        && request.resource.data.keys().hasOnly(['uid', 'createdAt'])
+        && request.resource.data.keys().hasAll(['uid', 'createdAt'])
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.createdAt == request.time
+        && !exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && getAfter(/databases/$(database)/documents/users/$(request.auth.uid)).data.uid == request.auth.uid
+        && getAfter(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'resident'
+        && getAfter(/databases/$(database)/documents/users/$(request.auth.uid)).data.email == request.auth.token.get('email', '');
+    }
     match /users/{uid} {
 
 
@@ -170,6 +202,7 @@ service cloud.firestore {
         && request.auth.uid == uid
         && request.auth.token.get("email_verified", false) == true
         && request.auth.token.get("email", "") == request.resource.data.email
+        && hasMatchingGmailClaim(uid, request.resource.data.email)
         && validInitialResidentInputs()
         && !request.resource.data.email.matches("(?i).*@([a-z0-9-]+[.])*en2ch[.](com|co)")
         && !request.resource.data.email.matches("(?i).*@([a-z0-9-]+[.])*emailkeep[.]com")
