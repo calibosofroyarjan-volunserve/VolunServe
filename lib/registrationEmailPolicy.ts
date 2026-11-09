@@ -104,6 +104,12 @@ export function getRegistrationEmailError(email: string): string | null {
   if ((domain === "gmail.com" || domain === "googlemail.com") && local.includes("+")) {
     return "Gmail +tag aliases are not accepted. Enter your main Gmail address without the +tag.";
   }
+  // A domain such as gmail.com.some-other-site.example is NOT Gmail.
+  // Reject high-confidence Gmail/Googlemail impersonation without guessing
+  // whether a real @gmail.com inbox is a personal or throwaway account.
+  if (/^(?:gmail|googlemail)\.com\./.test(domain)) {
+    return "This is not an official Gmail domain. Use your real @gmail.com address.";
+  }
   const suggestedProvider = KNOWN_PROVIDER_TYPO_CORRECTIONS[domain];
   if (suggestedProvider) {
     return `Check your email domain. Did you mean @${suggestedProvider}? Please correct it to continue.`;
