@@ -55,7 +55,10 @@ async function main() {
     // verified community profiles, even when bypassing the login UI.
     for (const [uid,email] of [
       ["existing-temp-mailer", "person@mailer.pics"],
-      ["existing-temp-gmail-lookalike","person@gmail.shagni.com"]
+      ["existing-temp-gmail-lookalike","person@gmail.shagni.com"],
+      ["existing-temp-uppercase", "person@MAILER.PICS"],
+      ["existing-temp-mixed", "person@suB.MPMAIL.TOP"],
+      ["existing-temp-emailkeep-upper","person@EMAILKEEP.COM"]
     ]) {
       await env.withSecurityRulesDisabled(async context => {
         await setDoc(doc(context.firestore(),"users",uid),{
@@ -81,7 +84,8 @@ async function main() {
         ...validProfile,uid,email,
       }));
     }
-    for(const domain of ["mailer.pics","mpmail.top","gmail.shagni.com","ghostmailz.club","mail.sc2hub.com"]){
+    for(const domain of ["mailer.pics","mpmail.top","gmail.shagni.com","ghostmailz.club","mail.sc2hub.com",
+      "MAILER.PICS","sub.MPMAIL.TOP","EN2CH.CO","EMAILKEEP.COM","sub.EMAILKEEP.COM"]){
       const uid="blocked-provider-"+domain.replace(/[^a-z0-9]/g,"-");
       const email="person@"+domain;
       await assertFails(setDoc(doc(as(uid,email,true),"users",uid),{...validProfile,uid,email}));

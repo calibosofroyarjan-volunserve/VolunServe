@@ -289,10 +289,18 @@ const expectedProviderRules=expectedCombinedRules
  .replace("    function approved() {",tempMailHelper+"    function approved() {")
  .replace("            && !request.auth.token.get('email', '').matches(\".*@([a-z0-9-]+[.])*emailkeep[.]com\")","            && !request.auth.token.get('email', '').matches(\".*@([a-z0-9-]+[.])*emailkeep[.]com\")"+tempMailApprovedDeny)
  .replace("        && !request.resource.data.email.matches(\".*@([a-z0-9-]+[.])*emailkeep[.]com\")","        && !request.resource.data.email.matches(\".*@([a-z0-9-]+[.])*emailkeep[.]com\")"+tempMailCreateDeny);
-assert.equal(current,expectedProviderRules,
- "BLOCKED: Firestore rules changed beyond exact reviewed temp-mail.org provider denies and original predicates");
+
+const providerFold=expectedProviderRules
+ .replaceAll('matches(".*@([a-z0-9-]+[.])*emailkeep[.]com")','matches("(?i).*@([a-z0-9-]+[.])*emailkeep[.]com")')
+ .replace('matches(".*@([a-z0-9-]+[.])*en2ch[.](com|co)")','matches("(?i).*@([a-z0-9-]+[.])*en2ch[.](com|co)")')
+ .replace('return email.matches(".*@([a-z0-9-]+[.])*(adujudi01','return email.matches("(?i).*@([a-z0-9-]+[.])*(adujudi01');
+assert.equal(expectedProviderRules.split('matches(".*@([a-z0-9-]+[.])*emailkeep[.]com")').length,3);
+assert.equal(expectedProviderRules.split('matches(".*@([a-z0-9-]+[.])*en2ch[.](com|co)")').length,2);
+assert.equal(current,providerFold,
+ "BLOCKED: rules changed beyond the three case-insensitive temporary-domain guard upgrades");
+
 assert.equal(cp.execFileSync("git",["hash-object","firestore.rules"],{encoding:"utf8"}).trim(),
-"f3721c82169367478deb9e3c5e690636a92e1a2d","BLOCKED: unreviewed Firestore Rules blob");
+"a40954b7d8716e3953483a7ca39dd9e03f7b4e9a","BLOCKED: unreviewed Firestore Rules blob");
 // Verify exhaustiveness of all optional-review branches over valid and
 // invalid types, status values and three-valued nulls before Firebase emulator.
 for(const required of [true,false,null,"true",0,1,undefined]){
@@ -310,7 +318,7 @@ for(const required of [true,false,null,"true",0,1,undefined]){
 }
 
 const gitBlob=cp.execFileSync("git",["hash-object","firestore.rules"],{encoding:"utf8"}).trim();
-assert.equal(gitBlob,"f3721c82169367478deb9e3c5e690636a92e1a2d","BLOCKED: unapproved Firestore blob");
+assert.equal(gitBlob,"a40954b7d8716e3953483a7ca39dd9e03f7b4e9a","BLOCKED: unapproved Firestore blob");
 const paths=source=>source.split("\n").filter(l=>l.startsWith("    match /")).map(l=>l.slice("    match /".length).split(" ")[0]);
 assert.deepEqual(paths(current),paths(protectedBaseline),"BLOCKED: collection scope changed");
 const allows=source=>[...source.matchAll(/allow (?:get|list|read|write|create|update|delete)/g)].length;
