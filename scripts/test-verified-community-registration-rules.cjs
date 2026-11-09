@@ -98,7 +98,8 @@ async function main() {
       const uid = "invalid-resident-" + (++n);
       const email = "invalid" + n + "@gmail.com";
       const candidate = {...validProfile,uid,email,...changes};
-      await assertFails(setDoc(doc(as(uid,email,true),"users",uid),candidate));
+      // Include the required claim so only the input validation decides the denial.
+      await assertFails(createGmailResident(uid,email,candidate));
     }
     await invalidCreate({phoneNumber:"0917"});
     await invalidCreate({phoneNumber:"+639171234567999"});
