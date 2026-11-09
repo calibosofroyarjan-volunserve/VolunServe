@@ -28,6 +28,7 @@ jobs:
           node --check scripts/test-gmail-alias-claims.cjs
           node scripts/test-gmail-alias-claims.cjs
           node scripts/test-signup-prod.cjs
+          node scripts/test-site-derived-signup-candidate.cjs
       - name: Compile site-derived web candidate (no publish)
         run: |
           npx tsc --noEmit --incremental false
