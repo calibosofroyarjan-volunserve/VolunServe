@@ -58,7 +58,6 @@ jobs:
             "scripts/test-profile-certificates-account-menu.cjs"
             "scripts/test-volunteer-community-event-join-20261106.cjs"
             "scripts/test-volunteer-time-controls-20261106.cjs"
-            "scripts/test-community-organizer-gps-cleanup.cjs"
             "scripts/test-event-pin-picker.cjs"
             "scripts/test-event-map-route-ux.cjs"
             "scripts/test-embedded-emergency-map-navigation.cjs"
@@ -71,16 +70,39 @@ jobs:
           )
           failures=0
           echo "## VolunServe cross-module source contract audit" >> "$GITHUB_STEP_SUMMARY"
-          echo "Scope: ${#tests[@]} offline scripts; excludes live account, GPS, PayMongo, Render and production Firebase E2E." >> "$GITHUB_STEP_SUMMARY"
+          echo "Scope: ${#tests[@]} offline scripts; excludes live account, real-device GPS, PayMongo, Render and production Firebase E2E." >> "$GITHUB_STEP_SUMMARY"
           for testfile in "${tests[@]}"; do
             if node "$testfile"; then
-              echo "- PASS `$testfile`" >> "$GITHUB_STEP_SUMMARY"
+              echo "- PASS $testfile" >> "$GITHUB_STEP_SUMMARY"
             else
               failures=$((failures + 1))
-              echo "- FAIL `$testfile`" >> "$GITHUB_STEP_SUMMARY"
+              echo "- FAIL $testfile" >> "$GITHUB_STEP_SUMMARY"
             fi
           done
           echo "Failures: $failures" >> "$GITHUB_STEP_SUMMARY"
           if [ "$failures" -ne 0 ]; then exit 1; fi
       - name: Confirm audit has no deployment commands
         run: echo "No deployments, credentials, production data writes, service modifications, or Firebase Auth interactions"
+  organizer-gps-emulator:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      CI: 'true'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Install locked dependency tree
+        run: npm ci --no-audit --no-fund
+      - name: Emulator-only organizer GPS permission and cleanup regression
+        run: npx firebase-tools emulators:exec --only firestore --project demo-volunserve "node scripts/test-community-organizer-gps-cleanup.cjs"
+      - name: Confirm production is untouched
+        run: echo "Synthetic Firestore emulator only; no production writes"
