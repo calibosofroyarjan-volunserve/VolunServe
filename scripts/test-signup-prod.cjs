@@ -18,6 +18,7 @@ function load(source, imports = {}, env = process.env) {
 const read = file => fs.readFileSync(file,"utf8");
 const current = read("lib/firebaseAuth.ts");
 const baseline = cp.execFileSync("git",["show","e7c2cc8:lib/firebaseAuth.ts"],{encoding:"utf8"});
+const gmailAlias = load(read("lib/canonicalGmailAlias.ts"));
 const emailPolicy = load(read("lib/registrationEmailPolicy.ts"), {
   "./disposableEmailDomains.generated": load(read("lib/disposableEmailDomains.generated.ts")),
 });
@@ -45,12 +46,26 @@ function harness(source, enabled, options = {}) {
     updatePassword:async()=>{calls.push("first-password");user.providerData.push({providerId:"password"});},
     linkWithCredential:async()=>{calls.push("link");if(options.sdkLinkError)throw Object.assign(new Error("Link rejected"),{code:options.sdkLinkError});user.providerData.push({providerId:"password"});return {user};},
   };
-  const store = {doc:(_,collection,uid)=>({collection,uid}),getDoc:async()=>{calls.push("read");return snapshot();},serverTimestamp:()=>"timestamp",writeBatch:()=>({set:(_,value)=>{saved=value;},commit:async()=>{calls.push("commit");profile=saved;}}),runTransaction:async(_,fn)=>{calls.push("transaction");await fn({get:async()=>options.raceExisting ? {exists:()=>true} : snapshot(),set:(_,value)=>{saved=value;profile=value;}});}};
-  const imports = {"./requireCompleteResidentRegistration":residentDetailsGuard,"./registrationEmailPolicy":emailPolicy,"./firebase":{auth,db:{}},"./signupFeature":{EMAIL_FIRST_SIGNUP_ENABLED:enabled},"firebase/auth":authSdk,"firebase/firestore":store,"react-native":{Platform:{OS:"web"}},"./androidNativePush":{disableAndroidPhoneAlerts:async()=>{}}};
+  const store = {doc:(_,collection,uid)=>({collection,uid}),getDoc:async()=>{calls.push("read");return snapshot();},serverTimestamp:()=>"timestamp",writeBatch:()=>({set:(_,value)=>{saved=value;},commit:async()=>{calls.push("commit");profile=saved;}}),runTransaction:async(_,fn)=>{calls.push("transaction");await fn({get:async(ref)=>ref.collection==="gmailAliasClaims" && options.aliasExisting ? {exists:()=>true} : options.raceExisting ? {exists:()=>true} : snapshot(),set:(ref,value)=>{if(ref.collection==="gmailAliasClaims")calls.push("gmail-alias-claim");saved=value;profile=value;}});}};
+  const imports = {"./requireCompleteResidentRegistration":residentDetailsGuard,"./registrationEmailPolicy":emailPolicy,"./canonicalGmailAlias":gmailAlias,"./firebase":{auth,db:{}},"./signupFeature":{EMAIL_FIRST_SIGNUP_ENABLED:enabled},"firebase/auth":authSdk,"firebase/firestore":store,"react-native":{Platform:{OS:"web"}},"./androidNativePush":{disableAndroidPhoneAlerts:async()=>{}}};
   imports["./signupRegistration"]=load(read("lib/signupRegistration.ts"),imports);
   return {registration:imports["./signupRegistration"],api:load(source,imports),link:load(read("lib/emailFirstSignupAuth.ts"),imports),calls,user,auth,profile:()=>profile};
 }
 (async()=>{
+  await check("canonical Gmail Resident reserves alias atomically",async()=>{
+    const h=harness(current,true);
+    h.user.email="first.last@gmail.com";
+    await h.api.signUpUser({...data,email:h.user.email,password:"",authProvider:"verified_email"});
+    assert(h.calls.includes("gmail-alias-claim"),"Gmail alias was not written in transaction");
+    assert.equal(h.profile()?.email,"first.last@gmail.com");
+  });
+  await check("existing Gmail alias prevents second Resident profile",async()=>{
+    const h=harness(current,true,{aliasExisting:true});
+    h.user.email="f.i.r.s.t.last@gmail.com";
+    await assert.rejects(h.api.signUpUser({...data,email:h.user.email,password:"",authProvider:"verified_email"}),/already belongs/);
+    assert(!h.calls.includes("gmail-alias-claim"));
+    assert.equal(h.profile(),null);
+  });
   await check("verified Resident signup accepts removed optional phone",async()=>{
     const h=harness(current,true);
     await h.api.signUpUser({...data,phoneNumber:"",authProvider:"verified_email"});

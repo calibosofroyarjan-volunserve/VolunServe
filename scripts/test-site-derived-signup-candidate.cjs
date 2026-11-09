@@ -17,6 +17,8 @@ const allowed=new Set([
  "scripts/test-preserved-volunteer-invitation-rules.cjs",
  "scripts/test-signup-prod.cjs",
  "scripts/test-site-derived-signup-candidate.cjs",
+ "lib/canonicalGmailAlias.ts","scripts/test-gmail-alias-claims.cjs",
+ ".github/workflows/validate-gmail-alias-signup-review-20261110.yml",
  ".github/workflows/validate-site-derived-signup-candidate.yml",
 ]);
 assert(changed.length>0);
