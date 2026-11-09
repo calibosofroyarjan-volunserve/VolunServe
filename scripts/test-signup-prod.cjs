@@ -214,7 +214,6 @@ function harness(source, enabled, options = {}) {
       {firstName:""},
       {lastName:""},
       {age:0},
-      {phoneNumber:""},
       {barangay:""},
       {barangay:"Outside SJDM"},
       {occupationCategory:""},
