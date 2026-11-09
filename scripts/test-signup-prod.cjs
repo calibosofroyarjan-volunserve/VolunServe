@@ -51,6 +51,12 @@ function harness(source, enabled, options = {}) {
   return {registration:imports["./signupRegistration"],api:load(source,imports),link:load(read("lib/emailFirstSignupAuth.ts"),imports),calls,user,auth,profile:()=>profile};
 }
 (async()=>{
+  await check("verified Resident signup accepts removed optional phone",async()=>{
+    const h=harness(current,true);
+    await h.api.signUpUser({...data,phoneNumber:"",authProvider:"verified_email"});
+    assert.equal(h.profile()?.phoneNumber,"");
+    assert(h.calls.includes("transaction"));
+  });
   await check("web Signup stays premium after unrelated Hosting builds; native remains opt-in",()=>{
     for (const value of [undefined,"false","1","TRUE",""]) {
       const native=load(read("lib/signupFeature.ts"),{"react-native":{Platform:{OS:"android"}}},{EXPO_PUBLIC_EMAIL_FIRST_SIGNUP:value});
@@ -66,13 +72,34 @@ function harness(source, enabled, options = {}) {
     const ios=load(read("lib/signupFeature.ts"),{"react-native":{Platform:{OS:"ios"}}},{EXPO_PUBLIC_EMAIL_FIRST_SIGNUP:""});
     assert.equal(ios.EMAIL_FIRST_SIGNUP_ENABLED,false);
   });
-  await check("legacy signup layouts remain unchanged relative to published website source",()=>{
+  await check("legacy signup design matches published source apart from specific inline email errors",()=>{
+    const baseRef="f7bc8d12d8e926365175afb5288f2adf214025a5";
+    const extract=text=>text.replace(/\r\n/g,"\n").slice(text.replace(/\r\n/g,"\n").indexOf("  const currentMeta = STEP_META[step];")).replace(/\nexport default function Signup\(\) \{[\s\S]*$/,'').trimEnd();
     for(const file of ["app/signup.tsx","app/signup.web.tsx"]) {
-      const extract=text=>text.replace(/\r\n/g,"\n").slice(text.replace(/\r\n/g,"\n").indexOf("  const currentMeta = STEP_META[step];")).replace(/\nexport default function Signup\(\) \{[\s\S]*$/,'').trimEnd();
-      // Compare the unchanged legacy wizard against the REAL deployed website
-      // revision. Protected source has unshipped UI edits and is not the baseline.
-      const baseRef="f7bc8d12d8e926365175afb5288f2adf214025a5";
-      assert.equal(extract(read(file)),extract(cp.execFileSync("git",["show",baseRef+":"+file],{encoding:"utf8"})));
+      const source=read(file);
+      assert(source.includes("getRegistrationEmailError(formData.email)"),"Step 1 must screen disposable mail: "+file);
+      assert(source.includes("const emailValid = emailError === null;"),"Rejected email must block Next: "+file);
+      assert(source.includes("emailError,"),"Show the exact email validation reason: "+file);
+      let rendered=extract(source);
+      if(file.endsWith(".web.tsx")){
+        const current=`{formData.email.length > 0 && !!validation.emailError ? (
+                    <ValidationText ok={false}>{validation.emailError}</ValidationText>
+                  ) : null}`;
+        const original=`{formData.email.length > 0 && !validation.emailValid ? (
+                    <ValidationText ok={false}>Enter a valid email address.</ValidationText>
+                  ) : null}`;
+        assert.equal(rendered.split(current).length,2,"Specific web inline email error not found");
+        rendered=rendered.replace(current,original);
+      } else {
+        const newInline=`{formData.email.length > 0 && !!validation.emailError && (
+                <ValidationText ok={false}>{validation.emailError}</ValidationText>
+              )}
+              `;
+        assert.equal(rendered.split(newInline).length,2,"Native email field error not found");
+        rendered=rendered.replace(newInline,"");
+      }
+      const published=extract(cp.execFileSync("git",["show",baseRef+":"+file],{encoding:"utf8"}));
+      assert.equal(rendered,published,"Unexpected published signup layout drift: "+file);
     }
   });
   for(const enabled of [false,true]) {
@@ -167,14 +194,15 @@ function harness(source, enabled, options = {}) {
   await check("signup email syntax, typo, country domain and disposable checks",()=>{
     const generated=load(read("lib/disposableEmailDomains.generated.ts"));
     const policy=load(read("lib/registrationEmailPolicy.ts"),{"./disposableEmailDomains.generated":generated});
-    for(const value of ["person@yahoo.com.ph","person@outlook.com","person@department.gov.ph","person@legitimate.co"]) assert.equal(policy.getRegistrationEmailError(value),null);
-    for(const value of ["","bad@gmail..com","bad@gmail.con","bad@sub.mailinator.com","person@en2ch.co","person@en2ch.com","person@sub.en2ch.co","person+tag@gmail.com","person+tag@googlemail.com"]) assert.equal(typeof policy.getRegistrationEmailError(value),"string");
+    for(const value of ["person@yahoo.com.ph","person@outlook.com","person@department.gov.ph","person@legitimate.co","real.user@gmail.com","real.user@googlemail.com"]) assert.equal(policy.getRegistrationEmailError(value),null);
+    for(const value of ["","bad@gmail..com","bad@gmail.con","bad@sub.mailinator.com","person@en2ch.co","person@en2ch.com","person@sub.en2ch.co","person@emailkeep.com","person@sub.emailkeep.com","person@gmail.com.fake.example","person@googlemail.com.fake.example","person+tag@gmail.com","person+tag@googlemail.com"]) assert.equal(typeof policy.getRegistrationEmailError(value),"string");
     for(const [wrong,right] of Object.entries(policy.KNOWN_PROVIDER_TYPO_CORRECTIONS)) assert(policy.getRegistrationEmailError("person@"+wrong).includes(right));
   });
   await check("disposable domain rejects Firebase UID before creation and profile write",async()=>{
     const h=harness(current,true,{noUser:true});
     await assert.rejects(h.registration.authenticateEmailSignup("person@en2ch.com","Password1!",false,true),/Temporary email/);
     await assert.rejects(h.registration.authenticateEmailSignup("person@en2ch.co","Password1!",false,true),/Temporary email/);
+    await assert.rejects(h.registration.authenticateEmailSignup("person@emailkeep.com","Password1!",false,true),/Temporary email/);
     assert(!h.calls.includes("create")); assert(!h.calls.includes("transaction"));
     const existing=harness(current,true);
     existing.user.email="person@en2ch.co";
@@ -209,7 +237,6 @@ function harness(source, enabled, options = {}) {
       {firstName:""},
       {lastName:""},
       {age:0},
-      {phoneNumber:""},
       {barangay:""},
       {barangay:"Outside SJDM"},
       {occupationCategory:""},
