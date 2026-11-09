@@ -13,7 +13,7 @@ const domains = new Set(
     .filter(Boolean)
 );
 for (const extra of [
-  "en2ch.com", "en2ch.co", "mailinator.com", "yopmail.com", "guerrillamail.com",
+  "en2ch.com", "en2ch.co", "emailkeep.com", "mailinator.com", "yopmail.com", "guerrillamail.com",
   "guerrillamailblock.com", "sharklasers.com", "10minutemail.com",
   "temp-mail.org", "tempmail.com", "tempmail.net", "trashmail.com",
   "dispostable.com", "getnada.com", "maildrop.cc", "minuteinbox.com",
@@ -34,6 +34,11 @@ function classifyRegistrationEmail(email) {
   // often used to register many accounts. Ordinary Gmail stays accepted.
   if ((domain === "gmail.com" || domain === "googlemail.com") && local.includes("+")) {
     return {allowed: false, reason: "gmail_alias"};
+  }
+  // gmail.com.some-other-site.example is not Gmail. Share the frontend
+  // high-confidence impersonation policy; real Gmail accounts stay allowed.
+  if (/^(?:gmail|googlemail)\.com\./.test(domain)) {
+    return {allowed: false, reason: "gmail_impersonation"};
   }
   // The client warns on these Gmail-looking typos. Trusted Auth blocking
   // must enforce the same exact-domain policy, even against direct SDK calls.

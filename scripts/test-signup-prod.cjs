@@ -51,6 +51,17 @@ function harness(source, enabled, options = {}) {
   return {registration:imports["./signupRegistration"],api:load(source,imports),link:load(read("lib/emailFirstSignupAuth.ts"),imports),calls,user,auth,profile:()=>profile};
 }
 (async()=>{
+  await check("emailkeep.com and subdomains fail before Firebase Auth creation",async()=>{
+    for (const email of ["candidate@emailkeep.com", "candidate@sub.emailkeep.com", "candidate@EMAILKEEP.COM"]) {
+      assert.match(emailPolicy.getRegistrationEmailError(email), /Temporary email/i);
+      const h=harness(current,true,{noUser:true});
+      await assert.rejects(h.api.signUpUser({...data,email,authProvider:"email"}),/Temporary email/i);
+      assert(!h.calls.includes("create"),"Disposable mail must be blocked before creating Auth UID");
+    }
+    for (const email of ["resident@gmail.com","resident@yahoo.com.ph","resident@outlook.com"]) {
+      assert.equal(emailPolicy.getRegistrationEmailError(email),null);
+    }
+  });
   await check("web Signup stays premium after unrelated Hosting builds; native remains opt-in",()=>{
     for (const value of [undefined,"false","1","TRUE",""]) {
       const native=load(read("lib/signupFeature.ts"),{"react-native":{Platform:{OS:"android"}}},{EXPO_PUBLIC_EMAIL_FIRST_SIGNUP:value});
@@ -66,12 +77,27 @@ function harness(source, enabled, options = {}) {
     const ios=load(read("lib/signupFeature.ts"),{"react-native":{Platform:{OS:"ios"}}},{EXPO_PUBLIC_EMAIL_FIRST_SIGNUP:""});
     assert.equal(ios.EMAIL_FIRST_SIGNUP_ENABLED,false);
   });
-  await check("legacy signup layouts remain unchanged relative to current live-protected source",()=>{
+  await check("legacy signup retains exact live UI except inline disposable-email validation",()=>{
     for(const file of ["app/signup.tsx","app/signup.web.tsx"]) {
+      const source=read(file);
+      assert(source.includes('getRegistrationEmailError(formData.email)'), file+" must screen before Step 1 Next");
+      assert(source.includes("const emailValid = emailError === null;"), file+" must disable Next for rejected mail");
+      assert(source.includes("emailError,"), file+" must surface the specific reason");
       const extract=text=>text.replace(/\r\n/g,"\n").slice(text.replace(/\r\n/g,"\n").indexOf("  const currentMeta = STEP_META[step];")).replace(/\nexport default function Signup\(\) \{[\s\S]*$/,'').trimEnd();
+      let rendered=extract(source);
+      if(file.endsWith(".web.tsx")){
+        const currentEmailError='{formData.email.length > 0 && !!validation.emailError ? (\\n                    <ValidationText ok={false}>{validation.emailError}</ValidationText>\\n                  ) : null}'.replaceAll('\\n','\n');
+        const oldEmailError='{formData.email.length > 0 && !validation.emailValid ? (\\n                    <ValidationText ok={false}>Enter a valid email address.</ValidationText>\\n                  ) : null}'.replaceAll('\\n','\n');
+        assert.equal(rendered.split(currentEmailError).length,2,"Web inline error marker missing");
+        rendered=rendered.replace(currentEmailError,oldEmailError);
+      } else {
+        const nativeInline='{formData.email.length > 0 && !!validation.emailError && (\\n                <ValidationText ok={false}>{validation.emailError}</ValidationText>\\n              )}\\n              '.replaceAll('\\n','\n');
+        assert.equal(rendered.split(nativeInline).length,2,"Native inline error marker missing");
+        rendered=rendered.replace(nativeInline,"");
+      }
       const hasLiveProtectedRef=cp.spawnSync("git",["show-ref","--verify","--quiet","refs/remotes/origin/live-protected"]).status===0;
       const baseRef=hasLiveProtectedRef ? "origin/live-protected" : "e7c2cc8";
-      assert.equal(extract(read(file)),extract(cp.execFileSync("git",["show",baseRef+":"+file],{encoding:"utf8"})));
+      assert.equal(rendered,extract(cp.execFileSync("git",["show",baseRef+":"+file],{encoding:"utf8"})));
     }
   });
   for(const enabled of [false,true]) {
@@ -166,8 +192,8 @@ function harness(source, enabled, options = {}) {
   await check("signup email syntax, typo, country domain and disposable checks",()=>{
     const generated=load(read("lib/disposableEmailDomains.generated.ts"));
     const policy=load(read("lib/registrationEmailPolicy.ts"),{"./disposableEmailDomains.generated":generated});
-    for(const value of ["person@yahoo.com.ph","person@outlook.com","person@department.gov.ph","person@legitimate.co"]) assert.equal(policy.getRegistrationEmailError(value),null);
-    for(const value of ["","bad@gmail..com","bad@gmail.con","bad@sub.mailinator.com","person@en2ch.co","person@en2ch.com","person@sub.en2ch.co","person+tag@gmail.com","person+tag@googlemail.com"]) assert.equal(typeof policy.getRegistrationEmailError(value),"string");
+    for(const value of ["person@yahoo.com.ph","person@outlook.com","person@department.gov.ph","person@legitimate.co","real.user@gmail.com","real.user@googlemail.com"]) assert.equal(policy.getRegistrationEmailError(value),null);
+    for(const value of ["","bad@gmail..com","bad@gmail.con","bad@sub.mailinator.com","person@en2ch.co","person@en2ch.com","person@sub.en2ch.co","person@emailkeep.com","person@sub.emailkeep.com","person@gmail.com.fake.example","person@googlemail.com.mail.example","person+tag@gmail.com","person+tag@googlemail.com"]) assert.equal(typeof policy.getRegistrationEmailError(value),"string");
     for(const [wrong,right] of Object.entries(policy.KNOWN_PROVIDER_TYPO_CORRECTIONS)) assert(policy.getRegistrationEmailError("person@"+wrong).includes(right));
   });
   await check("disposable domain rejects Firebase UID before creation and profile write",async()=>{

@@ -7,7 +7,8 @@ const {classifyRegistrationEmail} = require("./registrationEmailScreening");
 test("known temporary and subdomain emails blocked on trusted server", () => {
   for (const value of [
     "person+alias@gmail.com", "person+alias@googlemail.com",
-    "person@en2ch.com", "person@en2ch.co", "person@sub.en2ch.co", "person@MAILINATOR.COM", "person@sub.yopmail.com",
+    "person@en2ch.com", "person@en2ch.co", "person@sub.en2ch.co", "person@EMAILKEEP.COM", "person@sub.emailkeep.com",
+    "person@gmail.com.evil.example", "person@googlemail.com.example.org", "person@MAILINATOR.COM", "person@sub.yopmail.com",
     "person@mail.tm", "person@guerrillamail.com", "person@10minutemail.com",
     "person@0-30-24.com",
   ]) assert.equal(classifyRegistrationEmail(value).allowed, false, value);
