@@ -232,7 +232,6 @@ export default function EmailFirstSignup() {
   const [noMiddleName, setNoMiddleName] = useState(false);
   const [lastName, setLastName] = useState("");
   const [birth, setBirth] = useState("");
-  const [phone, setPhone] = useState("");
   const [barangay, setBarangay] = useState("");
   const [occupation, setOccupation] = useState("");
   const [specialization, setSpecialization] = useState("");
@@ -260,12 +259,6 @@ export default function EmailFirstSignup() {
   }
 
   const age = useMemo(() => dateAge(birth), [birth]);
-  // Accept familiar 09xxxxxxxxx, +639xxxxxxxxx and 9xxxxxxxxx input.
-  // Firestore always receives the canonical +639xxxxxxxxx form.
-  const phoneDigits = phone.replace(/\D/g, "");
-  const phoneClean = phoneDigits.startsWith("63")
-    ? phoneDigits.slice(2)
-    : phoneDigits.startsWith("0") ? phoneDigits.slice(1) : phoneDigits;
   const emailErr = getRegistrationEmailError(email);
   const passwordErr = passwordError(password, email);
   const needsSpecialization = (SPECIALIZATIONS[occupation] || []).length > 0;
@@ -275,13 +268,13 @@ export default function EmailFirstSignup() {
   const emailCanEdit = !signedInUser;
   const registrationErrors = getResidentRegistrationFieldErrors({
     firstName, lastName, middleName: noMiddleName ? "" : middleName,
-    age: age ?? -1, phoneNumber: "+63" + phoneClean,
+    age: age ?? -1, phoneNumber: "", // Optional; preserve the existing profile field.
     region: "Region III – Central Luzon", province: "Bulacan",
     city: "City of San Jose del Monte", barangay,
     occupationCategory: occupation, occupationSpecialization: specialization,
     occupationOther,
   });
-  const personalOk = !["firstName","lastName","middleName","age","phoneNumber"]
+  const personalOk = !["firstName","lastName","middleName","age"]
     .some(field => !!registrationErrors[field as keyof typeof registrationErrors]);
   const addressOk = !["region","city","barangay","occupationCategory",
     "occupationSpecialization","occupationOther"]
@@ -321,7 +314,7 @@ export default function EmailFirstSignup() {
       const isCurrent = () => active && authRevision.current === revision && auth.currentUser?.uid === user?.uid;
       if (lastUid.current !== (user?.uid ?? null)) {
         setFirstName(""); setMiddleName(""); setNoMiddleName(false); setLastName("");
-        setBirth(""); setPhone(""); setBarangay(""); setOccupation("");
+        setBirth(""); setBarangay(""); setOccupation("");
         setSpecialization(""); setOccupationOther(""); setReviewed(false);
         setPassword(""); setConfirmPassword(""); setConsent(false);
         lastUid.current = user?.uid ?? null;
@@ -526,7 +519,7 @@ export default function EmailFirstSignup() {
         middleName: noMiddleName ? "" : middleName.trim(),
         lastName: lastName.trim(),
         age: age as number,
-        phoneNumber: "+63" + phoneClean,
+        phoneNumber: "", // Optional; no fabricated phone number.
         region: "Region III – Central Luzon",
         province: "Bulacan",
         city: "City of San Jose del Monte",
@@ -544,12 +537,13 @@ export default function EmailFirstSignup() {
     }
   }
 
-  const checkButton = (label: string, onPress: () => void, alt = false) => (
+  const checkButton = (label: string, onPress: () => void, alt = false, emailBlocked = false) => (
     <Pressable
       accessibilityRole="button"
       onPress={onPress}
-      disabled={busy}
-      style={[styles.button, alt && styles.altButton, busy && styles.dim]}
+      disabled={busy || emailBlocked}
+      accessibilityState={{disabled: busy || emailBlocked}}
+      style={[styles.button, alt && styles.altButton, (busy || emailBlocked) && styles.dim]}
     >
       {busy ? <ActivityIndicator color={alt ? GREEN : "#fff"} /> :
         label === "Continue with Google" ? (
@@ -804,7 +798,7 @@ export default function EmailFirstSignup() {
                 {checkButton(
                   googleOnly ? "Link Password & Continue" :
                     resumeMode ? "Resume Registration" : "Continue to Email Verification",
-                  () => {void startEmail();}
+                  () => {void startEmail();}, false, !!email.trim() && !!emailErr
                 )}
                 {!signedInUser && !resumeMode && (
                   <>
@@ -895,13 +889,6 @@ export default function EmailFirstSignup() {
                   keyboardType="phone-pad"
                   hint="Type 8 digits (year, month, day). The dashes appear automatically."
                   error={(showErrors || !!birth) ? registrationErrors.age : null}
-                />
-                <Field
-                  label="Mobile Number *" value={phone}
-                  onChange={v => setPhone(v.replace(/[^\d+]/g, "").slice(0, 13))}
-                  placeholder="09XXXXXXXXX or +639XXXXXXXXX" keyboardType="phone-pad"
-                  hint="Use 09, +639 or 9 at the start. We'll format it automatically."
-                  error={(showErrors || !!phone) ? registrationErrors.phoneNumber : null}
                 />
                 {checkButton("Continue to Address & Profile", () => {
                   setShowErrors(true);

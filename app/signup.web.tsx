@@ -2,6 +2,7 @@ import { liveUi as designUi } from "../constants/volunserveLiveUi";
 import EmailFirstSignup from "../components/auth/EmailFirstSignup";
 import { userFacingError } from "../lib/userFacingError";
 import { EMAIL_FIRST_SIGNUP_ENABLED } from "../lib/signupFeature";
+import { getRegistrationEmailError } from "../lib/registrationEmailPolicy";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { Feather } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
@@ -468,7 +469,6 @@ function LegacySignup() {
   );
 
   const validation = useMemo(() => {
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     const nameOk = (s: string) => s.trim().length >= 2;
 
     const lastNameValid = nameOk(formData.lastName);
@@ -480,7 +480,8 @@ function LegacySignup() {
     const phoneDigits = formData.phoneLocal.replace(/\D/g, "");
     const phoneValid = true;
 
-    const emailValid = emailRegex.test(formData.email.trim().toLowerCase());
+    const emailError = getRegistrationEmailError(formData.email);
+    const emailValid = emailError === null;
     const step2Valid =
       !!formData.region &&
       isAllowedProvince(formData.province) &&
@@ -517,6 +518,7 @@ function LegacySignup() {
       ageNumber,
       phoneValid,
       emailValid,
+      emailError,
       step1Valid,
       step2Valid,
       step3Valid,
@@ -600,6 +602,12 @@ function LegacySignup() {
       if (!user || !user.providerData.some(
         (provider) => provider.providerId === GoogleAuthProvider.PROVIDER_ID
       )) return;
+      // Resume paths cannot silently bind a now-blocked Google mailbox.
+      const restoredEmailError = getRegistrationEmailError(user.email || "");
+      if (restoredEmailError) {
+        if (auth.currentUser?.uid === user.uid) void signOut(auth).catch(() => undefined);
+        return;
+      }
       try {
         const profileSnapshot = await getDoc(doc(db, "users", user.uid));
         if (active && !profileSnapshot.exists()) applyGoogleIdentity(user);
@@ -619,6 +627,11 @@ function LegacySignup() {
       if (!googleUser.email || !googleUser.emailVerified) {
         await signOut(auth);
         throw new Error("Google could not verify the email for this account.");
+      }
+      const googleEmailError = getRegistrationEmailError(googleUser.email);
+      if (googleEmailError) {
+        if (auth.currentUser?.uid === googleUser.uid) await signOut(auth);
+        throw new Error(googleEmailError);
       }
       const existing = await getDoc(doc(db, "users", googleUser.uid));
       if (existing.exists()) {
@@ -886,8 +899,8 @@ function LegacySignup() {
                     editable={!googleBound}
                     autoCapitalize="none"
                   />
-                  {formData.email.length > 0 && !validation.emailValid ? (
-                    <ValidationText ok={false}>Enter a valid email address.</ValidationText>
+                  {formData.email.length > 0 && !!validation.emailError ? (
+                    <ValidationText ok={false}>{validation.emailError}</ValidationText>
                   ) : null}
                   {!googleBound ? (
                     <>

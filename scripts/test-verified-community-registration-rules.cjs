@@ -92,6 +92,13 @@ async function main() {
     await invalidCreate({age:17});
     await invalidCreate({age:101});
     await invalidCreate({region:""});
+    // Exact no-phone signup form payload must also be accepted; existing
+    // nonempty values remain validated and malformed values stay rejected.
+    const optionalUid = "new-resident-no-phone";
+    const optionalEmail = "no-phone@gmail.com";
+    await assertSucceeds(setDoc(doc(as(optionalUid,optionalEmail,true),"users",optionalUid),{
+      ...validProfile, uid:optionalUid, email:optionalEmail, phoneNumber:"",
+    }));
     await assertSucceeds(setDoc(doc(as("new-resident","real@gmail.com",true),"users","new-resident"),validProfile));
     assert.ok(true);
     console.log("PASS Firestore: unverified community/staff emails denied; verified complete Resident and staff access permitted.");

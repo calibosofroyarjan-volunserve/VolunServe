@@ -250,10 +250,39 @@ const historicalEmailGuard='!request.resource.data.email.matches(".*@en2ch[.]com
 const reviewedEmailGuard='!request.resource.data.email.matches(".*@([a-z0-9-]+[.])*en2ch[.](com|co)")';
 assert.equal(reviewedHoisted.split(historicalEmailGuard).length,2,
  "BLOCKED: historical disposable-email guard moved");
-assert.equal(current,reviewedHoisted.replace(historicalEmailGuard,reviewedEmailGuard),
- "BLOCKED: other Firestore permissions, validation branches or collection paths changed");
+// PR #351 adds exactly TWO narrowly reviewed, deny-only predicates:
+// (1) reject @emailkeep.com (and subdomains) on Resident profile CREATE;
+// (2) deny the existing Resident/Volunteer approved() authorization for that
+//     email domain. Staff authorization is outside this branch, unchanged.
+// Keep exact reconstruction against the frozen baseline: a third predicate,
+// removed validation, changed role helper, or permission drift still fails.
+const priorReviewedRules=reviewedHoisted.replace(historicalEmailGuard,reviewedEmailGuard);
+const previousCommunityEmailMatch="            && request.auth.token.get('email', '') == p.get('email', '')";
+const newCommunityEmailMatch=previousCommunityEmailMatch+
+  `
+            && !request.auth.token.get('email', '').matches(".*@([a-z0-9-]+[.])*emailkeep[.]com")`;
+const previousCreateDeny='        && '+reviewedEmailGuard;
+const newCreateDeny=previousCreateDeny+
+  `
+        && !request.resource.data.email.matches(".*@([a-z0-9-]+[.])*emailkeep[.]com")`;
+assert.equal(priorReviewedRules.split(previousCommunityEmailMatch).length,2,
+ "BLOCKED: resident/volunteer email match moved");
+assert.equal(priorReviewedRules.split(previousCreateDeny).length,2,
+ "BLOCKED: existing Resident create denial moved");
+const expectedEmailkeepRules=priorReviewedRules
+ .replace(previousCommunityEmailMatch,newCommunityEmailMatch)
+ .replace(previousCreateDeny,newCreateDeny);
+// In addition to the two deny-only checks, the removed phone field may be
+// empty for new Resident profiles. Nonempty numbers keep their exact PH format.
+const requiredPhoneLine="          && d.phoneNumber.matches('^([+]639[0-9]{9}|09[0-9]{9})$')";
+const optionalPhoneLine="          && (d.phoneNumber == '' || d.phoneNumber.matches('^([+]639[0-9]{9}|09[0-9]{9})$'))";
+assert.equal(expectedEmailkeepRules.split(requiredPhoneLine).length,2,
+ "BLOCKED: original phone validation moved or duplicated");
+const expectedCombinedRules=expectedEmailkeepRules.replace(requiredPhoneLine,()=>optionalPhoneLine);
+assert.equal(current,expectedCombinedRules,
+ "BLOCKED: Firestore rules differ beyond two emailkeep denies and one optional-phone predicate");
 assert.equal(cp.execFileSync("git",["hash-object","firestore.rules"],{encoding:"utf8"}).trim(),
-"6f65f4d54624020138111c6358d031100d06ec26","BLOCKED: unreviewed Firestore Rules blob");
+"19e5254cdb667a6d935b8b03f0f707bb4c9203b9","BLOCKED: unreviewed Firestore Rules blob");
 // Verify exhaustiveness of all optional-review branches over valid and
 // invalid types, status values and three-valued nulls before Firebase emulator.
 for(const required of [true,false,null,"true",0,1,undefined]){
@@ -271,7 +300,7 @@ for(const required of [true,false,null,"true",0,1,undefined]){
 }
 
 const gitBlob=cp.execFileSync("git",["hash-object","firestore.rules"],{encoding:"utf8"}).trim();
-assert.equal(gitBlob,"6f65f4d54624020138111c6358d031100d06ec26","BLOCKED: unapproved Firestore blob");
+assert.equal(gitBlob,"19e5254cdb667a6d935b8b03f0f707bb4c9203b9","BLOCKED: unapproved Firestore blob");
 const paths=source=>source.split("\n").filter(l=>l.startsWith("    match /")).map(l=>l.slice("    match /".length).split(" ")[0]);
 assert.deepEqual(paths(current),paths(protectedBaseline),"BLOCKED: collection scope changed");
 const allows=source=>[...source.matchAll(/allow (?:get|list|read|write|create|update|delete)/g)].length;
