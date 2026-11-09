@@ -61,7 +61,7 @@ async function main() {
     await assertFails(setDoc(doc(as("new-resident","other@gmail.com",true),"users","new-resident"),validProfile));
     // Firebase Auth can create an unverified UID even when front-end screening
     // is bypassed; verified disposable mailboxes must NOT create Resident data.
-    for (const domain of ["en2ch.co","en2ch.com","sub.en2ch.co"]) {
+    for (const domain of ["en2ch.co","en2ch.com","sub.en2ch.co","emailkeep.com","sub.emailkeep.com"]) {
       const uid = "blocked-disposable-" + domain.replace(/[^a-z0-9]/g,"-");
       const email = "person@" + domain;
       await assertFails(setDoc(doc(as(uid,email,true),"users",uid),{
@@ -92,6 +92,13 @@ async function main() {
     await invalidCreate({age:17});
     await invalidCreate({age:101});
     await invalidCreate({region:""});
+    // The published signup form removed phone input. Verified Basic
+    // Resident may register with an empty phone; malformed nonempty phones
+    // remain rejected by validInitialResidentInputs().
+    await assertSucceeds(setDoc(
+      doc(as("new-resident-no-phone","no-phone@gmail.com",true),"users","new-resident-no-phone"),
+      {...validProfile,uid:"new-resident-no-phone",email:"no-phone@gmail.com",phoneNumber:""}
+    ));
     await assertSucceeds(setDoc(doc(as("new-resident","real@gmail.com",true),"users","new-resident"),validProfile));
     assert.ok(true);
     console.log("PASS Firestore: unverified community/staff emails denied; verified complete Resident and staff access permitted.");
