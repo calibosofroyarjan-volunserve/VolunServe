@@ -2514,67 +2514,6 @@ async function issueCommunityEventCertificate(eventId, participantId) {
   });
 }
 
-// Admin-only manual reconciliation for previously completed events. The
-// existing issuance helper performs all eligibility checks and uses
-// deterministic IDs so retries never duplicate issued certificates.
-exports.syncCommunityEventCertificates = onCall(
-    {timeoutSeconds: 540, memory: "512MiB"},
-    async (request) => {
-      if (!request.auth?.uid) {
-        throw new HttpsError("unauthenticated", "Sign in to sync certificates.");
-      }
-      requireVerifiedCallableEmail(request);
-      const eventId = cleanText(request.data?.eventId, 160);
-      if (!eventId || !/^[A-Za-z0-9_-]{1,160}$/.test(eventId)) {
-        throw new HttpsError("invalid-argument", "A valid event ID is required.");
-      }
-
-      const database = getFirestore();
-      const [issuerSnap, eventSnap] = await Promise.all([
-        database.collection("users").doc(request.auth.uid).get(),
-        database.collection("communityEvents").doc(eventId).get(),
-      ]);
-      const issuer = issuerSnap.exists ? issuerSnap.data() || {} : {};
-      const role = cleanText(issuer.role, 30).toLowerCase();
-      const approved = issuer.status === "approved" ||
-          (!issuer.status && role !== "applicant");
-      if (!approved || !["admin", "superadmin"].includes(role)) {
-        throw new HttpsError(
-            "permission-denied",
-            "Only an approved Admin or Super Admin can sync certificates.",
-        );
-      }
-      const eventData = eventSnap.exists ? eventSnap.data() || {} : {};
-      if (eventData.status !== "completed" ||
-          eventData.publicationStatus !== "published") {
-        throw new HttpsError(
-            "failed-precondition",
-            "Complete and publish the event before syncing certificates.",
-        );
-      }
-
-      const participants = await database.collection("communityEventParticipants")
-          .where("eventId", "==", eventId).get();
-      const outcome = {issued: 0, alreadyExists: 0, notEligible: 0};
-      // Limit parallel transactions for Firestore; any failure propagates
-      // instead of silently reporting success.
-      for (let start = 0; start < participants.docs.length; start += 10) {
-        const group = participants.docs.slice(start, start + 10);
-        const results = await Promise.all(group.map((participant) =>
-          issueCommunityEventCertificate(eventId, participant.id)));
-        for (const result of results) {
-          if (result.issued) outcome.issued++;
-          else if (result.reason === "already_exists") outcome.alreadyExists++;
-          else outcome.notEligible++;
-        }
-      }
-      logger.info("Community certificate manual sync completed", {
-        eventId, issuerUid: request.auth.uid, ...outcome,
-      });
-      return {ok: true, eventId, ...outcome};
-    },
-);
-
 exports.issueCommunityCertificatesOnEventCompletion = onDocumentUpdated(
     {
       document: "communityEvents/{eventId}",
