@@ -132,6 +132,35 @@ async function main() {
         .data().verificationStatus, "revoked");
     pass("revoked certificate is not reissued");
 
+    // Staging-wide temporary one-minute demonstration; no allowlisted IDs required.
+    const oldDeployment = process.env.VOLUNSERVE_DEPLOYMENT_ENV;
+    const oldFlag = process.env.VOLUNSERVE_CERT_STAGING_TEMP_ONE_MIN;
+    try {
+      process.env.VOLUNSERVE_DEPLOYMENT_ENV = "staging";
+      process.env.VOLUNSERVE_CERT_STAGING_TEMP_ONE_MIN = "true";
+      const stagingEvent = "demo-staging-any-event";
+      await seed(stagingEvent, "demo-staging-other-volunteer", 60);
+      const stagingResult = await reconcileCommunityEventCertificates({
+        eventId: stagingEvent, execute: true,
+      });
+      assert.equal(stagingResult.issuedCount, 1);
+      pass("staging-only temporary rule issues at one minute without test UID allowlists");
+
+      process.env.VOLUNSERVE_DEPLOYMENT_ENV = "production";
+      const prodUnderFlag = "demo-production-flag-ignored";
+      await seed(prodUnderFlag, "demo-staging-other-volunteer", 60);
+      const prodResult = await reconcileCommunityEventCertificates({
+        eventId: prodUnderFlag, execute: true,
+      });
+      assert.equal(prodResult.issuedCount, 0);
+      pass("production ignores staging-only override even if enabled");
+    } finally {
+      if (oldDeployment === undefined) delete process.env.VOLUNSERVE_DEPLOYMENT_ENV;
+      else process.env.VOLUNSERVE_DEPLOYMENT_ENV = oldDeployment;
+      if (oldFlag === undefined) delete process.env.VOLUNSERVE_CERT_STAGING_TEMP_ONE_MIN;
+      else process.env.VOLUNSERVE_CERT_STAGING_TEMP_ONE_MIN = oldFlag;
+    }
+
     console.log("PASS: all " + n + " isolated Firebase emulator checks succeeded.");
   } finally {
     await db.terminate();
