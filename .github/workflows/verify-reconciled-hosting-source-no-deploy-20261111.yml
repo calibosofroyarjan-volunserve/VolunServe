@@ -1,0 +1,75 @@
+name: Verify Reconciled Source vs CURRENT Hosting (NO DEPLOY)
+on:
+  push:
+    branches: [reconcile/live-protected-with-current-hosting-20261111]
+  pull_request:
+    branches: [live-protected]
+permissions:
+  contents: read
+jobs:
+  source-vs-live:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    env:
+      EXPECTED_DEPLOYED_SHA: 847afced7da44ce4b2890402a19ee6faf74525bd
+      OLD_PROTECTED_SHA: 5db5c53e48f4130f37d7b4c283995d1dca704c70
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: false
+      - name: Fail closed if published production marker is stale or unknown
+        shell: bash
+        run: |
+          node <<'NODE'
+          "use strict";
+          const assert=require("node:assert/strict");
+          (async()=>{
+            const r=await fetch("https://volunserve.com/volunserve-release.json",
+              {headers:{"Cache-Control":"no-cache"},signal:AbortSignal.timeout(15000)});
+            assert.equal(r.status,200,"Production release marker is unavailable");
+            const data=await r.json();
+            assert.equal(data.app,"VolunServe");
+            assert.equal(data.firebaseProject,"volunserve-3aa5b");
+            assert.equal(data.revision,process.env.EXPECTED_DEPLOYED_SHA,
+              "BLOCKED: production Hosting has changed; rebase live-derived reconciliation");
+            console.log("PASS production Hosting is still at verified web source "+data.revision);
+          })().catch(e=>{console.error(e);process.exitCode=1});
+          NODE
+      - name: Verify both histories, web parity, protected services and release config
+        shell: bash
+        run: |
+          node <<'NODE'
+          "use strict";
+          const assert=require("node:assert/strict");
+          const cp=require("node:child_process");
+          const git=(...args)=>cp.execFileSync("git",args,{encoding:"utf8"}).trim();
+          const old=process.env.OLD_PROTECTED_SHA,site=process.env.EXPECTED_DEPLOYED_SHA;
+          for(const parent of [old,site])cp.execFileSync("git",["merge-base","--is-ancestor",parent,"HEAD"]);
+          const changed=(base)=>git("diff","--name-only",base,"HEAD").split("\n").filter(Boolean);
+          const web=/^(app|components|assets|constants|hooks|lib|services|utils)\//;
+          const webDelta=changed(site).filter(path=>web.test(path)).sort();
+          assert.deepEqual(webDelta,["lib/firebase.ts"],
+            "BLOCKED: another live website module differs from published source");
+          const preservedPrefixes=/^(backend|functions)\//;
+          const protectedDelta=changed(old);
+          assert.deepEqual(protectedDelta.filter(path=>preservedPrefixes.test(path)),[],
+            "BLOCKED: Render backend or Firebase Functions diverged");
+          for(const file of ["package.json","package-lock.json","app.json","firebase.json",
+              ".firebaserc","metro.config.js","tsconfig.json"]){
+            assert.equal(git("rev-parse","HEAD:"+file),git("rev-parse",site+":"+file),
+              "BLOCKED: Hosting build configuration changed: "+file);
+          }
+          for(const file of ["storage.rules","scripts/guard-live-protected-release.cjs",
+            ".github/workflows/auto-publish-protected-live-hosting.yml",
+            ".github/workflows/release-live-protected-hosting.yml"]){
+            assert.equal(git("rev-parse","HEAD:"+file),git("rev-parse",old+":"+file),
+              "BLOCKED: protected safety policy changed: "+file);
+          }
+          assert.equal(git("rev-parse","HEAD:lib/firebase.ts"),git("rev-parse",old+":lib/firebase.ts"),
+            "BLOCKED: protected staging-vs-production Firebase isolation guard was changed");
+          console.log("PASS: website matches live, except explicitly preserved protected Firebase isolation guard");
+          console.log("PASS: backend, Functions, release guard, build config and both histories are preserved");
+          NODE
+      - name: Explicitly NO deploy
+        run: echo 'All checks read-only — no secrets, credentials or deploy command'
