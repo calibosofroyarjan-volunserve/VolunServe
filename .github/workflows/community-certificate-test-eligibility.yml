@@ -7,6 +7,7 @@ on:
       - "backend/communityCertificates.js"
       - "backend/communityCertificateEligibility.js"
       - "backend/test-communityCertificateEligibility.js"
+      - "backend/test-communityCertificateIssuance.js"
       - "backend/package.json"
       - "functions/index.js"
       - "functions/communityCertificateEligibility.js"
@@ -50,4 +51,4 @@ jobs:
           node --check communityCertificates.js
           node --check communityCertificateEligibility.js
       - name: Test Render eligibility and integrity gates
-        run: node --test test-communityCertificateEligibility.js
+        run: node --test test-communityCertificateEligibility.js test-communityCertificateIssuance.js
