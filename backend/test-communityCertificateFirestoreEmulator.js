@@ -10,6 +10,7 @@ if (!process.env.FIRESTORE_EMULATOR_HOST ||
   throw new Error("Refusing to run: isolated Firestore emulator and demo project required.");
 }
 
+process.env.VOLUNSERVE_CERT_TEST_OVERRIDE_ENABLED = "true";
 process.env.VOLUNSERVE_CERT_TEST_EVENT_IDS =
     "demo-test-59s,demo-test-1m,demo-test-6m,demo-test-revoked";
 process.env.VOLUNSERVE_CERT_TEST_VOLUNTEER_UIDS = "demo-test-volunteer";
