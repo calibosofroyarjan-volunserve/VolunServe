@@ -141,6 +141,16 @@ export const REGISTRATION_ALLOWED_EMAIL_DOMAINS: ReadonlySet<string> = new Set([
   "gmail.com", "googlemail.com", "yahoo.com", "yahoo.com.ph", "yahoo.co.uk",
 ]);
 
+// SmailPro offers receive-only access to genuine Gmail inboxes. A verification
+// link does not prove control of the underlying Google account. New Gmail
+// resident registrations therefore require authenticated Google OAuth.
+export const GMAIL_GOOGLE_OAUTH_REQUIRED_MESSAGE =
+  "For new Gmail registrations, choose Continue with Google to verify account ownership. A verification email alone is insufficient.";
+export function requiresGoogleOAuthForRegistration(email: string): boolean {
+  const parts = String(email || "").trim().toLowerCase().split("@");
+  return parts.length === 2 && (parts[1] === "gmail.com" || parts[1] === "googlemail.com");
+}
+
 /** Return a clear, user-facing registration error, or null when acceptable.
  * Known-domain filtering is a client UX check; Firebase security rules and
  * trusted server enforcement are separate protections.
