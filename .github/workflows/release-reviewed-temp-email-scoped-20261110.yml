@@ -50,7 +50,7 @@ jobs:
           const w=fs.readFileSync('.github/workflows/release-reviewed-temp-email-scoped-20261110.yml','utf8');
           assert(w.includes("environment: production"));
           assert(w.includes("github.event_name == 'push'"));
-          assert(!w.includes('branches: [main]'));
+          assert(!/^\s*branches:\s*\[main\]\s*$/m.test(w));
           console.log('PASS: immutable reviewed security-only release and preserved source boundaries');
           NODE
   protected-prod-publish:
