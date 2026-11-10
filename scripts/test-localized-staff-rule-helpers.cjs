@@ -302,8 +302,8 @@ assert.equal(expectedProviderRules.split('matches(".*@([a-z0-9-]+[.])*en2ch[.](c
 const compactProvider=providerFold
  .replace("emailgeneratorai[.]cc|ghostmailz[.]club",
           "emailgeneratorai[.]cc|emailkeep[.]com|ghostmailz[.]club")
- .replace("            && !request.auth.token.get('email', '').matches(\"(?i).*@([a-z0-9-]+[.])*emailkeep[.]com\")\\n","")
- .replace("        && !request.resource.data.email.matches(\"(?i).*@([a-z0-9-]+[.])*emailkeep[.]com\")\\n","");
+ .replace("            && !request.auth.token.get('email', '').matches(\"(?i).*@([a-z0-9-]+[.])*emailkeep[.]com\")\n","")
+ .replace("        && !request.resource.data.email.matches(\"(?i).*@([a-z0-9-]+[.])*emailkeep[.]com\")\n","");
 assert.equal(current,compactProvider,
  "BLOCKED: Rules differ beyond the reviewed semantic-preserving emailkeep fold");
 
