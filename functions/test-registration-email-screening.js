@@ -43,7 +43,7 @@ test("server rejects Gmail-looking fake provider domains and matches client corr
   for(const domain of Object.keys(typos)) {
     const v=classifyRegistrationEmail("candidate@"+domain);
     assert.equal(v.allowed,false,"Fake provider @"+domain+" must not create Auth UID");
-    assert.equal(v.reason,"provider_typo");
+    assert.equal(v.reason,domain.endsWith(".co") ? "blocked_tld_co" : "provider_typo");
   }
   for(const domain of ["gmail.com","googlemail.com","yahoo.com","outlook.com","hotmail.com","icloud.com"]) {
     assert.equal(classifyRegistrationEmail("candidate@"+domain).allowed,true,domain);
