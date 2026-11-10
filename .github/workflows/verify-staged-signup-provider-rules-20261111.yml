@@ -1,0 +1,74 @@
+name: Verify Staged Signup Provider Rules (NO DEPLOY)
+on:
+  push:
+    branches:
+      - security/stage-new-signup-provider-rules-20261111
+  pull_request:
+    branches:
+      - review/reconciled-live-signup-calendar-20261111
+permissions:
+  contents: read
+jobs:
+  direct-sdk-rules:
+    runs-on: ubuntu-latest
+    timeout-minutes: 22
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+          submodules: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - run: npm ci --no-audit --no-fund
+      - name: Staging safety source assertions
+        run: |
+          node <<'NODE'
+          "use strict";
+          const assert=require("node:assert/strict");
+          const fs=require("node:fs");
+          const child=require("node:child_process");
+          const rules=fs.readFileSync("firestore.rules","utf8");
+          const diff=child.execFileSync("git",["diff","--name-only","HEAD~1","HEAD"],{encoding:"utf8"});
+          assert(rules.includes("function permittedNewResidentEmail()"));
+          assert(rules.includes("function permittedNewApplicantEmail()"));
+          assert(rules.includes("provider == 'google.com'"));
+          assert(rules.includes("&& permittedNewResidentEmail()"));
+          assert(rules.includes("&& permittedNewApplicantEmail()"));
+          assert(!diff.includes("functions/index.js"),"Never activate identity blocking functions");
+          console.log("PASS staged provider gates; Firebase prod config remains unchanged");
+          NODE
+      - name: Direct SDK profile-bypass scenarios (Firestore emulator only)
+        run: npx firebase-tools emulators:exec --only firestore --project demo-volunserve-new-email-policy "node scripts/test-staged-signup-provider-firestore-rules.cjs"
+      - name: Existing Resident profile input regression
+        run: npx firebase-tools emulators:exec --only firestore --project demo-volunserve-verified-signup "node scripts/test-verified-community-registration-rules.cjs"
+      - name: Historical account compatibility regression
+        run: npx firebase-tools emulators:exec --only firestore --project demo-volunserve-account-compatibility "node scripts/test-existing-account-compatibility.cjs"
+      - name: Frontend/server email classification compatibility
+        run: |
+          node --test functions/test-registration-email-screening.js
+          node --test scripts/test-signup-abuse-controls.cjs
+      - name: Validate direct Render LGU applicant bypass protection
+        run: |
+          npm --prefix backend ci --no-audit --no-fund
+          node --test backend/test-lgu-applicant-email-policy.cjs
+          node --check backend/lguCredentialRoutes.js
+      - name: Operational module source regression (ER, events, attendance, certificates, admin)
+        run: |
+          # Obsolete: old assertion expects deleted LGU Personnel dispatch.
+          # ER/Admin source is unchanged versus pinned live baseline.
+          node scripts/test-clean-emergency-report-header.cjs
+          node scripts/test-embedded-emergency-map-navigation.cjs
+          node scripts/test-volunteer-community-event-join-20261106.cjs
+          node scripts/test-volunteer-time-controls-20261106.cjs
+          node --test scripts/test-profile-certificates-account-menu.cjs
+          node scripts/test-live-derived-certificate-minimum-label-20261111.cjs
+      - name: TypeScript without output
+        run: npx tsc --noEmit --incremental false
+      - name: No production publish
+        run: echo 'NO DEPLOY. Firebase production Hosting, Auth UIDs, Rules, Functions and Render remain unchanged.'

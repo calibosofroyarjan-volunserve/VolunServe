@@ -116,6 +116,26 @@ service cloud.firestore {
           /databases/$(database)/documents/volunteerApplications/$(uid)
         ).data;
       }
+      // STAGING ONLY: new-signup provider gate. Existing READ/UPDATE, staff
+      // roles and historical verified accounts must remain unchanged.
+      // SmailPro may relay real Gmail verification links; only a Google
+      // OAuth-backed Firebase token is accepted for new Gmail profiles.
+      function permittedNewResidentEmail() {
+        let e = request.resource.data.email;
+        let provider = request.auth.token.get('firebase', {}).get('sign_in_provider', '');
+        return e is string && (
+          (e.matches('^[^@+]+@(gmail[.]com|googlemail[.]com)$')
+            && provider == 'google.com')
+          || e.matches('^[^@]+@(yahoo[.]com|yahoo[.]com[.]ph|yahoo[.]co[.]uk)$')
+        );
+      }
+      // LGU applications use Yahoo/password until Google OAuth is supported
+      // in that dedicated form; applications never grant Admin privileges.
+      function permittedNewApplicantEmail() {
+        let e = request.resource.data.email;
+        return e is string
+          && e.matches('^[^@]+@(yahoo[.]com|yahoo[.]com[.]ph|yahoo[.]co[.]uk)$');
+      }
       // Firestore creation must enforce the same required inputs as the wizard.
       // These lists are synchronized against the local SJDM/occupation constants.
       function validInitialResidentInputs() {
@@ -162,6 +182,7 @@ service cloud.firestore {
         && request.auth.uid == uid
         && request.auth.token.get("email_verified", false) == true
         && request.auth.token.get("email", "") == request.resource.data.email
+        && permittedNewResidentEmail()
         && validInitialResidentInputs()
         && !request.resource.data.email.matches(".*@([a-z0-9-]+[.])*en2ch[.](com|co)")
         && request.resource.data.keys().hasAll([
@@ -240,6 +261,7 @@ service cloud.firestore {
       allow create: if signedIn()
         && request.auth.uid == uid
         && request.auth.token.get('email', '') == request.resource.data.email
+        && permittedNewApplicantEmail()
         && request.resource.data.keys().hasOnly([
           'uid','email','fullName','age','phoneNumber','role','status',
           'residentAccess','volunteerAccess','region','province','city',
