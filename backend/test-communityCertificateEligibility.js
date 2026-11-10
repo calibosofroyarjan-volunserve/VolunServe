@@ -11,7 +11,9 @@ const {
 function withAllowlists(events, volunteers, run) {
   const originalEvents = process.env.VOLUNSERVE_CERT_TEST_EVENT_IDS;
   const originalVolunteers = process.env.VOLUNSERVE_CERT_TEST_VOLUNTEER_UIDS;
+  const originalFlag = process.env.VOLUNSERVE_CERT_TEST_OVERRIDE_ENABLED;
   try {
+    process.env.VOLUNSERVE_CERT_TEST_OVERRIDE_ENABLED = "true";
     if (events === undefined) delete process.env.VOLUNSERVE_CERT_TEST_EVENT_IDS;
     else process.env.VOLUNSERVE_CERT_TEST_EVENT_IDS = events;
     if (volunteers === undefined) delete process.env.VOLUNSERVE_CERT_TEST_VOLUNTEER_UIDS;
@@ -22,6 +24,8 @@ function withAllowlists(events, volunteers, run) {
     else process.env.VOLUNSERVE_CERT_TEST_EVENT_IDS = originalEvents;
     if (originalVolunteers === undefined) delete process.env.VOLUNSERVE_CERT_TEST_VOLUNTEER_UIDS;
     else process.env.VOLUNSERVE_CERT_TEST_VOLUNTEER_UIDS = originalVolunteers;
+    if (originalFlag === undefined) delete process.env.VOLUNSERVE_CERT_TEST_OVERRIDE_ENABLED;
+    else process.env.VOLUNSERVE_CERT_TEST_OVERRIDE_ENABLED = originalFlag;
   }
 }
 
@@ -93,5 +97,18 @@ test("all other integrity gates still apply in test mode", () => {
     assert.equal(check(60, {attendance: {uid: "other-user"}}), false);
     assert.equal(check(-30), false);
     assert.equal(check(24 * 3600 + 1), false);
+  });
+});
+
+test("production ignores matching event and UID allowlists without third explicit enable switch", () => {
+  withAllowlists("test-event-A", "test-volunteer-A", () => {
+    delete process.env.VOLUNSERVE_CERT_TEST_OVERRIDE_ENABLED;
+    assert.equal(minimum("test-event-A", "test-volunteer-A"), 30);
+    assert.equal(check(60), false);
+    process.env.VOLUNSERVE_CERT_TEST_OVERRIDE_ENABLED = "false";
+    assert.equal(check(6 * 60), false);
+    assert.equal(check(30 * 60), true);
+    process.env.VOLUNSERVE_CERT_TEST_OVERRIDE_ENABLED = "TRUE";
+    assert.equal(check(60), false);
   });
 });
