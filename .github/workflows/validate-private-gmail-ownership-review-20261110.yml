@@ -45,9 +45,9 @@ jobs:
           assert(src.includes('flag:"wx",mode:0o600'),"Private report must not overwrite or be world readable");
           assert(src.includes('role","in",ROLES'),"Must restrict account scan scope");
           assert(src.includes('MAX_SCANNED = 12000'),"Scan bound required");
-          assert(!/^\\s+environment:\\s*production\\s*$/m.test(workflow),
+          assert(!/^\s+environment:\s*production\s*$/m.test(workflow),
             "CI MUST NOT select the production environment");
-          assert(!/^\\s+[A-Z0-9_]+:\\s*\\$\\{\\{\\s*secrets\\./m.test(workflow),
+          assert(!/^\s+[A-Z0-9_]+:\s*\$\{\{\s*secrets\./m.test(workflow),
             "CI MUST NOT bind any secrets");
           assert(!/\bnpx firebase-tools\b/.test(workflow));
           console.log("PASS: private dossier is Cloud Shell-only; all CI tests synthetic, no production data");
