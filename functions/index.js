@@ -2326,7 +2326,8 @@ exports.issueVolunteerCertificate = onCall(
 // Certificates are authenticated VolunServe participation records.
 // No LGU seal, signature, or government endorsement is generated here.
 // =========================================================
-const MIN_COMMUNITY_CERTIFICATE_ATTENDANCE_MINUTES = 30;
+const {minimumCommunityCertificateMinutes} =
+  require("./communityCertificateEligibility");
 
 function communityTimestampMillis(value) {
   if (!value || typeof value.toMillis !== "function") {
@@ -2388,7 +2389,7 @@ async function issueCommunityEventCertificate(eventId, participantId) {
       timeIn <= 0 ||
       timeOut < timeIn ||
       timeOut - timeIn > 24 * 60 * 60 * 1000 ||
-      timeOut - timeIn < MIN_COMMUNITY_CERTIFICATE_ATTENDANCE_MINUTES * 60000
+      timeOut - timeIn < minimumCommunityCertificateMinutes(eventId, volunteerId) * 60000
     ) {
       return {issued: false, reason: "not_eligible"};
     }
