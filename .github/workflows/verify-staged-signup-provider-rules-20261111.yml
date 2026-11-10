@@ -53,6 +53,11 @@ jobs:
         run: |
           node --test functions/test-registration-email-screening.js
           node --test scripts/test-signup-abuse-controls.cjs
+      - name: Validate direct Render LGU applicant bypass protection
+        run: |
+          npm --prefix backend ci --no-audit --no-fund
+          node --test backend/test-lgu-applicant-email-policy.cjs
+          node --check backend/lguCredentialRoutes.js
       - name: Operational module source regression (ER, events, attendance, certificates, admin)
         run: |
           node scripts/test-unified-admin-dashboard-and-emergency-pagination.cjs
