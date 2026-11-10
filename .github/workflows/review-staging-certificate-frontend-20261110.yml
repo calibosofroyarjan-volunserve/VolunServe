@@ -1,0 +1,45 @@
+name: Review Isolated Community Certificates Staging Frontend (NO DEPLOY)
+on:
+  pull_request:
+    branches:
+      - design/consolidated-four-role-desktop-mobile-20261107
+    paths:
+      - "lib/stagingCertificateBackend.ts"
+      - "app/(admin)/community-attendance.tsx"
+      - "scripts/require-isolated-preview-build-20261107.cjs"
+      - "scripts/test-staging-certificate-connection-20261110.cjs"
+      - ".github/workflows/review-staging-certificate-frontend-20261110.yml"
+      - "docs/isolated-staging-certificate-frontend-20261110.md"
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      EXPO_PUBLIC_VOLUNSERVE_STAGING_MODE: "1"
+      EXPO_PUBLIC_STAGING_FIREBASE_API_KEY: "AIzaDevelopmentPlaceholderNotARealFirebaseProjectKey"
+      EXPO_PUBLIC_STAGING_FIREBASE_AUTH_DOMAIN: "volunserve-auth-staging.firebaseapp.com"
+      EXPO_PUBLIC_STAGING_FIREBASE_PROJECT_ID: "volunserve-auth-staging"
+      EXPO_PUBLIC_STAGING_FIREBASE_STORAGE_BUCKET: "volunserve-auth-staging.firebasestorage.app"
+      EXPO_PUBLIC_STAGING_FIREBASE_SENDER_ID: "999999999999"
+      EXPO_PUBLIC_STAGING_FIREBASE_APP_ID: "1:999999999999:web:0000000000000000000000"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - name: Staging certificate API route and UI correctness
+        run: node scripts/test-staging-certificate-connection-20261110.cjs
+      - name: Existing staging Firebase isolation checks
+        run: node scripts/test-isolated-staging-config-20261107.cjs
+      - name: Existing staging backend isolation checks
+        run: node scripts/test-staging-backend-isolation-20261107.cjs
+      - name: Check exact staging Firebase project and safe certificate route
+        run: node scripts/require-isolated-preview-build-20261107.cjs
+      - name: TypeScript check
+        run: npx tsc --noEmit --pretty false
+      - name: Isolated Expo web export with SYNTHETIC Firebase config (no deployed app)
+        run: npx expo export --platform web

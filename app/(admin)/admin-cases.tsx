@@ -1,3 +1,4 @@
+import { liveUi as ui } from "../../constants/volunserveLiveUi";
 import { getSafeVolunServeBackendBaseUrl } from "../../lib/stagingBackendSafety";
 import { useRouter } from "expo-router";
 import { getAuth } from "firebase/auth";
@@ -4875,7 +4876,7 @@ function FormSelect({
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: "#F6F8F7",
+    backgroundColor: ui.color.canvas,
     scrollbarWidth: "thin",
     scrollbarColor: "#8CAA9A #F6F8F7",
   } as any,
@@ -4892,10 +4893,10 @@ const styles = StyleSheet.create({
     minHeight: 520,
     justifyContent: "center",
     alignItems: "center",
-    backgroundColor: "#F6F8F7",
+    backgroundColor: ui.color.canvas,
   },
   loadingText: {
-    color: "#64748b",
+    color: ui.color.secondary,
     fontWeight: "700",
   },
   denied: {
@@ -4926,13 +4927,13 @@ const styles = StyleSheet.create({
   subtitle: {
     marginTop: 4,
     maxWidth: 760,
-    color: "#64748b",
+    color: ui.color.secondary,
     fontSize: 13.5,
     lineHeight: 20,
   },
   liveSummary: {
     minWidth: 108,
-    backgroundColor: "#ffffff",
+    backgroundColor: ui.color.surface,
     borderWidth: 1,
     borderColor: "#dfe7ee",
     borderRadius: 15,
@@ -4947,13 +4948,13 @@ const styles = StyleSheet.create({
   },
   liveSummaryLabel: {
     marginTop: 2,
-    color: "#64748b",
+    color: ui.color.secondary,
     fontSize: 10,
     fontWeight: "800",
   },
 
   filterCard: {
-    backgroundColor: "#ffffff",
+    backgroundColor: ui.color.surface,
     borderWidth: 1,
     borderColor: "#dfe7ee",
     borderRadius: 12,
@@ -5013,13 +5014,13 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 9,
     paddingHorizontal: 14,
-    backgroundColor: "#ffffff",
+    backgroundColor: ui.color.surface,
     borderWidth: 1,
     borderColor: "#dfe7ee",
     borderRadius: 12,
   },
   searchIcon: {
-    color: "#64748b",
+    color: ui.color.secondary,
     fontSize: 20,
     fontWeight: "700",
   },
@@ -5044,7 +5045,7 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderBottomWidth: 1,
     borderColor: "#e8eef4",
-    backgroundColor: "#ffffff",
+    backgroundColor: ui.color.surface,
   },
   detailTabButton: {
     minHeight: 42,
@@ -5057,7 +5058,7 @@ const styles = StyleSheet.create({
     borderBottomColor: "#2563eb",
   },
   detailTabText: {
-    color: "#64748b",
+    color: ui.color.secondary,
     fontSize: 10.5,
     fontWeight: "800",
   },
@@ -5078,7 +5079,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#e3eaf0",
     borderRadius: 11,
-    backgroundColor: "#ffffff",
+    backgroundColor: ui.color.surface,
     padding: 12,
   },
   overviewCardHeader: {
@@ -5104,7 +5105,7 @@ const styles = StyleSheet.create({
   },
   overviewLine: {
     marginTop: 5,
-    color: "#64748b",
+    color: ui.color.secondary,
     fontSize: 10.5,
     lineHeight: 16,
   },
@@ -5139,11 +5140,11 @@ const styles = StyleSheet.create({
     borderColor: "#0f9f84",
   },
   statusTimelineDotPending: {
-    backgroundColor: "#ffffff",
+    backgroundColor: ui.color.surface,
     borderColor: "#cbd5e1",
   },
   statusTimelineLabel: {
-    color: "#64748b",
+    color: ui.color.secondary,
     fontSize: 10.5,
     fontWeight: "700",
   },
@@ -5169,7 +5170,7 @@ const styles = StyleSheet.create({
   },
   overviewLabel: {
     marginTop: 11,
-    color: "#64748b",
+    color: ui.color.secondary,
     fontSize: 10,
     fontWeight: "900",
     textTransform: "uppercase",
@@ -5257,7 +5258,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#dfe7ee",
     borderRadius: 10,
-    backgroundColor: "#ffffff",
+    backgroundColor: ui.color.surface,
   },
   personnelCleanHeader: {
     flexDirection: "row",
@@ -5308,7 +5309,7 @@ const styles = StyleSheet.create({
   },
   personnelCleanSubtitle: {
     marginTop: 6,
-    color: "#64748b",
+    color: ui.color.secondary,
     fontSize: 12,
     lineHeight: 19,
   },
@@ -5327,7 +5328,7 @@ const styles = StyleSheet.create({
     fontWeight: "900",
   },
   personnelCleanStatusTextMuted: {
-    color: "#64748b",
+    color: ui.color.secondary,
   },
   primaryResponderCompactRow: {
     width: "100%",
@@ -5390,7 +5391,7 @@ const styles = StyleSheet.create({
   },
   personnelCompactMeta: {
     marginTop: 2,
-    color: "#64748b",
+    color: ui.color.secondary,
     fontSize: 10.5,
     lineHeight: 11,
     textAlign: "left",
@@ -5441,7 +5442,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#f1f5f9",
   },
   personnelMiniBadgeMutedText: {
-    color: "#64748b",
+    color: ui.color.secondary,
     fontSize: 10.5,
     fontWeight: "900",
   },
@@ -5507,7 +5508,7 @@ const styles = StyleSheet.create({
   },
   personnelCleanEmptyText: {
     marginTop: 3,
-    color: "#64748b",
+    color: ui.color.secondary,
     fontSize: 10.5,
     lineHeight: 13,
   },
@@ -5542,7 +5543,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#f1f5f9",
   },
   personnelCountBadgeMutedText: {
-    color: "#64748b",
+    color: ui.color.secondary,
     fontSize: 10.5,
     fontWeight: "900",
   },
@@ -5554,7 +5555,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#cbd5e1",
     borderRadius: 8,
-    backgroundColor: "#ffffff",
+    backgroundColor: ui.color.surface,
   },
   personnelRefreshCompactText: {
     color: "#0f766e",
@@ -5589,7 +5590,7 @@ const styles = StyleSheet.create({
     borderColor: "#dde8e3",
     borderRadius: 12,
     overflow: "hidden",
-    backgroundColor: "#ffffff",
+    backgroundColor: ui.color.surface,
   },
   volunteerRosterCard: {
     width: "100%",
@@ -5597,7 +5598,7 @@ const styles = StyleSheet.create({
     paddingVertical: 15,
     borderBottomWidth: 1,
     borderBottomColor: "#e2ebe8",
-    backgroundColor: "#ffffff",
+    backgroundColor: ui.color.surface,
     gap: 10,
   },
   volunteerRosterTop: {
@@ -5619,7 +5620,7 @@ const styles = StyleSheet.create({
   },
   volunteerRosterMeta: {
     marginTop: 4,
-    color: "#64748b",
+    color: ui.color.secondary,
     fontSize: 12,
     lineHeight: 17,
   },
@@ -5660,7 +5661,7 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     borderBottomWidth: 1,
     borderBottomColor: "#edf1f5",
-    backgroundColor: "#ffffff",
+    backgroundColor: ui.color.surface,
   },
   personnelAssignCompact: {
     minWidth: 105,
@@ -5674,7 +5675,7 @@ const styles = StyleSheet.create({
   },
   personnelAssignCompactDisabled: {
     borderWidth: 1,
-    borderColor: "#e2e8f0",
+    borderColor: ui.color.border,
     backgroundColor: "#f8fafc",
   },
   personnelAssignCompactText: {
@@ -5758,7 +5759,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 7,
     paddingVertical: 5,
     color: "#0f172a",
-    backgroundColor: "#ffffff",
+    backgroundColor: ui.color.surface,
     fontSize: 10.5,
   },
   personnelSupportDivider: {
@@ -5781,7 +5782,7 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     paddingHorizontal: 8,
     borderWidth: 1,
-    borderColor: "#e2e8f0",
+    borderColor: ui.color.border,
     borderRadius: 9,
     backgroundColor: "#fbfcfd",
   },
@@ -5808,7 +5809,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#dfe7ee",
     borderRadius: 12,
-    backgroundColor: "#ffffff",
+    backgroundColor: ui.color.surface,
   },
   personnelAsideTitle: {
     color: "#0f172a",
@@ -5839,7 +5840,7 @@ const styles = StyleSheet.create({
   },
   personnelAsideLabel: {
     marginTop: 9,
-    color: "#64748b",
+    color: ui.color.secondary,
     fontSize: 10,
     fontWeight: "800",
   },
@@ -5858,7 +5859,7 @@ const styles = StyleSheet.create({
   },
   personnelAsideMeta: {
     marginTop: 2,
-    color: "#64748b",
+    color: ui.color.secondary,
     fontSize: 10,
   },
   personnelAsideThumb: {
@@ -5918,7 +5919,7 @@ const styles = StyleSheet.create({
   },
   personnelMiniMapSub: {
     marginTop: 3,
-    color: "#64748b",
+    color: ui.color.secondary,
     fontSize: 10,
   },
   personnelAsideActionRow: {
@@ -5948,7 +5949,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#bfdbfe",
     borderRadius: 8,
-    backgroundColor: "#ffffff",
+    backgroundColor: ui.color.surface,
   },
   personnelAsideSecondaryButtonText: {
     color: "#2563eb",
@@ -5971,7 +5972,7 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     borderWidth: 2,
     borderColor: "#cbd5e1",
-    backgroundColor: "#ffffff",
+    backgroundColor: ui.color.surface,
   },
   personnelTimelineDotDone: {
     borderColor: "#0f8f80",
@@ -5991,7 +5992,7 @@ const styles = StyleSheet.create({
     paddingBottom: 7,
   },
   personnelTimelineLabel: {
-    color: "#64748b",
+    color: ui.color.secondary,
     fontSize: 10,
     fontWeight: "800",
   },
@@ -6026,9 +6027,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 8,
     borderRadius: 9,
-    backgroundColor: "#ffffff",
+    backgroundColor: ui.color.surface,
     borderWidth: 1,
-    borderColor: "#e2e8f0",
+    borderColor: ui.color.border,
   },
   personnelOverviewLabel: {
     color: "#94a3b8",
@@ -6061,17 +6062,17 @@ const styles = StyleSheet.create({
   personnelPanel: {
     width: "100%",
     borderWidth: 1,
-    borderColor: "#e2e8f0",
+    borderColor: ui.color.border,
     borderRadius: 11,
-    backgroundColor: "#ffffff",
+    backgroundColor: ui.color.surface,
     padding: 12,
   },
   attendancePanel: {
     width: "100%",
     borderWidth: 1,
-    borderColor: "#e2e8f0",
+    borderColor: ui.color.border,
     borderRadius: 11,
-    backgroundColor: "#ffffff",
+    backgroundColor: ui.color.surface,
     padding: 12,
   },
   lguRefreshButton: {
@@ -6082,7 +6083,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#cbd5e1",
     borderRadius: 8,
-    backgroundColor: "#ffffff",
+    backgroundColor: ui.color.surface,
   },
   lguRefreshButtonText: {
     color: "#0f766e",
@@ -6113,9 +6114,9 @@ const styles = StyleSheet.create({
     gap: 12,
     padding: 13,
     borderWidth: 1,
-    borderColor: "#e2e8f0",
+    borderColor: ui.color.border,
     borderRadius: 12,
-    backgroundColor: "#ffffff",
+    backgroundColor: ui.color.surface,
   },
   lguCandidateRowAvailable: {
     borderColor: "#9bd9ca",
@@ -6177,7 +6178,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0.25,
   },
   lguEmployeeIdText: {
-    color: "#64748b",
+    color: ui.color.secondary,
     fontSize: 10,
     fontWeight: "800",
   },
@@ -6194,7 +6195,7 @@ const styles = StyleSheet.create({
     padding: 9,
     borderRadius: 9,
     borderWidth: 1,
-    borderColor: "#e2e8f0",
+    borderColor: ui.color.border,
     backgroundColor: "#f8fafc",
   },
   lguProfileLabel: {
@@ -6256,7 +6257,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#ecfdf5",
   },
   lguActionButtonBlocked: {
-    borderColor: "#e2e8f0",
+    borderColor: ui.color.border,
     backgroundColor: "#f8fafc",
   },
   lguActionButtonText: {
@@ -6311,7 +6312,7 @@ const styles = StyleSheet.create({
   },
   personnelPanelSubtitle: {
     marginTop: 4,
-    color: "#64748b",
+    color: ui.color.secondary,
     fontSize: 10,
     lineHeight: 15,
   },
@@ -6355,7 +6356,7 @@ const styles = StyleSheet.create({
   },
   personnelMeta: {
     marginTop: 2,
-    color: "#64748b",
+    color: ui.color.secondary,
     fontSize: 10,
   },
   personnelActiveBadge: {
@@ -6382,7 +6383,7 @@ const styles = StyleSheet.create({
   },
   personnelEmptyText: {
     marginTop: 4,
-    color: "#64748b",
+    color: ui.color.secondary,
     fontSize: 10,
     lineHeight: 15,
   },
@@ -6402,7 +6403,7 @@ const styles = StyleSheet.create({
   },
   attendanceEmptyText: {
     marginTop: 4,
-    color: "#64748b",
+    color: ui.color.secondary,
     fontSize: 10,
     lineHeight: 15,
   },
@@ -6429,7 +6430,7 @@ const styles = StyleSheet.create({
   },
   lguCaseNeedHint: {
     marginTop: 4,
-    color: "#64748b",
+    color: ui.color.secondary,
     fontSize: 10,
     lineHeight: 13,
   },
@@ -6480,7 +6481,7 @@ const styles = StyleSheet.create({
   },
   historyTime: {
     marginTop: 2,
-    color: "#64748b",
+    color: ui.color.secondary,
     fontSize: 10,
   },
   historyAssignments: {
@@ -6502,7 +6503,7 @@ const styles = StyleSheet.create({
     fontWeight: "800",
   },
   historyAssignmentStatus: {
-    color: "#64748b",
+    color: ui.color.secondary,
     fontSize: 10,
     fontWeight: "700",
   },
@@ -6518,7 +6519,7 @@ const styles = StyleSheet.create({
   caseListPane: {
     width: 400,
     flexShrink: 0,
-    backgroundColor: "#ffffff",
+    backgroundColor: ui.color.surface,
     borderWidth: 1,
     borderColor: "#dfe7ee",
     borderRadius: 14,
@@ -6552,7 +6553,7 @@ const styles = StyleSheet.create({
     fontWeight: "800",
   },
   caseListSort: {
-    color: "#64748b",
+    color: ui.color.secondary,
     fontSize: 10,
     fontWeight: "700",
   },
@@ -6566,7 +6567,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 9,
     padding: 8,
-    backgroundColor: "#ffffff",
+    backgroundColor: ui.color.surface,
     borderWidth: 1,
     borderColor: "transparent",
     borderRadius: 10,
@@ -6623,7 +6624,7 @@ const styles = StyleSheet.create({
   },
   caseListLocation: {
     marginTop: 5,
-    color: "#64748b",
+    color: ui.color.secondary,
     fontSize: 10,
     fontWeight: "600",
   },
@@ -6646,7 +6647,7 @@ const styles = StyleSheet.create({
     alignSelf: "stretch",
   },
   caseListDate: {
-    color: "#64748b",
+    color: ui.color.secondary,
     fontSize: 10,
     textAlign: "right",
     fontWeight: "700",
@@ -6662,7 +6663,7 @@ const styles = StyleSheet.create({
   },
 
   caseCard: {
-    backgroundColor: "#ffffff",
+    backgroundColor: ui.color.surface,
     borderWidth: 1,
     borderColor: "#dfe7ee",
     borderRadius: 14,
@@ -6788,7 +6789,7 @@ const styles = StyleSheet.create({
   },
   details: {
     marginTop: 6,
-    color: "#64748b",
+    color: ui.color.secondary,
     lineHeight: 18,
     fontSize: 12.5,
   },
@@ -6887,7 +6888,7 @@ const styles = StyleSheet.create({
   },
   locationActionCoords: {
     marginTop: 3,
-    color: "#64748b",
+    color: ui.color.secondary,
     fontSize: 10,
     fontWeight: "600",
   },
@@ -6915,7 +6916,7 @@ const styles = StyleSheet.create({
     borderRadius: 9,
     borderWidth: 1,
     borderColor: "#bfd7e8",
-    backgroundColor: "#ffffff",
+    backgroundColor: ui.color.surface,
   },
   locationGoogleButtonText: {
     color: "#1d4ed8",
@@ -6927,7 +6928,7 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: "#edf1f5",
     padding: 16,
-    backgroundColor: "#ffffff",
+    backgroundColor: ui.color.surface,
   },
   reviewState: {
     paddingHorizontal: 9,
@@ -6957,7 +6958,7 @@ const styles = StyleSheet.create({
   },
   reviewInfoSub: {
     marginTop: 2,
-    color: "#64748b",
+    color: ui.color.secondary,
     fontSize: 10,
     lineHeight: 14,
   },
@@ -6972,7 +6973,7 @@ const styles = StyleSheet.create({
   },
   severityReviewText: {
     marginTop: 4,
-    color: "#64748b",
+    color: ui.color.secondary,
     fontSize: 10,
     lineHeight: 14,
   },
@@ -6988,7 +6989,7 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     borderWidth: 1,
     borderColor: "#cbd5e1",
-    backgroundColor: "#ffffff",
+    backgroundColor: ui.color.surface,
   },
   severityChoiceText: {
     color: "#475569",
@@ -7183,7 +7184,7 @@ const styles = StyleSheet.create({
   },
   dispatchLockedText: {
     marginTop: 3,
-    color: "#64748b",
+    color: ui.color.secondary,
     fontSize: 10,
     lineHeight: 14,
   },
@@ -7220,7 +7221,7 @@ const styles = StyleSheet.create({
     fontWeight: "800",
   },
   slotText: {
-    color: "#64748b",
+    color: ui.color.secondary,
     fontSize: 10,
     fontWeight: "800",
   },
@@ -7254,7 +7255,7 @@ const styles = StyleSheet.create({
   input: {
     borderWidth: 1,
     borderColor: "#d9e1e8",
-    backgroundColor: "#ffffff",
+    backgroundColor: ui.color.surface,
     borderRadius: 10,
     paddingHorizontal: 11,
     paddingVertical: 10,
@@ -7358,7 +7359,7 @@ const styles = StyleSheet.create({
   responseControlSubtitle: {
     marginTop: 7,
     maxWidth: 760,
-    color: "#64748b",
+    color: ui.color.secondary,
     fontSize: 14,
     lineHeight: 21,
   },
@@ -7428,7 +7429,7 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     borderWidth: 1,
     borderColor: "#cbd5e1",
-    backgroundColor: "#ffffff",
+    backgroundColor: ui.color.surface,
   },
   supportButtonActive: {
     borderColor: "#a7f3d0",
@@ -7441,7 +7442,7 @@ const styles = StyleSheet.create({
   },
   supportButtonSub: {
     marginTop: 4,
-    color: "#64748b",
+    color: ui.color.secondary,
     fontSize: 11.5,
   },
   lguOfficialReportSection: {
@@ -7473,7 +7474,7 @@ const styles = StyleSheet.create({
   lguOfficialReportSubtitle: {
     maxWidth: 720,
     marginTop: 4,
-    color: "#64748B",
+    color: ui.color.secondary,
     fontSize: 10.5,
     lineHeight: 16,
   },
@@ -7484,7 +7485,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#BDE7DD",
     borderRadius: 9,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: ui.color.surface,
   },
   lguReportRefreshText: {
     color: "#0F766E",
@@ -7535,7 +7536,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#DDE7E4",
     borderRadius: 12,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: ui.color.surface,
   },
   lguOfficialReportTopRow: {
     flexDirection: "row",
@@ -7646,7 +7647,7 @@ const styles = StyleSheet.create({
     marginTop: 10,
     padding: 11,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: ui.color.border,
     borderRadius: 10,
     backgroundColor: "#FAFAFA",
   },
@@ -7660,7 +7661,7 @@ const styles = StyleSheet.create({
     marginTop: 12,
     paddingTop: 12,
     borderTopWidth: 1,
-    borderTopColor: "#E2E8F0",
+    borderTopColor: ui.color.border,
   },
   lguOfficialReviewInput: {
     minHeight: 66,
@@ -7683,7 +7684,7 @@ const styles = StyleSheet.create({
   lguReviewDecisionHint: {
     flex: 1,
     minWidth: 220,
-    color: "#64748B",
+    color: ui.color.secondary,
     fontSize: 10,
     lineHeight: 14,
   },
@@ -7733,7 +7734,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#d7e0e8",
     borderRadius: 10,
-    backgroundColor: "#ffffff",
+    backgroundColor: ui.color.surface,
     paddingHorizontal: 12,
     paddingVertical: 10,
     color: "#0f172a",
@@ -7783,7 +7784,7 @@ const styles = StyleSheet.create({
   supportPanelSubtitle: {
     marginTop: 4,
     maxWidth: 760,
-    color: "#64748b",
+    color: ui.color.secondary,
     fontSize: 10,
     lineHeight: 15,
   },
@@ -7872,8 +7873,8 @@ const styles = StyleSheet.create({
     padding: 11,
     borderRadius: 13,
     borderWidth: 1,
-    borderColor: "#e2e8f0",
-    backgroundColor: "#ffffff",
+    borderColor: ui.color.border,
+    backgroundColor: ui.color.surface,
   },
   volunteerCandidateEligible: {
     borderColor: "#b7e4d8",
@@ -7909,11 +7910,11 @@ const styles = StyleSheet.create({
     color: "#166534",
   },
   eligibilityBadgeTextMuted: {
-    color: "#64748b",
+    color: ui.color.secondary,
   },
   eligibilityReason: {
     marginTop: 7,
-    color: "#64748b",
+    color: ui.color.secondary,
     fontSize: 10.5,
     fontWeight: "700",
   },
@@ -7923,7 +7924,7 @@ const styles = StyleSheet.create({
   assignSmallButtonDisabled: {
     backgroundColor: "#f1f5f9",
     borderWidth: 1,
-    borderColor: "#e2e8f0",
+    borderColor: ui.color.border,
   },
   assignSmallButtonTextDisabled: {
     color: "#94a3b8",
@@ -7934,12 +7935,12 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     padding: 14,
     borderWidth: 1,
-    borderColor: "#e2e8f0",
+    borderColor: ui.color.border,
     borderRadius: 12,
-    backgroundColor: "#ffffff",
+    backgroundColor: ui.color.surface,
   },
   volunteerCount: {
-    color: "#64748b",
+    color: ui.color.secondary,
     fontSize: 10,
     fontWeight: "800",
   },
@@ -8010,7 +8011,7 @@ const styles = StyleSheet.create({
   },
   volunteerMeta: {
     marginTop: 3,
-    color: "#64748b",
+    color: ui.color.secondary,
     fontSize: 11,
     lineHeight: 16,
   },
@@ -8127,7 +8128,7 @@ const styles = StyleSheet.create({
   escalationSummaryText: {
     marginTop: 5,
     maxWidth: 760,
-    color: "#64748B",
+    color: ui.color.secondary,
     fontSize: 10.5,
     lineHeight: 16,
   },
@@ -8214,7 +8215,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     borderWidth: 1,
     borderColor: "#dbe8e4",
-    backgroundColor: "#ffffff",
+    backgroundColor: ui.color.surface,
   },
   directFormHeader: {
     flexDirection: "row",
@@ -8229,7 +8230,7 @@ const styles = StyleSheet.create({
   },
   directFormSubtitle: {
     marginTop: 3,
-    color: "#64748b",
+    color: ui.color.secondary,
     fontSize: 10,
     lineHeight: 14,
   },
@@ -8260,7 +8261,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#D7E1E8",
     borderRadius: 10,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: ui.color.surface,
   },
   formSelectButtonOpen: {
     borderColor: "#078F82",
@@ -8276,7 +8277,7 @@ const styles = StyleSheet.create({
   },
   formSelectDescription: {
     marginTop: 2,
-    color: "#64748B",
+    color: ui.color.secondary,
     fontSize: 10,
     lineHeight: 12,
   },
@@ -8291,7 +8292,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#D7E1E8",
     borderRadius: 10,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: ui.color.surface,
   },
   formSelectOption: {
     flexDirection: "row",
@@ -8313,7 +8314,7 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     borderWidth: 1,
     borderColor: "#BFD7D1",
-    backgroundColor: "#FFFFFF",
+    backgroundColor: ui.color.surface,
   },
   formSelectOptionMarkText: {
     color: "#94A3B8",
@@ -8333,7 +8334,7 @@ const styles = StyleSheet.create({
   },
   formSelectOptionDescription: {
     marginTop: 2,
-    color: "#64748B",
+    color: ui.color.secondary,
     fontSize: 10,
     lineHeight: 12,
   },
@@ -8389,7 +8390,7 @@ const styles = StyleSheet.create({
     minWidth: 220,
     padding: 12,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: ui.color.border,
     borderRadius: 10,
     backgroundColor: "#F8FAFC",
   },
@@ -8407,7 +8408,7 @@ const styles = StyleSheet.create({
   },
   reliefScopeText: {
     marginTop: 4,
-    color: "#64748B",
+    color: ui.color.secondary,
     fontSize: 10,
     lineHeight: 14,
   },
@@ -8491,7 +8492,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#D7E1E8",
     borderRadius: 9,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: ui.color.surface,
   },
   directNeedChoiceActive: {
     borderColor: "#078F82",
@@ -8505,10 +8506,10 @@ const styles = StyleSheet.create({
     borderRadius: 9,
     borderWidth: 1,
     borderColor: "#CBD5E1",
-    color: "#64748B",
+    color: ui.color.secondary,
     fontSize: 10,
     fontWeight: "900",
-    backgroundColor: "#FFFFFF",
+    backgroundColor: ui.color.surface,
   },
   directNeedChoiceMarkActive: {
     borderColor: "#078F82",
@@ -8528,7 +8529,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     padding: 10,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: ui.color.border,
     borderRadius: 10,
     backgroundColor: "#F8FAFC",
   },
@@ -8540,7 +8541,7 @@ const styles = StyleSheet.create({
   directSelectedNeedsHint: {
     marginTop: 2,
     marginBottom: 7,
-    color: "#64748B",
+    color: ui.color.secondary,
     fontSize: 10,
     lineHeight: 12,
   },
@@ -8550,7 +8551,7 @@ const styles = StyleSheet.create({
     minWidth: 135,
     padding: 9,
     borderWidth: 1,
-    borderColor: "#e2e8f0",
+    borderColor: ui.color.border,
     borderRadius: 9,
     backgroundColor: "#f8fafc",
   },
@@ -8572,7 +8573,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#dbe3ea",
     borderRadius: 8,
-    backgroundColor: "#ffffff",
+    backgroundColor: ui.color.surface,
     color: "#0f172a",
     fontSize: 11,
     fontWeight: "800",
@@ -8588,7 +8589,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#DDE7E4",
     borderRadius: 11,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: ui.color.surface,
   },
   directReviewHeader: {
     flexDirection: "row",
@@ -8724,7 +8725,7 @@ const styles = StyleSheet.create({
   },
   directActionHint: {
     marginTop: 2,
-    color: "#64748b",
+    color: ui.color.secondary,
     fontSize: 10,
     lineHeight: 13,
   },
@@ -8749,7 +8750,7 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     borderWidth: 1,
     borderColor: "#dbe9e5",
-    backgroundColor: "#ffffff",
+    backgroundColor: ui.color.surface,
   },
   fieldAuthorityTitle: {
     color: "#183448",
@@ -8758,7 +8759,7 @@ const styles = StyleSheet.create({
   },
   fieldAuthorityText: {
     marginTop: 3,
-    color: "#64748b",
+    color: ui.color.secondary,
     fontSize: 10,
     lineHeight: 14,
   },
@@ -8768,7 +8769,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     borderWidth: 1,
     borderColor: "#dfe8e5",
-    backgroundColor: "#ffffff",
+    backgroundColor: ui.color.surface,
   },
   fieldReportTopRow: {
     flexDirection: "row",
@@ -8905,7 +8906,7 @@ const styles = StyleSheet.create({
   },
   needAssessmentHint: {
     marginTop: 4,
-    color: "#64748b",
+    color: ui.color.secondary,
     fontSize: 10,
     lineHeight: 14,
   },
@@ -8951,14 +8952,14 @@ const styles = StyleSheet.create({
     backgroundColor: "#f1f4f7",
   },
   fieldDismissedNoticeText: {
-    color: "#64748b",
+    color: ui.color.secondary,
     fontSize: 10,
     lineHeight: 14,
     fontWeight: "700",
   },
 
   emptyCard: {
-    backgroundColor: "#ffffff",
+    backgroundColor: ui.color.surface,
     borderWidth: 1,
     borderColor: "#dfe7ee",
     borderRadius: 16,
@@ -8978,7 +8979,7 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     marginTop: 4,
-    color: "#64748b",
+    color: ui.color.secondary,
     fontSize: 11,
     textAlign: "center",
   },

@@ -1,0 +1,86 @@
+name: Validate Four-Role VolunServe Desktop + Mobile UI (No Production Deploy)
+on:
+  push:
+    branches: [design/four-role-web-mobile-finish-20261107]
+permissions:
+  contents: read
+jobs:
+  design-review:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      CI: "true"
+      EXPO_NO_TELEMETRY: "1"
+      EXPO_PUBLIC_VOLUNSERVE_STAGING_MODE: "1"
+      EXPO_PUBLIC_STAGING_FIREBASE_API_KEY: "AIzaDevelopmentPlaceholderNotARealFirebaseProjectKey"
+      EXPO_PUBLIC_STAGING_FIREBASE_AUTH_DOMAIN: "volunserve-staging-review.firebaseapp.com"
+      EXPO_PUBLIC_STAGING_FIREBASE_PROJECT_ID: "volunserve-staging-review"
+      EXPO_PUBLIC_STAGING_FIREBASE_STORAGE_BUCKET: "volunserve-staging-review.firebasestorage.app"
+      EXPO_PUBLIC_STAGING_FIREBASE_SENDER_ID: "999999999999"
+      EXPO_PUBLIC_STAGING_FIREBASE_APP_ID: "1:999999999999:web:0000000000000000000000"
+      EXPO_PUBLIC_STAGING_BACKEND_URL: "https://volunserve-staging-api-shell.onrender.com"
+    steps:
+      - name: Checkout exact review head without production submodules
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir source && cd source
+          git init
+          git remote add origin https://github.com/calibosofroyarjan-volunserve/VolunServe.git
+          git fetch --depth=1 --no-recurse-submodules origin "$GITHUB_SHA"
+          git checkout --detach FETCH_HEAD
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: source/package-lock.json
+      - name: Install locked dependencies
+        working-directory: source
+        run: npm ci --no-audit --no-fund
+      - name: Review mode forbids production Firebase, Render and Cloudinary uploads
+        working-directory: source
+        run: |
+          node scripts/test-isolated-staging-config-20261107.cjs
+          node scripts/test-staging-backend-isolation-20261107.cjs
+          node scripts/audit-staging-external-endpoints-20261107.cjs
+          node scripts/require-isolated-preview-build-20261107.cjs
+      - name: Test all four preview roles, module navigation, responsive UI and existing login guards
+        working-directory: source
+        run: |
+          node scripts/test-four-role-responsive-review-20261107.cjs
+          node scripts/test-guest-readonly-preview.cjs
+          node scripts/test-readonly-preview-auth-guard-20261107.cjs
+          node scripts/test-live-controls-consistency-20261107.cjs
+          node scripts/test-portal-resident-volunteer-ui-flow.cjs
+          node scripts/test-admin-navigation-contract.cjs
+      - name: TypeScript check across entire actual application
+        working-directory: source
+        run: npx tsc --noEmit --pretty false
+      - name: Export real Expo web preview only
+        working-directory: source
+        run: npx expo export --platform web
+      - name: Capture desktop and mobile screenshots of all four roles
+        working-directory: source
+        run: |
+          set -euo pipefail
+          mkdir -p reports/ui-screenshots
+          node scripts/serve-four-role-review-20261107.cjs > /tmp/volunserve-static-server.log 2>&1 &
+          serverPid=$!
+          trap 'kill $serverPid || true' EXIT
+          node scripts/screenshot-four-role-design-review-20261107.cjs
+      - name: Share screenshot evidence and actual web preview artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: volunserve-four-role-web-mobile-qa
+          path: source/reports/ui-screenshots
+          if-no-files-found: warn
+          retention-days: 7
+      - name: Package isolated compiled web app - never deploy to production
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: volunserve-four-role-expo-web-build
+          path: source/dist/
+          if-no-files-found: error
+          retention-days: 7

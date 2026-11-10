@@ -1,3 +1,4 @@
+import { liveUi as ui } from "../../constants/volunserveLiveUi";
 import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 import { LinearGradient } from "expo-linear-gradient";
@@ -6070,7 +6071,7 @@ const styles =
 
     safeArea: {
       flex: 1,
-      backgroundColor: "#F6F8F7",
+      backgroundColor: ui.color.canvas,
     },
 
     loadingScreen: {
@@ -6088,8 +6089,7 @@ const styles =
     loadingText: {
       marginTop:
         12,
-      color:
-        "#64748B",
+      color: ui.color.secondary,
       fontWeight:
         "600",
     },
@@ -6129,8 +6129,7 @@ const styles =
         10,
       marginBottom:
         22,
-      color:
-        "#64748B",
+      color: ui.color.secondary,
       lineHeight:
         22,
       textAlign:
@@ -6233,8 +6232,7 @@ const styles =
         "center",
       gap:
         7,
-      backgroundColor:
-        "#FFFFFF",
+      backgroundColor: ui.color.surface,
       borderRadius:
         999,
       paddingHorizontal:
@@ -6401,10 +6399,8 @@ const styles =
         15,
       borderWidth:
         1,
-      borderColor:
-        "#E2E8F0",
-      backgroundColor:
-        "#FFFFFF",
+      borderColor: ui.color.border,
+      backgroundColor: ui.color.surface,
     },
 
     infoCardIcon: {
@@ -6436,8 +6432,7 @@ const styles =
       fontFamily:"AssistanceInter",
       marginTop:
         5,
-      color:
-        "#64748B",
+      color: ui.color.secondary,
       fontSize:
         12,
       lineHeight:
@@ -6535,10 +6530,8 @@ const styles =
         15,
       borderWidth:
         1,
-      borderColor:
-        "#E2E8F0",
-      backgroundColor:
-        "#FFFFFF",
+      borderColor: ui.color.border,
+      backgroundColor: ui.color.surface,
       flexDirection:
         "row",
       alignItems:
@@ -6583,8 +6576,7 @@ const styles =
         5,
       fontSize:
         11,
-      color:
-        "#64748B",
+      color: ui.color.secondary,
       fontWeight:
         "700",
     },
@@ -6623,10 +6615,8 @@ const styles =
         18,
       borderWidth:
         1,
-      borderColor:
-        "#E2E8F0",
-      backgroundColor:
-        "#FFFFFF",
+      borderColor: ui.color.border,
+      backgroundColor: ui.color.surface,
     },
 
     formHeading: {
@@ -6662,8 +6652,7 @@ const styles =
       fontFamily:"AssistanceInter",
       marginTop:
         6,
-      color:
-        "#64748B",
+      color: ui.color.secondary,
       fontSize:
         13,
       lineHeight:
@@ -6703,8 +6692,7 @@ const styles =
         1,
       borderColor:
         "#DFE6EF",
-      backgroundColor:
-        "#FFFFFF",
+      backgroundColor: ui.color.surface,
     },
 
     categoryIcon: {
@@ -6734,8 +6722,7 @@ const styles =
       fontFamily:"AssistanceInter",
       marginTop:
         4,
-      color:
-        "#64748B",
+      color: ui.color.secondary,
       fontSize:
         12,
       lineHeight:
@@ -6771,8 +6758,7 @@ const styles =
         1,
       borderColor:
         "#D3E6DC",
-      backgroundColor:
-        "#FFFFFF",
+      backgroundColor: ui.color.surface,
       paddingHorizontal:
         13,
       color:
@@ -6851,8 +6837,7 @@ const styles =
       fontFamily:"AssistanceInter",
       marginTop:
         3,
-      color:
-        "#64748B",
+      color: ui.color.secondary,
       fontSize:
         10.5,
       lineHeight:
@@ -6952,8 +6937,7 @@ const styles =
         1,
       borderColor:
         "#D5DEE9",
-      backgroundColor:
-        "#FFFFFF",
+      backgroundColor: ui.color.surface,
     },
 
     choiceButtonSelected: {
@@ -7001,8 +6985,7 @@ const styles =
         1,
       borderColor:
         "#D8E0EA",
-      backgroundColor:
-        "#FFFFFF",
+      backgroundColor: ui.color.surface,
     },
 
     situationChipActive: {
@@ -7013,8 +6996,7 @@ const styles =
     },
 
     situationChipText: {
-      color:
-        "#64748B",
+      color: ui.color.secondary,
       fontSize:
         12,
       fontWeight:
@@ -7145,8 +7127,7 @@ const styles =
         13,
       borderWidth:
         1,
-      borderColor:
-        "#E2E8F0",
+      borderColor: ui.color.border,
       backgroundColor:
         "#FAFCFF",
     },
@@ -7213,8 +7194,7 @@ const styles =
         999,
       backgroundColor:
         "#EEF2F7",
-      color:
-        "#64748B",
+      color: ui.color.secondary,
       fontSize:
         9,
       fontWeight:
@@ -7225,8 +7205,7 @@ const styles =
       fontFamily:"AssistanceInter",
       marginTop:
         4,
-      color:
-        "#64748B",
+      color: ui.color.secondary,
       fontSize:
         11,
       lineHeight:
@@ -7376,8 +7355,7 @@ const styles =
         13,
       borderWidth:
         1,
-      borderColor:
-        "#E2E8F0",
+      borderColor: ui.color.border,
       overflow:
         "hidden",
     },
@@ -7389,8 +7367,7 @@ const styles =
         13,
       borderWidth:
         1,
-      borderColor:
-        "#E2E8F0",
+      borderColor: ui.color.border,
       padding:
         16,
       backgroundColor:
@@ -7419,8 +7396,7 @@ const styles =
         160,
       padding:
         13,
-      color:
-        "#64748B",
+      color: ui.color.secondary,
       fontSize:
         11,
       fontWeight:
@@ -7460,8 +7436,7 @@ const styles =
         3,
       marginBottom:
         11,
-      color:
-        "#64748B",
+      color: ui.color.secondary,
       fontSize:
         11,
     },
@@ -7495,8 +7470,7 @@ const styles =
         14,
       borderTopWidth:
         1,
-      borderTopColor:
-        "#E2E8F0",
+      borderTopColor: ui.color.border,
       flexDirection:
         "row",
       gap:
@@ -7515,8 +7489,7 @@ const styles =
     lguLocationReviewText: {
       marginTop:
         3,
-      color:
-        "#64748B",
+      color: ui.color.secondary,
       fontSize:
         11,
       lineHeight:
@@ -7618,8 +7591,7 @@ const styles =
         1,
       borderColor:
         "#CBD5E1",
-      backgroundColor:
-        "#FFFFFF",
+      backgroundColor: ui.color.surface,
       alignItems:
         "center",
       justifyContent:
@@ -7682,8 +7654,7 @@ const styles =
         9,
       maxWidth:
         700,
-      color:
-        "#64748B",
+      color: ui.color.secondary,
       lineHeight:
         21,
       textAlign:
@@ -7709,10 +7680,8 @@ const styles =
         14,
       borderWidth:
         1,
-      borderColor:
-        "#E2E8F0",
-      backgroundColor:
-        "#FFFFFF",
+      borderColor: ui.color.border,
+      backgroundColor: ui.color.surface,
     },
 
     successDivider: {
@@ -7755,10 +7724,8 @@ const styles =
         18,
       borderWidth:
         1,
-      borderColor:
-        "#E2E8F0",
-      backgroundColor:
-        "#FFFFFF",
+      borderColor: ui.color.border,
+      backgroundColor: ui.color.surface,
     },
 
     historyHeader: {
@@ -7785,8 +7752,7 @@ const styles =
     historySubtitle: {
       marginTop:
         5,
-      color:
-        "#64748B",
+      color: ui.color.secondary,
       fontSize:
         12,
       lineHeight:
@@ -7857,8 +7823,7 @@ const styles =
     summaryPillLabel: {
       marginTop:
         2,
-      color:
-        "#64748B",
+      color: ui.color.secondary,
       fontSize:
         10,
       fontWeight:
@@ -7887,10 +7852,8 @@ const styles =
         13,
       borderWidth:
         1,
-      borderColor:
-        "#E2E8F0",
-      backgroundColor:
-        "#FFFFFF",
+      borderColor: ui.color.border,
+      backgroundColor: ui.color.surface,
     },
 
     requestCardIcon: {
@@ -7930,8 +7893,7 @@ const styles =
     requestCardMeta: {
       marginTop:
         3,
-      color:
-        "#64748B",
+      color: ui.color.secondary,
       fontSize:
         10,
     },
@@ -7984,8 +7946,7 @@ const styles =
     emptyText: {
       marginTop:
         5,
-      color:
-        "#64748B",
+      color: ui.color.secondary,
       textAlign:
         "center",
       fontSize:
@@ -8018,8 +7979,7 @@ const styles =
         20,
       overflow:
         "hidden",
-      backgroundColor:
-        "#FFFFFF",
+      backgroundColor: ui.color.surface,
     },
 
     modalHeader: {
@@ -8037,8 +7997,7 @@ const styles =
         16,
       borderBottomWidth:
         1,
-      borderBottomColor:
-        "#E2E8F0",
+      borderBottomColor: ui.color.border,
     },
 
     modalTitle: {
@@ -8055,8 +8014,7 @@ const styles =
     modalReference: {
       marginTop:
         3,
-      color:
-        "#64748B",
+      color: ui.color.secondary,
       fontSize:
         10,
       fontWeight:
@@ -8090,10 +8048,8 @@ const styles =
         14,
       borderWidth:
         1,
-      borderColor:
-        "#E2E8F0",
-      backgroundColor:
-        "#FFFFFF",
+      borderColor: ui.color.border,
+      backgroundColor: ui.color.surface,
       padding:
         16,
     },
@@ -8137,8 +8093,7 @@ const styles =
         2,
       borderColor:
         "#CBD5E1",
-      backgroundColor:
-        "#FFFFFF",
+      backgroundColor: ui.color.surface,
       alignItems:
         "center",
       justifyContent:
@@ -8174,8 +8129,7 @@ const styles =
     },
 
     timelineTitle: {
-      color:
-        "#64748B",
+      color: ui.color.secondary,
       fontSize:
         12,
       fontWeight:
@@ -8261,8 +8215,7 @@ const styles =
     assignedLocationHelper: {
       marginTop:
         3,
-      color:
-        "#64748B",
+      color: ui.color.secondary,
       fontSize:
         10,
       lineHeight:
@@ -8283,8 +8236,7 @@ const styles =
     assignedLocationAddress: {
       marginTop:
         4,
-      color:
-        "#64748B",
+      color: ui.color.secondary,
       fontSize:
         11,
     },
@@ -8324,8 +8276,7 @@ const styles =
     mapFallbackText: {
       marginTop:
         8,
-      color:
-        "#64748B",
+      color: ui.color.secondary,
       textAlign:
         "center",
       fontSize:
@@ -8376,8 +8327,7 @@ const styles =
     locationPendingText: {
       flex:
         1,
-      color:
-        "#64748B",
+      color: ui.color.secondary,
       fontSize:
         11,
       lineHeight:
@@ -8400,8 +8350,7 @@ const styles =
         1,
       borderColor:
         "#CBD5E1",
-      backgroundColor:
-        "#FFFFFF",
+      backgroundColor: ui.color.surface,
       paddingHorizontal:
         13,
       flexDirection:
@@ -8446,8 +8395,7 @@ const styles =
         1,
       borderColor:
         "#CBD5E1",
-      backgroundColor:
-        "#FFFFFF",
+      backgroundColor: ui.color.surface,
       overflow:
         "hidden",
     },
@@ -8493,8 +8441,7 @@ const styles =
     dropdownOptionHelper: {
       marginTop:
         3,
-      color:
-        "#64748B",
+      color: ui.color.secondary,
       fontSize:
         11,
       lineHeight:
@@ -8584,8 +8531,7 @@ const styles =
       fontFamily:"AssistanceInter",
       marginTop:
         3,
-      color:
-        "#64748B",
+      color: ui.color.secondary,
       fontSize:
         11,
       lineHeight:
@@ -8603,8 +8549,7 @@ const styles =
         1,
       borderColor:
         "#C7D2FE",
-      backgroundColor:
-        "#FFFFFF",
+      backgroundColor: ui.color.surface,
       flexDirection:
         "row",
       alignItems:
@@ -8637,12 +8582,10 @@ const styles =
         10,
       borderRadius:
         10,
-      backgroundColor:
-        "#FFFFFF",
+      backgroundColor: ui.color.surface,
       borderWidth:
         1,
-      borderColor:
-        "#E2E8F0",
+      borderColor: ui.color.border,
     },
 
     publicPhotoPreview: {
@@ -8740,8 +8683,7 @@ const styles =
     privateDocumentsText: {
       marginTop:
         2,
-      color:
-        "#64748B",
+      color: ui.color.secondary,
       fontSize:
         10.5,
       lineHeight:
@@ -8792,8 +8734,7 @@ const styles =
     reviewPublicPhotoText: {
       marginTop:
         2,
-      color:
-        "#64748B",
+      color: ui.color.secondary,
       fontSize:
         9.5,
       lineHeight:
@@ -9015,10 +8956,10 @@ const styles =
 
     premiumHero:{minHeight:188,borderRadius:17,flexDirection:"row",alignItems:"center",paddingHorizontal:23,paddingVertical:22,gap:18,borderWidth:1,borderColor:"#D3E8DB",overflow:"hidden"},
     premiumBotanicalLeaf:{position:"absolute",right:-20,bottom:-35,transform:[{rotate:"-25deg"}]},
-    premiumEmblem:{width:110,height:110,borderRadius:25,transform:[{rotate:"-8deg"}],padding:6,backgroundColor:"#FFFFFF",shadowColor:"#04744E",shadowOpacity:0.19,shadowOffset:{width:0,height:6},shadowRadius:13,elevation:3},
+    premiumEmblem:{width:110,height:110,borderRadius:25,transform:[{rotate:"-8deg"}],padding:6,backgroundColor: ui.color.surface,shadowColor:"#04744E",shadowOpacity:0.19,shadowOffset:{width:0,height:6},shadowRadius:13,elevation:3},
     premiumEmblemMobile:{width:62,height:62,borderRadius:15,padding:4},
     premiumEmblemFace:{flex:1,borderRadius:19,alignItems:"center",justifyContent:"center"},
-    premiumEmblemCheck:{position:"absolute",right:6,bottom:6,width:23,height:23,borderRadius:13,backgroundColor:"#FFFFFF",alignItems:"center",justifyContent:"center"},
+    premiumEmblemCheck:{position:"absolute",right:6,bottom:6,width:23,height:23,borderRadius:13,backgroundColor: ui.color.surface,alignItems:"center",justifyContent:"center"},
     premiumHeroCopy:{flex:1,minWidth:0,gap:5},
     premiumHeroCopyMobile:{width:"100%",alignSelf:"stretch",flex:0},
     premiumHeroEyebrow:{fontFamily:"AssistanceInterBold",fontSize:10,color:"#08775D",letterSpacing:1.1},
@@ -9046,7 +8987,7 @@ const styles =
     releaseTitle:{fontFamily:"AssistanceInterBold",fontSize:14,color:"#16483A"},
     releaseDesc:{fontFamily:"AssistanceInter",fontSize:11,color:"#6E887E",lineHeight:17},
     releaseOptions:{flexDirection:"row",flexWrap:"wrap",gap:10},
-    releaseOption:{flex:1,minWidth:170,minHeight:85,flexDirection:"row",gap:9,alignItems:"center",padding:12,borderRadius:12,backgroundColor:"#FFFFFF",borderWidth:1,borderColor:"#D6E7DE"},
+    releaseOption:{flex:1,minWidth:170,minHeight:85,flexDirection:"row",gap:9,alignItems:"center",padding:12,borderRadius:12,backgroundColor: ui.color.surface,borderWidth:1,borderColor:"#D6E7DE"},
     releaseOptionSelected:{backgroundColor:"#E9F9F0",borderColor:"#0C9773"},
     releaseIcon:{width:36,height:36,borderRadius:10,backgroundColor:"#E6F3ED",alignItems:"center",justifyContent:"center"},
     releaseIconActive:{backgroundColor:"#D0F0E0"},

@@ -1,3 +1,4 @@
+import { liveUi as ui } from "../../constants/volunserveLiveUi";
 import { Ionicons } from "@expo/vector-icons";
 import { Redirect, useLocalSearchParams } from "expo-router";
 
@@ -770,7 +771,7 @@ export default function AccountApprovalsRoute() {
 
 const styles =
   StyleSheet.create({
-    residentWorkspace: { backgroundColor: "#FFFFFF", padding: 16, borderRadius: 12, borderWidth: 1, borderColor: "#D9E6DE", width: "100%" },
+    residentWorkspace: { backgroundColor: ui.color.surface, padding: 16, borderRadius: 12, borderWidth: 1, borderColor: "#D9E6DE", width: "100%" },
     residentHeader: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 12 },
     residentEyebrow: { fontSize: 10, color: "#14715B", letterSpacing: 0.7, fontWeight: "700" },
     residentHeading: { fontSize: 19, fontWeight: "800", color: "#173F33", marginTop: 4 },
@@ -794,14 +795,14 @@ const styles =
     residentReactivate: { borderColor: "#86C3A4", backgroundColor: "#EAF7F0" },
     residentReactivateText: { color: "#166B4A" },
     metricsRow: { flexDirection: "row", flexWrap: "wrap", gap: 12, marginBottom: 18 },
-    metricCard: { flexGrow: 1, flexBasis: 210, minWidth: 180, backgroundColor: "#FFFFFF", borderRadius: 15,
+    metricCard: { flexGrow: 1, flexBasis: 210, minWidth: 180, backgroundColor: ui.color.surface, borderRadius: 15,
       borderWidth: 1, borderColor: "#DBE9E0", padding: 18 },
     metricIcon: { width: 42, height: 42, borderRadius: 12, backgroundColor: "#E2F5EB",
       alignItems: "center", justifyContent: "center", marginBottom: 12 },
     metricLabel: { color: "#32594B", fontSize: 12, fontWeight: "800" },
     metricValue: { color: "#124234", fontSize: 28, fontWeight: "900", marginTop: 5 },
     metricCaption: { color: "#698576", fontSize: 11, marginTop: 3 },
-    recordsPanel: { backgroundColor: "#FFFFFF", borderWidth: 1, borderColor: "#D8E7DE",
+    recordsPanel: { backgroundColor: ui.color.surface, borderWidth: 1, borderColor: "#D8E7DE",
       borderRadius: 15, padding: 16, marginBottom: 14 },
     recordsHeading: { flexDirection: "row", alignItems: "center", marginBottom: 15 },
     recordsHeadingCopy: { flex: 1 },
@@ -822,7 +823,7 @@ const styles =
 
     muted: {
       marginTop: 10,
-      color: "#64748B",
+      color: ui.color.secondary,
     },
 
     titleRow: {
@@ -838,19 +839,19 @@ const styles =
       borderRadius: 13,
       alignItems: "center",
       justifyContent: "center",
-      backgroundColor: "#FFFFFF",
+      backgroundColor: ui.color.surface,
       borderWidth: 1,
-      borderColor: "#E2E8F0",
+      borderColor: ui.color.border,
     },
 
     title: {
       fontSize: 24,
       fontWeight: "700",
-      color: "#173D32",
+      color: ui.color.text,
     },
 
     subtitle: {
-      color: "#64748B",
+      color: ui.color.secondary,
       marginTop: 4,
       lineHeight: 19,
     },
@@ -872,11 +873,11 @@ const styles =
 
     reviewSummary: { backgroundColor: "#E9F7EF", borderWidth: 1, borderColor: "#CDE8D9", borderRadius: 11, padding: 12, marginBottom: 12 },
     reviewSummaryText: { color: "#245846", fontSize: 12, fontWeight: "700", lineHeight: 18 },
-    searchWrap: { flexDirection: "row", alignItems: "center", gap: 9, backgroundColor: "#FFFFFF", borderWidth: 1, borderColor: "#D8E5DE", borderRadius: 12, paddingHorizontal: 13, marginBottom: 10 },
-    searchInput: { flex: 1, minHeight: 46, fontSize: 13, color: "#173D32" },
+    searchWrap: { flexDirection: "row", alignItems: "center", gap: 9, backgroundColor: ui.color.surface, borderWidth: 1, borderColor: "#D8E5DE", borderRadius: 12, paddingHorizontal: 13, marginBottom: 10 },
+    searchInput: { flex: 1, minHeight: 46, fontSize: 13, color: ui.color.text },
     approvalEvidenceScroll: { maxHeight: 260, marginTop: 12 },
     approvalEvidence: { backgroundColor: "#F6FBF8", borderColor: "#D9EAE0", borderWidth: 1, borderRadius: 11, padding: 13, marginVertical: 13, gap: 3 },
-    evidenceTitle: { color: "#173D32", fontSize: 14, fontWeight: "900", marginBottom: 5 },
+    evidenceTitle: { color: ui.color.text, fontSize: 14, fontWeight: "900", marginBottom: 5 },
     confirmCheckRow: { flexDirection: "row", alignItems: "flex-start", gap: 10, paddingVertical: 10 },
     confirmCheckText: { flex: 1, color: "#365B4E", fontSize: 12, fontWeight: "700", lineHeight: 18 },
     buttonDisabled: { opacity: 0.48 },
@@ -890,7 +891,7 @@ const styles =
       flex: 1,
       padding: 11,
       borderRadius: 12,
-      backgroundColor: "#FFFFFF",
+      backgroundColor: ui.color.surface,
       alignItems: "center",
       borderWidth: 1,
       borderColor: "#CBD5E1",
@@ -911,7 +912,7 @@ const styles =
     },
 
     emptyCard: {
-      backgroundColor: "#FFFFFF",
+      backgroundColor: ui.color.surface,
       borderRadius: 9,
       padding: 28,
       alignItems: "center",
@@ -924,12 +925,12 @@ const styles =
     },
 
     card: {
-      backgroundColor: "#FFFFFF",
+      backgroundColor: ui.color.surface,
       borderRadius: 14,
       padding: 18,
       marginBottom: 12,
       borderWidth: 1,
-      borderColor: "#E2E8F0",
+      borderColor: ui.color.border,
     },
 
     cardHeader: {
@@ -941,11 +942,11 @@ const styles =
     name: {
       fontSize: 17,
       fontWeight: "900",
-      color: "#173D32",
+      color: ui.color.text,
     },
 
     meta: {
-      color: "#64748B",
+      color: ui.color.secondary,
       marginTop: 3,
     },
 
@@ -1025,7 +1026,7 @@ const styles =
       width: "100%",
       maxHeight: "94%",
       alignSelf: "center",
-      backgroundColor: "#FFFFFF",
+      backgroundColor: ui.color.surface,
       borderRadius: 10,
       padding: 18,
     },
@@ -1033,7 +1034,7 @@ const styles =
     modalTitle: {
       fontSize: 20,
       fontWeight: "900",
-      color: "#173D32",
+      color: ui.color.text,
     },
 
     reasonInput: {

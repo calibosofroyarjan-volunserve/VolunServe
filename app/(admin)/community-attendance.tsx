@@ -1,4 +1,5 @@
-import { getSafeVolunServeBackendBaseUrl } from "../../lib/stagingBackendSafety";
+import { liveUi as ui } from "../../constants/volunserveLiveUi";
+import { getCommunityCertificateBackendBaseUrl, COMMUNITY_CERTIFICATE_MINIMUM_MINUTES } from "../../lib/stagingCertificateBackend";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { Redirect, useRouter, type Href } from "expo-router";
 import {
@@ -84,7 +85,7 @@ type Filter =
 // Render certificate reconciliation (Spark-compatible): authenticated Admin only.
 // This never changes attendance timestamps and must run AFTER a successful
 // Firestore completion/verification transaction, not inside one.
-const CERTIFICATE_BACKEND_URL = getSafeVolunServeBackendBaseUrl();
+const CERTIFICATE_BACKEND_URL = getCommunityCertificateBackendBaseUrl();
 const CERTIFICATE_SYNC_TIMEOUT_MS = 100_000;
 
 type CertificateSyncResult = {
@@ -272,7 +273,7 @@ function verifiedServiceMeetsMinimum(person: Participant): boolean {
   const start = asDate(person.checkedInAt)?.getTime() ?? 0;
   const end = asDate(person.checkedOutAt)?.getTime() ?? 0;
   return person.attendanceVerified === true &&
-    start > 0 && end >= start && end - start >= 30 * 60 * 1000;
+    start > 0 && end >= start && end - start >= COMMUNITY_CERTIFICATE_MINIMUM_MINUTES * 60 * 1000;
 }
 
 function safeProfileImage(value: unknown): string {
@@ -1334,7 +1335,7 @@ export default function CommunityAttendanceAdmin() {
                             <Text style={styles.mobileTimeLabel}>DURATION</Text>
                             <Text style={styles.timeText}>{readableDuration(hoursFor(person))}</Text>
                             {verifiedServiceMeetsMinimum(person) &&
-                              <Text style={styles.mobileDurationEligible}>30m minimum met</Text>}
+                              <Text style={styles.mobileDurationEligible}>{COMMUNITY_CERTIFICATE_MINIMUM_MINUTES}m minimum met</Text>}
                           </View>
                         </View>
                         <View style={styles.mobileRosterActions}>
@@ -1462,7 +1463,7 @@ export default function CommunityAttendanceAdmin() {
               <View style={styles.readinessChip}>
                 <Ionicons name="ribbon-outline" color="#0A806C" size={15} />
                 <Text style={styles.readinessText}>
-                  {serviceMinimumCount} verified with 30+ minutes
+                  {serviceMinimumCount} verified with {COMMUNITY_CERTIFICATE_MINIMUM_MINUTES}+ min
                   {selected.status === "completed" ? " · Eligible for certificate check" : " · Certificate check after completion"}
                 </Text>
               </View>
@@ -1472,7 +1473,7 @@ export default function CommunityAttendanceAdmin() {
                 <Ionicons name="information-circle-outline" size={24} color="#3874CF" />
               </View>
               <Text style={styles.eligibilityText}>
-                Volunteers record their own Time In and Time Out. Admin only reviews and verifies the recorded times; verification does not edit timestamps. Community Event certificates also require event completion and at least 30 minutes of verified service.
+                Volunteers record their own Time In and Time Out. Admin only reviews and verifies the recorded times; verification does not edit timestamps. Community Event certificates also require event completion and at least {COMMUNITY_CERTIFICATE_MINIMUM_MINUTES} min of verified service.
               </Text>
             </View>
           </View>
@@ -1524,7 +1525,7 @@ export default function CommunityAttendanceAdmin() {
 }
 
 const styles = StyleSheet.create({
-  page: {flex: 1, backgroundColor: "#F6F8F7"},
+  page: {flex: 1, backgroundColor: ui.color.canvas},
   scroll: {flex: 1},
   content: {width: "100%", maxWidth: 1560, alignSelf: "center", padding: 16, paddingBottom: 22},
   contentPhone: {padding: 12, paddingBottom: 22},
@@ -1613,7 +1614,7 @@ const styles = StyleSheet.create({
   wideButton: {width: "100%", minHeight: 44},
   primaryButtonText: {color: "#FFFFFF", fontSize: 12, fontWeight: "900"},
   disabled: {opacity: 0.5},
-  outlineButton: {minHeight: 39, paddingHorizontal: 15, paddingVertical: 10, backgroundColor: "#FFFFFF", borderWidth: 1, borderColor: "#A4CFC9", borderRadius: 9, alignItems: "center", justifyContent: "center"},
+  outlineButton: {minHeight: 39, paddingHorizontal: 15, paddingVertical: 10, backgroundColor: ui.color.surface, borderWidth: 1, borderColor: "#A4CFC9", borderRadius: 9, alignItems: "center", justifyContent: "center"},
   outlineText: {fontSize: 12, color: GREEN, fontWeight: "900"},
   buttonRow: {flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 8, justifyContent: "flex-end", marginTop: 11},
   confirmBox: {padding: 13, backgroundColor: "#FFF7EA", borderWidth: 1, borderColor: "#F5DFC0", borderRadius: 9, marginTop: 7},
@@ -1640,7 +1641,7 @@ const styles = StyleSheet.create({
   table: {minWidth: 1100, borderWidth: 1, borderColor: "#E6ECEF", borderRadius: 11, overflow: "hidden"},
   tableHeader: {minHeight: 43, backgroundColor: "#F0F5F8", flexDirection: "row", alignItems: "center", paddingHorizontal: 10, gap: 8},
   tableHeadText: {fontSize: 10.5, fontWeight: "900", color: "#425E78"},
-  tableRow: {minHeight: 70, flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 10, borderTopWidth: 1, borderTopColor: "#ECF0F2", backgroundColor: "#FFFFFF"},
+  tableRow: {minHeight: 70, flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 10, borderTopWidth: 1, borderTopColor: "#ECF0F2", backgroundColor: ui.color.surface},
   tableText: {fontSize: 11, color: "#526D84"},
   colNumber: {width: 21},
   colPerson: {width: 245},
@@ -1667,12 +1668,12 @@ const styles = StyleSheet.create({
   attendancePending: {backgroundColor: "#FFF3DB"},
   attendancePendingText: {color: "#AD7121"},
   actionsCell: {flexDirection: "row", gap: 5, alignItems: "center"},
-  profileOutlineButton: {minHeight: 33, flexDirection: "row", gap: 5, alignItems: "center", justifyContent: "center", borderRadius: 7, borderWidth: 1, borderColor: "#9AD3CB", paddingHorizontal: 9, backgroundColor: "#FFFFFF"},
+  profileOutlineButton: {minHeight: 33, flexDirection: "row", gap: 5, alignItems: "center", justifyContent: "center", borderRadius: 7, borderWidth: 1, borderColor: "#9AD3CB", paddingHorizontal: 9, backgroundColor: ui.color.surface},
   profileOutlineText: {fontSize: 10, fontWeight: "900", color: GREEN},
   rowAction: {minHeight: 33, paddingHorizontal: 9, paddingVertical: 8},
   rowActionText: {fontSize: 10, color: "#FFFFFF", fontWeight: "900"},
   mobileRosterList: {gap: 11},
-  mobileRosterCard: {padding: 13, borderWidth: 1, borderColor: "#E1ECEC", borderRadius: 12, backgroundColor: "#FFFFFF", gap: 13},
+  mobileRosterCard: {padding: 13, borderWidth: 1, borderColor: "#E1ECEC", borderRadius: 12, backgroundColor: ui.color.surface, gap: 13},
   mobileRosterHeading: {flexDirection: "row", alignItems: "flex-start", gap: 9, flexWrap: "wrap"},
   mobileRosterIdentity: {flex: 1, minWidth: 130, paddingTop: 2},
   mobileTimes: {flexDirection: "row", flexWrap: "wrap", gap: 7},

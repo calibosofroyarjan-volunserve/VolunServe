@@ -1,0 +1,21 @@
+name: Smoke Test Staging Community Certificates (NO DEPLOY)
+on:
+  pull_request:
+    branches:
+      - design/consolidated-four-role-desktop-mobile-20261107
+    paths:
+      - "scripts/smoke-staging-certificate-public-20261110.cjs"
+      - ".github/workflows/smoke-staging-certificate-public-20261110.yml"
+permissions:
+  contents: read
+jobs:
+  safe-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Public staging-only GET, CORS OPTIONS, anonymous 401 (no writes)
+        run: node scripts/smoke-staging-certificate-public-20261110.cjs

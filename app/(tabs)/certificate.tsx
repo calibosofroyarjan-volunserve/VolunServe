@@ -1,3 +1,4 @@
+import { liveUi as ui } from "../../constants/volunserveLiveUi";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { useRouter } from "expo-router";
 
@@ -1278,7 +1279,7 @@ const styles =
   StyleSheet.create({
     screen: {
       flex: 1,
-      backgroundColor: "#F6F8F7",
+      backgroundColor: ui.color.canvas,
     },
 
     container: {
@@ -1294,12 +1295,12 @@ const styles =
       alignItems: "center",
       justifyContent:
         "center",
-      backgroundColor: "#F6F8F7",
+      backgroundColor: ui.color.canvas,
       gap: 10,
     },
 
     loadingText: {
-      color: "#64748B",
+      color: ui.color.secondary,
       fontSize: 13,
     },
 
@@ -1310,8 +1311,7 @@ const styles =
       borderColor:
         "#DCE5EA",
       borderRadius: 16,
-      backgroundColor:
-        "#FFFFFF",
+      backgroundColor: ui.color.surface,
     },
 
     centerTitle: {
@@ -1322,7 +1322,7 @@ const styles =
 
     centerText: {
       marginTop: 6,
-      color: "#64748B",
+      color: ui.color.secondary,
       lineHeight: 20,
     },
 
@@ -1339,7 +1339,7 @@ const styles =
 
     title: {
       marginTop: 5,
-      color: "#173D32",
+      color: ui.color.text,
       fontSize: 28,
       lineHeight: 36,
       fontWeight: "700",
@@ -1347,7 +1347,7 @@ const styles =
 
     subtitle: {
       marginTop: 5,
-      color: "#64748B",
+      color: ui.color.secondary,
       fontSize: 13,
       lineHeight: 20,
     },
@@ -1375,8 +1375,7 @@ const styles =
       borderWidth: 1,
       borderColor:
         "#DCE5EA",
-      backgroundColor:
-        "#FFFFFF",
+      backgroundColor: ui.color.surface,
       marginBottom: 18,
     },
 
@@ -1397,7 +1396,7 @@ const styles =
     pendingText: {
       marginTop: 6,
       maxWidth: 680,
-      color: "#64748B",
+      color: ui.color.secondary,
       fontSize: 11.5,
       lineHeight: 18,
     },
@@ -1413,8 +1412,7 @@ const styles =
       borderColor:
         "#B9D7D1",
       borderRadius: 5,
-      backgroundColor:
-        "#FFFFFF",
+      backgroundColor: ui.color.surface,
       overflow: "hidden",
     },
 
@@ -1747,8 +1745,7 @@ const styles =
       borderWidth: 1,
       borderColor:
         "#DCE5EA",
-      backgroundColor:
-        "#FFFFFF",
+      backgroundColor: ui.color.surface,
     },
 
     legacyTitle: {
@@ -1841,10 +1838,10 @@ const styles =
     communitySectionSub: { marginTop: 4, color: "#667F8A", fontSize: 11, lineHeight: 17 },
     communityCount: { width: 34, height: 34, borderRadius: 17, alignItems: "center", justifyContent: "center", backgroundColor: "#E2F5EE" },
     communityCountText: { color: "#078F82", fontWeight: "900", fontSize: 14 },
-    communityEmpty: { backgroundColor: "#FFFFFF", borderWidth: 1, borderColor: "#DDEBE5", borderRadius: 12, padding: 21, marginBottom: 22 },
+    communityEmpty: { backgroundColor: ui.color.surface, borderWidth: 1, borderColor: "#DDEBE5", borderRadius: 12, padding: 21, marginBottom: 22 },
     communityEmptyTitle: { color: "#173747", fontSize: 14, fontWeight: "900" },
     communityEmptyCopy: { color: "#657C89", marginTop: 7, lineHeight: 19, fontSize: 11.5 },
-    communityWrapper: { backgroundColor: "#FFFFFF", borderRadius: 12, borderWidth: 1, borderColor: "#DDEAE3", overflow: "hidden", marginBottom: 20 },
+    communityWrapper: { backgroundColor: ui.color.surface, borderRadius: 12, borderWidth: 1, borderColor: "#DDEAE3", overflow: "hidden", marginBottom: 20 },
     communityPaper: { position: "relative", backgroundColor: "#FFFEF8", padding: 23, minHeight: 475 },
     communityBorderOuter: { position: "absolute", left: 12, right: 12, top: 12, bottom: 12, borderWidth: 2, borderColor: "#078F82", borderRadius: 1 },
     communityBorderInner: { position: "absolute", left: 17, right: 17, top: 17, bottom: 17, borderWidth: 1, borderColor: "#B3D0B8", borderRadius: 1 },
@@ -1868,7 +1865,7 @@ const styles =
     communityIdHelp: { fontSize: 9, color: "#7D958B", marginTop: 4, textAlign: "right" },
     communityFootDetails: { fontSize: 10, color: "#536D77" },
     communityDisclaimer: { marginTop: 2, fontSize: 9, color: "#87948B", lineHeight: 14 },
-    communityActionBar: { backgroundColor: "#FFFFFF", borderTopWidth: 1, borderTopColor: "#E1ECE6", padding: 12, flexDirection: "row", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 9 },
+    communityActionBar: { backgroundColor: ui.color.surface, borderTopWidth: 1, borderTopColor: ui.color.border, padding: 12, flexDirection: "row", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 9 },
     communityState: { fontWeight: "900", fontSize: 10, letterSpacing: 0.5 },
     communityStateIssued: { color: "#087F78" },
     communityStateRevoked: { color: "#B33A3A" },
@@ -1893,7 +1890,7 @@ const styles =
     dashHeroHalo: {position: "absolute", width: 240, height: 170, right: -38, top: 12, backgroundColor: "#E0F3F2", borderTopLeftRadius: 120, borderTopRightRadius: 90},
     dashHeroLeafOne: {position: "absolute", height: 65, width: 37, top: 27, right: 18, transform: [{rotate: "-32deg"}], borderTopLeftRadius: 42, borderBottomRightRadius: 42, backgroundColor: "#4EB6A5"},
     dashHeroLeafTwo: {position: "absolute", height: 53, width: 26, bottom: 3, left: 24, transform: [{rotate: "22deg"}], borderTopRightRadius: 40, borderBottomLeftRadius: 40, backgroundColor: "#9FDBD3"},
-    dashHeroDocument: {position: "absolute", height: 128, width: 158, top: 20, right: 72, borderRadius: 12, borderWidth: 8, borderColor: "#087A90", backgroundColor: "#FFFFFF", transform: [{rotate: "-8deg"}], flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 5, shadowColor: "#0C4853", shadowOpacity: 0.18, shadowRadius: 8, elevation: 3},
+    dashHeroDocument: {position: "absolute", height: 128, width: 158, top: 20, right: 72, borderRadius: 12, borderWidth: 8, borderColor: "#087A90", backgroundColor: ui.color.surface, transform: [{rotate: "-8deg"}], flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 5, shadowColor: "#0C4853", shadowOpacity: 0.18, shadowRadius: 8, elevation: 3},
     dashHeroLogo: {width: 42, height: 42},
     dashHeroLines: {gap: 7},
     dashHeroLine: {height: 5, borderRadius: 4, backgroundColor: "#C7DAE1"},
@@ -1903,7 +1900,7 @@ const styles =
     dashNoticeCopy: {flex: 1, gap: 5},
     dashNoticeTitle: {fontSize: 13, fontWeight: "900", color: "#123C4D", lineHeight: 20},
     dashNoticeBody: {fontSize: 12, color: "#47697C", lineHeight: 18},
-    dashSection: {backgroundColor: "#FFFFFF", borderWidth: 1, borderColor: "#E3EBF1", borderRadius: 18, padding: 17, gap: 16, shadowColor: "#123C4C", shadowOpacity: 0.035, shadowRadius: 12, shadowOffset: {width: 0, height: 4}, elevation: 1},
+    dashSection: {backgroundColor: ui.color.surface, borderWidth: 1, borderColor: "#E3EBF1", borderRadius: 18, padding: 17, gap: 16, shadowColor: "#123C4C", shadowOpacity: 0.035, shadowRadius: 12, shadowOffset: {width: 0, height: 4}, elevation: 1},
     dashSectionHeader: {flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10},
     dashSectionHeaderStack: {alignItems: "flex-start", flexDirection: "column"},
     dashSectionInfo: {flex: 1, minWidth: 0, flexDirection: "row", alignItems: "center", gap: 13},
@@ -1912,7 +1909,7 @@ const styles =
     dashSectionTitle: {fontSize: 18, fontWeight: "900", color: "#12324C"},
     dashSectionDescription: {color: "#58738B", fontSize: 12, lineHeight: 18, marginTop: 5},
     dashSectionControls: {flexDirection: "row", alignItems: "center", gap: 10},
-    dashViewAll: {flexDirection: "row", alignItems: "center", gap: 8, borderWidth: 1, borderColor: "#D0E0E8", borderRadius: 9, paddingHorizontal: 13, paddingVertical: 10, backgroundColor: "#FFFFFF"},
+    dashViewAll: {flexDirection: "row", alignItems: "center", gap: 8, borderWidth: 1, borderColor: "#D0E0E8", borderRadius: 9, paddingHorizontal: 13, paddingVertical: 10, backgroundColor: ui.color.surface},
     dashViewAllText: {fontSize: 11, fontWeight: "800", color: "#164057"},
     dashCount: {height: 38, width: 38, borderRadius: 20, backgroundColor: "#E0F5F0", justifyContent: "center", alignItems: "center"},
     dashCountNumber: {fontSize: 16, fontWeight: "900", color: "#078F82"},
@@ -1921,7 +1918,7 @@ const styles =
     dashEmptyGraphic: {width: 230, height: 74, alignItems: "center", justifyContent: "center", position: "relative", marginBottom: 10},
     dashEmptyCloudLeft: {position: "absolute", width: 135, height: 45, borderTopLeftRadius: 90, borderTopRightRadius: 90, bottom: 0, left: 9, backgroundColor: "#EFF5FA"},
     dashEmptyCloudRight: {position: "absolute", width: 135, height: 48, borderTopLeftRadius: 90, borderTopRightRadius: 90, bottom: 0, right: 9, backgroundColor: "#EAF2F8"},
-    dashEmptyDocument: {height: 66, width: 67, backgroundColor: "#FFFFFF", borderWidth: 2, borderColor: "#B7D3DC", borderRadius: 9, justifyContent: "center", alignItems: "center", shadowColor: "#345566", shadowOpacity: 0.07, shadowRadius: 5},
+    dashEmptyDocument: {height: 66, width: 67, backgroundColor: ui.color.surface, borderWidth: 2, borderColor: "#B7D3DC", borderRadius: 9, justifyContent: "center", alignItems: "center", shadowColor: "#345566", shadowOpacity: 0.07, shadowRadius: 5},
     dashEmptyTitle: {fontSize: 14, fontWeight: "900", color: "#16374F", textAlign: "center"},
     dashEmptyText: {marginTop: 7, fontSize: 12, lineHeight: 20, color: "#58738B", textAlign: "center", maxWidth: 580},
     dashBrowseButton: {marginTop: 17, borderRadius: 9, backgroundColor: "#087F78", minHeight: 37, paddingHorizontal: 16, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8},
@@ -1964,16 +1961,16 @@ const styles =
     dashViewButton: {minHeight: 36, borderRadius: 7, paddingHorizontal: 12, paddingVertical: 9, backgroundColor: "#006474", flexDirection: "row", gap: 7, justifyContent: "center", alignItems: "center"},
     dashViewButtonText: {fontSize: 10.5, fontWeight: "900", color: "#FFFFFF"},
     dashCardActions: {flexDirection: "row", flexWrap: "wrap", gap: 6},
-    dashOutlineButton: {borderWidth: 1, borderColor: "#C9DBE4", borderRadius: 7, minHeight: 34, paddingHorizontal: 10, paddingVertical: 8, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, backgroundColor: "#FFFFFF"},
+    dashOutlineButton: {borderWidth: 1, borderColor: "#C9DBE4", borderRadius: 7, minHeight: 34, paddingHorizontal: 10, paddingVertical: 8, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, backgroundColor: ui.color.surface},
     dashOutlineButtonText: {fontSize: 10, fontWeight: "800", color: "#0B425D"},
     dashModalBackdrop: {flex: 1, backgroundColor: "#061D2BC7", justifyContent: "center", alignItems: "center", padding: 18},
     dashModalPanel: {width: "100%", maxWidth: 750, height: "94%", backgroundColor: "#F4F8FB", borderRadius: 16, overflow: "hidden"},
     dashModalPanelMobile: {height: "100%", borderRadius: 10},
-    dashModalTopbar: {flexDirection: "row", alignItems: "center", gap: 14, paddingHorizontal: 18, paddingVertical: 13, borderBottomWidth: 1, borderBottomColor: "#E2EBEF", backgroundColor: "#FFFFFF"},
+    dashModalTopbar: {flexDirection: "row", alignItems: "center", gap: 14, paddingHorizontal: 18, paddingVertical: 13, borderBottomWidth: 1, borderBottomColor: "#E2EBEF", backgroundColor: ui.color.surface},
     dashModalEyebrow: {fontSize: 9, fontWeight: "900", letterSpacing: 1.2, color: "#078F82"},
     dashModalTitle: {fontSize: 17, fontWeight: "900", color: "#16384B", marginTop: 4},
     dashModalClose: {width: 36, height: 36, borderRadius: 18, justifyContent: "center", alignItems: "center", backgroundColor: "#EFF3F5"},
     dashModalBody: {flex: 1},
     dashModalScroll: {paddingVertical: 20, paddingHorizontal: 14, alignItems: "stretch"},
-    dashModalFooter: {padding: 12, borderTopWidth: 1, borderTopColor: "#DFE8EE", flexDirection: "row", justifyContent: "flex-end", gap: 9, flexWrap: "wrap", backgroundColor: "#FFFFFF"},
+    dashModalFooter: {padding: 12, borderTopWidth: 1, borderTopColor: "#DFE8EE", flexDirection: "row", justifyContent: "flex-end", gap: 9, flexWrap: "wrap", backgroundColor: ui.color.surface},
   });

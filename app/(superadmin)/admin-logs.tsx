@@ -1,3 +1,4 @@
+import { liveUi as ui } from "../../constants/volunserveLiveUi";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { collection, onSnapshot, type Timestamp } from "firebase/firestore";
@@ -156,7 +157,7 @@ export default function AdminLogs() {
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: "#F6F8F7" },
+  screen: { flex: 1, backgroundColor: ui.color.canvas },
   container: { width: "100%", maxWidth: 1180, alignSelf: "center", padding: 22, paddingBottom: 60 },
   center: { flex: 1, alignItems: "center", justifyContent: "center", gap: 12 },
   denied: { fontWeight: "700", color: "#475569", textAlign: "center" },
@@ -166,19 +167,19 @@ const styles = StyleSheet.create({
   subtitle: { fontSize: 12, color: "#657A80", marginTop: 4, lineHeight: 18 },
   back: { flexDirection: "row", alignItems: "center", gap: 8, borderRadius: 10, backgroundColor: "#E2F2ED", padding: 12 },
   backText: { color: "#086F55", fontWeight: "800" },
-  summary: { flexDirection: "row", alignItems: "center", gap: 12, padding: 18, borderRadius: 16, backgroundColor: "#FFFFFF", borderWidth: 1, borderColor: "#DDEAE7", marginBottom: 14 },
+  summary: { flexDirection: "row", alignItems: "center", gap: 12, padding: 18, borderRadius: 16, backgroundColor: ui.color.surface, borderWidth: 1, borderColor: "#DDEAE7", marginBottom: 14 },
   summaryTitle: { color: "#183C33", fontWeight: "800", fontSize: 15 },
-  searchRow: { flexDirection: "row", alignItems: "center", backgroundColor: "#FFFFFF", borderWidth: 1, borderColor: "#DDEAE7", paddingHorizontal: 14, borderRadius: 12, marginBottom: 14 },
+  searchRow: { flexDirection: "row", alignItems: "center", backgroundColor: ui.color.surface, borderWidth: 1, borderColor: "#DDEAE7", paddingHorizontal: 14, borderRadius: 12, marginBottom: 14 },
   searchInput: { flex: 1, paddingVertical: 12, paddingHorizontal: 9, minWidth: 0, color: "#173B32" },
   error: { backgroundColor: "#FEF2F2", padding: 12, marginBottom: 10, borderRadius: 9 },
   errorText: { color: "#B91C1C", fontSize: 12 },
   empty: { padding: 35, alignItems: "center", gap: 10 },
-  emptyText: { color: "#64748B", textAlign: "center" },
-  event: { backgroundColor: "#FFFFFF", borderWidth: 1, borderColor: "#DDEAE7", borderRadius: 14, marginBottom: 10, padding: 18 },
+  emptyText: { color: ui.color.secondary, textAlign: "center" },
+  event: { backgroundColor: ui.color.surface, borderWidth: 1, borderColor: "#DDEAE7", borderRadius: 14, marginBottom: 10, padding: 18 },
   eventHeader: { flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between", gap: 10, marginBottom: 8 },
   action: { color: "#087657", fontSize: 14, fontWeight: "900", flexShrink: 1 },
-  date: { color: "#64748B", fontSize: 11 },
+  date: { color: ui.color.secondary, fontSize: 11 },
   description: { color: "#243C36", fontSize: 13, lineHeight: 19, marginBottom: 8 },
-  meta: { color: "#64748B", fontSize: 12, marginTop: 3 },
+  meta: { color: ui.color.secondary, fontSize: 12, marginTop: 3 },
   source: { color: "#819995", fontSize: 10, marginTop: 9 },
 });

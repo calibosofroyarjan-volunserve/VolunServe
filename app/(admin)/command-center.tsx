@@ -28,6 +28,7 @@ import DashboardPendingIdentityReviews from "../../components/admin/DashboardPen
 import DashboardRecentActivities from "../../components/admin/DashboardRecentActivities";
 import { ResidentAccountsPanel } from "./account-approvals";
 import ListPagination from "../../components/ui/ListPagination";
+import { liveUi as ui } from "../../constants/volunserveLiveUi";
 import { db } from "../../lib/firebase";
 import { isApprovedProfile } from "../../lib/firebaseAuth";
 import { useUserSession } from "../../lib/useUserSession";
@@ -546,30 +547,30 @@ const styles =
   StyleSheet.create({
     workspaceTabs: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 5,
       borderBottomWidth: 1, borderBottomColor: "#DDE8E1", marginBottom: 10 },
-    workspaceTab: { flexGrow: 1, minHeight: 43, flexDirection: "row", alignItems: "center",
+    workspaceTab: { flexGrow: 1, minHeight: ui.minTap, flexDirection: "row", alignItems: "center",
       justifyContent: "center", gap: 7, paddingHorizontal: 11, paddingVertical: 10,
       borderBottomWidth: 2, borderBottomColor: "transparent" },
-    workspaceTabActive: { borderBottomColor: "#167456", backgroundColor: "#EAF4ED", borderTopLeftRadius: 8, borderTopRightRadius: 8 },
+    workspaceTabActive: { borderBottomColor: ui.color.primary, backgroundColor: ui.color.primarySoft, borderTopLeftRadius: 8, borderTopRightRadius: 8 },
     workspaceTabText: { fontSize: 12, color: "#61776B", fontWeight: "600" },
-    workspaceTabTextActive: { color: "#135E48", fontWeight: "800" },
+    workspaceTabTextActive: { color: ui.color.primary, fontWeight: "700" },
     // Xacton-inspired clarity: restrained KPI cards below one evergreen hero.
     kpiGrid: {flexDirection:"row",flexWrap:"wrap",gap:9,marginBottom:9},
     kpiGridCompact: {gap:9},
-    kpiCard: {flex:1,minWidth:165,backgroundColor:"#FFFFFF",borderRadius:12,
-      padding:12,borderWidth:1,borderColor:"#D9E7DF"},
+    kpiCard: {flex:1,minWidth:165,backgroundColor:ui.color.surface,borderRadius:ui.radius.card,
+      padding:16,borderWidth:1,borderColor:ui.color.border},
     kpiCardCompact: {minWidth:136,padding:13},
-    kpiCardFeatured: {backgroundColor:"#087B60",borderColor:"#087B60"},
+    kpiCardFeatured: {backgroundColor:ui.color.primary,borderColor:ui.color.primary},
     kpiCardHeader: {flexDirection:"row",justifyContent:"space-between",alignItems:"flex-start",gap:8},
-    kpiCardLabel: {fontSize:11,fontWeight:"700",color:"#688073",flex:1,lineHeight:16},
-    kpiCardValue: {fontSize:25,fontWeight:"800",color:"#164535",marginTop:5,fontVariant:["tabular-nums"]},
+    kpiCardLabel: {fontSize:12,fontWeight:"600",color:ui.color.secondary,flex:1,lineHeight:16},
+    kpiCardValue: {fontSize:25,fontWeight:"700",color:ui.color.text,marginTop:5,fontVariant:["tabular-nums"]},
     kpiCardFoot: {flexDirection:"row",justifyContent:"space-between",gap:7,alignItems:"center",marginTop:5},
-    kpiCardHint: {flex:1,fontSize:10.5,color:"#829B8E"},
+    kpiCardHint: {flex:1,fontSize:12,color:ui.color.secondary},
     kpiFeaturedText: {color:"#FFFFFF"},
     kpiFeaturedHint: {color:"#C5EDDF"},
     // VolunServe identity: one rich evergreen masthead, not a field of cards.
     premiumHero: {
-      overflow: "hidden", position: "relative", backgroundColor: "#103E33",
-      borderRadius: 11, paddingHorizontal: 20, paddingTop: 13, paddingBottom: 10,
+      overflow: "hidden", position: "relative", backgroundColor: ui.color.sidebar,
+      borderRadius: ui.radius.card, paddingHorizontal: 20, paddingTop: 13, paddingBottom: 10,
       marginBottom: 10, borderWidth: 1, borderColor: "#235D4E",
     },
     heroOrbLarge: {
@@ -600,17 +601,17 @@ const styles =
     metricItemDivider: { borderLeftWidth: 1, borderLeftColor: "rgba(204,238,217,0.18)" },
     sectionEyebrow: { flexDirection: "row", alignItems: "center", gap: 9, marginBottom: 9 },
     sectionEyebrowLine: { height: 2, width: 21, backgroundColor: "#3C9072" },
-    sectionEyebrowText: { fontSize: 10, fontWeight: "800", color: "#53836D", letterSpacing: 1.0 },
+    sectionEyebrowText: { fontSize: 11, fontWeight: "700", color: ui.color.primary, letterSpacing: 1.0 },
     chartHeadingAccent: { width: 34, height: 3, borderRadius: 2, backgroundColor: "#2F8468", marginBottom: 11 },
     overviewEyebrow: { flexDirection: "row", alignItems: "center", gap: 7, paddingBottom: 13 },
     overviewEyebrowDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: "#23765F" },
     overviewColumns: { flexDirection: "row", gap: 12, alignItems: "flex-start", marginBottom: 6 },
     overviewColumnsStack: { flexDirection: "column", gap: 10 },
-    overviewPrimary: { flex: 1, minWidth: 0, padding: 13, borderRadius: 11, borderWidth: 1, borderColor: "#DFE9E1", backgroundColor: "#FFFFFF" },
+    overviewPrimary: { flex: 1, minWidth: 0, padding: 17, borderRadius: ui.radius.card, borderWidth: 1, borderColor: ui.color.border, backgroundColor: ui.color.surface },
     overviewSecondary: { flex: 1, minWidth: 0 },
     overviewFullWidth: { flex: 0, width: "100%" },
     overviewSectionHeader: { marginBottom: 10 },
-    overviewSectionSubtitle: { color: "#6C8076", fontSize: 11.5, lineHeight: 17, marginTop: 3 },
+    overviewSectionSubtitle: { color: ui.color.secondary, fontSize: 12, lineHeight: 18, marginTop: 3 },
     overviewAction: {
       flexDirection: "row", gap: 10, alignItems: "center", paddingVertical: 8, paddingHorizontal: 2,
       borderBottomWidth: 1, borderColor: "#EDF1ED", minHeight: 49,
@@ -618,7 +619,7 @@ const styles =
     overviewActionIcon: { width: 32, height: 32, borderRadius: 8, backgroundColor: "#EAF4ED", alignItems: "center", justifyContent: "center" },
     overviewActionContent: { flex: 1, minWidth: 0 },
     overviewActionTitle: { fontSize: 12.5, fontWeight: "700", color: "#173E31" },
-    overviewActionDetail: { fontSize: 11, lineHeight: 16, color: "#708579", marginTop: 2 },
+    overviewActionDetail: { fontSize: 12, lineHeight: 18, color: ui.color.secondary, marginTop: 2 },
     metricItemCritical: {},
     metricItemValueCritical: { color: "#EBC18B" },
     overline: {
@@ -699,17 +700,18 @@ const styles =
     },
 
     title: {
-      color: "#173D32",
-      fontSize: 30,
+      color: ui.color.text,
+      fontSize: ui.type.page.fontSize,
+      lineHeight: ui.type.page.lineHeight,
       fontWeight: "700",
       letterSpacing: -0.5,
     },
 
     subtitle: {
       marginTop: 5,
-      color: "#64748B",
+      color: ui.color.secondary,
       fontSize: 13,
-      lineHeight: 19,
+      lineHeight: 20,
     },
 
     adminBadge: {
@@ -727,9 +729,9 @@ const styles =
     },
 
     adminBadgeText: {
-      color: "#0F766E",
+      color: ui.color.primary,
       fontSize: 11,
-      fontWeight: "900",
+      fontWeight: "700",
       letterSpacing: 0.5,
     },
 
@@ -822,14 +824,14 @@ const styles =
     },
 
     moduleCard: {
-      minHeight: 196,
+      minHeight: 186,
       padding: 18,
-      borderRadius: 15,
+      borderRadius: ui.radius.card,
       backgroundColor:
-        "#FFFFFF",
+        ui.color.surface,
       borderWidth: 1,
       borderColor:
-        "#DCEAE8",
+        ui.color.border,
     },
 
     moduleTop: {
