@@ -71,7 +71,9 @@ export const TEMP_MAIL_ORG_PUBLIC_ALIASES = [
 ] as const;
 
 export const KNOWN_DISPOSABLE_EMAIL_DOMAINS = new Set([
-  "en2ch.com", "en2ch.co", "emailkeep.com", "mailinator.com", "yopmail.com", "guerrillamail.com", "guerrillamailblock.com",
+  // User-observed temporary-mail domain on the public Signup page (2026-11-11).
+  // Block this exact .co domain; do NOT categorically block legitimate .co domains.
+  "en2ch.com", "en2ch.co", "ruutukf.co", "emailkeep.com", "mailinator.com", "yopmail.com", "guerrillamail.com", "guerrillamailblock.com",
   "sharklasers.com", "10minutemail.com", "temp-mail.org", "tempmail.com",
   "tempmail.net", "trashmail.com", "dispostable.com", "getnada.com",
   "maildrop.cc", "minuteinbox.com", "mohmal.com", "emailondeck.com",

@@ -1,42 +1,21 @@
-name: Verify Reconciled Source vs CURRENT Hosting (NO DEPLOY)
+# Fail closed when the protected GitHub source and deployed website have drifted.
+# The former one-time 847afced reconciliation check is now a repeatable PR gate.
+name: Verify Protected PR vs Current Hosting (NO DEPLOY)
 on:
-  push:
-    branches: [reconcile/live-protected-with-current-hosting-20261111]
   pull_request:
     branches: [live-protected]
 permissions:
   contents: read
 jobs:
-  source-vs-live:
+  current-live-guard:
     runs-on: ubuntu-latest
     timeout-minutes: 12
-    env:
-      EXPECTED_DEPLOYED_SHA: 847afced7da44ce4b2890402a19ee6faf74525bd
-      OLD_PROTECTED_SHA: 5db5c53e48f4130f37d7b4c283995d1dca704c70
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
           submodules: false
-      - name: Fail closed if published production marker is stale or unknown
-        shell: bash
-        run: |
-          node <<'NODE'
-          "use strict";
-          const assert=require("node:assert/strict");
-          (async()=>{
-            const r=await fetch("https://volunserve.com/volunserve-release.json",
-              {headers:{"Cache-Control":"no-cache"},signal:AbortSignal.timeout(15000)});
-            assert.equal(r.status,200,"Production release marker is unavailable");
-            const data=await r.json();
-            assert.equal(data.app,"VolunServe");
-            assert.equal(data.firebaseProject,"volunserve-3aa5b");
-            assert.equal(data.revision,process.env.EXPECTED_DEPLOYED_SHA,
-              "BLOCKED: production Hosting has changed; rebase live-derived reconciliation");
-            console.log("PASS production Hosting is still at verified web source "+data.revision);
-          })().catch(e=>{console.error(e);process.exitCode=1});
-          NODE
-      - name: Verify both histories, web parity, protected services and release config
+      - name: Validate live release marker and strictly scoped source changes
         shell: bash
         run: |
           node <<'NODE'
@@ -44,32 +23,51 @@ jobs:
           const assert=require("node:assert/strict");
           const cp=require("node:child_process");
           const git=(...args)=>cp.execFileSync("git",args,{encoding:"utf8"}).trim();
-          const old=process.env.OLD_PROTECTED_SHA,site=process.env.EXPECTED_DEPLOYED_SHA;
-          for(const parent of [old,site])cp.execFileSync("git",["merge-base","--is-ancestor",parent,"HEAD"]);
-          const changed=(base)=>git("diff","--name-only",base,"HEAD").split("\n").filter(Boolean);
-          const web=/^(app|components|assets|constants|hooks|lib|services|utils)\//;
-          const webDelta=changed(site).filter(path=>web.test(path)).sort();
-          assert.deepEqual(webDelta,["lib/firebase.ts"],
-            "BLOCKED: another live website module differs from published source");
-          const preservedPrefixes=/^(backend|functions)\//;
-          const protectedDelta=changed(old);
-          assert.deepEqual(protectedDelta.filter(path=>preservedPrefixes.test(path)),[],
-            "BLOCKED: Render backend or Firebase Functions diverged");
-          for(const file of ["package.json","package-lock.json","app.json","firebase.json",
-              ".firebaserc","tsconfig.json"]){
-            assert.equal(git("rev-parse","HEAD:"+file),git("rev-parse",site+":"+file),
-              "BLOCKED: Hosting build configuration changed: "+file);
-          }
-          for(const file of ["storage.rules","scripts/guard-live-protected-release.cjs",
-            ".github/workflows/auto-publish-protected-live-hosting.yml",
-            ".github/workflows/release-live-protected-hosting.yml"]){
-            assert.equal(git("rev-parse","HEAD:"+file),git("rev-parse",old+":"+file),
-              "BLOCKED: protected safety policy changed: "+file);
-          }
-          assert.equal(git("rev-parse","HEAD:lib/firebase.ts"),git("rev-parse",old+":lib/firebase.ts"),
-            "BLOCKED: protected staging-vs-production Firebase isolation guard was changed");
-          console.log("PASS: website matches live, except explicitly preserved protected Firebase isolation guard");
-          console.log("PASS: backend, Functions, release guard, build config and both histories are preserved");
+          const liveBase=git("rev-parse","origin/live-protected");
+          const commit=git("rev-parse","HEAD");
+          const current=git("merge-base",liveBase,commit);
+          assert.equal(current,liveBase,"BLOCKED: PR is not descended from protected HEAD");
+          function blob(ref,path){return git("rev-parse",ref+":"+path);}
+          (async()=>{
+            const response=await fetch("https://volunserve.com/volunserve-release.json",{
+              headers:{"Cache-Control":"no-cache"},
+              signal:AbortSignal.timeout(15000)
+            });
+            assert.equal(response.status,200,"BLOCKED: Hosting release marker unavailable");
+            const marker=await response.json();
+            assert.equal(marker.app,"VolunServe");
+            assert.equal(marker.firebaseProject,"volunserve-3aa5b");
+            assert.equal(marker.revision,liveBase,
+              "BLOCKED: protected base and production differ; reconcile FIRST");
+            const text=git("diff","--name-status","--no-renames",liveBase,commit);
+            const entries=text.split("\n").filter(Boolean).map(row=>row.split("\t"));
+            assert(entries.length>0,"BLOCKED: empty PR");
+            for(const [status,path] of entries){
+              assert(["A","M"].includes(status),"BLOCKED: destructive source change "+path);
+              const web=/^(app|components|assets|constants|hooks|lib|services|utils)\//.test(path);
+              const test=/^scripts\/test-[\w-]+\.cjs$/.test(path);
+              // Opt-in only; never allow Functions index, exports or deployment config.
+              const stagedIdentity=path==="functions/registrationEmailScreening.js";
+              // This workflow may only change under reviewed PR, not via auto deploy.
+              const self=path===".github/workflows/verify-reconciled-hosting-source-no-deploy-20261111.yml";
+              assert(web||test||stagedIdentity||self,
+                "BLOCKED: backend, Firebase policy, Hosting config, workflow or unknown path "+path);
+            }
+            for(const path of [
+              "package.json","package-lock.json","app.json","firebase.json",
+              ".firebaserc","tsconfig.json","firestore.rules","storage.rules",
+              "functions/index.js","functions/package.json",
+              "scripts/guard-live-protected-release.cjs",
+              ".github/workflows/auto-publish-protected-live-hosting.yml",
+              ".github/workflows/release-live-protected-hosting.yml"
+            ]) {
+              assert.equal(blob(commit,path),blob(liveBase,path),
+                "BLOCKED: protected release or security configuration drift: "+path);
+            }
+            assert.equal(blob(commit,"lib/firebase.ts"),blob(liveBase,"lib/firebase.ts"),
+              "BLOCKED: production/staging Firebase Auth isolation changed");
+            console.log("PASS production Hosting marker matches protected branch "+liveBase);
+            console.log("PASS "+entries.length+" approved web/test/staged-screening-only paths");
+            console.log("NO DEPLOY: Hosting, Firestore, Functions and Render remain unchanged");
+          })().catch(err=>{console.error(err);process.exitCode=1});
           NODE
-      - name: Explicitly NO deploy
-        run: echo 'All checks read-only — no secrets, credentials or deploy command'
