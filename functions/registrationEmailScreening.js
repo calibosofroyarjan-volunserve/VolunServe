@@ -31,9 +31,6 @@ function classifyRegistrationEmail(email) {
   const at = normalized.lastIndexOf("@");
   const local = normalized.slice(0, at);
   const domain = normalized.slice(at + 1);
-  // Mirror the client policy in the opt-in before-create handler: final .co TLD only.
-  // Valid .co.uk and .co.ph addresses do not match this suffix.
-  if (domain.endsWith(".co")) return {allowed: false, reason: "blocked_tld_co"};
   // Block Gmail +tags, which point to the same underlying inbox and are
   // often used to register many accounts. Ordinary Gmail stays accepted.
   if ((domain === "gmail.com" || domain === "googlemail.com") && local.includes("+")) {
@@ -44,6 +41,9 @@ function classifyRegistrationEmail(email) {
   if (Object.prototype.hasOwnProperty.call(providerTypos, domain)) {
     return {allowed: false, reason: "provider_typo"};
   }
+  // Mirror the client policy in the opt-in before-create handler: final .co TLD only.
+  // Valid .co.uk and .co.ph addresses do not match this suffix.
+  if (domain.endsWith(".co")) return {allowed: false, reason: "blocked_tld_co"};
   const pieces = domain.split(".");
   for (let i = 0; i < pieces.length - 1; i += 1) {
     if (domains.has(pieces.slice(i).join("."))) {
