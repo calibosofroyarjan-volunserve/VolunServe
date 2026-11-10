@@ -1,0 +1,27 @@
+name: Staging Certificate Review Origin Guard (NO DEPLOY)
+on:
+  pull_request:
+    branches:
+      - fix/identity-full-hardening-live-base-20261107
+    paths:
+      - "backend/server.js"
+      - "backend/test-stagingIsolation.js"
+      - ".github/workflows/review-staging-certificate-cors-20261110.yml"
+permissions:
+  contents: read
+jobs:
+  staging-cors:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - run: npm ci --no-audit --no-fund
+      - run: npm run check
