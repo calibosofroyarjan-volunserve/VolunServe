@@ -92,6 +92,8 @@ function fixture(minutes, uid = "test-uid", eventId = "test-event") {
 function allowTest(fn) {
   const previousEvents = process.env.VOLUNSERVE_CERT_TEST_EVENT_IDS;
   const previousVolunteers = process.env.VOLUNSERVE_CERT_TEST_VOLUNTEER_UIDS;
+  const previousEnabled = process.env.VOLUNSERVE_CERT_TEST_OVERRIDE_ENABLED;
+  process.env.VOLUNSERVE_CERT_TEST_OVERRIDE_ENABLED = "true";
   process.env.VOLUNSERVE_CERT_TEST_EVENT_IDS = "test-event";
   process.env.VOLUNSERVE_CERT_TEST_VOLUNTEER_UIDS = "test-uid";
   return Promise.resolve().then(fn).finally(() => {
@@ -99,6 +101,8 @@ function allowTest(fn) {
     else process.env.VOLUNSERVE_CERT_TEST_EVENT_IDS = previousEvents;
     if (previousVolunteers === undefined) delete process.env.VOLUNSERVE_CERT_TEST_VOLUNTEER_UIDS;
     else process.env.VOLUNSERVE_CERT_TEST_VOLUNTEER_UIDS = previousVolunteers;
+    if (previousEnabled === undefined) delete process.env.VOLUNSERVE_CERT_TEST_OVERRIDE_ENABLED;
+    else process.env.VOLUNSERVE_CERT_TEST_OVERRIDE_ENABLED = previousEnabled;
   });
 }
 
