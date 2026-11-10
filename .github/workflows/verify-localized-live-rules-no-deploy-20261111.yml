@@ -1,0 +1,65 @@
+name: Verify Localized LIVE-derived Firestore Rules (NO DEPLOY)
+on:
+  push:
+    branches:
+      - review/compiled-size-localize-scoped-rules-20261111
+  pull_request:
+    branches:
+      - review/exact-active-firebase-rules-security-20261111
+permissions:
+  contents: read
+jobs:
+  no-deploy-emulator:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Verify exact function localization and preserve all existing Rules
+        run: node scripts/test-localized-live-rules-provenance-20261111.cjs
+      - name: Install locked project dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Reproduce LGU, emergency and donation permissions on original live-derived Rules
+        run: |
+          set -euo pipefail
+          cp firestore.rules "$RUNNER_TEMP/localized-review.rules"
+          trap 'cp "$RUNNER_TEMP/localized-review.rules" firestore.rules' EXIT
+          git show 1d244dc31ecd997497dfa15df7b4b6acef996b5c:firestore.rules > firestore.rules
+          npx firebase-tools emulators:exec --only firestore --project demo-volunserve-original-lgu "node scripts/test-lgu-admin-rules.cjs"
+          npx firebase-tools emulators:exec --only firestore --project demo-volunserve-original-emergency "node scripts/test-live-emergency-map-rules.cjs"
+          npx firebase-tools emulators:exec --only firestore --project demo-volunserve-original-donations "node scripts/test-donation-lgu-role-isolation.cjs"
+          cp "$RUNNER_TEMP/localized-review.rules" firestore.rules
+          trap - EXIT
+      - name: Firestore direct-SDK new signup and verified email abuse tests
+        run: |
+          npx firebase-tools emulators:exec --only firestore --project demo-volunserve-optimized-signup "node scripts/test-staged-signup-provider-firestore-rules.cjs"
+          npx firebase-tools emulators:exec --only firestore --project demo-volunserve-optimized-verified "node scripts/test-verified-community-registration-rules.cjs"
+          npx firebase-tools emulators:exec --only firestore --project demo-volunserve-optimized-existing "node scripts/test-existing-account-compatibility.cjs"
+      - name: Localized account/identity and approved staff permissions
+        run: |
+          node --test scripts/test-resident-field-validation.cjs
+          npx firebase-tools emulators:exec --only firestore --project demo-volunserve-optimized-lgu-admin "node scripts/test-lgu-admin-rules.cjs"
+          npx firebase-tools emulators:exec --only firestore --project demo-volunserve-optimized-staff-scope "node scripts/test-localized-staff-rules-emulator.cjs"
+      - name: Emergency, volunteer invitation and community events regression
+        run: |
+          npx firebase-tools emulators:exec --only firestore --project demo-volunserve-optimized-emergency "node scripts/test-live-emergency-map-rules.cjs"
+          npx firebase-tools emulators:exec --only firestore --project demo-volunserve-optimized-invitation "node scripts/test-preserved-volunteer-invitation-rules.cjs"
+          npx firebase-tools emulators:exec --only firestore --project demo-volunserve-optimized-community-events "node scripts/test-community-events-rules.cjs"
+      - name: Donations, role isolation and volunteer account regression
+        run: |
+          npx firebase-tools emulators:exec --only firestore --project demo-volunserve-optimized-donations "node scripts/test-donation-lgu-role-isolation.cjs"
+          npx firebase-tools emulators:exec --only firestore --project demo-volunserve-optimized-admin-volunteer "node scripts/test-admin-volunteer-firestore.cjs"
+      - name: Final no-deploy marker
+        run: |
+          echo 'NO DEPLOY: NO production Firebase credentials, Rules release, Auth, Hosting or Render changes'
+          echo 'Source localization may lower compiled executable size but this requires independent production verification'

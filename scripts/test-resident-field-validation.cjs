@@ -100,9 +100,14 @@ test("Firestore Signup Rules accept exactly official SJDM barangays and occupati
     // permissions solely to satisfy a source-text assertion.
     const strictMarker=field+" is string && "+field+".matches('";
     const directMarker=field+".matches('";
-    const originalProductionCandidateHash=
-      require("node:crypto").createHash("sha256").update(rules).digest("hex")
-      === "672379f29797c323242549038ae3e3cc0985739a2c99c074c087ea07c44de13c";
+    // Permit ONLY exact, SHA-pinned source snapshots that were separately
+    // proven equivalent to active production, including helper-scope moves.
+    const reviewedCandidateHashes=new Set([
+      "672379f29797c323242549038ae3e3cc0985739a2c99c074c087ea07c44de13c",
+      "f35b59d4c7cca0b16b72cd5c4c86fb9671ea044cea28efbd997b4553109dbcd1"
+    ]);
+    const originalProductionCandidateHash=reviewedCandidateHashes.has(
+      require("node:crypto").createHash("sha256").update(rules).digest("hex"));
     const marker=block.includes(strictMarker)?strictMarker:
       (originalProductionCandidateHash?directMarker:strictMarker);
     const begin=block.indexOf(marker);

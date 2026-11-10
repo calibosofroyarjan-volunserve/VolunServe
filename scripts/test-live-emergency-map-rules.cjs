@@ -45,9 +45,9 @@ async function main() {
     await env.clearFirestore();
     await env.withSecurityRulesDisabled(async ctx => {
       const db = ctx.firestore();
-      await db.doc("users/" + ADMIN).set({ uid: ADMIN, role: "admin", status: "approved" });
+      await db.doc("users/" + ADMIN).set({ uid: ADMIN, email: "admin@city.gov.ph", role: "admin", status: "approved" });
       await db.doc("users/" + RESIDENT).set({
-        uid: RESIDENT, role: "resident", status: "approved",
+        uid: RESIDENT, email: "resident@yahoo.com", role: "resident", status: "approved",
         residentAccess: true, activeMode: "resident", identityVerified: true,
       });
       await db.doc("disasterCases/" + CASE).set({
@@ -56,9 +56,19 @@ async function main() {
         longitude: 121.04,
       });
     });
-    const adm = env.authenticatedContext(ADMIN).firestore();
-    const res = env.authenticatedContext(RESIDENT).firestore();
+    // Synthetic sessions must satisfy live approved(): verified email token
+    // and matching Resident profile email; no production identities are used.
+    const adm = env.authenticatedContext(ADMIN,
+      {email:"admin@city.gov.ph",email_verified:true}).firestore();
+    const res = env.authenticatedContext(RESIDENT,
+      {email:"resident@yahoo.com",email_verified:true}).firestore();
     const anon = env.unauthenticatedContext().firestore();
+    const adminUnverified=env.authenticatedContext(ADMIN,
+      {email:"admin@city.gov.ph",email_verified:false}).firestore();
+    await check("Unverified Admin cannot dispatch even with an approved profile", () =>
+      adminUnverified.doc("disasterCases/" + CASE).update({
+        responseVehicleType:"ambulance",responseVehicleUpdatedAt:TS()
+      }),true);
     await check("Admin can select ambulance dispatch", () =>
       adm.doc("disasterCases/" + CASE).update({
         responseVehicleType: "ambulance", responseVehicleUpdatedAt: TS(),
