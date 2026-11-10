@@ -95,3 +95,33 @@ test("all other integrity gates still apply in test mode", () => {
     assert.equal(check(24 * 3600 + 1), false);
   });
 });
+
+test("temporary staging switch allows one minute with no test IDs", () => {
+  const previousDeployment = process.env.VOLUNSERVE_DEPLOYMENT_ENV;
+  const previousSwitch = process.env.VOLUNSERVE_CERT_STAGING_TEMP_ONE_MIN;
+  try {
+    withAllowlists(undefined, undefined, () => {
+      process.env.VOLUNSERVE_DEPLOYMENT_ENV = "staging";
+      process.env.VOLUNSERVE_CERT_STAGING_TEMP_ONE_MIN = "true";
+      assert.equal(minimum("any-event", "any-volunteer"), 1);
+      assert.equal(check(59), false);
+      assert.equal(check(60), true);
+      assert.equal(check(60, {attendance: {attendanceVerified: false}}), false);
+      assert.equal(check(60, {event: {status: "active"}}), false);
+
+      process.env.VOLUNSERVE_DEPLOYMENT_ENV = "production";
+      assert.equal(minimum("any-event", "any-volunteer"), 30);
+      assert.equal(check(60), false);
+
+      process.env.VOLUNSERVE_DEPLOYMENT_ENV = "staging";
+      process.env.VOLUNSERVE_CERT_STAGING_TEMP_ONE_MIN = "false";
+      assert.equal(check(60), false);
+      assert.equal(check(30 * 60), true);
+    });
+  } finally {
+    if (previousDeployment === undefined) delete process.env.VOLUNSERVE_DEPLOYMENT_ENV;
+    else process.env.VOLUNSERVE_DEPLOYMENT_ENV = previousDeployment;
+    if (previousSwitch === undefined) delete process.env.VOLUNSERVE_CERT_STAGING_TEMP_ONE_MIN;
+    else process.env.VOLUNSERVE_CERT_STAGING_TEMP_ONE_MIN = previousSwitch;
+  }
+});
