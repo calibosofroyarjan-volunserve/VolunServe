@@ -13,13 +13,18 @@ const domains = new Set(
     .filter(Boolean)
 );
 for (const extra of [
-  "en2ch.com", "en2ch.co", "mailinator.com", "yopmail.com", "guerrillamail.com",
+  // Match the app's exact-domain rejection for observed .co temporary mail.
+  "en2ch.com", "en2ch.co", "ruutukf.co", "mailinator.com", "yopmail.com", "guerrillamail.com",
   "guerrillamailblock.com", "sharklasers.com", "10minutemail.com",
   "temp-mail.org", "tempmail.com", "tempmail.net", "trashmail.com",
   "dispostable.com", "getnada.com", "maildrop.cc", "minuteinbox.com",
   "mohmal.com", "emailondeck.com", "throwawaymail.com",
   "mailnesia.com", "fakeinbox.com", "tempmailo.com",
 ]) domains.add(extra);
+
+const ALLOWED_REGISTRATION_DOMAINS = new Set([
+  "gmail.com", "googlemail.com", "yahoo.com", "yahoo.com.ph", "yahoo.co.uk",
+]);
 
 const EMAIL_FORMAT = /^[^\s@]+@(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/;
 function classifyRegistrationEmail(email) {
@@ -40,11 +45,20 @@ function classifyRegistrationEmail(email) {
   if (Object.prototype.hasOwnProperty.call(providerTypos, domain)) {
     return {allowed: false, reason: "provider_typo"};
   }
+  // Mirror the client policy in the opt-in before-create handler: final .co TLD only.
+  // Valid .co.uk and .co.ph addresses do not match this suffix.
+  if (domain.endsWith(".co")) return {allowed: false, reason: "blocked_tld_co"};
   const pieces = domain.split(".");
   for (let i = 0; i < pieces.length - 1; i += 1) {
     if (domains.has(pieces.slice(i).join("."))) {
       return {allowed: false, reason: "disposable"};
     }
+  }
+  // Only newly created accounts may use these providers. Existing logins are
+  // separately governed; DO NOT activate this classifier for beforeSignIn
+  // without explicitly preserving historical non-Gmail/Yahoo accounts.
+  if (!ALLOWED_REGISTRATION_DOMAINS.has(domain)) {
+    return {allowed: false, reason: "provider_not_allowed"};
   }
   return {allowed: true, reason: "accepted"};
 }

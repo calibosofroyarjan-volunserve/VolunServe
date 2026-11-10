@@ -25,7 +25,7 @@ const residentDetailsGuard = load(read("lib/requireCompleteResidentRegistration.
   "../constants/sjdmBarangays": load(read("constants/sjdmBarangays.ts")),
   "../constants/occupationOptions": load(read("constants/occupationOptions.ts")),
 });
-const data = {firstName:"Maria",lastName:"Santos",middleName:"",email:"resident@example.com",password:"Password1!",age:25,phoneNumber:"+639171234567",region:"Region III ? Central Luzon",province:"Bulacan",city:"City of San Jose del Monte",barangay:"Muzon Proper",occupationCategory:"Student",occupationSpecialization:"College",occupationOther:"",role:"volunteer"};
+const data = {firstName:"Maria",lastName:"Santos",middleName:"",email:"resident@yahoo.com",password:"Password1!",age:25,phoneNumber:"+639171234567",region:"Region III ? Central Luzon",province:"Bulacan",city:"City of San Jose del Monte",barangay:"Muzon Proper",occupationCategory:"Student",occupationSpecialization:"College",occupationOther:"",role:"volunteer"};
 function harness(source, enabled, options = {}) {
   const calls = [];
   const user = {uid:"signup-test",email:data.email,emailVerified:options.verified ?? true,providerData:(options.providers || ["password"]).map(providerId=>({providerId})),photoURL:"",reload:async()=>{calls.push("reload");}};
@@ -93,7 +93,23 @@ function harness(source, enabled, options = {}) {
         rendered=rendered.replace(newInline,"");
       }
       const published=extract(cp.execFileSync("git",["show",baseRef+":"+file],{encoding:"utf8"}));
-      assert.equal(rendered,published,"Unexpected published signup layout drift: "+file);
+      // The DOB field is intentionally replaced by the shared no-typing
+      // calendar. Compare all OTHER UI source against the actual published
+      // legacy form, retaining the strict design-drift regression guard.
+      assert(source.includes("<BirthDateCalendarPicker"),"DOB must use calendar-only input: "+file);
+      assert(!source.includes('type: "date"'),"Do not expose a keyboard-editable web DOB: "+file);
+      assert(!source.includes("<DateTimePicker"),"Use one consistent DOB calendar: "+file);
+      const currentStart=rendered.indexOf("<BirthDateCalendarPicker");
+      const originalStart=published.indexOf(file.endsWith(".web.tsx")
+        ? "<View style={styles.dateOfBirthRow}>"
+        : '<View style={styles.field}>\n                <Text style={styles.label}>🎂 Date of Birth');
+      const birthdayEnd='<View style={styles.step1TermsBox}>';
+      const currentEnd=rendered.indexOf(birthdayEnd,currentStart);
+      const originalEnd=published.indexOf(birthdayEnd,originalStart);
+      assert(currentStart>0 && originalStart>0 && currentEnd>currentStart && originalEnd>originalStart,
+        "Missing scoped birthday UI boundary: "+file);
+      rendered=rendered.slice(0,currentStart)+published.slice(originalStart,originalEnd)+rendered.slice(currentEnd);
+      assert.equal(rendered,published,"Unexpected published signup layout drift outside DOB: "+file);
     }
   });
   for(const enabled of [false,true]) {
@@ -129,7 +145,7 @@ function harness(source, enabled, options = {}) {
     });
   }
   await check("verified signup requires matching authenticated email",async()=>{
-    const h=harness(current,true);await assert.rejects(h.api.signUpUser({...data,email:"other@example.com",authProvider:"verified_email"}),/does not match/);assert.equal(h.profile(),null);
+    const h=harness(current,true);await assert.rejects(h.api.signUpUser({...data,email:"other@yahoo.com",authProvider:"verified_email"}),/does not match/);assert.equal(h.profile(),null);
   });
   await check("verified signup atomically creates production Basic Resident schema on the same UID",async()=>{
     const h=harness(current,true);await h.api.signUpUser({...data,password:"",authProvider:"verified_email"});
@@ -188,18 +204,56 @@ function harness(source, enabled, options = {}) {
   await check("signup email syntax, typo, country domain and disposable checks",()=>{
     const generated=load(read("lib/disposableEmailDomains.generated.ts"));
     const policy=load(read("lib/registrationEmailPolicy.ts"),{"./disposableEmailDomains.generated":generated});
-    for(const value of ["person@yahoo.com.ph","person@outlook.com","person@department.gov.ph","person@legitimate.co"]) assert.equal(policy.getRegistrationEmailError(value),null);
-    for(const value of ["","bad@gmail..com","bad@gmail.con","bad@sub.mailinator.com","person@en2ch.co","person@en2ch.com","person@sub.en2ch.co","person+tag@gmail.com","person+tag@googlemail.com"]) assert.equal(typeof policy.getRegistrationEmailError(value),"string");
-    for(const [wrong,right] of Object.entries(policy.KNOWN_PROVIDER_TYPO_CORRECTIONS)) assert(policy.getRegistrationEmailError("person@"+wrong).includes(right));
+    for(const value of ["person@gmail.com","person@googlemail.com","person@yahoo.com","person@yahoo.com.ph","person@yahoo.co.uk"]) assert.equal(policy.getRegistrationEmailError(value),null);
+    for(const value of ["","bad@gmail..com","bad@gmail.con","bad@sub.mailinator.com","person@en2ch.co","person@en2ch.com","person@sub.en2ch.co","person@ruutukf.co","person@sub.ruutukf.co","person@legitimate.co","person@sub.legitimate.co","PERSON@LEGITIMATE.CO","person@outlook.com","person@hotmail.com","person@icloud.com","person@department.gov.ph","person@legitimate.co.uk","person@legitimate.co.ph","person@sub.gmail.com","person@gmail.com.evil.example","person+tag@gmail.com","person+tag@googlemail.com"]) assert.equal(typeof policy.getRegistrationEmailError(value),"string");
+    for(const [wrong,right] of Object.entries(policy.KNOWN_PROVIDER_TYPO_CORRECTIONS)) {
+      const error=policy.getRegistrationEmailError("person@"+wrong);
+      if(wrong.endsWith(".co")) assert.match(error,/\.co/);
+      else assert(error.includes(right));
+    }
   });
-  await check("disposable domain rejects Firebase UID before creation and profile write",async()=>{
+  await check("SmailPro receive-only Gmail cannot create an account without Google OAuth",async()=>{
+    const pending=harness(current,true,{noUser:true});
+    for(const mailbox of ["pooled@gmail.com","p.o.o.l.e.d@gmail.com","pooled@googlemail.com"]) {
+      await assert.rejects(pending.registration.authenticateEmailSignup(mailbox,"Password1!",false,true),/Continue with Google/);
+    }
+    assert(!pending.calls.includes("create") && !pending.calls.includes("transaction"));
+    // Even a previously verified email/password UID cannot register a new
+    // Resident profile through a proxy inbox. Google provider must be linked.
+    const direct=harness(current,true,{verified:true});
+    await assert.rejects(direct.api.signUpUser({...data,email:"resident@gmail.com",authProvider:"verified_email",password:""}),/Continue with Google/);
+    await assert.rejects(direct.api.signUpUser({...data,email:"resident@gmail.com",authProvider:"email"}),/Continue with Google/);
+    assert(!direct.calls.includes("create") && !direct.calls.includes("transaction"));
+    // A genuine Google provider identity remains able to register.
+    const google=harness(current,true,{providers:["google.com"]});
+    google.user.email="resident@gmail.com";
+    await google.api.signUpUser({...data,email:"resident@gmail.com",authProvider:"google",password:""});
+    assert(google.calls.includes("transaction"));
+    const ui=read("components/auth/EmailFirstSignup.tsx");
+    assert(ui.includes("gmailOAuthRequired && !googleOnly"));
+    for(const file of ["app/signup.web.tsx","app/signup.tsx"]) {
+      const source=read(file);
+      assert(source.includes("requiresGoogleOAuthForRegistration(formData.email)"));
+      assert(source.includes("(googleBound || (!gmailOAuthRequired && passwordValid))"));
+    }
+    const staff=read("app/admin-request.tsx");
+    assert(staff.includes("requiresGoogleOAuthForRegistration(email)"));
+  });
+    await check("disposable domain rejects Firebase UID before creation and profile write",async()=>{
     const h=harness(current,true,{noUser:true});
     await assert.rejects(h.registration.authenticateEmailSignup("person@en2ch.com","Password1!",false,true),/Temporary email/);
-    await assert.rejects(h.registration.authenticateEmailSignup("person@en2ch.co","Password1!",false,true),/Temporary email/);
+    await assert.rejects(h.registration.authenticateEmailSignup("person@en2ch.co","Password1!",false,true),/\.co/);
+    await assert.rejects(h.registration.authenticateEmailSignup("person@ruutukf.co","Password1!",false,true),/\.co/);
+    await assert.rejects(h.registration.authenticateEmailSignup("person@sub.ruutukf.co","Password1!",false,true),/\.co/);
+    await assert.rejects(h.registration.authenticateEmailSignup("person@legitimate.co","Password1!",false,true),/\.co/);
+    await assert.rejects(h.registration.authenticateEmailSignup("person@sub.legitimate.co","Password1!",false,true),/\.co/);
+    for(const blocked of ["person@outlook.com","person@company.com","person@sub.gmail.com"]) {
+      await assert.rejects(h.registration.authenticateEmailSignup(blocked,"Password1!",false,true),/Only Gmail and Yahoo/);
+    }
     assert(!h.calls.includes("create")); assert(!h.calls.includes("transaction"));
     const existing=harness(current,true);
     existing.user.email="person@en2ch.co";
-    await assert.rejects(existing.registration.inspectSignupUser(existing.user),/Temporary email/);
+    await assert.rejects(existing.registration.inspectSignupUser(existing.user),/\.co/);
     assert(!existing.calls.includes("transaction"));
     const verified=harness(current,true);
     await assert.rejects(verified.api.signUpUser({...data,email:"person@en2ch.com",authProvider:"verified_email"}),/Temporary email/);
@@ -297,7 +351,9 @@ function harness(source, enabled, options = {}) {
     assert(stepOne.includes('checkButton("Continue with Google"'));
     assert(stepOne.indexOf('Continue to Email Verification') < stepOne.indexOf('checkButton("Continue with Google"'),
       "Email & Password must be primary; Google is optional and below the email form");
-    assert(ui.includes('formatBirthday'));
+    assert(ui.includes("<BirthDateCalendarPicker"),"Birthday must use the calendar-only picker");
+    assert(ui.includes("setBirth(birthDateToISO(date))"),"Selected DOB must keep the original ISO storage format");
+    assert(!ui.includes("formatBirthday("),"Freeform DOB typing must be removed");
     assert(ui.includes('autoComplete={'));
     assert(ui.includes('setFirstName(current => current ||'));
     assert(ui.includes('setLastName(current => current ||'));
