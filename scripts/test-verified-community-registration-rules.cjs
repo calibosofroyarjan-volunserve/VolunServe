@@ -78,6 +78,13 @@ async function main() {
       await assertFails(setDoc(doc(as(uid,email,true),"users",uid),candidate));
     }
     await invalidCreate({phoneNumber:"0917"});
+    // Published signup explicitly makes phone optional. Keep the field in
+    // the schema but allow empty string; reject malformed supplied numbers.
+    const noPhoneUid="valid-optional-phone";
+    const noPhoneEmail="optional-phone@gmail.com";
+    await assertSucceeds(setDoc(doc(as(noPhoneUid,noPhoneEmail,true),"users",noPhoneUid),{
+      ...validProfile,uid:noPhoneUid,email:noPhoneEmail,phoneNumber:"",
+    }));
     await invalidCreate({phoneNumber:"+639171234567999"});
     await invalidCreate({barangay:"Muzon"});
     await invalidCreate({barangay:"Quezon City"});
