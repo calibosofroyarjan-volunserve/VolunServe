@@ -32,4 +32,5 @@ jobs:
       - name: Preserve existing Volunteer invitation permissions
         run: npx firebase-tools emulators:exec --only firestore --project demo-volunserve-preserved-volunteers "node scripts/test-preserved-volunteer-invitation-rules.cjs"
       - name: Confirm no production publishing
-        run: echo 'PASS: exact source + emulator tests only. No credentials or live writes.'
+        run: |
+          echo 'PASS: exact source + emulator tests only. No credentials or live writes.'
