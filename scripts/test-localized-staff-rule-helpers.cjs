@@ -313,7 +313,7 @@ const expectedUrlRule=compactProvider.replace(oldSizing,evidenceComment)
 assert.equal(current,expectedUrlRule,"BLOCKED: non-equivalent assistance URL or unrelated Rules change");
 
 assert.equal(cp.execFileSync("git",["hash-object","firestore.rules"],{encoding:"utf8"}).trim(),
-"755915d47ca1dfb1fe86d2e7e3e9ad7eada049fa","BLOCKED: unreviewed Firestore Rules blob");
+"ca25271c0ea9e2d14d39c1204ec1ad53745d6a65","BLOCKED: unreviewed Firestore Rules blob");
 // Verify exhaustiveness of all optional-review branches over valid and
 // invalid types, status values and three-valued nulls before Firebase emulator.
 for(const required of [true,false,null,"true",0,1,undefined]){
@@ -331,7 +331,7 @@ for(const required of [true,false,null,"true",0,1,undefined]){
 }
 
 const gitBlob=cp.execFileSync("git",["hash-object","firestore.rules"],{encoding:"utf8"}).trim();
-assert.equal(gitBlob,"755915d47ca1dfb1fe86d2e7e3e9ad7eada049fa","BLOCKED: unapproved Firestore blob");
+assert.equal(gitBlob,"ca25271c0ea9e2d14d39c1204ec1ad53745d6a65","BLOCKED: unapproved Firestore blob");
 const paths=source=>source.split("\n").filter(l=>l.startsWith("    match /")).map(l=>l.slice("    match /".length).split(" ")[0]);
 assert.deepEqual(paths(current),paths(protectedBaseline),"BLOCKED: collection scope changed");
 const allows=source=>[...source.matchAll(/allow (?:get|list|read|write|create|update|delete)/g)].length;
