@@ -296,11 +296,19 @@ const providerFold=expectedProviderRules
  .replace('return email.matches(".*@([a-z0-9-]+[.])*(adujudi01','return email.matches("(?i).*@([a-z0-9-]+[.])*(adujudi01');
 assert.equal(expectedProviderRules.split('matches(".*@([a-z0-9-]+[.])*emailkeep[.]com")').length,3);
 assert.equal(expectedProviderRules.split('matches(".*@([a-z0-9-]+[.])*en2ch[.](com|co)")').length,2);
-assert.equal(current,providerFold,
- "BLOCKED: rules changed beyond the three case-insensitive temporary-domain guard upgrades");
+// One semantic-preserving compacting step: fold emailkeep.com (and its
+// subdomains) into the ALREADY-enforced shared provider guard, rather than
+// separately evaluating two duplicate regex denies on each Resident path.
+const compactProvider=providerFold
+ .replace("emailgeneratorai[.]cc|ghostmailz[.]club",
+          "emailgeneratorai[.]cc|emailkeep[.]com|ghostmailz[.]club")
+ .replace("            && !request.auth.token.get('email', '').matches(\"(?i).*@([a-z0-9-]+[.])*emailkeep[.]com\")\n","")
+ .replace("        && !request.resource.data.email.matches(\"(?i).*@([a-z0-9-]+[.])*emailkeep[.]com\")\n","");
+assert.equal(current,compactProvider,
+ "BLOCKED: Rules differ beyond the reviewed semantic-preserving emailkeep fold");
 
 assert.equal(cp.execFileSync("git",["hash-object","firestore.rules"],{encoding:"utf8"}).trim(),
-"a40954b7d8716e3953483a7ca39dd9e03f7b4e9a","BLOCKED: unreviewed Firestore Rules blob");
+"44058e46683bfa46ce2a7daf5e1274fd4c31d985","BLOCKED: unreviewed Firestore Rules blob");
 // Verify exhaustiveness of all optional-review branches over valid and
 // invalid types, status values and three-valued nulls before Firebase emulator.
 for(const required of [true,false,null,"true",0,1,undefined]){
@@ -318,7 +326,7 @@ for(const required of [true,false,null,"true",0,1,undefined]){
 }
 
 const gitBlob=cp.execFileSync("git",["hash-object","firestore.rules"],{encoding:"utf8"}).trim();
-assert.equal(gitBlob,"a40954b7d8716e3953483a7ca39dd9e03f7b4e9a","BLOCKED: unapproved Firestore blob");
+assert.equal(gitBlob,"44058e46683bfa46ce2a7daf5e1274fd4c31d985","BLOCKED: unapproved Firestore blob");
 const paths=source=>source.split("\n").filter(l=>l.startsWith("    match /")).map(l=>l.slice("    match /".length).split(" ")[0]);
 assert.deepEqual(paths(current),paths(protectedBaseline),"BLOCKED: collection scope changed");
 const allows=source=>[...source.matchAll(/allow (?:get|list|read|write|create|update|delete)/g)].length;

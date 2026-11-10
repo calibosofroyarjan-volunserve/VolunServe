@@ -1,0 +1,36 @@
+# No credentials, no production Rules release; source/emulator only.
+name: Validate Compact Temp-Mail Provider Predicate (NO DEPLOY)
+on:
+  push:
+    branches: [fix/compact-temp-domain-single-predicate-20261110]
+  pull_request:
+    branches: [fix/active-production-rules-signup-compatible-20261109]
+permissions:
+  contents: read
+jobs:
+  scoped-rules:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - run: npm ci --no-audit --no-fund
+      - name: Confirm frozen-source permission equivalence and reviewed Rules blob
+        run: node scripts/test-localized-staff-rule-helpers.cjs
+      - name: Verify Resident email validation and staff access in Firestore emulator
+        run: npx firebase-tools emulators:exec --only firestore --project demo-volunserve-compact-temp-provider "node scripts/test-verified-community-registration-rules.cjs"
+      - name: Preserve existing Volunteer invitation permissions
+        run: npx firebase-tools emulators:exec --only firestore --project demo-volunserve-preserved-volunteers "node scripts/test-preserved-volunteer-invitation-rules.cjs"
+      - name: Confirm no production publishing
+        run: |
+          echo 'PASS: exact source + emulator tests only. No credentials or live writes.'
