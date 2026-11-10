@@ -38,6 +38,7 @@ const git=(...args)=>cp.execFileSync("git",args,{encoding:"utf8"}).trim();
 const allowed=new Set([
   "firestore.rules",
   "scripts/test-exact-active-firebase-rules-provenance-20261111.cjs",
+  "scripts/test-resident-field-validation.cjs",
   ".github/workflows/verify-exact-active-firebase-rules-no-deploy-20261111.yml",
 ]);
 const changes=git("diff","--name-status","--no-renames",
@@ -47,7 +48,7 @@ for(const [status,file] of changes){
   assert(["A","M"].includes(status),"BLOCKED: deletion in staged review");
   assert(allowed.has(file),"BLOCKED: unrelated file changed "+file);
 }
-assert.equal(changes.length,3,"BLOCKED: unexpected diff count");
+assert.equal(changes.length,4,"BLOCKED: unexpected diff count");
 console.log("PASS exact uploaded LIVE Rules SHA256: "+ACTIVE_SHA256);
 console.log("PASS review candidate only adds the 3 approved insertions");
 console.log("PASS live temp-mail aliases and volunteer invitations retained");
