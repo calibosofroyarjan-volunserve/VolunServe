@@ -77,7 +77,7 @@ async function issueCommunityEventCertificate(eventId, participantId) {
       timeIn <= 0 ||
       timeOut < timeIn ||
       timeOut - timeIn > 24 * 60 * 60 * 1000 ||
-      timeOut - timeIn < minimumCommunityCertificateMinutes(eventId, volunteerId) * 60000
+      timeOut - timeIn < minimumCommunityCertificateMinutes(eventId, volunteerId, attendance, eventData) * 60000
     ) {
       return {issued: false, reason: "not_eligible"};
     }

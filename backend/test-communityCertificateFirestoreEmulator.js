@@ -133,6 +133,70 @@ async function main() {
         .data().verificationStatus, "revoked");
     pass("revoked certificate is not reissued");
 
+    // New temporary live policy: real Firestore transaction integration,
+    // still strictly isolated to the demo- project and emulator.
+    const startMs = Date.now() - 30 * 60 * 1000;
+    process.env.VOLUNSERVE_CERT_LIVE_TEMP_ONE_MIN_ENABLED = "true";
+    process.env.VOLUNSERVE_CERT_LIVE_TEMP_ONE_MIN_START_UTC =
+      new Date(startMs).toISOString().slice(0, 19) + "Z";
+    process.env.VOLUNSERVE_CERT_LIVE_TEMP_ONE_MIN_END_UTC =
+      new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString().slice(0, 19) + "Z";
+
+    const newUid = "demo-live-temporary-unlisted-uid";
+    const newEvent = "demo-live-temporary-new-one-minute";
+    await seed(newEvent, newUid, 60);
+    await db.collection("communityEvents").doc(newEvent).update({
+      completedAt: Timestamp.now(),
+    });
+    const newResult = await reconcileCommunityEventCertificates({
+      eventId: newEvent, execute: true,
+    });
+    assert.equal(newResult.issuedCount, 1);
+    const newCertId = communityCertificateId(newEvent, newUid, "2026-11-10");
+    assert.equal((await db.collection("certificates").doc(newCertId).get())
+      .data().verifiedServiceMinutes, 1);
+    pass("temporary live 1m rule issues a real certificate to a new attendee without an allowlist");
+
+    const oldEvent = "demo-live-temporary-old-one-minute";
+    await seed(oldEvent, newUid, 60);
+    await db.collection("communityEvents").doc(oldEvent).update({
+      completedAt: Timestamp.now(),
+    });
+    await db.collection("communityEventParticipants")
+      .doc(oldEvent + "_" + newUid).update({
+        checkedInAt: Timestamp.fromMillis(startMs - 600000),
+        checkedOutAt: Timestamp.fromMillis(startMs - 540000),
+      });
+    const oldResult = await reconcileCommunityEventCertificates({
+      eventId: oldEvent, execute: true,
+    });
+    assert.equal(oldResult.issuedCount, 0);
+    assert.equal(oldResult.eligibleCount, 0);
+    pass("old one-minute attendance remains ineligible even after a new completion");
+
+    const shortNewEvent = "demo-live-temporary-short";
+    await seed(shortNewEvent, newUid, 59);
+    await db.collection("communityEvents").doc(shortNewEvent).update({
+      completedAt: Timestamp.now(),
+    });
+    const shortNew = await reconcileCommunityEventCertificates({
+      eventId: shortNewEvent, execute: true,
+    });
+    assert.equal(shortNew.issuedCount, 0);
+    pass("live temporary policy still blocks 59 seconds");
+
+    process.env.VOLUNSERVE_CERT_LIVE_TEMP_ONE_MIN_ENABLED = "false";
+    const disabledEvent = "demo-live-temporary-disabled";
+    await seed(disabledEvent, newUid, 60);
+    await db.collection("communityEvents").doc(disabledEvent).update({
+      completedAt: Timestamp.now(),
+    });
+    const disabledResult = await reconcileCommunityEventCertificates({
+      eventId: disabledEvent, execute: true,
+    });
+    assert.equal(disabledResult.issuedCount, 0);
+    pass("turning off temporary live flag immediately restores the 30m threshold");
+
     console.log("PASS: all " + n + " isolated Firebase emulator checks succeeded.");
   } finally {
     await db.terminate();
