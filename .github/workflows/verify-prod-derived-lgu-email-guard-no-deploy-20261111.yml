@@ -1,0 +1,67 @@
+name: Verify Prod-Derived LGU Email Guard (NO DEPLOY)
+on:
+  push:
+    branches:
+      - review/prod-lgu-applicant-email-guard-20261111
+  pull_request:
+    branches:
+      - backend-live-protected
+permissions:
+  contents: read
+jobs:
+  backend-review:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - name: Production backend SHA and scoped patch guard
+        env:
+          EXPECTED_DEPLOYED_BACKEND_SHA: 98050cef59ff7919e3f2bc23adf48c4127929204
+        run: |
+          node <<'NODE'
+          "use strict";
+          const assert = require("node:assert/strict");
+          const cp = require("node:child_process");
+          const git = (...args) => cp.execFileSync("git",args,{encoding:"utf8"}).trim();
+          const expected = process.env.EXPECTED_DEPLOYED_BACKEND_SHA;
+          assert.equal(git("merge-base",expected,"HEAD"),expected,
+            "Candidate must descend from exact deployed Render backend");
+          const paths = git("diff","--name-status","--no-renames",expected,"HEAD")
+            .split("\n").filter(Boolean).map(row=>row.split("\t"));
+          const approved = new Set([
+            "backend/lguCredentialRoutes.js",
+            "backend/test-lgu-applicant-email-policy.cjs",
+            ".github/workflows/verify-prod-derived-lgu-email-guard-no-deploy-20261111.yml",
+          ]);
+          for(const [status,path] of paths){
+            assert(["A","M"].includes(status),"No deletions: "+path);
+            assert(approved.has(path),"Blocked unexpected file: "+path);
+          }
+          assert.equal(paths.length,3,"Only three scoped files may change");
+          for(const frozen of ["backend/server.js","backend/communityCertificates.js",
+            "backend/communityEventRoster.js","backend/package.json","backend/package-lock.json",
+            "firebase.json","firestore.rules","functions/index.js","lib/firebase.ts"]){
+            assert.equal(git("rev-parse",expected+":"+frozen),
+                         git("rev-parse","HEAD:"+frozen),
+                         "Production file drift blocked: "+frozen);
+          }
+          console.log("PASS same source ancestry and scoped LGU applicant-only patch");
+          NODE
+      - name: Install production backend dependencies
+        run: npm --prefix backend ci --no-audit --no-fund
+      - name: Direct API and historical-account regression tests
+        run: node --test backend/test-lgu-applicant-email-policy.cjs
+      - name: Backend syntax check
+        run: |
+          node --check backend/lguCredentialRoutes.js
+          node --check backend/server.js
+      - name: Safe review only
+        run: echo 'NO DEPLOY: production Render remains at original SHA until separately approved.'
