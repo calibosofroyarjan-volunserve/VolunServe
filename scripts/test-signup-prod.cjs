@@ -230,7 +230,7 @@ function harness(source, enabled, options = {}) {
       {firstName:""},
       {lastName:""},
       {age:0},
-      {phoneNumber:""},
+      {phoneNumber:"not-a-number"},
       {barangay:""},
       {barangay:"Outside SJDM"},
       {occupationCategory:""},
