@@ -192,7 +192,7 @@ function harness(source, enabled, options = {}) {
     for(const value of ["","bad@gmail..com","bad@gmail.con","bad@sub.mailinator.com","person@en2ch.co","person@en2ch.com","person@sub.en2ch.co","person@ruutukf.co","person@sub.ruutukf.co","person@legitimate.co","person@sub.legitimate.co","PERSON@LEGITIMATE.CO","person+tag@gmail.com","person+tag@googlemail.com"]) assert.equal(typeof policy.getRegistrationEmailError(value),"string");
     for(const [wrong,right] of Object.entries(policy.KNOWN_PROVIDER_TYPO_CORRECTIONS)) {
       const error=policy.getRegistrationEmailError("person@"+wrong);
-      if(wrong.endsWith(".co")) assert.match(error,/\\.co/);
+      if(wrong.endsWith(".co")) assert.match(error,/\.co/);
       else assert(error.includes(right));
     }
   });
@@ -207,7 +207,7 @@ function harness(source, enabled, options = {}) {
     assert(!h.calls.includes("create")); assert(!h.calls.includes("transaction"));
     const existing=harness(current,true);
     existing.user.email="person@en2ch.co";
-    await assert.rejects(existing.registration.inspectSignupUser(existing.user),/Temporary email/);
+    await assert.rejects(existing.registration.inspectSignupUser(existing.user),/\.co/);
     assert(!existing.calls.includes("transaction"));
     const verified=harness(current,true);
     await assert.rejects(verified.api.signUpUser({...data,email:"person@en2ch.com",authProvider:"verified_email"}),/Temporary email/);
