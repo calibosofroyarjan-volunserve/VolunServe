@@ -50,9 +50,63 @@ const isLocalBrowser =
 export const usingFirebaseEmulators =
   ENABLE_LOCAL_TESTING && isLocalBrowser;
 
+/**
+ * Staging is always explicit. A staging build MUST NEVER silently fall back
+ * to the production project when its separate Firebase environment is missing.
+ * These are Firebase's public WEB config fields, not service-account secrets.
+ */
+const firebaseTarget = process.env.EXPO_PUBLIC_VOLUNSERVE_FIREBASE_TARGET || "production";
+if (firebaseTarget !== "production" && firebaseTarget !== "staging") {
+  throw new Error("Invalid Firebase target. Choose explicit 'staging' or 'production'.");
+}
+const useStagingFirebase = firebaseTarget === "staging";
+// A staging build must never authenticate against the live domain, and the
+// dedicated full-staging Hosting domain must never silently use production.
+const currentHost = typeof window !== "undefined"
+  ? window.location.hostname.toLowerCase() : "";
+const productionHosts = ["volunserve.com", "www.volunserve.com", "volunserve-3aa5b.web.app", "volunserve-3aa5b.firebaseapp.com"];
+const fullStagingHosts = ["volunserve-full-staging.web.app", "volunserve-full-staging.firebaseapp.com"];
+if ((useStagingFirebase && productionHosts.includes(currentHost)) ||
+    (!useStagingFirebase && fullStagingHosts.includes(currentHost))) {
+  throw new Error("Firebase target does not match website host. Refusing unsafe signup connection.");
+}
+const stagingConfig = useStagingFirebase ? {
+  apiKey: process.env.EXPO_PUBLIC_VOLUNSERVE_STAGING_FIREBASE_API_KEY || "",
+  authDomain: process.env.EXPO_PUBLIC_VOLUNSERVE_STAGING_FIREBASE_AUTH_DOMAIN || "",
+  projectId: process.env.EXPO_PUBLIC_VOLUNSERVE_STAGING_FIREBASE_PROJECT_ID || "",
+  storageBucket: process.env.EXPO_PUBLIC_VOLUNSERVE_STAGING_FIREBASE_STORAGE_BUCKET || "",
+  messagingSenderId: process.env.EXPO_PUBLIC_VOLUNSERVE_STAGING_FIREBASE_MESSAGING_SENDER_ID || "",
+  appId: process.env.EXPO_PUBLIC_VOLUNSERVE_STAGING_FIREBASE_APP_ID || "",
+} : null;
+
+if (useStagingFirebase) {
+  const stage = stagingConfig!;
+  if (Object.values(stage).some(v => !v || typeof v !== "string") ||
+      !/^[a-z][a-z0-9-]{4,29}$/.test(stage.projectId) ||
+      stage.projectId === productionConfig.projectId ||
+      /(?:^|[-_])prod(?:uction)?(?:$|[-_])/.test(stage.projectId) ||
+      stage.apiKey === productionConfig.apiKey ||
+      stage.authDomain === productionConfig.authDomain ||
+      stage.authDomain !== stage.projectId + ".firebaseapp.com" ||
+      ![stage.projectId + ".appspot.com", stage.projectId + ".firebasestorage.app"]
+        .includes(stage.storageBucket)) {
+    throw new Error(
+      "STAGING FIREBASE CONFIG REQUIRED. Refusing to connect staging signup to production Firebase."
+    );
+  }
+  // The dedicated Full Staging Hosting site must use its own Firebase Web App,
+  // never a different staging project (including the older auth-only project).
+  if (fullStagingHosts.includes(currentHost) &&
+      (stage.projectId !== "volunserve-full-staging" ||
+       stage.messagingSenderId !== "429213950126" ||
+       stage.appId !== "1:429213950126:web:955dbf575697826b674d3f")) {
+    throw new Error("Full staging Hosting requires the matching Full Staging Firebase Web App.");
+  }
+}
+
 export const firebaseConfig = usingFirebaseEmulators
   ? localConfig
-  : productionConfig;
+  : (useStagingFirebase ? stagingConfig! : productionConfig);
 
 const existingApp =
   getApps().length > 0 ? getApp() : null;
