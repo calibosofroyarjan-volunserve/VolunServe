@@ -304,14 +304,13 @@ const compactProvider=providerFold
           "emailgeneratorai[.]cc|emailkeep[.]com|ghostmailz[.]club")
  .replace("            && !request.auth.token.get('email', '').matches(\"(?i).*@([a-z0-9-]+[.])*emailkeep[.]com\")\n","")
  .replace("        && !request.resource.data.email.matches(\"(?i).*@([a-z0-9-]+[.])*emailkeep[.]com\")\n","");
-// Exact evidence URL equivalence. Fixed ASCII prefix and suffix total
-// 72 characters. Since the ID contains 1+ ASCII alphanumeric characters,
-// original URL size 40..500 is equivalent to ID length 1..428.
-const oldUrlGuard="          && document.url.size() >= 40\n"+
- "          && document.url.size() <= 500\n"+
- "          && document.url.matches(\n"+
- "            '^https://volunserve[.]onrender[.]com/api/assistance/evidence/evidence_[A-Za-z0-9]+/access
-
+// Evidence URL rule equivalence: old 73..500 exact ASCII URL == ID 1..428.
+const oldSizing="          && document.url.size() >= 40\n          && document.url.size() <= 500\n";
+const newComment="          // The fixed URL prefix/suffix contribute exactly 72 ASCII chars.\n          // 1-428 evidence ID chars give exactly the same valid 73-500 length\n          // range as the previous URL size checks, with no broader matches.\n";
+assert.equal(compactProvider.split(oldSizing).length,2,"Missing old evidence bounds");
+const boundedEvidenceExpected=compactProvider.replace(oldSizing,newComment)
+ .replace("evidence_[A-Za-z0-9]+/access$","evidence_[A-Za-z0-9]{1,428}/access$");
+assert.equal(current,boundedEvidenceExpected,"Rules differ beyond approved compact email and URL bounds");
 assert.equal(cp.execFileSync("git",["hash-object","firestore.rules"],{encoding:"utf8"}).trim(),
 "755915d47ca1dfb1fe86d2e7e3e9ad7eada049fa","BLOCKED: unreviewed Firestore Rules blob");
 // Verify exhaustiveness of all optional-review branches over valid and
