@@ -3,7 +3,7 @@ import { liveUi as designUi } from "../constants/volunserveLiveUi";
 import EmailFirstSignup from "../components/auth/EmailFirstSignup";
 import { userFacingError } from "../lib/userFacingError";
 import { EMAIL_FIRST_SIGNUP_ENABLED } from "../lib/signupFeature";
-import { getRegistrationEmailError } from "../lib/registrationEmailPolicy";
+import { getRegistrationEmailError, requiresGoogleOAuthForRegistration } from "../lib/registrationEmailPolicy";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { Feather } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
@@ -508,7 +508,8 @@ function LegacySignup() {
     const passwordScore = Object.values(passwordChecks).filter(Boolean).length;
     const passwordStrength = passwordScore <= 2 ? "Weak" : passwordScore <= 5 ? "Medium" : "Strong";
     const passwordValid = passwordScore === Object.keys(passwordChecks).length;
-    const step1Valid = lastNameValid && firstNameValid && middleNameValid && ageValid && phoneValid && emailValid && (googleBound || passwordValid) && formData.acceptTerms;
+    const gmailOAuthRequired = requiresGoogleOAuthForRegistration(formData.email);
+    const step1Valid = lastNameValid && firstNameValid && middleNameValid && ageValid && phoneValid && emailValid && (googleBound || (!gmailOAuthRequired && passwordValid)) && formData.acceptTerms;
     const step4Valid = formData.acceptTerms && formData.confirmReview;
 
     return {
@@ -551,7 +552,7 @@ function LegacySignup() {
       scrollRef.current?.scrollTo({ y: 0, animated: true });
 
       const stepMessages: Record<Step, string> = {
-        1: "Complete your email, password and personal details, then agree to the Terms and Privacy Policy.",
+        1: "Complete your details and consent. Gmail requires Continue with Google to prove ownership; Yahoo can use a password.",
         2: "Please select a valid City of San Jose del Monte, Bulacan residential address.",
         3: "Please complete your basic profile information.",
         4: "Review your information and accept the terms and privacy consent.",
