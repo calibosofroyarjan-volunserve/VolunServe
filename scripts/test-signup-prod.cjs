@@ -188,16 +188,18 @@ function harness(source, enabled, options = {}) {
   await check("signup email syntax, typo, country domain and disposable checks",()=>{
     const generated=load(read("lib/disposableEmailDomains.generated.ts"));
     const policy=load(read("lib/registrationEmailPolicy.ts"),{"./disposableEmailDomains.generated":generated});
-    for(const value of ["person@yahoo.com.ph","person@outlook.com","person@department.gov.ph","person@legitimate.co"]) assert.equal(policy.getRegistrationEmailError(value),null);
-    for(const value of ["","bad@gmail..com","bad@gmail.con","bad@sub.mailinator.com","person@en2ch.co","person@en2ch.com","person@sub.en2ch.co","person@ruutukf.co","person@sub.ruutukf.co","person+tag@gmail.com","person+tag@googlemail.com"]) assert.equal(typeof policy.getRegistrationEmailError(value),"string");
+    for(const value of ["person@gmail.com","person@yahoo.com.ph","person@outlook.com","person@department.gov.ph","person@legitimate.co.uk","person@legitimate.co.ph"]) assert.equal(policy.getRegistrationEmailError(value),null);
+    for(const value of ["","bad@gmail..com","bad@gmail.con","bad@sub.mailinator.com","person@en2ch.co","person@en2ch.com","person@sub.en2ch.co","person@ruutukf.co","person@sub.ruutukf.co","person@legitimate.co","person@sub.legitimate.co","PERSON@LEGITIMATE.CO","person+tag@gmail.com","person+tag@googlemail.com"]) assert.equal(typeof policy.getRegistrationEmailError(value),"string");
     for(const [wrong,right] of Object.entries(policy.KNOWN_PROVIDER_TYPO_CORRECTIONS)) assert(policy.getRegistrationEmailError("person@"+wrong).includes(right));
   });
   await check("disposable domain rejects Firebase UID before creation and profile write",async()=>{
     const h=harness(current,true,{noUser:true});
     await assert.rejects(h.registration.authenticateEmailSignup("person@en2ch.com","Password1!",false,true),/Temporary email/);
     await assert.rejects(h.registration.authenticateEmailSignup("person@en2ch.co","Password1!",false,true),/Temporary email/);
-    await assert.rejects(h.registration.authenticateEmailSignup("person@ruutukf.co","Password1!",false,true),/Temporary email/);
-    await assert.rejects(h.registration.authenticateEmailSignup("person@sub.ruutukf.co","Password1!",false,true),/Temporary email/);
+    await assert.rejects(h.registration.authenticateEmailSignup("person@ruutukf.co","Password1!",false,true),/\.co/);
+    await assert.rejects(h.registration.authenticateEmailSignup("person@sub.ruutukf.co","Password1!",false,true),/\.co/);
+    await assert.rejects(h.registration.authenticateEmailSignup("person@legitimate.co","Password1!",false,true),/\.co/);
+    await assert.rejects(h.registration.authenticateEmailSignup("person@sub.legitimate.co","Password1!",false,true),/\.co/);
     assert(!h.calls.includes("create")); assert(!h.calls.includes("transaction"));
     const existing=harness(current,true);
     existing.user.email="person@en2ch.co";
