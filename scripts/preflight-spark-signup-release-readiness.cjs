@@ -25,8 +25,8 @@ const CANDIDATE_SITE = "44cfe41429f91d35d383bf3846fb6fd2f7e7df44";
 const CANDIDATE_RULES = "508b58b6ce888810c081dc6bfe38c237629d96d8";
 const CANDIDATE_RULES_BLOB = "a40954b7d8716e3953483a7ca39dd9e03f7b4e9a";
 const RELEASE = "projects/" + PROJECT + "/releases/cloud.firestore";
-const BACKUP_CHANNEL = "signup-predeploy-backup-20261109";
-const PREVIEW_CHANNEL = "signup-reviewed-preview-20261109";
+const BACKUP_CHANNEL = "signup-live-backup-20261110";
+const PREVIEW_CHANNEL = "signup-web-review-20261110";
 const sha = s => crypto.createHash("sha256").update(String(s)).digest("hex");
 const git = (cwd,...args) => cp.execFileSync("git",["-C",cwd,...args],{encoding:"utf8"}).trim();
 const codeSha = s => /^[a-f0-9]{40}$/.test(s||"");
@@ -42,6 +42,7 @@ function verifyPinnedFiles() {
   assert(rules.includes("function blockedTempMailOrgAlias(email)"),"BLOCKED: reviewed provider guard missing");
   assert(rules.includes("function validInitialResidentInputs()"),"BLOCKED: resident validation missing");
   assert(rules.includes("match /volunteerInvitations/{invitationId}"),"BLOCKED: volunteer invitations rule missing");
+  assert(!rules.includes("gmailAliasClaims"),"BLOCKED: unresolved Gmail alias migration must not be bundled");
   // Only the independently reviewed and CI-tested source commits are allowed.
   console.log("PASS: immutable source candidates and reviewed Security Rules blob");
 }
