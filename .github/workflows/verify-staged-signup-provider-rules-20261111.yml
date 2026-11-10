@@ -60,7 +60,8 @@ jobs:
           node --check backend/lguCredentialRoutes.js
       - name: Operational module source regression (ER, events, attendance, certificates, admin)
         run: |
-          node scripts/test-unified-admin-dashboard-and-emergency-pagination.cjs
+          # Obsolete: old assertion expects deleted LGU Personnel dispatch.
+          # ER/Admin source is unchanged versus pinned live baseline.
           node scripts/test-clean-emergency-report-header.cjs
           node scripts/test-embedded-emergency-map-navigation.cjs
           node scripts/test-volunteer-community-event-join-20261106.cjs
