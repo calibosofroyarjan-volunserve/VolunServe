@@ -1,0 +1,33 @@
+name: Community Certificate Test Eligibility
+on:
+  pull_request:
+    branches:
+      - live-protected
+    paths:
+      - "functions/index.js"
+      - "functions/communityCertificateEligibility.js"
+      - "functions/test/communityCertificateEligibility.test.js"
+      - "functions/package.json"
+      - ".github/workflows/community-certificate-test-eligibility.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  certificate-eligibility:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: functions
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Check server JavaScript syntax
+        run: |
+          node --check index.js
+          node --check communityCertificateEligibility.js
+      - name: Run certificate eligibility regression tests
+        run: npm test
