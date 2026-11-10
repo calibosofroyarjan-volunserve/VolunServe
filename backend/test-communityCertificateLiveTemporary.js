@@ -1,10 +1,17 @@
 "use strict";
-const {test} = require("node:test");
+// Existing test filename retained to avoid unnecessary production test churn.
+// Now verifies the permanent, no-expiry policy and its safety controls.
+const { test } = require("node:test");
 const assert = require("node:assert/strict");
-const {minimumCommunityCertificateMinutes: threshold,
-  isEligibleCommunityAttendance: eligible} = require("./communityCertificateEligibility");
+const {
+  minimumCommunityCertificateMinutes: minimum,
+  isEligibleCommunityAttendance: eligible,
+} = require("./communityCertificateEligibility");
 
+const CUTOFF = Date.parse("2026-11-10T14:55:00Z");
+const AFTER = Date.parse("2026-11-11T16:00:00Z");
 const keys = [
+  "VOLUNSERVE_CERT_LIVE_ONE_MIN_PERMANENT_ENABLED",
   "VOLUNSERVE_CERT_LIVE_TEMP_ONE_MIN_ENABLED",
   "VOLUNSERVE_CERT_LIVE_TEMP_ONE_MIN_START_UTC",
   "VOLUNSERVE_CERT_LIVE_TEMP_ONE_MIN_END_UTC",
@@ -12,103 +19,107 @@ const keys = [
   "VOLUNSERVE_CERT_TEST_EVENT_IDS",
   "VOLUNSERVE_CERT_TEST_VOLUNTEER_UIDS",
 ];
-const ts = ms => ({toMillis:()=>ms});
-const iso = ms => new Date(ms).toISOString().slice(0,19)+"Z";
-function withEnv(env, run) {
-  const before = new Map(keys.map(k=>[k,process.env[k]]));
+const stamp = ms => ({toMillis: () => ms});
+function withEnv(values, callback) {
+  const previous = new Map(keys.map(key => [key, process.env[key]]));
+  const originalClock = Date.now;
   try {
+    Date.now = () => AFTER;
     for (const key of keys) delete process.env[key];
-    Object.assign(process.env, env);
-    run();
+    Object.assign(process.env, values);
+    callback();
   } finally {
-    for (const [key,value] of before) {
+    Date.now = originalClock;
+    for (const [key, value] of previous) {
       if (value === undefined) delete process.env[key];
       else process.env[key] = value;
     }
   }
 }
-const now = Date.now();
-const start = now - 60*60*1000;
-const end = now + 60*60*1000;
-const enabled = {
-  VOLUNSERVE_CERT_LIVE_TEMP_ONE_MIN_ENABLED:"true",
-  VOLUNSERVE_CERT_LIVE_TEMP_ONE_MIN_START_UTC:iso(start),
-  VOLUNSERVE_CERT_LIVE_TEMP_ONE_MIN_END_UTC:iso(end),
-};
 function fixture({
-  duration=60, checkIn = now-5*60*1000,
-  completed = now-10*1000, verified = true,
-  proposedBy = "resident-other", eventStatus = "completed",
+  duration = 60, checkIn = AFTER - 5 * 60000,
+  completed = AFTER - 10000, verified = true,
+  publicationStatus = "published", status = "completed",
+  proposedBy = "another-resident", checkedOutOverride,
 } = {}) {
-  const eventId="production-new-event";
-  const uid="unlisted-test-volunteer";
-  const attendance={
-    uid,eventId,status:"joined",attendanceVerified:verified,
-    attendanceVerifiedBy:"verified-admin",
-    checkedInAt:ts(checkIn),checkedOutAt:ts(checkIn+duration*1000)
+  const eventId = "sample-new-event";
+  const uid = "sample-other-volunteer";
+  const attendance = {
+    uid, eventId, status: "joined", attendanceVerified: verified,
+    attendanceVerifiedBy: "test-admin",
+    checkedInAt: stamp(checkIn),
+    checkedOutAt: stamp(checkedOutOverride ?? checkIn + duration * 1000),
   };
-  const event={
-    publicationStatus:"published",status:eventStatus,
-    proposedBy,completedBy:"verified-admin",
-    completedAt:ts(completed),
+  const event = {
+    publicationStatus, status, proposedBy, completedBy: "test-admin",
+    completedAt: stamp(completed),
   };
-  return {eventId,uid,attendance,event,participantId:eventId+"_"+uid};
+  return { eventId, uid, attendance, event, participantId: eventId + "_" + uid };
 }
-function check(f) {
-  return eligible(f.eventId,f.event,f.participantId,f.attendance);
-}
-function minimum(f) {
-  return threshold(f.eventId,f.uid,f.attendance,f.event);
-}
-test("temporary production 1m applies to new completed events and new volunteer Time In/Out",()=>{
-  withEnv(enabled,()=>{
-    const f=fixture();
-    assert.equal(minimum(f),1);
-    assert.equal(check(f),true);
-    const short=fixture({duration:59});
-    assert.equal(check(short),false);
+const minutes = f => minimum(f.eventId, f.uid, f.attendance, f.event);
+const isEligible = f => eligible(f.eventId, f.event, f.participantId, f.attendance);
+
+test("permanent enable allows 1 minute for new, verified, completed events", () => {
+  withEnv({VOLUNSERVE_CERT_LIVE_ONE_MIN_PERMANENT_ENABLED: "true"}, () => {
+    const f = fixture();
+    assert.equal(minutes(f), 1);
+    assert.equal(isEligible(f), true);
+    assert.equal(isEligible(fixture({duration: 59})), false);
   });
 });
-test("production does not retroactively issue 1m certificates for old attendance",()=>{
-  withEnv(enabled,()=>{
-    const cutoff=Date.parse(enabled.VOLUNSERVE_CERT_LIVE_TEMP_ONE_MIN_START_UTC);
-    const old=fixture({checkIn:cutoff-30*60*1000});
-    assert.equal(minimum(old),30);
-    assert.equal(check(old),false);
-    const oldEvent=fixture({completed:cutoff-1000});
-    assert.equal(minimum(oldEvent),30);
-    assert.equal(check(oldEvent),false);
-    assert.equal(check(fixture({duration:30*60,checkIn:cutoff-35*60*1000})),true);
+test("historical attendance and historical completed events keep 30m threshold", () => {
+  withEnv({VOLUNSERVE_CERT_LIVE_ONE_MIN_PERMANENT_ENABLED: "true"}, () => {
+    const oldCheckIn = CUTOFF - 900000;
+    assert.equal(minutes(fixture({checkIn:oldCheckIn})), 30);
+    assert.equal(isEligible(fixture({checkIn:oldCheckIn})), false);
+    assert.equal(minutes(fixture({completed:CUTOFF - 1000})), 30);
+    assert.equal(isEligible(fixture({completed:CUTOFF - 1000})), false);
+    assert.equal(isEligible(fixture({checkIn:oldCheckIn,duration:1800})), true);
   });
 });
-test("unapproved or incomplete events never qualify with temporary live 1m",()=>{
-  withEnv(enabled,()=>{
-    assert.equal(check(fixture({verified:false})),false);
-    assert.equal(check(fixture({eventStatus:"active"})),false);
-    assert.equal(check(fixture({proposedBy:"unlisted-test-volunteer"})),false);
-    assert.equal(check(fixture({completed:now+60*60*1000})),false);
+test("unverified attendance, active event, proposer, future completion remain blocked", () => {
+  withEnv({VOLUNSERVE_CERT_LIVE_ONE_MIN_PERMANENT_ENABLED: "true"}, () => {
+    assert.equal(isEligible(fixture({verified:false})), false);
+    assert.equal(isEligible(fixture({status:"active"})), false);
+    assert.equal(isEligible(fixture({publicationStatus:"draft"})), false);
+    assert.equal(isEligible(fixture({proposedBy:"sample-other-volunteer"})), false);
+    assert.equal(isEligible(fixture({completed:Date.now()+3600000})), false);
+    assert.equal(isEligible(fixture({checkedOutOverride:AFTER - 6*60000})), false);
   });
 });
-test("temporary override requires exact enable, valid bounded window, and auto-expires",()=>{
-  const f=fixture();
-  withEnv({...enabled,VOLUNSERVE_CERT_LIVE_TEMP_ONE_MIN_ENABLED:"false"},()=>{
-    assert.equal(minimum(f),30);
-    assert.equal(check(f),false);
+test("old temporary flag alone cannot enable permanent mode; rollback to 30m", () => {
+  withEnv({
+    VOLUNSERVE_CERT_LIVE_TEMP_ONE_MIN_ENABLED:"true",
+    VOLUNSERVE_CERT_LIVE_TEMP_ONE_MIN_START_UTC:"2026-11-10T14:55:00Z",
+    VOLUNSERVE_CERT_LIVE_TEMP_ONE_MIN_END_UTC:"2026-11-17T14:55:00Z"
+  }, () => {
+    assert.equal(minutes(fixture()), 30);
   });
-  withEnv({...enabled,VOLUNSERVE_CERT_LIVE_TEMP_ONE_MIN_ENABLED:"TRUE"},()=>assert.equal(minimum(f),30));
-  withEnv({...enabled,VOLUNSERVE_CERT_LIVE_TEMP_ONE_MIN_START_UTC:"bad"},()=>assert.equal(minimum(f),30));
-  withEnv({...enabled,VOLUNSERVE_CERT_LIVE_TEMP_ONE_MIN_END_UTC:""},()=>assert.equal(minimum(f),30));
-  withEnv({...enabled,VOLUNSERVE_CERT_LIVE_TEMP_ONE_MIN_START_UTC:iso(now+60*1000)},()=>assert.equal(minimum(f),30));
-  withEnv({...enabled,VOLUNSERVE_CERT_LIVE_TEMP_ONE_MIN_END_UTC:iso(now-60*1000)},()=>assert.equal(minimum(f),30));
-  withEnv({...enabled,VOLUNSERVE_CERT_LIVE_TEMP_ONE_MIN_END_UTC:iso(now+8*24*60*60*1000)},()=>assert.equal(minimum(f),30));
+  withEnv({VOLUNSERVE_CERT_LIVE_ONE_MIN_PERMANENT_ENABLED:"false"}, () => {
+    assert.equal(minutes(fixture()),30);
+    assert.equal(isEligible(fixture()),false);
+    assert.equal(isEligible(fixture({duration:1800})),true);
+  });
+  withEnv({VOLUNSERVE_CERT_LIVE_ONE_MIN_PERMANENT_ENABLED:"TRUE"}, () => {
+    assert.equal(minutes(fixture()),30);
+  });
 });
-test("other existing exact-ID test-only gate is unaffected by temporary live switch",()=>{
+test("permanent policy remains enabled long after old seven-day end date", () => {
+  withEnv({VOLUNSERVE_CERT_LIVE_ONE_MIN_PERMANENT_ENABLED:"true"}, () => {
+    const futureNow = Date.parse("2028-11-10T17:00:00Z");
+    Date.now = () => futureNow;
+    const future = fixture({
+      checkIn: futureNow - 120000,
+      completed: futureNow - 10000,
+    });
+    assert.equal(minutes(future),1);
+    assert.equal(isEligible(future),true);
+  });
+});
+test("separate exact-ID test-only exception remains independent", () => {
   withEnv({
     VOLUNSERVE_CERT_TEST_OVERRIDE_ENABLED:"true",
-    VOLUNSERVE_CERT_TEST_EVENT_IDS:"production-new-event",
-    VOLUNSERVE_CERT_TEST_VOLUNTEER_UIDS:"unlisted-test-volunteer"
-  },()=>{
-    const f=fixture({completed:undefined});
-    assert.equal(minimum(f),1);
-  });
+    VOLUNSERVE_CERT_TEST_EVENT_IDS:"sample-new-event",
+    VOLUNSERVE_CERT_TEST_VOLUNTEER_UIDS:"sample-other-volunteer",
+  }, () => assert.equal(minutes(fixture({completed:CUTOFF-1000})),1));
 });
