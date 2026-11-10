@@ -4,6 +4,10 @@ on:
     branches:
       - live-protected
     paths:
+      - "backend/communityCertificates.js"
+      - "backend/communityCertificateEligibility.js"
+      - "backend/test-communityCertificateEligibility.js"
+      - "backend/package.json"
       - "functions/index.js"
       - "functions/communityCertificateEligibility.js"
       - "functions/test/communityCertificateEligibility.test.js"
@@ -31,3 +35,19 @@ jobs:
           node --check communityCertificateEligibility.js
       - name: Run certificate eligibility regression tests
         run: npm test
+  render-certificate-eligibility:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Check backend JavaScript syntax
+        run: |
+          node --check communityCertificates.js
+          node --check communityCertificateEligibility.js
+      - name: Test Render eligibility and integrity gates
+        run: node --test test-communityCertificateEligibility.js
