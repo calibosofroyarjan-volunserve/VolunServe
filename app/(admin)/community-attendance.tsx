@@ -1,5 +1,5 @@
 import { liveUi as ui } from "../../constants/volunserveLiveUi";
-import { getSafeVolunServeBackendBaseUrl } from "../../lib/stagingBackendSafety";
+import { getCommunityCertificateBackendBaseUrl, COMMUNITY_CERTIFICATE_MINIMUM_MINUTES } from "../../lib/stagingCertificateBackend";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { Redirect, useRouter, type Href } from "expo-router";
 import {
@@ -85,7 +85,7 @@ type Filter =
 // Render certificate reconciliation (Spark-compatible): authenticated Admin only.
 // This never changes attendance timestamps and must run AFTER a successful
 // Firestore completion/verification transaction, not inside one.
-const CERTIFICATE_BACKEND_URL = getSafeVolunServeBackendBaseUrl();
+const CERTIFICATE_BACKEND_URL = getCommunityCertificateBackendBaseUrl();
 const CERTIFICATE_SYNC_TIMEOUT_MS = 100_000;
 
 type CertificateSyncResult = {
@@ -273,7 +273,7 @@ function verifiedServiceMeetsMinimum(person: Participant): boolean {
   const start = asDate(person.checkedInAt)?.getTime() ?? 0;
   const end = asDate(person.checkedOutAt)?.getTime() ?? 0;
   return person.attendanceVerified === true &&
-    start > 0 && end >= start && end - start >= 30 * 60 * 1000;
+    start > 0 && end >= start && end - start >= COMMUNITY_CERTIFICATE_MINIMUM_MINUTES * 60 * 1000;
 }
 
 function safeProfileImage(value: unknown): string {
@@ -1335,7 +1335,7 @@ export default function CommunityAttendanceAdmin() {
                             <Text style={styles.mobileTimeLabel}>DURATION</Text>
                             <Text style={styles.timeText}>{readableDuration(hoursFor(person))}</Text>
                             {verifiedServiceMeetsMinimum(person) &&
-                              <Text style={styles.mobileDurationEligible}>30m minimum met</Text>}
+                              <Text style={styles.mobileDurationEligible}>{COMMUNITY_CERTIFICATE_MINIMUM_MINUTES}m minimum met</Text>}
                           </View>
                         </View>
                         <View style={styles.mobileRosterActions}>
@@ -1463,7 +1463,7 @@ export default function CommunityAttendanceAdmin() {
               <View style={styles.readinessChip}>
                 <Ionicons name="ribbon-outline" color="#0A806C" size={15} />
                 <Text style={styles.readinessText}>
-                  {serviceMinimumCount} verified with 30+ minutes
+                  {serviceMinimumCount} verified with {COMMUNITY_CERTIFICATE_MINIMUM_MINUTES}+ min
                   {selected.status === "completed" ? " · Eligible for certificate check" : " · Certificate check after completion"}
                 </Text>
               </View>
@@ -1473,7 +1473,7 @@ export default function CommunityAttendanceAdmin() {
                 <Ionicons name="information-circle-outline" size={24} color="#3874CF" />
               </View>
               <Text style={styles.eligibilityText}>
-                Volunteers record their own Time In and Time Out. Admin only reviews and verifies the recorded times; verification does not edit timestamps. Community Event certificates also require event completion and at least 30 minutes of verified service.
+                Volunteers record their own Time In and Time Out. Admin only reviews and verifies the recorded times; verification does not edit timestamps. Community Event certificates also require event completion and at least {COMMUNITY_CERTIFICATE_MINIMUM_MINUTES} min of verified service.
               </Text>
             </View>
           </View>
