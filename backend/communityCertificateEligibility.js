@@ -13,6 +13,10 @@ function allowlist(name) {
 }
 
 function minimumCommunityCertificateMinutes(eventId, volunteerId) {
+  // Fail closed in live: exact allowlists alone never switch on 1-minute issuance.
+  if (process.env.VOLUNSERVE_CERT_TEST_OVERRIDE_ENABLED !== "true") {
+    return MIN_COMMUNITY_CERTIFICATE_ATTENDANCE_MINUTES;
+  }
   return allowlist("VOLUNSERVE_CERT_TEST_EVENT_IDS").has(eventId) &&
     allowlist("VOLUNSERVE_CERT_TEST_VOLUNTEER_UIDS").has(volunteerId) ?
     TEST_COMMUNITY_CERTIFICATE_ATTENDANCE_MINUTES :
