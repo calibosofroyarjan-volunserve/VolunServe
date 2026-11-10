@@ -45,8 +45,15 @@ async function main() {
         title: "Public safety update", publishAt: Timestamp.fromMillis(1000),
       });
     });
+    // For this existing field-validation suite, Gmail profiles represent
+    // verified real Google sign-in (not receive-only email/password inboxes).
+    // Direct forged Gmail/password negative cases are in the isolated
+    // test-staged-signup-provider-firestore-rules.cjs regression.
     const as = (uid, email, verified) =>
-      env.authenticatedContext(uid, {email, email_verified: verified}).firestore();
+      env.authenticatedContext(uid, {
+        email, email_verified: verified,
+        firebase: {sign_in_provider: email.endsWith("@gmail.com") ? "google.com" : "password"},
+      }).firestore();
     await assertFails(getDoc(doc(as("existing-resident","existing@gmail.com",false),"announcements","published")));
     await assertFails(getDoc(doc(as("existing-resident","other@gmail.com",true),"announcements","published")));
     await assertSucceeds(getDoc(doc(as("existing-resident","existing@gmail.com",true),"announcements","published")));
