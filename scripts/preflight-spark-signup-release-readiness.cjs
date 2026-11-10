@@ -179,6 +179,31 @@ async function main() {
   );
   const permitted=new Set(iam.data?.permissions||[]);
   const missingPublisherPermissions=publisherPermissions.filter(p=>!permitted.has(p));
+  // The previous release failed with HTTP 400 at 2026-11-10T05:28Z.
+  // Inspect ONLY admin activity audit entries for that narrow time window.
+  // This endpoint is read-only. Avoid printing principal, IP, request/response
+  // content, email, rule source or any other audit-log payload.
+  const auditLogs=await request("https://logging.googleapis.com/v2/entries:list",token,{
+    method:"POST",body:{
+      resourceNames:["projects/"+PROJECT],
+      filter:'timestamp>="2026-11-10T05:27:30Z" AND timestamp<="2026-11-10T05:30:30Z" AND protoPayload.serviceName="firebaserules.googleapis.com"',
+      orderBy:"timestamp desc",pageSize:50
+    }
+  });
+  const matching=(auditLogs.data?.entries||[]).filter(entry=>
+    /UpdateRelease|Patch|releases/i.test(entry.protoPayload?.methodName||"") &&
+    entry.protoPayload?.status?.code
+  );
+  const genericErrorTypes=matching.slice(0,5).map(entry=>{
+    const message=String(entry.protoPayload?.status?.message||"");
+    const kind=/size|too large|exceed|limit/i.test(message)?"SIZE_LIMIT":
+      /permission|unauthorized|denied/i.test(message)?"PERMISSION":
+      /invalid|field|argument/i.test(message)?"INVALID_REQUEST":
+      /compile|expression|ruleset/i.test(message)?"RULES_VALIDATION":
+      "OTHER_UNCLASSIFIED";
+    return {statusCode:entry.protoPayload.status.code,kind,
+      safeMessagePrefix:message.slice(0,180).replace(/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+/g,"[email]").replace(/ya29[.][A-Za-z0-9._-]+/g,"[token]")};
+  });
   const findings={
     mode:"READ_ONLY_SPARK_RELEASE_PREFLIGHT",
     project:PROJECT,
@@ -189,6 +214,7 @@ async function main() {
     selectedCandidateWebRevision:CANDIDATE_SITE,
     selectedCandidateRulesRevision:CANDIDATE_RULES,
     compiler:{httpStatus:compile.status,passed:compilerOkay,errorCount:(compile.data?.issues||[]).filter(x=>x.severity==="ERROR").length},
+    activationLogAudit:{httpStatus:auditLogs.status,matchedFailures:matching.length,errors:genericErrorTypes,readOnly:true},
     activationDiagnostics:{
       existingExecutableHttpStatus:executable.status,
       existingCompiledRulesBytes:activeExecutableBytes,
