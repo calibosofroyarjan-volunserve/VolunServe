@@ -79,15 +79,24 @@ async function main() {
         verifiedAt: firebase.firestore.Timestamp.fromDate(new Date("2025-01-01T00:00:00Z")),
       });
     });
-    const superDb = env.authenticatedContext(SU).firestore();
-    const adminDb = env.authenticatedContext(ADMIN).firestore();
-    const suspendedDb = env.authenticatedContext(SUSPENDED).firestore();
-    const residentDb = env.authenticatedContext(TARGET).firestore();
-    const unrelatedDb = env.authenticatedContext(OTHER).firestore();
+    // Use email+verified claim fixtures matching production approved()
+    // semantics. The previous synthetic tokens had neither claim and were
+    // denied by the already-active verifiedEmailSession() predicate.
+    const verifiedDb = (uid,email) => env.authenticatedContext(uid,
+      {email,email_verified:true}).firestore();
+    const superDb = verifiedDb(SU,"superadmin@example.test");
+    const adminDb = verifiedDb(ADMIN,"admin@example.test");
+    const suspendedDb = verifiedDb(SUSPENDED,"suspended@example.test");
+    const residentDb = verifiedDb(TARGET,"staff@example.test");
+    const unrelatedDb = verifiedDb(OTHER,"resident@example.test");
     const unauthDb = env.unauthenticatedContext().firestore();
 
     await check("Active LGU Admin can list user records for authorized verification", () =>
       adminDb.collection("users").get());
+    const unverifiedAdmin = env.authenticatedContext(ADMIN,
+      {email:"admin@example.test",email_verified:false}).firestore();
+    await check("Unverified LGU Admin cannot list user records", () =>
+      unverifiedAdmin.collection("users").get(), true);
     await check("Suspended LGU Admin cannot list private user records", () =>
       suspendedDb.collection("users").get(), true);
     await check("Suspended LGU Admin cannot read another resident profile", () =>
@@ -193,7 +202,8 @@ async function main() {
 
     // LGU staff can apply for an account, but applications grant NO privileges.
     const pendingUid = "pending-lgu-applicant";
-    const pendingEmail = "new-lgu-applicant@example.test";
+    // Production new-applicant policy is Yahoo-only, not arbitrary domains.
+    const pendingEmail = "new-lgu-applicant@yahoo.com";
     const pendingDb = env.authenticatedContext(pendingUid,
       { email: pendingEmail }).firestore();
     const pendingProfile = {
