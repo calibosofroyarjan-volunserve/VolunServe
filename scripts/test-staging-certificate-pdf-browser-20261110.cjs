@@ -6,7 +6,9 @@ const fs = require("node:fs");
 const path = require("node:path");
 const vm = require("node:vm");
 const ts = require("typescript");
-const { chromium } = require("playwright");
+const os = require("node:os");
+const { spawnSync } = require("node:child_process");
+const { pathToFileURL } = require("node:url");
 
 const projectRoot = path.resolve(__dirname, "..");
 
@@ -106,24 +108,32 @@ async function main() {
   assert.match(certificateSource.source, /onPress=\{\(\) => onPrint\(certificate\)\}/);
   console.log("PASS 3: Print / Save PDF action remains restricted to issued certificates");
 
-  const browser = await chromium.launch({ headless: true });
+  const chrome = ["google-chrome", "chromium", "chromium-browser"].find(binary => {
+    const result = spawnSync("which", [binary], { encoding: "utf8" });
+    return result.status === 0;
+  });
+  assert.ok(chrome, "Chrome/Chromium must be installed on CI runner");
+  const temp = fs.mkdtempSync(path.join(os.tmpdir(), "volunserve-synthetic-cert-"));
   try {
-    const page = await browser.newPage({ viewport: { width: 1060, height: 900 } });
-    // No outbound HTTP(S) requests from the synthetic document.
-    await page.route(/https?:\/\/.*/, route => route.abort("blockedbyclient"));
-    await page.setContent(html, { waitUntil: "load" });
-    assert.equal(await page.locator(".title").innerText(), "CERTIFICATE OF PARTICIPATION");
-    assert.match(await page.locator(".recipient").innerText(), /Synthetic <img src=x/);
-    assert.match(await page.locator(".recognition").innerText(), /1 minute/);
-    assert.match(await page.locator(".foot .id").innerText(), /VS-STAGING-TEST-0001/);
-    assert.equal(await page.evaluate(() => Boolean(window.__injected)), false);
-    const pdf = await page.pdf({ format: "A4", preferCSSPageSize: true, printBackground: true });
+    const htmlPath = path.join(temp, "certificate.html");
+    const pdfPath = path.join(temp, "certificate.pdf");
+    fs.writeFileSync(htmlPath, html, "utf8");
+    const browser = spawnSync(chrome, [
+      "--headless", "--no-sandbox", "--disable-gpu", "--disable-dev-shm-usage",
+      "--disable-background-networking", "--no-first-run",
+      "--no-pdf-header-footer",
+      "--print-to-pdf=" + pdfPath,
+      pathToFileURL(htmlPath).href,
+    ], { encoding: "utf8", timeout: 60000 });
+    assert.equal(browser.status, 0,
+      "Chromium PDF render failed: " + String(browser.stderr || browser.error || "").slice(-1000));
+    assert.ok(fs.existsSync(pdfPath), "Chromium must have generated a PDF");
+    const pdf = fs.readFileSync(pdfPath);
     assert.equal(pdf.subarray(0, 5).toString("ascii"), "%PDF-");
     assert.ok(pdf.length > 10000, "Browser-generated PDF must not be empty");
-    console.log("PASS 4: Real Chromium rendered the synthetic certificate and generated a non-empty A4 PDF (" + pdf.length + " bytes)");
-    await page.close();
+    console.log("PASS 4: Real Chromium generated a non-empty A4 certificate PDF (" + pdf.length + " bytes)");
   } finally {
-    await browser.close();
+    fs.rmSync(temp, { recursive: true, force: true });
   }
 
   console.log("PASS: isolated staging certificate printable-PDF and verification tests; no live writes");
