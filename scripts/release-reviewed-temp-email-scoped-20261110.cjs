@@ -40,6 +40,7 @@ function selfTest() {
   assert.equal(BACKUP, "signup-live-backup-20261110");
   assert.equal(PREVIEW, "signup-web-review-20261110");
   assert(!("gmailAliasClaims" in {allowedDomains:true}));
+  assert.throws(()=>ok({ok:false,status:400,data:{error:{message:"Candidate Rules exceed 256000 bytes"}}},"Rules existing-release PATCH"),/exceed 256000 bytes/);
   console.log("PASS scoped source fingerprints, backup names and rollback guards (NO CLOUD ACCESS)");
 }
 const REST_RULES="https://firebaserules.googleapis.com/v1/";
@@ -58,7 +59,16 @@ async function http(url,token,method="GET",body){
   return {ok:resp.ok,status:resp.status,data};
 }
 function ok(r,label){
-  assert(r.ok,"BLOCKED: "+label+" HTTP "+r.status);
+  if(!r.ok){
+    // Only Rules activation errors get their sanitized diagnostic printed.
+    // Never expose request payloads, OAuth tokens, account identifiers or full
+    // Firebase response bodies in production GitHub Actions logs.
+    const reason=label==="Rules existing-release PATCH" ?
+      String(r.data?.error?.message||"").slice(0,550)
+        .replace(/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+/g,"[redacted-email]")
+        .replace(/ya29[.][A-Za-z0-9._-]+/g,"[redacted-token]") : "";
+    throw Error("BLOCKED: "+label+" HTTP "+r.status+(reason?" — "+reason:""));
+  }
   return r.data;
 }
 function assertPinned(){
