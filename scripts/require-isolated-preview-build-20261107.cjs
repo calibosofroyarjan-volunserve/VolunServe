@@ -24,6 +24,9 @@ const stage=config.requireIsolatedStagingFirebaseConfig({
  messagingSenderId:process.env.EXPO_PUBLIC_STAGING_FIREBASE_SENDER_ID,
  appId:process.env.EXPO_PUBLIC_STAGING_FIREBASE_APP_ID,
 });
+assert(stage.projectId==="volunserve-auth-staging",
+  "STAGING BUILD BLOCKED: certificate frontend must use volunserve-auth-staging Firebase project");
+require("./test-staging-certificate-connection-20261110.cjs");
 const backend=compile("lib/stagingBackendSafety.ts");
 const backendUrl=backend.getSafeVolunServeBackendBaseUrl();
 const host=new URL(backendUrl).hostname;
