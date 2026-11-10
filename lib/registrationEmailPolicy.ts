@@ -1,7 +1,7 @@
 /**
  * VolunServe registration email policy.
  *
- * Built-in denylist + DNS-validated maintained list, checked before creation
+ * New-registration Gmail/Yahoo allowlist + maintained disposable denylist, checked before creation
  * of a new Firebase Auth UID. A subdomain of a blocked domain is blocked too.
  * Firebase verified email ownership is a separate requirement.
  * Unknown/new throwaway providers cannot be guaranteed to be detected without
@@ -135,6 +135,12 @@ export function isKnownDisposableEmail(email: string): boolean {
   return false;
 }
 
+// New registration is limited to the exact official Gmail and Yahoo domains.
+// Avoid suffix/substring matching (gmail.com.evil.example must never pass).
+export const REGISTRATION_ALLOWED_EMAIL_DOMAINS: ReadonlySet<string> = new Set([
+  "gmail.com", "googlemail.com", "yahoo.com", "yahoo.com.ph", "yahoo.co.uk",
+]);
+
 /** Return a clear, user-facing registration error, or null when acceptable.
  * Known-domain filtering is a client UX check; Firebase security rules and
  * trusted server enforcement are separate protections.
@@ -184,6 +190,9 @@ export function getRegistrationEmailError(email: string): string | null {
   }
   if (isKnownDisposableEmail(value)) {
     return "Temporary email addresses are not accepted. Use a permanent email address.";
+  }
+  if (!REGISTRATION_ALLOWED_EMAIL_DOMAINS.has(domain)) {
+    return "Only Gmail and Yahoo email addresses are accepted for new VolunServe registrations.";
   }
   return null;
 }
