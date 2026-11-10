@@ -21,6 +21,13 @@ const OFFICIAL_METHODS = new Set([
   "Official appointment records verification",
 ]);
 const ALLOWED_BARANGAY = /^[\p{L}\p{M}0-9 .'-]{2,100}$/u;
+// New LGU applications currently use Yahoo email/password only; do not let
+// this Admin SDK endpoint bypass the new-applicant Firestore/Signup policy.
+// Older pending applicant profiles are left intact, not retroactively denied.
+function isPermittedNewLguApplicantEmail(email) {
+  return typeof email === "string" &&
+    /^[^\s@]+@(?:yahoo\.com|yahoo\.com\.ph|yahoo\.co\.uk)$/.test(email.trim().toLowerCase());
+}
 
 function error(status, code, message) {
   const e = new Error(message);
@@ -136,6 +143,12 @@ function installLguCredentialRoutes({ app, db, FieldValue, requireFirebaseUser, 
             throw error(409, "account_already_registered", "This email is not a pending LGU application.");
           }
           return false;
+        }
+        // A direct Render API call must not evade the Yahoo-only new-LGU
+        // signup restriction. Admin SDK bypasses Firestore Security Rules.
+        if (!isPermittedNewLguApplicantEmail(email)) {
+          throw error(403, "new_lgu_email_provider_not_allowed",
+            "New LGU applications require a Yahoo email address.");
         }
         tx.create(ref, initial);
         return true;
@@ -317,4 +330,4 @@ function installLguCredentialRoutes({ app, db, FieldValue, requireFirebaseUser, 
     } catch (err) { respondError(res, err); }
   });
 }
-module.exports = { installLguCredentialRoutes, imageMime };
+module.exports = { installLguCredentialRoutes, imageMime, isPermittedNewLguApplicantEmail };
