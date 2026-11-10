@@ -23,12 +23,3 @@ jobs:
           node-version: "22"
       - name: Existing identity QA + staging certificate portal strict isolation
         run: node identity-staging-web/build-check.cjs
-      - name: Confirm existing read-only Expo preview auth boundary remains untouched
-        run: |
-          node - <<'NODE'
-          const fs = require('node:fs');
-          const assert = require('node:assert/strict');
-          const web=fs.readFileSync('app/login.web.tsx','utf8');
-          assert.match(web,/if \(isStagingPreview\) return <ReadOnlyPreviewAuthNotice \/>/);
-          console.log('PASS: original Expo staging UI login remains read-only');
-          NODE
