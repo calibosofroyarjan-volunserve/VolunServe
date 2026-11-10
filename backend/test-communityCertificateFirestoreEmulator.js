@@ -133,14 +133,11 @@ async function main() {
         .data().verificationStatus, "revoked");
     pass("revoked certificate is not reissued");
 
-    // New temporary live policy: real Firestore transaction integration,
-    // still strictly isolated to the demo- project and emulator.
-    const startMs = Date.now() - 30 * 60 * 1000;
-    process.env.VOLUNSERVE_CERT_LIVE_TEMP_ONE_MIN_ENABLED = "true";
-    process.env.VOLUNSERVE_CERT_LIVE_TEMP_ONE_MIN_START_UTC =
-      new Date(startMs).toISOString().slice(0, 19) + "Z";
-    process.env.VOLUNSERVE_CERT_LIVE_TEMP_ONE_MIN_END_UTC =
-      new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString().slice(0, 19) + "Z";
+    // Permanent live one-minute rule tested in the real Firestore emulator.
+    // Historical records still predate the original fixed activation cutoff.
+    const startMs = Date.parse("2026-11-10T14:55:00Z");
+    process.env.VOLUNSERVE_CERT_LIVE_ONE_MIN_PERMANENT_ENABLED = "true";
+    delete process.env.VOLUNSERVE_CERT_LIVE_TEMP_ONE_MIN_ENABLED;
 
     const newUid = "demo-live-temporary-unlisted-uid";
     const newEvent = "demo-live-temporary-new-one-minute";
@@ -155,7 +152,7 @@ async function main() {
     const newCertId = communityCertificateId(newEvent, newUid, "2026-11-10");
     assert.equal((await db.collection("certificates").doc(newCertId).get())
       .data().verifiedServiceMinutes, 1);
-    pass("temporary live 1m rule issues a real certificate to a new attendee without an allowlist");
+    pass("permanent live 1m rule issues a real certificate to a new attendee without an allowlist");
 
     const oldEvent = "demo-live-temporary-old-one-minute";
     await seed(oldEvent, newUid, 60);
@@ -183,9 +180,9 @@ async function main() {
       eventId: shortNewEvent, execute: true,
     });
     assert.equal(shortNew.issuedCount, 0);
-    pass("live temporary policy still blocks 59 seconds");
+    pass("live permanent policy still blocks 59 seconds");
 
-    process.env.VOLUNSERVE_CERT_LIVE_TEMP_ONE_MIN_ENABLED = "false";
+    process.env.VOLUNSERVE_CERT_LIVE_ONE_MIN_PERMANENT_ENABLED = "false";
     const disabledEvent = "demo-live-temporary-disabled";
     await seed(disabledEvent, newUid, 60);
     await db.collection("communityEvents").doc(disabledEvent).update({
@@ -195,7 +192,7 @@ async function main() {
       eventId: disabledEvent, execute: true,
     });
     assert.equal(disabledResult.issuedCount, 0);
-    pass("turning off temporary live flag immediately restores the 30m threshold");
+    pass("turning off permanent live flag immediately restores the 30m threshold");
 
     console.log("PASS: all " + n + " isolated Firebase emulator checks succeeded.");
   } finally {
