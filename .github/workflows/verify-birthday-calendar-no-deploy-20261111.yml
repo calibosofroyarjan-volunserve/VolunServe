@@ -1,0 +1,34 @@
+name: Verify Signup Birthday Calendar (NO DEPLOY)
+on:
+  push:
+    branches: [ux/signup-birthday-calendar-only-20261111]
+  pull_request:
+    branches: [fix/registration-block-all-co-20261111]
+permissions:
+  contents: read
+jobs:
+  birthday-calendar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - name: Verify birthday calendar and boundary dates
+        run: node --test scripts/test-birthday-calendar-20261111.cjs
+      - name: Keep existing auth and signup source regressions
+        run: |
+          node scripts/test-signup-prod.cjs
+          node --test scripts/test-resident-field-validation.cjs
+      - name: TypeScript validation
+        run: npx tsc --noEmit --incremental false
+      - name: Expo web export without publishing
+        run: npx expo export --platform web --clear
+      - name: Confirm no production deploy
+        run: echo 'NO DEPLOY - no Firebase credentials, Hosting, Functions, Firestore Rules or Render changes'
