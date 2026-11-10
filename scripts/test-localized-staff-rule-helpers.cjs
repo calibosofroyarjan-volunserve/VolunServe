@@ -304,11 +304,16 @@ const compactProvider=providerFold
           "emailgeneratorai[.]cc|emailkeep[.]com|ghostmailz[.]club")
  .replace("            && !request.auth.token.get('email', '').matches(\"(?i).*@([a-z0-9-]+[.])*emailkeep[.]com\")\n","")
  .replace("        && !request.resource.data.email.matches(\"(?i).*@([a-z0-9-]+[.])*emailkeep[.]com\")\n","");
-assert.equal(current,compactProvider,
- "BLOCKED: Rules differ beyond the reviewed semantic-preserving emailkeep fold");
+// Frozen-source evidence URL equivalence: ID length 1..428 is exactly URL length 73..500.
+const oldSizing="          && document.url.size() >= 40\n          && document.url.size() <= 500\n";
+const evidenceComment="          // The fixed URL prefix/suffix contribute exactly 72 ASCII chars.\n          // 1-428 evidence ID chars give exactly the same valid 73-500 length\n          // range as the previous URL size checks, with no broader matches.\n";
+assert.equal(compactProvider.split(oldSizing).length,2,"Missing old evidence length validation");
+const expectedUrlRule=compactProvider.replace(oldSizing,evidenceComment)
+ .replace("evidence_[A-Za-z0-9]+/access$","evidence_[A-Za-z0-9]{1,428}/access$");
+assert.equal(current,expectedUrlRule,"BLOCKED: non-equivalent assistance URL or unrelated Rules change");
 
 assert.equal(cp.execFileSync("git",["hash-object","firestore.rules"],{encoding:"utf8"}).trim(),
-"44058e46683bfa46ce2a7daf5e1274fd4c31d985","BLOCKED: unreviewed Firestore Rules blob");
+"ca25271c0ea9e2d14d39c1204ec1ad53745d6a65","BLOCKED: unreviewed Firestore Rules blob");
 // Verify exhaustiveness of all optional-review branches over valid and
 // invalid types, status values and three-valued nulls before Firebase emulator.
 for(const required of [true,false,null,"true",0,1,undefined]){
@@ -326,7 +331,7 @@ for(const required of [true,false,null,"true",0,1,undefined]){
 }
 
 const gitBlob=cp.execFileSync("git",["hash-object","firestore.rules"],{encoding:"utf8"}).trim();
-assert.equal(gitBlob,"44058e46683bfa46ce2a7daf5e1274fd4c31d985","BLOCKED: unapproved Firestore blob");
+assert.equal(gitBlob,"ca25271c0ea9e2d14d39c1204ec1ad53745d6a65","BLOCKED: unapproved Firestore blob");
 const paths=source=>source.split("\n").filter(l=>l.startsWith("    match /")).map(l=>l.slice("    match /".length).split(" ")[0]);
 assert.deepEqual(paths(current),paths(protectedBaseline),"BLOCKED: collection scope changed");
 const allows=source=>[...source.matchAll(/allow (?:get|list|read|write|create|update|delete)/g)].length;

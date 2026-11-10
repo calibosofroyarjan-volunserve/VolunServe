@@ -1506,10 +1506,11 @@ service cloud.firestore {
           && document.label.size() >= 2
           && document.label.size() <= 160
           && document.url is string
-          && document.url.size() >= 40
-          && document.url.size() <= 500
+          // The fixed URL prefix/suffix contribute exactly 72 ASCII chars.
+          // 1-428 evidence ID chars give exactly the same valid 73-500 length
+          // range as the previous URL size checks, with no broader matches.
           && document.url.matches(
-            '^https://volunserve[.]onrender[.]com/api/assistance/evidence/evidence_[A-Za-z0-9]+/access$'
+            '^https://volunserve[.]onrender[.]com/api/assistance/evidence/evidence_[A-Za-z0-9]{1,428}/access$'
           )
           && document.fileName is string
           && document.fileName.size() >= 1
