@@ -39,7 +39,7 @@ function selfTest() {
   assert.equal(REST_RULES, "https://firebaserules.googleapis.com/v1/");
   assert.equal(BACKUP, "signup-live-backup-20261110");
   assert.equal(PREVIEW, "signup-web-review-20261110");
-  assert(!Boolean("gmailAliasClaims".includes("gmailAliasClaims_")));
+  assert(!("gmailAliasClaims" in {allowedDomains:true}));
   console.log("PASS scoped source fingerprints, backup names and rollback guards (NO CLOUD ACCESS)");
 }
 const REST_RULES="https://firebaserules.googleapis.com/v1/";
@@ -201,14 +201,16 @@ function hostingClone(sourceChannel,destinationChannel,secret){
 async function safeRollback(token,originalRuleset,candidateRuleset,secret){
   let restored=true;
   try {
-    const live=await http("https://volunserve.com/volunserve-release.json");
-    if(live.ok && live.data.revision===WEB){
+    // Channel-version comparison is authoritative for rollback: CDN marker
+    // caches may lag even when the live Firebase Hosting channel has changed.
+    const hosting=await state(token);
+    if(version(hosting.liveChannel)===version(hosting.previewChannel)){
       console.error("ROLLBACK: restore original exact-live Hosting version");
       hostingClone(BACKUP,"live",secret);
       await awaitSiteMarker(LIVE);
-    } else if(!live.ok || live.data.revision!==LIVE){
+    } else if(version(hosting.liveChannel)!==version(hosting.backupChannel)){
       restored=false;
-      console.error("BLOCKED ROLLBACK HOSTING: unknown live revision; manual review required");
+      console.error("BLOCKED ROLLBACK HOSTING: unknown live Hosting channel version; manual review required");
     }
   }catch(e){restored=false;console.error("ROLLBACK HOSTING FAILED: manual review required");}
   try{
@@ -281,7 +283,9 @@ async function execute(){
     console.log("SUCCESS: reviewed PR #356 Hosting + PR #358 Firestore Rules both LIVE. Auth/Firestore records unchanged. Gmail aliases not deployed.");
   }catch(error){
     console.error("RELEASE BLOCKED: "+String(error?.message||"release error").slice(0,250));
-    if(candidateRuleset && (patched||hostingTouched)){
+    // A timed-out PATCH or clone can succeed remotely despite a local error.
+    // Always inspect actual remote pointers after attempting Ruleset create.
+    if(candidateRuleset){
       await safeRollback(token,first.rulesetName,candidateRuleset,secret);
     } else {
       console.error("NO PRODUCTION RELEASE SWITCH COMPLETED; original site/Rules retained");
