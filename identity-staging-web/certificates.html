@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+  <title>VolunServe | Staging Community Certificate Test</title>
+  <style>
+    :root{font-family:Inter,system-ui,-apple-system,Segoe UI,sans-serif;color:#123b34;background:#f3f8f6}
+    *{box-sizing:border-box}body{margin:0}main{max-width:1050px;margin:auto;padding:24px 17px 50px}
+    h1{font-size:26px;letter-spacing:-.6px;margin:0}h2{font-size:18px;margin:0 0 12px}h3{margin:0;font-size:15px}
+    p{line-height:1.5}.muted{color:#61766e;font-size:13px}.row{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+    .top{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:20px}
+    .pill{border-radius:30px;background:#dbf3e7;color:#12654e;padding:8px 14px;font-size:11px;font-weight:800;letter-spacing:.3px}
+    .hero{background:linear-gradient(135deg,#0b4d40,#068874);color:white;padding:26px 28px;border-radius:18px;margin-bottom:18px}
+    .hero p{color:#d1f5e8;margin:9px 0 0}.hero h2{font-size:24px;margin:0}
+    .notice{background:#fffaf0;border:1px solid #ead9a4;padding:15px 17px;border-radius:12px;font-size:13px;line-height:1.6;margin-bottom:20px;color:#705416}
+    .grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px}.card{background:#fff;border:1px solid #d9e8df;border-radius:15px;padding:22px;box-shadow:0 6px 18px #092f2810}
+    .wide{grid-column:1/-1}.stack{display:grid;gap:12px}label{font-weight:700;font-size:12px;display:grid;gap:6px}
+    input{border:1px solid #c6d9ce;border-radius:9px;font:inherit;font-size:14px;padding:12px;width:100%;color:#153c32}
+    button{border:0;border-radius:9px;background:#087964;color:white;padding:11px 16px;font:inherit;font-weight:700;font-size:13px;cursor:pointer}
+    button.alt{background:#e9f4ed;color:#145647}button:disabled{opacity:.45;cursor:not-allowed}
+    .results{white-space:pre-wrap;overflow-wrap:anywhere;background:#f4f8f6;border:1px solid #dfece4;border-radius:9px;min-height:48px;max-height:200px;overflow:auto;font:12px/1.5 ui-monospace,monospace;padding:12px}
+    .hidden{display:none!important}.list{display:grid;gap:9px;margin-top:12px}.item{border:1px solid #e0ece5;background:#f8fcf9;border-radius:10px;padding:12px}
+    .item p{margin:5px 0;font-size:12px}.item .row{justify-content:space-between}.badge{font-size:10px;border-radius:99px;padding:5px 8px;background:#e0f3e6;color:#0a694f;font-weight:800}
+    a{color:#126e59}small{font-size:11px}.danger{color:#9b3838}.success{color:#126b50}.hint{font-size:12px;color:#61746d}
+    footer{text-align:center;margin-top:24px;font-size:11px;color:#6a8075}
+    @media(max-width:730px){.grid{grid-template-columns:1fr}.wide{grid-column:auto}.top{align-items:flex-start}.hero{padding:22px}h1{font-size:22px}}
+  </style>
+</head>
+<body>
+<main>
+<header class="top"><div><h1>VolunServe</h1><div class="muted">Community Certificate Test Portal</div></div><div class="pill">ISOLATED STAGING ONLY</div></header>
+<section class="hero"><h2>Test 1-minute Community Event certificates</h2><p>Separate Firebase Auth/Firestore and separate Render certificate backend. This is a limited test portal, not the production VolunServe website.</p></section>
+<div class="notice"><strong>Use staging test accounts only.</strong> Do not enter your production VolunServe credentials or real residents' ID documents. Admin issuance can write certificates to <strong>staging only</strong> after explicit confirmation. Attendance creation and event setup are not provided by this page. The original UI-only preview remains intentionally read-only.</div>
+<div class="grid">
+  <section class="card">
+    <h2>1. Sign in to staging</h2>
+    <form id="loginForm" class="stack">
+      <label>Staging email <input id="email" type="email" autocomplete="email" required></label>
+      <label>Staging password <input id="password" type="password" autocomplete="current-password" required></label>
+      <div class="row"><button id="loginButton" type="submit">Sign in</button><button id="logoutButton" type="button" class="alt" disabled>Sign out</button></div>
+    </form>
+    <p id="session" class="muted" aria-live="polite">Checking staging login session…</p>
+    <div id="authResult" class="results" aria-live="polite">No action yet.</div>
+  </section>
+  <section class="card">
+    <h2>2. View completed staging events</h2>
+    <p class="hint">Only accessible to authenticated test Admin accounts if Firestore rules permit. Click an event to fill the ID below.</p>
+    <button id="loadEvents" type="button" disabled>Load staging events</button>
+    <div id="eventResult" class="results" aria-live="polite">Sign in with a staging Admin account.</div>
+    <div id="eventList" class="list"></div>
+  </section>
+  <section class="card">
+    <h2>3. Admin Certificate Sync</h2>
+    <p class="hint">Preview is read-only. Issue writes only to the staging Firebase backend and requires authorized Admin credentials.</p>
+    <form id="syncForm" class="stack">
+      <label>Community Event Firestore document ID<input id="eventId" type="text" maxlength="160" placeholder="Select a staging event above" required></label>
+      <div class="row"><button id="previewSync" type="button" disabled>Check eligibility</button><button id="issueSync" type="button" disabled>Issue staging certificates</button></div>
+    </form>
+    <div id="syncResult" class="results" aria-live="polite">Sign in as a staging Admin to continue.</div>
+  </section>
+  <section class="card">
+    <h2>4. My staging certificates</h2>
+    <p class="hint">Volunteer certificates belong to the signed-in staging Firebase UID. An Admin cannot pretend to be another user here.</p>
+    <button id="loadCertificates" type="button" disabled>Refresh my certificates</button>
+    <div id="certificateResult" class="results" aria-live="polite">Sign in with a staging Volunteer test account.</div>
+    <div id="certificateList" class="list"></div>
+  </section>
+  <section class="card wide">
+    <h2>5. Verify public staging Certificate ID</h2>
+    <div class="row"><label style="flex:1;min-width:200px">Certificate ID<input id="verifyId" type="text" maxlength="80" placeholder="VS-CE-2026-..." /></label><button id="verifyButton" type="button">Verify staging ID</button></div>
+    <div id="verifyResult" class="results" aria-live="polite">Public staging verification only. No production certificates are accessible.</div>
+  </section>
+</div>
+<footer>VolunServe staging · Firebase project: volunserve-auth-staging · Backend: volunserve-backend-staging.onrender.com<br>
+<a href="/">Identity staging tests</a> · <a href="https://volunserve-consolidated-pc-mobile-review.onrender.com/public/preview">Read-only design preview</a></footer>
+</main>
+<script type="module" src="./certificates.js"></script>
+</body></html>
