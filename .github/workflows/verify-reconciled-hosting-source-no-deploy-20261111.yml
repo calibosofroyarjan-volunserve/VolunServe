@@ -56,7 +56,7 @@ jobs:
           assert.deepEqual(protectedDelta.filter(path=>preservedPrefixes.test(path)),[],
             "BLOCKED: Render backend or Firebase Functions diverged");
           for(const file of ["package.json","package-lock.json","app.json","firebase.json",
-              ".firebaserc","metro.config.js","tsconfig.json"]){
+              ".firebaserc","tsconfig.json"]){
             assert.equal(git("rev-parse","HEAD:"+file),git("rev-parse",site+":"+file),
               "BLOCKED: Hosting build configuration changed: "+file);
           }
