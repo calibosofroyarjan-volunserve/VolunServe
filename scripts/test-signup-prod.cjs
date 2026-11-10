@@ -25,7 +25,7 @@ const residentDetailsGuard = load(read("lib/requireCompleteResidentRegistration.
   "../constants/sjdmBarangays": load(read("constants/sjdmBarangays.ts")),
   "../constants/occupationOptions": load(read("constants/occupationOptions.ts")),
 });
-const data = {firstName:"Maria",lastName:"Santos",middleName:"",email:"resident@gmail.com",password:"Password1!",age:25,phoneNumber:"+639171234567",region:"Region III ? Central Luzon",province:"Bulacan",city:"City of San Jose del Monte",barangay:"Muzon Proper",occupationCategory:"Student",occupationSpecialization:"College",occupationOther:"",role:"volunteer"};
+const data = {firstName:"Maria",lastName:"Santos",middleName:"",email:"resident@yahoo.com",password:"Password1!",age:25,phoneNumber:"+639171234567",region:"Region III ? Central Luzon",province:"Bulacan",city:"City of San Jose del Monte",barangay:"Muzon Proper",occupationCategory:"Student",occupationSpecialization:"College",occupationOther:"",role:"volunteer"};
 function harness(source, enabled, options = {}) {
   const calls = [];
   const user = {uid:"signup-test",email:data.email,emailVerified:options.verified ?? true,providerData:(options.providers || ["password"]).map(providerId=>({providerId})),photoURL:"",reload:async()=>{calls.push("reload");}};
@@ -129,7 +129,7 @@ function harness(source, enabled, options = {}) {
     });
   }
   await check("verified signup requires matching authenticated email",async()=>{
-    const h=harness(current,true);await assert.rejects(h.api.signUpUser({...data,email:"other@gmail.com",authProvider:"verified_email"}),/does not match/);assert.equal(h.profile(),null);
+    const h=harness(current,true);await assert.rejects(h.api.signUpUser({...data,email:"other@yahoo.com",authProvider:"verified_email"}),/does not match/);assert.equal(h.profile(),null);
   });
   await check("verified signup atomically creates production Basic Resident schema on the same UID",async()=>{
     const h=harness(current,true);await h.api.signUpUser({...data,password:"",authProvider:"verified_email"});
@@ -196,7 +196,34 @@ function harness(source, enabled, options = {}) {
       else assert(error.includes(right));
     }
   });
-  await check("disposable domain rejects Firebase UID before creation and profile write",async()=>{
+  await check("SmailPro receive-only Gmail cannot create an account without Google OAuth",async()=>{
+    const pending=harness(current,true,{noUser:true});
+    for(const mailbox of ["pooled@gmail.com","p.o.o.l.e.d@gmail.com","pooled@googlemail.com"]) {
+      await assert.rejects(pending.registration.authenticateEmailSignup(mailbox,"Password1!",false,true),/Continue with Google/);
+    }
+    assert(!pending.calls.includes("create") && !pending.calls.includes("transaction"));
+    // Even a previously verified email/password UID cannot register a new
+    // Resident profile through a proxy inbox. Google provider must be linked.
+    const direct=harness(current,true,{verified:true});
+    await assert.rejects(direct.api.signUpUser({...data,email:"resident@gmail.com",authProvider:"verified_email",password:""}),/Continue with Google/);
+    await assert.rejects(direct.api.signUpUser({...data,email:"resident@gmail.com",authProvider:"email"}),/Continue with Google/);
+    assert(!direct.calls.includes("create") && !direct.calls.includes("transaction"));
+    // A genuine Google provider identity remains able to register.
+    const google=harness(current,true,{providers:["google.com"]});
+    google.user.email="resident@gmail.com";
+    await google.api.signUpUser({...data,email:"resident@gmail.com",authProvider:"google",password:""});
+    assert(google.calls.includes("transaction"));
+    const ui=read("components/auth/EmailFirstSignup.tsx");
+    assert(ui.includes("gmailOAuthRequired && !googleOnly"));
+    for(const file of ["app/signup.web.tsx","app/signup.tsx"]) {
+      const source=read(file);
+      assert(source.includes("requiresGoogleOAuthForRegistration(formData.email)"));
+      assert(source.includes("(googleBound || (!gmailOAuthRequired && passwordValid))"));
+    }
+    const staff=read("app/admin-request.tsx");
+    assert(staff.includes("requiresGoogleOAuthForRegistration(email)"));
+  });
+    await check("disposable domain rejects Firebase UID before creation and profile write",async()=>{
     const h=harness(current,true,{noUser:true});
     await assert.rejects(h.registration.authenticateEmailSignup("person@en2ch.com","Password1!",false,true),/Temporary email/);
     await assert.rejects(h.registration.authenticateEmailSignup("person@en2ch.co","Password1!",false,true),/\.co/);
