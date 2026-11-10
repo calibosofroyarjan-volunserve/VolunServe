@@ -1462,8 +1462,8 @@ export default function CommunityAttendanceAdmin() {
               <View style={styles.readinessChip}>
                 <Ionicons name="ribbon-outline" color="#0A806C" size={15} />
                 <Text style={styles.readinessText}>
-                  {serviceMinimumCount} verified with 30+ minutes
-                  {selected.status === "completed" ? " · Eligible for certificate check" : " · Certificate check after completion"}
+                  {serviceMinimumCount} verified with 30+ minutes (standard requirement)
+                  {selected.status === "completed" ? " · Test-only exceptions checked during sync" : " · Certificate check after completion"}
                 </Text>
               </View>
             </View>
@@ -1472,7 +1472,7 @@ export default function CommunityAttendanceAdmin() {
                 <Ionicons name="information-circle-outline" size={24} color="#3874CF" />
               </View>
               <Text style={styles.eligibilityText}>
-                Volunteers record their own Time In and Time Out. Admin only reviews and verifies the recorded times; verification does not edit timestamps. Community Event certificates also require event completion and at least 30 minutes of verified service.
+                Volunteers record their own Time In and Time Out. Admin only reviews and verifies the recorded times; verification does not edit timestamps. Community Event certificates normally require a completed event and at least 30 minutes of verified service. The backend may apply a 1-minute exception only to explicitly approved test-event and volunteer pairs.
               </Text>
             </View>
           </View>
