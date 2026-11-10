@@ -166,7 +166,7 @@ el("loadEvents").addEventListener("click", async () => {
   try {
     const snapshot = await getDocs(query(collection(db, "communityEvents"), limit(40)));
     const events = snapshot.docs
-      .map(d => ({id:d.id, ...(d.data() || {})}))
+      .map(d => ({...(d.data() || {}), id:d.id}))
       .filter(d => d.status === "completed" && d.publicationStatus === "published");
     display("eventResult", events.length ? events.length + " completed/published staging events found." :
       "No completed published events found in the first 40 staging event documents. You can enter an event ID manually.");
@@ -287,7 +287,7 @@ el("loadCertificates").addEventListener("click", async () => {
     const snapshot = await getDocs(query(collection(db, "certificates"),
       where("volunteerId", "==", currentUser.uid), limit(35)));
     const certificates = snapshot.docs
-      .map(d => ({id:d.id, ...(d.data() || {})}))
+      .map(d => ({...(d.data() || {}), id:d.id}))
       .filter(d => d.certificateType === "community_event_participation");
     currentCertificates = certificates;
     display("certificateResult", certificates.length ?
