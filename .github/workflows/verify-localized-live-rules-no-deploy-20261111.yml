@@ -29,13 +29,14 @@ jobs:
         run: node scripts/test-localized-live-rules-provenance-20261111.cjs
       - name: Install locked project dependencies
         run: npm ci --no-audit --no-fund
-      - name: Reproduce identical LGU permissions with original live-derived Rules
+      - name: Reproduce LGU and emergency permissions on original live-derived Rules
         run: |
           set -euo pipefail
           cp firestore.rules "$RUNNER_TEMP/localized-review.rules"
           trap 'cp "$RUNNER_TEMP/localized-review.rules" firestore.rules' EXIT
           git show 1d244dc31ecd997497dfa15df7b4b6acef996b5c:firestore.rules > firestore.rules
           npx firebase-tools emulators:exec --only firestore --project demo-volunserve-original-lgu "node scripts/test-lgu-admin-rules.cjs"
+          npx firebase-tools emulators:exec --only firestore --project demo-volunserve-original-emergency "node scripts/test-live-emergency-map-rules.cjs"
           cp "$RUNNER_TEMP/localized-review.rules" firestore.rules
           trap - EXIT
       - name: Firestore direct-SDK new signup and verified email abuse tests
