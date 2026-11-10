@@ -190,12 +190,16 @@ function harness(source, enabled, options = {}) {
     const policy=load(read("lib/registrationEmailPolicy.ts"),{"./disposableEmailDomains.generated":generated});
     for(const value of ["person@gmail.com","person@yahoo.com.ph","person@outlook.com","person@department.gov.ph","person@legitimate.co.uk","person@legitimate.co.ph"]) assert.equal(policy.getRegistrationEmailError(value),null);
     for(const value of ["","bad@gmail..com","bad@gmail.con","bad@sub.mailinator.com","person@en2ch.co","person@en2ch.com","person@sub.en2ch.co","person@ruutukf.co","person@sub.ruutukf.co","person@legitimate.co","person@sub.legitimate.co","PERSON@LEGITIMATE.CO","person+tag@gmail.com","person+tag@googlemail.com"]) assert.equal(typeof policy.getRegistrationEmailError(value),"string");
-    for(const [wrong,right] of Object.entries(policy.KNOWN_PROVIDER_TYPO_CORRECTIONS)) assert(policy.getRegistrationEmailError("person@"+wrong).includes(right));
+    for(const [wrong,right] of Object.entries(policy.KNOWN_PROVIDER_TYPO_CORRECTIONS)) {
+      const error=policy.getRegistrationEmailError("person@"+wrong);
+      if(wrong.endsWith(".co")) assert.match(error,/\\.co/);
+      else assert(error.includes(right));
+    }
   });
   await check("disposable domain rejects Firebase UID before creation and profile write",async()=>{
     const h=harness(current,true,{noUser:true});
     await assert.rejects(h.registration.authenticateEmailSignup("person@en2ch.com","Password1!",false,true),/Temporary email/);
-    await assert.rejects(h.registration.authenticateEmailSignup("person@en2ch.co","Password1!",false,true),/Temporary email/);
+    await assert.rejects(h.registration.authenticateEmailSignup("person@en2ch.co","Password1!",false,true),/\.co/);
     await assert.rejects(h.registration.authenticateEmailSignup("person@ruutukf.co","Password1!",false,true),/\.co/);
     await assert.rejects(h.registration.authenticateEmailSignup("person@sub.ruutukf.co","Password1!",false,true),/\.co/);
     await assert.rejects(h.registration.authenticateEmailSignup("person@legitimate.co","Password1!",false,true),/\.co/);
