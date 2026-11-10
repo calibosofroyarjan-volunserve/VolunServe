@@ -1,0 +1,34 @@
+name: Review Staging Community Certificate Test Portal (NO DEPLOY)
+on:
+  pull_request:
+    branches:
+      - preview/identity-only-staging-web-20261108
+    paths:
+      - "identity-staging-web/index.html"
+      - "identity-staging-web/certificates.html"
+      - "identity-staging-web/certificates.js"
+      - "identity-staging-web/test-certificate-portal.cjs"
+      - "identity-staging-web/build-check.cjs"
+      - ".github/workflows/review-staging-certificate-test-portal-20261110.yml"
+permissions:
+  contents: read
+jobs:
+  isolated-portal:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Existing identity QA + staging certificate portal strict isolation
+        run: node identity-staging-web/build-check.cjs
+      - name: Confirm existing read-only Expo preview auth boundary remains untouched
+        run: |
+          node - <<'NODE'
+          const fs = require('node:fs');
+          const assert = require('node:assert/strict');
+          const web=fs.readFileSync('app/login.web.tsx','utf8');
+          assert.match(web,/if \(isStagingPreview\) return <ReadOnlyPreviewAuthNotice \/>/);
+          console.log('PASS: original Expo staging UI login remains read-only');
+          NODE
