@@ -121,16 +121,23 @@ test("known temporary inboxes, malformed emails, Gmail +tag are blocked; real Gm
     "person@outlook.com","person@school.edu.ph"
   ]) assert.equal(policy.getRegistrationEmailError(email),null,email+" must remain usable");
 });
-test("signup screen shows the same per-field errors, retains optional Google and verified email gates",()=>{
+test("signup screen retains required validation, verified email and phone-free fields",()=>{
   const source=read("components/auth/EmailFirstSignup.tsx");
-  for(const field of ["firstName","lastName","middleName","age","phoneNumber",
+  for(const field of ["firstName","lastName","middleName","age",
     "barangay","occupationCategory","occupationSpecialization","occupationOther"]) {
     assert(source.includes("registrationErrors."+field),"visible error "+field);
   }
+  // Phone input was deliberately removed from the published signup screen.
+  assert(!source.includes("registrationErrors.phoneNumber"),"Signup should not demand a phone");
+  assert(!source.includes('placeholder="09XXXXXXXXX or +639XXXXXXXXX"'),"Phone field must remain absent");
+  assert(source.includes('phoneNumber: ""'),"Blank optional contact must be sent to preserve schema");
+  assert.deepEqual(guard.getResidentRegistrationFieldErrors({...good,phoneNumber:""}),{});
+  assert.doesNotThrow(()=>guard.requireCompleteResidentRegistration({...good,phoneNumber:""}));
+  for(const value of ["not-a-number","0917","+639171234567999"]) {
+    assert(guard.getResidentRegistrationFieldErrors({...good,phoneNumber:value}).phoneNumber,
+      "Malformed supplied contact still rejected");
+  }
   assert(source.includes("getResidentRegistrationFieldErrors"));
-  assert(source.includes('phoneDigits.startsWith("63")'));
-  assert(source.includes('phoneDigits.startsWith("0")'));
-  assert(source.includes('placeholder="09XXXXXXXXX or +639XXXXXXXXX"'));
   assert(source.includes("if (!user.emailVerified)"));
   assert(source.includes("Continue to Email Verification"));
   assert(source.includes("Continue with Google"));
