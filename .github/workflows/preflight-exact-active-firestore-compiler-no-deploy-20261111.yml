@@ -1,0 +1,71 @@
+# REVIEW FIRST. No release or user-data writes. Production secret used only
+# after manually dispatching this exact workflow from live-protected.
+name: Preflight exact ACTIVE Firestore Rules compilation (NO DEPLOY)
+on:
+  pull_request:
+    branches:
+      - live-protected
+    paths:
+      - scripts/preflight-active-rules-compile-only-20261111.cjs
+      - .github/workflows/preflight-exact-active-firestore-compiler-no-deploy-20261111.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  review-only:
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Validate syntax and fail-closed patch contract without credentials
+        run: |
+          node --check scripts/preflight-active-rules-compile-only-20261111.cjs
+          node scripts/preflight-active-rules-compile-only-20261111.cjs --self-test
+      - name: Audit published Hosting vs protected branch without deploying
+        run: node scripts/audit-current-hosting-gap-no-deploy-20261111.cjs
+      - name: Prevent production publish references
+        run: |
+          node <<'NODE'
+          const assert=require("node:assert/strict");
+          const fs=require("node:fs");
+          const src=fs.readFileSync("scripts/preflight-active-rules-compile-only-20261111.cjs","utf8");
+          for(const forbidden of [":create",":patch","rulesets.create","releases.patch",
+            "firebase deploy","createUser(", "setDoc(", "runTransaction("]){
+            assert(!src.includes(forbidden),"BLOCKED: unsafe mutation entry: "+forbidden);
+          }
+          assert(src.includes("testSuite:{testCases:[]}"));
+          assert(src.includes("GITHUB_REF"));
+          assert(src.includes("EXPECTED_ACTIVE_SHA"));
+          assert(src.includes("EXPECTED_CANDIDATE_SHA"));
+          console.log("PASS: only protected, source-only Firebase preflight is permitted");
+          NODE
+  production-compiler-readonly:
+    if: ${{ github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/live-protected' && github.repository == 'calibosofroyarjan-volunserve/VolunServe' }}
+    needs: review-only
+    environment: production
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          submodules: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install Firebase-admin client for existing production viewer
+        run: npm ci --prefix functions --no-audit --no-fund
+      - name: Validate real-live Rules source against exact reviewed candidate without publishing
+        env:
+          VOLUNSERVE_PRODUCTION_HOSTING_SERVICE_ACCOUNT: ${{ secrets.VOLUNSERVE_PRODUCTION_HOSTING_SERVICE_ACCOUNT }}
+        run: node scripts/preflight-active-rules-compile-only-20261111.cjs --compile-only
+      - name: Explicit no-deployment marker
+        run: |
+          echo "NO DEPLOY: no Rules release, ruleset creation, Auth writes, Hosting changes or Render deploy"
