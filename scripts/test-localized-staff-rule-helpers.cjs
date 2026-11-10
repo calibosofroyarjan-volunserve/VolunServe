@@ -310,10 +310,30 @@ const evidenceComment="          // The fixed URL prefix/suffix contribute exact
 assert.equal(compactProvider.split(oldSizing).length,2,"Missing old evidence length validation");
 const expectedUrlRule=compactProvider.replace(oldSizing,evidenceComment)
  .replace("evidence_[A-Za-z0-9]+/access$","evidence_[A-Za-z0-9]{1,428}/access$");
-assert.equal(current,expectedUrlRule,"BLOCKED: non-equivalent assistance URL or unrelated Rules change");
+// The 18 exact assistance evidence document types remain unchanged.
+const oldDocTypeCheck="&& document.documentType is string && document.documentType.matches('^(damage_evidence|barangay_incident_reference|medical_certificate|hospital_estimate|other_medical_support|treatment_estimate|other_treatment_support|diagnosis_document|treatment_plan_or_bill|other_illness_support|animal_case_photo|vet_assessment|other_animal_support|elderly_need_evidence|elderly_supporting_document|basic_need_evidence|barangay_social_welfare_reference|other_supporting_evidence)$')";
+const minifiedDocTypeCheck="&& document.documentType.matches('^((?:d(?:amage_evidence|iagnosis_document)|ba(?:rangay_(?:incident_reference|social_welfare_reference)|sic_need_evidence)|medical_certificate|hospital_estimate|other_(?:(?:medical|treatment|illness|animal)_support|supporting_evidence)|treatment_(?:estimate|plan_or_bill)|animal_case_photo|vet_assessment|elderly_(?:need_evidence|supporting_document)))$')";
+const options=["damage_evidence","barangay_incident_reference","medical_certificate","hospital_estimate","other_medical_support","treatment_estimate","other_treatment_support","diagnosis_document","treatment_plan_or_bill","other_illness_support","animal_case_photo","vet_assessment","other_animal_support","elderly_need_evidence","elderly_supporting_document","basic_need_evidence","barangay_social_welfare_reference","other_supporting_evidence"];
+const newDocTypeRegex=new RegExp('^((?:d(?:amage_evidence|iagnosis_document)|ba(?:rangay_(?:incident_reference|social_welfare_reference)|sic_need_evidence)|medical_certificate|hospital_estimate|other_(?:(?:medical|treatment|illness|animal)_support|supporting_evidence)|treatment_(?:estimate|plan_or_bill)|animal_case_photo|vet_assessment|elderly_(?:need_evidence|supporting_document)))$');
+for(const x of options){
+ assert(newDocTypeRegex.test(x),'BLOCKED: lost accepted type '+x);
+ for(let i=0;i<x.length;i++){
+  const mutation=x.slice(0,i)+'Z'+x.slice(i+1);
+  if(!options.includes(mutation))assert(!newDocTypeRegex.test(mutation),'BLOCKED: expanded type allowlist');
+ }
+}
+for(const x of ['', 'other_something_support', 'other_medical_support_extra', 'MEDICAL_CERTIFICATE'])
+ assert(!newDocTypeRegex.test(x),'BLOCKED: allowed unreviewed type '+x);
+assert.equal(expectedUrlRule.split(oldDocTypeCheck).length,2,'Original document type guard changed');
+const expectedDocType=expectedUrlRule
+ .replace('document is map\n          && document.keys().hasOnly([','document.keys().hasOnly([')
+ .replace(oldDocTypeCheck,()=>minifiedDocTypeCheck)
+ .replace('          && document.url is string\n','');
+assert.equal(current,expectedDocType,
+ 'BLOCKED: Rules differ beyond source-reviewed deny-equivalent assistance evidence checks');
 
 assert.equal(cp.execFileSync("git",["hash-object","firestore.rules"],{encoding:"utf8"}).trim(),
-"ca25271c0ea9e2d14d39c1204ec1ad53745d6a65","BLOCKED: unreviewed Firestore Rules blob");
+"f143f8768a2b39f0a293b21779b3f9afccd9a408","BLOCKED: unreviewed Firestore Rules blob");
 // Verify exhaustiveness of all optional-review branches over valid and
 // invalid types, status values and three-valued nulls before Firebase emulator.
 for(const required of [true,false,null,"true",0,1,undefined]){
@@ -331,7 +351,7 @@ for(const required of [true,false,null,"true",0,1,undefined]){
 }
 
 const gitBlob=cp.execFileSync("git",["hash-object","firestore.rules"],{encoding:"utf8"}).trim();
-assert.equal(gitBlob,"ca25271c0ea9e2d14d39c1204ec1ad53745d6a65","BLOCKED: unapproved Firestore blob");
+assert.equal(gitBlob,"f143f8768a2b39f0a293b21779b3f9afccd9a408","BLOCKED: unapproved Firestore blob");
 const paths=source=>source.split("\n").filter(l=>l.startsWith("    match /")).map(l=>l.slice("    match /".length).split(" ")[0]);
 assert.deepEqual(paths(current),paths(protectedBaseline),"BLOCKED: collection scope changed");
 const allows=source=>[...source.matchAll(/allow (?:get|list|read|write|create|update|delete)/g)].length;
