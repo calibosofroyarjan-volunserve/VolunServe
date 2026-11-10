@@ -1,5 +1,6 @@
 import {evaluateLighting,assessFaceBoxes,frameDifference,assessDocumentFrame} from "./camera-metrics.mjs";
 import {ACTIONS,generateChallenge,faceSignals,createChallengeState,advanceChallenge} from "./face-challenge.mjs";
+import {cameraErrorMessage,videoInputList,cameraConstraints} from "./camera-device.mjs";
 // Staging-only live camera guidance. Camera tracking != liveness or ID authentication.
 const $=id=>document.getElementById(id);
 if(location.hostname!=="volunserve-identity-test-staging.onrender.com")throw Error("Staging-only camera guard");
@@ -48,6 +49,43 @@ function preview(stage,file){
 const modal=document.createElement("dialog");modal.id="scanModal";
 modal.innerHTML='<div class="scan-modal-head"><h3 id="scanTitle">Live camera</h3><button type="button" class="alt" id="scanClose">✕ Close</button></div><div class="cam-view"><video id="scanVideo" autoplay playsinline muted></video><canvas id="scanOverlay"></canvas><div id="scanGuide" class="frame-guide"></div></div><div class="scan-modal-body"><div id="scanStatus" class="cam-status" role="status">Starting...</div><div class="cam-note" id="scanNote"></div><p class="cam-note">Automatic capture is on. Keep the camera steady, then review the captured image. Images are not uploaded until you run staging verification.</p><div class="scan-controls"><button type="button" class="alt" id="scanCancel">Cancel</button></div></div>';
 document.body.append(modal);
+const sourceRow=document.createElement("label");
+sourceRow.className="cam-note";
+sourceRow.textContent="Camera source (choose a device, or leave Automatic)";
+const sourceSelect=document.createElement("select");
+sourceSelect.id="scanCameraSource";
+const sourceHint=document.createElement("p");
+sourceHint.className="cam-note";
+sourceHint.id="scanDeviceHint";
+sourceHint.textContent="If no camera appears, check the Windows Camera app or use a phone.";
+sourceRow.append(sourceSelect);
+modal.querySelector(".scan-modal-body").prepend(sourceHint);
+modal.querySelector(".scan-modal-body").prepend(sourceRow);
+let chosenDeviceId="",lastDiscovered=null;
+function option(value,label){
+ const element=document.createElement("option");element.value=value;element.textContent=label;return element;
+}
+async function refreshCameras(){
+ if(!navigator.mediaDevices?.enumerateDevices)return null;
+ try{
+  const inputs=videoInputList(await navigator.mediaDevices.enumerateDevices());
+  lastDiscovered=inputs.length;
+  sourceSelect.replaceChildren(option("","Automatic (browser default)"),...inputs.filter(v=>v.id).map(v=>option(v.id,v.name)));
+  if(inputs.some(v=>v.id===chosenDeviceId))sourceSelect.value=chosenDeviceId;
+  else{chosenDeviceId="";sourceSelect.value="";}
+  sourceHint.textContent=inputs.length
+    ? inputs.length+" camera(s) listed. If your camera does not start, try Automatic or choose a specific device."
+    : "No video input is currently listed. Check Windows Camera, a connected USB webcam, or try your phone.";
+  return inputs.length;
+ }catch{
+  sourceHint.textContent="Browser could not enumerate cameras. You can still try Automatic.";
+  return null;
+ }
+}
+sourceSelect.addEventListener("change",()=>{
+ chosenDeviceId=sourceSelect.value;
+ if(mode && modal.open)void start(mode);
+});
 const video=$("scanVideo"),canvas=$("scanOverlay"),ctx=canvas.getContext("2d");
 let stream=null,timer=null,mode=null,session=0,stable=0,previous=null,detector=null,detectorLoading=null,detectorUnavailable=false,capturing=false,challenge=null;
 const meter=document.createElement("canvas");meter.width=120;meter.height=90;
@@ -81,10 +119,22 @@ async function start(stage){
  status("Requesting camera permission...");
  try{
   modal.showModal();
-  try{stream=await navigator.mediaDevices.getUserMedia({audio:false,video:{facingMode:{ideal:TYPES[stage].facing},width:{ideal:1280},height:{ideal:960}}})}
-  catch(e){if(["OverconstrainedError","NotFoundError"].includes(e?.name))stream=await navigator.mediaDevices.getUserMedia({audio:false,video:true});else throw e}
-  if(current!==session){stream?.getTracks().forEach(t=>t.stop());return}
+  await refreshCameras();
+  if(current!==session)return;
+  let opened=null;
+  try{opened=await navigator.mediaDevices.getUserMedia(cameraConstraints(stage,chosenDeviceId))}
+  catch(e){
+   if(["OverconstrainedError","NotFoundError"].includes(e?.name)){
+    // Retry with the browser default if a requested facing mode or
+    // selected camera is unavailable. No device can be created by code.
+    opened=await navigator.mediaDevices.getUserMedia({audio:false,video:true});
+   }else throw e;
+  }
+  if(current!==session){opened?.getTracks().forEach(t=>t.stop());return}
+  stream=opened;
   video.srcObject=stream;await video.play();if(current!==session)return;
+  await refreshCameras();
+  if(current!==session)return;
   canvas.width=video.videoWidth;canvas.height=video.videoHeight;
   status("Camera ready — align one face or a card-like rectangle.");
   if(stage==="selfie"){
@@ -93,7 +143,7 @@ async function start(stage){
   }
   if(current!==session)return;
   timer=setInterval(()=>check(current),stage==="selfie"?120:240);
- }catch(e){if(current===session){status("Camera unavailable: "+String(e?.name||e?.message||"camera error")+". Allow access or use test-image fallback.")}}
+ }catch(e){if(current===session){const found=await refreshCameras();if(current!==session)return;status(cameraErrorMessage(e,found??lastDiscovered));}}
 }
 function drawFaces(faces){
  if(!ctx)return;ctx.clearRect(0,0,canvas.width,canvas.height);ctx.lineWidth=Math.max(3,canvas.width/350);ctx.strokeStyle="#58f0ae";
