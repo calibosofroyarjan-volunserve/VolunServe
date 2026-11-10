@@ -25,7 +25,7 @@ service cloud.firestore {
     // Deny-only for community profiles; staff policies remain unchanged.
     // This is a finite provider snapshot and cannot detect every new domain.
     function blockedTempMailOrgAlias(email) {
-      return email.matches("(?i).*@([a-z0-9-]+[.])*(adujudi01[.]info|avtomaty-online[.]cc|baimengshu[.]com|bankwen[.]com|berkshireonstage[.]com|boffweb[.]com|crackclue[.]com|crystalfact[.]info|ctd[.]nl8[.]eu|digeros[.]com|doisongtinhduc[.]xyz|dragontranslation[.]net|drtall[.]com|emailgeneratorai[.]cc|emailkeep[.]com|ghostmailz[.]club|ghostmailz[.]online|ghostmailz[.]store|gmail[.]shagni[.]com|huanqiu6[.]cc|huicuiguan[.]com|indonesiacentral[.]info|javafs[.]com|jjwxb[.]com|jlmmarine[.]com|kxdyy[.]com|livetogelhk[.]info|luontaisterveys[.]info|macsnipe[.]com|mail[.]chosenx[.]com|mail[.]gianes[.]com|mail[.]sc2hub[.]com|mailer[.]pics|mmamemories[.]com|mpmail[.]top|nmwxb[.]com|prejuge[.]com|prestigegroupnet[.]com|sofabazar[.]com|spicylog[.]com|stebie[.]com|tobiquegaming-license[.]com|ttbtt[.]com|wandera[.]top|wbcom[.]info|wencuigu[.]com|wxfwb[.]com|yesrox[.]com|yyqzw[.]com|zymapi[.]top)");
+      return email.matches("(?i).*@([a-z0-9-]+[.])*((?:adujudi01|crystalfact|indonesiacentral|livetogelhk|luontaisterveys|wbcom)[.]info|(?:avtomaty-online|emailgeneratorai|huanqiu6)[.]cc|(?:baimengshu|bankwen|berkshireonstage|boffweb|crackclue|digeros|drtall|emailkeep|gmail[.]shagni|huicuiguan|javafs|jjwxb|jlmmarine|kxdyy|macsnipe|mail[.]chosenx|mail[.]gianes|mail[.]sc2hub|mmamemories|nmwxb|prejuge|prestigegroupnet|sofabazar|spicylog|stebie|tobiquegaming-license|ttbtt|wencuigu|wxfwb|yesrox|yyqzw)[.]com|ctd[.]nl8[.]eu|doisongtinhduc[.]xyz|dragontranslation[.]net|ghostmailz[.]club|ghostmailz[.]online|ghostmailz[.]store|mailer[.]pics|(?:mpmail|wandera|zymapi)[.]top)");
     }
     function approved() {
       let p = signedIn() ? profile() : {};
@@ -1494,18 +1494,16 @@ service cloud.firestore {
         );
       }
       function validSecureAssistanceDocument(document) {
-        return document is map
-          && document.keys().hasOnly([
+        return document.keys().hasOnly([
             'documentType',
             'label',
             'url',
             'fileName'
           ])
-          && document.documentType is string && document.documentType.matches('^(damage_evidence|barangay_incident_reference|medical_certificate|hospital_estimate|other_medical_support|treatment_estimate|other_treatment_support|diagnosis_document|treatment_plan_or_bill|other_illness_support|animal_case_photo|vet_assessment|other_animal_support|elderly_need_evidence|elderly_supporting_document|basic_need_evidence|barangay_social_welfare_reference|other_supporting_evidence)$')
+          && document.documentType.matches('^((?:d(?:amage_evidence|iagnosis_document)|ba(?:rangay_(?:incident_reference|social_welfare_reference)|sic_need_evidence)|medical_certificate|hospital_estimate|other_(?:(?:medical|treatment|illness|animal)_support|supporting_evidence)|treatment_(?:estimate|plan_or_bill)|animal_case_photo|vet_assessment|elderly_(?:need_evidence|supporting_document)))$')
           && document.label is string
           && document.label.size() >= 2
           && document.label.size() <= 160
-          && document.url is string
           // The fixed URL prefix/suffix contribute exactly 72 ASCII chars.
           // 1-428 evidence ID chars give exactly the same valid 73-500 length
           // range as the previous URL size checks, with no broader matches.

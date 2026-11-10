@@ -2,7 +2,7 @@
 name: Validate Compact Temp-Mail Provider Predicate (NO DEPLOY)
 on:
   push:
-    branches: [fix/compact-temp-domain-single-predicate-20261110, fix/compact-assistance-evidence-url-bound-20261110]
+    branches: [fix/compact-temp-domain-single-predicate-20261110, fix/compact-assistance-evidence-url-bound-20261110, fix/compact-assistance-doc-type-regex-20261110]
   pull_request:
     branches: [fix/active-production-rules-signup-compatible-20261109, fix/compact-temp-domain-single-predicate-20261110]
 permissions:

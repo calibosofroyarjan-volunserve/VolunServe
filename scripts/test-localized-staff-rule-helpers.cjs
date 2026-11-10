@@ -310,10 +310,60 @@ const evidenceComment="          // The fixed URL prefix/suffix contribute exact
 assert.equal(compactProvider.split(oldSizing).length,2,"Missing old evidence length validation");
 const expectedUrlRule=compactProvider.replace(oldSizing,evidenceComment)
  .replace("evidence_[A-Za-z0-9]+/access$","evidence_[A-Za-z0-9]{1,428}/access$");
-assert.equal(current,expectedUrlRule,"BLOCKED: non-equivalent assistance URL or unrelated Rules change");
+// The 18 exact assistance evidence document types remain unchanged.
+const oldDocTypeCheck="&& document.documentType is string && document.documentType.matches('^(damage_evidence|barangay_incident_reference|medical_certificate|hospital_estimate|other_medical_support|treatment_estimate|other_treatment_support|diagnosis_document|treatment_plan_or_bill|other_illness_support|animal_case_photo|vet_assessment|other_animal_support|elderly_need_evidence|elderly_supporting_document|basic_need_evidence|barangay_social_welfare_reference|other_supporting_evidence)$')";
+const minifiedDocTypeCheck="&& document.documentType.matches('^((?:d(?:amage_evidence|iagnosis_document)|ba(?:rangay_(?:incident_reference|social_welfare_reference)|sic_need_evidence)|medical_certificate|hospital_estimate|other_(?:(?:medical|treatment|illness|animal)_support|supporting_evidence)|treatment_(?:estimate|plan_or_bill)|animal_case_photo|vet_assessment|elderly_(?:need_evidence|supporting_document)))$')";
+const options=["damage_evidence","barangay_incident_reference","medical_certificate","hospital_estimate","other_medical_support","treatment_estimate","other_treatment_support","diagnosis_document","treatment_plan_or_bill","other_illness_support","animal_case_photo","vet_assessment","other_animal_support","elderly_need_evidence","elderly_supporting_document","basic_need_evidence","barangay_social_welfare_reference","other_supporting_evidence"];
+const newDocTypeRegex=new RegExp('^((?:d(?:amage_evidence|iagnosis_document)|ba(?:rangay_(?:incident_reference|social_welfare_reference)|sic_need_evidence)|medical_certificate|hospital_estimate|other_(?:(?:medical|treatment|illness|animal)_support|supporting_evidence)|treatment_(?:estimate|plan_or_bill)|animal_case_photo|vet_assessment|elderly_(?:need_evidence|supporting_document)))$');
+for(const x of options){
+ assert(newDocTypeRegex.test(x),'BLOCKED: lost accepted type '+x);
+ for(let i=0;i<x.length;i++){
+  const mutation=x.slice(0,i)+'Z'+x.slice(i+1);
+  if(!options.includes(mutation))assert(!newDocTypeRegex.test(mutation),'BLOCKED: expanded type allowlist');
+ }
+}
+for(const x of ['', 'other_something_support', 'other_medical_support_extra', 'MEDICAL_CERTIFICATE'])
+ assert(!newDocTypeRegex.test(x),'BLOCKED: allowed unreviewed type '+x);
+assert.equal(expectedUrlRule.split(oldDocTypeCheck).length,2,'Original document type guard changed');
+const expectedDocType=expectedUrlRule
+ .replace('document is map\n          && document.keys().hasOnly([','document.keys().hasOnly([')
+ .replace(oldDocTypeCheck,()=>minifiedDocTypeCheck)
+ .replace('          && document.url is string\n','');
+// A compact factorization must match exactly the same 50 disposable domains.
+// Normalize TLD suffixes only; never alter provider coverage or case rules.
+const blockerGroup=expectedDocType.match(/function blockedTempMailOrgAlias\(email\)\s*\{\s*return email\.matches\("\(\?i\)\.\*@\(\[a-z0-9-\]\+\[\.\]\)\*\(([^"]+)\)"\);/);
+assert(blockerGroup,"Missing pinned original provider blocklist");
+const providerDomains=blockerGroup[1].split("|").map(x=>x.replaceAll("[.]","."));
+assert.equal(providerDomains.length,50);
+const byTld=new Map();
+for(const domain of providerDomains){
+ const parts=domain.split("."),tld=parts.pop(),root=parts.join(".");
+ if(!byTld.has(tld))byTld.set(tld,[]);
+ byTld.get(tld).push(root);
+}
+const group=[...byTld].map(([tld,roots])=>
+ (roots.length>1?"(?:"+roots.map(x=>x.replaceAll(".","[.]")).join("|")+")":roots[0].replaceAll(".","[.]"))+
+ "[.]"+tld).join("|");
+const oldProvider='email.matches("(?i).*@([a-z0-9-]+[.])*('+blockerGroup[1]+')")';
+const newProvider='email.matches("(?i).*@([a-z0-9-]+[.])*('+group+')")';
+const oldRegex=new RegExp(".*@([a-z0-9-]+[.])*("+blockerGroup[1]+")","i");
+const newRegex=new RegExp(".*@([a-z0-9-]+[.])*("+group+")","i");
+for(const domain of providerDomains)for(const value of [
+ "x@"+domain, "USER@"+domain.toUpperCase(), "x@sub."+domain,
+ "x@sub.sub."+domain, "x@"+domain+".extra", "x@pre"+domain,
+ "x@"+domain+"extra"
+])assert.equal(newRegex.test(value),oldRegex.test(value),"BLOCKED: changed temp-mail domain matching");
+for(const email of ["x@gmail.com","x@outlook.com","x@en2ch.co",
+ "x@mailers.pics","x@gmailXshagni.com","x@digeros.co",
+ "x@notmail.chosenx.com","x@ghostmailz.com"])
+ assert.equal(newRegex.test(email),oldRegex.test(email),"BLOCKED: changed blocked-domain negative case");
+assert.equal(expectedDocType.split(oldProvider).length,2,"Missing original provider source");
+const expectedFinal=expectedDocType.replace(oldProvider,()=>newProvider);
+assert.equal(current,expectedFinal,
+ "BLOCKED: unrelated Firestore permission or temporary-email provider change");
 
 assert.equal(cp.execFileSync("git",["hash-object","firestore.rules"],{encoding:"utf8"}).trim(),
-"ca25271c0ea9e2d14d39c1204ec1ad53745d6a65","BLOCKED: unreviewed Firestore Rules blob");
+"29ce1f6a9f92f901401c5752bf918f89cc5c942d","BLOCKED: unreviewed Firestore Rules blob");
 // Verify exhaustiveness of all optional-review branches over valid and
 // invalid types, status values and three-valued nulls before Firebase emulator.
 for(const required of [true,false,null,"true",0,1,undefined]){
@@ -331,7 +381,7 @@ for(const required of [true,false,null,"true",0,1,undefined]){
 }
 
 const gitBlob=cp.execFileSync("git",["hash-object","firestore.rules"],{encoding:"utf8"}).trim();
-assert.equal(gitBlob,"ca25271c0ea9e2d14d39c1204ec1ad53745d6a65","BLOCKED: unapproved Firestore blob");
+assert.equal(gitBlob,"29ce1f6a9f92f901401c5752bf918f89cc5c942d","BLOCKED: unapproved Firestore blob");
 const paths=source=>source.split("\n").filter(l=>l.startsWith("    match /")).map(l=>l.slice("    match /".length).split(" ")[0]);
 assert.deepEqual(paths(current),paths(protectedBaseline),"BLOCKED: collection scope changed");
 const allows=source=>[...source.matchAll(/allow (?:get|list|read|write|create|update|delete)/g)].length;
