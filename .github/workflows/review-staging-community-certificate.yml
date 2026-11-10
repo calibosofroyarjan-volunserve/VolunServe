@@ -1,0 +1,58 @@
+name: Staging Community Certificate 1-Minute Isolated Validation (NO DEPLOY)
+on:
+  pull_request:
+    branches: [fix/identity-full-hardening-live-base-20261107]
+    paths:
+      - "backend/communityCertificates.js"
+      - "backend/communityCertificateEligibility.js"
+      - "backend/test-communityCertificateEligibility.js"
+      - "backend/test-communityCertificateIssuance.js"
+      - "backend/test-communityCertificateFirestoreEmulator.js"
+      - "backend/package.json"
+      - ".github/workflows/review-staging-community-certificate.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  render-backend-checks:
+    name: Staging isolation + backend regression
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install backend dependencies
+        run: npm install --ignore-scripts --no-audit --no-fund
+      - name: Validate backend code and existing production regressions
+        run: npm run check
+  firestore-emulator-integration:
+    name: Isolated Firestore emulator certificate transactions
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - name: Install backend dependencies
+        working-directory: backend
+        run: npm install --ignore-scripts --no-audit --no-fund
+      - name: Run real Firestore transaction checks in isolated demo emulator
+        env:
+          GOOGLE_CLOUD_PROJECT: demo-volunserve-certificates
+          GCLOUD_PROJECT: demo-volunserve-certificates
+        run: |
+          npx --yes firebase-tools@15.31.0 emulators:exec \
+            --project demo-volunserve-certificates \
+            --only firestore \
+            --config firebase.json \
+            "node backend/test-communityCertificateFirestoreEmulator.js"
