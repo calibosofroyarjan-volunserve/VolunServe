@@ -246,9 +246,12 @@ function getAllowedOrigins() {
     .split(",")
     .map((value) => value.trim())
     .filter(Boolean);
-  // Isolated identity testing UI is allowed ONLY when staging is explicit.
+  // Staging-only review origins. NEVER include these in production CORS.
   const stagingTestOrigins = process.env.VOLUNSERVE_DEPLOYMENT_ENV === "staging"
-    ? ["https://volunserve-identity-test-staging.onrender.com"]
+    ? [
+        "https://volunserve-identity-test-staging.onrender.com",
+        "https://volunserve-consolidated-pc-mobile-review.onrender.com",
+      ]
     : [];
   return new Set([
     ...DEFAULT_ALLOWED_ORIGINS,
