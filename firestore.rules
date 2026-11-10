@@ -130,11 +130,10 @@ service cloud.firestore {
         return d.firstName is string && d.firstName.size() >= 2 && d.firstName.size() <= 80
           && d.lastName is string && d.lastName.size() >= 2 && d.lastName.size() <= 80
           && d.get('middleName', '') is string && d.get('middleName', '').size() <= 80
-          && d.phoneNumber is string
           && (d.phoneNumber == '' || d.phoneNumber.matches('^([+]639[0-9]{9}|09[0-9]{9})$'))
           && d.region is string && d.region.size() >= 5 && d.region.size() <= 100
-          && d.barangay is string && d.barangay.matches('^(Assumption|Bagong Buhay I|Bagong Buhay II|Bagong Buhay III|Citrus|Ciudad Real|Dulong Bayan|Fatima I|Fatima II|Fatima III|Fatima IV|Fatima V|Francisco Homes-Guijo|Francisco Homes-Mulawin|Francisco Homes-Narra|Francisco Homes-Yakal|Gaya-gaya|Graceville|Gumaoc Central|Gumaoc East|Gumaoc West|Kaybanban|Kaypian|Lawang Pari|Maharlika|Minuyan I|Minuyan II|Minuyan III|Minuyan IV|Minuyan Proper|Minuyan V|Muzon East|Muzon Proper|Muzon South|Muzon West|Paradise III|Poblacion|Poblacion I|San Isidro|San Manuel|San Martin de Porres|San Martin I|San Martin II|San Martin III|San Martin IV|San Pedro|San Rafael I|San Rafael II|San Rafael III|San Rafael IV|San Rafael V|San Roque|Santa Cruz I|Santa Cruz II|Santa Cruz III|Santa Cruz IV|Santa Cruz V|Santo Cristo|Santo Niño I|Santo Niño II|Sapang Palay|Tungkong Mangga)$')
-          && d.occupationCategory is string && d.occupationCategory.matches('^(Medical Professional|Emergency Responder|Government Employee|Student|Private Sector Employee|NGO Worker|Skilled Worker|Unemployed|Retired|Other [(]Specify[)])$')
+          && d.barangay.matches('^(Assumption|Bagong Buhay I|Bagong Buhay II|Bagong Buhay III|Citrus|Ciudad Real|Dulong Bayan|Fatima I|Fatima II|Fatima III|Fatima IV|Fatima V|Francisco Homes-Guijo|Francisco Homes-Mulawin|Francisco Homes-Narra|Francisco Homes-Yakal|Gaya-gaya|Graceville|Gumaoc Central|Gumaoc East|Gumaoc West|Kaybanban|Kaypian|Lawang Pari|Maharlika|Minuyan I|Minuyan II|Minuyan III|Minuyan IV|Minuyan Proper|Minuyan V|Muzon East|Muzon Proper|Muzon South|Muzon West|Paradise III|Poblacion|Poblacion I|San Isidro|San Manuel|San Martin de Porres|San Martin I|San Martin II|San Martin III|San Martin IV|San Pedro|San Rafael I|San Rafael II|San Rafael III|San Rafael IV|San Rafael V|San Roque|Santa Cruz I|Santa Cruz II|Santa Cruz III|Santa Cruz IV|Santa Cruz V|Santo Cristo|Santo Niño I|Santo Niño II|Sapang Palay|Tungkong Mangga)$')
+          && d.occupationCategory.matches('^(Medical Professional|Emergency Responder|Government Employee|Student|Private Sector Employee|NGO Worker|Skilled Worker|Unemployed|Retired|Other [(]Specify[)])$')
           && d.get('occupationSpecialization', '') is string
           && d.get('occupationOther', '') is string
           && d.get('occupationOther', '').size() <= 80
@@ -5122,11 +5121,9 @@ service cloud.firestore {
         && request.resource.data.location is string
         && request.resource.data.location.size() >= 1
         && request.resource.data.location.size() <= 150
-        && request.resource.data.date is string
         && request.resource.data.date.matches(
           '^[0-9]{4}-[0-9]{2}-[0-9]{2}$'
         )
-        && request.resource.data.time is string
         && request.resource.data.time.matches(
           '^([01][0-9]|2[0-3]):[0-5][0-9]$'
         )

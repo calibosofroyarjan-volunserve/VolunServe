@@ -101,6 +101,9 @@ async function main() {
       await assertFails(setDoc(doc(as(uid,email,true),"users",uid),candidate));
     }
     await invalidCreate({phoneNumber:"0917"});
+    for(const malformed of [null,false,12345,[],{}]) await invalidCreate({phoneNumber:malformed});
+    for(const malformed of [null,false,12345,[],{}]) await invalidCreate({barangay:malformed});
+    for(const malformed of [null,false,12345,[],{}]) await invalidCreate({occupationCategory:malformed});
     await invalidCreate({phoneNumber:"+639171234567999"});
     await invalidCreate({barangay:"Muzon"});
     await invalidCreate({barangay:"Quezon City"});

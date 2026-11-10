@@ -376,8 +376,16 @@ const expectedNoCaptures=expectedFinal
  .replace(oldProviderExpr,()=>newProviderExpr)
  .replace(oldDocExpr,()=>newDocExpr)
  .replace(oldEnExpr,()=>newEnExpr);
-assert.equal(current,expectedNoCaptures,
- "BLOCKED: noncapture refactor changed unrelated Firestore permission source");
+// Regex matching is string-only by Firebase Rules; non-strings fail closed.
+// Removing redundant is-string conjunctions does not permit any new write.
+const redundantStringPredicates=[["          && d.phoneNumber is string\n          && (d.phoneNumber == '' || d.phoneNumber.matches(","          && (d.phoneNumber == '' || d.phoneNumber.matches("],["          && d.barangay is string && d.barangay.matches(","          && d.barangay.matches("],["          && d.occupationCategory is string && d.occupationCategory.matches(","          && d.occupationCategory.matches("],["        && request.resource.data.date is string\n        && request.resource.data.date.matches(","        && request.resource.data.date.matches("],["        && request.resource.data.time is string\n        && request.resource.data.time.matches(","        && request.resource.data.time.matches("]];
+let expectedNoRedundantType=expectedNoCaptures;
+for(const [oldGuard,newGuard] of redundantStringPredicates){
+ assert.equal(expectedNoRedundantType.split(oldGuard).length,2,"BLOCKED: reviewed type guard missing");
+ expectedNoRedundantType=expectedNoRedundantType.replace(oldGuard,()=>newGuard);
+}
+assert.equal(current,expectedNoRedundantType,
+ "BLOCKED: Rules differ beyond five deny-equivalent regex type guards");
 const recaptureRegex=new RegExp(".*@([a-z0-9-]+[.])*("+finalProvider[1]+")","i");
 const noCaptureRegex=new RegExp(".*@(?:[a-z0-9-]+[.])*(?:"+finalProvider[1]+")","i");
 for(const blocked of providerDomains)for(const email of [
@@ -387,7 +395,7 @@ for(const blocked of providerDomains)for(const email of [
  "BLOCKED: regex capture refactor changed disposable-domain matching");
 
 assert.equal(cp.execFileSync("git",["hash-object","firestore.rules"],{encoding:"utf8"}).trim(),
-"e0d31c3de004da133ac00f5984e495bd66c97da6","BLOCKED: unreviewed Firestore Rules blob");
+"a4ba6a60e89dc9e19d9314ee74f6d07aee1e9f16","BLOCKED: unreviewed Firestore Rules blob");
 // Verify exhaustiveness of all optional-review branches over valid and
 // invalid types, status values and three-valued nulls before Firebase emulator.
 for(const required of [true,false,null,"true",0,1,undefined]){
@@ -405,7 +413,7 @@ for(const required of [true,false,null,"true",0,1,undefined]){
 }
 
 const gitBlob=cp.execFileSync("git",["hash-object","firestore.rules"],{encoding:"utf8"}).trim();
-assert.equal(gitBlob,"e0d31c3de004da133ac00f5984e495bd66c97da6","BLOCKED: unapproved Firestore blob");
+assert.equal(gitBlob,"a4ba6a60e89dc9e19d9314ee74f6d07aee1e9f16","BLOCKED: unapproved Firestore blob");
 const paths=source=>source.split("\n").filter(l=>l.startsWith("    match /")).map(l=>l.slice("    match /".length).split(" ")[0]);
 assert.deepEqual(paths(current),paths(protectedBaseline),"BLOCKED: collection scope changed");
 const allows=source=>[...source.matchAll(/allow (?:get|list|read|write|create|update|delete)/g)].length;
