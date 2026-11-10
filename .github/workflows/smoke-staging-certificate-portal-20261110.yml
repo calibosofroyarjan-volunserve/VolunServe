@@ -1,0 +1,21 @@
+name: Smoke Hosted Staging Community Certificates Portal (NO DEPLOY)
+on:
+  pull_request:
+    branches:
+      - preview/identity-only-staging-web-20261108
+    paths:
+      - "identity-staging-web/smoke-certificate-portal-20261110.cjs"
+      - ".github/workflows/smoke-staging-certificate-portal-20261110.yml"
+permissions:
+  contents: read
+jobs:
+  hosted-staging:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Check deployed staging portal GET and unauthenticated safety
+        run: node identity-staging-web/smoke-certificate-portal-20261110.cjs
