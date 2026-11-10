@@ -351,7 +351,9 @@ function harness(source, enabled, options = {}) {
     assert(stepOne.includes('checkButton("Continue with Google"'));
     assert(stepOne.indexOf('Continue to Email Verification') < stepOne.indexOf('checkButton("Continue with Google"'),
       "Email & Password must be primary; Google is optional and below the email form");
-    assert(ui.includes('formatBirthday'));
+    assert(ui.includes("<BirthDateCalendarPicker"),"Birthday must use the calendar-only picker");
+    assert(ui.includes("setBirth(birthDateToISO(date))"),"Selected DOB must keep the original ISO storage format");
+    assert(!ui.includes("formatBirthday("),"Freeform DOB typing must be removed");
     assert(ui.includes('autoComplete={'));
     assert(ui.includes('setFirstName(current => current ||'));
     assert(ui.includes('setLastName(current => current ||'));
