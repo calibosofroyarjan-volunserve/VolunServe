@@ -2327,6 +2327,29 @@ exports.issueVolunteerCertificate = onCall(
 // No LGU seal, signature, or government endorsement is generated here.
 // =========================================================
 const MIN_COMMUNITY_CERTIFICATE_ATTENDANCE_MINUTES = 30;
+const TEST_COMMUNITY_CERTIFICATE_ATTENDANCE_MINUTES = 1;
+
+// A test exception requires BOTH explicit server-controlled allowlists.
+// Never trust client-provided test flags, account roles, or event metadata.
+// Empty or missing configuration always retains the 30-minute rule.
+function communityCertificateAllowlist(name) {
+  return new Set(String(process.env[name] || "")
+      .split(",")
+      .map((value) => value.trim())
+      .filter(Boolean));
+}
+
+function communityCertificateMinimumMinutes(eventId, volunteerId) {
+  const testEvents = communityCertificateAllowlist(
+      "VOLUNSERVE_CERT_TEST_EVENT_IDS",
+  );
+  const testVolunteers = communityCertificateAllowlist(
+      "VOLUNSERVE_CERT_TEST_VOLUNTEER_UIDS",
+  );
+  return testEvents.has(eventId) && testVolunteers.has(volunteerId) ?
+    TEST_COMMUNITY_CERTIFICATE_ATTENDANCE_MINUTES :
+    MIN_COMMUNITY_CERTIFICATE_ATTENDANCE_MINUTES;
+}
 
 function communityTimestampMillis(value) {
   if (!value || typeof value.toMillis !== "function") {
@@ -2388,7 +2411,7 @@ async function issueCommunityEventCertificate(eventId, participantId) {
       timeIn <= 0 ||
       timeOut < timeIn ||
       timeOut - timeIn > 24 * 60 * 60 * 1000 ||
-      timeOut - timeIn < MIN_COMMUNITY_CERTIFICATE_ATTENDANCE_MINUTES * 60000
+      timeOut - timeIn < communityCertificateMinimumMinutes(eventId, volunteerId) * 60000
     ) {
       return {issued: false, reason: "not_eligible"};
     }
@@ -2512,6 +2535,67 @@ async function issueCommunityEventCertificate(eventId, participantId) {
     return {issued: true, certificateId};
   });
 }
+
+// Admin-only manual reconciliation for previously completed events. The
+// existing issuance helper performs all eligibility checks and uses
+// deterministic IDs so retries never duplicate issued certificates.
+exports.syncCommunityEventCertificates = onCall(
+    {timeoutSeconds: 540, memory: "512MiB"},
+    async (request) => {
+      if (!request.auth?.uid) {
+        throw new HttpsError("unauthenticated", "Sign in to sync certificates.");
+      }
+      requireVerifiedCallableEmail(request);
+      const eventId = cleanText(request.data?.eventId, 160);
+      if (!eventId || !/^[A-Za-z0-9_-]{1,160}$/.test(eventId)) {
+        throw new HttpsError("invalid-argument", "A valid event ID is required.");
+      }
+
+      const database = getFirestore();
+      const [issuerSnap, eventSnap] = await Promise.all([
+        database.collection("users").doc(request.auth.uid).get(),
+        database.collection("communityEvents").doc(eventId).get(),
+      ]);
+      const issuer = issuerSnap.exists ? issuerSnap.data() || {} : {};
+      const role = cleanText(issuer.role, 30).toLowerCase();
+      const approved = issuer.status === "approved" ||
+          (!issuer.status && role !== "applicant");
+      if (!approved || !["admin", "superadmin"].includes(role)) {
+        throw new HttpsError(
+            "permission-denied",
+            "Only an approved Admin or Super Admin can sync certificates.",
+        );
+      }
+      const eventData = eventSnap.exists ? eventSnap.data() || {} : {};
+      if (eventData.status !== "completed" ||
+          eventData.publicationStatus !== "published") {
+        throw new HttpsError(
+            "failed-precondition",
+            "Complete and publish the event before syncing certificates.",
+        );
+      }
+
+      const participants = await database.collection("communityEventParticipants")
+          .where("eventId", "==", eventId).get();
+      const outcome = {issued: 0, alreadyExists: 0, notEligible: 0};
+      // Limit parallel transactions for Firestore; any failure propagates
+      // instead of silently reporting success.
+      for (let start = 0; start < participants.docs.length; start += 10) {
+        const group = participants.docs.slice(start, start + 10);
+        const results = await Promise.all(group.map((participant) =>
+          issueCommunityEventCertificate(eventId, participant.id)));
+        for (const result of results) {
+          if (result.issued) outcome.issued++;
+          else if (result.reason === "already_exists") outcome.alreadyExists++;
+          else outcome.notEligible++;
+        }
+      }
+      logger.info("Community certificate manual sync completed", {
+        eventId, issuerUid: request.auth.uid, ...outcome,
+      });
+      return {ok: true, eventId, ...outcome};
+    },
+);
 
 exports.issueCommunityCertificatesOnEventCompletion = onDocumentUpdated(
     {
