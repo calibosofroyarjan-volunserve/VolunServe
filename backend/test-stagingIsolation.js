@@ -39,3 +39,18 @@ test("staging rejects missing internal key", () => {
 test("non-staging configuration stays backward compatible", () => {
   assert.doesNotThrow(() => validateStagingEnvironment({}, null));
 });
+
+test("certificate review origin is accepted ONLY under staging CORS", () => {
+  const fs = require("node:fs");
+  const server = fs.readFileSync(require.resolve("./server"), "utf8");
+  const begin = server.indexOf("const stagingTestOrigins =");
+  const end = server.indexOf("const allowedOrigins =", begin);
+  assert.ok(begin >= 0 && end > begin, "CORS stage block must be present");
+  const gate = server.slice(begin, end);
+  assert.match(gate, /process\.env\.VOLUNSERVE_DEPLOYMENT_ENV === "staging"/);
+  assert.match(gate, /volunserve-consolidated-pc-mobile-review\.onrender\.com/);
+  assert.match(gate, /volunserve-identity-test-staging\.onrender\.com/);
+  assert.match(gate, /:\s*\[\s*\]/);
+  assert.ok(!gate.includes("https://volunserve.onrender.com"),
+    "staging CORS block must not promote the production backend origin");
+});
