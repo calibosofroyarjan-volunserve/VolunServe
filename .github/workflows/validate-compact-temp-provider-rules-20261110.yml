@@ -2,7 +2,7 @@
 name: Validate Compact Temp-Mail Provider Predicate (NO DEPLOY)
 on:
   push:
-    branches: [fix/compact-temp-domain-single-predicate-20261110, fix/compact-assistance-evidence-url-bound-20261110]
+    branches: [fix/compact-temp-domain-single-predicate-20261110, fix/compact-assistance-evidence-url-bound-20261110, fix/compact-assistance-doc-type-regex-20261110]
   pull_request:
     branches: [fix/active-production-rules-signup-compatible-20261109, fix/compact-temp-domain-single-predicate-20261110]
 permissions:
@@ -31,6 +31,8 @@ jobs:
         run: node scripts/test-equivalent-assistance-evidence-url-bounds.cjs
       - name: Verify Resident email validation and staff access in Firestore emulator
         run: npx firebase-tools emulators:exec --only firestore --project demo-volunserve-compact-temp-provider "node scripts/test-verified-community-registration-rules.cjs"
+      - name: Verify no changes to donation guard compatibility
+        run: node scripts/test-donation-lgu-role-isolation.cjs
       - name: Preserve existing Volunteer invitation permissions
         run: npx firebase-tools emulators:exec --only firestore --project demo-volunserve-preserved-volunteers "node scripts/test-preserved-volunteer-invitation-rules.cjs"
       - name: Confirm no production publishing
