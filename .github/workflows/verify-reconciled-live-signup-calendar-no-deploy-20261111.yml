@@ -1,0 +1,94 @@
+name: Verify Reconciled LIVE Signup & Calendar (NO DEPLOY)
+on:
+  push:
+    branches:
+      - review/reconciled-live-signup-calendar-20261111
+  pull_request:
+    branches:
+      - review/live-source-baseline-20261111
+permissions:
+  contents: read
+jobs:
+  source-and-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 28
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Guard pinned live ancestor and restrict changed files
+        env:
+          EXPECTED_LIVE: 1a049274a0747257cb31c0deceb21c67661127e6
+        run: |
+          node <<'NODE'
+          "use strict";
+          const assert=require("node:assert/strict");
+          const cp=require("node:child_process");
+          const git=(...args)=>cp.execFileSync("git",args,{encoding:"utf8"}).trim();
+          const live=process.env.EXPECTED_LIVE;
+          assert.equal(git("merge-base",live,"HEAD"),live,"Candidate must descend from verified actual-live SHA");
+          const allowed=new Set([".github/workflows/verify-reconciled-live-signup-calendar-no-deploy-20261111.yml","app/admin-request.tsx","app/signup.tsx","app/signup.web.tsx","components/auth/BirthDateCalendarPicker.tsx","components/auth/EmailFirstSignup.tsx","functions/registrationEmailScreening.js","functions/test-registration-email-screening.js","lib/birthDateCalendar.ts","lib/firebaseAuth.ts","lib/registrationEmailPolicy.ts","lib/signupRegistration.ts","scripts/test-birthday-calendar-20261111.cjs","scripts/test-resident-field-validation.cjs","scripts/test-signup-abuse-controls.cjs","scripts/test-signup-prod.cjs"]);
+          const diff=git("diff","--name-status","--no-renames",live,"HEAD");
+          const entries=diff.split("\n").filter(Boolean).map(x=>x.split("\t"));
+          assert(entries.length>0,"Candidate must contain the reviewed delta");
+          for(const [status,path] of entries){
+            assert(["A","M"].includes(status),"Destructive source change: "+path);
+            assert(allowed.has(path),"Unexpected file changed: "+path);
+          }
+          for(const path of [
+            "package.json","package-lock.json","app.json","firebase.json",
+            ".firebaserc","firestore.rules","storage.rules",
+            "functions/index.js","functions/registrationBlocking.js",
+            "lib/firebase.ts",
+            ".github/workflows/auto-publish-protected-live-hosting.yml",
+            ".github/workflows/release-live-protected-hosting.yml"
+          ]){
+            assert.equal(git("rev-parse",live+":"+path),git("rev-parse","HEAD:"+path),
+              "Protected production/auth/deploy config changed: "+path);
+          }
+          console.log("PASS live-rooted, limited source changes: "+entries.length);
+          NODE
+      - name: Revalidate actual production Hosting marker (read-only)
+        env:
+          EXPECTED_LIVE: 1a049274a0747257cb31c0deceb21c67661127e6
+        run: |
+          node <<'NODE'
+          "use strict";
+          const assert=require("node:assert/strict");
+          (async()=>{
+            const response=await fetch("https://volunserve.com/volunserve-release.json",{
+              headers:{"Cache-Control":"no-cache"},
+              signal:AbortSignal.timeout(15000),
+            });
+            assert.equal(response.status,200,"Production marker not accessible: BLOCK RELEASE");
+            const marker=await response.json();
+            assert.equal(marker.app,"VolunServe");
+            assert.equal(marker.firebaseProject,"volunserve-3aa5b");
+            assert.equal(marker.revision,process.env.EXPECTED_LIVE,
+              "Production revision changed: reconcile again before release");
+            console.log("PASS exact actual live Hosting marker: "+marker.revision);
+          })().catch(e=>{console.error(e);process.exitCode=1});
+          NODE
+      - run: npm ci --no-audit --no-fund
+      - name: Calendar boundary and no-typing contract
+        run: node --test scripts/test-birthday-calendar-20261111.cjs
+      - name: Disposable-email server screening
+        run: node --test functions/test-registration-email-screening.js
+      - name: Registration abuse and guest protections
+        run: node --test scripts/test-signup-abuse-controls.cjs
+      - name: Existing account compatibility and signup regression
+        run: |
+          node scripts/test-signup-prod.cjs
+          node --test scripts/test-resident-field-validation.cjs
+          node scripts/test-guest-auth-route-isolation.cjs
+      - name: TypeScript check
+        run: npx tsc --noEmit --incremental false
+      - name: Web export smoke without publishing
+        run: npx expo export --platform web --clear
+      - name: Production stays untouched
+        run: echo 'NO DEPLOY - live Hosting, Firestore Rules, Auth, Functions, Render untouched'
