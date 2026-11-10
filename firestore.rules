@@ -25,7 +25,7 @@ service cloud.firestore {
     // Deny-only for community profiles; staff policies remain unchanged.
     // This is a finite provider snapshot and cannot detect every new domain.
     function blockedTempMailOrgAlias(email) {
-      return email.matches("(?i).*@([a-z0-9-]+[.])*((?:adujudi01|crystalfact|indonesiacentral|livetogelhk|luontaisterveys|wbcom)[.]info|(?:avtomaty-online|emailgeneratorai|huanqiu6)[.]cc|(?:baimengshu|bankwen|berkshireonstage|boffweb|crackclue|digeros|drtall|emailkeep|gmail[.]shagni|huicuiguan|javafs|jjwxb|jlmmarine|kxdyy|macsnipe|mail[.]chosenx|mail[.]gianes|mail[.]sc2hub|mmamemories|nmwxb|prejuge|prestigegroupnet|sofabazar|spicylog|stebie|tobiquegaming-license|ttbtt|wencuigu|wxfwb|yesrox|yyqzw)[.]com|ctd[.]nl8[.]eu|doisongtinhduc[.]xyz|dragontranslation[.]net|ghostmailz[.]club|ghostmailz[.]online|ghostmailz[.]store|mailer[.]pics|(?:mpmail|wandera|zymapi)[.]top)");
+      return email.matches("(?i).*@(?:[a-z0-9-]+[.])*(?:(?:adujudi01|crystalfact|indonesiacentral|livetogelhk|luontaisterveys|wbcom)[.]info|(?:avtomaty-online|emailgeneratorai|huanqiu6)[.]cc|(?:baimengshu|bankwen|berkshireonstage|boffweb|crackclue|digeros|drtall|emailkeep|gmail[.]shagni|huicuiguan|javafs|jjwxb|jlmmarine|kxdyy|macsnipe|mail[.]chosenx|mail[.]gianes|mail[.]sc2hub|mmamemories|nmwxb|prejuge|prestigegroupnet|sofabazar|spicylog|stebie|tobiquegaming-license|ttbtt|wencuigu|wxfwb|yesrox|yyqzw)[.]com|ctd[.]nl8[.]eu|doisongtinhduc[.]xyz|dragontranslation[.]net|ghostmailz[.]club|ghostmailz[.]online|ghostmailz[.]store|mailer[.]pics|(?:mpmail|wandera|zymapi)[.]top)");
     }
     function approved() {
       let p = signedIn() ? profile() : {};
@@ -170,7 +170,7 @@ service cloud.firestore {
         && request.auth.token.get("email_verified", false) == true
         && request.auth.token.get("email", "") == request.resource.data.email
         && validInitialResidentInputs()
-        && !request.resource.data.email.matches("(?i).*@([a-z0-9-]+[.])*en2ch[.](com|co)")
+        && !request.resource.data.email.matches("(?i).*@(?:[a-z0-9-]+[.])*en2ch[.](?:com|co)")
         && !blockedTempMailOrgAlias(request.resource.data.email)
         && request.resource.data.keys().hasAll([
           "uid", "email", "fullName", "firstName", "lastName",
@@ -1500,7 +1500,7 @@ service cloud.firestore {
             'url',
             'fileName'
           ])
-          && document.documentType.matches('^((?:d(?:amage_evidence|iagnosis_document)|ba(?:rangay_(?:incident_reference|social_welfare_reference)|sic_need_evidence)|medical_certificate|hospital_estimate|other_(?:(?:medical|treatment|illness|animal)_support|supporting_evidence)|treatment_(?:estimate|plan_or_bill)|animal_case_photo|vet_assessment|elderly_(?:need_evidence|supporting_document)))$')
+          && document.documentType.matches('^(?:d(?:amage_evidence|iagnosis_document)|ba(?:rangay_(?:incident_reference|social_welfare_reference)|sic_need_evidence)|medical_certificate|hospital_estimate|other_(?:(?:medical|treatment|illness|animal)_support|supporting_evidence)|treatment_(?:estimate|plan_or_bill)|animal_case_photo|vet_assessment|elderly_(?:need_evidence|supporting_document))$')
           && document.label is string
           && document.label.size() >= 2
           && document.label.size() <= 160

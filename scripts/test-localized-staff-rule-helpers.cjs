@@ -359,11 +359,35 @@ for(const email of ["x@gmail.com","x@outlook.com","x@en2ch.co",
  assert.equal(newRegex.test(email),oldRegex.test(email),"BLOCKED: changed blocked-domain negative case");
 assert.equal(expectedDocType.split(oldProvider).length,2,"Missing original provider source");
 const expectedFinal=expectedDocType.replace(oldProvider,()=>newProvider);
-assert.equal(current,expectedFinal,
- "BLOCKED: unrelated Firestore permission or temporary-email provider change");
+// Regex capture groups are unused by Firestore Rules matches(). Boolean
+// membership is identical when all three captures become noncapturing.
+const finalProvider=expectedFinal.match(/function blockedTempMailOrgAlias\(email\)\s*\{\s*return email\.matches\("\(\?i\)\.\*@\(\[a-z0-9-\]\+\[\.\]\)\*\(([^"]+)\)"\);/);
+const finalDoc=expectedFinal.match(/document\.documentType\.matches\('\^\(([^']+)\)\$'\)/);
+assert(finalProvider&&finalDoc&&finalDoc[1].startsWith("(?:"));
+const oldProviderExpr='email.matches("(?i).*@([a-z0-9-]+[.])*('+finalProvider[1]+')")';
+const newProviderExpr='email.matches("(?i).*@(?:[a-z0-9-]+[.])*(?:'+finalProvider[1]+')")';
+const oldDocExpr=finalDoc[0];
+const newDocExpr="document.documentType.matches('^"+finalDoc[1]+"$')";
+const oldEnExpr='request.resource.data.email.matches("(?i).*@([a-z0-9-]+[.])*en2ch[.](com|co)")';
+const newEnExpr='request.resource.data.email.matches("(?i).*@(?:[a-z0-9-]+[.])*en2ch[.](?:com|co)")';
+for(const token of [oldProviderExpr,oldDocExpr,oldEnExpr])
+ assert.equal(expectedFinal.split(token).length,2,"Missing exact old regex capture pattern");
+const expectedNoCaptures=expectedFinal
+ .replace(oldProviderExpr,()=>newProviderExpr)
+ .replace(oldDocExpr,()=>newDocExpr)
+ .replace(oldEnExpr,()=>newEnExpr);
+assert.equal(current,expectedNoCaptures,
+ "BLOCKED: noncapture refactor changed unrelated Firestore permission source");
+const recaptureRegex=new RegExp(".*@([a-z0-9-]+[.])*("+finalProvider[1]+")","i");
+const noCaptureRegex=new RegExp(".*@(?:[a-z0-9-]+[.])*(?:"+finalProvider[1]+")","i");
+for(const blocked of providerDomains)for(const email of [
+ "a@"+blocked,"A@SUB."+blocked.toUpperCase(),"a@"+blocked+".extra",
+ "a@evil"+blocked,"a@sub.sub."+blocked
+])assert.equal(recaptureRegex.test(email),noCaptureRegex.test(email),
+ "BLOCKED: regex capture refactor changed disposable-domain matching");
 
 assert.equal(cp.execFileSync("git",["hash-object","firestore.rules"],{encoding:"utf8"}).trim(),
-"29ce1f6a9f92f901401c5752bf918f89cc5c942d","BLOCKED: unreviewed Firestore Rules blob");
+"e0d31c3de004da133ac00f5984e495bd66c97da6","BLOCKED: unreviewed Firestore Rules blob");
 // Verify exhaustiveness of all optional-review branches over valid and
 // invalid types, status values and three-valued nulls before Firebase emulator.
 for(const required of [true,false,null,"true",0,1,undefined]){
@@ -381,7 +405,7 @@ for(const required of [true,false,null,"true",0,1,undefined]){
 }
 
 const gitBlob=cp.execFileSync("git",["hash-object","firestore.rules"],{encoding:"utf8"}).trim();
-assert.equal(gitBlob,"29ce1f6a9f92f901401c5752bf918f89cc5c942d","BLOCKED: unapproved Firestore blob");
+assert.equal(gitBlob,"e0d31c3de004da133ac00f5984e495bd66c97da6","BLOCKED: unapproved Firestore blob");
 const paths=source=>source.split("\n").filter(l=>l.startsWith("    match /")).map(l=>l.slice("    match /".length).split(" ")[0]);
 assert.deepEqual(paths(current),paths(protectedBaseline),"BLOCKED: collection scope changed");
 const allows=source=>[...source.matchAll(/allow (?:get|list|read|write|create|update|delete)/g)].length;
