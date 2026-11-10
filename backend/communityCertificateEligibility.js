@@ -20,8 +20,8 @@ function liveTemporaryOneMinuteWindow() {
   if (process.env.VOLUNSERVE_CERT_LIVE_TEMP_ONE_MIN_ENABLED !== "true") return null;
   const startText = String(process.env.VOLUNSERVE_CERT_LIVE_TEMP_ONE_MIN_START_UTC || "");
   const endText = String(process.env.VOLUNSERVE_CERT_LIVE_TEMP_ONE_MIN_END_UTC || "");
-  if (!/^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$/.test(startText) ||
-      !/^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$/.test(endText)) return null;
+  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/.test(startText) ||
+      !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/.test(endText)) return null;
   const start = Date.parse(startText);
   const end = Date.parse(endText);
   if (!Number.isFinite(start) || !Number.isFinite(end) ||
