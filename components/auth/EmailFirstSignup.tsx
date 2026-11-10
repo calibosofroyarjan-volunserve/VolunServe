@@ -26,7 +26,7 @@ import {auth} from "../../lib/firebase";
 import {
   signUpUser,
 } from "../../lib/firebaseAuth";
-import {getRegistrationEmailError} from "../../lib/registrationEmailPolicy";
+import {getRegistrationEmailError, requiresGoogleOAuthForRegistration, GMAIL_GOOGLE_OAUTH_REQUIRED_MESSAGE} from "../../lib/registrationEmailPolicy";
 import {verificationCooldownSeconds} from "../../lib/verificationCooldown";
 import {getResidentRegistrationFieldErrors} from "../../lib/requireCompleteResidentRegistration";
 import { userFacingError } from "../../lib/userFacingError";
@@ -262,6 +262,7 @@ export default function EmailFirstSignup() {
   const age = useMemo(() => dateAge(birth), [birth]);
   const emailErr = getRegistrationEmailError(email);
   const passwordErr = passwordError(password, email);
+  const gmailOAuthRequired = !resumeMode && requiresGoogleOAuthForRegistration(email);
   const needsSpecialization = (SPECIALIZATIONS[occupation] || []).length > 0;
   const googleOnly = !!signedInUser &&
     signedInUser.providerData.some(p => p.providerId === "google.com") &&
@@ -354,6 +355,10 @@ export default function EmailFirstSignup() {
     setError("");
     setMessage("");
     if (emailErr) return;
+    if (gmailOAuthRequired && !googleOnly) {
+      setError(GMAIL_GOOGLE_OAUTH_REQUIRED_MESSAGE);
+      return;
+    }
     // Existing accounts may have older passwords; only new credentials
     // must pass the current complexity policy.
     if (resumeMode ? !password.trim() : !!passwordErr) return;
@@ -715,7 +720,7 @@ export default function EmailFirstSignup() {
                 <Text style={styles.legacyInfoText}>
                   {resumeMode
                     ? "Started email verification but did not finish? Enter the same email and VolunServe password to resume. A pending Firebase login is not yet a Resident or Guest account."
-                    : "Enter an accessible email and a VolunServe password. We'll send a verification link before collecting your personal details."}
+                    : "New Gmail signup needs Continue with Google to prove account ownership. Yahoo can register using email/password and a verification link."}
                 </Text>
               </View>
             )}
@@ -746,7 +751,7 @@ export default function EmailFirstSignup() {
                 <Text style={styles.helper}>
                   {resumeMode
                     ? "Use your original email and password to continue unfinished registration."
-                    : "Create a password and verify your email. No Google account is required."}
+                    : "For Gmail, use Continue with Google to prove you own the account. Yahoo can use email and password."}
                 </Text>
                 <Field
                   label="Email Address *" value={email}
@@ -756,7 +761,9 @@ export default function EmailFirstSignup() {
                   error={resumeMode ? (!email.trim() ? "Enter your registration email." : null) : emailErr}
                   showError={showErrors}
                   hint={email.trim() && !emailErr
-                    ? "Email format accepted. You must open the verification link to confirm access to this inbox."
+                    ? gmailOAuthRequired
+                        ? "Gmail detected: choose Continue with Google below; email verification alone cannot prove ownership."
+                        : "Email format accepted. You must open the verification link to confirm access to this inbox."
                     : undefined}
                 />
                 <Field
@@ -803,7 +810,7 @@ export default function EmailFirstSignup() {
                 {!signedInUser && !resumeMode && (
                   <>
                     <Text style={styles.orText}>OR</Text>
-                    <Text style={styles.helper}>Optional: continue with Google instead of creating a VolunServe password.</Text>
+                    <Text style={styles.helper}>Gmail: Continue with Google is required. Yahoo: email and password are supported.</Text>
                     {checkButton("Continue with Google", () => {void continueWithGoogle();}, true)}
                   </>
                 )}
