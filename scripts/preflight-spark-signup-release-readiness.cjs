@@ -136,6 +136,34 @@ async function main() {
     method:"POST",body:{source:{files:[{name:"firestore.rules",content:candidateSource}]},testSuite:{testCases:[]}}
   });
   const compilerOkay=compile.ok&&noRuleCompilerErrors(compile.data);
+  // Read-only diagnosis of Firebase's compiled executable limit. The
+  // projects.test endpoint checks syntax, whereas release activation also
+  // validates backend executable limits. The existing executable is never
+  // printed; only its byte length is reported.
+  const executable=await request(
+    "https://firebaserules.googleapis.com/v1/"+RELEASE+":getExecutable"+
+    "?executableVersion=FIREBASE_RULES_EXECUTABLE_V2",token
+  );
+  const activeExecutableBytes=executable.ok && typeof executable.data.executable==="string"
+    ?Buffer.from(executable.data.executable,"base64").byteLength:null;
+  // Find whether the rejected publisher created an immutable candidate Ruleset
+  // without activating it. Bounded metadata and full-source reads only;
+  // no production change and no source contents in Actions logs.
+  const recentRulesets=await request(
+    "https://firebaserules.googleapis.com/v1/projects/"+PROJECT+"/rulesets?pageSize=20",token
+  );
+  let matchingUnreleasedCandidateCount=0;
+  if(recentRulesets.ok){
+    const recent=(recentRulesets.data.rulesets||[]).slice(0,20);
+    const inspected=await Promise.all(recent.map(item=>request(
+      "https://firebaserules.googleapis.com/v1/"+item.name,token
+    )));
+    matchingUnreleasedCandidateCount=inspected.filter(item=>
+      item.ok && item.data.source?.files?.length===1 &&
+      sha(item.data.source.files[0].content)===sha(candidateSource)
+    ).length;
+  }
+
   const triggers=identityResult.data?.blockingFunctions?.triggers||{};
   const authHooksActive=!!triggers.beforeCreate?.functionUri && !!triggers.beforeSignIn?.functionUri;
   // READ ONLY publisher IAM test. This does not grant any IAM role or release
@@ -161,6 +189,14 @@ async function main() {
     selectedCandidateWebRevision:CANDIDATE_SITE,
     selectedCandidateRulesRevision:CANDIDATE_RULES,
     compiler:{httpStatus:compile.status,passed:compilerOkay,errorCount:(compile.data?.issues||[]).filter(x=>x.severity==="ERROR").length},
+    activationDiagnostics:{
+      existingExecutableHttpStatus:executable.status,
+      existingCompiledRulesBytes:activeExecutableBytes,
+      knownCompiledLimitBytes:256000,
+      recentRulesetsListHttpStatus:recentRulesets.status,
+      matchingCandidateRulesetsCreatedButNotActivated:matchingUnreleasedCandidateCount,
+      scope:"READ ONLY; no Rules release or Hosting changes"
+    },
     hostingBackup:{liveHttpStatus:liveChannel.status,backupHttpStatus:backupChannel.status,
       pointsToCurrentLiveVersion:backupSame,fingerprintMatchesCurrentLive:backupMarkerMatch},
     hostingPreview:{httpStatus:previewChannel.status,fingerprintMatchesCurrentCandidate:previewMarkerMatch},
