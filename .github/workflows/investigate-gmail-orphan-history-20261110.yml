@@ -1,0 +1,86 @@
+# Exact protected-source and read-only production access; no deletion or deploy.
+name: Investigate Gmail Orphan History References (READ ONLY)
+on:
+  pull_request:
+    branches: [live-protected]
+    paths:
+      - scripts/audit-gmail-orphan-history-references-20261110.cjs
+      - .github/workflows/investigate-gmail-orphan-history-20261110.yml
+  push:
+    branches: [live-protected]
+    paths:
+      - scripts/audit-gmail-orphan-history-references-20261110.cjs
+      - .github/workflows/investigate-gmail-orphan-history-20261110.yml
+permissions:
+  contents: read
+concurrency:
+  group: volunserve-gmail-orphan-history-readonly-20261110
+  cancel-in-progress: false
+jobs:
+  synthetic-and-safety:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Offline self-test and static no-write review
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check scripts/audit-gmail-orphan-history-references-20261110.cjs
+          node scripts/audit-gmail-orphan-history-references-20261110.cjs --self-test
+          node <<'NODE'
+          const fs=require('node:fs');
+          const assert=require('node:assert/strict');
+          const p='scripts/audit-gmail-orphan-history-references-20261110.cjs';
+          const s=fs.readFileSync(p,'utf8');
+          const w=fs.readFileSync('.github/workflows/investigate-gmail-orphan-history-20261110.yml','utf8');
+          for(const re of [
+            /auth\.(?:createUser|updateUser|deleteUser|deleteUsers|setCustomUserClaims)\s*\(/,
+            /db\.(?:batch|runTransaction|bulkWriter)\s*\(/,
+            /\.ref\.(?:create|set|update|delete)\s*\(/,
+            /\.commit\s*\(/,
+            /\.doc\([^)]*\)\.(?:create|set|update|delete)\s*\(/,
+            /firebase-tools\s+(?:deploy|hosting:clone)/,
+          ])assert(!re.test(s),'Unsafe production operation in audit source');
+          assert(s.includes('mode:"READ_ONLY_GMAIL_ORPHAN_HISTORY_INVESTIGATION"'));
+          assert(s.includes('privateEmailsOrUidsPrinted:false'));
+          assert(s.includes('MAX_DOCS=12000'));
+          assert(s.includes('where("role","in",ROLES)'));
+          assert(w.includes("environment: production"));
+          assert(w.includes("github.event_name == 'push'"));
+          assert(!/^\s*(?:npx\s+)?firebase(?:-tools)?\s+.*(?:deploy|clone)/m.test(w));
+          console.log('PASS: production read access only; bounded scans; PII-safe aggregate output');
+          NODE
+  production-readonly-investigation:
+    if: github.repository == 'calibosofroyarjan-volunserve/VolunServe' && github.ref == 'refs/heads/live-protected' && github.event_name == 'push'
+    needs: synthetic-and-safety
+    environment: production
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          submodules: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: functions/package-lock.json
+      - name: Reject outdated controller SHA
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(git ls-remote --heads origin live-protected | cut -f1)" = "$GITHUB_SHA"
+      - run: npm ci --prefix functions --no-audit --no-fund
+      - name: Aggregate only Gmail orphan and duplicate historical references (NO WRITES)
+        env:
+          VOLUNSERVE_PRODUCTION_AUDIT_CREDENTIAL: ${{ secrets.VOLUNSERVE_PRODUCTION_READONLY_SERVICE_ACCOUNT }}
+        run: node scripts/audit-gmail-orphan-history-references-20261110.cjs
