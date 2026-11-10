@@ -254,7 +254,12 @@ assert.equal(reviewedHoisted.split(historicalEmailGuard).length,2,
 // Preserve all previously reviewed Firestore permissions except this one input
 // predicate. Emulator tests still reject invalid non-empty phone numbers.
 const reviewedBeforeContactChange=reviewedHoisted.replace(historicalEmailGuard,reviewedEmailGuard);
-const originalContactRule="          && d.phoneNumber.matches('^([+]639[0-9]{9}|09[0-9]{9})
+const originalContactRule="          && d.phoneNumber.matches('^([+]639[0-9]{9}|09[0-9]{9})$')";
+const optionalContactRule="          && (d.phoneNumber == '' || d.phoneNumber.matches('^([+]639[0-9]{9}|09[0-9]{9})$'))";
+assert.equal(reviewedBeforeContactChange.split(originalContactRule).length,2,
+  'BLOCKED: the original contact predicate was altered');
+assert.equal(current,reviewedBeforeContactChange.replace(originalContactRule,optionalContactRule),
+  'BLOCKED: only optional blank contact can change; all other Firestore rules unchanged');
 assert.equal(cp.execFileSync("git",["hash-object","firestore.rules"],{encoding:"utf8"}).trim(),
 "b6fa6a308592994c3825f190c6bbc23561a20e48","BLOCKED: unreviewed Firestore Rules blob");
 // Verify exhaustiveness of all optional-review branches over valid and
