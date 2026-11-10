@@ -32,7 +32,7 @@ jobs:
       - name: Verify Resident email validation and staff access in Firestore emulator
         run: npx firebase-tools emulators:exec --only firestore --project demo-volunserve-compact-temp-provider "node scripts/test-verified-community-registration-rules.cjs"
       - name: Verify no changes to donation guard compatibility
-        run: node scripts/test-donation-lgu-role-isolation.cjs
+        run: npx firebase-tools emulators:exec --only firestore --project demo-volunserve-compact-donation "node scripts/test-donation-lgu-role-isolation.cjs"
       - name: Preserve existing Volunteer invitation permissions
         run: npx firebase-tools emulators:exec --only firestore --project demo-volunserve-preserved-volunteers "node scripts/test-preserved-volunteer-invitation-rules.cjs"
       - name: Confirm no production publishing
