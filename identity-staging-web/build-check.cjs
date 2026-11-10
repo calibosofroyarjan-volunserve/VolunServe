@@ -35,4 +35,6 @@ for(const forbidden of ["volunserve-3aa5b","https://volunserve.onrender.com","na
  if(qa.includes(forbidden))throw Error("Unsafe camera QA reference: "+forbidden);
 }
 execFileSync(process.execPath,["--test","identity-staging-web/test-camera-metrics.mjs","identity-staging-web/test-device-quality.mjs","identity-staging-web/test-face-challenge.mjs"],{stdio:"inherit"});
+// Certificate testing is a separate staging-only portal. Preserve identity tests.
+execFileSync(process.execPath,["identity-staging-web/test-certificate-portal.cjs"],{stdio:"inherit"});
 console.log("Staging-only camera and identity integration checks passed.");
