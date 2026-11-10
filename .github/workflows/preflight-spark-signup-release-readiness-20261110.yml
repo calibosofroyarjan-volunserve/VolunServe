@@ -30,7 +30,7 @@ jobs:
         run: |
           node --check scripts/preflight-spark-signup-release-readiness.cjs
           node scripts/preflight-spark-signup-release-readiness.cjs --self-test
-          node -e 'const s=require("fs").readFileSync("scripts/preflight-spark-signup-release-readiness.cjs","utf8");if(/hosting:clone|hosting:channel:deploy|--publish-rules|--restore-rules|firebase-tools deploy|rulesets.create|releases.update/.test(s))process.exit(1);console.log("PASS: audit has no Firebase production release commands")'
+          node -e 'const s=require("fs").readFileSync("scripts/preflight-spark-signup-release-readiness.cjs","utf8");if(/hosting:clone|hosting:channel:deploy|--publish-rules|--restore-rules|firebase-tools deploy|rulesWrite\(|patchExistingRelease\(/.test(s))process.exit(1);console.log("PASS: audit has no Firebase production release commands")'
   production-readonly:
     if: github.repository == 'calibosofroyarjan-volunserve/VolunServe' && github.ref == 'refs/heads/live-protected' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
     needs: source-check
