@@ -106,8 +106,11 @@ test("all final .co registrations are denied by staged server screener without b
   for(const email of ["hlc3w2yrtm@ruutukf.co","resident@sub.ruutukf.co","resident@legitimate.co","resident@sub.legitimate.co","RESIDENT@SOMEBUSINESS.CO"]) {
     assert.deepEqual(classifyRegistrationEmail(email),{allowed:false,reason:"blocked_tld_co"});
   }
-  for(const email of ["resident@gmail.com","resident@yahoo.com","resident@outlook.com","resident@legitimate.co.uk","resident@legitimate.co.ph"]) {
+  for(const email of ["resident@gmail.com","resident@googlemail.com","resident@yahoo.com","resident@yahoo.com.ph","resident@yahoo.co.uk"]) {
     assert.equal(classifyRegistrationEmail(email).allowed,true,email);
+  }
+  for(const email of ["resident@outlook.com","resident@hotmail.com","resident@legitimate.co.uk","resident@legitimate.co.ph","resident@company.com","resident@sub.gmail.com"]) {
+    assert.deepEqual(classifyRegistrationEmail(email),{allowed:false,reason:"provider_not_allowed"},email);
   }
 });
 
