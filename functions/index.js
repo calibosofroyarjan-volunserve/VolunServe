@@ -2326,30 +2326,8 @@ exports.issueVolunteerCertificate = onCall(
 // Certificates are authenticated VolunServe participation records.
 // No LGU seal, signature, or government endorsement is generated here.
 // =========================================================
-const MIN_COMMUNITY_CERTIFICATE_ATTENDANCE_MINUTES = 30;
-const TEST_COMMUNITY_CERTIFICATE_ATTENDANCE_MINUTES = 1;
-
-// A test exception requires BOTH explicit server-controlled allowlists.
-// Never trust client-provided test flags, account roles, or event metadata.
-// Empty or missing configuration always retains the 30-minute rule.
-function communityCertificateAllowlist(name) {
-  return new Set(String(process.env[name] || "")
-      .split(",")
-      .map((value) => value.trim())
-      .filter(Boolean));
-}
-
-function communityCertificateMinimumMinutes(eventId, volunteerId) {
-  const testEvents = communityCertificateAllowlist(
-      "VOLUNSERVE_CERT_TEST_EVENT_IDS",
-  );
-  const testVolunteers = communityCertificateAllowlist(
-      "VOLUNSERVE_CERT_TEST_VOLUNTEER_UIDS",
-  );
-  return testEvents.has(eventId) && testVolunteers.has(volunteerId) ?
-    TEST_COMMUNITY_CERTIFICATE_ATTENDANCE_MINUTES :
-    MIN_COMMUNITY_CERTIFICATE_ATTENDANCE_MINUTES;
-}
+const {minimumCommunityCertificateMinutes} =
+  require("./communityCertificateEligibility");
 
 function communityTimestampMillis(value) {
   if (!value || typeof value.toMillis !== "function") {
@@ -2411,7 +2389,7 @@ async function issueCommunityEventCertificate(eventId, participantId) {
       timeIn <= 0 ||
       timeOut < timeIn ||
       timeOut - timeIn > 24 * 60 * 60 * 1000 ||
-      timeOut - timeIn < communityCertificateMinimumMinutes(eventId, volunteerId) * 60000
+      timeOut - timeIn < minimumCommunityCertificateMinutes(eventId, volunteerId) * 60000
     ) {
       return {issued: false, reason: "not_eligible"};
     }
