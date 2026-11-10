@@ -21,6 +21,12 @@ service cloud.firestore {
     // 2) the explicit role allow-list excludes 'applicant', so a missing
     //    status field is 'approved' but a present null/nonapproved status is not.
     // This reduces repeated compiled expressions across role-sensitive rules.
+    // Recent temp-mail.org delivery domains reviewed 2026-11-10.
+    // Deny-only for community profiles; staff policies remain unchanged.
+    // This is a finite provider snapshot and cannot detect every new domain.
+    function blockedTempMailOrgAlias(email) {
+      return email.matches("(?i).*@(?:[a-z0-9-]+[.])*(?:(?:adujudi01|crystalfact|indonesiacentral|livetogelhk|luontaisterveys|wbcom)[.]info|(?:avtomaty-online|emailgeneratorai|huanqiu6)[.]cc|(?:baimengshu|bankwen|berkshireonstage|boffweb|crackclue|digeros|drtall|emailkeep|gmail[.]shagni|huicuiguan|javafs|jjwxb|jlmmarine|kxdyy|macsnipe|mail[.]chosenx|mail[.]gianes|mail[.]sc2hub|mmamemories|nmwxb|prejuge|prestigegroupnet|sofabazar|spicylog|stebie|tobiquegaming-license|ttbtt|wencuigu|wxfwb|yesrox|yyqzw)[.]com|ctd[.]nl8[.]eu|doisongtinhduc[.]xyz|dragontranslation[.]net|ghostmailz[.]club|ghostmailz[.]online|ghostmailz[.]store|mailer[.]pics|(?:mpmail|wandera|zymapi)[.]top)");
+    }
     function approved() {
       let p = signedIn() ? profile() : {};
       let role = p.get('role', '');
@@ -32,6 +38,7 @@ service cloud.firestore {
           || (
             role in ['resident', 'volunteer']
             && request.auth.token.get('email', '') == p.get('email', '')
+            && !blockedTempMailOrgAlias(request.auth.token.get('email', ''))
           )
         )
         && p.get('status', 'approved') == 'approved'
@@ -116,10 +123,9 @@ service cloud.firestore {
           /databases/$(database)/documents/volunteerApplications/$(uid)
         ).data;
       }
-      // STAGING ONLY: new-signup provider gate. Existing READ/UPDATE, staff
-      // roles and historical verified accounts must remain unchanged.
-      // SmailPro may relay real Gmail verification links; only a Google
-      // OAuth-backed Firebase token is accepted for new Gmail profiles.
+      // STAGED ONLY: new community user profiles accept verified Yahoo or
+      // Google-authenticated Gmail, not receive-only shared Gmail inboxes.
+      // Existing users, reads, role updates and other modules are unchanged.
       function permittedNewResidentEmail() {
         let e = request.resource.data.email;
         let provider = request.auth.token.get('firebase', {}).get('sign_in_provider', '');
@@ -129,8 +135,7 @@ service cloud.firestore {
           || e.matches('^[^@]+@(yahoo[.]com|yahoo[.]com[.]ph|yahoo[.]co[.]uk)$')
         );
       }
-      // LGU applications use Yahoo/password until Google OAuth is supported
-      // in that dedicated form; applications never grant Admin privileges.
+      // The LGU applicant form currently supports Yahoo/password only.
       function permittedNewApplicantEmail() {
         let e = request.resource.data.email;
         return e is string
@@ -143,11 +148,10 @@ service cloud.firestore {
         return d.firstName is string && d.firstName.size() >= 2 && d.firstName.size() <= 80
           && d.lastName is string && d.lastName.size() >= 2 && d.lastName.size() <= 80
           && d.get('middleName', '') is string && d.get('middleName', '').size() <= 80
-          && d.phoneNumber is string
           && (d.phoneNumber == '' || d.phoneNumber.matches('^([+]639[0-9]{9}|09[0-9]{9})$'))
           && d.region is string && d.region.size() >= 5 && d.region.size() <= 100
-          && d.barangay is string && d.barangay.matches('^(Assumption|Bagong Buhay I|Bagong Buhay II|Bagong Buhay III|Citrus|Ciudad Real|Dulong Bayan|Fatima I|Fatima II|Fatima III|Fatima IV|Fatima V|Francisco Homes-Guijo|Francisco Homes-Mulawin|Francisco Homes-Narra|Francisco Homes-Yakal|Gaya-gaya|Graceville|Gumaoc Central|Gumaoc East|Gumaoc West|Kaybanban|Kaypian|Lawang Pari|Maharlika|Minuyan I|Minuyan II|Minuyan III|Minuyan IV|Minuyan Proper|Minuyan V|Muzon East|Muzon Proper|Muzon South|Muzon West|Paradise III|Poblacion|Poblacion I|San Isidro|San Manuel|San Martin de Porres|San Martin I|San Martin II|San Martin III|San Martin IV|San Pedro|San Rafael I|San Rafael II|San Rafael III|San Rafael IV|San Rafael V|San Roque|Santa Cruz I|Santa Cruz II|Santa Cruz III|Santa Cruz IV|Santa Cruz V|Santo Cristo|Santo Niño I|Santo Niño II|Sapang Palay|Tungkong Mangga)$')
-          && d.occupationCategory is string && d.occupationCategory.matches('^(Medical Professional|Emergency Responder|Government Employee|Student|Private Sector Employee|NGO Worker|Skilled Worker|Unemployed|Retired|Other [(]Specify[)])$')
+          && d.barangay.matches('^(Assumption|Bagong Buhay I|Bagong Buhay II|Bagong Buhay III|Citrus|Ciudad Real|Dulong Bayan|Fatima I|Fatima II|Fatima III|Fatima IV|Fatima V|Francisco Homes-Guijo|Francisco Homes-Mulawin|Francisco Homes-Narra|Francisco Homes-Yakal|Gaya-gaya|Graceville|Gumaoc Central|Gumaoc East|Gumaoc West|Kaybanban|Kaypian|Lawang Pari|Maharlika|Minuyan I|Minuyan II|Minuyan III|Minuyan IV|Minuyan Proper|Minuyan V|Muzon East|Muzon Proper|Muzon South|Muzon West|Paradise III|Poblacion|Poblacion I|San Isidro|San Manuel|San Martin de Porres|San Martin I|San Martin II|San Martin III|San Martin IV|San Pedro|San Rafael I|San Rafael II|San Rafael III|San Rafael IV|San Rafael V|San Roque|Santa Cruz I|Santa Cruz II|Santa Cruz III|Santa Cruz IV|Santa Cruz V|Santo Cristo|Santo Niño I|Santo Niño II|Sapang Palay|Tungkong Mangga)$')
+          && d.occupationCategory.matches('^(Medical Professional|Emergency Responder|Government Employee|Student|Private Sector Employee|NGO Worker|Skilled Worker|Unemployed|Retired|Other [(]Specify[)])$')
           && d.get('occupationSpecialization', '') is string
           && d.get('occupationOther', '') is string
           && d.get('occupationOther', '').size() <= 80
@@ -184,7 +188,8 @@ service cloud.firestore {
         && request.auth.token.get("email", "") == request.resource.data.email
         && permittedNewResidentEmail()
         && validInitialResidentInputs()
-        && !request.resource.data.email.matches(".*@([a-z0-9-]+[.])*en2ch[.](com|co)")
+        && !request.resource.data.email.matches("(?i).*@(?:[a-z0-9-]+[.])*en2ch[.](?:com|co)")
+        && !blockedTempMailOrgAlias(request.resource.data.email)
         && request.resource.data.keys().hasAll([
           "uid", "email", "fullName", "firstName", "lastName",
           "age", "phoneNumber", "barangay", "occupationCategory"
@@ -1508,22 +1513,21 @@ service cloud.firestore {
         );
       }
       function validSecureAssistanceDocument(document) {
-        return document is map
-          && document.keys().hasOnly([
+        return document.keys().hasOnly([
             'documentType',
             'label',
             'url',
             'fileName'
           ])
-          && document.documentType is string && document.documentType.matches('^(damage_evidence|barangay_incident_reference|medical_certificate|hospital_estimate|other_medical_support|treatment_estimate|other_treatment_support|diagnosis_document|treatment_plan_or_bill|other_illness_support|animal_case_photo|vet_assessment|other_animal_support|elderly_need_evidence|elderly_supporting_document|basic_need_evidence|barangay_social_welfare_reference|other_supporting_evidence)$')
+          && document.documentType.matches('^(?:d(?:amage_evidence|iagnosis_document)|ba(?:rangay_(?:incident_reference|social_welfare_reference)|sic_need_evidence)|medical_certificate|hospital_estimate|other_(?:(?:medical|treatment|illness|animal)_support|supporting_evidence)|treatment_(?:estimate|plan_or_bill)|animal_case_photo|vet_assessment|elderly_(?:need_evidence|supporting_document))$')
           && document.label is string
           && document.label.size() >= 2
           && document.label.size() <= 160
-          && document.url is string
-          && document.url.size() >= 40
-          && document.url.size() <= 500
+          // The fixed URL prefix/suffix contribute exactly 72 ASCII chars.
+          // 1-428 evidence ID chars give exactly the same valid 73-500 length
+          // range as the previous URL size checks, with no broader matches.
           && document.url.matches(
-            '^https://volunserve[.]onrender[.]com/api/assistance/evidence/evidence_[A-Za-z0-9]+/access$'
+            '^https://volunserve[.]onrender[.]com/api/assistance/evidence/evidence_[A-Za-z0-9]{1,428}/access$'
           )
           && document.fileName is string
           && document.fileName.size() >= 1
@@ -5137,11 +5141,9 @@ service cloud.firestore {
         && request.resource.data.location is string
         && request.resource.data.location.size() >= 1
         && request.resource.data.location.size() <= 150
-        && request.resource.data.date is string
         && request.resource.data.date.matches(
           '^[0-9]{4}-[0-9]{2}-[0-9]{2}$'
         )
-        && request.resource.data.time is string
         && request.resource.data.time.matches(
           '^([01][0-9]|2[0-3]):[0-5][0-9]$'
         )
