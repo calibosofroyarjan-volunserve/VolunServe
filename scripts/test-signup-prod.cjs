@@ -93,7 +93,23 @@ function harness(source, enabled, options = {}) {
         rendered=rendered.replace(newInline,"");
       }
       const published=extract(cp.execFileSync("git",["show",baseRef+":"+file],{encoding:"utf8"}));
-      assert.equal(rendered,published,"Unexpected published signup layout drift: "+file);
+      // The DOB field is intentionally replaced by the shared no-typing
+      // calendar. Compare all OTHER UI source against the actual published
+      // legacy form, retaining the strict design-drift regression guard.
+      assert(source.includes("<BirthDateCalendarPicker"),"DOB must use calendar-only input: "+file);
+      assert(!source.includes('type: "date"'),"Do not expose a keyboard-editable web DOB: "+file);
+      assert(!source.includes("<DateTimePicker"),"Use one consistent DOB calendar: "+file);
+      const currentStart=rendered.indexOf("<BirthDateCalendarPicker");
+      const originalStart=published.indexOf(file.endsWith(".web.tsx")
+        ? "<View style={styles.dateOfBirthRow}>"
+        : '<View style={styles.field}>\n                <Text style={styles.label}>🎂 Date of Birth');
+      const birthdayEnd='<View style={styles.step1TermsBox}>';
+      const currentEnd=rendered.indexOf(birthdayEnd,currentStart);
+      const originalEnd=published.indexOf(birthdayEnd,originalStart);
+      assert(currentStart>0 && originalStart>0 && currentEnd>currentStart && originalEnd>originalStart,
+        "Missing scoped birthday UI boundary: "+file);
+      rendered=rendered.slice(0,currentStart)+published.slice(originalStart,originalEnd)+rendered.slice(currentEnd);
+      assert.equal(rendered,published,"Unexpected published signup layout drift outside DOB: "+file);
     }
   });
   for(const enabled of [false,true]) {
