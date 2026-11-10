@@ -39,8 +39,8 @@ jobs:
           for(const marker of [
             'const LIVE="681c65eba80ea7ef8733a6b1e6047ea1c2a722ea"',
             'const WEB="44cfe41429f91d35d383bf3846fb6fd2f7e7df44"',
-            'const RULES="b817d81c075fa965e85c440cd4f9ea36ac1b0b1b"',
-            'const RULES_BLOB="29ce1f6a9f92f901401c5752bf918f89cc5c942d"',
+            'const RULES="770cf255234a69f1440bb7b2246fa6c891de2cf9"',
+            'const RULES_BLOB="e0d31c3de004da133ac00f5984e495bd66c97da6"',
             'const BACKUP="signup-live-backup-20261110"',
             'const PREVIEW="signup-web-review-20261110"',
             'assert(!content.includes("gmailAliasClaims")',
@@ -78,7 +78,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           path: rules
-          ref: b817d81c075fa965e85c440cd4f9ea36ac1b0b1b
+          ref: 770cf255234a69f1440bb7b2246fa6c891de2cf9
           fetch-depth: 0
           submodules: false
       - uses: actions/setup-node@v4
