@@ -1,0 +1,122 @@
+# ONE-TIME EXACT-source guarded publish. No stale main build, no Auth user
+# mutation, no Gmail alias claims or migration. Roll back known partial release.
+name: Release Scoped Disposable Email Security (GUARDED PRODUCTION)
+on:
+  pull_request:
+    branches: [live-protected]
+    paths:
+      - scripts/release-reviewed-temp-email-scoped-20261110.cjs
+      - .github/workflows/release-reviewed-temp-email-scoped-20261110.yml
+  push:
+    branches: [live-protected]
+    paths:
+      - scripts/release-reviewed-temp-email-scoped-20261110.cjs
+      - .github/workflows/release-reviewed-temp-email-scoped-20261110.yml
+permissions:
+  contents: read
+concurrency:
+  group: volunserve-production-hosting-release
+  cancel-in-progress: false
+jobs:
+  controller-safety:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Offline immutable reviewed-source and rollback contracts
+        run: |
+          node --check scripts/release-reviewed-temp-email-scoped-20261110.cjs
+          node scripts/release-reviewed-temp-email-scoped-20261110.cjs --self-test
+          node <<'NODE'
+          const assert=require('node:assert/strict');
+          const fs=require('node:fs');
+          const s=fs.readFileSync('scripts/release-reviewed-temp-email-scoped-20261110.cjs','utf8');
+          for(const marker of [
+            'const LIVE="681c65eba80ea7ef8733a6b1e6047ea1c2a722ea"',
+            'const WEB="44cfe41429f91d35d383bf3846fb6fd2f7e7df44"',
+            'const RULES="508b58b6ce888810c081dc6bfe38c237629d96d8"',
+            'const RULES_BLOB="a40954b7d8716e3953483a7ca39dd9e03f7b4e9a"',
+            'const BACKUP="signup-live-backup-20261110"',
+            'const PREVIEW="signup-web-review-20261110"',
+            'assert(!content.includes("gmailAliasClaims")',
+            'async function safeRollback(',
+            'process.env.GITHUB_REF,"refs/heads/live-protected"',
+          ])assert(s.includes(marker),'BLOCKED: reviewed release pin or rollback guard removed');
+          const w=fs.readFileSync('.github/workflows/release-reviewed-temp-email-scoped-20261110.yml','utf8');
+          assert(w.includes("environment: production"));
+          assert(w.includes("github.event_name == 'push'"));
+          assert(!w.includes('branches: [main]'));
+          console.log('PASS: immutable reviewed security-only release and preserved source boundaries');
+          NODE
+  protected-prod-publish:
+    if: github.repository == 'calibosofroyarjan-volunserve/VolunServe' && github.ref == 'refs/heads/live-protected' && github.event_name == 'push'
+    needs: controller-safety
+    runs-on: ubuntu-latest
+    environment: production
+    timeout-minutes: 75
+    env:
+      CI: 'true'
+      EXPO_NO_TELEMETRY: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: controller
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          submodules: false
+      - uses: actions/checkout@v4
+        with:
+          path: site
+          ref: 44cfe41429f91d35d383bf3846fb6fd2f7e7df44
+          fetch-depth: 0
+          submodules: false
+      - uses: actions/checkout@v4
+        with:
+          path: rules
+          ref: 508b58b6ce888810c081dc6bfe38c237629d96d8
+          fetch-depth: 0
+          submodules: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: |
+            controller/package-lock.json
+            site/package-lock.json
+            rules/package-lock.json
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Install exact pinned source and read-only Firebase Admin SDK dependencies
+        run: |
+          npm ci --prefix controller --no-audit --no-fund
+          npm ci --prefix controller/functions --no-audit --no-fund
+          npm ci --prefix site --no-audit --no-fund
+          npm ci --prefix rules --no-audit --no-fund
+      - name: Preserve actual live Admin/Resident/Volunteer UI and run Signup tests
+        working-directory: site
+        run: |
+          node scripts/test-site-derived-signup-candidate.cjs
+          node scripts/test-signup-prod.cjs
+          npx tsc --noEmit --incremental false
+          npx expo export --platform web --clear
+      - name: Verify reviewed active production Rules do not change unrelated permission scopes
+        working-directory: rules
+        run: |
+          node scripts/test-localized-staff-rule-helpers.cjs
+          npx firebase-tools emulators:exec --only firestore --project demo-volunserve-verified-signup "node scripts/test-verified-community-registration-rules.cjs"
+          npx firebase-tools emulators:exec --only firestore --project demo-volunserve-invitation-preserve "node scripts/test-preserved-volunteer-invitation-rules.cjs"
+      - name: Final protected production preflight (READ ONLY)
+        env:
+          VOLUNSERVE_PRODUCTION_HOSTING_SERVICE_ACCOUNT: ${{ secrets.VOLUNSERVE_PRODUCTION_HOSTING_SERVICE_ACCOUNT }}
+        run: node controller/scripts/preflight-spark-signup-release-readiness.cjs
+      - name: Publish exact reviewed Rules and preview Hosting with version-guarded rollback
+        env:
+          VOLUNSERVE_PRODUCTION_HOSTING_SERVICE_ACCOUNT: ${{ secrets.VOLUNSERVE_PRODUCTION_HOSTING_SERVICE_ACCOUNT }}
+        run: node controller/scripts/release-reviewed-temp-email-scoped-20261110.cjs --publish
