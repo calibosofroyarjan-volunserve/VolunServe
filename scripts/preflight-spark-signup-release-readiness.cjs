@@ -6,6 +6,8 @@
  * or modifies Hosting channels. Firebase Rules projects.test runs an empty
  * testSuite and does not touch production Firestore data or active Rules.
  *
+ * POST-BLOCKED RELEASE RECHECK 2026-11-10: confirms original website and
+ * Firestore Rules remained active after the scoped release HTTP 400 stop.
  * Source provenance: exact currently published Hosting ancestor, exact
  * currently deployed Firestore Rules hash, and two independently reviewed
  * candidate commits. Run only with protected GitHub production credentials.
