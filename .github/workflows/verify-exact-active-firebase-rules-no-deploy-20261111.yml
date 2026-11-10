@@ -40,4 +40,5 @@ jobs:
           node --test scripts/test-signup-abuse-controls.cjs
           node scripts/test-signup-prod.cjs
       - name: No production mutation
-        run: echo 'NO DEPLOY: emulator-only Rules compile; no Firebase production credential or deploy token.'
+        run: |
+          echo 'NO DEPLOY: emulator-only Rules compile; no Firebase production credential or deploy token.'
