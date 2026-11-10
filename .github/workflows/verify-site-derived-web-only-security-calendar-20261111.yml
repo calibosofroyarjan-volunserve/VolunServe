@@ -1,0 +1,88 @@
+name: Verify Site-Derived Signup + Birthday WEB ONLY (NO DEPLOY)
+on:
+  push:
+    branches:
+      - review/site-derived-web-only-security-calendar-20261111
+  pull_request:
+    branches:
+      - review/live-source-baseline-20261111
+permissions:
+  contents: read
+jobs:
+  web-verified-preview-source:
+    runs-on: ubuntu-latest
+    timeout-minutes: 28
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Verify current live website and exact original source
+        env:
+          PUBLISHED_SHA: 1a049274a0747257cb31c0deceb21c67661127e6
+          PROTECTED_SHA: 28a7a7490fb90b1205c963b474fc817f07312b03
+        run: |
+          node <<'NODE'
+          "use strict";
+          const assert=require("node:assert/strict");
+          const cp=require("node:child_process");
+          const git=(...args)=>cp.execFileSync("git",args,{encoding:"utf8"}).trim();
+          const base=process.env.PUBLISHED_SHA;
+          assert.equal(git("merge-base",base,"HEAD"),base,"BLOCKED: not based on live Hosting source");
+          const allowed=new Set(["app/admin-request.tsx","app/signup.tsx","app/signup.web.tsx","components/auth/BirthDateCalendarPicker.tsx","components/auth/EmailFirstSignup.tsx","lib/birthDateCalendar.ts","lib/firebaseAuth.ts","lib/registrationEmailPolicy.ts","lib/signupRegistration.ts","scripts/test-birthday-calendar-20261111.cjs","scripts/test-resident-field-validation.cjs","scripts/test-signup-prod.cjs",".github/workflows/verify-site-derived-web-only-security-calendar-20261111.yml"]);
+          const diffs=git("diff","--name-status","--no-renames",base,"HEAD")
+            .split("\n").filter(Boolean).map(row=>row.split("\t"));
+          assert.equal(diffs.length,allowed.size,"BLOCKED: unexpected changed file count");
+          for(const [status,path] of diffs){
+            assert(["A","M"].includes(status),"BLOCKED: unexpected deletion/rename");
+            assert(allowed.has(path),"BLOCKED: unauthorized non-web, backend, or Functions change "+path);
+          }
+          for(const p of ["functions/index.js","functions/registrationEmailScreening.js",
+            "functions/registrationBlocking.js","functions/package.json",
+            "backend/server.js","backend/lguCredentialRoutes.js",
+            "firebase.json",".firebaserc","firestore.rules","storage.rules",
+            "package.json","package-lock.json","app.json","lib/firebase.ts",
+            ".github/workflows/release-live-protected-hosting.yml",
+            ".github/workflows/auto-publish-protected-live-hosting.yml",
+            ".github/workflows/verify-reconciled-hosting-source-no-deploy-20261111.yml"]){
+            assert.equal(git("rev-parse",base+":"+p),git("rev-parse","HEAD:"+p),
+              "BLOCKED: critical production file changed: "+p);
+          }
+          (async()=>{
+            const response=await fetch("https://volunserve.com/volunserve-release.json",{
+              headers:{"Cache-Control":"no-cache"},
+              signal:AbortSignal.timeout(20000)
+            });
+            assert.equal(response.status,200,"BLOCKED: current live marker unavailable");
+            const marker=await response.json();
+            assert.equal(marker.app,"VolunServe");
+            assert.equal(marker.firebaseProject,"volunserve-3aa5b");
+            assert.equal(marker.revision,base,"BLOCKED: published Hosting changed, rebase first");
+            console.log("PASS exact live Hosting source, 12 approved app/test files, no backend or Functions");
+            console.log("NOTE: this does not reconcile protected HEAD with live Hosting");
+          })().catch(e=>{console.error(e);process.exitCode=1});
+          NODE
+      - run: npm ci --no-audit --no-fund
+      - name: Birthday calendar and 18-100-year date constraints
+        run: node --test scripts/test-birthday-calendar-20261111.cjs
+      - name: Signup compatibility and SmailPro Gmail OAuth guards
+        run: |
+          node scripts/test-signup-prod.cjs
+          node --test scripts/test-resident-field-validation.cjs
+          node --test scripts/test-signup-abuse-controls.cjs
+      - name: Existing guest and UI regression guards
+        run: |
+          node scripts/test-guest-auth-route-isolation.cjs
+          node scripts/test-guest-readonly-preview.cjs
+      - name: TypeScript and complete Expo static export (NO DEPLOY)
+        run: |
+          npx tsc --noEmit --incremental false
+          npx expo export --platform web --clear
+          node scripts/verify-hosting-release.cjs
+      - name: Intentionally not a production release
+        run: |
+          echo 'NO DEPLOY: this web-only branch excludes Functions, Firestore Rules, Render and production release approval'

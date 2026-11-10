@@ -1,6 +1,6 @@
 import { authenticateEmailSignup } from "./signupRegistration";
 import {requireCompleteResidentRegistration} from "./requireCompleteResidentRegistration";
-import {getRegistrationEmailError, isKnownDisposableEmail} from "./registrationEmailPolicy";
+import {getRegistrationEmailError, isKnownDisposableEmail, requiresGoogleOAuthForRegistration, GMAIL_GOOGLE_OAUTH_REQUIRED_MESSAGE} from "./registrationEmailPolicy";
 import { EMAIL_FIRST_SIGNUP_ENABLED } from "./signupFeature";
 import {
   getIdToken,
@@ -473,6 +473,14 @@ export const signUpUser = async (
     if (registrationEmailError) throw new Error(registrationEmailError);
     const usesGoogle = data.authProvider === "google";
     const usesVerifiedEmail = data.authProvider === "verified_email";
+    // Even an email-verified Gmail UID can be a shared, receive-only SmailPro
+    // inbox. Never write a new profile without a Google-linked identity.
+    if (requiresGoogleOAuthForRegistration(submittedEmail) && !usesGoogle &&
+        !(usesVerifiedEmail && auth.currentUser?.providerData.some(
+          provider => provider.providerId === "google.com"
+        ))) {
+      throw new Error(GMAIL_GOOGLE_OAUTH_REQUIRED_MESSAGE);
+    }
     if (usesVerifiedEmail && !EMAIL_FIRST_SIGNUP_ENABLED) {
       throw new Error("Email-first signup is not enabled.");
     }
