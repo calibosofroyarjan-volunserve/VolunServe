@@ -196,9 +196,15 @@ el("eventId").addEventListener("input", () => {
 });
 async function certificateSync(execute) {
   if (!currentUser || !adminEligible) return;
-  const eventId = exactEventId();
-  if (execute && previewedEvent !== eventId) {
-    throw new Error("Check eligibility for this exact event before issuing.");
+  let eventId;
+  try {
+    eventId = exactEventId();
+    if (execute && previewedEvent !== eventId) {
+      throw new Error("Check eligibility for this exact event before issuing.");
+    }
+  } catch (error) {
+    display("syncResult", errorText(error));
+    return;
   }
   if (execute && !window.confirm("Issue eligible certificates in STAGING ONLY for this event? This writes staging certificate records.")) return;
   setBusy(true);
