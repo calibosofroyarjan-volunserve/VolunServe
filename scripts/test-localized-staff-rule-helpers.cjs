@@ -329,11 +329,41 @@ const expectedDocType=expectedUrlRule
  .replace('document is map\n          && document.keys().hasOnly([','document.keys().hasOnly([')
  .replace(oldDocTypeCheck,()=>minifiedDocTypeCheck)
  .replace('          && document.url is string\n','');
-assert.equal(current,expectedDocType,
- 'BLOCKED: Rules differ beyond source-reviewed deny-equivalent assistance evidence checks');
+// A compact factorization must match exactly the same 50 disposable domains.
+// Normalize TLD suffixes only; never alter provider coverage or case rules.
+const blockerGroup=expectedDocType.match(/function blockedTempMailOrgAlias\(email\)\s*\{\s*return email\.matches\("\(\?i\)\.\*@\(\[a-z0-9-\]\+\[\.\]\)\*\(([^"]+)\)"\);/);
+assert(blockerGroup,"Missing pinned original provider blocklist");
+const providerDomains=blockerGroup[1].split("|").map(x=>x.replaceAll("[.]","."));
+assert.equal(providerDomains.length,50);
+const byTld=new Map();
+for(const domain of providerDomains){
+ const parts=domain.split("."),tld=parts.pop(),root=parts.join(".");
+ if(!byTld.has(tld))byTld.set(tld,[]);
+ byTld.get(tld).push(root);
+}
+const group=[...byTld].map(([tld,roots])=>
+ (roots.length>1?"(?:"+roots.map(x=>x.replaceAll(".","[.]")).join("|")+")":roots[0].replaceAll(".","[.]"))+
+ "[.]"+tld).join("|");
+const oldProvider='email.matches("(?i).*@([a-z0-9-]+[.])*('+blockerGroup[1]+')")';
+const newProvider='email.matches("(?i).*@([a-z0-9-]+[.])*('+group+')")';
+const oldRegex=new RegExp(".*@([a-z0-9-]+[.])*("+blockerGroup[1]+")","i");
+const newRegex=new RegExp(".*@([a-z0-9-]+[.])*("+group+")","i");
+for(const domain of providerDomains)for(const value of [
+ "x@"+domain, "USER@"+domain.toUpperCase(), "x@sub."+domain,
+ "x@sub.sub."+domain, "x@"+domain+".extra", "x@pre"+domain,
+ "x@"+domain+"extra"
+])assert.equal(newRegex.test(value),oldRegex.test(value),"BLOCKED: changed temp-mail domain matching");
+for(const email of ["x@gmail.com","x@outlook.com","x@en2ch.co",
+ "x@mailers.pics","x@gmailXshagni.com","x@digeros.co",
+ "x@notmail.chosenx.com","x@ghostmailz.com"])
+ assert.equal(newRegex.test(email),oldRegex.test(email),"BLOCKED: changed blocked-domain negative case");
+assert.equal(expectedDocType.split(oldProvider).length,2,"Missing original provider source");
+const expectedFinal=expectedDocType.replace(oldProvider,()=>newProvider);
+assert.equal(current,expectedFinal,
+ "BLOCKED: unrelated Firestore permission or temporary-email provider change");
 
 assert.equal(cp.execFileSync("git",["hash-object","firestore.rules"],{encoding:"utf8"}).trim(),
-"f143f8768a2b39f0a293b21779b3f9afccd9a408","BLOCKED: unreviewed Firestore Rules blob");
+"29ce1f6a9f92f901401c5752bf918f89cc5c942d","BLOCKED: unreviewed Firestore Rules blob");
 // Verify exhaustiveness of all optional-review branches over valid and
 // invalid types, status values and three-valued nulls before Firebase emulator.
 for(const required of [true,false,null,"true",0,1,undefined]){
@@ -351,7 +381,7 @@ for(const required of [true,false,null,"true",0,1,undefined]){
 }
 
 const gitBlob=cp.execFileSync("git",["hash-object","firestore.rules"],{encoding:"utf8"}).trim();
-assert.equal(gitBlob,"f143f8768a2b39f0a293b21779b3f9afccd9a408","BLOCKED: unapproved Firestore blob");
+assert.equal(gitBlob,"29ce1f6a9f92f901401c5752bf918f89cc5c942d","BLOCKED: unapproved Firestore blob");
 const paths=source=>source.split("\n").filter(l=>l.startsWith("    match /")).map(l=>l.slice("    match /".length).split(" ")[0]);
 assert.deepEqual(paths(current),paths(protectedBaseline),"BLOCKED: collection scope changed");
 const allows=source=>[...source.matchAll(/allow (?:get|list|read|write|create|update|delete)/g)].length;
