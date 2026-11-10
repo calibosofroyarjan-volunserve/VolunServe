@@ -13,6 +13,12 @@ function allowlist(name) {
 }
 
 function minimumCommunityCertificateMinutes(eventId, volunteerId) {
+  // Temporary staging-only demo switch: never overrides production.
+  // Turn it off to restore the normal 30-minute rule without another release.
+  if (process.env.VOLUNSERVE_DEPLOYMENT_ENV === "staging" &&
+      process.env.VOLUNSERVE_CERT_STAGING_TEMP_ONE_MIN === "true") {
+    return TEST_COMMUNITY_CERTIFICATE_ATTENDANCE_MINUTES;
+  }
   return allowlist("VOLUNSERVE_CERT_TEST_EVENT_IDS").has(eventId) &&
     allowlist("VOLUNSERVE_CERT_TEST_VOLUNTEER_UIDS").has(volunteerId) ?
     TEST_COMMUNITY_CERTIFICATE_ATTENDANCE_MINUTES :
