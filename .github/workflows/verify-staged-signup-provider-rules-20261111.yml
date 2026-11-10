@@ -53,6 +53,15 @@ jobs:
         run: |
           node --test functions/test-registration-email-screening.js
           node --test scripts/test-signup-abuse-controls.cjs
+      - name: Operational module source regression (ER, events, attendance, certificates, admin)
+        run: |
+          node scripts/test-unified-admin-dashboard-and-emergency-pagination.cjs
+          node scripts/test-clean-emergency-report-header.cjs
+          node scripts/test-embedded-emergency-map-navigation.cjs
+          node scripts/test-volunteer-community-event-join-20261106.cjs
+          node scripts/test-volunteer-time-controls-20261106.cjs
+          node --test scripts/test-profile-certificates-account-menu.cjs
+          node scripts/test-live-derived-certificate-minimum-label-20261111.cjs
       - name: TypeScript without output
         run: npx tsc --noEmit --incremental false
       - name: No production publish
