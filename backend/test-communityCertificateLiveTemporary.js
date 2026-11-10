@@ -9,7 +9,7 @@ const {
 } = require("./communityCertificateEligibility");
 
 const CUTOFF = Date.parse("2026-11-10T14:55:00Z");
-const AFTER = Math.max(Date.now(), CUTOFF + 2 * 60 * 60 * 1000);
+const AFTER = Date.parse("2026-11-11T16:00:00Z");
 const keys = [
   "VOLUNSERVE_CERT_LIVE_ONE_MIN_PERMANENT_ENABLED",
   "VOLUNSERVE_CERT_LIVE_TEMP_ONE_MIN_ENABLED",
@@ -22,11 +22,14 @@ const keys = [
 const stamp = ms => ({toMillis: () => ms});
 function withEnv(values, callback) {
   const previous = new Map(keys.map(key => [key, process.env[key]]));
+  const originalClock = Date.now;
   try {
+    Date.now = () => AFTER;
     for (const key of keys) delete process.env[key];
     Object.assign(process.env, values);
     callback();
   } finally {
+    Date.now = originalClock;
     for (const [key, value] of previous) {
       if (value === undefined) delete process.env[key];
       else process.env[key] = value;
@@ -102,21 +105,16 @@ test("old temporary flag alone cannot enable permanent mode; rollback to 30m", (
   });
 });
 test("permanent policy remains enabled long after old seven-day end date", () => {
-  const originalNow = Date.now;
-  try {
+  withEnv({VOLUNSERVE_CERT_LIVE_ONE_MIN_PERMANENT_ENABLED:"true"}, () => {
     const futureNow = Date.parse("2028-11-10T17:00:00Z");
     Date.now = () => futureNow;
-    withEnv({VOLUNSERVE_CERT_LIVE_ONE_MIN_PERMANENT_ENABLED:"true"}, () => {
-      const future = fixture({
-        checkIn: futureNow - 120000,
-        completed: futureNow - 10000,
-      });
-      assert.equal(minutes(future),1);
-      assert.equal(isEligible(future),true);
+    const future = fixture({
+      checkIn: futureNow - 120000,
+      completed: futureNow - 10000,
     });
-  } finally {
-    Date.now = originalNow;
-  }
+    assert.equal(minutes(future),1);
+    assert.equal(isEligible(future),true);
+  });
 });
 test("separate exact-ID test-only exception remains independent", () => {
   withEnv({
