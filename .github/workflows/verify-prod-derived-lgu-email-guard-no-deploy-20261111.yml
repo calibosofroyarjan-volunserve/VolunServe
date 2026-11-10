@@ -64,4 +64,5 @@ jobs:
           node --check backend/lguCredentialRoutes.js
           node --check backend/server.js
       - name: Safe review only
-        run: echo 'NO DEPLOY: production Render remains at original SHA until separately approved.'
+        run: |
+          echo 'NO DEPLOY: production Render remains at original SHA until separately approved.'
