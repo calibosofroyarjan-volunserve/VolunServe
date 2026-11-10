@@ -1,3 +1,4 @@
+import { volunserveTypography as vsType } from "../../constants/volunserveLiveUi";
 import React, { useMemo, useState } from "react";
 import ListPagination from "../../components/ui/ListPagination";
 import AdminReviewHero from "../../components/admin/AdminReviewHero";
@@ -903,7 +904,7 @@ const styles = StyleSheet.create({
 
   loadingText: {
     marginTop: 12,
-    fontSize: 14,
+    fontSize: vsType.size.body, fontFamily: vsType.family,
     color: "#64748B",
     fontWeight: "600",
   },
@@ -913,7 +914,7 @@ const styles = StyleSheet.create({
   },
 
   eyebrow: {
-    fontSize: 12,
+    fontSize: vsType.size.meta, fontFamily: vsType.family,
     fontWeight: "800",
     letterSpacing: 1.4,
     color: "#087F78",
@@ -921,14 +922,14 @@ const styles = StyleSheet.create({
   },
 
   title: {
-    fontSize: 32,
+    fontSize: vsType.size.display, fontFamily: vsType.family,
     fontWeight: "700",
     color: "#173D32",
   },
 
   subtitle: {
     marginTop: 6,
-    fontSize: 14,
+    fontSize: vsType.size.body, fontFamily: vsType.family,
     lineHeight: 21,
     color: "#64748B",
     maxWidth: 760,
@@ -957,8 +958,8 @@ const styles = StyleSheet.create({
 
   noticeIconText: {
     color: "#087F78",
-    fontSize: 19,
-    fontWeight: "900",
+    fontSize: vsType.size.section, fontFamily: vsType.family,
+    fontWeight: "800",
   },
 
   noticeTextArea: {
@@ -966,14 +967,14 @@ const styles = StyleSheet.create({
   },
 
   noticeTitle: {
-    fontSize: 14,
+    fontSize: vsType.size.body, fontFamily: vsType.family,
     fontWeight: "800",
     color: "#086A65",
   },
 
   noticeText: {
     marginTop: 4,
-    fontSize: 13,
+    fontSize: vsType.size.label, fontFamily: vsType.family,
     lineHeight: 19,
     color: "#46666A",
   },
@@ -990,7 +991,7 @@ const styles = StyleSheet.create({
   successText: {
     color: "#166534",
     fontWeight: "700",
-    fontSize: 13,
+    fontSize: vsType.size.label, fontFamily: vsType.family,
   },
 
   errorBox: {
@@ -1005,7 +1006,7 @@ const styles = StyleSheet.create({
   errorText: {
     color: "#B91C1C",
     fontWeight: "700",
-    fontSize: 13,
+    fontSize: vsType.size.label, fontFamily: vsType.family,
   },
 
   metricsGrid: {
@@ -1027,14 +1028,14 @@ const styles = StyleSheet.create({
   },
 
   metricValue: {
-    fontSize: 28,
-    fontWeight: "900",
+    fontSize: vsType.size.hero, fontFamily: vsType.family,
+    fontWeight: "800",
     color: "#123047",
   },
 
   metricLabel: {
     marginTop: 4,
-    fontSize: 13,
+    fontSize: vsType.size.label, fontFamily: vsType.family,
     fontWeight: "700",
     color: "#64748B",
   },
@@ -1049,8 +1050,8 @@ const styles = StyleSheet.create({
   },
 
   sectionTitle: {
-    fontSize: 17,
-    fontWeight: "900",
+    fontSize: vsType.size.card, fontFamily: vsType.family,
+    fontWeight: "800",
     color: "#123047",
     marginBottom: 12,
   },
@@ -1077,7 +1078,7 @@ const styles = StyleSheet.create({
 
   filterButtonText: {
     color: "#475569",
-    fontSize: 13,
+    fontSize: vsType.size.label, fontFamily: vsType.family,
     fontWeight: "800",
   },
 
@@ -1095,15 +1096,15 @@ const styles = StyleSheet.create({
   },
 
   emptyTitle: {
-    fontSize: 17,
-    fontWeight: "900",
+    fontSize: vsType.size.card, fontFamily: vsType.family,
+    fontWeight: "800",
     color: "#123047",
   },
 
   emptyText: {
     marginTop: 6,
     color: "#64748B",
-    fontSize: 13,
+    fontSize: vsType.size.label, fontFamily: vsType.family,
   },
 
   disputeCard: {
@@ -1127,22 +1128,22 @@ const styles = StyleSheet.create({
   },
 
   cardEyebrow: {
-    fontSize: 11,
-    fontWeight: "900",
+    fontSize: vsType.size.caption, fontFamily: vsType.family,
+    fontWeight: "800",
     letterSpacing: 1.2,
     color: "#087F78",
   },
 
   cardTitle: {
     marginTop: 4,
-    fontSize: 20,
-    fontWeight: "900",
+    fontSize: vsType.size.subheading, fontFamily: vsType.family,
+    fontWeight: "800",
     color: "#123047",
   },
 
   cardSubtitle: {
     marginTop: 4,
-    fontSize: 12,
+    fontSize: vsType.size.meta, fontFamily: vsType.family,
     lineHeight: 18,
     fontWeight: "800",
     color: "#64748B",
@@ -1155,8 +1156,8 @@ const styles = StyleSheet.create({
   },
 
   statusBadgeText: {
-    fontSize: 11,
-    fontWeight: "900",
+    fontSize: vsType.size.caption, fontFamily: vsType.family,
+    fontWeight: "800",
   },
 
   divider: {
@@ -1181,15 +1182,15 @@ const styles = StyleSheet.create({
   },
 
   infoLabel: {
-    fontSize: 10,
-    fontWeight: "900",
+    fontSize: vsType.size.micro, fontFamily: vsType.family,
+    fontWeight: "800",
     letterSpacing: 0.8,
     color: "#94A3B8",
   },
 
   infoValue: {
     marginTop: 4,
-    fontSize: 13,
+    fontSize: vsType.size.label, fontFamily: vsType.family,
     fontWeight: "700",
     color: "#334155",
   },
@@ -1214,15 +1215,15 @@ const styles = StyleSheet.create({
   },
 
   auditLabel: {
-    fontSize: 9,
-    fontWeight: "900",
+    fontSize: vsType.size.micro, fontFamily: vsType.family,
+    fontWeight: "800",
     letterSpacing: 0.6,
     color: "#94A3B8",
   },
 
   auditValue: {
     marginTop: 3,
-    fontSize: 10.5,
+    fontSize: vsType.size.caption, fontFamily: vsType.family,
     lineHeight: 15,
     color: "#64748B",
   },
@@ -1235,15 +1236,15 @@ const styles = StyleSheet.create({
   },
 
   detailLabel: {
-    fontSize: 10,
-    fontWeight: "900",
+    fontSize: vsType.size.micro, fontFamily: vsType.family,
+    fontWeight: "800",
     letterSpacing: 0.8,
     color: "#64748B",
   },
 
   detailText: {
     marginTop: 6,
-    fontSize: 14,
+    fontSize: vsType.size.body, fontFamily: vsType.family,
     lineHeight: 21,
     color: "#334155",
   },
@@ -1258,15 +1259,15 @@ const styles = StyleSheet.create({
   },
 
   residentLabel: {
-    fontSize: 10,
-    fontWeight: "900",
+    fontSize: vsType.size.micro, fontFamily: vsType.family,
+    fontWeight: "800",
     letterSpacing: 0.8,
     color: "#9A3412",
   },
 
   residentText: {
     marginTop: 6,
-    fontSize: 14,
+    fontSize: vsType.size.body, fontFamily: vsType.family,
     lineHeight: 21,
     color: "#7C2D12",
     fontWeight: "600",
@@ -1280,22 +1281,22 @@ const styles = StyleSheet.create({
   },
 
   reviewTitle: {
-    fontSize: 17,
-    fontWeight: "900",
+    fontSize: vsType.size.card, fontFamily: vsType.family,
+    fontWeight: "800",
     color: "#123047",
   },
 
   reviewDescription: {
     marginTop: 5,
     marginBottom: 14,
-    fontSize: 13,
+    fontSize: vsType.size.label, fontFamily: vsType.family,
     lineHeight: 19,
     color: "#64748B",
   },
 
   inputLabel: {
-    fontSize: 10,
-    fontWeight: "900",
+    fontSize: vsType.size.micro, fontFamily: vsType.family,
+    fontWeight: "800",
     letterSpacing: 0.8,
     color: "#64748B",
     marginBottom: 7,
@@ -1310,7 +1311,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 13,
     paddingVertical: 12,
     backgroundColor: "#FFFFFF",
-    fontSize: 14,
+    fontSize: vsType.size.body, fontFamily: vsType.family,
     color: "#1E293B",
   },
 
@@ -1318,7 +1319,7 @@ const styles = StyleSheet.create({
     alignSelf: "flex-end",
     marginTop: 5,
     color: "#94A3B8",
-    fontSize: 11,
+    fontSize: vsType.size.caption, fontFamily: vsType.family,
     fontWeight: "700",
   },
 
@@ -1342,8 +1343,8 @@ const styles = StyleSheet.create({
 
   resolveButtonText: {
     color: "#FFFFFF",
-    fontSize: 13,
-    fontWeight: "900",
+    fontSize: vsType.size.label, fontFamily: vsType.family,
+    fontWeight: "800",
   },
 
   dismissButton: {
@@ -1361,8 +1362,8 @@ const styles = StyleSheet.create({
 
   dismissButtonText: {
     color: "#475569",
-    fontSize: 13,
-    fontWeight: "900",
+    fontSize: vsType.size.label, fontFamily: vsType.family,
+    fontWeight: "800",
   },
 
   disabledButton: {
@@ -1371,7 +1372,7 @@ const styles = StyleSheet.create({
 
   actionHelp: {
     marginTop: 10,
-    fontSize: 11,
+    fontSize: vsType.size.caption, fontFamily: vsType.family,
     lineHeight: 17,
     color: "#94A3B8",
   },
@@ -1384,22 +1385,22 @@ const styles = StyleSheet.create({
   },
 
   completedReviewLabel: {
-    fontSize: 10,
-    fontWeight: "900",
+    fontSize: vsType.size.micro, fontFamily: vsType.family,
+    fontWeight: "800",
     letterSpacing: 0.8,
     color: "#64748B",
   },
 
   completedReviewText: {
     marginTop: 6,
-    fontSize: 14,
+    fontSize: vsType.size.body, fontFamily: vsType.family,
     lineHeight: 21,
     color: "#334155",
   },
 
   resolvedByText: {
     marginTop: 10,
-    fontSize: 11,
+    fontSize: vsType.size.caption, fontFamily: vsType.family,
     color: "#94A3B8",
     fontWeight: "700",
   },

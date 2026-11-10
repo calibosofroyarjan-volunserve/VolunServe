@@ -1,3 +1,4 @@
+import { volunserveTypography as vsType } from "../../constants/volunserveLiveUi";
 import { liveUi as designUi } from "../../constants/volunserveLiveUi";
 import AdminReviewHero from "../../components/admin/AdminReviewHero";
 
@@ -1042,8 +1043,8 @@ const styles = StyleSheet.create({
 
   eyebrow: {
     color: GREEN,
-    fontWeight: "900",
-    fontSize: 10,
+    fontWeight: "800",
+    fontSize: vsType.size.micro,
     letterSpacing: 1,
   },
 
@@ -1083,7 +1084,7 @@ const styles = StyleSheet.create({
 
   errorText: {
     color: "#AC3528",
-    fontSize: 11,
+    fontSize: vsType.size.caption,
   },
 
   empty: {
@@ -1103,7 +1104,7 @@ const styles = StyleSheet.create({
 
   small: {
     color: MUTED,
-    fontSize: 11,
+    fontSize: vsType.size.caption,
     lineHeight: 17,
   },
 
@@ -1134,13 +1135,13 @@ const styles = StyleSheet.create({
 
   personChipName: {
     color: DARK,
-    fontSize: 12,
-    fontWeight: "900",
+    fontSize: vsType.size.meta,
+    fontWeight: "800",
   },
 
   chipMeta: {
     color: MUTED,
-    fontSize: 10,
+    fontSize: vsType.size.micro,
     marginTop: 3,
   },
 
@@ -1234,13 +1235,13 @@ const styles = StyleSheet.create({
   },
 
   brandName: {
-    fontSize: 23,
+    fontSize: vsType.size.title,
     color: "#0B756B",
-    fontWeight: "900",
+    fontWeight: "800",
   },
 
   brandSub: {
-    fontSize: 9,
+    fontSize: vsType.size.micro,
     letterSpacing: 1.1,
     color: "#66837A",
     fontWeight: "700",
@@ -1257,13 +1258,13 @@ const styles = StyleSheet.create({
   },
 
   sealText: {
-    fontSize: 11,
-    fontWeight: "900",
+    fontSize: vsType.size.caption,
+    fontWeight: "800",
     color: "#28775B",
   },
 
   sealSub: {
-    fontSize: 7,
+    fontSize: vsType.size.micro,
     fontWeight: "800",
     color: "#798B7D",
   },
@@ -1272,21 +1273,21 @@ const styles = StyleSheet.create({
     marginTop: 21,
     fontFamily: "Georgia",
     color: "#14475B",
-    fontSize: 27,
-    fontWeight: "900",
+    fontSize: vsType.size.page,
+    fontWeight: "800",
     textAlign: "center",
   },
 
   certificateLabel: {
     marginTop: 10,
     color: "#405C55",
-    fontSize: 13,
+    fontSize: vsType.size.label,
   },
 
   volunteerName: {
     fontFamily: "Georgia",
-    fontWeight: "900",
-    fontSize: 31,
+    fontWeight: "800",
+    fontSize: vsType.size.hero,
     color: "#141A1E",
     textAlign: "center",
     marginTop: 9,
@@ -1301,8 +1302,8 @@ const styles = StyleSheet.create({
 
   eventTitle: {
     fontFamily: "Georgia",
-    fontSize: 20,
-    fontWeight: "900",
+    fontSize: vsType.size.subheading,
+    fontWeight: "800",
     color: "#214658",
     marginTop: 10,
     textAlign: "center",
@@ -1310,14 +1311,14 @@ const styles = StyleSheet.create({
 
   certificateBody: {
     color: "#455C58",
-    fontSize: 12,
+    fontSize: vsType.size.meta,
     marginTop: 5,
     textAlign: "center",
   },
 
   recognition: {
     color: "#455C58",
-    fontSize: 12,
+    fontSize: vsType.size.meta,
     lineHeight: 18,
     maxWidth: 620,
     marginTop: 18,
@@ -1345,14 +1346,14 @@ const styles = StyleSheet.create({
   },
 
   signatureRole: {
-    fontSize: 11,
-    fontWeight: "900",
+    fontSize: vsType.size.caption,
+    fontWeight: "800",
     color: "#334E4B",
     textAlign: "center",
   },
 
   signatureSub: {
-    fontSize: 9,
+    fontSize: vsType.size.micro,
     color: "#73847E",
     textAlign: "center",
     marginTop: 3,
@@ -1360,7 +1361,7 @@ const styles = StyleSheet.create({
 
   watermark: {
     marginTop: 12,
-    fontSize: 9,
+    fontSize: vsType.size.micro,
     color: "#8A846C",
     textAlign: "center",
   },
@@ -1385,8 +1386,8 @@ const styles = StyleSheet.create({
 
   saveText: {
     color: "white",
-    fontWeight: "900",
-    fontSize: 12,
+    fontWeight: "800",
+    fontSize: vsType.size.meta,
   },
 
   printButton: {
@@ -1404,13 +1405,13 @@ const styles = StyleSheet.create({
 
   printText: {
     color: GREEN,
-    fontWeight: "900",
-    fontSize: 12,
+    fontWeight: "800",
+    fontSize: vsType.size.meta,
   },
 
   footerHelp: {
     color: MUTED,
-    fontSize: 11,
+    fontSize: vsType.size.caption,
     lineHeight: 17,
     marginTop: 9,
   },

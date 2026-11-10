@@ -1,3 +1,4 @@
+import { volunserveTypography as vsType } from "../../constants/volunserveLiveUi";
 import { liveUi as designUi } from "../../constants/volunserveLiveUi";
 import AdminReviewHero from "../../components/admin/AdminReviewHero";
 import React, { useState } from "react";
@@ -292,8 +293,8 @@ const styles = StyleSheet.create({
 
   eyebrow: {
     color: "#23765F",
-    fontSize: 11,
-    fontWeight: "900",
+    fontSize: vsType.size.caption, fontFamily: vsType.family,
+    fontWeight: "800",
     letterSpacing: 1.3,
   },
 
@@ -327,14 +328,14 @@ const styles = StyleSheet.create({
 
   scopeValue: {
     color: "#173D32",
-    fontSize: 18,
-    fontWeight: "900",
+    fontSize: vsType.size.section, fontFamily: vsType.family,
+    fontWeight: "800",
     marginTop: 5,
   },
 
   scopeHelp: {
     color: "#587174",
-    fontSize: 12,
+    fontSize: vsType.size.meta, fontFamily: vsType.family,
     lineHeight: 18,
     marginTop: 5,
   },
@@ -364,7 +365,7 @@ const styles = StyleSheet.create({
     borderRadius: 11,
     paddingHorizontal: 13,
     paddingVertical: 11,
-    fontSize: 14,
+    fontSize: vsType.size.body, fontFamily: vsType.family,
     color: "#1E293B",
     marginBottom: 14,
   },
@@ -375,7 +376,7 @@ const styles = StyleSheet.create({
 
   characterCount: {
     color: "#94A3B8",
-    fontSize: 11,
+    fontSize: vsType.size.caption, fontFamily: vsType.family,
     fontWeight: "700",
     textAlign: "right",
     marginTop: -8,
@@ -401,8 +402,8 @@ const styles = StyleSheet.create({
 
   submitText: {
     color: "#FFFFFF",
-    fontSize: 14,
-    fontWeight: "900",
+    fontSize: vsType.size.body, fontFamily: vsType.family,
+    fontWeight: "800",
   },
 
   noteCard: {

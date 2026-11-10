@@ -1,3 +1,4 @@
+import { volunserveTypography as vsType } from "../../constants/volunserveLiveUi";
 import { liveUi as designUi } from "../../constants/volunserveLiveUi";
 import { AppAlert } from "../../lib/appDialog";
 import Ionicons from "@expo/vector-icons/Ionicons";
@@ -652,7 +653,7 @@ function CustomTabBar({
 
 const styles = StyleSheet.create({
   journeyAction: { flexDirection: "row", alignItems: "center", gap: 9, backgroundColor: "#226859", minHeight: 42, paddingHorizontal: 12, marginBottom: 10, borderRadius: 9 },
-  journeyActionText: { color: "#FFFFFF", fontSize: 13, fontWeight: "700" },
+  journeyActionText: { color: "#FFFFFF", fontSize: vsType.size.label, fontFamily: vsType.family, fontWeight: "700" },
   // Isolated mobile shell and real slide-out navigation. Desktop styles untouched.
   mobileShell: { flex: 1, backgroundColor: "#F5F9F6" },
   mobileHeader: {
@@ -668,13 +669,13 @@ const styles = StyleSheet.create({
   mobileHeaderLogo: { width: 31, height: 31 },
   mobileBrandText: { flex: 1, minWidth: 0 },
   mobileBrandName: { color: "#113E30", fontWeight: designUi.type.card.fontWeight, fontSize: designUi.type.card.fontSize, lineHeight: designUi.type.card.lineHeight,},
-  mobileBrandMode: { color: "#45765E", fontSize: 9, fontWeight: "800" },
+  mobileBrandMode: { color: "#45765E", fontSize: vsType.size.micro, fontFamily: vsType.family, fontWeight: "800" },
   mobileHeaderStatus: {
     minWidth: 37, flexDirection: "row", alignItems: "center", gap: 4,
     borderRadius: 20, paddingHorizontal: 7, height: 30, backgroundColor: "#E9F8F1",
   },
   mobileStatusDot: { backgroundColor: "#00A17C", width: 6, height: 6, borderRadius: 3 },
-  mobileStatusText: { fontSize: 9, fontWeight: "800", color: "#0B735D" },
+  mobileStatusText: { fontSize: vsType.size.micro, fontFamily: vsType.family, fontWeight: "800", color: "#0B735D" },
   mobileDrawerLayer: { ...StyleSheet.absoluteFillObject, top: 60, zIndex: 100, flexDirection: "row" },
   mobileDrawerBackdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(6, 25, 41, 0.45)" },
   mobileDrawer: { height: "100%", width: "82%", maxWidth: 310, backgroundColor: "#0B3F34", paddingTop: 18, paddingHorizontal: 15, paddingBottom: 12 },
@@ -700,24 +701,24 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8, paddingVertical: 11,
     borderBottomWidth: 1, borderBottomColor: "#E7EEF4", marginBottom: 6,
   },
-  mobileAccountName: { fontSize: 13, fontWeight: "700", color: "#173D32" },
-  mobileAccountRole: { fontSize: 10, color: "#6B829D", marginTop: 3 },
+  mobileAccountName: { fontSize: vsType.size.label, fontFamily: vsType.family, fontWeight: "700", color: "#173D32" },
+  mobileAccountRole: { fontSize: vsType.size.micro, fontFamily: vsType.family, color: "#6B829D", marginTop: 3 },
   mobileAccountAction: {
     flexDirection: "row", alignItems: "center", gap: 13,
     minHeight: 44, paddingHorizontal: 13, borderRadius: 10,
   },
-  mobileAccountActionText: { fontSize: 12.5, color: "#1A345D", fontWeight: "700" },
+  mobileAccountActionText: { fontSize: vsType.size.label, fontFamily: vsType.family, color: "#1A345D", fontWeight: "700" },
   mobileAccountDivider: { height: 1, backgroundColor: "#E6EDF2", marginVertical: 7 },
-  mobileDrawerTitle: { color: "#FFFFFF", fontSize: 19, fontWeight: "700" },
-  mobileDrawerSub: { color: "#B5E9D9", fontSize: 9, fontWeight: "800" },
-  mobileDrawerLabel: { paddingTop: 17, paddingBottom: 9, color: "#90DBC8", fontWeight: "800", letterSpacing: 1.8, fontSize: 9.5 },
+  mobileDrawerTitle: { color: "#FFFFFF", fontSize: vsType.size.section, fontFamily: vsType.family, fontWeight: "700" },
+  mobileDrawerSub: { color: "#B5E9D9", fontSize: vsType.size.micro, fontFamily: vsType.family, fontWeight: "800" },
+  mobileDrawerLabel: { paddingTop: 17, paddingBottom: 9, color: "#90DBC8", fontWeight: "800", letterSpacing: 1.8, fontSize: vsType.size.micro, fontFamily: vsType.family },
   mobileDrawerScroll: { flex: 1 },
   mobileDrawerItem: { minHeight: 48, flexDirection: "row", alignItems: "center", gap: 11, paddingHorizontal: 9, borderRadius: 12, marginBottom: 4, overflow: "hidden" },
   mobileDrawerItemOverlay: { ...StyleSheet.absoluteFillObject, borderRadius: 12 },
   mobileDrawerIconBadge: { width: 30, height: 30, borderRadius: 8, alignItems: "center", justifyContent: "center" },
-  mobileDrawerSubtitle: { color: "#B8DED3", fontSize: 9, marginTop: 2 },
+  mobileDrawerSubtitle: { color: "#B8DED3", fontSize: vsType.size.micro, fontFamily: vsType.family, marginTop: 2 },
   mobileDrawerActive: { backgroundColor: "#147D61", borderWidth: 1, borderColor: "#2D9E7C" },
-  mobileDrawerItemText: { flex: 1, color: "#E3F2EC", fontWeight: "600", fontSize: 13 },
+  mobileDrawerItemText: { flex: 1, color: "#E3F2EC", fontWeight: "600", fontSize: vsType.size.label, fontFamily: vsType.family },
   loadingScreen: {
     flex: 1,
     alignItems: "center",
@@ -763,7 +764,7 @@ const styles = StyleSheet.create({
   },
   mobileModeButtonText: {
     color: "#0F766E",
-    fontSize: 11,
+    fontSize: vsType.size.caption, fontFamily: vsType.family,
     fontWeight: "800",
   },
   mobilePortalButton: {
@@ -778,7 +779,7 @@ const styles = StyleSheet.create({
   },
   mobilePortalButtonText: {
     color: "#6D28D9",
-    fontSize: 11,
+    fontSize: vsType.size.caption, fontFamily: vsType.family,
     fontWeight: "800",
   },
   mobilePressed: {
@@ -811,7 +812,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#E7F8F4",
   },
   tabText: {
-    fontSize: 11.5,
+    fontSize: vsType.size.meta, fontFamily: vsType.family,
     color: "#7A8799",
     marginTop: 3,
     fontWeight: "500",
@@ -854,13 +855,13 @@ const styles = StyleSheet.create({
   },
   desktopBrandTitle: {
     color: "#FFFFFF",
-    fontSize: 21,
-    fontWeight: "900",
+    fontSize: vsType.size.titleSmall, fontFamily: vsType.family,
+    fontWeight: "800",
   },
   desktopBrandSubtitle: {
     marginTop: 1,
     color: "#B6E9DF",
-    fontSize: 8.5,
+    fontSize: vsType.size.micro, fontFamily: vsType.family,
     fontWeight: "700",
   },
   desktopStatusCard: {
@@ -884,13 +885,13 @@ const styles = StyleSheet.create({
   desktopStatusCopy: { flex: 1 },
   desktopStatusTitle: {
     color: "#08725A",
-    fontSize: 11.5,
-    fontWeight: "900",
+    fontSize: vsType.size.meta, fontFamily: vsType.family,
+    fontWeight: "800",
   },
   desktopStatusText: {
     marginTop: 2,
     color: "#689083",
-    fontSize: 9.5,
+    fontSize: vsType.size.micro, fontFamily: vsType.family,
   },
   desktopSectionLabel: {
     marginTop: 24,
@@ -945,7 +946,7 @@ const styles = StyleSheet.create({
     fontWeight: designUi.type.label.fontWeight, lineHeight: designUi.type.label.lineHeight,},
   desktopNavTextActive: {
     color: "#FFFFFF",
-    fontWeight: "900",
+    fontWeight: "800",
   },
   desktopActiveMark: {
     width: 4,
@@ -975,13 +976,13 @@ const styles = StyleSheet.create({
   desktopPortalText: {
     flex: 1,
     color: "#6D28D9",
-    fontSize: 11.5,
-    fontWeight: "900",
+    fontSize: vsType.size.meta, fontFamily: vsType.family,
+    fontWeight: "800",
   },
   desktopUtilityText: {
     flex: 1,
     color: "#FFFFFF",
-    fontSize: 11.5,
+    fontSize: vsType.size.meta, fontFamily: vsType.family,
     fontWeight: "700",
   },
   desktopLogoutText: {
@@ -993,7 +994,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     paddingHorizontal: 10,
     color: "#8EE6D1",
-    fontSize: 10,
+    fontSize: vsType.size.micro, fontFamily: vsType.family,
     letterSpacing: 2,
     fontWeight: "800",
   },

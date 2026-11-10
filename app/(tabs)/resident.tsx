@@ -1,3 +1,4 @@
+import { volunserveTypography as vsType } from "../../constants/volunserveLiveUi";
 import { liveUi as designUi } from "../../constants/volunserveLiveUi";
 import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
@@ -6112,8 +6113,7 @@ const styles =
     },
 
     gateTitle: {
-      fontSize:
-        25,
+      fontSize: vsType.size.title,
       fontWeight:
         "800",
       color:
@@ -6194,10 +6194,8 @@ const styles =
     heroEyebrow: {
       color:
         "#CFE2FF",
-      fontSize:
-        11,
-      fontWeight:
-        "900",
+      fontSize: vsType.size.caption,
+      fontWeight: "800",
       letterSpacing:
         1.1,
     },
@@ -6207,10 +6205,8 @@ const styles =
         6,
       color:
         "#FFFFFF",
-      fontSize:
-        32,
-      fontWeight:
-        "900",
+      fontSize: vsType.size.display,
+      fontWeight: "800",
     },
 
     heroSubtitle: {
@@ -6220,8 +6216,7 @@ const styles =
         "#E6F0FF",
       lineHeight:
         21,
-      fontSize:
-        14,
+      fontSize: vsType.size.body,
       maxWidth:
         820,
     },
@@ -6248,8 +6243,7 @@ const styles =
         "#0F8A58",
       fontWeight:
         "800",
-      fontSize:
-        12,
+      fontSize: vsType.size.meta,
     },
 
     modeTabs: {
@@ -6290,13 +6284,12 @@ const styles =
     },
 
     modeTabText: {
-      fontFamily:"AssistanceInterBold",
+      fontFamily: vsType.family,
       color:
         "#475569",
       fontWeight:
         "800",
-      fontSize:
-        13,
+      fontSize: vsType.size.label,
     },
 
     modeTabTextActive: {
@@ -6325,10 +6318,8 @@ const styles =
     },
 
     modeCountText: {
-      fontSize:
-        11,
-      fontWeight:
-        "900",
+      fontSize: vsType.size.caption,
+      fontWeight: "800",
       color:
         "#475569",
     },
@@ -6366,8 +6357,7 @@ const styles =
         "#B42318",
       lineHeight:
         19,
-      fontSize:
-        13,
+      fontSize: vsType.size.label,
       fontWeight:
         "600",
     },
@@ -6422,20 +6412,19 @@ const styles =
     },
 
     infoCardTitle: {
-      fontFamily:"AssistanceInterBold",
+      fontFamily: vsType.family,
       color:
         "#172033",
       fontSize: designUi.type.card.fontSize,
       fontWeight: designUi.type.card.fontWeight, lineHeight: designUi.type.card.lineHeight,},
 
     infoCardText: {
-      fontFamily:"AssistanceInter",
+      fontFamily: vsType.family,
       marginTop:
         5,
       color:
         "#64748B",
-      fontSize:
-        12,
+      fontSize: vsType.size.meta,
       lineHeight:
         18,
     },
@@ -6479,10 +6468,8 @@ const styles =
     emergencyNoticeTitle: {
       color:
         "#7A271A",
-      fontWeight:
-        "900",
-      fontSize:
-        13,
+      fontWeight: "800",
+      fontSize: vsType.size.label,
     },
 
     emergencyNoticeText: {
@@ -6513,8 +6500,7 @@ const styles =
         "#FFFFFF",
       fontWeight:
         "800",
-      fontSize:
-        12,
+      fontSize: vsType.size.meta,
     },
 
     progressCard: {
@@ -6571,11 +6557,10 @@ const styles =
     },
 
     progressLabel: {
-      fontFamily:"AssistanceInterSemiBold",
+      fontFamily: vsType.family,
       marginTop:
         5,
-      fontSize:
-        11,
+      fontSize: vsType.size.caption,
       color:
         "#64748B",
       fontWeight:
@@ -6585,8 +6570,7 @@ const styles =
     progressLabelActive: {
       color:
         "#098E70",
-      fontWeight:
-        "900",
+      fontWeight: "800",
     },
 
     progressLine: {
@@ -6627,19 +6611,17 @@ const styles =
     },
 
     formEyebrow: {
-      fontFamily:"AssistanceInterBold",
+      fontFamily: vsType.family,
       color:
         "#0B916F",
-      fontSize:
-        11,
-      fontWeight:
-        "900",
+      fontSize: vsType.size.caption,
+      fontWeight: "800",
       letterSpacing:
         1,
     },
 
     formTitle: {
-      fontFamily:"AssistanceInterExtraBold",
+      fontFamily: vsType.family,
       marginTop:
         5,
       color:
@@ -6648,13 +6630,12 @@ const styles =
       fontWeight: designUi.type.section.fontWeight, lineHeight: designUi.type.section.lineHeight,},
 
     formText: {
-      fontFamily:"AssistanceInter",
+      fontFamily: vsType.family,
       marginTop:
         6,
       color:
         "#64748B",
-      fontSize:
-        13,
+      fontSize: vsType.size.label,
       lineHeight:
         20,
     },
@@ -6710,29 +6691,26 @@ const styles =
     },
 
     categoryTitle: {
-      fontFamily:"AssistanceInterBold",
+      fontFamily: vsType.family,
       color:
         "#17463A",
-      fontSize:
-        14,
-      fontWeight:
-        "900",
+      fontSize: vsType.size.body,
+      fontWeight: "800",
     },
 
     categoryText: {
-      fontFamily:"AssistanceInter",
+      fontFamily: vsType.family,
       marginTop:
         4,
       color:
         "#64748B",
-      fontSize:
-        12,
+      fontSize: vsType.size.meta,
       lineHeight:
         17,
     },
 
     fieldLabel: {
-      fontFamily:"AssistanceInterSemiBold",
+      fontFamily: vsType.family,
       marginTop:
         15,
       marginBottom:
@@ -6748,7 +6726,7 @@ const styles =
     },
 
     input: {
-      fontFamily:"AssistanceInter",
+      fontFamily: vsType.family,
       minHeight: 46,
       borderRadius: 11,
       borderWidth:
@@ -6761,8 +6739,7 @@ const styles =
         13,
       color:
         "#172033",
-      fontSize:
-        13,
+      fontSize: vsType.size.label,
     },
 
     accountContactCard: {
@@ -6820,10 +6797,8 @@ const styles =
     accountContactValue: {
       color:
         "#172033",
-      fontSize:
-        12,
-      fontWeight:
-        "900",
+      fontSize: vsType.size.meta,
+      fontWeight: "800",
     },
 
     accountContactValueMissing: {
@@ -6832,13 +6807,12 @@ const styles =
     },
 
     accountContactHelper: {
-      fontFamily:"AssistanceInter",
+      fontFamily: vsType.family,
       marginTop:
         3,
       color:
         "#64748B",
-      fontSize:
-        10.5,
+      fontSize: vsType.size.caption,
       lineHeight:
         15,
     },
@@ -6863,10 +6837,8 @@ const styles =
     readOnlyBadgeText: {
       color:
         "#475569",
-      fontSize:
-        8.5,
-      fontWeight:
-        "900",
+      fontSize: vsType.size.micro,
+      fontWeight: "800",
       letterSpacing:
         0.4,
     },
@@ -6887,8 +6859,7 @@ const styles =
         "flex-end",
       color:
         "#94A3B8",
-      fontSize:
-        11,
+      fontSize: vsType.size.caption,
     },
 
     twoColumn: {
@@ -6952,15 +6923,13 @@ const styles =
         "#475569",
       fontWeight:
         "700",
-      fontSize:
-        12,
+      fontSize: vsType.size.meta,
     },
 
     choiceButtonTextSelected: {
       color:
         "#1458B7",
-      fontWeight:
-        "900",
+      fontWeight: "800",
     },
 
     chipWrap: {
@@ -6999,8 +6968,7 @@ const styles =
     situationChipText: {
       color:
         "#64748B",
-      fontSize:
-        12,
+      fontSize: vsType.size.meta,
       fontWeight:
         "700",
     },
@@ -7008,8 +6976,7 @@ const styles =
     situationChipTextActive: {
       color:
         "#1769E0",
-      fontWeight:
-        "900",
+      fontWeight: "800",
     },
 
     privateNotice: {
@@ -7032,8 +6999,7 @@ const styles =
         1,
       color:
         "#356B64",
-      fontSize:
-        12,
+      fontSize: vsType.size.meta,
       lineHeight:
         18,
     },
@@ -7077,7 +7043,7 @@ const styles =
     },
 
     backButtonText: {
-      fontFamily:"AssistanceInterSemiBold",
+      fontFamily: vsType.family,
       color:
         "#475569",
       fontWeight:
@@ -7106,11 +7072,10 @@ const styles =
     },
 
     nextButtonText: {
-      fontFamily:"AssistanceInterBold",
+      fontFamily: vsType.family,
       color:
         "#FFFFFF",
-      fontWeight:
-        "900",
+      fontWeight: "800",
     },
 
     documentList: {
@@ -7162,13 +7127,11 @@ const styles =
     },
 
     documentTitle: {
-      fontFamily:"AssistanceInterBold",
+      fontFamily: vsType.family,
       color:
         "#172033",
-      fontWeight:
-        "900",
-      fontSize:
-        13,
+      fontWeight: "800",
+      fontSize: vsType.size.label,
     },
 
     requiredBadge: {
@@ -7182,10 +7145,8 @@ const styles =
         "#FDECEC",
       color:
         "#B42318",
-      fontSize:
-        9,
-      fontWeight:
-        "900",
+      fontSize: vsType.size.micro,
+      fontWeight: "800",
     },
 
     optionalBadge: {
@@ -7199,20 +7160,17 @@ const styles =
         "#EEF2F7",
       color:
         "#64748B",
-      fontSize:
-        9,
-      fontWeight:
-        "900",
+      fontSize: vsType.size.micro,
+      fontWeight: "800",
     },
 
     documentHelper: {
-      fontFamily:"AssistanceInter",
+      fontFamily: vsType.family,
       marginTop:
         4,
       color:
         "#64748B",
-      fontSize:
-        11,
+      fontSize: vsType.size.caption,
       lineHeight:
         17,
     },
@@ -7243,13 +7201,11 @@ const styles =
     },
 
     uploadButtonText: {
-      fontFamily:"AssistanceInterBold",
+      fontFamily: vsType.family,
       color:
         "#1769E0",
-      fontSize:
-        11,
-      fontWeight:
-        "900",
+      fontSize: vsType.size.caption,
+      fontWeight: "800",
     },
 
     documentSelected: {
@@ -7283,8 +7239,7 @@ const styles =
     documentFileName: {
       color:
         "#334155",
-      fontSize:
-        11,
+      fontSize: vsType.size.caption,
       fontWeight:
         "800",
     },
@@ -7294,8 +7249,7 @@ const styles =
         2,
       color:
         "#15803D",
-      fontSize:
-        10,
+      fontSize: vsType.size.micro,
       fontWeight:
         "700",
     },
@@ -7335,8 +7289,7 @@ const styles =
         1,
       color:
         "#506A8B",
-      fontSize:
-        11,
+      fontSize: vsType.size.caption,
       lineHeight:
         17,
     },
@@ -7398,7 +7351,7 @@ const styles =
     },
 
     reviewLabel: {
-      fontFamily:"AssistanceInterSemiBold",
+      fontFamily: vsType.family,
       width:
         160,
       padding:
@@ -7411,15 +7364,14 @@ const styles =
         "#F8FAFC", lineHeight: designUi.type.label.lineHeight,},
 
     reviewValue: {
-      fontFamily:"AssistanceInterMedium",
+      fontFamily: vsType.family,
       flex:
         1,
       padding:
         13,
       color:
         "#27364B",
-      fontSize:
-        12,
+      fontSize: vsType.size.meta,
       lineHeight:
         18,
       fontWeight:
@@ -7427,13 +7379,11 @@ const styles =
     },
 
     reviewSideTitle: {
-      fontFamily:"AssistanceInterBold",
+      fontFamily: vsType.family,
       color:
         "#172033",
-      fontSize:
-        13,
-      fontWeight:
-        "900",
+      fontSize: vsType.size.label,
+      fontWeight: "800",
     },
 
     reviewSideCount: {
@@ -7443,8 +7393,7 @@ const styles =
         11,
       color:
         "#64748B",
-      fontSize:
-        11,
+      fontSize: vsType.size.caption,
     },
 
     reviewDocumentLine: {
@@ -7463,8 +7412,7 @@ const styles =
         1,
       color:
         "#475569",
-      fontSize:
-        11,
+      fontSize: vsType.size.caption,
       lineHeight:
         16,
     },
@@ -7487,10 +7435,8 @@ const styles =
     lguLocationReviewTitle: {
       color:
         "#1769E0",
-      fontSize:
-        12,
-      fontWeight:
-        "900",
+      fontSize: vsType.size.meta,
+      fontWeight: "800",
     },
 
     lguLocationReviewText: {
@@ -7498,8 +7444,7 @@ const styles =
         3,
       color:
         "#64748B",
-      fontSize:
-        11,
+      fontSize: vsType.size.caption,
       lineHeight:
         17,
     },
@@ -7524,8 +7469,7 @@ const styles =
         1,
       color:
         "#356B64",
-      fontSize:
-        11,
+      fontSize: vsType.size.caption,
       lineHeight:
         18,
     },
@@ -7551,13 +7495,11 @@ const styles =
     },
 
     submitButtonText: {
-      fontFamily:"AssistanceInterBold",
+      fontFamily: vsType.family,
       color:
         "#FFFFFF",
-      fontWeight:
-        "900",
-      fontSize:
-        13,
+      fontWeight: "800",
+      fontSize: vsType.size.label,
     },
 
     disabledButton: {
@@ -7583,8 +7525,7 @@ const styles =
     primaryButtonText: {
       color:
         "#FFFFFF",
-      fontWeight:
-        "900",
+      fontWeight: "800",
     },
 
     secondaryButton: {
@@ -7646,13 +7587,11 @@ const styles =
     },
 
     successTitle: {
-      fontFamily:"AssistanceInterExtraBold",
+      fontFamily: vsType.family,
       color:
         "#172033",
-      fontSize:
-        27,
-      fontWeight:
-        "900",
+      fontSize: vsType.size.page,
+      fontWeight: "800",
       textAlign:
         "center",
     },
@@ -7717,10 +7656,8 @@ const styles =
         4,
       color:
         "#27364B",
-      fontSize:
-        13,
-      fontWeight:
-        "900",
+      fontSize: vsType.size.label,
+      fontWeight: "800",
     },
 
     historyCard: {
@@ -7748,7 +7685,7 @@ const styles =
     },
 
     historyTitle: {
-      fontFamily:"AssistanceInterBold",
+      fontFamily: vsType.family,
       marginTop:
         5,
       color:
@@ -7786,10 +7723,8 @@ const styles =
     newRequestButtonText: {
       color:
         "#FFFFFF",
-      fontWeight:
-        "900",
-      fontSize:
-        12,
+      fontWeight: "800",
+      fontSize: vsType.size.meta,
     },
 
     historySummaryRow: {
@@ -7819,10 +7754,8 @@ const styles =
     summaryPillValue: {
       color:
         "#1769E0",
-      fontSize:
-        17,
-      fontWeight:
-        "900",
+      fontSize: vsType.size.card,
+      fontWeight: "800",
     },
 
     summaryPillLabel: {
@@ -7830,8 +7763,7 @@ const styles =
         2,
       color:
         "#64748B",
-      fontSize:
-        10,
+      fontSize: vsType.size.micro,
       fontWeight:
         "700",
     },
@@ -7879,14 +7811,12 @@ const styles =
     requestCardId: {
       color:
         "#94A3B8",
-      fontSize:
-        9,
-      fontWeight:
-        "900",
+      fontSize: vsType.size.micro,
+      fontWeight: "800",
     },
 
     requestCardTitle: {
-      fontFamily:"AssistanceInterBold",
+      fontFamily: vsType.family,
       marginTop:
         2,
       color:
@@ -7917,11 +7847,9 @@ const styles =
     },
 
     statusBadgeText: {
-      fontFamily:"AssistanceInterBold",
-      fontSize:
-        10,
-      fontWeight:
-        "900",
+      fontFamily: vsType.family,
+      fontSize: vsType.size.micro,
+      fontWeight: "800",
     },
 
     emptyState: {
@@ -8005,10 +7933,8 @@ const styles =
         4,
       color:
         "#172033",
-      fontSize:
-        19,
-      fontWeight:
-        "900",
+      fontSize: vsType.size.section,
+      fontWeight: "800",
     },
 
     modalReference: {
@@ -8016,8 +7942,7 @@ const styles =
         3,
       color:
         "#64748B",
-      fontSize:
-        10,
+      fontSize: vsType.size.micro,
       fontWeight:
         "700",
     },
@@ -8060,10 +7985,8 @@ const styles =
     modalSectionTitle: {
       color:
         "#172033",
-      fontSize:
-        13,
-      fontWeight:
-        "900",
+      fontSize: vsType.size.label,
+      fontWeight: "800",
     },
 
     timeline: {
@@ -8135,8 +8058,7 @@ const styles =
     timelineTitle: {
       color:
         "#64748B",
-      fontSize:
-        12,
+      fontSize: vsType.size.meta,
       fontWeight:
         "800",
     },
@@ -8151,8 +8073,7 @@ const styles =
         3,
       color:
         "#94A3B8",
-      fontSize:
-        10,
+      fontSize: vsType.size.micro,
     },
 
     modalDocumentGrid: {
@@ -8180,8 +8101,7 @@ const styles =
     modalDocumentTitle: {
       color:
         "#334155",
-      fontSize:
-        11,
+      fontSize: vsType.size.caption,
       fontWeight:
         "800",
     },
@@ -8191,8 +8111,7 @@ const styles =
         2,
       color:
         "#94A3B8",
-      fontSize:
-        9,
+      fontSize: vsType.size.micro,
     },
 
     assignedLocationHeader: {
@@ -8222,8 +8141,7 @@ const styles =
         3,
       color:
         "#64748B",
-      fontSize:
-        10,
+      fontSize: vsType.size.micro,
       lineHeight:
         16,
     },
@@ -8233,10 +8151,8 @@ const styles =
         14,
       color:
         "#172033",
-      fontSize:
-        15,
-      fontWeight:
-        "900",
+      fontSize: vsType.size.bodyStrong,
+      fontWeight: "800",
     },
 
     assignedLocationAddress: {
@@ -8244,8 +8160,7 @@ const styles =
         4,
       color:
         "#64748B",
-      fontSize:
-        11,
+      fontSize: vsType.size.caption,
     },
 
     mapFrame: {
@@ -8287,8 +8202,7 @@ const styles =
         "#64748B",
       textAlign:
         "center",
-      fontSize:
-        11,
+      fontSize: vsType.size.caption,
     },
 
     locationNotes: {
@@ -8311,8 +8225,7 @@ const styles =
         1,
       color:
         "#356B64",
-      fontSize:
-        11,
+      fontSize: vsType.size.caption,
       lineHeight:
         16,
     },
@@ -8337,8 +8250,7 @@ const styles =
         1,
       color:
         "#64748B",
-      fontSize:
-        11,
+      fontSize: vsType.size.caption,
       lineHeight:
         17,
     },
@@ -8383,8 +8295,7 @@ const styles =
         1,
       color:
         "#172033",
-      fontSize:
-        13,
+      fontSize: vsType.size.label,
       fontWeight:
         "700",
     },
@@ -8438,8 +8349,7 @@ const styles =
     dropdownOptionText: {
       color:
         "#334155",
-      fontSize:
-        13,
+      fontSize: vsType.size.label,
       fontWeight:
         "800",
     },
@@ -8454,8 +8364,7 @@ const styles =
         3,
       color:
         "#64748B",
-      fontSize:
-        11,
+      fontSize: vsType.size.caption,
       lineHeight:
         16,
     },
@@ -8482,8 +8391,7 @@ const styles =
         1,
       color:
         "#475569",
-      fontSize:
-        11.5,
+      fontSize: vsType.size.meta,
       lineHeight:
         17,
       fontWeight:
@@ -8530,23 +8438,20 @@ const styles =
     },
 
     publicPhotoSectionTitle: {
-      fontFamily:"AssistanceInterBold",
+      fontFamily: vsType.family,
       color:
         "#312E81",
-      fontSize:
-        13,
-      fontWeight:
-        "900",
+      fontSize: vsType.size.label,
+      fontWeight: "800",
     },
 
     publicPhotoSectionText: {
-      fontFamily:"AssistanceInter",
+      fontFamily: vsType.family,
       marginTop:
         3,
       color:
         "#64748B",
-      fontSize:
-        11,
+      fontSize: vsType.size.caption,
       lineHeight:
         16,
     },
@@ -8577,10 +8482,8 @@ const styles =
     publicPhotoUploadButtonText: {
       color:
         "#4F46E5",
-      fontSize:
-        12,
-      fontWeight:
-        "900",
+      fontSize: vsType.size.meta,
+      fontWeight: "800",
     },
 
     publicPhotoSelected: {
@@ -8620,8 +8523,7 @@ const styles =
         3,
       color:
         "#15803D",
-      fontSize:
-        10.5,
+      fontSize: vsType.size.caption,
       fontWeight:
         "800",
     },
@@ -8640,10 +8542,8 @@ const styles =
     changePhotoButtonText: {
       color:
         "#4338CA",
-      fontSize:
-        10.5,
-      fontWeight:
-        "900",
+      fontSize: vsType.size.caption,
+      fontWeight: "800",
     },
 
     publicPhotoConsentRow: {
@@ -8668,8 +8568,7 @@ const styles =
         1,
       color:
         "#475569",
-      fontSize:
-        10.5,
+      fontSize: vsType.size.caption,
       lineHeight:
         16,
       fontWeight:
@@ -8690,10 +8589,8 @@ const styles =
     privateDocumentsTitle: {
       color:
         "#0F766E",
-      fontSize:
-        12,
-      fontWeight:
-        "900",
+      fontSize: vsType.size.meta,
+      fontWeight: "800",
     },
 
     privateDocumentsText: {
@@ -8701,8 +8598,7 @@ const styles =
         2,
       color:
         "#64748B",
-      fontSize:
-        10.5,
+      fontSize: vsType.size.caption,
       lineHeight:
         15,
     },
@@ -8742,10 +8638,8 @@ const styles =
     reviewPublicPhotoTitle: {
       color:
         "#312E81",
-      fontSize:
-        10.5,
-      fontWeight:
-        "900",
+      fontSize: vsType.size.caption,
+      fontWeight: "800",
     },
 
     reviewPublicPhotoText: {
@@ -8753,8 +8647,7 @@ const styles =
         2,
       color:
         "#64748B",
-      fontSize:
-        9.5,
+      fontSize: vsType.size.micro,
       lineHeight:
         14,
     },
@@ -8788,10 +8681,8 @@ const styles =
     campaignLinkTitle: {
       color:
         "#6D28D9",
-      fontSize:
-        12,
-      fontWeight:
-        "900",
+      fontSize: vsType.size.meta,
+      fontWeight: "800",
     },
 
     campaignLinkText: {
@@ -8799,8 +8690,7 @@ const styles =
         3,
       color:
         "#6B5B82",
-      fontSize:
-        11,
+      fontSize: vsType.size.caption,
       lineHeight:
         17,
     },
@@ -8825,10 +8715,8 @@ const styles =
     rejectionTitle: {
       color:
         "#B42318",
-      fontSize:
-        12,
-      fontWeight:
-        "900",
+      fontSize: vsType.size.meta,
+      fontWeight: "800",
     },
 
     rejectionText: {
@@ -8836,8 +8724,7 @@ const styles =
         3,
       color:
         "#8A463E",
-      fontSize:
-        11,
+      fontSize: vsType.size.caption,
       lineHeight:
         17,
     },
@@ -8873,17 +8760,17 @@ const styles =
       alignSelf: "stretch",
     },
     mobileHeroEyebrow: {
-      fontSize: 10,
+      fontSize: vsType.size.micro,
       lineHeight: 15,
       letterSpacing: 0.6,
     },
     mobileHeroTitle: {
-      fontSize: 25,
+      fontSize: vsType.size.title,
       lineHeight: 31,
       marginTop: 5,
     },
     mobileHeroSubtitle: {
-      fontSize: 13,
+      fontSize: vsType.size.label,
       lineHeight: 20,
       marginTop: 8,
       maxWidth: "100%",
@@ -8946,7 +8833,7 @@ const styles =
       width: "auto",
     },
     mobileProgressLabel: {
-      fontSize: 10,
+      fontSize: vsType.size.micro,
       lineHeight: 13,
       textAlign: "center",
     },
@@ -8980,38 +8867,38 @@ const styles =
     premiumEmblemCheck:{position:"absolute",right:6,bottom:6,width:23,height:23,borderRadius:13,backgroundColor:"#FFFFFF",alignItems:"center",justifyContent:"center"},
     premiumHeroCopy:{flex:1,minWidth:0,gap:5},
     premiumHeroCopyMobile:{width:"100%",alignSelf:"stretch",flex:0},
-    premiumHeroEyebrow:{fontFamily:"AssistanceInterBold",fontSize:10,color:"#08775D",letterSpacing:1.1},
-    premiumHeroTitle:{fontFamily:"AssistanceInterExtraBold",fontSize:33,lineHeight:40,letterSpacing:-0.9,color:"#064638"},
-    premiumHeroTitleMobile:{fontSize:26,lineHeight:33,letterSpacing:-0.5},
-    premiumHeroTagline:{fontFamily:"AssistanceInterBold",fontSize:13,color:"#0F6E52"},
-    premiumHeroDescription:{fontFamily:"AssistanceInter",fontSize:11.5,lineHeight:18,color:"#4C766B",maxWidth:460},
+    premiumHeroEyebrow:{fontFamily: vsType.family,fontSize: vsType.size.micro,color:"#08775D",letterSpacing:1.1},
+    premiumHeroTitle:{fontFamily: vsType.family,fontSize: vsType.size.display,lineHeight:40,letterSpacing:-0.9,color:"#064638"},
+    premiumHeroTitleMobile:{fontSize: vsType.size.page,lineHeight:33,letterSpacing:-0.5},
+    premiumHeroTagline:{fontFamily: vsType.family,fontSize: vsType.size.label,color:"#0F6E52"},
+    premiumHeroDescription:{fontFamily: vsType.family,fontSize: vsType.size.meta,lineHeight:18,color:"#4C766B",maxWidth:460},
     premiumHeroRight:{width:"33%",minWidth:215,maxWidth:310,gap:14,alignItems:"stretch"},
     premiumHeroRightMobile:{width:"100%",minWidth:0,maxWidth:"100%"},
     premiumVerified:{alignSelf:"flex-end",paddingHorizontal:11,paddingVertical:7,backgroundColor:"rgba(255,255,255,0.91)",borderRadius:19,flexDirection:"row",alignItems:"center",gap:7},
-    premiumVerifiedText:{fontFamily:"AssistanceInterBold",fontSize:10,color:"#087C5D"},
+    premiumVerifiedText:{fontFamily: vsType.family,fontSize: vsType.size.micro,color:"#087C5D"},
     premiumHeroFacts:{flexDirection:"row",gap:9},
     premiumHeroFact:{flex:1,minHeight:63,padding:10,borderRadius:11,backgroundColor:"rgba(255,255,255,0.91)",alignItems:"center",justifyContent:"center",gap:6},
-    premiumHeroFactText:{fontFamily:"AssistanceInterSemiBold",color:"#27594B",fontSize:10,textAlign:"center"},
-    premiumStepNumber:{fontFamily:"AssistanceInterBold",fontSize:13,color:"#FFFFFF"},
+    premiumHeroFactText:{fontFamily: vsType.family,color:"#27594B",fontSize: vsType.size.micro,textAlign:"center"},
+    premiumStepNumber:{fontFamily: vsType.family,fontSize: vsType.size.label,color:"#FFFFFF"},
     amountPresetRow:{flexDirection:"row",flexWrap:"wrap",gap:7,marginTop:9},
     amountPreset:{paddingHorizontal:11,paddingVertical:8,backgroundColor:"#F4FAF7",borderWidth:1,borderColor:"#D9E9E1",borderRadius:9},
     amountPresetActive:{backgroundColor:"#E5F8EE",borderColor:"#129976"},
-    amountPresetText:{fontFamily:"AssistanceInterSemiBold",fontSize:11,color:"#597D6E"},
+    amountPresetText:{fontFamily: vsType.family,fontSize: vsType.size.caption,color:"#597D6E"},
     amountPresetTextActive:{color:"#087558"},
-    amountHelp:{fontFamily:"AssistanceInter",fontSize:10.5,color:"#76958A",marginTop:7,lineHeight:16},
+    amountHelp:{fontFamily: vsType.family,fontSize: vsType.size.caption,color:"#76958A",marginTop:7,lineHeight:16},
     releaseSection:{marginTop:22,padding:17,borderRadius:15,backgroundColor:"#F7FCF9",borderWidth:1,borderColor:"#DCEDE4",gap:13},
     releaseHeader:{flexDirection:"row",alignItems:"center",gap:9},
     releaseHeaderCopy:{flex:1,gap:4},
-    releaseTitle:{fontFamily:"AssistanceInterBold",fontSize:14,color:"#16483A"},
-    releaseDesc:{fontFamily:"AssistanceInter",fontSize:11,color:"#6E887E",lineHeight:17},
+    releaseTitle:{fontFamily: vsType.family,fontSize: vsType.size.body,color:"#16483A"},
+    releaseDesc:{fontFamily: vsType.family,fontSize: vsType.size.caption,color:"#6E887E",lineHeight:17},
     releaseOptions:{flexDirection:"row",flexWrap:"wrap",gap:10},
     releaseOption:{flex:1,minWidth:170,minHeight:85,flexDirection:"row",gap:9,alignItems:"center",padding:12,borderRadius:12,backgroundColor:"#FFFFFF",borderWidth:1,borderColor:"#D6E7DE"},
     releaseOptionSelected:{backgroundColor:"#E9F9F0",borderColor:"#0C9773"},
     releaseIcon:{width:36,height:36,borderRadius:10,backgroundColor:"#E6F3ED",alignItems:"center",justifyContent:"center"},
     releaseIconActive:{backgroundColor:"#D0F0E0"},
     releaseOptionCopy:{flex:1,minWidth:0,gap:4},
-    releaseOptionTitle:{fontFamily:"AssistanceInterBold",fontSize:12,color:"#214C3E"},
-    releaseOptionHint:{fontFamily:"AssistanceInter",fontSize:9.5,color:"#728F80",lineHeight:14},
+    releaseOptionTitle:{fontFamily: vsType.family,fontSize: vsType.size.meta,color:"#214C3E"},
+    releaseOptionHint:{fontFamily: vsType.family,fontSize: vsType.size.micro,color:"#728F80",lineHeight:14},
     releasePrivacy:{flexDirection:"row",gap:8,alignItems:"flex-start",borderRadius:9,backgroundColor:"#ECF8F2",padding:10},
-    releasePrivacyText:{flex:1,fontFamily:"AssistanceInter",fontSize:10.3,lineHeight:16,color:"#577E6F"},
+    releasePrivacyText:{flex:1,fontFamily: vsType.family,fontSize: vsType.size.micro,lineHeight:16,color:"#577E6F"},
   });

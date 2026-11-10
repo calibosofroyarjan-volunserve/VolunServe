@@ -1,3 +1,4 @@
+import { volunserveTypography as vsType } from "../../constants/volunserveLiveUi";
 import { liveUi as designUi } from "../../constants/volunserveLiveUi";
 import { useRouter } from "expo-router";
 import { getAuth } from "firebase/auth";
@@ -569,8 +570,9 @@ const lguResponseFieldLabel = (personnel?: LguPersonnelCandidate | null) => {
 export default function AdminCases() {
   const router = useRouter();
   const { width } = useWindowDimensions();
-  // The Admin sidebar takes 268px on desktop; use a content-aware breakpoint.
-  const compact = width < 1360;
+  // Preserve the branded two-column Admin desk on laptops while keeping
+  // readable stacked panes when sidebar + content cannot fit comfortably.
+  const compact = width < 1200;
 
   const [role, setRole] = useState<string | null>(null);
   const [loadingRole, setLoadingRole] = useState(true);
@@ -3675,10 +3677,10 @@ export default function AdminCases() {
                 <View style={{ marginTop: 12, marginBottom: 18, gap: 10 }}>
                   <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10 }}>
                     <View style={{ flex: 1, minWidth: 210 }}>
-                      <Text style={{ color: "#153F32", fontSize: 16, fontWeight: "800" }}>
+                      <Text style={{ color: "#153F32", fontSize: vsType.size.card, fontFamily: vsType.family, fontWeight: "800" }}>
                         Incident Location & Volunteer Tracking
                       </Text>
-                      <Text style={{ color: "#61766C", fontSize: 12, marginTop: 3 }}>
+                      <Text style={{ color: "#61766C", fontSize: vsType.size.meta, fontFamily: vsType.family, marginTop: 3 }}>
                         Incident pin is always shown. Volunteer GPS appears only while an assigned Volunteer is actively sharing their location.
                       </Text>
                     </View>
@@ -3687,7 +3689,7 @@ export default function AdminCases() {
                       onPress={() => router.push(`/(admin)/admin-live-map?caseId=${encodeURIComponent(incident.id)}` as any)}
                       style={{ backgroundColor: "#087F67", paddingHorizontal: 14, paddingVertical: 11, borderRadius: 10 }}
                     >
-                      <Text style={{ color: "#FFFFFF", fontWeight: "800", fontSize: 12 }}>Open Full Live Map</Text>
+                      <Text style={{ color: "#FFFFFF", fontWeight: "800", fontSize: vsType.size.meta, fontFamily: vsType.family }}>Open Full Live Map</Text>
                     </TouchableOpacity>
                   </View>
                   {Number.isFinite(incident.latitude) && Number.isFinite(incident.longitude) ? (
@@ -4274,10 +4276,10 @@ export default function AdminCases() {
                     <View style={styles.adminSection}>
                   {incidentFieldReports.length > 0 && (
                     <View style={{ marginTop: 12, padding: 14, borderRadius: 12, borderWidth: 1, borderColor: "#D7E8E0", backgroundColor: "#F7FCF9" }}>
-                      <Text style={{ fontWeight: "800", fontSize: 15, color: "#064E3B", marginBottom: 6 }}>
+                      <Text style={{ fontWeight: "800", fontSize: vsType.size.bodyStrong, fontFamily: vsType.family, color: "#064E3B", marginBottom: 6 }}>
                         Volunteer Completion Reports
                       </Text>
-                      <Text style={{ color: "#47675C", fontSize: 12, marginBottom: 10 }}>
+                      <Text style={{ color: "#47675C", fontSize: vsType.size.meta, fontFamily: vsType.family, marginBottom: 10 }}>
                         Review the actual assistance submitted by assigned Volunteers. Task completion does not automatically close the case.
                       </Text>
                       <ListPagination
@@ -4292,7 +4294,7 @@ export default function AdminCases() {
                         return (
                           <View key={report.id} style={{ padding: 12, marginVertical: 6, borderRadius: 10, backgroundColor: "#FFFFFF", borderWidth: 1, borderColor: "#E0EAE5" }}>
                             <Text style={{ fontWeight: "800", color: "#143B30" }}>{report.volunteerName || "Assigned Volunteer"}</Text>
-                            <Text style={{ fontSize: 12, color: "#58746B", marginBottom: 6 }}>
+                            <Text style={{ fontSize: vsType.size.meta, fontFamily: vsType.family, color: "#58746B", marginBottom: 6 }}>
                               Status: {String(report.reportStatus || "Submitted").replace(/_/g, " ")}
                             </Text>
                             <Text style={{ color: "#174E3D", marginBottom: 4 }}>
@@ -4927,8 +4929,8 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
   denied: {
-    fontSize: 18,
-    fontWeight: "900",
+    fontSize: vsType.size.section, fontFamily: vsType.family,
+    fontWeight: "800",
     color: "#b42318",
   },
 
@@ -4941,7 +4943,7 @@ const styles = StyleSheet.create({
   },
   eyebrow: {
     color: "#078f82",
-    fontSize: 11,
+    fontSize: vsType.size.caption, fontFamily: vsType.family,
     fontWeight: "800",
     letterSpacing: 1.2,
   },
@@ -4972,8 +4974,8 @@ const styles = StyleSheet.create({
   },
   liveSummaryNumber: {
     color: "#086b54",
-    fontSize: 19,
-    fontWeight: "900",
+    fontSize: vsType.size.section, fontFamily: vsType.family,
+    fontWeight: "800",
   },
   liveSummaryLabel: {
     marginTop: 2,
@@ -4982,9 +4984,9 @@ const styles = StyleSheet.create({
     fontWeight: designUi.type.label.fontWeight, lineHeight: designUi.type.label.lineHeight,},
 
   filterCard: {
-    backgroundColor: "#ffffff",
+    backgroundColor: "#FFFFFF",
     borderWidth: 1,
-    borderColor: "#dfe7ee",
+    borderColor: "#DAE8DF",
     borderRadius: 12,
     paddingHorizontal: 14,
     paddingVertical: 10,
@@ -5006,13 +5008,13 @@ const styles = StyleSheet.create({
   },
   filterToolbarTitle: {
     color: "#15372c",
-    fontSize: 13,
+    fontSize: vsType.size.label, fontFamily: vsType.family,
     fontWeight: "800",
   },
   filterToolbarSubtitle: {
     color: "#64748b",
     marginTop: 3,
-    fontSize: 11,
+    fontSize: vsType.size.caption, fontFamily: vsType.family,
   },
   filterToggle: {
     borderRadius: 9,
@@ -5025,12 +5027,12 @@ const styles = StyleSheet.create({
   },
   filterToggleText: {
     color: "#076b54",
-    fontSize: 12,
+    fontSize: vsType.size.meta, fontFamily: vsType.family,
     fontWeight: "800",
   },
   filterHint: {
     color: "#65766d",
-    fontSize: 11,
+    fontSize: vsType.size.caption, fontFamily: vsType.family,
   },
   filterContent: {
     flexDirection: "row",
@@ -5067,13 +5069,13 @@ const styles = StyleSheet.create({
     borderRadius: 999,
   },
   pillActive: {
-    borderColor: "#078f82",
-    backgroundColor: "#078f82",
+    borderColor: "#176B52",
+    backgroundColor: "#176B52",
   },
   pillText: {
     color: "#475569",
-    fontSize: 10,
-    fontWeight: "900",
+    fontSize: vsType.size.micro, fontFamily: vsType.family,
+    fontWeight: "800",
   },
   pillTextActive: {
     color: "#ffffff",
@@ -5103,14 +5105,14 @@ const styles = StyleSheet.create({
   },
   searchIcon: {
     color: "#64748b",
-    fontSize: 20,
+    fontSize: vsType.size.subheading, fontFamily: vsType.family,
     fontWeight: "700",
   },
   searchInput: {
     flex: 1,
     minWidth: 0,
     color: "#0f172a",
-    fontSize: 13,
+    fontSize: vsType.size.label, fontFamily: vsType.family,
   },
 
   hiddenSection: {
@@ -5137,15 +5139,15 @@ const styles = StyleSheet.create({
     borderBottomColor: "transparent",
   },
   detailTabButtonActive: {
-    borderBottomColor: "#2563eb",
+    borderBottomColor: "#17805E",
   },
   detailTabText: {
     color: "#64748b",
-    fontSize: 10.5,
+    fontSize: vsType.size.caption, fontFamily: vsType.family,
     fontWeight: "800",
   },
   detailTabTextActive: {
-    color: "#1d4ed8",
+    color: "#106848",
   },
   overviewDashboard: {
     flexDirection: "row",
@@ -5171,9 +5173,9 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   overviewCardIcon: {
-    color: "#2563eb",
-    fontSize: 15,
-    fontWeight: "900",
+    color: "#17765A",
+    fontSize: vsType.size.bodyStrong, fontFamily: vsType.family,
+    fontWeight: "800",
   },
   overviewCardTitle: {
     color: "#0f172a",
@@ -5181,13 +5183,13 @@ const styles = StyleSheet.create({
     fontWeight: designUi.type.section.fontWeight, lineHeight: designUi.type.section.lineHeight,},
   overviewPrimary: {
     color: "#0f172a",
-    fontSize: 13,
-    fontWeight: "900",
+    fontSize: vsType.size.label, fontFamily: vsType.family,
+    fontWeight: "800",
   },
   overviewLine: {
     marginTop: 5,
     color: "#64748b",
-    fontSize: 10.5,
+    fontSize: vsType.size.caption, fontFamily: vsType.family,
     lineHeight: 16,
   },
   overviewVerifiedPill: {
@@ -5200,7 +5202,7 @@ const styles = StyleSheet.create({
   },
   overviewVerifiedText: {
     color: "#0f766e",
-    fontSize: 10,
+    fontSize: vsType.size.micro, fontFamily: vsType.family,
     fontWeight: "800",
   },
   statusTimelineRow: {
@@ -5226,7 +5228,7 @@ const styles = StyleSheet.create({
   },
   statusTimelineLabel: {
     color: "#64748b",
-    fontSize: 10.5,
+    fontSize: vsType.size.caption, fontFamily: vsType.family,
     fontWeight: "700",
   },
   statusTimelineLabelDone: {
@@ -5236,7 +5238,7 @@ const styles = StyleSheet.create({
   statusTimelineTime: {
     marginTop: 1,
     color: "#94a3b8",
-    fontSize: 10,
+    fontSize: vsType.size.micro, fontFamily: vsType.family,
   },
   priorityRow: {
     flexDirection: "row",
@@ -5246,7 +5248,7 @@ const styles = StyleSheet.create({
   },
   priorityPeople: {
     color: "#334155",
-    fontSize: 10.5,
+    fontSize: vsType.size.caption, fontFamily: vsType.family,
     fontWeight: "800",
   },
   overviewLabel: {
@@ -5270,13 +5272,13 @@ const styles = StyleSheet.create({
   },
   needChipText: {
     color: "#475569",
-    fontSize: 10,
+    fontSize: vsType.size.micro, fontFamily: vsType.family,
     fontWeight: "700",
   },
   overviewDescription: {
     marginTop: 6,
     color: "#475569",
-    fontSize: 10.5,
+    fontSize: vsType.size.caption, fontFamily: vsType.family,
     lineHeight: 16,
   },
   assignLguButton: {
@@ -5294,18 +5296,18 @@ const styles = StyleSheet.create({
   },
   assignLguButtonIcon: {
     color: "#ffffff",
-    fontSize: 18,
-    fontWeight: "900",
+    fontSize: vsType.size.section, fontFamily: vsType.family,
+    fontWeight: "800",
   },
   assignLguButtonTitle: {
     color: "#ffffff",
-    fontSize: 12.5,
-    fontWeight: "900",
+    fontSize: vsType.size.label, fontFamily: vsType.family,
+    fontWeight: "800",
   },
   assignLguButtonSub: {
     marginTop: 2,
     color: "#ccfbf1",
-    fontSize: 10,
+    fontSize: vsType.size.micro, fontFamily: vsType.family,
   },
   personnelCleanWorkspace: {
     gap: 12,
@@ -5373,8 +5375,8 @@ const styles = StyleSheet.create({
   },
   personnelSectionIconText: {
     color: "#ffffff",
-    fontSize: 14,
-    fontWeight: "900",
+    fontSize: vsType.size.body, fontFamily: vsType.family,
+    fontWeight: "800",
   },
   personnelCleanTitleRow: {
     flexDirection: "row",
@@ -5384,13 +5386,13 @@ const styles = StyleSheet.create({
   },
   personnelCleanTitle: {
     color: "#0f172a",
-    fontSize: 17,
-    fontWeight: "900",
+    fontSize: vsType.size.card, fontFamily: vsType.family,
+    fontWeight: "800",
   },
   personnelCleanSubtitle: {
     marginTop: 6,
     color: "#64748b",
-    fontSize: 12,
+    fontSize: vsType.size.meta, fontFamily: vsType.family,
     lineHeight: 19,
   },
   personnelCleanStatusPill: {
@@ -5404,8 +5406,8 @@ const styles = StyleSheet.create({
   },
   personnelCleanStatusText: {
     color: "#047857",
-    fontSize: 10.5,
-    fontWeight: "900",
+    fontSize: vsType.size.caption, fontFamily: vsType.family,
+    fontWeight: "800",
   },
   personnelCleanStatusTextMuted: {
     color: "#64748b",
@@ -5435,8 +5437,8 @@ const styles = StyleSheet.create({
   },
   personnelAvatarCompactText: {
     color: "#1d4ed8",
-    fontSize: 10.5,
-    fontWeight: "900",
+    fontSize: vsType.size.caption, fontFamily: vsType.family,
+    fontWeight: "800",
   },
   volunteerAvatarCompact: {
     width: 32,
@@ -5449,8 +5451,8 @@ const styles = StyleSheet.create({
   },
   volunteerAvatarCompactText: {
     color: "#6d28d9",
-    fontSize: 10.5,
-    fontWeight: "900",
+    fontSize: vsType.size.caption, fontFamily: vsType.family,
+    fontWeight: "800",
   },
   personnelCompactIdentity: {
     flex: 1,
@@ -5465,14 +5467,14 @@ const styles = StyleSheet.create({
   },
   personnelCompactName: {
     color: "#0f172a",
-    fontSize: 10.5,
-    fontWeight: "900",
+    fontSize: vsType.size.caption, fontFamily: vsType.family,
+    fontWeight: "800",
     textAlign: "left",
   },
   personnelCompactMeta: {
     marginTop: 2,
     color: "#64748b",
-    fontSize: 10.5,
+    fontSize: vsType.size.caption, fontFamily: vsType.family,
     lineHeight: 11,
     textAlign: "left",
   },
@@ -5501,8 +5503,8 @@ const styles = StyleSheet.create({
   },
   personnelMiniBadgeGoodText: {
     color: "#087f5b",
-    fontSize: 10.5,
-    fontWeight: "900",
+    fontSize: vsType.size.caption, fontFamily: vsType.family,
+    fontWeight: "800",
   },
   personnelMiniBadgeBusy: {
     paddingHorizontal: 7,
@@ -5512,8 +5514,8 @@ const styles = StyleSheet.create({
   },
   personnelMiniBadgeBusyText: {
     color: "#c2410c",
-    fontSize: 10.5,
-    fontWeight: "900",
+    fontSize: vsType.size.caption, fontFamily: vsType.family,
+    fontWeight: "800",
   },
   personnelMiniBadgeMuted: {
     paddingHorizontal: 7,
@@ -5523,8 +5525,8 @@ const styles = StyleSheet.create({
   },
   personnelMiniBadgeMutedText: {
     color: "#64748b",
-    fontSize: 10.5,
-    fontWeight: "900",
+    fontSize: vsType.size.caption, fontFamily: vsType.family,
+    fontWeight: "800",
   },
   personnelMiniBadgeBlue: {
     paddingHorizontal: 6,
@@ -5534,8 +5536,8 @@ const styles = StyleSheet.create({
   },
   personnelMiniBadgeBlueText: {
     color: "#4338ca",
-    fontSize: 10.5,
-    fontWeight: "900",
+    fontSize: vsType.size.caption, fontFamily: vsType.family,
+    fontWeight: "800",
   },
   personnelSkillPill: {
     paddingHorizontal: 7,
@@ -5545,7 +5547,7 @@ const styles = StyleSheet.create({
   },
   personnelSkillPillText: {
     color: "#475569",
-    fontSize: 10.5,
+    fontSize: vsType.size.caption, fontFamily: vsType.family,
     fontWeight: "800",
   },
   personnelSkillPillBlue: {
@@ -5556,7 +5558,7 @@ const styles = StyleSheet.create({
   },
   personnelSkillPillBlueText: {
     color: "#2563eb",
-    fontSize: 10.5,
+    fontSize: vsType.size.caption, fontFamily: vsType.family,
     fontWeight: "800",
   },
   personnelPrimaryAction: {
@@ -5571,8 +5573,8 @@ const styles = StyleSheet.create({
   },
   personnelPrimaryActionText: {
     color: "#ffffff",
-    fontSize: 10.5,
-    fontWeight: "900",
+    fontSize: vsType.size.caption, fontFamily: vsType.family,
+    fontWeight: "800",
   },
   personnelCleanEmptyRow: {
     marginTop: 9,
@@ -5583,13 +5585,13 @@ const styles = StyleSheet.create({
   },
   personnelCleanEmptyTitle: {
     color: "#334155",
-    fontSize: 10.5,
-    fontWeight: "900",
+    fontSize: vsType.size.caption, fontFamily: vsType.family,
+    fontWeight: "800",
   },
   personnelCleanEmptyText: {
     marginTop: 3,
     color: "#64748b",
-    fontSize: 10.5,
+    fontSize: vsType.size.caption, fontFamily: vsType.family,
     lineHeight: 13,
   },
   personnelCountBadge: {
@@ -5600,8 +5602,8 @@ const styles = StyleSheet.create({
   },
   personnelCountBadgeText: {
     color: "#4338ca",
-    fontSize: 10.5,
-    fontWeight: "900",
+    fontSize: vsType.size.caption, fontFamily: vsType.family,
+    fontWeight: "800",
   },
   personnelCountBadgePurple: {
     paddingHorizontal: 7,
@@ -5611,8 +5613,8 @@ const styles = StyleSheet.create({
   },
   personnelCountBadgePurpleText: {
     color: "#7e22ce",
-    fontSize: 10.5,
-    fontWeight: "900",
+    fontSize: vsType.size.caption, fontFamily: vsType.family,
+    fontWeight: "800",
   },
   personnelCountBadgeMuted: {
     minWidth: 24,
@@ -5624,8 +5626,8 @@ const styles = StyleSheet.create({
   },
   personnelCountBadgeMutedText: {
     color: "#64748b",
-    fontSize: 10.5,
-    fontWeight: "900",
+    fontSize: vsType.size.caption, fontFamily: vsType.family,
+    fontWeight: "800",
   },
   personnelRefreshCompact: {
     minHeight: 31,
@@ -5639,8 +5641,8 @@ const styles = StyleSheet.create({
   },
   personnelRefreshCompactText: {
     color: "#0f766e",
-    fontSize: 10.5,
-    fontWeight: "900",
+    fontSize: vsType.size.caption, fontFamily: vsType.family,
+    fontWeight: "800",
   },
   personnelNeedStrip: {
     marginTop: 9,
@@ -5653,15 +5655,15 @@ const styles = StyleSheet.create({
   },
   personnelNeedLabel: {
     color: "#94a3b8",
-    fontSize: 10.5,
-    fontWeight: "900",
+    fontSize: vsType.size.caption, fontFamily: vsType.family,
+    fontWeight: "800",
     letterSpacing: 0.55,
   },
   personnelNeedValue: {
     marginTop: 3,
     color: "#1e3a8a",
-    fontSize: 10.5,
-    fontWeight: "900",
+    fontSize: vsType.size.caption, fontFamily: vsType.family,
+    fontWeight: "800",
   },
   personnelCompactList: {
     marginTop: 12,
@@ -5694,14 +5696,14 @@ const styles = StyleSheet.create({
   },
   volunteerRosterName: {
     color: "#12372c",
-    fontSize: 14,
+    fontSize: vsType.size.body, fontFamily: vsType.family,
     fontWeight: "800",
     lineHeight: 20,
   },
   volunteerRosterMeta: {
     marginTop: 4,
     color: "#64748b",
-    fontSize: 12,
+    fontSize: vsType.size.meta, fontFamily: vsType.family,
     lineHeight: 17,
   },
   volunteerRosterAction: {
@@ -5716,7 +5718,7 @@ const styles = StyleSheet.create({
   },
   volunteerRosterActionText: {
     color: "#ffffff",
-    fontSize: 12,
+    fontSize: vsType.size.meta, fontFamily: vsType.family,
     fontWeight: "800",
     textAlign: "center",
   },
@@ -5727,7 +5729,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   volunteerRosterWarning: {
-    fontSize: 12,
+    fontSize: vsType.size.meta, fontFamily: vsType.family,
     lineHeight: 17,
     color: "#92400e",
   },
@@ -5760,7 +5762,7 @@ const styles = StyleSheet.create({
   },
   personnelAssignCompactText: {
     color: "#ffffff",
-    fontSize: 10.5,
+    fontSize: vsType.size.caption, fontFamily: vsType.family,
     fontWeight: "800",
   },
   personnelAssignCompactTextDisabled: {
@@ -5783,12 +5785,12 @@ const styles = StyleSheet.create({
   personnelBarangayValue: {
     marginTop: 2,
     color: "#0f172a",
-    fontSize: 10.5,
-    fontWeight: "900",
+    fontSize: vsType.size.caption, fontFamily: vsType.family,
+    fontWeight: "800",
   },
   personnelBarangayHint: {
     color: "#0f766e",
-    fontSize: 12,
+    fontSize: vsType.size.meta, fontFamily: vsType.family,
     lineHeight: 18,
     fontWeight: "600",
   },
@@ -5803,13 +5805,13 @@ const styles = StyleSheet.create({
   },
   personnelSupportNoticeTitle: {
     color: "#1d4ed8",
-    fontSize: 10.5,
-    fontWeight: "900",
+    fontSize: vsType.size.caption, fontFamily: vsType.family,
+    fontWeight: "800",
   },
   personnelSupportNoticeText: {
     marginTop: 2,
     color: "#475569",
-    fontSize: 10.5,
+    fontSize: vsType.size.caption, fontFamily: vsType.family,
     lineHeight: 12,
   },
   personnelVolunteerToolbar: {
@@ -5822,8 +5824,8 @@ const styles = StyleSheet.create({
   },
   personnelListHeading: {
     color: "#0f172a",
-    fontSize: 13,
-    fontWeight: "900",
+    fontSize: vsType.size.label, fontFamily: vsType.family,
+    fontWeight: "800",
   },
   personnelVolunteerFilters: {
     flexDirection: "row",
@@ -5840,7 +5842,7 @@ const styles = StyleSheet.create({
     paddingVertical: 5,
     color: "#0f172a",
     backgroundColor: "#ffffff",
-    fontSize: 10.5,
+    fontSize: vsType.size.caption, fontFamily: vsType.family,
   },
   personnelSupportDivider: {
     marginTop: 11,
@@ -5868,8 +5870,8 @@ const styles = StyleSheet.create({
   },
   personnelSupportEmptyIcon: {
     color: "#94a3b8",
-    fontSize: 22,
-    fontWeight: "900",
+    fontSize: vsType.size.titleSmall, fontFamily: vsType.family,
+    fontWeight: "800",
   },
   personnelActiveSupportRow: {
     width: "100%",
@@ -5893,8 +5895,8 @@ const styles = StyleSheet.create({
   },
   personnelAsideTitle: {
     color: "#0f172a",
-    fontSize: 13.5,
-    fontWeight: "900",
+    fontSize: vsType.size.body, fontFamily: vsType.family,
+    fontWeight: "800",
   },
   personnelAsideHeaderRow: {
     flexDirection: "row",
@@ -5904,8 +5906,8 @@ const styles = StyleSheet.create({
   },
   personnelAsideMiniStatus: {
     color: "#0f766e",
-    fontSize: 10,
-    fontWeight: "900",
+    fontSize: vsType.size.micro, fontFamily: vsType.family,
+    fontWeight: "800",
   },
   personnelAsideCaseTop: {
     marginTop: 10,
@@ -5921,26 +5923,26 @@ const styles = StyleSheet.create({
   personnelAsideLabel: {
     marginTop: 9,
     color: "#64748b",
-    fontSize: 10,
+    fontSize: vsType.size.micro, fontFamily: vsType.family,
     fontWeight: "800",
   },
   personnelAsideValue: {
     marginTop: 2,
     color: "#0f172a",
-    fontSize: 10,
+    fontSize: vsType.size.micro, fontFamily: vsType.family,
     lineHeight: 14,
     fontWeight: "700",
   },
   personnelAsideStrong: {
     marginTop: 2,
     color: "#0f172a",
-    fontSize: 10.8,
-    fontWeight: "900",
+    fontSize: vsType.size.caption, fontFamily: vsType.family,
+    fontWeight: "800",
   },
   personnelAsideMeta: {
     marginTop: 2,
     color: "#64748b",
-    fontSize: 10,
+    fontSize: vsType.size.micro, fontFamily: vsType.family,
   },
   personnelAsideThumb: {
     width: 96,
@@ -5957,7 +5959,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#edf2f7",
   },
   personnelAsideThumbFallbackText: {
-    fontSize: 24,
+    fontSize: vsType.size.title, fontFamily: vsType.family,
   },
   personnelAsideSeverityPill: {
     alignSelf: "flex-start",
@@ -5987,20 +5989,20 @@ const styles = StyleSheet.create({
   },
   personnelMiniMapPinText: {
     color: "#dc2626",
-    fontSize: 18,
-    fontWeight: "900",
+    fontSize: vsType.size.section, fontFamily: vsType.family,
+    fontWeight: "800",
   },
   personnelMiniMapLocation: {
     marginTop: 8,
     color: "#0f172a",
-    fontSize: 10,
+    fontSize: vsType.size.micro, fontFamily: vsType.family,
     lineHeight: 14,
-    fontWeight: "900",
+    fontWeight: "800",
   },
   personnelMiniMapSub: {
     marginTop: 3,
     color: "#64748b",
-    fontSize: 10,
+    fontSize: vsType.size.micro, fontFamily: vsType.family,
   },
   personnelAsideActionRow: {
     marginTop: 9,
@@ -6017,8 +6019,8 @@ const styles = StyleSheet.create({
   },
   personnelAsidePrimaryButtonText: {
     color: "#ffffff",
-    fontSize: 10,
-    fontWeight: "900",
+    fontSize: vsType.size.micro, fontFamily: vsType.family,
+    fontWeight: "800",
   },
   personnelAsideSecondaryButton: {
     minWidth: 100,
@@ -6033,8 +6035,8 @@ const styles = StyleSheet.create({
   },
   personnelAsideSecondaryButtonText: {
     color: "#2563eb",
-    fontSize: 10,
-    fontWeight: "900",
+    fontSize: vsType.size.micro, fontFamily: vsType.family,
+    fontWeight: "800",
   },
   personnelTimelineRow: {
     minHeight: 42,
@@ -6073,7 +6075,7 @@ const styles = StyleSheet.create({
   },
   personnelTimelineLabel: {
     color: "#64748b",
-    fontSize: 10,
+    fontSize: vsType.size.micro, fontFamily: vsType.family,
     fontWeight: "800",
   },
   personnelTimelineLabelDone: {
@@ -6082,7 +6084,7 @@ const styles = StyleSheet.create({
   personnelTimelineTime: {
     marginTop: 2,
     color: "#94a3b8",
-    fontSize: 10,
+    fontSize: vsType.size.micro, fontFamily: vsType.family,
   },
 
   personnelWorkspace: {
@@ -6113,14 +6115,14 @@ const styles = StyleSheet.create({
   },
   personnelOverviewLabel: {
     color: "#94a3b8",
-    fontSize: 10,
-    fontWeight: "900",
+    fontSize: vsType.size.micro, fontFamily: vsType.family,
+    fontWeight: "800",
     letterSpacing: 0.55,
   },
   personnelOverviewValue: {
     marginTop: 3,
     color: "#0f172a",
-    fontSize: 10,
+    fontSize: vsType.size.micro, fontFamily: vsType.family,
     fontWeight: "800",
   },
   personnelVolunteerButton: {
@@ -6136,8 +6138,8 @@ const styles = StyleSheet.create({
   },
   personnelVolunteerButtonText: {
     color: "#4338ca",
-    fontSize: 10,
-    fontWeight: "900",
+    fontSize: vsType.size.micro, fontFamily: vsType.family,
+    fontWeight: "800",
   },
   personnelPanel: {
     width: "100%",
@@ -6167,8 +6169,8 @@ const styles = StyleSheet.create({
   },
   lguRefreshButtonText: {
     color: "#0f766e",
-    fontSize: 10,
-    fontWeight: "900",
+    fontSize: vsType.size.micro, fontFamily: vsType.family,
+    fontWeight: "800",
   },
   lguPersonnelError: {
     marginTop: 10,
@@ -6180,7 +6182,7 @@ const styles = StyleSheet.create({
   },
   lguPersonnelErrorText: {
     color: "#b91c1c",
-    fontSize: 10,
+    fontSize: vsType.size.micro, fontFamily: vsType.family,
     lineHeight: 14,
     fontWeight: "700",
   },
@@ -6226,13 +6228,13 @@ const styles = StyleSheet.create({
   },
   lguTestBadgeText: {
     color: "#4338ca",
-    fontSize: 10,
-    fontWeight: "900",
+    fontSize: vsType.size.micro, fontFamily: vsType.family,
+    fontWeight: "800",
   },
   lguCapabilityText: {
     marginTop: 4,
     color: "#475569",
-    fontSize: 10,
+    fontSize: vsType.size.micro, fontFamily: vsType.family,
     lineHeight: 13,
   },
   lguFieldRow: {
@@ -6253,13 +6255,13 @@ const styles = StyleSheet.create({
   },
   lguFieldBadgeText: {
     color: "#1d4ed8",
-    fontSize: 10,
-    fontWeight: "900",
+    fontSize: vsType.size.micro, fontFamily: vsType.family,
+    fontWeight: "800",
     letterSpacing: 0.25,
   },
   lguEmployeeIdText: {
     color: "#64748b",
-    fontSize: 10,
+    fontSize: vsType.size.micro, fontFamily: vsType.family,
     fontWeight: "800",
   },
   lguProfileGrid: {
@@ -6280,14 +6282,14 @@ const styles = StyleSheet.create({
   },
   lguProfileLabel: {
     color: "#94a3b8",
-    fontSize: 10,
-    fontWeight: "900",
+    fontSize: vsType.size.micro, fontFamily: vsType.family,
+    fontWeight: "800",
     letterSpacing: 0.55,
   },
   lguProfileValue: {
     marginTop: 3,
     color: "#0f172a",
-    fontSize: 10,
+    fontSize: vsType.size.micro, fontFamily: vsType.family,
     fontWeight: "800",
     lineHeight: 13,
   },
@@ -6310,13 +6312,13 @@ const styles = StyleSheet.create({
   },
   lguSkillChipText: {
     color: "#0f766e",
-    fontSize: 10,
+    fontSize: vsType.size.micro, fontFamily: vsType.family,
     fontWeight: "800",
   },
   lguNoSkillsText: {
     marginTop: 5,
     color: "#94a3b8",
-    fontSize: 10,
+    fontSize: vsType.size.micro, fontFamily: vsType.family,
     fontWeight: "700",
   },
   lguActionButton: {
@@ -6341,8 +6343,8 @@ const styles = StyleSheet.create({
     backgroundColor: "#f8fafc",
   },
   lguActionButtonText: {
-    fontSize: 10,
-    fontWeight: "900",
+    fontSize: vsType.size.micro, fontFamily: vsType.family,
+    fontWeight: "800",
   },
   lguActionButtonTextReady: {
     color: "#ffffff",
@@ -6375,8 +6377,8 @@ const styles = StyleSheet.create({
   },
   lguStatusChipText: {
     color: "#334155",
-    fontSize: 10,
-    fontWeight: "900",
+    fontSize: vsType.size.micro, fontFamily: vsType.family,
+    fontWeight: "800",
   },
   personnelPanelHeader: {
     flexDirection: "row",
@@ -6387,13 +6389,13 @@ const styles = StyleSheet.create({
   personnelPanelTitle: {
     marginTop: 2,
     color: "#0f172a",
-    fontSize: 14,
-    fontWeight: "900",
+    fontSize: vsType.size.body, fontFamily: vsType.family,
+    fontWeight: "800",
   },
   personnelPanelSubtitle: {
     marginTop: 4,
     color: "#64748b",
-    fontSize: 10,
+    fontSize: vsType.size.micro, fontFamily: vsType.family,
     lineHeight: 15,
   },
   personnelStatusPill: {
@@ -6404,8 +6406,8 @@ const styles = StyleSheet.create({
   },
   personnelStatusText: {
     color: "#047857",
-    fontSize: 10,
-    fontWeight: "900",
+    fontSize: vsType.size.micro, fontFamily: vsType.family,
+    fontWeight: "800",
   },
   personnelMemberRow: {
     marginTop: 12,
@@ -6426,18 +6428,18 @@ const styles = StyleSheet.create({
   },
   personnelAvatarText: {
     color: "#1d4ed8",
-    fontSize: 12,
-    fontWeight: "900",
+    fontSize: vsType.size.meta, fontFamily: vsType.family,
+    fontWeight: "800",
   },
   personnelName: {
     color: "#0f172a",
-    fontSize: 11.5,
-    fontWeight: "900",
+    fontSize: vsType.size.meta, fontFamily: vsType.family,
+    fontWeight: "800",
   },
   personnelMeta: {
     marginTop: 2,
     color: "#64748b",
-    fontSize: 10,
+    fontSize: vsType.size.micro, fontFamily: vsType.family,
   },
   personnelActiveBadge: {
     paddingHorizontal: 8,
@@ -6447,7 +6449,7 @@ const styles = StyleSheet.create({
   },
   personnelActiveBadgeText: {
     color: "#0f766e",
-    fontSize: 10,
+    fontSize: vsType.size.micro, fontFamily: vsType.family,
     fontWeight: "800",
   },
   personnelEmpty: {
@@ -6458,13 +6460,13 @@ const styles = StyleSheet.create({
   },
   personnelEmptyTitle: {
     color: "#0f172a",
-    fontSize: 11,
-    fontWeight: "900",
+    fontSize: vsType.size.caption, fontFamily: vsType.family,
+    fontWeight: "800",
   },
   personnelEmptyText: {
     marginTop: 4,
     color: "#64748b",
-    fontSize: 10,
+    fontSize: vsType.size.micro, fontFamily: vsType.family,
     lineHeight: 15,
   },
   attendanceEmpty: {
@@ -6478,13 +6480,13 @@ const styles = StyleSheet.create({
   },
   attendanceEmptyTitle: {
     color: "#334155",
-    fontSize: 10.5,
-    fontWeight: "900",
+    fontSize: vsType.size.caption, fontFamily: vsType.family,
+    fontWeight: "800",
   },
   attendanceEmptyText: {
     marginTop: 4,
     color: "#64748b",
-    fontSize: 10,
+    fontSize: vsType.size.micro, fontFamily: vsType.family,
     lineHeight: 15,
   },
   lguCaseNeedBox: {
@@ -6497,21 +6499,21 @@ const styles = StyleSheet.create({
   },
   lguCaseNeedLabel: {
     color: "#2563eb",
-    fontSize: 10,
-    fontWeight: "900",
+    fontSize: vsType.size.micro, fontFamily: vsType.family,
+    fontWeight: "800",
     letterSpacing: 0.6,
   },
   lguCaseNeedValue: {
     marginTop: 4,
     color: "#1e3a8a",
-    fontSize: 10.5,
-    fontWeight: "900",
+    fontSize: vsType.size.caption, fontFamily: vsType.family,
+    fontWeight: "800",
     lineHeight: 15,
   },
   lguCaseNeedHint: {
     marginTop: 4,
     color: "#64748b",
-    fontSize: 10,
+    fontSize: vsType.size.micro, fontFamily: vsType.family,
     lineHeight: 13,
   },
   assignedResponderCard: {
@@ -6556,13 +6558,13 @@ const styles = StyleSheet.create({
   },
   historyTitle: {
     color: "#0f172a",
-    fontSize: 11,
+    fontSize: vsType.size.caption, fontFamily: vsType.family,
     fontWeight: "800",
   },
   historyTime: {
     marginTop: 2,
     color: "#64748b",
-    fontSize: 10,
+    fontSize: vsType.size.micro, fontFamily: vsType.family,
   },
   historyAssignments: {
     marginTop: 12,
@@ -6579,12 +6581,12 @@ const styles = StyleSheet.create({
   },
   historyAssignmentName: {
     color: "#334155",
-    fontSize: 10.5,
+    fontSize: vsType.size.caption, fontFamily: vsType.family,
     fontWeight: "800",
   },
   historyAssignmentStatus: {
     color: "#64748b",
-    fontSize: 10,
+    fontSize: vsType.size.micro, fontFamily: vsType.family,
     fontWeight: "700",
   },
 
@@ -6600,7 +6602,7 @@ const styles = StyleSheet.create({
     alignItems: "stretch",
   },
   caseListPane: {
-    width: 380,
+    width: 340,
     flexShrink: 0,
     backgroundColor: "#ffffff",
     borderWidth: 1,
@@ -6609,36 +6611,37 @@ const styles = StyleSheet.create({
     overflow: "hidden",
   },
   caseListPaneAssignments: {
-    width: 305,
+    width: 290,
   },
   caseListPaneCompact: {
     width: "100%",
     flexShrink: 1,
   },
   caseListHeader: {
-    minHeight: 58,
+    minHeight: 64,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
     gap: 10,
     paddingHorizontal: 14,
+    backgroundColor: "#EEF8F1",
     borderBottomWidth: 1,
-    borderBottomColor: "#edf1f5",
+    borderBottomColor: "#D4E8DC",
   },
   caseListTitle: {
-    color: "#0f172a",
-    fontSize: 17,
-    fontWeight: "900",
+    color: "#153E30",
+    fontSize: vsType.size.card, fontFamily: vsType.family,
+    fontWeight: "800",
   },
   caseListCount: {
     marginTop: 2,
-    color: "#2563eb",
-    fontSize: 10,
+    color: "#17765A",
+    fontSize: vsType.size.caption, fontFamily: vsType.family,
     fontWeight: "800",
   },
   caseListSort: {
     color: "#64748b",
-    fontSize: 10,
+    fontSize: vsType.size.micro, fontFamily: vsType.family,
     fontWeight: "700",
   },
   caseListItems: {
@@ -6657,8 +6660,8 @@ const styles = StyleSheet.create({
     borderRadius: 10,
   },
   caseListItemActive: {
-    backgroundColor: "#effcf9",
-    borderColor: "#37b8aa",
+    backgroundColor: "#E8F6EE",
+    borderColor: "#198566",
   },
   caseListThumb: {
     width: 60,
@@ -6678,7 +6681,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   caseListThumbFallbackIcon: {
-    fontSize: 24,
+    fontSize: vsType.size.title, fontFamily: vsType.family,
   },
   caseListBody: {
     flex: 1,
@@ -6693,9 +6696,9 @@ const styles = StyleSheet.create({
   caseListItemTitle: {
     flex: 1,
     minWidth: 0,
-    color: "#0f172a",
-    fontSize: 12.5,
-    fontWeight: "900",
+    color: "#173D32",
+    fontSize: vsType.size.label, fontFamily: vsType.family,
+    fontWeight: "800",
   },
   caseListSeverity: {
     paddingHorizontal: 7,
@@ -6704,13 +6707,13 @@ const styles = StyleSheet.create({
   },
   caseListSeverityText: {
     color: "#ffffff",
-    fontSize: 10,
-    fontWeight: "900",
+    fontSize: vsType.size.micro, fontFamily: vsType.family,
+    fontWeight: "800",
   },
   caseListLocation: {
     marginTop: 5,
     color: "#64748b",
-    fontSize: 10,
+    fontSize: vsType.size.micro, fontFamily: vsType.family,
     fontWeight: "600",
   },
   caseListMetaRow: {
@@ -6721,7 +6724,7 @@ const styles = StyleSheet.create({
   },
   caseListMeta: {
     color: "#475569",
-    fontSize: 10,
+    fontSize: vsType.size.micro, fontFamily: vsType.family,
     fontWeight: "700",
   },
   caseListRight: {
@@ -6733,13 +6736,13 @@ const styles = StyleSheet.create({
   },
   caseListDate: {
     color: "#64748b",
-    fontSize: 10,
+    fontSize: vsType.size.micro, fontFamily: vsType.family,
     textAlign: "right",
     fontWeight: "700",
   },
   caseListChevron: {
     color: "#475569",
-    fontSize: 22,
+    fontSize: vsType.size.titleSmall, fontFamily: vsType.family,
     fontWeight: "400",
   },
   caseDetailPane: {
@@ -6748,9 +6751,9 @@ const styles = StyleSheet.create({
   },
 
   caseCard: {
-    backgroundColor: "#ffffff",
+    backgroundColor: "#FFFFFF",
     borderWidth: 1,
-    borderColor: "#dfe7ee",
+    borderColor: "#D6E5DC",
     borderRadius: 14,
     marginBottom: 0,
     overflow: "hidden",
@@ -6775,8 +6778,8 @@ const styles = StyleSheet.create({
   mediaBoxCompact: {
     width: "auto",
     alignSelf: "stretch",
-    height: 160,
-    minHeight: 160,
+    height: 136,
+    minHeight: 136,
     marginLeft: 12,
     marginRight: 12,
     marginBottom: 0,
@@ -6793,18 +6796,18 @@ const styles = StyleSheet.create({
     padding: 10,
   },
   imageFallbackIcon: {
-    fontSize: 38,
+    fontSize: vsType.size.xl, fontFamily: vsType.family,
   },
   imageFallbackText: {
     marginTop: 9,
     color: "#334155",
-    fontWeight: "900",
+    fontWeight: "800",
     textAlign: "center",
   },
   imageFallbackSubtext: {
     marginTop: 3,
     color: "#94a3b8",
-    fontSize: 10,
+    fontSize: vsType.size.micro, fontFamily: vsType.family,
     fontWeight: "700",
   },
 
@@ -6821,14 +6824,14 @@ const styles = StyleSheet.create({
   },
   caseTitle: {
     color: "#0f172a",
-    fontSize: 18.5,
+    fontSize: vsType.size.section, fontFamily: vsType.family,
     lineHeight: 24,
-    fontWeight: "900",
+    fontWeight: "800",
   },
   caseId: {
     color: "#94a3b8",
-    fontSize: 10,
-    fontWeight: "900",
+    fontSize: vsType.size.micro, fontFamily: vsType.family,
+    fontWeight: "800",
     maxWidth: 180,
   },
   badgeRow: {
@@ -6844,8 +6847,8 @@ const styles = StyleSheet.create({
   },
   badgeText: {
     color: "#ffffff",
-    fontSize: 10,
-    fontWeight: "900",
+    fontSize: vsType.size.micro, fontFamily: vsType.family,
+    fontWeight: "800",
   },
 
   severityCritical: { backgroundColor: "#c92a2a" },
@@ -6875,14 +6878,14 @@ const styles = StyleSheet.create({
   locationText: {
     marginTop: 8,
     color: "#0f766e",
-    fontSize: 11.5,
+    fontSize: vsType.size.meta, fontFamily: vsType.family,
     fontWeight: "800",
   },
   details: {
     marginTop: 6,
     color: "#64748b",
     lineHeight: 18,
-    fontSize: 12.5,
+    fontSize: vsType.size.label, fontFamily: vsType.family,
   },
   needsBox: {
     marginTop: 12,
@@ -6892,14 +6895,14 @@ const styles = StyleSheet.create({
   },
   needsLabel: {
     color: "#94a3b8",
-    fontSize: 10,
-    fontWeight: "900",
+    fontSize: vsType.size.micro, fontFamily: vsType.family,
+    fontWeight: "800",
     letterSpacing: 0.9,
   },
   needsText: {
     marginTop: 4,
     color: "#334155",
-    fontSize: 14,
+    fontSize: vsType.size.body, fontFamily: vsType.family,
     fontWeight: "600",
   },
 
@@ -6919,14 +6922,14 @@ const styles = StyleSheet.create({
   },
   metaLabel: {
     color: "#94a3b8",
-    fontSize: 10,
-    fontWeight: "900",
+    fontSize: vsType.size.micro, fontFamily: vsType.family,
+    fontWeight: "800",
     textTransform: "uppercase",
   },
   metaValue: {
     marginTop: 3,
     color: "#334155",
-    fontSize: 10.5,
+    fontSize: vsType.size.caption, fontFamily: vsType.family,
     fontWeight: "800",
   },
 
@@ -6968,19 +6971,19 @@ const styles = StyleSheet.create({
   locationActionTitle: {
     marginTop: 3,
     color: "#0f172a",
-    fontSize: 15,
-    fontWeight: "900",
+    fontSize: vsType.size.bodyStrong, fontFamily: vsType.family,
+    fontWeight: "800",
   },
   locationActionAddress: {
     marginTop: 5,
     color: "#334155",
-    fontSize: 12,
+    fontSize: vsType.size.meta, fontFamily: vsType.family,
     fontWeight: "700",
   },
   locationActionCoords: {
     marginTop: 3,
     color: "#64748b",
-    fontSize: 10,
+    fontSize: vsType.size.micro, fontFamily: vsType.family,
     fontWeight: "600",
   },
   locationActionButtons: {
@@ -6997,8 +7000,8 @@ const styles = StyleSheet.create({
   },
   locationLiveButtonText: {
     color: "#ffffff",
-    fontSize: 11.5,
-    fontWeight: "900",
+    fontSize: vsType.size.meta, fontFamily: vsType.family,
+    fontWeight: "800",
   },
   locationGoogleButton: {
     minHeight: 36,
@@ -7011,7 +7014,7 @@ const styles = StyleSheet.create({
   },
   locationGoogleButtonText: {
     color: "#1d4ed8",
-    fontSize: 11.5,
+    fontSize: vsType.size.meta, fontFamily: vsType.family,
     fontWeight: "800",
   },
 
@@ -7044,13 +7047,13 @@ const styles = StyleSheet.create({
   reviewInfoValue: {
     marginTop: 3,
     color: "#0f172a",
-    fontSize: 11.5,
-    fontWeight: "900",
+    fontSize: vsType.size.meta, fontFamily: vsType.family,
+    fontWeight: "800",
   },
   reviewInfoSub: {
     marginTop: 2,
     color: "#64748b",
-    fontSize: 10,
+    fontSize: vsType.size.micro, fontFamily: vsType.family,
     lineHeight: 14,
   },
   severityReviewCard: {
@@ -7065,7 +7068,7 @@ const styles = StyleSheet.create({
   severityReviewText: {
     marginTop: 4,
     color: "#64748b",
-    fontSize: 10,
+    fontSize: vsType.size.micro, fontFamily: vsType.family,
     lineHeight: 14,
   },
   severityChoiceRow: {
@@ -7084,8 +7087,8 @@ const styles = StyleSheet.create({
   },
   severityChoiceText: {
     color: "#475569",
-    fontSize: 10,
-    fontWeight: "900",
+    fontSize: vsType.size.micro, fontFamily: vsType.family,
+    fontWeight: "800",
   },
   severityChoiceTextActive: {
     color: "#ffffff",
@@ -7100,13 +7103,13 @@ const styles = StyleSheet.create({
   },
   criticalResponseTitle: {
     color: "#b42318",
-    fontSize: 12.5,
+    fontSize: vsType.size.label, fontFamily: vsType.family,
     fontWeight: "800",
   },
   criticalResponseText: {
     marginTop: 4,
     color: "#9f2f25",
-    fontSize: 10,
+    fontSize: vsType.size.micro, fontFamily: vsType.family,
     lineHeight: 14,
   },
 
@@ -7129,12 +7132,12 @@ const styles = StyleSheet.create({
   },
   checkIcon: {
     color: "#078f82",
-    fontSize: 10,
-    fontWeight: "900",
+    fontSize: vsType.size.micro, fontFamily: vsType.family,
+    fontWeight: "800",
   },
   checkText: {
     color: "#49646f",
-    fontSize: 10,
+    fontSize: vsType.size.micro, fontFamily: vsType.family,
     fontWeight: "800",
   },
   evidenceGrid: {
@@ -7160,7 +7163,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 9,
     paddingTop: 7,
     color: "#334155",
-    fontSize: 10,
+    fontSize: vsType.size.micro, fontFamily: vsType.family,
     fontWeight: "800",
   },
   evidenceOpen: {
@@ -7168,7 +7171,7 @@ const styles = StyleSheet.create({
     paddingTop: 2,
     paddingBottom: 8,
     color: "#078f82",
-    fontSize: 10,
+    fontSize: vsType.size.micro, fontFamily: vsType.family,
     fontWeight: "800",
   },
   videoList: {
@@ -7184,13 +7187,13 @@ const styles = StyleSheet.create({
   },
   videoButtonTitle: {
     color: "#27365f",
-    fontSize: 12.5,
+    fontSize: vsType.size.label, fontFamily: vsType.family,
     fontWeight: "800",
   },
   videoButtonSub: {
     marginTop: 2,
     color: "#6b7699",
-    fontSize: 10,
+    fontSize: vsType.size.micro, fontFamily: vsType.family,
   },
   reviewReasonInput: {
     minHeight: 72,
@@ -7219,7 +7222,7 @@ const styles = StyleSheet.create({
   },
   moreEvidenceText: {
     color: "#9a6700",
-    fontSize: 12.5,
+    fontSize: vsType.size.label, fontFamily: vsType.family,
     fontWeight: "800",
   },
   rejectButton: {
@@ -7232,7 +7235,7 @@ const styles = StyleSheet.create({
   },
   rejectButtonText: {
     color: "#b42318",
-    fontSize: 12.5,
+    fontSize: vsType.size.label, fontFamily: vsType.family,
     fontWeight: "800",
   },
   reviewNotice: {
@@ -7253,13 +7256,13 @@ const styles = StyleSheet.create({
   },
   rejectNoticeTitle: {
     color: "#b42318",
-    fontSize: 12.5,
+    fontSize: vsType.size.label, fontFamily: vsType.family,
     fontWeight: "800",
   },
   rejectNoticeText: {
     marginTop: 3,
     color: "#b42318",
-    fontSize: 10,
+    fontSize: vsType.size.micro, fontFamily: vsType.family,
     lineHeight: 14,
   },
   dispatchLocked: {
@@ -7270,20 +7273,20 @@ const styles = StyleSheet.create({
   },
   dispatchLockedTitle: {
     color: "#475569",
-    fontSize: 11,
-    fontWeight: "900",
+    fontSize: vsType.size.caption, fontFamily: vsType.family,
+    fontWeight: "800",
   },
   dispatchLockedText: {
     marginTop: 3,
     color: "#64748b",
-    fontSize: 10,
+    fontSize: vsType.size.micro, fontFamily: vsType.family,
     lineHeight: 14,
   },
   matchText: {
     marginTop: 4,
     color: "#078f82",
-    fontSize: 10,
-    fontWeight: "900",
+    fontSize: vsType.size.micro, fontFamily: vsType.family,
+    fontWeight: "800",
   },
 
   adminSection: {
@@ -7301,19 +7304,19 @@ const styles = StyleSheet.create({
   },
   sectionEyebrow: {
     color: "#94a3b8",
-    fontSize: 10,
+    fontSize: vsType.size.micro, fontFamily: vsType.family,
     fontWeight: "800",
     letterSpacing: 1.1,
   },
   sectionTitle: {
     marginTop: 2,
     color: "#0f172a",
-    fontSize: 18,
+    fontSize: vsType.size.section, fontFamily: vsType.family,
     fontWeight: "800",
   },
   slotText: {
     color: "#64748b",
-    fontSize: 10,
+    fontSize: vsType.size.micro, fontFamily: vsType.family,
     fontWeight: "800",
   },
 
@@ -7334,8 +7337,8 @@ const styles = StyleSheet.create({
   },
   controlLabel: {
     color: "#475569",
-    fontSize: 10,
-    fontWeight: "900",
+    fontSize: vsType.size.micro, fontFamily: vsType.family,
+    fontWeight: "800",
     marginBottom: 6,
   },
   inlineControl: {
@@ -7351,7 +7354,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 11,
     paddingVertical: 10,
     color: "#0f172a",
-    fontSize: 14,
+    fontSize: vsType.size.body, fontFamily: vsType.family,
     fontWeight: "600",
   },
   numberInput: {
@@ -7377,7 +7380,7 @@ const styles = StyleSheet.create({
   },
   primaryButtonText: {
     color: "#ffffff",
-    fontSize: 11.5,
+    fontSize: vsType.size.meta, fontFamily: vsType.family,
     fontWeight: "800",
   },
   secondaryButton: {
@@ -7392,7 +7395,7 @@ const styles = StyleSheet.create({
   },
   secondaryButtonText: {
     color: "#078f82",
-    fontSize: 12.5,
+    fontSize: vsType.size.label, fontFamily: vsType.family,
     fontWeight: "800",
   },
   assignButton: {
@@ -7405,7 +7408,7 @@ const styles = StyleSheet.create({
   },
   assignButtonText: {
     color: "#078f82",
-    fontSize: 12.5,
+    fontSize: vsType.size.label, fontFamily: vsType.family,
     fontWeight: "800",
   },
   progressButton: {
@@ -7428,8 +7431,8 @@ const styles = StyleSheet.create({
   },
   completedText: {
     color: "#15803d",
-    fontSize: 11,
-    fontWeight: "900",
+    fontSize: vsType.size.caption, fontFamily: vsType.family,
+    fontWeight: "800",
     paddingVertical: 8,
   },
 
@@ -7444,14 +7447,14 @@ const styles = StyleSheet.create({
   responseControlTitle: {
     marginTop: 4,
     color: "#0f172a",
-    fontSize: 22,
+    fontSize: vsType.size.titleSmall, fontFamily: vsType.family,
     fontWeight: "800",
   },
   responseControlSubtitle: {
     marginTop: 7,
     maxWidth: 760,
     color: "#64748b",
-    fontSize: 14,
+    fontSize: vsType.size.body, fontFamily: vsType.family,
     lineHeight: 21,
   },
   responseStatusPill: {
@@ -7467,11 +7470,11 @@ const styles = StyleSheet.create({
   },
   responseStatusDot: {
     color: "#078f82",
-    fontSize: 11,
+    fontSize: vsType.size.caption, fontFamily: vsType.family,
   },
   responseStatusText: {
     color: "#0f766e",
-    fontSize: 10,
+    fontSize: vsType.size.micro, fontFamily: vsType.family,
     fontWeight: "800",
     letterSpacing: 0.5,
   },
@@ -7495,18 +7498,18 @@ const styles = StyleSheet.create({
   },
   mapPrimaryButtonIcon: {
     color: "#ffffff",
-    fontSize: 24,
+    fontSize: vsType.size.title, fontFamily: vsType.family,
     fontWeight: "800",
   },
   mapPrimaryButtonTitle: {
     color: "#ffffff",
-    fontSize: 15,
+    fontSize: vsType.size.bodyStrong, fontFamily: vsType.family,
     fontWeight: "800",
   },
   mapPrimaryButtonSub: {
     marginTop: 3,
     color: "#ccfbf1",
-    fontSize: 11.5,
+    fontSize: vsType.size.meta, fontFamily: vsType.family,
     lineHeight: 16,
   },
   supportButton: {
@@ -7528,13 +7531,13 @@ const styles = StyleSheet.create({
   },
   supportButtonTitle: {
     color: "#0f172a",
-    fontSize: 14,
+    fontSize: vsType.size.body, fontFamily: vsType.family,
     fontWeight: "800",
   },
   supportButtonSub: {
     marginTop: 4,
     color: "#64748b",
-    fontSize: 11.5,
+    fontSize: vsType.size.meta, fontFamily: vsType.family,
   },
   lguOfficialReportSection: {
     marginTop: 14,
@@ -7552,21 +7555,21 @@ const styles = StyleSheet.create({
   },
   lguOfficialReportEyebrow: {
     color: "#0F766E",
-    fontSize: 10,
-    fontWeight: "900",
+    fontSize: vsType.size.micro, fontFamily: vsType.family,
+    fontWeight: "800",
     letterSpacing: 0.7,
   },
   lguOfficialReportTitle: {
     marginTop: 3,
     color: "#0F172A",
-    fontSize: 17,
-    fontWeight: "900",
+    fontSize: vsType.size.card, fontFamily: vsType.family,
+    fontWeight: "800",
   },
   lguOfficialReportSubtitle: {
     maxWidth: 720,
     marginTop: 4,
     color: "#64748B",
-    fontSize: 10.5,
+    fontSize: vsType.size.caption, fontFamily: vsType.family,
     lineHeight: 16,
   },
   lguReportRefreshButton: {
@@ -7580,8 +7583,8 @@ const styles = StyleSheet.create({
   },
   lguReportRefreshText: {
     color: "#0F766E",
-    fontSize: 10,
-    fontWeight: "900",
+    fontSize: vsType.size.micro, fontFamily: vsType.family,
+    fontWeight: "800",
   },
   lguReportErrorBox: {
     marginTop: 12,
@@ -7593,13 +7596,13 @@ const styles = StyleSheet.create({
   },
   lguReportErrorTitle: {
     color: "#B42318",
-    fontSize: 11,
-    fontWeight: "900",
+    fontSize: vsType.size.caption, fontFamily: vsType.family,
+    fontWeight: "800",
   },
   lguReportErrorText: {
     marginTop: 3,
     color: "#B42318",
-    fontSize: 10,
+    fontSize: vsType.size.micro, fontFamily: vsType.family,
     lineHeight: 15,
   },
   lguReportWaitingBox: {
@@ -7612,13 +7615,13 @@ const styles = StyleSheet.create({
   },
   lguReportWaitingTitle: {
     color: "#B54708",
-    fontSize: 11,
-    fontWeight: "900",
+    fontSize: vsType.size.caption, fontFamily: vsType.family,
+    fontWeight: "800",
   },
   lguReportWaitingText: {
     marginTop: 3,
     color: "#7A2E0E",
-    fontSize: 10,
+    fontSize: vsType.size.micro, fontFamily: vsType.family,
     lineHeight: 15,
   },
   lguOfficialReportCard: {
@@ -7636,19 +7639,19 @@ const styles = StyleSheet.create({
   },
   lguOfficialResponderName: {
     color: "#0F172A",
-    fontSize: 13.5,
-    fontWeight: "900",
+    fontSize: vsType.size.body, fontFamily: vsType.family,
+    fontWeight: "800",
   },
   lguOfficialResponderMeta: {
     marginTop: 2,
     color: "#475569",
-    fontSize: 10.5,
+    fontSize: vsType.size.caption, fontFamily: vsType.family,
     fontWeight: "800",
   },
   lguOfficialReportMeta: {
     marginTop: 3,
     color: "#94A3B8",
-    fontSize: 10,
+    fontSize: vsType.size.micro, fontFamily: vsType.family,
     lineHeight: 13,
   },
   lguOfficialReviewBadge: {
@@ -7667,8 +7670,8 @@ const styles = StyleSheet.create({
   },
   lguOfficialReviewBadgeText: {
     color: "#B54708",
-    fontSize: 10,
-    fontWeight: "900",
+    fontSize: vsType.size.micro, fontFamily: vsType.family,
+    fontWeight: "800",
   },
   lguOfficialReviewBadgeTextDone: {
     color: "#067647",
@@ -7690,15 +7693,15 @@ const styles = StyleSheet.create({
   lguOfficialReportValue: {
     marginTop: 4,
     color: "#334155",
-    fontSize: 10.5,
+    fontSize: vsType.size.caption, fontFamily: vsType.family,
     lineHeight: 16,
     fontWeight: "700",
   },
   lguOfficialReportValueStrong: {
     marginTop: 4,
     color: "#0F172A",
-    fontSize: 12,
-    fontWeight: "900",
+    fontSize: vsType.size.meta, fontFamily: vsType.family,
+    fontWeight: "800",
   },
   lguFollowUpWarning: {
     marginTop: 10,
@@ -7710,13 +7713,13 @@ const styles = StyleSheet.create({
   },
   lguFollowUpWarningTitle: {
     color: "#B54708",
-    fontSize: 11,
-    fontWeight: "900",
+    fontSize: vsType.size.caption, fontFamily: vsType.family,
+    fontWeight: "800",
   },
   lguFollowUpWarningText: {
     marginTop: 3,
     color: "#7A2E0E",
-    fontSize: 10,
+    fontSize: vsType.size.micro, fontFamily: vsType.family,
     lineHeight: 15,
   },
   lguOfficialNeedsBox: {
@@ -7730,7 +7733,7 @@ const styles = StyleSheet.create({
   lguOfficialNeedsText: {
     marginTop: 4,
     color: "#334155",
-    fontSize: 10.5,
+    fontSize: vsType.size.caption, fontFamily: vsType.family,
     lineHeight: 16,
     fontWeight: "700",
   },
@@ -7745,7 +7748,7 @@ const styles = StyleSheet.create({
   lguOfficialNotesText: {
     marginTop: 4,
     color: "#475569",
-    fontSize: 10.5,
+    fontSize: vsType.size.caption, fontFamily: vsType.family,
     lineHeight: 16,
   },
   lguOfficialReviewArea: {
@@ -7776,7 +7779,7 @@ const styles = StyleSheet.create({
     flex: 1,
     minWidth: 220,
     color: "#64748B",
-    fontSize: 10,
+    fontSize: vsType.size.micro, fontFamily: vsType.family,
     lineHeight: 14,
   },
   lguReviewedSummary: {
@@ -7789,13 +7792,13 @@ const styles = StyleSheet.create({
   },
   lguReviewedSummaryTitle: {
     color: "#067647",
-    fontSize: 11,
-    fontWeight: "900",
+    fontSize: vsType.size.caption, fontFamily: vsType.family,
+    fontWeight: "800",
   },
   lguReviewedSummaryText: {
     marginTop: 3,
     color: "#24704E",
-    fontSize: 10,
+    fontSize: vsType.size.micro, fontFamily: vsType.family,
     lineHeight: 15,
   },
   responseLifecycleRow: {
@@ -7817,7 +7820,7 @@ const styles = StyleSheet.create({
   coordinationLabel: {
     marginBottom: 7,
     color: "#475569",
-    fontSize: 11.5,
+    fontSize: vsType.size.meta, fontFamily: vsType.family,
     fontWeight: "700",
   },
   coordinationInput: {
@@ -7829,7 +7832,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 10,
     color: "#0f172a",
-    fontSize: 12.5,
+    fontSize: vsType.size.label, fontFamily: vsType.family,
     lineHeight: 18,
     textAlignVertical: "top",
   },
@@ -7844,7 +7847,7 @@ const styles = StyleSheet.create({
   },
   saveNoteButtonText: {
     color: "#0f766e",
-    fontSize: 12,
+    fontSize: vsType.size.meta, fontFamily: vsType.family,
     fontWeight: "800",
   },
   closedState: {
@@ -7856,7 +7859,7 @@ const styles = StyleSheet.create({
   },
   closedStateText: {
     color: "#15803d",
-    fontSize: 12,
+    fontSize: vsType.size.meta, fontFamily: vsType.family,
     fontWeight: "800",
   },
   supportPanelHeader: {
@@ -7869,14 +7872,14 @@ const styles = StyleSheet.create({
   supportPanelTitle: {
     marginTop: 3,
     color: "#0f172a",
-    fontSize: 15,
-    fontWeight: "900",
+    fontSize: vsType.size.bodyStrong, fontFamily: vsType.family,
+    fontWeight: "800",
   },
   supportPanelSubtitle: {
     marginTop: 4,
     maxWidth: 760,
     color: "#64748b",
-    fontSize: 10,
+    fontSize: vsType.size.micro, fontFamily: vsType.family,
     lineHeight: 15,
   },
   eligibleCountBox: {
@@ -7891,13 +7894,13 @@ const styles = StyleSheet.create({
   },
   eligibleCountNumber: {
     color: "#15803d",
-    fontSize: 20,
+    fontSize: vsType.size.subheading, fontFamily: vsType.family,
     fontWeight: "800",
   },
   eligibleCountLabel: {
     marginTop: 1,
     color: "#166534",
-    fontSize: 10,
+    fontSize: vsType.size.micro, fontFamily: vsType.family,
     fontWeight: "800",
     letterSpacing: 0.8,
   },
@@ -7915,26 +7918,26 @@ const styles = StyleSheet.create({
   },
   supportRequirementLabel: {
     color: "#94a3b8",
-    fontSize: 10,
+    fontSize: vsType.size.micro, fontFamily: vsType.family,
     fontWeight: "800",
     letterSpacing: 0.8,
   },
   supportRequirementValue: {
     marginTop: 4,
     color: "#0f172a",
-    fontSize: 13.5,
+    fontSize: vsType.size.body, fontFamily: vsType.family,
     fontWeight: "700",
   },
   supportBarangayHint: {
     marginTop: 4,
     color: "#0f766e",
-    fontSize: 10,
+    fontSize: vsType.size.micro, fontFamily: vsType.family,
     lineHeight: 14,
     fontWeight: "700",
   },
   supportRequirementSeverity: {
     color: "#475569",
-    fontSize: 10,
+    fontSize: vsType.size.micro, fontFamily: vsType.family,
     fontWeight: "800",
   },
   infoBox: {
@@ -7947,13 +7950,13 @@ const styles = StyleSheet.create({
   },
   infoBoxTitle: {
     color: "#1d4ed8",
-    fontSize: 12,
+    fontSize: vsType.size.meta, fontFamily: vsType.family,
     fontWeight: "800",
   },
   infoBoxText: {
     marginTop: 3,
     color: "#475569",
-    fontSize: 11,
+    fontSize: vsType.size.caption, fontFamily: vsType.family,
     lineHeight: 16,
   },
   volunteerCandidateCard: {
@@ -7993,7 +7996,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#f1f5f9",
   },
   eligibilityBadgeText: {
-    fontSize: 10,
+    fontSize: vsType.size.micro, fontFamily: vsType.family,
     fontWeight: "800",
     letterSpacing: 0.4,
   },
@@ -8006,7 +8009,7 @@ const styles = StyleSheet.create({
   eligibilityReason: {
     marginTop: 7,
     color: "#64748b",
-    fontSize: 10.5,
+    fontSize: vsType.size.caption, fontFamily: vsType.family,
     fontWeight: "700",
   },
   eligibilityReasonGood: {
@@ -8032,7 +8035,7 @@ const styles = StyleSheet.create({
   },
   volunteerCount: {
     color: "#64748b",
-    fontSize: 10,
+    fontSize: vsType.size.micro, fontFamily: vsType.family,
     fontWeight: "800",
   },
   warningBox: {
@@ -8045,13 +8048,13 @@ const styles = StyleSheet.create({
   },
   warningTitle: {
     color: "#9a3412",
-    fontSize: 11,
-    fontWeight: "900",
+    fontSize: vsType.size.caption, fontFamily: vsType.family,
+    fontWeight: "800",
   },
   warningText: {
     marginTop: 3,
     color: "#9a3412",
-    fontSize: 10,
+    fontSize: vsType.size.micro, fontFamily: vsType.family,
     lineHeight: 15,
   },
   matchFilters: {
@@ -8071,7 +8074,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 11,
     paddingVertical: 9,
     color: "#0f172a",
-    fontSize: 10.5,
+    fontSize: vsType.size.caption, fontFamily: vsType.family,
   },
 
   volunteerRow: {
@@ -8092,18 +8095,18 @@ const styles = StyleSheet.create({
   },
   avatarText: {
     color: "#078f82",
-    fontSize: 11,
-    fontWeight: "900",
+    fontSize: vsType.size.caption, fontFamily: vsType.family,
+    fontWeight: "800",
   },
   volunteerName: {
     color: "#0f172a",
-    fontSize: 14,
+    fontSize: vsType.size.body, fontFamily: vsType.family,
     fontWeight: "800",
   },
   volunteerMeta: {
     marginTop: 3,
     color: "#64748b",
-    fontSize: 11,
+    fontSize: vsType.size.caption, fontFamily: vsType.family,
     lineHeight: 16,
   },
   assignSmallButton: {
@@ -8116,7 +8119,7 @@ const styles = StyleSheet.create({
   },
   assignSmallButtonText: {
     color: "#ffffff",
-    fontSize: 10.5,
+    fontSize: vsType.size.caption, fontFamily: vsType.family,
     fontWeight: "800",
   },
   disabledButton: {
@@ -8153,8 +8156,8 @@ const styles = StyleSheet.create({
   },
   cancelButtonText: {
     color: "#b42318",
-    fontSize: 10,
-    fontWeight: "900",
+    fontSize: vsType.size.micro, fontFamily: vsType.family,
+    fontWeight: "800",
   },
 
   lguDoctrineNotice: {
@@ -8167,13 +8170,13 @@ const styles = StyleSheet.create({
   },
   lguDoctrineTitle: {
     color: "#087f74",
-    fontSize: 12.5,
+    fontSize: vsType.size.label, fontFamily: vsType.family,
     fontWeight: "800",
   },
   lguDoctrineText: {
     marginTop: 3,
     color: "#4f6b67",
-    fontSize: 10,
+    fontSize: vsType.size.micro, fontFamily: vsType.family,
     lineHeight: 14,
   },
 
@@ -8196,8 +8199,8 @@ const styles = StyleSheet.create({
 
   escalationSummaryIconText: {
     color: "#9A6700",
-    fontSize: 18,
-    fontWeight: "900",
+    fontSize: vsType.size.section, fontFamily: vsType.family,
+    fontWeight: "800",
   },
 
   reliefSummaryIcon: {
@@ -8212,7 +8215,7 @@ const styles = StyleSheet.create({
   },
   reliefSummaryIconText: {
     color: "#078F82",
-    fontSize: 24,
+    fontSize: vsType.size.title, fontFamily: vsType.family,
     fontWeight: "800",
   },
 
@@ -8220,7 +8223,7 @@ const styles = StyleSheet.create({
     marginTop: 5,
     maxWidth: 760,
     color: "#64748B",
-    fontSize: 10.5,
+    fontSize: vsType.size.caption, fontFamily: vsType.family,
     lineHeight: 16,
   },
 
@@ -8235,14 +8238,14 @@ const styles = StyleSheet.create({
 
   escalationRuleTitle: {
     color: "#7A4B00",
-    fontSize: 12.5,
+    fontSize: vsType.size.label, fontFamily: vsType.family,
     fontWeight: "800",
   },
 
   escalationRuleText: {
     marginTop: 4,
     color: "#795C2D",
-    fontSize: 10,
+    fontSize: vsType.size.micro, fontFamily: vsType.family,
     lineHeight: 15,
   },
 
@@ -8256,13 +8259,13 @@ const styles = StyleSheet.create({
   },
   reliefPolicyTitle: {
     color: "#1D4ED8",
-    fontSize: 12.5,
+    fontSize: vsType.size.label, fontFamily: vsType.family,
     fontWeight: "800",
   },
   reliefPolicyText: {
     marginTop: 4,
     color: "#475569",
-    fontSize: 10,
+    fontSize: vsType.size.micro, fontFamily: vsType.family,
     lineHeight: 15,
   },
 
@@ -8284,8 +8287,8 @@ const styles = StyleSheet.create({
   },
   directAssessmentButtonText: {
     color: "#078f82",
-    fontSize: 10,
-    fontWeight: "900",
+    fontSize: vsType.size.micro, fontFamily: vsType.family,
+    fontWeight: "800",
   },
   directAssessmentDone: {
     marginTop: 10,
@@ -8295,7 +8298,7 @@ const styles = StyleSheet.create({
   },
   directAssessmentDoneText: {
     color: "#15803d",
-    fontSize: 10,
+    fontSize: vsType.size.micro, fontFamily: vsType.family,
     lineHeight: 14,
     fontWeight: "800",
   },
@@ -8316,13 +8319,13 @@ const styles = StyleSheet.create({
   },
   directFormTitle: {
     color: "#0f172a",
-    fontSize: 14,
-    fontWeight: "900",
+    fontSize: vsType.size.body, fontFamily: vsType.family,
+    fontWeight: "800",
   },
   directFormSubtitle: {
     marginTop: 3,
     color: "#64748b",
-    fontSize: 10,
+    fontSize: vsType.size.micro, fontFamily: vsType.family,
     lineHeight: 14,
   },
   directFormBadge: {
@@ -8333,8 +8336,8 @@ const styles = StyleSheet.create({
   },
   directFormBadgeText: {
     color: "#0f766e",
-    fontSize: 10,
-    fontWeight: "900",
+    fontSize: vsType.size.micro, fontFamily: vsType.family,
+    fontWeight: "800",
     letterSpacing: 0.5,
   },
 
@@ -8360,7 +8363,7 @@ const styles = StyleSheet.create({
   },
   formSelectValue: {
     color: "#0F172A",
-    fontSize: 12.5,
+    fontSize: vsType.size.label, fontFamily: vsType.family,
     fontWeight: "800",
   },
   formSelectPlaceholder: {
@@ -8369,13 +8372,13 @@ const styles = StyleSheet.create({
   formSelectDescription: {
     marginTop: 2,
     color: "#64748B",
-    fontSize: 10,
+    fontSize: vsType.size.micro, fontFamily: vsType.family,
     lineHeight: 12,
   },
   formSelectChevron: {
     color: "#0F766E",
-    fontSize: 18,
-    fontWeight: "900",
+    fontSize: vsType.size.section, fontFamily: vsType.family,
+    fontWeight: "800",
   },
   formSelectMenu: {
     marginTop: 6,
@@ -8409,16 +8412,16 @@ const styles = StyleSheet.create({
   },
   formSelectOptionMarkText: {
     color: "#94A3B8",
-    fontSize: 10,
-    fontWeight: "900",
+    fontSize: vsType.size.micro, fontFamily: vsType.family,
+    fontWeight: "800",
   },
   formSelectOptionMarkTextActive: {
     color: "#0F766E",
   },
   formSelectOptionLabel: {
     color: "#334155",
-    fontSize: 10,
-    fontWeight: "900",
+    fontSize: vsType.size.micro, fontFamily: vsType.family,
+    fontWeight: "800",
   },
   formSelectOptionLabelActive: {
     color: "#0F766E",
@@ -8426,7 +8429,7 @@ const styles = StyleSheet.create({
   formSelectOptionDescription: {
     marginTop: 2,
     color: "#64748B",
-    fontSize: 10,
+    fontSize: vsType.size.micro, fontFamily: vsType.family,
     lineHeight: 12,
   },
   directInfoStrip: {
@@ -8439,13 +8442,13 @@ const styles = StyleSheet.create({
   },
   directInfoStripTitle: {
     color: "#0F766E",
-    fontSize: 10,
-    fontWeight: "900",
+    fontSize: vsType.size.micro, fontFamily: vsType.family,
+    fontWeight: "800",
   },
   directInfoStripText: {
     marginTop: 3,
     color: "#52706A",
-    fontSize: 10,
+    fontSize: vsType.size.micro, fontFamily: vsType.family,
     lineHeight: 13,
   },
   directGroupCard: {
@@ -8464,8 +8467,8 @@ const styles = StyleSheet.create({
     lineHeight: 24,
     color: "#ffffff",
     backgroundColor: "#0f766e",
-    fontSize: 10,
-    fontWeight: "900",
+    fontSize: vsType.size.micro, fontFamily: vsType.family,
+    fontWeight: "800",
   },
   directGroupContent: {
     flex: 1,
@@ -8491,7 +8494,7 @@ const styles = StyleSheet.create({
   },
   reliefScopeTitle: {
     color: "#334155",
-    fontSize: 12.5,
+    fontSize: vsType.size.label, fontFamily: vsType.family,
     fontWeight: "800",
   },
   reliefScopeTitleActive: {
@@ -8500,19 +8503,19 @@ const styles = StyleSheet.create({
   reliefScopeText: {
     marginTop: 4,
     color: "#64748B",
-    fontSize: 10,
+    fontSize: vsType.size.micro, fontFamily: vsType.family,
     lineHeight: 14,
   },
   directGroupTitle: {
     color: "#183448",
-    fontSize: 11.5,
-    fontWeight: "900",
+    fontSize: vsType.size.meta, fontFamily: vsType.family,
+    fontWeight: "800",
   },
   directGroupHint: {
     marginTop: 2,
     marginBottom: 9,
     color: "#7b8d9d",
-    fontSize: 10,
+    fontSize: vsType.size.micro, fontFamily: vsType.family,
     lineHeight: 13,
   },
   directTopGrid: {
@@ -8539,13 +8542,13 @@ const styles = StyleSheet.create({
     marginTop: 7,
     marginBottom: 5,
     color: "#475569",
-    fontSize: 10,
+    fontSize: vsType.size.micro, fontFamily: vsType.family,
     fontWeight: "800",
   },
   directFieldHelp: {
     marginTop: 4,
     color: "#94A3B8",
-    fontSize: 10,
+    fontSize: vsType.size.micro, fontFamily: vsType.family,
     lineHeight: 12,
   },
   directLockedInput: {
@@ -8556,8 +8559,8 @@ const styles = StyleSheet.create({
     marginTop: 5,
     marginBottom: 6,
     color: "#94a3b8",
-    fontSize: 10,
-    fontWeight: "900",
+    fontSize: vsType.size.micro, fontFamily: vsType.family,
+    fontWeight: "800",
     letterSpacing: 0.7,
   },
   directNeedGrid: {
@@ -8598,8 +8601,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#CBD5E1",
     color: "#64748B",
-    fontSize: 10,
-    fontWeight: "900",
+    fontSize: vsType.size.micro, fontFamily: vsType.family,
+    fontWeight: "800",
     backgroundColor: "#FFFFFF",
   },
   directNeedChoiceMarkActive: {
@@ -8609,8 +8612,8 @@ const styles = StyleSheet.create({
   },
   directNeedChoiceText: {
     color: "#475569",
-    fontSize: 10,
-    fontWeight: "900",
+    fontSize: vsType.size.micro, fontFamily: vsType.family,
+    fontWeight: "800",
   },
   directNeedChoiceTextActive: {
     color: "#0F766E",
@@ -8626,14 +8629,14 @@ const styles = StyleSheet.create({
   },
   directSelectedNeedsTitle: {
     color: "#334155",
-    fontSize: 10,
-    fontWeight: "900",
+    fontSize: vsType.size.micro, fontFamily: vsType.family,
+    fontWeight: "800",
   },
   directSelectedNeedsHint: {
     marginTop: 2,
     marginBottom: 7,
     color: "#64748B",
-    fontSize: 10,
+    fontSize: vsType.size.micro, fontFamily: vsType.family,
     lineHeight: 12,
   },
   directNeedField: {
@@ -8648,13 +8651,13 @@ const styles = StyleSheet.create({
   },
   directNeedLabel: {
     color: "#334155",
-    fontSize: 10,
-    fontWeight: "900",
+    fontSize: vsType.size.micro, fontFamily: vsType.family,
+    fontWeight: "800",
   },
   directNeedUnit: {
     marginTop: 1,
     color: "#94a3b8",
-    fontSize: 10,
+    fontSize: vsType.size.micro, fontFamily: vsType.family,
     fontWeight: "700",
   },
   directNeedInput: {
@@ -8666,7 +8669,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     backgroundColor: "#ffffff",
     color: "#0f172a",
-    fontSize: 11,
+    fontSize: vsType.size.caption, fontFamily: vsType.family,
     fontWeight: "800",
   },
   directNotesInput: {
@@ -8693,15 +8696,15 @@ const styles = StyleSheet.create({
   },
   directReviewEyebrow: {
     color: "#078F82",
-    fontSize: 10,
-    fontWeight: "900",
+    fontSize: vsType.size.micro, fontFamily: vsType.family,
+    fontWeight: "800",
     letterSpacing: 0.8,
   },
   directReviewTitle: {
     marginTop: 3,
     color: "#0F172A",
-    fontSize: 11.5,
-    fontWeight: "900",
+    fontSize: vsType.size.meta, fontFamily: vsType.family,
+    fontWeight: "800",
   },
   directReviewBadge: {
     paddingHorizontal: 8,
@@ -8711,8 +8714,8 @@ const styles = StyleSheet.create({
   },
   directReviewBadgeText: {
     color: "#15803D",
-    fontSize: 10,
-    fontWeight: "900",
+    fontSize: vsType.size.micro, fontFamily: vsType.family,
+    fontWeight: "800",
   },
   directReviewStats: {
     flexDirection: "row",
@@ -8730,29 +8733,29 @@ const styles = StyleSheet.create({
   },
   directReviewStatLabel: {
     color: "#94A3B8",
-    fontSize: 10,
-    fontWeight: "900",
+    fontSize: vsType.size.micro, fontFamily: vsType.family,
+    fontWeight: "800",
     letterSpacing: 0.6,
   },
   directReviewStatValue: {
     marginTop: 3,
     color: "#0F172A",
-    fontSize: 18,
+    fontSize: vsType.size.section, fontFamily: vsType.family,
     fontWeight: "800",
   },
   directReviewStatValueSmall: {
     marginTop: 3,
     color: "#0F172A",
-    fontSize: 10,
+    fontSize: vsType.size.micro, fontFamily: vsType.family,
     lineHeight: 13,
-    fontWeight: "900",
+    fontWeight: "800",
   },
   directReviewSectionLabel: {
     paddingHorizontal: 11,
     marginTop: 1,
     color: "#94A3B8",
-    fontSize: 10,
-    fontWeight: "900",
+    fontSize: vsType.size.micro, fontFamily: vsType.family,
+    fontWeight: "800",
     letterSpacing: 0.6,
   },
   directReviewNeedRow: {
@@ -8772,12 +8775,12 @@ const styles = StyleSheet.create({
   },
   directReviewNeedPillText: {
     color: "#0F766E",
-    fontSize: 10,
+    fontSize: vsType.size.micro, fontFamily: vsType.family,
     fontWeight: "800",
   },
   directReviewEmpty: {
     color: "#94A3B8",
-    fontSize: 10,
+    fontSize: vsType.size.micro, fontFamily: vsType.family,
     fontStyle: "italic",
   },
   directReviewNotice: {
@@ -8791,13 +8794,13 @@ const styles = StyleSheet.create({
   },
   directReviewNoticeTitle: {
     color: "#92400E",
-    fontSize: 10,
-    fontWeight: "900",
+    fontSize: vsType.size.micro, fontFamily: vsType.family,
+    fontWeight: "800",
   },
   directReviewNoticeText: {
     marginTop: 3,
     color: "#9A6700",
-    fontSize: 10,
+    fontSize: vsType.size.micro, fontFamily: vsType.family,
     lineHeight: 12.5,
   },
   directActionBar: {
@@ -8811,13 +8814,13 @@ const styles = StyleSheet.create({
   },
   directActionTitle: {
     color: "#183448",
-    fontSize: 12.5,
+    fontSize: vsType.size.label, fontFamily: vsType.family,
     fontWeight: "800",
   },
   directActionHint: {
     marginTop: 2,
     color: "#64748b",
-    fontSize: 10,
+    fontSize: vsType.size.micro, fontFamily: vsType.family,
     lineHeight: 13,
   },
   directSaveButton: {
@@ -8845,13 +8848,13 @@ const styles = StyleSheet.create({
   },
   fieldAuthorityTitle: {
     color: "#183448",
-    fontSize: 12.5,
+    fontSize: vsType.size.label, fontFamily: vsType.family,
     fontWeight: "800",
   },
   fieldAuthorityText: {
     marginTop: 3,
     color: "#64748b",
-    fontSize: 10,
+    fontSize: vsType.size.micro, fontFamily: vsType.family,
     lineHeight: 14,
   },
   fieldReportCard: {
@@ -8869,13 +8872,13 @@ const styles = StyleSheet.create({
   },
   fieldVolunteerName: {
     color: "#0f172a",
-    fontSize: 12.5,
-    fontWeight: "900",
+    fontSize: vsType.size.label, fontFamily: vsType.family,
+    fontWeight: "800",
   },
   fieldReportMeta: {
     marginTop: 2,
     color: "#7b8d9d",
-    fontSize: 10,
+    fontSize: vsType.size.micro, fontFamily: vsType.family,
     lineHeight: 13,
   },
   fieldReportStatus: {
@@ -8889,8 +8892,8 @@ const styles = StyleSheet.create({
   fieldStatusDismissed: { backgroundColor: "#64748b" },
   fieldReportStatusText: {
     color: "#ffffff",
-    fontSize: 10,
-    fontWeight: "900",
+    fontSize: vsType.size.micro, fontFamily: vsType.family,
+    fontWeight: "800",
   },
   fieldReportGrid: {
     flexDirection: "row",
@@ -8909,7 +8912,7 @@ const styles = StyleSheet.create({
   fieldReportValue: {
     marginTop: 4,
     color: "#334155",
-    fontSize: 10.5,
+    fontSize: vsType.size.caption, fontFamily: vsType.family,
     lineHeight: 15,
     fontWeight: "700",
   },
@@ -8924,13 +8927,13 @@ const styles = StyleSheet.create({
   remainingNeedsText: {
     marginTop: 4,
     color: "#7c5410",
-    fontSize: 12.5,
+    fontSize: vsType.size.label, fontFamily: vsType.family,
     fontWeight: "800",
   },
   remainingNeedsNote: {
     marginTop: 4,
     color: "#7a6740",
-    fontSize: 10,
+    fontSize: vsType.size.micro, fontFamily: vsType.family,
     lineHeight: 14,
   },
   fieldReviewInput: {
@@ -8959,8 +8962,8 @@ const styles = StyleSheet.create({
   },
   incorporateButtonText: {
     color: "#078f82",
-    fontSize: 10,
-    fontWeight: "900",
+    fontSize: vsType.size.micro, fontFamily: vsType.family,
+    fontWeight: "800",
   },
   dismissFieldButton: {
     backgroundColor: "#fff1f0",
@@ -8972,8 +8975,8 @@ const styles = StyleSheet.create({
   },
   dismissFieldButtonText: {
     color: "#b42318",
-    fontSize: 10,
-    fontWeight: "900",
+    fontSize: vsType.size.micro, fontFamily: vsType.family,
+    fontWeight: "800",
   },
   needAssessmentPanel: {
     marginTop: 12,
@@ -8985,20 +8988,20 @@ const styles = StyleSheet.create({
   },
   needAssessmentEyebrow: {
     color: "#078f82",
-    fontSize: 10,
-    fontWeight: "900",
+    fontSize: vsType.size.micro, fontFamily: vsType.family,
+    fontWeight: "800",
     letterSpacing: 0.8,
   },
   needAssessmentTitle: {
     marginTop: 2,
     color: "#183448",
-    fontSize: 14,
-    fontWeight: "900",
+    fontSize: vsType.size.body, fontFamily: vsType.family,
+    fontWeight: "800",
   },
   needAssessmentHint: {
     marginTop: 4,
     color: "#64748b",
-    fontSize: 10,
+    fontSize: vsType.size.micro, fontFamily: vsType.family,
     lineHeight: 14,
   },
   needInputGrid: {
@@ -9033,8 +9036,8 @@ const styles = StyleSheet.create({
   },
   fieldFinalNoticeText: {
     color: "#15803d",
-    fontSize: 10,
-    fontWeight: "900",
+    fontSize: vsType.size.micro, fontFamily: vsType.family,
+    fontWeight: "800",
   },
   fieldDismissedNotice: {
     marginTop: 10,
@@ -9044,7 +9047,7 @@ const styles = StyleSheet.create({
   },
   fieldDismissedNoticeText: {
     color: "#64748b",
-    fontSize: 10,
+    fontSize: vsType.size.micro, fontFamily: vsType.family,
     lineHeight: 14,
     fontWeight: "700",
   },
@@ -9073,5 +9076,5 @@ const styles = StyleSheet.create({
     fontSize: designUi.type.body.fontSize,
     textAlign: "center", lineHeight: designUi.type.body.lineHeight, fontWeight: designUi.type.body.fontWeight,},
   criticalNavigateButton: { marginTop: 12, minHeight: 42, alignItems: "center", justifyContent: "center", borderRadius: 10, backgroundColor: "#b91c1c", paddingHorizontal: 14 },
-  criticalNavigateButtonText: { color: "#ffffff", fontSize: 12, fontWeight: "900" },
+  criticalNavigateButtonText: { color: "#ffffff", fontSize: vsType.size.meta, fontFamily: vsType.family, fontWeight: "800" },
 });

@@ -1,3 +1,4 @@
+import { volunserveTypography as vsType } from "../../constants/volunserveLiveUi";
 import { collection, onSnapshot } from "firebase/firestore";
 import React, { useEffect, useMemo, useState } from "react";
 import {
@@ -191,7 +192,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   title: {
-    fontSize: 26,
+    fontSize: vsType.size.page, fontFamily: vsType.family,
     fontWeight: "800",
     marginBottom: 20,
   },
@@ -210,11 +211,11 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   cardTitle: {
-    fontSize: 12,
+    fontSize: vsType.size.meta, fontFamily: vsType.family,
     color: "#64748b",
   },
   cardValue: {
-    fontSize: 18,
+    fontSize: vsType.size.section, fontFamily: vsType.family,
     fontWeight: "800",
     marginTop: 6,
   },
@@ -227,22 +228,22 @@ const styles = StyleSheet.create({
   },
   highlightTitle: {
     color: "#94a3b8",
-    fontSize: 12,
+    fontSize: vsType.size.meta, fontFamily: vsType.family,
   },
   highlightValue: {
     color: "#ffffff",
-    fontSize: 18,
+    fontSize: vsType.size.section, fontFamily: vsType.family,
     fontWeight: "800",
     marginTop: 5,
   },
   highlightAmount: {
     color: "#22c55e",
-    fontSize: 16,
+    fontSize: vsType.size.card, fontFamily: vsType.family,
     fontWeight: "700",
     marginTop: 3,
   },
   sectionTitle: {
-    fontSize: 18,
+    fontSize: vsType.size.section, fontFamily: vsType.family,
     fontWeight: "800",
     marginTop: 20,
     marginBottom: 10,

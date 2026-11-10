@@ -1,7 +1,9 @@
+import { volunserveTypography as vsType } from "../constants/volunserveLiveUi";
 import { liveUi as designUi } from "../constants/volunserveLiveUi";
 import EmailFirstSignup from "../components/auth/EmailFirstSignup";
 import { userFacingError } from "../lib/userFacingError";
 import { EMAIL_FIRST_SIGNUP_ENABLED } from "../lib/signupFeature";
+import { getRegistrationEmailError } from "../lib/registrationEmailPolicy";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { Feather } from "@expo/vector-icons";
 import * as AuthSession from "expo-auth-session";
@@ -471,6 +473,8 @@ function LegacySignup() {
     androidClientId: "233201250762-d7tnic7h4q3f6ohip52a36ng22uqrvl5.apps.googleusercontent.com",
     redirectUri,
     scopes: ["openid", "profile", "email"],
+    // Resolve the authorization code with the same PKCE flow as native Login.
+    shouldAutoExchangeCode: false,
   });
 
   const today = new Date();
@@ -483,10 +487,24 @@ function LegacySignup() {
     const handleGoogleSuccess = async () => {
       if (response?.type !== "success") return;
       try {
-        const idToken = response.params?.id_token;
+        let idToken = response.params?.id_token || response.authentication?.idToken;
+        // Android Google OAuth may return an authorization code instead of an
+        // id_token. Exchange it with the exact PKCE verifier from this request.
+        // Never send an OAuth code or token to the registration profile.
+        if (!idToken && response.params?.code) {
+          if (!request?.codeVerifier) {
+            throw new Error("Google sign-in expired. Please try again.");
+          }
+          const exchanged = await AuthSession.exchangeCodeAsync({
+            clientId: request.clientId,
+            code: response.params.code,
+            redirectUri: request.redirectUri,
+            extraParams: { code_verifier: request.codeVerifier },
+          }, Google.discovery);
+          idToken = exchanged.idToken;
+        }
         if (!idToken) {
-          Alert.alert("Google Error", "No ID token returned.");
-          return;
+          throw new Error("Google did not return a sign-in token. Please try again.");
         }
 
         const credential = GoogleAuthProvider.credential(idToken);
@@ -494,6 +512,11 @@ function LegacySignup() {
         const user = userCred.user;
         const parsed = splitDisplayName(user.displayName || "");
         const googleEmail = (user.email || "").trim().toLowerCase();
+        const googleEmailError = getRegistrationEmailError(googleEmail);
+        if (googleEmailError || !user.emailVerified) {
+          if (auth.currentUser?.uid === user.uid) await signOut(auth);
+          throw new Error(googleEmailError || "Verify your Google email before registration.");
+        }
 
         updateField("email", googleEmail);
         if (parsed.firstName) updateField("firstName", sanitizeName(parsed.firstName));
@@ -515,7 +538,6 @@ function LegacySignup() {
   const specializationOptions = useMemo(() => SPECIALIZATIONS[formData.occupationCategory] ?? [], [formData.occupationCategory]);
 
   const validation = useMemo(() => {
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     const nameOk = (s: string) => s.trim().length >= 2;
     const lastNameValid = nameOk(formData.lastName);
     const firstNameValid = nameOk(formData.firstName);
@@ -523,7 +545,8 @@ function LegacySignup() {
     const ageNumber = formData.dateOfBirth ? calculateAge(formData.dateOfBirth) : 0;
     const ageValid = !!formData.dateOfBirth && ageNumber >= 18;
     const phoneValid = true;
-    const emailValid = emailRegex.test(formData.email.trim().toLowerCase());
+    const emailError = getRegistrationEmailError(formData.email);
+    const emailValid = emailError === null;
     const step2Valid =
       !!formData.region &&
       isAllowedProvince(formData.province) &&
@@ -556,6 +579,7 @@ function LegacySignup() {
       ageNumber,
       phoneValid,
       emailValid,
+      emailError,
       step1Valid,
       step2Valid,
       step3Valid,
@@ -778,6 +802,9 @@ function LegacySignup() {
                 editable={!googleBound}
                 autoCapitalize="none"
               />
+              {formData.email.length > 0 && !!validation.emailError && (
+                <ValidationText ok={false}>{validation.emailError}</ValidationText>
+              )}
               {!googleBound ? (
                 <>
                   <Field
@@ -849,7 +876,7 @@ function LegacySignup() {
               <View style={styles.field}>
                 <Text style={styles.label}>🎂 Date of Birth <Text style={{ color: "#DC2626" }}>*</Text></Text>
                 <TouchableOpacity activeOpacity={0.9} onPress={() => setDobOpen(true)} style={[styles.input, !validation.ageValid && formData.dateOfBirth !== null && styles.inputInvalid, { justifyContent: "center" }]}>
-                  <Text style={{ fontSize: 15, color: formData.dateOfBirth ? COLORS.text : COLORS.lightText, fontWeight: "700" }}>
+                  <Text style={{ fontSize: vsType.size.bodyStrong, fontFamily: vsType.family, color: formData.dateOfBirth ? COLORS.text : COLORS.lightText, fontWeight: "700" }}>
                     {formData.dateOfBirth ? formatDOB(formData.dateOfBirth) : "MM/DD/YYYY"}
                   </Text>
                 </TouchableOpacity>
@@ -1016,10 +1043,10 @@ const styles = StyleSheet.create({
   },
   brandRow: { flexDirection: "row", alignItems: "center", marginBottom: 18 },
   logo: { width: 42, height: 42, marginRight: 10, backgroundColor: "#fff", borderRadius: 12 },
-  brandTitle: { color: "#fff", fontSize: 21, fontWeight: "900" },
-  brandSub: { color: "#d1fae5", fontSize: 12, fontWeight: "700", marginTop: 2 },
-  heroTitle: { color: "#fff", fontSize: 26, fontWeight: "900", marginBottom: 8 },
-  heroText: { color: "#ecfeff", fontSize: 13.5, lineHeight: 20, fontWeight: "600" },
+  brandTitle: { color: "#fff", fontSize: vsType.size.titleSmall, fontFamily: vsType.family, fontWeight: "800" },
+  brandSub: { color: "#d1fae5", fontSize: vsType.size.meta, fontFamily: vsType.family, fontWeight: "700", marginTop: 2 },
+  heroTitle: { color: "#fff", fontSize: vsType.size.page, fontFamily: vsType.family, fontWeight: "800", marginBottom: 8 },
+  heroText: { color: "#ecfeff", fontSize: vsType.size.body, fontFamily: vsType.family, lineHeight: 20, fontWeight: "600" },
 
   carouselWrap: { marginBottom: 16 },
   carouselCard: {
@@ -1032,9 +1059,9 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
   },
-  carouselIcon: { fontSize: 28, marginRight: 14 },
-  carouselTitle: { fontSize: 15.5, fontWeight: "900", marginBottom: 4, color: COLORS.text },
-  carouselText: { fontSize: 12.5, color: COLORS.muted, lineHeight: 18, fontWeight: "600" },
+  carouselIcon: { fontSize: vsType.size.hero, fontFamily: vsType.family, marginRight: 14 },
+  carouselTitle: { fontSize: vsType.size.card, fontFamily: vsType.family, fontWeight: "800", marginBottom: 4, color: COLORS.text },
+  carouselText: { fontSize: vsType.size.label, fontFamily: vsType.family, color: COLORS.muted, lineHeight: 18, fontWeight: "600" },
   dots: { flexDirection: "row", justifyContent: "center", marginTop: 10, gap: 6 },
   dot: { width: 8, height: 8, borderRadius: 99 },
   dotOn: { backgroundColor: COLORS.primary },
@@ -1050,15 +1077,15 @@ const styles = StyleSheet.create({
   },
   stepperTop: { flexDirection: "row", alignItems: "center", marginBottom: 16 },
   stepIconBubble: { width: 44, height: 44, borderRadius: 14, backgroundColor: COLORS.primarySoft, justifyContent: "center", alignItems: "center", marginRight: 12 },
-  stepIcon: { fontSize: 22 },
-  stepperTitle: { color: COLORS.text, fontSize: 17, fontWeight: "900" },
-  stepperSub: { color: COLORS.muted, fontSize: 12.5, fontWeight: "600", marginTop: 2 },
-  stepCounter: { color: COLORS.primary, fontSize: 14, fontWeight: "900" },
+  stepIcon: { fontSize: vsType.size.titleSmall, fontFamily: vsType.family },
+  stepperTitle: { color: COLORS.text, fontSize: vsType.size.card, fontFamily: vsType.family, fontWeight: "800" },
+  stepperSub: { color: COLORS.muted, fontSize: vsType.size.label, fontFamily: vsType.family, fontWeight: "600", marginTop: 2 },
+  stepCounter: { color: COLORS.primary, fontSize: vsType.size.body, fontFamily: vsType.family, fontWeight: "800" },
   stepRow: { flexDirection: "row", alignItems: "center" },
   stepItem: { flex: 1, flexDirection: "row", alignItems: "center" },
   stepCircle: { width: 28, height: 28, borderRadius: 999, backgroundColor: "#e2e8f0", justifyContent: "center", alignItems: "center" },
   stepCircleActive: { backgroundColor: COLORS.primary },
-  stepCircleText: { color: COLORS.muted, fontSize: 12, fontWeight: "900" },
+  stepCircleText: { color: COLORS.muted, fontSize: vsType.size.meta, fontFamily: vsType.family, fontWeight: "800" },
   stepCircleTextActive: { color: "#fff" },
   stepLine: { flex: 1, height: 3, backgroundColor: "#e2e8f0", marginHorizontal: 6, borderRadius: 999 },
   stepLineActive: { backgroundColor: COLORS.primary },
@@ -1066,7 +1093,7 @@ const styles = StyleSheet.create({
   progressBarWrap: { marginTop: 12 },
   progressBar: { height: 6, backgroundColor: "#e2e8f0", borderRadius: 10, overflow: "hidden" },
   progressFill: { height: 6, backgroundColor: COLORS.primary, borderRadius: 10 },
-  progressText: { fontSize: 11, marginTop: 6, color: COLORS.muted, fontWeight: "700", textAlign: "center" },
+  progressText: { fontSize: vsType.size.caption, fontFamily: vsType.family, marginTop: 6, color: COLORS.muted, fontWeight: "700", textAlign: "center" },
 
   formCard: {
     backgroundColor: COLORS.card,
@@ -1086,48 +1113,48 @@ const styles = StyleSheet.create({
 
   googleBtn: { flexDirection: "row", gap: 12, minHeight: 48, justifyContent: "center", backgroundColor: "#fff", paddingVertical: 13, borderRadius: 14, borderWidth: 1, borderColor: COLORS.border, alignItems: "center" },
   googleBtnDisabled: { opacity: 0.82 },
-  googleBtnText: { fontWeight: "900", color: COLORS.text },
+  googleBtnText: { fontWeight: "800", color: COLORS.text },
   googleBtnLogo: { width: 20, height: 20 },
   signupDividerRow: { flexDirection: "row", alignItems: "center", gap: 14, marginVertical: 18 },
   signupDividerLine: { flex: 1, height: 1, backgroundColor: "#BDCFC7" },
-  signupDividerText: { color: "#154A3D", fontSize: 13, fontWeight: "900", letterSpacing: 1.8 },
+  signupDividerText: { color: "#154A3D", fontSize: vsType.size.label, fontFamily: vsType.family, fontWeight: "800", letterSpacing: 1.8 },
   emailVerifyHint: { color: "#4B6B61", fontSize: designUi.type.body.fontSize, fontWeight: designUi.type.body.fontWeight, lineHeight: designUi.type.body.lineHeight, marginBottom: 3 },
   personalDetailsHeader: { marginTop: 24, paddingTop: 18, borderTopWidth: 1, borderTopColor: "#DFEBE6" },
   step1TermsBox: { marginTop: 12, paddingVertical: 8, paddingHorizontal: 12, backgroundColor: "#F2FAF7", borderWidth: 1, borderColor: "#D7E8E0", borderRadius: 12 },
-  step1TermsLink: { color: "#006B56", fontSize: 12, fontWeight: "800", textDecorationLine: "underline", marginLeft: 32, marginBottom: 4 },
+  step1TermsLink: { color: "#006B56", fontSize: vsType.size.meta, fontFamily: vsType.family, fontWeight: "800", textDecorationLine: "underline", marginLeft: 32, marginBottom: 4 },
   infoBox: { backgroundColor: COLORS.primarySoft, borderWidth: 1, borderColor: "#99f6e4", borderRadius: 14, paddingVertical: 10, paddingHorizontal: 12, marginTop: 12 },
-  infoBoxText: { color: COLORS.primaryDark, fontSize: 12.5, fontWeight: "800", lineHeight: 18 },
+  infoBoxText: { color: COLORS.primaryDark, fontSize: vsType.size.label, fontFamily: vsType.family, fontWeight: "800", lineHeight: 18 },
 
   field: { marginBottom: 16 },
   passwordInputContainer: { position: "relative", justifyContent: "center" },
   passwordInput: { paddingRight: 60 },
   passwordEyeButton: { position: "absolute", right: 4, top: 0, bottom: 0, minWidth: 48, alignItems: "center", justifyContent: "center" },
   fixedLocationField: { minHeight: 54, borderWidth: 1, borderColor: COLORS.border, borderRadius: 14, backgroundColor: "#f1f5f9", paddingHorizontal: 14, justifyContent: "center" },
-  fixedLocationText: { fontSize: 15, color: COLORS.text, fontWeight: "700" },
+  fixedLocationText: { fontSize: vsType.size.bodyStrong, fontFamily: vsType.family, color: COLORS.text, fontWeight: "700" },
   label: { fontSize: designUi.type.label.fontSize, fontWeight: designUi.type.label.fontWeight, color: "#1f2937", marginBottom: 8, lineHeight: designUi.type.label.lineHeight,},
-  input: { backgroundColor: COLORS.field, borderWidth: 1, borderColor: COLORS.border, borderRadius: 14, paddingVertical: 15, paddingHorizontal: 14, fontSize: 15, color: COLORS.text, fontWeight: "700" },
+  input: { backgroundColor: COLORS.field, borderWidth: 1, borderColor: COLORS.border, borderRadius: 14, paddingVertical: 15, paddingHorizontal: 14, fontSize: vsType.size.bodyStrong, fontFamily: vsType.family, color: COLORS.text, fontWeight: "700" },
   inputFocused: { borderColor: COLORS.primary, backgroundColor: "#fff" },
   inputInvalid: { borderColor: COLORS.danger },
   disabledInput: { backgroundColor: "#f1f5f9", opacity: 0.85 },
 
-  validation: { fontSize: 12, marginBottom: 10, fontWeight: "700" },
+  validation: { fontSize: vsType.size.meta, fontFamily: vsType.family, marginBottom: 10, fontWeight: "700" },
   checkRow: { flexDirection: "row", alignItems: "center", marginBottom: 12 },
   checkLabel: { flex: 1, fontSize: designUi.type.label.fontSize, color: COLORS.text, fontWeight: designUi.type.label.fontWeight, lineHeight: designUi.type.label.lineHeight},
   checkbox: { width: 22, height: 22, borderWidth: 2, borderColor: "#cbd5e1", borderRadius: 7, marginRight: 10, justifyContent: "center", alignItems: "center", backgroundColor: "#fff" },
   checkboxOn: { backgroundColor: COLORS.primary, borderColor: COLORS.primary },
-  checkboxTick: { color: "#fff", fontWeight: "900", fontSize: 13 },
+  checkboxTick: { color: "#fff", fontWeight: "800", fontSize: vsType.size.label, fontFamily: vsType.family },
 
   phoneWrap: { flexDirection: "row", alignItems: "center", backgroundColor: COLORS.field, borderWidth: 1, borderColor: COLORS.border, borderRadius: 14, overflow: "hidden", marginBottom: 12 },
   phonePrefix: { flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 12, height: 54, borderRightWidth: 1, borderRightColor: COLORS.border, backgroundColor: "#fff" },
-  flag: { fontSize: 18 },
-  phonePrefixText: { fontSize: 14, fontWeight: "900", color: COLORS.text },
-  phoneInput: { flex: 1, height: 54, paddingHorizontal: 14, fontSize: 15, backgroundColor: COLORS.field, color: COLORS.text, fontWeight: "700" },
+  flag: { fontSize: vsType.size.section, fontFamily: vsType.family },
+  phonePrefixText: { fontSize: vsType.size.body, fontFamily: vsType.family, fontWeight: "800", color: COLORS.text },
+  phoneInput: { flex: 1, height: 54, paddingHorizontal: 14, fontSize: vsType.size.bodyStrong, fontFamily: vsType.family, backgroundColor: COLORS.field, color: COLORS.text, fontWeight: "700" },
 
   loadingRow: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 14, backgroundColor: COLORS.field, padding: 12, borderRadius: 14 },
-  loadingText: { color: COLORS.muted, fontSize: 12, fontWeight: "700" },
+  loadingText: { color: COLORS.muted, fontSize: vsType.size.meta, fontFamily: vsType.family, fontWeight: "700" },
 
   passwordPanel: { backgroundColor: COLORS.field, borderRadius: 16, borderWidth: 1, borderColor: COLORS.border, padding: 14, marginBottom: 18 },
-  passwordStrength: { color: COLORS.text, fontWeight: "900", fontSize: 14, marginBottom: 8 },
+  passwordStrength: { color: COLORS.text, fontWeight: "800", fontSize: vsType.size.body, fontFamily: vsType.family, marginBottom: 8 },
 
   reviewBox: {
     backgroundColor: COLORS.primarySoft,
@@ -1138,7 +1165,7 @@ const styles = StyleSheet.create({
     borderColor: "#99f6e4",
   },
   reviewText: {
-    fontSize: 13,
+    fontSize: vsType.size.label, fontFamily: vsType.family,
     fontWeight: "800",
     color: COLORS.primaryDark,
     marginBottom: 8,
@@ -1149,38 +1176,38 @@ const styles = StyleSheet.create({
   navBtn: { flex: 1, paddingVertical: 15, borderRadius: 16, alignItems: "center" },
   primaryBtn: { backgroundColor: COLORS.primary, shadowColor: COLORS.primary, shadowOpacity: 0.22, shadowRadius: 8, elevation: 4 },
   secondaryBtn: { backgroundColor: "#e2e8f0" },
-  primaryText: { color: "#fff", fontWeight: "900" },
-  secondaryText: { color: COLORS.text, fontWeight: "900" },
+  primaryText: { color: "#fff", fontWeight: "800" },
+  secondaryText: { color: COLORS.text, fontWeight: "800" },
   disabledBtn: { opacity: 0.5 },
   loginLinkWrap: { marginTop: 16 },
-  link: { textAlign: "center", fontSize: 14, color: COLORS.muted, fontWeight: "700" },
-  linkStrong: { color: COLORS.primary, fontWeight: "900" },
+  link: { textAlign: "center", fontSize: vsType.size.body, fontFamily: vsType.family, color: COLORS.muted, fontWeight: "700" },
+  linkStrong: { color: COLORS.primary, fontWeight: "800" },
 
   ddTrigger: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", backgroundColor: COLORS.field, borderWidth: 1, borderColor: COLORS.border, borderRadius: 14, paddingVertical: 15, paddingHorizontal: 14 },
-  ddValue: { fontSize: 15, color: COLORS.text, fontWeight: "800", flex: 1, paddingRight: 8 },
+  ddValue: { fontSize: vsType.size.bodyStrong, fontFamily: vsType.family, color: COLORS.text, fontWeight: "800", flex: 1, paddingRight: 8 },
   ddPlaceholder: { color: COLORS.lightText, fontWeight: "800" },
-  ddChevron: { fontSize: 14, color: COLORS.muted, fontWeight: "900" },
+  ddChevron: { fontSize: vsType.size.body, fontFamily: vsType.family, color: COLORS.muted, fontWeight: "800" },
   ddBackdrop: { flex: 1, backgroundColor: "rgba(15, 23, 42, 0.22)" },
   ddPanel: { position: "absolute", backgroundColor: "#fff", borderRadius: 14, borderWidth: 1, borderColor: COLORS.border, overflow: "hidden", elevation: 8 },
   ddItem: { paddingVertical: 14, paddingHorizontal: 14 },
   ddItemActive: { backgroundColor: COLORS.primarySoft },
-  ddItemText: { fontSize: 15, color: COLORS.text, fontWeight: "800" },
+  ddItemText: { fontSize: vsType.size.bodyStrong, fontFamily: vsType.family, color: COLORS.text, fontWeight: "800" },
   ddItemTextActive: { color: COLORS.primaryDark },
   ddEmpty: { padding: 14 },
   ddEmptyText: { color: COLORS.muted, fontWeight: "800" },
 
   termsOpenBtn: { borderWidth: 1, borderColor: "#99f6e4", backgroundColor: COLORS.primarySoft, paddingVertical: 13, paddingHorizontal: 12, borderRadius: 14, marginBottom: 12, alignItems: "center" },
-  termsOpenText: { color: COLORS.primaryDark, fontWeight: "900" },
+  termsOpenText: { color: COLORS.primaryDark, fontWeight: "800" },
   termsModalWrap: { flex: 1, backgroundColor: COLORS.bg },
   termsHeader: { paddingTop: Platform.OS === "ios" ? 54 : 18, paddingHorizontal: 16, paddingBottom: 14, borderBottomWidth: 1, borderBottomColor: COLORS.border, backgroundColor: "#fff", flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  termsHeaderTitle: { fontSize: 16, fontWeight: "900", color: COLORS.text },
-  termsHeaderSub: { fontSize: 12, color: COLORS.muted, fontWeight: "700", marginTop: 2 },
+  termsHeaderTitle: { fontSize: vsType.size.card, fontFamily: vsType.family, fontWeight: "800", color: COLORS.text },
+  termsHeaderSub: { fontSize: vsType.size.meta, fontFamily: vsType.family, color: COLORS.muted, fontWeight: "700", marginTop: 2 },
   termsCloseBtn: { paddingVertical: 8, paddingHorizontal: 12, borderRadius: 10, backgroundColor: "#e2e8f0" },
-  termsCloseText: { fontWeight: "900", color: COLORS.text },
+  termsCloseText: { fontWeight: "800", color: COLORS.text },
   termsBody: { padding: 16, paddingBottom: 40 },
-  termsH1: { fontSize: 18, fontWeight: "900", color: COLORS.text, marginBottom: 10 },
-  termsH2: { fontSize: 15, fontWeight: "900", color: COLORS.text, marginTop: 14, marginBottom: 8 },
-  termsP: { fontSize: 14, color: "#334155", lineHeight: 20, fontWeight: "600" },
+  termsH1: { fontSize: vsType.size.section, fontFamily: vsType.family, fontWeight: "800", color: COLORS.text, marginBottom: 10 },
+  termsH2: { fontSize: vsType.size.bodyStrong, fontFamily: vsType.family, fontWeight: "800", color: COLORS.text, marginTop: 14, marginBottom: 8 },
+  termsP: { fontSize: vsType.size.body, fontFamily: vsType.family, color: "#334155", lineHeight: 20, fontWeight: "600" },
 
   overlay: {
     position: "absolute",
@@ -1201,15 +1228,15 @@ const styles = StyleSheet.create({
     maxWidth: 280,
   },
   overlayTitle: {
-    fontSize: 17,
-    fontWeight: "900",
+    fontSize: vsType.size.card, fontFamily: vsType.family,
+    fontWeight: "800",
     color: COLORS.text,
     marginTop: 16,
     marginBottom: 8,
     textAlign: "center",
   },
   overlayText: {
-    fontSize: 13,
+    fontSize: vsType.size.label, fontFamily: vsType.family,
     color: COLORS.muted,
     fontWeight: "600",
     textAlign: "center",

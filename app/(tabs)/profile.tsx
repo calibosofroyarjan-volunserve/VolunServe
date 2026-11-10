@@ -1,3 +1,4 @@
+import { volunserveTypography as vsType } from "../../constants/volunserveLiveUi";
 import { liveUi as designUi } from "../../constants/volunserveLiveUi";
 import { AppAlert } from "../../lib/appDialog";
 import VolunteerImpact from "./volunteer-impact";
@@ -2842,7 +2843,7 @@ const styles =
     loadingText: {
       marginTop: 12,
       color: "#64748B",
-      fontSize: 13,
+      fontSize: vsType.size.label, fontFamily: vsType.family,
       fontWeight: "600",
     },
 
@@ -2936,8 +2937,8 @@ const styles =
 
     avatarInitials: {
       color: "#087A5D",
-      fontSize: 34,
-      fontWeight: "900",
+      fontSize: vsType.size.display, fontFamily: vsType.family,
+      fontWeight: "800",
     },
 
     activeDot: {
@@ -2969,8 +2970,8 @@ const styles =
 
     profileName: {
       color: "#0F172A",
-      fontSize: 24,
-      fontWeight: "900",
+      fontSize: vsType.size.title, fontFamily: vsType.family,
+      fontWeight: "800",
       flexShrink: 1,
     },
 
@@ -2987,14 +2988,14 @@ const styles =
 
     modeBadgeText: {
       color: "#4338CA",
-      fontSize: 12,
+      fontSize: vsType.size.meta, fontFamily: vsType.family,
       fontWeight: "800",
     },
 
     identityLine: {
       marginTop: 6,
       color: "#64748B",
-      fontSize: 13,
+      fontSize: vsType.size.label, fontFamily: vsType.family,
     },
 
     editProfileButton: {
@@ -3016,7 +3017,7 @@ const styles =
 
     editProfileText: {
       color: "#087A5D",
-      fontSize: 13,
+      fontSize: vsType.size.label, fontFamily: vsType.family,
       fontWeight: "800",
     },
 
@@ -3053,7 +3054,7 @@ const styles =
 
     tabText: {
       color: "#475569",
-      fontSize: 13,
+      fontSize: vsType.size.label, fontFamily: vsType.family,
       fontWeight: "700",
     },
 
@@ -3111,22 +3112,22 @@ const styles =
 
     identityCardEyebrow: {
       color: "#6366F1",
-      fontSize: 10,
-      fontWeight: "900",
+      fontSize: vsType.size.micro, fontFamily: vsType.family,
+      fontWeight: "800",
       letterSpacing: 0.8,
     },
 
     identityCardTitle: {
       marginTop: 3,
       color: "#0F172A",
-      fontSize: 18,
-      fontWeight: "900",
+      fontSize: vsType.size.section, fontFamily: vsType.family,
+      fontWeight: "800",
     },
 
     identityCardText: {
       marginTop: 6,
       color: "#64748B",
-      fontSize: 12.5,
+      fontSize: vsType.size.label, fontFamily: vsType.family,
       lineHeight: 19,
       maxWidth: 720,
     },
@@ -3140,8 +3141,8 @@ const styles =
     },
 
     identityStatusBadgeText: {
-      fontSize: 11,
-      fontWeight: "900",
+      fontSize: vsType.size.caption, fontFamily: vsType.family,
+      fontWeight: "800",
     },
 
     identityAccessRow: {
@@ -3166,7 +3167,7 @@ const styles =
 
     accessLabel: {
       color: "#94A3B8",
-      fontSize: 10,
+      fontSize: vsType.size.micro, fontFamily: vsType.family,
       fontWeight: "800",
       textTransform:
         "uppercase",
@@ -3176,7 +3177,7 @@ const styles =
     accessValue: {
       marginTop: 4,
       color: "#0F172A",
-      fontSize: 12.5,
+      fontSize: vsType.size.label, fontFamily: vsType.family,
       fontWeight: "800",
     },
 
@@ -3203,15 +3204,15 @@ const styles =
 
     identityPrimaryButtonText: {
       color: "#FFFFFF",
-      fontSize: 12.5,
-      fontWeight: "900",
+      fontSize: vsType.size.label, fontFamily: vsType.family,
+      fontWeight: "800",
     },
 
     identityActionHint: {
       flex: 1,
       minWidth: 220,
       color: "#64748B",
-      fontSize: 11.5,
+      fontSize: vsType.size.meta, fontFamily: vsType.family,
       lineHeight: 17,
     },
 
@@ -3232,7 +3233,7 @@ const styles =
 
     identityNoticeText: {
       flex: 1,
-      fontSize: 11.5,
+      fontSize: vsType.size.meta, fontFamily: vsType.family,
       lineHeight: 17,
       fontWeight: "700",
     },
@@ -3292,14 +3293,14 @@ const styles =
     infoLabel: {
       width: "38%",
       color: "#64748B",
-      fontSize: 12.5,
+      fontSize: vsType.size.label, fontFamily: vsType.family,
       lineHeight: 18,
     },
 
     infoValue: {
       flex: 1,
       color: "#0F172A",
-      fontSize: 13,
+      fontSize: vsType.size.label, fontFamily: vsType.family,
       lineHeight: 19,
       fontWeight: "700",
     },
@@ -3331,14 +3332,14 @@ const styles =
 
     activityTitle: {
       color: "#0F172A",
-      fontSize: 15,
+      fontSize: vsType.size.bodyStrong, fontFamily: vsType.family,
       fontWeight: "800",
     },
 
     activitySubtitle: {
       marginTop: 4,
       color: "#64748B",
-      fontSize: 12,
+      fontSize: vsType.size.meta, fontFamily: vsType.family,
       lineHeight: 17,
     },
 
@@ -3349,8 +3350,8 @@ const styles =
     },
 
     statusBadgeText: {
-      fontSize: 10.5,
-      fontWeight: "900",
+      fontSize: vsType.size.caption, fontFamily: vsType.family,
+      fontWeight: "800",
     },
 
     activityMeta: {
@@ -3375,7 +3376,7 @@ const styles =
     metaValue: {
       marginTop: 3,
       color: "#334155",
-      fontSize: 12,
+      fontSize: vsType.size.meta, fontFamily: vsType.family,
       fontWeight: "700",
     },
 
@@ -3432,7 +3433,7 @@ const styles =
     certificateId: {
       marginTop: 4,
       color: "#64748B",
-      fontSize: 11,
+      fontSize: vsType.size.caption, fontFamily: vsType.family,
     },
 
     certificateMetrics: {
@@ -3457,7 +3458,7 @@ const styles =
     metricValue: {
       marginTop: 3,
       color: "#334155",
-      fontSize: 12,
+      fontSize: vsType.size.meta, fontFamily: vsType.family,
       fontWeight: "800",
     },
 
@@ -3506,7 +3507,7 @@ const styles =
 
     inlineLoadingText: {
       color: "#64748B",
-      fontSize: 12.5,
+      fontSize: vsType.size.label, fontFamily: vsType.family,
       fontWeight: "700",
     },
 
@@ -3531,7 +3532,7 @@ const styles =
       alignItems:"center",justifyContent:"center",
     },
     modalHeaderCopy:{flex:1,minWidth:0},
-    modalEyebrow:{fontSize:10,fontWeight:"900",letterSpacing:1.3,color:"#1A7860",marginBottom:3},
+    modalEyebrow:{fontSize: vsType.size.micro, fontFamily: vsType.family,fontWeight: "800",letterSpacing:1.3,color:"#1A7860",marginBottom:3},
     modalTitle:{fontSize: designUi.type.section.fontSize,fontWeight: designUi.type.section.fontWeight,color:"#0D3429",letterSpacing:-0.5, lineHeight: designUi.type.section.lineHeight,},
     modalSubtitle:{fontSize: designUi.type.body.fontSize,color:"#537366",lineHeight: designUi.type.body.lineHeight,marginTop:3, fontWeight: designUi.type.body.fontWeight,},
     modalClose:{
@@ -3543,8 +3544,8 @@ const styles =
     modalScrollContent:{paddingHorizontal:23,paddingTop:18,paddingBottom:24},
     modalSectionHeader:{flexDirection:"row",alignItems:"center",gap:9,marginBottom:13},
     sectionMarker:{width:4,height:18,borderRadius:2,backgroundColor:"#0B8868"},
-    modalSectionTitle:{fontSize:14,fontWeight:"900",color:"#193D31"},
-    modalHelper:{fontSize:11,color:"#668276",lineHeight:16,marginBottom:12},
+    modalSectionTitle:{fontSize: vsType.size.body, fontFamily: vsType.family,fontWeight: "800",color:"#193D31"},
+    modalHelper:{fontSize: vsType.size.caption, fontFamily: vsType.family,color:"#668276",lineHeight:16,marginBottom:12},
     modalDivider:{height:1,backgroundColor:"#E6EFE9",marginBottom:20,marginTop:7},
     nameGrid:{flexDirection:"row",flexWrap:"wrap",gap:11},
     nameField:{flexGrow:1,flexBasis:"29%",minWidth:145},
@@ -3553,7 +3554,7 @@ const styles =
     requiredAsterisk:{color:"#D4413A"},
     input:{
       minHeight: 46,borderRadius:10,borderColor:"#D7E6DD",borderWidth:1,
-      backgroundColor:"#FCFEFD",paddingHorizontal:12,fontSize:13,color:"#173A2B",
+      backgroundColor:"#FCFEFD",paddingHorizontal:12,fontSize: vsType.size.label, fontFamily: vsType.family,color:"#173A2B",
     },
     dropdownTrigger:{
       minHeight:46,borderRadius:10,borderColor:"#D7E6DD",borderWidth:1,
@@ -3561,7 +3562,7 @@ const styles =
       paddingHorizontal:13,justifyContent:"space-between",gap:10,
     },
     dropdownTriggerOpen:{borderColor:"#0B896C",backgroundColor:"#F1FBF6"},
-    dropdownValue:{fontSize:13,fontWeight:"700",color:"#214F3E",flex:1},
+    dropdownValue:{fontSize: vsType.size.label, fontFamily: vsType.family,fontWeight:"700",color:"#214F3E",flex:1},
     dropdownPlaceholder:{fontWeight:"500",color:"#799588"},
     dropdownPanel:{
       borderWidth:1,borderColor:"#CDE4D6",borderRadius:10,
@@ -3571,7 +3572,7 @@ const styles =
       minHeight:42,flexDirection:"row",alignItems:"center",gap:8,
       paddingHorizontal:12,backgroundColor:"#F6FBF8",borderBottomWidth:1,borderBottomColor:"#E3F0E9",
     },
-    dropdownSearchInput:{minHeight:40,flex:1,fontSize:12,color:"#214A39",paddingVertical:6},
+    dropdownSearchInput:{minHeight:40,flex:1,fontSize: vsType.size.meta, fontFamily: vsType.family,color:"#214A39",paddingVertical:6},
     dropdownOptions:{maxHeight:188},
     dropdownOption:{
       paddingHorizontal:13,paddingVertical:11,minHeight:40,
@@ -3579,26 +3580,26 @@ const styles =
       borderBottomWidth:1,borderBottomColor:"#F0F4F1",
     },
     dropdownOptionSelected:{backgroundColor:"#E6F7ED"},
-    dropdownOptionText:{flex:1,fontSize:12,color:"#234B3D",fontWeight:"600"},
-    dropdownEmpty:{fontSize:12,color:"#718A7B",padding:15},
+    dropdownOptionText:{flex:1,fontSize: vsType.size.meta, fontFamily: vsType.family,color:"#234B3D",fontWeight:"600"},
+    dropdownEmpty:{fontSize: vsType.size.meta, fontFamily: vsType.family,color:"#718A7B",padding:15},
     modalFooter:{
       backgroundColor:"#F9FCFA",borderTopWidth:1,borderTopColor:"#E0EDE5",
       paddingHorizontal:22,paddingVertical:14,flexDirection:"row",
       justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:12,
     },
-    modalFooterHint:{fontSize:10.5,lineHeight:15,color:"#709181",flex:1,minWidth:110},
+    modalFooterHint:{fontSize: vsType.size.caption, fontFamily: vsType.family,lineHeight:15,color:"#709181",flex:1,minWidth:110},
     modalActions:{flexDirection:"row",alignItems:"center",gap:9},
     cancelButton:{
       minHeight:43,justifyContent:"center",alignItems:"center",paddingHorizontal:16,
       borderRadius:9,borderWidth:1,borderColor:"#CFE1D7",backgroundColor:"#FFFFFF",
     },
-    cancelButtonText:{color:"#355C4B",fontSize:12.5,fontWeight:"800"},
+    cancelButtonText:{color:"#355C4B",fontSize: vsType.size.label, fontFamily: vsType.family,fontWeight:"800"},
     saveButton:{
       minHeight: 46,flexDirection:"row",alignItems:"center",justifyContent:"center",gap:7,
       paddingHorizontal:18,borderRadius:9,backgroundColor:"#087C61",
     },
     buttonSaving:{opacity:.7},
-    saveButtonText:{color:"#FFFFFF",fontSize:12.5,fontWeight:"900"},
+    saveButtonText:{color:"#FFFFFF",fontSize: vsType.size.label, fontFamily: vsType.family,fontWeight: "800"},
 
     verifyResidentCard: {
       width: "100%",
@@ -3641,14 +3642,14 @@ const styles =
 
     verifyResidentTitle: {
       color: "#0F2F5A",
-      fontSize: 20,
-      fontWeight: "900",
+      fontSize: vsType.size.subheading, fontFamily: vsType.family,
+      fontWeight: "800",
     },
 
     verifyResidentSubtitle: {
       marginTop: 5,
       color: "#475569",
-      fontSize: 12.5,
+      fontSize: vsType.size.label, fontFamily: vsType.family,
       lineHeight: 19,
       maxWidth: 640,
     },
@@ -3665,8 +3666,8 @@ const styles =
 
     verifyBasicBadgeText: {
       color: "#C2410C",
-      fontSize: 11,
-      fontWeight: "900",
+      fontSize: vsType.size.caption, fontFamily: vsType.family,
+      fontWeight: "800",
     },
 
     verifyResidentGrid: {
@@ -3689,8 +3690,8 @@ const styles =
     verifyResidentMiniTitle: {
       marginBottom: 9,
       color: "#0F2F5A",
-      fontSize: 12.5,
-      fontWeight: "900",
+      fontSize: vsType.size.label, fontFamily: vsType.family,
+      fontWeight: "800",
     },
 
     verifyBenefitRow: {
@@ -3712,7 +3713,7 @@ const styles =
     verifyBenefitText: {
       flex: 1,
       color: "#334155",
-      fontSize: 11.5,
+      fontSize: vsType.size.meta, fontFamily: vsType.family,
       fontWeight: "700",
     },
 
@@ -3734,14 +3735,14 @@ const styles =
 
     verifyStepMiniNumberText: {
       color: "#FFFFFF",
-      fontSize: 11,
-      fontWeight: "900",
+      fontSize: vsType.size.caption, fontFamily: vsType.family,
+      fontWeight: "800",
     },
 
     verifyStepMiniText: {
       flex: 1,
       color: "#334155",
-      fontSize: 11.5,
+      fontSize: vsType.size.meta, fontFamily: vsType.family,
       fontWeight: "700",
     },
 
@@ -3767,8 +3768,8 @@ const styles =
 
     verifyStartButtonText: {
       color: "#FFFFFF",
-      fontSize: 12.5,
-      fontWeight: "900",
+      fontSize: vsType.size.label, fontFamily: vsType.family,
+      fontWeight: "800",
     },
 
     verifyLearnButton: {
@@ -3788,8 +3789,8 @@ const styles =
 
     verifyLearnButtonText: {
       color: "#2563EB",
-      fontSize: 12.5,
-      fontWeight: "900",
+      fontSize: vsType.size.label, fontFamily: vsType.family,
+      fontWeight: "800",
     },
 
     verifyStateCard: {
@@ -3845,8 +3846,8 @@ const styles =
     verifyStateTitle: {
       flexShrink: 1,
       color: "#0F2F5A",
-      fontSize: 18,
-      fontWeight: "900",
+      fontSize: vsType.size.section, fontFamily: vsType.family,
+      fontWeight: "800",
     },
 
     verifyStateBadge: {
@@ -3859,14 +3860,14 @@ const styles =
     },
 
     verifyStateBadgeText: {
-      fontSize: 10.5,
-      fontWeight: "900",
+      fontSize: vsType.size.caption, fontFamily: vsType.family,
+      fontWeight: "800",
     },
 
     verifyStateText: {
       marginTop: 6,
       color: "#475569",
-      fontSize: 12,
+      fontSize: vsType.size.meta, fontFamily: vsType.family,
       lineHeight: 18,
       maxWidth: 760,
     },
@@ -3884,7 +3885,7 @@ const styles =
     verifyStateNoticeSuccessText: {
       flex: 1,
       color: "#166534",
-      fontSize: 11.5,
+      fontSize: vsType.size.meta, fontFamily: vsType.family,
       fontWeight: "700",
     },
 
@@ -3901,7 +3902,7 @@ const styles =
     verifyStateNoticeWarningText: {
       flex: 1,
       color: "#92400E",
-      fontSize: 11.5,
+      fontSize: vsType.size.meta, fontFamily: vsType.family,
       fontWeight: "700",
     },
 
@@ -3920,8 +3921,8 @@ const styles =
 
     verifyVolunteerButtonText: {
       color: "#FFFFFF",
-      fontSize: 12,
-      fontWeight: "900",
+      fontSize: vsType.size.meta, fontFamily: vsType.family,
+      fontWeight: "800",
     },
 
     verifyRetryButton: {
@@ -3941,8 +3942,8 @@ const styles =
 
     verifyRetryButtonText: {
       color: "#B91C1C",
-      fontSize: 12,
-      fontWeight: "900",
+      fontSize: vsType.size.meta, fontFamily: vsType.family,
+      fontWeight: "800",
     },
 
   });

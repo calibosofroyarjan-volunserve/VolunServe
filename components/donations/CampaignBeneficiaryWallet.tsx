@@ -1,3 +1,4 @@
+import { volunserveTypography as vsType } from "../../constants/volunserveLiveUi";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import React, {useEffect,useState} from "react";
 import {ActivityIndicator,StyleSheet,Text,View} from "react-native";
@@ -81,9 +82,9 @@ const s=StyleSheet.create({
   icon:{width:39,height:39,borderRadius:11,backgroundColor:"#E6F8EE",
     alignItems:"center",justifyContent:"center"},
   headingText:{flex:1,gap:4},
-  title:{fontSize:15,fontFamily:"DonationInterBold",color:"#174D3B"},
-  subtitle:{fontSize:11,fontFamily:"DonationInterRegular",lineHeight:17,color:"#63877A"},
-  note:{fontSize:10,fontFamily:"DonationInterRegular",lineHeight:16,color:"#668276"},
+  title:{fontSize: vsType.size.bodyStrong,fontFamily: vsType.family,color:"#174D3B"},
+  subtitle:{fontSize: vsType.size.caption,fontFamily: vsType.family,lineHeight:17,color:"#63877A"},
+  note:{fontSize: vsType.size.micro,fontFamily: vsType.family,lineHeight:16,color:"#668276"},
   loading:{flexDirection:"row",alignItems:"center",padding:14,gap:9},
-  info:{fontSize:11,color:"#738B83"},
+  info:{fontSize: vsType.size.caption,color:"#738B83"},
 });

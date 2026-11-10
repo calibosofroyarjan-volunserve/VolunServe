@@ -1,3 +1,4 @@
+import { volunserveTypography as vsType } from "../../constants/volunserveLiveUi";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { useRouter } from "expo-router";
 import { collection, onSnapshot } from "firebase/firestore";
@@ -115,17 +116,17 @@ const styles = StyleSheet.create({
   panel: { marginTop: 11, borderWidth: 1, borderColor: "#DBE9DF", borderRadius: 12, backgroundColor: "#FFFFFF", padding: 15 },
   heading: { flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 6 },
   copy: { flex: 1, minWidth: 0 },
-  eyebrow: { fontSize: 10, fontWeight: "700", letterSpacing: 0.6, color: "#197459" },
-  title: { fontSize: 17, fontWeight: "800", color: "#183E32", marginTop: 4 },
-  subtitle: { fontSize: 11.5, lineHeight: 17, color: "#62766B", marginTop: 4 },
+  eyebrow: { fontSize: vsType.size.micro, fontFamily: vsType.family, fontWeight: "700", letterSpacing: 0.6, color: "#197459" },
+  title: { fontSize: vsType.size.card, fontFamily: vsType.family, fontWeight: "800", color: "#183E32", marginTop: 4 },
+  subtitle: { fontSize: vsType.size.meta, fontFamily: vsType.family, lineHeight: 17, color: "#62766B", marginTop: 4 },
   row: { flexDirection: "row", alignItems: "center", gap: 9, borderTopWidth: 1, borderTopColor: "#E9EFEA", paddingVertical: 10 },
   icon: { width: 32, height: 32, backgroundColor: "#EFF7F1", borderRadius: 8, alignItems: "center", justifyContent: "center" },
   rowContent: { flex: 1, minWidth: 0 },
-  recordLabel: { fontSize: 12.5, fontWeight: "700", color: "#244735" },
-  recordDetail: { fontSize: 11, color: "#6C8073", marginTop: 2 },
-  date: { fontSize: 10.5, color: "#72887A", maxWidth: 155, textAlign: "right" },
+  recordLabel: { fontSize: vsType.size.label, fontFamily: vsType.family, fontWeight: "700", color: "#244735" },
+  recordDetail: { fontSize: vsType.size.caption, fontFamily: vsType.family, color: "#6C8073", marginTop: 2 },
+  date: { fontSize: vsType.size.caption, fontFamily: vsType.family, color: "#72887A", maxWidth: 155, textAlign: "right" },
   empty: { flexDirection: "row", alignItems: "center", gap: 9, paddingVertical: 15 },
-  emptyText: { color: "#738477", fontSize: 12, paddingVertical: 13 },
-  muted: { color: "#738477", fontSize: 12 },
-  warning: { fontSize: 11, color: "#9B6535", marginTop: 9, lineHeight: 16 },
+  emptyText: { color: "#738477", fontSize: vsType.size.meta, fontFamily: vsType.family, paddingVertical: 13 },
+  muted: { color: "#738477", fontSize: vsType.size.meta, fontFamily: vsType.family },
+  warning: { fontSize: vsType.size.caption, fontFamily: vsType.family, color: "#9B6535", marginTop: 9, lineHeight: 16 },
 });

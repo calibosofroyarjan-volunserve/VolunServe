@@ -1,3 +1,4 @@
+import { volunserveTypography as vsType } from "../../constants/volunserveLiveUi";
 import { liveUi as designUi } from "../../constants/volunserveLiveUi";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
@@ -4010,7 +4011,7 @@ function CompactAssistanceReview({
       ))) && (
         <TouchableOpacity accessibilityRole="button" style={styles.simpleMore} onPress={onAdditional}>
           <Ionicons name="options-outline" size={17} color="#64748B" />
-          <Text style={{flex:1,color:"#64748B",fontSize:12,fontWeight:"600"}}>
+          <Text style={{flex:1,color:"#64748B",fontSize: vsType.size.meta, fontFamily: vsType.family,fontWeight:"600"}}>
             Special case details (only if needed)
           </Text>
           <Ionicons name="chevron-forward" size={16} color="#64748B" />
@@ -5730,7 +5731,7 @@ function DocumentPreviewModal({
 }
 
 const styles = StyleSheet.create({
-  simpleVerifiedAmount: { fontSize: 22, fontWeight: "800", color: "#047857", paddingVertical: 3 },
+  simpleVerifiedAmount: { fontSize: vsType.size.titleSmall, fontFamily: vsType.family, fontWeight: "800", color: "#047857", paddingVertical: 3 },
   assistanceBudgetFields: { gap: 10, padding: 15, borderWidth: 1, borderColor: "#D8E8DE", borderRadius: 12, backgroundColor: "#FAFCFA" },
   simpleReviewAmountNotice: { flexDirection: "row", alignItems: "flex-start", gap: 9, padding: 12, borderRadius: 9, borderColor: "#FDE68A", borderWidth: 1, backgroundColor: "#FFFBEB" },
   simpleReviewOfficeCard: { flexDirection: "row", alignItems: "flex-start", gap: 9, padding: 12, borderRadius: 9, backgroundColor: "#F0FDF4", borderWidth: 1, borderColor: "#BBF7D0" },
@@ -5738,54 +5739,54 @@ const styles = StyleSheet.create({
   simpleReviewSectionHeading: { gap: 5 },
   clearReviewDropdownWrap: { gap: 4 },
   clearReviewDropdown: { minHeight: 44, borderRadius: 9, borderWidth: 1, borderColor: "#CBD5E1", backgroundColor: "#FFFFFF", paddingHorizontal: 12, paddingVertical: 9, flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 },
-  clearReviewDropdownValue: { flex: 1, fontSize: 12, fontWeight: "700", color: "#334155" },
+  clearReviewDropdownValue: { flex: 1, fontSize: vsType.size.meta, fontFamily: vsType.family, fontWeight: "700", color: "#334155" },
   clearReviewDropdownOptions: { borderRadius: 9, borderWidth: 1, borderColor: "#D8E2EA", backgroundColor: "#FFFFFF", overflow: "hidden", marginTop: 3 },
   clearReviewDropdownOption: { minHeight: 42, borderBottomWidth: 1, borderBottomColor: "#F1F5F9", paddingHorizontal: 12, paddingVertical: 10, flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10 },
   clearReviewDropdownActive: { backgroundColor: "#EFFAF3" },
-  clearReviewDropdownOptionText: { flex: 1, fontSize: 12, color: "#334155", lineHeight: 18 },
+  clearReviewDropdownOptionText: { flex: 1, fontSize: vsType.size.meta, fontFamily: vsType.family, color: "#334155", lineHeight: 18 },
   clearReviewDropdownOptionChosen: { color: "#047857", fontWeight: "800" },
 
   simplePanel: { padding: 20, gap: 20, backgroundColor: "#FFFFFF", borderRadius: 17, borderColor: "#DDE7E2", borderWidth: 1 },
   simpleHead: { flexDirection: "row", alignItems: "flex-start", gap: 12 },
   simpleIcon: { width: 40, height: 40, alignItems: "center", justifyContent: "center", backgroundColor: "#ECFDF5", borderRadius: 10 },
-  simpleTitle: { color: "#102A20", fontSize: 19, fontWeight: "800" },
-  simpleSection: { color: "#102A20", fontSize: 15, fontWeight: "800" },
-  simpleCopy: { color: "#526477", fontSize: 13, lineHeight: 20 },
+  simpleTitle: { color: "#102A20", fontSize: vsType.size.section, fontFamily: vsType.family, fontWeight: "800" },
+  simpleSection: { color: "#102A20", fontSize: vsType.size.bodyStrong, fontFamily: vsType.family, fontWeight: "800" },
+  simpleCopy: { color: "#526477", fontSize: vsType.size.label, fontFamily: vsType.family, lineHeight: 20 },
   simpleStart: { gap: 10, padding: 13, borderRadius: 10, backgroundColor: "#F0FDF4" },
   simpleLinks: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
   assistanceCaseSnapshot: { padding: 16, gap: 7, borderRadius: 12, backgroundColor: "#F7FAF8", borderWidth: 1, borderColor: "#E0EAE4" },
-  assistanceContextLabel: { color: "#047857", fontSize: 10, fontWeight: "900", letterSpacing: 0.9 },
-  assistanceContextTitle: { color: "#102A20", fontSize: 16, fontWeight: "800", lineHeight: 22 },
+  assistanceContextLabel: { color: "#047857", fontSize: vsType.size.micro, fontFamily: vsType.family, fontWeight: "800", letterSpacing: 0.9 },
+  assistanceContextTitle: { color: "#102A20", fontSize: vsType.size.card, fontFamily: vsType.family, fontWeight: "800", lineHeight: 22 },
   assistanceContextMeta: { color: "#526477", fontSize: designUi.type.meta.fontSize, fontWeight: designUi.type.meta.fontWeight, lineHeight: designUi.type.meta.lineHeight,},
-  assistanceContextDesc: { color: "#334155", fontSize: 13, lineHeight: 20 },
+  assistanceContextDesc: { color: "#334155", fontSize: vsType.size.label, fontFamily: vsType.family, lineHeight: 20 },
   simpleLink: { flexDirection: "row", alignItems: "center", gap: 7, borderRadius: 10, paddingVertical: 11, paddingHorizontal: 14, backgroundColor: "#FFFFFF", borderWidth: 1, borderColor: "#D8E9DF" },
-  simpleLinkText: { fontSize: 12, fontWeight: "700", color: "#0F766E" },
+  simpleLinkText: { fontSize: vsType.size.meta, fontFamily: vsType.family, fontWeight: "700", color: "#0F766E" },
   simpleChecks: { borderColor: "#E2E8F0", borderWidth: 1, borderRadius: 10, overflow: "hidden" },
   simpleCheck: { padding: 15, borderBottomWidth: 1, borderBottomColor: "#E9EFEC", gap: 9 },
-  simpleCheckTitle: { color: "#1E293B", fontSize: 13.5, fontWeight: "700" },
+  simpleCheckTitle: { color: "#1E293B", fontSize: vsType.size.body, fontFamily: vsType.family, fontWeight: "700" },
   simpleOptions: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 8 },
   simpleOption: { flexDirection: "row", alignItems: "center", gap: 6, minHeight: 38, borderWidth: 1, borderRadius: 9, borderColor: "#D1DBD7", backgroundColor: "#FFFFFF", paddingHorizontal: 13, paddingVertical: 9 },
   simpleOptionYes: { backgroundColor: "#ECFDF5", borderColor: "#16A34A" },
   simpleOptionIssue: { backgroundColor: "#FFFBEB", borderColor: "#F59E0B" },
-  simpleOptionLabel: { fontSize: 12.5, color: "#334155", fontWeight: "700" },
+  simpleOptionLabel: { fontSize: vsType.size.label, fontFamily: vsType.family, color: "#334155", fontWeight: "700" },
   simpleViewIcon: { padding: 9 },
   simpleField: { gap: 8, paddingVertical: 9 },
   simpleFinancial: { gap: 14, padding: 16, borderWidth: 1, borderColor: "#E0EAE4", borderRadius: 12, backgroundColor: "#FBFCFB" },
   simpleNotice: { flexDirection: "row", gap: 9, backgroundColor: "#FFFBEB", borderColor: "#FDE68A", borderWidth: 1, borderRadius: 9, padding: 12 },
-  simpleNoticeTitle: { color: "#92400E", fontSize: 12, fontWeight: "800" },
+  simpleNoticeTitle: { color: "#92400E", fontSize: vsType.size.meta, fontFamily: vsType.family, fontWeight: "800" },
   simpleNoticeText: { color: "#92400E", fontSize: designUi.type.body.fontSize, lineHeight: designUi.type.body.lineHeight, fontWeight: designUi.type.body.fontWeight,},
   simpleDecision: { gap: 14, borderTopWidth: 1, borderTopColor: "#E6EDE8", paddingTop: 20 },
   simpleButtons: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 9 },
   simpleSecondary: { flexDirection: "row", flexWrap: "wrap", gap: 24, paddingVertical: 10 },
-  simpleRejectText: { color: "#B42318", fontSize: 12, fontWeight: "700" },
+  simpleRejectText: { color: "#B42318", fontSize: vsType.size.meta, fontFamily: vsType.family, fontWeight: "700" },
   simpleMore: { borderTopWidth: 1, borderTopColor: "#E2E8F0", flexDirection: "row", alignItems: "center", gap: 8, paddingVertical: 12 },
   simpleReturnButton: { flexDirection: "row", alignItems: "center", gap: 7, padding: 10, alignSelf: "flex-start" },
-  simpleReturnText: { color: "#0F766E", fontSize: 12, fontWeight: "700" },
+  simpleReturnText: { color: "#0F766E", fontSize: vsType.size.meta, fontFamily: vsType.family, fontWeight: "700" },
   simpleSummaryAction: { gap: 11, padding: 14, marginHorizontal: 16, borderRadius: 10, borderColor: "#E2E8F0", borderWidth: 1, backgroundColor: "#F8FAFC" },
 
   assistanceRequiredAsterisk: {
     color: "#B42318",
-    fontWeight: "900",
+    fontWeight: "800",
   },
   assistanceFieldInvalid: {
     borderColor: "#DC2626",
@@ -5802,7 +5803,7 @@ const styles = StyleSheet.create({
   assistanceValidationHintText: {
     flex: 1,
     color: "#B42318",
-    fontSize: 11.5,
+    fontSize: vsType.size.meta, fontFamily: vsType.family,
     fontWeight: "600",
     lineHeight: 17,
   },
@@ -5816,7 +5817,7 @@ const styles = StyleSheet.create({
   },
   assistanceValidationSummaryTitle: {
     color: "#991B1B",
-    fontSize: 13,
+    fontSize: vsType.size.label, fontFamily: vsType.family,
     fontWeight: "800",
   },
   assistanceValidationSummaryLink: {
@@ -5828,7 +5829,7 @@ const styles = StyleSheet.create({
   assistanceValidationSummaryLinkText: {
     flex: 1,
     color: "#B42318",
-    fontSize: 11.5,
+    fontSize: vsType.size.meta, fontFamily: vsType.family,
     lineHeight: 17,
   },
   assistanceDesktop: {
@@ -5917,7 +5918,7 @@ const styles = StyleSheet.create({
   assistanceSearchText: {
     flex: 1,
     minWidth: 0,
-    fontSize: 12,
+    fontSize: vsType.size.meta, fontFamily: vsType.family,
     color: "#101828",
     paddingVertical: 9,
   },
@@ -5947,7 +5948,7 @@ const styles = StyleSheet.create({
   assistancePickerValue: {
     flex: 1,
     color: "#334155",
-    fontSize: 11.5,
+    fontSize: vsType.size.meta, fontFamily: vsType.family,
     fontWeight: "700",
   },
   assistancePickerChoices: {
@@ -5973,7 +5974,7 @@ const styles = StyleSheet.create({
   },
   assistancePickerChoiceText: {
     flex: 1,
-    fontSize: 11,
+    fontSize: vsType.size.caption, fontFamily: vsType.family,
     color: "#334155",
   },
   assistanceEmptyQueue: {
@@ -5989,7 +5990,7 @@ const styles = StyleSheet.create({
   assistanceListFootnote: {
     textAlign: "center",
     color: "#94A3B8",
-    fontSize: 10,
+    fontSize: vsType.size.micro, fontFamily: vsType.family,
   },
   assistanceNoSelection: {
     flex: 1,
@@ -6041,12 +6042,12 @@ const styles = StyleSheet.create({
   },
   assistanceChecklistText: {
     flex: 1,
-    fontSize: 12.5,
+    fontSize: vsType.size.label, fontFamily: vsType.family,
     fontWeight: "600",
     color: "#334155",
   },
   assistanceChecklistHelp: {
-    fontSize: 10.5,
+    fontSize: vsType.size.caption, fontFamily: vsType.family,
     lineHeight: 16,
     color: "#64748B",
     paddingTop: 8,
@@ -6059,7 +6060,7 @@ const styles = StyleSheet.create({
     paddingTop: 8,
   },
   assistanceLinkText: {
-    fontSize: 12,
+    fontSize: vsType.size.meta, fontFamily: vsType.family,
     fontWeight: "800",
     color: "#047857",
   },
@@ -6088,7 +6089,7 @@ const styles = StyleSheet.create({
   },
   assistanceWarning: {
     color: "#9A6700",
-    fontSize: 11,
+    fontSize: vsType.size.caption, fontFamily: vsType.family,
     lineHeight: 17,
   },
   mockQueueRowSelected: {
@@ -6123,7 +6124,7 @@ const styles = StyleSheet.create({
   loadingText: {
     marginTop: 12,
     color: "#64748B",
-    fontSize: 13,
+    fontSize: vsType.size.label, fontFamily: vsType.family,
     fontWeight: "600",
   },
 
@@ -6141,14 +6142,14 @@ const styles = StyleSheet.create({
   accessTitle: {
     marginTop: 12,
     color: "#0F172A",
-    fontSize: 21,
-    fontWeight: "900",
+    fontSize: vsType.size.titleSmall, fontFamily: vsType.family,
+    fontWeight: "800",
   },
 
   accessText: {
     marginTop: 8,
     color: "#64748B",
-    fontSize: 13,
+    fontSize: vsType.size.label, fontFamily: vsType.family,
     lineHeight: 20,
     textAlign: "center",
   },
@@ -6169,22 +6170,22 @@ const styles = StyleSheet.create({
 
   eyebrow: {
     color: "#4F46E5",
-    fontSize: 10,
-    fontWeight: "900",
+    fontSize: vsType.size.micro, fontFamily: vsType.family,
+    fontWeight: "800",
     letterSpacing: 1.3,
   },
 
   pageTitle: {
     marginTop: 6,
     color: "#0F172A",
-    fontSize: 29,
-    fontWeight: "900",
+    fontSize: vsType.size.hero, fontFamily: vsType.family,
+    fontWeight: "800",
   },
 
   pageSubtitle: {
     marginTop: 8,
     color: "#64748B",
-    fontSize: 13,
+    fontSize: vsType.size.label, fontFamily: vsType.family,
     lineHeight: 20,
     maxWidth: 760,
   },
@@ -6208,14 +6209,14 @@ const styles = StyleSheet.create({
 
   noteTitle: {
     color: "#312E81",
-    fontSize: 12,
-    fontWeight: "900",
+    fontSize: vsType.size.meta, fontFamily: vsType.family,
+    fontWeight: "800",
   },
 
   noteText: {
     marginTop: 4,
     color: "#4B5563",
-    fontSize: 11,
+    fontSize: vsType.size.caption, fontFamily: vsType.family,
     lineHeight: 17,
   },
 
@@ -6252,14 +6253,14 @@ const styles = StyleSheet.create({
 
   statValue: {
     color: "#0F172A",
-    fontSize: 20,
-    fontWeight: "900",
+    fontSize: vsType.size.subheading, fontFamily: vsType.family,
+    fontWeight: "800",
   },
 
   statLabel: {
     marginTop: 1,
     color: "#64748B",
-    fontSize: 11,
+    fontSize: vsType.size.caption, fontFamily: vsType.family,
     fontWeight: "700",
   },
 
@@ -6278,7 +6279,7 @@ const styles = StyleSheet.create({
   errorText: {
     flex: 1,
     color: "#B42318",
-    fontSize: 12,
+    fontSize: vsType.size.meta, fontFamily: vsType.family,
     fontWeight: "700",
   },
 
@@ -6303,7 +6304,7 @@ const styles = StyleSheet.create({
     flex: 1,
     minWidth: 0,
     color: "#0F172A",
-    fontSize: 13,
+    fontSize: vsType.size.label, fontFamily: vsType.family,
     outlineStyle: "none" as any,
   },
 
@@ -6329,7 +6330,7 @@ const styles = StyleSheet.create({
 
   filterChipText: {
     color: "#64748B",
-    fontSize: 11,
+    fontSize: vsType.size.caption, fontFamily: vsType.family,
     fontWeight: "800",
   },
 
@@ -6396,16 +6397,16 @@ const styles = StyleSheet.create({
 
   panelEyebrow: {
     color: "#64748B",
-    fontSize: 9.5,
-    fontWeight: "900",
+    fontSize: vsType.size.micro, fontFamily: vsType.family,
+    fontWeight: "800",
     letterSpacing: 1,
   },
 
   panelTitle: {
     marginTop: 3,
     color: "#0F172A",
-    fontSize: 15,
-    fontWeight: "900",
+    fontSize: vsType.size.bodyStrong, fontFamily: vsType.family,
+    fontWeight: "800",
   },
 
   requestCard: {
@@ -6433,7 +6434,7 @@ const styles = StyleSheet.create({
   requestId: {
     flex: 1,
     color: "#64748B",
-    fontSize: 10,
+    fontSize: vsType.size.micro, fontFamily: vsType.family,
     fontWeight: "800",
   },
 
@@ -6447,22 +6448,22 @@ const styles = StyleSheet.create({
   },
 
   statusText: {
-    fontSize: 9.5,
-    fontWeight: "900",
+    fontSize: vsType.size.micro, fontFamily: vsType.family,
+    fontWeight: "800",
   },
 
   requestTitle: {
     marginTop: 9,
     color: "#0F172A",
-    fontSize: 13,
+    fontSize: vsType.size.label, fontFamily: vsType.family,
     lineHeight: 18,
-    fontWeight: "900",
+    fontWeight: "800",
   },
 
   requestMeta: {
     marginTop: 5,
     color: "#64748B",
-    fontSize: 10.5,
+    fontSize: vsType.size.caption, fontFamily: vsType.family,
     lineHeight: 15,
   },
 
@@ -6483,15 +6484,15 @@ const styles = StyleSheet.create({
   emptyTitle: {
     marginTop: 9,
     color: "#334155",
-    fontSize: 14,
-    fontWeight: "900",
+    fontSize: vsType.size.body, fontFamily: vsType.family,
+    fontWeight: "800",
     textAlign: "center",
   },
 
   emptyText: {
     marginTop: 5,
     color: "#64748B",
-    fontSize: 11,
+    fontSize: vsType.size.caption, fontFamily: vsType.family,
     lineHeight: 17,
     textAlign: "center",
   },
@@ -6515,14 +6516,14 @@ const styles = StyleSheet.create({
   reviewTitle: {
     marginTop: 5,
     color: "#0F172A",
-    fontSize: 20,
-    fontWeight: "900",
+    fontSize: vsType.size.subheading, fontFamily: vsType.family,
+    fontWeight: "800",
   },
 
   reviewSubtitle: {
     marginTop: 5,
     color: "#64748B",
-    fontSize: 11.5,
+    fontSize: vsType.size.meta, fontFamily: vsType.family,
     lineHeight: 17,
   },
 
@@ -6536,8 +6537,8 @@ const styles = StyleSheet.create({
   },
 
   largeStatusText: {
-    fontSize: 10.5,
-    fontWeight: "900",
+    fontSize: vsType.size.caption, fontFamily: vsType.family,
+    fontWeight: "800",
   },
 
   tabs: {
@@ -6565,7 +6566,7 @@ const styles = StyleSheet.create({
 
   tabButtonText: {
     color: "#64748B",
-    fontSize: 10.5,
+    fontSize: vsType.size.caption, fontFamily: vsType.family,
     fontWeight: "800",
   },
 
@@ -6591,18 +6592,18 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   reviewJourneyTitle: {
-    fontSize: 17,
+    fontSize: vsType.size.card, fontFamily: vsType.family,
     fontWeight: "800",
     color: "#12382D",
     marginBottom: 4,
   },
   reviewJourneySubtitle: {
-    fontSize: 12,
+    fontSize: vsType.size.meta, fontFamily: vsType.family,
     lineHeight: 19,
     color: "#52637A",
   },
   reviewJourneyHint: {
-    fontSize: 11,
+    fontSize: vsType.size.caption, fontFamily: vsType.family,
     lineHeight: 17,
     color: "#64748B",
   },
@@ -6625,7 +6626,7 @@ const styles = StyleSheet.create({
   },
   reviewStepText: {
     color: "#475569",
-    fontSize: 12,
+    fontSize: vsType.size.meta, fontFamily: vsType.family,
     fontWeight: "700",
   },
   reviewStepTextActive: {
@@ -6656,7 +6657,7 @@ const styles = StyleSheet.create({
   reviewPreviousText: {
     color: "#475569",
     fontWeight: "700",
-    fontSize: 12,
+    fontSize: vsType.size.meta, fontFamily: vsType.family,
   },
   reviewNextButton: {
     flexDirection: "row",
@@ -6670,7 +6671,7 @@ const styles = StyleSheet.create({
   reviewNextText: {
     color: "#FFFFFF",
     fontWeight: "800",
-    fontSize: 12,
+    fontSize: vsType.size.meta, fontFamily: vsType.family,
   },
 
   sectionCard: {
@@ -6704,14 +6705,14 @@ const styles = StyleSheet.create({
 
   sectionTitle: {
     color: "#0F172A",
-    fontSize: 14,
-    fontWeight: "900",
+    fontSize: vsType.size.body, fontFamily: vsType.family,
+    fontWeight: "800",
   },
 
   sectionSubtitle: {
     marginTop: 3,
     color: "#64748B",
-    fontSize: 10.5,
+    fontSize: vsType.size.caption, fontFamily: vsType.family,
     lineHeight: 16,
   },
 
@@ -6732,7 +6733,7 @@ const styles = StyleSheet.create({
 
   infoLabel: {
     color: "#64748B",
-    fontSize: 9.5,
+    fontSize: vsType.size.micro, fontFamily: vsType.family,
     fontWeight: "800",
     textTransform: "uppercase",
     letterSpacing: 0.5,
@@ -6741,7 +6742,7 @@ const styles = StyleSheet.create({
   infoValue: {
     marginTop: 5,
     color: "#0F172A",
-    fontSize: 12,
+    fontSize: vsType.size.meta, fontFamily: vsType.family,
     lineHeight: 17,
     fontWeight: "700",
   },
@@ -6756,13 +6757,13 @@ const styles = StyleSheet.create({
     marginTop: 9,
     marginBottom: 7,
     color: "#334155",
-    fontSize: 11,
-    fontWeight: "900",
+    fontSize: vsType.size.caption, fontFamily: vsType.family,
+    fontWeight: "800",
   },
 
   bodyText: {
     color: "#475569",
-    fontSize: 12,
+    fontSize: vsType.size.meta, fontFamily: vsType.family,
     lineHeight: 19,
   },
 
@@ -6782,7 +6783,7 @@ const styles = StyleSheet.create({
 
   softBadgeText: {
     color: "#475569",
-    fontSize: 9.5,
+    fontSize: vsType.size.micro, fontFamily: vsType.family,
     fontWeight: "800",
   },
 
@@ -6799,7 +6800,7 @@ const styles = StyleSheet.create({
   signalLabel: {
     flex: 1,
     color: "#475569",
-    fontSize: 11,
+    fontSize: vsType.size.caption, fontFamily: vsType.family,
     fontWeight: "700",
   },
 
@@ -6818,8 +6819,8 @@ const styles = StyleSheet.create({
 
   signalValue: {
     color: "#15803D",
-    fontSize: 10,
-    fontWeight: "900",
+    fontSize: vsType.size.micro, fontFamily: vsType.family,
+    fontWeight: "800",
   },
 
   signalValueTextAttention: {
@@ -6852,14 +6853,14 @@ const styles = StyleSheet.create({
 
   documentTitle: {
     color: "#0F172A",
-    fontSize: 11.5,
-    fontWeight: "900",
+    fontSize: vsType.size.meta, fontFamily: vsType.family,
+    fontWeight: "800",
   },
 
   documentMeta: {
     marginTop: 3,
     color: "#64748B",
-    fontSize: 9.5,
+    fontSize: vsType.size.micro, fontFamily: vsType.family,
   },
 
   emptyInner: {
@@ -6898,21 +6899,21 @@ const styles = StyleSheet.create({
 
   publicCampaignPhotoBadgeText: {
     color: "#15803D",
-    fontSize: 9.5,
-    fontWeight: "900",
+    fontSize: vsType.size.micro, fontFamily: vsType.family,
+    fontWeight: "800",
   },
 
   publicCampaignPhotoTitle: {
     marginTop: 10,
     color: "#172033",
-    fontSize: 13,
-    fontWeight: "900",
+    fontSize: vsType.size.label, fontFamily: vsType.family,
+    fontWeight: "800",
   },
 
   publicCampaignPhotoText: {
     marginTop: 5,
     color: "#64748B",
-    fontSize: 11,
+    fontSize: vsType.size.caption, fontFamily: vsType.family,
     lineHeight: 17,
   },
 
@@ -6930,8 +6931,8 @@ const styles = StyleSheet.create({
 
   publicCampaignPhotoOpenButtonText: {
     color: "#4338CA",
-    fontSize: 10.5,
-    fontWeight: "900",
+    fontSize: vsType.size.caption, fontFamily: vsType.family,
+    fontWeight: "800",
   },
 
   warningCard: {
@@ -6946,14 +6947,14 @@ const styles = StyleSheet.create({
 
   warningTitle: {
     color: "#78350F",
-    fontSize: 11,
-    fontWeight: "900",
+    fontSize: vsType.size.caption, fontFamily: vsType.family,
+    fontWeight: "800",
   },
 
   warningText: {
     marginTop: 4,
     color: "#92400E",
-    fontSize: 10.5,
+    fontSize: vsType.size.caption, fontFamily: vsType.family,
     lineHeight: 16,
   },
 
@@ -6969,7 +6970,7 @@ const styles = StyleSheet.create({
   infoNoticeText: {
     flex: 1,
     color: "#075985",
-    fontSize: 10.5,
+    fontSize: vsType.size.caption, fontFamily: vsType.family,
     lineHeight: 16,
   },
 
@@ -6979,14 +6980,14 @@ const styles = StyleSheet.create({
 
   historyTitle: {
     color: "#334155",
-    fontSize: 11,
-    fontWeight: "900",
+    fontSize: vsType.size.caption, fontFamily: vsType.family,
+    fontWeight: "800",
   },
 
   historyEmpty: {
     marginTop: 8,
     color: "#64748B",
-    fontSize: 10.5,
+    fontSize: vsType.size.caption, fontFamily: vsType.family,
     lineHeight: 16,
   },
 
@@ -7008,19 +7009,19 @@ const styles = StyleSheet.create({
 
   historyRequestTitle: {
     color: "#0F172A",
-    fontSize: 10.5,
+    fontSize: vsType.size.caption, fontFamily: vsType.family,
     fontWeight: "800",
   },
 
   historyMeta: {
     marginTop: 3,
     color: "#64748B",
-    fontSize: 9,
+    fontSize: vsType.size.micro, fontFamily: vsType.family,
   },
 
   historyStatus: {
-    fontSize: 9,
-    fontWeight: "900",
+    fontSize: vsType.size.micro, fontFamily: vsType.family,
+    fontWeight: "800",
   },
 
   checkRow: {
@@ -7064,14 +7065,14 @@ const styles = StyleSheet.create({
 
   checkTitle: {
     color: "#0F172A",
-    fontSize: 11.5,
-    fontWeight: "900",
+    fontSize: vsType.size.meta, fontFamily: vsType.family,
+    fontWeight: "800",
   },
 
   checkText: {
     marginTop: 3,
     color: "#64748B",
-    fontSize: 10,
+    fontSize: vsType.size.micro, fontFamily: vsType.family,
     lineHeight: 15,
   },
 
@@ -7092,7 +7093,7 @@ const styles = StyleSheet.create({
   checkSummaryText: {
     flex: 1,
     color: "#92400E",
-    fontSize: 10.5,
+    fontSize: vsType.size.caption, fontFamily: vsType.family,
     fontWeight: "700",
   },
 
@@ -7107,7 +7108,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#CBD5E1",
     color: "#0F172A",
-    fontSize: 11.5,
+    fontSize: vsType.size.meta, fontFamily: vsType.family,
     lineHeight: 18,
     textAlignVertical: "top",
     outlineStyle: "none" as any,
@@ -7120,7 +7121,7 @@ const styles = StyleSheet.create({
   counterText: {
     marginTop: 5,
     color: "#94A3B8",
-    fontSize: 9.5,
+    fontSize: vsType.size.micro, fontFamily: vsType.family,
     textAlign: "right",
   },
 
@@ -7143,8 +7144,8 @@ const styles = StyleSheet.create({
   },
 
   actionButtonText: {
-    fontSize: 10.5,
-    fontWeight: "900",
+    fontSize: vsType.size.caption, fontFamily: vsType.family,
+    fontWeight: "800",
   },
 
   optionGrid: {
@@ -7174,7 +7175,7 @@ const styles = StyleSheet.create({
 
   optionText: {
     color: "#475569",
-    fontSize: 10.5,
+    fontSize: vsType.size.caption, fontFamily: vsType.family,
     fontWeight: "800",
   },
 
@@ -7189,7 +7190,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#CBD5E1",
     color: "#0F172A",
-    fontSize: 11.5,
+    fontSize: vsType.size.meta, fontFamily: vsType.family,
     backgroundColor: "#FFFFFF",
     outlineStyle: "none" as any,
   },
@@ -7206,7 +7207,7 @@ const styles = StyleSheet.create({
   donationNoticeText: {
     flex: 1,
     color: "#5B21B6",
-    fontSize: 10.5,
+    fontSize: vsType.size.caption, fontFamily: vsType.family,
     lineHeight: 16,
   },
 
@@ -7232,7 +7233,7 @@ const styles = StyleSheet.create({
 
   locationChipText: {
     color: "#64748B",
-    fontSize: 9.5,
+    fontSize: vsType.size.micro, fontFamily: vsType.family,
     fontWeight: "800",
   },
 
@@ -7252,14 +7253,14 @@ const styles = StyleSheet.create({
 
   rejectedTitle: {
     color: "#B42318",
-    fontSize: 11.5,
-    fontWeight: "900",
+    fontSize: vsType.size.meta, fontFamily: vsType.family,
+    fontWeight: "800",
   },
 
   rejectedText: {
     marginTop: 4,
     color: "#9F1239",
-    fontSize: 10.5,
+    fontSize: vsType.size.caption, fontFamily: vsType.family,
     lineHeight: 16,
   },
 
@@ -7301,14 +7302,14 @@ const styles = StyleSheet.create({
 
   previewTitle: {
     color: "#0F172A",
-    fontSize: 14,
-    fontWeight: "900",
+    fontSize: vsType.size.body, fontFamily: vsType.family,
+    fontWeight: "800",
   },
 
   previewMeta: {
     marginTop: 3,
     color: "#64748B",
-    fontSize: 10,
+    fontSize: vsType.size.micro, fontFamily: vsType.family,
   },
 
   previewClose: {
@@ -7356,8 +7357,8 @@ const styles = StyleSheet.create({
 
   previewOpenText: {
     color: "#FFFFFF",
-    fontSize: 10.5,
-    fontWeight: "900",
+    fontSize: vsType.size.caption, fontFamily: vsType.family,
+    fontWeight: "800",
   },
 
   previewSecondaryButton: {
@@ -7373,8 +7374,8 @@ const styles = StyleSheet.create({
 
   previewSecondaryText: {
     color: "#334155",
-    fontSize: 10.5,
-    fontWeight: "900",
+    fontSize: vsType.size.caption, fontFamily: vsType.family,
+    fontWeight: "800",
   },
 
   mockHeaderRow: {
@@ -7414,7 +7415,7 @@ const styles = StyleSheet.create({
 
   mockStatusTabText: {
     color: "#475569",
-    fontSize: 10.5,
+    fontSize: vsType.size.caption, fontFamily: vsType.family,
     fontWeight: "800",
   },
 
@@ -7447,7 +7448,7 @@ const styles = StyleSheet.create({
 
   mockHistoryButtonText: {
     color: "#64748B",
-    fontSize: 10.5,
+    fontSize: vsType.size.caption, fontFamily: vsType.family,
     fontWeight: "800",
   },
 
@@ -7480,8 +7481,8 @@ const styles = StyleSheet.create({
 
   mockAllButtonText: {
     color: "#64748B",
-    fontSize: 10.5,
-    fontWeight: "900",
+    fontSize: vsType.size.caption, fontFamily: vsType.family,
+    fontWeight: "800",
   },
 
   mockAllButtonTextActive: {
@@ -7540,15 +7541,15 @@ const styles = StyleSheet.create({
 
   mockQueueId: {
     color: "#64748B",
-    fontSize: 10.5,
+    fontSize: vsType.size.caption, fontFamily: vsType.family,
     fontWeight: "800",
   },
 
   mockQueueTitle: {
     marginTop: 3,
     color: "#111827",
-    fontSize: 13.5,
-    fontWeight: "900",
+    fontSize: vsType.size.body, fontFamily: vsType.family,
+    fontWeight: "800",
   },
 
   mockQueueMetaLine: {
@@ -7560,7 +7561,7 @@ const styles = StyleSheet.create({
 
   mockQueueMeta: {
     color: "#64748B",
-    fontSize: 10,
+    fontSize: vsType.size.micro, fontFamily: vsType.family,
   },
 
   mockQueueDot: {
@@ -7582,13 +7583,13 @@ const styles = StyleSheet.create({
   },
 
   mockQueueStatusText: {
-    fontSize: 10.5,
-    fontWeight: "900",
+    fontSize: vsType.size.caption, fontFamily: vsType.family,
+    fontWeight: "800",
   },
 
   mockQueueDate: {
     color: "#64748B",
-    fontSize: 10.5,
+    fontSize: vsType.size.caption, fontFamily: vsType.family,
   },
 
   mockBackLink: {
@@ -7601,7 +7602,7 @@ const styles = StyleSheet.create({
 
   mockBackLinkText: {
     color: "#2563EB",
-    fontSize: 11,
+    fontSize: vsType.size.caption, fontFamily: vsType.family,
     fontWeight: "800",
   },
 
@@ -7617,8 +7618,8 @@ const styles = StyleSheet.create({
 
   mockBackPrimaryText: {
     color: "#FFFFFF",
-    fontSize: 10.5,
-    fontWeight: "900",
+    fontSize: vsType.size.caption, fontFamily: vsType.family,
+    fontWeight: "800",
   },
 
   mockDetailTabs: {
@@ -7690,7 +7691,7 @@ const styles = StyleSheet.create({
 
   detailSecurityBadgeText: {
     color: "#475569",
-    fontSize: 9.5,
+    fontSize: vsType.size.micro, fontFamily: vsType.family,
     fontWeight: "800",
     letterSpacing: 0.2,
   },
@@ -7752,16 +7753,16 @@ const styles = StyleSheet.create({
 
   detailPaneEyebrow: {
     color: "#64748B",
-    fontSize: 8.5,
-    fontWeight: "900",
+    fontSize: vsType.size.micro, fontFamily: vsType.family,
+    fontWeight: "800",
     letterSpacing: 1,
   },
 
   detailPaneTitle: {
     marginTop: 2,
     color: "#0F172A",
-    fontSize: 14,
-    fontWeight: "900",
+    fontSize: vsType.size.body, fontFamily: vsType.family,
+    fontWeight: "800",
   },
 
   detailMainScroll: {
@@ -7816,22 +7817,22 @@ const styles = StyleSheet.create({
 
   evaluationRailEyebrow: {
     color: "#4F46E5",
-    fontSize: 8.5,
-    fontWeight: "900",
+    fontSize: vsType.size.micro, fontFamily: vsType.family,
+    fontWeight: "800",
     letterSpacing: 1.1,
   },
 
   evaluationRailTitle: {
     marginTop: 2,
     color: "#0F172A",
-    fontSize: 14,
-    fontWeight: "900",
+    fontSize: vsType.size.body, fontFamily: vsType.family,
+    fontWeight: "800",
   },
 
   evaluationRailSubtitle: {
     marginTop: 3,
     color: "#64748B",
-    fontSize: 9.5,
+    fontSize: vsType.size.micro, fontFamily: vsType.family,
     lineHeight: 14,
   },
 
@@ -7895,15 +7896,15 @@ const styles = StyleSheet.create({
 
   declaredAddressLabel: {
     color: "#64748B",
-    fontSize: 7.5,
-    fontWeight: "900",
+    fontSize: vsType.size.micro, fontFamily: vsType.family,
+    fontWeight: "800",
     letterSpacing: 0.6,
   },
 
   declaredAddressValue: {
     marginTop: 3,
     color: "#0F172A",
-    fontSize: 10.5,
+    fontSize: vsType.size.caption, fontFamily: vsType.family,
     lineHeight: 15,
     fontWeight: "800",
   },
@@ -7919,8 +7920,8 @@ const styles = StyleSheet.create({
 
   addressSearchLabel: {
     color: "#475569",
-    fontSize: 7.5,
-    fontWeight: "900",
+    fontSize: vsType.size.micro, fontFamily: vsType.family,
+    fontWeight: "800",
     letterSpacing: 0.55,
   },
 
@@ -7953,8 +7954,8 @@ const styles = StyleSheet.create({
 
   addressSearchButtonText: {
     color: "#FFFFFF",
-    fontSize: 9.5,
-    fontWeight: "900",
+    fontSize: vsType.size.micro, fontFamily: vsType.family,
+    fontWeight: "800",
   },
 
   mapSearchStatus: {
@@ -7969,7 +7970,7 @@ const styles = StyleSheet.create({
   mapSearchStatusText: {
     flex: 1,
     color: "#075985",
-    fontSize: 9,
+    fontSize: vsType.size.micro, fontFamily: vsType.family,
     lineHeight: 14,
   },
 
@@ -7986,14 +7987,14 @@ const styles = StyleSheet.create({
 
   residencyVerifiedTitle: {
     color: "#166534",
-    fontSize: 10,
-    fontWeight: "900",
+    fontSize: vsType.size.micro, fontFamily: vsType.family,
+    fontWeight: "800",
   },
 
   residencyVerifiedText: {
     marginTop: 2,
     color: "#15803D",
-    fontSize: 8.8,
+    fontSize: vsType.size.micro, fontFamily: vsType.family,
     lineHeight: 13.5,
   },
 
@@ -8009,7 +8010,7 @@ const styles = StyleSheet.create({
   addressPrivacyNoticeText: {
     flex: 1,
     color: "#0F766E",
-    fontSize: 9,
+    fontSize: vsType.size.micro, fontFamily: vsType.family,
     lineHeight: 14,
   },
 
@@ -8059,14 +8060,14 @@ const styles = StyleSheet.create({
 
   embeddedMapTitle: {
     color: "#0F172A",
-    fontSize: 11.5,
-    fontWeight: "900",
+    fontSize: vsType.size.meta, fontFamily: vsType.family,
+    fontWeight: "800",
   },
 
   embeddedMapQuery: {
     marginTop: 2,
     color: "#64748B",
-    fontSize: 9.5,
+    fontSize: vsType.size.micro, fontFamily: vsType.family,
     lineHeight: 14,
   },
 
@@ -8079,8 +8080,8 @@ const styles = StyleSheet.create({
 
   embeddedMapBadgeText: {
     color: "#4338CA",
-    fontSize: 7.5,
-    fontWeight: "900",
+    fontSize: vsType.size.micro, fontFamily: vsType.family,
+    fontWeight: "800",
     letterSpacing: 0.7,
   },
 
@@ -8102,7 +8103,7 @@ const styles = StyleSheet.create({
   embeddedMapEmptyText: {
     maxWidth: 320,
     color: "#64748B",
-    fontSize: 10,
+    fontSize: vsType.size.micro, fontFamily: vsType.family,
     lineHeight: 15,
     textAlign: "center",
   },
@@ -8118,14 +8119,14 @@ const styles = StyleSheet.create({
 
   embeddedMapNativeFallbackTitle: {
     color: "#1D4ED8",
-    fontSize: 11,
-    fontWeight: "900",
+    fontSize: vsType.size.caption, fontFamily: vsType.family,
+    fontWeight: "800",
   },
 
   embeddedMapNativeFallbackText: {
     maxWidth: 320,
     color: "#64748B",
-    fontSize: 9.5,
+    fontSize: vsType.size.micro, fontFamily: vsType.family,
     lineHeight: 14,
     textAlign: "center",
   },
@@ -8148,7 +8149,7 @@ const styles = StyleSheet.create({
   embeddedMapPrivacyText: {
     flex: 1,
     color: "#0F766E",
-    fontSize: 9,
+    fontSize: vsType.size.micro, fontFamily: vsType.family,
     lineHeight: 14,
   },
 
@@ -8167,7 +8168,7 @@ const styles = StyleSheet.create({
 
   embeddedMapExternalButtonText: {
     color: "#475569",
-    fontSize: 9,
+    fontSize: vsType.size.micro, fontFamily: vsType.family,
     fontWeight: "800",
   },
 
@@ -8195,7 +8196,7 @@ const styles = StyleSheet.create({
   adminDropdownButtonText: {
     flex: 1,
     color: "#0F172A",
-    fontSize: 11,
+    fontSize: vsType.size.caption, fontFamily: vsType.family,
     fontWeight: "700",
   },
 
@@ -8240,8 +8241,8 @@ const styles = StyleSheet.create({
 
   adminDropdownModalTitle: {
     color: "#0F172A",
-    fontSize: 13,
-    fontWeight: "900",
+    fontSize: vsType.size.label, fontFamily: vsType.family,
+    fontWeight: "800",
   },
 
   adminDropdownCloseButton: {
@@ -8279,13 +8280,13 @@ const styles = StyleSheet.create({
   adminDropdownOptionText: {
     flex: 1,
     color: "#334155",
-    fontSize: 11,
+    fontSize: vsType.size.caption, fontFamily: vsType.family,
     fontWeight: "700",
   },
 
   adminDropdownOptionTextActive: {
     color: "#4338CA",
-    fontWeight: "900",
+    fontWeight: "800",
   },
 
 });

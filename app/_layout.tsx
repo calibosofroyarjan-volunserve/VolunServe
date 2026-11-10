@@ -8,6 +8,7 @@ import {
   useSegments,
 } from "expo-router";
 import { GoogleAuthProvider, type User } from "firebase/auth";
+import { isKnownDisposableEmail } from "../lib/registrationEmailPolicy";
 import React, {
   useEffect,
   useRef,
@@ -303,7 +304,8 @@ export default function RootLayout() {
       profile.role === "applicant";
     const communityEmailMatches = !!authUser.email && !!profile.email &&
       authUser.email.trim().toLowerCase() === profile.email.trim().toLowerCase();
-    if (communityAccount && (!authUser.emailVerified || !communityEmailMatches)) {
+    if (communityAccount && (!authUser.emailVerified || !communityEmailMatches ||
+      isKnownDisposableEmail(authUser.email || ""))) {
       if (!isLoginRoute && !isSignupRoute) {
         void logoutUser().finally(() => router.replace("/login"));
       }

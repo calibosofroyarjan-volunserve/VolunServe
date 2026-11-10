@@ -1,3 +1,4 @@
+import { volunserveTypography as vsType } from "../../constants/volunserveLiveUi";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter, type Href } from "expo-router";
@@ -1311,8 +1312,8 @@ const styles = StyleSheet.create({
     borderColor: "#DDEAE2", paddingHorizontal: 15, paddingVertical: 13,
     marginBottom: 14, borderRadius: 10,
   },
-  journeyLabel: { color: "#23765F", fontSize: 10, fontWeight: "800", letterSpacing: 1 },
-  journeyText: { color: "#36594B", fontSize: 12, lineHeight: 19, marginTop: 4 },
+  journeyLabel: { color: "#23765F", fontSize: vsType.size.micro, fontFamily: vsType.family, fontWeight: "800", letterSpacing: 1 },
+  journeyText: { color: "#36594B", fontSize: vsType.size.meta, fontFamily: vsType.family, lineHeight: 19, marginTop: 4 },
 
   /* ==========================================================
      ROOT
@@ -1434,7 +1435,7 @@ const styles = StyleSheet.create({
   brandTitle: {
     color: "#FFFFFF",
 
-    fontSize: 25,
+    fontSize: vsType.size.title, fontFamily: vsType.family,
     lineHeight: 28,
 
     fontWeight: "800",
@@ -1445,7 +1446,7 @@ const styles = StyleSheet.create({
   brandSubtitle: {
     color: "#FFE9EB",
 
-    fontSize: 11.5,
+    fontSize: vsType.size.meta, fontFamily: vsType.family,
     lineHeight: 15,
 
     marginTop: 2,
@@ -1556,14 +1557,14 @@ const styles = StyleSheet.create({
   welcomeSmall: {
     color: "#54647B",
 
-    fontSize: 13.5,
+    fontSize: vsType.size.body, fontFamily: vsType.family,
     lineHeight: 18,
   },
 
   welcomeName: {
     color: "#0B1E38",
 
-    fontSize: 27,
+    fontSize: vsType.size.page, fontFamily: vsType.family,
     lineHeight: 32,
 
     fontWeight: "800",
@@ -1576,7 +1577,7 @@ const styles = StyleSheet.create({
   welcomeMessage: {
     color: "#5B6B82",
 
-    fontSize: 13.5,
+    fontSize: vsType.size.body, fontFamily: vsType.family,
     lineHeight: 19,
 
     marginTop: 9,
@@ -1640,7 +1641,7 @@ const styles = StyleSheet.create({
   statusText: {
     color: "#243751",
 
-    fontSize: 13.5,
+    fontSize: vsType.size.body, fontFamily: vsType.family,
 
     fontWeight: "700",
   },
@@ -1665,7 +1666,7 @@ const styles = StyleSheet.create({
   operationalText: {
     color: "#078F62",
 
-    fontSize: 13.5,
+    fontSize: vsType.size.body, fontFamily: vsType.family,
 
     fontWeight: "700",
   },
@@ -1688,7 +1689,7 @@ const styles = StyleSheet.create({
   sectionLabel: {
     color: "#078D81",
 
-    fontSize: 14,
+    fontSize: vsType.size.body, fontFamily: vsType.family,
 
     fontWeight: "800",
 
@@ -1698,7 +1699,7 @@ const styles = StyleSheet.create({
   sectionDescription: {
     color: "#8190A1",
 
-    fontSize: 10.5,
+    fontSize: vsType.size.caption, fontFamily: vsType.family,
 
     marginTop: 3,
   },
@@ -1715,7 +1716,7 @@ const styles = StyleSheet.create({
   serviceCountText: {
     color: "#078D81",
 
-    fontSize: 10,
+    fontSize: vsType.size.micro, fontFamily: vsType.family,
 
     fontWeight: "700",
   },
@@ -1910,7 +1911,7 @@ const styles = StyleSheet.create({
   },
 
   identityText: {
-    fontSize: 9,
+    fontSize: vsType.size.micro, fontFamily: vsType.family,
 
     fontWeight: "800",
 
@@ -1920,7 +1921,7 @@ const styles = StyleSheet.create({
   serviceTitle: {
     color: "#0E213D",
 
-    fontSize: 18,
+    fontSize: vsType.size.section, fontFamily: vsType.family,
     lineHeight: 21,
 
     fontWeight: "800",
@@ -1933,7 +1934,7 @@ const styles = StyleSheet.create({
   serviceDescription: {
     color: "#556B87",
 
-    fontSize: 12.5,
+    fontSize: vsType.size.label, fontFamily: vsType.family,
     lineHeight: 17,
   },
 

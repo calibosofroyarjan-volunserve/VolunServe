@@ -1,7 +1,9 @@
+import { volunserveTypography as vsType } from "../constants/volunserveLiveUi";
 import { liveUi as designUi } from "../constants/volunserveLiveUi";
 import EmailFirstSignup from "../components/auth/EmailFirstSignup";
 import { userFacingError } from "../lib/userFacingError";
 import { EMAIL_FIRST_SIGNUP_ENABLED } from "../lib/signupFeature";
+import { getRegistrationEmailError } from "../lib/registrationEmailPolicy";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { Feather } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
@@ -468,7 +470,6 @@ function LegacySignup() {
   );
 
   const validation = useMemo(() => {
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     const nameOk = (s: string) => s.trim().length >= 2;
 
     const lastNameValid = nameOk(formData.lastName);
@@ -480,7 +481,8 @@ function LegacySignup() {
     const phoneDigits = formData.phoneLocal.replace(/\D/g, "");
     const phoneValid = true;
 
-    const emailValid = emailRegex.test(formData.email.trim().toLowerCase());
+    const emailError = getRegistrationEmailError(formData.email);
+    const emailValid = emailError === null;
     const step2Valid =
       !!formData.region &&
       isAllowedProvince(formData.province) &&
@@ -517,6 +519,7 @@ function LegacySignup() {
       ageNumber,
       phoneValid,
       emailValid,
+      emailError,
       step1Valid,
       step2Valid,
       step3Valid,
@@ -600,6 +603,11 @@ function LegacySignup() {
       if (!user || !user.providerData.some(
         (provider) => provider.providerId === GoogleAuthProvider.PROVIDER_ID
       )) return;
+      const restoredEmailError = getRegistrationEmailError(user.email || "");
+      if (restoredEmailError) {
+        if (auth.currentUser?.uid === user.uid) void signOut(auth).catch(() => undefined);
+        return;
+      }
       try {
         const profileSnapshot = await getDoc(doc(db, "users", user.uid));
         if (active && !profileSnapshot.exists()) applyGoogleIdentity(user);
@@ -619,6 +627,11 @@ function LegacySignup() {
       if (!googleUser.email || !googleUser.emailVerified) {
         await signOut(auth);
         throw new Error("Google could not verify the email for this account.");
+      }
+      const googleEmailError = getRegistrationEmailError(googleUser.email);
+      if (googleEmailError) {
+        if (auth.currentUser?.uid === googleUser.uid) await signOut(auth);
+        throw new Error(googleEmailError);
       }
       const existing = await getDoc(doc(db, "users", googleUser.uid));
       if (existing.exists()) {
@@ -886,8 +899,8 @@ function LegacySignup() {
                     editable={!googleBound}
                     autoCapitalize="none"
                   />
-                  {formData.email.length > 0 && !validation.emailValid ? (
-                    <ValidationText ok={false}>Enter a valid email address.</ValidationText>
+                  {formData.email.length > 0 && !!validation.emailError ? (
+                    <ValidationText ok={false}>{validation.emailError}</ValidationText>
                   ) : null}
                   {!googleBound ? (
                     <>
@@ -953,7 +966,7 @@ function LegacySignup() {
                         accessibilityRole="button"
                         style={{ alignSelf: "center", paddingVertical: 10 }}
                       >
-                        <Text style={{ color: "#087A62", fontWeight: "800", fontSize: 12 }}>
+                        <Text style={{ color: "#087A62", fontWeight: "800", fontSize: vsType.size.meta, fontFamily: vsType.family }}>
                           Use email and password instead
                         </Text>
                       </TouchableOpacity>
@@ -1039,7 +1052,7 @@ function LegacySignup() {
                           >
                             <Text
                               style={{
-                                fontSize: 15,
+                                fontSize: vsType.size.bodyStrong, fontFamily: vsType.family,
                                 color: formData.dateOfBirth ? COLORS.text : COLORS.lightText,
                                 fontWeight: "700",
                               }}
@@ -1380,23 +1393,23 @@ const styles = StyleSheet.create({
   photoOverlay: { position: "absolute", top: 0, right: 0, bottom: 0, left: 0, backgroundColor: "rgba(2, 55, 61, 0.52)" },
   photoTop: { paddingHorizontal: 48, paddingTop: 46, flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   secureBadge: { borderWidth: 1, borderColor: "rgba(255,255,255,0.3)", backgroundColor: "rgba(4,74,78,0.42)", borderRadius: 14, paddingHorizontal: 17, paddingVertical: 11, maxWidth: 205 },
-  secureBadgeText: { color: "#fff", fontSize: 12, lineHeight: 16, fontWeight: "800" },
+  secureBadgeText: { color: "#fff", fontSize: vsType.size.meta, fontFamily: vsType.family, lineHeight: 16, fontWeight: "800" },
   photoControls: { position: "absolute", top: "48%", left: 28, right: 28, flexDirection: "row", justifyContent: "space-between" },
   photoArrow: { width: 48, height: 48, borderRadius: 24, borderWidth: 1, borderColor: "rgba(255,255,255,0.7)", backgroundColor: "rgba(3,35,42,0.5)", alignItems: "center", justifyContent: "center" },
-  photoArrowText: { color: "#fff", fontSize: 38, lineHeight: 40, fontWeight: "300" },
+  photoArrowText: { color: "#fff", fontSize: vsType.size.xl, fontFamily: vsType.family, lineHeight: 40, fontWeight: "300" },
   photoCopy: { paddingHorizontal: 48, paddingBottom: 46 },
   photoAccentLine: { width: 82, height: 4, borderRadius: 4, backgroundColor: "#2dd4bf", marginBottom: 30 },
-  photoAccent: { color: "#5eead4", fontSize: 12, letterSpacing: 1.7, fontWeight: "900", marginBottom: 12 },
-  photoTitle: { color: "#fff", fontSize: 50, lineHeight: 57, fontWeight: "900", marginBottom: 17 },
-  photoBody: { color: "#f0fdfa", fontSize: 17, lineHeight: 27, maxWidth: 570, fontWeight: "500" },
+  photoAccent: { color: "#5eead4", fontSize: vsType.size.meta, fontFamily: vsType.family, letterSpacing: 1.7, fontWeight: "800", marginBottom: 12 },
+  photoTitle: { color: "#fff", fontSize: vsType.size.giant, fontFamily: vsType.family, lineHeight: 57, fontWeight: "800", marginBottom: 17 },
+  photoBody: { color: "#f0fdfa", fontSize: vsType.size.card, fontFamily: vsType.family, lineHeight: 27, maxWidth: 570, fontWeight: "500" },
   photoFooter: { marginTop: 38, flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
-  photoLocation: { color: "#d7f7f3", fontSize: 12, fontWeight: "700" },
+  photoLocation: { color: "#d7f7f3", fontSize: vsType.size.meta, fontFamily: vsType.family, fontWeight: "700" },
   formScroll: { flex: 1, backgroundColor: "#eef7fb" },
   content: { width: "100%", maxWidth: 610, alignSelf: "center", justifyContent: "flex-start", minHeight: "100%", paddingHorizontal: 0, paddingTop: 54, paddingBottom: 54 },
   contentMobile: { maxWidth: 610, paddingHorizontal: 16, paddingTop: 24, paddingBottom: 30 },
   mobileBrand: { flexDirection: "row", alignItems: "center", justifyContent: "center", marginBottom: 18 },
   mobileLogo: { width: 38, height: 38, borderRadius: 10, marginRight: 9 },
-  mobileBrandText: { color: COLORS.primaryDark, fontSize: 20, fontWeight: "900" },
+  mobileBrandText: { color: COLORS.primaryDark, fontSize: vsType.size.subheading, fontFamily: vsType.family, fontWeight: "800" },
   mainCard: { backgroundColor: "#fff", borderRadius: 14, borderWidth: 1, borderColor: "#dce6eb", paddingHorizontal: 32, paddingVertical: 34, shadowColor: "#64748b", shadowOpacity: 0.12, shadowRadius: 22, elevation: 5 },
   signupHeading: { alignItems: "center", marginBottom: 22 },
   signupTitle: { color: COLORS.text, fontSize: designUi.type.page.fontSize, lineHeight: designUi.type.page.lineHeight, fontWeight: designUi.type.page.fontWeight, textAlign: "center" },
@@ -1433,9 +1446,9 @@ const styles = StyleSheet.create({
     marginBottom: 14,
   },
   roleChoiceIconWrapActive: { backgroundColor: COLORS.primarySoft },
-  roleChoiceIcon: { fontSize: 24, color: COLORS.primaryDark },
+  roleChoiceIcon: { fontSize: vsType.size.title, fontFamily: vsType.family, color: COLORS.primaryDark },
   roleChoiceTitle: { color: COLORS.text, fontSize: designUi.type.card.fontSize, fontWeight: designUi.type.card.fontWeight, marginBottom: 8, lineHeight: designUi.type.card.lineHeight,},
-  roleChoiceText: { color: COLORS.muted, fontSize: 12.5, lineHeight: 19, fontWeight: "600", flex: 1 },
+  roleChoiceText: { color: COLORS.muted, fontSize: vsType.size.label, fontFamily: vsType.family, lineHeight: 19, fontWeight: "600", flex: 1 },
   roleChoiceBadge: {
     marginTop: 16,
     paddingHorizontal: 10,
@@ -1444,14 +1457,14 @@ const styles = StyleSheet.create({
     backgroundColor: "#e0f2fe",
   },
   roleChoiceBadgeVolunteer: { backgroundColor: "#dcfce7" },
-  roleChoiceBadgeText: { color: "#334155", fontSize: 10.5, fontWeight: "900" },
+  roleChoiceBadgeText: { color: "#334155", fontSize: vsType.size.caption, fontFamily: vsType.family, fontWeight: "800" },
   roleSelectionHint: {
     marginTop: 16,
     padding: 12,
     borderRadius: 10,
     backgroundColor: "#f8fafc",
     color: COLORS.muted,
-    fontSize: 11.5,
+    fontSize: vsType.size.meta, fontFamily: vsType.family,
     lineHeight: 17,
     fontWeight: "650" as any,
     textAlign: "center",
@@ -1477,10 +1490,10 @@ const styles = StyleSheet.create({
     marginBottom: 18,
   },
   selectedRoleCopy: { minWidth: 0 },
-  selectedRoleLabel: { color: COLORS.muted, fontSize: 9, fontWeight: "900", letterSpacing: 0.8 },
-  selectedRoleName: { color: COLORS.primaryDark, fontSize: 14, fontWeight: "900", marginTop: 2 },
+  selectedRoleLabel: { color: COLORS.muted, fontSize: vsType.size.micro, fontFamily: vsType.family, fontWeight: "800", letterSpacing: 0.8 },
+  selectedRoleName: { color: COLORS.primaryDark, fontSize: vsType.size.body, fontFamily: vsType.family, fontWeight: "800", marginTop: 2 },
   changeRoleBtn: { paddingHorizontal: 12, paddingVertical: 7, borderRadius: 8, backgroundColor: "#fff", borderWidth: 1, borderColor: "#b7d8d3" },
-  changeRoleText: { color: COLORS.primary, fontSize: 11.5, fontWeight: "900" },
+  changeRoleText: { color: COLORS.primary, fontSize: vsType.size.meta, fontFamily: vsType.family, fontWeight: "800" },
 
   hero: {
     backgroundColor: COLORS.primary,
@@ -1494,10 +1507,10 @@ const styles = StyleSheet.create({
   },
   brandRow: { flexDirection: "row", alignItems: "center" },
   logo: { width: 62, height: 62, marginRight: 12, backgroundColor: "#fff", borderRadius: 18 },
-  brandTitle: { color: "#fff", fontSize: 32, fontWeight: "900" },
-  brandSub: { color: "#e6fffb", fontSize: 13, fontWeight: "500", marginTop: 2 },
-  heroTitle: { color: "#fff", fontSize: 26, fontWeight: "900", marginBottom: 8 },
-  heroText: { color: "#ecfeff", fontSize: 13.5, lineHeight: 20, fontWeight: "600" },
+  brandTitle: { color: "#fff", fontSize: vsType.size.display, fontFamily: vsType.family, fontWeight: "800" },
+  brandSub: { color: "#e6fffb", fontSize: vsType.size.label, fontFamily: vsType.family, fontWeight: "500", marginTop: 2 },
+  heroTitle: { color: "#fff", fontSize: vsType.size.page, fontFamily: vsType.family, fontWeight: "800", marginBottom: 8 },
+  heroText: { color: "#ecfeff", fontSize: vsType.size.body, fontFamily: vsType.family, lineHeight: 20, fontWeight: "600" },
 
   carouselWrap: { marginBottom: 16 },
   carouselCard: {
@@ -1510,9 +1523,9 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
   },
-  carouselIcon: { fontSize: 28, marginRight: 14 },
-  carouselTitle: { fontSize: 15.5, fontWeight: "900", marginBottom: 4, color: COLORS.text },
-  carouselText: { fontSize: 12.5, color: COLORS.muted, lineHeight: 18, fontWeight: "600" },
+  carouselIcon: { fontSize: vsType.size.hero, fontFamily: vsType.family, marginRight: 14 },
+  carouselTitle: { fontSize: vsType.size.card, fontFamily: vsType.family, fontWeight: "800", marginBottom: 4, color: COLORS.text },
+  carouselText: { fontSize: vsType.size.label, fontFamily: vsType.family, color: COLORS.muted, lineHeight: 18, fontWeight: "600" },
   dots: { flexDirection: "row", alignItems: "center", gap: 8 },
   dot: { width: 9, height: 9, borderRadius: 99 },
   dotOn: { width: 28, backgroundColor: "#2dd4bf" },
@@ -1526,26 +1539,26 @@ const styles = StyleSheet.create({
   },
   stepperTop: { flexDirection: "row", alignItems: "center", marginBottom: 14 },
   stepIconBubble: { width: 44, height: 44, borderRadius: 14, backgroundColor: COLORS.primarySoft, justifyContent: "center", alignItems: "center", marginRight: 12 },
-  stepIcon: { fontSize: 22 },
-  stepperTitle: { color: COLORS.text, fontSize: 17, fontWeight: "900" },
-  stepperSub: { color: COLORS.muted, fontSize: 12.5, fontWeight: "600", marginTop: 2 },
-  stepCounter: { color: COLORS.primary, fontSize: 14, fontWeight: "900" },
+  stepIcon: { fontSize: vsType.size.titleSmall, fontFamily: vsType.family },
+  stepperTitle: { color: COLORS.text, fontSize: vsType.size.card, fontFamily: vsType.family, fontWeight: "800" },
+  stepperSub: { color: COLORS.muted, fontSize: vsType.size.label, fontFamily: vsType.family, fontWeight: "600", marginTop: 2 },
+  stepCounter: { color: COLORS.primary, fontSize: vsType.size.body, fontFamily: vsType.family, fontWeight: "800" },
   stepRow: { flexDirection: "row", alignItems: "flex-start" },
   stepItem: { flex: 1, flexDirection: "row", alignItems: "flex-start" },
   stepNode: { width: 70, alignItems: "center" },
   stepCircle: { width: 38, height: 38, borderRadius: 999, backgroundColor: "#e7edf2", justifyContent: "center", alignItems: "center" },
   stepCircleActive: { backgroundColor: COLORS.primary },
-  stepCircleText: { color: COLORS.muted, fontSize: 12, fontWeight: "900" },
+  stepCircleText: { color: COLORS.muted, fontSize: vsType.size.meta, fontFamily: vsType.family, fontWeight: "800" },
   stepCircleTextActive: { color: "#fff" },
-  stepLabel: { color: "#334155", fontSize: 11.5, fontWeight: "700", marginTop: 7 },
-  stepLabelActive: { color: COLORS.primaryDark, fontWeight: "900" },
+  stepLabel: { color: "#334155", fontSize: vsType.size.meta, fontFamily: vsType.family, fontWeight: "700", marginTop: 7 },
+  stepLabelActive: { color: COLORS.primaryDark, fontWeight: "800" },
   stepLine: { flex: 1, height: 2, backgroundColor: "#dbe5eb", marginHorizontal: -9, marginTop: 18, borderRadius: 999 },
   stepLineActive: { backgroundColor: COLORS.primary },
 
   progressBarWrap: { marginTop: 12 },
   progressBar: { height: 6, backgroundColor: "#e2e8f0", borderRadius: 10, overflow: "hidden" },
   progressFill: { height: 6, backgroundColor: COLORS.primary, borderRadius: 10 },
-  progressText: { fontSize: 11, marginTop: 6, color: COLORS.muted, fontWeight: "700", textAlign: "center" },
+  progressText: { fontSize: vsType.size.caption, fontFamily: vsType.family, marginTop: 6, color: COLORS.muted, fontWeight: "700", textAlign: "center" },
 
   formCard: {
     backgroundColor: "transparent",
@@ -1559,20 +1572,20 @@ const styles = StyleSheet.create({
   roleRow: { flexDirection: "row", gap: 10, marginBottom: 14 },
   roleBtn: { flex: 1, minHeight: 56, flexDirection: "row", justifyContent: "center", backgroundColor: "#f5f8fa", borderWidth: 1.5, borderColor: "#d9e2e8", paddingVertical: 12, borderRadius: 9, alignItems: "center" },
   roleBtnActive: { backgroundColor: "#eefafa", borderColor: COLORS.primary },
-  roleIcon: { fontSize: 19, marginRight: 9 },
-  roleBtnText: { color: COLORS.text, fontWeight: "900" },
+  roleIcon: { fontSize: vsType.size.section, fontFamily: vsType.family, marginRight: 9 },
+  roleBtnText: { color: COLORS.text, fontWeight: "800" },
   roleBtnTextActive: { color: COLORS.primary },
   roleInfoBox: { backgroundColor: "#eff6ff", borderWidth: 1, borderColor: "#bfdbfe", borderRadius: 10, padding: 12, marginBottom: 14 },
   roleInfoBoxVolunteer: { backgroundColor: "#f0fdfa", borderColor: "#99f6e4" },
-  roleInfoTitle: { color: COLORS.text, fontSize: 13, fontWeight: "900", marginBottom: 4 },
-  roleInfoText: { color: COLORS.muted, fontSize: 12.5, lineHeight: 18, fontWeight: "600" },
+  roleInfoTitle: { color: COLORS.text, fontSize: vsType.size.label, fontFamily: vsType.family, fontWeight: "800", marginBottom: 4 },
+  roleInfoText: { color: COLORS.muted, fontSize: vsType.size.label, fontFamily: vsType.family, lineHeight: 18, fontWeight: "600" },
 
   googleSignupButton: { flexDirection: "row", gap: 12, minHeight: 46, borderWidth: 1, borderColor: "#CBD5E1", borderRadius: 12, backgroundColor: "#FFFFFF", alignItems: "center", justifyContent: "center", marginTop: 0, paddingHorizontal: 16 },
   googleSignupLogo: { width: 20, height: 20 },
-  googleSignupLabel: { color: "#163D38", fontSize: 13, fontWeight: "800" },
+  googleSignupLabel: { color: "#163D38", fontSize: vsType.size.label, fontFamily: vsType.family, fontWeight: "800" },
   signupDividerRow: { flexDirection: "row", alignItems: "center", gap: 14, marginVertical: 16 },
   signupDividerLine: { flex: 1, height: 1, backgroundColor: "#BDCFC7" },
-  signupDividerText: { color: "#154A3D", fontSize: 13, fontWeight: "900", letterSpacing: 1.8 },
+  signupDividerText: { color: "#154A3D", fontSize: vsType.size.label, fontFamily: vsType.family, fontWeight: "800", letterSpacing: 1.8 },
   emailVerifyHint: { color: "#4B6B61", fontSize: designUi.type.body.fontSize, fontWeight: designUi.type.body.fontWeight, lineHeight: designUi.type.body.lineHeight, marginBottom: 2 },
   personalDetailsHeader: { marginTop: 24, paddingTop: 18, borderTopWidth: 1, borderTopColor: "#DFEBE6" },
   nameRow: { flexDirection: "row", flexWrap: "wrap", gap: 12, alignItems: "flex-start" },
@@ -1580,85 +1593,85 @@ const styles = StyleSheet.create({
   dateOfBirthRow: { flexDirection: "row", marginTop: 2 },
   dateOfBirthColumn: { width: "100%", maxWidth: 260 },
   step1TermsBox: { marginTop: 12, paddingVertical: 8, paddingHorizontal: 12, backgroundColor: "#F2FAF7", borderWidth: 1, borderColor: "#D7E8E0", borderRadius: 12 },
-  step1TermsLink: { color: "#006B56", fontSize: 12, fontWeight: "800", textDecorationLine: "underline", marginLeft: 32, marginBottom: 4 },
+  step1TermsLink: { color: "#006B56", fontSize: vsType.size.meta, fontFamily: vsType.family, fontWeight: "800", textDecorationLine: "underline", marginLeft: 32, marginBottom: 4 },
   googleConnectedNotice: { flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 11, paddingHorizontal: 12, marginBottom: 16, borderRadius: 10, backgroundColor: "#f0fdfa", borderWidth: 1, borderColor: "#b5e8dc" },
-  googleConnectedText: { flex: 1, color: COLORS.primaryDark, fontSize: 12.5, lineHeight: 18, fontWeight: "700" },
+  googleConnectedText: { flex: 1, color: COLORS.primaryDark, fontSize: vsType.size.label, fontFamily: vsType.family, lineHeight: 18, fontWeight: "700" },
   infoBox: { backgroundColor: COLORS.primarySoft, borderWidth: 1, borderColor: "#99f6e4", borderRadius: 14, paddingVertical: 10, paddingHorizontal: 12, marginTop: 12 },
-  infoBoxText: { color: COLORS.primaryDark, fontSize: 12.5, fontWeight: "800", lineHeight: 18 },
+  infoBoxText: { color: COLORS.primaryDark, fontSize: vsType.size.label, fontFamily: vsType.family, fontWeight: "800", lineHeight: 18 },
 
   formRow: { flexDirection: "row", gap: 14 },
   formColumn: { flex: 1, minWidth: 0 },
   field: { marginBottom: 14 },
   fixedLocationField: { height: 52, borderWidth: 1, borderColor: "#dce5ec", borderRadius: 12, backgroundColor: "#f1f5f9", paddingHorizontal: 14, justifyContent: "center" },
-  fixedLocationText: { color: COLORS.text, fontSize: 14, fontWeight: "800" },
+  fixedLocationText: { color: COLORS.text, fontSize: vsType.size.body, fontFamily: vsType.family, fontWeight: "800" },
   label: { fontSize: designUi.type.label.fontSize, fontWeight: designUi.type.label.fontWeight, color: "#172033", marginBottom: 7, lineHeight: designUi.type.label.lineHeight,},
   groupLabel: { fontSize: designUi.type.label.fontSize, fontWeight: designUi.type.label.fontWeight, color: "#172033", marginTop: 3, marginBottom: 7, lineHeight: designUi.type.label.lineHeight,},
-  helperText: { color: COLORS.muted, fontSize: 11.5, fontWeight: "600", marginTop: -3, marginBottom: 10 },
+  helperText: { color: COLORS.muted, fontSize: vsType.size.meta, fontFamily: vsType.family, fontWeight: "600", marginTop: -3, marginBottom: 10 },
   profileModeBanner: { backgroundColor: "#eff6ff", borderWidth: 1, borderColor: "#bfdbfe", borderRadius: 10, padding: 14, marginBottom: 18 },
   profileModeBannerVolunteer: { backgroundColor: "#f0fdfa", borderColor: "#99f6e4" },
-  profileModeTitle: { color: COLORS.text, fontSize: 14, fontWeight: "900", marginBottom: 4 },
-  profileModeText: { color: COLORS.muted, fontSize: 12.5, lineHeight: 18, fontWeight: "600" },
+  profileModeTitle: { color: COLORS.text, fontSize: vsType.size.body, fontFamily: vsType.family, fontWeight: "800", marginBottom: 4 },
+  profileModeText: { color: COLORS.muted, fontSize: vsType.size.label, fontFamily: vsType.family, lineHeight: 18, fontWeight: "600" },
   residentNotice: { flexDirection: "row", alignItems: "flex-start", backgroundColor: "#eff6ff", borderWidth: 1, borderColor: "#bfdbfe", borderRadius: 10, padding: 14, marginTop: 4 },
-  residentNoticeIcon: { fontSize: 22, marginRight: 12, color: COLORS.accent },
-  residentNoticeTitle: { color: COLORS.text, fontSize: 13.5, fontWeight: "900", marginBottom: 4 },
+  residentNoticeIcon: { fontSize: vsType.size.titleSmall, fontFamily: vsType.family, marginRight: 12, color: COLORS.accent },
+  residentNoticeTitle: { color: COLORS.text, fontSize: vsType.size.body, fontFamily: vsType.family, fontWeight: "800", marginBottom: 4 },
   residentNoticeText: { color: COLORS.muted, fontSize: designUi.type.body.fontSize, lineHeight: designUi.type.body.lineHeight, fontWeight: designUi.type.body.fontWeight},
   inputShell: { height: 46, flexDirection: "row", alignItems: "center", backgroundColor: "#fff", borderWidth: 1, borderColor: "#cfdbe3", borderRadius: 8, paddingLeft: 13 },
-  inputIcon: { color: "#64748b", fontSize: 16, width: 25, textAlign: "center" },
-  input: { height: 46, backgroundColor: "#fff", borderWidth: 1, borderColor: "#cfdbe3", borderRadius: 8, paddingVertical: 0, paddingHorizontal: 13, fontSize: 14, color: COLORS.text, fontWeight: "600" },
+  inputIcon: { color: "#64748b", fontSize: vsType.size.card, fontFamily: vsType.family, width: 25, textAlign: "center" },
+  input: { height: 46, backgroundColor: "#fff", borderWidth: 1, borderColor: "#cfdbe3", borderRadius: 8, paddingVertical: 0, paddingHorizontal: 13, fontSize: vsType.size.body, fontFamily: vsType.family, color: COLORS.text, fontWeight: "600" },
   inputControl: { flex: 1, height: 44, borderWidth: 0, backgroundColor: "transparent", paddingLeft: 9 },
   webDateShell: { height: 46, flexDirection: "row", alignItems: "center", borderWidth: 1, borderColor: "#cfdbe3", borderRadius: 8, backgroundColor: "#fff", paddingHorizontal: 12 },
-  webDateIcon: { color: "#64748b", fontSize: 15, marginRight: 9 },
-  webDateInput: { flex: 1, height: 42, borderWidth: 0, backgroundColor: "transparent", color: COLORS.text, fontSize: 14, fontWeight: "600" },
+  webDateIcon: { color: "#64748b", fontSize: vsType.size.bodyStrong, fontFamily: vsType.family, marginRight: 9 },
+  webDateInput: { flex: 1, height: 42, borderWidth: 0, backgroundColor: "transparent", color: COLORS.text, fontSize: vsType.size.body, fontFamily: vsType.family, fontWeight: "600" },
   inputFocused: { borderColor: COLORS.primary, backgroundColor: "#fff" },
   inputInvalid: { borderColor: COLORS.danger },
   disabledInput: { backgroundColor: "#f1f5f9", opacity: 0.85 },
 
-  validation: { fontSize: 11, marginBottom: 8, fontWeight: "700" },
+  validation: { fontSize: vsType.size.caption, fontFamily: vsType.family, marginBottom: 8, fontWeight: "700" },
   checkRow: { flexDirection: "row", alignItems: "center", marginBottom: 12 },
-  checkLabel: { flex: 1, fontSize: 13, color: COLORS.text, fontWeight: "700", lineHeight: 18 },
+  checkLabel: { flex: 1, fontSize: vsType.size.label, fontFamily: vsType.family, color: COLORS.text, fontWeight: "700", lineHeight: 18 },
   checkbox: { width: 22, height: 22, borderWidth: 2, borderColor: "#cbd5e1", borderRadius: 7, marginRight: 10, justifyContent: "center", alignItems: "center", backgroundColor: "#fff" },
   checkboxOn: { backgroundColor: COLORS.primary, borderColor: COLORS.primary },
-  checkboxTick: { color: "#fff", fontWeight: "900", fontSize: 13 },
+  checkboxTick: { color: "#fff", fontWeight: "800", fontSize: vsType.size.label, fontFamily: vsType.family },
 
   phoneWrap: { flexDirection: "row", alignItems: "center", backgroundColor: "#fff", borderWidth: 1, borderColor: "#cfdbe3", borderRadius: 8, overflow: "hidden", marginBottom: 12 },
   phonePrefix: { flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 12, height: 46, borderRightWidth: 1, borderRightColor: COLORS.border, backgroundColor: "#fff" },
-  flag: { fontSize: 18 },
-  phonePrefixText: { fontSize: 14, fontWeight: "900", color: COLORS.text },
-  phoneInput: { flex: 1, height: 46, paddingHorizontal: 14, fontSize: 14, backgroundColor: "#fff", color: COLORS.text, fontWeight: "600" },
+  flag: { fontSize: vsType.size.section, fontFamily: vsType.family },
+  phonePrefixText: { fontSize: vsType.size.body, fontFamily: vsType.family, fontWeight: "800", color: COLORS.text },
+  phoneInput: { flex: 1, height: 46, paddingHorizontal: 14, fontSize: vsType.size.body, fontFamily: vsType.family, backgroundColor: "#fff", color: COLORS.text, fontWeight: "600" },
 
   loadingRow: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 14, backgroundColor: COLORS.field, padding: 12, borderRadius: 14 },
-  loadingText: { color: COLORS.muted, fontSize: 12, fontWeight: "700" },
+  loadingText: { color: COLORS.muted, fontSize: vsType.size.meta, fontFamily: vsType.family, fontWeight: "700" },
   addressNotice: { flexDirection: "row", alignItems: "center", backgroundColor: "#ecfeff", borderWidth: 1, borderColor: "#a5f3fc", borderRadius: 14, padding: 14, marginTop: 4 },
-  addressNoticeIcon: { fontSize: 22, marginRight: 10 },
-  addressNoticeText: { flex: 1, color: "#155e75", fontSize: 13, lineHeight: 19, fontWeight: "700" },
+  addressNoticeIcon: { fontSize: vsType.size.titleSmall, fontFamily: vsType.family, marginRight: 10 },
+  addressNoticeText: { flex: 1, color: "#155e75", fontSize: vsType.size.label, fontFamily: vsType.family, lineHeight: 19, fontWeight: "700" },
   profileNotice: { flexDirection: "row", alignItems: "center", backgroundColor: "#f1f6f9", borderRadius: 8, paddingVertical: 14, paddingHorizontal: 15, marginTop: 2 },
-  profileNoticeIcon: { color: "#0e7490", fontSize: 22, marginRight: 12, fontWeight: "900" },
-  profileNoticeText: { flex: 1, color: "#64748b", fontSize: 12.5, lineHeight: 18, fontWeight: "600" },
+  profileNoticeIcon: { color: "#0e7490", fontSize: vsType.size.titleSmall, fontFamily: vsType.family, marginRight: 12, fontWeight: "800" },
+  profileNoticeText: { flex: 1, color: "#64748b", fontSize: vsType.size.label, fontFamily: vsType.family, lineHeight: 18, fontWeight: "600" },
 
   cardBox: { backgroundColor: "transparent", borderRadius: 0, padding: 0, borderWidth: 0, marginBottom: 20, flexDirection: "row", flexWrap: "wrap" },
   skillWrap: { width: "100%", flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between", marginBottom: 8 },
   skillTag: { width: "32%", minHeight: 42, paddingVertical: 9, paddingHorizontal: 8, borderRadius: 999, borderWidth: 1, borderColor: "#cbd5e1", marginBottom: 9, backgroundColor: "#f8fafc", alignItems: "center", justifyContent: "center" },
   skillTagActive: { backgroundColor: COLORS.primary, borderColor: COLORS.primary },
-  skillText: { fontSize: 11.5, lineHeight: 15, fontWeight: "800", color: COLORS.text, textAlign: "center" },
+  skillText: { fontSize: vsType.size.meta, fontFamily: vsType.family, lineHeight: 15, fontWeight: "800", color: COLORS.text, textAlign: "center" },
   skillTextActive: { color: "#ffffff" },
   checkboxRow: { width: "33.333%", flexDirection: "row", alignItems: "center", marginBottom: 12 },
-  checkboxLabel: { marginLeft: 2, fontSize: 14, color: COLORS.text, flex: 1, fontWeight: "700" },
+  checkboxLabel: { marginLeft: 2, fontSize: vsType.size.body, fontFamily: vsType.family, color: COLORS.text, flex: 1, fontWeight: "700" },
 
   passwordEyeButton: { minWidth: 44, height: 44, alignItems: "center", justifyContent: "center", paddingHorizontal: 10 },
   passwordPanel: { backgroundColor: COLORS.field, borderRadius: 16, borderWidth: 1, borderColor: COLORS.border, padding: 14, marginBottom: 18 },
-  passwordStrength: { color: COLORS.text, fontWeight: "900", fontSize: 14, marginBottom: 8 },
+  passwordStrength: { color: COLORS.text, fontWeight: "800", fontSize: vsType.size.body, fontFamily: vsType.family, marginBottom: 8 },
   requirementsGrid: { flexDirection: "row", flexWrap: "wrap", columnGap: 18 },
   googleConnectedCard: { flexDirection: "row", alignItems: "center", backgroundColor: "#ecfdf5", borderWidth: 1, borderColor: "#a7f3d0", borderRadius: 16, padding: 16, marginBottom: 20 },
   googleMark: { width: 42, height: 42, borderRadius: 21, backgroundColor: "#fff", alignItems: "center", justifyContent: "center", marginRight: 12, borderWidth: 1, borderColor: COLORS.border },
-  googleMarkText: { color: "#2563eb", fontSize: 23, fontWeight: "900" },
-  googleConnectedTitle: { color: COLORS.text, fontSize: 14, fontWeight: "900" },
-  googleConnectedEmail: { color: COLORS.muted, fontSize: 12, marginTop: 3, fontWeight: "600" },
+  googleMarkText: { color: "#2563eb", fontSize: vsType.size.title, fontFamily: vsType.family, fontWeight: "800" },
+  googleConnectedTitle: { color: COLORS.text, fontSize: vsType.size.body, fontFamily: vsType.family, fontWeight: "800" },
+  googleConnectedEmail: { color: COLORS.muted, fontSize: vsType.size.meta, fontFamily: vsType.family, marginTop: 3, fontWeight: "600" },
   verifiedBadge: { backgroundColor: "#d1fae5", borderRadius: 999, paddingHorizontal: 10, paddingVertical: 6 },
-  verifiedBadgeText: { color: "#047857", fontSize: 11, fontWeight: "900" },
+  verifiedBadgeText: { color: "#047857", fontSize: vsType.size.caption, fontFamily: vsType.family, fontWeight: "800" },
   consentBox: { borderWidth: 1, borderColor: "#cfdbe3", borderRadius: 8, paddingHorizontal: 14, paddingTop: 13, marginBottom: 12, backgroundColor: "#fff" },
   reviewNotice: { flexDirection: "row", alignItems: "center", backgroundColor: "#e0f2fe", borderRadius: 8, paddingVertical: 16, paddingHorizontal: 16, marginTop: 14 },
-  reviewNoticeIcon: { color: "#0284c7", fontSize: 22, marginRight: 12, fontWeight: "900" },
-  reviewNoticeText: { color: "#475569", fontSize: 12.5, fontWeight: "600", flex: 1 },
+  reviewNoticeIcon: { color: "#0284c7", fontSize: vsType.size.titleSmall, fontFamily: vsType.family, marginRight: 12, fontWeight: "800" },
+  reviewNoticeText: { color: "#475569", fontSize: vsType.size.label, fontFamily: vsType.family, fontWeight: "600", flex: 1 },
 
   reviewBox: {
     backgroundColor: COLORS.primarySoft,
@@ -1669,7 +1682,7 @@ const styles = StyleSheet.create({
     borderColor: "#99f6e4",
   },
   reviewText: {
-    fontSize: 13,
+    fontSize: vsType.size.label, fontFamily: vsType.family,
     fontWeight: "800",
     color: COLORS.primaryDark,
     marginBottom: 8,
@@ -1683,38 +1696,38 @@ const styles = StyleSheet.create({
   navBtn: { minWidth: 160, paddingVertical: 15, paddingHorizontal: 22, borderRadius: 8, alignItems: "center", borderWidth: 1.5, borderColor: COLORS.primary },
   primaryBtn: { backgroundColor: COLORS.primary, shadowColor: COLORS.primary, shadowOpacity: 0.22, shadowRadius: 8, elevation: 4 },
   secondaryBtn: { backgroundColor: "#fff" },
-  primaryText: { color: "#fff", fontWeight: "900" },
-  secondaryText: { color: COLORS.primary, fontWeight: "900" },
+  primaryText: { color: "#fff", fontWeight: "800" },
+  secondaryText: { color: COLORS.primary, fontWeight: "800" },
   disabledBtn: { opacity: 0.5 },
   loginLinkWrap: { paddingVertical: 10 },
-  link: { textAlign: "center", fontSize: 14, color: COLORS.muted, fontWeight: "700" },
-  linkStrong: { color: COLORS.primary, fontWeight: "900" },
+  link: { textAlign: "center", fontSize: vsType.size.body, fontFamily: vsType.family, color: COLORS.muted, fontWeight: "700" },
+  linkStrong: { color: COLORS.primary, fontWeight: "800" },
 
   ddTrigger: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", backgroundColor: COLORS.field, borderWidth: 1, borderColor: COLORS.border, borderRadius: 14, paddingVertical: 15, paddingHorizontal: 14 },
-  ddValue: { fontSize: 15, color: COLORS.text, fontWeight: "800", flex: 1, paddingRight: 8 },
+  ddValue: { fontSize: vsType.size.bodyStrong, fontFamily: vsType.family, color: COLORS.text, fontWeight: "800", flex: 1, paddingRight: 8 },
   ddPlaceholder: { color: COLORS.lightText, fontWeight: "800" },
-  ddChevron: { fontSize: 14, color: COLORS.muted, fontWeight: "900" },
+  ddChevron: { fontSize: vsType.size.body, fontFamily: vsType.family, color: COLORS.muted, fontWeight: "800" },
   ddBackdrop: { flex: 1, backgroundColor: "rgba(15, 23, 42, 0.22)" },
   ddPanel: { position: "absolute", backgroundColor: "#fff", borderRadius: 14, borderWidth: 1, borderColor: COLORS.border, overflow: "hidden", elevation: 8 },
   ddItem: { paddingVertical: 14, paddingHorizontal: 14 },
   ddItemActive: { backgroundColor: COLORS.primarySoft },
-  ddItemText: { fontSize: 15, color: COLORS.text, fontWeight: "800" },
+  ddItemText: { fontSize: vsType.size.bodyStrong, fontFamily: vsType.family, color: COLORS.text, fontWeight: "800" },
   ddItemTextActive: { color: COLORS.primaryDark },
   ddEmpty: { padding: 14 },
   ddEmptyText: { color: COLORS.muted, fontWeight: "800" },
 
   termsOpenBtn: { borderWidth: 1, borderColor: "#99f6e4", backgroundColor: COLORS.primarySoft, paddingVertical: 13, paddingHorizontal: 12, borderRadius: 14, marginBottom: 12, alignItems: "center" },
-  termsOpenText: { color: COLORS.primaryDark, fontWeight: "900" },
+  termsOpenText: { color: COLORS.primaryDark, fontWeight: "800" },
   termsModalWrap: { flex: 1, backgroundColor: COLORS.bg },
   termsHeader: { paddingTop: Platform.OS === "ios" ? 54 : 18, paddingHorizontal: 16, paddingBottom: 14, borderBottomWidth: 1, borderBottomColor: COLORS.border, backgroundColor: "#fff", flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  termsHeaderTitle: { fontSize: 16, fontWeight: "900", color: COLORS.text },
-  termsHeaderSub: { fontSize: 12, color: COLORS.muted, fontWeight: "700", marginTop: 2 },
+  termsHeaderTitle: { fontSize: vsType.size.card, fontFamily: vsType.family, fontWeight: "800", color: COLORS.text },
+  termsHeaderSub: { fontSize: vsType.size.meta, fontFamily: vsType.family, color: COLORS.muted, fontWeight: "700", marginTop: 2 },
   termsCloseBtn: { paddingVertical: 8, paddingHorizontal: 12, borderRadius: 10, backgroundColor: "#e2e8f0" },
-  termsCloseText: { fontWeight: "900", color: COLORS.text },
+  termsCloseText: { fontWeight: "800", color: COLORS.text },
   termsBody: { padding: 16, paddingBottom: 40 },
-  termsH1: { fontSize: 18, fontWeight: "900", color: COLORS.text, marginBottom: 10 },
-  termsH2: { fontSize: 15, fontWeight: "900", color: COLORS.text, marginTop: 14, marginBottom: 8 },
-  termsP: { fontSize: 14, color: "#334155", lineHeight: 20, fontWeight: "600" },
+  termsH1: { fontSize: vsType.size.section, fontFamily: vsType.family, fontWeight: "800", color: COLORS.text, marginBottom: 10 },
+  termsH2: { fontSize: vsType.size.bodyStrong, fontFamily: vsType.family, fontWeight: "800", color: COLORS.text, marginTop: 14, marginBottom: 8 },
+  termsP: { fontSize: vsType.size.body, fontFamily: vsType.family, color: "#334155", lineHeight: 20, fontWeight: "600" },
 
   overlay: {
     position: "absolute",
@@ -1735,15 +1748,15 @@ const styles = StyleSheet.create({
     maxWidth: 280,
   },
   overlayTitle: {
-    fontSize: 17,
-    fontWeight: "900",
+    fontSize: vsType.size.card, fontFamily: vsType.family,
+    fontWeight: "800",
     color: COLORS.text,
     marginTop: 16,
     marginBottom: 8,
     textAlign: "center",
   },
   overlayText: {
-    fontSize: 13,
+    fontSize: vsType.size.label, fontFamily: vsType.family,
     color: COLORS.muted,
     fontWeight: "600",
     textAlign: "center",

@@ -1,3 +1,4 @@
+import { volunserveTypography as vsType } from "../../constants/volunserveLiveUi";
 import { liveUi as designUi } from "../../constants/volunserveLiveUi";
 import { useRouter } from "expo-router";
 import { onAuthStateChanged } from "firebase/auth";
@@ -129,7 +130,7 @@ const styles = StyleSheet.create({
     marginBottom: 15,
   },
   amount: {
-    fontSize: 18,
+    fontSize: vsType.size.section, fontFamily: vsType.family,
     fontWeight: "700",
     color: "#16a34a",
   },

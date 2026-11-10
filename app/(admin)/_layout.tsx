@@ -1,3 +1,4 @@
+import { volunserveTypography as vsType } from "../../constants/volunserveLiveUi";
 import { liveUi as designUi } from "../../constants/volunserveLiveUi";
 
 import { Ionicons } from "@expo/vector-icons";
@@ -644,7 +645,7 @@ const styles =
     brandCopy: { flex: 1, minWidth: 0 },
     brandName: {
       color: "#FFFFFF",
-      fontSize: 20,
+      fontSize: vsType.size.subheading, fontFamily: vsType.family,
       fontWeight: "700",
       letterSpacing: -0.5,
     },
@@ -652,7 +653,7 @@ const styles =
     brandTagline: {
       marginTop: 2,
       color: "#B6E9DF",
-      fontSize: 10,
+      fontSize: vsType.size.micro, fontFamily: vsType.family,
       fontWeight: "700",
       letterSpacing: 0.65,
     },
@@ -729,7 +730,7 @@ const styles =
     logoutButton: { minHeight: 43, borderRadius: 11, flexDirection: "row", gap: 12, alignItems: "center", paddingHorizontal: 11 },
     signOutLabel: {
       color: "#FFCFCF",
-      fontSize: 12,
+      fontSize: vsType.size.meta, fontFamily: vsType.family,
       fontWeight: "800",
     },
 
@@ -743,8 +744,7 @@ const styles =
     sidebarFooterText: {
       color:
         "#67A5CA",
-      fontSize:
-        10,
+      fontSize: vsType.size.micro, fontFamily: vsType.family,
       lineHeight:
         16,
       fontWeight:
@@ -822,10 +822,8 @@ const styles =
     profileAvatarText: {
       color:
         "#FFFFFF",
-      fontSize:
-        12,
-      fontWeight:
-        "900",
+      fontSize: vsType.size.meta, fontFamily: vsType.family,
+      fontWeight: "800",
     },
 
     profileText: {
@@ -841,7 +839,7 @@ const styles =
     profileRole: {
       marginTop: 3,
       color: "#6F8278",
-      fontSize: 10.5,
+      fontSize: vsType.size.caption, fontFamily: vsType.family,
     },
 
     stackArea: {
@@ -940,19 +938,15 @@ const styles =
     iconText: {
       color:
         "#0F766E",
-      fontWeight:
-        "900",
-      fontSize:
-        22,
+      fontWeight: "800",
+      fontSize: vsType.size.titleSmall, fontFamily: vsType.family,
     },
 
     blockedEyebrow: {
       color:
         "#0F766E",
-      fontWeight:
-        "900",
-      fontSize:
-        10,
+      fontWeight: "800",
+      fontSize: vsType.size.micro, fontFamily: vsType.family,
       letterSpacing:
         1.4,
       marginBottom:
@@ -964,10 +958,8 @@ const styles =
     blockedTitle: {
       color:
         "#0F172A",
-      fontSize:
-        25,
-      fontWeight:
-        "900",
+      fontSize: vsType.size.title, fontFamily: vsType.family,
+      fontWeight: "800",
       textAlign:
         "center",
     },
@@ -977,8 +969,7 @@ const styles =
         10,
       color:
         "#64748B",
-      fontSize:
-        14,
+      fontSize: vsType.size.body, fontFamily: vsType.family,
       lineHeight:
         21,
       textAlign:
@@ -1009,10 +1000,8 @@ const styles =
     webButtonText: {
       color:
         "#FFFFFF",
-      fontWeight:
-        "900",
-      fontSize:
-        14,
+      fontWeight: "800",
+      fontSize: vsType.size.body, fontFamily: vsType.family,
     },
 
     webAddress: {
@@ -1020,8 +1009,7 @@ const styles =
         12,
       color:
         "#94A3B8",
-      fontSize:
-        11,
+      fontSize: vsType.size.caption, fontFamily: vsType.family,
       fontWeight:
         "600",
     },
