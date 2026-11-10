@@ -1,3 +1,4 @@
+import { volunserveTypography as vsType } from "../../constants/volunserveLiveUi";
 import { liveUi as designUi } from "../../constants/volunserveLiveUi";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
@@ -162,24 +163,24 @@ const styles = StyleSheet.create({
   center: { flex: 1, alignItems: "center", justifyContent: "center", gap: 12 },
   denied: { fontWeight: "700", color: "#475569", textAlign: "center" },
   header: { flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 12, marginBottom: 20 },
-  eyebrow: { fontSize: 11, fontWeight: "800", color: "#087657", letterSpacing: 1 },
+  eyebrow: { fontSize: vsType.size.caption, fontFamily: vsType.family, fontWeight: "800", color: "#087657", letterSpacing: 1 },
   title: { fontSize: designUi.type.page.fontSize, fontWeight: designUi.type.page.fontWeight, color: "#14392F", marginTop: 4, lineHeight: designUi.type.page.lineHeight,},
   subtitle: { fontSize: designUi.type.body.fontSize, color: "#657A80", marginTop: 4, lineHeight: designUi.type.body.lineHeight, fontWeight: designUi.type.body.fontWeight,},
   back: { flexDirection: "row", alignItems: "center", gap: 8, borderRadius: 10, backgroundColor: "#E2F2ED", padding: 12 },
   backText: { color: "#086F55", fontWeight: "800" },
   summary: { flexDirection: "row", alignItems: "center", gap: 12, padding: 18, borderRadius: 16, backgroundColor: "#FFFFFF", borderWidth: 1, borderColor: "#DDEAE7", marginBottom: 14 },
-  summaryTitle: { color: "#183C33", fontWeight: "800", fontSize: 15 },
+  summaryTitle: { color: "#183C33", fontWeight: "800", fontSize: vsType.size.bodyStrong, fontFamily: vsType.family },
   searchRow: { flexDirection: "row", alignItems: "center", backgroundColor: "#FFFFFF", borderWidth: 1, borderColor: "#DDEAE7", paddingHorizontal: 14, borderRadius: 12, marginBottom: 14 },
   searchInput: { flex: 1, paddingVertical: 12, paddingHorizontal: 9, minWidth: 0, color: "#173B32" },
   error: { backgroundColor: "#FEF2F2", padding: 12, marginBottom: 10, borderRadius: 9 },
-  errorText: { color: "#B91C1C", fontSize: 12 },
+  errorText: { color: "#B91C1C", fontSize: vsType.size.meta, fontFamily: vsType.family },
   empty: { padding: 35, alignItems: "center", gap: 10 },
   emptyText: { color: "#64748B", textAlign: "center", fontSize: designUi.type.body.fontSize, lineHeight: designUi.type.body.lineHeight, fontWeight: designUi.type.body.fontWeight,},
   event: { backgroundColor: "#FFFFFF", borderWidth: 1, borderColor: "#DDEAE7", borderRadius: 14, marginBottom: 10, padding: 18 },
   eventHeader: { flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between", gap: 10, marginBottom: 8 },
-  action: { color: "#087657", fontSize: 14, fontWeight: "900", flexShrink: 1 },
-  date: { color: "#64748B", fontSize: 11 },
-  description: { color: "#243C36", fontSize: 13, lineHeight: 19, marginBottom: 8 },
-  meta: { color: "#64748B", fontSize: 12, marginTop: 3 },
-  source: { color: "#819995", fontSize: 10, marginTop: 9 },
+  action: { color: "#087657", fontSize: vsType.size.body, fontFamily: vsType.family, fontWeight: "800", flexShrink: 1 },
+  date: { color: "#64748B", fontSize: vsType.size.caption, fontFamily: vsType.family },
+  description: { color: "#243C36", fontSize: vsType.size.label, fontFamily: vsType.family, lineHeight: 19, marginBottom: 8 },
+  meta: { color: "#64748B", fontSize: vsType.size.meta, fontFamily: vsType.family, marginTop: 3 },
+  source: { color: "#819995", fontSize: vsType.size.micro, fontFamily: vsType.family, marginTop: 9 },
 });

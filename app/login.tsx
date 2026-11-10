@@ -1,3 +1,4 @@
+import { volunserveTypography as vsType } from "../constants/volunserveLiveUi";
 import { liveUi as designUi } from "../constants/volunserveLiveUi";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
@@ -5,6 +6,7 @@ import GoogleBrandMark from "../components/auth/GoogleBrandMark";
 import AuthFeedback from "../components/auth/AuthFeedback";
 import { unifiedPasswordDestination } from "../lib/unifiedLoginRouting";
 import { getLoginEmailError, getLoginEmailSuggestion } from "../lib/loginInputValidation";
+import { isKnownDisposableEmail } from "../lib/registrationEmailPolicy";
 import { googleSignInErrorMessage } from "../lib/googleSignInFeedback";
 import { userFacingError } from "../lib/userFacingError";
 import { useSignupGoogle } from "../lib/useSignupGoogle";
@@ -171,6 +173,10 @@ export default function Login() {
 
       const user = await signInGoogle();
       authenticatedUid = user.uid;
+      if (isKnownDisposableEmail(user.email || "")) {
+        // Do not route a newly signed-in disposable Google identity as Resident.
+        throw new Error("Temporary email accounts cannot sign in. Use a permanent email address.");
+      }
       await routeSignedInProfile(user.uid);
     } catch (error) {
       // Do not sign out a pre-existing session when the popup was merely cancelled.
@@ -327,35 +333,35 @@ const styles = StyleSheet.create({
   inputBox: {minHeight:57,flexDirection:"row",alignItems:"center",paddingHorizontal:17,
     gap:12,backgroundColor:"rgba(255,255,255,.84)",borderColor:"#C8E0D2",
     borderRadius:13,borderWidth:1,marginBottom:2},
-  input: {flex:1,minWidth:0,fontSize:15,paddingVertical:14,color:"#103F33"},
+  input: {flex:1,minWidth:0,fontSize: vsType.size.bodyStrong, fontFamily: vsType.family,paddingVertical:14,color:"#103F33"},
   focused: {borderColor:"#068064",backgroundColor:"#FFFFFF",borderWidth:2},
   invalidInput: {borderColor:"#D33434",borderWidth:2,backgroundColor:"#FFFFFF"},
   fieldError: {color:"#C62828",fontSize: designUi.type.meta.fontSize,lineHeight: designUi.type.meta.lineHeight,fontWeight: designUi.type.meta.fontWeight,marginTop:5,marginBottom:5},
-  fieldSuggestion: {color:"#9A4C15",fontSize:12,lineHeight:18,fontWeight:"600",marginTop:5,marginBottom:5},
+  fieldSuggestion: {color:"#9A4C15",fontSize: vsType.size.meta, fontFamily: vsType.family,lineHeight:18,fontWeight:"600",marginTop:5,marginBottom:5},
   eye:{padding:7},
   options:{flexDirection:"row",alignItems:"center",justifyContent:"space-between",
     flexWrap:"wrap",gap:12,marginTop:3,marginBottom:5},
   checkRow:{flexDirection:"row",gap:7,alignItems:"center",minHeight:40},
-  muted:{color:"#527766",fontSize:13},
-  forgot:{color:"#076B51",fontSize:13,fontWeight:"800"},
+  muted:{color:"#527766",fontSize: vsType.size.label, fontFamily: vsType.family},
+  forgot:{color:"#076B51",fontSize: vsType.size.label, fontFamily: vsType.family,fontWeight:"800"},
   signIn:{minHeight:59,overflow:"hidden",borderRadius:16,justifyContent:"center",
     alignItems:"center",marginTop:3,shadowColor:"#00684A",shadowOpacity:0.18,
     shadowRadius:10,shadowOffset:{width:0,height:5},elevation:3},
-  signInText:{fontSize:16,fontWeight:"800",color:"#FFFFFF"},
+  signInText:{fontSize: vsType.size.card, fontFamily: vsType.family,fontWeight:"800",color:"#FFFFFF"},
   centerRow:{flexDirection:"row",alignItems:"center",justifyContent:"center",gap:12,paddingHorizontal:7},
   divider:{flexDirection:"row",alignItems:"center",gap:10,marginTop:8,marginBottom:2},
   dividerLine:{flex:1,height:1,backgroundColor:"#CAE0D5"},
   outlineButton:{minHeight:51,borderWidth:1,borderColor:"#C6DECF",
     backgroundColor:"rgba(255,255,255,.50)",alignItems:"center",justifyContent:"center",
     borderRadius:14},
-  outlineText:{fontSize:13,fontWeight:"800",color:"#19493B"},
+  outlineText:{fontSize: vsType.size.label, fontFamily: vsType.family,fontWeight:"800",color:"#19493B"},
   createRow:{flexDirection:"row",alignItems:"center",justifyContent:"center",marginTop:7},
   createButton:{borderWidth:1,borderColor:"#9DC9B4",borderRadius:18,minHeight:56,
     flexDirection:"row",alignItems:"center",justifyContent:"center",gap:11,
     backgroundColor:"rgba(255,255,255,.36)"},
-  createLink:{fontSize:15,fontWeight:"800",color:"#075B44"},
+  createLink:{fontSize: vsType.size.bodyStrong, fontFamily: vsType.family,fontWeight:"800",color:"#075B44"},
   staffRequest:{alignItems:"center",justifyContent:"center",minHeight:38,paddingHorizontal:10,marginTop:1},
-  staffRequestText:{fontSize:12,color:"#527766"},
-  staffRequestLink:{fontSize:12,fontWeight:"800",color:"#076B51"},
+  staffRequestText:{fontSize: vsType.size.meta, fontFamily: vsType.family,color:"#527766"},
+  staffRequestLink:{fontSize: vsType.size.meta, fontFamily: vsType.family,fontWeight:"800",color:"#076B51"},
   disabled:{opacity:0.55},
 });

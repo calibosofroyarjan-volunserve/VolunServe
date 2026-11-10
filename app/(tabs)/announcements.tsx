@@ -1,3 +1,4 @@
+import { volunserveTypography as vsType } from "../../constants/volunserveLiveUi";
 import { liveUi as designUi } from "../../constants/volunserveLiveUi";
 import React, {
   useEffect,
@@ -384,7 +385,7 @@ const styles = StyleSheet.create({
   eyebrow: {
     color: "#087F78",
 
-    fontSize: 11,
+    fontSize: vsType.size.caption, fontFamily: vsType.family,
     fontWeight: "700",
 
     letterSpacing: 1.3,
@@ -430,8 +431,8 @@ const styles = StyleSheet.create({
   areaValue: {
     color: "#123047",
 
-    fontSize: 17,
-    fontWeight: "900",
+    fontSize: vsType.size.card, fontFamily: vsType.family,
+    fontWeight: "800",
 
     marginTop: 5,
   },
@@ -439,7 +440,7 @@ const styles = StyleSheet.create({
   areaHelp: {
     color: "#587174",
 
-    fontSize: 12,
+    fontSize: vsType.size.meta, fontFamily: vsType.family,
     lineHeight: 18,
 
     marginTop: 5,
@@ -461,7 +462,7 @@ const styles = StyleSheet.create({
   errorText: {
     color: "#B91C1C",
 
-    fontSize: 13,
+    fontSize: vsType.size.label, fontFamily: vsType.family,
     fontWeight: "700",
   },
 
@@ -495,8 +496,8 @@ const styles = StyleSheet.create({
   emptyIconText: {
     color: "#087F78",
 
-    fontSize: 20,
-    fontWeight: "900",
+    fontSize: vsType.size.subheading, fontFamily: vsType.family,
+    fontWeight: "800",
   },
 
   emptyTitle: {
@@ -554,8 +555,8 @@ const styles = StyleSheet.create({
   },
 
   scopeBadgeText: {
-    fontSize: 9,
-    fontWeight: "900",
+    fontSize: vsType.size.micro, fontFamily: vsType.family,
+    fontWeight: "800",
 
     letterSpacing: 0.7,
   },
@@ -571,7 +572,7 @@ const styles = StyleSheet.create({
   dateText: {
     color: "#94A3B8",
 
-    fontSize: 11,
+    fontSize: vsType.size.caption, fontFamily: vsType.family,
     fontWeight: "700",
   },
 
@@ -601,7 +602,7 @@ const styles = StyleSheet.create({
   audienceLabel: {
     color: "#64748B",
 
-    fontSize: 11,
+    fontSize: vsType.size.caption, fontFamily: vsType.family,
     fontWeight: "700",
   },
 });

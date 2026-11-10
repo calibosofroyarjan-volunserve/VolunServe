@@ -1,3 +1,4 @@
+import { volunserveTypography as vsType } from "../../constants/volunserveLiveUi";
 import { liveUi as designUi } from "../../constants/volunserveLiveUi";
 import { Ionicons } from "@expo/vector-icons";
 import {
@@ -383,18 +384,18 @@ const styles = StyleSheet.create({
   },
   brandName: {
     color: "#FFFFFF",
-    fontSize: 20,
+    fontSize: vsType.size.subheading, fontFamily: vsType.family,
     fontWeight: "800",
   },
   brandTagline: {
     marginTop: 2,
     color: "#B6E9DF",
-    fontSize: 10,
+    fontSize: vsType.size.micro, fontFamily: vsType.family,
     fontWeight: "700",
     letterSpacing: 0.65,
   },
   sidebarDecoration: { position: "absolute", right: -65, bottom: 55, opacity: 0.16 },
-  sidebarTitle: { color: "#D9FFF1", fontSize: 11, fontWeight: "900", letterSpacing: 1.15, marginLeft: 26, marginTop: 4, marginBottom: 0 },
+  sidebarTitle: { color: "#D9FFF1", fontSize: vsType.size.caption, fontFamily: vsType.family, fontWeight: "800", letterSpacing: 1.15, marginLeft: 26, marginTop: 4, marginBottom: 0 },
   sidebarLabel: {
     flexShrink: 0,
     marginTop: 5,
@@ -475,7 +476,7 @@ const styles = StyleSheet.create({
   },
   signOutText: {
     color: "#FFCFCF",
-    fontSize: 12,
+    fontSize: vsType.size.meta, fontFamily: vsType.family,
     fontWeight: "800",
   },
   workspace: {
@@ -496,7 +497,7 @@ const styles = StyleSheet.create({
     borderBottomColor: "#E5EAF1",
   },
   breadcrumb: { flex: 1, minWidth: 0, flexDirection: "row", alignItems: "center", gap: 8 },
-  breadcrumbParent: { color: "#537569", fontSize: 12, fontWeight: "700" },
+  breadcrumbParent: { color: "#537569", fontSize: vsType.size.meta, fontFamily: vsType.family, fontWeight: "700" },
   breadcrumbCurrent: { color: "#124A39", fontSize: designUi.type.label.fontSize, fontWeight: designUi.type.label.fontWeight, flexShrink: 1, lineHeight: designUi.type.label.lineHeight,},
   menuButton: {
     width: 42,
@@ -518,7 +519,7 @@ const styles = StyleSheet.create({
   profileMenuAction: { flexDirection: "row", alignItems: "center", gap: 10,
     minHeight: 46, paddingHorizontal: 11, borderRadius: 9 },
   profileMenuText: { flex: 1, color: "#174B3E", fontWeight: designUi.type.label.fontWeight, fontSize: designUi.type.label.fontSize, lineHeight: designUi.type.label.lineHeight,},
-  profileMenuSignOut: { flex: 1, color: "#B42318", fontWeight: "800", fontSize: 13 },
+  profileMenuSignOut: { flex: 1, color: "#B42318", fontWeight: "800", fontSize: vsType.size.label, fontFamily: vsType.family },
   profileMenuDivider: { height: 1, backgroundColor: "#E5EEE9", marginVertical: 5, marginHorizontal: 8 },
   accountArea: {
     flexDirection: "row",
@@ -536,8 +537,8 @@ const styles = StyleSheet.create({
   },
   avatarText: {
     color: "#FFFFFF",
-    fontSize: 12,
-    fontWeight: "900",
+    fontSize: vsType.size.meta, fontFamily: vsType.family,
+    fontWeight: "800",
   },
   accountCopy: {
     maxWidth: 220,
@@ -549,7 +550,7 @@ const styles = StyleSheet.create({
     fontWeight: designUi.type.label.fontWeight, lineHeight: designUi.type.label.lineHeight,},
   accountRole: {
     color: "#64748B",
-    fontSize: 10.5,
+    fontSize: vsType.size.caption, fontFamily: vsType.family,
     marginTop: 2,
   },
   contentArea: {

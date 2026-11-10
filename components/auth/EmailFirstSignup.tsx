@@ -1,3 +1,4 @@
+import { volunserveTypography as vsType } from "../../constants/volunserveLiveUi";
 /**
  * Selectively adapted from origin/fix/email-verification-validation-20261104.
  * Enabled only by EXPO_PUBLIC_EMAIL_FIRST_SIGNUP=true; production profile schema retained.
@@ -232,7 +233,6 @@ export default function EmailFirstSignup() {
   const [noMiddleName, setNoMiddleName] = useState(false);
   const [lastName, setLastName] = useState("");
   const [birth, setBirth] = useState("");
-  const [phone, setPhone] = useState("");
   const [barangay, setBarangay] = useState("");
   const [occupation, setOccupation] = useState("");
   const [specialization, setSpecialization] = useState("");
@@ -260,12 +260,6 @@ export default function EmailFirstSignup() {
   }
 
   const age = useMemo(() => dateAge(birth), [birth]);
-  // Accept familiar 09xxxxxxxxx, +639xxxxxxxxx and 9xxxxxxxxx input.
-  // Firestore always receives the canonical +639xxxxxxxxx form.
-  const phoneDigits = phone.replace(/\D/g, "");
-  const phoneClean = phoneDigits.startsWith("63")
-    ? phoneDigits.slice(2)
-    : phoneDigits.startsWith("0") ? phoneDigits.slice(1) : phoneDigits;
   const emailErr = getRegistrationEmailError(email);
   const passwordErr = passwordError(password, email);
   const needsSpecialization = (SPECIALIZATIONS[occupation] || []).length > 0;
@@ -275,13 +269,13 @@ export default function EmailFirstSignup() {
   const emailCanEdit = !signedInUser;
   const registrationErrors = getResidentRegistrationFieldErrors({
     firstName, lastName, middleName: noMiddleName ? "" : middleName,
-    age: age ?? -1, phoneNumber: "+63" + phoneClean,
+    age: age ?? -1, phoneNumber: "", // Optional; no fabricated phone number.
     region: "Region III – Central Luzon", province: "Bulacan",
     city: "City of San Jose del Monte", barangay,
     occupationCategory: occupation, occupationSpecialization: specialization,
     occupationOther,
   });
-  const personalOk = !["firstName","lastName","middleName","age","phoneNumber"]
+  const personalOk = !["firstName","lastName","middleName","age"]
     .some(field => !!registrationErrors[field as keyof typeof registrationErrors]);
   const addressOk = !["region","city","barangay","occupationCategory",
     "occupationSpecialization","occupationOther"]
@@ -321,14 +315,13 @@ export default function EmailFirstSignup() {
       const isCurrent = () => active && authRevision.current === revision && auth.currentUser?.uid === user?.uid;
       if (lastUid.current !== (user?.uid ?? null)) {
         setFirstName(""); setMiddleName(""); setNoMiddleName(false); setLastName("");
-        setBirth(""); setPhone(""); setBarangay(""); setOccupation("");
+        setBirth(""); setBarangay(""); setOccupation("");
         setSpecialization(""); setOccupationOther(""); setReviewed(false);
         setPassword(""); setConfirmPassword(""); setConsent(false);
         lastUid.current = user?.uid ?? null;
       }
       setCompletedProfile(false);
-      // A pending UID created before a disposable domain was classified
-      // must not keep showing Step 2 or resume a Resident registration.
+      // Do not resume a pending Auth UID with a newly blocked disposable domain.
       const blockedEmail = user ? getRegistrationEmailError(user.email || "") : null;
       if (blockedEmail && user) {
         setSignedInUser(null);
@@ -337,7 +330,7 @@ export default function EmailFirstSignup() {
         setChecking(false);
         if (auth.currentUser?.uid === user.uid) {
           void signOut(auth).catch(() => {
-            // Keep the wizard blocked even if network sign-out fails.
+            // Never expose this unapproved account in the signup wizard.
           });
         }
         return;
@@ -526,7 +519,7 @@ export default function EmailFirstSignup() {
         middleName: noMiddleName ? "" : middleName.trim(),
         lastName: lastName.trim(),
         age: age as number,
-        phoneNumber: "+63" + phoneClean,
+        phoneNumber: "", // Optional; kept for existing profile schema compatibility.
         region: "Region III – Central Luzon",
         province: "Bulacan",
         city: "City of San Jose del Monte",
@@ -544,12 +537,13 @@ export default function EmailFirstSignup() {
     }
   }
 
-  const checkButton = (label: string, onPress: () => void, alt = false) => (
+  const checkButton = (label: string, onPress: () => void, alt = false, emailBlocked = false) => (
     <Pressable
       accessibilityRole="button"
       onPress={onPress}
-      disabled={busy}
-      style={[styles.button, alt && styles.altButton, busy && styles.dim]}
+      disabled={busy || emailBlocked}
+      accessibilityState={{disabled: busy || emailBlocked}}
+      style={[styles.button, alt && styles.altButton, (busy || emailBlocked) && styles.dim]}
     >
       {busy ? <ActivityIndicator color={alt ? GREEN : "#fff"} /> :
         label === "Continue with Google" ? (
@@ -804,7 +798,7 @@ export default function EmailFirstSignup() {
                 {checkButton(
                   googleOnly ? "Link Password & Continue" :
                     resumeMode ? "Resume Registration" : "Continue to Email Verification",
-                  () => {void startEmail();}
+                  () => {void startEmail();}, false, !!email.trim() && !!emailErr
                 )}
                 {!signedInUser && !resumeMode && (
                   <>
@@ -895,13 +889,6 @@ export default function EmailFirstSignup() {
                   keyboardType="phone-pad"
                   hint="Type 8 digits (year, month, day). The dashes appear automatically."
                   error={(showErrors || !!birth) ? registrationErrors.age : null}
-                />
-                <Field
-                  label="Mobile Number *" value={phone}
-                  onChange={v => setPhone(v.replace(/[^\d+]/g, "").slice(0, 13))}
-                  placeholder="09XXXXXXXXX or +639XXXXXXXXX" keyboardType="phone-pad"
-                  hint="Use 09, +639 or 9 at the start. We'll format it automatically."
-                  error={(showErrors || !!phone) ? registrationErrors.phoneNumber : null}
                 />
                 {checkButton("Continue to Address & Profile", () => {
                   setShowErrors(true);
@@ -1022,9 +1009,9 @@ const styles = StyleSheet.create({
   legacyInputInvalid: { borderColor: "#dc2626" },
   legacyDisabledInput: { backgroundColor: "#f1f5f9", opacity: 0.85 },
   legacyInputControl: { flex: 1, height: 44, borderWidth: 0, backgroundColor: "transparent", paddingLeft: 9 },
-  legacyInputIcon: { color: "#64748b", fontSize: 16, width: 25, textAlign: "center" },
+  legacyInputIcon: { color: "#64748b", fontSize: vsType.size.card, fontFamily: vsType.family, width: 25, textAlign: "center" },
   legacyPasswordEyeButton: { minWidth: 44, height: 44, alignItems: "center", justifyContent: "center", paddingHorizontal: 10 },
-  inputText: {color: "#0f172a", fontSize: 14, paddingVertical: 0},
+  inputText: {color: "#0f172a", fontSize: vsType.size.body, fontFamily: vsType.family, paddingVertical: 0},
 
   legacyScreen: { flex: 1, height: Platform.OS === "web" ? ("100vh" as any) : undefined, backgroundColor: "#eef4f7" },
   legacyDesktopShell: { flex: 1, flexDirection: "row", minHeight: 0 },
@@ -1033,20 +1020,20 @@ const styles = StyleSheet.create({
   legacyPhotoOverlay: { position: "absolute", top: 0, right: 0, bottom: 0, left: 0, backgroundColor: "rgba(2, 55, 61, 0.52)" },
   legacyPhotoTop: { paddingHorizontal: 48, paddingTop: 46, flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   legacySecureBadge: { borderWidth: 1, borderColor: "rgba(255,255,255,0.3)", backgroundColor: "rgba(4,74,78,0.42)", borderRadius: 14, paddingHorizontal: 17, paddingVertical: 11, maxWidth: 205 },
-  legacySecureBadgeText: { color: "#fff", fontSize: 12, lineHeight: 16, fontWeight: "800" },
+  legacySecureBadgeText: { color: "#fff", fontSize: vsType.size.meta, fontFamily: vsType.family, lineHeight: 16, fontWeight: "800" },
   legacyPhotoControls: { position: "absolute", top: "48%", left: 28, right: 28, flexDirection: "row", justifyContent: "space-between" },
   legacyPhotoArrow: { width: 48, height: 48, borderRadius: 24, borderWidth: 1, borderColor: "rgba(255,255,255,0.7)", backgroundColor: "rgba(3,35,42,0.5)", alignItems: "center", justifyContent: "center" },
-  legacyPhotoArrowText: { color: "#fff", fontSize: 38, lineHeight: 40, fontWeight: "300" },
+  legacyPhotoArrowText: { color: "#fff", fontSize: vsType.size.xl, fontFamily: vsType.family, lineHeight: 40, fontWeight: "300" },
   legacyPhotoCopy: { paddingHorizontal: 48, paddingBottom: 46 },
   legacyPhotoAccentLine: { width: 82, height: 4, borderRadius: 4, backgroundColor: "#2dd4bf", marginBottom: 30 },
-  legacyPhotoTitle: { color: "#fff", fontSize: 50, lineHeight: 57, fontWeight: "900", marginBottom: 17 },
-  legacyPhotoBody: { color: "#f0fdfa", fontSize: 17, lineHeight: 27, maxWidth: 570, fontWeight: "500" },
+  legacyPhotoTitle: { color: "#fff", fontSize: vsType.size.giant, fontFamily: vsType.family, lineHeight: 57, fontWeight: "800", marginBottom: 17 },
+  legacyPhotoBody: { color: "#f0fdfa", fontSize: vsType.size.card, fontFamily: vsType.family, lineHeight: 27, maxWidth: 570, fontWeight: "500" },
   legacyPhotoFooter: { marginTop: 38, flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
-  legacyPhotoLocation: { color: "#d7f7f3", fontSize: 12, fontWeight: "700" },
+  legacyPhotoLocation: { color: "#d7f7f3", fontSize: vsType.size.meta, fontFamily: vsType.family, fontWeight: "700" },
   legacyBrandRow: { flexDirection: "row", alignItems: "center" },
   legacyLogo: { width: 62, height: 62, marginRight: 12, backgroundColor: "#fff", borderRadius: 18 },
-  legacyBrandTitle: { color: "#fff", fontSize: 32, fontWeight: "900" },
-  legacyBrandSub: { color: "#e6fffb", fontSize: 13, fontWeight: "500", marginTop: 2 },
+  legacyBrandTitle: { color: "#fff", fontSize: vsType.size.display, fontFamily: vsType.family, fontWeight: "800" },
+  legacyBrandSub: { color: "#e6fffb", fontSize: vsType.size.label, fontFamily: vsType.family, fontWeight: "500", marginTop: 2 },
   legacyDots: { flexDirection: "row", alignItems: "center", gap: 8 },
   legacyDot: { width: 9, height: 9, borderRadius: 99 },
   legacyDotOn: { width: 28, backgroundColor: "#2dd4bf" },
@@ -1056,11 +1043,11 @@ const styles = StyleSheet.create({
   legacyContentMobile: { maxWidth: 610, paddingHorizontal: 16, paddingTop: 24, paddingBottom: 30 },
   legacyMobileBrand: { flexDirection: "row", alignItems: "center", justifyContent: "center", marginBottom: 18 },
   legacyMobileLogo: { width: 38, height: 38, borderRadius: 10, marginRight: 9 },
-  legacyMobileBrandText: { color: "#115e59", fontSize: 20, fontWeight: "900" },
+  legacyMobileBrandText: { color: "#115e59", fontSize: vsType.size.subheading, fontFamily: vsType.family, fontWeight: "800" },
   legacyMainCard: { backgroundColor: "#fff", borderRadius: 14, borderWidth: 1, borderColor: "#dce6eb", paddingHorizontal: 32, paddingVertical: 34, shadowColor: "#64748b", shadowOpacity: 0.12, shadowRadius: 22, elevation: 5 },
   legacySignupHeading: { alignItems: "center", marginBottom: 22 },
-  legacySignupTitle: { color: "#0f172a", fontSize: 31, lineHeight: 37, fontWeight: "900", textAlign: "center" },
-  legacySignupSubtitle: { color: "#64748b", fontSize: 15, marginTop: 4, fontWeight: "500", textAlign: "center", lineHeight: 21 },
+  legacySignupTitle: { color: "#0f172a", fontSize: vsType.size.hero, fontFamily: vsType.family, lineHeight: 37, fontWeight: "800", textAlign: "center" },
+  legacySignupSubtitle: { color: "#64748b", fontSize: vsType.size.bodyStrong, fontFamily: vsType.family, marginTop: 4, fontWeight: "500", textAlign: "center", lineHeight: 21 },
   legacySelectedRoleBanner: {
     flexDirection: "row",
     alignItems: "center",
@@ -1074,8 +1061,8 @@ const styles = StyleSheet.create({
     marginBottom: 18,
   },
   legacySelectedRoleCopy: { minWidth: 0 },
-  legacySelectedRoleLabel: { color: "#64748b", fontSize: 9, fontWeight: "900", letterSpacing: 0.8 },
-  legacySelectedRoleName: { color: "#115e59", fontSize: 14, fontWeight: "900", marginTop: 2 },
+  legacySelectedRoleLabel: { color: "#64748b", fontSize: vsType.size.micro, fontFamily: vsType.family, fontWeight: "800", letterSpacing: 0.8 },
+  legacySelectedRoleName: { color: "#115e59", fontSize: vsType.size.body, fontFamily: vsType.family, fontWeight: "800", marginTop: 2 },
   legacyRoleChoiceBadge: {
     marginTop: 16,
     paddingHorizontal: 10,
@@ -1083,7 +1070,7 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     backgroundColor: "#e0f2fe",
   },
-  legacyRoleChoiceBadgeText: { color: "#334155", fontSize: 10.5, fontWeight: "900" },
+  legacyRoleChoiceBadgeText: { color: "#334155", fontSize: vsType.size.caption, fontFamily: vsType.family, fontWeight: "800" },
   legacyStepperCard: {
     backgroundColor: "transparent",
     paddingHorizontal: 4,
@@ -1095,71 +1082,71 @@ const styles = StyleSheet.create({
   legacyStepNode: { width: 70, alignItems: "center" },
   legacyStepCircle: { width: 38, height: 38, borderRadius: 999, backgroundColor: "#e7edf2", justifyContent: "center", alignItems: "center" },
   legacyStepCircleActive: { backgroundColor: "#0f766e" },
-  legacyStepCircleText: { color: "#64748b", fontSize: 12, fontWeight: "900" },
+  legacyStepCircleText: { color: "#64748b", fontSize: vsType.size.meta, fontFamily: vsType.family, fontWeight: "800" },
   legacyStepCircleTextActive: { color: "#fff" },
-  legacyStepLabel: { color: "#334155", fontSize: 11.5, fontWeight: "700", marginTop: 7 },
-  legacyStepLabelActive: { color: "#115e59", fontWeight: "900" },
+  legacyStepLabel: { color: "#334155", fontSize: vsType.size.meta, fontFamily: vsType.family, fontWeight: "700", marginTop: 7 },
+  legacyStepLabelActive: { color: "#115e59", fontWeight: "800" },
   legacyStepLine: { flex: 1, height: 2, backgroundColor: "#dbe5eb", marginHorizontal: -9, marginTop: 18, borderRadius: 999 },
   legacyStepLineActive: { backgroundColor: "#0f766e" },
   legacyInfoBox: {
     backgroundColor: "#eff6ff", borderRadius: 10, borderWidth: 1,
     borderColor: "#bfdbfe", padding: 12, marginBottom: 18,
   },
-  legacyInfoTitle: {color: "#0f172a", fontSize: 13, fontWeight: "800", marginBottom: 5},
-  legacyInfoText: {color: "#475569", fontSize: 12, lineHeight: 18},
+  legacyInfoTitle: {color: "#0f172a", fontSize: vsType.size.label, fontFamily: vsType.family, fontWeight: "800", marginBottom: 5},
+  legacyInfoText: {color: "#475569", fontSize: vsType.size.meta, fontFamily: vsType.family, lineHeight: 18},
 
   screen: {flex: 1, backgroundColor: "#ecfdf5"},
   center: {justifyContent: "center", alignItems: "center", gap: 14},
   container: {flexGrow: 1, padding: 18, alignItems: "center", justifyContent: "center"},
   desktop: {flexDirection: "row", padding: 28, alignItems: "stretch"},
   side: {flex: 1, backgroundColor: DARK, borderRadius: 18, padding: 34, justifyContent: "center", maxWidth: 640},
-  brand: {fontSize: 30, fontWeight: "900", color: "#fff"},
-  brandSub: {fontSize: 14, fontWeight: "600", color: "#a7f3d0", marginTop: 5},
-  sideTitle: {fontSize: 38, lineHeight: 44, fontWeight: "900", color: "#fff", marginTop: 56},
-  sideCopy: {fontSize: 17, lineHeight: 25, color: "#d1fae5", marginTop: 18},
+  brand: {fontSize: vsType.size.hero, fontFamily: vsType.family, fontWeight: "800", color: "#fff"},
+  brandSub: {fontSize: vsType.size.body, fontFamily: vsType.family, fontWeight: "600", color: "#a7f3d0", marginTop: 5},
+  sideTitle: {fontSize: vsType.size.xl, fontFamily: vsType.family, lineHeight: 44, fontWeight: "800", color: "#fff", marginTop: 56},
+  sideCopy: {fontSize: vsType.size.card, fontFamily: vsType.family, lineHeight: 25, color: "#d1fae5", marginTop: 18},
   sideNote: {borderRadius: 12, backgroundColor: "#065f46", padding: 18, marginTop: 28},
   sideNoteText: {color: "#fff", lineHeight: 22},
   card: {width: "100%", maxWidth: 620, backgroundColor: "#fff", borderRadius: 18, padding: 26, alignSelf: "center", marginVertical: 12},
-  mobileBrand: {fontSize: 22, color: GREEN, fontWeight: "900", marginBottom: 15},
-  title: {fontSize: 25, fontWeight: "900", color: DARK, textAlign: "center"},
-  subtitle: {fontSize: 14, textAlign: "center", color: "#64748b", marginTop: 8, marginBottom: 20},
+  mobileBrand: {fontSize: vsType.size.titleSmall, fontFamily: vsType.family, color: GREEN, fontWeight: "800", marginBottom: 15},
+  title: {fontSize: vsType.size.title, fontFamily: vsType.family, fontWeight: "800", color: DARK, textAlign: "center"},
+  subtitle: {fontSize: vsType.size.body, fontFamily: vsType.family, textAlign: "center", color: "#64748b", marginTop: 8, marginBottom: 20},
   steps: {flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", marginVertical: 20},
   stepItem: {flex: 1, alignItems: "center"},
   stepNum: {width: 36, height: 36, borderRadius: 18, alignItems: "center", justifyContent: "center", backgroundColor: "#e2e8f0"},
   stepNumActive: {backgroundColor: GREEN},
-  stepNumText: {fontSize: 13, fontWeight: "800", color: "#475569"},
+  stepNumText: {fontSize: vsType.size.label, fontFamily: vsType.family, fontWeight: "800", color: "#475569"},
   stepNumTextActive: {color: "#fff"},
-  stepName: {fontSize: 11, marginTop: 8, textAlign: "center", color: "#64748b"},
+  stepName: {fontSize: vsType.size.caption, fontFamily: vsType.family, marginTop: 8, textAlign: "center", color: "#64748b"},
   stepNameActive: {fontWeight: "800", color: DARK},
-  sectionTitle: {fontSize: 20, fontWeight: "800", color: DARK, marginBottom: 8},
-  helper: {fontSize: 13, color: "#475569", lineHeight: 20, marginBottom: 16},
+  sectionTitle: {fontSize: vsType.size.subheading, fontFamily: vsType.family, fontWeight: "800", color: DARK, marginBottom: 8},
+  helper: {fontSize: vsType.size.label, fontFamily: vsType.family, color: "#475569", lineHeight: 20, marginBottom: 16},
   field: {marginBottom: 16},
-  label: {fontSize: 12.5, fontWeight: "800", color: "#0f172a", marginBottom: 7},
-  input: {height: 46, borderRadius: 8, borderWidth: 1, borderColor: "#cfdbe3", paddingHorizontal: 13, color: "#0f172a", backgroundColor: "#fff", fontSize: 14},
+  label: {fontSize: vsType.size.label, fontFamily: vsType.family, fontWeight: "800", color: "#0f172a", marginBottom: 7},
+  input: {height: 46, borderRadius: 8, borderWidth: 1, borderColor: "#cfdbe3", paddingHorizontal: 13, color: "#0f172a", backgroundColor: "#fff", fontSize: vsType.size.body, fontFamily: vsType.family},
   inputError: {borderColor: RED, borderWidth: 1.5},
   disabled: {backgroundColor: "#f1f5f9"},
   readonly: {padding: 12, borderWidth: 1, borderColor: "#e2e8f0", borderRadius: 10, backgroundColor: "#f8fafc", marginBottom: 15, color: "#334155"},
-  error: {fontSize: 12, color: RED, fontWeight: "700", marginTop: 5, marginBottom: 6},
-  fieldHint: {fontSize: 12, color: "#52525b", lineHeight: 18, marginTop: 5},
+  error: {fontSize: vsType.size.meta, fontFamily: vsType.family, color: RED, fontWeight: "700", marginTop: 5, marginBottom: 6},
+  fieldHint: {fontSize: vsType.size.meta, fontFamily: vsType.family, color: "#52525b", lineHeight: 18, marginTop: 5},
   errorBox: {padding: 13, borderRadius: 9, backgroundColor: "#fef2f2", borderColor: "#fecaca", borderWidth: 1, marginBottom: 16},
-  errorBoxText: {fontSize: 13, color: RED, lineHeight: 19},
+  errorBoxText: {fontSize: vsType.size.label, fontFamily: vsType.family, color: RED, lineHeight: 19},
   successBox: {padding: 13, borderRadius: 9, backgroundColor: PALE, borderColor: "#86efac", borderWidth: 1, marginBottom: 16},
-  successText: {fontSize: 13, color: DARK, lineHeight: 19},
+  successText: {fontSize: vsType.size.label, fontFamily: vsType.family, color: DARK, lineHeight: 19},
   button: {minHeight: 49, borderRadius: 10, backgroundColor: GREEN, marginTop: 13, alignItems: "center", justifyContent: "center", paddingHorizontal: 14},
   altButton: {backgroundColor: "#fff", borderColor: GREEN, borderWidth: 1.5},
-  buttonText: {color: "#fff", fontSize: 14, fontWeight: "800", textAlign: "center"},
+  buttonText: {color: "#fff", fontSize: vsType.size.body, fontFamily: vsType.family, fontWeight: "800", textAlign: "center"},
   altText: {color: GREEN},
   googleButtonContent: {flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10},
   dim: {opacity: 0.6},
   inlineButton: {paddingVertical: 11, alignItems: "center"},
-  link: {fontSize: 13, color: GREEN, fontWeight: "800"},
-  orText: {textAlign: "center", color: "#64748b", marginTop: 16, fontSize: 12, fontWeight: "800"},
+  link: {fontSize: vsType.size.label, fontFamily: vsType.family, color: GREEN, fontWeight: "800"},
+  orText: {textAlign: "center", color: "#64748b", marginTop: 16, fontSize: vsType.size.meta, fontFamily: vsType.family, fontWeight: "800"},
   check: {flexDirection: "row", alignItems: "flex-start", gap: 8, marginVertical: 9},
-  checkBox: {fontSize: 20, color: GREEN},
-  checkText: {flex: 1, color: "#475569", fontSize: 13, lineHeight: 20},
+  checkBox: {fontSize: vsType.size.subheading, fontFamily: vsType.family, color: GREEN},
+  checkText: {flex: 1, color: "#475569", fontSize: vsType.size.label, fontFamily: vsType.family, lineHeight: 20},
   highlight: {borderRadius: 10, backgroundColor: "#f0fdf4", padding: 14, marginBottom: 15},
-  highlightText: {color: DARK, fontSize: 15, fontWeight: "800"},
-  tiny: {fontSize: 11, color: "#64748b", lineHeight: 18, marginTop: 15},
+  highlightText: {color: DARK, fontSize: vsType.size.bodyStrong, fontFamily: vsType.family, fontWeight: "800"},
+  tiny: {fontSize: vsType.size.caption, fontFamily: vsType.family, color: "#64748b", lineHeight: 18, marginTop: 15},
   pickerBox: {borderRadius: 10, borderWidth: 1, borderColor: "#cbd5e1", marginBottom: 13, overflow: "hidden"},
-  footer: {fontSize: 11, textAlign: "center", color: "#94a3b8", marginTop: 35},
+  footer: {fontSize: vsType.size.caption, fontFamily: vsType.family, textAlign: "center", color: "#94a3b8", marginTop: 35},
 });

@@ -1,3 +1,4 @@
+import { volunserveTypography as vsType } from "../../constants/volunserveLiveUi";
 import { liveUi as designUi } from "../../constants/volunserveLiveUi";
 import { Ionicons } from "@expo/vector-icons";
 import ListPagination from "../../components/ui/ListPagination";
@@ -1642,8 +1643,8 @@ const styles =
     },
 
     eyebrow: {
-      fontSize: 11,
-      fontWeight: "900",
+      fontSize: vsType.size.caption, fontFamily: vsType.family,
+      fontWeight: "800",
       color: "#0F766E",
       letterSpacing: 1.3,
     },
@@ -1689,8 +1690,8 @@ const styles =
     },
 
     summaryValue: {
-      fontSize: 23,
-      fontWeight: "900",
+      fontSize: vsType.size.title, fontFamily: vsType.family,
+      fontWeight: "800",
       color: "#173D32",
     },
 
@@ -1713,12 +1714,12 @@ const styles =
     },
     browseHeaderCopy: { flexGrow: 1, gap: 3 },
     browseEyebrow: {
-      fontSize: 11,
-      fontWeight: "900",
+      fontSize: vsType.size.caption, fontFamily: vsType.family,
+      fontWeight: "800",
       letterSpacing: 1,
       color: "#1A5B47",
     },
-    browseDescription: { fontSize: 12, color: "#71877C" },
+    browseDescription: { fontSize: vsType.size.meta, fontFamily: vsType.family, color: "#71877C" },
     sectionPickerWrap: {
       position: "relative",
       zIndex: 30,
@@ -1741,7 +1742,7 @@ const styles =
     sectionPickerButtonOpen: { borderColor: "#087A62" },
     sectionPickerLabel: {
       flex: 1,
-      fontSize: 12,
+      fontSize: vsType.size.meta, fontFamily: vsType.family,
       color: "#194F3E",
       fontWeight: "800",
     },
@@ -1774,10 +1775,10 @@ const styles =
     sectionPickerOptionLabel: {
       flex: 1,
       color: "#365A4C",
-      fontSize: 12,
+      fontSize: vsType.size.meta, fontFamily: vsType.family,
       fontWeight: "700",
     },
-    sectionPickerOptionLabelActive: { color: "#087A62", fontWeight: "900" },
+    sectionPickerOptionLabelActive: { color: "#087A62", fontWeight: "800" },
     recordTypeTabs: {
       width: "100%",
       flexDirection: "row",
@@ -1797,11 +1798,11 @@ const styles =
     },
     recordTypeTabActive: { borderBottomColor: "#087A62" },
     recordTypeTabLabel: {
-      fontSize: 12,
+      fontSize: vsType.size.meta, fontFamily: vsType.family,
       fontWeight: "700",
       color: "#72847B",
     },
-    recordTypeTabLabelActive: { fontWeight: "900", color: "#087A62" },
+    recordTypeTabLabelActive: { fontWeight: "800", color: "#087A62" },
 
     searchBar: {
       flexDirection: "row",
@@ -1838,7 +1839,7 @@ const styles =
 
     recordCount: {
       color: "#64748B",
-      fontSize: 12,
+      fontSize: vsType.size.meta, fontFamily: vsType.family,
       fontWeight: "700",
     },
 
@@ -1886,8 +1887,8 @@ const styles =
     },
 
     statusText: {
-      fontSize: 9,
-      fontWeight: "900",
+      fontSize: vsType.size.micro, fontFamily: vsType.family,
+      fontWeight: "800",
     },
 
     recordDetails: {
@@ -1916,7 +1917,7 @@ const styles =
       marginTop: 4,
       color: "#334155",
       fontWeight: "700",
-      fontSize: 12,
+      fontSize: vsType.size.meta, fontFamily: vsType.family,
     },
 
     emptyCard: {
@@ -1932,8 +1933,8 @@ const styles =
     emptyTitle: {
       marginTop: 10,
       color: "#173D32",
-      fontWeight: "900",
-      fontSize: 16,
+      fontWeight: "800",
+      fontSize: vsType.size.card, fontFamily: vsType.family,
     },
 
     emptyText: {
@@ -1955,7 +1956,7 @@ const styles =
 
     errorTitle: {
       color: "#991B1B",
-      fontWeight: "900",
+      fontWeight: "800",
     },
 
     errorText: {
@@ -1979,6 +1980,6 @@ const styles =
       flex: 1,
       color: "#075985",
       lineHeight: 19,
-      fontSize: 12,
+      fontSize: vsType.size.meta, fontFamily: vsType.family,
     },
   });

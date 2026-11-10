@@ -1,3 +1,4 @@
+import { volunserveTypography as vsType } from "../../constants/volunserveLiveUi";
 import { liveUi as designUi } from "../../constants/volunserveLiveUi";
 import * as ImagePicker from "expo-image-picker";
 import { useRouter } from "expo-router";
@@ -2919,7 +2920,7 @@ const styles =
 
     loadingText: {
       color: "#64748B",
-      fontSize: 13,
+      fontSize: vsType.size.label, fontFamily: vsType.family,
     },
 
     centerCard: {
@@ -2934,7 +2935,7 @@ const styles =
     },
 
     centerTitle: {
-      fontSize: 20,
+      fontSize: vsType.size.subheading, fontFamily: vsType.family,
       fontWeight: "800",
       color: "#102A3A",
     },
@@ -2955,7 +2956,7 @@ const styles =
 
     eyebrow: {
       color: "#07857C",
-      fontSize: 10,
+      fontSize: vsType.size.micro, fontFamily: vsType.family,
       fontWeight: "700",
       letterSpacing: 1.4,
     },
@@ -2987,7 +2988,7 @@ const styles =
 
     errorText: {
       color: "#A83232",
-      fontSize: 12,
+      fontSize: vsType.size.meta, fontFamily: vsType.family,
       lineHeight: 18,
       fontWeight: "700",
     },
@@ -3048,7 +3049,7 @@ const styles =
     reference: {
       marginTop: 4,
       color: "#8A9AA5",
-      fontSize: 10,
+      fontSize: vsType.size.micro, fontFamily: vsType.family,
     },
 
     statusBadge: {
@@ -3064,8 +3065,8 @@ const styles =
 
     statusBadgeText: {
       color: "#08786F",
-      fontSize: 10,
-      fontWeight: "900",
+      fontSize: vsType.size.micro, fontFamily: vsType.family,
+      fontWeight: "800",
     },
 
     metaGrid: {
@@ -3097,7 +3098,7 @@ const styles =
     metaValue: {
       marginTop: 3,
       color: "#173748",
-      fontSize: 11,
+      fontSize: vsType.size.caption, fontFamily: vsType.family,
       fontWeight: "800",
     },
 
@@ -3116,7 +3117,7 @@ const styles =
     infoText: {
       marginTop: 4,
       color: "#36515F",
-      fontSize: 12,
+      fontSize: vsType.size.meta, fontFamily: vsType.family,
       lineHeight: 18,
     },
 
@@ -3134,7 +3135,7 @@ const styles =
     needsText: {
       marginTop: 5,
       color: "#36515F",
-      fontSize: 11,
+      fontSize: vsType.size.caption, fontFamily: vsType.family,
       lineHeight: 17,
     },
 
@@ -3169,23 +3170,23 @@ const styles =
 
     evidenceRequestEyebrow: {
       color: "#9A6700",
-      fontSize: 9,
-      fontWeight: "900",
+      fontSize: vsType.size.micro, fontFamily: vsType.family,
+      fontWeight: "800",
       letterSpacing: 1,
     },
 
     evidenceRequestTitle: {
       marginTop: 4,
       color: "#3F3314",
-      fontSize: 16,
+      fontSize: vsType.size.card, fontFamily: vsType.family,
       lineHeight: 22,
-      fontWeight: "900",
+      fontWeight: "800",
     },
 
     evidenceRequestText: {
       marginTop: 5,
       color: "#6F6033",
-      fontSize: 11.5,
+      fontSize: vsType.size.meta, fontFamily: vsType.family,
       lineHeight: 18,
     },
 
@@ -3200,15 +3201,15 @@ const styles =
 
     evidenceReasonLabel: {
       color: "#9A6700",
-      fontSize: 8.5,
-      fontWeight: "900",
+      fontSize: vsType.size.micro, fontFamily: vsType.family,
+      fontWeight: "800",
       letterSpacing: 0.8,
     },
 
     evidenceReasonText: {
       marginTop: 4,
       color: "#4F4529",
-      fontSize: 12,
+      fontSize: vsType.size.meta, fontFamily: vsType.family,
       lineHeight: 18,
       fontWeight: "700",
     },
@@ -3230,14 +3231,14 @@ const styles =
 
     evidenceFieldTitle: {
       color: "#263E4B",
-      fontSize: 12,
-      fontWeight: "900",
+      fontSize: vsType.size.meta, fontFamily: vsType.family,
+      fontWeight: "800",
     },
 
     evidenceFieldHelper: {
       marginTop: 3,
       color: "#778A95",
-      fontSize: 10,
+      fontSize: vsType.size.micro, fontFamily: vsType.family,
       lineHeight: 15,
     },
 
@@ -3250,8 +3251,8 @@ const styles =
 
     evidenceAddButtonText: {
       color: "#FFFFFF",
-      fontSize: 10.5,
-      fontWeight: "900",
+      fontSize: vsType.size.caption, fontFamily: vsType.family,
+      fontWeight: "800",
     },
 
     evidencePreviewGrid: {
@@ -3289,14 +3290,14 @@ const styles =
     evidencePreviewName: {
       flex: 1,
       color: "#4D6370",
-      fontSize: 9.5,
+      fontSize: vsType.size.micro, fontFamily: vsType.family,
       fontWeight: "700",
     },
 
     evidenceRemoveText: {
       color: "#B42318",
-      fontSize: 9.5,
-      fontWeight: "900",
+      fontSize: vsType.size.micro, fontFamily: vsType.family,
+      fontWeight: "800",
     },
 
     evidenceEmptyBox: {
@@ -3311,7 +3312,7 @@ const styles =
 
     evidenceEmptyText: {
       color: "#83939D",
-      fontSize: 10.5,
+      fontSize: vsType.size.caption, fontFamily: vsType.family,
     },
 
     evidenceVideoRow: {
@@ -3334,7 +3335,7 @@ const styles =
     evidenceSelectedVideo: {
       marginTop: 5,
       color: "#0B756E",
-      fontSize: 10,
+      fontSize: vsType.size.micro, fontFamily: vsType.family,
       fontWeight: "800",
     },
 
@@ -3355,8 +3356,8 @@ const styles =
 
     evidenceSecondaryButtonText: {
       color: "#0A726B",
-      fontSize: 10,
-      fontWeight: "900",
+      fontSize: vsType.size.micro, fontFamily: vsType.family,
+      fontWeight: "800",
     },
 
     evidenceTextButton: {
@@ -3367,7 +3368,7 @@ const styles =
     evidenceErrorText: {
       marginTop: 11,
       color: "#B42318",
-      fontSize: 10.5,
+      fontSize: vsType.size.caption, fontFamily: vsType.family,
       lineHeight: 16,
       fontWeight: "700",
     },
@@ -3375,7 +3376,7 @@ const styles =
     evidenceProgressText: {
       marginTop: 11,
       color: "#0B756E",
-      fontSize: 10.5,
+      fontSize: vsType.size.caption, fontFamily: vsType.family,
       lineHeight: 16,
       fontWeight: "800",
     },
@@ -3393,7 +3394,7 @@ const styles =
       flex: 1,
       minWidth: 240,
       color: "#71838E",
-      fontSize: 9.5,
+      fontSize: vsType.size.micro, fontFamily: vsType.family,
       lineHeight: 15,
     },
 
@@ -3413,8 +3414,8 @@ const styles =
 
     evidenceSubmitButtonText: {
       color: "#FFFFFF",
-      fontSize: 10.5,
-      fontWeight: "900",
+      fontSize: vsType.size.caption, fontFamily: vsType.family,
+      fontWeight: "800",
     },
 
     responderSection: {
@@ -3443,14 +3444,14 @@ const styles =
 
     waitingTitle: {
       color: "#526B79",
-      fontSize: 12,
+      fontSize: vsType.size.meta, fontFamily: vsType.family,
       fontWeight: "800",
     },
 
     waitingText: {
       marginTop: 4,
       color: "#7A8C97",
-      fontSize: 11,
+      fontSize: vsType.size.caption, fontFamily: vsType.family,
       lineHeight: 17,
     },
 
@@ -3480,14 +3481,14 @@ const styles =
 
     volunteerName: {
       color: "#153646",
-      fontSize: 13,
-      fontWeight: "900",
+      fontSize: vsType.size.label, fontFamily: vsType.family,
+      fontWeight: "800",
     },
 
     assignmentReference: {
       marginTop: 3,
       color: "#8A9AA5",
-      fontSize: 9,
+      fontSize: vsType.size.micro, fontFamily: vsType.family,
     },
 
     assignmentStatusBadge: {
@@ -3500,8 +3501,8 @@ const styles =
 
     assignmentStatusText: {
       color: "#456171",
-      fontSize: 9,
-      fontWeight: "900",
+      fontSize: vsType.size.micro, fontFamily: vsType.family,
+      fontWeight: "800",
     },
 
     contributionBox: {
@@ -3518,14 +3519,14 @@ const styles =
     contributionType: {
       marginTop: 4,
       color: "#087F78",
-      fontSize: 13,
+      fontSize: vsType.size.label, fontFamily: vsType.family,
       fontWeight: "800",
     },
 
     contributionMeta: {
       marginTop: 5,
       color: "#64748B",
-      fontSize: 12,
+      fontSize: vsType.size.meta, fontFamily: vsType.family,
       lineHeight: 18,
     },
 
@@ -3545,7 +3546,7 @@ const styles =
 
     secondaryButtonText: {
       color: "#096C66",
-      fontSize: 11,
+      fontSize: vsType.size.caption, fontFamily: vsType.family,
       fontWeight: "800",
     },
 
@@ -3573,14 +3574,14 @@ const styles =
 
     pendingConfirmationTitle: {
       color: "#765B0A",
-      fontSize: 12,
-      fontWeight: "900",
+      fontSize: vsType.size.meta, fontFamily: vsType.family,
+      fontWeight: "800",
     },
 
     pendingConfirmationText: {
       marginTop: 4,
       color: "#806D32",
-      fontSize: 10.5,
+      fontSize: vsType.size.caption, fontFamily: vsType.family,
       lineHeight: 16,
     },
 
@@ -3597,14 +3598,14 @@ const styles =
 
     reviewTitle: {
       color: "#153646",
-      fontSize: 14,
-      fontWeight: "900",
+      fontSize: vsType.size.body, fontFamily: vsType.family,
+      fontWeight: "800",
     },
 
     reviewCopy: {
       marginTop: 5,
       color: "#647984",
-      fontSize: 11,
+      fontSize: vsType.size.caption, fontFamily: vsType.family,
       lineHeight: 17,
     },
 
@@ -3642,7 +3643,7 @@ const styles =
 
     outcomeButtonText: {
       color: "#526B79",
-      fontSize: 10.5,
+      fontSize: vsType.size.caption, fontFamily: vsType.family,
       fontWeight: "800",
     },
 
@@ -3654,7 +3655,7 @@ const styles =
       marginTop: 13,
       marginBottom: 5,
       color: "#526B79",
-      fontSize: 10.5,
+      fontSize: vsType.size.caption, fontFamily: vsType.family,
       fontWeight: "800",
     },
 
@@ -3668,13 +3669,13 @@ const styles =
       backgroundColor:
         "#FFFFFF",
       color: "#173748",
-      fontSize: 12,
+      fontSize: vsType.size.meta, fontFamily: vsType.family,
     },
 
     reviewError: {
       marginTop: 8,
       color: "#B42318",
-      fontSize: 10.5,
+      fontSize: vsType.size.caption, fontFamily: vsType.family,
       fontWeight: "700",
     },
 
@@ -3701,8 +3702,8 @@ const styles =
 
     primaryButtonText: {
       color: "#FFFFFF",
-      fontSize: 10.5,
-      fontWeight: "900",
+      fontSize: vsType.size.caption, fontFamily: vsType.family,
+      fontWeight: "800",
     },
 
     cancelButton: {
@@ -3719,7 +3720,7 @@ const styles =
 
     cancelButtonText: {
       color: "#526B79",
-      fontSize: 10.5,
+      fontSize: vsType.size.caption, fontFamily: vsType.family,
       fontWeight: "800",
     },
 
@@ -3743,21 +3744,21 @@ const styles =
 
     confirmedTitle: {
       color: "#08786F",
-      fontSize: 11.5,
-      fontWeight: "900",
+      fontSize: vsType.size.meta, fontFamily: vsType.family,
+      fontWeight: "800",
     },
 
     confirmedText: {
       marginTop: 4,
       color: "#526B79",
-      fontSize: 10.5,
+      fontSize: vsType.size.caption, fontFamily: vsType.family,
       lineHeight: 16,
     },
 
     confirmedNote: {
       marginTop: 7,
       color: "#6A7E89",
-      fontSize: 10.5,
+      fontSize: vsType.size.caption, fontFamily: vsType.family,
       fontStyle: "italic",
       lineHeight: 16,
     },

@@ -1,3 +1,4 @@
+import { volunserveTypography as vsType } from "../../constants/volunserveLiveUi";
 import { liveUi as designUi } from "../../constants/volunserveLiveUi";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { useRouter } from "expo-router";
@@ -1301,7 +1302,7 @@ const styles =
 
     loadingText: {
       color: "#64748B",
-      fontSize: 13,
+      fontSize: vsType.size.label,
     },
 
     centerCard: {
@@ -1317,8 +1318,8 @@ const styles =
 
     centerTitle: {
       color: "#102A3A",
-      fontSize: 20,
-      fontWeight: "900",
+      fontSize: vsType.size.subheading,
+      fontWeight: "800",
     },
 
     centerText: {
@@ -1333,7 +1334,7 @@ const styles =
 
     eyebrow: {
       color: "#087F78",
-      fontSize: 10,
+      fontSize: vsType.size.micro,
       fontWeight: "700",
       letterSpacing: 1.3,
     },
@@ -1365,7 +1366,7 @@ const styles =
 
     errorText: {
       color: "#A83232",
-      fontSize: 11.5,
+      fontSize: vsType.size.meta,
       fontWeight: "700",
     },
 
@@ -1382,8 +1383,8 @@ const styles =
 
     pendingEyebrow: {
       color: "#087F78",
-      fontSize: 9,
-      fontWeight: "900",
+      fontSize: vsType.size.micro,
+      fontWeight: "800",
       letterSpacing: 0.8,
     },
 
@@ -1397,7 +1398,7 @@ const styles =
       marginTop: 6,
       maxWidth: 680,
       color: "#64748B",
-      fontSize: 11.5,
+      fontSize: vsType.size.meta,
       lineHeight: 18,
     },
 
@@ -1444,15 +1445,15 @@ const styles =
 
     logoText: {
       color: "#087F78",
-      fontSize: 18,
-      fontWeight: "900",
+      fontSize: vsType.size.section,
+      fontWeight: "800",
       letterSpacing: 2,
     },
 
     organization: {
       marginTop: 3,
       color: "#526B79",
-      fontSize: 10,
+      fontSize: vsType.size.micro,
       fontWeight: "700",
       textAlign: "center",
     },
@@ -1460,7 +1461,7 @@ const styles =
     city: {
       marginTop: 2,
       color: "#83949E",
-      fontSize: 9,
+      fontSize: vsType.size.micro,
       textAlign: "center",
     },
 
@@ -1473,7 +1474,7 @@ const styles =
 
     certSmallTitle: {
       color: "#71858F",
-      fontSize: 11,
+      fontSize: vsType.size.caption,
       fontWeight: "800",
       letterSpacing: 2,
       textAlign: "center",
@@ -1482,25 +1483,25 @@ const styles =
     certMainTitle: {
       marginTop: 4,
       color: "#173748",
-      fontSize: 32,
+      fontSize: vsType.size.display,
       lineHeight: 38,
-      fontWeight: "900",
+      fontWeight: "800",
       textAlign: "center",
     },
 
     presentedText: {
       marginTop: 22,
       color: "#7B8E97",
-      fontSize: 11,
+      fontSize: vsType.size.caption,
       textAlign: "center",
     },
 
     volunteerName: {
       marginTop: 8,
       color: "#087F78",
-      fontSize: 27,
+      fontSize: vsType.size.page,
       lineHeight: 34,
-      fontWeight: "900",
+      fontWeight: "800",
       textAlign: "center",
     },
 
@@ -1519,7 +1520,7 @@ const styles =
       alignSelf: "center",
       maxWidth: 650,
       color: "#526B79",
-      fontSize: 12,
+      fontSize: vsType.size.meta,
       lineHeight: 20,
       textAlign: "center",
     },
@@ -1550,14 +1551,14 @@ const styles =
 
     metricValue: {
       color: "#087F78",
-      fontSize: 22,
-      fontWeight: "900",
+      fontSize: vsType.size.titleSmall,
+      fontWeight: "800",
     },
 
     metricValueSmall: {
       color: "#087F78",
-      fontSize: 15,
-      fontWeight: "900",
+      fontSize: vsType.size.bodyStrong,
+      fontWeight: "800",
       textAlign: "center",
     },
 
@@ -1590,8 +1591,8 @@ const styles =
     breakdownHeading: {
       marginBottom: 5,
       color: "#405D69",
-      fontSize: 11,
-      fontWeight: "900",
+      fontSize: vsType.size.caption,
+      fontWeight: "800",
       textAlign: "center",
     },
 
@@ -1610,13 +1611,13 @@ const styles =
     breakdownType: {
       flex: 1,
       color: "#5A717D",
-      fontSize: 10.5,
+      fontSize: vsType.size.caption,
     },
 
     breakdownCount: {
       color: "#087F78",
-      fontSize: 11,
-      fontWeight: "900",
+      fontSize: vsType.size.caption,
+      fontWeight: "800",
     },
 
     recognitionText: {
@@ -1624,7 +1625,7 @@ const styles =
       alignSelf: "center",
       maxWidth: 620,
       color: "#71858F",
-      fontSize: 10,
+      fontSize: vsType.size.micro,
       lineHeight: 16,
       textAlign: "center",
       fontStyle: "italic",
@@ -1646,15 +1647,15 @@ const styles =
 
     footerLabel: {
       color: "#8B9BA4",
-      fontSize: 8,
-      fontWeight: "900",
+      fontSize: vsType.size.micro,
+      fontWeight: "800",
       letterSpacing: 0.7,
     },
 
     footerValue: {
       marginTop: 5,
       color: "#334E5C",
-      fontSize: 10.5,
+      fontSize: vsType.size.caption,
       fontWeight: "800",
       textAlign: "center",
     },
@@ -1675,12 +1676,12 @@ const styles =
       gap: 18,
     },
     verificationMessageBox: { flex: 1, minWidth: 190 },
-    verificationNote: { color: "#71858F", fontSize: 10, lineHeight: 16 },
-    verificationRecordStatus: { color: "#08786F", fontWeight: "900", fontSize: 9, marginTop: 6 },
-    verificationRevoked: { color: "#A83232", fontWeight: "900", fontSize: 9, marginTop: 6 },
+    verificationNote: { color: "#71858F", fontSize: vsType.size.micro, lineHeight: 16 },
+    verificationRecordStatus: { color: "#08786F", fontWeight: "800", fontSize: vsType.size.micro, marginTop: 6 },
+    verificationRevoked: { color: "#A83232", fontWeight: "800", fontSize: vsType.size.micro, marginTop: 6 },
     verificationIdBlock: { alignItems: "flex-end", maxWidth: "100%" },
-    verificationLabel: { color: "#71858F", fontSize: 8, fontWeight: "900", letterSpacing: 1 },
-    verificationId: { color: "#173748", fontSize: 12, fontWeight: "900", marginTop: 4, textAlign: "right" },
+    verificationLabel: { color: "#71858F", fontSize: vsType.size.micro, fontWeight: "800", letterSpacing: 1 },
+    verificationId: { color: "#173748", fontSize: vsType.size.meta, fontWeight: "800", marginTop: 4, textAlign: "right" },
 
     actions: {
       marginTop: 10,
@@ -1701,8 +1702,8 @@ const styles =
 
     primaryButtonText: {
       color: "#FFFFFF",
-      fontSize: 10.5,
-      fontWeight: "900",
+      fontSize: vsType.size.caption,
+      fontWeight: "800",
     },
 
     secondaryButton: {
@@ -1718,8 +1719,8 @@ const styles =
 
     secondaryButtonText: {
       color: "#08786F",
-      fontSize: 10.5,
-      fontWeight: "900",
+      fontSize: vsType.size.caption,
+      fontWeight: "800",
     },
 
     legacySection: {
@@ -1728,15 +1729,15 @@ const styles =
 
     legacyHeading: {
       color: "#173748",
-      fontSize: 17,
-      fontWeight: "900",
+      fontSize: vsType.size.card,
+      fontWeight: "800",
     },
 
     legacySubheading: {
       marginTop: 3,
       marginBottom: 10,
       color: "#7A8E99",
-      fontSize: 11,
+      fontSize: vsType.size.caption,
     },
 
     legacyCard: {
@@ -1752,26 +1753,26 @@ const styles =
 
     legacyTitle: {
       color: "#173748",
-      fontSize: 12,
-      fontWeight: "900",
+      fontSize: vsType.size.meta,
+      fontWeight: "800",
     },
 
     legacyName: {
       marginTop: 3,
       color: "#526B79",
-      fontSize: 11,
+      fontSize: vsType.size.caption,
     },
 
     legacyDate: {
       marginTop: 3,
       color: "#83949E",
-      fontSize: 9.5,
+      fontSize: vsType.size.micro,
     },
 
     legacyId: {
       marginTop: 5,
       color: "#087F78",
-      fontSize: 9,
+      fontSize: vsType.size.micro,
       fontWeight: "700",
     },
     // ========================================================
@@ -1780,10 +1781,10 @@ const styles =
     // ========================================================
     paperSheetCompact: { paddingHorizontal: 30, paddingTop: 37, paddingBottom: 38 },
     paperLogoCompact: { width: 49, height: 49 },
-    paperBrandCompact: { fontSize: 16 },
+    paperBrandCompact: { fontSize: vsType.size.card },
     paperRecordCompact: { width: 48, height: 48 },
-    paperHeadingCompact: { fontSize: 18, lineHeight: 26 },
-    paperRecipientCompact: { fontSize: 22, lineHeight: 30 },
+    paperHeadingCompact: { fontSize: vsType.size.section, lineHeight: 26 },
+    paperRecipientCompact: { fontSize: vsType.size.titleSmall, lineHeight: 30 },
     paperSheet: {
       width: "100%", maxWidth: 610, alignSelf: "center", minHeight: 810,
       backgroundColor: "#FFFEF9", paddingHorizontal: 49, paddingTop: 48,
@@ -1800,33 +1801,33 @@ const styles =
     paperBrandRow: { flexDirection: "row", alignItems: "center", flexShrink: 1, gap: 7 },
     paperLogoImage: { width: 67, height: 67 },
     paperBrandCopy: { flexShrink: 1 },
-    paperBrandName: { color: "#007A73", fontSize: 22, fontWeight: "900" },
-    paperBrandTagline: { color: "#547780", fontSize: 9, lineHeight: 14 },
+    paperBrandName: { color: "#007A73", fontSize: vsType.size.titleSmall, fontWeight: "800" },
+    paperBrandTagline: { color: "#547780", fontSize: vsType.size.micro, lineHeight: 14 },
     paperRecordBadge: { width: 68, height: 68, borderRadius: 35, borderWidth: 2, borderColor: "#8FAEA6", backgroundColor: "#F7FBF8", alignItems: "center", justifyContent: "center" },
-    paperRecordLetters: { color: "#0A756D", fontSize: 22, fontFamily: "Georgia", fontWeight: "900" },
-    paperRecordLabel: { fontSize: 7, fontWeight: "900", color: "#0A756D", letterSpacing: 1 },
+    paperRecordLetters: { color: "#0A756D", fontSize: vsType.size.titleSmall, fontFamily: "Georgia", fontWeight: "800" },
+    paperRecordLabel: { fontSize: vsType.size.micro, fontWeight: "800", color: "#0A756D", letterSpacing: 1 },
     paperMiddle: { flex: 1, width: "100%", alignItems: "center", justifyContent: "center", paddingVertical: 28, zIndex: 1 },
-    paperHeading: { fontFamily: "Georgia", fontSize: 23, lineHeight: 31, color: "#173E52", fontWeight: "900", textAlign: "center", letterSpacing: 0.4, marginBottom: 18 },
-    paperIntro: { color: "#526369", fontSize: 12, textAlign: "center" },
-    paperRecipient: { fontFamily: "Georgia", fontSize: 29, lineHeight: 38, fontWeight: "900", color: "#23313B", textAlign: "center", marginTop: 11, flexShrink: 1 },
+    paperHeading: { fontFamily: "Georgia", fontSize: vsType.size.title, lineHeight: 31, color: "#173E52", fontWeight: "800", textAlign: "center", letterSpacing: 0.4, marginBottom: 18 },
+    paperIntro: { color: "#526369", fontSize: vsType.size.meta, textAlign: "center" },
+    paperRecipient: { fontFamily: "Georgia", fontSize: vsType.size.hero, lineHeight: 38, fontWeight: "800", color: "#23313B", textAlign: "center", marginTop: 11, flexShrink: 1 },
     paperNameDivider: { height: 1, width: "80%", backgroundColor: "#C1D3B8", marginTop: 12, marginBottom: 14 },
-    paperSupport: { color: "#526369", fontSize: 12, lineHeight: 20, textAlign: "center", marginTop: 6 },
-    paperEventName: { fontFamily: "Georgia", color: "#184552", fontSize: 23, lineHeight: 30, fontWeight: "900", textAlign: "center", marginVertical: 12 },
-    paperEventDetail: { color: "#526369", fontSize: 11.5, lineHeight: 19, textAlign: "center" },
-    paperRecognition: { maxWidth: 390, marginTop: 31, color: "#526369", fontSize: 12, lineHeight: 20, textAlign: "center" },
-    paperRecordNote: { color: "#71847D", fontSize: 10, lineHeight: 17, marginTop: 13, textAlign: "center" },
+    paperSupport: { color: "#526369", fontSize: vsType.size.meta, lineHeight: 20, textAlign: "center", marginTop: 6 },
+    paperEventName: { fontFamily: "Georgia", color: "#184552", fontSize: vsType.size.title, lineHeight: 30, fontWeight: "800", textAlign: "center", marginVertical: 12 },
+    paperEventDetail: { color: "#526369", fontSize: vsType.size.meta, lineHeight: 19, textAlign: "center" },
+    paperRecognition: { maxWidth: 390, marginTop: 31, color: "#526369", fontSize: vsType.size.meta, lineHeight: 20, textAlign: "center" },
+    paperRecordNote: { color: "#71847D", fontSize: vsType.size.micro, lineHeight: 17, marginTop: 13, textAlign: "center" },
     paperSignoff: { flexDirection: "row", alignItems: "flex-end", justifyContent: "space-between", gap: 18, width: "100%", marginBottom: 23, zIndex: 1 },
     paperSignoffCol: { flex: 1, minWidth: 0, alignItems: "center" },
-    paperSignoffName: { fontSize: 11, fontWeight: "800", color: "#243E48", textAlign: "center" },
+    paperSignoffName: { fontSize: vsType.size.caption, fontWeight: "800", color: "#243E48", textAlign: "center" },
     paperSignoffRule: { borderTopWidth: 1, borderTopColor: "#9AACA7", width: "100%", marginTop: 9, marginBottom: 7 },
-    paperSignoffDesc: { color: "#617579", fontSize: 9, lineHeight: 14, textAlign: "center" },
+    paperSignoffDesc: { color: "#617579", fontSize: vsType.size.micro, lineHeight: 14, textAlign: "center" },
     paperFooter: { backgroundColor: "#FFFEF9", paddingTop: 12, borderTopWidth: 1, borderTopColor: "#DAE7DC", flexDirection: "row", justifyContent: "space-between", alignItems: "flex-end", gap: 12, width: "100%", zIndex: 1 },
-    paperFooterNote: { color: "#63777A", fontSize: 8.5, lineHeight: 14, flex: 1 },
+    paperFooterNote: { color: "#63777A", fontSize: vsType.size.micro, lineHeight: 14, flex: 1 },
     paperFooterIdWrap: { alignItems: "flex-end", flex: 1 },
-    paperFooterIdLabel: { fontSize: 8, color: "#63777A", fontWeight: "800", letterSpacing: 0.5 },
-    paperFooterId: { fontSize: 10, fontWeight: "900", color: "#154955", textAlign: "right", marginTop: 4 },
+    paperFooterIdLabel: { fontSize: vsType.size.micro, color: "#63777A", fontWeight: "800", letterSpacing: 0.5 },
+    paperFooterId: { fontSize: vsType.size.micro, fontWeight: "800", color: "#154955", textAlign: "right", marginTop: 4 },
     paperRevokedOverlay: { position: "absolute", top: 0, right: 0, bottom: 0, left: 0, alignItems: "center", justifyContent: "center", backgroundColor: "#FFFFFFAD", zIndex: 3 },
-    paperRevokedText: { fontSize: 42, color: "#A83232", fontWeight: "900", letterSpacing: 6, transform: [{rotate:"-20deg"}] },
+    paperRevokedText: { fontSize: vsType.size.xl, color: "#A83232", fontWeight: "800", letterSpacing: 6, transform: [{rotate:"-20deg"}] },
 
     // --------------------------------------------------------
     // COMMUNITY EVENT CERTIFICATE UI — ADDED, ORIGINAL STYLES KEPT
@@ -1835,48 +1836,48 @@ const styles =
       flexDirection: "row", alignItems: "center", gap: 12,
       marginTop: 14, marginBottom: 12,
     },
-    communityEyebrow: { color: "#078F82", fontSize: 10, fontWeight: "900", letterSpacing: 1.3 },
+    communityEyebrow: { color: "#078F82", fontSize: vsType.size.micro, fontWeight: "800", letterSpacing: 1.3 },
     communitySectionTitle: { marginTop: 4, color: "#173747", fontSize: designUi.type.section.fontSize, fontWeight: designUi.type.section.fontWeight, lineHeight: designUi.type.section.lineHeight,},
-    communitySectionSub: { marginTop: 4, color: "#667F8A", fontSize: 11, lineHeight: 17 },
+    communitySectionSub: { marginTop: 4, color: "#667F8A", fontSize: vsType.size.caption, lineHeight: 17 },
     communityCount: { width: 34, height: 34, borderRadius: 17, alignItems: "center", justifyContent: "center", backgroundColor: "#E2F5EE" },
-    communityCountText: { color: "#078F82", fontWeight: "900", fontSize: 14 },
+    communityCountText: { color: "#078F82", fontWeight: "800", fontSize: vsType.size.body },
     communityEmpty: { backgroundColor: "#FFFFFF", borderWidth: 1, borderColor: "#DDEBE5", borderRadius: 12, padding: 21, marginBottom: 22 },
-    communityEmptyTitle: { color: "#173747", fontSize: 14, fontWeight: "900" },
-    communityEmptyCopy: { color: "#657C89", marginTop: 7, lineHeight: 19, fontSize: 11.5 },
+    communityEmptyTitle: { color: "#173747", fontSize: vsType.size.body, fontWeight: "800" },
+    communityEmptyCopy: { color: "#657C89", marginTop: 7, lineHeight: 19, fontSize: vsType.size.meta },
     communityWrapper: { backgroundColor: "#FFFFFF", borderRadius: 12, borderWidth: 1, borderColor: "#DDEAE3", overflow: "hidden", marginBottom: 20 },
     communityPaper: { position: "relative", backgroundColor: "#FFFEF8", padding: 23, minHeight: 475 },
     communityBorderOuter: { position: "absolute", left: 12, right: 12, top: 12, bottom: 12, borderWidth: 2, borderColor: "#078F82", borderRadius: 1 },
     communityBorderInner: { position: "absolute", left: 17, right: 17, top: 17, bottom: 17, borderWidth: 1, borderColor: "#B3D0B8", borderRadius: 1 },
     communityPaperBody: { paddingHorizontal: 12, paddingVertical: 15, alignItems: "center", flex: 1 },
-    communityBrand: { fontSize: 21, fontWeight: "900", color: "#078F82", letterSpacing: 1.5 },
-    communityBrandSub: { fontSize: 9, color: "#7A8C80", letterSpacing: 1.1, marginTop: 3, textAlign: "center" },
-    communityCertHeading: { fontFamily: "Georgia", fontWeight: "900", color: "#173747", textAlign: "center", fontSize: 25, marginTop: 20 },
-    communityPresented: { color: "#526E76", fontSize: 12, textAlign: "center", marginTop: 11 },
-    communityRecipient: { color: "#173747", fontFamily: "Georgia", fontSize: 27, fontWeight: "900", textAlign: "center", marginTop: 8 },
+    communityBrand: { fontSize: vsType.size.titleSmall, fontWeight: "800", color: "#078F82", letterSpacing: 1.5 },
+    communityBrandSub: { fontSize: vsType.size.micro, color: "#7A8C80", letterSpacing: 1.1, marginTop: 3, textAlign: "center" },
+    communityCertHeading: { fontFamily: "Georgia", fontWeight: "800", color: "#173747", textAlign: "center", fontSize: vsType.size.title, marginTop: 20 },
+    communityPresented: { color: "#526E76", fontSize: vsType.size.meta, textAlign: "center", marginTop: 11 },
+    communityRecipient: { color: "#173747", fontFamily: "Georgia", fontSize: vsType.size.page, fontWeight: "800", textAlign: "center", marginTop: 8 },
     communityNameRule: { width: "70%", height: 1, backgroundColor: "#AAC6AE", marginTop: 9 },
-    communityEventTitle: { fontFamily: "Georgia", fontSize: 22, color: "#087F78", fontWeight: "900", textAlign: "center", marginTop: 8 },
-    communityEventMeta: { marginTop: 4, color: "#627782", fontSize: 11, textAlign: "center", lineHeight: 17 },
+    communityEventTitle: { fontFamily: "Georgia", fontSize: vsType.size.titleSmall, color: "#087F78", fontWeight: "800", textAlign: "center", marginTop: 8 },
+    communityEventMeta: { marginTop: 4, color: "#627782", fontSize: vsType.size.caption, textAlign: "center", lineHeight: 17 },
     communityServicePill: { marginTop: 15, borderRadius: 11, backgroundColor: "#E6F6EF", paddingHorizontal: 23, paddingVertical: 11, alignItems: "center" },
-    communityServiceLabel: { fontSize: 8.5, color: "#53877A", fontWeight: "900", letterSpacing: 0.6 },
-    communityServiceValue: { fontSize: 17, fontWeight: "900", color: "#087F78", marginTop: 3 },
+    communityServiceLabel: { fontSize: vsType.size.micro, color: "#53877A", fontWeight: "800", letterSpacing: 0.6 },
+    communityServiceValue: { fontSize: vsType.size.card, fontWeight: "800", color: "#087F78", marginTop: 3 },
     communityPaperFooter: { marginTop: "auto", paddingTop: 24, alignSelf: "stretch", flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between", alignItems: "flex-end", gap: 14 },
     communityIssuerDetails: { flex: 1, minWidth: 180, gap: 5 },
     communityIdBlock: { alignItems: "flex-end", maxWidth: "100%", borderTopWidth: 1, borderTopColor: "#C9DCD0", paddingTop: 8 },
-    communityIdLabel: { fontSize: 8, fontWeight: "900", letterSpacing: 1, color: "#7F9194" },
-    communityIdValue: { fontSize: 12, fontWeight: "900", color: "#173747", textAlign: "right", marginTop: 4 },
-    communityIdHelp: { fontSize: 9, color: "#7D958B", marginTop: 4, textAlign: "right" },
-    communityFootDetails: { fontSize: 10, color: "#536D77" },
-    communityDisclaimer: { marginTop: 2, fontSize: 9, color: "#87948B", lineHeight: 14 },
+    communityIdLabel: { fontSize: vsType.size.micro, fontWeight: "800", letterSpacing: 1, color: "#7F9194" },
+    communityIdValue: { fontSize: vsType.size.meta, fontWeight: "800", color: "#173747", textAlign: "right", marginTop: 4 },
+    communityIdHelp: { fontSize: vsType.size.micro, color: "#7D958B", marginTop: 4, textAlign: "right" },
+    communityFootDetails: { fontSize: vsType.size.micro, color: "#536D77" },
+    communityDisclaimer: { marginTop: 2, fontSize: vsType.size.micro, color: "#87948B", lineHeight: 14 },
     communityActionBar: { backgroundColor: "#FFFFFF", borderTopWidth: 1, borderTopColor: "#E1ECE6", padding: 12, flexDirection: "row", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 9 },
-    communityState: { fontWeight: "900", fontSize: 10, letterSpacing: 0.5 },
+    communityState: { fontWeight: "800", fontSize: vsType.size.micro, letterSpacing: 0.5 },
     communityStateIssued: { color: "#087F78" },
     communityStateRevoked: { color: "#B33A3A" },
     communityStateOther: { color: "#657C89" },
     communityActionButtons: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
     communityVerifyBtn: { borderWidth: 1, borderColor: "#B8D9CE", backgroundColor: "#EFF8F4", paddingHorizontal: 13, paddingVertical: 11, borderRadius: 8 },
-    communityVerifyText: { color: "#087F78", fontSize: 10.5, fontWeight: "900" },
+    communityVerifyText: { color: "#087F78", fontSize: vsType.size.caption, fontWeight: "800" },
     communityPrintBtn: { backgroundColor: "#078F82", paddingHorizontal: 13, paddingVertical: 11, borderRadius: 8 },
-    communityPrintText: { color: "#FFFFFF", fontSize: 10.5, fontWeight: "900" },
+    communityPrintText: { color: "#FFFFFF", fontSize: vsType.size.caption, fontWeight: "800" },
     // Certificate DASHBOARD only. Do not change the existing A4 paper styles.
     dashRoot: {flex: 1, backgroundColor: "#F4F8FC"},
     dashScroll: {flex: 1},
@@ -1884,9 +1885,9 @@ const styles =
     dashContainerMobile: {paddingHorizontal: 14, paddingTop: 15, gap: 16},
     dashHero: {minHeight: 135, overflow: "hidden", flexDirection: "row", justifyContent: "space-between", alignItems: "center", position: "relative"},
     dashHeroText: {flex: 1, minWidth: 0, paddingTop: 1, paddingBottom: 10, zIndex: 2},
-    dashEyebrow: {fontSize: 11, fontWeight: "900", color: "#048D80", letterSpacing: 1.2},
+    dashEyebrow: {fontSize: vsType.size.caption, fontWeight: "800", color: "#048D80", letterSpacing: 1.2},
     dashTitle: {fontSize: designUi.type.page.fontSize, fontWeight: designUi.type.page.fontWeight, color: "#102F46", marginTop: 6, letterSpacing: -0.8, lineHeight: designUi.type.page.lineHeight,},
-    dashTitleMobile: {fontSize: 30},
+    dashTitleMobile: {fontSize: vsType.size.hero},
     dashSubtitle: {fontSize: designUi.type.body.fontSize, color: "#58738A", lineHeight: designUi.type.body.lineHeight, marginTop: 7, maxWidth: 770, fontWeight: designUi.type.body.fontWeight,},
     dashHeroGraphic: {height: 144, width: 295, position: "relative", flexShrink: 0, justifyContent: "center", alignItems: "center", overflow: "hidden"},
     dashHeroHalo: {position: "absolute", width: 240, height: 170, right: -38, top: 12, backgroundColor: "#E0F3F2", borderTopLeftRadius: 120, borderTopRightRadius: 90},
@@ -1900,8 +1901,8 @@ const styles =
     dashNotice: {flexDirection: "row", alignItems: "center", gap: 16, paddingVertical: 16, paddingHorizontal: 19, backgroundColor: "#EAF8F5", borderWidth: 1, borderColor: "#CDEAE1", borderRadius: 14},
     dashNoticeIcon: {width: 51, height: 51, borderRadius: 26, backgroundColor: "#078F82", alignItems: "center", justifyContent: "center", borderWidth: 5, borderColor: "#BFE6DD"},
     dashNoticeCopy: {flex: 1, gap: 5},
-    dashNoticeTitle: {fontSize: 13, fontWeight: "900", color: "#123C4D", lineHeight: 20},
-    dashNoticeBody: {fontSize: 12, color: "#47697C", lineHeight: 18},
+    dashNoticeTitle: {fontSize: vsType.size.label, fontWeight: "800", color: "#123C4D", lineHeight: 20},
+    dashNoticeBody: {fontSize: vsType.size.meta, color: "#47697C", lineHeight: 18},
     dashSection: {backgroundColor: "#FFFFFF", borderWidth: 1, borderColor: "#E3EBF1", borderRadius: 18, padding: 17, gap: 16, shadowColor: "#123C4C", shadowOpacity: 0.035, shadowRadius: 12, shadowOffset: {width: 0, height: 4}, elevation: 1},
     dashSectionHeader: {flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10},
     dashSectionHeaderStack: {alignItems: "flex-start", flexDirection: "column"},
@@ -1909,13 +1910,13 @@ const styles =
     dashSectionTitleWrap: {flex: 1, minWidth: 0},
     dashSectionIcon: {width: 49, height: 49, backgroundColor: "#058C80", borderRadius: 13, alignItems: "center", justifyContent: "center", shadowColor: "#068D83", shadowOpacity: 0.12, shadowRadius: 8},
     dashSectionTitle: {fontSize: designUi.type.section.fontSize, fontWeight: designUi.type.section.fontWeight, color: "#12324C", lineHeight: designUi.type.section.lineHeight,},
-    dashSectionDescription: {color: "#58738B", fontSize: 12, lineHeight: 18, marginTop: 5},
+    dashSectionDescription: {color: "#58738B", fontSize: vsType.size.meta, lineHeight: 18, marginTop: 5},
     dashSectionControls: {flexDirection: "row", alignItems: "center", gap: 10},
     dashViewAll: {flexDirection: "row", alignItems: "center", gap: 8, borderWidth: 1, borderColor: "#D0E0E8", borderRadius: 9, paddingHorizontal: 13, paddingVertical: 10, backgroundColor: "#FFFFFF"},
-    dashViewAllText: {fontSize: 11, fontWeight: "800", color: "#164057"},
+    dashViewAllText: {fontSize: vsType.size.caption, fontWeight: "800", color: "#164057"},
     dashCount: {height: 38, width: 38, borderRadius: 20, backgroundColor: "#E0F5F0", justifyContent: "center", alignItems: "center"},
-    dashCountNumber: {fontSize: 16, fontWeight: "900", color: "#078F82"},
-    dashCountLabel: {fontSize: 11, color: "#55758A"},
+    dashCountNumber: {fontSize: vsType.size.card, fontWeight: "800", color: "#078F82"},
+    dashCountLabel: {fontSize: vsType.size.caption, color: "#55758A"},
     dashEmpty: {borderRadius: 13, borderWidth: 1, borderColor: "#E5EEF2", minHeight: 214, alignItems: "center", justifyContent: "center", paddingHorizontal: 18, paddingVertical: 23, backgroundColor: "#FCFDFE"},
     dashEmptyGraphic: {width: 230, height: 74, alignItems: "center", justifyContent: "center", position: "relative", marginBottom: 10},
     dashEmptyCloudLeft: {position: "absolute", width: 135, height: 45, borderTopLeftRadius: 90, borderTopRightRadius: 90, bottom: 0, left: 9, backgroundColor: "#EFF5FA"},
@@ -1924,7 +1925,7 @@ const styles =
     dashEmptyTitle: {fontSize: designUi.type.section.fontSize, fontWeight: designUi.type.section.fontWeight, color: "#16374F", textAlign: "center", lineHeight: designUi.type.section.lineHeight,},
     dashEmptyText: {marginTop: 7, fontSize: designUi.type.body.fontSize, lineHeight: designUi.type.body.lineHeight, color: "#58738B", textAlign: "center", maxWidth: 580, fontWeight: designUi.type.body.fontWeight,},
     dashBrowseButton: {marginTop: 17, borderRadius: 9, backgroundColor: "#087F78", minHeight: 37, paddingHorizontal: 16, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8},
-    dashBrowseText: {color: "#FFFFFF", fontSize: 12, fontWeight: "900"},
+    dashBrowseText: {color: "#FFFFFF", fontSize: vsType.size.meta, fontWeight: "800"},
     dashCardGrid: {flexDirection: "row", flexWrap: "wrap", gap: 13},
     dashGridItem: {width: "100%"},
     dashGridItemTwo: {width: "49%", flexGrow: 1, flexBasis: "45%"},
@@ -1938,39 +1939,39 @@ const styles =
     dashMiniCornerBottom: {position: "absolute", bottom: 0, right: 0, height: 16, width: 120, backgroundColor: "#007B73", transform: [{rotate: "-8deg"}]},
     dashMiniBrand: {flexDirection: "row", gap: 5, alignItems: "center", marginTop: 9, zIndex: 1},
     dashMiniLogo: {width: 28, height: 28},
-    dashMiniBrandName: {fontSize: 11, fontWeight: "900", color: "#008277"},
-    dashMiniBrandSub: {fontSize: 4.8, color: "#466C75"},
-    dashMiniHeading: {fontFamily: "Georgia", fontSize: 17, fontWeight: "900", color: "#15374B", marginTop: 9, letterSpacing: 0.5, textAlign: "center"},
-    dashMiniOf: {fontSize: 8, fontWeight: "800", color: "#B38C42", letterSpacing: 1.3, marginTop: -5, textAlign: "center"},
-    dashMiniPresented: {fontSize: 7, color: "#698083", marginTop: 9},
-    dashMiniRecipient: {fontSize: 14, fontFamily: "Georgia", fontWeight: "900", textAlign: "center", color: "#122E47", lineHeight: 19},
+    dashMiniBrandName: {fontSize: vsType.size.caption, fontWeight: "800", color: "#008277"},
+    dashMiniBrandSub: {fontSize: vsType.size.micro, color: "#466C75"},
+    dashMiniHeading: {fontFamily: "Georgia", fontSize: vsType.size.card, fontWeight: "800", color: "#15374B", marginTop: 9, letterSpacing: 0.5, textAlign: "center"},
+    dashMiniOf: {fontSize: vsType.size.micro, fontWeight: "800", color: "#B38C42", letterSpacing: 1.3, marginTop: -5, textAlign: "center"},
+    dashMiniPresented: {fontSize: vsType.size.micro, color: "#698083", marginTop: 9},
+    dashMiniRecipient: {fontSize: vsType.size.body, fontFamily: "Georgia", fontWeight: "800", textAlign: "center", color: "#122E47", lineHeight: 19},
     dashMiniRule: {width: "75%", height: 1, backgroundColor: "#D5DCCC", marginTop: 3},
-    dashMiniReason: {fontSize: 8.5, textAlign: "center", fontWeight: "700", color: "#445D65", lineHeight: 12, marginTop: 5},
-    dashMiniDate: {fontSize: 7, color: "#637F7F", marginTop: 5},
+    dashMiniReason: {fontSize: vsType.size.micro, textAlign: "center", fontWeight: "700", color: "#445D65", lineHeight: 12, marginTop: 5},
+    dashMiniDate: {fontSize: vsType.size.micro, color: "#637F7F", marginTop: 5},
     dashMiniFooter: {width: "100%", flexDirection: "row", alignItems: "flex-end", justifyContent: "space-between", gap: 5, zIndex: 1, marginTop: 13},
-    dashMiniIssuer: {fontSize: 6.5, color: "#5F7373", flex: 1},
-    dashMiniId: {fontSize: 6, color: "#5F7373", maxWidth: "48%"},
+    dashMiniIssuer: {fontSize: vsType.size.micro, color: "#5F7373", flex: 1},
+    dashMiniId: {fontSize: vsType.size.micro, color: "#5F7373", maxWidth: "48%"},
     dashMiniRevoked: {position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "#FFFFFFBF", alignItems: "center", justifyContent: "center", zIndex: 2},
-    dashMiniRevokedText: {fontSize: 25, color: "#B94141", fontWeight: "900", transform: [{rotate: "-18deg"}]},
+    dashMiniRevokedText: {fontSize: vsType.size.title, color: "#B94141", fontWeight: "800", transform: [{rotate: "-18deg"}]},
     dashCertificateInfo: {flex: 1, minWidth: 0, justifyContent: "center", gap: 9},
-    dashCertTitle: {fontSize: 13.5, fontWeight: "900", color: "#113750", marginBottom: 3},
+    dashCertTitle: {fontSize: vsType.size.body, fontWeight: "800", color: "#113750", marginBottom: 3},
     dashMetaRow: {flexDirection: "row", alignItems: "flex-start", gap: 6},
-    dashMetaText: {fontSize: 10.5, color: "#55728D", flex: 1, lineHeight: 16},
+    dashMetaText: {fontSize: vsType.size.caption, color: "#55728D", flex: 1, lineHeight: 16},
     dashStatusPill: {flexDirection: "row", alignItems: "center", gap: 5, backgroundColor: "#E4F6EE", borderRadius: 22, paddingHorizontal: 9, paddingVertical: 6, alignSelf: "flex-start"},
     dashStatusRevoked: {backgroundColor: "#FFF0F0"},
-    dashStatusText: {color: "#078F77", fontSize: 9.5, fontWeight: "900"},
+    dashStatusText: {color: "#078F77", fontSize: vsType.size.micro, fontWeight: "800"},
     dashStatusTextRevoked: {color: "#B23F42"},
     dashViewButton: {minHeight: 36, borderRadius: 7, paddingHorizontal: 12, paddingVertical: 9, backgroundColor: "#006474", flexDirection: "row", gap: 7, justifyContent: "center", alignItems: "center"},
-    dashViewButtonText: {fontSize: 10.5, fontWeight: "900", color: "#FFFFFF"},
+    dashViewButtonText: {fontSize: vsType.size.caption, fontWeight: "800", color: "#FFFFFF"},
     dashCardActions: {flexDirection: "row", flexWrap: "wrap", gap: 6},
     dashOutlineButton: {borderWidth: 1, borderColor: "#C9DBE4", borderRadius: 7, minHeight: 34, paddingHorizontal: 10, paddingVertical: 8, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, backgroundColor: "#FFFFFF"},
-    dashOutlineButtonText: {fontSize: 10, fontWeight: "800", color: "#0B425D"},
+    dashOutlineButtonText: {fontSize: vsType.size.micro, fontWeight: "800", color: "#0B425D"},
     dashModalBackdrop: {flex: 1, backgroundColor: "#061D2BC7", justifyContent: "center", alignItems: "center", padding: 18},
     dashModalPanel: {width: "100%", maxWidth: 750, height: "94%", backgroundColor: "#F4F8FB", borderRadius: 16, overflow: "hidden"},
     dashModalPanelMobile: {height: "100%", borderRadius: 10},
     dashModalTopbar: {flexDirection: "row", alignItems: "center", gap: 14, paddingHorizontal: 18, paddingVertical: 13, borderBottomWidth: 1, borderBottomColor: "#E2EBEF", backgroundColor: "#FFFFFF"},
-    dashModalEyebrow: {fontSize: 9, fontWeight: "900", letterSpacing: 1.2, color: "#078F82"},
-    dashModalTitle: {fontSize: 17, fontWeight: "900", color: "#16384B", marginTop: 4},
+    dashModalEyebrow: {fontSize: vsType.size.micro, fontWeight: "800", letterSpacing: 1.2, color: "#078F82"},
+    dashModalTitle: {fontSize: vsType.size.card, fontWeight: "800", color: "#16384B", marginTop: 4},
     dashModalClose: {width: 36, height: 36, borderRadius: 18, justifyContent: "center", alignItems: "center", backgroundColor: "#EFF3F5"},
     dashModalBody: {flex: 1},
     dashModalScroll: {paddingVertical: 20, paddingHorizontal: 14, alignItems: "stretch"},

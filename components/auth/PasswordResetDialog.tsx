@@ -1,3 +1,4 @@
+import { volunserveTypography as vsType } from "../../constants/volunserveLiveUi";
 import { Ionicons } from "@expo/vector-icons";
 import { sendPasswordResetEmail } from "firebase/auth";
 import React, { useEffect, useState } from "react";
@@ -205,17 +206,17 @@ const styles = StyleSheet.create({
   header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 18 },
   iconCircle: { width: 54, height: 54, borderRadius: 18, backgroundColor: "#E4F8ED", alignItems: "center", justifyContent: "center" },
   close: { padding: 8, marginRight: -8, alignItems: "center", justifyContent: "center" },
-  title: { color: "#073F32", fontSize: 23, fontWeight: "900", marginBottom: 10 },
-  description: { color: "#557267", fontSize: 14, lineHeight: 21, marginBottom: 20 },
-  fieldLabel: { color: "#16493A", fontWeight: "800", fontSize: 13, marginBottom: 8 },
+  title: { color: "#073F32", fontSize: vsType.size.title, fontFamily: vsType.family, fontWeight: "800", marginBottom: 10 },
+  description: { color: "#557267", fontSize: vsType.size.body, fontFamily: vsType.family, lineHeight: 21, marginBottom: 20 },
+  fieldLabel: { color: "#16493A", fontWeight: "800", fontSize: vsType.size.label, fontFamily: vsType.family, marginBottom: 8 },
   inputWrap: { minHeight: 54, borderRadius: 12, borderWidth: 1, borderColor: "#BEDBCD", flexDirection: "row", alignItems: "center", paddingHorizontal: 14, gap: 10, backgroundColor: "#FCFFFD" },
   inputInvalid: { borderColor: "#C43C3C" },
-  input: { flex: 1, fontSize: 15, color: "#123F30", paddingVertical: 13, minWidth: 0 },
-  error: { color: "#B42318", fontSize: 12, lineHeight: 18, marginTop: 8, fontWeight: "700" },
-  note: { color: "#647B70", fontSize: 12, lineHeight: 19, marginTop: 12, marginBottom: 17 },
+  input: { flex: 1, fontSize: vsType.size.bodyStrong, fontFamily: vsType.family, color: "#123F30", paddingVertical: 13, minWidth: 0 },
+  error: { color: "#B42318", fontSize: vsType.size.meta, fontFamily: vsType.family, lineHeight: 18, marginTop: 8, fontWeight: "700" },
+  note: { color: "#647B70", fontSize: vsType.size.meta, fontFamily: vsType.family, lineHeight: 19, marginTop: 12, marginBottom: 17 },
   submit: { minHeight: 52, borderRadius: 13, backgroundColor: "#047857", flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10, paddingHorizontal: 14 },
   submitDisabled: { opacity: 0.65 },
-  submitText: { color: "#FFFFFF", fontWeight: "900", fontSize: 14 },
+  submitText: { color: "#FFFFFF", fontWeight: "800", fontSize: vsType.size.body, fontFamily: vsType.family },
   cancel: { alignItems: "center", paddingVertical: 14, marginTop: 4 },
-  cancelText: { color: "#376558", fontSize: 13, fontWeight: "800" },
+  cancelText: { color: "#376558", fontSize: vsType.size.label, fontFamily: vsType.family, fontWeight: "800" },
 });

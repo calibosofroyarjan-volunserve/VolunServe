@@ -1,3 +1,4 @@
+import { volunserveTypography as vsType } from "../../constants/volunserveLiveUi";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import React, { useEffect, useState } from "react";
@@ -33,6 +34,7 @@ export default function PremiumAuthShell({ children }: Props) {
   const compact = width < 900;
   const narrow = width < 480;
   const [slide, setSlide] = useState(1);
+  const [heroBounds, setHeroBounds] = useState({ width: 0, height: 0 });
 
   useEffect(() => {
     const timer = setInterval(() => setSlide(current => (current + 1) % SLIDES.length), 6500);
@@ -44,8 +46,29 @@ export default function PremiumAuthShell({ children }: Props) {
   return (
     <ScrollView style={styles.page} contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
       <View style={[styles.split, compact && styles.splitCompact]}>
-        <View style={[styles.hero, { minHeight: heroHeight }, compact && styles.heroCompact]}>
-          <Image source={SLIDES[slide]} resizeMode="cover" style={StyleSheet.absoluteFillObject} />
+        <View
+          style={[styles.hero, { minHeight: heroHeight }, compact && styles.heroCompact]}
+          onLayout={({ nativeEvent: { layout } }) => {
+            const width = Math.ceil(layout.width);
+            const height = Math.ceil(layout.height);
+            setHeroBounds(current =>
+              current.width === width && current.height === height ? current : { width, height }
+            );
+          }}
+        >
+          {/* A background Image can keep its intrinsic image dimensions on RN Web
+              when styled with absoluteFillObject alone. Explicitly size it to
+              the *measured hero panel* so each carousel slide fills the entire
+              desktop and mobile panel while preserving cover cropping. */}
+          <Image
+            source={SLIDES[slide]}
+            resizeMode="cover"
+            accessibilityIgnoresInvertColors
+            style={[styles.heroSlideImage, heroBounds.width > 0 && {
+              width: heroBounds.width,
+              height: heroBounds.height,
+            }]}
+          />
           <LinearGradient
             colors={["rgba(5,41,32,0.42)", "rgba(0,44,38,0.64)", "rgba(0,43,37,0.98)"]}
             locations={[0, 0.46, 1]}
@@ -165,24 +188,28 @@ const styles = StyleSheet.create({
   splitCompact: { flexDirection: "column" },
   hero: { flex: 1.33, backgroundColor: "#064B3B", overflow: "hidden", minWidth: 0 },
   heroCompact: { flex: 0, width: "100%" },
+  heroSlideImage: {
+    position: "absolute", top: 0, left: 0,
+    width: "100%", height: "100%",
+  },
   heroContent: { flex: 1, paddingHorizontal: 47, paddingTop: 36, paddingBottom: 34, justifyContent: "space-between" },
   heroContentCompact: { paddingHorizontal: 24, paddingTop: 22, paddingBottom: 26 },
   brand: { flexDirection: "row", alignItems: "center", gap: 13 },
   logo: { width: 74, height: 74 },
   brandText: { flex: 1 },
-  brandTitle: { color: "#FFFFFF", fontSize: 33, fontWeight: "900", letterSpacing: -1.4 },
-  brandTitleCompact: { fontSize: 25 },
-  brandSub: { color: "#E1FFF3", fontWeight: "600", fontSize: 13 },
+  brandTitle: { color: "#FFFFFF", fontSize: vsType.size.display, fontWeight: "800", letterSpacing: -1.4 },
+  brandTitleCompact: { fontSize: vsType.size.title },
+  brandSub: { color: "#E1FFF3", fontWeight: "600", fontSize: vsType.size.label },
   heroTextWrap: { marginTop: 56 },
   heroTextCompact: { marginTop: 12 },
   heroBadge: { alignSelf: "flex-start", flexDirection: "row", gap: 8, alignItems: "center",
     backgroundColor: "#CBFFEB", paddingHorizontal: 16, paddingVertical: 11, marginBottom: 25 },
-  heroBadgeText: { fontSize: 11, fontWeight: "900", letterSpacing: 0.7, color: "#13594C" },
-  headline: { fontSize: 40, lineHeight: 49, fontWeight: "900", letterSpacing: -1.3, color: "#FFFFFF" },
-  headlineCompact: { fontSize: 25, lineHeight: 32 },
+  heroBadgeText: { fontSize: vsType.size.caption, fontWeight: "800", letterSpacing: 0.7, color: "#13594C" },
+  headline: { fontSize: vsType.size.xl, lineHeight: 49, fontWeight: "800", letterSpacing: -1.3, color: "#FFFFFF" },
+  headlineCompact: { fontSize: vsType.size.title, lineHeight: 32 },
   headlineMint: { color: "#83F3CD" },
-  heroCopy: { color: "#EEFFF8", fontSize: 16, lineHeight: 25, marginTop: 18, maxWidth: 570 },
-  heroCopyCompact: { fontSize: 12, lineHeight: 17, marginTop: 7 },
+  heroCopy: { color: "#EEFFF8", fontSize: vsType.size.card, lineHeight: 25, marginTop: 18, maxWidth: 570 },
+  heroCopyCompact: { fontSize: vsType.size.meta, lineHeight: 17, marginTop: 7 },
   heroBottom: { gap: 26 },
   featureRow: { flexDirection: "row", gap: 10 },
   feature: { flex: 1, minWidth: 0, minHeight: 112, flexDirection: "row",
@@ -191,10 +218,10 @@ const styles = StyleSheet.create({
   featureIcon: { width: 48, height: 48, alignItems: "center", justifyContent: "center",
     backgroundColor: "rgba(105,232,190,0.14)" },
   featureWords: { flex: 1, minWidth: 0, gap: 6 },
-  featureTitle: { fontSize: 12, fontWeight: "900", color: "#FFFFFF" },
-  featureSub: { fontSize: 11, lineHeight: 16, color: "#D5F9EB" },
+  featureTitle: { fontSize: vsType.size.meta, fontWeight: "800", color: "#FFFFFF" },
+  featureSub: { fontSize: vsType.size.caption, lineHeight: 16, color: "#D5F9EB" },
   heroFooter: { flexDirection: "row", alignItems: "flex-end", justifyContent: "space-between", gap: 15 },
-  tagline: { fontSize: 22, fontWeight: "500", fontStyle: "italic", color: "#EBFFF7", lineHeight: 29 },
+  tagline: { fontSize: vsType.size.titleSmall, fontWeight: "500", fontStyle: "italic", color: "#EBFFF7", lineHeight: 29 },
   dots: { flexDirection: "row", alignItems: "center", gap: 7, paddingBottom: 8 },
   dot: { height: 7, width: 7, borderRadius: 4, backgroundColor: "#A5CBBB" },
   dotActive: { width: 25, backgroundColor: "#7AFFCF" },
@@ -211,7 +238,7 @@ const styles = StyleSheet.create({
   photo: {width: "100%", height: 141},
   photoLeaf:{position:"absolute",right:-12,top:-12,transform:[{rotate:"-30deg"}]},
   photoBadge:{position:"absolute",top:26,left:24,flexDirection:"row",gap:7,alignItems:"center",paddingHorizontal:10,paddingVertical:7,borderColor:"rgba(220,255,233,.4)",borderWidth:1,borderRadius:8,backgroundColor:"rgba(3,64,46,.38)"},
-  photoBadgeText:{fontSize:9,fontWeight:"900",letterSpacing:1,color:"#E6FFF2"},
+  photoBadgeText:{fontSize: vsType.size.micro,fontWeight: "800",letterSpacing:1,color:"#E6FFF2"},
   wave: {position: "absolute", left: 0, bottom: -1, right: 0},
   heroIcon: {alignSelf: "center", width: 82, height: 82, borderRadius: 43,
     marginTop: -40, backgroundColor: "#FFFFFF", padding: 5,
@@ -220,13 +247,13 @@ const styles = StyleSheet.create({
   heroIconGradient: {flex: 1, borderRadius: 40,
     alignItems: "center", justifyContent: "center"},
   formHeading: {alignItems: "center", paddingHorizontal: 15, paddingTop: 2, paddingBottom: 8},
-  formTitle: {fontFamily: Platform.select({web: "Georgia, serif", ios: "Georgia", android: "serif"}),
-    fontSize: 26, lineHeight: 31, letterSpacing: -0.6, color: "#0B4936",
+  formTitle: {fontFamily: vsType.family,
+    fontSize: vsType.size.page, lineHeight: 31, letterSpacing: -0.6, color: "#0B4936",
     fontWeight: "800", textAlign: "center"},
-  formTitleNarrow: {fontSize: 24, lineHeight: 29},
-  formSubtitle: {fontSize: 12, lineHeight: 18, color: "#556F62",
+  formTitleNarrow: {fontSize: vsType.size.title, lineHeight: 29},
+  formSubtitle: {fontSize: vsType.size.meta, lineHeight: 18, color: "#556F62",
     marginTop: 6, maxWidth: 440, textAlign: "center"},
   formFields: {width: "100%", paddingHorizontal: 26, paddingTop: 6, paddingBottom: 10, gap: 8},
   formFieldsNarrow: {paddingHorizontal: 17},
-  location: {textAlign: "center", paddingTop: 11, fontSize: 10, color: "#6C8B80"},
+  location: {textAlign: "center", paddingTop: 11, fontSize: vsType.size.micro, color: "#6C8B80"},
 });

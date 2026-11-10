@@ -1,0 +1,66 @@
+# Isolated release candidate based on the EXACT PUBLISHED VolunServe website.
+# NO Firebase credentials, no production deployment, no writes.
+name: Validate Site-Derived Signup Candidate (NO DEPLOY)
+on:
+  push:
+    branches: [release/signup-preserve-published-site-20261109, fix/actual-live-site-login-signup-20261109]
+  pull_request:
+    branches: [snapshot/live-hosting-f7bc8d12-20261109, release/site-derived-en2ch-co-hotfix-20261109]
+permissions:
+  contents: read
+jobs:
+  published-site-preservation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      CI: 'true'
+      EXPO_NO_TELEMETRY: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Validate exact published-site baseline, no module losses and branded typography
+        run: |
+          node --check scripts/test-site-derived-signup-candidate.cjs
+          node scripts/test-site-derived-signup-candidate.cjs
+      - run: npm ci --no-audit --no-fund
+      - name: Production TypeScript compile (NO DEPLOY)
+        run: npx tsc --noEmit --incremental false
+      - name: Compile web candidate from published site (NO DEPLOY)
+        run: |
+          npx expo export --platform web --clear
+          test -f dist/index.html
+      - name: Confirm no deployment actions/credentials
+        run: echo 'PASS — candidate compiled, NO Firebase Rules/Functions/Hosting/Render deploy'
+  full-signup-policy-release-gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - run: npm ci --no-audit --no-fund
+      - name: Verify full Signup regression and matching secured Firestore policy
+        run: node scripts/test-signup-prod.cjs
+      - name: Verify direct-SDK Resident creation and verified-email denial (Firebase Emulator only)
+        run: |
+          npx firebase-tools emulators:exec --only firestore --project demo-volunserve-verified-signup "node scripts/test-verified-community-registration-rules.cjs"
+      - name: Preserve live Admin invitations and Volunteer acceptance (Firebase Emulator only)
+        run: |
+          npx firebase-tools emulators:exec --only firestore --project demo-volunserve-preserve-volunteer-invitations "node scripts/test-preserved-volunteer-invitation-rules.cjs"
+      - name: No deployment
+        run: echo 'PASS — candidate Rules and web code tested offline; no production changes'

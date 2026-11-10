@@ -1,3 +1,4 @@
+import { volunserveTypography as vsType } from "../constants/volunserveLiveUi";
 import { liveUi as designUi } from "../constants/volunserveLiveUi";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
@@ -5,6 +6,8 @@ import GoogleBrandMark from "../components/auth/GoogleBrandMark";
 import AuthFeedback from "../components/auth/AuthFeedback";
 import { unifiedPasswordDestination } from "../lib/unifiedLoginRouting";
 import { getLoginEmailError, getLoginEmailSuggestion } from "../lib/loginInputValidation";
+import { getRegistrationEmailError } from "../lib/registrationEmailPolicy";
+import { isKnownDisposableEmail } from "../lib/registrationEmailPolicy";
 import { userFacingError } from "../lib/userFacingError";
 import { googleSignInErrorMessage } from "../lib/googleSignInFeedback";
 import { useSignupGoogle } from "../lib/useSignupGoogle";
@@ -13,10 +16,14 @@ import { useRouter, type Href } from "expo-router";
 import {
   browserLocalPersistence,
   browserSessionPersistence,
+  getIdToken,
+  GoogleAuthProvider,
+  linkWithCredential,
   setPersistence,
   signOut,
+  type AuthCredential,
 } from "firebase/auth";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Pressable,
@@ -43,6 +50,10 @@ import {
  * No email addresses, tokens, UIDs or technical error payloads are stored.
  */
 const GOOGLE_LOGIN_NOTICE_KEY = "volunserve.google-login-notice";
+
+// OAuth credential is held only in component memory after a provider collision.
+// No token, email, password, or credential is written to storage.
+type PendingGoogleLink = { email: string; credential: AuthCredential };
 
 function rememberGoogleLoginNotice(message: string) {
   if (typeof window === "undefined") return;
@@ -72,6 +83,8 @@ export default function WebLogin() {
   const [loading, setLoading] = useState(false);
   const [pendingAction, setPendingAction] = useState<"login" | "google" | null>(null);
   const [googleFeedback, setGoogleFeedback] = useState("");
+  const pendingGoogleLink = useRef<PendingGoogleLink | null>(null);
+  const [pendingGoogleLinkEmail, setPendingGoogleLinkEmail] = useState<string | null>(null);
   const [googleProgress, setGoogleProgress] = useState("");
   useEffect(() => {
     const pending = consumeGoogleLoginNotice();
@@ -97,11 +110,16 @@ export default function WebLogin() {
         : browserSessionPersistence
     );
   };
-  const handleLogin = async () => {
+  const handleLogin = async (linkGoogle = false) => {
     if (loading) return;
     setAttemptedLogin(true);
     clearFeedback();
     const emailError = getLoginEmailError(email);
+    const pending = linkGoogle ? pendingGoogleLink.current : null;
+    if (linkGoogle && (!pending || pending.email !== email.trim().toLowerCase())) {
+      showError("Start Google sign-in again, then use your original email and password to link safely.");
+      return;
+    }
     if (emailError || !password) {
       showError(emailError || "Enter your password.");
       return;
@@ -110,7 +128,7 @@ export default function WebLogin() {
       setLoading(true);
       setPendingAction("login");
       await applySessionPersistence();
-      const { profile } = await loginUser(
+      const { user, profile } = await loginUser(
         email.trim().toLowerCase(),
         password
       );
@@ -120,6 +138,38 @@ export default function WebLogin() {
       } catch (accessError) {
         await logoutUser();
         throw accessError;
+      }
+      if (pending) {
+        // Explicit user consent: "Sign In & Link Google" was clicked.
+        // Prove ownership of the original verified password account first.
+        // Never link staff credentials or cross-UID, cross-email accounts.
+        const signedInEmail = (user.email || "").trim().toLowerCase();
+        const profileEmail = (profile.email || "").trim().toLowerCase();
+        if (
+          !["resident", "volunteer"].includes(profile.role) ||
+          !user.emailVerified ||
+          signedInEmail !== pending.email ||
+          profileEmail !== pending.email ||
+          auth.currentUser?.uid !== user.uid ||
+          isKnownDisposableEmail(pending.email)
+        ) {
+          await logoutUser();
+          throw new Error("Google account linking is only available for your own verified Resident or Volunteer email.");
+        }
+        try {
+          const linked = await linkWithCredential(user, pending.credential);
+          if (linked.user.uid !== user.uid || auth.currentUser?.uid !== user.uid) {
+            throw new Error("Google account identity did not match your existing VolunServe account.");
+          }
+          await getIdToken(linked.user, true);
+          pendingGoogleLink.current = null;
+          setPendingGoogleLinkEmail(null);
+        } catch {
+          // No account merge or password reset. The normal password login
+          // remains available if Google is already attached to another UID.
+          await logoutUser().catch(() => undefined);
+          throw new Error("Could not confirm Google linking. Sign in with your existing email and password instead; contact support if linking keeps failing.");
+        }
       }
       router.replace(destination as any);
     } catch (error: any) {
@@ -136,6 +186,8 @@ export default function WebLogin() {
     setGoogleProgress("Opening your Google account chooser...");
     // Clear an older attempt's notice without creating a new error.
     consumeGoogleLoginNotice();
+    pendingGoogleLink.current = null;
+    setPendingGoogleLinkEmail(null);
     let selectedUid: string | null = null;
     try {
       setLoading(true);
@@ -144,6 +196,11 @@ export default function WebLogin() {
 
       const googleUser = await signInGoogle();
       selectedUid = googleUser.uid;
+      if (isKnownDisposableEmail(googleUser.email || "")) {
+        // Reject recognized temporary Google/OAuth mailboxes before profile routing.
+        // The catch path signs out this newly authenticated UID.
+        throw new Error("Temporary email accounts cannot sign in. Use a permanent email address.");
+      }
       setGoogleProgress("Google account connected. Checking your VolunServe account...");
 
       let profile;
@@ -176,7 +233,20 @@ export default function WebLogin() {
       setGoogleProgress("Sign-in approved. Opening your account...");
       router.replace(homeRouteForProfile(profile) as any);
     } catch (error: unknown) {
-      const message = googleSignInErrorMessage(error);
+      let message = googleSignInErrorMessage(error);
+      const collision = error as { code?: string; customData?: { email?: string } } | null;
+      if (collision?.code === "auth/account-exists-with-different-credential") {
+        // Identity Platform can require manual provider linking, even when
+        // "Link accounts that use the same email" is selected.
+        const credential = GoogleAuthProvider.credentialFromError(error as any);
+        const collisionEmail = String(collision.customData?.email || "").trim().toLowerCase();
+        if (credential && collisionEmail && getRegistrationEmailError(collisionEmail) === null) {
+          pendingGoogleLink.current = { email: collisionEmail, credential };
+          setPendingGoogleLinkEmail(collisionEmail);
+          setEmail(collisionEmail);
+          message = "This email already has a VolunServe login. Enter its original password, then choose Sign In & Link Google below. Normal Sign In also remains available.";
+        }
+      }
       // Preserve every Google failure (including a cancelled or blocked popup)
       // across any auth-driven remount, not only a successfully selected UID.
       rememberGoogleLoginNotice(message);
@@ -210,7 +280,14 @@ export default function WebLogin() {
         <Text style={styles.label}>Email Address</Text>
         <View style={[styles.inputBox, authCornerCut(10), focusedInput === "email" && styles.focused, !!inlineEmailError && styles.invalidInput]}>
           <Ionicons name="mail-outline" size={21} color="#194F41" />
-          <TextInput style={styles.input} value={email} onChangeText={value => { setEmail(value); clearFeedback(); }}
+          <TextInput style={styles.input} value={email} onChangeText={value => {
+              setEmail(value); clearFeedback();
+              if (pendingGoogleLink.current &&
+                  pendingGoogleLink.current.email !== value.trim().toLowerCase()) {
+                pendingGoogleLink.current = null;
+                setPendingGoogleLinkEmail(null);
+              }
+            }}
             accessibilityLabel="Email address"
             placeholder="Email address" placeholderTextColor="#8BA0B4"
             autoCapitalize="none" autoCorrect={false} keyboardType="email-address"
@@ -276,6 +353,23 @@ export default function WebLogin() {
             </View>
           )}
         </Pressable>
+        {!!pendingGoogleLinkEmail && (
+          <View>
+            <Text style={styles.googleProgress}>
+              Google linking is optional. Verify your existing password to connect Google to the same account.
+            </Text>
+            <TouchableOpacity accessibilityRole="button"
+              accessibilityLabel="Sign in and link your Google account"
+              disabled={loading}
+              onPress={() => void handleLogin(true)}
+              style={[styles.outlineButton, loading && styles.disabled]}>
+              <View style={styles.centerRow}>
+                <GoogleBrandMark size={21} />
+                <Text style={styles.outlineText}>Sign In & Link Google</Text>
+              </View>
+            </TouchableOpacity>
+          </View>
+        )}
         <View style={styles.divider}>
           <View style={styles.dividerLine} />
           <Text style={styles.muted}>or continue with</Text>
@@ -352,36 +446,36 @@ const styles = StyleSheet.create({
   inputBox: {minHeight:57,flexDirection:"row",alignItems:"center",paddingHorizontal:17,
     gap:12,backgroundColor:"rgba(255,255,255,.84)",borderColor:"#C8E0D2",
     borderRadius:13,borderWidth:1,marginBottom:2},
-  input: {flex:1,minWidth:0,fontSize:15,paddingVertical:14,color:"#103F33"},
+  input: {flex:1,minWidth:0,fontSize: vsType.size.bodyStrong, fontFamily: vsType.family,paddingVertical:14,color:"#103F33"},
   focused: {borderColor:"#068064",backgroundColor:"#FFFFFF",borderWidth:2},
   invalidInput: {borderColor:"#D33434",borderWidth:2,backgroundColor:"#FFFFFF"},
   fieldError: {color:"#C62828",fontSize: designUi.type.meta.fontSize,lineHeight: designUi.type.meta.lineHeight,fontWeight: designUi.type.meta.fontWeight,marginTop:5,marginBottom:5},
-  fieldSuggestion: {color:"#9A4C15",fontSize:12,lineHeight:18,fontWeight:"600",marginTop:5,marginBottom:5},
-  googleProgress: {fontSize:12,color:"#075B44",fontWeight:"700",textAlign:"center",marginTop:7},
+  fieldSuggestion: {color:"#9A4C15",fontSize: vsType.size.meta, fontFamily: vsType.family,lineHeight:18,fontWeight:"600",marginTop:5,marginBottom:5},
+  googleProgress: {fontSize: vsType.size.meta, fontFamily: vsType.family,color:"#075B44",fontWeight:"700",textAlign:"center",marginTop:7},
   eye:{padding:7},
   options:{flexDirection:"row",alignItems:"center",justifyContent:"space-between",
     flexWrap:"wrap",gap:12,marginTop:3,marginBottom:5},
   checkRow:{flexDirection:"row",gap:7,alignItems:"center",minHeight:40},
-  muted:{color:"#527766",fontSize:13},
-  forgot:{color:"#076B51",fontSize:13,fontWeight:"800"},
+  muted:{color:"#527766",fontSize: vsType.size.label, fontFamily: vsType.family},
+  forgot:{color:"#076B51",fontSize: vsType.size.label, fontFamily: vsType.family,fontWeight:"800"},
   signIn:{minHeight:59,overflow:"hidden",borderRadius:16,justifyContent:"center",
     alignItems:"center",marginTop:3,shadowColor:"#00684A",shadowOpacity:0.18,
     shadowRadius:10,shadowOffset:{width:0,height:5},elevation:3},
-  signInText:{fontSize:16,fontWeight:"800",color:"#FFFFFF"},
+  signInText:{fontSize: vsType.size.card, fontFamily: vsType.family,fontWeight:"800",color:"#FFFFFF"},
   centerRow:{flexDirection:"row",alignItems:"center",justifyContent:"center",gap:12,paddingHorizontal:7},
   divider:{flexDirection:"row",alignItems:"center",gap:10,marginTop:8,marginBottom:2},
   dividerLine:{flex:1,height:1,backgroundColor:"#CAE0D5"},
   outlineButton:{minHeight:51,borderWidth:1,borderColor:"#C6DECF",
     backgroundColor:"rgba(255,255,255,.50)",alignItems:"center",justifyContent:"center",
     borderRadius:14},
-  outlineText:{fontSize:13,fontWeight:"800",color:"#19493B"},
+  outlineText:{fontSize: vsType.size.label, fontFamily: vsType.family,fontWeight:"800",color:"#19493B"},
   createRow:{flexDirection:"row",alignItems:"center",justifyContent:"center",marginTop:7},
   createButton:{borderWidth:1,borderColor:"#9DC9B4",borderRadius:18,minHeight:56,
     flexDirection:"row",alignItems:"center",justifyContent:"center",gap:11,
     backgroundColor:"rgba(255,255,255,.36)"},
-  createLink:{fontSize:15,fontWeight:"800",color:"#075B44"},
+  createLink:{fontSize: vsType.size.bodyStrong, fontFamily: vsType.family,fontWeight:"800",color:"#075B44"},
   staffRequest:{alignItems:"center",justifyContent:"center",minHeight:38,paddingHorizontal:10,marginTop:1},
-  staffRequestText:{fontSize:12,color:"#527766"},
-  staffRequestLink:{fontSize:12,fontWeight:"800",color:"#076B51"},
+  staffRequestText:{fontSize: vsType.size.meta, fontFamily: vsType.family,color:"#527766"},
+  staffRequestLink:{fontSize: vsType.size.meta, fontFamily: vsType.family,fontWeight:"800",color:"#076B51"},
   disabled:{opacity:0.55},
 });

@@ -1,3 +1,4 @@
+import { volunserveTypography as vsType } from "../../constants/volunserveLiveUi";
 import { liveUi as designUi } from "../../constants/volunserveLiveUi";
 import { Ionicons } from "@expo/vector-icons";
 
@@ -575,8 +576,8 @@ const styles =
     denied: {
       marginTop: 10,
       color: "#991B1B",
-      fontSize: 19,
-      fontWeight: "900",
+      fontSize: vsType.size.section, fontFamily: vsType.family,
+      fontWeight: "800",
       textAlign: "center",
     },
 
@@ -634,7 +635,7 @@ const styles =
 
     noticeTitle: {
       color: "#08766C",
-      fontWeight: "900",
+      fontWeight: "800",
     },
 
     noticeText: {
@@ -681,7 +682,7 @@ const styles =
       marginTop: 3,
       color: "#64748B",
       lineHeight: 18,
-      fontSize: 12.5,
+      fontSize: vsType.size.label, fontFamily: vsType.family,
     },
 
     label: {
@@ -710,7 +711,7 @@ const styles =
     helper: {
       marginTop: 8,
       color: "#64748B",
-      fontSize: 12,
+      fontSize: vsType.size.meta, fontFamily: vsType.family,
       lineHeight: 18,
     },
 
@@ -727,7 +728,7 @@ const styles =
     securityText: {
       flex: 1,
       color: "#075985",
-      fontSize: 12,
+      fontSize: vsType.size.meta, fontFamily: vsType.family,
       lineHeight: 18,
     },
 
@@ -744,7 +745,7 @@ const styles =
 
     buttonText: {
       color: "#FFFFFF",
-      fontWeight: "900",
+      fontWeight: "800",
     },
 
     disabled: {

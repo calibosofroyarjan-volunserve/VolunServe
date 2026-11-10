@@ -1,3 +1,4 @@
+import { volunserveTypography as vsType } from "../../constants/volunserveLiveUi";
 import { liveUi as designUi } from "../../constants/volunserveLiveUi";
 import { Ionicons } from "@expo/vector-icons";
 import { Redirect, useLocalSearchParams } from "expo-router";
@@ -773,25 +774,25 @@ const styles =
   StyleSheet.create({
     residentWorkspace: { backgroundColor: "#FFFFFF", padding: 16, borderRadius: 12, borderWidth: 1, borderColor: "#D9E6DE", width: "100%" },
     residentHeader: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 12 },
-    residentEyebrow: { fontSize: 10, color: "#14715B", letterSpacing: 0.7, fontWeight: "700" },
-    residentHeading: { fontSize: 19, fontWeight: "800", color: "#173F33", marginTop: 4 },
+    residentEyebrow: { fontSize: vsType.size.micro, fontFamily: vsType.family, color: "#14715B", letterSpacing: 0.7, fontWeight: "700" },
+    residentHeading: { fontSize: vsType.size.section, fontFamily: vsType.family, fontWeight: "800", color: "#173F33", marginTop: 4 },
     residentTotal: { backgroundColor: "#EDF6F0", borderRadius: 8, paddingHorizontal: 12, paddingVertical: 8 },
-    residentTotalText: { fontSize: 12, fontWeight: "800", color: "#166A51" },
+    residentTotalText: { fontSize: vsType.size.meta, fontFamily: vsType.family, fontWeight: "800", color: "#166A51" },
     residentItem: { borderTopWidth: 1, borderTopColor: "#E6EEE8", flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 12, paddingVertical: 12 },
     residentProfile: { flex: 1, flexDirection: "row", alignItems: "center", minWidth: 240, gap: 10 },
     residentAvatar: { width: 36, height: 36, borderRadius: 10, backgroundColor: "#EAF5EE", alignItems: "center", justifyContent: "center" },
     residentDetails: { flex: 1, minWidth: 0 },
-    residentName: { fontSize: 13, fontWeight: "800", color: "#1C4938" },
-    residentEmail: { fontSize: 12, color: "#5F756A", marginTop: 2 },
-    residentInfo: { fontSize: 11, color: "#6E8277", marginTop: 3, lineHeight: 16 },
+    residentName: { fontSize: vsType.size.label, fontFamily: vsType.family, fontWeight: "800", color: "#1C4938" },
+    residentEmail: { fontSize: vsType.size.meta, fontFamily: vsType.family, color: "#5F756A", marginTop: 2 },
+    residentInfo: { fontSize: vsType.size.caption, fontFamily: vsType.family, color: "#6E8277", marginTop: 3, lineHeight: 16 },
     residentActions: { flexDirection: "row", flexWrap: "wrap", justifyContent: "flex-end", alignItems: "center", gap: 8 },
     residentBadge: { paddingHorizontal: 8, paddingVertical: 5, borderRadius: 7, backgroundColor: "#EFF2FA" },
-    residentBadgeText: { color: "#4A6495", fontSize: 10, fontWeight: "700" },
+    residentBadgeText: { color: "#4A6495", fontSize: vsType.size.micro, fontFamily: vsType.family, fontWeight: "700" },
     residentVerifiedBadge: { backgroundColor: "#E5F5EB" },
     residentVerifiedBadgeText: { color: "#166C50" },
-    residentState: { fontSize: 11, color: "#637C6D", fontWeight: "600" },
+    residentState: { fontSize: vsType.size.caption, fontFamily: vsType.family, color: "#637C6D", fontWeight: "600" },
     residentModerateButton: { minHeight: 36, minWidth: 86, borderWidth: 1, borderColor: "#E5AD55", backgroundColor: "#FFF8EC", borderRadius: 8, alignItems: "center", justifyContent: "center", paddingHorizontal: 12 },
-    residentModerateText: { fontSize: 11, fontWeight: "800", color: "#996012" },
+    residentModerateText: { fontSize: vsType.size.caption, fontFamily: vsType.family, fontWeight: "800", color: "#996012" },
     residentReactivate: { borderColor: "#86C3A4", backgroundColor: "#EAF7F0" },
     residentReactivateText: { color: "#166B4A" },
     metricsRow: { flexDirection: "row", flexWrap: "wrap", gap: 12, marginBottom: 18 },
@@ -800,14 +801,14 @@ const styles =
     metricIcon: { width: 42, height: 42, borderRadius: 12, backgroundColor: "#E2F5EB",
       alignItems: "center", justifyContent: "center", marginBottom: 12 },
     metricLabel: { color: "#32594B", fontSize: designUi.type.label.fontSize, fontWeight: designUi.type.label.fontWeight, lineHeight: designUi.type.label.lineHeight,},
-    metricValue: { color: "#124234", fontSize: 28, fontWeight: "900", marginTop: 5 },
-    metricCaption: { color: "#698576", fontSize: 11, marginTop: 3 },
+    metricValue: { color: "#124234", fontSize: vsType.size.hero, fontFamily: vsType.family, fontWeight: "800", marginTop: 5 },
+    metricCaption: { color: "#698576", fontSize: vsType.size.caption, fontFamily: vsType.family, marginTop: 3 },
     recordsPanel: { backgroundColor: "#FFFFFF", borderWidth: 1, borderColor: "#D8E7DE",
       borderRadius: 17, padding: 19, marginBottom: 14 },
     recordsHeading: { flexDirection: "row", alignItems: "center", marginBottom: 15 },
     recordsHeadingCopy: { flex: 1 },
-    recordsTitle: { color: "#153E32", fontSize: 18, fontWeight: "900" },
-    recordsDescription: { color: "#6D8778", fontSize: 12, lineHeight: 19, marginTop: 5 },
+    recordsTitle: { color: "#153E32", fontSize: vsType.size.section, fontFamily: vsType.family, fontWeight: "800" },
+    recordsDescription: { color: "#6D8778", fontSize: vsType.size.meta, fontFamily: vsType.family, lineHeight: 19, marginTop: 5 },
     container: {
       padding: 20,
       paddingBottom: 50,
@@ -865,19 +866,19 @@ const styles =
 
     countText: {
       color: "#92400E",
-      fontWeight: "900",
-      fontSize: 17,
+      fontWeight: "800",
+      fontSize: vsType.size.card, fontFamily: vsType.family,
     },
 
     reviewSummary: { backgroundColor: "#E9F7EF", borderWidth: 1, borderColor: "#CDE8D9", borderRadius: 11, padding: 12, marginBottom: 12 },
-    reviewSummaryText: { color: "#245846", fontSize: 12, fontWeight: "700", lineHeight: 18 },
+    reviewSummaryText: { color: "#245846", fontSize: vsType.size.meta, fontFamily: vsType.family, fontWeight: "700", lineHeight: 18 },
     searchWrap: { flexDirection: "row", alignItems: "center", gap: 9, backgroundColor: "#FFFFFF", borderWidth: 1, borderColor: "#D8E5DE", borderRadius: 12, paddingHorizontal: 13, marginBottom: 10 },
-    searchInput: { flex: 1, minHeight: 46, fontSize: 13, color: "#173D32" },
+    searchInput: { flex: 1, minHeight: 46, fontSize: vsType.size.label, fontFamily: vsType.family, color: "#173D32" },
     approvalEvidenceScroll: { maxHeight: 260, marginTop: 12 },
     approvalEvidence: { backgroundColor: "#F6FBF8", borderColor: "#D9EAE0", borderWidth: 1, borderRadius: 11, padding: 13, marginVertical: 13, gap: 3 },
-    evidenceTitle: { color: "#173D32", fontSize: 14, fontWeight: "900", marginBottom: 5 },
+    evidenceTitle: { color: "#173D32", fontSize: vsType.size.body, fontFamily: vsType.family, fontWeight: "800", marginBottom: 5 },
     confirmCheckRow: { flexDirection: "row", alignItems: "flex-start", gap: 10, paddingVertical: 10 },
-    confirmCheckText: { flex: 1, color: "#365B4E", fontSize: 12, fontWeight: "700", lineHeight: 18 },
+    confirmCheckText: { flex: 1, color: "#365B4E", fontSize: vsType.size.meta, fontFamily: vsType.family, fontWeight: "700", lineHeight: 18 },
     buttonDisabled: { opacity: 0.48 },
     filterRow: {
       flexDirection: "row",
@@ -936,8 +937,8 @@ const styles =
     },
 
     name: {
-      fontSize: 17,
-      fontWeight: "900",
+      fontSize: vsType.size.card, fontFamily: vsType.family,
+      fontWeight: "800",
       color: "#173D32",
     },
 
@@ -955,15 +956,15 @@ const styles =
 
     roleText: {
       color: "#1D4ED8",
-      fontSize: 10,
-      fontWeight: "900",
+      fontSize: vsType.size.micro, fontFamily: vsType.family,
+      fontWeight: "800",
     },
 
     statusText: {
       marginTop: 10,
       color: "#0F766E",
-      fontWeight: "900",
-      fontSize: 12,
+      fontWeight: "800",
+      fontSize: vsType.size.meta, fontFamily: vsType.family,
     },
 
     reason: {
@@ -1006,7 +1007,7 @@ const styles =
 
     actionText: {
       color: "#FFFFFF",
-      fontWeight: "900",
+      fontWeight: "800",
     },
 
     modalBackdrop: {
@@ -1028,8 +1029,8 @@ const styles =
     },
 
     modalTitle: {
-      fontSize: 20,
-      fontWeight: "900",
+      fontSize: vsType.size.subheading, fontFamily: vsType.family,
+      fontWeight: "800",
       color: "#173D32",
     },
 

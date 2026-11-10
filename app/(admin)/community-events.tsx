@@ -1,3 +1,4 @@
+import { volunserveTypography as vsType } from "../../constants/volunserveLiveUi";
 import { liveUi as designUi } from "../../constants/volunserveLiveUi";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { Redirect } from "expo-router";
@@ -907,11 +908,11 @@ export default function CommunityEventAdminScreen() {
                   )}
                   {selectedProposal.latitude != null && selectedProposal.longitude != null && (
                     <View style={{marginTop:14,padding:12,borderRadius:12,borderWidth:1,borderColor:"#CCE5DF",backgroundColor:"#F4FBF9"}}>
-                      <Text style={{fontSize:14,fontWeight:"800",color:"#143F42"}}>Resident-Confirmed Event Meeting Point</Text>
-                      <Text style={{fontSize:12,color:"#456C73",marginTop:5}}>
+                      <Text style={{fontSize: vsType.size.body, fontFamily: vsType.family,fontWeight:"800",color:"#143F42"}}>Resident-Confirmed Event Meeting Point</Text>
+                      <Text style={{fontSize: vsType.size.meta, fontFamily: vsType.family,color:"#456C73",marginTop:5}}>
                         GPS: {Number(selectedProposal.latitude).toFixed(6)}, {Number(selectedProposal.longitude).toFixed(6)}
                       </Text>
-                      <Text style={{fontSize:11,color:"#577780",marginBottom:9}}>
+                      <Text style={{fontSize: vsType.size.caption, fontFamily: vsType.family,color:"#577780",marginBottom:9}}>
                         Verify that this Google Maps location matches the submitted barangay and venue before approving. The same coordinates are used for Volunteer navigation.
                       </Text>
                       {Platform.OS === "web" ? React.createElement("iframe" as any, {
@@ -1029,42 +1030,42 @@ export default function CommunityEventAdminScreen() {
 const styles = StyleSheet.create({
   cardCover: { width: 43, height: 43, borderRadius: 11, backgroundColor: "#E5F6F1" },
   avatarFallback: { backgroundColor: "#DCF3EC", alignItems: "center", justifyContent: "center" },
-  avatarInitials: { color: GREEN, fontSize: 13, fontWeight: "900" },
+  avatarInitials: { color: GREEN, fontSize: vsType.size.label, fontFamily: vsType.family, fontWeight: "800" },
   proposerLine: { flexDirection: "row", alignItems: "center", gap: 9, marginBottom: 10, marginTop: 2 },
-  proposerLabel: { fontSize: 9, color: MUTED },
-  proposerName: { fontSize: 12, fontWeight: "800", color: INK },
+  proposerLabel: { fontSize: vsType.size.micro, fontFamily: vsType.family, color: MUTED },
+  proposerName: { fontSize: vsType.size.meta, fontFamily: vsType.family, fontWeight: "800", color: INK },
   inlineButton: { paddingHorizontal: 10, paddingVertical: 8, borderWidth: 1, borderColor: "#C9DED7", borderRadius: 8 },
-  inlineButtonText: { color: GREEN, fontWeight: "800", fontSize: 11 },
+  inlineButtonText: { color: GREEN, fontWeight: "800", fontSize: vsType.size.caption, fontFamily: vsType.family },
   detailsButton: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 7, borderWidth: 1, borderColor: "#CFE6DE", backgroundColor: "#F2FAF7", borderRadius: 9, minHeight: 38, marginTop: 12 },
-  detailsButtonText: { fontSize: 12, color: GREEN, fontWeight: "800" },
+  detailsButtonText: { fontSize: vsType.size.meta, fontFamily: vsType.family, color: GREEN, fontWeight: "800" },
   modalBackdrop: { flex: 1, backgroundColor: "rgba(18,39,49,0.62)", alignItems: "center", justifyContent: "center", padding: 12 },
   detailPanel: { backgroundColor: "white", width: "100%", maxWidth: 680, maxHeight: "92%", borderRadius: 17, padding: 20 },
   detailPanelCompact: { padding: 13 },
   modalHeader: { flexDirection: "row", alignItems: "center", gap: 12, marginBottom: 12 },
-  modalTitle: { fontSize: 21, fontWeight: "900", color: INK },
+  modalTitle: { fontSize: vsType.size.titleSmall, fontFamily: vsType.family, fontWeight: "800", color: INK },
   closeButton: { padding: 7, borderRadius: 9 },
   detailCover: { width: "100%", height: 218, borderRadius: 12, backgroundColor: "#E6EEEB" },
   photoStrip: { flexDirection: "row", gap: 8, paddingTop: 9 },
   smallPhoto: { width: 105, height: 76, borderRadius: 9, backgroundColor: "#E6EEEB" },
   noPhoto: { height: 140, backgroundColor: "#F3F8F6", borderRadius: 12, alignItems: "center", justifyContent: "center", gap: 8 },
-  missingText: { color: MUTED, fontSize: 12 },
+  missingText: { color: MUTED, fontSize: vsType.size.meta, fontFamily: vsType.family },
   detailPills: { flexDirection: "row", alignItems: "center", gap: 8, marginVertical: 12 },
-  statusBadge: { paddingVertical: 6, paddingHorizontal: 10, color: "#08735E", backgroundColor: "#E5F6EE", overflow: "hidden", borderRadius: 7, fontSize: 10, fontWeight: "900" },
-  categoryBadge: { color: GREEN, fontWeight: "800", fontSize: 11 },
-  detailMeta: { color: MUTED, fontSize: 12, marginBottom: 6 },
-  detailHeading: { color: INK, fontSize: 14, fontWeight: "900", marginTop: 19, marginBottom: 8 },
-  bodyText: { color: "#435D69", fontSize: 12, lineHeight: 19 },
+  statusBadge: { paddingVertical: 6, paddingHorizontal: 10, color: "#08735E", backgroundColor: "#E5F6EE", overflow: "hidden", borderRadius: 7, fontSize: vsType.size.micro, fontFamily: vsType.family, fontWeight: "800" },
+  categoryBadge: { color: GREEN, fontWeight: "800", fontSize: vsType.size.caption, fontFamily: vsType.family },
+  detailMeta: { color: MUTED, fontSize: vsType.size.meta, fontFamily: vsType.family, marginBottom: 6 },
+  detailHeading: { color: INK, fontSize: vsType.size.body, fontFamily: vsType.family, fontWeight: "800", marginTop: 19, marginBottom: 8 },
+  bodyText: { color: "#435D69", fontSize: vsType.size.meta, fontFamily: vsType.family, lineHeight: 19 },
   profileRow: { flexDirection: "row", alignItems: "center", backgroundColor: "#F7FAF9", borderColor: "#E1ECE8", borderWidth: 1, borderRadius: 11, padding: 10, gap: 10, marginBottom: 8 },
-  profileRowName: { color: INK, fontWeight: "800", fontSize: 12 },
-  profileRowSub: { color: MUTED, fontSize: 11, marginTop: 3 },
+  profileRowName: { color: INK, fontWeight: "800", fontSize: vsType.size.meta, fontFamily: vsType.family },
+  profileRowSub: { color: MUTED, fontSize: vsType.size.caption, fontFamily: vsType.family, marginTop: 3 },
   participantHeader: { flexDirection: "row", alignItems: "center", gap: 10 },
   profilePanel: { width: "100%", maxWidth: 400, backgroundColor: "white", padding: 20, borderRadius: 16 },
   profileCenter: { alignItems: "center", gap: 7, marginTop: 4, marginBottom: 14 },
-  profileBigName: { color: INK, fontSize: 19, fontWeight: "900", marginTop: 6 },
+  profileBigName: { color: INK, fontSize: vsType.size.section, fontFamily: vsType.family, fontWeight: "800", marginTop: 6 },
   profileFact: { flexDirection: "row", justifyContent: "space-between", gap: 12, borderTopWidth: 1, borderTopColor: "#E5EFEB", paddingVertical: 13 },
-  profileFactLabel: { color: MUTED, fontSize: 12 },
-  profileFactValue: { color: INK, fontWeight: "800", fontSize: 12 },
-  profilePrivacy: { color: MUTED, fontSize: 10, lineHeight: 16, marginTop: 11 },
+  profileFactLabel: { color: MUTED, fontSize: vsType.size.meta, fontFamily: vsType.family },
+  profileFactValue: { color: INK, fontWeight: "800", fontSize: vsType.size.meta, fontFamily: vsType.family },
+  profilePrivacy: { color: MUTED, fontSize: vsType.size.micro, fontFamily: vsType.family, lineHeight: 16, marginTop: 11 },
   screen: {
     flex: 1,
     backgroundColor: "#F5F9F8",
@@ -1092,7 +1093,7 @@ const styles = StyleSheet.create({
   },
   eyebrow: {
     color: GREEN,
-    fontSize: 10,
+    fontSize: vsType.size.micro, fontFamily: vsType.family,
     fontWeight: "800",
     letterSpacing: 1,
   },
@@ -1127,8 +1128,8 @@ const styles = StyleSheet.create({
     borderColor: "#E0E9E7",
   },
   statNumber: {
-    fontSize: 22,
-    fontWeight: "900",
+    fontSize: vsType.size.titleSmall, fontFamily: vsType.family,
+    fontWeight: "800",
     color: INK,
     marginTop: 2,
   },
@@ -1146,7 +1147,7 @@ const styles = StyleSheet.create({
     borderColor: "#DFE8E6",
     backgroundColor: "white",
     paddingHorizontal: 12,
-    fontSize: 12,
+    fontSize: vsType.size.meta, fontFamily: vsType.family,
     color: INK,
   },
   filters: {
@@ -1168,7 +1169,7 @@ const styles = StyleSheet.create({
     borderColor: GREEN,
   },
   chipText: {
-    fontSize: 11,
+    fontSize: vsType.size.caption, fontFamily: vsType.family,
     fontWeight: "800",
     color: MUTED,
   },
@@ -1182,7 +1183,7 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   noticeText: {
-    fontSize: 12,
+    fontSize: vsType.size.meta, fontFamily: vsType.family,
     color: "#0C7566",
   },
   error: {
@@ -1192,7 +1193,7 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   errorText: {
-    fontSize: 12,
+    fontSize: vsType.size.meta, fontFamily: vsType.family,
     color: "#B42318",
   },
   grid: {
@@ -1226,7 +1227,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   category: {
-    fontSize: 10,
+    fontSize: vsType.size.micro, fontFamily: vsType.family,
     color: GREEN,
     fontWeight: "800",
   },
@@ -1243,11 +1244,11 @@ const styles = StyleSheet.create({
   },
   statusText: {
     color: "#08735E",
-    fontSize: 9,
-    fontWeight: "900",
+    fontSize: vsType.size.micro, fontFamily: vsType.family,
+    fontWeight: "800",
   },
   meta: {
-    fontSize: 11,
+    fontSize: vsType.size.caption, fontFamily: vsType.family,
     color: MUTED,
     marginBottom: 5,
   },
@@ -1258,12 +1259,12 @@ const styles = StyleSheet.create({
     marginTop: 6,
   },
   description: {
-    fontSize: 11.5,
+    fontSize: vsType.size.meta, fontFamily: vsType.family,
     color: "#425D6A",
     lineHeight: 17,
   },
   adminNote: {
-    fontSize: 11,
+    fontSize: vsType.size.caption, fontFamily: vsType.family,
     color: "#64798A",
     marginTop: 8,
   },
@@ -1274,7 +1275,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     padding: 10,
     marginTop: 10,
-    fontSize: 12,
+    fontSize: vsType.size.meta, fontFamily: vsType.family,
     textAlignVertical: "top",
   },
   actions: {
@@ -1294,7 +1295,7 @@ const styles = StyleSheet.create({
     borderColor: "#C8DAD5",
   },
   outlineText: {
-    fontSize: 12,
+    fontSize: vsType.size.meta, fontFamily: vsType.family,
     color: "#496978",
     fontWeight: "800",
   },
@@ -1317,9 +1318,9 @@ const styles = StyleSheet.create({
     borderRadius: 9,
   },
   buttonText: {
-    fontSize: 12,
+    fontSize: vsType.size.meta, fontFamily: vsType.family,
     color: "white",
-    fontWeight: "900",
+    fontWeight: "800",
   },
   disabled: {
     opacity: 0.55,

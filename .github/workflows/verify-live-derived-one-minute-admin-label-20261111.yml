@@ -1,0 +1,44 @@
+name: Verify live-derived 1-minute Admin label only (NO DEPLOY)
+on:
+  push:
+    branches:
+      - fix/hosting-live-derived-one-minute-admin-label-20261111
+  pull_request:
+    branches:
+      - baseline/verified-hosting-20261111-44cfe
+permissions:
+  contents: read
+jobs:
+  live-derived-safe-label:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      CI: "true"
+      EXPO_NO_TELEMETRY: "1"
+    steps:
+      - name: Download exact candidate source without broken legacy gitlink
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --location --retry 3 \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/tarball/${GITHUB_SHA}" \
+            -o "$RUNNER_TEMP/volunserve-candidate.tar.gz"
+          tar -xzf "$RUNNER_TEMP/volunserve-candidate.tar.gz" --strip-components=1 -C "$GITHUB_WORKSPACE"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - name: Install exact project dependencies (no deploy)
+        run: npm ci --no-audit --no-fund
+      - name: Test displayed 1-minute and historical 30-minute rules against actual live source
+        run: node --test scripts/test-live-derived-certificate-minimum-label-20261111.cjs
+      - name: TypeScript check
+        run: npx tsc --noEmit --incremental false
+      - name: Export Expo Web without Firebase Hosting upload
+        run: npx expo export --platform web --clear
+      - name: Confirm this workflow has no deployment instructions
+        run: echo "Source-only validation complete. No Hosting, rules, Functions or Render deployment occurred."
