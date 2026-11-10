@@ -1,0 +1,44 @@
+name: Verify Exact Active Firebase Rules Candidate (NO DEPLOY)
+on:
+  push:
+    branches:
+      - review/exact-active-firebase-rules-security-20261111
+  pull_request:
+    branches:
+      - security/stage-new-signup-provider-rules-20261111
+permissions:
+  contents: read
+jobs:
+  provenance-and-emulator:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Verify EXACT production source and only 3 safe insertions
+        run: node scripts/test-exact-active-firebase-rules-provenance-20261111.cjs
+      - run: npm ci --no-audit --no-fund
+      - name: Compile Firestore Rules in isolated emulator and test direct SDK
+        run: npx firebase-tools emulators:exec --only firestore --project demo-volunserve-new-email-policy "node scripts/test-staged-signup-provider-firestore-rules.cjs"
+      - name: Existing resident input and identity account compatibility
+        run: |
+          npx firebase-tools emulators:exec --only firestore --project demo-volunserve-verified-signup "node scripts/test-verified-community-registration-rules.cjs"
+          npx firebase-tools emulators:exec --only firestore --project demo-volunserve-account-compatibility "node scripts/test-existing-account-compatibility.cjs"
+      - name: Existing community and security checks
+        run: |
+          node --test functions/test-registration-email-screening.js
+          node --test scripts/test-signup-abuse-controls.cjs
+          node scripts/test-signup-prod.cjs
+      - name: No production mutation
+        run: |
+          echo 'NO DEPLOY: emulator-only Rules compile; no Firebase production credential or deploy token.'
