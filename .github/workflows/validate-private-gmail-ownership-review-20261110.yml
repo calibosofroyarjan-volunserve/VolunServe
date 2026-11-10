@@ -1,0 +1,54 @@
+# NO SECRETS / NO CLOUD ACCESS / NO WRITES. Private report runs only in the OWNER'S Cloud Shell.
+name: Validate Private Gmail Ownership Dossier (NO DEPLOY)
+on:
+  push:
+    branches: [audit/private-gmail-ownership-dossier-20261110]
+  pull_request:
+    branches: [live-protected]
+    paths:
+      - scripts/private-gmail-account-ownership-review-20261110.cjs
+      - docs/private-gmail-ownership-review-20261110.md
+      - .github/workflows/validate-private-gmail-ownership-review-20261110.yml
+permissions:
+  contents: read
+jobs:
+  local-only-safety:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Syntax, synthetic tests and explicit NO cloud / NO database writes
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check scripts/private-gmail-account-ownership-review-20261110.cjs
+          node scripts/private-gmail-account-ownership-review-20261110.cjs --self-test
+          node <<'NODE'
+          const assert=require("node:assert/strict");
+          const fs=require("node:fs");
+          const src=fs.readFileSync("scripts/private-gmail-account-ownership-review-20261110.cjs","utf8");
+          const workflow=fs.readFileSync(".github/workflows/validate-private-gmail-ownership-review-20261110.yml","utf8");
+          for(const forbidden of [
+            /auth\.(?:createUser|updateUser|deleteUser|deleteUsers|setCustomUserClaims)\s*\(/,
+            /db\.(?:batch|runTransaction|bulkWriter)\s*\(/,
+            /\.ref\.(?:set|create|delete|update)\s*\(/,
+            /\.commit\s*\(/,
+            /firebase-tools\s+(?:deploy|hosting:clone)/,
+          ]) assert(!forbidden.test(src),"Disallowed privileged write/deploy API");
+          assert(src.includes("!process.env.GITHUB_ACTIONS && !process.env.CI"),
+            "Must reject private report execution in CI");
+          assert(src.includes('flag:"wx",mode:0o600'),"Private report must not overwrite or be world readable");
+          assert(src.includes('role","in",ROLES'),"Must restrict account scan scope");
+          assert(src.includes('MAX_SCANNED = 12000'),"Scan bound required");
+          assert(!/^\s+environment:\s*production\s*$/m.test(workflow),
+            "CI MUST NOT select the production environment");
+          assert(!/^\s+[A-Z0-9_]+:\s*\$\{\{\s*secrets\./m.test(workflow),
+            "CI MUST NOT bind any secrets");
+          assert(!/\bnpx firebase-tools\b/.test(workflow));
+          console.log("PASS: private dossier is Cloud Shell-only; all CI tests synthetic, no production data");
+          NODE
