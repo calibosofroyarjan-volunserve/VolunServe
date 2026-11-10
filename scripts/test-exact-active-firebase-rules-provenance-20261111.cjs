@@ -41,7 +41,7 @@ const allowed=new Set([
   ".github/workflows/verify-exact-active-firebase-rules-no-deploy-20261111.yml",
 ]);
 const changes=git("diff","--name-status","--no-renames",
-  "security/stage-new-signup-provider-rules-20261111","HEAD")
+  "f871262eb01bcc5a8629ba05f211dd36011e6921","HEAD")
   .split("\n").filter(Boolean).map(row=>row.split("\t"));
 for(const [status,file] of changes){
   assert(["A","M"].includes(status),"BLOCKED: deletion in staged review");
