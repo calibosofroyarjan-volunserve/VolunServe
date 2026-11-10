@@ -17,22 +17,30 @@ async function main() {
   await env.clearFirestore();
   await env.withSecurityRulesDisabled(async context=>{
    const db=context.firestore();
-   await db.doc("users/financial-admin").set({role:"admin",status:"approved"});
-   await db.doc("users/system-programmer").set({role:"superadmin",status:"approved"});
+   await db.doc("users/financial-admin").set({email:"admin@city.gov.ph",role:"admin",status:"approved"});
+   await db.doc("users/system-programmer").set({email:"superadmin@city.gov.ph",role:"superadmin",status:"approved"});
    await db.doc("users/financial-donor").set({
-    role:"resident",status:"approved",residentAccess:true,activeMode:"resident"});
+    email:"donor@yahoo.com",role:"resident",status:"approved",residentAccess:true,activeMode:"resident"});
    await db.doc("users/other-financial-donor").set({
-    role:"resident",status:"approved",residentAccess:true,activeMode:"resident"});
+    email:"other@yahoo.com",role:"resident",status:"approved",
+    residentAccess:true,activeMode:"resident"});
    await db.doc("donationCampaigns/test-campaign").set({title:"Test Campaign",status:"published"});
    await db.doc("donations/test-receipt").set({
      donorUid:"financial-donor",campaignId:"test-campaign",status:"received"});
    await db.doc("donations/test-receipt/logs/test-audit").set({type:"verified",amount:1});
   });
-  const admin=env.authenticatedContext("financial-admin").firestore();
-  const superadmin=env.authenticatedContext("system-programmer").firestore();
-  const donor=env.authenticatedContext("financial-donor").firestore();
-  const outsider=env.authenticatedContext("other-financial-donor").firestore();
+  // Real approved() requires verified-email claims; Residents also require
+  // exact email equality with their own approved profile.
+  const verified=(uid,email)=>env.authenticatedContext(uid,
+    {email,email_verified:true}).firestore();
+  const admin=verified("financial-admin","admin@city.gov.ph");
+  const superadmin=verified("system-programmer","superadmin@city.gov.ph");
+  const donor=verified("financial-donor","donor@yahoo.com");
+  const outsider=verified("other-financial-donor","other@yahoo.com");
   const campaign="donationCampaigns/test-campaign",receipt="donations/test-receipt";
+  const unverifiedAdmin=env.authenticatedContext("financial-admin",
+    {email:"admin@city.gov.ph",email_verified:false}).firestore();
+  await assertFails(unverifiedAdmin.doc(receipt).get());
   await assertSucceeds(admin.doc(campaign).get());
   await assertSucceeds(admin.doc(receipt).get());
   await assertSucceeds(admin.doc(receipt+"/logs/test-audit").get());
