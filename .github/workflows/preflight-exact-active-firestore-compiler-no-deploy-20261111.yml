@@ -18,6 +18,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          fetch-depth: 0
           submodules: false
       - uses: actions/setup-node@v4
         with:
@@ -26,6 +27,8 @@ jobs:
         run: |
           node --check scripts/preflight-active-rules-compile-only-20261111.cjs
           node scripts/preflight-active-rules-compile-only-20261111.cjs --self-test
+      - name: Audit published Hosting vs protected branch without deploying
+        run: node scripts/audit-current-hosting-gap-no-deploy-20261111.cjs
       - name: Prevent production publish references
         run: |
           node <<'NODE'
