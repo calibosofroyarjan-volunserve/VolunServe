@@ -101,6 +101,16 @@ test("invalid limiter secret and abusive values fail rather than disabling prote
   await assert.rejects(enforceSignupIpRateLimit({...args(db,1),maxAttempts:0}),/Invalid signup limit/);
   await assert.rejects(enforceSignupIpRateLimit({...args(db,1),maxAttempts:70}),/Invalid signup limit/);
 });
+test("observed temporary .co mailbox is denied by staged server screener without overblocking .co",()=>{
+  const {classifyRegistrationEmail}=require("../functions/registrationEmailScreening");
+  for(const email of ["hlc3w2yrtm@ruutukf.co","resident@sub.ruutukf.co"]) {
+    assert.deepEqual(classifyRegistrationEmail(email),{allowed:false,reason:"disposable"});
+  }
+  for(const email of ["resident@gmail.com","resident@yahoo.com","resident@outlook.com","resident@legitimate.co"]) {
+    assert.equal(classifyRegistrationEmail(email).allowed,true,email);
+  }
+});
+
 test("beforeCreate enforces screening + shared rate limit, with production opt-in only",()=>{
   const blocking=fs.readFileSync("functions/registrationBlocking.js","utf8");
   const index=fs.readFileSync("functions/index.js","utf8");
