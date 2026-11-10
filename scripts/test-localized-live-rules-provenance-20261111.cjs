@@ -75,6 +75,7 @@ const allowedFiles=new Set([
  "firestore.rules",
  "scripts/test-resident-field-validation.cjs",
  "scripts/test-lgu-admin-rules.cjs",
+ "scripts/test-live-emergency-map-rules.cjs",
  "scripts/test-localized-live-rules-provenance-20261111.cjs",
  ".github/workflows/verify-localized-live-rules-no-deploy-20261111.yml",
 ]);
