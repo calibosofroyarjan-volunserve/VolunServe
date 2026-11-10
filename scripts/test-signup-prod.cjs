@@ -66,12 +66,34 @@ function harness(source, enabled, options = {}) {
     const ios=load(read("lib/signupFeature.ts"),{"react-native":{Platform:{OS:"ios"}}},{EXPO_PUBLIC_EMAIL_FIRST_SIGNUP:""});
     assert.equal(ios.EMAIL_FIRST_SIGNUP_ENABLED,false);
   });
-  await check("legacy signup layouts remain unchanged relative to current live-protected source",()=>{
+  await check("legacy signup design matches published source apart from specific inline email errors",()=>{
+    const baseRef="f7bc8d12d8e926365175afb5288f2adf214025a5";
+    const extract=text=>text.replace(/\r\n/g,"\n").slice(text.replace(/\r\n/g,"\n").indexOf("  const currentMeta = STEP_META[step];")).replace(/\nexport default function Signup\(\) \{[\s\S]*$/,'').trimEnd();
     for(const file of ["app/signup.tsx","app/signup.web.tsx"]) {
-      const extract=text=>text.replace(/\r\n/g,"\n").slice(text.replace(/\r\n/g,"\n").indexOf("  const currentMeta = STEP_META[step];")).replace(/\nexport default function Signup\(\) \{[\s\S]*$/,'').trimEnd();
-      const hasLiveProtectedRef=cp.spawnSync("git",["show-ref","--verify","--quiet","refs/remotes/origin/live-protected"]).status===0;
-      const baseRef=hasLiveProtectedRef ? "origin/live-protected" : "e7c2cc8";
-      assert.equal(extract(read(file)),extract(cp.execFileSync("git",["show",baseRef+":"+file],{encoding:"utf8"})));
+      const source=read(file);
+      assert(source.includes("getRegistrationEmailError(formData.email)"),"Step 1 must screen disposable mail: "+file);
+      assert(source.includes("const emailValid = emailError === null;"),"Rejected email must block Next: "+file);
+      assert(source.includes("emailError,"),"Show the exact email validation reason: "+file);
+      let rendered=extract(source);
+      if(file.endsWith(".web.tsx")){
+        const current=`{formData.email.length > 0 && !!validation.emailError ? (
+                    <ValidationText ok={false}>{validation.emailError}</ValidationText>
+                  ) : null}`;
+        const original=`{formData.email.length > 0 && !validation.emailValid ? (
+                    <ValidationText ok={false}>Enter a valid email address.</ValidationText>
+                  ) : null}`;
+        assert.equal(rendered.split(current).length,2,"Specific web inline email error not found");
+        rendered=rendered.replace(current,original);
+      } else {
+        const newInline=`{formData.email.length > 0 && !!validation.emailError && (
+                <ValidationText ok={false}>{validation.emailError}</ValidationText>
+              )}
+              `;
+        assert.equal(rendered.split(newInline).length,2,"Native email field error not found");
+        rendered=rendered.replace(newInline,"");
+      }
+      const published=extract(cp.execFileSync("git",["show",baseRef+":"+file],{encoding:"utf8"}));
+      assert.equal(rendered,published,"Unexpected published signup layout drift: "+file);
     }
   });
   for(const enabled of [false,true]) {
