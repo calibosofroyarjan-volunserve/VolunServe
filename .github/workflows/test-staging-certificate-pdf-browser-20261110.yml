@@ -1,0 +1,28 @@
+name: Staging Community Certificate Printable PDF + Verify ID (NO DEPLOY)
+on:
+  pull_request:
+    branches:
+      - design/consolidated-four-role-desktop-mobile-20261107
+    paths:
+      - "scripts/test-staging-certificate-pdf-browser-20261110.cjs"
+      - ".github/workflows/test-staging-certificate-pdf-browser-20261110.yml"
+permissions:
+  contents: read
+jobs:
+  synthetic-cert-pdf:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - name: Install locked app dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Install throwaway browser tester (no package file writes)
+        run: npm install --no-save --no-package-lock --ignore-scripts playwright@1.56.1
+      - name: Install Chromium headless browser
+        run: npx playwright install --with-deps chromium
+      - name: Render actual certificate HTML to PDF and inspect verification ID logic
+        run: node scripts/test-staging-certificate-pdf-browser-20261110.cjs
