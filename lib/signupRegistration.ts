@@ -4,7 +4,7 @@ import {
 } from "firebase/auth";
 import {doc, getDoc} from "firebase/firestore";
 import {auth, db} from "./firebase";
-import {getRegistrationEmailError} from "./registrationEmailPolicy";
+import {getRegistrationEmailError, requiresGoogleOAuthForRegistration, GMAIL_GOOGLE_OAUTH_REQUIRED_MESSAGE} from "./registrationEmailPolicy";
 
 /** No profile writes, credential linking, password changes, or local PII storage. */
 export async function authenticateEmailSignup(email: string, password: string, resumeOnly = false, rejectExisting = false): Promise<User> {
@@ -12,6 +12,11 @@ export async function authenticateEmailSignup(email: string, password: string, r
   if (!normalized || !password) throw new Error("Enter your registration email and password.");
   const emailError = getRegistrationEmailError(normalized);
   if (emailError) throw new Error(emailError);
+  // Existing pending email/password users can resume; new Gmail UIDs must
+  // start with Google OAuth rather than an accessible receive-only inbox.
+  if (!resumeOnly && requiresGoogleOAuthForRegistration(normalized)) {
+    throw new Error(GMAIL_GOOGLE_OAUTH_REQUIRED_MESSAGE);
+  }
   let user: User;
   if (resumeOnly) {
     user = (await signInWithEmailAndPassword(auth, normalized, password)).user;

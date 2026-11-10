@@ -3,8 +3,9 @@ import { liveUi as designUi } from "../constants/volunserveLiveUi";
 import EmailFirstSignup from "../components/auth/EmailFirstSignup";
 import { userFacingError } from "../lib/userFacingError";
 import { EMAIL_FIRST_SIGNUP_ENABLED } from "../lib/signupFeature";
-import { getRegistrationEmailError } from "../lib/registrationEmailPolicy";
-import DateTimePicker from "@react-native-community/datetimepicker";
+import { getRegistrationEmailError, requiresGoogleOAuthForRegistration } from "../lib/registrationEmailPolicy";
+import BirthDateCalendarPicker from "../components/auth/BirthDateCalendarPicker";
+
 import { Feather } from "@expo/vector-icons";
 import * as AuthSession from "expo-auth-session";
 import * as Google from "expo-auth-session/providers/google";
@@ -441,7 +442,6 @@ function LegacySignup() {
   const [termsOpen, setTermsOpen] = useState(false);
   const barangays = SJDM_BARANGAYS;
   const loadingAddress = false;
-  const [dobOpen, setDobOpen] = useState(false);
 
   const [formData, setFormData] = useState<FormState>({
     lastName: "",
@@ -569,7 +569,8 @@ function LegacySignup() {
     const passwordScore = Object.values(passwordChecks).filter(Boolean).length;
     const passwordStrength = passwordScore <= 2 ? "Weak" : passwordScore <= 5 ? "Medium" : "Strong";
     const passwordValid = passwordScore === Object.keys(passwordChecks).length;
-    const step1Valid = lastNameValid && firstNameValid && middleNameValid && ageValid && phoneValid && emailValid && (googleBound || passwordValid) && formData.acceptTerms;
+    const gmailOAuthRequired = requiresGoogleOAuthForRegistration(formData.email);
+    const step1Valid = lastNameValid && firstNameValid && middleNameValid && ageValid && phoneValid && emailValid && (googleBound || (!gmailOAuthRequired && passwordValid)) && formData.acceptTerms;
     const step4Valid = formData.acceptTerms && formData.confirmReview;
     return {
       lastNameValid,
@@ -605,7 +606,7 @@ function LegacySignup() {
       scrollRef.current?.scrollTo({ y: 0, animated: true });
       
       const stepMessages: Record<Step, string> = {
-        1: "Please complete your personal information and contact details.",
+        1: "Complete your details and consent. Gmail requires Continue with Google to prove ownership; Yahoo can use a password.",
         2: "Please select a valid City of San Jose del Monte, Bulacan residential address.",
         3: "Please complete your occupation information.",
         4: "Review your information and accept the terms and privacy consent.",
@@ -873,28 +874,18 @@ function LegacySignup() {
                 returnKeyType="next"
               />
               <Field icon="👤" label="Last Name *" value={formData.lastName} onChange={(v) => updateField("lastName", sanitizeName(v))} invalid={!validation.lastNameValid && formData.lastName.length > 0} returnKeyType="next" />
-              <View style={styles.field}>
-                <Text style={styles.label}>🎂 Date of Birth <Text style={{ color: "#DC2626" }}>*</Text></Text>
-                <TouchableOpacity activeOpacity={0.9} onPress={() => setDobOpen(true)} style={[styles.input, !validation.ageValid && formData.dateOfBirth !== null && styles.inputInvalid, { justifyContent: "center" }]}>
-                  <Text style={{ fontSize: vsType.size.bodyStrong, fontFamily: vsType.family, color: formData.dateOfBirth ? COLORS.text : COLORS.lightText, fontWeight: "700" }}>
-                    {formData.dateOfBirth ? formatDOB(formData.dateOfBirth) : "MM/DD/YYYY"}
-                  </Text>
-                </TouchableOpacity>
-                {dobOpen && (
-                  <DateTimePicker
-                    value={formData.dateOfBirth || maxDOB}
-                    mode="date"
-                    display="default"
-                    maximumDate={maxDOB}
-                    minimumDate={minDOB}
-                    onChange={(_, selectedDate) => {
-                      setDobOpen(false);
-                      if (selectedDate) updateField("dateOfBirth", selectedDate);
-                    }}
-                  />
-                )}
-                <ValidationText ok={validation.ageValid}>{formData.dateOfBirth ? validation.ageValid ? `✓ Age verified: ${validation.ageNumber} years old` : "You must be at least 18 years old to proceed." : "Residents must be at least 18 years old at the time of registration."}</ValidationText>
-              </View>
+              <BirthDateCalendarPicker
+                value={formData.dateOfBirth}
+                onChange={date => updateField("dateOfBirth", date)}
+                minDate={minDOB}
+                maxDate={maxDOB}
+                invalid={!validation.ageValid && formData.dateOfBirth !== null}
+              />
+              <ValidationText ok={validation.ageValid}>
+                {formData.dateOfBirth
+                  ? validation.ageValid ? "Age verified: " + validation.ageNumber + " years old" : "You must be at least 18 years old to proceed."
+                  : "Residents must be at least 18 years old at the time of registration."}
+              </ValidationText>
               <View style={styles.step1TermsBox}>
                 <CheckRow
                   label="I’ve read and agree to the Terms and Conditions and Privacy Policy."
