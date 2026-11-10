@@ -72,7 +72,7 @@ export const TEMP_MAIL_ORG_PUBLIC_ALIASES = [
 
 export const KNOWN_DISPOSABLE_EMAIL_DOMAINS = new Set([
   // User-observed temporary-mail domain on the public Signup page (2026-11-11).
-  // Block this exact .co domain; do NOT categorically block legitimate .co domains.
+  // All new .co registrations are rejected separately below (including this domain).
   "en2ch.com", "en2ch.co", "ruutukf.co", "emailkeep.com", "mailinator.com", "yopmail.com", "guerrillamail.com", "guerrillamailblock.com",
   "sharklasers.com", "10minutemail.com", "temp-mail.org", "tempmail.com",
   "tempmail.net", "trashmail.com", "dispostable.com", "getnada.com",
@@ -85,7 +85,7 @@ export const KNOWN_DISPOSABLE_EMAIL_DOMAINS = new Set([
 /**
  * Suggest corrections for common misspellings of known consumer providers.
  * Exact-domain matching protects legitimate country-code and private domains,
- * for example business.co, yahoo.co.uk, and yahoo.com.ph.
+ * for example yahoo.co.uk and yahoo.com.ph. Final .co TLDs are blocked at signup.
  * Rejected domains are hints/heuristics, not proof of mailbox validity.
  */
 export const KNOWN_PROVIDER_TYPO_CORRECTIONS: Readonly<Record<string, string>> = Object.freeze({
@@ -144,7 +144,7 @@ export function getRegistrationEmailError(email: string): string | null {
   if (!value) return "Email address is required. Enter an email you can verify.";
   // Validate complete domain labels instead of accepting malformed names
   // such as name@gmail..com or name@-gmail.com. Valid country-code TLDs
-  // (including .co) remain allowed for independent providers.
+  // are recognized; .co is intentionally blocked by the registration policy below.
   const parts = value.split("@");
   const local = parts[0] || "";
   const domain = parts[1] || "";
@@ -171,6 +171,12 @@ export function getRegistrationEmailError(email: string): string | null {
   // High-confidence impersonation: gmail.com.attacker.example is not Gmail.
   if (/^(?:gmail|googlemail)\.com\./.test(domain)) {
     return "This is not an official Gmail domain. Use your real @gmail.com address.";
+  }
+  // Explicit VolunServe registration policy: all final .co domains are banned,
+  // even if the address is otherwise legitimate. Do not block .co.ph or .co.uk.
+  // This is a signup-only restriction; existing accounts are not locked out.
+  if (domain.endsWith(".co")) {
+    return "Email addresses ending in .co are not accepted. Use another permanent email address.";
   }
   const suggestedProvider = KNOWN_PROVIDER_TYPO_CORRECTIONS[domain];
   if (suggestedProvider) {
