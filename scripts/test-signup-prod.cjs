@@ -196,6 +196,8 @@ function harness(source, enabled, options = {}) {
     const h=harness(current,true,{noUser:true});
     await assert.rejects(h.registration.authenticateEmailSignup("person@en2ch.com","Password1!",false,true),/Temporary email/);
     await assert.rejects(h.registration.authenticateEmailSignup("person@en2ch.co","Password1!",false,true),/Temporary email/);
+    await assert.rejects(h.registration.authenticateEmailSignup("person@ruutukf.co","Password1!",false,true),/Temporary email/);
+    await assert.rejects(h.registration.authenticateEmailSignup("person@sub.ruutukf.co","Password1!",false,true),/Temporary email/);
     assert(!h.calls.includes("create")); assert(!h.calls.includes("transaction"));
     const existing=harness(current,true);
     existing.user.email="person@en2ch.co";
