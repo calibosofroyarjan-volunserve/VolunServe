@@ -136,6 +136,19 @@ async function main() {
   const compilerOkay=compile.ok&&noRuleCompilerErrors(compile.data);
   const triggers=identityResult.data?.blockingFunctions?.triggers||{};
   const authHooksActive=!!triggers.beforeCreate?.functionUri && !!triggers.beforeSignIn?.functionUri;
+  // READ ONLY publisher IAM test. This does not grant any IAM role or release
+  // any Rules/Hosting version. Missing permissions must BLOCK any publish.
+  const publisherPermissions=[
+    "firebaserules.rulesets.create",
+    "firebaserules.releases.update",
+    "firebasehosting.sites.update"
+  ];
+  const iam=await request(
+    "https://cloudresourcemanager.googleapis.com/v1/projects/"+PROJECT+":testIamPermissions",
+    token,{method:"POST",body:{permissions:publisherPermissions}}
+  );
+  const permitted=new Set(iam.data?.permissions||[]);
+  const missingPublisherPermissions=publisherPermissions.filter(p=>!permitted.has(p));
   const findings={
     mode:"READ_ONLY_SPARK_RELEASE_PREFLIGHT",
     project:PROJECT,
@@ -149,6 +162,7 @@ async function main() {
     hostingBackup:{liveHttpStatus:liveChannel.status,backupHttpStatus:backupChannel.status,
       pointsToCurrentLiveVersion:backupSame,fingerprintMatchesCurrentLive:backupMarkerMatch},
     hostingPreview:{httpStatus:previewChannel.status,fingerprintMatchesCurrentCandidate:previewMarkerMatch},
+    publisherIam:{httpStatus:iam.status,hasAllRequired:iam.ok&&missingPublisherPermissions.length===0,missingPermissions:missingPublisherPermissions},
     identityBlocking:{access:identityResult.ok?"OK":"HTTP "+identityResult.status,
       beforeCreateAndSignInActive:authHooksActive,
       note:"Spark fallback cannot prevent arbitrary direct Firebase Auth SDK creation"},
@@ -163,7 +177,8 @@ async function main() {
    [rulesPinned,"Active Firestore Rules baseline changed"],
    [compilerOkay,"Firebase production Rules compiler rejected candidate"],
    [backupSame&&backupMarkerMatch,"No matching verified Hosting rollback backup"],
-   [previewMarkerMatch,"No exact preview channel for the current web candidate"]
+   [previewMarkerMatch,"No exact preview channel for the current web candidate"],
+   [iam.ok&&missingPublisherPermissions.length===0,"Production service account lacks one or more Rules/Hosting publish IAM permissions"]
   ])if(!ok){console.error("BLOCKED: "+reason+"; do not run historical publisher");process.exitCode=1;}
 }
 main().catch(e=>{console.error(String(e?.message||e));process.exitCode=1;});
