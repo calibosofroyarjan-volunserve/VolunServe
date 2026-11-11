@@ -5096,14 +5096,15 @@ app.post(
         const attemptCycle = Number.isSafeInteger(current.aiAttemptCycle) && current.aiAttemptCycle > 0
           ? current.aiAttemptCycle : 1;
         const result = identityAttemptOutcome(decision, attemptCount);
-        const resultMessage = result.requiresManualReview && decision === "failed"
-          ? "Three identity verification attempts were unsuccessful. Your case has been referred for Admin review."
-          : !recognizedSelectedId
-            ? documentScreening.status === "unsupported"
-              ? "School IDs are not accepted. Select and scan a supported government-issued ID."
+        const resultMessage = !recognizedSelectedId
+          ? (documentScreening.status === "unsupported"
+              ? "AUTO REJECTED: School, employee, or other unsupported IDs are not accepted. Choose one of the five supported government IDs."
               : documentScreening.status === "mismatch"
-                ? "The scanned document does not match the government ID selected. Please retry."
-                : "The selected government ID type was not clearly recognized. Retake a clearer scan and retry."
+                ? "AUTO REJECTED: The scanned ID does not match the selected government ID type. Choose the correct type and scan again."
+                : "NOT ACCEPTED: The selected government ID type could not be confirmed by OCR. Retake a clearer scan and retry.") +
+              (result.requiresManualReview ? " Maximum attempts reached; Admin can review the unsuccessful attempts but cannot approve an unsupported ID." : "")
+          : result.requiresManualReview && decision === "failed"
+            ? "Three verification attempts were unsuccessful. Your case has been referred for Admin review."
             : cleanText(aiResult?.message || (
               decision === "verified" ? "Identity verification completed successfully." :
               decision === "failed" ? "Identity verification attempt failed. Please retry with clear, valid images." :
