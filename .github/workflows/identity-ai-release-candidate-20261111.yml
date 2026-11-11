@@ -61,4 +61,4 @@ jobs:
           docker run --rm --entrypoint sh volunserve-identity-ai-ci:local -c 'command -v tesseract && tesseract --version && python -c "import cv2, mediapipe; print(cv2.__version__, mediapipe.__version__)"'
       - name: Run synthetic ID OCR and face integration tests inside image
         run: |
-          docker run --rm --network none --entrypoint python volunserve-identity-ai-ci:local -m unittest -v test_ai_runtime_smoke.py test_synthetic_document_pipeline.py
+          docker run --rm --network none --entrypoint python volunserve-identity-ai-ci:local -m unittest -v test_ai_runtime_smoke.py test_synthetic_document_pipeline.py test_document_precheck.py
