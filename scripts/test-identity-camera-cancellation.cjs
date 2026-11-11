@@ -46,6 +46,9 @@ function setupIdCapture() {
   const context = {
     idCaptureLockRef,
     idCameraSessionRef,
+    documentPrecheckRevisionRef: { current: 0 },
+    setDocumentPrecheckOutcome: () => {},
+    setDocumentPrecheckMessage: () => {},
     idCameraSide: "front",
     idStreamRef,
     idCameraReady: true,
