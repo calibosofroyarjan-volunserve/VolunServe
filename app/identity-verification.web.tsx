@@ -352,6 +352,15 @@ export default function IdentityVerificationWeb() {
     };
   }, [idBackDocument?.uri]);
 
+  // Selfie snapshots are sensitive biometric evidence. Revoke the temporary
+  // browser URL on replacement/unmount just as we do for ID front/back.
+  useEffect(() => {
+    const uri = selfie?.uri;
+    return () => {
+      if (uri?.startsWith("blob:")) URL.revokeObjectURL(uri);
+    };
+  }, [selfie?.uri]);
+
   const identityStatus = getIdentityStatus(profile);
   const currentIdentityStatus =
     statusResult?.identityStatus || identityStatus;
