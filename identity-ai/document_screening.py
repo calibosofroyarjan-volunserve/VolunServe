@@ -213,6 +213,22 @@ def _national_back_layout_signal(ocr_text: str) -> bool:
     return count >= 2 and not _front_heading_signal("national_id", ocr_text)
 
 
+def _front_demographic_layout_signal(ocr_text: str) -> bool:
+    """Strong personal-label layout supporting a front-side OCR heading.
+
+    A back may repeat an issuer/title. Do not call it a duplicate front
+    unless multiple portrait-side personal field labels are also visible.
+    """
+    normalized = _normalized(ocr_text)
+    families = (
+        ("SURNAME", "LAST NAME", "APELYIDO"),
+        ("GIVEN NAMES", "GIVEN NAME", "FIRST NAME", "MGA PANGALAN"),
+        ("DATE OF BIRTH", "BIRTH DATE", "PETSA NG KAPANGANAKAN"),
+    )
+    return sum(any(_contains(normalized, w) for w in family)
+               for family in families) >= 2
+
+
 def _orientation_warning(
     declared_type: str, front_text: str, back_text: str
 ) -> tuple[str, str] | None:
@@ -231,10 +247,9 @@ def _orientation_warning(
             return "mismatch", "document_front_back_swapped"
         if front_looks_back:
             return "inconclusive", "document_front_side_conflict"
-    if back_heading and front_heading:
-        # Both slots look like a portrait/front heading. Some official layouts
-        # can repeat the issuer heading, so request rescan/review rather than
-        # declaring the document fraudulent.
+    if back_heading and front_heading and _front_demographic_layout_signal(back_text):
+        # A repeated title alone is weak: the reverse may legitimately repeat
+        # issuer text. Require corroborating personal-field layout as well.
         return "inconclusive", "document_back_looks_like_front"
     if back_heading and not front_heading:
         # Likely reversal, but OCR of the actual front could be incomplete.
