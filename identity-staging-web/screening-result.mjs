@@ -14,6 +14,12 @@ export function documentVerdict(result){
   kind:"rejected",heading:"AUTO REJECTED — Wrong ID type",
   description:"The scanned ID does not match the government ID you selected. Choose the correct ID type and scan again."
  };
+ if(result?.reviewTrack==="blurry_id_review"&&result?.decision==="manual_review" &&
+     screening?.declaredIdType==="national_id" &&
+     (status==="inconclusive"||status==="text_consistent_unverified"))return {
+  kind:"review",heading:"BLURRY NATIONAL ID CLAIM — Pending Admin Review",
+  description:"This image was selected as National ID but is too blurry to verify. An Admin can request a clearer scan. It is not approved and cannot grant Verified Resident access."
+ };
  if(status==="inconclusive"||!status||status==="text_consistent_unverified"&&!idMatches)return {
   kind:"retry",heading:"NOT ACCEPTED — ID not recognized",
   description:"OCR could not confirm the selected government ID. Retake a clear photo and retry. No automatic verification was granted."
@@ -22,6 +28,10 @@ export function documentVerdict(result){
   if(result?.decision==="failed")return {
    kind:"retry",heading:"Face verification failed — Retry",
    description:"The selected government ID type was recognized, but the identity comparison failed. This ID has not been authenticated."
+  };
+  if(result?.reviewTrack==="priority_admin_review")return {
+   kind:"review",heading:"PRIORITY ADMIN REVIEW — Profile name may match",
+   description:"The selected National ID text appears consistent with the account name and image quality passed a basic check. This does NOT prove authentic issuance or liveness, so Admin review is still required."
   };
   return {kind:"review",heading:"ID type recognized — Admin review required",
    description:"The document matches the selected category by OCR text only. Authenticity and liveness are unverified; no Verified Resident access is granted automatically."};
