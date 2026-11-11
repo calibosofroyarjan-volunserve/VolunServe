@@ -3,7 +3,11 @@ const assert = require("node:assert/strict");
 const {test} = require("node:test");
 const {probeIdentityAiReadiness} = require("./identityAiReadiness");
 const endpoint = "https://volunserve-identity-ai.onrender.com/verify";
-const health = {ok: true, verificationEngineReady: true, internalAuthConfigured: true, livenessImplemented: false};
+const health = {
+  ok: true, verificationEngineReady: true, internalAuthConfigured: true,
+  livenessImplemented: false, documentOcrReady: true,
+  profileComparisonReady: true, documentPrecheckReady: true,
+};
 const response = (status, body) => ({status, ok: status >= 200 && status < 300, async json() {return body;}});
 const okHealth = () => response(200, health);
 const okAuth = () => response(200, {authenticated: true});
@@ -76,4 +80,27 @@ test("AI stays unreachable: bounded retries, no fake ready", async () => {
   let n = 0;
   const result = await probeIdentityAiReadiness(options(async () => {n++; throw new Error("offline");}));
   assert.equal(result.body.ready, false); assert.equal(result.body.error, "identity_ai_unreachable"); assert.equal(n, 2);
+});
+
+
+test("OCR cannot silently report readiness when Tesseract is missing", async()=>{
+ const result = await probeIdentityAiReadiness(options(async url =>
+   url.endsWith("/health") ? response(200,{...health,documentOcrReady:false}) : okAuth()));
+ assert.equal(result.body.ready,false);
+ assert.equal(result.body.error,"identity_document_readiness_failed");
+});
+
+test("birthday/barangay comparison engine is a required readiness gate", async()=>{
+ const result = await probeIdentityAiReadiness(options(async url =>
+   url.endsWith("/health") ? response(200,{...health,profileComparisonReady:false}) : okAuth()));
+ assert.equal(result.body.ready,false);
+ assert.equal(result.body.error,"identity_document_readiness_failed");
+});
+
+test("old AI response without document precheck capability fails closed", async()=>{
+ const {documentPrecheckReady,...stale}=health;
+ const result = await probeIdentityAiReadiness(options(async url =>
+   url.endsWith("/health") ? response(200,stale) : okAuth()));
+ assert.equal(result.body.ready,false);
+ assert.equal(result.body.error,"identity_document_readiness_failed");
 });

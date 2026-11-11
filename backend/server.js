@@ -14,6 +14,13 @@ const { combineApprovedBudget } = require("./assistanceDonationBudget");
 const { probeIdentityAiReadiness } = require("./identityAiReadiness");
 const {isVerifiedFirebaseToken, isCompletedVolunServeProfile} = require("./verifiedFirebaseToken");
 const {
+  selectedIdRecognized,
+  enforceSelectedIdDecision,
+  blurryNationalIdNeedsReview,
+  classifyIdentityReviewTrack,
+} = require("./selectedIdPolicy");
+const { reviewIssuerEvidence } = require("./identityIssuerReviewPolicy");
+const {
   getProfileRole,
   isApprovedAccount,
   isOperationalAdminProfile,
@@ -40,7 +47,8 @@ const DEFAULT_ALLOWED_ORIGINS = [
   "http\://127.0.0.1:19006",
   "http\://127.0.0.1:3000",
 ];
-const IDENTITY_UPLOAD_LIMIT = "20mb";
+// Max 10MB front + 10MB back + 10MB selfie, plus multipart overhead.
+const IDENTITY_UPLOAD_LIMIT = "32mb";
 const IDENTITY_RETRY_DELAY_MS = 8000;
 const MAX_IDENTITY_AI_ATTEMPTS = 3;
 const IDENTITY_PROCESSING_LEASE_MS = 3 * 60 * 1000;
@@ -706,13 +714,21 @@ function normalizeAiDecision(
 function normalizeIdDocumentScreening(value) {
   // Explicit allowlist: never store OCR text, full ID numbers, names,
   // face templates, or photos in Firestore or Admin-visible JSON.
-  const types = ["national_id", "drivers_license", "passport", "other_government_id"];
-  const statuses = ["text_consistent_unverified", "mismatch", "inconclusive"];
+  const types = ["national_id", "drivers_license", "passport", "umid", "prc_id"];
+  const statuses = ["text_consistent_unverified", "mismatch", "inconclusive", "unsupported"];
   const warnings = [
     "selected_id_type_conflicts_with_ocr",
     "document_type_not_recognized",
     "multiple_document_type_signals",
     "ocr_unavailable",
+    "document_back_type_conflict",
+    "document_front_type_inconclusive",
+    "document_back_ocr_inconclusive",
+    "document_front_back_swapped",
+    "document_front_side_conflict",
+    "document_back_looks_like_front",
+    "school_id_not_supported",
+    "low_document_image_quality",
   ];
   const declared = String(value?.declaredIdType || "");
   const detected = String(value?.detectedIdType || "");
@@ -725,6 +741,23 @@ function normalizeIdDocumentScreening(value) {
     authenticityVerified: false, // Keyword OCR is NOT an issuance registry.
     livenessVerified: false, // Still image is NOT a liveness proof.
     manualReviewRequired: true,
+    backSideProvided: value?.backSideProvided === true,
+    backSideScreened: value?.backSideScreened === true,
+    imageQualityStatus: ["low", "adequate"].includes(value?.imageQualityStatus)
+      ? value.imageQualityStatus : "unknown",
+    profileNameCompared: value?.profileNameCompared === true,
+    profileNameCheck: ["possible_match", "inconclusive", "not_checked"].includes(value?.profileNameCheck)
+      ? value.profileNameCheck : "not_checked",
+    profileBirthDateCompared: value?.profileBirthDateCompared === true,
+    profileBirthDateCheck: ["possible_match", "possible_conflict", "inconclusive", "not_checked"].includes(value?.profileBirthDateCheck)
+      ? value.profileBirthDateCheck : "not_checked",
+    profileAddressCompared: value?.profileAddressCompared === true,
+    profileAddressCheck: ["possible_match", "inconclusive", "not_checked"].includes(value?.profileAddressCheck)
+      ? value.profileAddressCheck : "not_checked",
+    // This API has NO PSA registry connection or ISO-tested PAD integration.
+    // Never adopt authenticity/liveness claims forwarded by the image service.
+    issuerAuthenticityStatus: "not_verified",
+    presentationAttackStatus: "not_validated",
     warningCodes: Array.isArray(value?.warningCodes)
       ? value.warningCodes.filter(code => warnings.includes(code)).slice(0, 4)
       : ["ocr_unavailable"],
@@ -4623,6 +4656,29 @@ function getIdentityAiHeaders(
     ] =
       internalKey;
   }
+  // Trusted account profile from Firestore, never supplied by client input.
+  // Transient private HTTPS headers only; do not log or store these fields.
+  const safeNameHeader = (value) => cleanText(value, 100)
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^A-Za-z .'-]/g, "");
+  const first = safeNameHeader(request.identityExpectedName?.firstName);
+  const last = safeNameHeader(request.identityExpectedName?.lastName);
+  if (first && last) {
+    headers["X-VolunServe-Profile-First-Name"] = first;
+    headers["X-VolunServe-Profile-Last-Name"] = last;
+  }
+  // Never take identity comparison fields from the uploaded form.
+  // Only the authenticated user's trusted Firestore profile is eligible.
+  // This private backend-to-AI request must not log or persist these headers.
+  const dob = String(request.identityExpectedName?.dateOfBirth || "").trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(dob)) {
+    headers["X-VolunServe-Profile-Date-Of-Birth"] = dob;
+  }
+  const barangay = cleanText(request.identityExpectedName?.barangay || "", 80)
+    .normalize("NFKD").replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^A-Za-z0-9 .'-]/g, "");
+  if (barangay) headers["X-VolunServe-Profile-Barangay"] = barangay;
   return headers;
 }
 async function readJsonResponse(
@@ -4649,9 +4705,12 @@ async function readJsonResponse(
 }
 async function callIdentityAiService(
   request,
+  options = {},
 ) {
   const endpoint =
-    getIdentityAiEndpoint();
+    options.documentPrecheck
+      ? getIdentityAiEndpoint().replace(/\/verify$/, "/document/precheck")
+      : getIdentityAiEndpoint();
   if (!endpoint) {
     const error =
       new Error(
@@ -4870,6 +4929,119 @@ app.get(
     }
   },
 );
+// Authenticated OCR-only document precheck BEFORE webcam/selfie collection.
+// Images stay transient; only bounded rate-limit counters are stored.
+// This does not consume any of the 3 actual face-verification attempts.
+const IDENTITY_DOC_PRECHECK_COOLDOWN_MS = 8000;
+const IDENTITY_DOC_PRECHECK_DAILY_LIMIT = 30;
+app.post(
+  "/api/identity/document/precheck",
+  requireFirebaseUser,
+  express.raw({ type: "multipart/form-data", limit: "21mb" }),
+  async (request, response) => {
+    response.set("Cache-Control", "no-store");
+    try {
+      const uid = request.firebaseUser.uid;
+      if (request.headers["x-volunserve-document-precheck-consent"] !== "true") {
+        throw makeHttpError(400, "document_precheck_consent_required",
+          "Agree to preliminary ID processing before continuing.");
+      }
+      const profile = await loadUserProfile(uid);
+      if (cleanText(profile.status || "approved", 40).toLowerCase() !== "approved") {
+        throw makeHttpError(403, "account_not_active", "Your Resident account is not active.");
+      }
+      if (profile.identityVerified === true ||
+          normalizeIdentityStatus(profile.identityStatus || "basic") === "verified") {
+        throw makeHttpError(409, "already_verified", "Your identity is already verified.");
+      }
+      if (!Buffer.isBuffer(request.body) || request.body.length === 0 ||
+          !String(request.headers["content-type"] || "").toLowerCase().startsWith("multipart/form-data")) {
+        throw makeHttpError(400, "missing_identity_document", "Select and capture both sides of the government ID first.");
+      }
+      const throttleRef = db.collection("identityDocumentPrecheckThrottle").doc(uid);
+      await db.runTransaction(async transaction => {
+        const record = await transaction.get(throttleRef);
+        const saved = record.exists ? record.data() || {} : {};
+        const last = saved.lastRequestedAt?.toMillis?.() || 0;
+        const windowStart = saved.windowStartedAt?.toMillis?.() || 0;
+        const now = Date.now();
+        if (last && now - last < IDENTITY_DOC_PRECHECK_COOLDOWN_MS) {
+          throw makeHttpError(429, "document_precheck_cooldown", "Wait a few seconds before retrying the ID scan.");
+        }
+        const newWindow = !windowStart || now - windowStart >= 24 * 60 * 60 * 1000;
+        const count = newWindow ? 0 : Number(saved.requestCount) || 0;
+        if (count >= IDENTITY_DOC_PRECHECK_DAILY_LIMIT) {
+          throw makeHttpError(429, "document_precheck_limit", "ID recognition attempts are temporarily limited. Try again tomorrow or request Admin assistance.");
+        }
+        transaction.set(throttleRef, {
+          lastRequestedAt: FieldValue.serverTimestamp(),
+          windowStartedAt: newWindow ? FieldValue.serverTimestamp() : saved.windowStartedAt,
+          requestCount: count + 1,
+        }, { merge: true });
+      });
+      // Never allow client-uploaded fields to override a saved profile DOB
+      // or barangay. Compare only using trusted Firebase Admin SDK data.
+      request.identityExpectedName = {
+        firstName: profile.firstName || "",
+        lastName: profile.lastName || "",
+        dateOfBirth: profile.dateOfBirth || "",
+        barangay: profile.barangay || "",
+      };
+      // Forward only private images to our internal-key-authenticated Python AI.
+      // Never store uploads in Firestore, Storage, Cloudinary or audit logs.
+      const result = await callIdentityAiService(request, { documentPrecheck: true });
+      const screening = normalizeIdDocumentScreening(result?.documentScreening);
+      const declared = screening.declaredIdType;
+      const validType = ["national_id", "drivers_license", "passport", "umid", "prc_id"].includes(declared);
+      const birthConflict = screening.profileBirthDateCheck === "possible_conflict";
+      const pass = validType &&
+        !birthConflict &&
+        result?.outcome === "pass" &&
+        selectedIdRecognized(screening) &&
+        (declared === "passport" || screening.backSideScreened === true);
+      const review = !pass && result?.outcome === "review" &&
+        blurryNationalIdNeedsReview(screening);
+      return response.json({
+        ok: true,
+        outcome: pass ? "pass" : review ? "review" : "retry",
+        detectedIdType: screening.detectedIdType,
+        documentScreening: screening,
+        // Sanitized hints only; no raw OCR values and no issuer claim.
+        message: birthConflict
+          ? "The date of birth on the ID may differ from your saved profile. Retake a clearer document or request Admin profile review; OCR differences are not proof of fraud."
+          : pass
+          ? "ID scan and selected type appear consistent. Birthday/barangay are OCR hints only; Admin still checks unresolved details."
+          : review
+            ? "The National ID is too blurry. You may continue for Admin rescan review but cannot be automatically approved."
+            : screening.warningCodes.includes("school_id_not_supported")
+              ? "School and employee IDs are not accepted. Capture one of the five supported government IDs."
+              : screening.warningCodes.includes("document_front_back_swapped")
+                ? "Front and back appear reversed. Retake both ID sides in their correct slots."
+                : screening.warningCodes.includes("document_back_looks_like_front")
+                  ? "The Back scan appears to show the front. Retake the reverse side."
+                  : screening.warningCodes.includes("document_front_side_conflict")
+                    ? "The Front scan appears to show back-side details. Retake the portrait/front."
+                    : "ID type or front/back orientation could not be recognized reliably. Retake clearer images.",
+        authenticityVerified: false,
+        livenessVerified: false,
+      });
+    } catch (error) {
+      // Never log private ID bytes, OCR text or profile fields.
+      if ((error.statusCode || 500) >= 500) {
+        console.warn("ID precheck service unavailable:", error?.code || "internal_error");
+      }
+      const status = Number(error.statusCode) || 503;
+      return response.status(status).json({
+        ok: false,
+        error: cleanText(error.code || "document_precheck_failed", 100),
+        message: status >= 500
+          ? "ID recognition is unavailable. No selfie was collected and no face verification attempt was used."
+          : cleanText(error.message || "ID recognition could not continue.", 250),
+      });
+    }
+  },
+);
+
 app.get(
   "/api/identity/status",
   requireFirebaseUser,
@@ -5022,6 +5194,13 @@ app.post(
           throw makeHttpError(404, "profile_not_found", "Your VolunServe profile was not found.");
         }
         const profile = userSnapshot.data() || {};
+        // Use names authenticated by Firebase profile, never user-supplied form fields.
+        request.identityExpectedName = {
+          firstName: profile.firstName || "",
+          lastName: profile.lastName || "",
+          dateOfBirth: profile.dateOfBirth || "",
+          barangay: profile.barangay || "",
+        };
         const verification = verificationSnapshot.exists ? verificationSnapshot.data() || {} : {};
         if (cleanText(profile.status || "approved", 40).toLowerCase() !== "approved") {
           throw makeHttpError(403, "account_not_active", "This VolunServe account is not active.");
@@ -5066,13 +5245,18 @@ app.post(
       const aiResult = await callIdentityAiService(request);
       const documentScreening = normalizeIdDocumentScreening(aiResult?.documentScreening);
       const rawDecision = normalizeAiDecision(aiResult?.decision || aiResult?.status);
-      // Face comparison and keyword OCR cannot authenticate a government ID
-      // or prove liveness. Never auto-verify without both verified assurances.
-      const decision = rawDecision === "verified" &&
-          (documentScreening.authenticityVerified !== true ||
-            aiResult?.livenessImplemented !== true)
-        ? "manual_review"
-        : rawDecision;
+      // A face match cannot compensate for an unsupported, unknown or
+      // mismatched selected government ID. Only recognized, selected types
+      // can proceed to manual identity review; all others require a retry.
+      const recognizedSelectedId = selectedIdRecognized(documentScreening);
+      const decision = enforceSelectedIdDecision(
+        rawDecision, documentScreening, aiResult?.livenessImplemented === true,
+      );
+      const reviewTrack = classifyIdentityReviewTrack({
+        screening: documentScreening,
+        decision,
+        idImageQualityScore: numberOrNull(aiResult?.idImageQualityScore),
+      });
       const matchScore = numberOrNull(aiResult?.matchScore);
       const livenessScore = numberOrNull(aiResult?.livenessScore);
       const verificationId = cleanText(
@@ -5097,13 +5281,28 @@ app.post(
         const attemptCycle = Number.isSafeInteger(current.aiAttemptCycle) && current.aiAttemptCycle > 0
           ? current.aiAttemptCycle : 1;
         const result = identityAttemptOutcome(decision, attemptCount);
-        const resultMessage = result.requiresManualReview && decision === "failed"
-          ? "Three identity verification attempts were unsuccessful. Your case has been referred for Admin review."
-          : cleanText(aiResult?.message || (
-            decision === "verified" ? "Identity verification completed successfully." :
-            decision === "failed" ? "Identity verification attempt failed. Please retry with clear, valid images." :
-            "The submission requires LGU/Admin manual review."
-          ), 500);
+        const resultMessage = reviewTrack === "blurry_id_review"
+          ? "PENDING ADMIN REVIEW: Your claimed National ID scan is too blurry to identify. An Admin can request a clearer rescan; this does not verify the ID."
+          : !recognizedSelectedId
+          ? (documentScreening.warningCodes.includes("document_front_back_swapped")
+              ? "AUTO REJECTED: The ID front and back appear reversed. Scan the portrait/front in the Front slot and the reverse in the Back slot, then retry."
+              : documentScreening.warningCodes.includes("document_back_looks_like_front")
+                ? "NOT ACCEPTED: The Back scan appears to show the front of the ID. Check both sides and retake before submitting."
+                : documentScreening.warningCodes.includes("document_front_side_conflict")
+                  ? "NOT ACCEPTED: The Front scan appears to show back-side information. Retake the portrait/front of the ID."
+                  : documentScreening.status === "unsupported"
+              ? "AUTO REJECTED: School, employee, or other unsupported IDs are not accepted. Choose one of the five supported government IDs."
+              : documentScreening.status === "mismatch"
+                ? "AUTO REJECTED: The scanned ID does not match the selected government ID type. Choose the correct type and scan again."
+                : "NOT ACCEPTED: The selected government ID type could not be confirmed by OCR. Retake a clearer scan and retry.") +
+              (result.requiresManualReview ? " Maximum attempts reached; Admin can review the unsuccessful attempts but cannot approve an unsupported ID." : "")
+          : result.requiresManualReview && decision === "failed"
+            ? "Three verification attempts were unsuccessful. Your case has been referred for Admin review."
+            : cleanText(aiResult?.message || (
+              decision === "verified" ? "Identity verification completed successfully." :
+              decision === "failed" ? "Identity verification attempt failed. Please retry with clear, valid images." :
+              "The submission requires LGU/Admin manual review."
+            ), 500);
         const previousReview = current.reviewedAt || current.manualReviewDecision ? {
           previousDecision: cleanText(current.manualReviewDecision || current.decision, 80),
           previousValidationMethod: cleanText(current.manualValidationMethod, 120),
@@ -5129,6 +5328,7 @@ app.post(
           matchScore,
           livenessScore,
           documentScreening,
+          reviewTrack,
           message: resultMessage,
           requiresManualReview: result.requiresManualReview,
           aiAttemptCount: attemptCount,
@@ -5152,7 +5352,7 @@ app.post(
             status: result.status,
             requiresManualReview: result.requiresManualReview,
             matchScore, livenessScore,
-            documentScreening,
+            documentScreening, reviewTrack,
             verificationMethod: "volunserve_ai",
             previousReview,
             createdAt: FieldValue.serverTimestamp(),
@@ -5187,7 +5387,7 @@ app.post(
         }
         return {
           ok: true, status: result.status, verificationId, decision,
-          matchScore, livenessScore, documentScreening, message: resultMessage,
+          matchScore, livenessScore, documentScreening, reviewTrack, message: resultMessage,
           attemptCount, maxAttempts: MAX_IDENTITY_AI_ATTEMPTS,
           attemptsRemaining: MAX_IDENTITY_AI_ATTEMPTS - attemptCount,
           requiresManualReview: result.requiresManualReview,
@@ -5257,6 +5457,8 @@ function identityAdminReviewPayload(verificationSnapshot, userSnapshot) {
     matchScore: numberOrNull(verification.matchScore),
     livenessScore: numberOrNull(verification.livenessScore),
     documentScreening: verification.documentScreening ? normalizeIdDocumentScreening(verification.documentScreening) : null,
+    reviewTrack: ["blurry_id_review", "priority_admin_review", "standard_admin_review"].includes(verification.reviewTrack)
+      ? verification.reviewTrack : "none",
     message: cleanText(verification.message || "", 500),
     requiresManualReview: verification.requiresManualReview === true,
     attemptCount: identityAttemptCount(verification.aiAttemptCount),
@@ -5371,6 +5573,9 @@ app.post(
         request.body?.validationMethod || "",
         120,
       );
+      // User-provided JSON is not issuer authentication. Only an authorized
+      // Admin may attest to an independent manual check; this is audited.
+      const issuerReviewAttested = request.body?.issuerReviewAttested === true;
       const reviewedByName = cleanText(
         request.volunServeProfile?.fullName ||
           request.firebaseUser?.name ||
@@ -5475,6 +5680,25 @@ app.post(
             "This identity verification is no longer waiting for manual review.",
           );
         }
+        if (action === "verify") {
+          const selectedIdCheck = normalizeIdDocumentScreening(verification.documentScreening);
+          if (!selectedIdRecognized(selectedIdCheck)) {
+            throw makeHttpError(
+              409,
+              "selected_government_id_not_recognized",
+              "The selected supported government ID was not recognized. Require a new scan before approval.",
+            );
+          }
+          const evidence = reviewIssuerEvidence({
+            declaredType: selectedIdCheck.declaredIdType,
+            validationMethod,
+            confirmed: issuerReviewAttested,
+            notes,
+          });
+          if (!evidence.ok) {
+            throw makeHttpError(400, "independent_id_review_required", evidence.message);
+          }
+        }
         const commonReviewFields = {
           requiresManualReview: false,
           manualReviewDecision:
@@ -5485,6 +5709,10 @@ app.post(
             action === "verify"
               ? validationMethod
               : "",
+          independentAdminCheckAttested: action === "verify" && issuerReviewAttested,
+          // No official issuer integration currently exists: never
+          // mark the ID as cryptographically authentic from an Admin tick.
+          issuerApiAuthenticityVerified: false,
           manualReviewNotes: notes,
           reviewedAt: FieldValue.serverTimestamp(),
           reviewedBy: adminUid,
