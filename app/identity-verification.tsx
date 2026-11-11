@@ -196,6 +196,11 @@ export default function IdentityVerification() {
   const [documentChecking, setDocumentChecking] = useState(false);
   const [documentPrecheckMessage, setDocumentPrecheckMessage] = useState("");
   const [documentPrecheckOutcome, setDocumentPrecheckOutcome] = useState<"pass" | "review" | "retry" | null>(null);
+  useEffect(() => () => {
+    // An in-flight OCR response cannot reopen the selfie screen after navigation.
+    documentPrecheckRevisionRef.current += 1;
+  }, []);
+
   const [pickingId, setPickingId] =
     useState(false);
   const [pickingSelfie, setPickingSelfie] =
@@ -407,6 +412,7 @@ export default function IdentityVerification() {
         if (revision !== documentPrecheckRevisionRef.current) return;
         setDocumentPrecheckOutcome(result.outcome);
         setDocumentPrecheckMessage(result.message);
+        setLocalMessage(result.outcome === "review" ? result.message : "");
         if (result.outcome === "retry") return;
         // Blurry National ID cases may proceed solely for Admin rescan review.
         setSelfie(null);
@@ -939,7 +945,14 @@ export default function IdentityVerification() {
             setIdBackDocument(null);
           }}
           documentConsent={documentConsent}
-          onDocumentConsentChange={setDocumentConsent}
+          onDocumentConsentChange={(allowed) => {
+            if (!allowed) {
+              documentPrecheckRevisionRef.current += 1;
+              setDocumentPrecheckOutcome(null);
+              setDocumentPrecheckMessage("");
+            }
+            setDocumentConsent(allowed);
+          }}
           documentChecking={documentChecking}
           documentPrecheckMessage={documentPrecheckMessage}
           documentPrecheckOutcome={documentPrecheckOutcome}
