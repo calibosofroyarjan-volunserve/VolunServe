@@ -30,6 +30,23 @@ jobs:
         working-directory: identity-ai
         run: python -m unittest -v test_document_screening.py test_face_box_dedup.py
 
+  face-runtime-smoke:
+    name: Real MediaPipe face-mesh smoke checks (NO OCR REQUIRED)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+          cache-dependency-path: identity-ai/requirements.txt
+      - name: Install pinned Python runtime
+        run: python -m pip install -r identity-ai/requirements.txt
+      - name: Verify installed MediaPipe and OpenCV on fabricated blank images
+        working-directory: identity-ai
+        run: python -m unittest -v test_ai_runtime_smoke.py
+
   runtime-synthetic-tests:
     name: Actual Tesseract and MediaPipe on synthetic fixtures
     runs-on: ubuntu-24.04
@@ -51,8 +68,17 @@ jobs:
             tesseract --version
             exit 0
           fi
-          sudo apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=30 update -qq
-          sudo apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=30 install -y -qq tesseract-ocr tesseract-ocr-eng
+          # A broken GitHub runner DNS can stall apt indefinitely; fail this
+          # OCR-dependent job within a fixed bound, while MediaPipe runs
+          # independently. Never mark OCR as passing if Tesseract is missing.
+          timeout 90s sudo apt-get -o Acquire::Retries=0 -o Acquire::http::Timeout=10 update -qq || {
+            echo "::error::OCR smoke blocked: Ubuntu apt package mirror unavailable (runner DNS/network)."
+            exit 1
+          }
+          timeout 90s sudo apt-get -o Acquire::Retries=0 -o Acquire::http::Timeout=10 install -y -qq tesseract-ocr tesseract-ocr-eng || {
+            echo "::error::OCR smoke blocked: Tesseract package install failed."
+            exit 1
+          }
           command -v tesseract
 
       - name: Run synthetic face and ID image smoke tests
