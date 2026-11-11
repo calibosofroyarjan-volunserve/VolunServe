@@ -53,15 +53,18 @@ assert(shelterHook.includes("Last reported:") && shelterHook.includes("LGU recor
   "Capacity and update status must be sourced from LGU records and not called live");
 
 const mobileResponseMap = read("components/tabs/MapTracking.native.tsx");
-assert(mobileResponseMap.includes('doc(db, "lguResponseLocations", caseId)') &&
-  mobileResponseMap.includes('item.reportedBy === CURRENT_USER_ID'),
-  "Native resident response markers must read only their own case-scoped LGU GPS");
-assert(mobileResponseMap.includes("point.responderUid !== incident.activeLguResponderUid") &&
-  mobileResponseMap.includes("gpsClock - lastReading > 120_000"),
-  "Never display an unassigned, missing or stale response marker");
-assert(mobileResponseMap.includes("vehicleInfo(incident.responseVehicleType)") &&
-  mobileResponseMap.includes("point.vehicle.symbol"),
-  "Native responder marker must use Admin-assigned vehicle type, not a generic marker");
+assert(mobileResponseMap.includes('doc(db, "responseLocations", volunteerId)') &&
+  mobileResponseMap.includes('item.reportedBy === CURRENT_USER_ID') &&
+  mobileResponseMap.includes('doc(db, "responseAssignments", assignmentId)'),
+  "Native resident response markers must read only assigned Volunteer GPS scoped to their own report");
+assert(mobileResponseMap.includes('task.volunteerId !== volunteerId') &&
+  mobileResponseMap.includes('gpsClock - lastReading <= 120000') &&
+  mobileResponseMap.includes('["responding", "on_site"]'),
+  "Never show a missing, unassigned, not-started or stale Volunteer location");
+assert(mobileResponseMap.includes("volunteerGpsConsent") &&
+  mobileResponseMap.includes("requestForegroundPermissionsAsync") &&
+  mobileResponseMap.includes("deleteDoc(gpsRef)"),
+  "Native Volunteer GPS must be consent-based and stop on task exit");
 const quickHelp = read("components/EmergencyResponseQuickActions.tsx");
 assert(!reportWeb.includes("<EmergencyResponseQuickActions") &&
   !reportNative.includes("<EmergencyResponseQuickActions"),

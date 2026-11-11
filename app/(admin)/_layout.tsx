@@ -397,7 +397,7 @@ export default function AdminLayout() {
               <Ionicons name={expanded ? "chevron-up" : "chevron-down"} color="#A9CDC0" size={15} />
             </TouchableOpacity>
             {expanded ? <View style={styles.navGroupChildren}>
-              {NAV_ITEMS.filter(item => section.labels.includes(item.label)).map((item) => {
+              {NAV_ITEMS.filter(item => section.labels.includes(item.label) && item.label !== "LGU Operations").map((item) => {
                 const selected = navActive(item, pathname);
                 return <TouchableOpacity key={item.route} style={[styles.navItem, styles.groupNavItem, selected && styles.navItemActive]}
                   accessibilityRole="button" accessibilityState={{ selected }} activeOpacity={0.82}

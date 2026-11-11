@@ -602,8 +602,8 @@ export default function VolunteerTasks() {
 
       if (lguFollowUpRequired === null) {
         Alert.alert(
-          "LGU Follow-up Required?",
-          "Select Yes or No so LGU/Admin knows whether further action is needed."
+          "Admin Follow-up Required?",
+          "Select Yes or No so Admin knows whether additional community assistance is needed."
         );
         return;
       }
@@ -715,7 +715,7 @@ export default function VolunteerTasks() {
 
             if (barangay.length < 2) {
               throw new Error(
-                "The emergency case has no valid barangay. Ask LGU/Admin to correct the case before completing this mission."
+                "The emergency case has no valid barangay. Ask Admin to correct the report before completing this mission."
               );
             }
           }
@@ -972,7 +972,7 @@ export default function VolunteerTasks() {
       } else {
         Alert.alert(
           "Field Report Submitted",
-          "Your mission completion and field report were sent to LGU/Admin. This does not automatically close the emergency case. LGU will review any remaining needs and decide the next action."
+          "Your task update was submitted for Admin review. The emergency report stays open until Admin confirms completion."
         );
 
         resetCompletion();
@@ -1079,7 +1079,7 @@ export default function VolunteerTasks() {
           </Text>
 
           <Text style={styles.subtitle}>
-            Optional Volunteer support assignments coordinated by LGU/Admin.
+            Community assistance tasks assigned by Admin. Not official emergency dispatch.
           </Text>
         </View>
       </View>
@@ -1592,7 +1592,7 @@ export default function VolunteerTasks() {
                         {completionId ===
                         assignment.id
                           ? "Hide Field Report"
-                          : "Complete & Report to LGU"}
+                          : "Complete Task & Submit Update"}
                       </Text>
                     </TouchableOpacity>
                   )}
@@ -1644,7 +1644,7 @@ export default function VolunteerTasks() {
                           styles.completedText
                         }
                       >
-                        Field report submitted to LGU/Admin
+                        Task update sent to Admin
                       </Text>
                     </View>
                   )}
@@ -1692,7 +1692,7 @@ export default function VolunteerTasks() {
                             styles.completionHint
                           }
                         >
-                          Report what you actually observed and did on site. LGU/Admin will use this report to review remaining needs and decide the next action.
+                          Report what you actually observed and did on site. Admin will review your update and decide whether further assistance is needed.
                         </Text>
 
                         <Text
@@ -1911,7 +1911,7 @@ export default function VolunteerTasks() {
                             styles.inputLabel
                           }
                         >
-                          Does LGU/Admin still need to follow up?
+                          Does Admin still need to follow up?
                         </Text>
 
                         <View
@@ -2015,7 +2015,7 @@ export default function VolunteerTasks() {
                             setCompletionNotes
                           }
                           maxLength={600}
-                          placeholder="Any other operational note for LGU/Admin."
+                          placeholder="Any other notes for Admin."
                           placeholderTextColor="#94a3b8"
                         />
 
@@ -2035,7 +2035,7 @@ export default function VolunteerTasks() {
                               styles.trustNoticeText
                             }
                           >
-                            Submitting this form reports your field findings to LGU/Admin and completes only your Volunteer assignment. It does not close the emergency case, approve relief goods, or grant service credit automatically.
+                            Submitting this form sends your task update to Admin and completes only your Volunteer assignment. It does not close the emergency case, approve relief goods, or grant service credit automatically.
                           </Text>
                         </View>
 

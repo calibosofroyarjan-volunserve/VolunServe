@@ -28,9 +28,10 @@ test("Native emergency report still has form, evidence and valid submit",()=>{
     assert.ok(native.includes(item),"Native report flow changed: "+item);
   }
 });
-test("Top-level Emergency Reports retains Report Emergency and Live Response Map",()=>{
+test("Top-level Emergency Reports retains Report Emergency and Volunteer report tracking",()=>{
   assert.match(moduleTabs,/Report Emergency/);
-  assert.match(moduleTabs,/Live Response Map/);
+  assert.match(moduleTabs,/Track My Report/);
+  assert.match(moduleTabs,/live response map inside Emergency Reports/i);
   assert.match(moduleTabs,/<MapTracking \/> : <DisasterResponse \/>/);
 });
 test("Quick actions, 911 dialer and verified centers are not deleted from reusable source code",()=>{
