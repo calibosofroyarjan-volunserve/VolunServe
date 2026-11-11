@@ -15,8 +15,8 @@
 <label>Government ID front / portrait<input type="file" id="front" accept="image/jpeg,image/png,image/webp" capture="environment" required></label>
 <label id="backrow">Back of the same ID<input type="file" id="back" accept="image/jpeg,image/png,image/webp" capture="environment" required></label>
 <section style="border:1px solid #b7ddd0;border-radius:12px;padding:16px;background:#f5fcf8">
-<strong>New: ID recognition before selfie (no selfie upload)</strong>
-<p class="muted">Use fabricated DEMO / NOT A REAL ID cards only. Consent to transient OCR document screening; no image is saved by this test UI and no face-verification attempt is consumed. A PASS indicates possible ID type/side consistency, not official authenticity. When uncertain, the AI must request a retake or Admin review.</p>
+<strong>New: ID recognition + saved-profile comparison before selfie (no selfie upload)</strong>
+<p class="muted">Use fabricated DEMO / NOT A REAL ID cards only. Consent to transient OCR document screening; no image is saved by this test UI and no face-verification attempt is consumed. A PASS indicates possible ID type/side consistency, not official authenticity. Readiness must pass face scan, OCR, birthday/barangay matcher and private AI authentication before use. Birthday and barangay are compared to the authenticated staging profile only when available; older accounts may show <code>not_checked</code>. Barangay is not a full street-address verification. When uncertain, the AI must request a retake or Admin review.</p>
 <label class="check"><input id="precheckConsent" type="checkbox"><span>I consent to sending the selected ID front/back photos to the isolated staging AI for a document-only OCR precheck. No selfie will be submitted.</span></label>
 <div class="actions"><button id="precheck" type="button" disabled>Check ID before selfie</button></div>
 <div id="precheckResult" class="result" role="status" aria-live="polite">No document-only check yet.</div>
@@ -101,7 +101,7 @@ el('readiness').addEventListener('click',async()=>{
    try{
     const d=await get('/api/identity/engine-health');
     ready=d.ready===true;
-    show('diagnostic',{ready,provider:d.provider,livenessImplemented:d.livenessImplemented,message:d.message});
+    show('diagnostic',{ready,provider:d.provider,documentOcrReady:d.documentOcrReady===true,profileComparisonReady:d.profileComparisonReady===true,documentPrecheckReady:d.documentPrecheckReady===true,livenessImplemented:d.livenessImplemented===true,message:d.message});
     if(ready||!warmingErrors.has(String(d.error||'')))break;
    }catch(e){
     if(e.httpStatus===503&&warmingErrors.has(e.code)){
@@ -146,6 +146,9 @@ el('precheck').addEventListener('click',async()=>{
     outcome:body.outcome,detectedIdType:body.detectedIdType,
     status:screening.status,warningCodes:screening.warningCodes||[],
     imageQualityStatus:screening.imageQualityStatus,
+    birthdayVsSavedProfile:screening.profileBirthDateCheck||'not_checked',
+    barangayVsSavedProfile:screening.profileAddressCheck||'not_checked',
+    noteAboutAddress:'Barangay-level OCR plausibility only, NOT full address verification.',
     message:body.message,
     authenticityVerified:false,livenessVerified:false,
     note:'A successful capture or OCR precheck does NOT authenticate the ID or establish liveness.'
