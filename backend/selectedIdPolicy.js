@@ -42,7 +42,8 @@ function classifyIdentityReviewTrack({screening, decision, idImageQualityScore} 
   if (selectedIdRecognized(screening) &&
       screening.declaredIdType === "national_id" &&
       screening.profileNameCheck === "possible_match" &&
-      screening.profileBirthDateCheck !== "possible_conflict" &&
+      screening.profileBirthDateCheck === "possible_match" &&
+      screening.profileAddressCheck === "possible_match" &&
       screening.imageQualityStatus === "adequate" &&
       Number.isFinite(idImageQualityScore) && idImageQualityScore >= 0.68) {
     // Expedite only. OCR name presence, a score and a face comparison
