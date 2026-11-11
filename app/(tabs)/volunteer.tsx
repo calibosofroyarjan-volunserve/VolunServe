@@ -2143,16 +2143,14 @@ const styles = StyleSheet.create({
   title: {
     marginTop: 2,
     color: ui.color.text,
-    fontSize: 23,
-    fontWeight: "700",
-  },
+    fontSize: ui.type.page.fontSize,
+    fontWeight: ui.type.page.fontWeight, lineHeight: ui.type.page.lineHeight,},
 
   subtitle: {
     marginTop: 3,
     color: ui.color.secondary,
-    fontSize: 14,
-    lineHeight: 21,
-  },
+    fontSize: ui.type.body.fontSize,
+    lineHeight: ui.type.body.lineHeight, fontWeight: ui.type.body.fontWeight,},
 
   liveMapButton: {
     minHeight: 46,
@@ -2197,9 +2195,8 @@ const styles = StyleSheet.create({
   statLabel: {
     marginTop: 2,
     color: ui.color.secondary,
-    fontSize: 12,
-    fontWeight: "600",
-  },
+    fontSize: ui.type.label.fontSize,
+    fontWeight: ui.type.label.fontWeight, lineHeight: ui.type.label.lineHeight,},
 
   filterRow: {
     gap: 7,
@@ -2331,10 +2328,9 @@ const styles = StyleSheet.create({
 
   cardTitle: {
     color: "#10283d",
-    fontSize: 17,
-    lineHeight: 22,
-    fontWeight: "900",
-  },
+    fontSize: ui.type.card.fontSize,
+    lineHeight: ui.type.card.lineHeight,
+    fontWeight: ui.type.card.fontWeight, },
 
   locationText: {
     marginTop: 4,
@@ -2399,10 +2395,9 @@ const styles = StyleSheet.create({
 
   metaLabel: {
     color: "#7d8f9f",
-    fontSize: 8.5,
-    fontWeight: "900",
-    letterSpacing: 0.4,
-  },
+    fontSize: ui.type.meta.fontSize,
+    fontWeight: ui.type.meta.fontWeight,
+    letterSpacing: 0.4, lineHeight: ui.type.meta.lineHeight,},
 
   metaValue: {
     marginTop: 4,

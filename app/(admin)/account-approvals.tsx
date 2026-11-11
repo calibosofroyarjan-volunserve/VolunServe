@@ -799,14 +799,14 @@ const styles =
       borderWidth: 1, borderColor: "#DBE9E0", padding: 18 },
     metricIcon: { width: 42, height: 42, borderRadius: 12, backgroundColor: "#E2F5EB",
       alignItems: "center", justifyContent: "center", marginBottom: 12 },
-    metricLabel: { color: "#32594B", fontSize: 12, fontWeight: "800" },
+    metricLabel: { color: "#32594B", fontSize: ui.type.label.fontSize, fontWeight: ui.type.label.fontWeight, lineHeight: ui.type.label.lineHeight,},
     metricValue: { color: "#124234", fontSize: 28, fontWeight: "900", marginTop: 5 },
     metricCaption: { color: "#698576", fontSize: 11, marginTop: 3 },
     recordsPanel: { backgroundColor: ui.color.surface, borderWidth: 1, borderColor: "#D8E7DE",
       borderRadius: 15, padding: 16, marginBottom: 14 },
     recordsHeading: { flexDirection: "row", alignItems: "center", marginBottom: 15 },
     recordsHeadingCopy: { flex: 1 },
-    recordsTitle: { color: "#153E32", fontSize: 18, fontWeight: "900" },
+    recordsTitle: { color: "#153E32", fontSize: ui.type.section.fontSize, fontWeight: ui.type.section.fontWeight, lineHeight: ui.type.section.lineHeight,},
     recordsDescription: { color: "#6D8778", fontSize: 12, lineHeight: 19, marginTop: 5 },
     container: {
       padding: 20,
@@ -845,16 +845,14 @@ const styles =
     },
 
     title: {
-      fontSize: 24,
-      fontWeight: "700",
-      color: ui.color.text,
-    },
+      fontSize: ui.type.page.fontSize,
+      fontWeight: ui.type.page.fontWeight,
+      color: ui.color.text, lineHeight: ui.type.page.lineHeight,},
 
     subtitle: {
       color: ui.color.secondary,
       marginTop: 4,
-      lineHeight: 19,
-    },
+      lineHeight: ui.type.body.lineHeight, fontSize: ui.type.body.fontSize, fontWeight: ui.type.body.fontWeight,},
 
     countBadge: {
       width: 44,
@@ -872,12 +870,12 @@ const styles =
     },
 
     reviewSummary: { backgroundColor: "#E9F7EF", borderWidth: 1, borderColor: "#CDE8D9", borderRadius: 11, padding: 12, marginBottom: 12 },
-    reviewSummaryText: { color: "#245846", fontSize: 12, fontWeight: "700", lineHeight: 18 },
+    reviewSummaryText: { color: "#245846", fontSize: ui.type.body.fontSize, fontWeight: ui.type.body.fontWeight, lineHeight: ui.type.body.lineHeight},
     searchWrap: { flexDirection: "row", alignItems: "center", gap: 9, backgroundColor: ui.color.surface, borderWidth: 1, borderColor: "#D8E5DE", borderRadius: 12, paddingHorizontal: 13, marginBottom: 10 },
     searchInput: { flex: 1, minHeight: 46, fontSize: 13, color: ui.color.text },
     approvalEvidenceScroll: { maxHeight: 260, marginTop: 12 },
     approvalEvidence: { backgroundColor: "#F6FBF8", borderColor: "#D9EAE0", borderWidth: 1, borderRadius: 11, padding: 13, marginVertical: 13, gap: 3 },
-    evidenceTitle: { color: ui.color.text, fontSize: 14, fontWeight: "900", marginBottom: 5 },
+    evidenceTitle: { color: ui.color.text, fontSize: ui.type.section.fontSize, fontWeight: ui.type.section.fontWeight, marginBottom: 5, lineHeight: ui.type.section.lineHeight,},
     confirmCheckRow: { flexDirection: "row", alignItems: "flex-start", gap: 10, paddingVertical: 10 },
     confirmCheckText: { flex: 1, color: "#365B4E", fontSize: 12, fontWeight: "700", lineHeight: 18 },
     buttonDisabled: { opacity: 0.48 },
@@ -904,8 +902,7 @@ const styles =
 
     filterText: {
       color: "#334155",
-      fontWeight: "800",
-    },
+      fontWeight: ui.type.label.fontWeight, fontSize: ui.type.label.fontSize, lineHeight: ui.type.label.lineHeight,},
 
     filterTextActive: {
       color: "#FFFFFF",
@@ -920,9 +917,8 @@ const styles =
 
     emptyTitle: {
       marginTop: 8,
-      fontWeight: "800",
-      color: "#334155",
-    },
+      fontWeight: ui.type.section.fontWeight,
+      color: "#334155", fontSize: ui.type.section.fontSize, lineHeight: ui.type.section.lineHeight,},
 
     card: {
       backgroundColor: ui.color.surface,

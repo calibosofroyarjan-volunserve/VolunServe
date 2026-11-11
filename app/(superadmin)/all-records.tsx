@@ -1650,16 +1650,14 @@ const styles =
 
     title: {
       marginTop: 4,
-      fontSize: 30,
-      fontWeight: "700",
-      color: ui.color.text,
-    },
+      fontSize: ui.type.page.fontSize,
+      fontWeight: ui.type.page.fontWeight,
+      color: ui.color.text, lineHeight: ui.type.page.lineHeight,},
 
     subtitle: {
       marginTop: 5,
       color: ui.color.secondary,
-      lineHeight: 20,
-    },
+      lineHeight: ui.type.body.lineHeight, fontSize: ui.type.body.fontSize, fontWeight: ui.type.body.fontWeight,},
 
     summaryRow: {
       flexDirection: "row",
@@ -1833,10 +1831,9 @@ const styles =
     },
 
     sectionTitle: {
-      fontSize: 18,
-      fontWeight: "900",
-      color: ui.color.text,
-    },
+      fontSize: ui.type.section.fontSize,
+      fontWeight: ui.type.section.fontWeight,
+      color: ui.color.text, lineHeight: ui.type.section.lineHeight,},
 
     recordCount: {
       color: ui.color.secondary,
@@ -1871,16 +1868,14 @@ const styles =
     },
 
     recordTitle: {
-      fontSize: 16,
-      fontWeight: "900",
-      color: ui.color.text,
-    },
+      fontSize: ui.type.card.fontSize,
+      fontWeight: ui.type.card.fontWeight,
+      color: ui.color.text, lineHeight: ui.type.card.lineHeight,},
 
     recordSubtitle: {
       marginTop: 3,
       color: ui.color.secondary,
-      fontSize: 12,
-    },
+      fontSize: ui.type.body.fontSize, lineHeight: ui.type.body.lineHeight, fontWeight: ui.type.body.fontWeight,},
 
     statusBadge: {
       borderRadius: 999,
@@ -1910,11 +1905,10 @@ const styles =
     },
 
     detailLabel: {
-      fontSize: 9,
-      fontWeight: "900",
+      fontSize: ui.type.label.fontSize,
+      fontWeight: ui.type.label.fontWeight,
       color: "#94A3B8",
-      letterSpacing: 0.5,
-    },
+      letterSpacing: 0.5, lineHeight: ui.type.label.lineHeight,},
 
     detailValue: {
       marginTop: 4,

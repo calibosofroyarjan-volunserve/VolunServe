@@ -1,3 +1,4 @@
+import { liveUi as designUi } from "../../constants/volunserveLiveUi";
 
 import Ionicons from "@expo/vector-icons/Ionicons";
 import React, { useState } from "react";
@@ -117,12 +118,10 @@ const styles = StyleSheet.create({
   },
   tabText: {
     color: MUTED,
-    fontSize: 11,
-    fontWeight: "800",
-  },
+    fontSize: designUi.type.label.fontSize,
+    fontWeight: designUi.type.label.fontWeight, lineHeight: designUi.type.label.lineHeight,},
   activeTabText: {
-    color: "#FFFFFF",
-  },
+    color: "#FFFFFF", fontSize: designUi.type.label.fontSize, lineHeight: designUi.type.label.lineHeight, fontWeight: designUi.type.label.fontWeight,},
   moduleContent: {
     flex: 1,
     minHeight: 0,
