@@ -1968,7 +1968,7 @@ function UploadIdStep({
             Scan Government ID
           </Text>
           <Text style={styles.stepSubtitle}>
-            Scan your physical government-issued ID with the camera. Make the face and printed details clear.
+            Scan your physical government ID. Put the portrait/front in Front and the reverse in Back. Auto-capture checks steadiness, not which side is shown; OCR checks orientation after submission.
           </Text>
         </View>
       </View>
@@ -2042,7 +2042,7 @@ function UploadIdStep({
                 </View>
                 <View style={styles.mediaPreviewCopy}>
                   <Text style={styles.mediaPreviewTitle}>
-                    {label} captured — not yet authenticated
+                    {label} captured — side not yet validated
                   </Text>
                   <Text style={styles.mediaPreviewText} numberOfLines={1}>
                     {media.name}
@@ -2069,7 +2069,7 @@ function UploadIdStep({
                 })}
               </View>
               <Text style={styles.uploadText}>
-                Hold {side === "front" ? "the front" : "the back"} of the ID flat and steady. Keep all four edges visible and avoid glare.
+                Hold {side === "front" ? "the portrait/front side" : "the reverse/back side"} of the ID flat and steady. Keep all four edges visible. Auto-capture alone cannot confirm the correct side.
               </Text>
               <Text style={styles.uploadText}>{autoHint} {autoProgress > 0 ? `(${autoProgress}%)` : ""}</Text>
               {cameraError ? <Text style={styles.idCameraError}>{cameraError}</Text> : null}
@@ -2098,7 +2098,7 @@ function UploadIdStep({
               </View>
               <Text style={styles.uploadTitle}>Open Camera — {label}</Text>
               <Text style={styles.uploadText}>
-                This captures a document photo. Government ID type and authenticity are checked separately.
+                The camera may capture the wrong side. Check the preview; AI screens ID type and front/back orientation only after submission. A successful photo is not verification.
               </Text>
             </TouchableOpacity>
           )}
