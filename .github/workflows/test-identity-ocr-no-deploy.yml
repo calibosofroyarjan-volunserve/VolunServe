@@ -8,6 +8,10 @@ on:
       - "identity-ai/test_document_screening.py"
       - "identity-ai/test_strict_document_screening.py"
       - "identity-ai/test_profile_consistency.py"
+      - "identity-ai/main.py"
+      - "backend/server.js"
+      - "backend/selectedIdPolicy.js"
+      - "backend/test-selectedIdPolicy.js"
       - ".github/workflows/test-identity-ocr-no-deploy.yml"
 permissions:
   contents: read
@@ -30,5 +34,14 @@ jobs:
           PYTHONPATH: identity-ai
         run: |
           python -m unittest discover -s identity-ai -p 'test_profile_consistency.py' -v
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Validate protected Python AI API syntax
+        run: python -m py_compile identity-ai/main.py identity-ai/strict_document_screening.py identity-ai/profile_consistency.py
+      - name: Validate Node identity gateway syntax and selected ID policy
+        run: |
+          node --check backend/server.js
+          node --test backend/test-selectedIdPolicy.js
       - name: Confirm no deployment occurs in this workflow
         run: echo "NO DEPLOY - unit tests only"
