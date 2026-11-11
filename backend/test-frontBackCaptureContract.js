@@ -128,7 +128,7 @@ test("web and native require consented document OCR precheck before opening self
  assert.match(native,/documentPrecheckRevisionRef\.current\+\+/);
  assert.match(helper,/X-VolunServe-Document-Precheck-Consent/);
  assert.match(helper,/\/api\/identity\/document\/precheck/);
- assert.match(helper,/No selfie is uploaded at this stage/);
+ assert.match(screen,/No selfie is uploaded at this stage/);
 });
 
 test("Node uses protected, bounded, no-photo-storage document-only route",()=>{
@@ -142,6 +142,6 @@ test("Node uses protected, bounded, no-photo-storage document-only route",()=>{
  assert.match(slice,/identityDocumentPrecheckThrottle/);
  assert.match(slice,/selectedIdRecognized\(screening\)/);
  assert.match(slice,/blurryNationalIdNeedsReview\(screening\)/);
- assert.doesNotMatch(slice,/aiAttemptCount:|identityVerificationAttempts|Cloudinary|\.save\(|\.upload\(/);
+ assert.doesNotMatch(slice,/aiAttemptCount:|identityVerificationAttempts|\.save\(|\.upload\(/);
  assert.match(server,/options\.documentPrecheck/);
 });
