@@ -97,6 +97,18 @@ class SyntheticDocumentImagePipelineTests(unittest.TestCase):
         self.assertTrue(blurry_national_id_claim_needs_review("national_id", result))
         self.assertFalse(result["authenticityVerified"])
 
+    def test_correct_synthetic_philid_front_and_back_are_not_reversed(self):
+        reverse_image, _ = synthetic_photo(BACK_SIDE_SAMPLE)
+        result = screen_government_id(
+            declared_type="national_id",
+            id_document_bytes=self.national_clear,
+            id_back_document_bytes=reverse_image,
+        )
+        self.assertEqual(result["status"], "text_consistent_unverified")
+        self.assertNotIn("document_front_back_swapped", result["warningCodes"])
+        self.assertFalse(result["authenticityVerified"])
+        self.assertTrue(result["manualReviewRequired"])
+
     def test_synthetic_swapped_philid_sides_are_rejected_before_face_matching(self):
         reverse_image, _ = synthetic_photo(BACK_SIDE_SAMPLE)
         result = screen_government_id(
