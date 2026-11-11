@@ -6,7 +6,7 @@ const valid = type => ({
   status:"text_consistent_unverified", declaredIdType:type,
   detectedIdType:type, authenticityVerified:false,
 });
-for (const type of ["national_id","drivers_license","passport","umid"]) {
+for (const type of ["national_id","drivers_license","passport","umid","prc_id"]) {
   test("recognizes selected "+type+" type without claiming authenticity", () => {
     assert.equal(selectedIdRecognized(valid(type)),true);
     assert.equal(enforceSelectedIdDecision("verified",valid(type),false),"manual_review");
