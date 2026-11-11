@@ -67,6 +67,15 @@ async function probeIdentityAiReadiness({
           "identity_ai_not_ready",
           "The Python AI engine is not yet ready. Check AI Render logs if this persists.",
         );
+      } else if (body?.documentOcrReady !== true ||
+                 body?.profileComparisonReady !== true ||
+                 body?.documentPrecheckReady !== true) {
+        // Camera and private auth may work even when Tesseract or profile
+        // comparison is broken. Fail closed before residents submit ID photos.
+        return notReady(
+          "identity_document_readiness_failed",
+          "ID OCR or birthday/address comparison is not ready. Check the staging AI service before scanning.",
+        );
       } else {
         health = body;
         break;
