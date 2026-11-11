@@ -18,7 +18,7 @@ test("Resident birthday is optional and immutable after signup", () => {
   assert(residentRules.includes("!('dateOfBirth' in request.resource.data)"));
   assert(residentRules.includes("dateOfBirth.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')"));
   assert(!source.slice(staff, staff + 350).includes("'dateOfBirth'"));
-  assert(source.includes("affectedKeys().hasOnly("),
+  assert(/affectedKeys\(\)\s*\.hasOnly\(/.test(source),
     "Do not bypass existing restricted user-update field allowlist");
 });
 
