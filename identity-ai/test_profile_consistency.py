@@ -51,6 +51,10 @@ class ProfileConsistencyTests(unittest.TestCase):
                                        "PLACE OF BIRTH: MUZON BULACAN")
         self.assertEqual(value["profileAddressCheck"], "inconclusive")
 
+    def test_email_address_must_not_count_as_residential_address(self):
+        value = assess_profile_address("Muzon", "EMAIL ADDRESS MUZON EXAMPLE COM")
+        self.assertEqual(value["profileAddressCheck"], "inconclusive")
+
     def test_missing_address_and_missing_barangay_are_not_failures(self):
         self.assertEqual(
             assess_profile_address("Muzon", "NATIONAL ID CARD")["profileAddressCheck"],
