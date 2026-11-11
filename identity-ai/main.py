@@ -36,6 +36,7 @@ ACCEPTED_ID_TYPES = {
     "drivers_license",
     "passport",
     "umid",
+    "prc_id",
 }
 ALLOWED_IMAGE_TYPES = {
     "image/jpeg",
