@@ -7,6 +7,11 @@ const ALLOWED = new Set(["national_id", "drivers_license", "passport", "umid", "
 function selectedIdRecognized(screening) {
   return !!screening &&
     screening.status === "text_consistent_unverified" &&
+    !screening.warningCodes?.some(code => [
+      "document_front_back_swapped",
+      "document_front_side_conflict",
+      "document_back_looks_like_front",
+    ].includes(code)) &&
     screening.imageQualityStatus !== "low" &&
     ALLOWED.has(screening.declaredIdType) &&
     screening.detectedIdType === screening.declaredIdType;
@@ -25,7 +30,10 @@ function blurryNationalIdNeedsReview(screening) {
     screening.imageQualityStatus === "low" &&
     screening.warningCodes?.includes("low_document_image_quality") === true &&
     !screening.warningCodes.includes("school_id_not_supported") &&
-    !screening.warningCodes.includes("ocr_unavailable");
+    !screening.warningCodes.includes("ocr_unavailable") &&
+    !screening.warningCodes.includes("document_front_back_swapped") &&
+    !screening.warningCodes.includes("document_front_side_conflict") &&
+    !screening.warningCodes.includes("document_back_looks_like_front");
 }
 
 function classifyIdentityReviewTrack({screening, decision, idImageQualityScore} = {}) {
