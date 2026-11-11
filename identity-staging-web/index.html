@@ -8,7 +8,7 @@
 <div class="warning"><strong>Testing only.</strong> Do not upload real National IDs or private face images until privacy and security checks are completed. Start with synthetic samples. Document OCR and face comparison do not prove document authenticity or liveness; final approval still requires Admin review.</div>
 <p class="muted"><a href="./certificates.html" style="display:inline-block;background:#e1f7eb;color:#085d4a;font-weight:800;padding:11px 14px;border-radius:9px;margin-bottom:16px;text-decoration:none">Open staging Community Certificates test portal</a></p>
 <div class="grid">
-<section class="card"><h2>1. Sign in</h2><p class="muted">Use the test account you created in <strong>volunserve-auth-staging</strong>.</p><form id="login" class="stack"><label>Staging email<input id="email" type="email" autocomplete="email" required></label><label>Password<input id="password" type="password" autocomplete="current-password" required></label><div class="actions"><button id="loginBtn">Sign in</button><button type="button" id="logout" class="alt hidden">Sign out</button></div></form><p class="muted" id="account" aria-live="polite">Not signed in.</p></section>
+<section class="card"><h2>1. Sign in</h2><p class="muted">Use the test account you created in <strong>volunserve-auth-staging</strong>.</p><form id="login" class="stack"><label>Staging email<input id="email" type="email" autocomplete="email" required></label><label>Password<input id="password" type="password" autocomplete="current-password" required></label><div class="actions"><button id="loginBtn">Sign in</button><button type="button" id="resetPassword" class="alt">Forgot password? Send reset email</button><button type="button" id="logout" class="alt hidden">Sign out</button></div></form><p class="muted" id="account" aria-live="polite">Not signed in.</p></section>
 <section class="card"><h2>2. Verify connections</h2><p class="muted">Authenticated checks verify your Firebase token and private backend-to-AI access.</p><div class="actions"><button id="readiness" type="button" disabled>Check AI readiness</button><button id="status" type="button" class="alt" disabled>Check resident status</button></div><div class="result" id="diagnostic" aria-live="polite">Sign in to begin.</div></section>
 <section class="card wide"><h2>3. ID scan + face comparison</h2><div class="steps">Front of ID → Back of ID → Selfie → AI screening → Admin review</div><form id="verify" class="stack">
 <label>Select your government-issued ID<select id="type" required><option value="national_id">Philippine National ID (PhilID)</option><option value="drivers_license">LTO Driver's License</option><option value="passport">Philippine Passport (bio page)</option><option value="umid">SSS / GSIS UMID</option><option value="prc_id">PRC Professional ID (PIC)</option></select></label><p class="muted"><strong>Only these five ID types are supported.</strong> School IDs, employee IDs, and any ID not in this list cannot pass identity verification. The camera may capture any card-shaped object; capture is NOT document validation. OCR checks the selected type after submission, then independent Admin verification is required.</p><p id="psaHelp" class="muted"><strong>Philippine National ID only:</strong> The <a href="https://everify.gov.ph/check" target="_blank" rel="noopener noreferrer">official PSA National ID Check</a> can authenticate the ID QR code. This is a separate official website; its result is NOT sent back to VolunServe. Authorized Admin verification is still required.</p>
@@ -21,7 +21,7 @@
 <script type="module">
 import {documentVerdict} from "./screening-result.mjs";
 import{initializeApp}from'https://www.gstatic.com/firebasejs/11.10.0/firebase-app.js';
-import{getAuth,onAuthStateChanged,signInWithEmailAndPassword,signOut}from'https://www.gstatic.com/firebasejs/11.10.0/firebase-auth.js';
+import{getAuth,onAuthStateChanged,signInWithEmailAndPassword,sendPasswordResetEmail,signOut}from'https://www.gstatic.com/firebasejs/11.10.0/firebase-auth.js';
 const config=Object.freeze({apiKey:'AIzaSyDQgSgUT2QQivfq8CHbQKM0Df0mkCTFXFI',authDomain:'volunserve-auth-staging.firebaseapp.com',projectId:'volunserve-auth-staging',storageBucket:'volunserve-auth-staging.firebasestorage.app',messagingSenderId:'916160317396',appId:'1:916160317396:web:0626f2a622b6aa25027841'});
 const backend='https://volunserve-backend-staging.onrender.com';
 if(config.projectId!=='volunserve-auth-staging'||new URL(backend).hostname!=='volunserve-backend-staging.onrender.com')throw Error('Staging isolation violated');
@@ -39,10 +39,42 @@ function showDocumentVerdict(result){
  target.classList.remove("hidden");
 }
 function clearDocumentVerdict(){el("idVerdict").classList.add("hidden")}
-function state(){el('readiness').disabled=!user||busy;el('status').disabled=!user||busy;el('submit').disabled=!user||!ready||busy;el('loginBtn').disabled=!!user||busy;el('logout').classList.toggle('hidden',!user)}
+function state(){el('readiness').disabled=!user||busy;el('status').disabled=!user||busy;el('submit').disabled=!user||!ready||busy;el('loginBtn').disabled=!!user||busy;el('resetPassword').disabled=!!user||busy;el('logout').classList.toggle('hidden',!user)}
 function err(e){return String(e?.message||e||'Unknown error').slice(0,360)}
+function authMessage(e){
+ const code=String(e?.code||"");
+ if(code==="auth/invalid-credential"||code==="auth/wrong-password"||code==="auth/user-not-found")
+  return "The staging email/password was not accepted. Double-check the email and password, or click Forgot password to request a staging reset email. This is not an AI or Render error.";
+ if(code==="auth/too-many-requests")return "Too many sign-in attempts. Stop retrying and use Forgot password later.";
+ if(code==="auth/invalid-email")return "Enter a valid staging email address.";
+ if(code==="auth/network-request-failed")return "Network request failed. Check your internet connection and try again.";
+ if(code==="auth/user-disabled")return "This staging account is disabled. Contact the staging project owner; do not create a duplicate account.";
+ if(code==="auth/operation-not-allowed")return "Email/password sign-in is disabled for the staging Firebase project.";
+ if(code==="auth/unauthorized-domain")return "Staging domain is not authorized in Firebase Authentication. Ask the staging project owner to check allowed domains.";
+ return "Firebase staging sign-in could not finish ("+(code||"unknown error")+").";
+}
 onAuthStateChanged(auth,u=>{user=u;ready=false;el('account').textContent=u?'Staging account signed in: '+(u.email||'account'):'Not signed in';show('diagnostic',u?'Signed in. Click Check AI readiness.':'Sign in to begin.');el('password').value='';state()});
-el('login').addEventListener('submit',async e=>{e.preventDefault();busy=true;state();try{await signInWithEmailAndPassword(auth,el('email').value.trim(),el('password').value)}catch(e){show('diagnostic','Login failed: '+err(e))}finally{busy=false;state()}});
+el('login').addEventListener('submit',async e=>{e.preventDefault();busy=true;state();try{await signInWithEmailAndPassword(auth,el('email').value.trim(),el('password').value)}catch(e){show('diagnostic','Login failed: '+authMessage(e))}finally{busy=false;state()}});
+el('resetPassword').addEventListener('click',async()=>{
+ if(busy||auth.currentUser)return;
+ const email=el('email').value.trim();
+ if(!email||!el('email').checkValidity()){show('diagnostic','Enter your staging account email first, then click Forgot password.');return}
+ busy=true;state();
+ show('diagnostic','Requesting a staging Firebase password-reset email...');
+ try{
+  await sendPasswordResetEmail(auth,email);
+  show('diagnostic','If this email belongs to the staging Firebase project, check your Inbox and Spam for the password-reset link. Follow that link to choose a new password, then return here and sign in. No production password was changed.');
+ }catch(e){
+  const code=String(e?.code||'');
+  if(code==='auth/user-not-found'||code==='auth/invalid-credential'){
+    show('diagnostic','If this email belongs to a staging account, check your Inbox and Spam for a reset link. Otherwise, check you entered the staging address you previously registered.');
+  }else if(code==='auth/too-many-requests'){
+    show('diagnostic','Too many reset requests. Try again later.');
+  }else{
+    show('diagnostic','Staging reset email could not be sent: '+authMessage(e));
+  }
+ }finally{busy=false;state()}
+});
 el('logout').addEventListener('click',()=>signOut(auth));
 async function get(path){if(!auth.currentUser)throw Error('Sign in first');const token=await auth.currentUser.getIdToken();const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),150000);try{const r=await fetch(backend+path,{headers:{Authorization:'Bearer '+token},signal:controller.signal});const b=await r.json().catch(()=>({error:'Non-JSON response'}));if(!r.ok)throw Error(b.message||b.error||'HTTP '+r.status);return b}finally{clearTimeout(timeout)}}
 el('readiness').addEventListener('click',async()=>{busy=true;ready=false;state();show('diagnostic','Checking backend → AI readiness... Free services may wake from sleep.');try{const d=await get('/api/identity/engine-health');ready=d.ready===true;show('diagnostic',{ready,provider:d.provider,livenessImplemented:d.livenessImplemented,message:d.message})}catch(e){show('diagnostic','Readiness check failed: '+err(e))}finally{busy=false;state()}});
