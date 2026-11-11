@@ -97,6 +97,25 @@ def assess_document_text(declared_type: str, ocr_text: str) -> dict:
     """Return strictly sanitized type screening, never an identity verdict."""
     if declared_type not in SUPPORTED:
         raise ValueError("Unsupported government ID type.")
+    # A student/school identification label conflicts with government-ID
+    # document-type evidence. Even if stray issuer keywords appear in OCR,
+    # never treat a school ID as a consistent government ID.
+    normalized = _normalized(ocr_text)
+    school_labels = (
+        "SCHOOL ID", "STUDENT ID", "STUDENT IDENTIFICATION CARD",
+        "SCHOOL IDENTIFICATION CARD", "UNIVERSITY ID", "CAMPUS ID",
+    )
+    if any(_contains(normalized, label) for label in school_labels):
+        return {
+            "method": METHOD,
+            "declaredIdType": declared_type,
+            "detectedIdType": None,
+            "status": "inconclusive",
+            "authenticityVerified": False,
+            "livenessVerified": False,
+            "manualReviewRequired": True,
+            "warningCodes": ["document_type_not_recognized"],
+        }
     found = _document_signals(ocr_text)
     detected = next(iter(found)) if len(found) == 1 else None
     if len(found) > 1:
