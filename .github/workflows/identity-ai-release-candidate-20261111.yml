@@ -18,7 +18,7 @@ permissions:
 jobs:
   document-policy-tests:
     name: Five-ID allowlist and blur review policy
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -32,7 +32,7 @@ jobs:
 
   runtime-synthetic-tests:
     name: Actual Tesseract and MediaPipe on synthetic fixtures
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
@@ -43,8 +43,18 @@ jobs:
           cache-dependency-path: identity-ai/requirements.txt
       - name: Install pinned runtime
         run: python -m pip install -r identity-ai/requirements.txt
-      - name: Install OCR engine
-        run: sudo apt-get update -qq && sudo apt-get install -y -qq tesseract-ocr
+      - name: Install OCR engine with bounded network retries
+        env:
+          DEBIAN_FRONTEND: noninteractive
+        run: |
+          if command -v tesseract >/dev/null 2>&1; then
+            tesseract --version
+            exit 0
+          fi
+          sudo apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=30 update -qq
+          sudo apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=30 install -y -qq tesseract-ocr tesseract-ocr-eng
+          command -v tesseract
+
       - name: Run synthetic face and ID image smoke tests
         working-directory: identity-ai
         run: python -m unittest -v test_ai_runtime_smoke.py test_synthetic_document_pipeline.py
