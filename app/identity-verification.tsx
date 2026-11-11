@@ -88,6 +88,11 @@ const ID_TYPES: Array<{
     label: "UMID",
     helper: "Unified Multi-Purpose ID (SSS / GSIS)",
   },
+  {
+    value: "prc_id",
+    label: "PRC Professional ID",
+    helper: "Professional Regulation Commission (PRC) PIC",
+  },
 ];
 
 function mediaFromAsset(
