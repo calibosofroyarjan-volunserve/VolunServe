@@ -141,7 +141,7 @@ function scanCopy(scanState: ScanState) {
     case "camera_error":
       return {
         title: "Camera access is blocked",
-        text: "Allow camera access for localhost in your browser, then try again.",
+        text: "Allow camera access for this website in your browser settings, then try again.",
         color: COLORS.danger,
       };
     case "camera_missing":
