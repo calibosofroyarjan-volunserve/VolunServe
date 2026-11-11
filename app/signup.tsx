@@ -639,6 +639,11 @@ function LegacySignup() {
         firstName: formData.firstName.trim(),
         middleName: formData.middleName.trim(),
         age: validation.ageNumber,
+        dateOfBirth: formData.dateOfBirth
+          ? [formData.dateOfBirth.getFullYear(),
+              String(formData.dateOfBirth.getMonth() + 1).padStart(2, "0"),
+              String(formData.dateOfBirth.getDate()).padStart(2, "0")].join("-")
+          : undefined,
         email: formData.email.trim().toLowerCase(),
         password: formData.password,
         authProvider: googleBound ? "google" : "email",

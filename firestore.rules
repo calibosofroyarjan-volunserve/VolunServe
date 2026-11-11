@@ -123,6 +123,7 @@ service cloud.firestore {
           'firstName',
           'middleName',
           'age',
+          'dateOfBirth',
           'email',
           'phoneNumber',
           'region',
@@ -150,6 +151,15 @@ service cloud.firestore {
           'profilePictureUrl',
           'createdAt'
         ])
+        // DOB is recorded only at signup. Existing profiles may lack it.
+        // Standard client profile updates cannot change DOB.
+        && (
+          !('dateOfBirth' in request.resource.data)
+          || (
+            request.resource.data.dateOfBirth is string
+            && request.resource.data.dateOfBirth.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
+          )
+        )
         && request.resource.data.role == 'resident'
         && request.resource.data.status == 'approved'
         && request.resource.data.requestedRole == 'resident'
