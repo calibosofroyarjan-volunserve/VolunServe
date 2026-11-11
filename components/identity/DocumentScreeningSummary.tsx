@@ -22,11 +22,17 @@ export default function DocumentScreeningSummary({
   const recognized = screening.status === "text_consistent_unverified";
   const mismatch = screening.status === "mismatch";
   const unsupported = screening.status === "unsupported";
+  const blurryNationalId = screening.status === "inconclusive" &&
+    screening.declaredIdType === "national_id" &&
+    screening.detectedIdType === null &&
+    screening.imageQualityStatus === "low" &&
+    screening.warningCodes.includes("low_document_image_quality");
   const title = recognized
     ? (screening.detectedIdType === "national_id" ? "National ID text recognized" : "Government ID text recognized")
     : unsupported ? "ID rejected — not supported"
       : mismatch ? "ID rejected — wrong government ID type"
-        : "ID not accepted — scan inconclusive";
+        : blurryNationalId ? "Blurry scan — Admin review / rescan"
+          : "ID not accepted — scan inconclusive";
   const icon = recognized ? "document-text-outline" : unsupported || mismatch ? "alert-circle-outline" : "help-circle-outline";
   const accent = recognized ? "#12644E" : unsupported || mismatch ? "#A13F2B" : "#A46B16";
 
@@ -76,7 +82,8 @@ export default function DocumentScreeningSummary({
         <View style={styles.row}>
           <Text style={styles.label}>Identity decision</Text>
           <Text style={styles.value}>
-            {recognized ? "Pending LGU validation (independent check required)" : "Rejected / retry required"}
+            {recognized ? "Pending LGU validation (independent check required)"
+              : blurryNationalId ? "Pending Admin review — no approval" : "Rejected / retry required"}
           </Text>
         </View>
       </View>
