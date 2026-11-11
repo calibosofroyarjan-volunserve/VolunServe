@@ -15,8 +15,9 @@ test("Resident birthday is optional and immutable after signup", () => {
   assert(users >= 0 && resident > users && staff > resident);
   const residentRules = source.slice(resident, staff);
   assert(residentRules.includes("'dateOfBirth'"));
-  assert(residentRules.includes("!('dateOfBirth' in request.resource.data)"));
-  assert(residentRules.includes("dateOfBirth.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')"));
+  // Optional legacy entry paths use a canonical default; present values
+  // must still be strings with a YYYY-MM-DD pattern.
+  assert(residentRules.includes("request.resource.data.get('dateOfBirth', '2000-01-01').matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')"));
   assert(!source.slice(staff, staff + 350).includes("'dateOfBirth'"));
   assert(source.includes("affectedKeys().hasOnly("),
     "Do not bypass existing restricted user-update field allowlist");
