@@ -10,6 +10,7 @@ on:
       - 'app/identity-verification.web.tsx'
       - 'app/(admin)/identity-reviews.tsx'
       - 'lib/identityVerification.ts'
+      - 'lib/firebase.ts'
       - 'components/identity/DocumentScreeningSummary.tsx'
       - '.github/workflows/identity-backend-release-candidate-20261111.yml'
   pull_request:
