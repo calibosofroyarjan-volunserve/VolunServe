@@ -10,7 +10,7 @@ import re
 import unicodedata
 
 SUPPORTED = frozenset({
-    "national_id", "drivers_license", "passport", "other_government_id",
+    "national_id", "drivers_license", "passport", "umid", "prc_id",
 })
 # Preserve backend's allowlisted method identifier for existing clients.
 METHOD = "ph_government_id_ocr_keyword_screen_v1"
@@ -84,13 +84,45 @@ def _document_signals(text: str) -> set[str]:
         found.add("passport")
     if any(_contains(t, term) for term in (
         "UNIFIED MULTI PURPOSE ID",
-        "SOCIAL SECURITY SYSTEM",
-        "PROFESSIONAL REGULATION COMMISSION",
-        "GOVERNMENT SERVICE INSURANCE SYSTEM",
+        "UNIFIED MULTI PURPOSE IDENTIFICATION",
         "UMID",
     )):
-        found.add("other_government_id")
+        found.add("umid")
+    # A lone "PRC" or "professional" is too weak: those can appear
+    # on unrelated documents, so require an issuer and card-type signal.
+    pic = any(_contains(t, term) for term in (
+        "PROFESSIONAL IDENTIFICATION CARD",
+        "PROFESSIONAL ID CARD",
+        "E PIC",
+        "EPIC",
+    ))
+    issuer = any(_contains(t, term) for term in (
+        "PROFESSIONAL REGULATION COMMISSION",
+        "PRC",
+    ))
+    if issuer and pic:
+        found.add("prc_id")
     return found
+
+
+def _school_id_signal(text: str) -> bool:
+    """Clear school-only ID labels must never count as government-ID evidence."""
+    t = _normalized(text)
+    return any(_contains(t, term) for term in (
+        "SCHOOL ID",
+        "STUDENT ID",
+        "STUDENT IDENTIFICATION CARD",
+        "STUDENT IDENTIFICATION",
+        "STUDENT IDENTITY CARD",
+        "STUDENT CARD",
+        "SCHOOL IDENTIFICATION CARD",
+        "UNIVERSITY ID",
+        "COLLEGE ID",
+        "CAMPUS ID",
+        "LIBRARY CARD",
+        "EMPLOYEE ID",
+        "EMPLOYEE IDENTIFICATION CARD",
+    ))
 
 
 def assess_document_text(declared_type: str, ocr_text: str) -> dict:
@@ -99,7 +131,12 @@ def assess_document_text(declared_type: str, ocr_text: str) -> dict:
         raise ValueError("Unsupported government ID type.")
     found = _document_signals(ocr_text)
     detected = next(iter(found)) if len(found) == 1 else None
-    if len(found) > 1:
+    if _school_id_signal(ocr_text):
+        # If a student/school card label appears, never let a government-ID
+        # keyword elsewhere in the image override that clear conflict.
+        status, warning = "unsupported", "school_id_not_supported"
+        detected = None
+    elif len(found) > 1:
         status, warning = "inconclusive", "multiple_document_type_signals"
     elif detected is None:
         status, warning = "inconclusive", "document_type_not_recognized"
@@ -130,4 +167,104 @@ def document_ocr_unavailable(declared_type: str) -> dict:
         "livenessVerified": False,
         "manualReviewRequired": True,
         "warningCodes": ["ocr_unavailable"],
+        "imageQualityStatus": "unknown",
+    }
+
+
+def assess_document_sides(
+    declared_type: str,
+    front_ocr_text: str,
+    back_ocr_text: str | None,
+) -> dict:
+    """Screen front/back text without exposing text or claiming authenticity.
+
+    A document-type keyword is not proof that a physical card is genuine or
+    that two images belong to the same issued document.
+    """
+    front = assess_document_text(declared_type, front_ocr_text)
+    result = dict(front)
+    result["backSideProvided"] = back_ocr_text is not None
+    result["backSideScreened"] = back_ocr_text is not None
+    if back_ocr_text is None:
+        return result
+
+    back = assess_document_text(declared_type, back_ocr_text)
+    if back["status"] == "unsupported":
+        result["status"] = "unsupported"
+        result["warningCodes"] = list(dict.fromkeys(
+            result["warningCodes"] + ["school_id_not_supported"]
+        ))
+    elif back["status"] == "mismatch" and result["status"] != "unsupported":
+        result["status"] = "mismatch"
+        result["warningCodes"] = list(dict.fromkeys(
+            result["warningCodes"] + ["document_back_type_conflict"]
+        ))
+    elif result["status"] == "inconclusive" and back["status"] == "text_consistent_unverified":
+        # Back is recognizable but portrait-side ID type was not established.
+        # Keep manual review; never turn a weak front into a clean result.
+        result["warningCodes"] = list(dict.fromkeys(
+            result["warningCodes"] + ["document_front_type_inconclusive"]
+        ))
+    if not back_ocr_text.strip():
+        result["warningCodes"] = list(dict.fromkeys(
+            result["warningCodes"] + ["document_back_ocr_inconclusive"]
+        ))
+    result["authenticityVerified"] = False
+    result["manualReviewRequired"] = True
+    return result
+
+
+def add_photo_quality(screening: dict, blur_variance: float) -> dict:
+    """Conservative blur flag for the *whole image*, not an ID validity claim.
+
+    Very low Laplacian variance can also occur with an empty card/background.
+    Only the selected-type conflict checks can identify a wrong document.
+    Never use this signal alone to approve or reject an ID.
+    """
+    out = dict(screening)
+    out["imageQualityStatus"] = (
+        "low" if blur_variance < 40.0 else "adequate"
+    )
+    if blur_variance < 40.0:
+        out["warningCodes"] = list(dict.fromkeys(
+            out.get("warningCodes", []) + ["low_document_image_quality"]
+        ))
+    return out
+
+
+def blurry_national_id_claim_needs_review(declared_type: str, screening: dict) -> bool:
+    """Prioritize a human rescan review, never government ID confirmation.
+
+    A sharpness reading cannot tell if the blurry photograph is a real ID.
+    We route only a user-selected National ID with NO conflicting labels.
+    """
+    warnings = screening.get("warningCodes") or []
+    return (
+        declared_type == "national_id"
+        and screening.get("declaredIdType") == "national_id"
+        and screening.get("imageQualityStatus") == "low"
+        and "low_document_image_quality" in warnings
+        and "ocr_unavailable" not in warnings
+        and "school_id_not_supported" not in warnings
+        and screening.get("status") in ("inconclusive", "text_consistent_unverified")
+        and screening.get("detectedIdType") in (None, "national_id")
+    )
+
+
+def assess_profile_name(first_name: str, last_name: str, ocr_text: str) -> dict:
+    """Conservative text-presence check against server-supplied account name.
+
+    It cannot authenticate an ID or extract a reliable full legal name from
+    arbitrary layouts. Missing tokens are inconclusive, never proof of fraud.
+    Raw names and OCR strings are not returned.
+    """
+    first = [part for part in _normalized(first_name).split() if len(part) >= 3]
+    last = [part for part in _normalized(last_name).split() if len(part) >= 3]
+    if not first or not last:
+        return {"profileNameCheck": "not_checked", "profileNameCompared": False}
+    text = _normalized(ocr_text)
+    matches = all(_contains(text, part) for part in first + last)
+    return {
+        "profileNameCheck": "possible_match" if matches else "inconclusive",
+        "profileNameCompared": True,
     }
