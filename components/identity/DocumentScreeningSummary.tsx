@@ -27,14 +27,18 @@ export default function DocumentScreeningSummary({
     screening.detectedIdType === null &&
     screening.imageQualityStatus === "low" &&
     screening.warningCodes.includes("low_document_image_quality");
-  const title = recognized
+  const sideProblem = screening.warningCodes?.some((code) =>
+    ["document_front_back_swapped", "document_front_side_conflict", "document_back_looks_like_front"].includes(code),
+  );
+  const title = sideProblem ? "Retake ID — front/back position may be wrong"
+    : recognized
     ? (screening.detectedIdType === "national_id" ? "National ID text recognized" : "Government ID text recognized")
     : unsupported ? "ID rejected — not supported"
       : mismatch ? "ID rejected — wrong government ID type"
         : blurryNationalId ? "Blurry scan — Admin review / rescan"
           : "ID not accepted — scan inconclusive";
-  const icon = recognized ? "document-text-outline" : unsupported || mismatch ? "alert-circle-outline" : "help-circle-outline";
-  const accent = recognized ? "#12644E" : unsupported || mismatch ? "#A13F2B" : "#A46B16";
+  const icon = recognized && !sideProblem ? "document-text-outline" : unsupported || mismatch || sideProblem ? "alert-circle-outline" : "help-circle-outline";
+  const accent = recognized && !sideProblem ? "#12644E" : unsupported || mismatch || sideProblem ? "#A13F2B" : "#A46B16";
 
   return (
     <View style={styles.panel} accessibilityLabel="Government ID document screening result">
