@@ -29,3 +29,8 @@ test("server errors without screening must not falsely claim a government ID rej
  assert.equal(a.kind,"retry");
  assert.doesNotMatch(a.heading,/auto rejected/i);
 });
+
+test("unknown ID cannot be displayed as accepted even if spoofed response claims consistency",()=>{
+ const a=documentVerdict({decision:"manual_review",documentScreening:{status:"text_consistent_unverified",declaredIdType:"school_id",detectedIdType:"school_id"}});
+ assert.equal(a.kind,"rejected");
+});
