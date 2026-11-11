@@ -1,7 +1,7 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const assert = require("node:assert/strict");
-const read = name => fs.readFileSync(path.join(__dirname, "..", name), "utf8");
+const read = name => fs.readFileSync(path.join(__dirname, "..", name), "utf8").replace(/\r\n/g, "\n");
 const sa = read("app/(superadmin)/_layout.tsx");
 const lgu = read("app/(admin)/_layout.tsx");
 const accounts = read("app/(superadmin)/admin-accounts.tsx");

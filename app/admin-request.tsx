@@ -1,12 +1,12 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { deleteApp, initializeApp } from "firebase/app";
-import { createUserWithEmailAndPassword, deleteUser, getAuth, sendEmailVerification, signOut } from "firebase/auth";
-import { doc, getFirestore, serverTimestamp, setDoc } from "firebase/firestore";
+import { connectAuthEmulator, createUserWithEmailAndPassword, deleteUser, getAuth, sendEmailVerification, signOut } from "firebase/auth";
+import { connectFirestoreEmulator, doc, getFirestore, serverTimestamp, setDoc } from "firebase/firestore";
 import React, { useState } from "react";
 import { ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { SJDM_BARANGAYS } from "../constants/sjdmBarangays";
-import { firebaseConfig } from "../lib/firebase";
+import { firebaseConfig, usingFirebaseEmulators } from "../lib/firebase";
 
 /** Applicant registration creates NO Admin permissions. Only Super Admin can verify and grant Admin role. */
 export default function LguStaffApplication() {
@@ -35,6 +35,10 @@ export default function LguStaffApplication() {
     const app=initializeApp(firebaseConfig,"lgu-application-"+Date.now());
     const candidateAuth=getAuth(app);
     const candidateDb=getFirestore(app);
+    if (usingFirebaseEmulators) {
+      connectAuthEmulator(candidateAuth, "http://127.0.0.1:9099", { disableWarnings: true });
+      connectFirestoreEmulator(candidateDb, "127.0.0.1", 8080);
+    }
     let newUser:Awaited<ReturnType<typeof createUserWithEmailAndPassword>>["user"]|null=null;
     try{
       newUser=(await createUserWithEmailAndPassword(candidateAuth,email,form.password)).user;

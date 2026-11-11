@@ -40,7 +40,8 @@ const localConfig = {
   appId: "demo-volunserve-local-web",
 };
 
-const ENABLE_LOCAL_TESTING = false;
+const ENABLE_LOCAL_TESTING =
+  process.env.EXPO_PUBLIC_USE_FIREBASE_EMULATORS === "true";
 
 const isLocalBrowser =
   typeof window !== "undefined" &&
