@@ -48,8 +48,8 @@ const first=reviewed.indexOf(start),last=reviewed.indexOf(stop);
 assert(first>0&&last>first&&reviewed.indexOf(start,first+1)<0);
 let before=reviewed.slice(0,first)+reviewed.slice(last);
 for(const line of [
-  "        && permittedNewResidentEmail()\\n",
-  "        && permittedNewApplicantEmail()\\n",
+  "        && permittedNewResidentEmail()\n",
+  "        && permittedNewApplicantEmail()\n",
 ]){
   assert.equal(before.split(line).length,2,"Reviewed helper changed.");
   before=before.replace(line,"");
@@ -59,9 +59,9 @@ assert.equal(activeFingerprint,
   "b4e67103503213bec28671f2dc2ab0440edd4e38a2ffd9d6ad6d2f93ccb9a269",
   "Reviewed Rules provenance differs from the verified active release.");
 const candidate = fs.readFileSync("firestore.rules","utf8");
-const oldField = "          'age',\\n          'email',\\n          'phoneNumber',";
-const newField = "          'age',\\n          'dateOfBirth',\\n          'email',\\n          'phoneNumber',";
-const anchor = "          'createdAt'\\n        ])\\n        && request.resource.data.role == 'resident'";
+const oldField = "          'age',\n          'email',\n          'phoneNumber',";
+const newField = "          'age',\n          'dateOfBirth',\n          'email',\n          'phoneNumber',";
+const anchor = "          'createdAt'\n        ])\n        && request.resource.data.role == 'resident'";
 const guarded = [
   "          'createdAt'",
   "        ])",
@@ -75,7 +75,7 @@ const guarded = [
   "          )",
   "        )",
   "        && request.resource.data.role == 'resident'"
-].join("\\n");
+].join("\n");
 assert.equal(before.split(oldField).length,2,"Active resident field block changed");
 assert.equal(before.split(anchor).length,2,"Active resident create guard changed");
 const expected = before.replace(oldField,()=>newField).replace(anchor,()=>guarded);
