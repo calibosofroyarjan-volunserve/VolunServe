@@ -30,16 +30,18 @@ assert(nav.includes('volunteerOnlyRoutes') &&
  nav.includes('hasVolunteerAccess(profile)') &&
  nav.includes('hasResidentAccess(profile)'),
  "Preserve mandatory role gates and login protection");
-assert(volunteerWeb.includes('colors={["#EFFBF5", "#DFF4E9", "#F7FDF9"]}') &&
- volunteerWeb.includes('colors={["#EFFBF5", "#DDF4E8", "#F8FDFA"]}') &&
- volunteerWeb.includes('botanicalDesktop') && volunteerWeb.includes('botanicalMobile'),
- "Emergency Task web/mobile headers should share botanical mint appearance");
+assert(volunteerWeb.includes('style={styles.mobileTaskHeader}') &&
+ volunteerWeb.includes('style={styles.headerRow}') &&
+ volunteerWeb.includes('volunserveUi as ui') &&
+ !volunteerWeb.includes('botanicalDesktop') &&
+ !volunteerWeb.includes('botanicalMobile'),
+ "Emergency Tasks web/mobile headers should use matching, uncluttered VolunServe surfaces");
 assert(volunteerWeb.includes('openLiveMap()') &&
  volunteerWeb.includes('onSnapshot(') &&
  volunteerWeb.includes('runTransaction('),
  "Keep all live response map, task and Firestore handling unchanged");
-assert(volunteerNative.includes('styles.headerLeaf') &&
- volunteerNative.includes('backgroundColor: "#E9F8F0"') &&
+assert(volunteerNative.includes('backgroundColor: ui.color.surface') &&
+ !volunteerNative.includes('styles.headerLeaf') &&
  volunteerNative.includes('openLiveMap()'),
  "Native Volunteer header must match without losing map action");
 assert(assistance.includes('colors={["#F1FCF6","#E4F7EB","#D7F2E3","#E9F9F1"]}') &&
