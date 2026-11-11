@@ -109,7 +109,7 @@ def assess_profile_address(expected_barangay: str, ocr_text: str) -> dict:
         return {"profileAddressCheck": "not_checked", "profileAddressCompared": False}
     normalized = re.sub(r"[^A-Z0-9 ]+", " ", _normalize(ocr_text))
     normalized = " ".join(normalized.split())
-    labels = re.compile(r"\b(?:RESIDENTIAL\s+ADDRESS|HOME\s+ADDRESS|ADDRESS|TIRAHAN|TIRAHANAN)\b")
+    labels = re.compile(r"\b(?:RESIDENTIAL\s+ADDRESS|HOME\s+ADDRESS|(?<!EMAIL\s)ADDRESS|TIRAHAN|TIRAHANAN)\b")
     found = False
     for match in labels.finditer(normalized):
         area = normalized[match.end():match.end()+120]
