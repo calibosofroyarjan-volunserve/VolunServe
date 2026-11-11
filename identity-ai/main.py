@@ -11,6 +11,7 @@ import cv2
 import mediapipe as mp
 import pytesseract
 from document_screening import assess_document_sides, assess_profile_name, document_ocr_unavailable, add_photo_quality, blurry_national_id_claim_needs_review
+from profile_consistency import profile_comparison
 from face_boxes import deduplicate_face_boxes
 import numpy as np
 from fastapi import FastAPI, Header, HTTPException, Request
@@ -96,6 +97,8 @@ app.add_middleware(
         "X-VolunServe-Internal-Key",
         "X-VolunServe-Profile-First-Name",
         "X-VolunServe-Profile-Last-Name",
+        "X-VolunServe-Profile-Date-Of-Birth",
+        "X-VolunServe-Profile-Barangay",
     ],
 )
 
@@ -905,8 +908,9 @@ def extract_government_id_text(id_document_bytes, label):
 def screen_government_id(
     *, declared_type, id_document_bytes, id_back_document_bytes=None,
     expected_first_name="", expected_last_name="",
+    expected_date_of_birth="", expected_barangay="",
 ):
-    """OCR plausibility on both card sides; never proof of valid issuance."""
+    """OCR plausibility and profile consistency; never government issuance."""
     try:
         front_text = extract_government_id_text(
             id_document_bytes, "Government ID front image"
@@ -921,9 +925,17 @@ def screen_government_id(
         # Transient whole-image blur estimate; not proof of real ID issuance.
         quality = image_quality(decode_image(id_document_bytes, "Government ID front image"))
         result = add_photo_quality(result, quality["blurVariance"])
+        ocr_combined = front_text + "\n" + (back_text or "")
         result.update(assess_profile_name(
-            expected_first_name, expected_last_name, front_text + "\n" + (back_text or "")
+            expected_first_name, expected_last_name, ocr_combined
         ))
+        result.update(profile_comparison(
+            expected_date_of_birth, expected_barangay, ocr_combined
+        ))
+        # Explicitly report missing issuer/PAD checks. Neither OCR, matching
+        # demographics nor a client movement challenge proves identity.
+        result["issuerAuthenticityStatus"] = "not_verified"
+        result["presentationAttackStatus"] = "not_validated"
         return result
     except Exception:
         logging.warning("Government ID OCR screening unavailable")
@@ -932,6 +944,9 @@ def screen_government_id(
         result["backSideScreened"] = False
         result["profileNameCheck"] = "inconclusive"
         result["profileNameCompared"] = False
+        result.update(profile_comparison(expected_date_of_birth, expected_barangay, ""))
+        result["issuerAuthenticityStatus"] = "not_verified"
+        result["presentationAttackStatus"] = "not_validated"
         return result
 
 
@@ -1221,6 +1236,16 @@ async def verify_identity(
         default=None,
         alias="X-VolunServe-Profile-Last-Name",
     ),
+    x_volunserve_profile_date_of_birth: str
+    | None = Header(
+        default=None,
+        alias="X-VolunServe-Profile-Date-Of-Birth",
+    ),
+    x_volunserve_profile_barangay: str
+    | None = Header(
+        default=None,
+        alias="X-VolunServe-Profile-Barangay",
+    ),
 ):
     require_internal_backend(
         x_volunserve_internal_key
@@ -1346,6 +1371,8 @@ async def verify_identity(
             id_back_document_bytes=id_back_document_bytes,
             expected_first_name=x_volunserve_profile_first_name or "",
             expected_last_name=x_volunserve_profile_last_name or "",
+            expected_date_of_birth=x_volunserve_profile_date_of_birth or "",
+            expected_barangay=x_volunserve_profile_barangay or "",
         )
         screening_status = document_screening.get("status")
         if blurry_national_id_claim_needs_review(id_type, document_screening):
