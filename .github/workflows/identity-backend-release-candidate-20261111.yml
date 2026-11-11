@@ -57,6 +57,13 @@ jobs:
       # Synthetic no-deploy config: do not point any CI test at live identity API.
       EXPO_PUBLIC_VOLUNSERVE_ENV: staging
       EXPO_PUBLIC_IDENTITY_VERIFICATION_API_URL: https://identity-bundle-smoke.invalid
+      # Synthetic Firebase credentials for BUILD ONLY. No real or production access.
+      EXPO_PUBLIC_FIREBASE_API_KEY: fake-ci-key-no-external-auth
+      EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN: ci-identity-isolated.firebaseapp.com
+      EXPO_PUBLIC_FIREBASE_PROJECT_ID: ci-identity-isolated
+      EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET: ci-identity-isolated.appspot.com
+      EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID: '000000000000'
+      EXPO_PUBLIC_FIREBASE_APP_ID: 1:000000000000:web:0000000000000000
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
