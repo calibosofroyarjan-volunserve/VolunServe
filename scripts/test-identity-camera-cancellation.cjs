@@ -101,6 +101,7 @@ function setupSelfieCapture() {
   return {
     ...recorded,
     get blobs() { return recorded.blobs; },
+    get stopped() { return recorded.stopped; },
     cameraRequestRef,
     captureLockRef,
     streamRef,
