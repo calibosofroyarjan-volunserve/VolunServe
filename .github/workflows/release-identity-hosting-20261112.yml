@@ -8,6 +8,7 @@ on:
       - .github/workflows/release-identity-hosting-20261112.yml
       - scripts/publish-identity-dob-rules-safely.cjs
       - scripts/validate-identity-hosting-release.cjs
+      - backend/test-firestore-dob-rules.js
       - firestore.rules
 
 permissions:
