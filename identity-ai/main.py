@@ -10,7 +10,7 @@ from io import BytesIO
 import cv2
 import mediapipe as mp
 import pytesseract
-from document_screening import assess_document_sides, assess_profile_name, document_ocr_unavailable, add_photo_quality
+from document_screening import assess_document_sides, assess_profile_name, document_ocr_unavailable, add_photo_quality, blurry_national_id_claim_needs_review
 from face_boxes import deduplicate_face_boxes
 import numpy as np
 from fastapi import FastAPI, Header, HTTPException, Request
@@ -1348,37 +1348,30 @@ async def verify_identity(
             expected_last_name=x_volunserve_profile_last_name or "",
         )
         screening_status = document_screening.get("status")
-        if (screening_status != "text_consistent_unverified"
-                or document_screening.get("detectedIdType") != id_type):
+        if blurry_national_id_claim_needs_review(id_type, document_screening):
+            # Claim not verified. Human can request a better scan.
+            # Keep this blocked from Approved identity state.
+            result = manual_review_result(
+                uid=uid,
+                message=(
+                    "The photo selected as National ID is too blurry for reliable "
+                    "identity verification. Pending Admin review for a clearer "
+                    "rescan or independent check; this is NOT an approved ID."
+                ),
+                warning="blurry_national_id_claim_review",
+            )
+        elif (screening_status != "text_consistent_unverified"
+              or document_screening.get("detectedIdType") != id_type):
             if screening_status == "unsupported":
                 reason = "School IDs are not supported. Select and scan a valid government-issued ID."
             elif screening_status == "mismatch":
                 reason = "The scanned document does not match the selected government ID type. Select the correct ID and retry."
             else:
                 reason = "The selected government ID type could not be confirmed from the scan. Retake a clear photo and retry."
-            if (id_type == "national_id"
-                    and screening_status == "inconclusive"
-                    and document_screening.get("imageQualityStatus") == "low"
-                    and document_screening.get("detectedIdType") is None
-                    and "ocr_unavailable" not in document_screening.get("warningCodes", [])):
-                # Not proof that a National ID was submitted: simply route
-                # a blurry, unclassified document selected as National ID
-                # to Admin to request a rescan or independently check it.
-                # The Admin cannot grant Verified status from this OCR result.
-                result = manual_review_result(
-                    uid=uid,
-                    message=(
-                        "The image selected as National ID is too blurry to identify "
-                        "reliably. Submitted to Admin review. The Admin can request "
-                        "a clearer rescan; this does not verify the ID."
-                    ),
-                    warning="blurry_national_id_claim_review",
-                )
-            else:
-                result = failed_attempt_result(
-                    uid=uid, message=reason,
-                    warning="selected_government_id_not_recognized",
-                )
+            result = failed_attempt_result(
+                uid=uid, message=reason,
+                warning="selected_government_id_not_recognized",
+            )
         else:
             result = await asyncio.to_thread(
                 run_face_verification,
