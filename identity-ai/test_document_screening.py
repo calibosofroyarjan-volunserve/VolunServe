@@ -96,6 +96,16 @@ class GovernmentIdScreeningTests(unittest.TestCase):
         self.assertEqual(result["status"], "inconclusive")
         self.assertIn("document_back_looks_like_front", result["warningCodes"])
 
+    def test_repeated_issuer_heading_alone_on_back_is_not_false_duplicate_front(self):
+        result = assess_document_sides(
+            "national_id",
+            "PHILIPPINE IDENTIFICATION CARD SURNAME SAMPLE GIVEN NAMES TEST",
+            "PHILID BLOOD TYPE O MARITAL STATUS SINGLE",
+        )
+        self.assertEqual(result["status"], "text_consistent_unverified")
+        self.assertNotIn("document_back_looks_like_front", result["warningCodes"])
+        self.assertFalse(result["authenticityVerified"])
+
     def test_document_with_back_only_clues_in_front_fails_closed(self):
         result = assess_document_sides(
             "national_id",
