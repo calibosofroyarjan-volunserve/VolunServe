@@ -30,7 +30,9 @@ export default function DocumentScreeningSummary({
   const sideProblem = screening.warningCodes?.some((code) =>
     ["document_front_back_swapped", "document_front_side_conflict", "document_back_looks_like_front"].includes(code),
   );
+  const birthConflict = screening.profileBirthDateCheck === "possible_conflict";
   const title = sideProblem ? "Retake ID — front/back position may be wrong"
+    : birthConflict ? "Birth date needs Admin review"
     : recognized
     ? (screening.detectedIdType === "national_id" ? "National ID text recognized" : "Government ID text recognized")
     : unsupported ? "ID rejected — not supported"
@@ -84,9 +86,35 @@ export default function DocumentScreeningSummary({
           </Text>
         </View>
         <View style={styles.row}>
+          <Text style={styles.label}>Birthday vs profile</Text>
+          <Text style={styles.value}>
+            {screening.profileBirthDateCheck === "possible_match" ? "Date appears consistent (OCR only)"
+              : screening.profileBirthDateCheck === "possible_conflict" ? "Possible difference — Admin review"
+              : screening.profileBirthDateCheck === "not_checked" ? "Not checked (no saved birthday)"
+              : "Unclear or absent on scanned ID"}
+          </Text>
+        </View>
+        <View style={styles.row}>
+          <Text style={styles.label}>Address vs profile</Text>
+          <Text style={styles.value}>
+            {screening.profileAddressCheck === "possible_match" ? "Barangay appears consistent (OCR only)"
+              : screening.profileAddressCheck === "not_checked" ? "Not checked (no saved barangay)"
+              : "Not readable or not on this ID"}
+          </Text>
+        </View>
+        <View style={styles.row}>
+          <Text style={styles.label}>Official issuer check</Text>
+          <Text style={styles.value}>Not verified — PSA/issuer check required</Text>
+        </View>
+        <View style={styles.row}>
+          <Text style={styles.label}>Anti-spoofing (PAD)</Text>
+          <Text style={styles.value}>Not validated — movement is not proof</Text>
+        </View>
+        <View style={styles.row}>
           <Text style={styles.label}>Identity decision</Text>
           <Text style={styles.value}>
             {sideProblem ? "Rejected / retake correct ID side"
+              : birthConflict ? "Pending Admin review — birth date differs"
               : recognized ? "Pending LGU validation (independent check required)"
               : blurryNationalId ? "Pending Admin review — no approval" : "Rejected / retry required"}
           </Text>
@@ -94,8 +122,9 @@ export default function DocumentScreeningSummary({
       </View>
       <Text style={styles.disclaimer}>
         Only the five supported ID types may proceed after document screening.
-        OCR alone cannot prove authenticity, official issuance, or liveness.
-        Independent LGU verification is required.
+        Birthday, barangay and ID-type comparisons are only OCR clues.
+        They do not prove official issuance, residence or liveness.
+        Independent issuer checks, qualified anti-spoofing validation and Admin review are still required.
       </Text>
     </View>
   );
