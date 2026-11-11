@@ -42,6 +42,7 @@ function classifyIdentityReviewTrack({screening, decision, idImageQualityScore} 
   if (selectedIdRecognized(screening) &&
       screening.declaredIdType === "national_id" &&
       screening.profileNameCheck === "possible_match" &&
+      screening.profileBirthDateCheck !== "possible_conflict" &&
       screening.imageQualityStatus === "adequate" &&
       Number.isFinite(idImageQualityScore) && idImageQualityScore >= 0.68) {
     // Expedite only. OCR name presence, a score and a face comparison
@@ -54,11 +55,14 @@ function classifyIdentityReviewTrack({screening, decision, idImageQualityScore} 
 function enforceSelectedIdDecision(rawDecision, screening, livenessImplemented) {
   if (rawDecision === "manual_review" && blurryNationalIdNeedsReview(screening)) return "manual_review";
   if (!selectedIdRecognized(screening)) return "failed";
-  // Never auto-approve from face comparison or OCR keyword recognition alone.
-  if (rawDecision === "verified" &&
-      (screening.authenticityVerified !== true || livenessImplemented !== true)) {
-    return "manual_review";
-  }
+  // A DOB conflict is an OCR clue, not fraud. Do not grant verification;
+  // route to independent Admin correction/identity review.
+  if (screening.profileBirthDateCheck === "possible_conflict" &&
+      rawDecision === "verified") return "manual_review";
+  // Until a separate, authorized issuer check AND independently validated
+  // presentation attack detection exist, NO AI result can auto-verify.
+  // Ignore AI "authenticityVerified" or "livenessImplemented" claims alone.
+  if (rawDecision === "verified") return "manual_review";
   return rawDecision;
 }
 
