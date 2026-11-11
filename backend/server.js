@@ -748,6 +748,16 @@ function normalizeIdDocumentScreening(value) {
     profileNameCompared: value?.profileNameCompared === true,
     profileNameCheck: ["possible_match", "inconclusive", "not_checked"].includes(value?.profileNameCheck)
       ? value.profileNameCheck : "not_checked",
+    profileBirthDateCompared: value?.profileBirthDateCompared === true,
+    profileBirthDateCheck: ["possible_match", "possible_conflict", "inconclusive", "not_checked"].includes(value?.profileBirthDateCheck)
+      ? value.profileBirthDateCheck : "not_checked",
+    profileAddressCompared: value?.profileAddressCompared === true,
+    profileAddressCheck: ["possible_match", "inconclusive", "not_checked"].includes(value?.profileAddressCheck)
+      ? value.profileAddressCheck : "not_checked",
+    // This API has NO PSA registry connection or ISO-tested PAD integration.
+    // Never adopt authenticity/liveness claims forwarded by the image service.
+    issuerAuthenticityStatus: "not_verified",
+    presentationAttackStatus: "not_validated",
     warningCodes: Array.isArray(value?.warningCodes)
       ? value.warningCodes.filter(code => warnings.includes(code)).slice(0, 4)
       : ["ocr_unavailable"],
