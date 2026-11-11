@@ -7,7 +7,8 @@ const NAMES: Record<string, string> = {
   national_id: "Philippine National ID",
   drivers_license: "Driver's License",
   passport: "Philippine Passport",
-  other_government_id: "Other Government ID",
+  umid: "Unified Multi-Purpose ID (UMID)",
+  prc_id: "PRC Professional ID",
 };
 
 /** Shared, privacy-safe document-type assessment for Residents and LGU. */
@@ -20,11 +21,20 @@ export default function DocumentScreeningSummary({
 
   const recognized = screening.status === "text_consistent_unverified";
   const mismatch = screening.status === "mismatch";
+  const unsupported = screening.status === "unsupported";
+  const blurryNationalId = screening.status === "inconclusive" &&
+    screening.declaredIdType === "national_id" &&
+    screening.detectedIdType === null &&
+    screening.imageQualityStatus === "low" &&
+    screening.warningCodes.includes("low_document_image_quality");
   const title = recognized
     ? (screening.detectedIdType === "national_id" ? "National ID text recognized" : "Government ID text recognized")
-    : mismatch ? "Selected ID type does not match" : "Document recognition inconclusive";
-  const icon = recognized ? "document-text-outline" : mismatch ? "alert-circle-outline" : "help-circle-outline";
-  const accent = recognized ? "#12644E" : mismatch ? "#A13F2B" : "#A46B16";
+    : unsupported ? "ID rejected — not supported"
+      : mismatch ? "ID rejected — wrong government ID type"
+        : blurryNationalId ? "Blurry scan — Admin review / rescan"
+          : "ID not accepted — scan inconclusive";
+  const icon = recognized ? "document-text-outline" : unsupported || mismatch ? "alert-circle-outline" : "help-circle-outline";
+  const accent = recognized ? "#12644E" : unsupported || mismatch ? "#A13F2B" : "#A46B16";
 
   return (
     <View style={styles.panel} accessibilityLabel="Government ID document screening result">
@@ -48,13 +58,39 @@ export default function DocumentScreeningSummary({
           <Text style={styles.value}>{NAMES[screening.detectedIdType || ""] || "Not recognized"}</Text>
         </View>
         <View style={styles.row}>
+          <Text style={styles.label}>ID back</Text>
+          <Text style={styles.value}>
+            {screening.declaredIdType === "passport"
+              ? "Bio page only"
+              : screening.backSideScreened
+                ? "Captured and OCR screened"
+                : screening.backSideProvided
+                  ? "Captured; OCR unavailable"
+                  : "Not confirmed"}
+          </Text>
+        </View>
+        <View style={styles.row}>
+          <Text style={styles.label}>Account name vs ID text</Text>
+          <Text style={styles.value}>
+            {screening.profileNameCheck === "possible_match"
+              ? "Name appears in ID text"
+              : screening.profileNameCheck === "inconclusive"
+                ? "Not confirmed by OCR"
+                : "Not checked"}
+          </Text>
+        </View>
+        <View style={styles.row}>
           <Text style={styles.label}>Identity decision</Text>
-          <Text style={styles.value}>Pending LGU validation</Text>
+          <Text style={styles.value}>
+            {recognized ? "Pending LGU validation (independent check required)"
+              : blurryNationalId ? "Pending Admin review — no approval" : "Rejected / retry required"}
+          </Text>
         </View>
       </View>
       <Text style={styles.disclaimer}>
-        Recognition checks document text only; it cannot prove authenticity,
-        official issuance or liveness. Independent LGU verification is required.
+        Only the five supported ID types may proceed after document screening.
+        OCR alone cannot prove authenticity, official issuance, or liveness.
+        Independent LGU verification is required.
       </Text>
     </View>
   );
