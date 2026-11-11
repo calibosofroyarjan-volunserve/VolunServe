@@ -1,0 +1,48 @@
+name: Identity backend protected-release candidate (NO DEPLOY)
+
+on:
+  push:
+    branches:
+      - release/identity-backend-from-protected-20261111
+    paths:
+      - 'backend/**'
+      - 'app/identity-verification.tsx'
+      - 'app/identity-verification.web.tsx'
+      - 'app/(admin)/identity-reviews.tsx'
+      - 'lib/identityVerification.ts'
+      - 'components/identity/DocumentScreeningSummary.tsx'
+      - '.github/workflows/identity-backend-release-candidate-20261111.yml'
+  pull_request:
+    branches:
+      - backend-live-protected
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  backend-security:
+    name: Node syntax, identity policy and production-boundary tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Parse protected backend and identity helpers
+        run: node --check backend/server.js && node --check backend/selectedIdPolicy.js && node --check backend/identityIssuerReviewPolicy.js
+      - name: Run no-credential security regression tests
+        run: node --test backend/test-selectedIdPolicy.js backend/test-identityIssuerReviewPolicy.js backend/test-protectedIdentityReleaseBoundary.js
+
+  web-and-mobile-types:
+    name: Identity and existing app TypeScript compatibility
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npx tsc --noEmit --pretty false
