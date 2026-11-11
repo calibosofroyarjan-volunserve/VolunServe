@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { View, Text } from "react-native";
+import { SJDM_REFERENCE_GEOMETRY } from "../constants/sjdmBoundaryReference";
 
 type Props = {
   latitude: number | null;
@@ -15,6 +16,7 @@ const isPoint = (lat: unknown, lng: unknown): lat is number =>
 function iframeDocument(token: string, latitude: number, longitude: number) {
   // Embed numbers + an unpredictable instance token; no user-supplied HTML.
   const initial = JSON.stringify({ token, latitude, longitude }).replace(/</g, "\\u003c");
+  const cityPolygon = JSON.stringify(SJDM_REFERENCE_GEOMETRY).replace(/</g, "\\u003c");
   return `<!doctype html><html lang="en"><head>
   <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
   <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@5/dist/maplibre-gl.css">
@@ -30,13 +32,27 @@ function iframeDocument(token: string, latitude: number, longitude: number) {
     #fallback{display:none;position:absolute;inset:0;place-items:center;padding:22px;
       text-align:center;background:#E7F0E9;color:#46665B;font:13px system-ui}
   </style></head><body>
-  <div id="map"></div><div id="hint">Tap anywhere to place the event pin</div>
+  <div id="map"></div><div id="hint">Select a meeting point inside SJDM · geoBoundaries</div>
   <div id="fallback">Map is unavailable. Use Current GPS or Enter Coordinates below.</div>
   <script src="https://unpkg.com/maplibre-gl@5/dist/maplibre-gl.js"><\/script>
   <script>
     (() => {
       const initial = ${initial};
       const token = initial.token;
+      const city = ${cityPolygon};
+      const isInsideRing = (lat,lng,ring) => {
+        let inside=false;
+        for(let i=0,j=ring.length-1;i<ring.length;j=i++){
+          const [xi,yi]=ring[i], [xj,yj]=ring[j];
+          if((yi>lat)!==(yj>lat) && lng<(xj-xi)*(lat-yi)/(yj-yi)+xi)inside=!inside;
+        }
+        return inside;
+      };
+      const insideCity = (lat,lng) => {
+        const polygons = city.type==="Polygon" ? [city.coordinates] : city.coordinates;
+        return polygons.some(rings=>rings.length && isInsideRing(lat,lng,rings[0]) &&
+          !rings.slice(1).some(hole=>isInsideRing(lat,lng,hole)));
+      };
       let map, marker = null;
       let acceptedPoint = null;
       const showFallback = () => { document.getElementById("fallback").style.display = "grid"; };
@@ -48,9 +64,8 @@ function iframeDocument(token: string, latitude: number, longitude: number) {
       }
       function move(lat,lng,notify) {
         if (!valid(lat,lng) || !map) return;
-        // Mirror backend's existing SJDM service-area bounds. An out-of-area
-        // click reports validation feedback but never displays a false venue pin.
-        if (lat < 14.65 || lat > 15.0 || lng < 120.88 || lng > 121.30) {
+        // The real SJDM reference polygon, not a rectangular service area.
+        if (!insideCity(lat,lng)) {
           if (marker && acceptedPoint) marker.setLngLat(acceptedPoint);
           if (notify) parent.postMessage({kind:"volunserve:event-pin:select",token,latitude:lat,longitude:lng},"*");
           return;
@@ -81,6 +96,11 @@ function iframeDocument(token: string, latitude: number, longitude: number) {
           style:"https://tiles.openfreemap.org/styles/liberty",
           center:[initial.longitude,initial.latitude],zoom:14,attributionControl:true});
         map.addControl(new maplibregl.NavigationControl({showCompass:false}),"top-right");
+        map.on("load",()=>{
+          map.addSource("sjdm-outline",{type:"geojson",data:{type:"Feature",properties:{},geometry:city}});
+          map.addLayer({id:"sjdm-outline",type:"line",source:"sjdm-outline",
+            paint:{"line-color":"#087F75","line-width":3,"line-opacity":0.85}});
+        });
         map.on("click", event => move(event.lngLat.lat,event.lngLat.lng,true));
         map.on("error", event => {
           if (String(event?.error?.message||"").includes("style")) showFallback();

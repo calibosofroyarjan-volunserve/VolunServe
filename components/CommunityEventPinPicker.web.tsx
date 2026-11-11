@@ -1,7 +1,9 @@
 import React, { useEffect, useRef, useState } from "react";
-import { Linking, Pressable, Text, TextInput, View } from "react-native";
+import { Pressable, Text, TextInput, View } from "react-native";
 import InteractiveEventPinMap from "./InteractiveEventPinMap.web";
 import { lookUpEventVenue } from "../lib/eventVenueLookup";
+import { isSjdmEventPoint, SJDM_EVENT_BOUNDARY } from "../lib/communityEventSjdmScope";
+import { boundaryBounds } from "../lib/sjdmMapBoundary";
 
 type Venue = { latitude: number; longitude: number };
 type Props = {
@@ -17,9 +19,7 @@ const GOOGLE_JS_KEY = String(process.env.EXPO_PUBLIC_GOOGLE_MAPS_JS_API_KEY || "
 let googleScriptPromise: Promise<any> | null = null;
 
 function validVenue(lat: number, lng: number) {
-  // Matches the Node proposal API's broad SJDM-area coordinate guard.
-  return Number.isFinite(lat) && Number.isFinite(lng) &&
-    lat >= 14.65 && lat <= 15.0 && lng >= 120.88 && lng <= 121.30;
+  return isSjdmEventPoint(lat, lng);
 }
 function tidy(lat: number, lng: number): Venue {
   return { latitude: Number(lat.toFixed(6)), longitude: Number(lng.toFixed(6)) };
@@ -92,7 +92,7 @@ export default function CommunityEventPinPicker({ latitude, longitude, barangay 
 
   const pick = (lat: number, lng: number) => {
     if (!validVenue(lat, lng)) {
-      setMessage("Pumili ng location sa San Jose del Monte area. Hindi tatanggapin ang pin na malayo sa service area.");
+      setMessage("Pumili ng event pin sa loob ng City of San Jose del Monte.");
       return false;
     }
     const next = tidy(lat, lng);
@@ -139,6 +139,7 @@ export default function CommunityEventPinPicker({ latitude, longitude, barangay 
       if (!active || !mapContainer.current) return;
       googleRef.current = g;
       const point = draft || savedRef.current || CENTER;
+      const cityBounds = boundaryBounds(SJDM_EVENT_BOUNDARY);
       const map = new g.maps.Map(mapContainer.current, {
         center: { lat: point.latitude, lng: point.longitude },
         zoom: draft || savedRef.current ? 16 : 13,
@@ -146,6 +147,10 @@ export default function CommunityEventPinPicker({ latitude, longitude, barangay 
         streetViewControl: false,
         fullscreenControl: true,
         gestureHandling: "greedy",
+        restriction: {latLngBounds: {
+          north: cityBounds.north, south: cityBounds.south,
+          east: cityBounds.east, west: cityBounds.west,
+        }, strictBounds: true},
       });
       mapInstance.current = map;
       map.addListener("click", (event: any) => {
@@ -276,11 +281,6 @@ export default function CommunityEventPinPicker({ latitude, longitude, barangay 
       )}
 
       <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 9, marginTop: 13 }}>
-        <Pressable accessibilityRole="link"
-          onPress={() => void Linking.openURL("https://www.google.com/maps/@14.8139,121.0453,13z")}
-          style={{ ...button, backgroundColor: "#FFFFFF", borderWidth: 1, borderColor: "#D1E4D9" }}>
-          <Text style={{ ...buttonText, color: "#245F4C" }}>Open Google Maps ↗</Text>
-        </Pressable>
         <Pressable accessibilityRole="button" accessibilityState={{ expanded: manualOpen }}
           onPress={() => setManualOpen(value => !value)}
           style={{ ...button, backgroundColor: "#FFFFFF", borderWidth: 1, borderColor: "#D1E4D9" }}>

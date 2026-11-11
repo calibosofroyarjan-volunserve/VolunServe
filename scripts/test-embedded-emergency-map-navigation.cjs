@@ -30,7 +30,10 @@ test("Emergency Reports owns Report Emergency and case-aware Live Response Map",
 test("Community Events still has its OWN map in event details, not a standalone sidebar module", () => {
   const events = read("app/(tabs)/community-events.tsx");
   assert.match(events, /import CommunityEventRoadMap from/);
-  assert.ok((events.match(/<CommunityEventRoadMap/g) || []).length >= 2, "Event detail maps missing");
+  assert.match(events, /const renderWebMap = \(event: CommunityEvent\)/);
+  assert.match(events, /<CommunityEventRoadMap/);
+  assert.ok((events.match(/renderWebMap\(event\)/g) || []).length >= 2,
+    "Volunteer and Resident event details must reuse the embedded event map");
   assert.match(events, /Event map belongs to the expanded event details/);
 });
 

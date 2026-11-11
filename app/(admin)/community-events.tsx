@@ -1,5 +1,6 @@
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { Redirect } from "expo-router";
+import { isSjdmEventPoint } from "../../lib/communityEventSjdmScope";
 import {
   collection,
   doc,
@@ -386,6 +387,12 @@ export default function CommunityEventAdminScreen() {
           );
         }
         const proposal = proposalSnap.data();
+        const proposedLatitude = Number(proposal.latitude);
+        const proposedLongitude = Number(proposal.longitude);
+        if (proposal.latitude == null || proposal.longitude == null ||
+            !isSjdmEventPoint(proposedLatitude, proposedLongitude)) {
+          throw new Error("Community Events may only be published with a confirmed meeting point inside San Jose del Monte.");
+        }
         const capacity = Number(proposal.capacity);
         if (
           !Number.isInteger(capacity) ||
