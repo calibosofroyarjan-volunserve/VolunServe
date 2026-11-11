@@ -42,7 +42,9 @@ const DEFAULT_ALLOWED_ORIGINS = [
   "http\://127.0.0.1:19006",
   "http\://127.0.0.1:3000",
 ];
-const IDENTITY_UPLOAD_LIMIT = "20mb";
+// Three media parts may each be up to 10 MiB: ID front, back and selfie.
+// A slightly larger raw multipart envelope prevents valid upper-bound uploads failing.
+const IDENTITY_UPLOAD_LIMIT = "32mb";
 const IDENTITY_RETRY_DELAY_MS = 8000;
 const MAX_IDENTITY_AI_ATTEMPTS = 3;
 const IDENTITY_PROCESSING_LEASE_MS = 3 * 60 * 1000;
