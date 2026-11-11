@@ -21,6 +21,7 @@ on:
       - 'backend/test-selectedIdPolicy.js'
       - 'backend/identityIssuerReviewPolicy.js'
       - 'backend/test-identityIssuerReviewPolicy.js'
+      - 'backend/test-fiveIdContract.cjs'
       - '.github/workflows/identity-ai-safe-tests.yml'
   pull_request:
     branches:
@@ -73,7 +74,7 @@ jobs:
       - name: Syntax checks
         run: node --check backend/firebaseAdmin.js && node --check backend/stagingIsolation.js && node --check backend/selectedIdPolicy.js && node --check backend/identityIssuerReviewPolicy.js && node --check backend/server.js
       - name: Production boundary regression tests
-        run: node --test backend/test-stagingIsolation.js backend/test-selectedIdPolicy.js backend/test-identityIssuerReviewPolicy.js
+        run: node --test backend/test-stagingIsolation.js backend/test-selectedIdPolicy.js backend/test-identityIssuerReviewPolicy.js backend/test-fiveIdContract.cjs
 
   frontend-types:
     name: Frontend TypeScript check
