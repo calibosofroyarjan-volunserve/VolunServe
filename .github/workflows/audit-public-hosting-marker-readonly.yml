@@ -1,0 +1,29 @@
+# Public Hosting check. No credentials, no production environment, no deployment.
+name: Verify Published VolunServe Hosting Revision (READ ONLY)
+on:
+  pull_request:
+    branches: [live-protected]
+    paths:
+      - '.github/workflows/audit-public-hosting-marker-readonly.yml'
+      - 'scripts/audit-public-hosting-revision-readonly.cjs'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify-public-release-marker:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Self-test trusted marker validation logic (no network)
+        run: node scripts/audit-public-hosting-revision-readonly.cjs --self-test
+      - name: Compare public volunserve.com marker and Firebase Hosting mirror (GET ONLY)
+        run: node scripts/audit-public-hosting-revision-readonly.cjs
+      - name: Confirm no production writes or deployments
+        run: echo "READ ONLY; no credentials, no mutations, no actions outside public GET"
