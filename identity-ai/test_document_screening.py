@@ -1,9 +1,52 @@
 import unittest
 
-from document_screening import assess_document_text, assess_document_sides, assess_profile_name, document_ocr_unavailable
+from document_screening import assess_document_text, assess_document_sides, assess_profile_name, document_ocr_unavailable, add_photo_quality, blurry_national_id_claim_needs_review
 
 
 class GovernmentIdScreeningTests(unittest.TestCase):
+    def test_blurry_national_id_claim_goes_to_human_rescan_review(self):
+        for text in ("", "PHILIPPINE IDENTIFICATION CARD"):
+            with self.subTest(text=text):
+                result = add_photo_quality(
+                    assess_document_text("national_id", text), 5.0
+                )
+                self.assertEqual(result["imageQualityStatus"], "low")
+                self.assertTrue(blurry_national_id_claim_needs_review("national_id", result))
+                self.assertFalse(result["authenticityVerified"])
+
+    def test_clear_national_id_and_name_is_still_unverified(self):
+        result = add_photo_quality(
+            assess_document_text("national_id", "PHILIPPINE IDENTIFICATION CARD"), 120.0
+        )
+        self.assertEqual(result["imageQualityStatus"], "adequate")
+        self.assertFalse(blurry_national_id_claim_needs_review("national_id", result))
+        self.assertFalse(result["authenticityVerified"])
+
+    def test_school_id_does_not_become_blurry_national_id_pending(self):
+        for text in (
+            "UNIVERSITY STUDENT ID PHILIPPINE IDENTIFICATION CARD",
+            "STUDENT ID",
+            "EMPLOYEE ID NATIONAL ID CARD",
+        ):
+            with self.subTest(text=text):
+                result = add_photo_quality(
+                    assess_document_text("national_id", text), 3.0
+                )
+                self.assertEqual(result["status"], "unsupported")
+                self.assertFalse(blurry_national_id_claim_needs_review("national_id", result))
+
+    def test_wrong_selected_type_stays_mismatch_even_if_blurry(self):
+        result = add_photo_quality(
+            assess_document_text("national_id", "DRIVER S LICENSE"), 1.0
+        )
+        self.assertEqual(result["status"], "mismatch")
+        self.assertFalse(blurry_national_id_claim_needs_review("national_id", result))
+
+    def test_ocr_engine_error_does_not_open_unverified_blur_review(self):
+        result = document_ocr_unavailable("national_id")
+        self.assertEqual(result["imageQualityStatus"], "unknown")
+        self.assertFalse(blurry_national_id_claim_needs_review("national_id", result))
+
     def test_account_name_may_appear_in_ocr_but_never_authenticates_id(self):
         result = assess_profile_name(
             "Maria", "Dela Cruz",
