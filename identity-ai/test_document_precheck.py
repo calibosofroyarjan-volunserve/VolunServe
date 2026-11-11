@@ -44,8 +44,22 @@ class DocumentPrecheckTests(unittest.IsolatedAsyncioTestCase):
         cls.front, _ = synthetic_photo(NATIONAL_SAMPLE)
         cls.back, _ = synthetic_photo(BACK_SIDE_SAMPLE)
         cls.school, _ = synthetic_photo(SCHOOL_SAMPLE)
+        cls.dob_front, _ = synthetic_photo((
+            "PHILIPPINE IDENTIFICATION CARD",
+            "DEMO SAMPLE - NOT A REAL ID",
+            "SURNAME: SAMPLE",
+            "GIVEN NAMES: TEST",
+            "DATE OF BIRTH: 2000-02-03",
+        ))
+        cls.barangay_back, _ = synthetic_photo((
+            "BLOOD TYPE: O",
+            "MARITAL STATUS: SINGLE",
+            "RESIDENTIAL ADDRESS: MUZON",
+            "DEMO - NOT A REAL ID",
+        ))
 
-    async def run_check(self, front=None, back=None, id_type="national_id", selfie=None, key="test-private-key"):
+    async def run_check(self, front=None, back=None, id_type="national_id", selfie=None,
+                        key="test-private-key", birth_date="", barangay=""):
         fields = {"idType": id_type, "idDocument": fake_image(self.front if front is None else front)}
         if back is not None:
             fields["idBackDocument"] = fake_image(back)
@@ -55,6 +69,10 @@ class DocumentPrecheckTests(unittest.IsolatedAsyncioTestCase):
             return await document_precheck(
                 FakeRequest(fields), x_volunserve_user_id="synthetic-user",
                 x_volunserve_internal_key=key,
+                x_volunserve_profile_first_name="TEST",
+                x_volunserve_profile_last_name="SAMPLE",
+                x_volunserve_profile_date_of_birth=birth_date,
+                x_volunserve_profile_barangay=barangay,
             )
 
     async def test_clear_correct_sides_can_continue_to_face_scan_only(self):
@@ -64,6 +82,42 @@ class DocumentPrecheckTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(result["authenticityVerified"])
         self.assertFalse(result["livenessVerified"])
         self.assertNotIn("selfie", repr(result).lower())
+
+    async def test_matching_birthday_and_barangay_are_reported_as_ocr_clues(self):
+        result = await self.run_check(
+            front=self.dob_front, back=self.barangay_back,
+            birth_date="2000-02-03", barangay="Muzon",
+        )
+        self.assertEqual(result["outcome"], "pass")
+        screening = result["documentScreening"]
+        self.assertEqual(screening["profileBirthDateCheck"], "possible_match")
+        self.assertEqual(screening["profileAddressCheck"], "possible_match")
+        self.assertNotIn("2000-02-03", repr(result))
+        self.assertNotIn("MUZON", repr(result).upper())
+        self.assertFalse(result["authenticityVerified"])
+        self.assertFalse(result["livenessVerified"])
+
+    async def test_birth_date_conflict_blocks_face_stage_without_accusing_of_fraud(self):
+        result = await self.run_check(
+            front=self.dob_front, back=self.barangay_back,
+            birth_date="2001-02-03", barangay="Muzon",
+        )
+        self.assertEqual(result["outcome"], "retry")
+        self.assertEqual(result["documentScreening"]["profileBirthDateCheck"],
+                         "possible_conflict")
+        self.assertIn("Admin", result["message"])
+        self.assertFalse(result["authenticityVerified"])
+
+    async def test_missing_legacy_birthday_is_not_falsely_verified(self):
+        result = await self.run_check(
+            front=self.dob_front, back=self.barangay_back,
+            birth_date="", barangay="",
+        )
+        self.assertEqual(result["documentScreening"]["profileBirthDateCheck"],
+                         "not_checked")
+        self.assertEqual(result["documentScreening"]["profileAddressCheck"],
+                         "not_checked")
+        self.assertFalse(result["authenticityVerified"])
 
     async def test_reversed_sides_prevent_face_stage(self):
         result = await self.run_check(front=self.back, back=self.front)
