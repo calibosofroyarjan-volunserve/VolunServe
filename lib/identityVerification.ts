@@ -124,6 +124,72 @@ export type IdentityVerificationResult = {
   message?: string;
 };
 
+export type DocumentPrecheckResult = {
+  outcome: "pass" | "review" | "retry";
+  detectedIdType: IdentityDocumentType | null;
+  documentScreening?: DocumentScreening;
+  message: string;
+};
+
+/**
+ * Private authenticated ID-only OCR screening before face capture.
+ * Explicit user consent is required. Photos are transient and do not
+ * consume a limited face-verification attempt; no selfie is sent.
+ */
+export async function precheckIdentityDocument(input: {
+  idType: IdentityDocumentType;
+  idDocument: CapturedIdentityMedia;
+  idBackDocument?: CapturedIdentityMedia | null;
+  consent: boolean;
+}): Promise<DocumentPrecheckResult> {
+  if (!input.consent) {
+    throw new Error("Consent is required before uploading an ID for preliminary AI document screening.");
+  }
+  if (!["national_id", "drivers_license", "passport", "umid", "prc_id"].includes(input.idType)) {
+    throw new Error("Select a supported government ID.");
+  }
+  validateMedia(input.idDocument, "ID front scan");
+  if (input.idType !== "passport") {
+    validateMedia(input.idBackDocument || undefined, "ID reverse scan");
+  }
+  const user = await getAuthenticatedUser();
+  const token = await user.getIdToken(true);
+  const body = new FormData();
+  body.append("idType", input.idType);
+  appendMedia(body, "idDocument", input.idDocument);
+  if (input.idType !== "passport" && input.idBackDocument) {
+    appendMedia(body, "idBackDocument", input.idBackDocument);
+  }
+  const response = await fetchWithTimeout(
+    `${getBackendBaseUrl()}/api/identity/document/precheck`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "X-VolunServe-Document-Precheck-Consent": "true",
+      },
+      body,
+    },
+    70000,
+  );
+  const data = await readResponseBody(response);
+  if (!response.ok) {
+    throw new Error(getResponseMessage(data,
+      "Document screening is unavailable. No face-verification attempt was used."));
+  }
+  const screening = parseDocumentScreening(data?.documentScreening);
+  const outcome = data?.outcome === "pass" && screening?.status === "text_consistent_unverified"
+    && screening?.detectedIdType === input.idType
+    ? "pass"
+    : data?.outcome === "review" ? "review" : "retry";
+  return {
+    outcome,
+    detectedIdType: screening?.detectedIdType || null,
+    documentScreening: screening,
+    message: getResponseMessage(data, "Retake the scanned government ID."),
+  };
+}
+
 export type SubmitIdentityVerificationInput = {
   idType: IdentityDocumentType;
   idDocument: CapturedIdentityMedia;
