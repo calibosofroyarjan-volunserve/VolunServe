@@ -6,6 +6,8 @@ on:
       - release/identity-hosting-live-20261112
     paths:
       - .github/workflows/release-identity-hosting-20261112.yml
+      - scripts/publish-identity-dob-rules-safely.cjs
+      - firestore.rules
 
 permissions:
   contents: read
@@ -55,6 +57,7 @@ jobs:
           }
           git merge-base --is-ancestor "$PINNED_MAIN_SHA" HEAD
           node scripts/validate-identity-hosting-release.cjs
+          node --check scripts/publish-identity-dob-rules-safely.cjs
 
       - name: Install exact pinned dependencies
         run: npm ci --no-audit --no-fund
