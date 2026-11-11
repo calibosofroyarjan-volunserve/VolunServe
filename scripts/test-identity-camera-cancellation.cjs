@@ -63,6 +63,7 @@ function setupIdCapture() {
   };
   return {
     ...recorded,
+    get blobs() { return recorded.blobs; },
     idCameraSessionRef,
     idCaptureLockRef,
     idStreamRef,
@@ -99,6 +100,7 @@ function setupSelfieCapture() {
   };
   return {
     ...recorded,
+    get blobs() { return recorded.blobs; },
     cameraRequestRef,
     captureLockRef,
     streamRef,
