@@ -5022,8 +5022,10 @@ app.post(
         detectedIdType: screening.detectedIdType,
         documentScreening: screening,
         // Sanitized hints only; no raw OCR values and no issuer claim.
-        message: pass
-          ? "ID type and scan arrangement appear consistent. This does not prove ID authenticity."
+        message: birthConflict
+          ? "The date of birth on the ID may differ from your saved profile. Retake a clearer document or request Admin profile review; OCR differences are not proof of fraud."
+          : pass
+          ? "ID scan and selected type appear consistent. Birthday/barangay are OCR hints only; Admin still checks unresolved details."
           : review
             ? "The National ID is too blurry. You may continue for Admin rescan review but cannot be automatically approved."
             : screening.warningCodes.includes("school_id_not_supported")
