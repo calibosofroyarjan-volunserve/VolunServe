@@ -77,3 +77,11 @@ test("all staging Firebase modules fail closed against production project",()=>{
  assert.match(firebaseSource,/usingStagingFirebase\s*\? stagingConfig\s*:\s*productionConfig/);
  assert.match(firebaseSource,/const app = existingApp \|\| initializeApp\(firebaseConfig\)/);
 });
+
+test("browser selfie blob is released when the selfie changes or page unmounts",()=>{
+ assert.match(screen,/const uri = selfie\?\.uri;/);
+ assert.match(screen,/\[selfie\?\.uri\]/);
+ assert.match(screen,/URL\.revokeObjectURL\(uri\)/);
+ assert.match(screen,/\[idDocument\?\.uri\]/);
+ assert.match(screen,/\[idBackDocument\?\.uri\]/);
+});
