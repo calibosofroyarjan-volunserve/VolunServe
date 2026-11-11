@@ -35,6 +35,10 @@ for(const required of [
  'id="precheck"', 'id="precheckConsent"', 'id="precheckResult"',
  '/api/identity/document/precheck', 'X-VolunServe-Document-Precheck-Consent',
  'No selfie, biometrics, DOB, user name or profile fields in this request',
+ 'documentOcrReady:d.documentOcrReady===true',
+ 'profileComparisonReady:d.profileComparisonReady===true',
+ 'birthdayVsSavedProfile:screening.profileBirthDateCheck',
+ 'barangayVsSavedProfile:screening.profileAddressCheck',
 ]){
  if(!html.includes(required))throw Error("Missing no-selfie staging OCR precheck safeguard: "+required);
 }
