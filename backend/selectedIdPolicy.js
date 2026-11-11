@@ -11,7 +11,13 @@ function selectedIdRecognized(screening) {
       "document_front_back_swapped",
       "document_front_side_conflict",
       "document_back_looks_like_front",
+      "document_back_required",
+      "document_duplicate_side_text",
+      "document_back_ocr_inconclusive",
     ].includes(code)) &&
+    // Never accept a non-passport ID without both sides screened by the AI.
+    (screening.declaredIdType === "passport" ||
+      (screening.backSideProvided === true && screening.backSideScreened === true)) &&
     screening.imageQualityStatus !== "low" &&
     ALLOWED.has(screening.declaredIdType) &&
     screening.detectedIdType === screening.declaredIdType;
