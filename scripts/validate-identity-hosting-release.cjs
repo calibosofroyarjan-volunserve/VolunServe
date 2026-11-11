@@ -22,6 +22,7 @@ const allowed = new Set([
   "scripts/test-identity-staging-endpoint-allowlist.cjs",
   "scripts/test-staging-firebase-release-isolation.cjs",
   "scripts/validate-identity-hosting-release.cjs",
+  "scripts/publish-identity-dob-rules-safely.cjs",
   ".github/workflows/release-identity-hosting-20261112.yml",
 ]);
 const changed = git("diff","--name-only",pinned,"HEAD").split("\n").filter(Boolean);
