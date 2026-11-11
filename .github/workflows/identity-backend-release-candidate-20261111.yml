@@ -32,7 +32,7 @@ jobs:
       - name: Parse protected backend and identity helpers
         run: node --check backend/server.js && node --check backend/selectedIdPolicy.js && node --check backend/identityIssuerReviewPolicy.js
       - name: Run no-credential security regression tests
-        run: node --test backend/test-selectedIdPolicy.js backend/test-identityIssuerReviewPolicy.js backend/test-protectedIdentityReleaseBoundary.js
+        run: node --test backend/test-selectedIdPolicy.js backend/test-identityIssuerReviewPolicy.js backend/test-protectedIdentityReleaseBoundary.js backend/test-frontBackCaptureContract.js
 
   web-and-mobile-types:
     name: Identity and existing app TypeScript compatibility
