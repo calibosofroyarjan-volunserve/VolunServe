@@ -31,6 +31,15 @@ if(!html.includes("warmingErrors=new Set")||!html.includes("attempts=4")||!html.
 if((html.match(/fetch\(backend\+'\/api\/identity\/verify'/g)||[]).length!==1){
  throw Error("Verification POST must never be replayed by a readiness retry");
 }
+for(const required of [
+ 'id="precheck"', 'id="precheckConsent"', 'id="precheckResult"',
+ '/api/identity/document/precheck', 'X-VolunServe-Document-Precheck-Consent',
+ 'No selfie, biometrics, DOB, user name or profile fields in this request',
+]){
+ if(!html.includes(required))throw Error("Missing no-selfie staging OCR precheck safeguard: "+required);
+}
+const precheckOnly=html.slice(html.indexOf("el('precheck').addEventListener"),html.indexOf("el('verify').addEventListener"));
+if(precheckOnly.includes("form.set('selfie'")||precheckOnly.includes("form.append('selfie'"))throw Error("Precheck must never upload selfie media");
 const inlineModule=html.match(/<script type="module">([\s\S]*?)<\/script>/)?.[1];
 if(!inlineModule)throw Error("Missing staging sign-in module");
 const {execFileSync:checkInlineModule}=require("node:child_process");
