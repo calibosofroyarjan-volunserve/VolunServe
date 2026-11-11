@@ -46,3 +46,27 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npx tsc --noEmit --pretty false
+
+  web-bundle:
+    name: Browser bundle smoke test (NO DEPLOY)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      CI: '1'
+      EXPO_NO_TELEMETRY: '1'
+      # Synthetic no-deploy config: do not point any CI test at live identity API.
+      EXPO_PUBLIC_VOLUNSERVE_ENV: staging
+      EXPO_PUBLIC_IDENTITY_VERIFICATION_API_URL: https://identity-bundle-smoke.invalid
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - name: Export static web candidate without deployment
+        run: npx expo export --platform web --output-dir /tmp/volunserve-identity-bundle-smoke
+      - name: Verify bundle artifacts exist (never upload or publish)
+        run: |
+          test -d /tmp/volunserve-identity-bundle-smoke
+          test -n "$(find /tmp/volunserve-identity-bundle-smoke -type f -name '*.js' -print -quit)"
