@@ -126,6 +126,19 @@ class GovernmentIdScreeningTests(unittest.TestCase):
                 self.assertFalse(actual["authenticityVerified"])
                 self.assertTrue(actual["manualReviewRequired"])
 
+    def test_non_government_credentials_never_pass_keyword_screen(self):
+        for label in (
+            "STUDENT IDENTIFICATION", "STUDENT CARD", "COLLEGE ID",
+            "LIBRARY CARD", "EMPLOYEE IDENTIFICATION CARD",
+        ):
+            with self.subTest(label=label):
+                actual = assess_document_text(
+                    "national_id", label + " PHILIPPINE IDENTIFICATION CARD"
+                )
+                self.assertEqual(actual["status"], "inconclusive")
+                self.assertIsNone(actual["detectedIdType"])
+                self.assertFalse(actual["authenticityVerified"])
+
     def test_normal_government_id_without_school_label_keeps_screening(self):
         actual = assess_document_text("national_id", "PHILIPPINE IDENTIFICATION CARD")
         self.assertEqual(actual["status"], "text_consistent_unverified")
