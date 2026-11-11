@@ -1,7 +1,7 @@
 "use strict";
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const {selectedIdRecognized, enforceSelectedIdDecision} = require("./selectedIdPolicy");
+const {selectedIdRecognized, enforceSelectedIdDecision, blurryNationalIdNeedsReview, classifyIdentityReviewTrack} = require("./selectedIdPolicy");
 const valid = type => ({
   status:"text_consistent_unverified", declaredIdType:type,
   detectedIdType:type, authenticityVerified:false,
@@ -42,4 +42,43 @@ test("declared and detected government ID must be the same even if OCR claims co
   const wrong={status:"text_consistent_unverified",declaredIdType:"national_id",detectedIdType:"passport",authenticityVerified:false};
   assert.equal(selectedIdRecognized(wrong),false);
   assert.equal(enforceSelectedIdDecision("verified",wrong,true),"failed");
+});
+
+const blur = {
+  status:"inconclusive",declaredIdType:"national_id",detectedIdType:null,
+  imageQualityStatus:"low",warningCodes:["document_type_not_recognized","low_document_image_quality"],
+  profileNameCheck:"inconclusive",authenticityVerified:false
+};
+test("blurry claimed National ID routes to manual review but never verified",()=>{
+ assert.equal(blurryNationalIdNeedsReview(blur),true);
+ assert.equal(enforceSelectedIdDecision("manual_review",blur,false),"manual_review");
+ assert.equal(enforceSelectedIdDecision("verified",blur,true),"failed");
+ assert.equal(selectedIdRecognized(blur),false);
+ assert.equal(classifyIdentityReviewTrack({screening:blur,decision:"manual_review"}),"blurry_id_review");
+});
+test("even readable National ID heading with low quality cannot be Admin approved",()=>{
+ const blurryReadable={...blur,status:"text_consistent_unverified",detectedIdType:"national_id"};
+ assert.equal(selectedIdRecognized(blurryReadable),false);
+ assert.equal(enforceSelectedIdDecision("manual_review",blurryReadable,false),"manual_review");
+ assert.equal(classifyIdentityReviewTrack({screening:blurryReadable,decision:"manual_review"}),"blurry_id_review");
+});
+test("unsupported ID cannot exploit blur route",()=>{
+ for(const bad of [
+   {...blur,status:"unsupported",warningCodes:["school_id_not_supported","low_document_image_quality"]},
+   {...blur,status:"mismatch",detectedIdType:"drivers_license"},
+   {...blur,declaredIdType:"passport"},
+   {...blur,warningCodes:["low_document_image_quality","ocr_unavailable"]},
+ ]){
+   assert.equal(blurryNationalIdNeedsReview(bad),false);
+   assert.equal(enforceSelectedIdDecision("manual_review",bad,false),"failed");
+ }
+});
+test("clear selected National ID and possible profile name match gets PRIORITY not verification",()=>{
+ const good={status:"text_consistent_unverified",declaredIdType:"national_id",detectedIdType:"national_id",
+   profileNameCheck:"possible_match",imageQualityStatus:"adequate",authenticityVerified:false};
+ assert.equal(selectedIdRecognized(good),true);
+ assert.equal(enforceSelectedIdDecision("verified",good,false),"manual_review");
+ assert.equal(classifyIdentityReviewTrack({screening:good,decision:"manual_review",idImageQualityScore:.87}),"priority_admin_review");
+ assert.equal(classifyIdentityReviewTrack({screening:{...good,profileNameCheck:"inconclusive"},decision:"manual_review",idImageQualityScore:.87}),"standard_admin_review");
+ assert.equal(classifyIdentityReviewTrack({screening:good,decision:"manual_review",idImageQualityScore:.2}),"standard_admin_review");
 });
