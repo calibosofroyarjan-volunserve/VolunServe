@@ -10,7 +10,7 @@ import re
 import unicodedata
 
 SUPPORTED = frozenset({
-    "national_id", "drivers_license", "passport", "umid",
+    "national_id", "drivers_license", "passport", "umid", "prc_id",
 })
 # Preserve backend's allowlisted method identifier for existing clients.
 METHOD = "ph_government_id_ocr_keyword_screen_v1"
@@ -88,6 +88,20 @@ def _document_signals(text: str) -> set[str]:
         "UMID",
     )):
         found.add("umid")
+    # A lone "PRC" or "professional" is too weak: those can appear
+    # on unrelated documents, so require an issuer and card-type signal.
+    pic = any(_contains(t, term) for term in (
+        "PROFESSIONAL IDENTIFICATION CARD",
+        "PROFESSIONAL ID CARD",
+        "E PIC",
+        "EPIC",
+    ))
+    issuer = any(_contains(t, term) for term in (
+        "PROFESSIONAL REGULATION COMMISSION",
+        "PRC",
+    ))
+    if issuer and pic:
+        found.add("prc_id")
     return found
 
 
@@ -98,9 +112,16 @@ def _school_id_signal(text: str) -> bool:
         "SCHOOL ID",
         "STUDENT ID",
         "STUDENT IDENTIFICATION CARD",
+        "STUDENT IDENTIFICATION",
+        "STUDENT IDENTITY CARD",
+        "STUDENT CARD",
         "SCHOOL IDENTIFICATION CARD",
         "UNIVERSITY ID",
+        "COLLEGE ID",
         "CAMPUS ID",
+        "LIBRARY CARD",
+        "EMPLOYEE ID",
+        "EMPLOYEE IDENTIFICATION CARD",
     ))
 
 
