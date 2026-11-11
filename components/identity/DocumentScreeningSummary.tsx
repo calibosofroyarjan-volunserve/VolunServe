@@ -76,14 +76,14 @@ export default function DocumentScreeningSummary({
         <View style={styles.row}>
           <Text style={styles.label}>Identity decision</Text>
           <Text style={styles.value}>
-            {recognized ? "Pending independent LGU validation" : "Rejected / retry required"}
+            {recognized ? "Pending LGU validation (independent check required)" : "Rejected / retry required"}
           </Text>
         </View>
       </View>
       <Text style={styles.disclaimer}>
         Only the five supported ID types may proceed after document screening.
         OCR alone cannot prove authenticity, official issuance, or liveness.
-        Independent LGU verification is still required.
+        Independent LGU verification is required.
       </Text>
     </View>
   );
