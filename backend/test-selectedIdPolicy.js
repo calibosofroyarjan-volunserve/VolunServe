@@ -82,3 +82,29 @@ test("clear selected National ID and possible profile name match gets PRIORITY n
  assert.equal(classifyIdentityReviewTrack({screening:{...good,profileNameCheck:"inconclusive"},decision:"manual_review",idImageQualityScore:.87}),"standard_admin_review");
  assert.equal(classifyIdentityReviewTrack({screening:good,decision:"manual_review",idImageQualityScore:.2}),"standard_admin_review");
 });
+
+
+test("AI side mismatch cannot be bypassed by an otherwise recognized ID or face match",()=>{
+ for(const warning of [
+   "document_front_back_swapped",
+   "document_front_side_conflict",
+   "document_back_looks_like_front",
+ ]) {
+   const result={...valid("national_id"),warningCodes:[warning]};
+   assert.equal(selectedIdRecognized(result),false);
+   assert.equal(enforceSelectedIdDecision("verified",result,true),"failed");
+   assert.equal(enforceSelectedIdDecision("manual_review",result,false),"failed");
+ }
+});
+
+test("back/front orientation warnings cannot take blurry National ID review exception",()=>{
+ for(const warning of [
+   "document_front_back_swapped",
+   "document_front_side_conflict",
+   "document_back_looks_like_front",
+ ]) {
+   const result={...blur,warningCodes:["low_document_image_quality",warning]};
+   assert.equal(blurryNationalIdNeedsReview(result),false);
+   assert.equal(enforceSelectedIdDecision("manual_review",result,false),"failed");
+ }
+});
