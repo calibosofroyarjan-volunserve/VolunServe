@@ -117,7 +117,7 @@ test("beforeCreate enforces screening + shared rate limit, with production opt-i
   assert(blocking.includes("classifyRegistrationEmail(event.data?.email)"));
   assert(blocking.includes("await enforceSignupIpRateLimit({"));
   assert(blocking.includes("ipAddress: event.ipAddress"));
-  assert(blocking.includes("eventId: event.eventId"));
+  assert(blocking.includes("eventId: event.id || event.eventId"));
   assert(blocking.includes('defineSecret("VOLUNSERVE_REGISTRATION_RATE_LIMIT_SECRET")'));
   assert(blocking.includes("secrets: [signupRateLimitSecret]"));
   assert(blocking.includes('new HttpsError("resource-exhausted"'));

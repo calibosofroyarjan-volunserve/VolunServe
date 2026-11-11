@@ -25,6 +25,16 @@ if (process.env.VOLUNSERVE_ENABLE_IDENTITY_BLOCKING === "true") {
   exports.volunserveBlockDisposableBeforeSignIn = registrationBlocking.beforeSignIn;
 }
 
+// Safer first-phase activation: only intercept NEW Firebase Auth users.
+// This leaves existing Admin / Resident / Volunteer sign-ins untouched.
+// Both flags default OFF; this must be enabled only after the Identity
+// Platform upgrade, staging QA, Secret Manager & TTL prerequisites.
+if (process.env.VOLUNSERVE_ENABLE_IDENTITY_BEFORE_CREATE === "true" &&
+    process.env.VOLUNSERVE_ENABLE_IDENTITY_BLOCKING !== "true") {
+  const registrationBlocking = require("./registrationBlocking");
+  exports.volunserveBlockDisposableBeforeCreate = registrationBlocking.beforeCreate;
+}
+
 setGlobalOptions({
   region: "us-central1",
   maxInstances: 5,
