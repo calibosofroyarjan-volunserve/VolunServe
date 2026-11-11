@@ -276,6 +276,11 @@ export default function IdentityVerificationWeb() {
   const [documentChecking, setDocumentChecking] = useState(false);
   const [documentPrecheckMessage, setDocumentPrecheckMessage] = useState("");
   const [documentPrecheckOutcome, setDocumentPrecheckOutcome] = useState<"pass" | "review" | "retry" | null>(null);
+  useEffect(() => () => {
+    // An in-flight OCR response cannot reopen the selfie screen after navigation.
+    documentPrecheckRevisionRef.current += 1;
+  }, []);
+
   const [retryingFailed, setRetryingFailed] = useState(false);
   const [idCameraOpen, setIdCameraOpen] = useState(false);
   const [idCameraSide, setIdCameraSide] = useState<"front" | "back">("front");
@@ -1521,7 +1526,14 @@ export default function IdentityVerificationWeb() {
           }}
           onNext={() => void openFaceScan()}
           documentConsent={documentConsent}
-          onDocumentConsentChange={setDocumentConsent}
+          onDocumentConsentChange={(allowed) => {
+            if (!allowed) {
+              documentPrecheckRevisionRef.current += 1;
+              setDocumentPrecheckOutcome(null);
+              setDocumentPrecheckMessage("");
+            }
+            setDocumentConsent(allowed);
+          }}
           documentChecking={documentChecking}
           documentPrecheckMessage={documentPrecheckMessage}
           documentPrecheckOutcome={documentPrecheckOutcome}
@@ -1532,6 +1544,12 @@ export default function IdentityVerificationWeb() {
 
       {step === 2 ? (
         <View style={styles.stepCard}>
+          {documentPrecheckOutcome === "review" ? (
+            <View style={styles.truthNote} accessibilityRole="alert">
+              <Ionicons name="information-circle-outline" size={18} color={COLORS.danger}/>
+              <Text style={styles.truthText}>{documentPrecheckMessage}</Text>
+            </View>
+          ) : null}
           <View style={styles.stepHeader}>
             <View style={styles.stepHeaderNumber}>
               <Text style={styles.stepHeaderNumberText}>
@@ -2163,7 +2181,7 @@ function UploadIdStep({
               </View>
               <Text style={styles.uploadTitle}>Open Camera — {label}</Text>
               <Text style={styles.uploadText}>
-                The camera may capture the wrong side. Check the preview; AI screens ID type and front/back orientation only after submission. A successful photo is not verification.
+                The camera may capture the wrong side. Review the preview, then tap Check ID: the AI will screen the ID type and front/back layout before you enter the face scan. This is not proof of authenticity.
               </Text>
             </TouchableOpacity>
           )}
