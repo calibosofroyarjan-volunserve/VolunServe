@@ -232,6 +232,25 @@ def add_photo_quality(screening: dict, blur_variance: float) -> dict:
     return out
 
 
+def blurry_national_id_claim_needs_review(declared_type: str, screening: dict) -> bool:
+    """Prioritize a human rescan review, never government ID confirmation.
+
+    A sharpness reading cannot tell if the blurry photograph is a real ID.
+    We route only a user-selected National ID with NO conflicting labels.
+    """
+    warnings = screening.get("warningCodes") or []
+    return (
+        declared_type == "national_id"
+        and screening.get("declaredIdType") == "national_id"
+        and screening.get("imageQualityStatus") == "low"
+        and "low_document_image_quality" in warnings
+        and "ocr_unavailable" not in warnings
+        and "school_id_not_supported" not in warnings
+        and screening.get("status") in ("inconclusive", "text_consistent_unverified")
+        and screening.get("detectedIdType") in (None, "national_id")
+    )
+
+
 def assess_profile_name(first_name: str, last_name: str, ocr_text: str) -> dict:
     """Conservative text-presence check against server-supplied account name.
 
