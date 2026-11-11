@@ -79,6 +79,10 @@ type ScanState =
   | "too_close"
   | "off_center"
   | "hold_still"
+  | "challenge_center"
+  | "challenge_left"
+  | "challenge_right"
+  | "challenge_return"
   | "ready"
   | "captured";
 
@@ -89,6 +93,8 @@ type LiveChecks = {
   distanceGood: boolean;
   stable: boolean;
 };
+
+type MovementCheck = { direction: "left" | "right"; stage: "center" | "move" | "return" | "complete"; since: number | null };
 
 const EMPTY_CHECKS: LiveChecks = {
   faceDetected: false,
@@ -192,6 +198,14 @@ function scanCopy(scanState: ScanState) {
         text: "Move your face toward the center of the oval.",
         color: COLORS.warning,
       };
+    case "challenge_center":
+      return { title: "Start in the center", text: "Center your face briefly before the movement prompt.", color: COLORS.blue };
+    case "challenge_left":
+      return { title: "Move left on screen", text: "Move your face toward the LEFT side of the mirrored preview.", color: COLORS.blue };
+    case "challenge_right":
+      return { title: "Move right on screen", text: "Move your face toward the RIGHT side of the mirrored preview.", color: COLORS.blue };
+    case "challenge_return":
+      return { title: "Return to the center", text: "Come back to the oval and hold still for the final selfie.", color: COLORS.blue };
     case "hold_still":
       return {
         title: "Face detected — hold still",
@@ -234,6 +248,7 @@ export default function IdentityVerificationWeb() {
   const visionModuleRef = useRef<any>(null);
   const animationRef = useRef<number | null>(null);
   const stableSinceRef = useRef<number | null>(null);
+  const movementRef = useRef<MovementCheck>({ direction: "left", stage: "center", since: null });
   const lastDetectAtRef = useRef(0);
   const captureLockRef = useRef(false);
   const cameraStartingRef = useRef(false);
@@ -274,6 +289,7 @@ export default function IdentityVerificationWeb() {
   const [scanProgress, setScanProgress] = useState(0);
   const [liveChecks, setLiveChecks] =
     useState<LiveChecks>(EMPTY_CHECKS);
+  const [movementCompleted, setMovementCompleted] = useState(false);
   const [cameraError, setCameraError] = useState("");
 
   useEffect(() => {
@@ -785,11 +801,17 @@ export default function IdentityVerificationWeb() {
           const oneFace = detections.length === 1;
 
           if (!faceDetected) {
+            movementRef.current.stage = "center";
+            movementRef.current.since = null;
+            setMovementCompleted(false);
             stableSinceRef.current = null;
             setScanProgress(0);
             setLiveChecks(EMPTY_CHECKS);
             setScanState("no_face");
           } else if (!oneFace) {
+            movementRef.current.stage = "center";
+            movementRef.current.since = null;
+            setMovementCompleted(false);
             stableSinceRef.current = null;
             setScanProgress(0);
             setLiveChecks({
@@ -807,6 +829,9 @@ export default function IdentityVerificationWeb() {
             const videoHeight = video.videoHeight || 1;
 
             if (!box) {
+              movementRef.current.stage = "center";
+              movementRef.current.since = null;
+              setMovementCompleted(false);
               stableSinceRef.current = null;
               setScanProgress(0);
               setLiveChecks({
@@ -845,6 +870,9 @@ export default function IdentityVerificationWeb() {
                 !tooClose;
 
               if (!distanceGood) {
+                movementRef.current.stage = "center";
+                movementRef.current.since = null;
+                setMovementCompleted(false);
                 stableSinceRef.current = null;
                 setScanProgress(0);
                 setLiveChecks({
@@ -857,6 +885,35 @@ export default function IdentityVerificationWeb() {
                 setScanState(
                   tooFar ? "too_far" : "too_close",
                 );
+              } else if (movementRef.current.stage !== "complete") {
+                // Camera-motion prompt only: replay or moved photo may still pass.
+                // Never treat this as validated liveness or presentation-attack detection.
+                const movement = movementRef.current;
+                const displayOffset = 0.5 - centerX / videoWidth; // mirrored preview
+                const onSide = movement.direction === "left"
+                  ? displayOffset <= -0.15 : displayOffset >= 0.15;
+                const qualifies = movement.stage === "move" ? onSide : centered;
+                if (!qualifies) {
+                  movement.since = null;
+                } else {
+                  if (movement.since === null) movement.since = now;
+                  const held = now - movement.since;
+                  if (movement.stage === "center" && held >= 550) {
+                    movement.stage = "move"; movement.since = null;
+                  } else if (movement.stage === "move" && held >= 400) {
+                    movement.stage = "return"; movement.since = null;
+                  } else if (movement.stage === "return" && held >= 650) {
+                    movement.stage = "complete"; movement.since = null;
+                    setMovementCompleted(true);
+                  }
+                }
+                stableSinceRef.current = null;
+                setScanProgress(0);
+                setLiveChecks({ faceDetected: true, oneFace: true, centered, distanceGood: true, stable: false });
+                setScanState(movement.stage === "center" ? "challenge_center"
+                  : movement.stage === "move"
+                    ? movement.direction === "left" ? "challenge_left" : "challenge_right"
+                    : "challenge_return");
               } else if (!centered) {
                 stableSinceRef.current = null;
                 setScanProgress(0);
@@ -924,6 +981,9 @@ export default function IdentityVerificationWeb() {
     setLiveChecks(EMPTY_CHECKS);
     captureLockRef.current = false;
     stableSinceRef.current = null;
+    // Randomized motion guidance, not validated anti-spoofing.
+    movementRef.current = { direction: Math.random() < 0.5 ? "left" : "right", stage: "center", since: null };
+    setMovementCompleted(false);
 
     let stream: MediaStream | null = null;
     let phase: "camera" | "preview" | "detector" = "camera";
@@ -1027,6 +1087,7 @@ export default function IdentityVerificationWeb() {
     }
 
     setSelfie(null);
+    setMovementCompleted(false);
     setScanProgress(0);
     setLiveChecks(EMPTY_CHECKS);
     setScanState("idle");
@@ -1390,9 +1451,7 @@ export default function IdentityVerificationWeb() {
                 Real-time Face Scan
               </Text>
               <Text style={styles.stepSubtitle}>
-                VolunServe detects your face live, checks
-                centering and distance, then captures
-                automatically after you hold still.
+                VolunServe checks camera alignment, asks for a random sideways movement, then captures a still selfie. This is not validated anti-spoofing.
               </Text>
             </View>
           </View>
@@ -1543,6 +1602,10 @@ export default function IdentityVerificationWeb() {
               <LiveCheck
                 passed={liveChecks.stable}
                 label="Face held still"
+              />
+              <LiveCheck
+                passed={movementCompleted}
+                label="Movement prompt completed (not proof of liveness)"
               />
 
               <View style={styles.guidanceCard}>
