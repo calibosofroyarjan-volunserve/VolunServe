@@ -12,6 +12,10 @@ on:
       - "backend/server.js"
       - "backend/selectedIdPolicy.js"
       - "backend/test-selectedIdPolicy.js"
+      - "lib/identityVerification.ts"
+      - "app/identity-verification.web.tsx"
+      - "app/identity-verification.tsx"
+      - "components/identity/DocumentScreeningSummary.tsx"
       - ".github/workflows/test-identity-ocr-no-deploy.yml"
 permissions:
   contents: read
@@ -43,5 +47,9 @@ jobs:
         run: |
           node --check backend/server.js
           node --test backend/test-selectedIdPolicy.js
+      - name: Install frontend dependency lockfile (no lifecycle scripts)
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Typecheck frontend identity UI and API client
+        run: npx tsc --noEmit
       - name: Confirm no deployment occurs in this workflow
         run: echo "NO DEPLOY - unit tests only"
