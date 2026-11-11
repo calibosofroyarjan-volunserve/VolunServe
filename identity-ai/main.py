@@ -1327,7 +1327,8 @@ async def document_precheck(
                                  "document_back_looks_like_front"))
     )
     review = (
-        not recognized
+        not birthday_conflict
+        and not recognized
         and blurry_national_id_claim_needs_review(declared_type, screening)
     )
     outcome = "pass" if recognized else "review" if review else "retry"
