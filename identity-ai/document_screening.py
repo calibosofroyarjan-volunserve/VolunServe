@@ -103,7 +103,9 @@ def assess_document_text(declared_type: str, ocr_text: str) -> dict:
     normalized = _normalized(ocr_text)
     school_labels = (
         "SCHOOL ID", "STUDENT ID", "STUDENT IDENTIFICATION CARD",
-        "SCHOOL IDENTIFICATION CARD", "UNIVERSITY ID", "CAMPUS ID",
+        "STUDENT IDENTIFICATION", "STUDENT IDENTITY CARD", "STUDENT CARD",
+        "SCHOOL IDENTIFICATION CARD", "UNIVERSITY ID", "COLLEGE ID",
+        "CAMPUS ID", "LIBRARY CARD", "EMPLOYEE IDENTIFICATION CARD",
     )
     if any(_contains(normalized, label) for label in school_labels):
         return {
