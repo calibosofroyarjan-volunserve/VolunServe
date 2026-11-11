@@ -93,7 +93,7 @@ async function run(){
  console.log("PASS: currently active Firestore Rules exactly match audited production source. (read-only)");
  if(mode!=="publish")return;
  const created=await api("POST","/projects/"+PROJECT+"/rulesets",{
-   source:{files:[{name:"firestore.rules",content:source}],metadata:{services:["cloud.firestore"]}},
+   source:{files:[{name:"firestore.rules",content:source}]},
  });
  assert.match(created.name||"",/^projects\/volunserve-3aa5b\/rulesets\/[a-zA-Z0-9_-]+$/);
  const unchanged=await api("GET",releasePath);
