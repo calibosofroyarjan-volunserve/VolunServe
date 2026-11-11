@@ -5,6 +5,7 @@ const {selectedIdRecognized, enforceSelectedIdDecision, blurryNationalIdNeedsRev
 const valid = type => ({
   status:"text_consistent_unverified", declaredIdType:type,
   detectedIdType:type, authenticityVerified:false,
+  backSideProvided:type!=="passport", backSideScreened:type!=="passport",
 });
 for (const type of ["national_id","drivers_license","passport","umid","prc_id"]) {
   test("recognizes selected "+type+" type without claiming authenticity", () => {
@@ -38,6 +39,20 @@ for (const type of ["national_id","drivers_license","passport","umid","prc_id"])
     });
   }
 }
+test("non-passport cannot bypass missing-back screening even with matching ID text",()=>{
+  for (const type of ["national_id", "drivers_license", "umid", "prc_id"]) {
+    const incomplete={...valid(type),backSideProvided:false,backSideScreened:false};
+    assert.equal(selectedIdRecognized(incomplete),false);
+    assert.equal(enforceSelectedIdDecision("verified",incomplete,true),"failed");
+  }
+  assert.equal(selectedIdRecognized(valid("passport")),true);
+});
+test("duplicate side OCR warning cannot pass as a recognized government ID",()=>{
+  const candidate={...valid("national_id"),warningCodes:["document_duplicate_side_text"]};
+  assert.equal(selectedIdRecognized(candidate),false);
+  assert.equal(enforceSelectedIdDecision("verified",candidate,true),"failed");
+});
+
 test("declared and detected government ID must be the same even if OCR claims consistency",()=>{
   const wrong={status:"text_consistent_unverified",declaredIdType:"national_id",detectedIdType:"passport",authenticityVerified:false};
   assert.equal(selectedIdRecognized(wrong),false);
@@ -76,7 +91,8 @@ test("unsupported ID cannot exploit blur route",()=>{
 test("priority review requires confirmed OCR name, birthday and barangay, never auto-verification",()=>{
  const good={status:"text_consistent_unverified",declaredIdType:"national_id",detectedIdType:"national_id",
    profileNameCheck:"possible_match",profileBirthDateCheck:"possible_match",profileAddressCheck:"possible_match",
-   imageQualityStatus:"adequate",authenticityVerified:false};
+   imageQualityStatus:"adequate",authenticityVerified:false,
+   backSideProvided:true,backSideScreened:true};
  assert.equal(selectedIdRecognized(good),true);
  assert.equal(enforceSelectedIdDecision("verified",good,false),"manual_review");
  assert.equal(classifyIdentityReviewTrack({screening:good,decision:"manual_review",idImageQualityScore:.87}),"priority_admin_review");
