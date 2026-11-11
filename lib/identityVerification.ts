@@ -10,7 +10,8 @@ export type IdentityDocumentType =
   | "national_id"
   | "drivers_license"
   | "passport"
-  | "umid";
+  | "umid"
+  | "prc_id";
 
 export type DocumentScreening = {
   declaredIdType: IdentityDocumentType | null;
@@ -42,7 +43,7 @@ export function documentScreeningLabel(value?: DocumentScreening | null): string
 function parseDocumentScreening(value: unknown): DocumentScreening | undefined {
   if (!value || typeof value !== "object") return undefined;
   const raw = value as Record<string, unknown>;
-  const allowed = ["national_id", "drivers_license", "passport", "umid"];
+  const allowed = ["national_id", "drivers_license", "passport", "umid", "prc_id"];
   const type = (x: unknown) => allowed.includes(String(x)) ? x as IdentityDocumentType : null;
   return {
     declaredIdType: type(raw.declaredIdType),
