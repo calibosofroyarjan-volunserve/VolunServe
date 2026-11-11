@@ -180,7 +180,8 @@ def document_ocr_unavailable(declared_type: str) -> dict:
 FRONT_HEADING_MARKERS = {
     "national_id": (
         "PHILIPPINE IDENTIFICATION CARD", "PAMBANSANG PAGKAKAKILANLAN",
-        "NATIONAL ID CARD", "PHILID",
+        "NATIONAL ID CARD", "NATIONAL ID IN PAPER", "DIGITAL NATIONAL ID",
+        "EPHILID", "PHILID",
     ),
     "drivers_license": ("DRIVERS LICENSE", "DRIVER S LICENSE", "DRIVER LICENSE"),
     "umid": ("UNIFIED MULTI PURPOSE ID", "UNIFIED MULTI PURPOSE IDENTIFICATION"),
