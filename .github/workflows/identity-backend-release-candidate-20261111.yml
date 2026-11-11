@@ -12,6 +12,7 @@ on:
       - 'lib/identityVerification.ts'
       - 'lib/firebase.ts'
       - 'scripts/test-staging-firebase-release-isolation.cjs'
+      - 'scripts/test-identity-staging-endpoint-allowlist.cjs'
       - 'components/identity/DocumentScreeningSummary.tsx'
       - '.github/workflows/identity-backend-release-candidate-20261111.yml'
   pull_request:
@@ -48,7 +49,7 @@ jobs:
           cache: npm
       - run: npm ci
       - name: Verify offline staging Firebase initialization cannot reuse production
-        run: node --test scripts/test-staging-firebase-release-isolation.cjs
+        run: node --test scripts/test-staging-firebase-release-isolation.cjs scripts/test-identity-staging-endpoint-allowlist.cjs
       - run: npx tsc --noEmit --pretty false
 
   web-bundle:
