@@ -243,6 +243,11 @@ const ASSISTANCE_EVIDENCE_LABELS = Object.freeze({
 const ASSISTANCE_PUBLIC_BACKEND_URL =
   "https://volunserve.onrender.com";
 function getAllowedOrigins() {
+  if (process.env.VOLUNSERVE_STAGING_STRICT === "1") {
+    // Never let the staging identity service accept requests from the live
+    // app's origins. The dedicated lab is the only browser entry point.
+    return new Set(["https://volunserve-identity-test-staging.onrender.com"]);
+  }
   const configured = String(
     process.env.ALLOWED_ORIGINS || "",
   )
@@ -4620,6 +4625,16 @@ function getIdentityAiEndpoint() {
       /\/+$/,
       "",
     );
+  if (process.env.VOLUNSERVE_STAGING_STRICT === "1") {
+    let serviceUrl;
+    try { serviceUrl = new URL(baseUrl); }
+    catch { throw new Error("Invalid staging AI URL."); }
+    if (serviceUrl.origin !== "https://volunserve-identity-ai-staging.onrender.com" ||
+        (serviceUrl.pathname !== "/" && serviceUrl.pathname !== "/verify") ||
+        serviceUrl.search || serviceUrl.hash || serviceUrl.username || serviceUrl.password) {
+      throw new Error("Refusing to forward staging identity images outside staging AI.");
+    }
+  }
   if (
     baseUrl.endsWith(
       "/verify",
