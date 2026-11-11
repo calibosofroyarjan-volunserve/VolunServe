@@ -4994,6 +4994,14 @@ app.post(
           requestCount: count + 1,
         }, { merge: true });
       });
+      // Read private comparison fields ONLY from the authenticated Firestore
+      // profile. A client-side dropdown, date or form value cannot override it.
+      request.identityExpectedName = {
+        firstName: profile.firstName || "",
+        lastName: profile.lastName || "",
+        dateOfBirth: profile.dateOfBirth || "",
+        barangay: profile.barangay || "",
+      };
       // Forward only private images to our internal-key-authenticated Python AI.
       // Never store uploads in Firestore, Storage, Cloudinary or audit logs.
       const result = await callIdentityAiService(request, { documentPrecheck: true });
