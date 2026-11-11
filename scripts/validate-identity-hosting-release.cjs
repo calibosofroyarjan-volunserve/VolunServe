@@ -2,6 +2,7 @@
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const { execFileSync } = require("node:child_process");
+const crypto = require("node:crypto");
 
 const pinned = process.env.PINNED_MAIN_SHA;
 assert.match(pinned || "", /^[0-9a-f]{40}$/);
@@ -37,16 +38,35 @@ const backendChanged = git("diff","--name-only",pinned,"HEAD","--","backend")
   .split("\n").filter(Boolean);
 assert(backendChanged.every(file=>file==="backend/test-firestore-dob-rules.js"),
   "Production backend source must remain untouched by the Hosting release");
-const before = execFileSync("git",["show",pinned+":firestore.rules"],{encoding:"utf8"});
+// Production Rules differ from the old Hosting main branch. Reconstruct
+// precisely the active Rules source reviewed on 2026-11-11, not main's copy.
+const reviewed = execFileSync("git",["show",
+  "origin/review/exact-active-firebase-rules-security-20261111:firestore.rules"],{encoding:"utf8"});
+const start="      // STAGED ONLY: new community user profiles accept verified Yahoo or";
+const stop="      // Firestore creation must enforce the same required inputs as the wizard.";
+const first=reviewed.indexOf(start),last=reviewed.indexOf(stop);
+assert(first>0&&last>first&&reviewed.indexOf(start,first+1)<0);
+let before=reviewed.slice(0,first)+reviewed.slice(last);
+for(const line of [
+  "        && permittedNewResidentEmail()\\n",
+  "        && permittedNewApplicantEmail()\\n",
+]){
+  assert.equal(before.split(line).length,2,"Reviewed helper changed.");
+  before=before.replace(line,"");
+}
+const activeFingerprint=crypto.createHash("sha256").update(before).digest("hex");
+assert.equal(activeFingerprint,
+  "b4e67103503213bec28671f2dc2ab0440edd4e38a2ffd9d6ad6d2f93ccb9a269",
+  "Reviewed Rules provenance differs from the verified active release.");
 const candidate = fs.readFileSync("firestore.rules","utf8");
-const oldField = "          'age',\n          'email',\n          'phoneNumber',";
-const newField = "          'age',\n          'dateOfBirth',\n          'email',\n          'phoneNumber',";
-const anchor = "          'createdAt'\n        ])\n        && request.resource.data.role == 'resident'";
+const oldField = "          'age',\\n          'email',\\n          'phoneNumber',";
+const newField = "          'age',\\n          'dateOfBirth',\\n          'email',\\n          'phoneNumber',";
+const anchor = "          'createdAt'\\n        ])\\n        && request.resource.data.role == 'resident'";
 const guarded = [
   "          'createdAt'",
   "        ])",
-  "        // DOB is recorded only at signup. Existing profiles may lack it.",
-  "        // Standard client profile updates cannot change DOB.",
+  "        // New signup only; legacy profiles may lack exact birth date.",
+  "        // Standard resident profile updates cannot edit this field.",
   "        && (",
   "          !('dateOfBirth' in request.resource.data)",
   "          || (",
@@ -55,14 +75,13 @@ const guarded = [
   "          )",
   "        )",
   "        && request.resource.data.role == 'resident'"
-].join("\n");
-assert.equal(before.split(oldField).length,2,"Original resident field block changed");
-assert.equal(before.split(anchor).length,2,"Original resident create guard changed");
-// Always use callbacks: replacement strings containing '$' must NOT expand as JS
-// substitution tokens (especially '$\'' which previously duplicated the file).
+].join("\\n");
+assert.equal(before.split(oldField).length,2,"Active resident field block changed");
+assert.equal(before.split(anchor).length,2,"Active resident create guard changed");
 const expected = before.replace(oldField,()=>newField).replace(anchor,()=>guarded);
-assert.equal(candidate, expected,
-  "FireStore Rules change must be exactly the optional canonical signup DOB guard.");
+if(candidate!==expected)throw Error(
+  "Security stop: candidate must equal verified active Rules + exact optional DOB guard."
+);
 const id = fs.readFileSync("lib/identityVerification.ts","utf8");
 const firebase = fs.readFileSync("lib/firebase.ts","utf8");
 assert(id.includes("/api/identity/document/precheck") &&
