@@ -16,7 +16,7 @@ export type IdentityDocumentType =
 export type DocumentScreening = {
   declaredIdType: IdentityDocumentType | null;
   detectedIdType: IdentityDocumentType | null;
-  status: "text_consistent_unverified" | "mismatch" | "inconclusive";
+  status: "text_consistent_unverified" | "mismatch" | "inconclusive" | "unsupported";
   authenticityVerified: false;
   livenessVerified: false;
   manualReviewRequired: true;
@@ -34,9 +34,11 @@ export function documentScreeningLabel(value?: DocumentScreening | null): string
         ? "ID text recognized and both sides screened for conflicting document labels. Authenticity is not verified."
         : "ID type matches recognized text, but authenticity is not verified.";
     case "mismatch":
-      return "Selected ID type does not match recognized document text. Review required.";
+      return "REJECTED: The scanned document does not match the selected government ID. Choose the correct type and scan again.";
+    case "unsupported":
+      return "REJECTED: School, student, employee or other unsupported ID detected. Only the five selected government ID types are accepted.";
     default:
-      return "ID type could not be confirmed automatically. Review required.";
+      return "NOT ACCEPTED: The selected government ID type could not be confirmed. Retake a clearer scan and retry.";
   }
 }
 
@@ -48,8 +50,8 @@ function parseDocumentScreening(value: unknown): DocumentScreening | undefined {
   return {
     declaredIdType: type(raw.declaredIdType),
     detectedIdType: type(raw.detectedIdType),
-    status: raw.status === "mismatch" || raw.status === "text_consistent_unverified" ?
-      raw.status : "inconclusive",
+    status: raw.status === "mismatch" || raw.status === "text_consistent_unverified" ||
+      raw.status === "unsupported" ? raw.status : "inconclusive",
     authenticityVerified: false,
     livenessVerified: false,
     manualReviewRequired: true,
