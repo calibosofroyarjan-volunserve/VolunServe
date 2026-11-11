@@ -240,6 +240,8 @@ export default function IdentityVerificationWeb() {
   const idVideoRef = useRef<HTMLVideoElement | null>(null);
   const idCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const idStreamRef = useRef<MediaStream | null>(null);
+  const idCameraSessionRef = useRef(0);
+  const pendingFaceStartRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const idCaptureLockRef = useRef(false);
   const idAutoFramesRef = useRef<{ previous: Uint8Array | null; steadySince: number | null }>({ previous: null, steadySince: null });
   const canvasRef = useRef<any>(null);
@@ -380,6 +382,11 @@ export default function IdentityVerificationWeb() {
   );
 
   const stopCamera = useCallback(() => {
+    // Cancel any deferred camera start when navigating back or unmounting.
+    if (pendingFaceStartRef.current !== null) {
+      clearTimeout(pendingFaceStartRef.current);
+      pendingFaceStartRef.current = null;
+    }
     cameraRequestRef.current += 1;
     if (animationRef.current !== null) {
       cancelAnimationFrame(animationRef.current);
@@ -446,6 +453,8 @@ export default function IdentityVerificationWeb() {
   // Scan the physical ID directly from the camera; do not accept gallery
   // images as identity evidence. Live face detection is a separate step.
   const stopIdCamera = useCallback(() => {
+    // Invalidate pending toBlob callbacks before closing/cancelling camera.
+    idCameraSessionRef.current += 1;
     const stream = idStreamRef.current;
     idStreamRef.current = null;
     stream?.getTracks().forEach((track) => track.stop());
@@ -508,6 +517,7 @@ export default function IdentityVerificationWeb() {
   }, [idCameraOpen, stopIdCamera]);
 
   const chooseIdDocument = (side: "front" | "back") => {
+    idCameraSessionRef.current += 1;
     setIdCameraSide(side);
     setIdCameraReady(false);
     setIdCameraError("");
@@ -520,6 +530,8 @@ export default function IdentityVerificationWeb() {
   const captureIdDocument = async () => {
     if (idCaptureLockRef.current) return;
     idCaptureLockRef.current = true;
+    const captureSession = idCameraSessionRef.current;
+    const captureSide = idCameraSide;
     const video = idVideoRef.current;
     const canvas = idCanvasRef.current;
     if (!idCameraReady || !video || !canvas || !video.videoWidth || !video.videoHeight) {
@@ -539,10 +551,13 @@ export default function IdentityVerificationWeb() {
           0.92,
         );
       });
-      const name = `government-id-${idCameraSide}-camera-${Date.now()}.jpg`;
+      // A cancelled camera, route change, or side change must not save a
+      // stale snapshot after an asynchronous canvas.toBlob() finishes.
+      if (captureSession !== idCameraSessionRef.current || !idStreamRef.current) return;
+      const name = `government-id-${captureSide}-camera-${Date.now()}.jpg`;
       const file = new File([blob], name, { type: "image/jpeg" });
       const media: CapturedIdentityMedia = { uri: URL.createObjectURL(blob), name, type: "image/jpeg", file };
-      if (idCameraSide === "front") {
+      if (captureSide === "front") {
         setIdDocument(media);
       } else {
         setIdBackDocument(media);
@@ -550,7 +565,9 @@ export default function IdentityVerificationWeb() {
       setLocalMessage("");
       setIdCameraOpen(false);
     } catch (error: any) {
-      setIdCameraError(error?.message || "ID capture failed; please retry.");
+      if (captureSession === idCameraSessionRef.current) {
+        setIdCameraError(error?.message || "ID capture failed; please retry.");
+      }
     } finally {
       idCaptureLockRef.current = false;
     }
@@ -715,6 +732,7 @@ export default function IdentityVerificationWeb() {
 
   const captureFrame = useCallback(async () => {
     if (captureLockRef.current) return;
+    const captureSession = cameraRequestRef.current;
 
     const video = videoRef.current as HTMLVideoElement | null;
     const canvas = canvasRef.current as HTMLCanvasElement | null;
@@ -756,6 +774,8 @@ export default function IdentityVerificationWeb() {
         );
       });
 
+      // Never save a selfie captured after the user left/cancelled this scan.
+      if (captureSession !== cameraRequestRef.current || !streamRef.current) return;
       const name = `identity-face-scan-${Date.now()}.jpg`;
       const file = new File([blob], name, {
         type: "image/jpeg",
@@ -772,11 +792,12 @@ export default function IdentityVerificationWeb() {
       setScanState("captured");
       stopCamera();
     } catch (error: any) {
-      setScanState("camera_error");
-      setCameraError(
-        error?.message ||
-          "The face scan could not capture a frame.",
-      );
+      if (captureSession === cameraRequestRef.current) {
+        setScanState("camera_error");
+        setCameraError(
+          error?.message || "The face scan could not capture a frame.",
+        );
+      }
     } finally {
       captureLockRef.current = false;
     }
@@ -1085,7 +1106,8 @@ export default function IdentityVerificationWeb() {
     setSelfie(null);
     stopCamera();
     setStep(2);
-    setTimeout(() => {
+    pendingFaceStartRef.current = setTimeout(() => {
+      pendingFaceStartRef.current = null;
       void startCamera();
     }, 250);
   };
@@ -1100,7 +1122,9 @@ export default function IdentityVerificationWeb() {
     setScanProgress(0);
     setLiveChecks(EMPTY_CHECKS);
     setScanState("idle");
-    setTimeout(() => {
+    if (pendingFaceStartRef.current !== null) clearTimeout(pendingFaceStartRef.current);
+    pendingFaceStartRef.current = setTimeout(() => {
+      pendingFaceStartRef.current = null;
       void startCamera();
     }, 100);
   };
@@ -1422,6 +1446,7 @@ export default function IdentityVerificationWeb() {
             if (idType !== value) {
               discardIdDocument();
               discardIdBackDocument();
+              idCameraSessionRef.current += 1;
               setIdCameraOpen(false);
             }
             setIdType(value);
@@ -1440,7 +1465,10 @@ export default function IdentityVerificationWeb() {
           onPick={() => chooseIdDocument("front")}
           onPickBack={() => chooseIdDocument("back")}
           onCapture={() => void captureIdDocument()}
-          onCancel={() => setIdCameraOpen(false)}
+          onCancel={() => {
+            idCameraSessionRef.current += 1;
+            setIdCameraOpen(false);
+          }}
           onNext={() => void openFaceScan()}
           onRemove={discardIdDocument}
           onRemoveBack={discardIdBackDocument}
