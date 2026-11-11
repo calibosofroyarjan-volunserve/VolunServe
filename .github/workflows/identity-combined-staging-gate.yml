@@ -19,7 +19,7 @@ jobs:
           python -m py_compile identity-ai/main.py identity-ai/document_screening.py identity-ai/firebase_admin_config.py identity-ai/profile_consistency.py
           node -e "const fs=require('fs');for(const p of ['backend/firebaseAdmin.js','backend/server.js','identity-ai/firebase_admin_config.py']){const t=fs.readFileSync(p,'utf8');if(!t.includes('VOLUNSERVE_STAGING_STRICT')||!t.includes('volunserve-auth-staging'))throw Error('Staging isolation safeguard missing: '+p)}"
       - name: Verify ID precheck and existing backend contract (no uploads)
-        run: node --test backend/test-selectedIdPolicy.js backend/test-identityIssuerReviewPolicy.js backend/test-protectedIdentityReleaseBoundary.js backend/test-frontBackCaptureContract.js
+        run: node --test backend/test-identityAiReadiness.js backend/test-selectedIdPolicy.js backend/test-identityIssuerReviewPolicy.js backend/test-protectedIdentityReleaseBoundary.js backend/test-frontBackCaptureContract.js
   types:
     runs-on: ubuntu-24.04
     timeout-minutes: 15
