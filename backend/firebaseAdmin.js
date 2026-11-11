@@ -62,6 +62,13 @@ function getFirebaseApp() {
   const serviceAccount =
     getServiceAccount();
 
+  // Staging release guard: refuse any missing or production Firebase
+  // service-account credentials before accepting authenticated requests.
+  if (process.env.VOLUNSERVE_STAGING_STRICT === "1" &&
+      (!serviceAccount || serviceAccount.project_id !== "volunserve-auth-staging")) {
+    throw new Error("Staging Firebase project mismatch: refusing to start backend.");
+  }
+
   if (serviceAccount) {
     return initializeApp({
       credential:
