@@ -20,6 +20,7 @@ export type DocumentScreening = {
   authenticityVerified: false;
   livenessVerified: false;
   manualReviewRequired: true;
+  imageQualityStatus?: "low" | "adequate" | "unknown";
   backSideProvided?: boolean;
   backSideScreened?: boolean;
   profileNameCompared?: boolean;
@@ -38,7 +39,11 @@ export function documentScreeningLabel(value?: DocumentScreening | null): string
     case "unsupported":
       return "REJECTED: School, student, employee or other unsupported ID detected. Only the five selected government ID types are accepted.";
     default:
-      return "NOT ACCEPTED: The selected government ID type could not be confirmed. Retake a clearer scan and retry.";
+      return value?.declaredIdType === "national_id" &&
+        value?.imageQualityStatus === "low" &&
+        value?.warningCodes.includes("low_document_image_quality")
+        ? "BLURRY NATIONAL ID CLAIM: ID type could not be confirmed. Sent for Admin review to request a clearer scan; not identity verified."
+        : "NOT ACCEPTED: The selected government ID type could not be confirmed. Retake a clearer scan and retry.";
   }
 }
 
@@ -55,6 +60,8 @@ function parseDocumentScreening(value: unknown): DocumentScreening | undefined {
     authenticityVerified: false,
     livenessVerified: false,
     manualReviewRequired: true,
+    imageQualityStatus: raw.imageQualityStatus === "low" || raw.imageQualityStatus === "adequate"
+      ? raw.imageQualityStatus : "unknown",
     backSideProvided: raw.backSideProvided === true,
     backSideScreened: raw.backSideScreened === true,
     profileNameCompared: raw.profileNameCompared === true,
