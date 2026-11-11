@@ -324,6 +324,9 @@ def blurry_national_id_claim_needs_review(declared_type: str, screening: dict) -
         and "low_document_image_quality" in warnings
         and "ocr_unavailable" not in warnings
         and "school_id_not_supported" not in warnings
+        and "document_front_side_conflict" not in warnings
+        and "document_back_looks_like_front" not in warnings
+        and "document_front_back_swapped" not in warnings
         and screening.get("status") in ("inconclusive", "text_consistent_unverified")
         and screening.get("detectedIdType") in (None, "national_id")
     )
