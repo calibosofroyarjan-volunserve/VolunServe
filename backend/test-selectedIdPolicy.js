@@ -73,13 +73,16 @@ test("unsupported ID cannot exploit blur route",()=>{
    assert.equal(enforceSelectedIdDecision("manual_review",bad,false),"failed");
  }
 });
-test("clear selected National ID and possible profile name match gets PRIORITY not verification",()=>{
+test("priority review requires confirmed OCR name, birthday and barangay, never auto-verification",()=>{
  const good={status:"text_consistent_unverified",declaredIdType:"national_id",detectedIdType:"national_id",
-   profileNameCheck:"possible_match",imageQualityStatus:"adequate",authenticityVerified:false};
+   profileNameCheck:"possible_match",profileBirthDateCheck:"possible_match",profileAddressCheck:"possible_match",
+   imageQualityStatus:"adequate",authenticityVerified:false};
  assert.equal(selectedIdRecognized(good),true);
  assert.equal(enforceSelectedIdDecision("verified",good,false),"manual_review");
  assert.equal(classifyIdentityReviewTrack({screening:good,decision:"manual_review",idImageQualityScore:.87}),"priority_admin_review");
  assert.equal(classifyIdentityReviewTrack({screening:{...good,profileNameCheck:"inconclusive"},decision:"manual_review",idImageQualityScore:.87}),"standard_admin_review");
+ assert.equal(classifyIdentityReviewTrack({screening:{...good,profileBirthDateCheck:"not_checked"},decision:"manual_review",idImageQualityScore:.87}),"standard_admin_review");
+ assert.equal(classifyIdentityReviewTrack({screening:{...good,profileAddressCheck:"inconclusive"},decision:"manual_review",idImageQualityScore:.87}),"standard_admin_review");
  assert.equal(classifyIdentityReviewTrack({screening:good,decision:"manual_review",idImageQualityScore:.2}),"standard_admin_review");
 });
 
