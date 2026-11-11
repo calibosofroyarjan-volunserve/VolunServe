@@ -15,6 +15,8 @@ const { probeIdentityAiReadiness } = require("./identityAiReadiness");
 const {
   selectedIdRecognized,
   enforceSelectedIdDecision,
+  blurryNationalIdNeedsReview,
+  classifyIdentityReviewTrack,
 } = require("./selectedIdPolicy");
 const { reviewIssuerEvidence } = require("./identityIssuerReviewPolicy");
 const {
@@ -730,6 +732,7 @@ function normalizeIdDocumentScreening(value) {
     "document_front_type_inconclusive",
     "document_back_ocr_inconclusive",
     "school_id_not_supported",
+    "low_document_image_quality",
   ];
   const declared = String(value?.declaredIdType || "");
   const detected = String(value?.detectedIdType || "");
@@ -744,6 +747,8 @@ function normalizeIdDocumentScreening(value) {
     manualReviewRequired: true,
     backSideProvided: value?.backSideProvided === true,
     backSideScreened: value?.backSideScreened === true,
+    imageQualityStatus: ["low", "adequate"].includes(value?.imageQualityStatus)
+      ? value.imageQualityStatus : "unknown",
     profileNameCompared: value?.profileNameCompared === true,
     profileNameCheck: ["possible_match", "inconclusive", "not_checked"].includes(value?.profileNameCheck)
       ? value.profileNameCheck : "not_checked",
@@ -5072,6 +5077,11 @@ app.post(
       const decision = enforceSelectedIdDecision(
         rawDecision, documentScreening, aiResult?.livenessImplemented === true,
       );
+      const reviewTrack = classifyIdentityReviewTrack({
+        screening: documentScreening,
+        decision,
+        idImageQualityScore: numberOrNull(aiResult?.idImageQualityScore),
+      });
       const matchScore = numberOrNull(aiResult?.matchScore);
       const livenessScore = numberOrNull(aiResult?.livenessScore);
       const verificationId = cleanText(
@@ -5096,7 +5106,9 @@ app.post(
         const attemptCycle = Number.isSafeInteger(current.aiAttemptCycle) && current.aiAttemptCycle > 0
           ? current.aiAttemptCycle : 1;
         const result = identityAttemptOutcome(decision, attemptCount);
-        const resultMessage = !recognizedSelectedId
+        const resultMessage = reviewTrack === "blurry_id_review"
+          ? "PENDING ADMIN REVIEW: Your claimed National ID scan is too blurry to identify. An Admin can request a clearer rescan; this does not verify the ID."
+          : !recognizedSelectedId
           ? (documentScreening.status === "unsupported"
               ? "AUTO REJECTED: School, employee, or other unsupported IDs are not accepted. Choose one of the five supported government IDs."
               : documentScreening.status === "mismatch"
@@ -5135,6 +5147,7 @@ app.post(
           matchScore,
           livenessScore,
           documentScreening,
+          reviewTrack,
           message: resultMessage,
           requiresManualReview: result.requiresManualReview,
           aiAttemptCount: attemptCount,
@@ -5158,7 +5171,7 @@ app.post(
             status: result.status,
             requiresManualReview: result.requiresManualReview,
             matchScore, livenessScore,
-            documentScreening,
+            documentScreening, reviewTrack,
             verificationMethod: "volunserve_ai",
             previousReview,
             createdAt: FieldValue.serverTimestamp(),
@@ -5193,7 +5206,7 @@ app.post(
         }
         return {
           ok: true, status: result.status, verificationId, decision,
-          matchScore, livenessScore, documentScreening, message: resultMessage,
+          matchScore, livenessScore, documentScreening, reviewTrack, message: resultMessage,
           attemptCount, maxAttempts: MAX_IDENTITY_AI_ATTEMPTS,
           attemptsRemaining: MAX_IDENTITY_AI_ATTEMPTS - attemptCount,
           requiresManualReview: result.requiresManualReview,
@@ -5263,6 +5276,8 @@ function identityAdminReviewPayload(verificationSnapshot, userSnapshot) {
     matchScore: numberOrNull(verification.matchScore),
     livenessScore: numberOrNull(verification.livenessScore),
     documentScreening: verification.documentScreening ? normalizeIdDocumentScreening(verification.documentScreening) : null,
+    reviewTrack: ["blurry_id_review", "priority_admin_review", "standard_admin_review"].includes(verification.reviewTrack)
+      ? verification.reviewTrack : "none",
     message: cleanText(verification.message || "", 500),
     requiresManualReview: verification.requiresManualReview === true,
     attemptCount: identityAttemptCount(verification.aiAttemptCount),
