@@ -220,29 +220,12 @@ service cloud.firestore {
           'profilePictureUrl',
           'createdAt'
         ])
-        // DOB is write-once at registration; older users may lack this field.
-        // Owner profile updates cannot modify it.
+        // Optional date at registration only; never mutable through owner updates.
         && (
           !('dateOfBirth' in request.resource.data)
           || (
             request.resource.data.dateOfBirth is string
-            && request.resource.data.dateOfBirth.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}
-        && request.resource.data.status == 'approved'
-        && request.resource.data.requestedRole == 'resident'
-        && request.resource.data.primaryRole == 'resident'
-        && request.resource.data.residentAccess == true
-        && request.resource.data.volunteerAccess == false
-        && request.resource.data.volunteerStatus == 'not_applied'
-        && request.resource.data.activeMode == 'resident'
-        && request.resource.data.identityStatus == 'basic'
-        && request.resource.data.identityVerified == false
-        && request.resource.data.skills is list
-        && request.resource.data.skills.size() == 0
-        && request.resource.data.skillOther == ''
-        && request.resource.data.availability is list
-        && request.resource.data.availability.size() == 0
-        && request.resource.data.createdAt is timestamp;
-      )
+            && request.resource.data.dateOfBirth.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
           )
         )
         && request.resource.data.role == 'resident'
