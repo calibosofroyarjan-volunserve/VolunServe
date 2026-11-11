@@ -25,6 +25,12 @@ if(!html.includes('https://everify.gov.ph/check'))throw Error("Official PSA QR c
 if(!html.includes("showDocumentVerdict(b)")||!html.includes("idVerdict"))throw Error("Server OCR rejection banner missing");
 if(!html.includes('id="resetPassword"')||!html.includes("sendPasswordResetEmail(auth,email)")||!html.includes("auth/invalid-credential"))throw Error("Staging Firebase password recovery/error messaging missing");
 if(!html.includes("auth.currentUser")||!html.includes("if(busy||auth.currentUser)return;"))throw Error("Password reset must be interactive and staging-only");
+if(!html.includes("warmingErrors=new Set")||!html.includes("attempts=4")||!html.includes("e.httpStatus===503")||!html.includes("setTimeout(resolve")||!html.includes("No identity attempt was used")){
+ throw Error("Cold start readiness retry must be bounded to transient HTTP 503 with no identity attempts");
+}
+if((html.match(/fetch\(backend\+'\/api\/identity\/verify'/g)||[]).length!==1){
+ throw Error("Verification POST must never be replayed by a readiness retry");
+}
 const inlineModule=html.match(/<script type="module">([\s\S]*?)<\/script>/)?.[1];
 if(!inlineModule)throw Error("Missing staging sign-in module");
 const {execFileSync:checkInlineModule}=require("node:child_process");
