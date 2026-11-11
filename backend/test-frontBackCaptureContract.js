@@ -115,3 +115,33 @@ test("identity AI gets profile DOB and barangay only from trusted Firestore, not
  assert.match(ai,/profileAddressCheck/);
  assert.doesNotMatch(ai,/formData\.append\(["'](?:dateOfBirth|barangay)/);
 });
+
+
+test("web and native require consented document OCR precheck before opening selfie",()=>{
+ assert.match(screen,/await precheckIdentityDocument\(/);
+ assert.match(native,/await precheckIdentityDocument\(/);
+ assert.match(screen,/if \(result\.outcome === "retry"\) return;/);
+ assert.match(native,/if \(result\.outcome === "retry"\) return;/);
+ assert.match(screen,/if \(!documentConsent\)/);
+ assert.match(native,/if \(!documentConsent\)/);
+ assert.match(screen,/documentPrecheckRevisionRef\.current \+= 1/);
+ assert.match(native,/documentPrecheckRevisionRef\.current\+\+/);
+ assert.match(helper,/X-VolunServe-Document-Precheck-Consent/);
+ assert.match(helper,/\/api\/identity\/document\/precheck/);
+ assert.match(helper,/No selfie is uploaded at this stage/);
+});
+
+test("Node uses protected, bounded, no-photo-storage document-only route",()=>{
+ const routeIndex=server.indexOf('"/api/identity/document/precheck"');
+ assert.ok(routeIndex > 0);
+ const slice=server.slice(routeIndex,server.indexOf('"/api/identity/status"',routeIndex));
+ assert.match(slice,/requireFirebaseUser/);
+ assert.match(slice,/x-volunserve-document-precheck-consent/);
+ assert.match(slice,/documentPrecheck: true/);
+ assert.match(slice,/IDENTITY_DOC_PRECHECK_DAILY_LIMIT/);
+ assert.match(slice,/identityDocumentPrecheckThrottle/);
+ assert.match(slice,/selectedIdRecognized\(screening\)/);
+ assert.match(slice,/blurryNationalIdNeedsReview\(screening\)/);
+ assert.doesNotMatch(slice,/aiAttemptCount:|identityVerificationAttempts|Cloudinary|\.save\(|\.upload\(/);
+ assert.match(server,/options\.documentPrecheck/);
+});
