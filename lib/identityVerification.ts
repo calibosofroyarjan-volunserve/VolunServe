@@ -139,14 +139,24 @@ function getBackendBaseUrl() {
     } catch {
       throw new Error("Staging identity backend URL is invalid.");
     }
-    const blockedHosts = [
-      "volunserve.onrender.com",
-      "volunserve.com",
-      "www.volunserve.com",
-      "volunserve-identity-ai.onrender.com",
+    // Only the audited staging Node gateway may receive private ID/selfie
+    // uploads. The reserved .invalid host is for compile-only CI exports.
+    // Do not allow arbitrary HTTPS destinations or direct Python AI services.
+    const allowedOrigins = [
+      "https://volunserve-backend-staging.onrender.com",
+      "https://identity-bundle-smoke.invalid",
     ];
-    if (parsed.protocol !== "https:" || blockedHosts.includes(parsed.hostname.toLowerCase())) {
-      throw new Error("Staging verification cannot use the production identity endpoint.");
+    if (
+      !allowedOrigins.includes(parsed.origin.toLowerCase()) ||
+      parsed.pathname !== "/" ||
+      parsed.search !== "" ||
+      parsed.hash !== "" ||
+      parsed.username !== "" ||
+      parsed.password !== ""
+    ) {
+      throw new Error(
+        "Staging verification cannot use the production identity endpoint or an unauthorized URL. Use the approved staging Node backend.",
+      );
     }
   }
 
