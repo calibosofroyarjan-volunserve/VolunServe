@@ -29,6 +29,15 @@ export type DocumentScreening = {
 };
 
 export function documentScreeningLabel(value?: DocumentScreening | null): string {
+  if (value?.warningCodes?.includes("document_front_back_swapped")) {
+    return "RETAKE: Your ID front and back appear reversed. Put the portrait/front face in Scan ID front and the reverse in Scan ID back.";
+  }
+  if (value?.warningCodes?.includes("document_back_looks_like_front")) {
+    return "RETAKE: Scan ID back appears to show the front of the card. Confirm both sides and capture the reverse again.";
+  }
+  if (value?.warningCodes?.includes("document_front_side_conflict")) {
+    return "RETAKE: Scan ID front appears to show the reverse of the card. Capture the portrait/front side again.";
+  }
   switch (value?.status) {
     case "text_consistent_unverified":
       return value?.backSideScreened
