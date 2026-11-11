@@ -12,7 +12,9 @@ test("web, native, and backend require two ID sides except passport",()=>{
  assert.match(screen,/idBackDocument: idType === "passport" \? null : idBackDocument/);
  assert.match(native,/idType !== "passport" && !idBackDocument/);
  assert.match(helper,/idBackDocument/);
- assert.match(server,/idBackDocument/);
+ // Node forwards multipart bytes unchanged; the Python AI applies the back-side requirement.
+ assert.match(server,/body: request\.body/);
+ assert.match(server,/const aiResult = await callIdentityAiService\(request\)/);
 });
 test("webfront and back photos use separate camera captures and cannot silently reuse front",()=>{
  assert.match(screen,/setIdCameraSide\(side\)/);
