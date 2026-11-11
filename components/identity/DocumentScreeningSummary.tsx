@@ -8,6 +8,7 @@ const NAMES: Record<string, string> = {
   drivers_license: "Driver's License",
   passport: "Philippine Passport",
   umid: "Unified Multi-Purpose ID (UMID)",
+  prc_id: "PRC Professional ID",
 };
 
 /** Shared, privacy-safe document-type assessment for Residents and LGU. */
