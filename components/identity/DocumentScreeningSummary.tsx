@@ -21,11 +21,14 @@ export default function DocumentScreeningSummary({
 
   const recognized = screening.status === "text_consistent_unverified";
   const mismatch = screening.status === "mismatch";
+  const unsupported = screening.status === "unsupported";
   const title = recognized
     ? (screening.detectedIdType === "national_id" ? "National ID text recognized" : "Government ID text recognized")
-    : mismatch ? "Selected ID type does not match" : "Document recognition inconclusive";
-  const icon = recognized ? "document-text-outline" : mismatch ? "alert-circle-outline" : "help-circle-outline";
-  const accent = recognized ? "#12644E" : mismatch ? "#A13F2B" : "#A46B16";
+    : unsupported ? "ID rejected — not supported"
+      : mismatch ? "ID rejected — wrong government ID type"
+        : "ID not accepted — scan inconclusive";
+  const icon = recognized ? "document-text-outline" : unsupported || mismatch ? "alert-circle-outline" : "help-circle-outline";
+  const accent = recognized ? "#12644E" : unsupported || mismatch ? "#A13F2B" : "#A46B16";
 
   return (
     <View style={styles.panel} accessibilityLabel="Government ID document screening result">
@@ -72,12 +75,15 @@ export default function DocumentScreeningSummary({
         </View>
         <View style={styles.row}>
           <Text style={styles.label}>Identity decision</Text>
-          <Text style={styles.value}>Pending LGU validation</Text>
+          <Text style={styles.value}>
+            {recognized ? "Pending independent LGU validation" : "Rejected / retry required"}
+          </Text>
         </View>
       </View>
       <Text style={styles.disclaimer}>
-        Recognition checks document text only; it cannot prove authenticity,
-        official issuance or liveness. Independent LGU verification is required.
+        Only the five supported ID types may proceed after document screening.
+        OCR alone cannot prove authenticity, official issuance, or liveness.
+        Independent LGU verification is still required.
       </Text>
     </View>
   );
