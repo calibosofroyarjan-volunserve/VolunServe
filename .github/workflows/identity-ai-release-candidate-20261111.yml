@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - release/identity-ai-from-protected-20261111
+      - preview/identity-precheck-combined-staging-20261112
     paths:
       - 'identity-ai/**'
       - '.github/workflows/identity-ai-release-candidate-20261111.yml'
