@@ -245,12 +245,15 @@ export default function IdentityVerificationWeb() {
     useState<IdentityDocumentType>("national_id");
   const [idDocument, setIdDocument] =
     useState<CapturedIdentityMedia | null>(null);
+  const [idBackDocument, setIdBackDocument] =
+    useState<CapturedIdentityMedia | null>(null);
   const [selfie, setSelfie] =
     useState<CapturedIdentityMedia | null>(null);
 
   const [consent, setConsent] = useState(false);
   const [retryingFailed, setRetryingFailed] = useState(false);
   const [idCameraOpen, setIdCameraOpen] = useState(false);
+  const [idCameraSide, setIdCameraSide] = useState<"front" | "back">("front");
   const [idCameraReady, setIdCameraReady] = useState(false);
   const [idCameraError, setIdCameraError] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -321,6 +324,13 @@ export default function IdentityVerificationWeb() {
       if (uri?.startsWith("blob:")) URL.revokeObjectURL(uri);
     };
   }, [idDocument?.uri]);
+
+  useEffect(() => {
+    const uri = idBackDocument?.uri;
+    return () => {
+      if (uri?.startsWith("blob:")) URL.revokeObjectURL(uri);
+    };
+  }, [idBackDocument?.uri]);
 
   const identityStatus = getIdentityStatus(profile);
   const currentIdentityStatus =
@@ -466,7 +476,8 @@ export default function IdentityVerificationWeb() {
     };
   }, [idCameraOpen, stopIdCamera]);
 
-  const chooseIdDocument = () => {
+  const chooseIdDocument = (side: "front" | "back") => {
+    setIdCameraSide(side);
     setIdCameraReady(false);
     setIdCameraError("");
     setIdCameraOpen(true);
@@ -489,10 +500,14 @@ export default function IdentityVerificationWeb() {
           0.92,
         );
       });
-      const name = `government-id-camera-${Date.now()}.jpg`;
+      const name = `government-id-${idCameraSide}-camera-${Date.now()}.jpg`;
       const file = new File([blob], name, { type: "image/jpeg" });
-      if (idDocument?.uri.startsWith("blob:")) URL.revokeObjectURL(idDocument.uri);
-      setIdDocument({ uri: URL.createObjectURL(blob), name, type: "image/jpeg", file });
+      const media: CapturedIdentityMedia = { uri: URL.createObjectURL(blob), name, type: "image/jpeg", file };
+      if (idCameraSide === "front") {
+        setIdDocument(media);
+      } else {
+        setIdBackDocument(media);
+      }
       setLocalMessage("");
       setIdCameraOpen(false);
     } catch (error: any) {
@@ -501,8 +516,10 @@ export default function IdentityVerificationWeb() {
   };
 
   const discardIdDocument = () => {
-    if (idDocument?.uri.startsWith("blob:")) URL.revokeObjectURL(idDocument.uri);
     setIdDocument(null);
+  };
+  const discardIdBackDocument = () => {
+    setIdBackDocument(null);
   };
 
   const ensureDetector = async () => {
@@ -911,6 +928,10 @@ export default function IdentityVerificationWeb() {
       return;
     }
 
+    if (idType !== "passport" && !idBackDocument) {
+      setLocalMessage("Please capture the back of this government ID before continuing.");
+      return;
+    }
     setSelfie(null);
     stopCamera();
     setStep(2);
@@ -942,6 +963,12 @@ export default function IdentityVerificationWeb() {
         "Government ID Required",
         "Select a clear image of your government-issued ID.",
       );
+      return;
+    }
+
+    if (idType !== "passport" && !idBackDocument) {
+      setStep(1);
+      setLocalMessage("The back-side ID scan is required before submission.");
       return;
     }
 
@@ -979,6 +1006,7 @@ export default function IdentityVerificationWeb() {
         await submitIdentityVerification({
           idType,
           idDocument,
+          idBackDocument: idType === "passport" ? null : idBackDocument,
           selfie,
         });
 
@@ -1114,6 +1142,7 @@ export default function IdentityVerificationWeb() {
           setLocalMessage("");
           setSubmittedIdPreviewUri(null);
           setIdDocument(null);
+          setIdBackDocument(null);
           setSelfie(null);
           setConsent(false);
           setScanState("idle");
@@ -1238,19 +1267,30 @@ export default function IdentityVerificationWeb() {
       {step === 1 ? (
         <UploadIdStep
           idType={idType}
-          setIdType={setIdType}
+          setIdType={(value) => {
+            if (idType !== value) {
+              discardIdDocument();
+              discardIdBackDocument();
+              setIdCameraOpen(false);
+            }
+            setIdType(value);
+          }}
           idDocument={idDocument}
+          idBackDocument={idBackDocument}
+          cameraSide={idCameraSide}
           selectedIdLabel={selectedIdLabel}
           cameraOpen={idCameraOpen}
           cameraReady={idCameraReady}
           cameraError={idCameraError}
           idVideoRef={idVideoRef}
           idCanvasRef={idCanvasRef}
-          onPick={chooseIdDocument}
+          onPick={() => chooseIdDocument("front")}
+          onPickBack={() => chooseIdDocument("back")}
           onCapture={() => void captureIdDocument()}
           onCancel={() => setIdCameraOpen(false)}
           onNext={() => void openFaceScan()}
           onRemove={discardIdDocument}
+          onRemoveBack={discardIdBackDocument}
         />
       ) : null}
 
