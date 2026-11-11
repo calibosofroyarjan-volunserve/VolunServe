@@ -1,0 +1,153 @@
+name: Validate LGU Approval Security Against Latest ANNOUNCEMENTS Live Rules (NO DEPLOY)
+on:
+  push:
+    branches: [fix/lgu-live-after-announcements-20261105]
+    paths:
+      - .github/workflows/validate-live-lgu-accept-reject-20261105.yml
+      - scripts/prepare-live-lgu-rules-20261105.cjs
+      - scripts/scope-superadmin-helper.cjs
+      - scripts/scope-additional-role-helpers.cjs
+      - scripts/test-surgical-lgu-review-live.cjs
+      - scripts/test-superadmin-lgu-approval-rejection.cjs
+permissions:
+  contents: read
+concurrency:
+  group: volunserve-lgu-accept-reject-inactive-only
+  cancel-in-progress: false
+jobs:
+  validate-inactive-only:
+    if: github.repository == 'calibosofroyarjan-volunserve/VolunServe'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      CI: 'true'
+      GH_TOKEN: ${{ github.token }}
+      EXPECTED_LIVE_RULESET: projects/volunserve-3aa5b/rulesets/7a7ae2c0-1eeb-49ac-af54-d8fe37c3a164
+      EXPECTED_LIVE_SHA: f6f7d433d85bc0083539b9de9b38d2afb7f625bbad4dec0b1fd9ba275b2c240d
+    steps:
+      - name: Load exact branch source as a tarball (legacy submodule safe)
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --location --retry 3 \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/$GITHUB_REPOSITORY/tarball/$GITHUB_SHA" \
+            -o "$RUNNER_TEMP/source.tar.gz"
+          tar -xzf "$RUNNER_TEMP/source.tar.gz" --strip-components=1 -C "$GITHUB_WORKSPACE"
+          test -f package-lock.json
+          test -f scripts/prepare-live-lgu-rules-20261105.cjs
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: google-github-actions/auth@v3
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_VOLUNSERVE_3AA5B || secrets.FIREBASE_SERVICE_ACCOUNT }}
+          project_id: volunserve-3aa5b
+      - uses: google-github-actions/setup-gcloud@v3
+      - name: Backup exact currently published immutable Ruleset into ephemeral runner only
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import hashlib,json,os,subprocess,urllib.request
+          t=subprocess.check_output(['gcloud','auth','print-access-token'],text=True).strip()
+          def get(p):
+            req=urllib.request.Request('https://firebaserules.googleapis.com/v1/'+p,headers={'Authorization':'Bearer '+t})
+            with urllib.request.urlopen(req,timeout=30) as r:return json.load(r)
+          release=get('projects/volunserve-3aa5b/releases/cloud.firestore')
+          assert release['rulesetName']==os.environ['EXPECTED_LIVE_RULESET'],'STOP: active ruleset changed'
+          files=get(release['rulesetName'])['source']['files']
+          assert len(files)==1,'STOP: multi-file Ruleset unexpected'
+          raw=files[0]['content']
+          assert hashlib.sha256(raw.encode()).hexdigest()==os.environ['EXPECTED_LIVE_SHA'],'STOP: active source changed'
+          with open('/tmp/volunserve-live-before.rules','w',encoding='utf8',newline='') as f:f.write(raw)
+          req=urllib.request.Request('https://volunserve.com/volunserve-release.json?lgu_safe_audit=20261105',headers={'Cache-Control':'no-cache'})
+          with urllib.request.urlopen(req,timeout=20) as r: hosted=json.load(r)
+          assert hosted.get('revision')=='717ec8624a5e0f4b955e4a6fe66d6c68cceb5355', 'STOP: Hosting changed; preserve latest Login, Signup and Super Admin'
+          print('PASS: backed up exact current live Rules source in ephemeral runner')
+          print('SOURCE_SHA',hashlib.sha256(raw.encode()).hexdigest())
+          PY
+      - name: Patch only approved LGU policy anchors and verify exact reverse diff
+        run: |
+          set -euo pipefail
+          node scripts/prepare-live-lgu-rules-20261105.cjs /tmp/volunserve-live-before.rules /tmp/volunserve-lgu-candidate.rules
+          cp /tmp/volunserve-lgu-candidate.rules firestore.rules
+      - name: Localize unchanged global Super Admin helper and prove byte-exact inverse
+        run: |
+          set -euo pipefail
+          node scripts/scope-superadmin-helper.cjs /tmp/volunserve-lgu-candidate.rules /tmp/volunserve-lgu-scoped.rules
+          node scripts/scope-additional-role-helpers.cjs /tmp/volunserve-lgu-scoped.rules /tmp/volunserve-lgu-optimized.rules
+          cp /tmp/volunserve-lgu-optimized.rules firestore.rules
+      - name: Install locked project dependencies (no app deploy)
+        run: npm ci --no-audit --no-fund
+      - name: Emulator security tests — approve and reject + unauthorized denials
+        run: |
+          # The older static authorization test expects hasVolunteerAccess() but
+          # production already uses isVolunteer(). This is an existing source
+          # mismatch, not a change introduced by the LGU patch. Do not modify
+          # any Volunteer permission to satisfy a stale string assertion.
+          npx firebase emulators:exec --only firestore --project demo-volunserve --non-interactive "node scripts/test-surgical-lgu-review-live.cjs && node scripts/test-superadmin-lgu-approval-rejection.cjs && node scripts/test-pavia-admin-announcement-emulator.cjs"
+      - name: Compare Community Events outcomes on current live Rules versus candidate (no new regression)
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp firestore.rules "$RUNNER_TEMP/scoped-lgu-candidate.rules"
+          trap 'cp "$RUNNER_TEMP/scoped-lgu-candidate.rules" firestore.rules' EXIT
+          cp /tmp/volunserve-live-before.rules firestore.rules
+          npx firebase emulators:exec --only firestore --project demo-volunserve --non-interactive "node scripts/test-community-events-rules.cjs" > "$RUNNER_TEMP/community-baseline.log" 2>&1 || true
+          cp "$RUNNER_TEMP/scoped-lgu-candidate.rules" firestore.rules
+          npx firebase emulators:exec --only firestore --project demo-volunserve --non-interactive "node scripts/test-community-events-rules.cjs" > "$RUNNER_TEMP/community-candidate.log" 2>&1 || true
+          python3 - <<'PY'
+          import os,re
+          root=os.environ['RUNNER_TEMP']
+          def outcomes(name):
+            text=open(root+'/'+name,encoding='utf8',errors='replace').read()
+            text=re.sub(r'\x1b\[[0-9;]*m','',text)
+            lines=[x.strip() for x in text.splitlines()
+              if x.strip().startswith(('PASS ','FAIL ','SKIP ','Community Events rule tests:'))]
+            if not lines or not any('Community Events rule tests:' in x for x in lines):
+              raise SystemExit('BLOCKED: incomplete Community Events baseline/emulator output')
+            return lines
+          before=outcomes('community-baseline.log')
+          after=outcomes('community-candidate.log')
+          if before!=after:
+            print('BASELINE OUTCOMES:',before)
+            print('CANDIDATE OUTCOMES:',after)
+            raise SystemExit('BLOCKED: candidate changes existing Community Events behavior')
+          print('PASS unchanged Community Events outcomes against exact active live Rules')
+          print('Existing live baseline test summary:',next(x for x in before if 'Community Events rule tests:' in x))
+          PY
+      - name: Compile immutable candidate Ruleset to prove real Firebase size quota — never activate
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import hashlib,json,os,subprocess,urllib.request,urllib.error
+          t=subprocess.check_output(['gcloud','auth','print-access-token'],text=True).strip()
+          content=open('/tmp/volunserve-lgu-optimized.rules',encoding='utf8',newline='').read()
+          req=urllib.request.Request('https://firebaserules.googleapis.com/v1/projects/volunserve-3aa5b/rulesets',
+            data=json.dumps({'source':{'files':[{'name':'firestore.rules','content':content}]}}).encode(),
+            headers={'Authorization':'Bearer '+t,'Content-Type':'application/json'},method='POST')
+          try:
+            with urllib.request.urlopen(req,timeout=40) as r:resp=json.load(r)
+          except urllib.error.HTTPError as e:
+            print('STOP COMPILED_RULESET_REJECTED HTTP',e.code,e.read().decode()[:700])
+            raise
+          print('PASS compiled INACTIVE Ruleset',resp['name'])
+          print('CANDIDATE_SHA',hashlib.sha256(content.replace('\r\n','\n').encode()).hexdigest())
+          print('NO LIVE RULES RELEASE ACTIVATION. NO DATA/HOSTING/LOGIN/SIGNUP CHANGES.')
+          PY
+      - name: Recheck active production Ruleset remains unchanged
+        if: always()
+        run: |
+          python3 - <<'PY'
+          import json,os,subprocess,urllib.request
+          t=subprocess.check_output(['gcloud','auth','print-access-token'],text=True).strip()
+          req=urllib.request.Request('https://firebaserules.googleapis.com/v1/projects/volunserve-3aa5b/releases/cloud.firestore',headers={'Authorization':'Bearer '+t})
+          with urllib.request.urlopen(req,timeout=30) as r:release=json.load(r)
+          assert release['rulesetName']==os.environ['EXPECTED_LIVE_RULESET'],'ALERT: live Rules changed concurrently'
+          print('PASS active production unchanged:',release['rulesetName'])
+          PY

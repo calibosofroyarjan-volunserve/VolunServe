@@ -1,0 +1,58 @@
+name: Read-only inspect exact live LGU rules (NO DEPLOY)
+on:
+  push:
+    branches: [fix/lgu-accept-reject-live-safe-20261105]
+    paths: [.github/workflows/audit-live-lgu-rules-20261105.yml]
+permissions:
+  contents: read
+jobs:
+  inspect:
+    if: github.repository == 'calibosofroyarjan-volunserve/VolunServe'
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: google-github-actions/auth@v3
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_VOLUNSERVE_3AA5B || secrets.FIREBASE_SERVICE_ACCOUNT }}
+          project_id: volunserve-3aa5b
+      - uses: google-github-actions/setup-gcloud@v3
+      - name: Read current rules release and inspect only policy anchors
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json,hashlib,subprocess,urllib.request,re
+          token=subprocess.check_output(['gcloud','auth','print-access-token'],text=True).strip()
+          def get(path):
+            req=urllib.request.Request('https://firebaserules.googleapis.com/v1/'+path,headers={'Authorization':'Bearer '+token})
+            with urllib.request.urlopen(req,timeout=30) as response:return json.load(response)
+          release=get('projects/volunserve-3aa5b/releases/cloud.firestore')
+          name=release['rulesetName']
+          rules=get(name)
+          src=max((f['content'] for f in rules['source']['files']),key=len)
+          print('ACTIVE_RULESET',name)
+          print('SOURCE_SHA256',hashlib.sha256(src.encode()).hexdigest())
+          print('SOURCE_BYTES',len(src.encode()))
+          lines=src.splitlines()
+          needles=[
+            r'^\s*function isSuperAdmin\(\)',
+            r'^\s*match /users/\{uid\}',
+            r'^\s*function volunteerApplicationAfter\(\)',
+            r'^\s*function hasFreshLguCredentialReview\(\)',
+            r'^\s*allow create: if isSuperAdmin\(\)',
+            r'^\s*allow update: if isSuperAdmin\(\)',
+            r'^\s*&& resource\.data\.role == .applicant.',
+            r'^\s*match /lguAdminCredentialReviews/',
+            r'^\s*match /adminLogs/',
+          ]
+          for pat in needles:
+            hits=[i for i,line in enumerate(lines) if re.search(pat,line)]
+            print('\nANCHOR',pat,'MATCHES',len(hits))
+            for i in hits[:5]:
+              before=3 if 'applicant' in pat else 1
+              after=35 if any(x in pat for x in ['lguAdminCredentialReviews','isSuperAdmin','applicant','volunteerApplicationAfter']) else 12
+              print('-----')
+              for j in range(max(0,i-before),min(len(lines),i+after)):
+                print(str(j+1)+': '+lines[j])
+          print('\nNO FIREBASE WRITES AND NO HOSTING DEPLOYMENT')
+          PY
