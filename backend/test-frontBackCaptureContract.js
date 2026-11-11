@@ -66,3 +66,14 @@ test("staging identity rejects production Firebase user tokens before contacting
  assert.match(helper,/async function getAuthenticatedUser\(\)/);
  assert.match(helper,/Staging verification cannot use the production identity endpoint/);
 });
+
+test("all staging Firebase modules fail closed against production project",()=>{
+ const firebaseSource = fs.readFileSync("lib/firebase.ts", "utf8");
+ assert.match(firebaseSource,/EXPO_PUBLIC_VOLUNSERVE_ENV === "staging"/);
+ assert.match(firebaseSource,/Object\.values\(stagingConfig\)\.some\(\(value\) => !value\)/);
+ assert.match(firebaseSource,/stagingConfig\.projectId === productionConfig\.projectId/);
+ assert.match(firebaseSource,/stagingConfig\.authDomain !==/);
+ assert.match(firebaseSource,/stagingConfig\.storageBucket\.startsWith/);
+ assert.match(firebaseSource,/usingStagingFirebase\s*\? stagingConfig\s*:\s*productionConfig/);
+ assert.match(firebaseSource,/const app = existingApp \|\| initializeApp\(firebaseConfig\)/);
+});
