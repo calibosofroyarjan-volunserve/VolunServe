@@ -50,7 +50,8 @@ test("randomized camera-movement prompt is not accepted as verified liveness",()
  assert.match(screen,/movement\.stage === "center"/);
  assert.match(screen,/movement\.stage === "move"/);
  assert.match(screen,/movement\.stage === "return"/);
- assert.match(screen,/movement\.stage === "complete"/);
+ assert.match(screen,/movement\.stage = "complete"/);
+ assert.match(screen,/movementRef\.current\.stage !== "complete"/);
  assert.match(screen,/Movement prompt completed \(not proof of liveness\)/);
  assert.match(screen,/Never treat this as validated liveness/);
  assert.match(helper,/livenessVerified: false/);
