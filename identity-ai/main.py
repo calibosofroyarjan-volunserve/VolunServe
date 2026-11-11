@@ -1362,12 +1362,19 @@ async def verify_identity(
             )
         elif (screening_status != "text_consistent_unverified"
               or document_screening.get("detectedIdType") != id_type):
-            if screening_status == "unsupported":
+            warnings = document_screening.get("warningCodes") or []
+            if "document_front_back_swapped" in warnings:
+                reason = "Front and back appear reversed. Retake the portrait/front side in the Front slot and the reverse in the Back slot."
+            elif "document_back_looks_like_front" in warnings:
+                reason = "The Back slot appears to show the front side. Check both images and retake the back side."
+            elif "document_front_side_conflict" in warnings:
+                reason = "The Front slot appears to show back-side details. Retake a clear portrait/front image."
+            elif screening_status == "unsupported":
                 reason = "School IDs are not supported. Select and scan a valid government-issued ID."
             elif screening_status == "mismatch":
                 reason = "The scanned document does not match the selected government ID type. Select the correct ID and retry."
             else:
-                reason = "The selected government ID type could not be confirmed from the scan. Retake a clear photo and retry."
+                reason = "The selected government ID type or orientation could not be confirmed from the scan. Retake a clear photo and retry."
             result = failed_attempt_result(
                 uid=uid, message=reason,
                 warning="selected_government_id_not_recognized",
