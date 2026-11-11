@@ -1,0 +1,34 @@
+name: Identity combined staging source gate (NO DEPLOY)
+on:
+  push:
+    branches:
+      - preview/identity-precheck-combined-staging-20261112
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  guarded-source:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Parse both production-equivalent services and stage-only guards
+        run: |
+          node --check backend/server.js
+          node --check backend/firebaseAdmin.js
+          python -m py_compile identity-ai/main.py identity-ai/document_screening.py identity-ai/firebase_admin_config.py identity-ai/profile_consistency.py
+          node -e "const fs=require('fs');for(const p of ['backend/firebaseAdmin.js','backend/server.js','identity-ai/firebase_admin_config.py']){const t=fs.readFileSync(p,'utf8');if(!t.includes('VOLUNSERVE_STAGING_STRICT')||!t.includes('volunserve-auth-staging'))throw Error('Staging isolation safeguard missing: '+p)}"
+      - name: Verify ID precheck and existing backend contract (no uploads)
+        run: node --test backend/test-selectedIdPolicy.js backend/test-identityIssuerReviewPolicy.js backend/test-protectedIdentityReleaseBoundary.js backend/test-frontBackCaptureContract.js
+  types:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: node --test scripts/test-staging-firebase-release-isolation.cjs scripts/test-identity-staging-endpoint-allowlist.cjs scripts/test-identity-camera-cancellation.cjs
+      - run: npx tsc --noEmit --pretty false
