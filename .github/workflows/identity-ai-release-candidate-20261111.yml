@@ -25,10 +25,10 @@ jobs:
         with:
           python-version: '3.11'
       - name: Python syntax
-        run: python -m py_compile identity-ai/main.py identity-ai/document_screening.py identity-ai/face_boxes.py
+        run: python -m py_compile identity-ai/main.py identity-ai/document_screening.py identity-ai/profile_consistency.py identity-ai/face_boxes.py
       - name: Privacy-safe classification tests
         working-directory: identity-ai
-        run: python -m unittest -v test_document_screening.py test_face_box_dedup.py
+        run: python -m unittest -v test_document_screening.py test_profile_consistency.py test_face_box_dedup.py
 
   face-runtime-smoke:
     name: Real MediaPipe face-mesh smoke checks (NO OCR REQUIRED)
