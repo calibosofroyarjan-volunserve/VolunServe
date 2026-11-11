@@ -5,6 +5,7 @@ import math
 import os
 import secrets
 import uuid
+from functools import lru_cache
 from datetime import datetime, timezone
 from io import BytesIO
 import cv2
@@ -1128,12 +1129,46 @@ def run_face_verification(
     )
 
 
+@lru_cache(maxsize=1)
+def ocr_and_profile_capabilities():
+    """Cheap *actual* dependency/logic checks, cached per server process.
+
+    This only verifies that Tesseract is installed and the conservative
+    date/barangay comparison functions behave on artificial data.
+    It does NOT measure accuracy on real ID documents.
+    """
+    try:
+        version = pytesseract.get_tesseract_version()
+        document_ocr_ready = bool(version)
+    except Exception:
+        document_ocr_ready = False
+    try:
+        checks = profile_comparison(
+            "2000-02-03", "Muzon",
+            "DATE OF BIRTH: 2000-02-03 RESIDENTIAL ADDRESS: MUZON BULACAN",
+        )
+        discrepancy = profile_comparison(
+            "2000-02-03", "Muzon",
+            "DATE OF BIRTH: 2001-02-03 PLACE OF BIRTH: MUZON",
+        )
+        profile_ready = (
+            checks["profileBirthDateCheck"] == "possible_match"
+            and checks["profileAddressCheck"] == "possible_match"
+            and discrepancy["profileBirthDateCheck"] == "possible_conflict"
+            and discrepancy["profileAddressCheck"] == "inconclusive"
+        )
+    except Exception:
+        profile_ready = False
+    return document_ocr_ready, profile_ready
+
+
 @app.get(
     "/health"
 )
 
 
 def health():
+    ocr_ready, profile_ready = ocr_and_profile_capabilities()
     return {
         "ok": True,
         "service": (
@@ -1146,6 +1181,9 @@ def health():
             get_internal_key()
         ),
         "verificationEngineReady": face_mesh_engine_ready(),
+        "documentOcrReady": ocr_ready,
+        "profileComparisonReady": profile_ready,
+        "documentPrecheckReady": ocr_ready and profile_ready,
         "mediaPipeVersion": str(getattr(mp, "__version__", "unknown")),
         "faceMatchThreshold":
             get_match_threshold(),
@@ -1221,6 +1259,18 @@ async def document_precheck(
     x_volunserve_internal_key: str | None = Header(
         default=None, alias="X-VolunServe-Internal-Key",
     ),
+    x_volunserve_profile_first_name: str | None = Header(
+        default=None, alias="X-VolunServe-Profile-First-Name",
+    ),
+    x_volunserve_profile_last_name: str | None = Header(
+        default=None, alias="X-VolunServe-Profile-Last-Name",
+    ),
+    x_volunserve_profile_date_of_birth: str | None = Header(
+        default=None, alias="X-VolunServe-Profile-Date-Of-Birth",
+    ),
+    x_volunserve_profile_barangay: str | None = Header(
+        default=None, alias="X-VolunServe-Profile-Barangay",
+    ),
 ):
     require_internal_backend(x_volunserve_internal_key)
     validate_forwarded_user(x_volunserve_user_id)
@@ -1260,9 +1310,15 @@ async def document_precheck(
     screening = await asyncio.to_thread(
         screen_government_id, declared_type=declared_type,
         id_document_bytes=front_bytes, id_back_document_bytes=back_bytes,
+        expected_first_name=x_volunserve_profile_first_name or "",
+        expected_last_name=x_volunserve_profile_last_name or "",
+        expected_date_of_birth=x_volunserve_profile_date_of_birth or "",
+        expected_barangay=x_volunserve_profile_barangay or "",
     )
+    birthday_conflict = screening.get("profileBirthDateCheck") == "possible_conflict"
     recognized = (
-        screening.get("status") == "text_consistent_unverified"
+        not birthday_conflict
+        and screening.get("status") == "text_consistent_unverified"
         and screening.get("detectedIdType") == declared_type
         and screening.get("imageQualityStatus") == "adequate"
         and not any(code in (screening.get("warningCodes") or [])
@@ -1271,12 +1327,15 @@ async def document_precheck(
                                  "document_back_looks_like_front"))
     )
     review = (
-        not recognized
+        not birthday_conflict
+        and not recognized
         and blurry_national_id_claim_needs_review(declared_type, screening)
     )
     outcome = "pass" if recognized else "review" if review else "retry"
-    if outcome == "pass":
-        message = "ID format appears consistent. This does not authenticate the document."
+    if birthday_conflict and outcome == "retry":
+        message = "The ID birth date may differ from your saved profile. Retake a clear ID or ask Admin to review your profile; this is not proof of fraud."
+    elif outcome == "pass":
+        message = "ID format appears consistent. Birthday and barangay checks are OCR clues only; unresolved fields still require Admin review."
     elif outcome == "review":
         message = "The selected National ID is too blurry. It may continue only to Admin rescan review, never automatic approval."
     elif "school_id_not_supported" in (screening.get("warningCodes") or []):
