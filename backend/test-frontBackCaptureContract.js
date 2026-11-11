@@ -85,3 +85,33 @@ test("browser selfie blob is released when the selfie changes or page unmounts",
  assert.match(screen,/\[idDocument\?\.uri\]/);
  assert.match(screen,/\[idBackDocument\?\.uri\]/);
 });
+
+
+test("signup retains validated DOB and Firestore only accepts canonical date",()=>{
+ const signup = fs.readFileSync("app/signup.tsx","utf8");
+ const emailSignup = fs.readFileSync("components/auth/EmailFirstSignup.tsx","utf8");
+ const auth = fs.readFileSync("lib/firebaseAuth.ts","utf8");
+ const rules = fs.readFileSync("firestore.rules","utf8");
+ assert.match(signup,/dateOfBirth:\s*formData\.dateOfBirth/);
+ assert.match(emailSignup,/dateOfBirth:\s*birth/);
+ assert.match(auth,/dateOfBirth\?: string/);
+ assert.match(auth,/\.\.\.\(birthDate \? \{ dateOfBirth: birthDate \} : \{\}\)/);
+ assert.match(rules,/request\.resource\.data\.dateOfBirth\.matches/);
+ // The existing owner profile-update allowlist must not include dateOfBirth.
+ const updateRules = rules.slice(rules.indexOf("allow update: if signedIn()",rules.indexOf("match \/users/{uid}")));
+ assert.match(updateRules,/affectedKeys\(\)\.hasOnly/);
+ assert.doesNotMatch(updateRules.split("affectedKeys()")[1].split("])")[0],/'dateOfBirth'/);
+});
+
+test("identity AI gets profile DOB and barangay only from trusted Firestore, not uploaded form",()=>{
+ const ai = fs.readFileSync("lib/identityVerification.ts","utf8");
+ assert.match(server,/dateOfBirth: profile\.dateOfBirth \|\| ""/);
+ assert.match(server,/barangay: profile\.barangay \|\| ""/);
+ assert.match(server,/X-VolunServe-Profile-Date-Of-Birth/);
+ assert.match(server,/X-VolunServe-Profile-Barangay/);
+ assert.match(server,/issuerAuthenticityStatus: "not_verified"/);
+ assert.match(server,/presentationAttackStatus: "not_validated"/);
+ assert.match(ai,/profileBirthDateCheck/);
+ assert.match(ai,/profileAddressCheck/);
+ assert.doesNotMatch(ai,/formData\.append\(["'](?:dateOfBirth|barangay)/);
+});
