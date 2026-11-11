@@ -26,3 +26,20 @@ for (const [label,screening] of [
     assert.equal(enforceSelectedIdDecision("manual_review",screening,false),"failed");
   });
 }
+
+for (const type of ["national_id","drivers_license","passport","umid","prc_id"]) {
+  for (const status of ["unsupported","inconclusive","mismatch"]) {
+    test("selected "+type+" with "+status+" OCR status is always rejected",()=>{
+      const bad={status,declaredIdType:type,detectedIdType:
+        status==="mismatch"?"school_id":null,authenticityVerified:false};
+      assert.equal(selectedIdRecognized(bad),false);
+      assert.equal(enforceSelectedIdDecision("verified",bad,true),"failed");
+      assert.equal(enforceSelectedIdDecision("manual_review",bad,false),"failed");
+    });
+  }
+}
+test("declared and detected government ID must be the same even if OCR claims consistency",()=>{
+  const wrong={status:"text_consistent_unverified",declaredIdType:"national_id",detectedIdType:"passport",authenticityVerified:false};
+  assert.equal(selectedIdRecognized(wrong),false);
+  assert.equal(enforceSelectedIdDecision("verified",wrong,true),"failed");
+});
