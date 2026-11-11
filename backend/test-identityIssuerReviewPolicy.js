@@ -18,7 +18,7 @@ test("National ID requires an explicit admin attestation and privacy-safe notes"
  assert.equal(r.independentAdminCheckAttested,true);
 });
 test("Other IDs cannot use PSA National ID review method",()=>{
- for(const id of ["drivers_license","passport","umid"]){
+ for(const id of ["drivers_license","passport","umid","prc_id"]){
   assert.equal(reviewIssuerEvidence({declaredType:id,validationMethod:"psa_national_id_qr_check",confirmed:true,notes:"Validated manually and checked full document"}).ok,false);
   assert.equal(reviewIssuerEvidence({declaredType:id,validationMethod:"in_person_lgu_validation",confirmed:true,notes:"In-person independent review performed"}).ok,true);
  }
@@ -27,7 +27,7 @@ test("unsupported ID type cannot pass admin attestation",()=>{
  assert.equal(reviewIssuerEvidence({declaredType:"school_id",validationMethod:"in_person_lgu_validation",confirmed:true,notes:"In-person review"}).ok,false);
 });
 test("missing attestation cannot pass for any supported ID",()=>{
- for(const declaredType of ["national_id","drivers_license","passport","umid"]){
+ for(const declaredType of ["national_id","drivers_license","passport","umid","prc_id"]){
   assert.equal(reviewIssuerEvidence({declaredType,validationMethod:declaredType==="national_id"?"psa_national_id_qr_check":"official_document_check",confirmed:false,notes:"Independent government document review"}).ok,false);
  }
 });
