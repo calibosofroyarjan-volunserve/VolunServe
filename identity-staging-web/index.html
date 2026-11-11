@@ -76,8 +76,37 @@ el('resetPassword').addEventListener('click',async()=>{
  }finally{busy=false;state()}
 });
 el('logout').addEventListener('click',()=>signOut(auth));
-async function get(path){if(!auth.currentUser)throw Error('Sign in first');const token=await auth.currentUser.getIdToken();const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),150000);try{const r=await fetch(backend+path,{headers:{Authorization:'Bearer '+token},signal:controller.signal});const b=await r.json().catch(()=>({error:'Non-JSON response'}));if(!r.ok)throw Error(b.message||b.error||'HTTP '+r.status);return b}finally{clearTimeout(timeout)}}
-el('readiness').addEventListener('click',async()=>{busy=true;ready=false;state();show('diagnostic','Checking backend → AI readiness... Free services may wake from sleep.');try{const d=await get('/api/identity/engine-health');ready=d.ready===true;show('diagnostic',{ready,provider:d.provider,livenessImplemented:d.livenessImplemented,message:d.message})}catch(e){show('diagnostic','Readiness check failed: '+err(e))}finally{busy=false;state()}});
+async function get(path){if(!auth.currentUser)throw Error('Sign in first');const token=await auth.currentUser.getIdToken();const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),150000);try{const r=await fetch(backend+path,{headers:{Authorization:'Bearer '+token},signal:controller.signal});const b=await r.json().catch(()=>({error:'Non-JSON response'}));if(!r.ok){const problem=new Error(b.message||b.error||'HTTP '+r.status);problem.httpStatus=r.status;problem.code=String(b.error||'');throw problem}return b}finally{clearTimeout(timeout)}}
+el('readiness').addEventListener('click',async()=>{
+ if(busy||!auth.currentUser)return;
+ busy=true;ready=false;state();
+ const startedFor=auth.currentUser.uid;
+ const warmingErrors=new Set(['identity_ai_warming_up','identity_ai_unreachable','identity_ai_auth_check_unreachable']);
+ const attempts=4;
+ try{
+  for(let attempt=1;attempt<=attempts;attempt++){
+   if(!auth.currentUser||auth.currentUser.uid!==startedFor)throw Error('Signed-out staging session; sign in to check again.');
+   if(attempt>1){
+    show('diagnostic','Staging AI may be starting after inactivity. Automatic readiness retry '+attempt+'/'+attempts+' (no ID or selfie upload).');
+    await new Promise(resolve=>setTimeout(resolve,attempt===2?10000:15000));
+   }
+   show('diagnostic','Checking staging backend → AI readiness ('+attempt+'/'+attempts+'). Free Render services may be waking up...');
+   try{
+    const d=await get('/api/identity/engine-health');
+    ready=d.ready===true;
+    show('diagnostic',{ready,provider:d.provider,livenessImplemented:d.livenessImplemented,message:d.message});
+    if(ready||!warmingErrors.has(String(d.error||'')))break;
+   }catch(e){
+    if(e.httpStatus===503&&warmingErrors.has(e.code)){
+     if(attempt===attempts)show('diagnostic','AI still warming after automatic readiness checks. No identity attempt was used. Confirm the staging Python AI service is healthy in Render and click Check AI readiness later.');
+     continue;
+    }
+    throw e;
+   }
+  }
+ }catch(e){show('diagnostic','Readiness check failed: '+err(e))}
+ finally{busy=false;state()}
+});
 el('status').addEventListener('click',async()=>{busy=true;state();try{const d=await get('/api/identity/status');show('diagnostic',{identityStatus:d.identityStatus,identityVerified:d.identityVerified,attemptCount:d.attemptCount,requiresManualReview:d.requiresManualReview,message:d.message})}catch(e){show('diagnostic','Status check failed: '+err(e))}finally{busy=false;state()}});
 el('type').addEventListener('change',()=>{let passport=el('type').value==='passport';el('backrow').classList.toggle('hidden',passport);el('back').required=!passport});
 function file(f){if(!f)throw Error('Photo required');if(!['image/png','image/jpeg','image/webp'].includes(f.type))throw Error('Only JPG/PNG/WebP images allowed');if(f.size>10*1024*1024)throw Error('Image must be <= 10 MB');return f}
