@@ -7,6 +7,8 @@ const overview = fs.readFileSync("app/(superadmin)/index.tsx", "utf8");
 const admin = fs.readFileSync("app/(superadmin)/admin-accounts.tsx", "utf8");
 const reset = fs.readFileSync("components/auth/PasswordResetDialog.tsx", "utf8");
 const login = fs.readFileSync("app/admin-login.tsx", "utf8");
+const unifiedWebLogin = fs.readFileSync("app/login.web.tsx", "utf8");
+const unifiedNativeLogin = fs.readFileSync("app/login.tsx", "utf8");
 const profile = fs.readFileSync("app/(superadmin)/profile.tsx", "utf8");
 assert(layout.includes('accessibilityLabel="Open Super Admin profile dropdown"') &&
   layout.includes('accessibilityLabel="Super Admin profile dropdown"') &&
@@ -30,7 +32,9 @@ assert(records.includes('import ListPagination from "../../components/ui/ListPag
 assert(overview.includes("orientation=\"vertical\"") && overview.includes("ListPagination") &&
   admin.includes("const ADMIN_PAGE_SIZE = 5"),
   "Restored premium Overview and current Admin Accounts must stay unchanged");
-assert(login.includes('audience="admin"') &&
+assert(login.includes('<Redirect href="/login" />') &&
+  unifiedWebLogin.includes("<PasswordResetDialog") &&
+  unifiedNativeLogin.includes("<PasswordResetDialog") &&
   reset.includes('styles.webOverlay') &&
   reset.includes('Send reset link'),
   "Keep both login Forgot Password modal fixes in the same release");

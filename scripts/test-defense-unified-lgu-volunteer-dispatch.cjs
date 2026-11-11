@@ -46,24 +46,26 @@ assert(cases.includes("approvedApplications") &&
   cases.includes('String(data.status || "").toLowerCase() === "approved"') &&
   cases.includes("visibleApprovedVolunteers"),
   "Candidate pool must only be sourced from approved applications");
-assert(cases.includes("return !isReporter && skillSearchMatch && availabilityMatch;") &&
+assert(cases.includes("return !isReporter && skillSearchMatch;") &&
   !cases.includes('reason: "Currently unavailable / off duty"') &&
   cases.includes("offline ? \"Offline · offer allowed\"") &&
   cases.includes('pageFive(volunteerCandidates, volunteerPage)'),
   "All approved Volunteers must be visible and offline status must not prohibit offers");
 assert(cases.includes("runTransaction(db, async (transaction)") &&
-  cases.includes("responderLockSnapshot.exists()") &&
-  cases.includes("hasCurrentSkillMatch") &&
+  cases.includes("transaction.get(volunteerRef)") &&
+  cases.includes("const currentRequiredSkills = normalizeStringArray(") &&
+  cases.includes("volunteerEligibilityForCase(incident, volunteer)") &&
   cases.includes("currentVerification !== \"validated\"") &&
   cases.includes('status: "offered"') &&
   cases.includes('read: false') &&
   cases.includes('volunteer.uid === incident.reporterUid'),
-  "Keep atomic, validated, skill/lock-checked assignment with queued Volunteer notifications");
-assert(cases.includes('currentVolunteerBarangay !== currentCaseBarangay') &&
-  cases.includes("!volunteerSupportAvailable") &&
+  "Keep atomic, validated, reviewed-skill and duplicate-assignment checks with queued Volunteer notifications");
+assert(!cases.includes('currentVolunteerBarangay !== currentCaseBarangay') &&
+  cases.includes("normalizeBarangay(currentCaseBarangayRaw)") &&
+  cases.includes("!eligibility.eligible") &&
   cases.includes("!caseOpenForSupport"),
-  "Maintain local eligibility and case verification; do not promise unrestricted dispatch");
-assert(cases.includes("pageFive(onDutyPersonnel") &&
+  "Allow approved citywide SJDM Volunteers but require validated case and eligibility");
+assert(cases.includes("pageFive(volunteerCandidates") &&
   cases.includes("pageFive(activeAssignments") &&
   cases.includes("pageFive(videoEvidence"),
   "Preserve secondary Emergency pagination");

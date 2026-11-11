@@ -9,6 +9,7 @@ const dashboard = fs.readFileSync("app/(superadmin)/index.tsx", "utf8");
 const settings = fs.readFileSync("app/(superadmin)/system-settings.tsx", "utf8");
 const login = fs.readFileSync("app/login.web.tsx", "utf8");
 const adminLogin = fs.readFileSync("app/admin-login.tsx", "utf8");
+const nativeLogin = fs.readFileSync("app/login.tsx", "utf8");
 
 for (const section of ['id: "residents", label: "Residents"', 'id: "volunteers", label: "Volunteers"',
   'id: "events", label: "Community Events"', 'id: "operations", label: "Response & Outcomes"',
@@ -49,6 +50,7 @@ assert(layout.includes('accessibilityLabel="Super Admin profile dropdown"') &&
        settings.includes("System Settings") &&
        dashboard.includes('orientation="vertical"'),
   "Preserve premium Super Admin Overview and profile dropdown Settings");
-assert(login.includes("<PasswordResetDialog") && adminLogin.includes("<PasswordResetDialog"),
-  "Do not regress either login forgot-password popup");
+assert(login.includes("<PasswordResetDialog") && nativeLogin.includes("<PasswordResetDialog") &&
+       adminLogin.includes('<Redirect href="/login" />'),
+  "Unified web/native Login must retain password reset; old Admin login must redirect safely");
 console.log("PASS restored service-area System Records, resident/volunteer grouping and 5-row pagination; protected adjacent features");
