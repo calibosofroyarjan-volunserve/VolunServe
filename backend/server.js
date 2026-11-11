@@ -4942,6 +4942,10 @@ app.post(
     response.set("Cache-Control", "no-store");
     try {
       const uid = request.firebaseUser.uid;
+      if (request.headers["x-volunserve-document-precheck-consent"] !== "true") {
+        throw makeHttpError(400, "document_precheck_consent_required",
+          "Agree to preliminary ID processing before continuing.");
+      }
       const profile = await loadUserProfile(uid);
       if (cleanText(profile.status || "approved", 40).toLowerCase() !== "approved") {
         throw makeHttpError(403, "account_not_active", "Your Resident account is not active.");
