@@ -16,6 +16,12 @@ on:
       - "app/identity-verification.web.tsx"
       - "app/identity-verification.tsx"
       - "components/identity/DocumentScreeningSummary.tsx"
+      - "lib/firebaseAuth.ts"
+      - "app/signup.tsx"
+      - "components/auth/EmailFirstSignup.tsx"
+      - "firestore.rules"
+      - "backend/test-identity-contract-staging.js"
+      - "backend/test-firestore-dob-rules.js"
       - ".github/workflows/test-identity-ocr-no-deploy.yml"
 permissions:
   contents: read
@@ -47,6 +53,8 @@ jobs:
         run: |
           node --check backend/server.js
           node --test backend/test-selectedIdPolicy.js
+          node --test backend/test-identity-contract-staging.js
+          node --test backend/test-firestore-dob-rules.js
       - name: Install frontend dependency lockfile (no lifecycle scripts)
         run: npm ci --ignore-scripts --no-audit --no-fund
       - name: Typecheck frontend identity UI and API client
