@@ -1733,6 +1733,8 @@ function UploadIdStep({
   idType,
   setIdType,
   idDocument,
+  idBackDocument,
+  cameraSide,
   selectedIdLabel,
   cameraOpen,
   cameraReady,
@@ -1740,14 +1742,18 @@ function UploadIdStep({
   idVideoRef,
   idCanvasRef,
   onPick,
+  onPickBack,
   onCapture,
   onCancel,
   onNext,
   onRemove,
+  onRemoveBack,
 }: {
   idType: IdentityDocumentType;
   setIdType: (value: IdentityDocumentType) => void;
   idDocument: CapturedIdentityMedia | null;
+  idBackDocument: CapturedIdentityMedia | null;
+  cameraSide: "front" | "back";
   selectedIdLabel: string;
   cameraOpen: boolean;
   cameraReady: boolean;
@@ -1755,10 +1761,12 @@ function UploadIdStep({
   idVideoRef: React.MutableRefObject<HTMLVideoElement | null>;
   idCanvasRef: React.MutableRefObject<HTMLCanvasElement | null>;
   onPick: () => void;
+  onPickBack: () => void;
   onCapture: () => void;
   onCancel: () => void;
   onNext: () => void;
   onRemove: () => void;
+  onRemoveBack: () => void;
 }) {
   return (
     <View style={styles.stepCard}>
@@ -1826,111 +1834,96 @@ function UploadIdStep({
         })}
       </View>
 
-      <Text style={styles.fieldLabel}>
-        ID Photo
-      </Text>
-
-      {idDocument ? (
-        <View style={styles.mediaPreviewCard}>
-          <Image
-            source={{ uri: idDocument.uri }}
-            style={styles.idPreview}
-            resizeMode="cover"
-          />
-          <View style={styles.mediaPreviewInfo}>
-            <View style={styles.mediaSuccessIcon}>
-              <Ionicons
-                name="checkmark"
-                size={17}
-                color="#FFFFFF"
+      {([
+        { side: "front" as const, label: "Front of ID", media: idDocument, open: onPick, remove: onRemove },
+        ...(idType === "passport" ? [] : [
+          { side: "back" as const, label: "Back of ID", media: idBackDocument, open: onPickBack, remove: onRemoveBack },
+        ]),
+      ]).map(({ side, label, media, open, remove }) => (
+        <View key={side}>
+          <Text style={styles.fieldLabel}>{label}</Text>
+          {media ? (
+            <View style={styles.mediaPreviewCard}>
+              <Image
+                source={{ uri: media.uri }}
+                style={styles.idPreview}
+                resizeMode="cover"
               />
-            </View>
-            <View style={styles.mediaPreviewCopy}>
-              <Text style={styles.mediaPreviewTitle}>
-                {selectedIdLabel} selected
-              </Text>
-              <Text
-                style={styles.mediaPreviewText}
-                numberOfLines={1}
-              >
-                {idDocument.name}
-              </Text>
-            </View>
-            <TouchableOpacity
-              style={styles.iconButton}
-              onPress={onRemove}
-            >
-              <Ionicons
-                name="trash-outline"
-                size={18}
-                color={COLORS.danger}
-              />
-            </TouchableOpacity>
-          </View>
-        </View>
-      ) : cameraOpen ? (
-        <View style={styles.mediaPreviewCard}>
-          <View style={styles.idLivePreview}>
-            {React.createElement("video" as any, {
-              ref: idVideoRef,
-              autoPlay: true,
-              muted: true,
-              playsInline: true,
-              style: { width: "100%", height: "100%", objectFit: "contain", background: "#111827" },
-            })}
-            {React.createElement("canvas" as any, {
-              ref: idCanvasRef,
-              style: { display: "none" },
-            })}
-          </View>
-          <Text style={styles.uploadText}>
-            Hold the physical ID flat and steady. Avoid glare, make sure the face is visible, then capture.
-          </Text>
-          {cameraError ? <Text style={styles.idCameraError}>{cameraError}</Text> : null}
-          <View style={styles.idCameraActions}>
-            <TouchableOpacity
-              style={[styles.nextButton, !cameraReady && styles.disabledButton]}
-              onPress={onCapture}
-              disabled={!cameraReady}
-            >
-              <Ionicons name="camera" size={19} color="#FFFFFF" />
-              <Text style={styles.nextButtonText}>Capture ID</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.secondaryWideButton} onPress={onCancel}>
-              <Text style={styles.secondaryWideButtonText}>Cancel</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      ) : (
-        <TouchableOpacity
-          style={styles.uploadZone}
-          onPress={onPick}
-        >
-          <>
-              <View style={styles.uploadIcon}>
-                <Ionicons
-                  name="image-outline"
-                  size={29}
-                  color={COLORS.blue}
-                />
+              <View style={styles.mediaPreviewInfo}>
+                <View style={styles.mediaSuccessIcon}>
+                  <Ionicons name="checkmark" size={17} color="#FFFFFF" />
+                </View>
+                <View style={styles.mediaPreviewCopy}>
+                  <Text style={styles.mediaPreviewTitle}>
+                    {label} captured — not yet authenticated
+                  </Text>
+                  <Text style={styles.mediaPreviewText} numberOfLines={1}>
+                    {media.name}
+                  </Text>
+                </View>
+                <TouchableOpacity style={styles.iconButton} onPress={remove}>
+                  <Ionicons name="trash-outline" size={18} color={COLORS.danger} />
+                </TouchableOpacity>
               </View>
-              <Text style={styles.uploadTitle}>
-                Open Camera to Scan ID
-              </Text>
+            </View>
+          ) : cameraOpen && cameraSide === side ? (
+            <View style={styles.mediaPreviewCard}>
+              <View style={styles.idLivePreview}>
+                {React.createElement("video" as any, {
+                  ref: idVideoRef,
+                  autoPlay: true,
+                  muted: true,
+                  playsInline: true,
+                  style: { width: "100%", height: "100%", objectFit: "contain", background: "#111827" },
+                })}
+                {React.createElement("canvas" as any, {
+                  ref: idCanvasRef,
+                  style: { display: "none" },
+                })}
+              </View>
               <Text style={styles.uploadText}>
-                Live camera capture · clear ID face · no glare
+                Hold {side === "front" ? "the front" : "the back"} of the ID flat and steady. Keep all four edges visible and avoid glare.
               </Text>
-          </>
-        </TouchableOpacity>
-      )}
+              {cameraError ? <Text style={styles.idCameraError}>{cameraError}</Text> : null}
+              <View style={styles.idCameraActions}>
+                <TouchableOpacity
+                  style={[styles.nextButton, !cameraReady && styles.disabledButton]}
+                  onPress={onCapture}
+                  disabled={!cameraReady}
+                >
+                  <Ionicons name="camera" size={19} color="#FFFFFF" />
+                  <Text style={styles.nextButtonText}>Capture {label}</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.secondaryWideButton} onPress={onCancel}>
+                  <Text style={styles.secondaryWideButtonText}>Cancel</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          ) : (
+            <TouchableOpacity
+              style={styles.uploadZone}
+              onPress={open}
+              disabled={cameraOpen}
+            >
+              <View style={styles.uploadIcon}>
+                <Ionicons name="camera-outline" size={29} color={COLORS.blue} />
+              </View>
+              <Text style={styles.uploadTitle}>Open Camera — {label}</Text>
+              <Text style={styles.uploadText}>
+                This captures a document photo. Government ID type and authenticity are checked separately.
+              </Text>
+            </TouchableOpacity>
+          )}
+        </View>
+      ))}
 
       <View style={styles.stepFooter}>
         <TouchableOpacity
           style={[
             styles.nextButton,
-            !idDocument && styles.disabledButton,
+            (!idDocument || (idType !== "passport" && !idBackDocument)) && styles.disabledButton,
           ]}
-          disabled={!idDocument}
+          disabled={!idDocument || (idType !== "passport" && !idBackDocument)}
           onPress={onNext}
         >
           <Text style={styles.nextButtonText}>
