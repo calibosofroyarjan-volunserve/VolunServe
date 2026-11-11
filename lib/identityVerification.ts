@@ -10,42 +10,63 @@ export type IdentityDocumentType =
   | "national_id"
   | "drivers_license"
   | "passport"
-  | "other_government_id";
+  | "umid"
+  | "prc_id";
 
 export type DocumentScreening = {
   declaredIdType: IdentityDocumentType | null;
   detectedIdType: IdentityDocumentType | null;
-  status: "text_consistent_unverified" | "mismatch" | "inconclusive";
+  status: "text_consistent_unverified" | "mismatch" | "inconclusive" | "unsupported";
   authenticityVerified: false;
   livenessVerified: false;
   manualReviewRequired: true;
+  imageQualityStatus?: "low" | "adequate" | "unknown";
+  backSideProvided?: boolean;
+  backSideScreened?: boolean;
+  profileNameCompared?: boolean;
+  profileNameCheck?: "possible_match" | "inconclusive" | "not_checked";
   warningCodes: string[];
 };
 
 export function documentScreeningLabel(value?: DocumentScreening | null): string {
   switch (value?.status) {
     case "text_consistent_unverified":
-      return "ID type matches recognized text, but authenticity is not verified.";
+      return value?.backSideScreened
+        ? "ID text recognized and both sides screened for conflicting document labels. Authenticity is not verified."
+        : "ID type matches recognized text, but authenticity is not verified.";
     case "mismatch":
-      return "Selected ID type does not match recognized document text. Review required.";
+      return "REJECTED: The scanned document does not match the selected government ID. Choose the correct type and scan again.";
+    case "unsupported":
+      return "REJECTED: School, student, employee or other unsupported ID detected. Only the five selected government ID types are accepted.";
     default:
-      return "ID type could not be confirmed automatically. Review required.";
+      return value?.declaredIdType === "national_id" &&
+        value?.imageQualityStatus === "low" &&
+        value?.warningCodes.includes("low_document_image_quality")
+        ? "BLURRY NATIONAL ID CLAIM: ID type could not be confirmed. Sent for Admin review to request a clearer scan; not identity verified."
+        : "NOT ACCEPTED: The selected government ID type could not be confirmed. Retake a clearer scan and retry.";
   }
 }
 
 function parseDocumentScreening(value: unknown): DocumentScreening | undefined {
   if (!value || typeof value !== "object") return undefined;
   const raw = value as Record<string, unknown>;
-  const allowed = ["national_id", "drivers_license", "passport", "other_government_id"];
+  const allowed = ["national_id", "drivers_license", "passport", "umid", "prc_id"];
   const type = (x: unknown) => allowed.includes(String(x)) ? x as IdentityDocumentType : null;
   return {
     declaredIdType: type(raw.declaredIdType),
     detectedIdType: type(raw.detectedIdType),
-    status: raw.status === "mismatch" || raw.status === "text_consistent_unverified" ?
-      raw.status : "inconclusive",
+    status: raw.status === "mismatch" || raw.status === "text_consistent_unverified" ||
+      raw.status === "unsupported" ? raw.status : "inconclusive",
     authenticityVerified: false,
     livenessVerified: false,
     manualReviewRequired: true,
+    imageQualityStatus: raw.imageQualityStatus === "low" || raw.imageQualityStatus === "adequate"
+      ? raw.imageQualityStatus : "unknown",
+    backSideProvided: raw.backSideProvided === true,
+    backSideScreened: raw.backSideScreened === true,
+    profileNameCompared: raw.profileNameCompared === true,
+    profileNameCheck: raw.profileNameCheck === "possible_match" || raw.profileNameCheck === "inconclusive"
+      ? raw.profileNameCheck : "not_checked",
     warningCodes: Array.isArray(raw.warningCodes)
       ? raw.warningCodes.filter((x): x is string => typeof x === "string").slice(0, 4) : [],
   };
@@ -82,17 +103,21 @@ export type IdentityVerificationResult = {
 export type SubmitIdentityVerificationInput = {
   idType: IdentityDocumentType;
   idDocument: CapturedIdentityMedia;
+  idBackDocument?: CapturedIdentityMedia | null;
   selfie: CapturedIdentityMedia;
 };
 
 const FALLBACK_BACKEND_URL = "https://volunserve.onrender.com";
 
 function getBackendBaseUrl() {
-  // The Resident app must always call the main VolunServe backend.
-  // The separate AI service is private and is reached only server-to-server.
-  let value =
-    process.env.EXPO_PUBLIC_IDENTITY_VERIFICATION_API_URL?.trim() ||
-    FALLBACK_BACKEND_URL;
+  // The separate Python AI service is private; clients use the Node backend.
+  // A staging build must NEVER silently send ID or selfie images to production.
+  const staging = process.env.EXPO_PUBLIC_VOLUNSERVE_ENV === "staging";
+  const configured = process.env.EXPO_PUBLIC_IDENTITY_VERIFICATION_API_URL?.trim();
+  if (staging && !configured) {
+    throw new Error("Staging identity backend URL is required before verification.");
+  }
+  let value = configured || FALLBACK_BACKEND_URL;
 
   value = value.replace(/\/+$/, "");
 
@@ -105,6 +130,24 @@ function getBackendBaseUrl() {
 
   if (value.endsWith(statusSuffix)) {
     value = value.slice(0, -statusSuffix.length);
+  }
+
+  if (staging) {
+    let parsed: URL;
+    try {
+      parsed = new URL(value);
+    } catch {
+      throw new Error("Staging identity backend URL is invalid.");
+    }
+    const blockedHosts = [
+      "volunserve.onrender.com",
+      "volunserve.com",
+      "www.volunserve.com",
+      "volunserve-identity-ai.onrender.com",
+    ];
+    if (parsed.protocol !== "https:" || blockedHosts.includes(parsed.hostname.toLowerCase())) {
+      throw new Error("Staging verification cannot use the production identity endpoint.");
+    }
   }
 
   return value;
@@ -301,6 +344,15 @@ export const submitIdentityVerification = async (
     "Government ID image",
   );
 
+  if (input.idType !== "passport") {
+    validateMedia(
+      input.idBackDocument || undefined,
+      "Government ID back image",
+    );
+  } else if (input.idBackDocument) {
+    validateMedia(input.idBackDocument, "Passport supplementary image");
+  }
+
   validateMedia(
     input.selfie,
     "Live selfie",
@@ -321,6 +373,14 @@ export const submitIdentityVerification = async (
     "idDocument",
     input.idDocument,
   );
+
+  if (input.idBackDocument) {
+    appendMedia(
+      formData,
+      "idBackDocument",
+      input.idBackDocument,
+    );
+  }
 
   appendMedia(
     formData,
