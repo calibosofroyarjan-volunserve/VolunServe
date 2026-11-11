@@ -167,6 +167,7 @@ def document_ocr_unavailable(declared_type: str) -> dict:
         "livenessVerified": False,
         "manualReviewRequired": True,
         "warningCodes": ["ocr_unavailable"],
+        "imageQualityStatus": "unknown",
     }
 
 
@@ -211,6 +212,24 @@ def assess_document_sides(
     result["authenticityVerified"] = False
     result["manualReviewRequired"] = True
     return result
+
+
+def add_photo_quality(screening: dict, blur_variance: float) -> dict:
+    """Conservative blur flag for the *whole image*, not an ID validity claim.
+
+    Very low Laplacian variance can also occur with an empty card/background.
+    Only the selected-type conflict checks can identify a wrong document.
+    Never use this signal alone to approve or reject an ID.
+    """
+    out = dict(screening)
+    out["imageQualityStatus"] = (
+        "low" if blur_variance < 40.0 else "adequate"
+    )
+    if blur_variance < 40.0:
+        out["warningCodes"] = list(dict.fromkeys(
+            out.get("warningCodes", []) + ["low_document_image_quality"]
+        ))
+    return out
 
 
 def assess_profile_name(first_name: str, last_name: str, ocr_text: str) -> dict:
