@@ -108,3 +108,32 @@ test("back/front orientation warnings cannot take blurry National ID review exce
    assert.equal(enforceSelectedIdDecision("manual_review",result,false),"failed");
  }
 });
+
+
+test("birthday OCR possible conflict prevents priority review and auto-grant",()=>{
+ const screening={
+   ...valid("national_id"),
+   profileBirthDateCheck:"possible_conflict",
+   profileNameCheck:"possible_match",
+   imageQualityStatus:"adequate",
+ };
+ assert.equal(selectedIdRecognized(screening),true); // ID TYPE only
+ assert.equal(enforceSelectedIdDecision("verified",screening,true),"manual_review");
+ assert.equal(classifyIdentityReviewTrack({screening,decision:"manual_review",idImageQualityScore:.95}),
+   "standard_admin_review");
+});
+
+test("even malicious perfect issuer/liveness claims cannot auto-verify without approved integration",()=>{
+ const screening={
+   ...valid("national_id"),
+   authenticityVerified:true,
+   issuerAuthenticityStatus:"verified",
+   presentationAttackStatus:"validated",
+ };
+ assert.equal(enforceSelectedIdDecision("verified",screening,true),"manual_review");
+});
+
+test("older profile with no saved birthday does not count as birthday mismatch",()=>{
+ const screening={...valid("national_id"),profileBirthDateCheck:"not_checked"};
+ assert.equal(enforceSelectedIdDecision("manual_review",screening,false),"manual_review");
+});
