@@ -154,6 +154,18 @@ function getBackendBaseUrl() {
 }
 
 async function getAuthenticatedUser() {
+  // Fail closed: the staging UI must not silently read production Firebase
+  // accounts or forward production-issued Firebase tokens to a test backend.
+  // A dedicated staging Firebase project must be explicitly configured first.
+  if (
+    process.env.EXPO_PUBLIC_VOLUNSERVE_ENV === "staging" &&
+    auth.app.options.projectId === "volunserve-3aa5b"
+  ) {
+    throw new Error(
+      "Staging identity verification is blocked: this build is connected to production Firebase. Configure an isolated staging Firebase project before testing.",
+    );
+  }
+
   const user = auth.currentUser;
 
   if (!user) {
