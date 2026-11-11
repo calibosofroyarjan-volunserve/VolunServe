@@ -125,11 +125,20 @@ jobs:
           node scripts/validate-identity-hosting-release.cjs
           node scripts/check-live-hosting.cjs
 
+      - name: Read-only audit of current Firestore release
+        shell: bash
+        run: |
+          set -euo pipefail
+          IDENTITY_RULES_MODE=inspect node scripts/publish-identity-dob-rules-safely.cjs
+
       - name: Deploy ONLY the additive Firestore signup DOB rule
         shell: bash
         run: |
           set -euo pipefail
-          npx firebase-tools deploy --only firestore:rules --project volunserve-3aa5b --non-interactive
+          # The Firebase CLI create-on-existing-release path returned 409.
+          # Use documented Rules API PATCH on cloud.firestore only after
+          # exact active-source comparison, never delete the existing release.
+          IDENTITY_RULES_MODE=publish node scripts/publish-identity-dob-rules-safely.cjs
 
       - name: Deploy ONLY Firebase Hosting identity UI from the exact built revision
         shell: bash
