@@ -33,6 +33,7 @@ import {
     checkIdentityEngineReady,
     IdentityDocumentType,
     IdentityVerificationStatusResult,
+    precheckIdentityDocument,
     submitIdentityVerification,
 } from "../lib/identityVerification";
 
@@ -241,6 +242,7 @@ export default function IdentityVerificationWeb() {
   const idCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const idStreamRef = useRef<MediaStream | null>(null);
   const idCameraSessionRef = useRef(0);
+  const documentPrecheckRevisionRef = useRef(0);
   const pendingFaceStartRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const idCaptureLockRef = useRef(false);
   const idAutoFramesRef = useRef<{ previous: Uint8Array | null; steadySince: number | null }>({ previous: null, steadySince: null });
@@ -270,6 +272,10 @@ export default function IdentityVerificationWeb() {
     useState<CapturedIdentityMedia | null>(null);
 
   const [consent, setConsent] = useState(false);
+  const [documentConsent, setDocumentConsent] = useState(false);
+  const [documentChecking, setDocumentChecking] = useState(false);
+  const [documentPrecheckMessage, setDocumentPrecheckMessage] = useState("");
+  const [documentPrecheckOutcome, setDocumentPrecheckOutcome] = useState<"pass" | "review" | "retry" | null>(null);
   const [retryingFailed, setRetryingFailed] = useState(false);
   const [idCameraOpen, setIdCameraOpen] = useState(false);
   const [idCameraSide, setIdCameraSide] = useState<"front" | "back">("front");
@@ -517,6 +523,9 @@ export default function IdentityVerificationWeb() {
   }, [idCameraOpen, stopIdCamera]);
 
   const chooseIdDocument = (side: "front" | "back") => {
+    documentPrecheckRevisionRef.current += 1;
+    setDocumentPrecheckOutcome(null);
+    setDocumentPrecheckMessage("");
     idCameraSessionRef.current += 1;
     setIdCameraSide(side);
     setIdCameraReady(false);
@@ -557,6 +566,9 @@ export default function IdentityVerificationWeb() {
       const name = `government-id-${captureSide}-camera-${Date.now()}.jpg`;
       const file = new File([blob], name, { type: "image/jpeg" });
       const media: CapturedIdentityMedia = { uri: URL.createObjectURL(blob), name, type: "image/jpeg", file };
+      documentPrecheckRevisionRef.current += 1;
+      setDocumentPrecheckOutcome(null);
+      setDocumentPrecheckMessage("");
       if (captureSide === "front") {
         setIdDocument(media);
       } else {
@@ -639,9 +651,15 @@ export default function IdentityVerificationWeb() {
   }, [idCameraOpen, idCameraReady, idCameraSide]);
 
   const discardIdDocument = () => {
+    documentPrecheckRevisionRef.current += 1;
+    setDocumentPrecheckOutcome(null);
+    setDocumentPrecheckMessage("");
     setIdDocument(null);
   };
   const discardIdBackDocument = () => {
+    documentPrecheckRevisionRef.current += 1;
+    setDocumentPrecheckOutcome(null);
+    setDocumentPrecheckMessage("");
     setIdBackDocument(null);
   };
 
@@ -1091,25 +1109,56 @@ export default function IdentityVerificationWeb() {
   };
 
   const openFaceScan = async () => {
+    if (documentChecking) return;
     if (!idDocument) {
-      Alert.alert(
-        "Government ID Required",
-        "Capture a clear government ID image using your camera before starting the face scan.",
+      setDocumentPrecheckMessage("Capture the front of your government ID first.");
+      return;
+    }
+    if (idType !== "passport" && !idBackDocument) {
+      setDocumentPrecheckMessage("Capture the reverse of your government ID before proceeding.");
+      return;
+    }
+    if (!documentConsent) {
+      setDocumentPrecheckMessage(
+        "Please consent to uploading these ID photos for a preliminary OCR document check before opening the face camera.",
       );
       return;
     }
-
-    if (idType !== "passport" && !idBackDocument) {
-      setLocalMessage("Please capture the back of this government ID before continuing.");
-      return;
+    const revision = documentPrecheckRevisionRef.current;
+    setDocumentChecking(true);
+    setDocumentPrecheckOutcome(null);
+    setDocumentPrecheckMessage("Checking the selected ID type, front/back arrangement and image quality...");
+    try {
+      await checkIdentityEngineReady();
+      if (revision !== documentPrecheckRevisionRef.current) return;
+      const result = await precheckIdentityDocument({
+        idType, idDocument,
+        idBackDocument: idType === "passport" ? null : idBackDocument,
+        consent: documentConsent,
+      });
+      if (revision !== documentPrecheckRevisionRef.current) return;
+      setDocumentPrecheckOutcome(result.outcome);
+      setDocumentPrecheckMessage(result.message);
+      if (result.outcome === "retry") return;
+      // PASS is preliminary OCR plausibility; REVIEW is a blurry-National-ID
+      // human rescan case. Neither authenticates an ID or establishes liveness.
+      setSelfie(null);
+      stopCamera();
+      setStep(2);
+      pendingFaceStartRef.current = setTimeout(() => {
+        pendingFaceStartRef.current = null;
+        void startCamera();
+      }, 250);
+    } catch (error: any) {
+      if (revision === documentPrecheckRevisionRef.current) {
+        setDocumentPrecheckOutcome("retry");
+        setDocumentPrecheckMessage(
+          error?.message || "ID recognition is unavailable. Retake or retry after checking the connection.",
+        );
+      }
+    } finally {
+      setDocumentChecking(false);
     }
-    setSelfie(null);
-    stopCamera();
-    setStep(2);
-    pendingFaceStartRef.current = setTimeout(() => {
-      pendingFaceStartRef.current = null;
-      void startCamera();
-    }, 250);
   };
 
   const retake = () => {
@@ -1446,6 +1495,7 @@ export default function IdentityVerificationWeb() {
             if (idType !== value) {
               discardIdDocument();
               discardIdBackDocument();
+              documentPrecheckRevisionRef.current += 1;
               idCameraSessionRef.current += 1;
               setIdCameraOpen(false);
             }
@@ -1470,6 +1520,11 @@ export default function IdentityVerificationWeb() {
             setIdCameraOpen(false);
           }}
           onNext={() => void openFaceScan()}
+          documentConsent={documentConsent}
+          onDocumentConsentChange={setDocumentConsent}
+          documentChecking={documentChecking}
+          documentPrecheckMessage={documentPrecheckMessage}
+          documentPrecheckOutcome={documentPrecheckOutcome}
           onRemove={discardIdDocument}
           onRemoveBack={discardIdBackDocument}
         />
@@ -1931,6 +1986,11 @@ function UploadIdStep({
   onCapture,
   onCancel,
   onNext,
+  documentConsent,
+  onDocumentConsentChange,
+  documentChecking,
+  documentPrecheckMessage,
+  documentPrecheckOutcome,
   onRemove,
   onRemoveBack,
 }: {
@@ -1952,6 +2012,11 @@ function UploadIdStep({
   onCapture: () => void;
   onCancel: () => void;
   onNext: () => void;
+  documentConsent: boolean;
+  onDocumentConsentChange: (value: boolean) => void;
+  documentChecking: boolean;
+  documentPrecheckMessage: string;
+  documentPrecheckOutcome: "pass" | "review" | "retry" | null;
   onRemove: () => void;
   onRemoveBack: () => void;
 }) {
@@ -2105,17 +2170,42 @@ function UploadIdStep({
         </View>
       ))}
 
+      <TouchableOpacity
+        accessibilityRole="checkbox"
+        accessibilityState={{ checked: documentConsent }}
+        style={styles.consentRow}
+        onPress={() => onDocumentConsentChange(!documentConsent)}
+      >
+        <View style={[styles.checkbox, documentConsent && styles.checkboxActive]}>
+          {documentConsent ? <Ionicons name="checkmark" color="#FFFFFF" size={15} /> : null}
+        </View>
+        <Text style={styles.consentText}>
+          I agree to securely submit my ID front/back images for a preliminary OCR
+          scan before the selfie. No selfie is uploaded at this stage.
+          The check does not confirm government issuance.
+        </Text>
+      </TouchableOpacity>
+      {documentPrecheckMessage ? (
+        <View style={styles.truthNote} accessibilityRole="alert">
+          <Ionicons
+            name={documentPrecheckOutcome === "pass" ? "checkmark-circle-outline" : "information-circle-outline"}
+            size={18}
+            color={documentPrecheckOutcome === "pass" ? COLORS.tealDark : COLORS.danger}
+          />
+          <Text style={styles.truthText}>{documentPrecheckMessage}</Text>
+        </View>
+      ) : null}
       <View style={styles.stepFooter}>
         <TouchableOpacity
           style={[
             styles.nextButton,
-            (!idDocument || (idType !== "passport" && !idBackDocument)) && styles.disabledButton,
+            (!idDocument || (idType !== "passport" && !idBackDocument) || documentChecking) && styles.disabledButton,
           ]}
-          disabled={!idDocument || (idType !== "passport" && !idBackDocument)}
+          disabled={!idDocument || (idType !== "passport" && !idBackDocument) || documentChecking}
           onPress={onNext}
         >
           <Text style={styles.nextButtonText}>
-            Next: Face Scan
+            {documentChecking ? "Checking government ID..." : "Check ID, then Face Scan"}
           </Text>
           <Ionicons
             name="arrow-forward"
