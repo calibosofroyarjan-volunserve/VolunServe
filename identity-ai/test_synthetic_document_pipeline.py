@@ -41,6 +41,13 @@ NATIONAL_SAMPLE = (
     "GIVEN NAMES: TEST",
     "DATE OF BIRTH: 2000",
 )
+BACK_SIDE_SAMPLE = (
+    "BLOOD TYPE: O",
+    "MARITAL STATUS: SINGLE",
+    "PLACE OF BIRTH: TEST CITY",
+    "DEMO - NOT A REAL ID",
+)
+
 SCHOOL_SAMPLE = (
     "SCHOOL ID",
     "DEMO SAMPLE - NOT A REAL ID",
@@ -89,6 +96,27 @@ class SyntheticDocumentImagePipelineTests(unittest.TestCase):
         self.assertIn("low_document_image_quality", result["warningCodes"])
         self.assertTrue(blurry_national_id_claim_needs_review("national_id", result))
         self.assertFalse(result["authenticityVerified"])
+
+    def test_synthetic_swapped_philid_sides_are_rejected_before_face_matching(self):
+        reverse_image, _ = synthetic_photo(BACK_SIDE_SAMPLE)
+        result = screen_government_id(
+            declared_type="national_id",
+            id_document_bytes=reverse_image,
+            id_back_document_bytes=self.national_clear,
+        )
+        self.assertEqual(result["status"], "mismatch")
+        self.assertIn("document_front_back_swapped", result["warningCodes"])
+        self.assertFalse(result["authenticityVerified"])
+        self.assertFalse(blurry_national_id_claim_needs_review("national_id", result))
+
+    def test_synthetic_duplicate_front_image_is_not_accepted_as_front_and_back(self):
+        result = screen_government_id(
+            declared_type="national_id",
+            id_document_bytes=self.national_clear,
+            id_back_document_bytes=self.national_clear,
+        )
+        self.assertEqual(result["status"], "inconclusive")
+        self.assertIn("document_back_looks_like_front", result["warningCodes"])
 
     def test_school_card_claiming_national_id_is_unsupported_not_reviewable(self):
         image, _ = synthetic_photo(SCHOOL_SAMPLE)
