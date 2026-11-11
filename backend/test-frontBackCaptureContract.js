@@ -29,3 +29,8 @@ test("user still explicitly submits identity photos with consent",()=>{
  assert.match(screen,/if \(!consent\)/);
  assert.doesNotMatch(screen,/setIdentityVerified\(true\)/);
 });
+
+test("camera permission guidance is valid on a deployed website",()=>{
+ assert.match(screen,/Allow camera access for this website/);
+ assert.doesNotMatch(screen,/Allow camera access for localhost/);
+});
