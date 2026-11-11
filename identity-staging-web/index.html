@@ -14,6 +14,13 @@
 <label>Select your government-issued ID<select id="type" required><option value="national_id">Philippine National ID (PhilID)</option><option value="drivers_license">LTO Driver's License</option><option value="passport">Philippine Passport (bio page)</option><option value="umid">SSS / GSIS UMID</option><option value="prc_id">PRC Professional ID (PIC)</option></select></label><p class="muted"><strong>Only these five ID types are supported.</strong> School IDs, employee IDs, and any ID not in this list cannot pass identity verification. The camera may capture any card-shaped object; capture is NOT document validation. OCR checks the selected type after submission, then independent Admin verification is required.</p><p id="psaHelp" class="muted"><strong>Philippine National ID only:</strong> The <a href="https://everify.gov.ph/check" target="_blank" rel="noopener noreferrer">official PSA National ID Check</a> can authenticate the ID QR code. This is a separate official website; its result is NOT sent back to VolunServe. Authorized Admin verification is still required.</p>
 <label>Government ID front / portrait<input type="file" id="front" accept="image/jpeg,image/png,image/webp" capture="environment" required></label>
 <label id="backrow">Back of the same ID<input type="file" id="back" accept="image/jpeg,image/png,image/webp" capture="environment" required></label>
+<section style="border:1px solid #b7ddd0;border-radius:12px;padding:16px;background:#f5fcf8">
+<strong>New: ID recognition before selfie (no selfie upload)</strong>
+<p class="muted">Use fabricated DEMO / NOT A REAL ID cards only. Consent to transient OCR document screening; no image is saved by this test UI and no face-verification attempt is consumed. A PASS indicates possible ID type/side consistency, not official authenticity. When uncertain, the AI must request a retake or Admin review.</p>
+<label class="check"><input id="precheckConsent" type="checkbox"><span>I consent to sending the selected ID front/back photos to the isolated staging AI for a document-only OCR precheck. No selfie will be submitted.</span></label>
+<div class="actions"><button id="precheck" type="button" disabled>Check ID before selfie</button></div>
+<div id="precheckResult" class="result" role="status" aria-live="polite">No document-only check yet.</div>
+</section>
 <label>Selfie<input type="file" id="selfie" accept="image/jpeg,image/png,image/webp" capture="user" required></label>
 <label class="check"><input id="consent" type="checkbox" required><span>These are consented, safe staging test images. I understand verification is not automatic.</span></label><div><button id="submit" type="submit" disabled>Run staging verification</button></div></form><div id="idVerdict" class="id-verdict hidden" role="status" aria-live="polite"></div><div id="result" class="result" aria-live="polite">No submission yet. First check AI readiness.</div>
 </section></div><footer>Staging Firebase only · Production accounts, services and documents are not used by this page</footer>
@@ -39,7 +46,7 @@ function showDocumentVerdict(result){
  target.classList.remove("hidden");
 }
 function clearDocumentVerdict(){el("idVerdict").classList.add("hidden")}
-function state(){el('readiness').disabled=!user||busy;el('status').disabled=!user||busy;el('submit').disabled=!user||!ready||busy;el('loginBtn').disabled=!!user||busy;el('resetPassword').disabled=!!user||busy;el('logout').classList.toggle('hidden',!user)}
+function state(){el('readiness').disabled=!user||busy;el('status').disabled=!user||busy;el('submit').disabled=!user||!ready||busy;el('precheck').disabled=!user||!ready||busy;el('loginBtn').disabled=!!user||busy;el('resetPassword').disabled=!!user||busy;el('logout').classList.toggle('hidden',!user)}
 function err(e){return String(e?.message||e||'Unknown error').slice(0,360)}
 function authMessage(e){
  const code=String(e?.code||"");
@@ -110,6 +117,43 @@ el('readiness').addEventListener('click',async()=>{
 el('status').addEventListener('click',async()=>{busy=true;state();try{const d=await get('/api/identity/status');show('diagnostic',{identityStatus:d.identityStatus,identityVerified:d.identityVerified,attemptCount:d.attemptCount,requiresManualReview:d.requiresManualReview,message:d.message})}catch(e){show('diagnostic','Status check failed: '+err(e))}finally{busy=false;state()}});
 el('type').addEventListener('change',()=>{let passport=el('type').value==='passport';el('backrow').classList.toggle('hidden',passport);el('back').required=!passport});
 function file(f){if(!f)throw Error('Photo required');if(!['image/png','image/jpeg','image/webp'].includes(f.type))throw Error('Only JPG/PNG/WebP images allowed');if(f.size>10*1024*1024)throw Error('Image must be <= 10 MB');return f}
+el('precheck').addEventListener('click',async()=>{
+ if(!auth.currentUser||!ready||busy)return;
+ busy=true;state();
+ show('precheckResult','Checking ID type, orientation and scan quality in isolated staging; no selfie is sent...');
+ try{
+  if(!el('precheckConsent').checked)throw Error('Consent to the ID-only precheck is required.');
+  const selected=el('type').value,front=file(el('front').files[0]);
+  const back=selected==='passport'?null:file(el('back').files[0]);
+  if(back&&front===back)throw Error('Select different front and back images.');
+  if(!['national_id','drivers_license','passport','umid','prc_id'].includes(selected))throw Error('Choose a supported ID type.');
+  const form=new FormData();
+  form.set('idType',selected);form.set('idDocument',front);
+  if(back)form.set('idBackDocument',back);
+  // No selfie, biometrics, DOB, user name or profile fields in this request.
+  const token=await auth.currentUser.getIdToken(true);
+  const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),70000);
+  try{
+   const response=await fetch(backend+'/api/identity/document/precheck',{
+    method:'POST',headers:{
+     Authorization:'Bearer '+token,
+     'X-VolunServe-Document-Precheck-Consent':'true',
+    },body:form,signal:controller.signal});
+   const body=await response.json().catch(()=>({message:'Could not read staging precheck response.'}));
+   if(!response.ok)throw Error(body.message||body.error||'HTTP '+response.status);
+   const screening=body.documentScreening||{};
+   show('precheckResult',{
+    outcome:body.outcome,detectedIdType:body.detectedIdType,
+    status:screening.status,warningCodes:screening.warningCodes||[],
+    imageQualityStatus:screening.imageQualityStatus,
+    message:body.message,
+    authenticityVerified:false,livenessVerified:false,
+    note:'A successful capture or OCR precheck does NOT authenticate the ID or establish liveness.'
+   });
+  }finally{clearTimeout(timeout)}
+ }catch(e){show('precheckResult','Document-only precheck: '+err(e))}
+ finally{busy=false;state()}
+});
 el('verify').addEventListener('submit',async e=>{e.preventDefault();if(!user||!ready||busy)return;busy=true;state();clearDocumentVerdict();show('result','Sending test images to staging only...');try{const type=el('type').value,front=file(el('front').files[0]),selfie=file(el('selfie').files[0]),back=type==='passport'?null:file(el('back').files[0]);if(!['national_id','drivers_license','passport','umid','prc_id'].includes(type))throw Error('Select a supported government-issued ID. School IDs are not accepted.');if(back&&front.name===back.name&&front.size===back.size)throw Error('Use separate front/back photos');if(!el('consent').checked)throw Error('Confirm consent');const form=new FormData();form.set('idType',type);form.set('idDocument',front);if(back)form.set('idBackDocument',back);form.set('selfie',selfie);const token=await auth.currentUser.getIdToken(true),controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),65000);try{const r=await fetch(backend+'/api/identity/verify',{method:'POST',headers:{Authorization:'Bearer '+token},body:form,signal:controller.signal}),b=await r.json().catch(()=>({message:'Invalid response'}));if(!r.ok)throw Error(b.message||b.error||'HTTP '+r.status);show('result',{status:b.status,decision:b.decision,matchScore:b.matchScore,documentScreening:b.documentScreening,requiresManualReview:b.requiresManualReview,reviewTrack:b.reviewTrack,attemptCount:b.attemptCount,message:b.message});showDocumentVerdict(b)}finally{clearTimeout(timeout)}}catch(e){show('result','Test failed: '+err(e))}finally{busy=false;state()}});
 </script><script type="module" src="./camera.js"></script><script type="module" src="./device-qa.js"></script><script>
 document.getElementById('type').addEventListener('change',function(){
