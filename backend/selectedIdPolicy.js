@@ -7,6 +7,7 @@ const ALLOWED = new Set(["national_id", "drivers_license", "passport", "umid", "
 function selectedIdRecognized(screening) {
   return !!screening &&
     screening.status === "text_consistent_unverified" &&
+    screening.imageQualityStatus !== "low" &&
     ALLOWED.has(screening.declaredIdType) &&
     screening.detectedIdType === screening.declaredIdType;
 }
@@ -17,8 +18,10 @@ function blurryNationalIdNeedsReview(screening) {
   // queued for a human to request a rescan. NEVER automatically approve.
   return !!screening &&
     screening.declaredIdType === "national_id" &&
-    screening.status === "inconclusive" &&
-    screening.detectedIdType === null &&
+    (screening.status === "inconclusive" ||
+      screening.status === "text_consistent_unverified") &&
+    (screening.detectedIdType === null ||
+      screening.detectedIdType === "national_id") &&
     screening.imageQualityStatus === "low" &&
     screening.warningCodes?.includes("low_document_image_quality") === true &&
     !screening.warningCodes.includes("school_id_not_supported") &&
