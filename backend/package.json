@@ -6,7 +6,8 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "check": "node --check server.js && node --check firebaseAdmin.js && node --check identityAiReadiness.js && node --test test-identityAiReadiness.js"
+    "postinstall": "node --check server.js && node --check identityAiReadiness.js && node --test test-identityAiReadiness.js test-selectedIdPolicy.js",
+    "check": "node --check server.js && node --check firebaseAdmin.js && node --check identityAiReadiness.js && node --test test-identityAiReadiness.js && node --test tests/verifiedFirebaseToken.test.js && node test-communityCertificateAutoSync.js && node --check communityCertificates.js && node --check communityCertificateEligibility.js && node --test test-communityCertificateEligibility.js && node --test test-communityCertificateIssuance.js && node --test test-communityCertificateLiveTemporary.js"
   },
   "engines": {
     "node": "22.x"

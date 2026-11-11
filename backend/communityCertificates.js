@@ -2,6 +2,11 @@
 
 const crypto = require("crypto");
 const { db, FieldValue } = require("./firebaseAdmin");
+const {
+  MIN_COMMUNITY_CERTIFICATE_ATTENDANCE_MINUTES,
+  minimumCommunityCertificateMinutes,
+  isEligibleCommunityAttendance,
+} = require("./communityCertificateEligibility");
 
 function cleanText(value, maximumLength = 240) {
   return String(value || "")
@@ -11,7 +16,6 @@ function cleanText(value, maximumLength = 240) {
     .slice(0, maximumLength);
 }
 
-const MIN_COMMUNITY_CERTIFICATE_ATTENDANCE_MINUTES = 30;
 
 function communityTimestampMillis(value) {
   if (!value || typeof value.toMillis !== "function") {
@@ -73,7 +77,7 @@ async function issueCommunityEventCertificate(eventId, participantId) {
       timeIn <= 0 ||
       timeOut < timeIn ||
       timeOut - timeIn > 24 * 60 * 60 * 1000 ||
-      timeOut - timeIn < MIN_COMMUNITY_CERTIFICATE_ATTENDANCE_MINUTES * 60000
+      timeOut - timeIn < minimumCommunityCertificateMinutes(eventId, volunteerId, attendance, eventData) * 60000
     ) {
       return {issued: false, reason: "not_eligible"};
     }
@@ -194,27 +198,6 @@ async function issueCommunityEventCertificate(eventId, participantId) {
 
     return {issued: true, certificateId};
   });
-}
-
-function isEligibleCommunityAttendance(eventId, eventData, participantId, attendance) {
-  const volunteerId = cleanText(attendance?.uid, 160);
-  const timeIn = communityTimestampMillis(attendance?.checkedInAt);
-  const timeOut = communityTimestampMillis(attendance?.checkedOutAt);
-  return Boolean(
-    eventData?.publicationStatus === "published" &&
-    eventData?.status === "completed" &&
-    attendance?.status === "joined" &&
-    attendance?.attendanceVerified === true &&
-    volunteerId &&
-    attendance?.eventId === eventId &&
-    participantId === `${eventId}_${volunteerId}` &&
-    eventData?.proposedBy !== volunteerId &&
-    cleanText(eventData?.completedBy, 160) &&
-    cleanText(attendance?.attendanceVerifiedBy, 160) &&
-    timeIn > 0 && timeOut >= timeIn &&
-    timeOut - timeIn <= 24 * 60 * 60 * 1000 &&
-    timeOut - timeIn >= MIN_COMMUNITY_CERTIFICATE_ATTENDANCE_MINUTES * 60000
-  );
 }
 
 const MAX_PARTICIPANTS_PER_REQUEST = 500;

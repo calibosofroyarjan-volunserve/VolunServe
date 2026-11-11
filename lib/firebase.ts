@@ -50,9 +50,39 @@ const isLocalBrowser =
 export const usingFirebaseEmulators =
   ENABLE_LOCAL_TESTING && isLocalBrowser;
 
+// A staging build must never initialize production Firebase Auth, Firestore,
+// Storage, or Functions. All six staging values are required at build time.
+// Production builds keep the original config and behavior unchanged.
+export const usingStagingFirebase =
+  process.env.EXPO_PUBLIC_VOLUNSERVE_ENV === "staging";
+
+const stagingConfig = {
+  apiKey: process.env.EXPO_PUBLIC_FIREBASE_API_KEY?.trim() || "",
+  authDomain: process.env.EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN?.trim() || "",
+  projectId: process.env.EXPO_PUBLIC_FIREBASE_PROJECT_ID?.trim() || "",
+  storageBucket: process.env.EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET?.trim() || "",
+  messagingSenderId: process.env.EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID?.trim() || "",
+  appId: process.env.EXPO_PUBLIC_FIREBASE_APP_ID?.trim() || "",
+};
+
+if (usingStagingFirebase) {
+  if (
+    Object.values(stagingConfig).some((value) => !value) ||
+    stagingConfig.projectId === productionConfig.projectId ||
+    stagingConfig.authDomain !== `${stagingConfig.projectId}.firebaseapp.com` ||
+    !stagingConfig.storageBucket.startsWith(`${stagingConfig.projectId}.`)
+  ) {
+    throw new Error(
+      "Unsafe staging Firebase configuration: provide a complete, separate Firebase project.",
+    );
+  }
+}
+
 export const firebaseConfig = usingFirebaseEmulators
   ? localConfig
-  : productionConfig;
+  : usingStagingFirebase
+    ? stagingConfig
+    : productionConfig;
 
 const existingApp =
   getApps().length > 0 ? getApp() : null;

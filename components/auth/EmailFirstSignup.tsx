@@ -417,6 +417,7 @@ export default function EmailFirstSignup() {
         middleName: noMiddleName ? "" : middleName.trim(),
         lastName: lastName.trim(),
         age: age as number,
+        dateOfBirth: birth, // Already validated YYYY-MM-DD by dateAge().
         phoneNumber: "+63" + phoneClean,
         region: "Region III – Central Luzon",
         province: "Bulacan",

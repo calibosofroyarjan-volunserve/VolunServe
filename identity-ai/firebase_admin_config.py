@@ -49,6 +49,10 @@ def _initialize_firebase():
             _get_service_account()
         )
 
+        if os.getenv("VOLUNSERVE_STAGING_STRICT") == "1":
+            if not service_account or service_account.get("project_id") != "volunserve-auth-staging":
+                raise RuntimeError("Staging Firebase project mismatch: refusing to start AI.")
+
         if service_account:
             credential = (
                 credentials.Certificate(

@@ -27,4 +27,9 @@ RUN python -c "import mediapipe as mp; assert hasattr(mp, 'solutions') and hasat
 
 COPY . .
 
+# Staging-only deploy gate: do not start a new AI instance until real
+# Tesseract OCR, MediaPipe and birthday/barangay synthetic suites pass.
+# These tests use DEMO fixtures only, no private ID, account or network.
+RUN python -m unittest -v test_document_screening.py test_profile_consistency.py test_face_box_dedup.py test_ai_runtime_smoke.py test_synthetic_document_pipeline.py test_document_precheck.py
+
 CMD ["sh", "-c", "uvicorn main:app --host 0.0.0.0 --port ${PORT:-10000}"]
