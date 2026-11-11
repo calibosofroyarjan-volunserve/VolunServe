@@ -4705,9 +4705,12 @@ async function readJsonResponse(
 }
 async function callIdentityAiService(
   request,
+  options = {},
 ) {
   const endpoint =
-    getIdentityAiEndpoint();
+    options.documentPrecheck
+      ? getIdentityAiEndpoint().replace(/\/verify$/, "/document/precheck")
+      : getIdentityAiEndpoint();
   if (!endpoint) {
     const error =
       new Error(
@@ -4926,6 +4929,103 @@ app.get(
     }
   },
 );
+// Authenticated OCR-only document precheck BEFORE webcam/selfie collection.
+// Images stay transient; only bounded rate-limit counters are stored.
+// This does not consume any of the 3 actual face-verification attempts.
+const IDENTITY_DOC_PRECHECK_COOLDOWN_MS = 8000;
+const IDENTITY_DOC_PRECHECK_DAILY_LIMIT = 30;
+app.post(
+  "/api/identity/document/precheck",
+  requireFirebaseUser,
+  express.raw({ type: "multipart/form-data", limit: "21mb" }),
+  async (request, response) => {
+    response.set("Cache-Control", "no-store");
+    try {
+      const uid = request.firebaseUser.uid;
+      const profile = await loadUserProfile(uid);
+      if (cleanText(profile.status || "approved", 40).toLowerCase() !== "approved") {
+        throw makeHttpError(403, "account_not_active", "Your Resident account is not active.");
+      }
+      if (profile.identityVerified === true ||
+          normalizeIdentityStatus(profile.identityStatus || "basic") === "verified") {
+        throw makeHttpError(409, "already_verified", "Your identity is already verified.");
+      }
+      if (!Buffer.isBuffer(request.body) || request.body.length === 0 ||
+          !String(request.headers["content-type"] || "").toLowerCase().startsWith("multipart/form-data")) {
+        throw makeHttpError(400, "missing_identity_document", "Select and capture both sides of the government ID first.");
+      }
+      const throttleRef = db.collection("identityDocumentPrecheckThrottle").doc(uid);
+      await db.runTransaction(async transaction => {
+        const record = await transaction.get(throttleRef);
+        const saved = record.exists ? record.data() || {} : {};
+        const last = saved.lastRequestedAt?.toMillis?.() || 0;
+        const windowStart = saved.windowStartedAt?.toMillis?.() || 0;
+        const now = Date.now();
+        if (last && now - last < IDENTITY_DOC_PRECHECK_COOLDOWN_MS) {
+          throw makeHttpError(429, "document_precheck_cooldown", "Wait a few seconds before retrying the ID scan.");
+        }
+        const newWindow = !windowStart || now - windowStart >= 24 * 60 * 60 * 1000;
+        const count = newWindow ? 0 : Number(saved.requestCount) || 0;
+        if (count >= IDENTITY_DOC_PRECHECK_DAILY_LIMIT) {
+          throw makeHttpError(429, "document_precheck_limit", "ID recognition attempts are temporarily limited. Try again tomorrow or request Admin assistance.");
+        }
+        transaction.set(throttleRef, {
+          lastRequestedAt: FieldValue.serverTimestamp(),
+          windowStartedAt: newWindow ? FieldValue.serverTimestamp() : saved.windowStartedAt,
+          requestCount: count + 1,
+        }, { merge: true });
+      });
+      // Forward only private images to our internal-key-authenticated Python AI.
+      // Never store uploads in Firestore, Storage, Cloudinary or audit logs.
+      const result = await callIdentityAiService(request, { documentPrecheck: true });
+      const screening = normalizeIdDocumentScreening(result?.documentScreening);
+      const declared = screening.declaredIdType;
+      const validType = ["national_id", "drivers_license", "passport", "umid", "prc_id"].includes(declared);
+      const pass = validType &&
+        result?.outcome === "pass" &&
+        selectedIdRecognized(screening) &&
+        (declared === "passport" || screening.backSideScreened === true);
+      const review = !pass && result?.outcome === "review" &&
+        blurryNationalIdNeedsReview(screening);
+      return response.json({
+        ok: true,
+        outcome: pass ? "pass" : review ? "review" : "retry",
+        detectedIdType: screening.detectedIdType,
+        documentScreening: screening,
+        // Sanitized hints only; no raw OCR values and no issuer claim.
+        message: pass
+          ? "ID type and scan arrangement appear consistent. This does not prove ID authenticity."
+          : review
+            ? "The National ID is too blurry. You may continue for Admin rescan review but cannot be automatically approved."
+            : screening.warningCodes.includes("school_id_not_supported")
+              ? "School and employee IDs are not accepted. Capture one of the five supported government IDs."
+              : screening.warningCodes.includes("document_front_back_swapped")
+                ? "Front and back appear reversed. Retake both ID sides in their correct slots."
+                : screening.warningCodes.includes("document_back_looks_like_front")
+                  ? "The Back scan appears to show the front. Retake the reverse side."
+                  : screening.warningCodes.includes("document_front_side_conflict")
+                    ? "The Front scan appears to show back-side details. Retake the portrait/front."
+                    : "ID type or front/back orientation could not be recognized reliably. Retake clearer images.",
+        authenticityVerified: false,
+        livenessVerified: false,
+      });
+    } catch (error) {
+      // Never log private ID bytes, OCR text or profile fields.
+      if ((error.statusCode || 500) >= 500) {
+        console.warn("ID precheck service unavailable:", error?.code || "internal_error");
+      }
+      const status = Number(error.statusCode) || 503;
+      return response.status(status).json({
+        ok: false,
+        error: cleanText(error.code || "document_precheck_failed", 100),
+        message: status >= 500
+          ? "ID recognition is unavailable. No selfie was collected and no face verification attempt was used."
+          : cleanText(error.message || "ID recognition could not continue.", 250),
+      });
+    }
+  },
+);
+
 app.get(
   "/api/identity/status",
   requireFirebaseUser,
