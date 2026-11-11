@@ -38,6 +38,7 @@ import {
   getIdentityVerificationStatus,
   IdentityDocumentType,
   IdentityVerificationStatusResult,
+  precheckIdentityDocument,
   submitIdentityVerification,
 } from "../lib/identityVerification";
 
@@ -164,6 +165,7 @@ export default function IdentityVerification() {
 
   const cameraRef =
     useRef<any>(null);
+  const documentPrecheckRevisionRef = useRef(0);
 
   const [
     cameraPermission,
@@ -190,6 +192,10 @@ export default function IdentityVerification() {
 
   const [consent, setConsent] =
     useState(false);
+  const [documentConsent, setDocumentConsent] = useState(false);
+  const [documentChecking, setDocumentChecking] = useState(false);
+  const [documentPrecheckMessage, setDocumentPrecheckMessage] = useState("");
+  const [documentPrecheckOutcome, setDocumentPrecheckOutcome] = useState<"pass" | "review" | "retry" | null>(null);
   const [pickingId, setPickingId] =
     useState(false);
   const [pickingSelfie, setPickingSelfie] =
@@ -353,6 +359,9 @@ export default function IdentityVerification() {
       });
       if (!result.canceled && result.assets[0]) {
         const captured = mediaFromAsset(result.assets[0], `government-id-${side}`);
+        documentPrecheckRevisionRef.current++;
+        setDocumentPrecheckMessage("");
+        setDocumentPrecheckOutcome(null);
         if (side === "front") setIdDocument(captured);
         else setIdBackDocument(captured);
         setLocalMessage("");
@@ -369,31 +378,53 @@ export default function IdentityVerification() {
 
   const openFaceScan =
     async () => {
+      if (documentChecking) return;
       if (!idDocument) {
-        Alert.alert(
-          "Government ID Required",
-          "Place the physical ID alone on a flat, well-lit surface. Keep all four corners and the printed portrait visible; avoid glare or other people in the frame.",
-        );
+        setDocumentPrecheckMessage("Capture the front of a supported government ID first.");
         return;
       }
-
       if (idType !== "passport" && !idBackDocument) {
-        Alert.alert("Back of ID Required", "Scan the back of the same government ID before proceeding.");
+        setDocumentPrecheckMessage("Capture the reverse of the same government ID first.");
+        return;
+      }
+      if (!documentConsent) {
+        setDocumentPrecheckMessage("Agree to preliminary AI ID screening before uploading document photos.");
         return;
       }
 
-      setSelfie(null);
-      setCameraReady(false);
-      setStep(2);
-
-      if (
-        !cameraPermission?.granted
-      ) {
-        try {
-          await requestCameraPermission();
-        } catch {
-          // The step itself will show the permission fallback.
+      const revision = documentPrecheckRevisionRef.current;
+      setDocumentChecking(true);
+      setDocumentPrecheckMessage("Checking the ID type, scan side, and image quality...");
+      setDocumentPrecheckOutcome(null);
+      try {
+        await checkIdentityEngineReady();
+        if (revision !== documentPrecheckRevisionRef.current) return;
+        const result = await precheckIdentityDocument({
+          idType, idDocument,
+          idBackDocument: idType === "passport" ? null : idBackDocument,
+          consent: documentConsent,
+        });
+        if (revision !== documentPrecheckRevisionRef.current) return;
+        setDocumentPrecheckOutcome(result.outcome);
+        setDocumentPrecheckMessage(result.message);
+        if (result.outcome === "retry") return;
+        // Blurry National ID cases may proceed solely for Admin rescan review.
+        setSelfie(null);
+        setCameraReady(false);
+        setStep(2);
+        if (!cameraPermission?.granted) {
+          try { await requestCameraPermission(); }
+          catch { /* Screen includes permission-recovery UI. */ }
         }
+      } catch (error: any) {
+        if (revision === documentPrecheckRevisionRef.current) {
+          setDocumentPrecheckOutcome("retry");
+          setDocumentPrecheckMessage(
+            error?.message || "Document screening unavailable. No selfie was submitted.",
+          );
+        }
+      } finally {
+        setDocumentChecking(false);
       }
     };
 
@@ -879,6 +910,9 @@ export default function IdentityVerification() {
           }
           setIdType={(value) => {
             if (value !== idType) {
+              documentPrecheckRevisionRef.current++;
+              setDocumentPrecheckOutcome(null);
+              setDocumentPrecheckMessage("");
               setIdDocument(null);
               setIdBackDocument(null);
             }
@@ -898,15 +932,26 @@ export default function IdentityVerification() {
             void chooseIdDocument()
           }
           onPickBack={() => void chooseIdBackDocument()}
-          onRemoveBack={() => setIdBackDocument(null)}
+          onRemoveBack={() => {
+            documentPrecheckRevisionRef.current++;
+            setDocumentPrecheckOutcome(null);
+            setDocumentPrecheckMessage("");
+            setIdBackDocument(null);
+          }}
+          documentConsent={documentConsent}
+          onDocumentConsentChange={setDocumentConsent}
+          documentChecking={documentChecking}
+          documentPrecheckMessage={documentPrecheckMessage}
+          documentPrecheckOutcome={documentPrecheckOutcome}
           onNext={() =>
             void openFaceScan()
           }
-          onRemove={() =>
-            setIdDocument(
-              null,
-            )
-          }
+          onRemove={() => {
+            documentPrecheckRevisionRef.current++;
+            setDocumentPrecheckOutcome(null);
+            setDocumentPrecheckMessage("");
+            setIdDocument(null);
+          }}
         />
       ) : null}
 
