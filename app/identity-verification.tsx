@@ -1169,6 +1169,11 @@ function UploadIdStep({
   onRemoveBack,
   onNext,
   onRemove,
+  documentConsent,
+  onDocumentConsentChange,
+  documentChecking,
+  documentPrecheckMessage,
+  documentPrecheckOutcome,
 }: {
   idType: IdentityDocumentType;
   setIdType: (
@@ -1190,6 +1195,11 @@ function UploadIdStep({
     () => void;
   onRemove:
     () => void;
+  documentConsent: boolean;
+  onDocumentConsentChange: (value: boolean) => void;
+  documentChecking: boolean;
+  documentPrecheckMessage: string;
+  documentPrecheckOutcome: "pass" | "review" | "retry" | null;
 }) {
   return (
     <View
@@ -1511,6 +1521,28 @@ function UploadIdStep({
         </>
       ) : null}
 
+      <TouchableOpacity
+        accessibilityRole="checkbox"
+        accessibilityState={{ checked: documentConsent }}
+        style={styles.consentRow}
+        onPress={() => onDocumentConsentChange(!documentConsent)}
+      >
+        <View style={[styles.checkbox, documentConsent && styles.checkboxActive]}>
+          {documentConsent ? <Ionicons name="checkmark" size={15} color="#FFFFFF" /> : null}
+        </View>
+        <Text style={styles.consentText}>
+          I consent to sending my government ID scans to VolunServe for a preliminary
+          OCR type and front/back check before the face scan. This is not ID authentication.
+        </Text>
+      </TouchableOpacity>
+      {documentPrecheckMessage ? (
+        <View style={styles.failedNotice} accessibilityRole="alert">
+          <Ionicons name={documentPrecheckOutcome === "pass" ? "checkmark-circle-outline" : "information-circle-outline"}
+            size={18} color={documentPrecheckOutcome === "pass" ? COLORS.tealDark : COLORS.danger} />
+          <Text style={styles.failedNoticeText}>{documentPrecheckMessage}</Text>
+        </View>
+      ) : null}
+
       <View
         style={
           styles.stepFooter
@@ -1519,10 +1551,10 @@ function UploadIdStep({
         <TouchableOpacity
           style={[
             styles.nextButton,
-            (!idDocument || (idType !== "passport" && !idBackDocument)) &&
+            (!idDocument || (idType !== "passport" && !idBackDocument) || documentChecking) &&
               styles.disabledButton,
           ]}
-          disabled={!idDocument || (idType !== "passport" && !idBackDocument)}
+          disabled={!idDocument || (idType !== "passport" && !idBackDocument) || documentChecking}
           activeOpacity={
             0.85
           }
@@ -1535,7 +1567,7 @@ function UploadIdStep({
               styles.nextButtonText
             }
           >
-            Next: Face Scan
+            {documentChecking ? "Checking government ID..." : "Check ID, then Face Scan"}
           </Text>
           <Ionicons
             name="arrow-forward"
