@@ -102,8 +102,70 @@ class GovernmentIdScreeningTests(unittest.TestCase):
         self.assertEqual(actual["status"], "text_consistent_unverified")
         self.assertEqual(actual["detectedIdType"], "umid")
 
+    def test_fifth_prc_professional_id_is_supported(self):
+        for label in (
+            "REPUBLIC OF THE PHILIPPINES PROFESSIONAL REGULATION COMMISSION PROFESSIONAL IDENTIFICATION CARD",
+            "PRC PROFESSIONAL ID CARD",
+        ):
+            with self.subTest(label=label):
+                actual = assess_document_text("prc_id", label)
+                self.assertEqual(actual["status"], "text_consistent_unverified")
+                self.assertEqual(actual["detectedIdType"], "prc_id")
+                self.assertFalse(actual["authenticityVerified"])
+                self.assertTrue(actual["manualReviewRequired"])
+
+    def test_prc_label_alone_does_not_pass(self):
+        for label in (
+            "PRC",
+            "PROFESSIONAL REGULATION COMMISSION",
+            "PROFESSIONAL IDENTIFICATION CARD",
+            "REPUBLIC OF THE PHILIPPINES ID CARD",
+        ):
+            with self.subTest(label=label):
+                actual = assess_document_text("prc_id", label)
+                self.assertEqual(actual["status"], "inconclusive")
+                self.assertIsNone(actual["detectedIdType"])
+
+    def test_prc_card_mismatches_selected_national_id(self):
+        actual = assess_document_text(
+            "national_id",
+            "PROFESSIONAL REGULATION COMMISSION PROFESSIONAL IDENTIFICATION CARD",
+        )
+        self.assertEqual(actual["status"], "mismatch")
+        self.assertEqual(actual["detectedIdType"], "prc_id")
+
+    def test_school_employee_and_library_cards_are_unsupported(self):
+        for label in (
+            "SCHOOL ID",
+            "STUDENT IDENTIFICATION",
+            "UNIVERSITY ID",
+            "COLLEGE ID",
+            "LIBRARY CARD",
+            "EMPLOYEE IDENTIFICATION CARD",
+        ):
+            with self.subTest(label=label):
+                actual = assess_document_text("prc_id", label)
+                self.assertEqual(actual["status"], "unsupported")
+                self.assertIn("school_id_not_supported", actual["warningCodes"])
+
+    def test_school_card_with_stolen_philid_heading_still_not_accepted(self):
+        actual = assess_document_text(
+            "national_id",
+            "STUDENT ID PHILIPPINE IDENTIFICATION CARD SCHOOL LIBRARY",
+        )
+        self.assertEqual(actual["status"], "unsupported")
+        self.assertFalse(actual["authenticityVerified"])
+
+    def test_garbage_with_no_supported_issuer_cannot_pass(self):
+        for declared in ("national_id", "drivers_license", "passport", "umid", "prc_id"):
+            with self.subTest(declared=declared):
+                actual = assess_document_text(
+                    declared, "FULL NAME STUDENT NO: 12345 SCHOOL YEAR 2026"
+                )
+                self.assertNotEqual(actual["status"], "text_consistent_unverified")
+
     def test_school_id_is_unsupported_for_every_selected_id(self):
-        for id_type in ("national_id", "drivers_license", "passport", "umid"):
+        for id_type in ("national_id", "drivers_license", "passport", "umid", "prc_id"):
             with self.subTest(id_type=id_type):
                 result = assess_document_text(
                     id_type, "UNIVERSITY STUDENT ID NAME SAMPLE DOB 2001"
@@ -126,7 +188,7 @@ class GovernmentIdScreeningTests(unittest.TestCase):
         self.assertEqual(result["status"], "mismatch")
 
     def test_only_specifically_supported_id_types_allowed(self):
-        for unknown in ("other_government_id", "school_id", "prc_id"):
+        for unknown in ("other_government_id", "school_id", "company_id"):
             with self.subTest(unknown=unknown):
                 with self.assertRaises(ValueError):
                     assess_document_text(unknown, "NATIONAL ID CARD")
