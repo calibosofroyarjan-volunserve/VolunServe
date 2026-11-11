@@ -34,3 +34,26 @@ test("camera permission guidance is valid on a deployed website",()=>{
  assert.match(screen,/Allow camera access for this website/);
  assert.doesNotMatch(screen,/Allow camera access for localhost/);
 });
+
+test("web ID quality assist preserves separate front/back captures and a manual fallback",()=>{
+ assert.match(screen,/idAutoFramesRef/);
+ assert.match(screen,/brightness >= 55 && brightness <= 210/);
+ assert.match(screen,/edges \/ count >= 0\.12/);
+ assert.match(screen,/if \(heldFor >= 1300\) void captureIdDocument\(\)/);
+ assert.match(screen,/Capture manually: \{label\}/);
+ assert.match(screen,/setIdCameraSide\(side\)/);
+ assert.match(screen,/idCameraOpen \|\| !idCameraReady/);
+});
+
+test("randomized camera-movement prompt is not accepted as verified liveness",()=>{
+ assert.match(screen,/Math\.random\(\) < 0\.5 \? "left" : "right"/);
+ assert.match(screen,/movement\.stage === "center"/);
+ assert.match(screen,/movement\.stage === "move"/);
+ assert.match(screen,/movement\.stage === "return"/);
+ assert.match(screen,/movement\.stage === "complete"/);
+ assert.match(screen,/Movement prompt completed \(not proof of liveness\)/);
+ assert.match(screen,/Never treat this as validated liveness/);
+ assert.match(helper,/livenessVerified: false/);
+ assert.match(helper,/manualReviewRequired: true/);
+ assert.doesNotMatch(screen,/setIdentityVerified\(true\)/);
+});
