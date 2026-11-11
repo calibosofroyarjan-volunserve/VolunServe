@@ -25,6 +25,12 @@ export type DocumentScreening = {
   backSideScreened?: boolean;
   profileNameCompared?: boolean;
   profileNameCheck?: "possible_match" | "inconclusive" | "not_checked";
+  profileBirthDateCompared?: boolean;
+  profileBirthDateCheck?: "possible_match" | "possible_conflict" | "inconclusive" | "not_checked";
+  profileAddressCompared?: boolean;
+  profileAddressCheck?: "possible_match" | "inconclusive" | "not_checked";
+  issuerAuthenticityStatus?: "not_verified";
+  presentationAttackStatus?: "not_validated";
   warningCodes: string[];
 };
 
@@ -76,6 +82,15 @@ function parseDocumentScreening(value: unknown): DocumentScreening | undefined {
     profileNameCompared: raw.profileNameCompared === true,
     profileNameCheck: raw.profileNameCheck === "possible_match" || raw.profileNameCheck === "inconclusive"
       ? raw.profileNameCheck : "not_checked",
+    profileBirthDateCompared: raw.profileBirthDateCompared === true,
+    profileBirthDateCheck: raw.profileBirthDateCheck === "possible_match" ||
+      raw.profileBirthDateCheck === "possible_conflict" || raw.profileBirthDateCheck === "inconclusive"
+      ? raw.profileBirthDateCheck : "not_checked",
+    profileAddressCompared: raw.profileAddressCompared === true,
+    profileAddressCheck: raw.profileAddressCheck === "possible_match" ||
+      raw.profileAddressCheck === "inconclusive" ? raw.profileAddressCheck : "not_checked",
+    issuerAuthenticityStatus: "not_verified",
+    presentationAttackStatus: "not_validated",
     warningCodes: Array.isArray(raw.warningCodes)
       ? raw.warningCodes.filter((x): x is string => typeof x === "string").slice(0, 4) : [],
   };
