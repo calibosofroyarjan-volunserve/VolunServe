@@ -719,7 +719,7 @@ function normalizeAiDecision(
 function normalizeIdDocumentScreening(value) {
   // Explicit allowlist: never store OCR text, full ID numbers, names,
   // face templates, or photos in Firestore or Admin-visible JSON.
-  const types = ["national_id", "drivers_license", "passport", "umid"];
+  const types = ["national_id", "drivers_license", "passport", "umid", "prc_id"];
   const statuses = ["text_consistent_unverified", "mismatch", "inconclusive", "unsupported"];
   const warnings = [
     "selected_id_type_conflicts_with_ocr",
