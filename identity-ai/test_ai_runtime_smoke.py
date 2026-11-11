@@ -48,6 +48,9 @@ class IdentityAiRuntimeSmokeTests(unittest.TestCase):
     def test_health_never_claims_liveness_or_document_authenticity(self):
         result = health()
         self.assertTrue(result["verificationEngineReady"])
+        self.assertTrue(result["documentOcrReady"])
+        self.assertTrue(result["profileComparisonReady"])
+        self.assertTrue(result["documentPrecheckReady"])
         self.assertFalse(result["livenessImplemented"])
         self.assertFalse(result["idDocumentAuthenticityVerified"])
 
