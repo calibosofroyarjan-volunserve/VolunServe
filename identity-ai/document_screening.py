@@ -171,6 +171,76 @@ def document_ocr_unavailable(declared_type: str) -> dict:
     }
 
 
+
+# Conservative OCR-based orientation evidence; not a trained visual classifier.
+# PSA describes the physical PhilID front as carrying a portrait, name and PCN,
+# while its back carries additional demographics and machine-readable features.
+# Do not use QR presence alone; OCR cannot read a QR reliably and digital /
+# paper National IDs have a different layout.
+FRONT_HEADING_MARKERS = {
+    "national_id": (
+        "PHILIPPINE IDENTIFICATION CARD", "PAMBANSANG PAGKAKAKILANLAN",
+        "NATIONAL ID CARD", "PHILID",
+    ),
+    "drivers_license": ("DRIVERS LICENSE", "DRIVER S LICENSE", "DRIVER LICENSE"),
+    "umid": ("UNIFIED MULTI PURPOSE ID", "UNIFIED MULTI PURPOSE IDENTIFICATION"),
+    "prc_id": ("PROFESSIONAL IDENTIFICATION CARD", "PROFESSIONAL ID CARD"),
+}
+
+
+def _front_heading_signal(declared_type: str, ocr_text: str) -> bool:
+    if declared_type == "passport":
+        return False  # Bio page only: no back is required.
+    normalized = _normalized(ocr_text)
+    return any(_contains(normalized, phrase) for phrase in
+               FRONT_HEADING_MARKERS.get(declared_type, ()))
+
+
+def _national_back_layout_signal(ocr_text: str) -> bool:
+    """Strong physical PhilID back-side labels; insufficient alone for an ID verdict."""
+    normalized = _normalized(ocr_text)
+    back_families = (
+        ("BLOOD TYPE", "URI NG DUGO"),
+        ("MARITAL STATUS", "KATAYUANG SIBIL"),
+        ("PLACE OF BIRTH", "LUGAR NG KAPANGANAKAN"),
+        ("DATE OF ISSUE", "PETSA NG PAGKAKALABAS"),
+    )
+    count = sum(any(_contains(normalized, word) for word in family)
+                for family in back_families)
+    # Require independent clues and no obvious front heading. These labels
+    # alone could also appear on other forms: never claim authenticity.
+    return count >= 2 and not _front_heading_signal("national_id", ocr_text)
+
+
+def _orientation_warning(
+    declared_type: str, front_text: str, back_text: str
+) -> tuple[str, str] | None:
+    """Fail closed on convincing reversed/repeated sides, not weak OCR guesses.
+
+    Returned status/warning contain no names, numbers, OCR text or photos.
+    Both sides are already type-screened by assess_document_sides().
+    """
+    if declared_type == "passport":
+        return None
+    front_heading = _front_heading_signal(declared_type, front_text)
+    back_heading = _front_heading_signal(declared_type, back_text)
+    if declared_type == "national_id":
+        front_looks_back = _national_back_layout_signal(front_text)
+        if front_looks_back and back_heading:
+            return "mismatch", "document_front_back_swapped"
+        if front_looks_back:
+            return "inconclusive", "document_front_side_conflict"
+    if back_heading and front_heading:
+        # Both slots look like a portrait/front heading. Some official layouts
+        # can repeat the issuer heading, so request rescan/review rather than
+        # declaring the document fraudulent.
+        return "inconclusive", "document_back_looks_like_front"
+    if back_heading and not front_heading:
+        # Likely reversal, but OCR of the actual front could be incomplete.
+        return "inconclusive", "document_back_looks_like_front"
+    return None
+
+
 def assess_document_sides(
     declared_type: str,
     front_ocr_text: str,
@@ -208,6 +278,14 @@ def assess_document_sides(
     if not back_ocr_text.strip():
         result["warningCodes"] = list(dict.fromkeys(
             result["warningCodes"] + ["document_back_ocr_inconclusive"]
+        ))
+    # Orientation is checked after unsupported/wrong-ID classification so
+    # a school ID can never be downgraded to harmless "inconclusive".
+    orientation = _orientation_warning(declared_type, front_ocr_text, back_ocr_text)
+    if orientation and result["status"] not in ("unsupported", "mismatch"):
+        result["status"] = orientation[0]
+        result["warningCodes"] = list(dict.fromkeys(
+            result["warningCodes"] + [orientation[1]]
         ))
     result["authenticityVerified"] = False
     result["manualReviewRequired"] = True
