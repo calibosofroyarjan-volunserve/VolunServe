@@ -28,10 +28,14 @@ const changed = git("diff","--name-only",pinned,"HEAD").split("\n").filter(Boole
 assert(changed.length >= 8 && changed.every(path => allowed.has(path)),
   "Unexpected non-identity production hosting source change: " +
   changed.filter(path=>!allowed.has(path)).join(", "));
-for(const path of ["backend","functions","storage.rules","firebase.json",".firebaserc"]) {
+for(const path of ["functions","storage.rules","firebase.json",".firebaserc"]) {
   assert.equal(git("diff","--name-only",pinned,"HEAD","--",path),"",
     "Not allowed to change production "+path+" from Hosting release");
 }
+const backendChanged = git("diff","--name-only",pinned,"HEAD","--","backend")
+  .split("\n").filter(Boolean);
+assert(backendChanged.every(file=>file==="backend/test-firestore-dob-rules.js"),
+  "Production backend source must remain untouched by the Hosting release");
 const before = execFileSync("git",["show",pinned+":firestore.rules"],{encoding:"utf8"});
 const candidate = fs.readFileSync("firestore.rules","utf8");
 const oldField = "          'age',\n          'email',\n          'phoneNumber',";
