@@ -246,6 +246,14 @@ export default function IdentityReviewsAdmin() {
         .toLowerCase();
 
       return haystack.includes(query);
+    }).sort((a, b) => {
+      // Only prioritize pending identity checks. Never award Verified status
+      // on account of a perceived name match or a camera quality score.
+      if (reviewBucket(a) !== "pending" || reviewBucket(b) !== "pending") return 0;
+      const priority = (item: IdentityReview) =>
+        item.reviewTrack === "priority_admin_review" ? 0
+          : item.reviewTrack === "blurry_id_review" ? 2 : 1;
+      return priority(a) - priority(b);
     });
   }, [filter, items, search]);
 
