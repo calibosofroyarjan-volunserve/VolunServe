@@ -226,6 +226,8 @@ export default function IdentityVerificationWeb() {
   const idVideoRef = useRef<HTMLVideoElement | null>(null);
   const idCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const idStreamRef = useRef<MediaStream | null>(null);
+  const idCaptureLockRef = useRef(false);
+  const idAutoFramesRef = useRef<{ previous: Uint8Array | null; steadySince: number | null }>({ previous: null, steadySince: null });
   const canvasRef = useRef<any>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const detectorRef = useRef<any>(null);
@@ -256,6 +258,8 @@ export default function IdentityVerificationWeb() {
   const [idCameraSide, setIdCameraSide] = useState<"front" | "back">("front");
   const [idCameraReady, setIdCameraReady] = useState(false);
   const [idCameraError, setIdCameraError] = useState("");
+  const [idAutoHint, setIdAutoHint] = useState("Keep the complete document visible and steady.");
+  const [idAutoProgress, setIdAutoProgress] = useState(0);
   const [submitting, setSubmitting] = useState(false);
   const [checkingStatus, setCheckingStatus] = useState(false);
   const [statusResult, setStatusResult] =
@@ -424,6 +428,8 @@ export default function IdentityVerificationWeb() {
       idVideoRef.current.srcObject = null;
     }
     setIdCameraReady(false);
+    idAutoFramesRef.current = { previous: null, steadySince: null };
+    setIdAutoProgress(0);
   }, []);
 
   useEffect(() => {
@@ -480,13 +486,21 @@ export default function IdentityVerificationWeb() {
     setIdCameraSide(side);
     setIdCameraReady(false);
     setIdCameraError("");
+    setIdAutoHint("Keep all corners of the ID visible. Auto-capture checks image steadiness, not authenticity.");
+    setIdAutoProgress(0);
+    idAutoFramesRef.current = { previous: null, steadySince: null };
     setIdCameraOpen(true);
   };
 
   const captureIdDocument = async () => {
+    if (idCaptureLockRef.current) return;
+    idCaptureLockRef.current = true;
     const video = idVideoRef.current;
     const canvas = idCanvasRef.current;
-    if (!idCameraReady || !video || !canvas || !video.videoWidth || !video.videoHeight) return;
+    if (!idCameraReady || !video || !canvas || !video.videoWidth || !video.videoHeight) {
+      idCaptureLockRef.current = false;
+      return;
+    }
     try {
       canvas.width = video.videoWidth;
       canvas.height = video.videoHeight;
@@ -512,8 +526,75 @@ export default function IdentityVerificationWeb() {
       setIdCameraOpen(false);
     } catch (error: any) {
       setIdCameraError(error?.message || "ID capture failed; please retry.");
+    } finally {
+      idCaptureLockRef.current = false;
     }
   };
+
+  // Non-biometric quality assist: sample a small local preview. It neither
+  // recognizes government IDs nor authenticates them; backend screening is separate.
+  useEffect(() => {
+    if (!idCameraOpen || !idCameraReady) return;
+    const sample = document.createElement("canvas");
+    sample.width = 160;
+    sample.height = 120;
+    const ctx = sample.getContext("2d", { willReadFrequently: true });
+    if (!ctx) {
+      setIdAutoHint("Auto-capture unavailable. Use the manual capture button.");
+      return;
+    }
+    const timer = window.setInterval(() => {
+      const video = idVideoRef.current;
+      if (!video || !idStreamRef.current || !video.videoWidth || idCaptureLockRef.current) return;
+      try {
+        ctx.drawImage(video, 0, 0, 160, 120);
+        const pixels = ctx.getImageData(0, 0, 160, 120).data;
+        const frame = new Uint8Array(80 * 60);
+        let sum = 0, glare = 0, edges = 0, moving = 0, count = 0;
+        const previous = idAutoFramesRef.current.previous;
+        // Ignore the extreme border. Texture is a framing aid, not ID detection.
+        for (let y = 8; y < 52; y++) {
+          for (let x = 8; x < 72; x++) {
+            const pixel = ((y * 2) * 160 + x * 2) * 4;
+            const gray = Math.round(0.299 * pixels[pixel] + 0.587 * pixels[pixel + 1] + 0.114 * pixels[pixel + 2]);
+            const at = y * 80 + x;
+            frame[at] = gray;
+            sum += gray;
+            if (gray > 238) glare++;
+            const right = pixel + 8;
+            const down = pixel + 160 * 8;
+            const r = 0.299 * pixels[right] + 0.587 * pixels[right + 1] + 0.114 * pixels[right + 2];
+            const d = 0.299 * pixels[down] + 0.587 * pixels[down + 1] + 0.114 * pixels[down + 2];
+            if (Math.abs(gray - r) + Math.abs(gray - d) > 34) edges++;
+            if (previous) moving += Math.abs(gray - previous[at]);
+            count++;
+          }
+        }
+        idAutoFramesRef.current.previous = frame;
+        const brightness = sum / count;
+        const qualityOk = video.videoWidth >= 640 && brightness >= 55 && brightness <= 210 && glare / count < 0.23 && edges / count >= 0.12;
+        const steady = Boolean(previous) && moving / count < 6;
+        if (!qualityOk || !steady) {
+          idAutoFramesRef.current.steadySince = null;
+          setIdAutoProgress(0);
+          setIdAutoHint(!qualityOk
+            ? "Improve lighting, avoid glare, and keep printed details visible. Manual capture is available."
+            : "Hold the document and camera still for automatic capture.");
+          return;
+        }
+        const now = performance.now();
+        if (idAutoFramesRef.current.steadySince === null) idAutoFramesRef.current.steadySince = now;
+        const heldFor = now - idAutoFramesRef.current.steadySince;
+        setIdAutoProgress(Math.min(100, Math.round(heldFor / 1300 * 100)));
+        setIdAutoHint("Image looks steady; auto-capturing. Review the result before continuing.");
+        if (heldFor >= 1300) void captureIdDocument();
+      } catch {
+        idAutoFramesRef.current.steadySince = null;
+        setIdAutoHint("Camera analysis unavailable. Use Capture manually.");
+      }
+    }, 250);
+    return () => window.clearInterval(timer);
+  }, [idCameraOpen, idCameraReady, idCameraSide]);
 
   const discardIdDocument = () => {
     setIdDocument(null);
@@ -1282,6 +1363,8 @@ export default function IdentityVerificationWeb() {
           cameraOpen={idCameraOpen}
           cameraReady={idCameraReady}
           cameraError={idCameraError}
+          autoHint={idAutoHint}
+          autoProgress={idAutoProgress}
           idVideoRef={idVideoRef}
           idCanvasRef={idCanvasRef}
           onPick={() => chooseIdDocument("front")}
@@ -1739,6 +1822,8 @@ function UploadIdStep({
   cameraOpen,
   cameraReady,
   cameraError,
+  autoHint,
+  autoProgress,
   idVideoRef,
   idCanvasRef,
   onPick,
@@ -1758,6 +1843,8 @@ function UploadIdStep({
   cameraOpen: boolean;
   cameraReady: boolean;
   cameraError: string;
+  autoHint: string;
+  autoProgress: number;
   idVideoRef: React.MutableRefObject<HTMLVideoElement | null>;
   idCanvasRef: React.MutableRefObject<HTMLCanvasElement | null>;
   onPick: () => void;
@@ -1884,6 +1971,7 @@ function UploadIdStep({
               <Text style={styles.uploadText}>
                 Hold {side === "front" ? "the front" : "the back"} of the ID flat and steady. Keep all four edges visible and avoid glare.
               </Text>
+              <Text style={styles.uploadText}>{autoHint} {autoProgress > 0 ? `(${autoProgress}%)` : ""}</Text>
               {cameraError ? <Text style={styles.idCameraError}>{cameraError}</Text> : null}
               <View style={styles.idCameraActions}>
                 <TouchableOpacity
@@ -1892,7 +1980,7 @@ function UploadIdStep({
                   disabled={!cameraReady}
                 >
                   <Ionicons name="camera" size={19} color="#FFFFFF" />
-                  <Text style={styles.nextButtonText}>Capture {label}</Text>
+                  <Text style={styles.nextButtonText}>Capture manually: {label}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity style={styles.secondaryWideButton} onPress={onCancel}>
                   <Text style={styles.secondaryWideButtonText}>Cancel</Text>
