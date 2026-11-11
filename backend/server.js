@@ -4979,13 +4979,23 @@ app.post(
           requestCount: count + 1,
         }, { merge: true });
       });
+      // Never allow client-uploaded fields to override a saved profile DOB
+      // or barangay. Compare only using trusted Firebase Admin SDK data.
+      request.identityExpectedName = {
+        firstName: profile.firstName || "",
+        lastName: profile.lastName || "",
+        dateOfBirth: profile.dateOfBirth || "",
+        barangay: profile.barangay || "",
+      };
       // Forward only private images to our internal-key-authenticated Python AI.
       // Never store uploads in Firestore, Storage, Cloudinary or audit logs.
       const result = await callIdentityAiService(request, { documentPrecheck: true });
       const screening = normalizeIdDocumentScreening(result?.documentScreening);
       const declared = screening.declaredIdType;
       const validType = ["national_id", "drivers_license", "passport", "umid", "prc_id"].includes(declared);
+      const birthConflict = screening.profileBirthDateCheck === "possible_conflict";
       const pass = validType &&
+        !birthConflict &&
         result?.outcome === "pass" &&
         selectedIdRecognized(screening) &&
         (declared === "passport" || screening.backSideScreened === true);
@@ -4997,8 +5007,10 @@ app.post(
         detectedIdType: screening.detectedIdType,
         documentScreening: screening,
         // Sanitized hints only; no raw OCR values and no issuer claim.
-        message: pass
-          ? "ID type and scan arrangement appear consistent. This does not prove ID authenticity."
+        message: birthConflict
+          ? "The date of birth on the ID may differ from your saved profile. Retake a clearer document or request Admin profile review; OCR differences are not proof of fraud."
+          : pass
+          ? "ID scan and selected type appear consistent. Birthday/barangay are OCR hints only; Admin still checks unresolved details."
           : review
             ? "The National ID is too blurry. You may continue for Admin rescan review but cannot be automatically approved."
             : screening.warningCodes.includes("school_id_not_supported")
