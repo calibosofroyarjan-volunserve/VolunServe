@@ -724,6 +724,9 @@ function normalizeIdDocumentScreening(value) {
     "document_back_type_conflict",
     "document_front_type_inconclusive",
     "document_back_ocr_inconclusive",
+    "document_front_back_swapped",
+    "document_front_side_conflict",
+    "document_back_looks_like_front",
     "school_id_not_supported",
     "low_document_image_quality",
   ];
@@ -5142,7 +5145,13 @@ app.post(
         const resultMessage = reviewTrack === "blurry_id_review"
           ? "PENDING ADMIN REVIEW: Your claimed National ID scan is too blurry to identify. An Admin can request a clearer rescan; this does not verify the ID."
           : !recognizedSelectedId
-          ? (documentScreening.status === "unsupported"
+          ? (documentScreening.warningCodes.includes("document_front_back_swapped")
+              ? "AUTO REJECTED: The ID front and back appear reversed. Scan the portrait/front in the Front slot and the reverse in the Back slot, then retry."
+              : documentScreening.warningCodes.includes("document_back_looks_like_front")
+                ? "NOT ACCEPTED: The Back scan appears to show the front of the ID. Check both sides and retake before submitting."
+                : documentScreening.warningCodes.includes("document_front_side_conflict")
+                  ? "NOT ACCEPTED: The Front scan appears to show back-side information. Retake the portrait/front of the ID."
+                  : documentScreening.status === "unsupported"
               ? "AUTO REJECTED: School, employee, or other unsupported IDs are not accepted. Choose one of the five supported government IDs."
               : documentScreening.status === "mismatch"
                 ? "AUTO REJECTED: The scanned ID does not match the selected government ID type. Choose the correct type and scan again."
