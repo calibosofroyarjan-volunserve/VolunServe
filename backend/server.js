@@ -5008,7 +5008,9 @@ app.post(
       const screening = normalizeIdDocumentScreening(result?.documentScreening);
       const declared = screening.declaredIdType;
       const validType = ["national_id", "drivers_license", "passport", "umid", "prc_id"].includes(declared);
+      const birthConflict = screening.profileBirthDateCheck === "possible_conflict";
       const pass = validType &&
+        !birthConflict &&
         result?.outcome === "pass" &&
         selectedIdRecognized(screening) &&
         (declared === "passport" || screening.backSideScreened === true);
