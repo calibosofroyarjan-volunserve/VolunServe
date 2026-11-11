@@ -7,7 +7,8 @@ const NAMES: Record<string, string> = {
   national_id: "Philippine National ID",
   drivers_license: "Driver's License",
   passport: "Philippine Passport",
-  other_government_id: "Other Government ID",
+  umid: "Unified Multi-Purpose ID (UMID)",
+  prc_id: "PRC Professional ID",
 };
 
 /** Shared, privacy-safe document-type assessment for Residents and LGU. */
@@ -20,11 +21,26 @@ export default function DocumentScreeningSummary({
 
   const recognized = screening.status === "text_consistent_unverified";
   const mismatch = screening.status === "mismatch";
-  const title = recognized
+  const unsupported = screening.status === "unsupported";
+  const blurryNationalId = screening.status === "inconclusive" &&
+    screening.declaredIdType === "national_id" &&
+    screening.detectedIdType === null &&
+    screening.imageQualityStatus === "low" &&
+    screening.warningCodes.includes("low_document_image_quality");
+  const sideProblem = screening.warningCodes?.some((code) =>
+    ["document_front_back_swapped", "document_front_side_conflict", "document_back_looks_like_front"].includes(code),
+  );
+  const birthConflict = screening.profileBirthDateCheck === "possible_conflict";
+  const title = sideProblem ? "Retake ID — front/back position may be wrong"
+    : birthConflict ? "Birth date needs Admin review"
+    : recognized
     ? (screening.detectedIdType === "national_id" ? "National ID text recognized" : "Government ID text recognized")
-    : mismatch ? "Selected ID type does not match" : "Document recognition inconclusive";
-  const icon = recognized ? "document-text-outline" : mismatch ? "alert-circle-outline" : "help-circle-outline";
-  const accent = recognized ? "#12644E" : mismatch ? "#A13F2B" : "#A46B16";
+    : unsupported ? "ID rejected — not supported"
+      : mismatch ? "ID rejected — wrong government ID type"
+        : blurryNationalId ? "Blurry scan — Admin review / rescan"
+          : "ID not accepted — scan inconclusive";
+  const icon = recognized && !sideProblem ? "document-text-outline" : unsupported || mismatch || sideProblem ? "alert-circle-outline" : "help-circle-outline";
+  const accent = recognized && !sideProblem ? "#12644E" : unsupported || mismatch || sideProblem ? "#A13F2B" : "#A46B16";
 
   return (
     <View style={styles.panel} accessibilityLabel="Government ID document screening result">
@@ -48,13 +64,67 @@ export default function DocumentScreeningSummary({
           <Text style={styles.value}>{NAMES[screening.detectedIdType || ""] || "Not recognized"}</Text>
         </View>
         <View style={styles.row}>
+          <Text style={styles.label}>ID back</Text>
+          <Text style={styles.value}>
+            {screening.declaredIdType === "passport"
+              ? "Bio page only"
+              : screening.backSideScreened
+                ? "Captured and OCR screened"
+                : screening.backSideProvided
+                  ? "Captured; OCR unavailable"
+                  : "Not confirmed"}
+          </Text>
+        </View>
+        <View style={styles.row}>
+          <Text style={styles.label}>Account name vs ID text</Text>
+          <Text style={styles.value}>
+            {screening.profileNameCheck === "possible_match"
+              ? "Name appears in ID text"
+              : screening.profileNameCheck === "inconclusive"
+                ? "Not confirmed by OCR"
+                : "Not checked"}
+          </Text>
+        </View>
+        <View style={styles.row}>
+          <Text style={styles.label}>Birthday vs profile</Text>
+          <Text style={styles.value}>
+            {screening.profileBirthDateCheck === "possible_match" ? "Date appears consistent (OCR only)"
+              : screening.profileBirthDateCheck === "possible_conflict" ? "Possible difference — Admin review"
+              : screening.profileBirthDateCheck === "not_checked" ? "Not checked (no saved birthday)"
+              : "Unclear or absent on scanned ID"}
+          </Text>
+        </View>
+        <View style={styles.row}>
+          <Text style={styles.label}>Address vs profile</Text>
+          <Text style={styles.value}>
+            {screening.profileAddressCheck === "possible_match" ? "Barangay appears consistent (OCR only)"
+              : screening.profileAddressCheck === "not_checked" ? "Not checked (no saved barangay)"
+              : "Not readable or not on this ID"}
+          </Text>
+        </View>
+        <View style={styles.row}>
+          <Text style={styles.label}>Official issuer check</Text>
+          <Text style={styles.value}>Not verified — PSA/issuer check required</Text>
+        </View>
+        <View style={styles.row}>
+          <Text style={styles.label}>Anti-spoofing (PAD)</Text>
+          <Text style={styles.value}>Not validated — movement is not proof</Text>
+        </View>
+        <View style={styles.row}>
           <Text style={styles.label}>Identity decision</Text>
-          <Text style={styles.value}>Pending LGU validation</Text>
+          <Text style={styles.value}>
+            {sideProblem ? "Rejected / retake correct ID side"
+              : birthConflict ? "Pending Admin review — birth date differs"
+              : recognized ? "Pending LGU validation (independent check required)"
+              : blurryNationalId ? "Pending Admin review — no approval" : "Rejected / retry required"}
+          </Text>
         </View>
       </View>
       <Text style={styles.disclaimer}>
-        Recognition checks document text only; it cannot prove authenticity,
-        official issuance or liveness. Independent LGU verification is required.
+        Only the five supported ID types may proceed after document screening.
+        Birthday, barangay and ID-type comparisons are only OCR clues.
+        They do not prove official issuance, residence or liveness.
+        Independent issuer checks, qualified anti-spoofing validation and Admin review are still required.
       </Text>
     </View>
   );
