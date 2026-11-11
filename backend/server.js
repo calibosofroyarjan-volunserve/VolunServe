@@ -4658,6 +4658,17 @@ function getIdentityAiHeaders(
     headers["X-VolunServe-Profile-First-Name"] = first;
     headers["X-VolunServe-Profile-Last-Name"] = last;
   }
+  // Never take identity comparison fields from the uploaded form.
+  // Only the authenticated user's trusted Firestore profile is eligible.
+  // This private backend-to-AI request must not log or persist these headers.
+  const dob = String(request.identityExpectedName?.dateOfBirth || "").trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(dob)) {
+    headers["X-VolunServe-Profile-Date-Of-Birth"] = dob;
+  }
+  const barangay = cleanText(request.identityExpectedName?.barangay || "", 80)
+    .normalize("NFKD").replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^A-Za-z0-9 .'-]/g, "");
+  if (barangay) headers["X-VolunServe-Profile-Barangay"] = barangay;
   return headers;
 }
 async function readJsonResponse(
@@ -5061,6 +5072,8 @@ app.post(
         request.identityExpectedName = {
           firstName: profile.firstName || "",
           lastName: profile.lastName || "",
+          dateOfBirth: profile.dateOfBirth || "",
+          barangay: profile.barangay || "",
         };
         const verification = verificationSnapshot.exists ? verificationSnapshot.data() || {} : {};
         if (cleanText(profile.status || "approved", 40).toLowerCase() !== "approved") {
