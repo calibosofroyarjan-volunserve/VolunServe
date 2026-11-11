@@ -82,3 +82,33 @@ jobs:
         run: |
           test -d /tmp/volunserve-identity-bundle-smoke
           test -n "$(find /tmp/volunserve-identity-bundle-smoke -type f -name '*.js' -print -quit)"
+
+  android-js-bundle:
+    name: Android JavaScript bundle smoke test (NO APK / NO DEPLOY)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      CI: '1'
+      EXPO_NO_TELEMETRY: '1'
+      EXPO_PUBLIC_VOLUNSERVE_ENV: staging
+      EXPO_PUBLIC_IDENTITY_VERIFICATION_API_URL: https://identity-bundle-smoke.invalid
+      # Deliberately fake test project: no real-user Firebase access.
+      EXPO_PUBLIC_FIREBASE_API_KEY: fake-ci-key-no-external-auth
+      EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN: ci-identity-isolated.firebaseapp.com
+      EXPO_PUBLIC_FIREBASE_PROJECT_ID: ci-identity-isolated
+      EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET: ci-identity-isolated.appspot.com
+      EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID: '000000000000'
+      EXPO_PUBLIC_FIREBASE_APP_ID: 1:000000000000:web:0000000000000000
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - name: Export Android JS assets without native APK signing or deployment
+        run: npx expo export --platform android --output-dir /tmp/volunserve-android-js-smoke
+      - name: Confirm candidate Android JS exists
+        run: |
+          test -d /tmp/volunserve-android-js-smoke
+          test -n "$(find /tmp/volunserve-android-js-smoke -type f -name '*.hbc' -o -name '*.js' | head -n 1)"
