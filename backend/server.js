@@ -14,6 +14,7 @@ const { probeIdentityAiReadiness } = require("./identityAiReadiness");
 const {
   selectedIdRecognized, enforceSelectedIdDecision, blurryNationalIdNeedsReview,
 } = require("./selectedIdPolicy");
+const {reviewIssuerEvidence} = require("./identityIssuerReviewPolicy");
 const {isVerifiedFirebaseToken, isCompletedVolunServeProfile} = require("./verifiedFirebaseToken");
 const {
   getProfileRole,
@@ -5543,6 +5544,7 @@ app.post(
         request.body?.validationMethod || "",
         120,
       );
+      const issuerReviewAttested = request.body?.issuerReviewAttested === true;
       const reviewedByName = cleanText(
         request.volunServeProfile?.fullName ||
           request.firebaseUser?.name ||
@@ -5647,6 +5649,21 @@ app.post(
             "This identity verification is no longer waiting for manual review.",
           );
         }
+        if (action === "verify") {
+          // OCR and face similarity are unverified clues, not identity approval.
+          const selectedIdCheck = normalizeIdDocumentScreening(verification.documentScreening);
+          if (!selectedIdRecognized(selectedIdCheck)) {
+            throw makeHttpError(409, "selected_government_id_not_recognized",
+              "ID type, image quality or required front/back evidence is incomplete. Require a new scan.");
+          }
+          const independentCheck = reviewIssuerEvidence({
+            declaredType: selectedIdCheck.declaredIdType,
+            validationMethod, confirmed: issuerReviewAttested, notes,
+          });
+          if (!independentCheck.ok) {
+            throw makeHttpError(400, "independent_id_review_required", independentCheck.message);
+          }
+        }
         const commonReviewFields = {
           requiresManualReview: false,
           manualReviewDecision:
@@ -5657,6 +5674,8 @@ app.post(
             action === "verify"
               ? validationMethod
               : "",
+          independentAdminCheckAttested: action === "verify" && issuerReviewAttested,
+          issuerApiAuthenticityVerified: false,
           manualReviewNotes: notes,
           reviewedAt: FieldValue.serverTimestamp(),
           reviewedBy: adminUid,
