@@ -23,6 +23,12 @@ if(!html.includes('<script type="module" src="./camera.js"></script>'))throw Err
 if(!html.includes('<script type="module" src="./device-qa.js"></script>'))throw Error("Camera device QA not loaded.");
 if(!html.includes('https://everify.gov.ph/check'))throw Error("Official PSA QR check guidance is missing.");
 if(!html.includes("showDocumentVerdict(b)")||!html.includes("idVerdict"))throw Error("Server OCR rejection banner missing");
+if(!html.includes('id="resetPassword"')||!html.includes("sendPasswordResetEmail(auth,email)")||!html.includes("auth/invalid-credential"))throw Error("Staging Firebase password recovery/error messaging missing");
+if(!html.includes("auth.currentUser")||!html.includes("if(busy||auth.currentUser)return;"))throw Error("Password reset must be interactive and staging-only");
+const inlineModule=html.match(/<script type="module">([\s\S]*?)<\/script>/)?.[1];
+if(!inlineModule)throw Error("Missing staging sign-in module");
+const {execFileSync:checkInlineModule}=require("node:child_process");
+checkInlineModule(process.execPath,["--check","--input-type=module"],{input:inlineModule,stdio:["pipe","inherit","inherit"]});
 const camera=fs.readFileSync("identity-staging-web/camera.js","utf8");
 if(/scanCapture|scanAuto|Capture now/.test(camera))throw Error("Manual shutter must be absent from staging camera");
 for(const key of ["getUserMedia","detectForVideo","capture","showModal","MediaPipe".toLowerCase(),"FaceLandmarker","advanceChallenge","cameraErrorMessage","sourceSelect","assessDocumentFrame","mode===\"selfie\"?9:13"]){
