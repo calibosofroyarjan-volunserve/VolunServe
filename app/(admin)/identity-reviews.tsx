@@ -36,6 +36,7 @@ type IdentityReview = {
   matchScore?: number | null;
   livenessScore?: number | null;
   documentScreening?: DocumentScreening;
+  reviewTrack?: "blurry_id_review" | "priority_admin_review" | "standard_admin_review" | "none";
   message?: string;
   requiresManualReview?: boolean;
   manualReviewDecision?: string;
@@ -264,6 +265,13 @@ export default function IdentityReviewsAdmin() {
   ) => {
     if (!selected || !user || saving) return;
 
+    if (action === "verify" && selected.reviewTrack === "blurry_id_review") {
+      Alert.alert(
+        "Clear ID Evidence Required",
+        "This claimed National ID is too blurry to identify. You may request a new scan, but it cannot be approved from the unreadable OCR result.",
+      );
+      return;
+    }
     if (action === "verify" && !validationMethod) {
       Alert.alert(
         "Validation Method Required",
@@ -593,11 +601,15 @@ export default function IdentityReviewsAdmin() {
                     <View style={styles.scoreRow}>
                       <Text style={styles.scoreLabel}>Government ID check</Text>
                       <Text style={styles.scoreValue}>
-                        {item.documentScreening?.status === "text_consistent_unverified"
-                          ? "ID type recognized — unverified"
-                          : item.documentScreening?.status === "mismatch"
-                            ? "Selected ID type mismatch"
-                            : "Recognition inconclusive"}
+                        {item.reviewTrack === "blurry_id_review"
+                          ? "Blurry ID — Admin rescan review"
+                          : item.reviewTrack === "priority_admin_review"
+                            ? "Priority review — account name may match"
+                            : item.documentScreening?.status === "text_consistent_unverified"
+                              ? "ID type recognized — unverified"
+                              : item.documentScreening?.status === "mismatch"
+                                ? "Selected ID type mismatch"
+                                : "Recognition inconclusive"}
                       </Text>
                     </View>
 
@@ -711,6 +723,7 @@ function ReviewDetail({
 }) {
   const pending = reviewBucket(item) === "pending";
   const nationalId = item.documentScreening?.declaredIdType === "national_id";
+  const blurry = item.reviewTrack === "blurry_id_review";
   const availableMethods = VALIDATION_METHODS.filter(m =>
     nationalId ? m.value === "psa_national_id_qr_check" : m.value !== "psa_national_id_qr_check"
   );
@@ -764,11 +777,15 @@ function ReviewDetail({
         <View>
           <Text style={styles.scoreCardLabel}>Document and identity review</Text>
           <Text style={styles.scoreCardDecision}>
-            {item.documentScreening?.status === "text_consistent_unverified"
-              ? "Document text is consistent with the selected ID type; not authenticated"
-              : item.documentScreening?.status === "mismatch"
-                ? "Selected ID type conflicts with recognized document text"
-                : "Document type is inconclusive; verify using an independent LGU method"}
+            {blurry
+              ? "The image selected as National ID is too blurry to identify. Require a clearer scan; do not approve this record."
+              : item.reviewTrack === "priority_admin_review"
+                ? "Priority review: OCR found the selected National ID type and the account name, but did not authenticate the document."
+                : item.documentScreening?.status === "text_consistent_unverified"
+                  ? "Document text is consistent with the selected ID type; not authenticated"
+                  : item.documentScreening?.status === "mismatch"
+                    ? "Selected ID type conflicts with recognized document text"
+                    : "Document type is inconclusive; independent LGU review is required"}
           </Text>
         </View>
         <Text style={styles.scoreCardLabel}>
@@ -806,8 +823,9 @@ function ReviewDetail({
           />
 
           <Text style={styles.helperText}>
-            Choose the method actually used by LGU/Admin. Do not verify
-            based only on the AI score.
+            {blurry
+              ? "The OCR cannot identify this ID. Select Require Retry and ask for a clearer scan. Approval is blocked until an acceptable scan and independent ID check."
+              : "Choose the method actually used by LGU/Admin. Do not verify based only on the AI score or an OCR name match."}
           </Text>
 
           <View style={styles.methodList}>
@@ -872,10 +890,10 @@ function ReviewDetail({
             <TouchableOpacity
               style={[
                 styles.verifyButton,
-                (!validationMethod || !issuerReviewAttested || notes.trim().length < 10 || !!saving) &&
+                (blurry || !validationMethod || !issuerReviewAttested || notes.trim().length < 10 || !!saving) &&
                   styles.disabledButton,
               ]}
-              disabled={!validationMethod || !issuerReviewAttested || notes.trim().length < 10 || !!saving}
+              disabled={blurry || !validationMethod || !issuerReviewAttested || notes.trim().length < 10 || !!saving}
               onPress={onVerify}
             >
               {saving === "verify" ? (
