@@ -3,7 +3,8 @@
 export function documentVerdict(result){
  const screening=result?.documentScreening;
  const status=screening?.status;
- const idMatches=screening?.declaredIdType &&
+ const allowed=new Set(["national_id","drivers_license","passport","umid","prc_id"]);
+ const idMatches=allowed.has(screening?.declaredIdType) &&
    screening.declaredIdType===screening.detectedIdType;
  if(status==="unsupported")return {
   kind:"rejected",heading:"AUTO REJECTED — Unsupported ID",
