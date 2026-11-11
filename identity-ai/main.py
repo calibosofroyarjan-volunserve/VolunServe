@@ -1209,6 +1209,91 @@ def capabilities():
     }
 
 
+# Document-only precheck: no selfie, no face comparison, no attempt charge.
+# Return only sanitized OCR status; user consent and upload rate limiting
+# are enforced by the authenticated Node gateway before reaching this route.
+@app.post("/document/precheck")
+async def document_precheck(
+    request: Request,
+    x_volunserve_user_id: str | None = Header(
+        default=None, alias="X-VolunServe-User-Id",
+    ),
+    x_volunserve_internal_key: str | None = Header(
+        default=None, alias="X-VolunServe-Internal-Key",
+    ),
+):
+    require_internal_backend(x_volunserve_internal_key)
+    validate_forwarded_user(x_volunserve_user_id)
+    content_type = clean_text(request.headers.get("content-type", ""), 200).lower()
+    if not content_type.startswith("multipart/form-data"):
+        raise HTTPException(status_code=415, detail="Identity documents require multipart form data.")
+    form = await request.form()
+    declared_type = clean_text(form.get("idType"), 60).lower()
+    if declared_type not in ACCEPTED_ID_TYPES:
+        raise HTTPException(status_code=400, detail="Choose one of the five supported government IDs.")
+    front_upload = form.get("idDocument")
+    back_upload = form.get("idBackDocument")
+    if declared_type != "passport" and not isinstance(back_upload, StarletteUploadFile):
+        raise HTTPException(status_code=400, detail="Capture both sides of the selected ID.")
+    if form.get("selfie") is not None:
+        raise HTTPException(status_code=400, detail="A selfie is not required for document screening.")
+    try:
+        front_bytes = await read_upload(
+            front_upload, label="Government ID front image",
+            maximum_bytes=MAX_ID_DOCUMENT_BYTES,
+        )
+        back_bytes = (
+            await read_upload(back_upload, label="Government ID back image",
+                              maximum_bytes=MAX_ID_DOCUMENT_BYTES)
+            if isinstance(back_upload, StarletteUploadFile) else None
+        )
+    finally:
+        if isinstance(front_upload, StarletteUploadFile):
+            await front_upload.close()
+        if isinstance(back_upload, StarletteUploadFile):
+            await back_upload.close()
+    if back_bytes is not None:
+        if hashlib.sha256(front_bytes).digest() == hashlib.sha256(back_bytes).digest():
+            raise HTTPException(status_code=400, detail="Front and back cannot be identical images.")
+        decode_image(back_bytes, "Government ID back image")
+    # Never send account fields, DOB, names, image data or OCR text back.
+    screening = await asyncio.to_thread(
+        screen_government_id, declared_type=declared_type,
+        id_document_bytes=front_bytes, id_back_document_bytes=back_bytes,
+    )
+    recognized = (
+        screening.get("status") == "text_consistent_unverified"
+        and screening.get("detectedIdType") == declared_type
+        and screening.get("imageQualityStatus") == "adequate"
+        and not any(code in (screening.get("warningCodes") or [])
+                    for code in ("document_front_back_swapped",
+                                 "document_front_side_conflict",
+                                 "document_back_looks_like_front"))
+    )
+    review = (
+        not recognized
+        and blurry_national_id_claim_needs_review(declared_type, screening)
+    )
+    outcome = "pass" if recognized else "review" if review else "retry"
+    if outcome == "pass":
+        message = "ID format appears consistent. This does not authenticate the document."
+    elif outcome == "review":
+        message = "The selected National ID is too blurry. It may continue only to Admin rescan review, never automatic approval."
+    elif "school_id_not_supported" in (screening.get("warningCodes") or []):
+        message = "Unsupported School or employee ID. Choose a valid government-issued ID."
+    elif "document_front_back_swapped" in (screening.get("warningCodes") or []):
+        message = "Front and back appear reversed. Retake each ID side in its correct slot."
+    elif "document_back_looks_like_front" in (screening.get("warningCodes") or []):
+        message = "Back scan may show the front of the ID. Retake the reverse side."
+    elif "document_front_side_conflict" in (screening.get("warningCodes") or []):
+        message = "Front scan appears to contain back-side details. Retake the portrait/front."
+    else:
+        message = "Document type or side could not be confirmed. Retake clear ID photos."
+    return {"ok": True, "outcome": outcome, "documentScreening": screening,
+            "message": message, "authenticityVerified": False,
+            "livenessVerified": False}
+
+
 @app.post(
     "/verify"
 )
