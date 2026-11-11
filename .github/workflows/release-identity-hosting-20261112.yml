@@ -1,0 +1,168 @@
+name: Production Identity UI + Additive DOB Rules (GUARDED)
+
+on:
+  push:
+    branches:
+      - release/identity-hosting-live-20261112
+    paths:
+      - .github/workflows/release-identity-hosting-20261112.yml
+      - scripts/publish-identity-dob-rules-safely.cjs
+      - scripts/validate-identity-hosting-release.cjs
+      - backend/test-firestore-dob-rules.js
+      - firestore.rules
+
+permissions:
+  contents: read
+
+concurrency:
+  group: volunserve-production-hosting-release
+  cancel-in-progress: false
+
+jobs:
+  validate-and-release:
+    if: github.repository == 'calibosofroyarjan-volunserve/VolunServe'
+    runs-on: ubuntu-24.04
+    environment: production
+    timeout-minutes: 60
+    env:
+      CI: 'true'
+      EXPO_NO_TELEMETRY: '1'
+      EXPO_PUBLIC_VOLUNSERVE_ENV: production
+      EXPO_PUBLIC_IDENTITY_VERIFICATION_API_URL: https://volunserve.onrender.com
+      VOLUNSERVE_HOSTING_URL: https://volunserve.com
+      PINNED_MAIN_SHA: 1ee67d02906826f49a3edaa54635afcad380c82d
+      FIREBASE_SA: ${{ secrets.VOLUNSERVE_PRODUCTION_HOSTING_SERVICE_ACCOUNT }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Confirm no concurrent main changes or unrelated module modifications
+        shell: bash
+        run: |
+          set -euo pipefail
+          CURRENT_MAIN="$(git ls-remote origin refs/heads/main | cut -f1)"
+          test "$CURRENT_MAIN" = "$PINNED_MAIN_SHA" || {
+            echo "::error::Main changed. Refusing to overwrite a newer Hosting release."
+            exit 1
+          }
+          git merge-base --is-ancestor "$PINNED_MAIN_SHA" HEAD
+          node scripts/validate-identity-hosting-release.cjs
+          node --check scripts/publish-identity-dob-rules-safely.cjs
+
+      - name: Install exact pinned dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Validate new DOB rules and existing production signup/login
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --test backend/test-firestore-dob-rules.js
+          node --test scripts/test-staging-firebase-release-isolation.cjs scripts/test-identity-staging-endpoint-allowlist.cjs
+          node scripts/test-signup-prod.cjs
+          node scripts/test-premium-auth-portal.cjs
+          npx tsc --noEmit --pretty false
+
+      - name: Compile Firestore Rules safely in a DEMO emulator
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx firebase-tools emulators:exec --only firestore --project demo-volunserve-identity-rules "node backend/test-firestore-dob-rules.js"
+
+      - name: Confirm the existing live public Hosting routes still respond
+        run: node scripts/check-live-hosting.cjs
+
+      - name: Confirm production AI and backend are live and document OCR is ready
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --retry 3 --retry-delay 5 --max-time 45 \
+            https://volunserve-identity-ai.onrender.com/health |
+            node -e 'let s="";process.stdin.on("data",c=>s+=c);process.stdin.on("end",()=>{const x=JSON.parse(s);if(x.ok!==true||x.verificationEngineReady!==true||x.documentOcrReady!==true||x.profileComparisonReady!==true||x.documentPrecheckReady!==true||x.internalAuthConfigured!==true)throw Error("Live Python identity capabilities are not ready");console.log("PASS: operational live AI OCR and profile comparison");})'
+          curl --fail --silent --show-error --retry 3 --retry-delay 5 --max-time 45 \
+            https://volunserve.onrender.com/health |
+            node -e 'let s="";process.stdin.on("data",c=>s+=c);process.stdin.on("end",()=>{const x=JSON.parse(s);if(x.ok!==true||x.service!=="volunserve-backend"||x.identityEngine!=="volunserve_ai_configured")throw Error("Live Node identity backend not configured");console.log("PASS: operational live Node identity backend");})'
+
+      - name: Compile production Expo web build and auditable revision
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx expo export --platform web --clear
+          node scripts/verify-hosting-release.cjs
+
+      - name: Require correct Firebase production service-account before any write
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$FIREBASE_SA" || {
+            echo "::error::Firebase production credential missing; no deployment."
+            exit 1
+          }
+          node - <<'NODE'
+          const fs=require('fs');
+          const parsed=JSON.parse(process.env.FIREBASE_SA);
+          if(parsed.type!=="service_account"||parsed.project_id!=="volunserve-3aa5b"||
+             !parsed.client_email || !parsed.private_key) {
+            throw Error("Wrong production Firebase credentials. Refusing any deployment.");
+          }
+          fs.writeFileSync(process.env.RUNNER_TEMP+"/identity-live-firebase.json",
+            process.env.FIREBASE_SA,{mode:0o600});
+          console.log("PASS: credentials belong to the intended production Firebase project.");
+          NODE
+          echo "GOOGLE_APPLICATION_CREDENTIALS=$RUNNER_TEMP/identity-live-firebase.json" >> "$GITHUB_ENV"
+
+      - name: Recheck main source and live public site immediately before release
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$PINNED_MAIN_SHA"
+          node scripts/validate-identity-hosting-release.cjs
+          node scripts/check-live-hosting.cjs
+
+      - name: Read-only audit of current Firestore release
+        shell: bash
+        run: |
+          set -euo pipefail
+          IDENTITY_RULES_MODE=inspect node scripts/publish-identity-dob-rules-safely.cjs
+
+      - name: Deploy ONLY the additive Firestore signup DOB rule
+        shell: bash
+        run: |
+          set -euo pipefail
+          # The Firebase CLI create-on-existing-release path returned 409.
+          # Use documented Rules API PATCH on cloud.firestore only after
+          # exact active-source comparison, never delete the existing release.
+          IDENTITY_RULES_MODE=publish node scripts/publish-identity-dob-rules-safely.cjs
+
+      - name: Deploy ONLY Firebase Hosting identity UI from the exact built revision
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx firebase-tools deploy --only hosting --project volunserve-3aa5b --non-interactive
+
+      - name: Verify exact live Hosting revision and all existing public routes
+        env:
+          VOLUNSERVE_EXPECTED_SHA: ${{ github.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in 1 2 3 4 5 6; do
+            if node scripts/check-live-hosting.cjs; then
+              echo "PASS: live Hosting revision and public routes verified"
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "::error::Hosting revision could not be confirmed after deployment."
+          exit 1

@@ -158,6 +158,8 @@ export interface UserProfile {
   firstName?: string;
   middleName?: string;
   age: number;
+  /** New signup profiles only. Older profiles require separate review. */
+  dateOfBirth?: string;
   email: string;
   phoneNumber: string;
   region?: string;
@@ -216,6 +218,8 @@ export interface SignupData {
   firstName: string;
   middleName?: string;
   age: number;
+  /** YYYY-MM-DD calendar date; optional for legacy entry points. */
+  dateOfBirth?: string;
   email: string;
   password: string;
   authProvider?: "email" | "google" | "verified_email";
@@ -522,6 +526,17 @@ export const signUpUser = async (
       return user;
     }
     await getIdToken(user, true);
+    const birthDate = String(data.dateOfBirth || "").trim();
+    if (birthDate) {
+      const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(birthDate);
+      const date = new Date(birthDate + "T00:00:00Z");
+      if (!match || Number.isNaN(date.getTime()) ||
+          date.getUTCFullYear() !== Number(match[1]) ||
+          date.getUTCMonth() + 1 !== Number(match[2]) ||
+          date.getUTCDate() !== Number(match[3])) {
+        throw new Error("Please select a valid date of birth.");
+      }
+    }
     const fullName = [
       data.lastName,
       data.firstName,
@@ -554,6 +569,7 @@ export const signUpUser = async (
       middleName:
         (data.middleName || "").trim(),
       age: data.age,
+      ...(birthDate ? { dateOfBirth: birthDate } : {}),
       email: submittedEmail,
       phoneNumber:
         data.phoneNumber.trim(),
