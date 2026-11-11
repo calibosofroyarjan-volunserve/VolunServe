@@ -1318,8 +1318,7 @@ async def document_precheck(
     birthday_conflict = screening.get("profileBirthDateCheck") == "possible_conflict"
     recognized = (
         not birthday_conflict
-        and (
-        screening.get("status") == "text_consistent_unverified"
+        and screening.get("status") == "text_consistent_unverified"
         and screening.get("detectedIdType") == declared_type
         and screening.get("imageQualityStatus") == "adequate"
         and not any(code in (screening.get("warningCodes") or [])
