@@ -130,7 +130,10 @@ async function probeIdentityAiReadiness({
             ready: true,
             provider: "volunserve-custom-ai",
             livenessImplemented: health.livenessImplemented === true,
-            message: "The AI engine and private backend authentication are ready. Liveness and ID authenticity are not fully verified.",
+            documentOcrReady: true,
+            profileComparisonReady: true,
+            documentPrecheckReady: true,
+            message: "Face scan, ID OCR, birthday/barangay comparison and private AI connection are operational. This does not confirm ID authenticity or validated anti-spoofing.",
           }};
         }
         return notReady(
