@@ -18,6 +18,7 @@ jobs:
   validate-and-release:
     if: github.repository == 'calibosofroyarjan-volunserve/VolunServe'
     runs-on: ubuntu-24.04
+    environment: production
     timeout-minutes: 60
     env:
       CI: 'true'
@@ -26,7 +27,7 @@ jobs:
       EXPO_PUBLIC_IDENTITY_VERIFICATION_API_URL: https://volunserve.onrender.com
       VOLUNSERVE_HOSTING_URL: https://volunserve.com
       PINNED_MAIN_SHA: 1ee67d02906826f49a3edaa54635afcad380c82d
-      FIREBASE_SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_VOLUNSERVE_3AA5B || secrets.FIREBASE_SERVICE_ACCOUNT }}
+      FIREBASE_SA: ${{ secrets.VOLUNSERVE_PRODUCTION_HOSTING_SERVICE_ACCOUNT }}
 
     steps:
       - uses: actions/checkout@v4
