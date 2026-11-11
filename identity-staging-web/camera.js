@@ -38,7 +38,7 @@ function preview(stage,file){
   previews[stage]=URL.createObjectURL(file);
   const img=card.querySelector("img");img.src=previews[stage];img.classList.remove("hidden");
   card.querySelector(".scan-symbol").classList.add("hidden");
-  card.querySelector(".scan-sub").textContent="Captured — "+Math.round(file.size/1024)+" KB";
+  card.querySelector(".scan-sub").textContent="Photo captured — ID not yet validated ("+Math.round(file.size/1024)+" KB)";
   card.querySelector(".scan-open").textContent="Scan again";card.querySelector(".scan-clear").classList.remove("hidden");
  }else{
   delete previews[stage];const img=card.querySelector("img");img.removeAttribute("src");img.classList.add("hidden");
