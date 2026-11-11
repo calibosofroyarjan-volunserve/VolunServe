@@ -478,6 +478,9 @@ export default function WebDisasterReport() {
   const [pin, setPin] = useState<Pin | null>(null);
   const [latitude, setLatitude] = useState("");
   const [longitude, setLongitude] = useState("");
+  const [incidentAddress, setIncidentAddress] = useState("");
+  const [addressFeedback, setAddressFeedback] = useState("");
+  const [lookingUpAddress, setLookingUpAddress] = useState(false);
 
   const [photoFiles, setPhotoFiles] = useState<File[]>([]);
   const [photoPreviews, setPhotoPreviews] = useState<string[]>([]);
@@ -495,6 +498,8 @@ export default function WebDisasterReport() {
   const frame = useRef<HTMLIFrameElement>(null);
   const lock = useRef(false);
   const pinRef = useRef<Pin | null>(null);
+  const addressRevision = useRef(0);
+  const lastAutoAddress = useRef("");
 
   const attempt = useRef<{
     id: string;
@@ -537,6 +542,19 @@ export default function WebDisasterReport() {
       accuracy,
     };
 
+    // A changed pin invalidates pending lookups and any address filled
+    // for the previous GPS point; residents can still edit their own text.
+    const revision = ++addressRevision.current;
+    const previousAutoAddress = lastAutoAddress.current;
+    if (previousAutoAddress) {
+      setIncidentAddress((current) =>
+        current === previousAutoAddress ? "" : current
+      );
+      lastAutoAddress.current = "";
+    }
+    setLookingUpAddress(false);
+    setAddressFeedback("");
+
     pinRef.current = selected;
     setPin(selected);
     setLatitude(lat.toFixed(6));
@@ -546,6 +564,57 @@ export default function WebDisasterReport() {
       { kind: "set-pin", ...selected },
       "*"
     );
+    return revision;
+  };
+
+  const autoFillGpsAddress = async (lat: number, lng: number, revision: number) => {
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(() => controller.abort(), 8000);
+    setLookingUpAddress(true);
+    setAddressFeedback("Finding a nearby address from GPS…");
+
+    try {
+      // This lookup is made only after the resident chooses GPS.
+      const response = await fetch(
+        `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lng)}&zoom=18&addressdetails=1`,
+        { signal: controller.signal, headers: { Accept: "application/json", "Accept-Language": "en" } }
+      );
+      if (!response.ok) throw new Error("Reverse geocoding unavailable");
+
+      const result: { address?: Record<string, string>; display_name?: string; error?: string } =
+        await response.json();
+      if (result.error) throw new Error(result.error);
+      const data = result.address || {};
+      const street = [data.house_number, data.road || data.pedestrian || data.footway]
+        .filter(Boolean).join(" ").trim();
+      const nearby = data.neighbourhood || data.quarter || data.suburb ||
+        data.village || data.hamlet || data.city_district || data.residential;
+      if (!street && !nearby) throw new Error("No nearby street or barangay found");
+
+      const address = Array.from(new Set(
+        [street, nearby, data.city || data.town || data.municipality ||
+          "City of San Jose del Monte", data.state || "Bulacan"]
+          .map((part) => String(part || "").trim()).filter(Boolean)
+      )).join(", ").slice(0, 240);
+
+      if (addressRevision.current !== revision) return;
+      lastAutoAddress.current = address;
+      setIncidentAddress(address);
+      setAddressFeedback(
+        "Nearby address filled from GPS. Please verify the barangay, house number, or landmark."
+      );
+    } catch {
+      if (addressRevision.current === revision) {
+        setAddressFeedback(
+          "GPS pin saved, but the address could not be identified. Please enter the barangay or landmark."
+        );
+      }
+    } finally {
+      window.clearTimeout(timeoutId);
+      if (addressRevision.current === revision) {
+        setLookingUpAddress(false);
+      }
+    }
   };
 
   useEffect(() => {
@@ -592,11 +661,14 @@ export default function WebDisasterReport() {
     navigator.geolocation.getCurrentPosition(
       (position) => {
         if (!lock.current) {
-          selectPin(
-            position.coords.latitude,
-            position.coords.longitude,
-            position.coords.accuracy
-          );
+          const lat = position.coords.latitude;
+          const lng = position.coords.longitude;
+          const revision = selectPin(lat, lng, position.coords.accuracy);
+          if (typeof revision === "number") {
+            lastAutoAddress.current = "";
+            setIncidentAddress("");
+            void autoFillGpsAddress(lat, lng, revision);
+          }
         }
         setLocating(false);
       },
@@ -1300,9 +1372,9 @@ export default function WebDisasterReport() {
                   type="button"
                   className="secondary"
                   onClick={locate}
-                  disabled={locating}
+                  disabled={locating || lookingUpAddress || busy}
                 >
-                  {locating
+                  {locating || lookingUpAddress
                     ? "Finding your location…"
                     : "Use my current GPS location"}
                 </button>
@@ -1398,9 +1470,21 @@ export default function WebDisasterReport() {
                     required
                     minLength={3}
                     maxLength={240}
-                    placeholder="Example: Block 4, Brgy. Muzon, near ..."
+                    value={incidentAddress}
+                    onChange={(event) => {
+                      // Manual edits always take precedence over an in-flight GPS lookup.
+                      addressRevision.current += 1;
+                      lastAutoAddress.current = "";
+                      setLookingUpAddress(false);
+                      setAddressFeedback("");
+                      setIncidentAddress(event.target.value);
+                    }}
+                    placeholder="Use GPS to fill this, or enter an address / landmark"
                   />
                 </label>
+                <p className="section-copy" aria-live="polite">
+                  {addressFeedback || "GPS can suggest a nearby street or barangay, but may not know the exact house or landmark. You can edit this field."}
+                </p>
               </section>
             </div>
 
