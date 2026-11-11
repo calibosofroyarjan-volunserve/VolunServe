@@ -10,42 +10,87 @@ export type IdentityDocumentType =
   | "national_id"
   | "drivers_license"
   | "passport"
-  | "other_government_id";
+  | "umid"
+  | "prc_id";
 
 export type DocumentScreening = {
   declaredIdType: IdentityDocumentType | null;
   detectedIdType: IdentityDocumentType | null;
-  status: "text_consistent_unverified" | "mismatch" | "inconclusive";
+  status: "text_consistent_unverified" | "mismatch" | "inconclusive" | "unsupported";
   authenticityVerified: false;
   livenessVerified: false;
   manualReviewRequired: true;
+  imageQualityStatus?: "low" | "adequate" | "unknown";
+  backSideProvided?: boolean;
+  backSideScreened?: boolean;
+  profileNameCompared?: boolean;
+  profileNameCheck?: "possible_match" | "inconclusive" | "not_checked";
+  profileBirthDateCompared?: boolean;
+  profileBirthDateCheck?: "possible_match" | "possible_conflict" | "inconclusive" | "not_checked";
+  profileAddressCompared?: boolean;
+  profileAddressCheck?: "possible_match" | "inconclusive" | "not_checked";
+  issuerAuthenticityStatus?: "not_verified";
+  presentationAttackStatus?: "not_validated";
   warningCodes: string[];
 };
 
 export function documentScreeningLabel(value?: DocumentScreening | null): string {
+  if (value?.warningCodes?.includes("document_front_back_swapped")) {
+    return "RETAKE: Your ID front and back appear reversed. Put the portrait/front face in Scan ID front and the reverse in Scan ID back.";
+  }
+  if (value?.warningCodes?.includes("document_back_looks_like_front")) {
+    return "RETAKE: Scan ID back appears to show the front of the card. Confirm both sides and capture the reverse again.";
+  }
+  if (value?.warningCodes?.includes("document_front_side_conflict")) {
+    return "RETAKE: Scan ID front appears to show the reverse of the card. Capture the portrait/front side again.";
+  }
   switch (value?.status) {
     case "text_consistent_unverified":
-      return "ID type matches recognized text, but authenticity is not verified.";
+      return value?.backSideScreened
+        ? "ID text recognized and both sides screened for conflicting document labels. Authenticity is not verified."
+        : "ID type matches recognized text, but authenticity is not verified.";
     case "mismatch":
-      return "Selected ID type does not match recognized document text. Review required.";
+      return "REJECTED: The scanned document does not match the selected government ID. Choose the correct type and scan again.";
+    case "unsupported":
+      return "REJECTED: School, student, employee or other unsupported ID detected. Only the five selected government ID types are accepted.";
     default:
-      return "ID type could not be confirmed automatically. Review required.";
+      return value?.declaredIdType === "national_id" &&
+        value?.imageQualityStatus === "low" &&
+        value?.warningCodes.includes("low_document_image_quality")
+        ? "BLURRY NATIONAL ID CLAIM: ID type could not be confirmed. Sent for Admin review to request a clearer scan; not identity verified."
+        : "NOT ACCEPTED: The selected government ID type could not be confirmed. Retake a clearer scan and retry.";
   }
 }
 
 function parseDocumentScreening(value: unknown): DocumentScreening | undefined {
   if (!value || typeof value !== "object") return undefined;
   const raw = value as Record<string, unknown>;
-  const allowed = ["national_id", "drivers_license", "passport", "other_government_id"];
+  const allowed = ["national_id", "drivers_license", "passport", "umid", "prc_id"];
   const type = (x: unknown) => allowed.includes(String(x)) ? x as IdentityDocumentType : null;
   return {
     declaredIdType: type(raw.declaredIdType),
     detectedIdType: type(raw.detectedIdType),
-    status: raw.status === "mismatch" || raw.status === "text_consistent_unverified" ?
-      raw.status : "inconclusive",
+    status: raw.status === "mismatch" || raw.status === "text_consistent_unverified" ||
+      raw.status === "unsupported" ? raw.status : "inconclusive",
     authenticityVerified: false,
     livenessVerified: false,
     manualReviewRequired: true,
+    imageQualityStatus: raw.imageQualityStatus === "low" || raw.imageQualityStatus === "adequate"
+      ? raw.imageQualityStatus : "unknown",
+    backSideProvided: raw.backSideProvided === true,
+    backSideScreened: raw.backSideScreened === true,
+    profileNameCompared: raw.profileNameCompared === true,
+    profileNameCheck: raw.profileNameCheck === "possible_match" || raw.profileNameCheck === "inconclusive"
+      ? raw.profileNameCheck : "not_checked",
+    profileBirthDateCompared: raw.profileBirthDateCompared === true,
+    profileBirthDateCheck: raw.profileBirthDateCheck === "possible_match" ||
+      raw.profileBirthDateCheck === "possible_conflict" || raw.profileBirthDateCheck === "inconclusive"
+      ? raw.profileBirthDateCheck : "not_checked",
+    profileAddressCompared: raw.profileAddressCompared === true,
+    profileAddressCheck: raw.profileAddressCheck === "possible_match" ||
+      raw.profileAddressCheck === "inconclusive" ? raw.profileAddressCheck : "not_checked",
+    issuerAuthenticityStatus: "not_verified",
+    presentationAttackStatus: "not_validated",
     warningCodes: Array.isArray(raw.warningCodes)
       ? raw.warningCodes.filter((x): x is string => typeof x === "string").slice(0, 4) : [],
   };
@@ -79,20 +124,90 @@ export type IdentityVerificationResult = {
   message?: string;
 };
 
+export type DocumentPrecheckResult = {
+  outcome: "pass" | "review" | "retry";
+  detectedIdType: IdentityDocumentType | null;
+  documentScreening?: DocumentScreening;
+  message: string;
+};
+
+/**
+ * Private authenticated ID-only OCR screening before face capture.
+ * Explicit user consent is required. Photos are transient and do not
+ * consume a limited face-verification attempt; no selfie is sent.
+ */
+export async function precheckIdentityDocument(input: {
+  idType: IdentityDocumentType;
+  idDocument: CapturedIdentityMedia;
+  idBackDocument?: CapturedIdentityMedia | null;
+  consent: boolean;
+}): Promise<DocumentPrecheckResult> {
+  if (!input.consent) {
+    throw new Error("Consent is required before uploading an ID for preliminary AI document screening.");
+  }
+  if (!["national_id", "drivers_license", "passport", "umid", "prc_id"].includes(input.idType)) {
+    throw new Error("Select a supported government ID.");
+  }
+  validateMedia(input.idDocument, "ID front scan");
+  if (input.idType !== "passport") {
+    validateMedia(input.idBackDocument || undefined, "ID reverse scan");
+  }
+  const user = await getAuthenticatedUser();
+  const token = await user.getIdToken(true);
+  const body = new FormData();
+  body.append("idType", input.idType);
+  appendMedia(body, "idDocument", input.idDocument);
+  if (input.idType !== "passport" && input.idBackDocument) {
+    appendMedia(body, "idBackDocument", input.idBackDocument);
+  }
+  const response = await fetchWithTimeout(
+    `${getBackendBaseUrl()}/api/identity/document/precheck`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "X-VolunServe-Document-Precheck-Consent": "true",
+      },
+      body,
+    },
+    70000,
+  );
+  const data = await readResponseBody(response);
+  if (!response.ok) {
+    throw new Error(getResponseMessage(data,
+      "Document screening is unavailable. No face-verification attempt was used."));
+  }
+  const screening = parseDocumentScreening(data?.documentScreening);
+  const outcome = data?.outcome === "pass" && screening?.status === "text_consistent_unverified"
+    && screening?.detectedIdType === input.idType
+    ? "pass"
+    : data?.outcome === "review" ? "review" : "retry";
+  return {
+    outcome,
+    detectedIdType: screening?.detectedIdType || null,
+    documentScreening: screening,
+    message: getResponseMessage(data, "Retake the scanned government ID."),
+  };
+}
+
 export type SubmitIdentityVerificationInput = {
   idType: IdentityDocumentType;
   idDocument: CapturedIdentityMedia;
+  idBackDocument?: CapturedIdentityMedia | null;
   selfie: CapturedIdentityMedia;
 };
 
 const FALLBACK_BACKEND_URL = "https://volunserve.onrender.com";
 
 function getBackendBaseUrl() {
-  // The Resident app must always call the main VolunServe backend.
-  // The separate AI service is private and is reached only server-to-server.
-  let value =
-    process.env.EXPO_PUBLIC_IDENTITY_VERIFICATION_API_URL?.trim() ||
-    FALLBACK_BACKEND_URL;
+  // The separate Python AI service is private; clients use the Node backend.
+  // A staging build must NEVER silently send ID or selfie images to production.
+  const staging = process.env.EXPO_PUBLIC_VOLUNSERVE_ENV === "staging";
+  const configured = process.env.EXPO_PUBLIC_IDENTITY_VERIFICATION_API_URL?.trim();
+  if (staging && !configured) {
+    throw new Error("Staging identity backend URL is required before verification.");
+  }
+  let value = configured || FALLBACK_BACKEND_URL;
 
   value = value.replace(/\/+$/, "");
 
@@ -107,10 +222,50 @@ function getBackendBaseUrl() {
     value = value.slice(0, -statusSuffix.length);
   }
 
+  if (staging) {
+    let parsed: URL;
+    try {
+      parsed = new URL(value);
+    } catch {
+      throw new Error("Staging identity backend URL is invalid.");
+    }
+    // Only the audited staging Node gateway may receive private ID/selfie
+    // uploads. The reserved .invalid host is for compile-only CI exports.
+    // Do not allow arbitrary HTTPS destinations or direct Python AI services.
+    const allowedOrigins = [
+      "https://volunserve-backend-staging.onrender.com",
+      "https://identity-bundle-smoke.invalid",
+    ];
+    if (
+      !allowedOrigins.includes(parsed.origin.toLowerCase()) ||
+      parsed.pathname !== "/" ||
+      parsed.search !== "" ||
+      parsed.hash !== "" ||
+      parsed.username !== "" ||
+      parsed.password !== ""
+    ) {
+      throw new Error(
+        "Staging verification cannot use the production identity endpoint or an unauthorized URL. Use the approved staging Node backend.",
+      );
+    }
+  }
+
   return value;
 }
 
 async function getAuthenticatedUser() {
+  // Fail closed: the staging UI must not silently read production Firebase
+  // accounts or forward production-issued Firebase tokens to a test backend.
+  // A dedicated staging Firebase project must be explicitly configured first.
+  if (
+    process.env.EXPO_PUBLIC_VOLUNSERVE_ENV === "staging" &&
+    auth.app.options.projectId === "volunserve-3aa5b"
+  ) {
+    throw new Error(
+      "Staging identity verification is blocked: this build is connected to production Firebase. Configure an isolated staging Firebase project before testing.",
+    );
+  }
+
   const user = auth.currentUser;
 
   if (!user) {
@@ -301,6 +456,15 @@ export const submitIdentityVerification = async (
     "Government ID image",
   );
 
+  if (input.idType !== "passport") {
+    validateMedia(
+      input.idBackDocument || undefined,
+      "Government ID back image",
+    );
+  } else if (input.idBackDocument) {
+    validateMedia(input.idBackDocument, "Passport supplementary image");
+  }
+
   validateMedia(
     input.selfie,
     "Live selfie",
@@ -321,6 +485,14 @@ export const submitIdentityVerification = async (
     "idDocument",
     input.idDocument,
   );
+
+  if (input.idBackDocument) {
+    appendMedia(
+      formData,
+      "idBackDocument",
+      input.idBackDocument,
+    );
+  }
 
   appendMedia(
     formData,
