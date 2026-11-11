@@ -79,6 +79,60 @@ class GovernmentIdScreeningTests(unittest.TestCase):
         self.assertFalse(result["authenticityVerified"])
         self.assertTrue(result["manualReviewRequired"])
 
+    def test_reversed_philid_front_and_back_are_not_accepted(self):
+        result = assess_document_sides(
+            "national_id",
+            "BLOOD TYPE O MARITAL STATUS SINGLE PLACE OF BIRTH CITY",
+            "PHILIPPINE IDENTIFICATION CARD SURNAME SAMPLE GIVEN NAMES TEST",
+        )
+        self.assertEqual(result["status"], "mismatch")
+        self.assertIn("document_front_back_swapped", result["warningCodes"])
+        self.assertTrue(result["manualReviewRequired"])
+        self.assertFalse(result["authenticityVerified"])
+
+    def test_double_front_scan_cannot_pass_as_front_and_back(self):
+        text = "PHILIPPINE IDENTIFICATION CARD SURNAME SAMPLE GIVEN NAMES TEST"
+        result = assess_document_sides("national_id", text, text)
+        self.assertEqual(result["status"], "inconclusive")
+        self.assertIn("document_back_looks_like_front", result["warningCodes"])
+
+    def test_document_with_back_only_clues_in_front_fails_closed(self):
+        result = assess_document_sides(
+            "national_id",
+            "BLOOD TYPE O MARITAL STATUS SINGLE",
+            "UNREADABLE",
+        )
+        self.assertEqual(result["status"], "inconclusive")
+        self.assertIn("document_front_side_conflict", result["warningCodes"])
+
+    def test_front_header_only_on_back_remains_inconclusive_not_accepted(self):
+        result = assess_document_sides(
+            "drivers_license",
+            "WEAK AND UNREADABLE FRONT",
+            "LAND TRANSPORTATION OFFICE DRIVER S LICENSE",
+        )
+        self.assertEqual(result["status"], "inconclusive")
+        self.assertIn("document_back_looks_like_front", result["warningCodes"])
+
+    def test_school_id_on_swapped_pair_remains_unsupported(self):
+        result = assess_document_sides(
+            "national_id",
+            "SCHOOL ID BLOOD TYPE O MARITAL STATUS SINGLE",
+            "PHILIPPINE IDENTIFICATION CARD",
+        )
+        self.assertEqual(result["status"], "unsupported")
+        self.assertIn("school_id_not_supported", result["warningCodes"])
+
+    def test_valid_philid_front_and_back_labels_remain_unverified_not_swapped(self):
+        result = assess_document_sides(
+            "national_id",
+            "PHILIPPINE IDENTIFICATION CARD SURNAME SAMPLE",
+            "BLOOD TYPE O MARITAL STATUS SINGLE DATE OF ISSUE",
+        )
+        self.assertEqual(result["status"], "text_consistent_unverified")
+        self.assertNotIn("document_front_back_swapped", result["warningCodes"])
+        self.assertFalse(result["authenticityVerified"])
+
     def test_wrong_type_back_flags_mismatch(self):
         result = assess_document_sides(
             "national_id",
