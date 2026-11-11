@@ -58,3 +58,11 @@ test("randomized camera-movement prompt is not accepted as verified liveness",()
  assert.match(helper,/manualReviewRequired: true/);
  assert.doesNotMatch(screen,/setIdentityVerified\(true\)/);
 });
+
+test("staging identity rejects production Firebase user tokens before contacting backend",()=>{
+ assert.match(helper,/EXPO_PUBLIC_VOLUNSERVE_ENV === "staging"/);
+ assert.match(helper,/auth\.app\.options\.projectId === "volunserve-3aa5b"/);
+ assert.match(helper,/Staging identity verification is blocked/);
+ assert.match(helper,/async function getAuthenticatedUser\(\)/);
+ assert.match(helper,/Staging verification cannot use the production identity endpoint/);
+});
