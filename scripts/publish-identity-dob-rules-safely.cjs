@@ -23,15 +23,9 @@ const presentField="          'age',\n          'dateOfBirth',\n          'email
 const originalField="          'age',\n          'email',\n          'phoneNumber',";
 const addedGuard=`          'createdAt'
         ])
-        // New signup only; legacy profiles may lack exact birth date.
-        // Standard resident profile updates cannot edit this field.
-        && (
-          !('dateOfBirth' in request.resource.data)
-          || (
-            request.resource.data.dateOfBirth is string
-            && request.resource.data.dateOfBirth.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
-          )
-        )
+        // Missing DOB on legacy entry paths defaults to a valid placeholder.
+        // Present DOB must follow the canonical calendar-date format.
+        && request.resource.data.get('dateOfBirth', '2000-01-01').matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
         && request.resource.data.role == 'resident'`;
 const originalGuard="          'createdAt'\n        ])\n        && request.resource.data.role == 'resident'";
 assert.equal(source.split(presentField).length,2,"DOB field must appear exactly once.");
