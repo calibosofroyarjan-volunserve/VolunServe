@@ -31,7 +31,11 @@ test("only the five approved government types have issuer methods",()=>{
   for(const kind of allowed)assert(availableMethods(kind).length>0);
   for(const unknown of ["","school_id","employee_id","other_government_id","SCHOOL_ID",undefined]){
     assert.deepEqual(availableMethods(unknown),[]);
-    assert.equal(documentEligibleForAdminReview(screening(unknown)),false);
+    // Passing undefined into a parameter with a default supplies passport,
+    // so explicitly remove the type for this missing-evidence test.
+    const doc=screening(unknown);
+    if(unknown === undefined){doc.declaredIdType=undefined;doc.detectedIdType=undefined;}
+    assert.equal(documentEligibleForAdminReview(doc),false);
   }
 });
 test("National ID requires independent PSA check; others must not use it",()=>{
@@ -95,6 +99,6 @@ test("missing, unsupported or manipulated evidence never authorizes verify",()=>
     screening("passport",{status:"unsupported"}),
     screening("passport",{detectedIdType:"umid"}),
     screening("passport",{warningCodes:undefined})]){
-    assert.equal(canVerify({...valid,review:pending(doc)}),false);
+    assert.equal(canVerify({...valid,review:{...pending(),documentScreening:doc}}),false);
   }
 });
