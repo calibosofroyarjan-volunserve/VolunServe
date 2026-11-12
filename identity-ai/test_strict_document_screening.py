@@ -99,13 +99,14 @@ class GovernmentIdScreeningTests(unittest.TestCase):
         result = assess_profile_name("Jo", "Li", "PHILIPPINE IDENTIFICATION CARD")
         self.assertEqual(result["profileNameCheck"], "not_checked")
 
-    def test_matching_front_back_remains_unverified(self):
+    def test_generic_national_id_back_words_need_review_not_positive_screening(self):
         result = assess_document_sides(
             "national_id",
             "PHILIPPINE IDENTIFICATION CARD GIVEN NAMES",
             "REPUBLIKA NG PILIPINAS PSN QR CODE",
         )
-        self.assertEqual(result["status"], "text_consistent_unverified")
+        self.assertEqual(result["status"], "inconclusive")
+        self.assertIn("document_back_evidence_inconclusive", result["warningCodes"])
         self.assertTrue(result["backSideProvided"])
         self.assertTrue(result["backSideScreened"])
         self.assertFalse(result["authenticityVerified"])
