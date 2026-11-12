@@ -33,6 +33,7 @@ COPY . .
 # The classifier cannot mark someone live, verified, or authenticated.
 ENV VOLUNSERVE_PASSIVE_PAD_SHADOW=1
 RUN python download_passive_pad_model.py && \
-    python -c "from passive_pad_shadow import readiness; status = readiness(); assert status['modelLoaded'] and not status['independentPadValidated'], status; print('PASS experimental PAD shadow model load; NOT certified liveness')"
+    python download_yunet_model.py && \
+    python -c "from passive_pad_shadow import readiness; status = readiness(); assert status['modelLoaded'] and status['faceDetectorShadow']['modelLoaded'] and not status['independentPadValidated'], status; print('PASS pinned MiniFASNet and YuNet shadow models loaded; neither proves liveness')"
 
 CMD ["sh", "-c", "uvicorn main:app --host 0.0.0.0 --port ${PORT:-10000}"]
