@@ -21,6 +21,7 @@ export type DocumentScreening = {
   livenessVerified: false;
   manualReviewRequired: true;
   imageQualityStatus?: "low" | "adequate" | "unknown";
+  backImageQualityStatus?: "low" | "adequate" | "unknown" | "not_checked" | "not_required";
   backSideProvided?: boolean;
   backSideScreened?: boolean;
   profileNameCompared?: boolean;
@@ -48,6 +49,19 @@ export function documentScreeningLabel(value?: DocumentScreening | null): string
        value.passportMrzCheck === "multiple_candidates" ||
        value.passportMrzBirthDateCheck === "possible_conflict")) {
     return "REVIEW: Passport machine-readable text has an unresolved checksum or profile birth-date conflict. Retake the passport bio page or request independent Admin review. This is not proof of fraud.";
+  }
+  if (value?.warningCodes?.includes("low_document_back_image_quality")) {
+    return "RETAKE: The reverse side of your ID is too blurry. Capture the actual back again in good lighting. The front scan alone is not enough.";
+  }
+  if (value?.warningCodes?.includes("document_back_image_quality_unavailable")) {
+    return "REVIEW: The reverse-side photo quality could not be checked. Retake the ID back; no automatic identity approval.";
+  }
+  if (value?.warningCodes?.includes("document_back_evidence_inconclusive") ||
+      value?.warningCodes?.includes("document_back_layout_inconclusive")) {
+    return "REVIEW: The reverse-side OCR text does not reliably confirm an ID back. Please rescan the actual reverse side or request Admin review.";
+  }
+  if (value?.warningCodes?.includes("document_image_quality_unavailable")) {
+    return "RETAKE: Front ID image quality could not be checked. No ID recognition or identity approval was granted.";
   }
   if (value?.warningCodes?.includes("document_front_back_swapped")) {
     return "RETAKE: Your ID front and back appear reversed. Put the portrait/front face in Scan ID front and the reverse in Scan ID back.";
@@ -91,6 +105,10 @@ function parseDocumentScreening(value: unknown): DocumentScreening | undefined {
     manualReviewRequired: true,
     imageQualityStatus: raw.imageQualityStatus === "low" || raw.imageQualityStatus === "adequate"
       ? raw.imageQualityStatus : "unknown",
+    backImageQualityStatus: [
+      "low", "adequate", "unknown", "not_checked", "not_required",
+    ].includes(String(raw.backImageQualityStatus)) ?
+      raw.backImageQualityStatus as DocumentScreening["backImageQualityStatus"] : "unknown",
     backSideProvided: raw.backSideProvided === true,
     backSideScreened: raw.backSideScreened === true,
     profileNameCompared: raw.profileNameCompared === true,
