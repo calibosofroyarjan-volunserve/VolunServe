@@ -165,5 +165,60 @@ class SyntheticDocumentImagePipelineTests(unittest.TestCase):
         self.assertFalse(blurry_national_id_claim_needs_review("national_id", result))
 
 
+class SyntheticSelfieReuseRouteTests(unittest.TestCase):
+    """Exercise the real FastAPI handler without contacting external services."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.front, _ = synthetic_photo(NATIONAL_SAMPLE)
+        cls.back, _ = synthetic_photo(BACK_SIDE_SAMPLE)
+
+    def _assert_duplicate_rejected(self, id_type, front, back, selfie):
+        import asyncio
+        import os
+        from unittest.mock import patch
+        from fastapi import HTTPException
+        from starlette.datastructures import Headers, UploadFile
+        from main import verify_identity
+
+        def upload(payload):
+            return UploadFile(
+                file=BytesIO(payload), filename="fabricated-test.png",
+                headers=Headers({"content-type": "image/png"}),
+            )
+
+        data = {"idType": id_type, "idDocument": upload(front),
+                "selfie": upload(selfie)}
+        if back is not None:
+            data["idBackDocument"] = upload(back)
+
+        class FakeRequest:
+            headers = {"content-type": "multipart/form-data; boundary=synthetic"}
+
+            async def form(self):
+                return data
+
+        with patch.dict(os.environ, {"IDENTITY_AI_INTERNAL_KEY": "synthetic-local-test-key"}):
+            with self.assertRaises(HTTPException) as raised:
+                asyncio.run(verify_identity(
+                    FakeRequest(),
+                    x_volunserve_user_id="synthetic-test-uid",
+                    x_volunserve_internal_key="synthetic-local-test-key",
+                ))
+        self.assertEqual(raised.exception.status_code, 400)
+        self.assertIn("different images", raised.exception.detail)
+        self.assertTrue(all(item.closed for item in data.values()
+                            if isinstance(item, UploadFile)))
+
+    def test_government_id_front_cannot_be_reused_as_selfie(self):
+        self._assert_duplicate_rejected("national_id", self.front, self.back, self.front)
+
+    def test_government_id_back_cannot_be_reused_as_selfie(self):
+        self._assert_duplicate_rejected("national_id", self.front, self.back, self.back)
+
+    def test_passport_bio_page_cannot_be_reused_as_selfie(self):
+        self._assert_duplicate_rejected("passport", self.front, None, self.front)
+
+
 if __name__ == "__main__":
     unittest.main()
