@@ -92,6 +92,56 @@ For manually captured photos **outside Git**, use these alternate output folders
 
 Official model downloads need internet access; actual test media processing happens locally. Model hashes, licenses and source attribution are documented in THIRD_PARTY_MODELS.md. No third-party promotional logo is required on VolunServe user screens; preserve legal attribution.
 
+## Investigating a genuine face labeled as an attack
+
+A consented LIVE camera sample was labeled `model_prefers_attack_unvalidated`
+in exploratory testing. This is a **potential false rejection**, not evidence
+of a real spoof. The 2.7x context failure was already fixed by increasing
+camera distance, and the next issue is the model classification itself.
+
+Source review (2026-11-13):
+- Official MiniVisionAI `src/generate_patches.py` scales face bounding-box
+  **width and height independently** before 80x80 resizing. Earlier VolunServe
+  implementation used a SQUARE ROI based on the longer dimension. This QA
+  branch corrects the ROI shape, while retaining fail-closed rejection when
+  the 2.7x context would extend outside the frame.
+- The original `src/anti_spoof_predict.py` applies only ToTensor (BGR image
+  values divided by 255) and then softmax; our input follows that order,
+  without RGB channel swapping.
+- The original MiniVisionAI `test.py` treats class **1** as genuine. The
+  third-party ONNX model card claims class **0** is genuine. This conflict
+  is NOT resolved by changing labels on the basis of a single person's test.
+- The original evaluation combines predictions from several anti-spoof
+  models, whereas our experimental ONNX QA currently uses a single MiniFASNet
+  model. Its reliability is therefore not equivalent to the upstream
+  ensemble.
+
+Check the corrected code and repeat **several** consented local LIVE camera
+captures under diffuse/bright lighting. Avoid pointing a bright window
+behind the subject. Use the same method on actual print and screen replay
+presentations. You must not change the confidence threshold, flip labels,
+remove the face-context check, or automatically approve Verified Resident
+to obtain an artificially successful report.
+
+~~~powershell
+git pull --ff-only origin feat/staging-private-face-pad-evaluation-20261113
+py -3.11 identity-ai/capture_private_camera_qa.py --kind live --camera 0
+py -3.11 identity-ai/diagnose_passive_pad_local.py --samples "$env:USERPROFILE\VolunServe-Private-QA\pad"
+py -3.11 identity-ai/evaluate_passive_pad_local.py --samples "$env:USERPROFILE\VolunServe-Private-QA\pad"
+~~~
+
+With the corrected crop, retest output may change, but success is **not
+guaranteed**. If genuine faces are still called attacks across reasonable
+conditions and devices, record this as a model limitation and use an
+independently evaluated PAD system for any future automated identity gate.
+Only aggregate counts should be shared.
+
+Source links:
+- https://github.com/minivision-ai/Silent-Face-Anti-Spoofing/blob/master/src/generate_patches.py
+- https://github.com/minivision-ai/Silent-Face-Anti-Spoofing/blob/master/src/anti_spoof_predict.py
+- https://github.com/minivision-ai/Silent-Face-Anti-Spoofing/blob/master/test.py
+- https://huggingface.co/garciafido/minifasnet-v2-anti-spoofing-onnx
+
 ## When every PAD test is inconclusive
 
 An all-inconclusive result is **not an anti-spoofing success**. The genuine live
