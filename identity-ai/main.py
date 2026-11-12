@@ -15,6 +15,7 @@ from strict_document_screening import (
     add_photo_quality, blurry_national_id_claim_needs_review,
 )
 from profile_consistency import profile_comparison
+from passport_mrz_shadow import assess_passport_mrz
 from passive_pad_shadow import readiness as passive_pad_readiness, assess_frame_shadow
 from sface_shadow import readiness as sface_readiness, assess_pair_shadow as sface_assess_pair_shadow
 import numpy as np
@@ -935,6 +936,32 @@ def screen_government_id(
         result.update(profile_comparison(
             expected_date_of_birth, expected_barangay, ocr_combined
         ))
+        if declared_type == "passport":
+            # ICAO TD3 MRZ checks add a privacy-safe textual consistency clue
+            # from existing Tesseract OCR; valid checksum != genuine passport.
+            mrz = assess_passport_mrz(front_text, expected_date_of_birth)
+            result.update(mrz)
+            if mrz["passportMrzCheck"] in (
+                "checksum_inconsistent_or_ocr_error", "multiple_candidates"
+            ):
+                if result["status"] == "text_consistent_unverified":
+                    result["status"] = "inconclusive"
+                result["warningCodes"] = list(dict.fromkeys(
+                    result.get("warningCodes", []) + ["passport_mrz_review_required"]
+                ))
+            if mrz["passportMrzBirthDateCheck"] == "possible_conflict":
+                result["profileBirthDateCheck"] = "possible_conflict"
+                result["profileBirthDateCompared"] = True
+                result["warningCodes"] = list(dict.fromkeys(
+                    result.get("warningCodes", [])
+                    + ["passport_mrz_profile_birth_date_conflict"]
+                ))
+            elif (mrz["passportMrzBirthDateCheck"] == "possible_match"
+                  and result.get("profileBirthDateCheck") == "inconclusive"):
+                # A valid checksum with matching DOB is only a plausible
+                # OCR clue, never proof of age, holder or issuer authenticity.
+                result["profileBirthDateCheck"] = "possible_match"
+                result["profileBirthDateCompared"] = True
         # Explicitly report missing issuer/PAD checks. Neither OCR, matching
         # demographics nor a client movement challenge proves identity.
         result["issuerAuthenticityStatus"] = "not_verified"
