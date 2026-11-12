@@ -749,6 +749,8 @@ function normalizeIdDocumentScreening(value) {
     "low_document_image_quality",
     "document_back_required",
     "document_duplicate_side_text",
+    "passport_mrz_review_required",
+    "passport_mrz_profile_birth_date_conflict",
   ];
   const declared = String(value?.declaredIdType || "");
   const detected = String(value?.detectedIdType || "");
@@ -778,6 +780,24 @@ function normalizeIdDocumentScreening(value) {
     // Never adopt authenticity/liveness claims forwarded by the image service.
     issuerAuthenticityStatus: "not_verified",
     presentationAttackStatus: "not_validated",
+    // Passport MRZ integrity is only a textual OCR clue. Never forward
+    // the raw MRZ, holder name, passport number, DOB or decoded ID fields.
+    ...(declared === "passport" ? {
+      passportMrzCheck: [
+        "not_detected", "checksum_consistent_unverified",
+        "checksum_inconsistent_or_ocr_error", "multiple_candidates",
+      ].includes(value?.passportMrzCheck)
+        ? value.passportMrzCheck : "not_detected",
+      passportMrzBirthDateCheck: [
+        "not_checked", "inconclusive", "possible_match", "possible_conflict",
+      ].includes(value?.passportMrzBirthDateCheck)
+        ? value.passportMrzBirthDateCheck : "not_checked",
+      passportMrzCheckDigitsConsistent:
+        value?.passportMrzCheck === "checksum_consistent_unverified" &&
+        value?.passportMrzCheckDigitsConsistent === true,
+      passportIssuerAuthenticityVerified: false,
+      passportMrzManualReviewRequired: true,
+    } : {}),
     warningCodes: Array.isArray(value?.warningCodes)
       ? value.warningCodes.filter(code => warnings.includes(code)).slice(0, 4)
       : ["ocr_unavailable"],
@@ -5701,6 +5721,17 @@ app.post(
           if (!selectedIdRecognized(selectedIdCheck)) {
             throw makeHttpError(409, "selected_government_id_not_recognized",
               "ID type, image quality or required front/back evidence is incomplete. Require a new scan.");
+          }
+          // Independent issuer attestation does not override conflicting
+          // birthday evidence or broken passport MRZ checks. Human correction
+          // and a new authorized review are required; never claim fraud.
+          if (selectedIdCheck.profileBirthDateCheck === "possible_conflict" ||
+              selectedIdCheck.passportMrzBirthDateCheck === "possible_conflict" ||
+              ["checksum_inconsistent_or_ocr_error", "multiple_candidates"].includes(
+                selectedIdCheck.passportMrzCheck
+              )) {
+            throw makeHttpError(409, "identity_document_evidence_conflict",
+              "Passport/ID evidence has unresolved inconsistencies. Request corrected evidence and review again; this does not establish fraud.");
           }
           const independentCheck = reviewIssuerEvidence({
             declaredType: selectedIdCheck.declaredIdType,
