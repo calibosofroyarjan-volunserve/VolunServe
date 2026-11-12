@@ -95,6 +95,15 @@ class BackScanQualityTests(unittest.TestCase):
         self.assertEqual(res["issuerAuthenticityStatus"], "not_verified")
         self.assertEqual(res["presentationAttackStatus"], "not_validated")
 
+    def test_blurry_front_must_not_be_reported_as_successful_document_scan(self):
+        res = synthetic_screen(FRONT_TEXTS["national_id"], GOOD_PHILID_BACK,
+                               front_blur=4.0, back_blur=160.0)
+        self.assertEqual(res["status"], "inconclusive")
+        self.assertEqual(res["imageQualityStatus"], "low")
+        self.assertEqual(res["backImageQualityStatus"], "adequate")
+        self.assertIn("low_document_image_quality", res["warningCodes"])
+        self.assertFalse(res["authenticityVerified"])
+
     def test_actual_handler_clear_side_quality_but_no_id_authenticity(self):
         res = synthetic_screen(FRONT_TEXTS["national_id"], GOOD_PHILID_BACK)
         self.assertEqual(res["imageQualityStatus"], "adequate")
