@@ -127,7 +127,22 @@ async function probeIdentityAiReadiness({
             documentOcrReady: health.documentOcrReady === true,
             profileComparisonReady: health.profileComparisonReady === true,
             documentPrecheckReady: health.documentPrecheckReady === true,
-            message: "The AI engine, document screening and private backend authentication are ready. Independent liveness and ID authenticity are not validated.",
+            // Read-only, privacy-safe staging model diagnostics. Never mistake
+            // an ONNX model loading successfully for real-world PAD validation.
+            passivePadShadow: {
+              modelLoaded: health.passivePadShadow?.modelLoaded === true,
+              shadowEnabled: health.passivePadShadow?.shadowEnabled === true,
+              independentPadValidated: false,
+              identityDecisionUse: "none",
+            },
+            faceDetectorShadow: {
+              modelLoaded: health.passivePadShadow?.faceDetectorShadow?.modelLoaded === true,
+              independentPadValidated: false,
+              identityDecisionUse: "none",
+            },
+            mediaSubmissionEnabled: false,
+            biometricAccuracyMeasured: false,
+            message: "The AI engine, document screening and private backend authentication are ready. Pretrained face models are experimental; independent liveness and ID authenticity are not validated.",
           }};
         }
         return notReady(
