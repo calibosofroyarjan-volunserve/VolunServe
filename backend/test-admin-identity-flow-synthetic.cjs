@@ -8,6 +8,7 @@ const fs = require("node:fs");
 const vm = require("node:vm");
 const { selectedIdRecognized } = require("./selectedIdPolicy");
 const { reviewIssuerEvidence } = require("./identityIssuerReviewPolicy");
+const { getProfileRole, isApprovedAccount } = require("./adminAccess");
 
 const source = fs.readFileSync("backend/server.js","utf8");
 const a = source.indexOf("function normalizeIdDocumentScreening(value) {");
@@ -33,9 +34,13 @@ const baseDoc = {
 };
 function trial({doc={},admin=true,auth=true,approved=true,personUid=DEMO_UID,
                 action="verify",attested=true,validMethod=true,
-                currentStatus="pending"}={}) {
+                currentStatus="pending", targetRole="resident",
+                residentAccess=true, targetStatus="approved"}={}) {
   const records=new Map([
-    ["users/"+DEMO_UID,{identityStatus:"pending",identityVerified:false}],
+    ["users/"+DEMO_UID,{
+      role:targetRole,residentAccess,status:targetStatus,
+      identityStatus:"pending",identityVerified:false,
+    }],
     ["identityVerifications/"+DEMO_UID,{
       verificationId:"synthetic_review_001",requiresManualReview:true,
       status:currentStatus,documentScreening:{...baseDoc,...doc},
@@ -83,6 +88,7 @@ function trial({doc={},admin=true,auth=true,approved=true,personUid=DEMO_UID,
     identityAttemptCount:value=>Number.isSafeInteger(value)?Math.min(Math.max(0,value),3):0,
     normalizeIdentityStatus:value=>["basic","pending","verified","failed"].includes(value)?value:"basic",
     normalizeIdDocumentScreening, selectedIdRecognized,reviewIssuerEvidence,
+    getProfileRole,isApprovedAccount,
     makeHttpError:(status,code,message)=>Object.assign(new Error(message),{statusCode:status,code}),
     console:{error:()=>{}},
   };
@@ -134,6 +140,36 @@ test("Admin cannot review own identity",async()=>{
  const r=await trial({personUid:ADMIN_UID});
  assert.equal(r.response.statusCode,403);
  assert.equal(r.writes.length,0);
+});
+test("staff, Admin, Super Admin and applicant accounts cannot be targets of Resident decisions",async()=>{
+ for(const role of ["admin","superadmin","lgu_personnel","applicant","guest",""]){
+   for(const action of ["verify","require_retry"]){
+     const r=await trial({targetRole:role,action});
+     assert.equal(r.response.statusCode,403,role+" "+action);
+     assert.equal(r.response.body.error,"identity_review_target_not_eligible");
+     assert.equal(r.writes.length,0);
+   }
+ }
+});
+test("a role claim in requested/active mode cannot replace a real Resident profile",async()=>{
+ const r=await trial({targetRole:"admin"});
+ assert.equal(r.response.statusCode,403);
+ assert.equal(r.writes.length,0);
+});
+test("inactive or nonresident-access accounts cannot be verified or retried",async()=>{
+ for(const args of [{targetStatus:"suspended"},{targetStatus:"pending"},
+                    {targetStatus:"rejected"},{residentAccess:false}]){
+   for(const action of ["verify","require_retry"]){
+     const r=await trial({...args,action});
+     assert.equal(r.response.statusCode,403,JSON.stringify({...args,action}));
+     assert.equal(r.writes.length,0);
+   }
+ }
+});
+test("approved Volunteer with residentAccess remains eligible for human identity review",async()=>{
+ const r=await trial({targetRole:"volunteer"});
+ assert.equal(r.response.statusCode,200);
+ assert.equal(r.response.body.identityVerified,true);
 });
 test("MRZ contradiction blocks the actual transaction before writes",async()=>{
  for(const doc of [
