@@ -72,11 +72,15 @@ function classifyIdentityReviewTrack({screening, decision, idImageQualityScore} 
 
 function enforceSelectedIdDecision(rawDecision, screening, livenessImplemented) {
   if (rawDecision === "manual_review" && blurryNationalIdNeedsReview(screening)) return "manual_review";
+  // A DOB OCR conflict (including passport MRZ DOB) is NOT evidence of fraud.
+  // Preserve pending manual review, but never treat the ID as recognized
+  // for Admin approval before the discrepancy is independently resolved.
+  if ((screening?.profileBirthDateCheck === "possible_conflict" ||
+       screening?.passportMrzBirthDateCheck === "possible_conflict") &&
+      (rawDecision === "manual_review" || rawDecision === "verified")) {
+    return "manual_review";
+  }
   if (!selectedIdRecognized(screening)) return "failed";
-  // A DOB conflict is an OCR clue, not fraud. Do not grant verification;
-  // route to independent Admin correction/identity review.
-  if (screening.profileBirthDateCheck === "possible_conflict" &&
-      rawDecision === "verified") return "manual_review";
   // Until a separate, authorized issuer check AND independently validated
   // presentation attack detection exist, NO AI result can auto-verify.
   // Ignore AI "authenticityVerified" or "livenessImplemented" claims alone.
