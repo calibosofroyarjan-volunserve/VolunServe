@@ -29,3 +29,4 @@ test("no unconditional automatic verified-resident grant from OCR",()=>{
 
 // Include the final integration hardening contract in the existing protected CI.
 require("./test-identity-final-admin-only");
+require("./test-identity-three-attempt-review");
