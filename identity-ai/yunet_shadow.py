@@ -60,6 +60,40 @@ def readiness():
     }
 
 
+
+def single_face_box(image):
+    """Private, validated (x,y,w,h) for PAD face cropping; NEVER a liveness result.
+
+    Returns None if the YuNet model is unavailable, image is invalid, or there
+    is zero/more than one face. Bounding coordinates stay inside this process;
+    no face image, embedding or coordinates are returned by the public API.
+    """
+    detector = _load_detector()
+    if detector is None:
+        return None
+    if not isinstance(image, np.ndarray) or image.ndim != 3 or image.shape[2] != 3:
+        return None
+    height, width = image.shape[:2]
+    if not 120 <= height <= 3000 or not 120 <= width <= 3000:
+        return None
+    try:
+        with _LOCK:
+            detector.setInputSize((width, height))
+            _ok, faces = detector.detect(image)
+        if faces is None or len(faces) != 1:
+            return None
+        values = np.asarray(faces[0], dtype=np.float64).reshape(-1)
+        if values.size < 4 or not np.isfinite(values[:4]).all():
+            return None
+        x, y, box_width, box_height = (float(v) for v in values[:4])
+        if box_width < 40 or box_height < 40 or x < 0 or y < 0 or \
+                x + box_width > width or y + box_height > height:
+            return None
+        return tuple(int(round(v)) for v in (x, y, box_width, box_height))
+    except (cv2.error, ValueError, TypeError, OverflowError):
+        return None
+
+
 def inspect_frame(image):
     """Return coarse QA-only face count categories, never coordinates or images."""
     detector = _load_detector()

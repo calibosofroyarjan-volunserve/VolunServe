@@ -33,6 +33,34 @@ class YuNetShadowTests(unittest.TestCase):
             with patch.object(yunet, "_load_detector", return_value=FakeDetector(faces)):
                 self.assertEqual(yunet.inspect_frame(self.frame), expected)
 
+    def test_single_face_coordinates_can_feed_pad_only_when_valid(self):
+        fake = FakeDetector(np.array([[165, 150, 70, 80] + [0] * 11],
+                                     dtype=np.float32))
+        with patch.object(yunet, "_load_detector", return_value=fake):
+            self.assertEqual(yunet.single_face_box(self.frame), (165, 150, 70, 80))
+        self.assertEqual(fake.input_size, (480, 360))
+
+    def test_single_face_box_rejects_ambiguous_invalid_and_out_of_frame(self):
+        candidates = [
+            None,
+            np.zeros((0, 15), dtype=np.float32),
+            np.zeros((2, 15), dtype=np.float32),
+            np.array([[0, 0, 0, 70] + [0] * 11], dtype=np.float32),
+            np.array([[-1, 40, 70, 70] + [0] * 11], dtype=np.float32),
+            np.array([[420, 90, 90, 80] + [0] * 11], dtype=np.float32),
+            np.array([[10, 10, float("nan"), 70] + [0] * 11], dtype=np.float32),
+            np.array([[80, 80, 5, 70] + [0] * 11], dtype=np.float32),
+        ]
+        for faces in candidates:
+            fake = FakeDetector(faces)
+            with patch.object(yunet, "_load_detector", return_value=fake):
+                self.assertIsNone(yunet.single_face_box(self.frame))
+        with patch.object(yunet, "_load_detector", return_value=None):
+            self.assertIsNone(yunet.single_face_box(self.frame))
+        with patch.object(yunet, "_load_detector", return_value=FakeDetector()):
+            self.assertIsNone(yunet.single_face_box(np.zeros((1, 1, 3), dtype=np.uint8)))
+
+
     def test_bad_image_and_missing_model_fail_closed(self):
         with patch.object(yunet, "_load_detector", return_value=None):
             self.assertEqual(yunet.inspect_frame(self.frame), "unavailable")

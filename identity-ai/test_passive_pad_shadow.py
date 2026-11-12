@@ -20,17 +20,6 @@ class FakeNet:
         return np.array([self.values], dtype=np.float32)
 
 
-class FakeCascade:
-    def __init__(self, faces):
-        self.faces = faces
-
-    def empty(self):
-        return False
-
-    def detectMultiScale(self, *_args, **_kwargs):
-        return np.asarray(self.faces, dtype=np.int32).reshape((-1, 4))
-
-
 class PassivePadShadowTests(unittest.TestCase):
     def setUp(self):
         self.env = patch.dict(os.environ, {"VOLUNSERVE_PASSIVE_PAD_SHADOW": "1"})
@@ -46,7 +35,8 @@ class PassivePadShadowTests(unittest.TestCase):
 
     def evaluate(self, faces, logits):
         self.net.values = logits
-        with patch.object(cv2, "CascadeClassifier", return_value=FakeCascade(faces)):
+        box = faces[0] if len(faces) == 1 else None
+        with patch.object(pad, "single_face_box", return_value=box):
             return pad.assess_frame_shadow(self.image)
 
     def test_live_like_output_is_not_identity_approval(self):
@@ -77,6 +67,15 @@ class PassivePadShadowTests(unittest.TestCase):
         for faces in ([], [(70, 70, 50, 50), (180, 180, 55, 55)],
                       [(0, 0, 70, 70)]):
             self.assertEqual(self.evaluate(faces, [0, 6, 0])["status"], "inconclusive")
+
+    def test_yunet_boundary_is_required_for_any_shadow_inference(self):
+        with patch.object(pad, "single_face_box", return_value=None):
+            result = pad.assess_frame_shadow(self.image)
+        self.assertEqual(result["status"], "inconclusive")
+        self.assertFalse(result["independentPadValidated"])
+        self.assertIsNone(self.net.last_input,
+                          "No frame must reach the classifier when YuNet fails")
+
 
     def test_no_model_returns_unavailable_without_crashing(self):
         self.model.stop()
