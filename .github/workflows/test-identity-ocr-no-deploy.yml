@@ -10,6 +10,10 @@ on:
       - "identity-ai/test_profile_consistency.py"
       - "identity-ai/main.py"
       - "identity-ai/test_ai_route_contract.py"
+      - "identity-ai/test_staging_health_contract.py"
+      - "backend/identityAiReadiness.js"
+      - "backend/test-identityAiReadiness.js"
+      - "backend/test-identity-staging-admin-only.js"
       - "backend/server.js"
       - "backend/firebaseAdmin.js"
       - "backend/stagingFirebaseIsolation.js"
@@ -59,6 +63,8 @@ jobs:
         env:
           PYTHONPATH: identity-ai
         run: python -m unittest discover -s identity-ai -p 'test_ai_route_contract.py' -v
+      - name: Validate actual AI OCR/profile readiness health contract (synthetic only)
+        run: python -m unittest discover -s identity-ai -p 'test_staging_health_contract.py' -v
       - name: Validate protected Python AI API syntax
         run: python -m py_compile identity-ai/main.py identity-ai/strict_document_screening.py identity-ai/profile_consistency.py
       - name: Validate Node identity gateway syntax and selected ID policy
@@ -72,6 +78,8 @@ jobs:
           node --test backend/test-firestore-dob-rules.js
           node --test backend/test-identityIssuerReviewPolicy.js
           node --test backend/test-stagingFirebaseIsolation.js
+          node --test backend/test-identityAiReadiness.js
+          node --test backend/test-identity-staging-admin-only.js
       - name: Install frontend dependency lockfile (no lifecycle scripts)
         run: npm ci --ignore-scripts --no-audit --no-fund
       - name: Typecheck frontend identity UI and API client

@@ -58,11 +58,15 @@ function identityAttemptCount(value) {
 }
 
 function identityAttemptOutcome(decision, attempts) {
+  // The AI may score or recommend review, never grant Verified Resident.
+  // Only the authorized Admin decision route may mark a user verified.
   const requiresManualReview = decision === "manual_review" ||
+    decision === "verified" ||
     (decision === "failed" && attempts >= MAX_IDENTITY_AI_ATTEMPTS);
-  const status = decision === "verified" ? "verified" :
-    requiresManualReview ? "pending" : "failed";
-  return { status, requiresManualReview };
+  return {
+    status: requiresManualReview ? "pending" : "failed",
+    requiresManualReview,
+  };
 }
 const ASSISTANCE_EVIDENCE_UPLOAD_LIMIT = "10mb";
 const ASSISTANCE_EVIDENCE_MAX_BYTES =
@@ -5273,7 +5277,7 @@ app.post(
         const resultMessage = result.requiresManualReview && decision === "failed"
           ? "Three identity verification attempts were unsuccessful. Your case has been referred for Admin review."
           : cleanText(aiResult?.message || (
-            decision === "verified" ? "Identity verification completed successfully." :
+            decision === "verified" ? "The AI comparison is complete. Your application is pending independent Admin review." :
             decision === "failed" ? "Identity verification attempt failed. Please retry with clear, valid images." :
             "The submission requires LGU/Admin manual review."
           ), 500);
@@ -5332,32 +5336,19 @@ app.post(
           },
         );
 
-        if (decision === "verified") {
-          transaction.set(userRef, {
-            identityStatus: "verified",
-            identityVerified: true,
-            identityVerificationProvider: FieldValue.delete(),
-            identityVerificationSessionId: FieldValue.delete(),
-            identityVerificationMethod: "volunserve_ai",
-            identityVerificationStartedAt: FieldValue.serverTimestamp(),
-            identityVerifiedAt: FieldValue.serverTimestamp(),
-            identityVerifiedBy: "volunserve_ai",
-            identityFailureReason: FieldValue.delete(),
-            updatedAt: FieldValue.serverTimestamp(),
-          }, { merge: true });
-        } else {
-          transaction.set(userRef, {
-            identityStatus: result.status,
-            identityVerified: false,
-            identityVerificationProvider: FieldValue.delete(),
-            identityVerificationSessionId: FieldValue.delete(),
-            identityVerificationMethod: "volunserve_ai",
-            identityVerificationStartedAt: FieldValue.serverTimestamp(),
-            identityFailureReason: decision === "failed" && !result.requiresManualReview
-              ? resultMessage : FieldValue.delete(),
-            updatedAt: FieldValue.serverTimestamp(),
-          }, { merge: true });
-        }
+        // AI decisions are provisional even if a provider erroneously returns
+        // "verified". A separate authorized Admin action is mandatory.
+        transaction.set(userRef, {
+          identityStatus: result.status,
+          identityVerified: false,
+          identityVerificationProvider: FieldValue.delete(),
+          identityVerificationSessionId: FieldValue.delete(),
+          identityVerificationMethod: "volunserve_ai",
+          identityVerificationStartedAt: FieldValue.serverTimestamp(),
+          identityFailureReason: decision === "failed" && !result.requiresManualReview
+            ? resultMessage : FieldValue.delete(),
+          updatedAt: FieldValue.serverTimestamp(),
+        }, { merge: true });
         return {
           ok: true, status: result.status, verificationId, decision,
           matchScore, livenessScore, documentScreening, message: resultMessage,

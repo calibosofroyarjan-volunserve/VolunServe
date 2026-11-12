@@ -3,7 +3,7 @@ const assert = require("node:assert/strict");
 const {test} = require("node:test");
 const {probeIdentityAiReadiness} = require("./identityAiReadiness");
 const endpoint = "https://volunserve-identity-ai.onrender.com/verify";
-const health = {ok: true, verificationEngineReady: true, internalAuthConfigured: true, livenessImplemented: false};
+const health = {ok: true, verificationEngineReady: true, internalAuthConfigured: true, documentOcrReady: true, profileComparisonReady: true, documentPrecheckReady: true, livenessImplemented: false};
 const response = (status, body) => ({status, ok: status >= 200 && status < 300, async json() {return body;}});
 const okHealth = () => response(200, health);
 const okAuth = () => response(200, {authenticated: true});
@@ -16,6 +16,10 @@ test("successful check verifies both readiness and private authentication", asyn
     return url.endsWith("/health") ? okHealth() : okAuth();
   }));
   assert.equal(result.statusCode, 200); assert.equal(result.body.ready, true);
+  assert.equal(result.body.documentOcrReady, true);
+  assert.equal(result.body.profileComparisonReady, true);
+  assert.equal(result.body.documentPrecheckReady, true);
+  assert.equal(result.body.livenessImplemented, false);
   assert.equal(calls.length, 2); assert(calls.every(c => c.method === "GET" && c.body === undefined));
   assert.equal(calls[0].hasSecret, false); assert.equal(calls[1].hasSecret, true);
 });
@@ -76,4 +80,23 @@ test("AI stays unreachable: bounded retries, no fake ready", async () => {
   let n = 0;
   const result = await probeIdentityAiReadiness(options(async () => {n++; throw new Error("offline");}));
   assert.equal(result.body.ready, false); assert.equal(result.body.error, "identity_ai_unreachable"); assert.equal(n, 2);
+});
+
+test("missing OCR, profile comparison or precheck readiness blocks camera submission", async () => {
+  for(const key of ["documentOcrReady","profileComparisonReady","documentPrecheckReady"]){
+    const result = await probeIdentityAiReadiness(options(async url => {
+      return url.endsWith("/health") ? response(200,{...health,[key]:false}) : okAuth();
+    }));
+    assert.equal(result.statusCode,503);
+    assert.equal(result.body.ready,false);
+    assert.equal(result.body.error,"identity_ai_not_ready");
+  }
+});
+
+test("missing readiness flags must not silently enable identity uploads", async () => {
+  const result = await probeIdentityAiReadiness(options(async url =>
+    url.endsWith("/health") ? response(200,{ok:true,verificationEngineReady:true,internalAuthConfigured:true}) : okAuth()
+  ));
+  assert.equal(result.statusCode,503);
+  assert.equal(result.body.ready,false);
 });

@@ -1129,12 +1129,19 @@ def run_face_verification(
     )
 
 
-@app.get(
-    "/health"
-)
+def document_ocr_ready():
+    """Check the installed OCR executable, not just the Python wrapper."""
+    try:
+        pytesseract.get_tesseract_version()
+        return True
+    except Exception:
+        return False
 
 
+@app.get("/health")
 def health():
+    ocr_ready = document_ocr_ready()
+    profile_ready = callable(profile_comparison)
     return {
         "ok": True,
         "service": (
@@ -1147,6 +1154,10 @@ def health():
             get_internal_key()
         ),
         "verificationEngineReady": face_mesh_engine_ready(),
+        "documentOcrReady": ocr_ready,
+        "profileComparisonReady": profile_ready,
+        "documentPrecheckReady": ocr_ready and profile_ready,
+        "idFrontBackScreeningImplemented": True,
         "mediaPipeVersion": str(getattr(mp, "__version__", "unknown")),
         "faceMatchThreshold":
             get_match_threshold(),
