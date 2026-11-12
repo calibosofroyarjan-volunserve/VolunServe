@@ -1,6 +1,7 @@
 "use strict";
 const test = require("node:test");
 const assert = require("node:assert/strict");
+const fs = require("node:fs");
 const {assessFullStagingEnvironment} = require("./stagingFirebaseIsolation");
 
 const good = () => ({
@@ -85,4 +86,16 @@ test("AI target cannot point to production or unknown hosts", () => {
 });
 test("AI internal key cannot be absent", () => {
   assert(failure({...good(), IDENTITY_AI_INTERNAL_KEY: ""}).includes("PRIVATE_AI_KEY_CONFIGURED"));
+});
+
+test("Firebase Admin initialization enforces staging isolation before credentials", () => {
+  const source = fs.readFileSync(require("node:path").join(__dirname, "firebaseAdmin.js"), "utf8");
+  const checkAt = source.indexOf("assessFullStagingEnvironment(process.env)");
+  const appAt = source.indexOf("const existingApps = getApps();");
+  const credentialsAt = source.indexOf("const serviceAccount =\n    getServiceAccount();");
+  assert(checkAt > 0 && appAt > checkAt && credentialsAt > checkAt);
+  assert(source.includes("if (!isolation.safeToUseFullStaging)"));
+  assert(source.includes("STAGING_ISOLATION_BLOCKED"));
+  assert(!source.includes('serviceAccount.project_id !== "volunserve-auth-staging"'));
+  assert(source.includes('existingApps[0].options.projectId !== "volunserve-full-staging"'));
 });
