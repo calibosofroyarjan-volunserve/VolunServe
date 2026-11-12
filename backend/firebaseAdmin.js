@@ -16,6 +16,9 @@ const {
   FieldValue,
 } = require("firebase-admin/firestore");
 
+const {assessFullStagingEnvironment} = require("./stagingFirebaseIsolation");
+
+
 function getServiceAccount() {
   const raw =
     String(
@@ -52,22 +55,31 @@ function getServiceAccount() {
 }
 
 function getFirebaseApp() {
-  const existingApps =
-    getApps();
+  // Validate BEFORE Firebase initialization, and before considering a cached
+  // app. Never read or write Firestore to determine the target project.
+  const isStaging = process.env.VOLUNSERVE_DEPLOYMENT_ENV === "staging" ||
+    process.env.VOLUNSERVE_DEPLOYMENT_ENV === "full-staging" ||
+    process.env.VOLUNSERVE_STAGING_STRICT === "1";
+  if (isStaging) {
+    const isolation = assessFullStagingEnvironment(process.env);
+    if (!isolation.safeToUseFullStaging) {
+      // Errors are intentionally generic: no tokens, service-account JSON,
+      // email addresses or URLs are included in exception messages.
+      throw new Error("STAGING_ISOLATION_BLOCKED: backend must use isolated full-staging Firebase and AI.");
+    }
+    console.log("PASS FULL_STAGING_ISOLATION: staging configuration checked without database access.");
+  }
 
+  const existingApps = getApps();
   if (existingApps.length > 0) {
+    if (isStaging && existingApps[0].options.projectId !== "volunserve-full-staging") {
+      throw new Error("STAGING_ISOLATION_BLOCKED: Firebase app target mismatch.");
+    }
     return existingApps[0];
   }
 
   const serviceAccount =
     getServiceAccount();
-
-  // Staging release guard: refuse any missing or production Firebase
-  // service-account credentials before accepting authenticated requests.
-  if (process.env.VOLUNSERVE_STAGING_STRICT === "1" &&
-      (!serviceAccount || serviceAccount.project_id !== "volunserve-auth-staging")) {
-    throw new Error("Staging Firebase project mismatch: refusing to start backend.");
-  }
 
   if (serviceAccount) {
     return initializeApp({
