@@ -16,7 +16,7 @@ from pathlib import Path
 
 import cv2
 import numpy as np
-from yunet_shadow import readiness as yunet_readiness
+from yunet_shadow import readiness as yunet_readiness, single_face_box
 
 MODEL_PATH = Path(__file__).resolve().parent / "models" / "minifasnet_v2.onnx"
 MODEL_SHA256 = "d7b3cd9ba8a7ceb13baa8c4720902e27ca3112eff52f926c08804af6b6eecc7b"
@@ -81,16 +81,13 @@ def _face_crop(image):
     height, width = image.shape[:2]
     if height < 120 or width < 120 or height > 3000 or width > 3000:
         return None
-    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-    face_detector = cv2.CascadeClassifier(
-        cv2.data.haarcascades + "haarcascade_frontalface_default.xml")
-    if face_detector.empty():
+    # YuNet (hash-pinned in the same Docker image) is the face detector.
+    # Missing / ambiguous / out-of-frame detection fails closed as inconclusive.
+    # Detection is not a PAD/liveness result, and no image is persisted.
+    box = single_face_box(image)
+    if box is None:
         return None
-    faces = face_detector.detectMultiScale(
-        gray, scaleFactor=1.08, minNeighbors=5, minSize=(60, 60))
-    if len(faces) != 1:
-        return None
-    x, y, w, h = map(int, faces[0])
+    x, y, w, h = box
     side = max(w, h) * 2.7
     left = int(round(x + w / 2 - side / 2))
     top = int(round(y + h / 2 - side / 2))
