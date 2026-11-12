@@ -8,6 +8,23 @@ The Render **staging** Python AI Docker build automatically downloads the small 
 
 The original [MinivisionAI classifier](https://github.com/minivision-ai/Silent-Face-Anti-Spoofing/blob/master/test.py) treats **class 1 as real face**, while classes 0 and 2 mean presentation attacks. The third-party ONNX model card describes a conflicting class order; the staging shadow code uses the upstream order and **must still be checked against genuine labeled camera samples**. Never use an uncalibrated model result to grant verified identity.
 
+## November 13, 2026 — source preprocessing audit and open risks
+
+- **Corrected in staging:** The originally deployed VolunServe shadow PAD used `max(face_width, face_height) * 2.7` for both crop dimensions, creating a square ROI unlike upstream MiniVisionAI. The staging code now enlarges **face width and height independently by 2.7×**, before resizing to the model's 80×80 input. In VolunServe, missing/ambiguous/edge-truncated face context still fails closed as `inconclusive`, instead of padding invented pixels. This is intentionally stricter than upstream's coordinate clamp/shift behavior.
+- **Input scale unresolved:** Upstream MiniVisionAI `src/data_io/functional.py` `ToTensor()` uses `torch.from_numpy(...).float()` for NumPy input; its `div(255)` is commented out. The third-party ONNX model card instead prescribes BGR `pixel/255`. Staging preserves the pinned ONNX card format while the exact converter is independently audited; **do not switch input normalization to force a successful test**.
+- **Class mapping unresolved:** Upstream `test.py` treats **class 1** as a genuine image, whereas the converted ONNX model card describes class 0 as genuine. Current VolunServe observations are explicitly `unvalidated`, even if a model logit looks confident. A model output is not proof that the picture came from a live camera.
+- **Observed failure:** The user's consented live-face retest produced `class_2` under both 0–255 and 0–1 pipelines (one example only). This raises a **possible false rejection**, not a validated label or measurement of deployed PAD performance. No multi-condition genuine/print/replay results with adequate face framing are available to establish practical accuracy.
+- **Readiness contract:** `modelLoaded: true` only means the pinned network initializes. `independentPadValidated`, `modelClassMappingValidated`, `modelInputScaleValidated`, and `thresholdCalibrated` remain **false**, with `identityDecisionUse: none`. No staging or production identity claim may turn these into true merely because a test passes.
+- **Actual handler isolation:** The synthetic test `test_pad_shadow_decision_isolation.py` runs the genuine `main.py:run_face_verification` function with mocked, non-biometric inputs and confirms that *all* single-frame PAD outputs, including favorable `model_prefers_live_unvalidated`, still lead to `manual_review`, not automatic verification.
+- **Release gate:** This patch is a **technical consistency + safety fix**, not a certified liveness implementation. Before any real-media upload or production identity gate, evaluate the exact ONNX conversion, representative consenting genuine/attack samples across devices, lighting and camera frames, privacy/retention authorization, and independent PAD evidence. Keep issuer/LGU manual review and account access guards.
+
+Upstream audit references:
+
+- https://github.com/minivision-ai/Silent-Face-Anti-Spoofing/blob/master/src/generate_patches.py
+- https://github.com/minivision-ai/Silent-Face-Anti-Spoofing/blob/master/src/data_io/functional.py
+- https://github.com/minivision-ai/Silent-Face-Anti-Spoofing/blob/master/test.py
+- https://huggingface.co/garciafido/minifasnet-v2-anti-spoofing-onnx
+
 ## Test safely on your own Windows computer
 
 Python **3.11** and a Git checkout containing the latest staging code are needed. A browser alone cannot execute this private local evaluator.
