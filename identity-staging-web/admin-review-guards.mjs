@@ -18,9 +18,12 @@ export const METHOD_LABELS = Object.freeze({
   official_document_check: "Independent official document check",
 });
 export function reviewBucket(review) {
-  if (review?.status === "pending" && review?.requiresManualReview === true) return "pending";
-  if (review?.identityVerified === true || review?.status === "verified" ||
+  // A stale verification row must never re-enable Verify on an already
+  // verified profile. The Node backend enforces the same transactionally.
+  if (review?.identityVerified === true || review?.identityStatus === "verified" ||
+      review?.status === "verified" ||
       review?.manualReviewDecision === "verified") return "verified";
+  if (review?.status === "pending" && review?.requiresManualReview === true) return "pending";
   if (review?.status === "failed" || review?.manualReviewDecision === "retry_required") return "retry_required";
   return "other";
 }
@@ -40,12 +43,13 @@ export function documentEligibleForAdminReview(screening) {
   if (!screening || !IDS.includes(screening.declaredIdType)) return false;
   if (screening.detectedIdType !== screening.declaredIdType ||
       screening.status !== "text_consistent_unverified" ||
-      screening.imageQualityStatus === "low" ||
+      screening.imageQualityStatus !== "adequate" ||
       evidenceConflicts(screening) ||
       !Array.isArray(screening.warningCodes) ||
       screening.warningCodes.length > 0) return false;
   if (screening.declaredIdType !== "passport" &&
-      (screening.backSideProvided !== true || screening.backSideScreened !== true)) return false;
+      (screening.backSideProvided !== true || screening.backSideScreened !== true ||
+       screening.backImageQualityStatus !== "adequate")) return false;
   return true;
 }
 export function canVerify({review, method, attested, notes, busy}={}) {
@@ -66,6 +70,14 @@ export function screeningDescription(screening) {
   if (status === "unsupported") return "Unsupported ID — school, employee and non-listed cards cannot proceed.";
   if (status === "mismatch") return "Selected ID type conflicts with OCR signals.";
   if (evidenceConflicts(screening)) return "Possible OCR, passport MRZ or birthday conflict. Resolve before approval; not proof of fraud.";
+  if (screening.imageQualityStatus !== "adequate") return "Front ID photo quality unconfirmed or blurry. Retake the front; identity cannot be approved.";
+  if (screening.declaredIdType !== "passport" &&
+      screening.backImageQualityStatus !== "adequate") {
+    return "Reverse-side ID photo quality unconfirmed or blurry. Retake the actual back; a readable front alone is not enough.";
+  }
+  if (Array.isArray(screening.warningCodes) && screening.warningCodes.length) {
+    return "Document OCR has unresolved warnings. Retake the affected ID side or request independent Admin review.";
+  }
   if (status === "text_consistent_unverified") {
     return "Selected government ID type appears consistent with OCR. Authenticity, holder identity and liveness remain unverified.";
   }
