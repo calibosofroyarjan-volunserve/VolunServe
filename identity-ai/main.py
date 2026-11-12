@@ -15,6 +15,7 @@ from strict_document_screening import (
     add_photo_quality, blurry_national_id_claim_needs_review,
 )
 from profile_consistency import profile_comparison
+from passive_pad_shadow import readiness as passive_pad_readiness, assess_frame_shadow
 import numpy as np
 from fastapi import FastAPI, Header, HTTPException, Request
 from starlette.datastructures import UploadFile as StarletteUploadFile
@@ -1162,6 +1163,7 @@ def health():
         "faceMatchThreshold":
             get_match_threshold(),
         "livenessImplemented": False,
+        "passivePadShadow": passive_pad_readiness(),
         "idDocumentScreeningImplemented": True,
         "idDocumentAuthenticityVerified": False,
         "time": datetime.now(
@@ -1544,6 +1546,14 @@ async def verify_identity(
                 id_document_bytes=id_document_bytes,
                 selfie_bytes=selfie_bytes,
             )
+            # Experimental shadow model, NOT a verified liveness result.
+            # Does not affect decision, identity verification status, attempts
+            # or admin review. Media uploads remain blocked in the Node gate.
+            if os.getenv("VOLUNSERVE_PASSIVE_PAD_SHADOW", "0") == "1":
+                result["passivePadShadow"] = await asyncio.to_thread(
+                    assess_frame_shadow,
+                    decode_image(selfie_bytes, "Selfie image"),
+                )
     except HTTPException:
         raise
     except Exception:
