@@ -114,7 +114,8 @@ if(!html.includes("const mediaSubmissionEnabled=false;") ||
    !html.includes("if(!authIsolationReady||!auth||!mediaSubmissionEnabled)")) {
   throw Error("No ID/selfie-upload unlock allowed with an untested staging account");
 }
-if (!html.includes("const authIsolationReady=config.projectId==='volunserve-full-staging'") ||
+if (!html.includes("const authIsolationReady=location.hostname==='volunserve-identity-test-staging.onrender.com'") ||
+    !html.includes("&&config.projectId==='volunserve-full-staging'") ||
     !html.includes("const auth=authIsolationReady?getAuth(initializeApp(config)):null")) {
   throw Error("Identity staging lab may be using obsolete Firebase authentication.");
 }
