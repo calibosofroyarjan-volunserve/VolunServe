@@ -54,7 +54,10 @@ class IdentityAiRuntimeSmokeTests(unittest.TestCase):
         # Health must never claim OCR readiness when the binary is absent.
         self.assertEqual(result["documentOcrReady"], shutil.which("tesseract") is not None)
         self.assertTrue(result["profileComparisonReady"])
-        self.assertTrue(result["documentPrecheckReady"])
+        self.assertEqual(
+            result["documentPrecheckReady"],
+            result["documentOcrReady"] and result["profileComparisonReady"],
+        )
         self.assertFalse(result["livenessImplemented"])
         self.assertFalse(result["idDocumentAuthenticityVerified"])
 
