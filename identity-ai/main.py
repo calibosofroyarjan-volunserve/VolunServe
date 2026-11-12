@@ -1129,11 +1129,6 @@ def run_face_verification(
     )
 
 
-@app.get(
-    "/health"
-)
-
-
 def document_ocr_ready():
     """Check the installed OCR executable, not just the Python wrapper."""
     try:
@@ -1143,6 +1138,7 @@ def document_ocr_ready():
         return False
 
 
+@app.get("/health")
 def health():
     ocr_ready = document_ocr_ready()
     profile_ready = callable(profile_comparison)
