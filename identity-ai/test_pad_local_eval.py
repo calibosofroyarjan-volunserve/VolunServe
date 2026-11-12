@@ -93,6 +93,17 @@ class LocalPadEvalTests(unittest.TestCase):
             path.write_bytes(b"not a real image")
             self.assertEqual(e.evaluate_media(path), "inconclusive")
 
+    def test_pad_runner_refuses_missing_attack_class(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            for kind in e.KINDS:
+                (root / kind).mkdir()
+            with patch.object(e.pad, "readiness", return_value={"modelLoaded": True}), \
+                 patch.object(e, "gather", return_value={
+                     "live": ["live"], "print": ["attack"], "replay": []
+                 }):
+                self.assertEqual(e.main(["--samples", str(root)]), 2)
+
     def test_no_biometrics_leak_into_counts(self):
         r = e.summarize_observations({"live": ["live"]})
         from json import dumps
