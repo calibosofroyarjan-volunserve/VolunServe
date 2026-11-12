@@ -35,8 +35,9 @@ for(const required of [
  'id="precheck"', 'id="precheckConsent"', 'id="precheckResult"',
  '/api/identity/document/precheck', 'X-VolunServe-Document-Precheck-Consent',
  'No selfie, biometrics, DOB, user name or profile fields in this request',
- 'documentOcrReady:d.documentOcrReady===true',
- 'profileComparisonReady:d.profileComparisonReady===true',
+ 'import {summarizeAiReadiness} from "./model-readiness.mjs"',
+ 'show(\'diagnostic\',summarizeAiReadiness(d))',
+ 'Model loaded does not mean liveness tested or Verified Resident approved.',
  'birthdayVsSavedProfile:screening.profileBirthDateCheck',
  'barangayVsSavedProfile:screening.profileAddressCheck',
 ]){
@@ -48,6 +49,13 @@ const inlineModule=html.match(/<script type="module">([\s\S]*?)<\/script>/)?.[1]
 if(!inlineModule)throw Error("Missing staging sign-in module");
 const {execFileSync:checkInlineModule}=require("node:child_process");
 checkInlineModule(process.execPath,["--check","--input-type=module"],{input:inlineModule,stdio:["pipe","inherit","inherit"]});
+// Model loading is an operational diagnostic only; do not let it unlock PAD.
+if(!fs.existsSync("identity-staging-web/model-readiness.mjs") ||
+   !fs.existsSync("identity-staging-web/test-model-readiness.mjs")) {
+ throw Error("Missing read-only experimental model readiness QA modules");
+}
+require("node:child_process").execFileSync(process.execPath,
+ ["--test","identity-staging-web/test-model-readiness.mjs"],{stdio:"inherit"});
 const camera=fs.readFileSync("identity-staging-web/camera.js","utf8");
 if(/scanCapture|scanAuto|Capture now/.test(camera))throw Error("Manual shutter must be absent from staging camera");
 for(const key of ["getUserMedia","detectForVideo","capture","showModal","MediaPipe".toLowerCase(),"FaceLandmarker","advanceChallenge","cameraErrorMessage","sourceSelect","assessDocumentFrame","mode===\"selfie\"?9:13"]){
