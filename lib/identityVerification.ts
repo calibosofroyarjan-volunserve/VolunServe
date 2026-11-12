@@ -31,10 +31,24 @@ export type DocumentScreening = {
   profileAddressCheck?: "possible_match" | "inconclusive" | "not_checked";
   issuerAuthenticityStatus?: "not_verified";
   presentationAttackStatus?: "not_validated";
+  // Passport-only ICAO MRZ OCR clues. Checksums do NOT verify issuance.
+  passportMrzCheck?: "not_detected" | "checksum_consistent_unverified" |
+    "checksum_inconsistent_or_ocr_error" | "multiple_candidates";
+  passportMrzBirthDateCheck?: "not_checked" | "inconclusive" |
+    "possible_match" | "possible_conflict";
+  passportMrzCheckDigitsConsistent?: boolean;
+  passportIssuerAuthenticityVerified?: false;
+  passportMrzManualReviewRequired?: true;
   warningCodes: string[];
 };
 
 export function documentScreeningLabel(value?: DocumentScreening | null): string {
+  if (value?.declaredIdType === "passport" &&
+      (value.passportMrzCheck === "checksum_inconsistent_or_ocr_error" ||
+       value.passportMrzCheck === "multiple_candidates" ||
+       value.passportMrzBirthDateCheck === "possible_conflict")) {
+    return "REVIEW: Passport machine-readable text has an unresolved checksum or profile birth-date conflict. Retake the passport bio page or request independent Admin review. This is not proof of fraud.";
+  }
   if (value?.warningCodes?.includes("document_front_back_swapped")) {
     return "RETAKE: Your ID front and back appear reversed. Put the portrait/front face in Scan ID front and the reverse in Scan ID back.";
   }
@@ -91,6 +105,23 @@ function parseDocumentScreening(value: unknown): DocumentScreening | undefined {
       raw.profileAddressCheck === "inconclusive" ? raw.profileAddressCheck : "not_checked",
     issuerAuthenticityStatus: "not_verified",
     presentationAttackStatus: "not_validated",
+    ...(type(raw.declaredIdType) === "passport" ? {
+      passportMrzCheck:
+        raw.passportMrzCheck === "checksum_consistent_unverified" ||
+        raw.passportMrzCheck === "checksum_inconsistent_or_ocr_error" ||
+        raw.passportMrzCheck === "multiple_candidates"
+          ? raw.passportMrzCheck : "not_detected" as const,
+      passportMrzBirthDateCheck:
+        raw.passportMrzBirthDateCheck === "possible_match" ||
+        raw.passportMrzBirthDateCheck === "possible_conflict" ||
+        raw.passportMrzBirthDateCheck === "inconclusive"
+          ? raw.passportMrzBirthDateCheck : "not_checked" as const,
+      passportMrzCheckDigitsConsistent:
+        raw.passportMrzCheck === "checksum_consistent_unverified" &&
+        raw.passportMrzCheckDigitsConsistent === true,
+      passportIssuerAuthenticityVerified: false as const,
+      passportMrzManualReviewRequired: true as const,
+    } : {}),
     warningCodes: Array.isArray(raw.warningCodes)
       ? raw.warningCodes.filter((x): x is string => typeof x === "string").slice(0, 4) : [],
   };
