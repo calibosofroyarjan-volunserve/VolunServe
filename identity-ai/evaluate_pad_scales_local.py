@@ -45,8 +45,10 @@ def interpret_logits(logits):
     confidence = float(probs.max())
     if confidence < pad.SHADOW_THRESHOLD:
         return "inconclusive"
-    return (pad.OBSERVED_LIVE if hasattr(pad, "OBSERVED_LIVE") else "model_prefers_live_unvalidated") \
-        if int(np.argmax(probs)) == 1 else "model_prefers_attack_unvalidated"
+    # Upstream authors' sample inference considers class 1 genuine, but
+    # this index is an UNVALIDATED local model observation, not a PAD result.
+    return ("model_prefers_live_unvalidated" if int(np.argmax(probs)) == 1
+            else "model_prefers_attack_unvalidated")
 
 
 def assess_paired_frame(image, net=None, cropper=None):
@@ -216,8 +218,13 @@ def main(argv=None):
               file=sys.stderr)
         return 2
     os.environ["VOLUNSERVE_PASSIVE_PAD_SHADOW"] = "1"
-    if not pad.readiness().get("modelLoaded"):
+    readiness = pad.readiness()
+    if not readiness.get("modelLoaded"):
         print("Pinned local MiniFASNet model unavailable. Nothing uploaded.", file=sys.stderr)
+        return 2
+    if not readiness.get("faceDetectorShadow", {}).get("modelLoaded"):
+        print("Pinned local YuNet face detector unavailable. Download its pinned model first.",
+              file=sys.stderr)
         return 2
     trials = gather_paired(args.samples)
     if not any(trials.values()):
