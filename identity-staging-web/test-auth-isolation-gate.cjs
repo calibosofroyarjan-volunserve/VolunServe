@@ -9,7 +9,7 @@ assert.ok(match, "Identity web auth module must exist");
 const script = match[1].replace(/^import[^\n]*;\s*$/gm, "");
 
 function simulate(hostname="volunserve-identity-test-staging.onrender.com") {
-  let initialized=0, authListeners=0, sentAuth=0, resetCount=0;
+  let initialized=0, authListeners=0, sentAuth=0, resetCount=0, verifyCount=0, reloadCount=0, tokenRefreshCount=0, verifiedOnServer=false;
   const calls=[], controls=new Map();
   const auth={currentUser:null};
   let notify=()=>{};
@@ -28,7 +28,8 @@ function simulate(hostname="volunserve-identity-test-staging.onrender.com") {
   const signedInUser={
     uid:"test-resident-12345",
     email:"test-resident@example.invalid",
-    async getIdToken(){return "synthetic-token-not-a-real-user";}
+    emailVerified:false,
+    async getIdToken(forceRefresh){if(forceRefresh)tokenRefreshCount++;return "synthetic-token-not-a-real-user";}
   };
   const scope={
     URL, location:{hostname},
@@ -42,6 +43,8 @@ function simulate(hostname="volunserve-identity-test-staging.onrender.com") {
       auth.currentUser=signedInUser;notify(signedInUser);
     },
     async sendPasswordResetEmail(){resetCount++;},
+    async sendEmailVerification(u){assert.equal(u,signedInUser);verifyCount++;},
+    async reload(u){assert.equal(u,signedInUser);reloadCount++;u.emailVerified=verifiedOnServer;},
     async signOut(a){auth.currentUser=null;notify(null);},
     AbortController,
     setTimeout(){return 1;},
@@ -64,7 +67,8 @@ function simulate(hostname="volunserve-identity-test-staging.onrender.com") {
     assert.equal(typeof listener,"function","Listener missing: "+id+"/"+event);
     return listener(event==="submit"?{preventDefault(){}}:{});
   }
-  return {auth,control,context,fire,calls,get stats(){return {initialized,authListeners,sentAuth,resetCount}}};
+  return {auth,control,context,fire,calls,markEmailVerified(){verifiedOnServer=true;},
+    get stats(){return {initialized,authListeners,sentAuth,resetCount,verifyCount,reloadCount,tokenRefreshCount}}};
 }
 
 test("Real full-staging Web App metadata is paired to exact staging origin",()=>{
@@ -74,7 +78,7 @@ test("Real full-staging Web App metadata is paired to exact staging origin",()=>
   assert.equal(s.stats.initialized,1);
   assert.equal(s.stats.authListeners,1);
   assert.equal(s.control("loginBtn").disabled,false);
-  for(const id of ["readiness","status","precheck","submit"]){
+  for(const id of ["readiness","status","precheck","submit","sendVerification","refreshVerification"]){
     assert.equal(s.control(id).disabled,true);
   }
   assert.ok(!html.includes("volunserve-auth-staging"));
@@ -110,7 +114,7 @@ test("No Firebase initialization outside the designated staging camera host",asy
   assert.equal(vm.runInContext("authIsolationReady",s.context),false);
   assert.equal(s.stats.initialized,0);
   assert.equal(s.stats.authListeners,0);
-  for(const id of ["loginBtn","resetPassword","readiness","status","precheck","submit"]){
+  for(const id of ["loginBtn","resetPassword","readiness","status","precheck","submit","sendVerification","refreshVerification"]){
     assert.equal(s.control(id).disabled,true);
   }
   await s.fire("login","submit");
@@ -126,4 +130,47 @@ test("Local no-upload camera testing and explicit disabled-media warning remain"
   }
   assert.match(html,/Government ID precheck and ID\/selfie submissions remain deliberately blocked/);
   assert.match(html,/const mediaSubmissionEnabled=false/);
+  assert.match(html,/sendEmailVerification/);
+  assert.match(html,/await reload\(current\)/);
+});
+
+
+test("Signed-in unverified test user can request one Firebase email link and refresh verified token",async()=>{
+  const s=simulate();
+  s.control("email").value="test-resident@example.invalid";
+  s.control("password").value="synthetic-secret";
+  await s.fire("login","submit");
+  assert.equal(s.control("sendVerification").disabled,false);
+  assert.equal(s.control("refreshVerification").disabled,false);
+  assert.match(s.control("verificationNotice").textContent,/Email not yet verified/);
+  await s.fire("sendVerification");
+  assert.equal(s.stats.verifyCount,1);
+  assert.equal(s.control("sendVerification").disabled,true);
+  assert.match(s.control("verificationNotice").textContent,/Verification email requested from Firebase/);
+  await s.fire("sendVerification");
+  assert.equal(s.stats.verifyCount,1,"Repeated click must not send multiple emails in same session");
+  await s.fire("refreshVerification");
+  assert.equal(s.stats.reloadCount,1);
+  assert.equal(s.stats.tokenRefreshCount,1);
+  assert.match(s.control("verificationNotice").textContent,/Email still unverified/);
+  s.markEmailVerified();
+  await s.fire("refreshVerification");
+  assert.equal(s.stats.reloadCount,2);
+  assert.equal(s.stats.tokenRefreshCount,2);
+  assert.equal(s.auth.currentUser.emailVerified,true);
+  assert.match(s.control("verificationNotice").textContent,/Email verified successfully/);
+  assert.equal(s.control("sendVerification").disabled,true);
+  assert.equal(s.control("precheck").disabled,true);
+  assert.equal(s.control("submit").disabled,true);
+  assert.equal(s.calls.length,0,"Verification UI must not call backend, process ID or upload face media");
+});
+
+test("Untrusted non-staging host cannot request Firebase verification or refresh user",async()=>{
+  const s=simulate("attacker.example");
+  await s.fire("sendVerification");
+  await s.fire("refreshVerification");
+  assert.equal(s.stats.verifyCount,0);
+  assert.equal(s.stats.reloadCount,0);
+  assert.equal(s.stats.initialized,0);
+  assert.equal(s.calls.length,0);
 });
