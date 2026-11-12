@@ -1,7 +1,7 @@
 "use strict";
 const fs=require("node:fs");
 const html=fs.readFileSync("identity-staging-web/index.html","utf8");
-for(const required of ["volunserve-auth-staging","volunserve-backend-staging.onrender.com","/api/identity/engine-health","idBackDocument","signInWithEmailAndPassword"]){
+for(const required of ["volunserve-full-staging","volunserve-backend-staging.onrender.com","/api/identity/engine-health","idBackDocument","signInWithEmailAndPassword"]){
  if(!html.includes(required))throw Error("Missing staging integration: "+required);
 }
 for(const id of ['national_id','drivers_license','passport','umid','prc_id']){
@@ -105,8 +105,15 @@ checkInlineModule(process.execPath,["--check","--input-type=module"],{
   input:matchPadQa,stdio:["pipe","inherit","inherit"]
 });
 execFileSync(process.execPath,["--test","identity-staging-web/test-match-pad-metrics.mjs"],{stdio:"inherit"});
-// No signed-in Firebase user or ID/selfie upload must remain possible while the
-// staging lab still embeds obsolete auth-staging SDK configuration.
+// Firebase login is now configured for the exact dedicated full-staging
+// Web App, but biometrics stay blocked until separate authenticated QA signoff.
+for(const bad of ["volunserve-auth-staging","916160317396","volunserve-3aa5b"]){
+  if(html.includes(bad))throw Error("Legacy or production Firebase config leaked into staging lab: "+bad);
+}
+if(!html.includes("const mediaSubmissionEnabled=false;") ||
+   !html.includes("if(!authIsolationReady||!auth||!mediaSubmissionEnabled)")) {
+  throw Error("No ID/selfie-upload unlock allowed with an untested staging account");
+}
 if (!html.includes("const authIsolationReady=config.projectId==='volunserve-full-staging'") ||
     !html.includes("const auth=authIsolationReady?getAuth(initializeApp(config)):null")) {
   throw Error("Identity staging lab may be using obsolete Firebase authentication.");
