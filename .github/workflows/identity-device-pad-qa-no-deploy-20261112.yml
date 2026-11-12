@@ -1,0 +1,23 @@
+name: Identity Real-Device Camera QA Report (NO DEPLOY)
+on:
+  pull_request:
+    paths:
+      - 'identity-staging-web/**'
+      - '.github/workflows/identity-device-pad-qa-no-deploy-20261112.yml'
+permissions:
+  contents: read
+jobs:
+  staging-camera-qa-static-and-unit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Validate staging camera and existing identity lab
+        run: node identity-staging-web/build-check.cjs
+      - name: Ensure face QA report does not store or transmit media
+        run: |
+          node --test identity-staging-web/test-pad-qa-report.mjs
+          echo 'NO DEPLOY - no camera upload, credentials, Firebase or Render writes'

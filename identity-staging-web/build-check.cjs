@@ -66,4 +66,17 @@ for(const forbidden of ["volunserve-3aa5b","https://volunserve.onrender.com","na
 execFileSync(process.execPath,["--test","identity-staging-web/test-camera-metrics.mjs","identity-staging-web/test-device-quality.mjs","identity-staging-web/test-face-challenge.mjs","identity-staging-web/test-camera-device.mjs","identity-staging-web/test-screening-result.mjs"],{stdio:"inherit"});
 // Certificate testing is a separate staging-only portal. Preserve identity tests.
 execFileSync(process.execPath,["identity-staging-web/test-certificate-portal.cjs"],{stdio:"inherit"});
+// Camera/PAD field observations are manual, local-only, and NEVER certificate of liveness.
+for(const qaPath of ["identity-staging-web/pad-qa.js","identity-staging-web/pad-qa-report.mjs","identity-staging-web/test-pad-qa-report.mjs"]){
+ if(!fs.existsSync(qaPath))throw Error("Missing staging face QA file: "+qaPath);
+}
+if(!html.includes('<script type="module" src="./pad-qa.js"></script>'))throw Error("Staging pad QA report is not loaded.");
+const padQa=fs.readFileSync("identity-staging-web/pad-qa.js","utf8");
+if(!padQa.includes('location.hostname!=="volunserve-identity-test-staging.onrender.com"'))throw Error("Staging QA host restriction missing");
+for(const sensitive of ["fetch(", "XMLHttpRequest", "navigator.sendBeacon", "localStorage", "sessionStorage",
+  "https://volunserve.onrender.com", "https://volunserve.com", "volunserve-3aa5b"]){
+ if(padQa.includes(sensitive))throw Error("Potential PII/transmission or production link in local QA: "+sensitive);
+}
+checkInlineModule(process.execPath,["--check","--input-type=module"],{input:padQa,stdio:["pipe","inherit","inherit"]});
+execFileSync(process.execPath,["--test","identity-staging-web/test-pad-qa-report.mjs"],{stdio:"inherit"});
 console.log("Staging-only camera and identity integration checks passed.");
