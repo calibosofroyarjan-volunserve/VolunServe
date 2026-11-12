@@ -116,7 +116,7 @@ def evaluate(trials, threshold=DEFAULT_THRESHOLD, scorer=score_pair_locally):
         if score is None:
             unscorable[label] += 1
             continue
-        if not isinstance(score,(float,int)) or not math.isfinite(score) or score<0 or score>1:
+        if isinstance(score,bool) or not isinstance(score,(float,int)) or not math.isfinite(score) or score<0 or score>1:
             raise ValueError("INVALID_FACE_SCORE")
         if label == "genuine" and score < threshold:
             errors[label] += 1
