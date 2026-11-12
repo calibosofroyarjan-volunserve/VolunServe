@@ -14,6 +14,34 @@ This audit does not involve real people, government IDs, identity submissions, f
 | Crop dimensions? | Original \`CropImage._get_new_box()\` multiplies width and height **independently** by 2.7. VolunServe staging now uses independent dimensions and requires all context inside the frame. | Source shifts/clamps edge crops; VolunServe deliberately returns inconclusive instead. Synthetic ROI consistency ≠ genuine/replay detection accuracy. |
 | Weights provenance? | The downloaded ONNX is accepted **only** at SHA-256 \`d7b3cd9ba8a7ceb13baa8c4720902e27ca3112eff52f926c08804af6b6eecc7b\`, 1,744,116 bytes. The HF model card claims export from original \`2.7_80x80_MiniFASNetV2.pth\`. | No independent same-input numerical comparison with original PyTorch checkpoint has been established. Do NOT interpret the model-card's "bit-equivalent" assertion as verified. |
 
+## Independent original-PyTorch vs ONNX numerical parity audit
+
+**Prepared on November 13, 2026 — result depends on the isolated GitHub workflow.** The original checkpoint's published SHA-256 is `a5eb02e1843f19b5386b953cc4c9f011c3f985d0ee2bb9819eea9a142099bec0`. The upstream `MiniFASNet.py` Git blob SHA-1 observed from the original repository is `548f77346020bcbdb5d2bcff362a10d0bb338104`. The converted ONNX SHA-256 remains `d7b3cd9ba8a7ceb13baa8c4720902e27ca3112eff52f926c08804af6b6eecc7b`.
+
+A standalone **NO DEPLOY** GitHub Actions workflow, `.github/workflows/identity-pytorch-onnx-parity-no-deploy.yml`, uses an isolated CPU-only PyTorch 2.2.2 QA environment and `identity-ai/audit_minifasnet_pytorch_onnx_parity.py`. Before importing external upstream Python source or calling `torch.load(weights_only=True)`, it verifies both original source Git blob ID and checkpoint SHA-256. It rejects modified or unrelated checkpoint bytes, requires a strict matching `MiniFASNetV2` state dict with `conv6_kernel=(5,5)`, and checks the already pinned real ONNX graph.
+
+It feeds the **same synthetic, non-person, 80×80 BGR float32 tensor** into both networks for each of ten fixed patterns at both 0–255 and 0–1 input scales. It compares **un-softmaxed** corresponding logit indices with fixed absolute/relative tolerances and checks whether the argmax indices remain equal. Unlike comparing two versions' final softmax class descriptions, this can detect an output-index permutation or wrongly converted parameters without knowing which index represents live/attack.
+
+The output reports numerical max differences and `pytorchToOnnxIndexParityOnSyntheticInputs`. **Only a completed successful run** can substantiate numeric parity; simply having a model card claim of "bit equivalent" or a CI script in the repository is insufficient. If source download, checksum, strict state_dict loading, CPU dependencies or numerical tolerance fail, the result is **inconclusive or mismatched** and no automation should silently flip labels.
+
+Even if parity is confirmed, the original training-time input distribution and independently labeled class semantics **remain unvalidated**. The original upstream `test.py` uses class 1 for real; the converted ONNX card says class 0 live. The original NumPy pathway does not divide by 255, while the card prescribes 0–1. No production or staging liveness threshold, class mapping, automatic Verified Resident grant, private-ID policy or model weights are changed by this audit.
+
+### Independently reproducible QA (never run with real photos)
+
+```powershell
+py -3.11 -m pip install --index-url https://download.pytorch.org/whl/cpu "torch==2.2.2+cpu"
+py -3.11 -m pip install numpy==1.26.4 opencv-contrib-python-headless==4.11.0.86 onnx==1.17.0
+py -3.11 identity-ai/download_passive_pad_model.py
+$env:PYTHONPATH="identity-ai"
+py -3.11 identity-ai/audit_minifasnet_pytorch_onnx_parity.py
+```
+
+Original public checkpoint source: https://github.com/minivision-ai/Silent-Face-Anti-Spoofing/blob/master/resources/anti_spoof_models/2.7_80x80_MiniFASNetV2.pth
+
+Original model architecture source: https://github.com/minivision-ai/Silent-Face-Anti-Spoofing/blob/master/src/model_lib/MiniFASNet.py
+
+Public checkpoint mirror with matching published hash: https://huggingface.co/spaces/Coobeliues/antispoofingdetection/blob/main/resources/anti_spoof_models/2.7_80x80_MiniFASNetV2.pth
+
 ## Executable real-ONNX synthetic audit
 
 From an isolated QA checkout with Python 3.11:
