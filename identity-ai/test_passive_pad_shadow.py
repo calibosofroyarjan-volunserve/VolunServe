@@ -91,6 +91,24 @@ class PassivePadShadowTests(unittest.TestCase):
         self.assertEqual(source_roi.shape[1], 216)
         self.assertTrue(130 <= source_roi.shape[0] <= 136)
 
+    def test_preprocessing_is_bgr_nchw_scaled_0_to_1(self):
+        """Original source uses BGR tensor values divided by 255."""
+        photo = np.zeros((480, 640, 3), dtype=np.uint8)
+        photo[:, :, 0] = 10  # Blue
+        photo[:, :, 1] = 80  # Green
+        photo[:, :, 2] = 240  # Red (not swapped)
+        with patch.object(pad, "single_face_box", return_value=(260, 180, 60, 60)):
+            observation = pad.assess_frame_shadow(photo)
+        self.assertIn(observation["status"], (
+            "model_prefers_live_unvalidated", "model_prefers_attack_unvalidated",
+            "inconclusive"))
+        blob = self.net.last_input
+        self.assertIsNotNone(blob)
+        self.assertEqual(blob.shape, (1, 3, 80, 80))
+        self.assertAlmostEqual(float(blob[0, 0, 20, 20]), 10 / 255, places=5)
+        self.assertAlmostEqual(float(blob[0, 1, 20, 20]), 80 / 255, places=5)
+        self.assertAlmostEqual(float(blob[0, 2, 20, 20]), 240 / 255, places=5)
+
     def test_rectangular_context_can_fit_without_square_overcrop(self):
         image = np.zeros((480, 640, 3), dtype=np.uint8)
         # A 150 x 50 face with enough vertical rectangular context; an
