@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   availableMethods,reviewBucket,documentEligibleForAdminReview,
   canVerify,canRequireRetry,evidenceConflicts,screeningDescription,mrzDescription,
+  stagingAccessMessage,
 } from "./admin-review-guards.mjs";
 
 const allowed=["national_id","drivers_license","passport","umid","prc_id"];
@@ -101,4 +102,27 @@ test("missing, unsupported or manipulated evidence never authorizes verify",()=>
     screening("passport",{warningCodes:undefined})]){
     assert.equal(canVerify({...valid,review:{...pending(),documentScreening:doc}}),false);
   }
+});
+
+test("staging login succeeds but Admin authorization failures are explained without bypass",()=>{
+  const scenarios=[
+    [403,"operational_admin_required","approved operational Admin"],
+    [403,"registration_incomplete","completed user profile"],
+    [403,"email_not_verified","email is not verified"],
+    [401,"invalid_token","session was not accepted"],
+    [404,"profile_not_found","matching full-staging Firestore"],
+    [503,"profile_check_unavailable","could not check"],
+    [423,"staging_identity_media_disabled","uploads remain disabled"],
+  ];
+  for(const [status,code,phrase] of scenarios) {
+    const message=stagingAccessMessage(status,code);
+    assert(message.includes(phrase),code+" should explain "+phrase);
+    assert(!message.includes("uid") && !message.includes("Bearer "));
+  }
+});
+test("unknown backend error codes do not echo untrusted HTML or sensitive strings",()=>{
+  const secret='<img src=x onerror=alert(1)>';
+  const message=stagingAccessMessage(403,secret);
+  assert(!message.includes(secret));
+  assert.match(message,/access denied/i);
 });
