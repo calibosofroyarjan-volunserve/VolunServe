@@ -15,7 +15,7 @@ for(const stage of ["front","back","selfie"]){
  const input=$(stage),label=input.closest("label");
  input.required=false; // JS file() validation handles empty uploads, not invisible required inputs.
  const fallback=document.createElement("details");fallback.className="upload-backup";
- const summary=document.createElement("summary");summary.textContent="Camera unavailable? Choose a test image instead";
+ const summary=document.createElement("summary");summary.textContent=stage==="selfie"?"QA-only: preview a test face image (never sent for verification)":"Camera unavailable? Choose a test image instead";
  fallback.append(summary);label.before(fallback);fallback.append(label);
  const card=document.createElement("div");card.className="scan-card";card.dataset.stage=stage;
  card.innerHTML='<div class="scan-main"><span class="scan-symbol" aria-hidden="true">▣</span><img class="scan-thumb hidden" alt="Captured test image preview"><div><div class="scan-title"></div><div class="scan-sub" aria-live="polite">Not captured yet</div></div></div><div class="scan-actions"><button type="button" class="scan-open">Open camera</button><button type="button" class="alt scan-clear hidden">Retake</button></div>';
@@ -23,10 +23,14 @@ for(const stage of ["front","back","selfie"]){
  card.querySelector(".scan-open").addEventListener("click",()=>start(stage));
  card.querySelector(".scan-clear").addEventListener("click",()=>clear(stage));
  cards.append(card);
- input.addEventListener("change",()=>preview(stage,input.files?.[0]||null));
+ input.addEventListener("change",()=>{
+  const selected=input.files?.[0]||null;
+  if(stage==="selfie")input.value=""; // Never attach a test image to identity form data.
+  preview(stage,selected);
+ });
 }
 const privacy=document.createElement("p");privacy.className="muted";
-privacy.textContent="Captured images stay in this browser until you explicitly run staging verification. Live guidance does not prove ID authenticity or selfie liveness.";
+privacy.textContent="This staging lab is QA-only: selfie captures are browser previews and NEVER populate the verification form. A recorded video passed the facial challenge during testing. Independent PAD has NOT been validated; staging ID/selfie uploads remain blocked.";
 cards.after(privacy);
 function syncType(){const passport=$("type").value==="passport";cards.querySelector('[data-stage="back"]').classList.toggle("hidden",passport);if(passport)clear("back")}
 $("type").addEventListener("change",syncType);syncType();
@@ -38,7 +42,7 @@ function preview(stage,file){
   previews[stage]=URL.createObjectURL(file);
   const img=card.querySelector("img");img.src=previews[stage];img.classList.remove("hidden");
   card.querySelector(".scan-symbol").classList.add("hidden");
-  card.querySelector(".scan-sub").textContent="Photo captured — ID not yet validated ("+Math.round(file.size/1024)+" KB)";
+  card.querySelector(".scan-sub").textContent=stage==="selfie"?"UNVERIFIED QA preview — no liveness/PAD; cannot be used for identity approval":"Photo captured — ID not yet validated ("+Math.round(file.size/1024)+" KB)";
   card.querySelector(".scan-open").textContent="Scan again";card.querySelector(".scan-clear").classList.remove("hidden");
  }else{
   delete previews[stage];const img=card.querySelector("img");img.removeAttribute("src");img.classList.add("hidden");
@@ -47,7 +51,7 @@ function preview(stage,file){
  }
 }
 const modal=document.createElement("dialog");modal.id="scanModal";
-modal.innerHTML='<div class="scan-modal-head"><h3 id="scanTitle">Live camera</h3><button type="button" class="alt" id="scanClose">✕ Close</button></div><div class="cam-view"><video id="scanVideo" autoplay playsinline muted></video><canvas id="scanOverlay"></canvas><div id="scanGuide" class="frame-guide"></div></div><div class="scan-modal-body"><div id="scanStatus" class="cam-status" role="status">Starting...</div><div class="cam-note" id="scanNote"></div><p class="cam-note">Automatic capture is on. Keep the camera steady, then review the captured image. Images are not uploaded until you run staging verification.</p><div class="scan-controls"><button type="button" class="alt" id="scanCancel">Cancel</button></div></div>';
+modal.innerHTML='<div class="scan-modal-head"><h3 id="scanTitle">Live camera</h3><button type="button" class="alt" id="scanClose">✕ Close</button></div><div class="cam-view"><video id="scanVideo" autoplay playsinline muted></video><canvas id="scanOverlay"></canvas><div id="scanGuide" class="frame-guide"></div></div><div class="scan-modal-body"><div id="scanStatus" class="cam-status" role="status">Starting...</div><div class="cam-note" id="scanNote"></div><p class="cam-note">Automatic capture is for local QA only. Browser facial challenges can accept replay videos; captured face images are NOT eligible for identity verification. ID/selfie uploads are disabled.</p><div class="scan-controls"><button type="button" class="alt" id="scanCancel">Cancel</button></div></div>';
 document.body.append(modal);
 const sourceRow=document.createElement("label");
 sourceRow.className="cam-note";
@@ -115,7 +119,7 @@ async function start(stage){
  $("scanTitle").textContent=TYPES[stage].label;
  $("scanGuide").classList.toggle("face",stage==="selfie");
  video.classList.toggle("mirror",stage==="selfie");canvas.classList.toggle("mirror",stage==="selfie");
- $("scanNote").textContent=stage==="selfie"?"Center one face and follow two random facial movement prompts (blink, smile or open mouth). Local challenge only, NOT validated anti-spoofing.":"Align all four edges of the ID against a contrasting background. Auto-capture uses approximate rectangle, lighting and stillness only, NOT government-ID identification or authenticity.";
+ $("scanNote").textContent=stage==="selfie"?"QA-ONLY preview: center one face and follow two random prompts. Screen replay has passed this browser-only challenge; it is NOT PAD and cannot verify identity.":"Align all four edges of the ID against a contrasting background. Auto-capture uses approximate rectangle, lighting and stillness only, NOT government-ID identification or authenticity.";
  status("Requesting camera permission...");
  try{
   modal.showModal();
@@ -198,20 +202,28 @@ function check(current){
 }
 async function capture(){
  if(!mode||!stream||video.readyState<2||capturing)return;
- capturing=true;const stage=mode;const current=session;status("Automatically capturing. Review the image before submitting.");
+ capturing=true;const stage=mode;const current=session;status(stage==="selfie"?"Capturing an UNVERIFIED local QA preview — never an identity selfie.":"Capturing a local ID-camera preview — document authenticity not checked.");
  const pic=document.createElement("canvas");const factor=Math.min(1,1400/video.videoWidth);
  pic.width=Math.round(video.videoWidth*factor);pic.height=Math.round(video.videoHeight*factor);
  pic.getContext("2d").drawImage(video,0,0,pic.width,pic.height);
  const blob=await new Promise(resolve=>pic.toBlob(resolve,"image/jpeg",0.88));
  if(current!==session)return;
- if(!blob||typeof DataTransfer==="undefined"){status("Could not save camera capture; use test-image fallback.");capturing=false;return}
+ if(!blob){status("Could not make local QA preview.");capturing=false;return}
+ if(stage==="selfie"){
+   // SECURITY BOUNDARY: the browser expression challenge accepted a prerecorded
+   // screen replay. Never turn its captured image into a verification-form file.
+   // Local QA preview is allowed; independent server-side PAD is still required.
+   $("selfie").value="";
+   preview("selfie",blob);
+   const card=document.querySelector('[data-stage="selfie"] .scan-sub');
+   if(card)card.textContent="UNVERIFIED QA ONLY — replay video may pass; not a valid identity selfie";
+   stop();
+   return;
+ }
+ if(typeof DataTransfer==="undefined"){status("Could not save local ID preview.");capturing=false;return}
  const file=new File([blob],"staging-"+stage+"-"+Date.now()+".jpg",{type:"image/jpeg"});
  const dt=new DataTransfer();dt.items.add(file);
  $(stage).files=dt.files;$(stage).dispatchEvent(new Event("change",{bubbles:true}));
- if(stage==="selfie"){
-   const card=document.querySelector('[data-stage="selfie"] .scan-sub');
-   if(card)card.textContent=challenge?.completed?"Captured after local facial challenge — NOT certified liveness":"Captured — active challenge unverified";
- }
  stop();
 }
 $("scanClose").addEventListener("click",stop);
