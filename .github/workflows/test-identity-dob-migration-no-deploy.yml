@@ -1,0 +1,39 @@
+name: Validate optional DOB registration migration (NO DEPLOY)
+on:
+  pull_request:
+    branches: [live-protected]
+    paths:
+      - 'firestore.rules'
+      - 'scripts/test-identity-dob-migration.cjs'
+      - '.github/workflows/test-identity-dob-migration-no-deploy.yml'
+permissions:
+  contents: read
+jobs:
+  identity-dob-review:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Prove exact DOB-only rules delta, no other permission changes
+        run: |
+          git fetch origin live-protected
+          node scripts/test-identity-dob-migration.cjs
+      - name: Install locked test dependencies
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Test creation of DOB/legacy profiles and immutability in isolated emulator
+        run: npx firebase-tools emulators:exec --only firestore --project demo-volunserve-identity-dob-review-20261112 "node scripts/test-identity-dob-migration.cjs --emulator"
+      - name: Preserve pre-existing account and role permissions in isolated emulator
+        run: npx firebase-tools emulators:exec --only firestore --project demo-volunserve-account-compatibility "node scripts/test-existing-account-compatibility.cjs"
+      - name: Confirm no deployment
+        run: echo 'PASS no production Firebase, Hosting, Render or Firestore mutation'
