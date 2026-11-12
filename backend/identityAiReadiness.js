@@ -140,6 +140,15 @@ async function probeIdentityAiReadiness({
               independentPadValidated: false,
               identityDecisionUse: "none",
             },
+            // SFace is a staging-only observation. Never trust model/provider
+            // assertions of independent validation or identity approval.
+            sFaceShadow: {
+              modelLoaded: health.sFaceShadow?.modelLoaded === true,
+              shadowEnabled: health.sFaceShadow?.shadowEnabled === true,
+              independentFaceMatchValidated: false,
+              independentPadValidated: false,
+              identityDecisionUse: "none",
+            },
             mediaSubmissionEnabled: false,
             biometricAccuracyMeasured: false,
             message: "The AI engine, document screening and private backend authentication are ready. Pretrained face models are experimental; independent liveness and ID authenticity are not validated.",
