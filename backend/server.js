@@ -749,6 +749,11 @@ function normalizeIdDocumentScreening(value) {
     "low_document_image_quality",
     "document_back_required",
     "document_duplicate_side_text",
+    "document_back_evidence_inconclusive",
+    "document_back_layout_inconclusive",
+    "low_document_back_image_quality",
+    "document_back_image_quality_unavailable",
+    "document_image_quality_unavailable",
     "passport_mrz_review_required",
     "passport_mrz_profile_birth_date_conflict",
   ];
@@ -767,6 +772,11 @@ function normalizeIdDocumentScreening(value) {
     backSideScreened: value?.backSideScreened === true,
     imageQualityStatus: ["low", "adequate"].includes(value?.imageQualityStatus)
       ? value.imageQualityStatus : "unknown",
+    // Same privacy-minimized, independent quality clue for a required back.
+    // No actual pixel data, ID numbers, names or OCR text enter Firestore.
+    backImageQualityStatus: ["low", "adequate", "unknown", "not_checked", "not_required"].includes(
+      value?.backImageQualityStatus
+    ) ? value.backImageQualityStatus : "unknown",
     profileNameCompared: value?.profileNameCompared === true,
     profileNameCheck: ["possible_match", "inconclusive", "not_checked"].includes(value?.profileNameCheck)
       ? value.profileNameCheck : "not_checked",
