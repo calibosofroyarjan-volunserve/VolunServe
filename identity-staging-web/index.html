@@ -9,7 +9,7 @@
 <div class="warning" id="fullStagingGateNotice" role="alert"><strong>Full-staging Firebase Web App configured.</strong> Sign in only with a <code>volunserve-full-staging</code> TEST account. The identity backend's authenticated readiness and Resident-status checks are available after login. <strong>Government ID precheck and ID/selfie submissions remain deliberately blocked</strong> until the staging login, approved testing accounts and data-handling controls are confirmed. Camera and challenge QA in Sections 4–6 remains local-only.</div>
 <p class="muted"><a href="./certificates.html" style="display:inline-block;background:#e1f7eb;color:#085d4a;font-weight:800;padding:11px 14px;border-radius:9px;margin-bottom:16px;text-decoration:none">Open staging Community Certificates test portal</a></p>
 <div class="grid">
-<section class="card"><h2>1. Sign in</h2><p class="muted">Only sign in with a <strong>volunserve-full-staging</strong> test account. Do not use production accounts, government ID media or real resident photos.</p><form id="login" class="stack"><label>Staging email<input id="email" type="email" autocomplete="email" required></label><label>Password<input id="password" type="password" autocomplete="current-password" required></label><div class="actions"><button id="loginBtn">Sign in</button><button type="button" id="resetPassword" class="alt">Forgot password? Send reset email</button><button type="button" id="logout" class="alt hidden">Sign out</button></div></form><p class="muted" id="account" aria-live="polite">Not signed in.</p></section>
+<section class="card"><h2>1. Sign in</h2><p class="muted">Only sign in with a <strong>volunserve-full-staging</strong> test account. Do not use production accounts, government ID media or real resident photos.</p><form id="login" class="stack"><label>Staging email<input id="email" type="email" autocomplete="email" required></label><label>Password<input id="password" type="password" autocomplete="current-password" required></label><div class="actions"><button id="loginBtn">Sign in</button><button type="button" id="resetPassword" class="alt">Forgot password? Send reset email</button><button type="button" id="logout" class="alt hidden">Sign out</button></div></form><div class="actions"><button type="button" id="sendVerification" class="alt" disabled>Send verification email</button><button type="button" id="refreshVerification" class="alt" disabled>Refresh email verification</button></div><p class="muted" id="verificationNotice" role="status" aria-live="polite">Sign in first to verify your staging email.</p><p class="muted" id="account" aria-live="polite">Not signed in.</p></section>
 <section class="card"><h2>2. Verify connections</h2><p class="muted">Authenticated checks verify your Firebase token and private backend-to-AI access.</p><div class="actions"><button id="readiness" type="button" disabled>Check AI readiness</button><button id="status" type="button" class="alt" disabled>Check resident status</button></div><div class="result" id="diagnostic" aria-live="polite">Sign in to begin.</div></section>
 <section class="card wide"><h2>3. ID scan + face comparison</h2><div class="steps">Front of ID → Back of ID → Selfie → AI screening → Admin review</div><form id="verify" class="stack">
 <label>Select your government-issued ID<select id="type" required><option value="national_id">Philippine National ID (PhilID)</option><option value="drivers_license">LTO Driver's License</option><option value="passport">Philippine Passport (bio page)</option><option value="umid">SSS / GSIS UMID</option><option value="prc_id">PRC Professional ID (PIC)</option></select></label><p class="muted"><strong>Only these five ID types are supported.</strong> School IDs, employee IDs, and any ID not in this list cannot pass identity verification. The camera may capture any card-shaped object; capture is NOT document validation. OCR checks the selected type after submission, then independent Admin verification is required.</p><p id="psaHelp" class="muted"><strong>Philippine National ID only:</strong> The <a href="https://everify.gov.ph/check" target="_blank" rel="noopener noreferrer">official PSA National ID Check</a> can authenticate the ID QR code. This is a separate official website; its result is NOT sent back to VolunServe. Authorized Admin verification is still required.</p>
@@ -29,7 +29,7 @@
 <script type="module">
 import {documentVerdict} from "./screening-result.mjs";
 import{initializeApp}from'https://www.gstatic.com/firebasejs/11.10.0/firebase-app.js';
-import{getAuth,onAuthStateChanged,signInWithEmailAndPassword,sendPasswordResetEmail,signOut}from'https://www.gstatic.com/firebasejs/11.10.0/firebase-auth.js';
+import{getAuth,onAuthStateChanged,signInWithEmailAndPassword,sendPasswordResetEmail,sendEmailVerification,reload,signOut}from'https://www.gstatic.com/firebasejs/11.10.0/firebase-auth.js';
 // Public Firebase Web App SDK identifiers for the explicitly registered
 // "VolunServe Full Staging Web" app. Never use Firebase Admin private keys here.
 const config=Object.freeze({apiKey:'AIzaSyBvBU0Ze4TBBgsgoLtmPUk9W0xN7kBNWRQ',authDomain:'volunserve-full-staging.firebaseapp.com',projectId:'volunserve-full-staging',storageBucket:'volunserve-full-staging.firebasestorage.app',messagingSenderId:'429213950126',appId:'1:429213950126:web:955dbf575697826b674d3f'});
@@ -38,7 +38,7 @@ const authIsolationReady=location.hostname==='volunserve-identity-test-staging.o
 const mediaSubmissionEnabled=false; // Additional explicit gate: no upload until actual auth testing and consent process are approved.
 // Fail closed: never authenticate outside this exact staging origin, and
 // never transmit biometric media until a separately reviewed release enables it.
-const auth=authIsolationReady?getAuth(initializeApp(config)):null,el=id=>document.getElementById(id);let user=null,ready=false,busy=false;
+const auth=authIsolationReady?getAuth(initializeApp(config)):null,el=id=>document.getElementById(id);let user=null,ready=false,busy=false,verificationSent=false;
 function show(id,x){el(id).textContent=typeof x==='string'?x:JSON.stringify(x,null,2)}
 function showDocumentVerdict(result){
  const value=documentVerdict(result),target=el("idVerdict");
@@ -52,7 +52,7 @@ function showDocumentVerdict(result){
  target.classList.remove("hidden");
 }
 function clearDocumentVerdict(){el("idVerdict").classList.add("hidden")}
-function state(){el('readiness').disabled=!authIsolationReady||!user||busy;el('status').disabled=!authIsolationReady||!user||busy;el('submit').disabled=!authIsolationReady||!mediaSubmissionEnabled||!user||!ready||busy;el('precheck').disabled=!authIsolationReady||!mediaSubmissionEnabled||!user||!ready||busy;el('loginBtn').disabled=!authIsolationReady||!!user||busy;el('resetPassword').disabled=!authIsolationReady||!!user||busy;el('logout').classList.toggle('hidden',!authIsolationReady||!user)}
+function state(){el('readiness').disabled=!authIsolationReady||!user||busy;el('status').disabled=!authIsolationReady||!user||busy;el('submit').disabled=!authIsolationReady||!mediaSubmissionEnabled||!user||!ready||busy;el('precheck').disabled=!authIsolationReady||!mediaSubmissionEnabled||!user||!ready||busy;el('loginBtn').disabled=!authIsolationReady||!!user||busy;el('resetPassword').disabled=!authIsolationReady||!!user||busy;el('sendVerification').disabled=!authIsolationReady||!user||!!user.emailVerified||busy||verificationSent;el('refreshVerification').disabled=!authIsolationReady||!user||busy;el('logout').classList.toggle('hidden',!authIsolationReady||!user)}
 function err(e){return String(e?.message||e||'Unknown error').slice(0,360)}
 function authMessage(e){
  const code=String(e?.code||"");
@@ -66,7 +66,7 @@ function authMessage(e){
  if(code==="auth/unauthorized-domain")return "Staging domain is not authorized in Firebase Authentication. Ask the staging project owner to check allowed domains.";
  return "Firebase staging sign-in could not finish ("+(code||"unknown error")+").";
 }
-if(authIsolationReady){onAuthStateChanged(auth,u=>{user=u;ready=false;el('account').textContent=u?'Staging account signed in: '+(u.email||'account'):'Not signed in';show('diagnostic',u?'Signed in. Click Check AI readiness.':'Sign in to begin.');el('password').value='';state()})}else{el('account').textContent='BLOCKED: full-staging Firebase authentication is not configured.';show('diagnostic','BLOCKED: camera-only QA is available, but identity sign-in and uploads require verified full-staging Firebase web configuration.');state()}
+if(authIsolationReady){onAuthStateChanged(auth,u=>{const previousUid=user?.uid;user=u;ready=false;if(previousUid!==u?.uid)verificationSent=false;el('account').textContent=u?'Staging account signed in: '+(u.email||'account'):'Not signed in';show('verificationNotice',u?(u.emailVerified?'Email verified. A complete staging Basic Resident profile is also required.':'Email not yet verified. Click Send verification email, open the link from your mailbox, then click Refresh email verification.'):'Sign in first to verify your staging email.');show('diagnostic',u?'Signed in. Click Check AI readiness.':'Sign in to begin.');el('password').value='';state()})}else{el('account').textContent='BLOCKED: full-staging Firebase authentication is not configured.';show('diagnostic','BLOCKED: camera-only QA is available, but identity sign-in and uploads require verified full-staging Firebase web configuration.');state()}
 el('login').addEventListener('submit',async e=>{e.preventDefault();if(!authIsolationReady||!auth){show('diagnostic','BLOCKED: full-staging authentication is not configured.');return}busy=true;state();try{await signInWithEmailAndPassword(auth,el('email').value.trim(),el('password').value)}catch(e){show('diagnostic','Login failed: '+authMessage(e))}finally{busy=false;state()}});
 el('resetPassword').addEventListener('click',async()=>{
  if(!authIsolationReady||!auth){show('diagnostic','BLOCKED: full-staging authentication is not configured.');return}
@@ -88,6 +88,35 @@ el('resetPassword').addEventListener('click',async()=>{
     show('diagnostic','Staging reset email could not be sent: '+authMessage(e));
   }
  }finally{busy=false;state()}
+});
+el('sendVerification').addEventListener('click',async()=>{
+ if(!authIsolationReady||!auth||!auth.currentUser||busy||verificationSent)return;
+ if(auth.currentUser.emailVerified){show('verificationNotice','This staging email is already verified.');state();return}
+ busy=true;state();
+ try{
+  await sendEmailVerification(auth.currentUser);
+  verificationSent=true;
+  show('verificationNotice','Verification email requested from Firebase. Check the mailbox for this staging account, including Spam and Promotions. Open the verification link, return here, then click Refresh email verification. Do not use Forgot password; that is a different email.');
+ }catch(e){
+  const code=String(e?.code||'');
+  const msg=code==='auth/too-many-requests'?'Too many verification requests. Try again later.':
+    code==='auth/requires-recent-login'?'Sign out and sign back into the staging account, then retry.':
+    code==='auth/network-request-failed'?'Network error. Check your connection and retry.':
+    'Firebase could not send the verification email ('+(code||'unknown')+'). Check that this staging email account is correct.';
+  show('verificationNotice',msg);
+ }finally{busy=false;state()}
+});
+el('refreshVerification').addEventListener('click',async()=>{
+ if(!authIsolationReady||!auth||!auth.currentUser||busy)return;
+ busy=true;state();
+ try{
+  const current=auth.currentUser;
+  await reload(current);
+  await current.getIdToken(true);
+  user=auth.currentUser;
+  show('verificationNotice',current.emailVerified?'Email verified successfully. Click Check AI readiness. A complete staging Resident profile is still required.':'Email still unverified. Open the Firebase verification link from your email first; check Spam and Promotions if missing.');
+ }catch(e){show('verificationNotice','Could not refresh the staging email verification status. Sign out and back in, then try again.');}
+ finally{busy=false;state()}
 });
 el('logout').addEventListener('click',()=>{if(authIsolationReady&&auth)void signOut(auth)});
 async function get(path){if(!authIsolationReady||!auth)throw Error('FULL_STAGING_AUTH_NOT_CONFIGURED');if(!auth.currentUser)throw Error('Sign in first');const token=await auth.currentUser.getIdToken();const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),150000);try{const r=await fetch(backend+path,{headers:{Authorization:'Bearer '+token},signal:controller.signal});const b=await r.json().catch(()=>({error:'Non-JSON response'}));if(!r.ok){const problem=new Error(b.message||b.error||'HTTP '+r.status);problem.httpStatus=r.status;problem.code=String(b.error||'');throw problem}return b}finally{clearTimeout(timeout)}}
