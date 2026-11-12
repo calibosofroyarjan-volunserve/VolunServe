@@ -236,6 +236,35 @@ class RealRouteHandlerContractTests(unittest.TestCase):
         self.assertEqual(self.hits["face"], 1)
         self.assertFalse(result["documentScreening"]["authenticityVerified"])
 
+    def test_verify_rejects_identical_front_used_as_selfie(self):
+        form = self.form(with_selfie=True)
+        form["selfie"] = Upload(NATIONAL_FRONT)
+        with self.assertRaises(RouteHTTPException) as exc:
+            self.call("verify_identity", form)
+        self.assertEqual(exc.exception.status_code, 400)
+        self.assertIn("different images", exc.exception.detail)
+        self.assertEqual(self.hits["screen"], 0)
+        self.assertEqual(self.hits["face"], 0)
+
+    def test_verify_rejects_identical_back_used_as_selfie(self):
+        form = self.form(with_selfie=True)
+        form["selfie"] = Upload(NATIONAL_BACK)
+        with self.assertRaises(RouteHTTPException) as exc:
+            self.call("verify_identity", form)
+        self.assertEqual(exc.exception.status_code, 400)
+        self.assertEqual(self.hits["screen"], 0)
+        self.assertEqual(self.hits["face"], 0)
+
+    def test_passport_front_used_as_selfie_is_rejected(self):
+        form = self.form(id_type="passport",
+                         front="REPUBLIC OF THE PHILIPPINES PASSPORT",
+                         back=None, with_selfie=True)
+        form["selfie"] = Upload("REPUBLIC OF THE PHILIPPINES PASSPORT")
+        with self.assertRaises(RouteHTTPException) as exc:
+            self.call("verify_identity", form)
+        self.assertEqual(exc.exception.status_code, 400)
+        self.assertEqual(self.hits["face"], 0)
+
     def test_verify_rejects_missing_back_before_matching(self):
         with self.assertRaises(RouteHTTPException) as exc:
             self.call("verify_identity", self.form(back=None, with_selfie=True))
