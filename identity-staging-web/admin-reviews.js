@@ -7,7 +7,7 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/11.10.0/fireba
 import {
   reviewBucket, availableMethods, METHOD_LABELS,
   canVerify, canRequireRetry, evidenceConflicts,
-  screeningDescription, mrzDescription,
+  screeningDescription, mrzDescription, stagingAccessMessage,
 } from "./admin-review-guards.mjs";
 
 // Public staging Firebase SDK configuration; no Firebase Admin private key.
@@ -66,16 +66,10 @@ function getSelected() {
   return reviews.find(item => item.uid === selectedUid) || null;
 }
 function safeMessage(body, response) {
-  if (response.status === 401 || response.status === 403) {
-    return "Only approved staging Admin test accounts may use this workspace.";
-  }
-  if (response.status === 409) {
-    return "Review changed or ID evidence is inconsistent. Refresh and request corrected evidence.";
-  }
-  if (response.status === 423) {
-    return "Staging ID/selfie media uploads remain disabled. Admin review requires existing authorized records.";
-  }
-  return String(body?.message || body?.error || "Staging backend is unavailable.").slice(0,260);
+  // Show the caller a safe, actionable explanation of their own staging
+  // session state. These codes come from the authenticated Node backend,
+  // not from user-editable profile fields or any self-declared role.
+  return stagingAccessMessage(response.status, body?.error);
 }
 async function authorizedRequest(path,options={}) {
   const user=signedIn;
@@ -229,7 +223,11 @@ async function loadReviews() {
     renderDetail();
   } catch (error) {
     clearPrivateState();
-    notice(error instanceof Error ? error.message : "Unable to load Admin reviews.","bad");
+    const reason=error instanceof Error ? error.message : "Unable to load staging Admin reviews.";
+    el("account").textContent=signedIn
+      ? "Staging Firebase sign-in succeeded, but Admin review access is unavailable. See the access explanation below."
+      : "Not signed in.";
+    notice(reason,"bad");
   } finally {
     isBusy=false;
     renderButtons();
