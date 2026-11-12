@@ -11,6 +11,10 @@ on:
       - "identity-ai/main.py"
       - "identity-ai/test_ai_route_contract.py"
       - "backend/server.js"
+      - "backend/firebaseAdmin.js"
+      - "backend/stagingFirebaseIsolation.js"
+      - "backend/scripts/check-staging-isolation.cjs"
+      - "backend/test-stagingFirebaseIsolation.js"
       - "backend/selectedIdPolicy.js"
       - "backend/test-selectedIdPolicy.js"
       - "lib/identityVerification.ts"
@@ -60,10 +64,14 @@ jobs:
       - name: Validate Node identity gateway syntax and selected ID policy
         run: |
           node --check backend/server.js
+          node --check backend/firebaseAdmin.js
+          node --check backend/stagingFirebaseIsolation.js
+          node --check backend/scripts/check-staging-isolation.cjs
           node --test backend/test-selectedIdPolicy.js
           node --test backend/test-identity-contract-staging.js
           node --test backend/test-firestore-dob-rules.js
           node --test backend/test-identityIssuerReviewPolicy.js
+          node --test backend/test-stagingFirebaseIsolation.js
       - name: Install frontend dependency lockfile (no lifecycle scripts)
         run: npm ci --ignore-scripts --no-audit --no-fund
       - name: Typecheck frontend identity UI and API client
