@@ -1,0 +1,46 @@
+name: MiniFASNet upstream PyTorch vs ONNX parity (synthetic, NO DEPLOY)
+on:
+  pull_request:
+    paths:
+      - "identity-ai/audit_minifasnet_pytorch_onnx_parity.py"
+      - "identity-ai/test_minifasnet_pytorch_onnx_parity.py"
+      - "identity-ai/audit_minifasnet_onnx_synthetic.py"
+      - "identity-ai/download_passive_pad_model.py"
+      - "identity-ai/ONNX_COMPATIBILITY_AUDIT.md"
+      - ".github/workflows/identity-pytorch-onnx-parity-no-deploy.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  original-pytorch-vs-onnx:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      PYTHONPATH: identity-ai
+      PYTHONDONTWRITEBYTECODE: "1"
+    steps:
+      - name: Checkout review branch (read only)
+        uses: actions/checkout@v4
+      - name: Setup Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install pinned CPU-only PyTorch 2.2.2 (audit only, NOT production)
+        run: |
+          python -m pip install --disable-pip-version-check --no-cache-dir \
+            --index-url https://download.pytorch.org/whl/cpu "torch==2.2.2+cpu"
+      - name: Install pinned offline-matrix QA dependencies (no resident images)
+        run: |
+          python -m pip install --disable-pip-version-check --no-cache-dir \
+            numpy==1.26.4 opencv-contrib-python-headless==4.11.0.86 onnx==1.17.0
+      - name: Validate source hash guards and output-index comparison logic
+        run: |
+          python -m unittest discover -s identity-ai -p 'test_minifasnet_pytorch_onnx_parity.py' -v
+          python -m py_compile identity-ai/audit_minifasnet_pytorch_onnx_parity.py
+      - name: Download verified ONNX only (staging public model)
+        run: python identity-ai/download_passive_pad_model.py
+      - name: Compare original SHA-pinned PyTorch weights and converted ONNX on non-face patches
+        run: python identity-ai/audit_minifasnet_pytorch_onnx_parity.py
+      - name: Confirm no live/attack classification or deployment was attempted
+        run: |
+          echo "NO DEPLOY, NO REAL BIOMETRICS, NO PERSON CLASSIFICATION, NO IDENTITY APPROVAL"
