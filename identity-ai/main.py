@@ -12,7 +12,8 @@ import mediapipe as mp
 import pytesseract
 from strict_document_screening import (
     assess_document_sides, assess_profile_name, document_ocr_unavailable,
-    add_photo_quality, blurry_national_id_claim_needs_review,
+    add_photo_quality, add_back_photo_quality,
+    blurry_national_id_claim_needs_review,
 )
 from profile_consistency import profile_comparison
 from passport_mrz_shadow import assess_passport_mrz
@@ -929,6 +930,14 @@ def screen_government_id(
         # Transient whole-image blur estimate; not proof of real ID issuance.
         quality = image_quality(decode_image(id_document_bytes, "Government ID front image"))
         result = add_photo_quality(result, quality["blurVariance"])
+        # The back must have independent image-quality evidence. A readable
+        # front does NOT make a blurred or illegible reverse side adequate.
+        # Passport bio page is single-sided and exempt from back scanning.
+        back_blur = None
+        if id_back_document_bytes is not None and declared_type != "passport":
+            back_image = decode_image(id_back_document_bytes, "Government ID back image")
+            back_blur = image_quality(back_image)["blurVariance"]
+        result = add_back_photo_quality(result, back_blur)
         ocr_combined = front_text + "\n" + (back_text or "")
         result.update(assess_profile_name(
             expected_first_name, expected_last_name, ocr_combined
@@ -972,6 +981,9 @@ def screen_government_id(
         result = document_ocr_unavailable(declared_type)
         result["backSideProvided"] = id_back_document_bytes is not None
         result["backSideScreened"] = False
+        result["backImageQualityStatus"] = (
+            "not_required" if declared_type == "passport" else "not_checked"
+        )
         result["profileNameCheck"] = "inconclusive"
         result["profileNameCompared"] = False
         result.update(profile_comparison(expected_date_of_birth, expected_barangay, ""))
