@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<meta http-equiv="Cache-Control" content="no-store">
+<title>VolunServe | Staging Admin Identity Reviews</title>
+<style>
+:root{font-family:system-ui,-apple-system,Segoe UI,sans-serif;color:#143b31;background:#f3f8f5}*{box-sizing:border-box}
+body{margin:0}main{max-width:1150px;margin:auto;padding:26px 16px 70px}
+h1{font-size:23px;margin:0}h2{font-size:19px;margin:0 0 8px}h3{font-size:15px;margin:4px 0 12px}p{line-height:1.55}
+a{color:#087663}.small{color:#5c7469;font-size:13px}.top{display:flex;justify-content:space-between;gap:12px;align-items:center;margin-bottom:18px}
+.tag{background:#dbf3e6;color:#155b43;padding:8px 12px;border-radius:22px;font-size:11px;font-weight:800}
+.hero{background:linear-gradient(115deg,#124d3f,#127e67);border-radius:17px;color:white;padding:24px;margin-bottom:15px}
+.hero h2{font-size:25px}.hero p{color:#d7f5e9;margin-bottom:0}
+.card{background:white;border:1px solid #d8e6dd;border-radius:15px;padding:20px}
+.notice{padding:13px 15px;border-radius:11px;background:#fff8e8;border:1px solid #e6d2a7;color:#775a22;font-size:13px;margin:14px 0;line-height:1.5}
+.danger{background:#fff1ee;border-color:#edc3b8;color:#903e33}
+.stack{display:grid;gap:12px}
+label{display:grid;gap:5px;font-size:12px;font-weight:700;color:#395c4b}
+input,select,textarea{font:inherit;font-size:14px;border:1px solid #cbdad1;border-radius:9px;padding:10px 12px;width:100%;background:white;color:#123e30}
+textarea{min-height:96px;resize:vertical}
+button{border:0;border-radius:10px;background:#0a7962;color:white;padding:11px 14px;cursor:pointer;font-size:13px;font-weight:750}
+button.secondary{background:#e6f4eb;color:#11654f}
+button.danger{background:#fff0ee;color:#a23c30}
+button:disabled{opacity:.43;cursor:not-allowed}
+button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:3px solid #7dbba8;outline-offset:2px}
+.actions{display:flex;gap:10px;flex-wrap:wrap;align-items:center}.hidden{display:none!important}
+.layout{display:grid;grid-template-columns:minmax(260px, .92fr) minmax(390px,1.2fr);gap:15px;margin-top:15px}
+.queue{display:grid;gap:9px;max-height:660px;overflow:auto;margin-top:14px}
+.case{border:1px solid #d5e5da;background:#fbfdfb;border-radius:11px;padding:12px;text-align:left;display:grid;gap:5px;color:#153c30;min-width:0}
+.case.selected{border-color:#12866b;background:#e7f7ed}
+.case strong{font-size:14px}.case span{font-weight:400;font-size:12px;color:#526d60}
+.pager{display:flex;align-items:center;justify-content:space-between;gap:7px;padding-top:12px}
+.keyval{display:flex;gap:15px;justify-content:space-between;border-bottom:1px solid #eef1ee;padding:9px 0;font-size:13px}
+.keyval>:first-child{color:#557267}.keyval>:last-child{font-weight:650;text-align:right;overflow-wrap:anywhere;max-width:64%}
+.checkline{display:flex;gap:10px;align-items:flex-start;padding:8px 0}.checkline input{width:auto;margin:3px 0}
+.checkline span{font-size:13px;font-weight:500}.status{padding:10px 12px;border-radius:10px;background:#eaf7ed;border:1px solid #c5e3cb;font-size:13px}
+.status.bad{background:#fff3e9;border-color:#edcaad}
+.toolbar{display:flex;flex-wrap:wrap;gap:9px}.toolbar>*{flex:1;min-width:115px}
+.empty{padding:26px 10px;text-align:center;color:#718c7e;font-size:14px}
+footer{font-size:12px;text-align:center;color:#668475;margin-top:30px}
+@media(max-width:780px){.layout{grid-template-columns:1fr}.top{align-items:flex-start}.hero h2{font-size:21px}main{padding:16px 12px 45px}}
+</style>
+</head>
+<body>
+<main>
+<header class="top">
+  <div><h1>VolunServe</h1><div class="small">Resident Identity Reviews · Isolated staging lab</div></div>
+  <span class="tag">STAGING ONLY</span>
+</header>
+<section class="hero">
+  <h2>Admin identity verification workspace</h2>
+  <p>Authenticated staging Admin review queue, passport MRZ evidence, independent LGU checks, Verify / Require Retry and audit trail.</p>
+</section>
+<div class="notice" role="alert"><strong>Only approved staging Admin accounts.</strong> Never use production credentials or real government IDs for this test. Official ID issuance and biometric liveness are NOT automatically authenticated. This page does not display or store scanned ID images. All identity approval decisions require independent LGU validation; staging ID/selfie uploads remain disabled.</div>
+<p class="small"><a href="./index.html">Back to identity staging lab</a> · The <strong>review queue and decision buttons use only the staging Node backend</strong>. They will not work for ordinary Resident accounts.</p>
+<section class="card" id="signInPanel">
+<h2>1. Staging Admin sign-in</h2>
+<p class="small">Sign in with an approved <strong>volunserve-full-staging</strong> Admin test account. Authentication is kept in memory for this browser tab; closing or refreshing the tab requires sign-in again.</p>
+<form class="stack" id="login">
+  <label>Staging Admin email<input id="email" type="email" required autocomplete="username"></label>
+  <label>Staging password<input id="password" type="password" required autocomplete="current-password"></label>
+  <div class="actions"><button type="submit" id="loginButton">Sign in</button><button type="button" class="secondary hidden" id="logoutButton">Sign out</button></div>
+</form>
+<p id="account" class="small" role="status" aria-live="polite">Not signed in.</p>
+</section>
+<section class="hidden" id="workspace" aria-label="Staging Admin identity review queue">
+<div class="layout">
+  <section class="card">
+    <h2>2. Review queue</h2>
+    <div class="toolbar">
+      <label>Status<select id="filter"><option value="pending">Pending</option><option value="verified">Verified</option><option value="retry_required">Retry required</option><option value="all">All</option></select></label>
+      <label>Search<input id="search" type="search" placeholder="Name or verification ID" autocomplete="off"></label>
+    </div>
+    <p class="small" id="count">No records loaded.</p>
+    <div id="queue" class="queue"><div class="empty">Sign in to load Admin reviews.</div></div>
+    <div class="pager"><button id="previous" class="secondary" type="button">Previous</button><span class="small" id="pageCount">Page 1 of 1</span><button id="next" class="secondary" type="button">Next</button></div>
+    <button id="refresh" type="button" class="secondary" style="margin-top:12px">Refresh staging reviews</button>
+  </section>
+  <section class="card">
+    <h2>3. Inspect evidence and decide</h2>
+    <div id="details" class="stack"><div class="empty">Select one pending review on the left.</div></div>
+    <form class="stack hidden" id="decisionForm">
+      <div class="notice" id="riskNotice">This is preliminary OCR screening. Independent issuer validation remains mandatory.</div>
+      <label>Independent validation actually performed
+        <select id="method"><option value="">Choose a validation method</option></select>
+      </label>
+      <label class="checkline"><input id="attestation" type="checkbox"><span>I independently completed the selected official or in-person document check. I understand that VolunServe did not verify issuance through an official issuer API.</span></label>
+      <label>Review notes or retry reason (avoid ID numbers and other sensitive details)
+        <textarea id="notes" maxlength="1000" placeholder="Record the independent validation method or explain the retry reason."></textarea>
+      </label>
+      <div class="actions"><button id="verify" type="button" disabled>Verify Resident</button><button id="retry" type="button" class="danger" disabled>Require Retry</button></div>
+      <p class="small">A successful Verify changes a staging Resident's account. Actions are protected by Firebase Admin-role checks, server-side evidence validation and an audited Firestore transaction.</p>
+    </form>
+  </section>
+</div>
+</section>
+<div class="notice hidden" id="error" role="alert"></div>
+<footer>VolunServe Full Staging · Test accounts only · No automatic identity approval · Never display real ID or private face media</footer>
+</main>
+<script type="module" src="./admin-reviews.js"></script>
+</body>
+</html>
