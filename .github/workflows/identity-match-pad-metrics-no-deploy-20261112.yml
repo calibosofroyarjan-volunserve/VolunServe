@@ -1,0 +1,24 @@
+name: Face Match FMR FNMR & PAD Observations (NO DEPLOY)
+on:
+  pull_request:
+    paths:
+      - 'identity-staging-web/**'
+      - 'docs/identity/REAL_MATCH_PAD_MEASUREMENT_20261112.md'
+      - '.github/workflows/identity-match-pad-metrics-no-deploy-20261112.yml'
+permissions:
+  contents: read
+jobs:
+  aggregate-identity-metrics:
+    runs-on: ubuntu-latest
+    timeout-minutes: 7
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Test accuracy measurements without any real persons
+        run: node --test identity-staging-web/test-match-pad-metrics.mjs
+      - name: Validate staging QA UI, production-isolation and existing workflows
+        run: node identity-staging-web/build-check.cjs
+      - name: Confirm no deployment or biometric media is involved
+        run: echo 'NO_DEPLOY. Synthetic numerical fixtures only. Admin approval remains mandatory.'
