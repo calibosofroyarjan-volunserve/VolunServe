@@ -45,7 +45,7 @@ def validated_root(path):
     root = supplied.resolve()
     if _inside(REPO_ROOT, root):
         raise ValueError("Store PRIVATE camera samples OUTSIDE the Git repository.")
-    if root == root.anchor or str(root) in (".", ""):
+    if root == Path(root.anchor):
         raise ValueError("Choose a dedicated private folder, not a drive root.")
     return root
 
