@@ -22,7 +22,11 @@ import {
 
 import { useUserSession } from "../../lib/useUserSession";
 
-const BACKEND_URL = "https://volunserve.onrender.com";
+// A staging Admin UI must never forward private review tokens/data to
+// production. The Node gateway authorizes every GET/POST server-side.
+const BACKEND_URL = process.env.EXPO_PUBLIC_VOLUNSERVE_ENV === "staging"
+  ? "https://volunserve-backend-staging.onrender.com"
+  : "https://volunserve.onrender.com";
 
 type ReviewFilter = "pending" | "verified" | "retry_required" | "all";
 
@@ -271,12 +275,16 @@ export default function IdentityReviewsAdmin() {
     if (action === "verify" && (
       !issuerReviewAttested || notes.trim().length < 10 ||
       selected.documentScreening?.status !== "text_consistent_unverified" ||
+      selected.documentScreening?.profileBirthDateCheck === "possible_conflict" ||
+      selected.documentScreening?.passportMrzBirthDateCheck === "possible_conflict" ||
+      selected.documentScreening?.passportMrzCheck === "checksum_inconsistent_or_ocr_error" ||
+      selected.documentScreening?.passportMrzCheck === "multiple_candidates" ||
       (selected.documentScreening?.declaredIdType !== "passport" &&
        selected.documentScreening?.backSideScreened !== true) ||
       selected.documentScreening?.imageQualityStatus === "low"
     )) {
       Alert.alert("Independent ID Verification Required",
-        "Review a legible supported ID, confirm both sides when applicable, complete the independent issuer check, and record at least 10 characters of review notes.");
+        "Review a legible supported ID, resolve passport MRZ and profile DOB conflicts, confirm both sides when applicable, independently check the issuer, and record at least 10 characters of review notes.");
       return;
     }
     if (action === "require_retry" && notes.trim().length < 5) {
@@ -718,6 +726,12 @@ function ReviewDetail({
   const backComplete = item.documentScreening?.declaredIdType === "passport" ||
     item.documentScreening?.backSideScreened === true;
   const legible = item.documentScreening?.imageQualityStatus !== "low";
+  const unresolvedEvidence = item.documentScreening?.profileBirthDateCheck === "possible_conflict" ||
+    item.documentScreening?.passportMrzBirthDateCheck === "possible_conflict" ||
+    item.documentScreening?.passportMrzCheck === "checksum_inconsistent_or_ocr_error" ||
+    item.documentScreening?.passportMrzCheck === "multiple_candidates";
+  const canVerify = recognized && backComplete && legible && !unresolvedEvidence &&
+    !!validationMethod && issuerReviewAttested && notes.trim().length >= 10 && !saving;
   const availableMethods = VALIDATION_METHODS.filter(method =>
     nationalId ? method.value === "psa_national_id_qr_check"
       : method.value !== "psa_national_id_qr_check"
@@ -873,14 +887,23 @@ function ReviewDetail({
             textAlignVertical="top"
           />
 
+          {unresolvedEvidence ? (
+            <View style={styles.privacyNotice}>
+              <Ionicons name="alert-circle-outline" size={19} color="#A13F2B" />
+              <Text style={styles.noticeText}>
+                Verification is blocked: unresolved document or birth-date evidence.
+                Require corrected evidence and independent issuer review; do not
+                infer fraud from OCR alone.
+              </Text>
+            </View>
+          ) : null}
           <View style={styles.actionRow}>
             <TouchableOpacity
               style={[
                 styles.verifyButton,
-                (!recognized || !backComplete || !legible || !validationMethod || !issuerReviewAttested || notes.trim().length < 10 || !!saving) &&
-                  styles.disabledButton,
+                !canVerify && styles.disabledButton,
               ]}
-              disabled={!recognized || !backComplete || !legible || !validationMethod || !issuerReviewAttested || notes.trim().length < 10 || !!saving}
+              disabled={!canVerify}
               onPress={onVerify}
             >
               {saving === "verify" ? (
