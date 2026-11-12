@@ -5284,6 +5284,13 @@ app.post(
         const attemptCycle = Number.isSafeInteger(current.aiAttemptCycle) && current.aiAttemptCycle > 0
           ? current.aiAttemptCycle : 1;
         const result = identityAttemptOutcome(decision, attemptCount);
+        // An exhausted retry cycle is a separate Admin queue reason, even
+        // if OCR already rejected the selected document. This never makes
+        // an unsupported or unrecognized ID eligible for approval.
+        const finalReviewTrack = decision === "failed" &&
+          result.requiresManualReview
+          ? "three_failed_attempts"
+          : reviewTrack;
         const resultMessage = reviewTrack === "blurry_id_review"
           ? "PENDING ADMIN REVIEW: Your claimed National ID scan is too blurry to identify. An Admin can request a clearer rescan; this does not verify the ID."
           : !recognizedSelectedId
@@ -5331,7 +5338,7 @@ app.post(
           matchScore,
           livenessScore,
           documentScreening,
-          reviewTrack,
+          reviewTrack: finalReviewTrack,
           message: resultMessage,
           requiresManualReview: result.requiresManualReview,
           aiAttemptCount: attemptCount,
@@ -5355,7 +5362,7 @@ app.post(
             status: result.status,
             requiresManualReview: result.requiresManualReview,
             matchScore, livenessScore,
-            documentScreening, reviewTrack,
+            documentScreening, reviewTrack: finalReviewTrack,
             verificationMethod: "volunserve_ai",
             previousReview,
             createdAt: FieldValue.serverTimestamp(),
@@ -5377,7 +5384,7 @@ app.post(
           }, { merge: true });
         return {
           ok: true, status: result.status, verificationId, decision,
-          matchScore, livenessScore, documentScreening, reviewTrack, message: resultMessage,
+          matchScore, livenessScore, documentScreening, reviewTrack: finalReviewTrack, message: resultMessage,
           attemptCount, maxAttempts: MAX_IDENTITY_AI_ATTEMPTS,
           attemptsRemaining: MAX_IDENTITY_AI_ATTEMPTS - attemptCount,
           requiresManualReview: result.requiresManualReview,
@@ -5447,7 +5454,7 @@ function identityAdminReviewPayload(verificationSnapshot, userSnapshot) {
     matchScore: numberOrNull(verification.matchScore),
     livenessScore: numberOrNull(verification.livenessScore),
     documentScreening: verification.documentScreening ? normalizeIdDocumentScreening(verification.documentScreening) : null,
-    reviewTrack: ["blurry_id_review", "priority_admin_review", "standard_admin_review"].includes(verification.reviewTrack)
+    reviewTrack: ["blurry_id_review", "priority_admin_review", "standard_admin_review", "three_failed_attempts"].includes(verification.reviewTrack)
       ? verification.reviewTrack : "none",
     message: cleanText(verification.message || "", 500),
     requiresManualReview: verification.requiresManualReview === true,
