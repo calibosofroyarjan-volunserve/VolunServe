@@ -17,6 +17,7 @@ const {
 const {reviewIssuerEvidence} = require("./identityIssuerReviewPolicy");
 const {isVerifiedFirebaseToken, isCompletedVolunServeProfile} = require("./verifiedFirebaseToken");
 const {classifyStagingFirestoreFailure} = require("./stagingProfileDiagnostics");
+const {verifyIndependentPadAttestation} = require("./independentPadAttestation");
 const {
   getProfileRole,
   isApprovedAccount,
@@ -5162,6 +5163,8 @@ app.get(
             verification
               .livenessScore,
           ),
+        padStatus: cleanText(verification.padStatus || "not_validated", 40),
+        padValidated: false, // Independent PAD not certified for this staging system.
         message:
           cleanText(
             verification
@@ -5266,13 +5269,29 @@ app.post(
       const aiResult = await callIdentityAiService(request);
       const documentScreening = normalizeIdDocumentScreening(aiResult?.documentScreening);
       const rawDecision = normalizeAiDecision(aiResult?.decision || aiResult?.status);
-      // A camera face match and OCR clue cannot automatically authenticate an ID
-      // or prove presentation-attack resistance. Fail closed on unsupported IDs.
-      const decision = enforceSelectedIdDecision(
-        rawDecision, documentScreening, aiResult?.livenessImplemented === true,
+      // The Python AI's reported liveness flag or facial-expression score is
+      // NEVER authoritative PAD evidence. Only verify a separately issued
+      // Ed25519 attestation tied to this exact request, UID and image payload.
+      // No trusted PAD provider is currently connected: default NOT validated.
+      const pad = verifyIndependentPadAttestation({
+        evidence: aiResult?.independentPadAttestation,
+        publicKeyPem: String(process.env.IDENTITY_PAD_PUBLIC_KEY_PEM || ""),
+        expectedIssuer: String(process.env.IDENTITY_PAD_ISSUER || ""),
+        expectedUid: uid,
+        expectedRequestId: requestId,
+        multipartBytes: request.body,
+      });
+      // Independent PAD provider/test validation is NOT complete. Even a
+      // cryptographically signed claim cannot grant Verified Resident.
+      // A signed, detected attack is a conservative failure; otherwise
+      // retain existing selected-ID and independent Admin-review policy.
+      const selectedIdDecision = enforceSelectedIdDecision(
+        rawDecision, documentScreening, false,
       );
+      const decision = pad.status === "spoof_detected"
+        ? "failed" : selectedIdDecision;
       const matchScore = numberOrNull(aiResult?.matchScore);
-      const livenessScore = numberOrNull(aiResult?.livenessScore);
+      const livenessScore = null; // Never manufacture or trust a still-photo PAD score.
       const verificationId = cleanText(
         aiResult?.verificationId || `identity_${uid}_${Date.now()}`, 200,
       );
@@ -5326,6 +5345,8 @@ app.post(
           reviewedByName: FieldValue.delete(),
           matchScore,
           livenessScore,
+          padStatus: pad.status,
+          padValidated: false,
           documentScreening,
           message: resultMessage,
           requiresManualReview: result.requiresManualReview,
@@ -5350,6 +5371,8 @@ app.post(
             status: result.status,
             requiresManualReview: result.requiresManualReview,
             matchScore, livenessScore,
+            padStatus: pad.status,
+            padValidated: false,
             documentScreening,
             verificationMethod: "volunserve_ai",
             previousReview,
@@ -5373,6 +5396,7 @@ app.post(
         return {
           ok: true, status: result.status, verificationId, decision,
           matchScore, livenessScore, documentScreening, message: resultMessage,
+          padStatus: pad.status, padValidated: false,
           attemptCount, maxAttempts: MAX_IDENTITY_AI_ATTEMPTS,
           attemptsRemaining: MAX_IDENTITY_AI_ATTEMPTS - attemptCount,
           requiresManualReview: result.requiresManualReview,
