@@ -16,6 +16,7 @@ const {
 } = require("./selectedIdPolicy");
 const {reviewIssuerEvidence} = require("./identityIssuerReviewPolicy");
 const {isVerifiedFirebaseToken, isCompletedVolunServeProfile} = require("./verifiedFirebaseToken");
+const {classifyStagingFirestoreFailure} = require("./stagingProfileDiagnostics");
 const {
   getProfileRole,
   isApprovedAccount,
@@ -858,6 +859,9 @@ async function requireFirebaseUser(
         storedProfile = await loadUserProfile(decodedToken.uid);
       } catch (profileError) {
         if (profileError?.statusCode !== 404) {
+          // Staging diagnostics: only a coarse, allowlisted gRPC category.
+          // NEVER log error.message, UID, email, document path or credentials.
+          console.warn("STAGING_PROFILE_READ_FAILURE", classifyStagingFirestoreFailure(profileError));
           response.status(503).json({
             error: "profile_check_unavailable",
             message: "Unable to verify your VolunServe profile right now.",
