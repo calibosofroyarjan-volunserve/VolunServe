@@ -18,6 +18,13 @@ function selectedIdRecognized(screening) {
     (screening.declaredIdType === "passport" ||
       (screening.backSideProvided === true && screening.backSideScreened === true)) &&
     screening.imageQualityStatus !== "low" &&
+    // Profile DOB and passport MRZ conflicts block even when upstream
+    // supplied a misleading "consistent" status with no warning codes.
+    screening.profileBirthDateCheck !== "possible_conflict" &&
+    screening.passportMrzBirthDateCheck !== "possible_conflict" &&
+    !["checksum_inconsistent_or_ocr_error", "multiple_candidates"].includes(
+      screening.passportMrzCheck
+    ) &&
     ALLOWED.has(screening.declaredIdType) &&
     screening.detectedIdType === screening.declaredIdType;
 }
