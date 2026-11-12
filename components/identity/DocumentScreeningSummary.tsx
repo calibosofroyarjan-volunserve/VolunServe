@@ -28,7 +28,12 @@ export default function DocumentScreeningSummary({
     screening.imageQualityStatus === "low" &&
     screening.warningCodes.includes("low_document_image_quality");
   const sideProblem = screening.warningCodes?.some((code) =>
-    ["document_front_back_swapped", "document_front_side_conflict", "document_back_looks_like_front"].includes(code),
+    [
+      "document_front_back_swapped", "document_front_side_conflict",
+      "document_back_looks_like_front", "document_back_evidence_inconclusive",
+      "document_back_layout_inconclusive", "low_document_back_image_quality",
+      "document_back_image_quality_unavailable",
+    ].includes(code),
   );
   const birthConflict = screening.profileBirthDateCheck === "possible_conflict";
   const passportMrzConflict = screening.declaredIdType === "passport" &&
@@ -86,6 +91,20 @@ export default function DocumentScreeningSummary({
                   : "Not confirmed"}
           </Text>
         </View>
+        {screening.declaredIdType !== "passport" ? (
+          <View style={styles.row}>
+            <Text style={styles.label}>ID back photo quality</Text>
+            <Text style={styles.value}>
+              {screening.backImageQualityStatus === "adequate"
+                ? "Image sufficiently sharp for OCR (not ID authenticity)"
+                : screening.backImageQualityStatus === "low"
+                  ? "Too blurry — retake the back"
+                  : screening.backImageQualityStatus === "not_checked"
+                    ? "Back not provided / not checked"
+                    : "Unconfirmed — needs review"}
+            </Text>
+          </View>
+        ) : null}
         <View style={styles.row}>
           <Text style={styles.label}>Account name vs ID text</Text>
           <Text style={styles.value}>
