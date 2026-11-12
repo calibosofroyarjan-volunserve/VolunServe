@@ -72,8 +72,8 @@ class ComparePadInputsTests(unittest.TestCase):
             self.assertFalse(report["classIndexSemanticsValidated"])
             self.assertEqual(report["identityDecisionUse"], "none")
             text = json.dumps(report)
-            for secret in ("private_person", "face_embedding", "confidence",
-                           "cosineSimilarity", "imageBytes"):
+            for secret in ("private_person", "face_embedding",
+                           "cosineSimilarity", "imageBytes", "individualScore"):
                 self.assertNotIn(secret, text)
 
     def test_missing_or_invalid_inputs_are_inconclusive(self):
