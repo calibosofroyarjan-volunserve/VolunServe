@@ -4702,6 +4702,16 @@ function getIdentityAiHeaders(
     .normalize("NFKD").replace(/[\u0300-\u036f]/g, "")
     .replace(/[^A-Za-z0-9 .'-]/g, "");
   if (barangay) headers["X-VolunServe-Profile-Barangay"] = barangay;
+  // Future independent PAD provider can bind its signed decision to the
+  // server-generated request, never a user-supplied nonce or face score.
+  // Sent only through the private, authenticated backend-to-AI hop.
+  if (typeof request.identityPadRequestId === "string" &&
+      /^[A-Za-z0-9-]{30,80}$/.test(request.identityPadRequestId) &&
+      Buffer.isBuffer(request.body)) {
+    headers["X-VolunServe-PAD-Request-Id"] = request.identityPadRequestId;
+    headers["X-VolunServe-PAD-Multipart-SHA256"] =
+      crypto.createHash("sha256").update(request.body).digest("hex");
+  }
   return headers;
 }
 async function readJsonResponse(
@@ -5265,7 +5275,7 @@ app.post(
         }, { merge: true });
       });
       claimed = true;
-
+      request.identityPadRequestId = requestId; // private server-issued per-attempt nonce
       const aiResult = await callIdentityAiService(request);
       const documentScreening = normalizeIdDocumentScreening(aiResult?.documentScreening);
       const rawDecision = normalizeAiDecision(aiResult?.decision || aiResult?.status);
