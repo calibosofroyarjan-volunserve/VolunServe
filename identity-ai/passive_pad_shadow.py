@@ -126,11 +126,17 @@ def assess_frame_shadow(image):
         shifted = logits - float(np.max(logits))
         exp = np.exp(shifted)
         probs = exp / exp.sum()
-        label = int(np.argmax(probs))  # 0 live, 1 printed, 2 replay (model card)
+        # IMPORTANT: the original MiniVisionAI Silent-Face-Anti-Spoofing
+        # test.py defines class 1 as REAL, while 0 and 2 are ATTACK classes.
+        # The third-party ONNX card incorrectly describes class 0 as live.
+        # These weights were converted from the upstream MiniFASNetV2 model.
+        # Until independently confirmed on representative camera samples,
+        # treat all labels as unvalidated SHADOW observations only.
+        label = int(np.argmax(probs))
         confidence = float(probs[label])
         if not math.isfinite(confidence) or confidence < SHADOW_THRESHOLD:
             status = "inconclusive"
-        elif label == 0:
+        elif label == 1:
             status = "model_prefers_live_unvalidated"
         else:
             status = "model_prefers_attack_unvalidated"
