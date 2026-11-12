@@ -16,6 +16,7 @@ from strict_document_screening import (
 )
 from profile_consistency import profile_comparison
 from passive_pad_shadow import readiness as passive_pad_readiness, assess_frame_shadow
+from sface_shadow import readiness as sface_readiness, assess_pair_shadow as sface_assess_pair_shadow
 import numpy as np
 from fastapi import FastAPI, Header, HTTPException, Request
 from starlette.datastructures import UploadFile as StarletteUploadFile
@@ -1066,6 +1067,13 @@ def run_face_verification(
     # SHADOW ONLY: no impact on matching threshold or verification decision.
     # A one-frame passive classifier cannot establish true liveness.
     pad_shadow = assess_frame_shadow(selfie_image)
+    # Independent staging QA observation only: never change match/approval policy.
+    sface_result = sface_assess_pair_shadow(id_image, selfie_image)
+    sface_diagnostic = {
+        "status": sface_result["status"],
+        "independentFaceMatchValidated": False,
+        "identityDecisionUse": "none",
+    }
     threshold = (
         get_match_threshold()
     )
@@ -1119,6 +1127,7 @@ def run_face_verification(
             "livenessImplemented":
                 False,
             "passivePadShadow": pad_shadow,
+            "sFaceShadow": sface_diagnostic,
         }
     fallback = manual_review_result(
         uid=uid,
@@ -1133,6 +1142,7 @@ def run_face_verification(
         warning="face_match_uncertain_uncalibrated",
     )
     fallback["passivePadShadow"] = pad_shadow
+    fallback["sFaceShadow"] = sface_diagnostic
     return fallback
 
 
@@ -1170,6 +1180,7 @@ def health():
             get_match_threshold(),
         "livenessImplemented": False,
         "passivePadShadow": passive_pad_readiness(),
+        "sFaceShadow": sface_readiness(),
         "idDocumentScreeningImplemented": True,
         "idDocumentAuthenticityVerified": False,
         "time": datetime.now(
