@@ -72,6 +72,15 @@ class TD3MrzTests(unittest.TestCase):
         res = assess_passport_mrz(FIRST + "\n" + invalid_dob)
         self.assertEqual(res["passportMrzCheck"], "checksum_inconsistent_or_ocr_error")
 
+    def test_mrz_leap_day_is_not_invented_on_nonleap_year(self):
+        # YY=99 cannot represent a leap year in either 1999 or 2099.
+        impossible = SECOND[:13] + "990229"
+        impossible += str(_check_digit("990229")) + SECOND[20:]
+        self.assertEqual(
+            assess_passport_mrz(FIRST + "\n" + impossible)["passportMrzCheck"],
+            "checksum_inconsistent_or_ocr_error",
+        )
+
     def test_no_private_profile_date_echo_and_invalid_profile_date(self):
         for date in ("2001-02-29", "secrets", ""):
             result = assess_passport_mrz(FIRST + "\n" + SECOND, date)
