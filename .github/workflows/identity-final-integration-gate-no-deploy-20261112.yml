@@ -1,0 +1,49 @@
+name: Identity Final Integration Gate (NO DEPLOY)
+on:
+  pull_request:
+    paths:
+      - 'backend/server.js'
+      - 'backend/test-identity-final-admin-only.js'
+      - 'scripts/identity-final-cross-service-contract.cjs'
+      - '.github/workflows/identity-final-integration-gate-no-deploy-20261112.yml'
+permissions:
+  contents: read
+jobs:
+  protected-identity-integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - name: Checkout protected Node candidate
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Checkout exact previously deployed production AI snapshot (read only)
+        uses: actions/checkout@v4
+        with:
+          ref: '768a78ac548b46c602ecc24118f381fadbdd9a49'
+          path: '.integration-audit/ai'
+          persist-credentials: false
+      - name: Checkout exact previously released Hosting/UI source (read only)
+        uses: actions/checkout@v4
+        with:
+          ref: '2cd63d318ecb6b0dfc52706308e05d0b5806d874'
+          path: '.integration-audit/web'
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Node gateway syntax and identity Admin-only behavior
+        run: |
+          node --check backend/server.js
+          node --test backend/test-identity-final-admin-only.js
+          node --test backend/test-selectedIdPolicy.js
+          node --test backend/test-identityIssuerReviewPolicy.js
+      - name: Validate matching released AI, Node, web/mobile and Firestore contracts
+        run: node scripts/identity-final-cross-service-contract.cjs
+      - name: Typecheck released Hosting web and native UI without deployment
+        working-directory: .integration-audit/web
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          npx tsc --noEmit --pretty false
+      - name: Confirm no deployment, keys or user data are accessed
+        run: echo 'PASS NO_DEPLOY - read-only sources, synthetic checks only'
