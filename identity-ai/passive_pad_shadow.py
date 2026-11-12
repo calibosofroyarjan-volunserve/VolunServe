@@ -68,15 +68,19 @@ def readiness():
     return {"shadowEnabled": shadow_enabled(),
             "modelLoaded": _load_net() is not None,
             "independentPadValidated": False,
+            "modelClassMappingValidated": False,
+            "modelInputScaleValidated": False,
+            "thresholdCalibrated": False,
             "identityDecisionUse": "none",
             "model": "minifasnet-v2-onnx-shadow",
             "faceDetectorShadow": yunet_readiness(),
-            "note": "Single-frame experimental classifier; not certified liveness."}
+            "note": "Single-frame model: source and converted ONNX class/order and input-scale documentation conflict. Labels and threshold unvalidated; cannot establish liveness."}
 
 
 def _face_crop(image):
     """Return a 2.7x context crop for exactly one clearly detected face."""
-    if not isinstance(image, np.ndarray) or image.ndim != 3 or image.shape[2] != 3:
+    if (not isinstance(image, np.ndarray) or image.dtype != np.uint8 or
+            image.ndim != 3 or image.shape[2] != 3):
         return None
     height, width = image.shape[:2]
     if height < 120 or width < 120 or height > 3000 or width > 3000:
@@ -88,13 +92,19 @@ def _face_crop(image):
     if box is None:
         return None
     x, y, w, h = box
-    side = max(w, h) * 2.7
-    left = int(round(x + w / 2 - side / 2))
-    top = int(round(y + h / 2 - side / 2))
-    right = int(round(x + w / 2 + side / 2))
-    bottom = int(round(y + h / 2 + side / 2))
+    # Original MiniVisionAI CropImage._get_new_box independently enlarges
+    # width and height by 2.7x, THEN resizes the rectangular patch to 80x80.
+    # The previous max(w,h) square was a source-preprocessing mismatch and
+    # could capture excess background or reject valid framed faces.
+    enlarged_width = w * 2.7
+    enlarged_height = h * 2.7
+    left = int(round(x + w / 2 - enlarged_width / 2))
+    top = int(round(y + h / 2 - enlarged_height / 2))
+    right = int(round(x + w / 2 + enlarged_width / 2))
+    bottom = int(round(y + h / 2 + enlarged_height / 2))
     # Never invent padded context outside the photographed frame.
-    if left < 0 or top < 0 or right > width or bottom > height:
+    if (left < 0 or top < 0 or right > width or bottom > height or
+            right <= left or bottom <= top):
         return None
     roi = image[top:bottom, left:right]
     if roi.size == 0:
@@ -113,7 +123,11 @@ def assess_frame_shadow(image):
         crop = _face_crop(image)
         if crop is None:
             return {"status": "inconclusive", "independentPadValidated": False}
-        # Source model card: BGR input, [0,1] normalization, NCHW 1x3x80x80.
+        # Third-party ONNX card documents BGR/[0,1]/NCHW 1x3x80x80.
+        # Upstream MiniVisionAI NumPy ToTensor appears to use raw 0..255.
+        # Both scales previously gave class_2 for one real-person test.
+        # Do NOT switch input scale, flip labels or lower the threshold
+        # based on a single observation; provenance needs independent audit.
         blob = cv2.dnn.blobFromImage(
             crop, scalefactor=1.0/255.0, size=(80, 80),
             mean=(0, 0, 0), swapRB=False, crop=False)
