@@ -2,7 +2,7 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
-const {assessFullStagingEnvironment} = require("./stagingFirebaseIsolation");
+const {assessFullStagingEnvironment, isFullStagingRuntime} = require("./stagingFirebaseIsolation");
 
 const good = () => ({
   VOLUNSERVE_STAGING_STRICT: "1",
@@ -98,4 +98,62 @@ test("Firebase Admin initialization enforces staging isolation before credential
   assert(source.includes("STAGING_ISOLATION_BLOCKED"));
   assert(!source.includes('serviceAccount.project_id !== "volunserve-auth-staging"'));
   assert(source.includes('existingApps[0].options.projectId !== "volunserve-full-staging"'));
+});
+
+
+test("known Render staging service ID enforces isolation even with all staging flags forgotten", () => {
+  const env = {...good(), RENDER_SERVICE_ID:"srv-dbnp9ulg1s2s73daj250"};
+  delete env.VOLUNSERVE_STAGING_STRICT;
+  delete env.VOLUNSERVE_DEPLOYMENT_ENV;
+  assert.equal(isFullStagingRuntime(env),true);
+  assert.equal(assessFullStagingEnvironment(env).safeToUseFullStaging,false);
+  const missing=failure(env);
+  assert(missing.includes("STAGING_MODE_ENABLED"));
+  assert(missing.includes("DEPLOYMENT_ENV_IS_STAGING"));
+});
+test("Render staging backend service name and URL are independent fail-closed staging signals", () => {
+  for (const only of [
+    {RENDER_SERVICE_NAME:"volunserve-backend-staging"},
+    {RENDER_EXTERNAL_URL:"https://volunserve-backend-staging.onrender.com"},
+  ]) {
+    const env = {...good(), ...only, VOLUNSERVE_STAGING_STRICT:"0",
+      VOLUNSERVE_DEPLOYMENT_ENV:"production"};
+    assert.equal(isFullStagingRuntime(env),true);
+    assert.equal(assessFullStagingEnvironment(env).safeToUseFullStaging,false);
+  }
+});
+test("a full-staging Firebase service account itself requires staging flags before app startup",()=>{
+  const env = {...good()};
+  delete env.VOLUNSERVE_STAGING_STRICT;
+  delete env.VOLUNSERVE_DEPLOYMENT_ENV;
+  assert.equal(isFullStagingRuntime(env),true);
+  assert.equal(assessFullStagingEnvironment(env).safeToUseFullStaging,false);
+});
+test("production Render identity cannot be mistaken for the known staging backend",()=>{
+  const env = {
+    RENDER_SERVICE_ID:"srv-daofqomk1f9s73btsg20",
+    RENDER_SERVICE_NAME:"VolunServe",
+    RENDER_EXTERNAL_URL:"https://volunserve.onrender.com",
+  };
+  assert.equal(isFullStagingRuntime(env),false);
+});
+test("old auth-staging or production credentials cannot pass even when attached to staging service",()=>{
+  for(const project of ["volunserve-auth-staging","volunserve-3aa5b"]){
+    const env={...good(),RENDER_SERVICE_NAME:"volunserve-backend-staging"};
+    const account=JSON.parse(env.FIREBASE_SERVICE_ACCOUNT_JSON);
+    account.project_id=project;
+    account.client_email="demo@"+project+".iam.gserviceaccount.com";
+    env.FIREBASE_SERVICE_ACCOUNT_JSON=JSON.stringify(account);
+    assert.equal(isFullStagingRuntime(env),true);
+    assert.equal(assessFullStagingEnvironment(env).safeToUseFullStaging,false);
+  }
+});
+test("firebaseAdmin checks service identity before cached or new Firebase SDK app",()=>{
+  const source=fs.readFileSync(require("node:path").join(__dirname, "firebaseAdmin.js"),"utf8");
+  const detectAt=source.indexOf("isFullStagingRuntime(process.env)");
+  const checkAt=source.indexOf("assessFullStagingEnvironment(process.env)");
+  const firstCached=source.indexOf("getApps();");
+  const firstAccount=source.indexOf("getServiceAccount();");
+  assert(detectAt > 0 && checkAt > detectAt);
+  assert(firstCached > checkAt && firstAccount > checkAt);
 });
