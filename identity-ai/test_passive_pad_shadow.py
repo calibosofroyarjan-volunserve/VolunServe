@@ -77,6 +77,60 @@ class PassivePadShadowTests(unittest.TestCase):
                           "No frame must reach the classifier when YuNet fails")
 
 
+    def test_rectangular_face_roi_matches_upstream_separate_width_and_height(self):
+        """A genuine landscape bbox should not be expanded into square background."""
+        image = np.zeros((480, 640, 3), dtype=np.uint8)
+        with patch.object(pad, "single_face_box", return_value=(160, 60, 150, 50)), \
+             patch.object(pad.cv2, "resize",
+                          return_value=np.zeros((80, 80, 3), dtype=np.uint8)) as resize:
+            crop = pad._face_crop(image)
+        self.assertEqual(crop.shape, (80, 80, 3))
+        raw_roi = resize.call_args.args[0]
+        # 150*2.7=405 and 50*2.7=135. Previously an oversized
+        # 405x405 square left the frame and returned inconclusive.
+        self.assertEqual(raw_roi.shape[:2], (135, 405))
+
+    def test_untrusted_frame_dtype_and_near_edge_face_fail_closed(self):
+        with patch.object(pad, "single_face_box",
+                          side_effect=AssertionError("invalid image reached detector")):
+            bad = np.ones((480, 640, 3), dtype=np.float32)
+            self.assertIsNone(pad._face_crop(bad))
+        with patch.object(pad, "single_face_box", return_value=(0, 0, 120, 55)):
+            self.assertIsNone(pad._face_crop(np.zeros((480, 640, 3), dtype=np.uint8)))
+
+    def test_bgr_normalization_stays_unmodified_pending_model_provenance(self):
+        photo = np.zeros((480, 640, 3), dtype=np.uint8)
+        photo[:, :, 0] = 10
+        photo[:, :, 1] = 80
+        photo[:, :, 2] = 240
+        with patch.object(pad, "single_face_box", return_value=(260, 180, 60, 60)):
+            output = pad.assess_frame_shadow(photo)
+        self.assertFalse(output["independentPadValidated"])
+        blob = self.net.last_input
+        self.assertEqual(blob.shape, (1, 3, 80, 80))
+        self.assertAlmostEqual(float(blob[0, 0, 20, 20]), 10 / 255, places=5)
+        self.assertAlmostEqual(float(blob[0, 1, 20, 20]), 80 / 255, places=5)
+        self.assertAlmostEqual(float(blob[0, 2, 20, 20]), 240 / 255, places=5)
+
+    def test_readiness_does_not_claim_label_or_input_scale_validated(self):
+        report = pad.readiness()
+        for key in ("independentPadValidated", "modelClassMappingValidated",
+                    "modelInputScaleValidated", "thresholdCalibrated"):
+            self.assertFalse(report[key])
+        self.assertEqual(report["identityDecisionUse"], "none")
+
+    def test_conflicting_model_probabilities_are_not_certified(self):
+        for logits in ([5, 0, 0], [0, 5, 0], [0, 0, 5],
+                       [0, 0, 0], [float("inf"), 0, 0]):
+            with self.subTest(logits=logits):
+                result = self.evaluate([(165, 165, 70, 70)], logits)
+                self.assertFalse(result["independentPadValidated"])
+                self.assertNotIn("identityVerified", result)
+                self.assertNotIn("livenessVerified", result)
+                self.assertIn(result["status"], (
+                    "model_prefers_live_unvalidated",
+                    "model_prefers_attack_unvalidated", "inconclusive"))
+
     def test_no_model_returns_unavailable_without_crashing(self):
         self.model.stop()
         with patch.object(pad, "_load_net", return_value=None):
