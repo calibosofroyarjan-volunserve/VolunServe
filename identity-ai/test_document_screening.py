@@ -110,6 +110,39 @@ class GovernmentIdScreeningTests(unittest.TestCase):
         self.assertFalse(actual["authenticityVerified"])
         self.assertEqual(actual["warningCodes"], ["ocr_unavailable"])
 
+    def test_school_id_with_government_keywords_never_passes(self):
+        examples = (
+            ("national_id", "UNIVERSITY ID STUDENT ID PhilID"),
+            ("drivers_license", "SCHOOL ID DRIVER'S LICENSE"),
+            ("passport", "CAMPUS ID PASSPORT"),
+            ("other_government_id", "STUDENT IDENTIFICATION CARD UMID"),
+        )
+        for declared_type, text in examples:
+            with self.subTest(declared_type=declared_type):
+                actual = assess_document_text(declared_type, text)
+                self.assertEqual(actual["status"], "inconclusive")
+                self.assertIsNone(actual["detectedIdType"])
+                self.assertEqual(actual["warningCodes"], ["document_type_not_recognized"])
+                self.assertFalse(actual["authenticityVerified"])
+                self.assertTrue(actual["manualReviewRequired"])
+
+    def test_non_government_credentials_never_pass_keyword_screen(self):
+        for label in (
+            "STUDENT IDENTIFICATION", "STUDENT CARD", "COLLEGE ID",
+            "LIBRARY CARD", "EMPLOYEE IDENTIFICATION CARD",
+        ):
+            with self.subTest(label=label):
+                actual = assess_document_text(
+                    "national_id", label + " PHILIPPINE IDENTIFICATION CARD"
+                )
+                self.assertEqual(actual["status"], "inconclusive")
+                self.assertIsNone(actual["detectedIdType"])
+                self.assertFalse(actual["authenticityVerified"])
+
+    def test_normal_government_id_without_school_label_keeps_screening(self):
+        actual = assess_document_text("national_id", "PHILIPPINE IDENTIFICATION CARD")
+        self.assertEqual(actual["status"], "text_consistent_unverified")
+
     def test_unsupported_id_type_rejected(self):
         with self.assertRaises(ValueError):
             assess_document_text("student_card", "PhilSys")
