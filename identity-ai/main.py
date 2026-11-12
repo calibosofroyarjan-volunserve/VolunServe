@@ -1452,6 +1452,21 @@ async def verify_identity(
             status_code=400,
             detail="The ID front and back must be different photographs.",
         )
+    # A copied ID photo (front or back) is not an independent selfie.
+    # This only detects exact byte reuse; it does NOT establish liveness,
+    # reject re-encoded spoofs, or certify presentation-attack detection.
+    selfie_fingerprint = hashlib.sha256(selfie_bytes).digest()
+    if selfie_fingerprint == hashlib.sha256(id_document_bytes).digest() or (
+        id_back_document_bytes is not None and
+        selfie_fingerprint == hashlib.sha256(id_back_document_bytes).digest()
+    ):
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "The selfie and ID photos must be different images. "
+                "Capture a new selfie with the camera."
+            ),
+        )
     if id_back_document_bytes is not None:
         # Reject corrupt or too-small back images before charging an attempt.
         decode_image(id_back_document_bytes, "Government ID back image")
