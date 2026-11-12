@@ -11,6 +11,13 @@ HEALTH = next(
     node for node in TREE.body
     if isinstance(node, ast.FunctionDef) and node.name == "health"
 )
+HEALTH_HAS_ROUTE = any(
+    isinstance(d, ast.Call) and isinstance(d.func, ast.Attribute)
+    and d.func.attr == "get"
+    and isinstance(d.func.value, ast.Name) and d.func.value.id == "app"
+    and d.args and isinstance(d.args[0], ast.Constant) and d.args[0].value == "/health"
+    for d in HEALTH.decorator_list
+)
 HEALTH.decorator_list = []
 MODULE = ast.Module(body=[HEALTH], type_ignores=[])
 ast.fix_missing_locations(MODULE)
@@ -20,6 +27,7 @@ def evaluate(ocr_ready, profile_ready):
     namespace = {
         "get_internal_key": lambda: "synthetic-internal-key",
         "face_mesh_engine_ready": lambda: True,
+        "get_match_threshold": lambda: 0.78,
         "document_ocr_ready": lambda: ocr_ready,
         "profile_comparison": (lambda *args: {}) if profile_ready else None,
         "datetime": datetime, "timezone": timezone,
@@ -30,6 +38,12 @@ def evaluate(ocr_ready, profile_ready):
 
 
 class StagingHealthContractTests(unittest.TestCase):
+    def test_health_route_is_registered_on_correct_handler(self):
+        self.assertTrue(HEALTH_HAS_ROUTE, "/health must call health(), not OCR helper")
+        helper = next(n for n in TREE.body if isinstance(n, ast.FunctionDef)
+                      and n.name == "document_ocr_ready")
+        self.assertFalse(helper.decorator_list, "OCR helper must not be an HTTP route")
+
     def test_healthy_server_reports_all_ui_required_checks(self):
         result = evaluate(True, True)
         self.assertTrue(result["ok"])
