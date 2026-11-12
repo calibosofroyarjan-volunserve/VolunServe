@@ -42,6 +42,11 @@ def parse_manifest(path):
     source = Path(path).expanduser().resolve(strict=True)
     if source.suffix.lower() != ".jsonl":
         raise ValueError("MANIFEST_JSONL_REQUIRED")
+    # A private manifest and its face/ID photos must NEVER live in the
+    # checkout: this stops accidental commits and Docker build-context copies.
+    repo_root = Path(__file__).resolve().parent.parent
+    if source.is_relative_to(repo_root):
+        raise ValueError("PRIVATE_MEDIA_FOLDER_MUST_BE_OUTSIDE_REPOSITORY")
     root = source.parent
     trials = []
     seen = set()
