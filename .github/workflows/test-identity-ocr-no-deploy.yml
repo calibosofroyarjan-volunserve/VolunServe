@@ -9,6 +9,7 @@ on:
       - "identity-ai/test_strict_document_screening.py"
       - "identity-ai/test_profile_consistency.py"
       - "identity-ai/main.py"
+      - "identity-ai/test_ai_route_contract.py"
       - "backend/server.js"
       - "backend/selectedIdPolicy.js"
       - "backend/test-selectedIdPolicy.js"
@@ -50,6 +51,10 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "20"
+      - name: Synthetic Python route-handler staging contract (no real photos, no network)
+        env:
+          PYTHONPATH: identity-ai
+        run: python -m unittest discover -s identity-ai -p 'test_ai_route_contract.py' -v
       - name: Validate protected Python AI API syntax
         run: python -m py_compile identity-ai/main.py identity-ai/strict_document_screening.py identity-ai/profile_consistency.py
       - name: Validate Node identity gateway syntax and selected ID policy
