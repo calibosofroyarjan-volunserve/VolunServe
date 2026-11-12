@@ -1063,6 +1063,9 @@ def run_face_verification(
         similarity["score"],
         4,
     )
+    # SHADOW ONLY: no impact on matching threshold or verification decision.
+    # A one-frame passive classifier cannot establish true liveness.
+    pad_shadow = assess_frame_shadow(selfie_image)
     threshold = (
         get_match_threshold()
     )
@@ -1115,8 +1118,9 @@ def run_face_verification(
             ),
             "livenessImplemented":
                 False,
+            "passivePadShadow": pad_shadow,
         }
-    return manual_review_result(
+    fallback = manual_review_result(
         uid=uid,
         message=(
             "The automatic 1-to-1 face comparison was not "
@@ -1128,6 +1132,8 @@ def run_face_verification(
         selfie_quality=selfie_quality,
         warning="face_match_uncertain_uncalibrated",
     )
+    fallback["passivePadShadow"] = pad_shadow
+    return fallback
 
 
 def document_ocr_ready():
@@ -1546,14 +1552,7 @@ async def verify_identity(
                 id_document_bytes=id_document_bytes,
                 selfie_bytes=selfie_bytes,
             )
-            # Experimental shadow model, NOT a verified liveness result.
-            # Does not affect decision, identity verification status, attempts
-            # or admin review. Media uploads remain blocked in the Node gate.
-            if os.getenv("VOLUNSERVE_PASSIVE_PAD_SHADOW", "0") == "1":
-                result["passivePadShadow"] = await asyncio.to_thread(
-                    assess_frame_shadow,
-                    decode_image(selfie_bytes, "Selfie image"),
-                )
+
     except HTTPException:
         raise
     except Exception:
