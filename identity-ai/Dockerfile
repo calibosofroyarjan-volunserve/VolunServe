@@ -27,4 +27,12 @@ RUN python -c "import mediapipe as mp; assert hasattr(mp, 'solutions') and hasat
 
 COPY . .
 
+# Only the isolated staging AI branch enables *shadow-only* PAD inference.
+# Download a tiny, SHA256-pinned Apache-2.0 ONNX model during build, never at
+# request time. Fail the build if source/checksum/model runtime is invalid.
+# The classifier cannot mark someone live, verified, or authenticated.
+ENV VOLUNSERVE_PASSIVE_PAD_SHADOW=1
+RUN python download_passive_pad_model.py && \
+    python -c "from passive_pad_shadow import readiness; status = readiness(); assert status['modelLoaded'] and not status['independentPadValidated'], status; print('PASS experimental PAD shadow model load; NOT certified liveness')"
+
 CMD ["sh", "-c", "uvicorn main:app --host 0.0.0.0 --port ${PORT:-10000}"]
