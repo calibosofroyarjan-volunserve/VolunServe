@@ -92,6 +92,40 @@ For manually captured photos **outside Git**, use these alternate output folders
 
 Official model downloads need internet access; actual test media processing happens locally. Model hashes, licenses and source attribution are documented in THIRD_PARTY_MODELS.md. No third-party promotional logo is required on VolunServe user screens; preserve legal attribution.
 
+## When every PAD test is inconclusive
+
+An all-inconclusive result is **not an anti-spoofing success**. The genuine live
+image being inconclusive also means genuine-face acceptance failed in this very
+small sample. The 0.0 attack fraction does not establish reliability.
+
+Run the **private, image-only diagnostic** from this branch. It never prints
+photos, names, face coordinates or per-person confidence.
+
+~~~powershell
+git pull --ff-only origin feat/staging-private-face-pad-evaluation-20261113
+py -3.11 identity-ai/diagnose_passive_pad_local.py --samples "$env:USERPROFILE\VolunServe-Private-QA\pad"
+~~~
+
+This reports aggregate reasons for each group:
+
+- `face_not_detected`: improve lighting/focus, center one real face and
+  capture enough face detail; print/screen samples may be harder to detect.
+- `multiple_faces`: keep exactly one pictured face in the frame.
+- `insufficient_face_context`: the experimental classifier requires 2.7x
+  context around the detected face and refuses crops extending outside
+  the image. Move **farther from the camera**, include head and shoulders and
+  background on all sides; a large close-up face can cause this despite
+  strong detection.
+- `model_inconclusive`: face crop was possible but model was uncertain or
+  failed. Do not lower the threshold simply to make a test pass.
+- `model_prefers_live_unvalidated` or `model_prefers_attack_unvalidated`:
+  these are preliminary model observations, **not independent PAD proof**.
+
+Retake the consenting samples with better natural room lighting, one
+well-centered face and more space around the head; use a separate
+video replay/printed-photo sample captured by the webcam, not the
+original digital file. The classifier and scoring policy remain unmodified.
+
 ## How to read the outputs
 
 - SFace samePersonNotAcceptedFraction: at a **fixed experimental threshold**, the fraction of genuine same-person pairs that score too low or are inconclusive.
