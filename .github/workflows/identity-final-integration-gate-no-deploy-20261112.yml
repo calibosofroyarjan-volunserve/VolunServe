@@ -16,19 +16,16 @@ jobs:
       - name: Checkout protected Node candidate
         uses: actions/checkout@v4
         with:
-          persist-credentials: false
       - name: Checkout exact previously deployed production AI snapshot (read only)
         uses: actions/checkout@v4
         with:
           ref: '768a78ac548b46c602ecc24118f381fadbdd9a49'
           path: '.integration-audit/ai'
-          persist-credentials: false
       - name: Checkout exact previously released Hosting/UI source (read only)
         uses: actions/checkout@v4
         with:
           ref: '2cd63d318ecb6b0dfc52706308e05d0b5806d874'
           path: '.integration-audit/web'
-          persist-credentials: false
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
