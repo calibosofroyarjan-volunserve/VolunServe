@@ -84,3 +84,42 @@ export function mrzDescription(screening) {
       return "Machine-readable passport text not found or not checked.";
   }
 }
+
+/**
+ * Explain only the caller's own staging login/access status. Never expose
+ * another user's role, documents, UID or authentication token.
+ *
+ * The backend is still the canonical authorization gate. Do NOT grant
+ * permissions or change the UI role based on the message shown here.
+ */
+export function stagingAccessMessage(status, errorCode) {
+  const code=String(errorCode || "").slice(0,100);
+  if (status === 401) {
+    return "Your staging Firebase session was not accepted by the staging backend. Sign out, confirm you are using the full-staging account (not production), and sign in again.";
+  }
+  if (status === 403) {
+    if (code === "email_not_verified") {
+      return "Your staging Firebase email is not verified. Verify that staging account's email before trying again.";
+    }
+    if (code === "registration_incomplete") {
+      return "Firebase sign-in worked, but no approved completed user profile was found in the full-staging Firestore project. Finish authorized staging account setup; production profiles do not transfer.";
+    }
+    if (code === "operational_admin_required") {
+      return "Firebase sign-in worked, but this full-staging profile is not an approved operational Admin. An authorized staging Super Admin must review/approve a test Admin account. Do not change roles manually or use production credentials.";
+    }
+    return "Staging access denied. The account may not have the required Admin authorization. Ask an authorized staging Super Admin to check your test account.";
+  }
+  if (status === 404 && code === "profile_not_found") {
+    return "This signed-in staging account has no matching full-staging Firestore user profile. Complete authorized staging account setup.";
+  }
+  if (status === 503 || status >= 500) {
+    return "Staging backend could not check your account right now. Retry the staging check; do not change Admin permissions to work around it.";
+  }
+  if (status === 409) {
+    return "This review was updated or its evidence conflicts. Refresh and require corrected evidence before approval.";
+  }
+  if (status === 423) {
+    return "Staging ID/selfie uploads remain disabled; use only approved synthetic or previously authorized test reviews.";
+  }
+  return "Unable to load staging Admin reviews. Confirm staging account approval and service availability.";
+}
