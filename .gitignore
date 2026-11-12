@@ -62,3 +62,10 @@ VolunServe-SafeBackup-*/
 # Debug logs
 firebase-debug.log
 firestore-debug.log
+
+# Experimental PAD model binaries and private biometric QA material: NEVER COMMIT
+/identity-ai/models/
+/private-pad-samples/
+/identity-ai/private-pad-samples/
+/private-pad-results/
+/identity-ai/private-pad-results/

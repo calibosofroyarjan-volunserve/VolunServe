@@ -35,7 +35,7 @@ class PassivePadShadowTests(unittest.TestCase):
     def setUp(self):
         self.env = patch.dict(os.environ, {"VOLUNSERVE_PASSIVE_PAD_SHADOW": "1"})
         self.env.start()
-        self.net = FakeNet([6, 0, 0])
+        self.net = FakeNet([0, 6, 0])
         self.model = patch.object(pad, "_load_net", return_value=self.net)
         self.model.start()
         self.image = np.full((400, 400, 3), 128, dtype=np.uint8)
@@ -50,16 +50,23 @@ class PassivePadShadowTests(unittest.TestCase):
             return pad.assess_frame_shadow(self.image)
 
     def test_live_like_output_is_not_identity_approval(self):
-        result = self.evaluate([(165, 165, 70, 70)], [6, 0, 0])
+        result = self.evaluate([(165, 165, 70, 70)], [0, 7, 0])
         self.assertEqual(result["status"], "model_prefers_live_unvalidated")
         self.assertFalse(result["independentPadValidated"])
         self.assertFalse("verified" in result)
 
     def test_attack_like_output_is_not_certified_pad(self):
-        for logits in ([0, 7, 0], [0, 0, 7]):
+        for logits in ([7, 0, 0], [0, 0, 7]):
             result = self.evaluate([(165, 165, 70, 70)], logits)
             self.assertEqual(result["status"], "model_prefers_attack_unvalidated")
             self.assertFalse(result["independentPadValidated"])
+
+    def test_upstream_class_zero_is_attack_not_live(self):
+        """Regression: MiniVisionAI test.py defines only class 1 as live."""
+        self.assertEqual(self.evaluate([(165, 165, 70, 70)], [9, 1, 0])["status"],
+                         "model_prefers_attack_unvalidated")
+        self.assertEqual(self.evaluate([(165, 165, 70, 70)], [0, 9, 1])["status"],
+                         "model_prefers_live_unvalidated")
 
     def test_uncertain_or_invalid_predictions_are_inconclusive(self):
         for logits in ([0, 0, 0], [float("nan"), 1, 0]):
@@ -69,7 +76,7 @@ class PassivePadShadowTests(unittest.TestCase):
     def test_no_face_multiple_faces_and_missing_context_are_inconclusive(self):
         for faces in ([], [(70, 70, 50, 50), (180, 180, 55, 55)],
                       [(0, 0, 70, 70)]):
-            self.assertEqual(self.evaluate(faces, [6, 0, 0])["status"], "inconclusive")
+            self.assertEqual(self.evaluate(faces, [0, 6, 0])["status"], "inconclusive")
 
     def test_no_model_returns_unavailable_without_crashing(self):
         self.model.stop()
