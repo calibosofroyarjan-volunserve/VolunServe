@@ -1,0 +1,22 @@
+name: Verify LIVE Identity AI Public Health (READ ONLY, NO DEPLOY)
+on:
+  pull_request:
+    paths:
+      - "scripts/check-public-identity-ai-health-20261112.py"
+      - ".github/workflows/verify-live-identity-ai-health-no-deploy-20261112.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify-live-ai:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Read-only production FaceMesh OCR profile readiness (no private media)
+        run: python scripts/check-public-identity-ai-health-20261112.py
+      - name: Confirm zero deployment permissions
+        run: echo "READ ONLY - no Render, Firebase or credential actions"
