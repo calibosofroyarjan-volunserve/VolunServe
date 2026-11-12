@@ -4,6 +4,7 @@ on:
     branches:
       - fix/identity-full-hardening-live-base-20261107
     paths:
+      - 'backend/firebaseAdmin.js'
       - 'backend/stagingFirebaseIsolation.js'
       - 'backend/scripts/check-staging-isolation.cjs'
       - 'backend/test-stagingFirebaseIsolation.js'
@@ -20,6 +21,7 @@ jobs:
           node-version: '22'
       - name: Verify syntax only
         run: |
+          node --check backend/firebaseAdmin.js
           node --check backend/stagingFirebaseIsolation.js
           node --check backend/scripts/check-staging-isolation.cjs
           node --check backend/test-stagingFirebaseIsolation.js
