@@ -91,6 +91,9 @@ test("Verification routes hard-block media and do not trust AI liveness claims",
   assert.match(route,/verifyIndependentPadAttestation\(\{/);
   assert.match(route,/expectedUid: uid/);
   assert.match(route,/expectedRequestId: requestId/);
+  assert.match(route,/request.identityPadRequestId = requestId/);
+  assert.match(source,/headers\["X-VolunServe-PAD-Request-Id"\] = request.identityPadRequestId/);
+  assert.match(source,/headers\["X-VolunServe-PAD-Multipart-SHA256"\]/);
   assert.match(route,/multipartBytes: request\.body/);
   assert.match(route,/const livenessScore = null;/);
   assert.match(route,/padValidated: false/);
