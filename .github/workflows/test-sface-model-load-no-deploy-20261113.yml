@@ -1,0 +1,60 @@
+name: SFace official model load (staging QA only; no deploy)
+on:
+  pull_request:
+    paths:
+      - "identity-ai/download_sface_model.py"
+      - "identity-ai/sface_shadow.py"
+      - "identity-ai/test_sface_shadow.py"
+      - "identity-ai/download_yunet_model.py"
+      - "identity-ai/yunet_shadow.py"
+      - "identity-ai/Dockerfile"
+      - ".github/workflows/test-sface-model-load-no-deploy-20261113.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify-official-model:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install CPU-only OpenCV without training dependencies
+        run: python -m pip install --disable-pip-version-check numpy==1.26.4 opencv-contrib-python-headless==4.11.0.86
+      - name: Download hash-pinned official weights and validate CPU model loading
+        env:
+          PYTHONPATH: identity-ai
+          VOLUNSERVE_SFACE_SHADOW: "1"
+        run: |
+          python identity-ai/download_sface_model.py
+          python identity-ai/download_yunet_model.py
+          python - <<'PY'
+          import sface_shadow
+          import yunet_shadow
+
+          sf = sface_shadow.readiness()
+          yu = yunet_shadow.readiness()
+          assert sf["modelLoaded"], "SFACE_MODEL_NOT_LOADABLE"
+          assert yu["modelLoaded"], "YUNET_MODEL_NOT_LOADABLE"
+          assert sf["independentFaceMatchValidated"] is False
+          assert sf["independentPadValidated"] is False
+          assert sf["identityDecisionUse"] == "none"
+          assert yu["identityDecisionUse"] == "none"
+          print("PASS official hash-pinned SFace and YuNet loaded on CPU.")
+          print("No resident images, identity approvals, or PAD certification tested.")
+          PY
+      - name: Synthetic no-media regression
+        env:
+          PYTHONPATH: identity-ai
+        run: python -m unittest discover -s identity-ai -p 'test_sface_shadow.py' -v
+      - name: Build actual staging identity AI Docker image without publishing
+        run: docker build --progress=plain --file identity-ai/Dockerfile --tag volunserve-ai-sface-qa identity-ai
+      - name: Check cold-start Python health under 512 MiB memory limit
+        run: |
+          docker run --rm --memory=512m \
+            -e IDENTITY_AI_INTERNAL_KEY=synthetic-ci-only-not-for-deployment \
+            volunserve-ai-sface-qa python -c "import main; h=main.health(); assert h['verificationEngineReady']; assert h['sFaceShadow']['modelLoaded']; assert h['passivePadShadow']['modelLoaded']; assert h['sFaceShadow']['independentFaceMatchValidated'] is False; assert h['livenessImplemented'] is False; assert h['idDocumentAuthenticityVerified'] is False; print('PASS staging identity AI health, models loaded, no identity approval under 512 MiB')"
+      - name: Confirm workflow cannot deploy
+        run: echo "PASS - Model QA and Docker smoke only; NO DEPLOY"
