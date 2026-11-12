@@ -156,3 +156,63 @@ test("older profile with no saved birthday does not count as birthday mismatch",
  const screening={...valid("national_id"),profileBirthDateCheck:"not_checked"};
  assert.equal(enforceSelectedIdDecision("manual_review",screening,false),"manual_review");
 });
+
+test("contradictory positive OCR plus warning is never treated as a recognized government ID",()=>{
+  const contradictoryWarnings=[
+    "school_id_not_supported",
+    "document_back_type_conflict",
+    "selected_id_type_conflicts_with_ocr",
+    "multiple_document_type_signals",
+    "ocr_unavailable",
+    "document_front_type_inconclusive",
+    "document_back_required",
+    "document_duplicate_side_text",
+    "low_document_image_quality",
+    "unexpected_untrusted_warning",
+  ];
+  for (const type of ["national_id","drivers_license","passport","umid","prc_id"]) {
+    for (const warning of contradictoryWarnings) {
+      const forged={...valid(type),warningCodes:[warning]};
+      assert.equal(selectedIdRecognized(forged),false,`${type} should reject ${warning}`);
+      assert.equal(enforceSelectedIdDecision("verified",forged,true),"failed");
+      assert.equal(enforceSelectedIdDecision("manual_review",forged,false),"failed");
+    }
+  }
+});
+
+test("malformed AI warning values never become a valid government ID",()=>{
+  for (const warnings of ["school_id_not_supported",{0:"school_id_not_supported"},null,42]) {
+    const forged={...valid("national_id"),warningCodes:warnings};
+    assert.equal(selectedIdRecognized(forged),false);
+    assert.equal(enforceSelectedIdDecision("verified",forged,true),"failed");
+  }
+});
+
+test("blurry National ID human-review exception refuses any conflicting or unknown warning",()=>{
+  const contradicting=[
+    "school_id_not_supported",
+    "document_back_type_conflict",
+    "document_back_required",
+    "multiple_document_type_signals",
+    "selected_id_type_conflicts_with_ocr",
+    "ocr_unavailable",
+    "document_front_back_swapped",
+    "document_front_side_conflict",
+    "document_back_looks_like_front",
+    "unexpected_untrusted_warning",
+  ];
+  for(const warning of contradicting){
+    const forged={...blur,warningCodes:[...blur.warningCodes,warning]};
+    assert.equal(blurryNationalIdNeedsReview(forged),false,warning);
+    assert.equal(enforceSelectedIdDecision("manual_review",forged,false),"failed");
+  }
+  // Allow only documented blur/uncertain OCR hints for human review;
+  // this NEVER means that an issuer or a face was authenticated.
+  const accepted={...blur,warningCodes:[
+    "low_document_image_quality","document_front_type_inconclusive",
+    "document_back_ocr_inconclusive",
+  ]};
+  assert.equal(blurryNationalIdNeedsReview(accepted),true);
+  assert.equal(enforceSelectedIdDecision("manual_review",accepted,false),"manual_review");
+  assert.equal(enforceSelectedIdDecision("verified",accepted,true),"failed");
+});

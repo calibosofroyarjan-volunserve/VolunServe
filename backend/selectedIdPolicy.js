@@ -7,14 +7,13 @@ const ALLOWED = new Set(["national_id", "drivers_license", "passport", "umid", "
 function selectedIdRecognized(screening) {
   return !!screening &&
     screening.status === "text_consistent_unverified" &&
-    !screening.warningCodes?.some(code => [
-      "document_front_back_swapped",
-      "document_front_side_conflict",
-      "document_back_looks_like_front",
-      "document_back_required",
-      "document_duplicate_side_text",
-      "document_back_ocr_inconclusive",
-    ].includes(code)) &&
+    // A *positive* document type match requires zero unresolved warnings.
+    // The AI may return contradictory status+warning fields: treat ALL
+    // warnings (including school_id_not_supported and back-side conflicts)
+    // as disqualifying, even when its status says "text_consistent".
+    // Undefined warningCodes is tolerated only for older sanitized fixtures.
+    (screening.warningCodes === undefined ||
+      (Array.isArray(screening.warningCodes) && screening.warningCodes.length === 0)) &&
     // Never accept a non-passport ID without both sides screened by the AI.
     (screening.declaredIdType === "passport" ||
       (screening.backSideProvided === true && screening.backSideScreened === true)) &&
@@ -34,12 +33,17 @@ function blurryNationalIdNeedsReview(screening) {
     (screening.detectedIdType === null ||
       screening.detectedIdType === "national_id") &&
     screening.imageQualityStatus === "low" &&
-    screening.warningCodes?.includes("low_document_image_quality") === true &&
-    !screening.warningCodes.includes("school_id_not_supported") &&
-    !screening.warningCodes.includes("ocr_unavailable") &&
-    !screening.warningCodes.includes("document_front_back_swapped") &&
-    !screening.warningCodes.includes("document_front_side_conflict") &&
-    !screening.warningCodes.includes("document_back_looks_like_front");
+    // Narrowly allow only blur/inconclusive OCR clues for *human review*.
+    // A selected government type with conflicting school/issuer/side signals
+    // must NOT enter the blurry-ID exception even when "low" is reported.
+    Array.isArray(screening.warningCodes) &&
+    screening.warningCodes.includes("low_document_image_quality") &&
+    screening.warningCodes.every(code => [
+      "low_document_image_quality",
+      "document_type_not_recognized",
+      "document_front_type_inconclusive",
+      "document_back_ocr_inconclusive",
+    ].includes(code));
 }
 
 function classifyIdentityReviewTrack({screening, decision, idImageQualityScore} = {}) {
