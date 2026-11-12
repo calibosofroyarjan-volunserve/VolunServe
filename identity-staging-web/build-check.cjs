@@ -105,4 +105,11 @@ checkInlineModule(process.execPath,["--check","--input-type=module"],{
   input:matchPadQa,stdio:["pipe","inherit","inherit"]
 });
 execFileSync(process.execPath,["--test","identity-staging-web/test-match-pad-metrics.mjs"],{stdio:"inherit"});
+// No signed-in Firebase user or ID/selfie upload must remain possible while the
+// staging lab still embeds obsolete auth-staging SDK configuration.
+if (!html.includes("const authIsolationReady=config.projectId==='volunserve-full-staging'") ||
+    !html.includes("const auth=authIsolationReady?getAuth(initializeApp(config)):null")) {
+  throw Error("Identity staging lab may be using obsolete Firebase authentication.");
+}
+execFileSync(process.execPath,["--test","identity-staging-web/test-auth-isolation-gate.cjs"],{stdio:"inherit"});
 console.log("Staging-only camera and identity integration checks passed.");
