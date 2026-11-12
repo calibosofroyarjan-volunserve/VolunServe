@@ -150,6 +150,12 @@ def main(argv=None):
         print("No supported consenting local presentation samples; nothing uploaded.",
               file=sys.stderr)
         return 2
+    # Do not publish a partial dataset as a complete live/print/replay assessment.
+    # The three classes are required; fewer classes cannot characterize PAD risk.
+    if not all(results.get(kind) for kind in KINDS):
+        print("Local PAD evaluation requires live/, print/ and replay/ samples.",
+              file=sys.stderr)
+        return 2
     report = summarize_observations(results)
     print(json.dumps(report, sort_keys=True, indent=2))
     if args.aggregate_json is not None:
