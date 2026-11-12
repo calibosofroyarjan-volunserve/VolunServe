@@ -1,0 +1,21 @@
+name: Final Identity LIVE Read-Only Stack Audit (NO DEPLOY)
+on:
+  pull_request:
+    paths:
+      - 'scripts/check-final-live-identity-stack-20261112.py'
+      - '.github/workflows/identity-final-live-stack-check-20261112.yml'
+permissions:
+  contents: read
+jobs:
+  public-identity-health:
+    runs-on: ubuntu-latest
+    timeout-minutes: 7
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Confirm production backend/AI health and anonymous identity denials
+        run: python scripts/check-final-live-identity-stack-20261112.py
+      - name: Confirm no deployment, upload, credentials, or access tokens
+        run: echo 'NO_DEPLOY_PUBLIC_READ_ONLY_HEALTH_CHECK'
