@@ -3,7 +3,7 @@ const assert = require("node:assert/strict");
 const {test} = require("node:test");
 const {probeIdentityAiReadiness} = require("./identityAiReadiness");
 const endpoint = "https://volunserve-identity-ai.onrender.com/verify";
-const health = {ok: true, verificationEngineReady: true, internalAuthConfigured: true, documentOcrReady: true, profileComparisonReady: true, documentPrecheckReady: true, livenessImplemented: false};
+const health = {ok: true, verificationEngineReady: true, internalAuthConfigured: true, documentOcrReady: true, profileComparisonReady: true, documentPrecheckReady: true, livenessImplemented: false, passivePadShadow:{shadowEnabled:true,modelLoaded:true,independentPadValidated:false,faceDetectorShadow:{modelLoaded:true,independentPadValidated:false}}};
 const response = (status, body) => ({status, ok: status >= 200 && status < 300, async json() {return body;}});
 const okHealth = () => response(200, health);
 const okAuth = () => response(200, {authenticated: true});
@@ -20,6 +20,11 @@ test("successful check verifies both readiness and private authentication", asyn
   assert.equal(result.body.profileComparisonReady, true);
   assert.equal(result.body.documentPrecheckReady, true);
   assert.equal(result.body.livenessImplemented, false);
+  assert.deepEqual(result.body.passivePadShadow,{modelLoaded:true,shadowEnabled:true,independentPadValidated:false,identityDecisionUse:"none"});
+  assert.deepEqual(result.body.faceDetectorShadow,{modelLoaded:true,independentPadValidated:false,identityDecisionUse:"none"});
+  assert.equal(result.body.mediaSubmissionEnabled,false);
+  assert.equal(result.body.biometricAccuracyMeasured,false);
+  assert.ok(!("model" in result.body.passivePadShadow),"Do not relay third-party model metadata to client");
   assert.equal(calls.length, 2); assert(calls.every(c => c.method === "GET" && c.body === undefined));
   assert.equal(calls[0].hasSecret, false); assert.equal(calls[1].hasSecret, true);
 });
@@ -99,4 +104,21 @@ test("missing readiness flags must not silently enable identity uploads", async 
   ));
   assert.equal(result.statusCode,503);
   assert.equal(result.body.ready,false);
+});
+
+test("shadow models missing or vendor falsely claiming PAD cannot flip verified, uploads or readiness",async()=>{
+  for(const pad of [undefined,{}, {modelLoaded:true,shadowEnabled:true,independentPadValidated:true,
+    faceDetectorShadow:{modelLoaded:true,independentPadValidated:true}}]){
+    const result=await probeIdentityAiReadiness(options(async url=>
+      url.endsWith("/health")?response(200,{...health,passivePadShadow:pad}):okAuth()));
+    assert.equal(result.statusCode,200,"Missing optional model must not break core OCR auth");
+    assert.equal(result.body.livenessImplemented,false);
+    assert.equal(result.body.mediaSubmissionEnabled,false);
+    assert.equal(result.body.biometricAccuracyMeasured,false);
+    assert.equal(result.body.passivePadShadow.independentPadValidated,false);
+    assert.equal(result.body.faceDetectorShadow.independentPadValidated,false);
+    assert.equal(result.body.passivePadShadow.identityDecisionUse,"none");
+    assert.equal(result.body.faceDetectorShadow.identityDecisionUse,"none");
+    assert.equal(result.body.passivePadShadow.modelLoaded,pad?.modelLoaded===true);
+  }
 });
