@@ -16,7 +16,7 @@ const {
   FieldValue,
 } = require("firebase-admin/firestore");
 
-const {assessFullStagingEnvironment} = require("./stagingFirebaseIsolation");
+const {assessFullStagingEnvironment, isFullStagingRuntime} = require("./stagingFirebaseIsolation");
 
 
 function getServiceAccount() {
@@ -57,9 +57,7 @@ function getServiceAccount() {
 function getFirebaseApp() {
   // Validate BEFORE Firebase initialization, and before considering a cached
   // app. Never read or write Firestore to determine the target project.
-  const isStaging = process.env.VOLUNSERVE_DEPLOYMENT_ENV === "staging" ||
-    process.env.VOLUNSERVE_DEPLOYMENT_ENV === "full-staging" ||
-    process.env.VOLUNSERVE_STAGING_STRICT === "1";
+  const isStaging = isFullStagingRuntime(process.env);
   if (isStaging) {
     const isolation = assessFullStagingEnvironment(process.env);
     if (!isolation.safeToUseFullStaging) {
