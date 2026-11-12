@@ -16,8 +16,13 @@ function selectedIdRecognized(screening) {
       (Array.isArray(screening.warningCodes) && screening.warningCodes.length === 0)) &&
     // Never accept a non-passport ID without both sides screened by the AI.
     (screening.declaredIdType === "passport" ||
-      (screening.backSideProvided === true && screening.backSideScreened === true)) &&
+      (screening.backSideProvided === true && screening.backSideScreened === true &&
+        // Newly screened reverse-side photos must be independently legible.
+        // Legacy records lacking the field remain subject to Admin review.
+        (screening.backImageQualityStatus === undefined ||
+          screening.backImageQualityStatus === "adequate"))) &&
     screening.imageQualityStatus !== "low" &&
+    screening.imageQualityStatus !== "unknown" &&
     // Profile DOB and passport MRZ conflicts block even when upstream
     // supplied a misleading "consistent" status with no warning codes.
     screening.profileBirthDateCheck !== "possible_conflict" &&
