@@ -148,12 +148,15 @@ test("old auth-staging or production credentials cannot pass even when attached 
     assert.equal(assessFullStagingEnvironment(env).safeToUseFullStaging,false);
   }
 });
-test("firebaseAdmin checks service identity before cached or new Firebase SDK app",()=>{
+test("firebaseAdmin always enforces full-staging credentials before cached or new Firebase SDK app",()=>{
   const source=fs.readFileSync(require("node:path").join(__dirname, "firebaseAdmin.js"),"utf8");
-  const detectAt=source.indexOf("isFullStagingRuntime(process.env)");
   const checkAt=source.indexOf("assessFullStagingEnvironment(process.env)");
   const firstCached=source.indexOf("getApps();");
   const firstAccount=source.indexOf("getServiceAccount();");
-  assert(detectAt > 0 && checkAt > detectAt);
-  assert(firstCached > checkAt && firstAccount > checkAt);
+  assert(checkAt > 0 && firstCached > checkAt && firstAccount > checkAt);
+  assert(source.includes("if (!isolation.safeToUseFullStaging)"));
+  assert(source.includes('existingApps[0].options.projectId !== "volunserve-full-staging"'));
+  assert(source.includes('projectId: "volunserve-full-staging"'));
+  assert(!source.includes("if (isStaging)"));
+  assert(!/credential:\s*applicationDefault\(/.test(source));
 });
