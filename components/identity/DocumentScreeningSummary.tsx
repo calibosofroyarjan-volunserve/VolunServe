@@ -31,7 +31,12 @@ export default function DocumentScreeningSummary({
     ["document_front_back_swapped", "document_front_side_conflict", "document_back_looks_like_front"].includes(code),
   );
   const birthConflict = screening.profileBirthDateCheck === "possible_conflict";
-  const title = sideProblem ? "Retake ID — front/back position may be wrong"
+  const passportMrzConflict = screening.declaredIdType === "passport" &&
+    (screening.passportMrzCheck === "checksum_inconsistent_or_ocr_error" ||
+      screening.passportMrzCheck === "multiple_candidates" ||
+      screening.passportMrzBirthDateCheck === "possible_conflict");
+  const title = passportMrzConflict ? "Passport MRZ needs manual review"
+    : sideProblem ? "Retake ID — front/back position may be wrong"
     : birthConflict ? "Birth date needs Admin review"
     : recognized
     ? (screening.detectedIdType === "national_id" ? "National ID text recognized" : "Government ID text recognized")
@@ -39,8 +44,14 @@ export default function DocumentScreeningSummary({
       : mismatch ? "ID rejected — wrong government ID type"
         : blurryNationalId ? "Blurry scan — Admin review / rescan"
           : "ID not accepted — scan inconclusive";
-  const icon = recognized && !sideProblem ? "document-text-outline" : unsupported || mismatch || sideProblem ? "alert-circle-outline" : "help-circle-outline";
-  const accent = recognized && !sideProblem ? "#12644E" : unsupported || mismatch || sideProblem ? "#A13F2B" : "#A46B16";
+  const icon = recognized && !sideProblem && !passportMrzConflict
+    ? "document-text-outline"
+    : unsupported || mismatch || sideProblem || passportMrzConflict
+      ? "alert-circle-outline" : "help-circle-outline";
+  const accent = recognized && !sideProblem && !passportMrzConflict
+    ? "#12644E"
+    : unsupported || mismatch || sideProblem || passportMrzConflict
+      ? "#A13F2B" : "#A46B16";
 
   return (
     <View style={styles.panel} accessibilityLabel="Government ID document screening result">
@@ -102,6 +113,32 @@ export default function DocumentScreeningSummary({
               : "Not readable or not on this ID"}
           </Text>
         </View>
+        {screening.declaredIdType === "passport" ? (
+          <>
+            <View style={styles.row}>
+              <Text style={styles.label}>Passport MRZ checksum</Text>
+              <Text style={styles.value}>
+                {screening.passportMrzCheck === "checksum_consistent_unverified"
+                  ? "OCR checksum consistent — passport NOT authenticated"
+                  : screening.passportMrzCheck === "checksum_inconsistent_or_ocr_error"
+                    ? "Checksum discrepancy or OCR error — review"
+                    : screening.passportMrzCheck === "multiple_candidates"
+                      ? "Conflicting OCR results — review"
+                      : "Not read / not checked"}
+              </Text>
+            </View>
+            <View style={styles.row}>
+              <Text style={styles.label}>MRZ birthday vs profile</Text>
+              <Text style={styles.value}>
+                {screening.passportMrzBirthDateCheck === "possible_match"
+                  ? "Possibly consistent (two-digit year, OCR only)"
+                  : screening.passportMrzBirthDateCheck === "possible_conflict"
+                    ? "Potential mismatch — Admin review"
+                    : "Not independently confirmed"}
+              </Text>
+            </View>
+          </>
+        ) : null}
         <View style={styles.row}>
           <Text style={styles.label}>Official issuer check</Text>
           <Text style={styles.value}>Not verified — PSA/issuer check required</Text>
@@ -113,7 +150,8 @@ export default function DocumentScreeningSummary({
         <View style={styles.row}>
           <Text style={styles.label}>Identity decision</Text>
           <Text style={styles.value}>
-            {sideProblem ? "Rejected / retake correct ID side"
+            {passportMrzConflict ? "Requires Admin review / corrected passport evidence"
+              : sideProblem ? "Rejected / retake correct ID side"
               : birthConflict ? "Pending Admin review — birth date differs"
               : recognized ? "Pending LGU validation (independent check required)"
               : blurryNationalId ? "Pending Admin review — no approval" : "Rejected / retry required"}
