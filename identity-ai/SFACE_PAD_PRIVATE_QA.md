@@ -46,7 +46,7 @@ py -3.11 identity-ai/evaluate_passive_pad_local.py --samples "$env:USERPROFILE\V
 
 Share **only the console's aggregate counts** if you want help interpreting them; do **not** upload raw camera images/videos or actual government IDs to a public service.
 
-## Capture consenting PRIVATE samples on your own Windows device
+## Alternative: supply your own previously captured, consented local test samples
 
 Face matching requires two distinct camera photos per pair. Use a folder OUTSIDE Git:
 
@@ -80,9 +80,9 @@ A digital video on its own is NOT a replay-attack example: record the screen pre
 
 ## Run on your private computer (Python 3.11)
 
-From a local checkout of the review branch:
+For manually captured photos **outside Git**, use these alternate output folders. If you used the quick camera commands above, you already have the output automatically and do not need to repeat the capture steps.
 
-    py -3.11 -m pip install numpy==1.26.4 opencv-contrib-python-headless==4.11.0.86
+    py -3.11 -m pip install numpy==1.26.4 opencv-contrib-python==4.11.0.86
     py -3.11 identity-ai/download_yunet_model.py
     py -3.11 identity-ai/download_sface_model.py
     py -3.11 identity-ai/download_passive_pad_model.py
@@ -106,6 +106,7 @@ Official model downloads need internet access; actual test media processing happ
 
 - [x] Staging model integration, Docker startup and no-deploy synthetic tests previously passed.
 - [x] Private SFace similarity and PAD exploratory aggregate testing tools provided.
+- [x] Consent-first local webcam capture CLI, no-upload/no-overwrite and synthetic tests provided (draft QA PR).
 - [ ] Real consented same-person and different-person pairs tested across devices and sessions.
 - [ ] Real live/printed-photo/screen-replay cases captured using physical cameras.
 - [ ] Independent error analysis, threshold calibration and multi-camera spoof evaluation.
