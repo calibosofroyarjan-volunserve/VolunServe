@@ -379,7 +379,10 @@ def add_photo_quality(screening: dict, blur_variance: float) -> dict:
         out["warningCodes"] = list(dict.fromkeys(
             out.get("warningCodes", []) + [reason]
         ))
-        if status == "unknown" and out.get("status") == "text_consistent_unverified":
+        # A blurred/unmeasurable front should not appear as a successful
+        # OCR precheck in Resident/Admin UI, even when a heading was read.
+        # Preserve stronger unsupported/wrong-ID findings over quality hints.
+        if out.get("status") == "text_consistent_unverified":
             out["status"] = "inconclusive"
     return out
 
