@@ -48,8 +48,9 @@ def _date_field_looks_possible(yy_mm_dd: str) -> bool:
     try:
         date(test_year, month, day)
     except ValueError:
-        # Century ambiguity: 29 Feb 1900 vs 2000 cannot be resolved via MRZ.
-        return month == 2 and day == 29
+        # Calendar plausibility only. Two-digit MRZ years cannot disambiguate
+        # 1900 from 2000, but an impossible Feb 29 (e.g. YY=99) is never valid.
+        return False
     return True
 
 
