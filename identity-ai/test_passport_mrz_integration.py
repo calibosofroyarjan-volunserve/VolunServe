@@ -9,7 +9,7 @@ import unittest
 
 from strict_document_screening import (
     assess_document_sides, assess_profile_name, document_ocr_unavailable,
-    add_photo_quality,
+    add_photo_quality, add_back_photo_quality,
 )
 from profile_consistency import profile_comparison
 from passport_mrz_shadow import assess_passport_mrz
@@ -32,6 +32,7 @@ def screened(front_text, dob="1974-08-12", id_type="passport", back_text=None):
         "extract_government_id_text": ocr,
         "assess_document_sides": assess_document_sides,
         "add_photo_quality": add_photo_quality,
+        "add_back_photo_quality": add_back_photo_quality,
         "decode_image": lambda *_args: object(),
         "image_quality": lambda *_args: {"blurVariance": 135.0},
         "assess_profile_name": assess_profile_name,
