@@ -116,8 +116,8 @@ class CapturePrivateCameraTests(unittest.TestCase):
              patch.object(camera.cv2, "VideoCapture",
                           side_effect=AssertionError("Camera accessed without consent")):
             result = camera.main(["--kind", "live", "--output", tmp])
-        self.assertEqual(result, 1)
-        self.assertEqual(list(Path(tmp).iterdir()), [])
+            self.assertEqual(result, 1)
+            self.assertEqual(list(Path(tmp).iterdir()), [])
 
     def test_windows_camera_setup_error_does_not_leave_camera_open(self):
         fake = FakeCamera()
