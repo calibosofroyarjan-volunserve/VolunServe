@@ -79,6 +79,9 @@ for(const sensitive of ["fetch(", "XMLHttpRequest", "navigator.sendBeacon", "loc
 }
 checkInlineModule(process.execPath,["--check","--input-type=module"],{input:padQa,stdio:["pipe","inherit","inherit"]});
 execFileSync(process.execPath,["--test","identity-staging-web/test-pad-qa-report.mjs"],{stdio:"inherit"});
+// The browser challenge accepted a prerecorded replay. Keep captured selfies
+// quarantined as local-only QA previews; they must never reach identity forms.
+execFileSync(process.execPath,["--test","identity-staging-web/test-replay-qa-containment.cjs"],{stdio:"inherit"});
 // Similarity observations are manual. Scores must NEVER be stored, networked,
 // used to modify production thresholds or interpreted as PAD certification.
 for (const qaPath of ["identity-staging-web/match-pad-metrics.mjs",
