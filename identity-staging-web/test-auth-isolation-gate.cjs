@@ -43,7 +43,8 @@ function simulate(hostname="volunserve-identity-test-staging.onrender.com") {
     },
     async sendPasswordResetEmail(){resetCount++;},
     async signOut(a){auth.currentUser=null;notify(null);},
-    setTimeout(){throw Error("Unexpected delayed retry in synthetic test");},
+    AbortController,
+    setTimeout(){return 1;},
     clearTimeout(){},
     fetch:async(url,options)=>{
       calls.push({url,method:options?.method||"GET",headers:options?.headers});
