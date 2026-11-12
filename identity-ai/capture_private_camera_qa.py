@@ -155,22 +155,46 @@ def capture_from_camera(kind, camera_index=0):
             raise RuntimeError("Camera unavailable. Check permissions and other camera apps.")
         cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
         cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
+        # Mouse input works even if Windows does not deliver keyboard focus to
+        # the OpenCV preview window. A click requests ONE camera capture.
+        click_requested = False
+        mouse_hook_attempted = False
+
+        def on_mouse(event, _x, _y, _flags, _userdata):
+            nonlocal click_requested
+            if event == cv2.EVENT_LBUTTONUP:
+                click_requested = True
+
         while len(frames) < count:
             ok, frame = cap.read()
             if not ok or frame is None:
                 raise RuntimeError("Cannot read camera frame; no samples were saved.")
             preview = frame.copy()
-            text = f"{kind.upper()}: {len(frames) + 1}/{count} — C capture, Q cancel"
+            text = f"{kind.upper()}: {len(frames) + 1}/{count} - CLICK / SPACE / C | Q cancel"
             cv2.putText(preview, text, (12, 28), cv2.FONT_HERSHEY_SIMPLEX,
-                        0.60, (255, 255, 255), 2, cv2.LINE_AA)
+                        0.55, (255, 255, 255), 2, cv2.LINE_AA)
+            if frames:
+                cv2.putText(preview, "FIRST PHOTO CAPTURED - TAKE SECOND",
+                            (12, 55), cv2.FONT_HERSHEY_SIMPLEX,
+                            0.52, (255, 255, 255), 2, cv2.LINE_AA)
             cv2.imshow(WINDOW_TITLE, preview)
+            if not mouse_hook_attempted:
+                mouse_hook_attempted = True
+                try:
+                    cv2.setMouseCallback(WINDOW_TITLE, on_mouse)
+                except cv2.error:
+                    # Some test/headless environments lack a native preview
+                    # window; keyboard capture remains available.
+                    pass
             key = cv2.waitKey(35) & 0xFF
-            if key in (ord("q"), 27):
+            if key in (ord("q"), ord("Q"), 27):
                 return None
-            if key == ord("c"):
+            if key in (ord("c"), ord("C"), 32, 13) or click_requested:
+                click_requested = False
                 if frames and np.array_equal(frames[-1], frame):
                     continue
                 frames.append(frame.copy())
+                print(f"Camera capture {len(frames)}/{count} accepted locally.", flush=True)
         return frames
     except cv2.error as exc:
         raise RuntimeError(
