@@ -34,6 +34,7 @@ import {
     checkIdentityEngineReady,
     IdentityDocumentType,
     IdentityVerificationStatusResult,
+    precheckIdentityDocument,
     submitIdentityVerification,
 } from "../lib/identityVerification";
 
@@ -80,6 +81,10 @@ type ScanState =
   | "too_close"
   | "off_center"
   | "hold_still"
+  | "challenge_center"
+  | "challenge_left"
+  | "challenge_right"
+  | "challenge_return"
   | "ready"
   | "captured";
 
@@ -90,6 +95,8 @@ type LiveChecks = {
   distanceGood: boolean;
   stable: boolean;
 };
+
+type MovementCheck = { direction: "left" | "right"; stage: "center" | "move" | "return" | "complete"; since: number | null };
 
 const EMPTY_CHECKS: LiveChecks = {
   faceDetected: false,
@@ -120,9 +127,14 @@ const ID_TYPES: Array<{
     helper: "Valid passport bio page",
   },
   {
-    value: "other_government_id",
-    label: "Other Government ID",
-    helper: "UMID or another government-issued photo ID",
+    value: "umid",
+    label: "UMID",
+    helper: "SSS / GSIS Unified Multi-Purpose ID",
+  },
+  {
+    value: "prc_id",
+    label: "PRC Professional ID",
+    helper: "PRC Professional Identification Card (PIC)",
   },
 ];
 
@@ -137,7 +149,7 @@ function scanCopy(scanState: ScanState) {
     case "camera_error":
       return {
         title: "Camera access is blocked",
-        text: "Allow camera access for localhost in your browser, then try again.",
+        text: "Allow camera access for this website in your browser settings, then try again.",
         color: COLORS.danger,
       };
     case "camera_missing":
@@ -188,6 +200,14 @@ function scanCopy(scanState: ScanState) {
         text: "Move your face toward the center of the oval.",
         color: COLORS.warning,
       };
+    case "challenge_center":
+      return { title: "Start in the center", text: "Center your face briefly before the movement prompt.", color: COLORS.blue };
+    case "challenge_left":
+      return { title: "Move left on screen", text: "Move your face toward the LEFT side of the mirrored preview.", color: COLORS.blue };
+    case "challenge_right":
+      return { title: "Move right on screen", text: "Move your face toward the RIGHT side of the mirrored preview.", color: COLORS.blue };
+    case "challenge_return":
+      return { title: "Return to the center", text: "Come back to the oval and hold still for the final selfie.", color: COLORS.blue };
     case "hold_still":
       return {
         title: "Face detected — hold still",
@@ -222,12 +242,18 @@ export default function IdentityVerificationWeb() {
   const idVideoRef = useRef<HTMLVideoElement | null>(null);
   const idCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const idStreamRef = useRef<MediaStream | null>(null);
+  const idCameraSessionRef = useRef(0);
+  const documentPrecheckRevisionRef = useRef(0);
+  const pendingFaceStartRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const idCaptureLockRef = useRef(false);
+  const idAutoFramesRef = useRef<{ previous: Uint8Array | null; steadySince: number | null }>({ previous: null, steadySince: null });
   const canvasRef = useRef<any>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const detectorRef = useRef<any>(null);
   const visionModuleRef = useRef<any>(null);
   const animationRef = useRef<number | null>(null);
   const stableSinceRef = useRef<number | null>(null);
+  const movementRef = useRef<MovementCheck>({ direction: "left", stage: "center", since: null });
   const lastDetectAtRef = useRef(0);
   const captureLockRef = useRef(false);
   const cameraStartingRef = useRef(false);
@@ -241,14 +267,28 @@ export default function IdentityVerificationWeb() {
     useState<IdentityDocumentType>("national_id");
   const [idDocument, setIdDocument] =
     useState<CapturedIdentityMedia | null>(null);
+  const [idBackDocument, setIdBackDocument] =
+    useState<CapturedIdentityMedia | null>(null);
   const [selfie, setSelfie] =
     useState<CapturedIdentityMedia | null>(null);
 
   const [consent, setConsent] = useState(false);
+  const [documentConsent, setDocumentConsent] = useState(false);
+  const [documentChecking, setDocumentChecking] = useState(false);
+  const [documentPrecheckMessage, setDocumentPrecheckMessage] = useState("");
+  const [documentPrecheckOutcome, setDocumentPrecheckOutcome] = useState<"pass" | "review" | "retry" | null>(null);
+  useEffect(() => () => {
+    // An in-flight OCR response cannot reopen the selfie screen after navigation.
+    documentPrecheckRevisionRef.current += 1;
+  }, []);
+
   const [retryingFailed, setRetryingFailed] = useState(false);
   const [idCameraOpen, setIdCameraOpen] = useState(false);
+  const [idCameraSide, setIdCameraSide] = useState<"front" | "back">("front");
   const [idCameraReady, setIdCameraReady] = useState(false);
   const [idCameraError, setIdCameraError] = useState("");
+  const [idAutoHint, setIdAutoHint] = useState("Keep the complete document visible and steady.");
+  const [idAutoProgress, setIdAutoProgress] = useState(0);
   const [submitting, setSubmitting] = useState(false);
   const [checkingStatus, setCheckingStatus] = useState(false);
   const [statusResult, setStatusResult] =
@@ -263,6 +303,7 @@ export default function IdentityVerificationWeb() {
   const [scanProgress, setScanProgress] = useState(0);
   const [liveChecks, setLiveChecks] =
     useState<LiveChecks>(EMPTY_CHECKS);
+  const [movementCompleted, setMovementCompleted] = useState(false);
   const [cameraError, setCameraError] = useState("");
 
   useEffect(() => {
@@ -318,6 +359,22 @@ export default function IdentityVerificationWeb() {
     };
   }, [idDocument?.uri]);
 
+  useEffect(() => {
+    const uri = idBackDocument?.uri;
+    return () => {
+      if (uri?.startsWith("blob:")) URL.revokeObjectURL(uri);
+    };
+  }, [idBackDocument?.uri]);
+
+  // Selfie snapshots are sensitive biometric evidence. Revoke the temporary
+  // browser URL on replacement/unmount just as we do for ID front/back.
+  useEffect(() => {
+    const uri = selfie?.uri;
+    return () => {
+      if (uri?.startsWith("blob:")) URL.revokeObjectURL(uri);
+    };
+  }, [selfie?.uri]);
+
   const identityStatus = getIdentityStatus(profile);
   const currentIdentityStatus =
     statusResult?.identityStatus || identityStatus;
@@ -337,6 +394,11 @@ export default function IdentityVerificationWeb() {
   );
 
   const stopCamera = useCallback(() => {
+    // Cancel any deferred camera start when navigating back or unmounting.
+    if (pendingFaceStartRef.current !== null) {
+      clearTimeout(pendingFaceStartRef.current);
+      pendingFaceStartRef.current = null;
+    }
     cameraRequestRef.current += 1;
     if (animationRef.current !== null) {
       cancelAnimationFrame(animationRef.current);
@@ -403,6 +465,8 @@ export default function IdentityVerificationWeb() {
   // Scan the physical ID directly from the camera; do not accept gallery
   // images as identity evidence. Live face detection is a separate step.
   const stopIdCamera = useCallback(() => {
+    // Invalidate pending toBlob callbacks before closing/cancelling camera.
+    idCameraSessionRef.current += 1;
     const stream = idStreamRef.current;
     idStreamRef.current = null;
     stream?.getTracks().forEach((track) => track.stop());
@@ -410,6 +474,8 @@ export default function IdentityVerificationWeb() {
       idVideoRef.current.srcObject = null;
     }
     setIdCameraReady(false);
+    idAutoFramesRef.current = { previous: null, steadySince: null };
+    setIdAutoProgress(0);
   }, []);
 
   useEffect(() => {
@@ -462,16 +528,31 @@ export default function IdentityVerificationWeb() {
     };
   }, [idCameraOpen, stopIdCamera]);
 
-  const chooseIdDocument = () => {
+  const chooseIdDocument = (side: "front" | "back") => {
+    documentPrecheckRevisionRef.current += 1;
+    setDocumentPrecheckOutcome(null);
+    setDocumentPrecheckMessage("");
+    idCameraSessionRef.current += 1;
+    setIdCameraSide(side);
     setIdCameraReady(false);
     setIdCameraError("");
+    setIdAutoHint("Keep all corners of the ID visible. Auto-capture checks image steadiness, not authenticity.");
+    setIdAutoProgress(0);
+    idAutoFramesRef.current = { previous: null, steadySince: null };
     setIdCameraOpen(true);
   };
 
   const captureIdDocument = async () => {
+    if (idCaptureLockRef.current) return;
+    idCaptureLockRef.current = true;
+    const captureSession = idCameraSessionRef.current;
+    const captureSide = idCameraSide;
     const video = idVideoRef.current;
     const canvas = idCanvasRef.current;
-    if (!idCameraReady || !video || !canvas || !video.videoWidth || !video.videoHeight) return;
+    if (!idCameraReady || !video || !canvas || !video.videoWidth || !video.videoHeight) {
+      idCaptureLockRef.current = false;
+      return;
+    }
     try {
       canvas.width = video.videoWidth;
       canvas.height = video.videoHeight;
@@ -485,20 +566,107 @@ export default function IdentityVerificationWeb() {
           0.92,
         );
       });
-      const name = `government-id-camera-${Date.now()}.jpg`;
+      // A cancelled camera, route change, or side change must not save a
+      // stale snapshot after an asynchronous canvas.toBlob() finishes.
+      if (captureSession !== idCameraSessionRef.current || !idStreamRef.current) return;
+      const name = `government-id-${captureSide}-camera-${Date.now()}.jpg`;
       const file = new File([blob], name, { type: "image/jpeg" });
-      if (idDocument?.uri.startsWith("blob:")) URL.revokeObjectURL(idDocument.uri);
-      setIdDocument({ uri: URL.createObjectURL(blob), name, type: "image/jpeg", file });
+      const media: CapturedIdentityMedia = { uri: URL.createObjectURL(blob), name, type: "image/jpeg", file };
+      documentPrecheckRevisionRef.current += 1;
+      setDocumentPrecheckOutcome(null);
+      setDocumentPrecheckMessage("");
+      if (captureSide === "front") {
+        setIdDocument(media);
+      } else {
+        setIdBackDocument(media);
+      }
       setLocalMessage("");
       setIdCameraOpen(false);
     } catch (error: any) {
-      setIdCameraError(error?.message || "ID capture failed; please retry.");
+      if (captureSession === idCameraSessionRef.current) {
+        setIdCameraError(error?.message || "ID capture failed; please retry.");
+      }
+    } finally {
+      idCaptureLockRef.current = false;
     }
   };
 
+  // Non-biometric quality assist: sample a small local preview. It neither
+  // recognizes government IDs nor authenticates them; backend screening is separate.
+  useEffect(() => {
+    if (!idCameraOpen || !idCameraReady) return;
+    const sample = document.createElement("canvas");
+    sample.width = 160;
+    sample.height = 120;
+    const ctx = sample.getContext("2d", { willReadFrequently: true });
+    if (!ctx) {
+      setIdAutoHint("Auto-capture unavailable. Use the manual capture button.");
+      return;
+    }
+    const timer = window.setInterval(() => {
+      const video = idVideoRef.current;
+      if (!video || !idStreamRef.current || !video.videoWidth || idCaptureLockRef.current) return;
+      try {
+        ctx.drawImage(video, 0, 0, 160, 120);
+        const pixels = ctx.getImageData(0, 0, 160, 120).data;
+        const frame = new Uint8Array(80 * 60);
+        let sum = 0, glare = 0, edges = 0, moving = 0, count = 0;
+        const previous = idAutoFramesRef.current.previous;
+        // Ignore the extreme border. Texture is a framing aid, not ID detection.
+        for (let y = 8; y < 52; y++) {
+          for (let x = 8; x < 72; x++) {
+            const pixel = ((y * 2) * 160 + x * 2) * 4;
+            const gray = Math.round(0.299 * pixels[pixel] + 0.587 * pixels[pixel + 1] + 0.114 * pixels[pixel + 2]);
+            const at = y * 80 + x;
+            frame[at] = gray;
+            sum += gray;
+            if (gray > 238) glare++;
+            const right = pixel + 8;
+            const down = pixel + 160 * 8;
+            const r = 0.299 * pixels[right] + 0.587 * pixels[right + 1] + 0.114 * pixels[right + 2];
+            const d = 0.299 * pixels[down] + 0.587 * pixels[down + 1] + 0.114 * pixels[down + 2];
+            if (Math.abs(gray - r) + Math.abs(gray - d) > 34) edges++;
+            if (previous) moving += Math.abs(gray - previous[at]);
+            count++;
+          }
+        }
+        idAutoFramesRef.current.previous = frame;
+        const brightness = sum / count;
+        const qualityOk = video.videoWidth >= 640 && brightness >= 55 && brightness <= 210 && glare / count < 0.23 && edges / count >= 0.12;
+        const steady = Boolean(previous) && moving / count < 6;
+        if (!qualityOk || !steady) {
+          idAutoFramesRef.current.steadySince = null;
+          setIdAutoProgress(0);
+          setIdAutoHint(!qualityOk
+            ? "Improve lighting, avoid glare, and keep printed details visible. Manual capture is available."
+            : "Hold the document and camera still for automatic capture.");
+          return;
+        }
+        const now = performance.now();
+        if (idAutoFramesRef.current.steadySince === null) idAutoFramesRef.current.steadySince = now;
+        const heldFor = now - idAutoFramesRef.current.steadySince;
+        setIdAutoProgress(Math.min(100, Math.round(heldFor / 1300 * 100)));
+        setIdAutoHint("Image looks steady; auto-capturing. Review the result before continuing.");
+        if (heldFor >= 1300) void captureIdDocument();
+      } catch {
+        idAutoFramesRef.current.steadySince = null;
+        setIdAutoHint("Camera analysis unavailable. Use Capture manually.");
+      }
+    }, 250);
+    return () => window.clearInterval(timer);
+  }, [idCameraOpen, idCameraReady, idCameraSide]);
+
   const discardIdDocument = () => {
-    if (idDocument?.uri.startsWith("blob:")) URL.revokeObjectURL(idDocument.uri);
+    documentPrecheckRevisionRef.current += 1;
+    setDocumentPrecheckOutcome(null);
+    setDocumentPrecheckMessage("");
     setIdDocument(null);
+  };
+  const discardIdBackDocument = () => {
+    documentPrecheckRevisionRef.current += 1;
+    setDocumentPrecheckOutcome(null);
+    setDocumentPrecheckMessage("");
+    setIdBackDocument(null);
   };
 
   const ensureDetector = async () => {
@@ -588,6 +756,7 @@ export default function IdentityVerificationWeb() {
 
   const captureFrame = useCallback(async () => {
     if (captureLockRef.current) return;
+    const captureSession = cameraRequestRef.current;
 
     const video = videoRef.current as HTMLVideoElement | null;
     const canvas = canvasRef.current as HTMLCanvasElement | null;
@@ -629,6 +798,8 @@ export default function IdentityVerificationWeb() {
         );
       });
 
+      // Never save a selfie captured after the user left/cancelled this scan.
+      if (captureSession !== cameraRequestRef.current || !streamRef.current) return;
       const name = `identity-face-scan-${Date.now()}.jpg`;
       const file = new File([blob], name, {
         type: "image/jpeg",
@@ -645,11 +816,12 @@ export default function IdentityVerificationWeb() {
       setScanState("captured");
       stopCamera();
     } catch (error: any) {
-      setScanState("camera_error");
-      setCameraError(
-        error?.message ||
-          "The face scan could not capture a frame.",
-      );
+      if (captureSession === cameraRequestRef.current) {
+        setScanState("camera_error");
+        setCameraError(
+          error?.message || "The face scan could not capture a frame.",
+        );
+      }
     } finally {
       captureLockRef.current = false;
     }
@@ -683,11 +855,17 @@ export default function IdentityVerificationWeb() {
           const oneFace = detections.length === 1;
 
           if (!faceDetected) {
+            movementRef.current.stage = "center";
+            movementRef.current.since = null;
+            setMovementCompleted(false);
             stableSinceRef.current = null;
             setScanProgress(0);
             setLiveChecks(EMPTY_CHECKS);
             setScanState("no_face");
           } else if (!oneFace) {
+            movementRef.current.stage = "center";
+            movementRef.current.since = null;
+            setMovementCompleted(false);
             stableSinceRef.current = null;
             setScanProgress(0);
             setLiveChecks({
@@ -705,6 +883,9 @@ export default function IdentityVerificationWeb() {
             const videoHeight = video.videoHeight || 1;
 
             if (!box) {
+              movementRef.current.stage = "center";
+              movementRef.current.since = null;
+              setMovementCompleted(false);
               stableSinceRef.current = null;
               setScanProgress(0);
               setLiveChecks({
@@ -743,6 +924,9 @@ export default function IdentityVerificationWeb() {
                 !tooClose;
 
               if (!distanceGood) {
+                movementRef.current.stage = "center";
+                movementRef.current.since = null;
+                setMovementCompleted(false);
                 stableSinceRef.current = null;
                 setScanProgress(0);
                 setLiveChecks({
@@ -755,6 +939,35 @@ export default function IdentityVerificationWeb() {
                 setScanState(
                   tooFar ? "too_far" : "too_close",
                 );
+              } else if (movementRef.current.stage !== "complete") {
+                // Camera-motion prompt only: replay or moved photo may still pass.
+                // Never treat this as validated liveness or presentation-attack detection.
+                const movement = movementRef.current;
+                const displayOffset = 0.5 - centerX / videoWidth; // mirrored preview
+                const onSide = movement.direction === "left"
+                  ? displayOffset <= -0.15 : displayOffset >= 0.15;
+                const qualifies = movement.stage === "move" ? onSide : centered;
+                if (!qualifies) {
+                  movement.since = null;
+                } else {
+                  if (movement.since === null) movement.since = now;
+                  const held = now - movement.since;
+                  if (movement.stage === "center" && held >= 550) {
+                    movement.stage = "move"; movement.since = null;
+                  } else if (movement.stage === "move" && held >= 400) {
+                    movement.stage = "return"; movement.since = null;
+                  } else if (movement.stage === "return" && held >= 650) {
+                    movement.stage = "complete"; movement.since = null;
+                    setMovementCompleted(true);
+                  }
+                }
+                stableSinceRef.current = null;
+                setScanProgress(0);
+                setLiveChecks({ faceDetected: true, oneFace: true, centered, distanceGood: true, stable: false });
+                setScanState(movement.stage === "center" ? "challenge_center"
+                  : movement.stage === "move"
+                    ? movement.direction === "left" ? "challenge_left" : "challenge_right"
+                    : "challenge_return");
               } else if (!centered) {
                 stableSinceRef.current = null;
                 setScanProgress(0);
@@ -822,6 +1035,9 @@ export default function IdentityVerificationWeb() {
     setLiveChecks(EMPTY_CHECKS);
     captureLockRef.current = false;
     stableSinceRef.current = null;
+    // Randomized motion guidance, not validated anti-spoofing.
+    movementRef.current = { direction: Math.random() < 0.5 ? "left" : "right", stage: "center", since: null };
+    setMovementCompleted(false);
 
     let stream: MediaStream | null = null;
     let phase: "camera" | "preview" | "detector" = "camera";
@@ -899,20 +1115,56 @@ export default function IdentityVerificationWeb() {
   };
 
   const openFaceScan = async () => {
+    if (documentChecking) return;
     if (!idDocument) {
-      Alert.alert(
-        "Government ID Required",
-        "Capture a clear government ID image using your camera before starting the face scan.",
+      setDocumentPrecheckMessage("Capture the front of your government ID first.");
+      return;
+    }
+    if (idType !== "passport" && !idBackDocument) {
+      setDocumentPrecheckMessage("Capture the reverse of your government ID before proceeding.");
+      return;
+    }
+    if (!documentConsent) {
+      setDocumentPrecheckMessage(
+        "Please consent to uploading these ID photos for a preliminary OCR document check before opening the face camera.",
       );
       return;
     }
-
-    setSelfie(null);
-    stopCamera();
-    setStep(2);
-    setTimeout(() => {
-      void startCamera();
-    }, 250);
+    const revision = documentPrecheckRevisionRef.current;
+    setDocumentChecking(true);
+    setDocumentPrecheckOutcome(null);
+    setDocumentPrecheckMessage("Checking the selected ID type, front/back arrangement and image quality...");
+    try {
+      await checkIdentityEngineReady();
+      if (revision !== documentPrecheckRevisionRef.current) return;
+      const result = await precheckIdentityDocument({
+        idType, idDocument,
+        idBackDocument: idType === "passport" ? null : idBackDocument,
+        consent: documentConsent,
+      });
+      if (revision !== documentPrecheckRevisionRef.current) return;
+      setDocumentPrecheckOutcome(result.outcome);
+      setDocumentPrecheckMessage(result.message);
+      if (result.outcome === "retry") return;
+      // PASS is preliminary OCR plausibility; REVIEW is a blurry-National-ID
+      // human rescan case. Neither authenticates an ID or establishes liveness.
+      setSelfie(null);
+      stopCamera();
+      setStep(2);
+      pendingFaceStartRef.current = setTimeout(() => {
+        pendingFaceStartRef.current = null;
+        void startCamera();
+      }, 250);
+    } catch (error: any) {
+      if (revision === documentPrecheckRevisionRef.current) {
+        setDocumentPrecheckOutcome("retry");
+        setDocumentPrecheckMessage(
+          error?.message || "ID recognition is unavailable. Retake or retry after checking the connection.",
+        );
+      }
+    } finally {
+      setDocumentChecking(false);
+    }
   };
 
   const retake = () => {
@@ -921,10 +1173,13 @@ export default function IdentityVerificationWeb() {
     }
 
     setSelfie(null);
+    setMovementCompleted(false);
     setScanProgress(0);
     setLiveChecks(EMPTY_CHECKS);
     setScanState("idle");
-    setTimeout(() => {
+    if (pendingFaceStartRef.current !== null) clearTimeout(pendingFaceStartRef.current);
+    pendingFaceStartRef.current = setTimeout(() => {
+      pendingFaceStartRef.current = null;
       void startCamera();
     }, 100);
   };
@@ -938,6 +1193,12 @@ export default function IdentityVerificationWeb() {
         "Government ID Required",
         "Select a clear image of your government-issued ID.",
       );
+      return;
+    }
+
+    if (idType !== "passport" && !idBackDocument) {
+      setStep(1);
+      setLocalMessage("The back-side ID scan is required before submission.");
       return;
     }
 
@@ -975,6 +1236,7 @@ export default function IdentityVerificationWeb() {
         await submitIdentityVerification({
           idType,
           idDocument,
+          idBackDocument: idType === "passport" ? null : idBackDocument,
           selfie,
         });
 
@@ -1110,6 +1372,7 @@ export default function IdentityVerificationWeb() {
           setLocalMessage("");
           setSubmittedIdPreviewUri(null);
           setIdDocument(null);
+          setIdBackDocument(null);
           setSelfie(null);
           setConsent(false);
           setScanState("idle");
@@ -1234,24 +1497,60 @@ export default function IdentityVerificationWeb() {
       {step === 1 ? (
         <UploadIdStep
           idType={idType}
-          setIdType={setIdType}
+          setIdType={(value) => {
+            if (idType !== value) {
+              discardIdDocument();
+              discardIdBackDocument();
+              documentPrecheckRevisionRef.current += 1;
+              idCameraSessionRef.current += 1;
+              setIdCameraOpen(false);
+            }
+            setIdType(value);
+          }}
           idDocument={idDocument}
+          idBackDocument={idBackDocument}
+          cameraSide={idCameraSide}
           selectedIdLabel={selectedIdLabel}
           cameraOpen={idCameraOpen}
           cameraReady={idCameraReady}
           cameraError={idCameraError}
+          autoHint={idAutoHint}
+          autoProgress={idAutoProgress}
           idVideoRef={idVideoRef}
           idCanvasRef={idCanvasRef}
-          onPick={chooseIdDocument}
+          onPick={() => chooseIdDocument("front")}
+          onPickBack={() => chooseIdDocument("back")}
           onCapture={() => void captureIdDocument()}
-          onCancel={() => setIdCameraOpen(false)}
+          onCancel={() => {
+            idCameraSessionRef.current += 1;
+            setIdCameraOpen(false);
+          }}
           onNext={() => void openFaceScan()}
+          documentConsent={documentConsent}
+          onDocumentConsentChange={(allowed) => {
+            if (!allowed) {
+              documentPrecheckRevisionRef.current += 1;
+              setDocumentPrecheckOutcome(null);
+              setDocumentPrecheckMessage("");
+            }
+            setDocumentConsent(allowed);
+          }}
+          documentChecking={documentChecking}
+          documentPrecheckMessage={documentPrecheckMessage}
+          documentPrecheckOutcome={documentPrecheckOutcome}
           onRemove={discardIdDocument}
+          onRemoveBack={discardIdBackDocument}
         />
       ) : null}
 
       {step === 2 ? (
         <View style={styles.stepCard}>
+          {documentPrecheckOutcome === "review" ? (
+            <View style={styles.truthNote} accessibilityRole="alert">
+              <Ionicons name="information-circle-outline" size={18} color={COLORS.danger}/>
+              <Text style={styles.truthText}>{documentPrecheckMessage}</Text>
+            </View>
+          ) : null}
           <View style={styles.stepHeader}>
             <View style={styles.stepHeaderNumber}>
               <Text style={styles.stepHeaderNumberText}>
@@ -1263,9 +1562,7 @@ export default function IdentityVerificationWeb() {
                 Real-time Face Scan
               </Text>
               <Text style={styles.stepSubtitle}>
-                VolunServe detects your face live, checks
-                centering and distance, then captures
-                automatically after you hold still.
+                VolunServe checks camera alignment, asks for a random sideways movement, then captures a still selfie. This is not validated anti-spoofing.
               </Text>
             </View>
           </View>
@@ -1416,6 +1713,10 @@ export default function IdentityVerificationWeb() {
               <LiveCheck
                 passed={liveChecks.stable}
                 label="Face held still"
+              />
+              <LiveCheck
+                passed={movementCompleted}
+                label="Movement prompt completed (not proof of liveness)"
               />
 
               <View style={styles.guidanceCard}>
@@ -1689,32 +1990,54 @@ function UploadIdStep({
   idType,
   setIdType,
   idDocument,
+  idBackDocument,
+  cameraSide,
   selectedIdLabel,
   cameraOpen,
   cameraReady,
   cameraError,
+  autoHint,
+  autoProgress,
   idVideoRef,
   idCanvasRef,
   onPick,
+  onPickBack,
   onCapture,
   onCancel,
   onNext,
+  documentConsent,
+  onDocumentConsentChange,
+  documentChecking,
+  documentPrecheckMessage,
+  documentPrecheckOutcome,
   onRemove,
+  onRemoveBack,
 }: {
   idType: IdentityDocumentType;
   setIdType: (value: IdentityDocumentType) => void;
   idDocument: CapturedIdentityMedia | null;
+  idBackDocument: CapturedIdentityMedia | null;
+  cameraSide: "front" | "back";
   selectedIdLabel: string;
   cameraOpen: boolean;
   cameraReady: boolean;
   cameraError: string;
+  autoHint: string;
+  autoProgress: number;
   idVideoRef: React.MutableRefObject<HTMLVideoElement | null>;
   idCanvasRef: React.MutableRefObject<HTMLCanvasElement | null>;
   onPick: () => void;
+  onPickBack: () => void;
   onCapture: () => void;
   onCancel: () => void;
   onNext: () => void;
+  documentConsent: boolean;
+  onDocumentConsentChange: (value: boolean) => void;
+  documentChecking: boolean;
+  documentPrecheckMessage: string;
+  documentPrecheckOutcome: "pass" | "review" | "retry" | null;
   onRemove: () => void;
+  onRemoveBack: () => void;
 }) {
   return (
     <View style={styles.stepCard}>
@@ -1729,7 +2052,7 @@ function UploadIdStep({
             Scan Government ID
           </Text>
           <Text style={styles.stepSubtitle}>
-            Scan your physical government-issued ID with the camera. Make the face and printed details clear.
+            Scan your physical government ID. Put the portrait/front in Front and the reverse in Back. Auto-capture checks steadiness, not which side is shown; OCR checks orientation after submission.
           </Text>
         </View>
       </View>
@@ -1782,115 +2105,126 @@ function UploadIdStep({
         })}
       </View>
 
-      <Text style={styles.fieldLabel}>
-        ID Photo
-      </Text>
-
-      {idDocument ? (
-        <View style={styles.mediaPreviewCard}>
-          <Image
-            source={{ uri: idDocument.uri }}
-            style={styles.idPreview}
-            resizeMode="cover"
-          />
-          <View style={styles.mediaPreviewInfo}>
-            <View style={styles.mediaSuccessIcon}>
-              <Ionicons
-                name="checkmark"
-                size={17}
-                color="#FFFFFF"
+      {([
+        { side: "front" as const, label: "Front of ID", media: idDocument, open: onPick, remove: onRemove },
+        ...(idType === "passport" ? [] : [
+          { side: "back" as const, label: "Back of ID", media: idBackDocument, open: onPickBack, remove: onRemoveBack },
+        ]),
+      ]).map(({ side, label, media, open, remove }) => (
+        <View key={side}>
+          <Text style={styles.fieldLabel}>{label}</Text>
+          {media ? (
+            <View style={styles.mediaPreviewCard}>
+              <Image
+                source={{ uri: media.uri }}
+                style={styles.idPreview}
+                resizeMode="cover"
               />
-            </View>
-            <View style={styles.mediaPreviewCopy}>
-              <Text style={styles.mediaPreviewTitle}>
-                {selectedIdLabel} selected
-              </Text>
-              <Text
-                style={styles.mediaPreviewText}
-                numberOfLines={1}
-              >
-                {idDocument.name}
-              </Text>
-            </View>
-            <TouchableOpacity
-              style={styles.iconButton}
-              onPress={onRemove}
-            >
-              <Ionicons
-                name="trash-outline"
-                size={18}
-                color={COLORS.danger}
-              />
-            </TouchableOpacity>
-          </View>
-        </View>
-      ) : cameraOpen ? (
-        <View style={styles.mediaPreviewCard}>
-          <View style={styles.idLivePreview}>
-            {React.createElement("video" as any, {
-              ref: idVideoRef,
-              autoPlay: true,
-              muted: true,
-              playsInline: true,
-              style: { width: "100%", height: "100%", objectFit: "contain", background: "#111827" },
-            })}
-            {React.createElement("canvas" as any, {
-              ref: idCanvasRef,
-              style: { display: "none" },
-            })}
-          </View>
-          <Text style={styles.uploadText}>
-            Hold the physical ID flat and steady. Avoid glare, make sure the face is visible, then capture.
-          </Text>
-          {cameraError ? <Text style={styles.idCameraError}>{cameraError}</Text> : null}
-          <View style={styles.idCameraActions}>
-            <TouchableOpacity
-              style={[styles.nextButton, !cameraReady && styles.disabledButton]}
-              onPress={onCapture}
-              disabled={!cameraReady}
-            >
-              <Ionicons name="camera" size={19} color="#FFFFFF" />
-              <Text style={styles.nextButtonText}>Capture ID</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.secondaryWideButton} onPress={onCancel}>
-              <Text style={styles.secondaryWideButtonText}>Cancel</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      ) : (
-        <TouchableOpacity
-          style={styles.uploadZone}
-          onPress={onPick}
-        >
-          <>
-              <View style={styles.uploadIcon}>
-                <Ionicons
-                  name="image-outline"
-                  size={29}
-                  color={COLORS.blue}
-                />
+              <View style={styles.mediaPreviewInfo}>
+                <View style={styles.mediaSuccessIcon}>
+                  <Ionicons name="checkmark" size={17} color="#FFFFFF" />
+                </View>
+                <View style={styles.mediaPreviewCopy}>
+                  <Text style={styles.mediaPreviewTitle}>
+                    {label} captured — side not yet validated
+                  </Text>
+                  <Text style={styles.mediaPreviewText} numberOfLines={1}>
+                    {media.name}
+                  </Text>
+                </View>
+                <TouchableOpacity style={styles.iconButton} onPress={remove}>
+                  <Ionicons name="trash-outline" size={18} color={COLORS.danger} />
+                </TouchableOpacity>
               </View>
-              <Text style={styles.uploadTitle}>
-                Open Camera to Scan ID
-              </Text>
+            </View>
+          ) : cameraOpen && cameraSide === side ? (
+            <View style={styles.mediaPreviewCard}>
+              <View style={styles.idLivePreview}>
+                {React.createElement("video" as any, {
+                  ref: idVideoRef,
+                  autoPlay: true,
+                  muted: true,
+                  playsInline: true,
+                  style: { width: "100%", height: "100%", objectFit: "contain", background: "#111827" },
+                })}
+                {React.createElement("canvas" as any, {
+                  ref: idCanvasRef,
+                  style: { display: "none" },
+                })}
+              </View>
               <Text style={styles.uploadText}>
-                Live camera capture · clear ID face · no glare
+                Hold {side === "front" ? "the portrait/front side" : "the reverse/back side"} of the ID flat and steady. Keep all four edges visible. Auto-capture alone cannot confirm the correct side.
               </Text>
-          </>
-        </TouchableOpacity>
-      )}
+              <Text style={styles.uploadText}>{autoHint} {autoProgress > 0 ? `(${autoProgress}%)` : ""}</Text>
+              {cameraError ? <Text style={styles.idCameraError}>{cameraError}</Text> : null}
+              <View style={styles.idCameraActions}>
+                <TouchableOpacity
+                  style={[styles.nextButton, !cameraReady && styles.disabledButton]}
+                  onPress={onCapture}
+                  disabled={!cameraReady}
+                >
+                  <Ionicons name="camera" size={19} color="#FFFFFF" />
+                  <Text style={styles.nextButtonText}>Capture manually: {label}</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.secondaryWideButton} onPress={onCancel}>
+                  <Text style={styles.secondaryWideButtonText}>Cancel</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          ) : (
+            <TouchableOpacity
+              style={styles.uploadZone}
+              onPress={open}
+              disabled={cameraOpen}
+            >
+              <View style={styles.uploadIcon}>
+                <Ionicons name="camera-outline" size={29} color={COLORS.blue} />
+              </View>
+              <Text style={styles.uploadTitle}>Open Camera — {label}</Text>
+              <Text style={styles.uploadText}>
+                The camera may capture the wrong side. Review the preview, then tap Check ID: the AI will screen the ID type and front/back layout before you enter the face scan. This is not proof of authenticity.
+              </Text>
+            </TouchableOpacity>
+          )}
+        </View>
+      ))}
 
+      <TouchableOpacity
+        accessibilityRole="checkbox"
+        accessibilityState={{ checked: documentConsent }}
+        style={styles.consentRow}
+        onPress={() => onDocumentConsentChange(!documentConsent)}
+      >
+        <View style={[styles.checkbox, documentConsent && styles.checkboxActive]}>
+          {documentConsent ? <Ionicons name="checkmark" color="#FFFFFF" size={15} /> : null}
+        </View>
+        <Text style={styles.consentText}>
+          I agree to securely submit my ID front/back images for a preliminary OCR
+          scan before the selfie. No selfie is uploaded at this stage.
+          The check does not confirm government issuance.
+        </Text>
+      </TouchableOpacity>
+      {documentPrecheckMessage ? (
+        <View style={styles.truthNote} accessibilityRole="alert">
+          <Ionicons
+            name={documentPrecheckOutcome === "pass" ? "checkmark-circle-outline" : "information-circle-outline"}
+            size={18}
+            color={documentPrecheckOutcome === "pass" ? COLORS.tealDark : COLORS.danger}
+          />
+          <Text style={styles.truthText}>{documentPrecheckMessage}</Text>
+        </View>
+      ) : null}
       <View style={styles.stepFooter}>
         <TouchableOpacity
           style={[
             styles.nextButton,
-            !idDocument && styles.disabledButton,
+            (!idDocument || (idType !== "passport" && !idBackDocument) || documentChecking) && styles.disabledButton,
           ]}
-          disabled={!idDocument}
+          disabled={!idDocument || (idType !== "passport" && !idBackDocument) || documentChecking}
           onPress={onNext}
         >
           <Text style={styles.nextButtonText}>
-            Next: Face Scan
+            {documentChecking ? "Checking government ID..." : "Check ID, then Face Scan"}
           </Text>
           <Ionicons
             name="arrow-forward"
@@ -2167,17 +2501,21 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
   },
   title: {
+    lineHeight: designUi.type.page.lineHeight,
     marginTop: 5,
     color: COLORS.navy,
     fontSize: designUi.type.page.fontSize,
     fontWeight: designUi.type.page.fontWeight,
-    letterSpacing: -0.4, lineHeight: designUi.type.page.lineHeight,},
+    letterSpacing: -0.4,
+  },
   subtitle: {
+    fontWeight: designUi.type.body.fontWeight,
     marginTop: 6,
     maxWidth: 760,
     color: COLORS.muted,
     fontSize: designUi.type.body.fontSize,
-    lineHeight: designUi.type.body.lineHeight, fontWeight: designUi.type.body.fontWeight,},
+    lineHeight: designUi.type.body.lineHeight,
+  },
   progressCard: {
     width: "100%",
     minHeight: 86,
@@ -2277,20 +2615,26 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   stepTitle: {
+    lineHeight: designUi.type.section.lineHeight,
     color: COLORS.navy,
     fontSize: designUi.type.section.fontSize,
-    fontWeight: designUi.type.section.fontWeight, lineHeight: designUi.type.section.lineHeight,},
+    fontWeight: designUi.type.section.fontWeight,
+  },
   stepSubtitle: {
+    fontWeight: designUi.type.body.fontWeight,
     marginTop: 4,
     color: COLORS.muted,
     fontSize: designUi.type.body.fontSize,
-    lineHeight: designUi.type.body.lineHeight, fontWeight: designUi.type.body.fontWeight,},
+    lineHeight: designUi.type.body.lineHeight,
+  },
   fieldLabel: {
+    lineHeight: designUi.type.label.lineHeight,
     marginTop: 2,
     marginBottom: 8,
     color: "#334155",
     fontSize: designUi.type.label.fontSize,
-    fontWeight: designUi.type.label.fontWeight, lineHeight: designUi.type.label.lineHeight,},
+    fontWeight: designUi.type.label.fontWeight,
+  },
   idTypeGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
@@ -2564,10 +2908,12 @@ const styles = StyleSheet.create({
     borderColor: COLORS.border,
   },
   requirementsTitle: {
+    lineHeight: designUi.type.section.lineHeight,
     marginBottom: 10,
     color: COLORS.navy,
     fontSize: designUi.type.section.fontSize,
-    fontWeight: designUi.type.section.fontWeight, lineHeight: designUi.type.section.lineHeight,},
+    fontWeight: designUi.type.section.fontWeight,
+  },
   requirementRow: {
     minHeight: 38,
     flexDirection: "row",
@@ -2879,11 +3225,13 @@ const styles = StyleSheet.create({
     fontWeight: "900",
   },
   statusTitle: {
+    lineHeight: designUi.type.section.lineHeight,
     marginTop: 14,
     color: COLORS.navy,
     fontSize: designUi.type.section.fontSize,
     fontWeight: designUi.type.section.fontWeight,
-    textAlign: "center", lineHeight: designUi.type.section.lineHeight,},
+    textAlign: "center",
+  },
   statusMessage: {
     marginTop: 8,
     maxWidth: 500,

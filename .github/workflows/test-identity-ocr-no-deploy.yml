@@ -1,0 +1,72 @@
+name: Identity OCR unit tests (review only, no deploy)
+on:
+  pull_request:
+    paths:
+      - "identity-ai/document_screening.py"
+      - "identity-ai/strict_document_screening.py"
+      - "identity-ai/profile_consistency.py"
+      - "identity-ai/test_document_screening.py"
+      - "identity-ai/test_strict_document_screening.py"
+      - "identity-ai/test_profile_consistency.py"
+      - "identity-ai/main.py"
+      - "identity-ai/test_ai_route_contract.py"
+      - "backend/server.js"
+      - "backend/selectedIdPolicy.js"
+      - "backend/test-selectedIdPolicy.js"
+      - "lib/identityVerification.ts"
+      - "app/identity-verification.web.tsx"
+      - "app/identity-verification.tsx"
+      - "components/identity/DocumentScreeningSummary.tsx"
+      - "lib/firebaseAuth.ts"
+      - "app/signup.tsx"
+      - "components/auth/EmailFirstSignup.tsx"
+      - "firestore.rules"
+      - "backend/test-identity-contract-staging.js"
+      - "backend/test-firestore-dob-rules.js"
+      - "backend/identityIssuerReviewPolicy.js"
+      - "backend/test-identityIssuerReviewPolicy.js"
+      - "app/(admin)/identity-reviews.tsx"
+      - ".github/workflows/test-identity-ocr-no-deploy.yml"
+permissions:
+  contents: read
+jobs:
+  identity-ocr-unit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Screen current and staged ID document OCR
+        env:
+          PYTHONPATH: identity-ai
+        run: |
+          python -m unittest discover -s identity-ai -p 'test_document_screening.py' -v
+          python -m unittest discover -s identity-ai -p 'test_strict_document_screening.py' -v
+      - name: Test DOB and barangay consistency
+        env:
+          PYTHONPATH: identity-ai
+        run: |
+          python -m unittest discover -s identity-ai -p 'test_profile_consistency.py' -v
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Synthetic Python route-handler staging contract (no real photos, no network)
+        env:
+          PYTHONPATH: identity-ai
+        run: python -m unittest discover -s identity-ai -p 'test_ai_route_contract.py' -v
+      - name: Validate protected Python AI API syntax
+        run: python -m py_compile identity-ai/main.py identity-ai/strict_document_screening.py identity-ai/profile_consistency.py
+      - name: Validate Node identity gateway syntax and selected ID policy
+        run: |
+          node --check backend/server.js
+          node --test backend/test-selectedIdPolicy.js
+          node --test backend/test-identity-contract-staging.js
+          node --test backend/test-firestore-dob-rules.js
+          node --test backend/test-identityIssuerReviewPolicy.js
+      - name: Install frontend dependency lockfile (no lifecycle scripts)
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Typecheck frontend identity UI and API client
+        run: npx tsc --noEmit
+      - name: Confirm no deployment occurs in this workflow
+        run: echo "NO DEPLOY - unit tests only"

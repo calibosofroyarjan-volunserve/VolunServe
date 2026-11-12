@@ -519,6 +519,7 @@ export default function EmailFirstSignup() {
         middleName: noMiddleName ? "" : middleName.trim(),
         lastName: lastName.trim(),
         age: age as number,
+        dateOfBirth: birth,
         phoneNumber: "", // Optional; kept for existing profile schema compatibility.
         region: "Region III – Central Luzon",
         province: "Bulacan",

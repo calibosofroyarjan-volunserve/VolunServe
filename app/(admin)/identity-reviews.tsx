@@ -60,15 +60,11 @@ type IdentityReview = {
 };
 
 const VALIDATION_METHODS = [
+  { value: "psa_national_id_qr_check", label: "PSA National ID Check (independent QR verification)", icon: "qr-code-outline" as const },
   {
     value: "in_person_lgu_validation",
     label: "In-person LGU validation",
     icon: "person-outline" as const,
-  },
-  {
-    value: "barangay_lgu_record_check",
-    label: "Barangay / LGU record check",
-    icon: "document-text-outline" as const,
   },
   {
     value: "official_document_check",
@@ -132,6 +128,7 @@ export default function IdentityReviewsAdmin() {
   const PAGE_SIZE = 5;
   const [selected, setSelected] = useState<IdentityReview | null>(null);
   const [validationMethod, setValidationMethod] = useState("");
+  const [issuerReviewAttested, setIssuerReviewAttested] = useState(false);
   const [notes, setNotes] = useState("");
   const [saving, setSaving] = useState<"" | "verify" | "require_retry">("");
 
@@ -254,6 +251,7 @@ export default function IdentityReviewsAdmin() {
   const openReview = (item: IdentityReview) => {
     setSelected(item);
     setValidationMethod(item.manualValidationMethod || "");
+    setIssuerReviewAttested(false);
     setNotes(item.manualReviewNotes || "");
   };
 
@@ -270,6 +268,17 @@ export default function IdentityReviewsAdmin() {
       return;
     }
 
+    if (action === "verify" && (
+      !issuerReviewAttested || notes.trim().length < 10 ||
+      selected.documentScreening?.status !== "text_consistent_unverified" ||
+      (selected.documentScreening?.declaredIdType !== "passport" &&
+       selected.documentScreening?.backSideScreened !== true) ||
+      selected.documentScreening?.imageQualityStatus === "low"
+    )) {
+      Alert.alert("Independent ID Verification Required",
+        "Review a legible supported ID, confirm both sides when applicable, complete the independent issuer check, and record at least 10 characters of review notes.");
+      return;
+    }
     if (action === "require_retry" && notes.trim().length < 5) {
       Alert.alert(
         "Retry Reason Required",
@@ -306,6 +315,7 @@ export default function IdentityReviewsAdmin() {
             action,
             validationMethod:
               action === "verify" ? validationMethod : "",
+            issuerReviewAttested: action === "verify" && issuerReviewAttested,
             notes: notes.trim(),
           }),
         },
@@ -333,6 +343,7 @@ export default function IdentityReviewsAdmin() {
 
       setSelected(null);
       setValidationMethod("");
+      setIssuerReviewAttested(false);
       setNotes("");
       await loadReviews();
     } catch (saveError: any) {
@@ -617,6 +628,8 @@ export default function IdentityReviewsAdmin() {
                   item={selected}
                   validationMethod={validationMethod}
                   setValidationMethod={setValidationMethod}
+                  issuerReviewAttested={issuerReviewAttested}
+                  setIssuerReviewAttested={setIssuerReviewAttested}
                   notes={notes}
                   setNotes={setNotes}
                   saving={saving}
@@ -680,6 +693,8 @@ function ReviewDetail({
   item,
   validationMethod,
   setValidationMethod,
+  issuerReviewAttested,
+  setIssuerReviewAttested,
   notes,
   setNotes,
   saving,
@@ -689,6 +704,8 @@ function ReviewDetail({
   item: IdentityReview;
   validationMethod: string;
   setValidationMethod: (value: string) => void;
+  issuerReviewAttested: boolean;
+  setIssuerReviewAttested: (value: boolean) => void;
   notes: string;
   setNotes: (value: string) => void;
   saving: "" | "verify" | "require_retry";
@@ -696,6 +713,15 @@ function ReviewDetail({
   onRetry: () => void;
 }) {
   const pending = reviewBucket(item) === "pending";
+  const nationalId = item.documentScreening?.declaredIdType === "national_id";
+  const recognized = item.documentScreening?.status === "text_consistent_unverified";
+  const backComplete = item.documentScreening?.declaredIdType === "passport" ||
+    item.documentScreening?.backSideScreened === true;
+  const legible = item.documentScreening?.imageQualityStatus !== "low";
+  const availableMethods = VALIDATION_METHODS.filter(method =>
+    nationalId ? method.value === "psa_national_id_qr_check"
+      : method.value !== "psa_national_id_qr_check"
+  );
 
   return (
     <View>
@@ -793,7 +819,7 @@ function ReviewDetail({
           </Text>
 
           <View style={styles.methodList}>
-            {VALIDATION_METHODS.map((method) => {
+            {availableMethods.map((method) => {
               const active = validationMethod === method.value;
               return (
                 <TouchableOpacity
@@ -822,6 +848,17 @@ function ReviewDetail({
             })}
           </View>
 
+          <TouchableOpacity
+            accessibilityRole="checkbox"
+            accessibilityState={{checked: issuerReviewAttested}}
+            style={styles.methodButton}
+            onPress={() => setIssuerReviewAttested(!issuerReviewAttested)}
+          >
+            <Ionicons name={issuerReviewAttested ? "checkbox-outline" : "square-outline"} size={21} color="#0F766E" />
+            <Text style={styles.methodButtonText}>
+              I independently checked this ID and confirm the evidence. VolunServe has not verified it through an issuer API.
+            </Text>
+          </TouchableOpacity>
           <Text style={styles.inputLabel}>
             Review notes / retry reason
           </Text>
@@ -840,10 +877,10 @@ function ReviewDetail({
             <TouchableOpacity
               style={[
                 styles.verifyButton,
-                (!validationMethod || !!saving) &&
+                (!recognized || !backComplete || !legible || !validationMethod || !issuerReviewAttested || notes.trim().length < 10 || !!saving) &&
                   styles.disabledButton,
               ]}
-              disabled={!validationMethod || !!saving}
+              disabled={!recognized || !backComplete || !legible || !validationMethod || !issuerReviewAttested || notes.trim().length < 10 || !!saving}
               onPress={onVerify}
             >
               {saving === "verify" ? (

@@ -35,9 +35,11 @@ import {
 } from "../lib/firebaseAuth";
 import {
   CapturedIdentityMedia,
+  checkIdentityEngineReady,
   getIdentityVerificationStatus,
   IdentityDocumentType,
   IdentityVerificationStatusResult,
+  precheckIdentityDocument,
   submitIdentityVerification,
 } from "../lib/identityVerification";
 
@@ -84,9 +86,14 @@ const ID_TYPES: Array<{
     helper: "Valid passport bio page",
   },
   {
-    value: "other_government_id",
-    label: "Other Government ID",
-    helper: "UMID or another government-issued photo ID",
+    value: "umid",
+    label: "UMID",
+    helper: "Unified Multi-Purpose ID (SSS / GSIS)",
+  },
+  {
+    value: "prc_id",
+    label: "PRC Professional ID",
+    helper: "Professional Regulation Commission (PRC) PIC",
   },
 ];
 
@@ -159,6 +166,7 @@ export default function IdentityVerification() {
 
   const cameraRef =
     useRef<any>(null);
+  const documentPrecheckRevisionRef = useRef(0);
 
   const [
     cameraPermission,
@@ -178,11 +186,22 @@ export default function IdentityVerification() {
     useState<IdentityDocumentType>("national_id");
   const [idDocument, setIdDocument] =
     useState<CapturedIdentityMedia | null>(null);
+  const [idBackDocument, setIdBackDocument] =
+    useState<CapturedIdentityMedia | null>(null);
   const [selfie, setSelfie] =
     useState<CapturedIdentityMedia | null>(null);
 
   const [consent, setConsent] =
     useState(false);
+  const [documentConsent, setDocumentConsent] = useState(false);
+  const [documentChecking, setDocumentChecking] = useState(false);
+  const [documentPrecheckMessage, setDocumentPrecheckMessage] = useState("");
+  const [documentPrecheckOutcome, setDocumentPrecheckOutcome] = useState<"pass" | "review" | "retry" | null>(null);
+  useEffect(() => () => {
+    // An in-flight OCR response cannot reopen the selfie screen after navigation.
+    documentPrecheckRevisionRef.current += 1;
+  }, []);
+
   const [pickingId, setPickingId] =
     useState(false);
   const [pickingSelfie, setPickingSelfie] =
@@ -329,7 +348,7 @@ export default function IdentityVerification() {
     identityStatus,
   ]);
 
-  const chooseIdDocument = async () => {
+  const captureIdSide = async (side: "front" | "back") => {
     if (pickingId || submitting) return;
     try {
       setPickingId(true);
@@ -345,7 +364,12 @@ export default function IdentityVerification() {
         cameraType: ImagePicker.CameraType.back,
       });
       if (!result.canceled && result.assets[0]) {
-        setIdDocument(mediaFromAsset(result.assets[0], "government-id-camera"));
+        const captured = mediaFromAsset(result.assets[0], `government-id-${side}`);
+        documentPrecheckRevisionRef.current++;
+        setDocumentPrecheckMessage("");
+        setDocumentPrecheckOutcome(null);
+        if (side === "front") setIdDocument(captured);
+        else setIdBackDocument(captured);
         setLocalMessage("");
       }
     } catch (error: any) {
@@ -355,28 +379,59 @@ export default function IdentityVerification() {
     }
   };
 
+  const chooseIdDocument = () => captureIdSide("front");
+  const chooseIdBackDocument = () => captureIdSide("back");
+
   const openFaceScan =
     async () => {
+      if (documentChecking) return;
       if (!idDocument) {
-        Alert.alert(
-          "Government ID Required",
-          "Scan a clear government ID using your camera before starting the face scan.",
-        );
+        setDocumentPrecheckMessage("Capture the front of a supported government ID first.");
+        return;
+      }
+      if (idType !== "passport" && !idBackDocument) {
+        setDocumentPrecheckMessage("Capture the reverse of the same government ID first.");
+        return;
+      }
+      if (!documentConsent) {
+        setDocumentPrecheckMessage("Agree to preliminary AI ID screening before uploading document photos.");
         return;
       }
 
-      setSelfie(null);
-      setCameraReady(false);
-      setStep(2);
-
-      if (
-        !cameraPermission?.granted
-      ) {
-        try {
-          await requestCameraPermission();
-        } catch {
-          // The step itself will show the permission fallback.
+      const revision = documentPrecheckRevisionRef.current;
+      setDocumentChecking(true);
+      setDocumentPrecheckMessage("Checking the ID type, scan side, and image quality...");
+      setDocumentPrecheckOutcome(null);
+      try {
+        await checkIdentityEngineReady();
+        if (revision !== documentPrecheckRevisionRef.current) return;
+        const result = await precheckIdentityDocument({
+          idType, idDocument,
+          idBackDocument: idType === "passport" ? null : idBackDocument,
+          consent: documentConsent,
+        });
+        if (revision !== documentPrecheckRevisionRef.current) return;
+        setDocumentPrecheckOutcome(result.outcome);
+        setDocumentPrecheckMessage(result.message);
+        setLocalMessage(result.outcome === "review" ? result.message : "");
+        if (result.outcome === "retry") return;
+        // Blurry National ID cases may proceed solely for Admin rescan review.
+        setSelfie(null);
+        setCameraReady(false);
+        setStep(2);
+        if (!cameraPermission?.granted) {
+          try { await requestCameraPermission(); }
+          catch { /* Screen includes permission-recovery UI. */ }
         }
+      } catch (error: any) {
+        if (revision === documentPrecheckRevisionRef.current) {
+          setDocumentPrecheckOutcome("retry");
+          setDocumentPrecheckMessage(
+            error?.message || "Document screening unavailable. No selfie was submitted.",
+          );
+        }
+      } finally {
+        setDocumentChecking(false);
       }
     };
 
@@ -451,7 +506,7 @@ export default function IdentityVerification() {
         Alert.alert(
           "Unable to Capture Face",
           error?.message ||
-            "The face scan photo could not be captured.",
+            "The face scan photo could not be captured. Keep one face inside the oval, look straight ahead in even lighting, and retry.",
         );
       } finally {
         setPickingSelfie(false);
@@ -473,6 +528,12 @@ export default function IdentityVerification() {
         return;
       }
 
+      if (idType !== "passport" && !idBackDocument) {
+        setStep(1);
+        Alert.alert("Back of ID Required", "Scan the back of the same physical ID.");
+        return;
+      }
+
       if (!selfie) {
         setStep(2);
         Alert.alert(
@@ -491,15 +552,19 @@ export default function IdentityVerification() {
       }
 
       try {
-        setStep(3);
+        // A readiness failure must not submit ID/selfie files or consume
+        // one of the Resident's three AI verification attempts.
         setSubmitting(true);
         setLocalMessage("");
+        await checkIdentityEngineReady();
+        setStep(3);
 
         const result =
           await submitIdentityVerification(
             {
               idType,
               idDocument,
+              idBackDocument: idType === "passport" ? null : idBackDocument,
               selfie,
             },
           );
@@ -538,6 +603,7 @@ export default function IdentityVerification() {
           "verified"
         ) {
           setIdDocument(null);
+          setIdBackDocument(null);
           setSelfie(null);
           setConsent(false);
         }
@@ -545,12 +611,15 @@ export default function IdentityVerification() {
         error: any
       ) {
         setStep(2);
-
-        Alert.alert(
-          "Verification Not Completed",
+        const explanation =
           error?.message ||
-            "Identity verification could not be completed.",
-        );
+          "Identity verification could not be completed. Your captured photos are still available. Wait for the AI service to become ready, then retry.";
+        // Inline feedback is required on React Native Web: Alert.alert may
+        // not show a native dialog in web browsers.
+        setLocalMessage(explanation);
+        if (Platform.OS !== "web") {
+          Alert.alert("Verification Not Completed", explanation);
+        }
       } finally {
         setSubmitting(false);
       }
@@ -846,12 +915,20 @@ export default function IdentityVerification() {
           idType={
             idType
           }
-          setIdType={
-            setIdType
-          }
+          setIdType={(value) => {
+            if (value !== idType) {
+              documentPrecheckRevisionRef.current++;
+              setDocumentPrecheckOutcome(null);
+              setDocumentPrecheckMessage("");
+              setIdDocument(null);
+              setIdBackDocument(null);
+            }
+            setIdType(value);
+          }}
           idDocument={
             idDocument
           }
+          idBackDocument={idBackDocument}
           selectedIdLabel={
             selectedIdLabel
           }
@@ -861,15 +938,46 @@ export default function IdentityVerification() {
           onPick={() =>
             void chooseIdDocument()
           }
+          onPickBack={() => void chooseIdBackDocument()}
+          onRemoveBack={() => {
+            documentPrecheckRevisionRef.current++;
+            setDocumentPrecheckOutcome(null);
+            setDocumentPrecheckMessage("");
+            setIdBackDocument(null);
+          }}
+          documentConsent={documentConsent}
+          onDocumentConsentChange={(allowed) => {
+            if (!allowed) {
+              documentPrecheckRevisionRef.current += 1;
+              setDocumentPrecheckOutcome(null);
+              setDocumentPrecheckMessage("");
+            }
+            setDocumentConsent(allowed);
+          }}
+          documentChecking={documentChecking}
+          documentPrecheckMessage={documentPrecheckMessage}
+          documentPrecheckOutcome={documentPrecheckOutcome}
           onNext={() =>
             void openFaceScan()
           }
-          onRemove={() =>
-            setIdDocument(
-              null,
-            )
-          }
+          onRemove={() => {
+            documentPrecheckRevisionRef.current++;
+            setDocumentPrecheckOutcome(null);
+            setDocumentPrecheckMessage("");
+            setIdDocument(null);
+          }}
         />
+      ) : null}
+
+      {step === 2 && localMessage ? (
+        <View style={styles.failedNotice}>
+          <Ionicons
+            name="alert-circle-outline"
+            size={20}
+            color={COLORS.danger}
+          />
+          <Text style={styles.failedNoticeText}>{localMessage}</Text>
+        </View>
       ) : null}
 
       {step === 2 ? (
@@ -895,6 +1003,7 @@ export default function IdentityVerification() {
           pickingSelfie={
             pickingSelfie
           }
+          submitting={submitting}
           consent={
             consent
           }
@@ -1066,11 +1175,19 @@ function UploadIdStep({
   idType,
   setIdType,
   idDocument,
+  idBackDocument,
   selectedIdLabel,
   picking,
   onPick,
+  onPickBack,
+  onRemoveBack,
   onNext,
   onRemove,
+  documentConsent,
+  onDocumentConsentChange,
+  documentChecking,
+  documentPrecheckMessage,
+  documentPrecheckOutcome,
 }: {
   idType: IdentityDocumentType;
   setIdType: (
@@ -1079,16 +1196,24 @@ function UploadIdStep({
   ) => void;
   idDocument:
     CapturedIdentityMedia | null;
+  idBackDocument: CapturedIdentityMedia | null;
   selectedIdLabel:
     string;
   picking:
     boolean;
   onPick:
     () => void;
+  onPickBack: () => void;
+  onRemoveBack: () => void;
   onNext:
     () => void;
   onRemove:
     () => void;
+  documentConsent: boolean;
+  onDocumentConsentChange: (value: boolean) => void;
+  documentChecking: boolean;
+  documentPrecheckMessage: string;
+  documentPrecheckOutcome: "pass" | "review" | "retry" | null;
 }) {
   return (
     <View
@@ -1132,8 +1257,8 @@ function UploadIdStep({
               styles.stepSubtitle
             }
           >
-            Take or choose a clear photo of a valid government-issued
-            ID with a visible face.
+            Scan the front and back of the same physical ID, then
+            take a selfie. For passports, capture the bio page only.
           </Text>
         </View>
       </View>
@@ -1224,7 +1349,7 @@ function UploadIdStep({
           styles.fieldLabel
         }
       >
-        ID Photo
+        {idType === "passport" ? "Passport Bio Page" : "ID Front Photo"}
       </Text>
 
       {idDocument ? (
@@ -1360,6 +1485,78 @@ function UploadIdStep({
         </TouchableOpacity>
       )}
 
+      {idType !== "passport" ? (
+        <>
+          <Text style={styles.fieldLabel}>ID Back Photo</Text>
+          {idBackDocument ? (
+            <View style={styles.mediaPreviewCard}>
+              <Image
+                source={{ uri: idBackDocument.uri }}
+                style={styles.idPreview}
+                resizeMode="cover"
+              />
+              <View style={styles.mediaPreviewInfo}>
+                <View style={styles.mediaSuccessIcon}>
+                  <Ionicons name="checkmark" size={17} color="#FFFFFF" />
+                </View>
+                <View style={styles.mediaPreviewCopy}>
+                  <Text style={styles.mediaPreviewTitle}>Back of ID captured</Text>
+                  <Text style={styles.mediaPreviewText} numberOfLines={1}>
+                    {idBackDocument.name}
+                  </Text>
+                </View>
+                <TouchableOpacity style={styles.iconButton} onPress={onRemoveBack}>
+                  <Ionicons name="trash-outline" size={18} color={COLORS.danger} />
+                </TouchableOpacity>
+              </View>
+            </View>
+          ) : (
+            <TouchableOpacity
+              style={styles.uploadZone}
+              activeOpacity={0.84}
+              onPress={onPickBack}
+              disabled={picking}
+            >
+              {picking ? (
+                <ActivityIndicator color={COLORS.blue} />
+              ) : (
+                <>
+                  <View style={styles.uploadIcon}>
+                    <Ionicons name="scan-outline" size={29} color={COLORS.blue} />
+                  </View>
+                  <Text style={styles.uploadTitle}>Tap to scan the back of the same ID</Text>
+                  <Text style={styles.uploadText}>
+                    Show the full back side with clear text and QR code when present.
+                  </Text>
+                </>
+              )}
+            </TouchableOpacity>
+          )}
+        </>
+      ) : null}
+
+      <TouchableOpacity
+        accessibilityRole="checkbox"
+        accessibilityState={{ checked: documentConsent }}
+        style={styles.consentRow}
+        onPress={() => onDocumentConsentChange(!documentConsent)}
+      >
+        <View style={[styles.checkbox, documentConsent && styles.checkboxActive]}>
+          {documentConsent ? <Ionicons name="checkmark" size={15} color="#FFFFFF" /> : null}
+        </View>
+        <Text style={styles.consentText}>
+          I consent to sending my government ID scans to VolunServe for a preliminary
+          OCR type and front/back check before the face scan. This is not ID authentication.
+        </Text>
+      </TouchableOpacity>
+      {documentPrecheckMessage ? (
+        <View style={styles.failedNotice} accessibilityRole="alert">
+          <Ionicons name={documentPrecheckOutcome === "pass" ? "checkmark-circle-outline" : "information-circle-outline"}
+            size={18} color={documentPrecheckOutcome === "pass" ? COLORS.tealDark : COLORS.danger} />
+          <Text style={styles.failedNoticeText}>{documentPrecheckMessage}</Text>
+        </View>
+      ) : null}
+
       <View
         style={
           styles.stepFooter
@@ -1368,12 +1565,10 @@ function UploadIdStep({
         <TouchableOpacity
           style={[
             styles.nextButton,
-            !idDocument &&
+            (!idDocument || (idType !== "passport" && !idBackDocument) || documentChecking) &&
               styles.disabledButton,
           ]}
-          disabled={
-            !idDocument
-          }
+          disabled={!idDocument || (idType !== "passport" && !idBackDocument) || documentChecking}
           activeOpacity={
             0.85
           }
@@ -1386,7 +1581,7 @@ function UploadIdStep({
               styles.nextButtonText
             }
           >
-            Next: Face Scan
+            {documentChecking ? "Checking government ID..." : "Check ID, then Face Scan"}
           </Text>
           <Ionicons
             name="arrow-forward"
@@ -1407,6 +1602,7 @@ function FaceScanStep({
   setCameraReady,
   selfie,
   pickingSelfie,
+  submitting,
   consent,
   setConsent,
   onCapture,
@@ -1433,6 +1629,8 @@ function FaceScanStep({
   selfie:
     CapturedIdentityMedia | null;
   pickingSelfie:
+    boolean;
+  submitting:
     boolean;
   consent:
     boolean;
@@ -1820,13 +2018,15 @@ function FaceScanStep({
           styles.verifyButton,
           (
             !selfie ||
-            !consent
+            !consent ||
+            submitting
           ) &&
             styles.disabledButton,
         ]}
         disabled={
           !selfie ||
-          !consent
+          !consent ||
+          submitting
         }
         activeOpacity={
           0.85
@@ -1835,17 +2035,21 @@ function FaceScanStep({
           onVerify
         }
       >
-        <Ionicons
-          name="scan-outline"
-          size={19}
-          color="#FFFFFF"
-        />
+        {submitting ? (
+          <ActivityIndicator color="#FFFFFF" size="small" />
+        ) : (
+          <Ionicons
+            name="scan-outline"
+            size={19}
+            color="#FFFFFF"
+          />
+        )}
         <Text
           style={
             styles.verifyButtonText
           }
         >
-          Start AI Verification
+          {submitting ? "Checking AI Service..." : "Start AI Verification"}
         </Text>
         <Ionicons
           name="arrow-forward"
@@ -2328,6 +2532,7 @@ const styles =
     },
 
     title: {
+    lineHeight: designUi.type.page.lineHeight,
       marginTop:
         5,
       color:
@@ -2335,9 +2540,11 @@ const styles =
       fontSize: designUi.type.page.fontSize,
       fontWeight: designUi.type.page.fontWeight,
       letterSpacing:
-        -0.4, lineHeight: designUi.type.page.lineHeight,},
+        -0.4,
+    },
 
     subtitle: {
+    fontWeight: designUi.type.body.fontWeight,
       marginTop:
         6,
       maxWidth:
@@ -2345,7 +2552,8 @@ const styles =
       color:
         COLORS.muted,
       fontSize: designUi.type.body.fontSize,
-      lineHeight: designUi.type.body.lineHeight, fontWeight: designUi.type.body.fontWeight,},
+      lineHeight: designUi.type.body.lineHeight,
+    },
 
     progressCard: {
       width:
@@ -2559,20 +2767,25 @@ const styles =
     },
 
     stepTitle: {
+    lineHeight: designUi.type.section.lineHeight,
       color:
         COLORS.navy,
       fontSize: designUi.type.section.fontSize,
-      fontWeight: designUi.type.section.fontWeight, lineHeight: designUi.type.section.lineHeight,},
+      fontWeight: designUi.type.section.fontWeight,
+    },
 
     stepSubtitle: {
+    fontWeight: designUi.type.body.fontWeight,
       marginTop:
         4,
       color:
         COLORS.muted,
       fontSize: designUi.type.body.fontSize,
-      lineHeight: designUi.type.body.lineHeight, fontWeight: designUi.type.body.fontWeight,},
+      lineHeight: designUi.type.body.lineHeight,
+    },
 
     fieldLabel: {
+    lineHeight: designUi.type.label.lineHeight,
       marginTop:
         2,
       marginBottom:
@@ -2580,7 +2793,8 @@ const styles =
       color:
         "#334155",
       fontSize: designUi.type.label.fontSize,
-      fontWeight: designUi.type.label.fontWeight, lineHeight: designUi.type.label.lineHeight,},
+      fontWeight: designUi.type.label.fontWeight,
+    },
 
     idTypeGrid: {
       flexDirection:
@@ -3089,12 +3303,14 @@ const styles =
     },
 
     requirementsTitle: {
+    lineHeight: designUi.type.section.lineHeight,
       marginBottom:
         10,
       color:
         COLORS.navy,
       fontSize: designUi.type.section.fontSize,
-      fontWeight: designUi.type.section.fontWeight, lineHeight: designUi.type.section.lineHeight,},
+      fontWeight: designUi.type.section.fontWeight,
+    },
 
     requirementRow: {
       minHeight:
@@ -3571,6 +3787,7 @@ const styles =
     },
 
     statusTitle: {
+    lineHeight: designUi.type.section.lineHeight,
       marginTop:
         14,
       color:
@@ -3578,7 +3795,8 @@ const styles =
       fontSize: designUi.type.section.fontSize,
       fontWeight: designUi.type.section.fontWeight,
       textAlign:
-        "center", lineHeight: designUi.type.section.lineHeight,},
+        "center",
+    },
 
     statusMessage: {
       marginTop:

@@ -160,6 +160,8 @@ export interface UserProfile {
   firstName?: string;
   middleName?: string;
   age: number;
+  /** Immutable signup date (YYYY-MM-DD) used for private ID comparison. */
+  dateOfBirth?: string;
   email: string;
   phoneNumber: string;
   region?: string;
@@ -218,6 +220,8 @@ export interface SignupData {
   firstName: string;
   middleName?: string;
   age: number;
+  /** Immutable signup date (YYYY-MM-DD) used for private ID comparison. */
+  dateOfBirth?: string;
   email: string;
   password: string;
   authProvider?: "email" | "google" | "verified_email";
@@ -544,6 +548,17 @@ export const signUpUser = async (
     // as completed Basic Resident registration without all wizard details.
     requireCompleteResidentRegistration(data);
     await getIdToken(user, true);
+    const birthDate = String(data.dateOfBirth || "").trim();
+    if (birthDate) {
+      const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(birthDate);
+      const parsed = new Date(birthDate + "T00:00:00Z");
+      if (!match || Number.isNaN(parsed.getTime()) ||
+          parsed.getUTCFullYear() !== Number(match[1]) ||
+          parsed.getUTCMonth() + 1 !== Number(match[2]) ||
+          parsed.getUTCDate() !== Number(match[3])) {
+        throw new Error("Please select a valid date of birth.");
+      }
+    }
     const fullName = [
       data.lastName,
       data.firstName,
@@ -576,6 +591,7 @@ export const signUpUser = async (
       middleName:
         (data.middleName || "").trim(),
       age: data.age,
+      ...(birthDate ? { dateOfBirth: birthDate } : {}),
       email: submittedEmail,
       phoneNumber:
         data.phoneNumber.trim(),
