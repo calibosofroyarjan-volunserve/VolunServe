@@ -29,7 +29,7 @@ py -3.11 identity-ai/capture_private_camera_qa.py --kind replay
 ~~~
 
 - The script will explicitly ask whether **all photographed people consent** before opening the camera. A denial leaves no files.
-- In the camera preview, press **C** to capture each photo or **Q** / Escape to cancel. `same` and `different` each require two separate captures. Let the second person step in only after consent for `different`. Move/change the angle between the two `same` photos.
+- In the camera preview, **click inside the video**, press **Space**, or press **C** (uppercase/lowercase) to capture each photo. Press **Q** / Escape to cancel. The counter `2/2` means the first of two pictures was already captured and the second remains. `same` and `different` each require two separate captures. Let the second person step in only after consent for `different`. Move/change the angle between the two `same` photos.
 - For `print` and `replay`, the camera must photograph the physical printed picture or a second screen showing a consented face video; never copy the source digital file into the test folder.
 - Data are stored **only** on your PC under `%USERPROFILE%\VolunServe-Private-QA\face` or `%USERPROFILE%\VolunServe-Private-QA\pad`. Each new capture is placed in a new numbered local trial. The tool makes **no network request**, does not need an ID photo, and does not grant Verified Resident.
 - Repeat with multiple **consented** camera trials for meaningful exploratory observations. One capture in each class is a smoke test, not a scientific validation.
