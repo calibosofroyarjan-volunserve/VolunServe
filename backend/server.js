@@ -61,11 +61,14 @@ function identityAttemptCount(value) {
 }
 
 function identityAttemptOutcome(decision, attempts) {
+  // Never grant Verified Resident through AI or a future provider response.
+  // A provider "verified" decision is only a candidate for independent
+  // Admin review. The authorized /api/admin/identity/reviews route is the
+  // only service flow that may mark the Resident verified.
   const requiresManualReview = decision === "manual_review" ||
+    decision === "verified" ||
     (decision === "failed" && attempts >= MAX_IDENTITY_AI_ATTEMPTS);
-  const status = decision === "verified" ? "verified" :
-    requiresManualReview ? "pending" : "failed";
-  return { status, requiresManualReview };
+  return { status: requiresManualReview ? "pending" : "failed", requiresManualReview };
 }
 const ASSISTANCE_EVIDENCE_UPLOAD_LIMIT = "10mb";
 const ASSISTANCE_EVIDENCE_MAX_BYTES =
@@ -5359,21 +5362,9 @@ app.post(
           },
         );
 
-        if (decision === "verified") {
-          transaction.set(userRef, {
-            identityStatus: "verified",
-            identityVerified: true,
-            identityVerificationProvider: FieldValue.delete(),
-            identityVerificationSessionId: FieldValue.delete(),
-            identityVerificationMethod: "volunserve_ai",
-            identityVerificationStartedAt: FieldValue.serverTimestamp(),
-            identityVerifiedAt: FieldValue.serverTimestamp(),
-            identityVerifiedBy: "volunserve_ai",
-            identityFailureReason: FieldValue.delete(),
-            updatedAt: FieldValue.serverTimestamp(),
-          }, { merge: true });
-        } else {
-          transaction.set(userRef, {
+        // No AI decision, including a synthetic or future "verified"
+        // response, can write identityVerified=true to the Resident profile.
+        transaction.set(userRef, {
             identityStatus: result.status,
             identityVerified: false,
             identityVerificationProvider: FieldValue.delete(),
@@ -5384,7 +5375,6 @@ app.post(
               ? resultMessage : FieldValue.delete(),
             updatedAt: FieldValue.serverTimestamp(),
           }, { merge: true });
-        }
         return {
           ok: true, status: result.status, verificationId, decision,
           matchScore, livenessScore, documentScreening, reviewTrack, message: resultMessage,

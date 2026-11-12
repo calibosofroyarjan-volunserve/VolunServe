@@ -26,3 +26,6 @@ test("no unconditional automatic verified-resident grant from OCR",()=>{
  const school={status:"unsupported",declaredIdType:"national_id",detectedIdType:null};
  assert.equal(policy.enforceSelectedIdDecision("verified",school,true),"failed");
 });
+
+// Include the final integration hardening contract in the existing protected CI.
+require("./test-identity-final-admin-only");
