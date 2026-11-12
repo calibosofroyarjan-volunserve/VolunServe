@@ -77,6 +77,28 @@ class PassivePadShadowTests(unittest.TestCase):
                           "No frame must reach the classifier when YuNet fails")
 
 
+    def test_crop_matches_upstream_2p7_independent_bbox_dimensions(self):
+        """A rectangular face must NOT be overcropped into a square ROI."""
+        # Original MiniVisionAI expands the bbox width and height separately.
+        # Previous implementation used max(w,h) for both dimensions.
+        with patch.object(pad, "single_face_box", return_value=(200, 150, 80, 50)), \
+             patch.object(pad.cv2, "resize",
+                          return_value=np.zeros((80, 80, 3), dtype=np.uint8)) as resize:
+            crop = pad._face_crop(np.zeros((480, 640, 3), dtype=np.uint8))
+        self.assertEqual(crop.shape, (80, 80, 3))
+        source_roi = resize.call_args.args[0]
+        self.assertGreater(source_roi.shape[1], source_roi.shape[0])
+        self.assertEqual(source_roi.shape[1], 216)
+        self.assertTrue(130 <= source_roi.shape[0] <= 136)
+
+    def test_rectangular_context_can_fit_without_square_overcrop(self):
+        image = np.zeros((480, 640, 3), dtype=np.uint8)
+        # A 150 x 50 face with enough vertical rectangular context; an
+        # artificial 405x405 square fails because it extends beyond top.
+        with patch.object(pad, "single_face_box", return_value=(160, 60, 150, 50)):
+            crop = pad._face_crop(image)
+        self.assertEqual(crop.shape, (80, 80, 3))
+
     def test_no_model_returns_unavailable_without_crashing(self):
         self.model.stop()
         with patch.object(pad, "_load_net", return_value=None):
