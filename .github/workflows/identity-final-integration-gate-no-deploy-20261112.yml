@@ -1,5 +1,8 @@
 name: Identity Final Integration Gate (NO DEPLOY)
 on:
+  push:
+    branches:
+      - 'release/identity-final-integration-gate-20261112'
   pull_request:
     paths:
       - 'backend/server.js'
