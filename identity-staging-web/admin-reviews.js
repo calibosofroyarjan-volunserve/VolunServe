@@ -7,6 +7,7 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/11.10.0/fireba
 import {
   reviewBucket, availableMethods, METHOD_LABELS,
   canVerify, canRequireRetry, evidenceConflicts,
+  documentEligibleForAdminReview,
   screeningDescription, mrzDescription, stagingAccessMessage,
 } from "./admin-review-guards.mjs";
 
@@ -159,6 +160,14 @@ function renderDetail() {
   pair(detail,"Document evidence",screeningDescription(doc));
   pair(detail,"Back of ID",doc?.declaredIdType==="passport" ? "Passport bio page only"
     : doc?.backSideScreened === true ? "Both sides OCR screened" : "Not confirmed");
+  if (doc?.declaredIdType !== "passport") {
+    pair(detail,"Back image quality",doc?.backImageQualityStatus === "adequate"
+      ? "Adequate for OCR (not proof of authenticity)"
+      : doc?.backImageQualityStatus === "low" ? "Blurry reverse photo — retake"
+        : "Unknown / not checked — retake before approval");
+  }
+  pair(detail,"Front image quality",doc?.imageQualityStatus === "adequate"
+    ? "Adequate for OCR" : "Blurry or unknown — retake before approval");
   pair(detail,"Account name OCR",doc?.profileNameCheck || "not_checked");
   pair(detail,"Birthday OCR comparison",doc?.profileBirthDateCheck || "not_checked");
   pair(detail,"Barangay OCR comparison",doc?.profileAddressCheck || "not_checked");
@@ -187,8 +196,10 @@ function renderDetail() {
     option.value=value;
     method.append(option);
   }
-  if (evidenceConflicts(doc)) {
-    el("riskNotice").textContent="ID evidence has unresolved MRZ or profile DOB inconsistencies. Verify is blocked. Request corrected evidence; OCR contradiction is not proof of fraud.";
+  const evidenceNotEligible = !documentEligibleForAdminReview(doc);
+  if (evidenceNotEligible) {
+    el("riskNotice").textContent=screeningDescription(doc) +
+      " Verify is blocked until independently checked evidence is acceptable. Require Retry remains available with a reason.";
     el("riskNotice").classList.add("danger");
   } else {
     el("riskNotice").textContent="Preliminary AI screening only. Independently check government-issued ID through an approved LGU/issuer process before verification.";
