@@ -4,6 +4,7 @@ No real ID cards, human faces, Firebase accounts, network calls, or credentials.
 Run: python -m unittest -v test_ai_runtime_smoke.py
 """
 import unittest
+import shutil
 from io import BytesIO
 
 import cv2
@@ -48,7 +49,10 @@ class IdentityAiRuntimeSmokeTests(unittest.TestCase):
     def test_health_never_claims_liveness_or_document_authenticity(self):
         result = health()
         self.assertTrue(result["verificationEngineReady"])
-        self.assertTrue(result["documentOcrReady"])
+        # This standalone MediaPipe job does not install Tesseract. The
+        # Docker OCR job separately requires its executable and readiness.
+        # Health must never claim OCR readiness when the binary is absent.
+        self.assertEqual(result["documentOcrReady"], shutil.which("tesseract") is not None)
         self.assertTrue(result["profileComparisonReady"])
         self.assertTrue(result["documentPrecheckReady"])
         self.assertFalse(result["livenessImplemented"])
