@@ -17,7 +17,15 @@ VolunServe integrates pretrained third-party components. The VolunServe product 
 - Pinned model SHA-256: `8f2383e4dd3cfbb4553ea8718107fc0423210dc964f9f4280604804ed2552fa4`
 - Use: **face detection diagnostics only**. It does not detect spoofing and is not evidence that a face is alive or belongs to the submitting Resident.
 
-## 3. Other installed runtime components
+## 3. SFace 2021dec, 1-to-1 face-recognition shadow model
+
+- Upstream: [OpenCV Zoo / SFace](https://github.com/opencv/opencv_zoo/tree/main/models/face_recognition_sface).
+- License: **Apache-2.0**, OpenCV Zoo and applicable SFace contributors ([full license](https://github.com/opencv/opencv_zoo/blob/main/models/face_recognition_sface/LICENSE)). Retain upstream notices and provide the full license with any redistributed model.
+- Pinned official model SHA-256: `0ba9fbfa01b5270c96627c4ef784da859931e02f04419c829e83484087c34e79`.
+- Use: **experimental in-memory 1-to-1 matching observation only**. This is not a verified identity decision, calibrated similarity threshold, proof of real camera capture, ID issuer verification, or PAD/liveness validation.
+- Docker staging build downloads from the official OpenCV Zoo mirror and refuses unexpected bytes. The 38.7 MB weights are excluded from Git and are not fetched at request time.
+
+## 4. Other installed runtime components
 
 - MediaPipe FaceMesh / face-landmark runtime: upstream Google MediaPipe (Apache-2.0), [project and licenses](https://github.com/google-ai-edge/mediapipe).
 - OpenCV: [licenses](https://github.com/opencv/opencv/tree/4.x/LICENSES).
