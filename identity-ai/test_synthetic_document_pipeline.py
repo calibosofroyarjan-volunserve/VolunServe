@@ -207,7 +207,7 @@ class SyntheticSelfieReuseRouteTests(unittest.TestCase):
                 ))
         self.assertEqual(raised.exception.status_code, 400)
         self.assertIn("different images", raised.exception.detail)
-        self.assertTrue(all(item.closed for item in data.values()
+        self.assertTrue(all(item.file.closed for item in data.values()
                             if isinstance(item, UploadFile)))
 
     def test_government_id_front_cannot_be_reused_as_selfie(self):
