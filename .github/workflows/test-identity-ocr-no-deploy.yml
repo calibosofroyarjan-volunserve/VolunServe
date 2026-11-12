@@ -28,6 +28,8 @@ on:
       - "identity-ai/test_pad_local_eval.py"
       - "identity-ai/diagnose_passive_pad_local.py"
       - "identity-ai/test_diagnose_passive_pad_local.py"
+      - "identity-ai/compare_pad_input_scales_local.py"
+      - "identity-ai/test_compare_pad_input_scales_local.py"
       - "identity-ai/PAD_LOCAL_EVALUATION.md"
       - "identity-ai/download_passive_pad_model.py"
       - "identity-ai/Dockerfile"
@@ -106,7 +108,8 @@ jobs:
           python -m unittest discover -s identity-ai -p 'test_capture_private_camera_qa.py' -v
           python -m unittest discover -s identity-ai -p 'test_pad_local_eval.py' -v
           python -m unittest discover -s identity-ai -p 'test_diagnose_passive_pad_local.py' -v
-          python -m py_compile identity-ai/passive_pad_shadow.py identity-ai/download_passive_pad_model.py identity-ai/evaluate_passive_pad_local.py identity-ai/yunet_shadow.py identity-ai/download_yunet_model.py identity-ai/sface_shadow.py identity-ai/download_sface_model.py identity-ai/evaluate_sface_local.py identity-ai/capture_private_camera_qa.py identity-ai/diagnose_passive_pad_local.py
+          python -m unittest discover -s identity-ai -p 'test_compare_pad_input_scales_local.py' -v
+          python -m py_compile identity-ai/passive_pad_shadow.py identity-ai/download_passive_pad_model.py identity-ai/evaluate_passive_pad_local.py identity-ai/yunet_shadow.py identity-ai/download_yunet_model.py identity-ai/sface_shadow.py identity-ai/download_sface_model.py identity-ai/evaluate_sface_local.py identity-ai/capture_private_camera_qa.py identity-ai/diagnose_passive_pad_local.py identity-ai/compare_pad_input_scales_local.py
       - name: Validate Node identity gateway syntax and selected ID policy
         run: |
           node --check backend/server.js
