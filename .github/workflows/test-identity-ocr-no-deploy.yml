@@ -15,6 +15,8 @@ on:
       - "backend/test-identityAiReadiness.js"
       - "backend/test-identity-staging-admin-only.js"
       - "backend/test-staging-lab-auth-phase.cjs"
+      - "backend/stagingProfileDiagnostics.js"
+      - "backend/test-stagingProfileDiagnostics.js"
       - "backend/server.js"
       - "backend/firebaseAdmin.js"
       - "backend/stagingFirebaseIsolation.js"
@@ -82,6 +84,7 @@ jobs:
           node --test backend/test-identityAiReadiness.js
           node --test backend/test-identity-staging-admin-only.js
           node --test backend/test-staging-lab-auth-phase.cjs
+          node --test backend/test-stagingProfileDiagnostics.js
       - name: Install frontend dependency lockfile (no lifecycle scripts)
         run: npm ci --ignore-scripts --no-audit --no-fund
       - name: Typecheck frontend identity UI and API client
