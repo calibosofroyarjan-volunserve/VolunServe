@@ -1,0 +1,31 @@
+name: Verify Full Staging Firebase isolation (READ ONLY)
+on:
+  pull_request:
+    branches:
+      - fix/identity-full-hardening-live-base-20261107
+    paths:
+      - 'backend/firebaseAdmin.js'
+      - 'backend/stagingFirebaseIsolation.js'
+      - 'backend/scripts/check-staging-isolation.cjs'
+      - 'backend/test-stagingFirebaseIsolation.js'
+      - '.github/workflows/verify-full-staging-isolation-no-deploy.yml'
+permissions:
+  contents: read
+jobs:
+  secret-safe-static-and-synthetic-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify syntax only
+        run: |
+          node --check backend/firebaseAdmin.js
+          node --check backend/stagingFirebaseIsolation.js
+          node --check backend/scripts/check-staging-isolation.cjs
+          node --check backend/test-stagingFirebaseIsolation.js
+      - name: Verify isolation behavior against synthetic staging and production inputs
+        run: node --test backend/test-stagingFirebaseIsolation.js
+      - name: Confirm no real service account access or deployment
+        run: echo 'READ ONLY - synthetic test fixtures, no Render connection, no Firebase credentials, no production access'
