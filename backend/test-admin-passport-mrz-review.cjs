@@ -89,6 +89,7 @@ test("no MRZ checker is forced onto other four allowed IDs",()=>{
   for(const id of Object.values(valid)){
     const doc=sanitizer(input({
       declaredIdType:id,detectedIdType:id,backSideProvided:true,backSideScreened:true,
+      backImageQualityStatus:"adequate",
       passportMrzCheck:"checksum_inconsistent_or_ocr_error",
     }));
     assert.equal("passportMrzCheck" in doc,false);
