@@ -6,6 +6,7 @@ All results require independent LGU review. No sensitive OCR fields in output.
 """
 from __future__ import annotations
 
+import math
 import re
 import unicodedata
 
@@ -294,6 +295,28 @@ def assess_document_sides(
         result["warningCodes"] = list(dict.fromkeys(
             result["warningCodes"] + ["document_front_type_inconclusive"]
         ))
+    # OCR having merely *run* on an arbitrary back image is not evidence that
+    # the image belongs to the selected ID. Some genuine card backs lack issuer
+    # text; this must be a rescan/manual-review result, NOT a positive precheck.
+    # Physical PhilID backs can use corroborating independent layout labels.
+    if (declared_type != "passport"
+            and result["status"] == "text_consistent_unverified"
+            and back["status"] == "inconclusive"
+            and not (declared_type == "national_id"
+                     and _national_back_layout_signal(back_ocr_text))):
+        result["status"] = "inconclusive"
+        result["warningCodes"] = list(dict.fromkeys(
+            result["warningCodes"] + ["document_back_evidence_inconclusive"]
+        ))
+    # Even a repeated National ID heading on the back cannot be treated as
+    # successful orientation evidence without back-side layout corroboration.
+    if (declared_type == "national_id"
+            and result["status"] == "text_consistent_unverified"
+            and not _national_back_layout_signal(back_ocr_text)):
+        result["status"] = "inconclusive"
+        result["warningCodes"] = list(dict.fromkeys(
+            result["warningCodes"] + ["document_back_layout_inconclusive"]
+        ))
     if not back_ocr_text.strip():
         if result["status"] == "text_consistent_unverified":
             result["status"] = "inconclusive"
@@ -324,21 +347,54 @@ def assess_document_sides(
     return result
 
 
-def add_photo_quality(screening: dict, blur_variance: float) -> dict:
-    """Conservative blur flag for the *whole image*, not an ID validity claim.
+def _safe_blur_status(blur_variance: float) -> str:
+    """Do not mistake NaN or a missing quality reading for an adequate scan."""
+    try:
+        value = float(blur_variance)
+    except (TypeError, ValueError, OverflowError):
+        return "unknown"
+    if not math.isfinite(value) or value < 0:
+        return "unknown"
+    return "low" if value < 40.0 else "adequate"
 
-    Very low Laplacian variance can also occur with an empty card/background.
-    Only the selected-type conflict checks can identify a wrong document.
-    Never use this signal alone to approve or reject an ID.
+
+def add_photo_quality(screening: dict, blur_variance: float) -> dict:
+    """Conservative front-image blur flag; never claims ID authenticity."""
+    out = dict(screening)
+    status = _safe_blur_status(blur_variance)
+    out["imageQualityStatus"] = status
+    if status != "adequate":
+        reason = ("low_document_image_quality" if status == "low"
+                  else "document_image_quality_unavailable")
+        out["warningCodes"] = list(dict.fromkeys(
+            out.get("warningCodes", []) + [reason]
+        ))
+        if status == "unknown" and out.get("status") == "text_consistent_unverified":
+            out["status"] = "inconclusive"
+    return out
+
+
+def add_back_photo_quality(screening: dict, blur_variance: float | None) -> dict:
+    """Independent reverse-side quality check; passport has no required back.
+
+    OCR running does not mean the document side is legible. Unreadable back
+    images must stay in manual review/rescan; never override school-ID or
+    wrong-document evidence with a harmless blur diagnosis.
     """
     out = dict(screening)
-    out["imageQualityStatus"] = (
-        "low" if blur_variance < 40.0 else "adequate"
-    )
-    if blur_variance < 40.0:
+    if out.get("declaredIdType") == "passport" or not out.get("backSideProvided"):
+        out["backImageQualityStatus"] = "not_required" if out.get("declaredIdType") == "passport" else "not_checked"
+        return out
+    status = _safe_blur_status(blur_variance)
+    out["backImageQualityStatus"] = status
+    if status != "adequate":
+        reason = ("low_document_back_image_quality" if status == "low"
+                  else "document_back_image_quality_unavailable")
         out["warningCodes"] = list(dict.fromkeys(
-            out.get("warningCodes", []) + ["low_document_image_quality"]
+            out.get("warningCodes", []) + [reason]
         ))
+        if out.get("status") == "text_consistent_unverified":
+            out["status"] = "inconclusive"
     return out
 
 
