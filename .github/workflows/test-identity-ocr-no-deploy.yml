@@ -11,6 +11,9 @@ on:
       - "identity-ai/main.py"
       - "identity-ai/passive_pad_shadow.py"
       - "identity-ai/test_passive_pad_shadow.py"
+      - "identity-ai/evaluate_passive_pad_local.py"
+      - "identity-ai/test_pad_local_eval.py"
+      - "identity-ai/PAD_LOCAL_EVALUATION.md"
       - "identity-ai/download_passive_pad_model.py"
       - "identity-ai/Dockerfile"
       - "identity-ai/test_ai_route_contract.py"
@@ -82,7 +85,8 @@ jobs:
         run: |
           python -m pip install --disable-pip-version-check numpy==1.26.4 opencv-contrib-python-headless==4.11.0.86
           python -m unittest discover -s identity-ai -p 'test_passive_pad_shadow.py' -v
-          python -m py_compile identity-ai/passive_pad_shadow.py identity-ai/download_passive_pad_model.py
+          python -m unittest discover -s identity-ai -p 'test_pad_local_eval.py' -v
+          python -m py_compile identity-ai/passive_pad_shadow.py identity-ai/download_passive_pad_model.py identity-ai/evaluate_passive_pad_local.py
       - name: Validate Node identity gateway syntax and selected ID policy
         run: |
           node --check backend/server.js
