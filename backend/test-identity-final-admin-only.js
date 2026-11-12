@@ -43,7 +43,7 @@ test("Identity submit route has no AI-only verified profile writer", () => {
   assert.doesNotMatch(source, /identityStatus:\s*["']verified["']/);
 });
 test("Admin decisions require privileged Firebase authentication and independent issuer check", () => {
-  const source = routeBody("/api/admin/identity/reviews/:uid/decision", "/api/identity/");
+  const source = routeBody("/api/admin/identity/reviews/:uid/decision", "/api/admin/assistance/requests/:requestId/start-review");
   assert.match(source, /requireFirebaseUser/);
   assert.match(source, /requireOperationalAdmin/);
   assert.match(source, /self_identity_review_forbidden/);
