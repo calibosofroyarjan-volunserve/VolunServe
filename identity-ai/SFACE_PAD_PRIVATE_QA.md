@@ -9,6 +9,43 @@
 - MiniFASNet is an **experimental single-frame** anti-spoofing classifier. Blink/head movement, a positive model score, or a video challenge do not establish independent liveness.
 - The Node staging backend deliberately blocks media submissions (HTTP 423). Resident approval must remain restricted to authorized manual Admin review.
 
+## Quick camera capture (recommended)
+
+Use the **GUI-enabled** OpenCV package on Windows so the live camera preview actually opens. The server's headless OpenCV package is not suitable for this desktop capture window. In a separate local checkout of this **draft QA branch**, run in PowerShell:
+
+~~~powershell
+py -3.11 -m pip uninstall -y opencv-contrib-python-headless opencv-python-headless
+py -3.11 -m pip install numpy==1.26.4 opencv-contrib-python==4.11.0.86
+~~~
+
+For each test class, start the camera manually:
+
+~~~powershell
+py -3.11 identity-ai/capture_private_camera_qa.py --kind same
+py -3.11 identity-ai/capture_private_camera_qa.py --kind different
+py -3.11 identity-ai/capture_private_camera_qa.py --kind live
+py -3.11 identity-ai/capture_private_camera_qa.py --kind print
+py -3.11 identity-ai/capture_private_camera_qa.py --kind replay
+~~~
+
+- The script will explicitly ask whether **all photographed people consent** before opening the camera. A denial leaves no files.
+- In the camera preview, press **C** to capture each photo or **Q** / Escape to cancel. `same` and `different` each require two separate captures. Let the second person step in only after consent for `different`. Move/change the angle between the two `same` photos.
+- For `print` and `replay`, the camera must photograph the physical printed picture or a second screen showing a consented face video; never copy the source digital file into the test folder.
+- Data are stored **only** on your PC under `%USERPROFILE%\VolunServe-Private-QA\face` or `%USERPROFILE%\VolunServe-Private-QA\pad`. Each new capture is placed in a new numbered local trial. The tool makes **no network request**, does not need an ID photo, and does not grant Verified Resident.
+- Repeat with multiple **consented** camera trials for meaningful exploratory observations. One capture in each class is a smoke test, not a scientific validation.
+
+After taking the photos, install the hash-pinned models and run both **local-only** evaluators:
+
+~~~powershell
+py -3.11 identity-ai/download_yunet_model.py
+py -3.11 identity-ai/download_sface_model.py
+py -3.11 identity-ai/download_passive_pad_model.py
+py -3.11 identity-ai/evaluate_sface_local.py --samples "$env:USERPROFILE\VolunServe-Private-QA\face"
+py -3.11 identity-ai/evaluate_passive_pad_local.py --samples "$env:USERPROFILE\VolunServe-Private-QA\pad"
+~~~
+
+Share **only the console's aggregate counts** if you want help interpreting them; do **not** upload raw camera images/videos or actual government IDs to a public service.
+
 ## Capture consenting PRIVATE samples on your own Windows device
 
 Face matching requires two distinct camera photos per pair. Use a folder OUTSIDE Git:
