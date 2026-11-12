@@ -39,6 +39,17 @@ class DiagnosisTests(unittest.TestCase):
         self.assertEqual(why, "insufficient_face_context")
         self.assertEqual(classification.calls, 0)
 
+    def test_rectangular_bbox_context_matches_upstream_crop(self):
+        image = self.image
+        # Valid with width/height expansion, rejected by old square crop.
+        rectangular_face = (160, 60, 150, 50)
+        self.assertTrue(diag.context_inside_frame(image.shape, rectangular_face))
+        p = FakePad("model_prefers_attack_unvalidated")
+        reason = diag.diagnose_frame(
+            image, FakeDetection(box=rectangular_face), p)
+        self.assertEqual(reason, "model_prefers_attack_unvalidated")
+        self.assertEqual(p.calls, 1)
+
     def test_face_without_context_is_distinct_from_no_face(self):
         for status, expected in [
             ("no_face", "face_not_detected"),
