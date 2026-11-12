@@ -131,4 +131,7 @@ if (!html.includes("const authIsolationReady=location.hostname==='volunserve-ide
   throw Error("Identity staging lab may be using obsolete Firebase authentication.");
 }
 execFileSync(process.execPath,["--test","identity-staging-web/test-auth-isolation-gate.cjs"],{stdio:"inherit"});
+// Independent Admin review page is protected by full-staging Firebase Auth,
+// the operational Admin backend role guard, and a hardcoded staging origin.
+execFileSync(process.execPath,["identity-staging-web/test-admin-review-page.cjs"],{stdio:"inherit"});
 console.log("Staging-only camera and identity integration checks passed.");
