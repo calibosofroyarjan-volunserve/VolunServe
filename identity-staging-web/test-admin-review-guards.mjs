@@ -16,6 +16,7 @@ const base={
   passportMrzCheck:"checksum_consistent_unverified",
   passportMrzBirthDateCheck:"possible_match",
   backSideProvided:true,backSideScreened:true,
+  backImageQualityStatus:"adequate",
 };
 function screening(type="passport",extra={}) {
   return {
@@ -68,7 +69,45 @@ test("nonpassport ID must supply both sides and clear quality",()=>{
     assert.equal(documentEligibleForAdminReview(screening(type,{backSideProvided:false})),false);
     assert.equal(documentEligibleForAdminReview(screening(type,{backSideScreened:false})),false);
     assert.equal(documentEligibleForAdminReview(screening(type,{imageQualityStatus:"low"})),false);
+    assert.equal(documentEligibleForAdminReview(screening(type,{imageQualityStatus:"unknown"})),false);
+    for(const backQuality of ["low","unknown","not_checked",null,undefined]) {
+      assert.equal(documentEligibleForAdminReview(
+        screening(type,{backImageQualityStatus:backQuality})
+      ),false, type+" back="+String(backQuality));
+    }
+    assert.equal(canVerify({...valid,review:pending(
+      screening(type,{backImageQualityStatus:"low"})
+    ),method:type==="national_id"?"psa_national_id_qr_check":"official_document_check"}),false);
   }
+});
+test("passport bio page does not require back but must have adequate front",()=>{
+  assert.equal(documentEligibleForAdminReview(screening("passport",{
+    backSideProvided:false,backSideScreened:false,backImageQualityStatus:"not_required"
+  })),true);
+  assert.equal(documentEligibleForAdminReview(screening("passport",{
+    imageQualityStatus:"unknown"
+  })),false);
+  assert.match(screeningDescription(screening("passport",{
+    imageQualityStatus:"unknown"
+  })),/front ID photo quality/i);
+});
+test("inconclusive back quality and OCR warnings give actionable retake messages",()=>{
+  const bad=screening("national_id",{backImageQualityStatus:"low"});
+  assert.match(screeningDescription(bad),/Reverse-side ID photo quality/i);
+  assert.equal(canVerify({...valid,review:pending(bad),
+    method:"psa_national_id_qr_check"}),false);
+  const warn=screening("national_id",{
+    backImageQualityStatus:"adequate",
+    warningCodes:["document_back_evidence_inconclusive"]
+  });
+  assert.match(screeningDescription(warn),/unresolved warnings/i);
+  assert.equal(documentEligibleForAdminReview(warn),false);
+});
+test("a stale pending review from an already verified Resident never re-enables Verify",()=>{
+  const stale={...pending(),identityVerified:true};
+  assert.equal(reviewBucket(stale),"verified");
+  assert.equal(canVerify({...valid,review:stale}),false);
+  assert.equal(reviewBucket({...pending(),identityStatus:"verified"}),"verified");
 });
 test("independent review attestation and notes are mandatory",()=>{
   assert.equal(canVerify(valid),true);
