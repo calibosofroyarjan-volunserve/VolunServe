@@ -16,6 +16,7 @@ from pathlib import Path
 
 import cv2
 import numpy as np
+from yunet_shadow import readiness as yunet_readiness
 
 MODEL_PATH = Path(__file__).resolve().parent / "models" / "minifasnet_v2.onnx"
 MODEL_SHA256 = "d7b3cd9ba8a7ceb13baa8c4720902e27ca3112eff52f926c08804af6b6eecc7b"
@@ -69,6 +70,7 @@ def readiness():
             "independentPadValidated": False,
             "identityDecisionUse": "none",
             "model": "minifasnet-v2-onnx-shadow",
+            "faceDetectorShadow": yunet_readiness(),
             "note": "Single-frame experimental classifier; not certified liveness."}
 
 
