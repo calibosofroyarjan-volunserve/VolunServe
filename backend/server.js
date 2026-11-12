@@ -5698,6 +5698,22 @@ app.post(
         }
         const profile = userSnapshot.data() || {};
         const verification = verificationSnapshot.data() || {};
+        // An operational Admin may adjudicate only a registered community
+        // Resident or Volunteer identity submission. An unrelated pending
+        // identityVerifications record must never allow staff/Admin accounts
+        // (or suspended/unapproved accounts) to gain Resident verification
+        // using this endpoint. Requested/primary/activeMode roles are not
+        // authoritative; use the persisted canonical profile role.
+        const targetRole = getProfileRole(profile);
+        if (!["resident", "volunteer"].includes(targetRole) ||
+            profile.residentAccess !== true ||
+            !isApprovedAccount(profile)) {
+          throw makeHttpError(
+            403,
+            "identity_review_target_not_eligible",
+            "This identity review is not an approved Resident or Volunteer account.",
+          );
+        }
         const currentStatus = normalizeIdentityStatus(
           profile.identityStatus ||
             verification.status ||
