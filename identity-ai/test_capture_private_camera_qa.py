@@ -110,6 +110,38 @@ class CapturePrivateCameraTests(unittest.TestCase):
         self.assertFalse(np.array_equal(result[0], result[1]))
         self.assertTrue(fake.released)
 
+    def test_space_and_uppercase_c_capture_two_distinct_frames(self):
+        fake = FakeCamera()
+        with patch.object(camera.cv2, "VideoCapture", return_value=fake), \
+             patch.object(camera.cv2, "imshow"), \
+             patch.object(camera.cv2, "setMouseCallback"), \
+             patch.object(camera.cv2, "waitKey",
+                          side_effect=[ord(" "), ord("C")]):
+            result = camera.capture_from_camera("same")
+        self.assertEqual(len(result), 2)
+        self.assertFalse(np.array_equal(result[0], result[1]))
+        self.assertTrue(fake.released)
+
+    def test_mouse_click_can_capture_even_when_keyboard_keys_not_received(self):
+        fake = FakeCamera()
+        callback = []
+
+        def register(_window, on_mouse):
+            callback.append(on_mouse)
+
+        def mouse_click(_delay):
+            if callback:
+                callback[0](cv2.EVENT_LBUTTONUP, 30, 30, 0, None)
+            return -1
+
+        with patch.object(camera.cv2, "VideoCapture", return_value=fake), \
+             patch.object(camera.cv2, "imshow"), \
+             patch.object(camera.cv2, "setMouseCallback", side_effect=register), \
+             patch.object(camera.cv2, "waitKey", side_effect=mouse_click):
+            result = camera.capture_from_camera("different")
+        self.assertEqual(len(result), 2)
+        self.assertTrue(fake.released)
+
     def test_no_camera_access_without_explicit_consent(self):
         with tempfile.TemporaryDirectory() as tmp, \
              patch("builtins.input", return_value="NO"), \
