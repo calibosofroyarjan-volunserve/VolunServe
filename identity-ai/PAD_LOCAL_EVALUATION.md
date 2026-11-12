@@ -25,6 +25,12 @@ Upstream audit references:
 - https://github.com/minivision-ai/Silent-Face-Anti-Spoofing/blob/master/test.py
 - https://huggingface.co/garciafido/minifasnet-v2-anti-spoofing-onnx
 
+## New private dual-scale real-device pilot (Nov 13, 2026)
+
+The original PyTorch/ONNX weight parity audit passed **20/20 same-tensor synthetic comparisons**. That resolves numerical conversion and index-order parity on those inputs, **not** which normalization works best for a real camera subject. The upstream NumPy path uses raw 0–255 BGR values, whereas the third-party converted ONNX card says 0–1 BGR. The staging shadow still uses 0–1 and has a previously observed possible genuine-face false rejection.
+
+For a stricter **local-only comparison**, use `identity-ai/evaluate_pad_scales_local.py`. It evaluates the **same cropped frame under both 0–255 and 0–1** without uploads, exports only aggregate paired-trial counts, enforces explicit consent and checks for both pinned MiniFASNet and YuNet models. See [PAD_REAL_DEVICE_DUAL_SCALE_QA.md](PAD_REAL_DEVICE_DUAL_SCALE_QA.md) for the full capture protocol, Windows commands and interpretation. This new evaluation path **does not enable automatic identity approval or claim independent liveness validation**.
+
 ## Test safely on your own Windows computer
 
 Python **3.11** and a Git checkout containing the latest staging code are needed. A browser alone cannot execute this private local evaluator.
