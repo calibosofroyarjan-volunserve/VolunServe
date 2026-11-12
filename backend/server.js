@@ -24,6 +24,9 @@ const {
 } = require("./adminAccess");
 const app = express();
 const DEFAULT_ALLOWED_ORIGINS = [
+  // Dedicated isolated staging camera lab. Only this staging-only branch
+  // should contain this explicit cross-origin allowlist entry.
+  "https://volunserve-identity-test-staging.onrender.com",
   // Production and Firebase Hosting previews of the VolunServe web app.
   "https://volunserve.org",
   "https://volunserve.com",
@@ -47,6 +50,18 @@ const DEFAULT_ALLOWED_ORIGINS = [
 // A slightly larger raw multipart envelope prevents valid upper-bound uploads failing.
 const IDENTITY_UPLOAD_LIMIT = "32mb";
 const IDENTITY_RETRY_DELAY_MS = 8000;
+// Keep server-side media processing DISABLED until full-staging test account
+// login and privacy/retention checks are independently confirmed.
+const STAGING_IDENTITY_MEDIA_UPLOADS_ENABLED = false;
+function requireStagingIdentityMediaApproval(_request,response,next) {
+  if (!STAGING_IDENTITY_MEDIA_UPLOADS_ENABLED) {
+    return response.status(423).json({
+      error: "staging_identity_media_disabled",
+      message: "Staging sign-in and read-only checks are enabled. ID/selfie uploads are not approved yet.",
+    });
+  }
+  return next();
+}
 const MAX_IDENTITY_AI_ATTEMPTS = 3;
 const IDENTITY_PROCESSING_LEASE_MS = 3 * 60 * 1000;
 
@@ -4937,6 +4952,7 @@ const IDENTITY_DOC_PRECHECK_DAILY_LIMIT = 30;
 app.post(
   "/api/identity/document/precheck",
   requireFirebaseUser,
+  requireStagingIdentityMediaApproval,
   express.raw({ type: "multipart/form-data", limit: "21mb" }),
   async (request, response) => {
     response.set("Cache-Control", "no-store");
@@ -5174,6 +5190,7 @@ app.get(
 app.post(
   "/api/identity/verify",
   requireFirebaseUser,
+  requireStagingIdentityMediaApproval,
   express.raw({ type: "multipart/form-data", limit: IDENTITY_UPLOAD_LIMIT }),
   async (request, response) => {
     const uid = request.firebaseUser.uid;
