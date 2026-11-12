@@ -79,4 +79,30 @@ for(const sensitive of ["fetch(", "XMLHttpRequest", "navigator.sendBeacon", "loc
 }
 checkInlineModule(process.execPath,["--check","--input-type=module"],{input:padQa,stdio:["pipe","inherit","inherit"]});
 execFileSync(process.execPath,["--test","identity-staging-web/test-pad-qa-report.mjs"],{stdio:"inherit"});
+// Similarity observations are manual. Scores must NEVER be stored, networked,
+// used to modify production thresholds or interpreted as PAD certification.
+for (const qaPath of ["identity-staging-web/match-pad-metrics.mjs",
+                      "identity-staging-web/match-pad-qa.js",
+                      "identity-staging-web/test-match-pad-metrics.mjs"]) {
+ if (!fs.existsSync(qaPath)) throw Error("Missing local-only similarity QA: "+qaPath);
+}
+if (!html.includes('<script type="module" src="./match-pad-qa.js"></script>')) {
+ throw Error("Similarity and challenge calculator missing from staging lab");
+}
+const matchPadQa=fs.readFileSync("identity-staging-web/match-pad-qa.js","utf8");
+const scoreMetrics=fs.readFileSync("identity-staging-web/match-pad-metrics.mjs","utf8");
+if (!matchPadQa.includes('location.hostname!=="volunserve-identity-test-staging.onrender.com"')) {
+ throw Error("Face-match QA is not restricted to isolated test website");
+}
+for (const [name,contents] of [["face match form",matchPadQa],["score metrics",scoreMetrics]]) {
+ for (const forbidden of ["fetch(", "XMLHttpRequest", "sendBeacon(", "localStorage",
+  "sessionStorage", "IndexedDB", "https://volunserve.com", "https://volunserve.onrender.com",
+  "volunserve-3aa5b", "firebase"]) {
+  if (contents.includes(forbidden)) throw Error("Potential production access or data persistence in "+name+": "+forbidden);
+ }
+}
+checkInlineModule(process.execPath,["--check","--input-type=module"],{
+  input:matchPadQa,stdio:["pipe","inherit","inherit"]
+});
+execFileSync(process.execPath,["--test","identity-staging-web/test-match-pad-metrics.mjs"],{stdio:"inherit"});
 console.log("Staging-only camera and identity integration checks passed.");
