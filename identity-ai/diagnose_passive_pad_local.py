@@ -41,11 +41,14 @@ def context_inside_frame(shape, box):
         return False
     height, width = shape[:2]
     x, y, w, h = box
-    side = max(w, h) * 2.7
-    left = int(round(x + w / 2 - side / 2))
-    top = int(round(y + h / 2 - side / 2))
-    right = int(round(x + w / 2 + side / 2))
-    bottom = int(round(y + h / 2 + side / 2))
+    # Keep this diagnosis source-parallel with passive_pad_shadow._face_crop:
+    # 2.7x each bbox dimension, NOT a square based on max(width, height).
+    expanded_width = w * 2.7
+    expanded_height = h * 2.7
+    left = int(round(x + w / 2 - expanded_width / 2))
+    top = int(round(y + h / 2 - expanded_height / 2))
+    right = int(round(x + w / 2 + expanded_width / 2))
+    bottom = int(round(y + h / 2 + expanded_height / 2))
     return left >= 0 and top >= 0 and right <= width and bottom <= height
 
 
