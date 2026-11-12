@@ -70,6 +70,18 @@ class PrivateFaceEvaluationTests(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     parse_manifest(manifest)
 
+    def test_private_media_manifest_inside_git_checkout_is_rejected(self):
+        # Synthetic manifest only; this temporary folder is deleted after test.
+        with TemporaryDirectory(dir=Path(__file__).resolve().parent) as folder:
+            manifest=Path(folder)/"pairs.jsonl"
+            manifest.write_text(json.dumps({
+                "label":"genuine",
+                "reference":"images/synthetic_a.jpg",
+                "probe":"images/synthetic_b.png",
+            })+"\\n",encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "PRIVATE_MEDIA_FOLDER_MUST_BE_OUTSIDE_REPOSITORY"):
+                parse_manifest(manifest)
+
     def test_report_includes_no_pair_scores_images_or_identifiers(self):
         result=evaluate([("genuine",Path("patient_photo.jpg"),Path("private_selfie.png"))],
                         scorer=lambda *_:.93456)
