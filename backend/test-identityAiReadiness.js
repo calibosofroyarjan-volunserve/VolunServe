@@ -3,7 +3,7 @@ const assert = require("node:assert/strict");
 const {test} = require("node:test");
 const {probeIdentityAiReadiness} = require("./identityAiReadiness");
 const endpoint = "https://volunserve-identity-ai.onrender.com/verify";
-const health = {ok: true, verificationEngineReady: true, internalAuthConfigured: true, documentOcrReady: true, profileComparisonReady: true, documentPrecheckReady: true, livenessImplemented: false, passivePadShadow:{shadowEnabled:true,modelLoaded:true,independentPadValidated:false,faceDetectorShadow:{modelLoaded:true,independentPadValidated:false}}};
+const health = {ok: true, verificationEngineReady: true, internalAuthConfigured: true, documentOcrReady: true, profileComparisonReady: true, documentPrecheckReady: true, livenessImplemented: false, passivePadShadow:{shadowEnabled:true,modelLoaded:true,independentPadValidated:false,faceDetectorShadow:{modelLoaded:true,independentPadValidated:false}},sFaceShadow:{modelLoaded:true,shadowEnabled:true,independentFaceMatchValidated:false,independentPadValidated:false}};
 const response = (status, body) => ({status, ok: status >= 200 && status < 300, async json() {return body;}});
 const okHealth = () => response(200, health);
 const okAuth = () => response(200, {authenticated: true});
@@ -22,6 +22,8 @@ test("successful check verifies both readiness and private authentication", asyn
   assert.equal(result.body.livenessImplemented, false);
   assert.deepEqual(result.body.passivePadShadow,{modelLoaded:true,shadowEnabled:true,independentPadValidated:false,identityDecisionUse:"none"});
   assert.deepEqual(result.body.faceDetectorShadow,{modelLoaded:true,independentPadValidated:false,identityDecisionUse:"none"});
+  assert.deepEqual(result.body.sFaceShadow,{modelLoaded:true,shadowEnabled:true,independentFaceMatchValidated:false,independentPadValidated:false,identityDecisionUse:"none"});
+  assert.ok(!("model" in result.body.sFaceShadow),"Do not relay model vendor metadata to clients");
   assert.equal(result.body.mediaSubmissionEnabled,false);
   assert.equal(result.body.biometricAccuracyMeasured,false);
   assert.ok(!("model" in result.body.passivePadShadow),"Do not relay third-party model metadata to client");
@@ -120,5 +122,26 @@ test("shadow models missing or vendor falsely claiming PAD cannot flip verified,
     assert.equal(result.body.passivePadShadow.identityDecisionUse,"none");
     assert.equal(result.body.faceDetectorShadow.identityDecisionUse,"none");
     assert.equal(result.body.passivePadShadow.modelLoaded,pad?.modelLoaded===true);
+  }
+});
+
+test("optional SFace readiness never enables approvals or trusts claims of calibration", async () => {
+  for (const sface of [
+    undefined, {},
+    {modelLoaded:true,shadowEnabled:true,independentFaceMatchValidated:true,
+     independentPadValidated:true,identityDecisionUse:"automatic_verified"}
+  ]) {
+    const result=await probeIdentityAiReadiness(options(async url=>
+      url.endsWith("/health")?response(200,{...health,sFaceShadow:sface}):okAuth()
+    ));
+    assert.equal(result.statusCode,200);
+    assert.equal(result.body.sFaceShadow.modelLoaded,sface?.modelLoaded===true);
+    assert.equal(result.body.sFaceShadow.shadowEnabled,sface?.shadowEnabled===true);
+    assert.equal(result.body.sFaceShadow.independentFaceMatchValidated,false);
+    assert.equal(result.body.sFaceShadow.independentPadValidated,false);
+    assert.equal(result.body.sFaceShadow.identityDecisionUse,"none");
+    assert.equal(result.body.mediaSubmissionEnabled,false);
+    assert.equal(result.body.biometricAccuracyMeasured,false);
+    assert.equal(result.body.livenessImplemented,false);
   }
 });
