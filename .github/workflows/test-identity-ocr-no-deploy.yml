@@ -8,6 +8,10 @@ on:
       - "identity-ai/test_document_screening.py"
       - "identity-ai/test_strict_document_screening.py"
       - "identity-ai/test_profile_consistency.py"
+      - "identity-ai/passport_mrz_shadow.py"
+      - "identity-ai/test_passport_mrz_shadow.py"
+      - "identity-ai/test_passport_mrz_integration.py"
+      - "identity-ai/ICAO_PASSPORT_MRZ_QA.md"
       - "identity-ai/main.py"
       - "identity-ai/passive_pad_shadow.py"
       - "identity-ai/test_passive_pad_shadow.py"
@@ -76,6 +80,9 @@ jobs:
           PYTHONPATH: identity-ai
         run: |
           python -m unittest discover -s identity-ai -p 'test_profile_consistency.py' -v
+          python -m unittest discover -s identity-ai -p 'test_passport_mrz_shadow.py' -v
+          python -m unittest discover -s identity-ai -p 'test_passport_mrz_integration.py' -v
+          python -m py_compile identity-ai/passport_mrz_shadow.py
       - uses: actions/setup-node@v4
         with:
           node-version: "20"
