@@ -233,6 +233,7 @@ async function loadReviews() {
   } finally {
     isBusy=false;
     renderButtons();
+    if (hasAccess) renderQueue();
   }
 }
 async function decide(action) {
@@ -286,6 +287,9 @@ el("login").addEventListener("submit",async event=>{
     isBusy=false;
     el("loginButton").disabled=!!signedIn || !enabled;
     el("password").value="";
+    // onAuthStateChanged may fire while signIn() is still busy.
+    // Ensure the first Admin queue fetch is not silently skipped.
+    if (signedIn && !hasAccess) void loadReviews();
   }
 });
 el("logoutButton").addEventListener("click",async()=>{
