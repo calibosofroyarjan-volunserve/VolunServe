@@ -2,7 +2,6 @@
 
 const {
   initializeApp,
-  applicationDefault,
   cert,
   getApps,
 } = require("firebase-admin/app");
@@ -16,7 +15,7 @@ const {
   FieldValue,
 } = require("firebase-admin/firestore");
 
-const {assessFullStagingEnvironment, isFullStagingRuntime} = require("./stagingFirebaseIsolation");
+const {assessFullStagingEnvironment} = require("./stagingFirebaseIsolation");
 
 
 function getServiceAccount() {
@@ -57,20 +56,18 @@ function getServiceAccount() {
 function getFirebaseApp() {
   // Validate BEFORE Firebase initialization, and before considering a cached
   // app. Never read or write Firestore to determine the target project.
-  const isStaging = isFullStagingRuntime(process.env);
-  if (isStaging) {
-    const isolation = assessFullStagingEnvironment(process.env);
-    if (!isolation.safeToUseFullStaging) {
-      // Errors are intentionally generic: no tokens, service-account JSON,
-      // email addresses or URLs are included in exception messages.
-      throw new Error("STAGING_ISOLATION_BLOCKED: backend must use isolated full-staging Firebase and AI.");
-    }
-    console.log("PASS FULL_STAGING_ISOLATION: staging configuration checked without database access.");
+  // This GitHub integration branch is STAGING-ONLY. Even if every Render
+  // runtime identifier/flag is missing, never initialize a production,
+  // auth-only-staging or default Google ADC Firebase project.
+  const isolation = assessFullStagingEnvironment(process.env);
+  if (!isolation.safeToUseFullStaging) {
+    throw new Error("STAGING_ISOLATION_BLOCKED: backend must use isolated full-staging Firebase and AI.");
   }
+  console.log("PASS FULL_STAGING_ISOLATION: staging configuration checked without database access.");
 
   const existingApps = getApps();
   if (existingApps.length > 0) {
-    if (isStaging && existingApps[0].options.projectId !== "volunserve-full-staging") {
+    if (existingApps[0].options.projectId !== "volunserve-full-staging") {
       throw new Error("STAGING_ISOLATION_BLOCKED: Firebase app target mismatch.");
     }
     return existingApps[0];
@@ -79,16 +76,14 @@ function getFirebaseApp() {
   const serviceAccount =
     getServiceAccount();
 
-  if (serviceAccount) {
-    return initializeApp({
-      credential:
-        cert(serviceAccount),
-    });
+  // No fallback to applicationDefault() or workstation/cloud metadata.
+  // The strict check above required an explicit full-staging service account.
+  if (!serviceAccount) {
+    throw new Error("STAGING_ISOLATION_BLOCKED: explicit staging Firebase credentials required.");
   }
-
   return initializeApp({
-    credential:
-      applicationDefault(),
+    credential: cert(serviceAccount),
+    projectId: "volunserve-full-staging",
   });
 }
 
