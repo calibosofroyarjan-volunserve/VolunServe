@@ -6,6 +6,37 @@
  */
 const EXPECTED_PROJECT = "volunserve-full-staging";
 const EXPECTED_AI_ORIGIN = "https://volunserve-identity-ai-staging.onrender.com";
+const STAGING_NODE_SERVICE_ID = "srv-dbnp9ulg1s2s73daj250";
+const STAGING_NODE_SERVICE_NAME = "volunserve-backend-staging";
+const STAGING_NODE_EXTERNAL_ORIGIN = "https://volunserve-backend-staging.onrender.com";
+
+// Detect known staging *runtime identity* even if an operator forgot both
+// VOLUNSERVE_STAGING_STRICT and VOLUNSERVE_DEPLOYMENT_ENV. Without this,
+// missing flags could bypass the Firebase isolation check entirely.
+// These environment values are provided by Render and are not read from
+// client requests or untrusted uploaded documents.
+function isFullStagingRuntime(env) {
+  const mode = String(env.VOLUNSERVE_DEPLOYMENT_ENV || "").trim().toLowerCase();
+  if (env.VOLUNSERVE_STAGING_STRICT === "1" ||
+      mode === "staging" || mode === "full-staging") return true;
+  if (env.RENDER_SERVICE_ID === STAGING_NODE_SERVICE_ID ||
+      env.RENDER_SERVICE_NAME === STAGING_NODE_SERVICE_NAME) return true;
+  try {
+    const address = new URL(String(env.RENDER_EXTERNAL_URL || "").trim());
+    if (address.origin === STAGING_NODE_EXTERNAL_ORIGIN &&
+        ["", "/"].includes(address.pathname) &&
+        !address.username && !address.password &&
+        !address.search && !address.hash) return true;
+  } catch { /* no Render external URL available */ }
+  // A copied full-staging account in a misconfigured runtime is another
+  // reason to demand explicit strict flags before initializing the SDK.
+  try {
+    const creds = JSON.parse(String(env.FIREBASE_SERVICE_ACCOUNT_JSON || ""));
+    if (creds?.project_id === EXPECTED_PROJECT) return true;
+  } catch { /* malformed credentials are checked by the strict evaluator */ }
+  return false;
+}
+
 
 function assessFullStagingEnvironment(env) {
   const checks = [];
@@ -63,4 +94,4 @@ function assessFullStagingEnvironment(env) {
     checks,
   };
 }
-module.exports = {assessFullStagingEnvironment};
+module.exports = {assessFullStagingEnvironment, isFullStagingRuntime};
