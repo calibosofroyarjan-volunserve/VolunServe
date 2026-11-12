@@ -78,7 +78,7 @@ class PrivateFaceEvaluationTests(unittest.TestCase):
                 "label":"genuine",
                 "reference":"images/synthetic_a.jpg",
                 "probe":"images/synthetic_b.png",
-            })+"\\n",encoding="utf-8")
+            })+"\n",encoding="utf-8")
             with self.assertRaisesRegex(ValueError, "PRIVATE_MEDIA_FOLDER_MUST_BE_OUTSIDE_REPOSITORY"):
                 parse_manifest(manifest)
 
