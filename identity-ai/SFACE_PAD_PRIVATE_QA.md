@@ -92,6 +92,41 @@ For manually captured photos **outside Git**, use these alternate output folders
 
 Official model downloads need internet access; actual test media processing happens locally. Model hashes, licenses and source attribution are documented in THIRD_PARTY_MODELS.md. No third-party promotional logo is required on VolunServe user screens; preserve legal attribution.
 
+## Critical ONNX input-scale discrepancy (QA comparison only)
+
+The original MiniVisionAI src/data_io/functional.py to_tensor method for
+NumPy images returns img.float() with pixel values in **0..255** (its
+previous division by 255 is commented out in the upstream source). However,
+the third-party ONNX model card specifies **0..1** normalized BGR input.
+The third-party card also describes class 0 as live, conflicting with
+upstream test.py (where class 1 is genuine). These are unresolved
+model-export/provenance discrepancies, not grounds to flip class labels.
+
+**We DO NOT change the existing staging or production PAD predictor**
+on this evidence alone. The following local-only comparison evaluates
+both scales on the **same consented saved photo** using the same
+hash-pinned model and rectangular 2.7x face crop:
+
+~~~powershell
+git pull --ff-only origin feat/staging-private-face-pad-evaluation-20261113
+py -3.11 identity-ai/compare_pad_input_scales_local.py --samples "$env:USERPROFILE\VolunServe-Private-QA-Retest\pad"
+~~~
+
+Only aggregate counts for class_0, class_1, class_2 and inconclusive
+are reported separately for source_raw_0_to_255 and onnx_card_0_to_1.
+No per-person predictions, confidences, images, embeddings, names,
+image paths or biometric information leave your PC.
+
+**The class numbers are NOT independently validated live/attack labels.**
+One genuine example cannot identify the correct input scale or verify
+the ONNX class mapping. Compare several real consented live,
+printed-photo and screen-replay trials under different conditions.
+No preprocessing mode is automatically enabled in account approval.
+
+Original upstream and third-party sources:
+- https://github.com/minivision-ai/Silent-Face-Anti-Spoofing/blob/master/src/data_io/functional.py
+- https://github.com/minivision-ai/Silent-Face-Anti-Spoofing/blob/master/test.py
+- https://huggingface.co/garciafido/minifasnet-v2-anti-spoofing-onnx
 ## Investigating a genuine face labeled as an attack
 
 A consented LIVE camera sample was labeled `model_prefers_attack_unvalidated`
