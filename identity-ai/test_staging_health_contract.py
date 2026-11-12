@@ -28,6 +28,9 @@ def evaluate(ocr_ready, profile_ready):
         "get_internal_key": lambda: "synthetic-internal-key",
         "face_mesh_engine_ready": lambda: True,
         "get_match_threshold": lambda: 0.78,
+        "passive_pad_readiness": lambda: {"shadowEnabled": True, "modelLoaded": False,
+                                          "independentPadValidated": False,
+                                          "identityDecisionUse": "none"},
         "document_ocr_ready": lambda: ocr_ready,
         "profile_comparison": (lambda *args: {}) if profile_ready else None,
         "datetime": datetime, "timezone": timezone,
@@ -53,6 +56,8 @@ class StagingHealthContractTests(unittest.TestCase):
         self.assertTrue(result["profileComparisonReady"])
         self.assertTrue(result["documentPrecheckReady"])
         self.assertFalse(result["livenessImplemented"])
+        self.assertFalse(result["passivePadShadow"]["independentPadValidated"])
+        self.assertEqual(result["passivePadShadow"]["identityDecisionUse"], "none")
         self.assertFalse(result["idDocumentAuthenticityVerified"])
 
     def test_missing_ocr_is_not_misreported_ready(self):
