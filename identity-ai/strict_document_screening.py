@@ -198,8 +198,8 @@ def _front_heading_signal(declared_type: str, ocr_text: str) -> bool:
                FRONT_HEADING_MARKERS.get(declared_type, ()))
 
 
-def _national_back_layout_signal(ocr_text: str) -> bool:
-    """Strong physical PhilID back-side labels; insufficient alone for an ID verdict."""
+def _national_back_family_corrob(ocr_text: str) -> bool:
+    """Two independent physical PhilID back label families; OCR clue only."""
     normalized = _normalized(ocr_text)
     back_families = (
         ("BLOOD TYPE", "URI NG DUGO"),
@@ -209,9 +209,19 @@ def _national_back_layout_signal(ocr_text: str) -> bool:
     )
     count = sum(any(_contains(normalized, word) for word in family)
                 for family in back_families)
-    # Require independent clues and no obvious front heading. These labels
-    # alone could also appear on other forms: never claim authenticity.
-    return count >= 2 and not _front_heading_signal("national_id", ocr_text)
+    # These labels can appear on unrelated forms: never claim authenticity.
+    return count >= 2
+
+
+def _national_back_layout_signal(ocr_text: str) -> bool:
+    """A likely reverse scan when a clearly front-facing title is absent.
+
+    Orientation detection needs a stricter heuristic than reverse-side
+    corroboration: a genuine back may repeat a PhilID title as well as
+    actual reverse-side field labels.
+    """
+    return (_national_back_family_corrob(ocr_text)
+            and not _front_heading_signal("national_id", ocr_text))
 
 
 def _front_demographic_layout_signal(ocr_text: str) -> bool:
@@ -303,7 +313,7 @@ def assess_document_sides(
             and result["status"] == "text_consistent_unverified"
             and back["status"] == "inconclusive"
             and not (declared_type == "national_id"
-                     and _national_back_layout_signal(back_ocr_text))):
+                     and _national_back_family_corrob(back_ocr_text))):
         result["status"] = "inconclusive"
         result["warningCodes"] = list(dict.fromkeys(
             result["warningCodes"] + ["document_back_evidence_inconclusive"]
@@ -312,7 +322,7 @@ def assess_document_sides(
     # successful orientation evidence without back-side layout corroboration.
     if (declared_type == "national_id"
             and result["status"] == "text_consistent_unverified"
-            and not _national_back_layout_signal(back_ocr_text)):
+            and not _national_back_family_corrob(back_ocr_text)):
         result["status"] = "inconclusive"
         result["warningCodes"] = list(dict.fromkeys(
             result["warningCodes"] + ["document_back_layout_inconclusive"]
