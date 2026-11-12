@@ -62,7 +62,10 @@ async function probeIdentityAiReadiness({
           "The Python AI service has no internal authentication configured in Render.",
         );
       } else if (body?.ok !== true || body?.verificationEngineReady !== true ||
-                 body?.internalAuthConfigured !== true) {
+                 body?.internalAuthConfigured !== true ||
+                 body?.documentOcrReady !== true ||
+                 body?.profileComparisonReady !== true ||
+                 body?.documentPrecheckReady !== true) {
         lastHealthFailure = notReady(
           "identity_ai_not_ready",
           "The Python AI engine is not yet ready. Check AI Render logs if this persists.",
@@ -120,8 +123,11 @@ async function probeIdentityAiReadiness({
             ok: true,
             ready: true,
             provider: "volunserve-custom-ai",
-            livenessImplemented: health.livenessImplemented === true,
-            message: "The AI engine and private backend authentication are ready. Liveness and ID authenticity are not fully verified.",
+            livenessImplemented: false,
+            documentOcrReady: health.documentOcrReady === true,
+            profileComparisonReady: health.profileComparisonReady === true,
+            documentPrecheckReady: health.documentPrecheckReady === true,
+            message: "The AI engine, document screening and private backend authentication are ready. Independent liveness and ID authenticity are not validated.",
           }};
         }
         return notReady(
