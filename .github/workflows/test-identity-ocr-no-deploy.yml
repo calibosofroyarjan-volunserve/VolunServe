@@ -7,6 +7,7 @@ on:
       - "identity-ai/profile_consistency.py"
       - "identity-ai/test_document_screening.py"
       - "identity-ai/test_strict_document_screening.py"
+      - "identity-ai/test_id_backscan_quality.py"
       - "identity-ai/test_profile_consistency.py"
       - "identity-ai/passport_mrz_shadow.py"
       - "identity-ai/test_passport_mrz_shadow.py"
@@ -45,6 +46,7 @@ on:
       - "backend/test-stagingFirebaseIsolation.js"
       - "backend/selectedIdPolicy.js"
       - "backend/test-selectedIdPolicy.js"
+      - "backend/test-id-backscan-quality.cjs"
       - "lib/identityVerification.ts"
       - "app/identity-verification.web.tsx"
       - "app/identity-verification.tsx"
@@ -77,6 +79,7 @@ jobs:
         run: |
           python -m unittest discover -s identity-ai -p 'test_document_screening.py' -v
           python -m unittest discover -s identity-ai -p 'test_strict_document_screening.py' -v
+          python -m unittest discover -s identity-ai -p 'test_id_backscan_quality.py' -v
       - name: Test DOB and barangay consistency
         env:
           PYTHONPATH: identity-ai
@@ -113,6 +116,7 @@ jobs:
           node --check backend/stagingFirebaseIsolation.js
           node --check backend/scripts/check-staging-isolation.cjs
           node --test backend/test-selectedIdPolicy.js
+          node --test backend/test-id-backscan-quality.cjs
           node --test backend/test-identity-contract-staging.js
           node --test backend/test-firestore-dob-rules.js
           node --test backend/test-identityIssuerReviewPolicy.js
