@@ -136,8 +136,9 @@ test("birthday OCR possible conflict prevents priority review and auto-grant",()
    profileNameCheck:"possible_match",
    imageQualityStatus:"adequate",
  };
- assert.equal(selectedIdRecognized(screening),true); // ID TYPE only
+ assert.equal(selectedIdRecognized(screening),false); // Unresolved DOB blocks approval.
  assert.equal(enforceSelectedIdDecision("verified",screening,true),"manual_review");
+ assert.equal(enforceSelectedIdDecision("manual_review",screening,true),"manual_review");
  assert.equal(classifyIdentityReviewTrack({screening,decision:"manual_review",idImageQualityScore:.95}),
    "standard_admin_review");
 });
