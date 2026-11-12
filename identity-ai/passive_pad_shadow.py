@@ -88,11 +88,18 @@ def _face_crop(image):
     if box is None:
         return None
     x, y, w, h = box
-    side = max(w, h) * 2.7
-    left = int(round(x + w / 2 - side / 2))
-    top = int(round(y + h / 2 - side / 2))
-    right = int(round(x + w / 2 + side / 2))
-    bottom = int(round(y + h / 2 + side / 2))
+    # Match upstream MiniVisionAI CropImage._get_new_box: independently
+    # expand bbox WIDTH and HEIGHT by 2.7x, then resize to 80x80.
+    # An earlier square crop based on max(w, h) was not source-equivalent:
+    # it could include irrelevant background or reject valid rectangular
+    # face crops. Preserve fail-closed behavior when context exits frame.
+    scale = 2.7
+    expanded_width = w * scale
+    expanded_height = h * scale
+    left = int(round(x + w / 2 - expanded_width / 2))
+    top = int(round(y + h / 2 - expanded_height / 2))
+    right = int(round(x + w / 2 + expanded_width / 2))
+    bottom = int(round(y + h / 2 + expanded_height / 2))
     # Never invent padded context outside the photographed frame.
     if left < 0 or top < 0 or right > width or bottom > height:
         return None
