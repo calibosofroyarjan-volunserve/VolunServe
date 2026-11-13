@@ -19,6 +19,7 @@ from profile_consistency import profile_comparison
 from face_preflight_policy import screening_ready_for_face_comparison
 from passport_mrz_shadow import assess_passport_mrz
 from passive_pad_shadow import readiness as passive_pad_readiness, assess_frame_shadow
+from pad_v1se_shadow import readiness as v1se_pad_readiness, assess_ensemble_shadow
 from sface_shadow import readiness as sface_readiness, assess_pair_shadow as sface_assess_pair_shadow
 import numpy as np
 from fastapi import FastAPI, Header, HTTPException, Request
@@ -1128,6 +1129,9 @@ def run_face_verification(
     # SHADOW ONLY: no impact on matching threshold or verification decision.
     # A one-frame passive classifier cannot establish true liveness.
     pad_shadow = assess_frame_shadow(selfie_image)
+    # A second Apache-2.0 model only provides a correlated shadow observation.
+    # No model label can approve a resident or assert real liveness.
+    pad_ensemble_shadow = assess_ensemble_shadow(selfie_image, primary=pad_shadow)
     # Independent staging QA observation only: never change match/approval policy.
     sface_result = sface_assess_pair_shadow(id_image, selfie_image)
     sface_diagnostic = {
@@ -1188,6 +1192,7 @@ def run_face_verification(
             "livenessImplemented":
                 False,
             "passivePadShadow": pad_shadow,
+            "ensemblePadShadow": pad_ensemble_shadow,
             "sFaceShadow": sface_diagnostic,
         }
     fallback = manual_review_result(
@@ -1203,6 +1208,7 @@ def run_face_verification(
         warning="face_match_uncertain_uncalibrated",
     )
     fallback["passivePadShadow"] = pad_shadow
+    fallback["ensemblePadShadow"] = pad_ensemble_shadow
     fallback["sFaceShadow"] = sface_diagnostic
     return fallback
 
@@ -1241,6 +1247,7 @@ def health():
             get_match_threshold(),
         "livenessImplemented": False,
         "passivePadShadow": passive_pad_readiness(),
+        "secondaryPadShadow": v1se_pad_readiness(),
         "sFaceShadow": sface_readiness(),
         "idDocumentScreeningImplemented": True,
         "idDocumentAuthenticityVerified": False,
