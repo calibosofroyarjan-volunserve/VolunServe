@@ -1,0 +1,38 @@
+name: Validate Announcements Hotfix (NO DEPLOY)
+
+on:
+  push:
+    branches:
+      - hotfix/announcements-exact-live-20261114
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  announcements-emulator-and-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      CI: "true"
+      EXPO_NO_TELEMETRY: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - name: Install exact dependencies
+        run: npm ci --no-audit --no-fund
+      - name: TypeScript check (no publish)
+        run: npx tsc --noEmit --incremental false
+      - name: Firestore announcement access tests on LOCAL emulator only
+        run: npx firebase emulators:exec --only firestore --project demo-volunserve "node scripts/test-announcements-published-audience-emulator.cjs"
+      - name: Expo web export (no production credentials)
+        run: npx expo export --platform web --clear
+      - name: Guard: never deploy production
+        run: echo "Announcement tests only. No Firebase Hosting, Firestore production rules, Functions or Render deployment."
