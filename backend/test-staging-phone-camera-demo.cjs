@@ -161,6 +161,25 @@ test("SFace camera QA is separate opt-in and blocked until all three captures", 
   assert.equal(b.get("qaRun").disabled,true);
 });
 
+test("SFace public model setup diagnostic requires separate consent, NOT images",async()=>{
+  const b=browser();
+  assert.equal(b.get("sfaceSetup").disabled,true);
+  b.get("consent").checked=true;b.get("consent").onchange();
+  assert.equal(b.get("sfaceSetup").disabled,true);
+  b.get("sfaceConsent").checked=true;b.get("sfaceConsent").onchange();
+  assert.equal(b.get("sfaceSetup").disabled,false);
+  assert.equal(b.get("sfaceRun").disabled,true);
+  assert.equal(b.count(),0);
+  b.get("sfaceConsent").checked=false;b.get("sfaceConsent").onchange();
+  assert.equal(b.get("sfaceSetup").disabled,true);
+  assert.match(b.get("sfaceSetupResult").textContent,/Setup not checked/);
+  b.get("sfaceConsent").checked=true;b.get("sfaceConsent").onchange();
+  assert.equal(b.get("sfaceSetup").disabled,false);
+  await b.click("reset");
+  assert.equal(b.get("sfaceSetup").disabled,true);
+  assert.equal(b.get("sfaceConsent").checked,false);
+});
+
 test("diagnostic only loads public model weights on explicit permission and no identity decision",()=>{
   assert.match(html,/I separately consent to LOCAL face detection/);
   assert.match(script,/if \(qaBusy \|\| sfaceBusy \|\| step !== 3/);
