@@ -106,8 +106,20 @@ def format_aggregate(report):
         "0–255 vs 0–1 model decisions disagreed on:",
         *(f"  {kind.upper()}: {int(disagreements.get(kind, 0))}" for kind
           in ("live", "print", "replay")),
+    ))
+    for mode, data in sorted(scales.items()):
+        lines.append("")
+        lines.append(f"Experimental input: {mode}")
+        by_kind = data.get("perClass", {})
+        for kind in ("live", "print", "replay"):
+            row = by_kind.get(kind, {})
+            lines.append(
+                f"  {kind.upper()}: live={int(row.get('observedLive', 0))}, "
+                f"attack={int(row.get('observedAttack', 0))}, "
+                f"inconclusive={int(row.get('inconclusive', 0))}"
+            )
+    lines.extend((
         "",
-        "Model evaluation modes: " + ", ".join(sorted(scales)),
         "Liveness independently validated: NO",
         "Permission to approve Verified Resident: NO",
         "",
