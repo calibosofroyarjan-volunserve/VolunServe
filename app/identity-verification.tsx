@@ -352,6 +352,9 @@ export default function IdentityVerification() {
     if (pickingId || submitting) return;
     try {
       setPickingId(true);
+      // A healthy AI server does not imply private photo upload permission.
+      // Check backend capability BEFORE prompting for government ID pictures.
+      await checkIdentityEngineReady();
       const permission = await ImagePicker.requestCameraPermissionsAsync();
       if (!permission.granted) {
         Alert.alert("Camera Required", "Allow camera access to scan your physical government ID.");
@@ -373,7 +376,8 @@ export default function IdentityVerification() {
         setLocalMessage("");
       }
     } catch (error: any) {
-      Alert.alert("ID Camera Failed", error?.message || "Unable to scan the government ID.");
+      Alert.alert("Identity Submission Unavailable",
+        error?.message || "Cannot start government ID capture while private uploads are paused.");
     } finally {
       setPickingId(false);
     }
