@@ -50,7 +50,7 @@ export default function PremiumAuthShell({ children }: Props) {
         backgroundSize: "cover",
         backgroundPosition: "center center",
         backgroundRepeat: "no-repeat",
-      } as const)
+      } as any)
     : undefined;
 
   return (
