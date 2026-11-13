@@ -30,6 +30,10 @@ jobs:
         run: npm ci --no-audit --no-fund
       - name: TypeScript check (no publish)
         run: npx tsc --noEmit --incremental false
+      - name: Validate surgical rules deployment tool without credentials
+        run: |
+          node --check scripts/publish-announcements-rules-safely.cjs
+          node -e 'const fs=require("node:fs"),cp=require("node:child_process"),assert=require("node:assert/strict");const base=cp.execFileSync("git",["show","2cd63d318ecb6b0dfc52706308e05d0b5806d874:firestore.rules"],{encoding:"utf8"});const now=fs.readFileSync("firestore.rules","utf8");const a="    match /announcements/{announcementId} {",b="    match /identityVerifications/{uid} {";const take=x=>x.slice(x.indexOf(a),x.indexOf(b,x.indexOf(a)));assert.equal(base.replace(take(base),take(now)),now);console.log("PASS: rules differ only within announcements.");'
       - name: Firestore announcement access tests on LOCAL emulator only
         run: npx firebase emulators:exec --only firestore --project demo-volunserve "node scripts/test-announcements-published-audience-emulator.cjs"
       - name: Expo web export (no production credentials)
