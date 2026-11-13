@@ -64,6 +64,25 @@ class CameraOCRPolicy(unittest.TestCase):
         for invalid in (None, (), (0, 640), ("bad", 640), (5000, 640)):
             self.assertEqual(camera_id_roi_bounds(invalid), (0, 0, 0, 0))
 
+    def test_compact_id_guide_is_centered_smaller_but_wide_OCR_fallback_stays(self):
+        for shape in ((720, 1280, 3), (480, 640, 3)):
+            with self.subTest(shape=shape):
+                wide = camera_id_roi_bounds(shape)
+                compact = camera_id_roi_bounds(shape, compact=True)
+                w0, h0, w1, h1 = wide
+                x0, y0, x1, y1 = compact
+                self.assertTrue(w0 < x0 < x1 < w1)
+                self.assertTrue(h0 < y0 < y1 < h1)
+                self.assertGreater((x1 - x0) / shape[1], 0.72)
+                self.assertLess((x1 - x0) / shape[1], 0.80)
+                self.assertAlmostEqual(
+                    (x0 + x1) / 2, shape[1] / 2, delta=1.5)
+                self.assertAlmostEqual(
+                    (y0 + y1) / 2, shape[0] / 2, delta=1.5)
+                self.assertGreater(y1 - y0, 150)
+        self.assertEqual(camera_id_roi_bounds(None, compact=True),
+                         (0, 0, 0, 0))
+
     def test_front_retry_messages_identify_missing_signal_without_pii(self):
         heading_only = assess("front", "PAMBANSANG PAGKAKAKILANLAN",
                               120.0, 110.0)
