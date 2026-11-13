@@ -161,7 +161,14 @@ class GuidedPadWebcamUI:
         self.frames_per_trial = frames_per_trial
         self.tick_ms = tick_ms
         self.clock = clock
-        self.framing = framing
+        # Combined study requires V1SE's full 4x crop, not just the old
+        # V2-only 2.7x preview. Do not accept trial with missing V1SE context.
+        # Retain injectable custom framing function for no-camera tests.
+        self.framing = (
+            (lambda frame: analyze_framing(frame, context_scale=4.0))
+            if self.four_hypothesis and framing is analyze_framing
+            else framing
+        )
         self.assessor = assessor
         self.cancelled = True
         self.camera_failed = False
@@ -304,7 +311,8 @@ class GuidedPadWebcamUI:
             state="normal",
             text=self.PRESENTATION_CONFIRMATIONS[kind])
         self.step_label.configure(
-            text=f"{self.PROMPTS[kind]}   Trial {number}/{self.progress.trials_per_class}")
+            text=(f"{self.PROMPTS[kind]}   Trial {number}/{self.progress.trials_per_class}"
+                  + ("   FULL 4x V1SE CROP REQUIRED" if self.four_hypothesis else "")))
         completed = sum(len(values) for values in self.progress.trials.values())
         target = self.progress.trials_per_class * len(self.progress.enabled_categories)
         self.progress_label.configure(
