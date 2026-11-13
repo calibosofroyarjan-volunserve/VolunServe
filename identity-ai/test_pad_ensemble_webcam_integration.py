@@ -179,13 +179,13 @@ class CombinedWebcamTests(unittest.TestCase):
             output_fn(json.dumps(report, sort_keys=True))
             return 0
         terminal = io.StringIO()
-        with patch.object(gui.sys, "platform", "win32"), \\
-             patch.object(gui, "ask_user_settings", return_value=settings), \\
-             patch.object(gui, "setup_required", return_value=False), \\
-             patch("run_pad_webcam_trials_local.run_cli", side_effect=mocked_cli), \\
-             patch.object(gui, "show_copyable_combined_counts") as copy_window, \\
+        with patch.object(gui.sys, "platform", "win32"), \
+             patch.object(gui, "ask_user_settings", return_value=settings), \
+             patch.object(gui, "setup_required", return_value=False), \
+             patch("run_pad_webcam_trials_local.run_cli", side_effect=mocked_cli), \
+             patch.object(gui, "show_copyable_combined_counts") as copy_window, \
              patch.object(gui, "notify",
-                          side_effect=AssertionError("Legacy modal should not hide counts")), \\
+                          side_effect=AssertionError("Legacy modal should not hide counts")), \
              redirect_stdout(terminal):
             self.assertEqual(gui.main(), 0)
         self.assertEqual(copy_window.call_count, 1)
