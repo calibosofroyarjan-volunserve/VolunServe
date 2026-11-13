@@ -1,3 +1,4 @@
+import {blockProductionEvidenceUploadDuringStaging} from "../lib/stagingExpoServiceIsolation";
 import {
   collection,
   doc,
@@ -619,6 +620,7 @@ export default function WebDisasterReport() {
     uid: string,
     files: File[]
   ): Promise<Attachment[]> => {
+    blockProductionEvidenceUploadDuringStaging();
     const attachments: Attachment[] = [];
 
     for (let index = 0; index < files.length; index += 1) {

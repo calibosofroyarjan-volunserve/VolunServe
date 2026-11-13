@@ -1,3 +1,4 @@
+import { getSafeVolunServeBackendBaseUrl, blockProductionEvidenceUploadDuringStaging } from "../../lib/stagingExpoServiceIsolation";
 import { volunserveTypography as vsType } from "../../constants/volunserveLiveUi";
 import { liveUi as designUi } from "../../constants/volunserveLiveUi";
 import AdminReviewHero from "../../components/admin/AdminReviewHero";
@@ -222,7 +223,7 @@ const sanitizeMoneyInput = (value: string) => {
   return `${safeWhole}.${decimal}`;
 };
 
-const SECURE_DONATION_BACKEND = "https://volunserve.onrender.com";
+const SECURE_DONATION_BACKEND = getSafeVolunServeBackendBaseUrl();
 const CLOUDINARY_CLOUD_NAME = "netjawtz";
 const CLOUDINARY_UPLOAD_PRESET = "volunserve_evidence";
 const CLOUDINARY_UPLOAD_URL =
@@ -1113,6 +1114,7 @@ export default function DonationAdministration() {
   const uploadPublicCampaignPhoto = async (
     asset: ImagePicker.ImagePickerAsset,
   ) => {
+    blockProductionEvidenceUploadDuringStaging(); // Check BEFORE touching any photo bytes.
     const fileName =
       asset.fileName ||
       asset.uri.split("/").pop()?.split("?")[0] ||

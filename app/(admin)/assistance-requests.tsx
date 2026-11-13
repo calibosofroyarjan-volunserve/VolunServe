@@ -1,3 +1,4 @@
+import { getSafeVolunServeBackendBaseUrl } from "../../lib/stagingExpoServiceIsolation";
 import { volunserveTypography as vsType } from "../../constants/volunserveLiveUi";
 import { liveUi as designUi } from "../../constants/volunserveLiveUi";
 import { Ionicons } from "@expo/vector-icons";
@@ -211,7 +212,7 @@ type PrivateReviewDraft = {
 };
 
 const PRIVATE_REVIEW_COLLECTION = "assistanceVerificationReviews";
-const SECURE_ASSISTANCE_BACKEND = "https://volunserve.onrender.com";
+const SECURE_ASSISTANCE_BACKEND = getSafeVolunServeBackendBaseUrl();
 
 const needsFacilityVerification = (category?: string) =>
   [
