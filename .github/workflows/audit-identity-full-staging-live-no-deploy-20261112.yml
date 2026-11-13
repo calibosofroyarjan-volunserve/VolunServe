@@ -1,0 +1,21 @@
+name: Full-Staging Identity Runtime Audit (READ ONLY)
+on:
+  pull_request:
+    paths:
+      - 'scripts/audit-identity-full-staging-live-20261112.py'
+      - '.github/workflows/audit-identity-full-staging-live-no-deploy-20261112.yml'
+permissions:
+  contents: read
+jobs:
+  staging-public-runtime-audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 7
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Read-only staging Node / AI / anonymous route health
+        run: python scripts/audit-identity-full-staging-live-20261112.py
+      - name: No credentials, IDs, photos, Firebase writes or Render deploy
+        run: echo 'READ_ONLY_NO_DEPLOY_STAGING_IDENTITY_HEALTH'
