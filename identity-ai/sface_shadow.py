@@ -133,7 +133,7 @@ def _valid_embedding(feature):
     else:
         return False
     if (values.size < 2 or values.size > 4096 or
-            not np.issubdtype(values.dtype, np.number) or
+            not np.issubdtype(values.dtype, np.floating) or
             not np.isfinite(values).all()):
         return False
     magnitude = float(np.linalg.norm(values.astype(np.float64)))
