@@ -39,7 +39,7 @@ function getReviewBackendUrl() {
   });
 }
 
-type ReviewFilter = "pending" | "verified" | "retry_required" | "all";
+type ReviewFilter = "pending" | "verified" | "retry_required" | "rejected" | "all";
 
 type IdentityReview = {
   uid: string;
@@ -127,7 +127,7 @@ export default function IdentityReviewsAdmin() {
   const [validationMethod, setValidationMethod] = useState("");
   const [issuerReviewAttested, setIssuerReviewAttested] = useState(false);
   const [notes, setNotes] = useState("");
-  const [saving, setSaving] = useState<"" | "verify" | "require_retry">("");
+  const [saving, setSaving] = useState<"" | "verify" | "require_retry" | "reject">("");
 
   const role =
     typeof profile?.role === "string"
@@ -206,6 +206,7 @@ export default function IdentityReviewsAdmin() {
       pending: 0,
       verified: 0,
       retry_required: 0,
+      rejected: 0,
       all: items.length,
     };
 
@@ -214,6 +215,7 @@ export default function IdentityReviewsAdmin() {
       if (bucket === "pending") result.pending += 1;
       if (bucket === "verified") result.verified += 1;
       if (bucket === "retry_required") result.retry_required += 1;
+      if (bucket === "rejected") result.rejected += 1;
     });
 
     return result;
@@ -254,7 +256,7 @@ export default function IdentityReviewsAdmin() {
   };
 
   const saveDecision = async (
-    action: "verify" | "require_retry",
+    action: "verify" | "require_retry" | "reject",
   ) => {
     if (!selected || !user || saving) return;
     if (selected.targetEligible !== true) {
@@ -287,10 +289,10 @@ export default function IdentityReviewsAdmin() {
         "Verify is disabled for mismatched or unsupported ID types, missing or unclear front/back photo quality, unresolved OCR warnings, and profile date conflicts. Require a corrected scan and independently review the issuer before approval.");
       return;
     }
-    if (action === "require_retry" && notes.trim().length < 5) {
+    if ((action === "require_retry" || action === "reject") && notes.trim().length < 5) {
       Alert.alert(
-        "Retry Reason Required",
-        "Enter a clear reason so the Resident knows what must be corrected.",
+        "Decision Reason Required",
+        "Enter a clear reason for rejection or the required resubmission.",
       );
       return;
     }
@@ -300,7 +302,9 @@ export default function IdentityReviewsAdmin() {
       const confirmed = confirmFn(
         action === "verify"
           ? "Verify this Resident identity after independent LGU/Admin validation?"
-          : "Require this Resident to retry identity verification?",
+          : action === "reject"
+            ? "Reject this specific identity submission without verifying the Resident?"
+            : "Require this Resident to retry identity verification?",
       );
       if (!confirmed) return;
     }
@@ -343,11 +347,15 @@ export default function IdentityReviewsAdmin() {
       Alert.alert(
         action === "verify"
           ? "Identity Verified"
-          : "Retry Required",
+          : action === "reject"
+            ? "Submission Rejected"
+            : "Retry Required",
         body?.message ||
           (action === "verify"
             ? "The Resident is now identity verified."
-            : "The Resident must submit identity verification again."),
+            : action === "reject"
+              ? "The submission was rejected. Resident verification remains disabled."
+              : "The Resident must submit identity verification again."),
       );
 
       setSelected(null);
@@ -465,6 +473,7 @@ export default function IdentityReviewsAdmin() {
               label: "Retry Required",
               count: counts.retry_required,
             },
+            { key: "rejected" as const, label: "Rejected", count: counts.rejected },
             { key: "all" as const, label: "All", count: counts.all },
           ].map((item) => {
             const active = filter === item.key;
@@ -644,6 +653,7 @@ export default function IdentityReviewsAdmin() {
                   saving={saving}
                   onVerify={() => void saveDecision("verify")}
                   onRetry={() => void saveDecision("require_retry")}
+                  onReject={() => void saveDecision("reject")}
                 />
               ) : (
                 <View style={styles.detailEmpty}>
@@ -677,7 +687,9 @@ function StatusChip({ bucket }: { bucket: ReviewFilter }) {
         ? { label: "Verified", background: "#DCFCE7", color: "#166534" }
         : bucket === "retry_required"
           ? { label: "Retry", background: "#FEE2E2", color: "#B91C1C" }
-          : { label: "Other", background: "#F1F5F9", color: "#475569" };
+          : bucket === "rejected"
+            ? { label: "Rejected", background: "#FEE2E2", color: "#991B1B" }
+            : { label: "Other", background: "#F1F5F9", color: "#475569" };
 
   return (
     <View
@@ -709,6 +721,7 @@ function ReviewDetail({
   saving,
   onVerify,
   onRetry,
+  onReject,
 }: {
   item: IdentityReview;
   validationMethod: string;
@@ -717,9 +730,10 @@ function ReviewDetail({
   setIssuerReviewAttested: (value: boolean) => void;
   notes: string;
   setNotes: (value: string) => void;
-  saving: "" | "verify" | "require_retry";
+  saving: "" | "verify" | "require_retry" | "reject";
   onVerify: () => void;
   onRetry: () => void;
+  onReject: () => void;
 }) {
   const pending = reviewBucket(item) === "pending";
   const nationalId = item.documentScreening?.declaredIdType === "national_id";
@@ -796,6 +810,16 @@ function ReviewDetail({
       <DocumentScreeningSummary screening={item.documentScreening} />
 
       <InfoLine
+        label="Face comparison"
+        value={item.matchScore == null
+          ? "Inconclusive — no usable validated face result"
+          : "Inconclusive — preliminary similarity only (not calibrated)"}
+      />
+      <InfoLine
+        label="Liveness / anti-spoofing"
+        value="Not validated — independent verification required"
+      />
+      <InfoLine
         label="Verification ID"
         value={item.verificationId || "—"}
       />
@@ -869,7 +893,7 @@ function ReviewDetail({
             </Text>
           </TouchableOpacity>
           <Text style={styles.inputLabel}>
-            Review notes / retry reason
+            Review notes / rejection or retry reason
           </Text>
 
           <TextInput
@@ -877,7 +901,7 @@ function ReviewDetail({
             value={notes}
             onChangeText={setNotes}
             multiline
-            placeholder="Add LGU validation notes. A retry decision requires a clear reason."
+            placeholder="Explain the independent review, rejection, or what must be resubmitted."
             placeholderTextColor="#94A3B8"
             textAlignVertical="top"
           />
@@ -936,6 +960,27 @@ function ReviewDetail({
               )}
               <Text style={styles.retryButtonText}>
                 Require Retry
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[
+                styles.retryButton,
+                (notes.trim().length < 5 || !!saving) &&
+                  styles.disabledButton,
+              ]}
+              disabled={notes.trim().length < 5 || !!saving}
+              onPress={onReject}
+              accessibilityRole="button"
+              accessibilityLabel="Reject this identity submission"
+            >
+              {saving === "reject" ? (
+                <ActivityIndicator size="small" color="#B91C1C" />
+              ) : (
+                <Ionicons name="close-circle-outline" size={19} color="#B91C1C" />
+              )}
+              <Text style={styles.retryButtonText}>
+                Reject Submission
               </Text>
             </TouchableOpacity>
           </View>

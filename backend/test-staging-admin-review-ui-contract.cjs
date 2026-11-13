@@ -245,3 +245,37 @@ test("transactional Node permission gate and disabled media uploads remain autho
  assert.match(adminRoute,/identityVerified:\s*true/);
  assert.match(adminRoute,/adminActivityLogs/);
 });
+
+test("Hybrid Admin Rejected filter only displays final non-verified submissions",()=>{
+ assert.equal(adminReviewStatusBucket({
+  status:"failed",manualReviewDecision:"rejected",
+  requiresManualReview:false,identityVerified:false,targetEligible:true,
+ }),"rejected");
+ assert.equal(adminReviewStatusBucket({
+  status:"pending",manualReviewDecision:"rejected",
+  requiresManualReview:true,identityVerified:false,targetEligible:true,
+ }),"all");
+ assert.equal(adminReviewStatusBucket({
+  status:"pending",manualReviewDecision:"rejected",
+  requiresManualReview:false,identityVerified:true,targetEligible:true,
+ }),"verified");
+});
+test("staging web Admin and Resident show distinct Reject without relaxing Verify authority",()=>{
+ const admin=fs.readFileSync("app/(admin)/identity-reviews.tsx","utf8");
+ const web=fs.readFileSync("app/identity-verification.web.tsx","utf8");
+ const native=fs.readFileSync("app/identity-verification.tsx","utf8");
+ assert.match(admin,/onReject=\{\(\) => void saveDecision\("reject"\)\}/);
+ assert(admin.includes("Reject Submission"));
+ assert(admin.includes("Inconclusive — preliminary similarity only (not calibrated)"));
+ assert(admin.includes("Not validated — independent verification required"));
+ assert(admin.includes('selected.targetEligible !== true'));
+ assert(admin.includes('!issuerReviewAttested'));
+ assert(admin.includes('!adminReviewDocumentEligible(selected.documentScreening)'));
+ assert(web.includes('statusResult?.decision === "rejected"'));
+ assert(web.includes("Rejected · Not Verified"));
+ assert(web.includes("Identity Submission Rejected"));
+ assert(native.includes('statusResult?.decision === "rejected"'));
+ assert(native.includes("You are not Verified"));
+ const gate=fs.readFileSync("lib/identityAdminReviewGate.ts","utf8");
+ assert(gate.includes('row.manualReviewDecision === "rejected"'));
+});
