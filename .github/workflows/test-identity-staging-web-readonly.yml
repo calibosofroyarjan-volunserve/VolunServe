@@ -1,0 +1,30 @@
+name: Identity staging web read-only privacy checks (no deploy)
+
+on:
+  pull_request:
+    branches:
+      - preview/identity-only-staging-web-20261108
+    paths:
+      - 'identity-staging-web/**'
+      - '.github/workflows/test-identity-staging-web-readonly.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify-staging-preview:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Use Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Verify staging read-only UI, camera quarantine and Admin synthetic checks
+        run: node identity-staging-web/build-check.cjs
+      - name: Confirm tests cannot deploy
+        run: echo "NO DEPLOY; staging review only"
