@@ -162,6 +162,68 @@ class SFaceShadowTests(unittest.TestCase):
         self.assertFalse(sface._valid_embedding(
             np.array([[1e-12, 0.0]], dtype=np.float32)))
 
+    def test_qa_stage_distinguishes_id_portrait_from_selfie_failure(self):
+        with patch.object(sface, "_load_matcher", return_value=FakeMatcher()), \
+             patch.object(sface, "_single_face_row") as detect:
+            detect.return_value = None
+            id_issue = sface.assess_pair_shadow(self.first, self.second)
+            self.assertEqual(id_issue["status"], "inconclusive")
+            self.assertEqual(id_issue["qaStage"], "id_face_not_detected")
+            self.assertEqual(detect.call_count, 1)
+
+            detect.reset_mock()
+            valid_face = FakeDetector().detect(self.first)[1][0]
+            detect.side_effect = [valid_face, None]
+            selfie_issue = sface.assess_pair_shadow(self.first, self.second)
+            self.assertEqual(selfie_issue["status"], "inconclusive")
+            self.assertEqual(selfie_issue["qaStage"], "selfie_face_not_detected")
+            self.assertEqual(detect.call_count, 2)
+
+    def test_qa_stage_identifies_alignment_and_embedding_failures_without_score(self):
+        valid_face = FakeDetector().detect(self.first)[1][0]
+        valid_crop = np.zeros((112, 112, 3), dtype=np.uint8)
+        valid_feature = np.asarray([[1.0, 0.0]], dtype=np.float32)
+        with patch.object(sface, "_single_face_row", return_value=valid_face):
+            for alignment, expected in (
+                ([None], "id_alignment_invalid"),
+                ([valid_crop, None], "selfie_alignment_invalid"),
+            ):
+                with self.subTest(stage=expected):
+                    matcher = FakeMatcher()
+                    matcher.alignCrop = unittest.mock.Mock(side_effect=alignment)
+                    with patch.object(sface, "_load_matcher", return_value=matcher):
+                        result = sface.assess_pair_shadow(self.first, self.second)
+                    self.assertEqual(result["qaStage"], expected)
+                    self.assertNotIn("cosineSimilarity", result)
+                    self.assertEqual(matcher.calls, 0)
+            for feature, expected in (
+                ([None], "id_embedding_invalid"),
+                ([valid_feature, np.zeros((1, 2), np.float32)],
+                 "selfie_embedding_invalid"),
+            ):
+                with self.subTest(stage=expected):
+                    matcher = FakeMatcher()
+                    matcher.feature = unittest.mock.Mock(side_effect=feature)
+                    with patch.object(sface, "_load_matcher", return_value=matcher):
+                        result = sface.assess_pair_shadow(self.first, self.second)
+                    self.assertEqual(result["qaStage"], expected)
+                    self.assertNotIn("cosineSimilarity", result)
+                    self.assertEqual(matcher.calls, 0)
+
+    def test_qa_stage_has_no_personal_or_biometric_data(self):
+        with patch.object(sface, "_load_matcher", return_value=FakeMatcher()), \
+             patch.object(sface.yunet_shadow, "_load_detector",
+                          return_value=FakeDetector(0)):
+            result = sface.assess_pair_shadow(self.first, self.second)
+        self.assertEqual(set(result), {
+            "status", "qaStage", "identityDecisionUse",
+            "independentFaceMatchValidated", "independentPadValidated",
+        })
+        self.assertEqual(result["qaStage"], "id_face_not_detected")
+        self.assertFalse(result["independentFaceMatchValidated"])
+        self.assertFalse(result["independentPadValidated"])
+        self.assertEqual(result["identityDecisionUse"], "none")
+
     def test_readiness_is_not_a_validation_claim(self):
         with patch.object(sface, "_load_matcher", return_value=FakeMatcher()):
             status = sface.readiness()
