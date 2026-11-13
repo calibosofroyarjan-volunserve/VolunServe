@@ -68,6 +68,8 @@ jobs:
             const data = await response.json();
             if (data.app !== 'VolunServe' || data.firebaseProject !== 'volunserve-3aa5b')
               throw Error('Live marker project mismatch');
+            if (data.revision !== '2cd63d318ecb6b0dfc52706308e05d0b5806d874')
+              throw Error('STOP: actual live Hosting revision changed; recompute hotfix from the newly deployed source before any publish.');
             console.log('LIVE_PRODUCTION_REVISION=' + data.revision);
             console.log('SOURCE_HOTFIX_BASE=2cd63d318ecb6b0dfc52706308e05d0b5806d874');
           })().catch(error => { console.error(error.message); process.exitCode = 1; });
