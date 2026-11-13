@@ -726,6 +726,7 @@ export default function Donation() {
 
       const firebaseToken = await user.getIdToken();
 
+      blockExternalCheckoutDuringStaging(); // Before initiating a donation payment session.
       const response = await fetch(`${PAYMONGO_BACKEND_URL}/api/paymongo/checkout-session`, {
         method: "POST",
         headers: {
