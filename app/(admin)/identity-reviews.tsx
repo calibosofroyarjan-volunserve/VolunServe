@@ -9,6 +9,7 @@ import DocumentScreeningSummary from "../../components/identity/DocumentScreenin
 import type { DocumentScreening } from "../../lib/identityVerification";
 import {
   adminReviewDocumentEligible,
+  adminReviewMethodEligible,
   adminReviewStatusBucket,
 } from "../../lib/identityAdminReviewGate";
 import {
@@ -263,10 +264,12 @@ export default function IdentityReviewsAdmin() {
       return;
     }
 
-    if (action === "verify" && !validationMethod) {
+    if (action === "verify" && !adminReviewMethodEligible(
+      selected.documentScreening, validationMethod,
+    )) {
       Alert.alert(
-        "Validation Method Required",
-        "Select how the Resident was independently validated by LGU/Admin.",
+        "Correct Independent Validation Method Required",
+        "Select a permitted independent issuer or LGU review method for this exact government ID. An earlier selection from another ID cannot be reused.",
       );
       return;
     }
@@ -717,7 +720,8 @@ function ReviewDetail({
   const nationalId = item.documentScreening?.declaredIdType === "national_id";
   const documentEligible = adminReviewDocumentEligible(item.documentScreening);
   const canVerify = pending && documentEligible &&
-    !!validationMethod && issuerReviewAttested && notes.trim().length >= 10 && !saving;
+    adminReviewMethodEligible(item.documentScreening, validationMethod) &&
+    issuerReviewAttested && notes.trim().length >= 10 && !saving;
   const availableMethods = VALIDATION_METHODS.filter(method =>
     nationalId ? method.value === "psa_national_id_qr_check"
       : method.value !== "psa_national_id_qr_check"

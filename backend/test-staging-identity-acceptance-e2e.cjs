@@ -182,6 +182,62 @@ test("role/auth isolates Admin queue and Resident can read own pending status",a
  assert.equal(r.body.decision,"manual_review");
  assertSanitized(r.body);
 });
+test("Resident status remains pending when profile snapshot is still basic",async()=>{
+ const h=harness();
+ const key="users/"+RESIDENT;
+ h.records.set(key,{...h.records.get(key),identityStatus:"basic",identityVerified:false});
+ const status=await h.status(RESIDENT);
+ assert.equal(status.code,200);
+ assert.equal(status.body.identityStatus,"pending");
+ assert.equal(status.body.identityVerified,false);
+ assert.equal(status.body.decision,"manual_review");
+ assertSanitized(status.body);
+});
+test("verification row cannot impersonate profile-owned Verified Resident status",async()=>{
+ const h=harness(),userKey="users/"+RESIDENT,recordKey="identityVerifications/"+RESIDENT;
+ const profile=h.records.get(userKey),verification=h.records.get(recordKey);
+ h.records.set(userKey,{...profile,identityStatus:"basic",identityVerified:false});
+ h.records.set(recordKey,{
+   ...verification,status:"verified",decision:"verified",
+   aiDecision:"verified",manualReviewDecision:"verified",
+   requiresManualReview:false,
+ });
+ const spoofed=await h.status(RESIDENT);
+ assert.equal(spoofed.code,200);
+ assert.equal(spoofed.body.identityVerified,false);
+ assert.equal(spoofed.body.identityStatus,"basic");
+ assert.notEqual(spoofed.body.decision,"verified");
+ assertSanitized(spoofed.body);
+
+ // A stale profile text flag on its own is also insufficient.
+ h.records.set(userKey,{...profile,identityStatus:"verified",identityVerified:false});
+ const inconsistent=await h.status(RESIDENT);
+ assert.equal(inconsistent.body.identityVerified,false);
+ assert.notEqual(inconsistent.body.identityStatus,"verified");
+ assert.notEqual(inconsistent.body.decision,"verified");
+
+ // Once the authoritative Admin transaction has updated the profile flag,
+ // only THEN may the status route emit a verified account.
+ h.records.set(userKey,{...profile,identityStatus:"verified",identityVerified:true});
+ const genuinelyApprovedProfile=await h.status(RESIDENT);
+ assert.equal(genuinelyApprovedProfile.body.identityVerified,true);
+ assert.equal(genuinelyApprovedProfile.body.identityStatus,"verified");
+ assert.equal(genuinelyApprovedProfile.body.decision,"verified");
+});
+test("final Admin Require Retry overrides a stale pending verification snapshot",async()=>{
+ const h=harness(),recordKey="identityVerifications/"+RESIDENT;
+ const verification=h.records.get(recordKey);
+ h.records.set(recordKey,{
+   ...verification,status:"pending",manualReviewDecision:"retry_required",
+   requiresManualReview:false,aiDecision:"manual_review",decision:"manual_review",
+ });
+ const status=await h.status(RESIDENT);
+ assert.equal(status.code,200);
+ assert.equal(status.body.identityStatus,"failed");
+ assert.equal(status.body.identityVerified,false);
+ assert.equal(status.body.decision,"retry_required");
+});
+
 test("actual queue to manual Verify to refreshed Resident verified status and log",async()=>{
  const h=harness(),initial=await h.queue({});
  assert.equal(initial.code,200);assert.equal(initial.body.items.length,2);

@@ -22,7 +22,7 @@ vm.runInNewContext(compiled.outputText, {
   exports:moduleMock.exports, module:moduleMock,
   require:()=>{throw new Error("The pure UI guard must have no runtime imports");},
 }, {filename:"identityAdminReviewGate.transpiled.js"});
-const {adminReviewDocumentEligible, adminReviewStatusBucket} = moduleMock.exports;
+const {adminReviewDocumentEligible, adminReviewMethodEligible, adminReviewStatusBucket} = moduleMock.exports;
 
 const base = Object.freeze({
  declaredIdType:"national_id",
@@ -49,6 +49,27 @@ test("every supported recognized, legible no-warning ID is eligible for *manual*
    assert.equal(selectedIdRecognized(data),true,id+" server policy");
    assert.equal(adminReviewDocumentEligible(data),true,id+" Expo UI");
  }
+});
+test("ID-appropriate Admin validation methods match backend issuer review policy",()=>{
+ const {reviewIssuerEvidence}=require("./identityIssuerReviewPolicy");
+ for(const id of ["national_id","drivers_license","passport","umid","prc_id"]){
+   const validMethods=id==="national_id" ? ["psa_national_id_qr_check"] :
+       ["in_person_lgu_validation","official_document_check"];
+   for(const method of [
+     "psa_national_id_qr_check","in_person_lgu_validation",
+     "official_document_check","unsupported",""
+   ]){
+     const screen={...base,declaredIdType:id,detectedIdType:id};
+     const expected=validMethods.includes(method);
+     assert.equal(adminReviewMethodEligible(screen,method),expected,id+":"+method);
+     assert.equal(reviewIssuerEvidence({
+       declaredType:id,validationMethod:method,
+       confirmed:true,notes:"Synthetic independent validation for test only.",
+     }).ok,expected,id+":"+method+" Node policy");
+   }
+ }
+ assert.equal(adminReviewMethodEligible(null,"official_document_check"),false);
+ assert.equal(adminReviewMethodEligible({...base,declaredIdType:"school_id"},"official_document_check"),false);
 });
 test("unsupported, school or declared/detected mismatch can never enable client Verify",()=>{
  for(const candidate of [
@@ -120,6 +141,8 @@ test("real Expo Admin component uses the pure gate in button AND submission path
  assert.match(admin,/!adminReviewDocumentEligible\(selected\.documentScreening\)/);
  assert.match(admin,/const documentEligible = adminReviewDocumentEligible\(item\.documentScreening\)/);
  assert.match(admin,/const canVerify = pending && documentEligible/);
+ assert(admin.includes("adminReviewMethodEligible(item.documentScreening, validationMethod)"));
+ assert(admin.includes("selected.documentScreening, validationMethod,"));
  assert.match(admin,/reviewBucket\(selected\) !== "pending"/);
  assert.match(admin,/Require Retry/);
 });
