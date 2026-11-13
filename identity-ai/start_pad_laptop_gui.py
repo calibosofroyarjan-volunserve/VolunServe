@@ -76,6 +76,24 @@ def setup_required():
     return not dependencies_present() or not models_present()
 
 
+def install_camera_prerequisites(*, approved=False, runner=subprocess.check_call):
+    """Camera check uses numpy/OpenCV only; never fetch YuNet/MiniFASNet."""
+    if not approved:
+        raise PermissionError("CAMERA_ONLY_SETUP_NOT_APPROVED")
+    if not dependencies_present():
+        runner([sys.executable, "-m", "pip", "install",
+                "--disable-pip-version-check", *DEPS], cwd=str(ROOT))
+    if not dependencies_present():
+        raise RuntimeError("Camera-only Python dependencies unavailable.")
+
+
+def run_camera_only(camera_index):
+    """No biometric models, scores, trials, uploads or saved camera images."""
+    from pad_camera_clarity_preview_local import open_camera_clarity
+    open_camera_clarity(camera_index)
+    return 0
+
+
 def install_prerequisites(*, approved=False, runner=subprocess.check_call):
     """No network/install action without a distinct affirmative setup click."""
     if not approved:
@@ -191,12 +209,12 @@ def ask_user_settings():
     root = tk.Tk()
     root.title("VolunServe | Private Laptop Camera Validation")
     root.configure(bg="#f4f8fc")
-    root.geometry("640x650")
+    root.geometry("640x680")
     root.resizable(False, False)
-    choice = {"accepted": False, "camera": 0, "trials": 1, "mode": "framing",
+    choice = {"accepted": False, "camera": 0, "trials": 1, "mode": "camera_only",
               "lighting": "indoor_artificial", "cameraType": "laptop_built_in"}
     camera = tk.IntVar(value=0)
-    mode = tk.StringVar(value="framing")
+    mode = tk.StringVar(value="camera_only")
     lighting = tk.StringVar(value="indoor_artificial")
     camera_type = tk.StringVar(value="laptop_built_in")
     consent = tk.BooleanVar(value=False)
@@ -231,8 +249,11 @@ def ask_user_settings():
                   "phone_webcam", "not_recorded").pack(side="left")
     tk.Label(box, text="Session length", bg="#f4f8fc",
              font=("Segoe UI", 10, "bold")).pack(anchor="w", pady=(7, 0))
+    tk.Radiobutton(box, variable=mode, value="camera_only",
+                   text="RECOMMENDED: Camera clarity only (NO AI models, no tests)",
+                   bg="#f4f8fc").pack(anchor="w")
     tk.Radiobutton(box, variable=mode, value="framing",
-                   text="First: camera + framing only (NO captures, no printer needed)",
+                   text="Face framing only (YuNet detection, NO captures)",
                    bg="#f4f8fc").pack(anchor="w")
     tk.Radiobutton(box, variable=mode, value="quick",
                    text="Quick pilot: 1 live + 1 print + 1 replay",
@@ -297,6 +318,23 @@ def main():
         print("Cancelled without accessing camera, model, or identity data.")
         return 0
     try:
+        # Camera hardware clarity must work independently of downloaded AI.
+        # Consent is required above; avoid loading/checking any face models.
+        if user.get("mode") == "camera_only":
+            if not dependencies_present():
+                from tkinter import messagebox
+                approved = messagebox.askyesno(
+                    "Camera-only Python setup",
+                    "Only Python numpy/OpenCV packages are missing. Install "
+                    "these public packages? No face models, identity data, "
+                    "photos or videos are downloaded or uploaded.",
+                )
+                if not approved:
+                    print("Camera-only setup declined; camera not opened.")
+                    return 0
+                install_camera_prerequisites(approved=True)
+            return run_camera_only(user["camera"])
+
         args = pilot_args(camera=user["camera"], trials=user["trials"],
                           consent=True, live_only=user.get("mode") == "live_only")
         if setup_required():
