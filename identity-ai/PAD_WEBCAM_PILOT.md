@@ -33,6 +33,38 @@ does not permit software to recognize whether a photo or screen was
 physically presented. A larger, independently labeled trial is needed;
 do not repeat the same nine samples merely to optimize a reported score.
 
+## Laptop webcam clarity and real hardware limits
+
+The staging local laptop tester now asks the Windows camera driver for a
+best-effort **1280×720** capture resolution after explicit consent and camera
+access. This does **not** upgrade the physical sensor; drivers may ignore the
+request and continue at 640×480. The preview shows **ACTUAL frame dimensions**
+read from captured pixels, not the requested setting. If 720p is supported,
+the display-only image is scaled to fit the Tk window; **the PAD 2.7× crop is
+still computed from the original full-resolution camera frame**, without
+artificial sharpening or upscaling.
+
+The preview also displays lightweight, **uncalibrated** detail/brightness
+troubleshooting hints. "Soft image" and "Dark image" are approximate notices,
+not identity/security decisions. A printed photograph may appear sharper
+than a genuine person's webcam face; sharpness must NEVER be interpreted as
+liveness, and quality warnings never by themselves authorize any identity
+approval or biometrics upload.
+
+If your face is dim or blurred, compare the **Windows Camera** app using the
+same webcam with a clean lens and a desk lamp/window lighting your face
+**from the front**, not a ceiling lamp or bright window behind you.
+Try adjusting your distance and holding your laptop still. If the Windows
+Camera app is still low-resolution/blurred in good light after checking the
+Windows camera device driver, the limitation is likely webcam hardware,
+focus or driver capabilities; software cannot recover details absent from
+the sensor. Consider an external USB webcam or phone used as a webcam
+with permission, but don't claim its biometric reliability is validated.
+
+This software change does not touch identity status, the model threshold,
+actual face recognition validity, live deployment or previously gathered
+experimental reports.
+
 ## Easier LIVE-camera troubleshooting — no need to redo PRINT or REPLAY
 
 If the webcam easily detects a **3×3 photograph** but struggles with your real
