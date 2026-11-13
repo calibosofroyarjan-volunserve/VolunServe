@@ -6,6 +6,34 @@ import local_national_id_selfie_review as local
 
 
 class CameraOnlyLocalReviewTests(unittest.TestCase):
+    def test_each_camera_capture_must_be_distinct(self):
+        # Fabricated bytes only. No IDs, faces, image models or network.
+        local.validate_distinct_local_captures(
+            b"synthetic FRONT", b"synthetic BACK", b"synthetic SELFIE")
+
+        for frames in (
+            (b"same", b"same", b"selfie"),
+            (b"front", b"back", b"front"),
+            (b"front", b"back", b"back"),
+        ):
+            with self.subTest(frames=frames):
+                with self.assertRaisesRegex(ValueError, "reused"):
+                    local.validate_distinct_local_captures(*frames)
+
+    def test_reject_missing_or_oversized_frame_before_importing_ai_models(self):
+        for frames in (
+            (b"", b"back", b"selfie"),
+            (b"front", None, b"selfie"),
+            (b"front", b"back", "not bytes"),
+            (b"front", b"back", b"x" * (local.MAX_IMAGE_BYTES + 1)),
+        ):
+            with self.subTest(sizes=[len(f) if isinstance(f, bytes) else "bad" for f in frames]):
+                with self.assertRaisesRegex(ValueError, "missing or invalid"):
+                    local.validate_distinct_local_captures(*frames)
+        source = inspect.getsource(local.perform_local_review)
+        self.assertLess(source.index("validate_distinct_local_captures("),
+                        source.index("import main as ai"))
+
     def test_no_file_upload_or_picker_in_user_interface(self):
         source = inspect.getsource(local.main)
         self.assertNotIn("askopenfilename", source)
