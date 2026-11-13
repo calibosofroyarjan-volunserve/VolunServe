@@ -141,8 +141,8 @@ test("real Expo Admin component uses the pure gate in button AND submission path
  assert.match(admin,/!adminReviewDocumentEligible\(selected\.documentScreening\)/);
  assert.match(admin,/const documentEligible = adminReviewDocumentEligible\(item\.documentScreening\)/);
  assert.match(admin,/const canVerify = pending && documentEligible/);
- assert.match(admin,/adminReviewMethodEligible\\(item\\.documentScreening, validationMethod\\)/);
- assert.match(admin,/selected\\.documentScreening, validationMethod,/);
+ assert(admin.includes("adminReviewMethodEligible(item.documentScreening, validationMethod)"));
+ assert(admin.includes("selected.documentScreening, validationMethod,"));
  assert.match(admin,/reviewBucket\(selected\) !== "pending"/);
  assert.match(admin,/Require Retry/);
 });
