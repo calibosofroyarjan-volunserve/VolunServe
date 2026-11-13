@@ -164,6 +164,8 @@ def run_cli(argv=None, *, camera_factory=None, input_fn=input,
     parser.add_argument("--trials-per-class", type=int, default=DEFAULT_TRIALS_PER_CLASS)
     parser.add_argument("--only-live", action="store_true",
                         help="Opt-in local LIVE-only diagnostic; print and replay remain UNTESTED")
+    parser.add_argument("--four-hypothesis", action="store_true",
+                        help="Optional V2 + V1SE paired 0..255/0..1 evaluation (visible preview only)")
     parser.add_argument("--frames-per-trial", type=int, default=DEFAULT_FRAMES_PER_TRIAL)
     parser.add_argument("--aggregate-json", type=Path,
                         help="Optional NEW aggregate-only JSON outside Git (no overwrite)")
@@ -186,13 +188,25 @@ def run_cli(argv=None, *, camera_factory=None, input_fn=input,
         print("Invalid camera/trial settings or unsafe aggregate destination.", file=sys.stderr)
         return 2
 
+    if args.four_hypothesis and args.preview is False:
+        print("Combined research requires visible, consented webcam preview.",
+              file=sys.stderr)
+        return 2
     os.environ["VOLUNSERVE_PASSIVE_PAD_SHADOW"] = "1"
+    if args.four_hypothesis:
+        os.environ["VOLUNSERVE_PAD_V1SE_SHADOW"] = "1"
     status = pad.readiness()
     if not status.get("modelLoaded") or not status.get("faceDetectorShadow", {}).get("modelLoaded"):
         print("Pinned MiniFASNet or YuNet model unavailable. Run both local model downloaders.",
               file=sys.stderr)
         return 2
 
+    if args.four_hypothesis:
+        import pad_v1se_shadow as v1se
+        if not v1se.readiness().get("modelLoaded"):
+            print("Pinned MiniFASNetV1SE second model missing; run checksum-pinned "
+                  "local V1SE downloader before any camera capture.", file=sys.stderr)
+            return 2
     factory = camera_factory if camera_factory is not None else cv2.VideoCapture
     capture = None
     try:
@@ -231,6 +245,17 @@ def run_cli(argv=None, *, camera_factory=None, input_fn=input,
                 }
                 if args.only_live:
                     kwargs["enabled_categories"] = ("live",)
+                if args.four_hypothesis:
+                    # Exactly the same original camera frame feeds both models;
+                    # each uses its own 2.7x or 4x in-memory context crop.
+                    # Never attach an experimental PAD result to identity status.
+                    import evaluate_pad_ensemble_local as combined
+                    kwargs["four_hypothesis"] = True
+                    kwargs["assessor"] = (
+                        lambda frame, guidance:
+                        combined.assess_four_hypotheses(frame)
+                        if guidance.capture_ready else combined.UNDECIDED
+                    )
                 trial_data = launcher(capture, **kwargs)
             except Exception:
                 print("Local camera preview could not start. Check Python Tkinter "
@@ -242,6 +267,10 @@ def run_cli(argv=None, *, camera_factory=None, input_fn=input,
                       file=sys.stderr)
                 return 130
         else:
+            if args.four_hypothesis:
+                print("Combined research requires the visible privacy/label "
+                      "confirmation window.", file=sys.stderr)
+                return 2
             output_fn("Headless CLI mode; no camera preview. Use --preview on Windows.")
             trial_data = run_pilot(
                 capture, trials_per_class=args.trials_per_class,
@@ -258,7 +287,11 @@ def run_cli(argv=None, *, camera_factory=None, input_fn=input,
         if capture is not None:
             capture.release()
 
-    report = dual.aggregate_paired(trial_data)
+    if args.four_hypothesis:
+        import evaluate_pad_ensemble_local as combined
+        report = combined.summarize_four_hypotheses(trial_data)
+    else:
+        report = dual.aggregate_paired(trial_data)
     if args.only_live and report["allPresentationTypesSampled"]:
         print("Invalid LIVE-only report: expected print and replay untested.",
               file=sys.stderr)
