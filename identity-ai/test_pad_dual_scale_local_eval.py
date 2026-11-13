@@ -135,6 +135,57 @@ class PairedPrivatePadTests(unittest.TestCase):
                           "private_jane", "videoBytes", "password"):
             self.assertNotIn(forbidden, serialized)
 
+    def test_print_false_live_is_safety_flag_even_when_scales_disagree(self):
+        # Synthetic analogue of observed 9-trial run: 3 genuine LIVE,
+        # 3 PRINT (one raw scale false-live, two raw inconclusive),
+        # 3 REPLAY attack at both scales.
+        report = evals.aggregate_paired({
+            "live": [("live", "attack")] * 3,
+            "print": [("live", "attack")] +
+                     [("inconclusive", "attack")] * 2,
+            "replay": [("attack", "attack")] * 3,
+        })
+        risk = report["conservativeShadowRisk"]
+        self.assertEqual(risk["printPresentationsAnyScalePredictedLive"], 1)
+        self.assertEqual(risk["replayPresentationsAnyScalePredictedLive"], 0)
+        self.assertEqual(risk["unsafeAttackObservations"], 1)
+        self.assertEqual(risk["perClass"]["print"]["scaleAgreedLive"], 0)
+        self.assertEqual(risk["perClass"]["print"]["conflictOrUncertain"], 3)
+        self.assertEqual(risk["perClass"]["live"]["conflictOrUncertain"], 3)
+        self.assertEqual(risk["perClass"]["replay"]["scaleAgreedAttack"], 3)
+        self.assertEqual(risk["releaseRecommendation"],
+                         "do_not_enable_biometric_identity_approval")
+        self.assertFalse(risk["independentPadValidated"])
+        self.assertEqual(risk["identityDecisionUse"], "none")
+        self.assertFalse(report["modelInputScaleValidatedOnRealSamples"])
+
+    def test_conflicts_and_unknown_values_abstain_never_create_live_agreement(self):
+        for candidate in [
+            None, (), ["live"], ("live", "attack"),
+            ("attack", "live"), ("inconclusive", "live"),
+            ("inconclusive", "inconclusive"), ("verified", "verified"),
+            ("live", "verified"), ("live", "live", "live"),
+        ]:
+            with self.subTest(candidate=candidate):
+                self.assertEqual(evals.conservative_shadow_status(candidate),
+                                 "inconclusive")
+        self.assertEqual(
+            evals.conservative_shadow_status(("live", "live")),
+            "agreement_live_unvalidated")
+        self.assertEqual(
+            evals.conservative_shadow_status(("attack", "attack")),
+            "agreement_attack_unvalidated")
+
+    def test_no_print_trials_never_fake_negative_risk_as_validated(self):
+        report = evals.aggregate_paired({"live": [("live", "live")]})
+        risk = report["conservativeShadowRisk"]
+        self.assertEqual(risk["perClass"]["print"]["trials"], 0)
+        self.assertTrue(risk["operatorLabelsNotIndependentlyVerified"])
+        self.assertFalse(risk["researchConsensusIsAuthentication"])
+        self.assertFalse(report["allPresentationTypesSampled"])
+        self.assertEqual(risk["releaseRecommendation"],
+                         "do_not_enable_biometric_identity_approval")
+
     def test_missing_presentation_types_prohibit_completeness_claim(self):
         report = evals.aggregate_paired({"live": [("live", "live")]})
         self.assertFalse(report["allPresentationTypesSampled"])

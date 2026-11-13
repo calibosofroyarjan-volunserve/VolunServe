@@ -146,6 +146,65 @@ def gather_paired(samples_dir, assessor=assess_paired_frame):
     return results
 
 
+def conservative_shadow_status(pair):
+    """Two-scale diagnostic agreement only; never authentication/liveness proof.
+
+    Any contradictory, invalid, or uncertain model observation ABSTAINS.
+    This does not repair the pretrained model or authorize use as a PAD gate.
+    """
+    if not isinstance(pair, (tuple, list)) or len(pair) != 2:
+        return "inconclusive"
+    if pair[0] == pair[1] == "live":
+        return "agreement_live_unvalidated"
+    if pair[0] == pair[1] == "attack":
+        return "agreement_attack_unvalidated"
+    return "inconclusive"
+
+
+def private_shadow_risk_summary(trials):
+    """Aggregate-only red flags; any scale calling a print live is unsafe.
+
+    Count physical presentations, NOT individual frames. Operator supplied
+    categories are not independently authenticated. No media/score retained.
+    """
+    per_kind = {}
+    for kind in baseline.KINDS:
+        pairs = trials.get(kind, [])
+        counts = {"trials": len(pairs), "scaleAgreedLive": 0,
+                  "scaleAgreedAttack": 0, "conflictOrUncertain": 0,
+                  "anyScalePredictedLive": 0}
+        for pair in pairs:
+            status = conservative_shadow_status(pair)
+            if status == "agreement_live_unvalidated":
+                counts["scaleAgreedLive"] += 1
+            elif status == "agreement_attack_unvalidated":
+                counts["scaleAgreedAttack"] += 1
+            else:
+                counts["conflictOrUncertain"] += 1
+            if (isinstance(pair, (tuple, list)) and len(pair) == 2 and
+                    any(value == "live" for value in pair)):
+                counts["anyScalePredictedLive"] += 1
+        per_kind[kind] = counts
+    print_risk = per_kind["print"]["anyScalePredictedLive"]
+    replay_risk = per_kind["replay"]["anyScalePredictedLive"]
+    return {
+        "perClass": per_kind,
+        "printPresentationsAnyScalePredictedLive": print_risk,
+        "replayPresentationsAnyScalePredictedLive": replay_risk,
+        "unsafeAttackObservations": print_risk + replay_risk,
+        "operatorLabelsNotIndependentlyVerified": True,
+        "researchConsensusIsAuthentication": False,
+        "identityDecisionUse": "none",
+        "independentPadValidated": False,
+        "releaseRecommendation": "do_not_enable_biometric_identity_approval",
+        "note": (
+            "At least one print/replay classed as live under EITHER input "
+            "hypothesis is a red flag. Contradictory predictions abstain in "
+            "the conservative research view. No preview result proves PAD."
+        ),
+    }
+
+
 def aggregate_paired(trials):
     """Only numerical aggregate counts; do not include filenames or per-trial logits."""
     by_scale = {name: {} for name, _scale in MODES}
@@ -168,6 +227,7 @@ def aggregate_paired(trials):
         "perScale": reports,
         "pairedTrialStatusDisagreements": disagreements,
         "trialCountsByPresentationType": per_class_count,
+        "conservativeShadowRisk": private_shadow_risk_summary(trials),
         "allPresentationTypesSampled": all(x > 0 for x in per_class_count.values()),
         "classOrderSemanticsConfirmedOnRealSamples": False,
         "modelInputScaleValidatedOnRealSamples": False,
