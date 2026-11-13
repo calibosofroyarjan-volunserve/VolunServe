@@ -253,8 +253,10 @@ def run_cli(argv=None, *, camera_factory=None, input_fn=input,
                     kwargs["four_hypothesis"] = True
                     kwargs["assessor"] = (
                         lambda frame, guidance:
-                        combined.assess_four_hypotheses(frame)
-                        if guidance.capture_ready else combined.UNDECIDED
+                        combined.assess_four_hypotheses(
+                            frame, face_box=guidance.face_rect)
+                        if guidance.capture_ready and guidance.face_rect is not None
+                        else combined.UNDECIDED
                     )
                 trial_data = launcher(capture, **kwargs)
             except Exception:
