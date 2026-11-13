@@ -8,7 +8,12 @@
  * calibrated on physical IDs or verified against OpenCV outputs.
  */
 export const SFACE_SHA256 = "0ba9fbfa01b5270c96627c4ef784da859931e02f04419c829e83484087c34e79";
-const MODEL_URL = "https://huggingface.co/opencv/opencv_zoo/resolve/main/models/face_recognition_sface/face_recognition_sface_2021dec.onnx";
+// Same SHA256-pinned official bytes in two OpenCV publisher repositories.
+// Browser CORS can differ after Hugging Face's large-file redirect.
+const MODEL_URLS = [
+  "https://huggingface.co/opencv/opencv_zoo/resolve/main/models/face_recognition_sface/face_recognition_sface_2021dec.onnx",
+  "https://huggingface.co/opencv/face_recognition_sface/resolve/main/face_recognition_sface_2021dec.onnx",
+];
 const VISION_JS = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.1.0/vision_bundle.mjs";
 const VISION_WASM = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.1.0/wasm";
 const LANDMARKER_MODEL = "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task";
@@ -144,15 +149,37 @@ function alignedImageData(image,points) {
   return rgbTensorData(pixels);
 }
 async function validModelBytes(active) {
-  const response=await fetch(MODEL_URL, {mode:"cors", cache:"no-store", credentials:"omit"});
-  if (!response.ok || !active()) throw new Error("model_unavailable");
-  const buffer=await response.arrayBuffer();
-  if (buffer.byteLength < 30*1024*1024 || buffer.byteLength > 45*1024*1024)
-    throw new Error("model_invalid");
-  const digest=await crypto.subtle.digest("SHA-256",buffer);
-  const hex=Array.from(new Uint8Array(digest),b=>b.toString(16).padStart(2,"0")).join("");
-  if (hex!==SFACE_SHA256 || !active()) throw new Error("model_invalid");
-  return new Uint8Array(buffer);
+  let integrityFailed=false;
+  for (const url of MODEL_URLS) {
+    if (!active()) throw new Error("cancelled");
+    try {
+      // GET only official public model bytes. No IDs, faces or embeddings.
+      const response=await fetch(url, {
+        mode:"cors", cache:"no-store", credentials:"omit", redirect:"follow"
+      });
+      if (!response.ok) continue;
+      const buffer=await response.arrayBuffer();
+      if (!active()) throw new Error("cancelled");
+      if (buffer.byteLength < 30*1024*1024 || buffer.byteLength > 45*1024*1024) {
+        integrityFailed=true;
+        continue;
+      }
+      const digest=await crypto.subtle.digest("SHA-256",buffer);
+      const hex=Array.from(new Uint8Array(digest),b=>b.toString(16).padStart(2,"0")).join("");
+      if (!active()) throw new Error("cancelled");
+      if (hex!==SFACE_SHA256) {
+        integrityFailed=true;
+        continue;
+      }
+      return new Uint8Array(buffer);
+    } catch (error) {
+      if (!active()) throw new Error("cancelled");
+      // Some device/network combinations block a large model redirect.
+      // Only try the alternate OFFICIAL source, never an untrusted model.
+    }
+  }
+  throw new Error(integrityFailed ? "model_integrity_failed" :
+    "model_download_failed");
 }
 /**
  * Opt-in research ONLY. All image decoding and inference is local; network
@@ -165,26 +192,35 @@ export async function runSFaceResearch(idUrl,selfieUrl,{active,progress=()=>{}})
     return researchResult("consent_or_frames_missing");
   let landmarker=null,session=null, model=null;
   let embeddingA=null,embeddingB=null;
+  let stage="vision_module_load_failed";
   try {
-    progress("Downloading public landmark/SFace models and WebAssembly code only.");
+    progress("Loading public MediaPipe face-landmark runtime (no photos uploaded).");
     const vision=await import(VISION_JS);
     if(!active())return researchResult("cancelled");
+    stage="face_landmarker_init_failed";
     const files=await vision.FilesetResolver.forVisionTasks(VISION_WASM);
     landmarker=await vision.FaceLandmarker.createFromOptions(files,{
       baseOptions:{modelAssetPath:LANDMARKER_MODEL, delegate:"CPU"},
       runningMode:"IMAGE",numFaces:2
     });
     if(!active())return researchResult("cancelled");
+    stage="sface_model_download_failed";
+    progress("Downloading public official SFace model (~39 MB), checking SHA-256.");
     model=await validModelBytes(active);
-    progress("Public SFace model checksum verified. Running local research.");
+    progress("SFace model SHA-256 verified. Loading local ONNX WebAssembly.");
+    stage="onnx_runtime_import_failed";
     const ort=await import(ORT_JS);
     if(!active())return researchResult("cancelled");
+    if(!ort?.env?.wasm || !ort?.InferenceSession || !ort?.Tensor)
+      throw new Error("runtime_import_failed");
     ort.env.wasm.wasmPaths=ORT_WASM;
     ort.env.wasm.numThreads=1;
+    stage="onnx_session_init_failed";
     session=await ort.InferenceSession.create(model,{
       executionProviders:["wasm"],graphOptimizationLevel:"all"
     });
     if (!active())return researchResult("cancelled");
+    stage="image_or_inference_failed";
     const embeddings=[];
     for (const [idx,url] of [[0,idUrl],[1,selfieUrl]]) {
       const image=await imageFromBlob(url,active);
@@ -213,8 +249,13 @@ export async function runSFaceResearch(idUrl,selfieUrl,{active,progress=()=>{}})
     }
     const cosine=cosineResearchOnly(embeddings[0],embeddings[1]);
     return cosine===null?researchResult("embedding_invalid"):researchResult("numeric_score_research_only",cosine);
-  } catch {
-    return researchResult("runtime_or_model_unavailable");
+  } catch (error) {
+    if(!active())return researchResult("cancelled");
+    const reason=error instanceof Error && [
+      "model_download_failed","model_integrity_failed"
+    ].includes(error.message) ? error.message : stage;
+    // Never display raw exceptions, full URLs, biometric data or model stack traces.
+    return researchResult(reason);
   } finally {
     if(embeddingA)embeddingA.fill(0);
     if(embeddingB)embeddingB.fill(0);
