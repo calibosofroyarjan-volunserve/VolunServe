@@ -1,0 +1,44 @@
+name: Validate protected live announcements and carousel (NO DEPLOY)
+
+on:
+  push:
+    branches:
+      - hotfix/live-protected-announcements-carousel-20261114
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  scoped-regression-checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      CI: "true"
+      EXPO_NO_TELEMETRY: "1"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - name: Install locked project dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Fail closed on unrelated source or Firestore rule changes
+        run: |
+          git fetch origin live-protected
+          node scripts/test-protected-announcements-carousel-scoped.cjs
+      - name: Existing TypeScript validation
+        run: npx tsc --noEmit --incremental false
+      - name: Local Firestore Admin publish and Resident/Volunteer read permissions
+        run: npx firebase emulators:exec --only firestore --project demo-volunserve "node scripts/test-announcements-published-audience-emulator.cjs"
+      - name: Expo web export (without Firebase deploy)
+        run: npx expo export --platform web --clear
+      - name: Production unchanged
+        run: echo "NO PRODUCTION DEPLOY - No Firebase Hosting, Firestore Rules, Functions, Auth, Render, or production data changes."
