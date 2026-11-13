@@ -22,7 +22,8 @@ import {
     View,
 } from "react-native";
 
-import { db } from "../lib/firebase";
+import { auth, db } from "../lib/firebase";
+import { identityEnvironmentTarget } from "../lib/identityEnvironmentTarget";
 import { waitForCameraPreview } from "../lib/identityCameraPreview";
 import {
     getIdentityStatus,
@@ -393,6 +394,20 @@ export default function IdentityVerificationWeb() {
       "Government ID",
     [idType],
   );
+
+  // Optional isolated local preview only; never enable production ID/media
+  // uploads, FaceMatch auto-approval, or unvalidated liveness.
+  const canOpenLocalFaceDemo = (() => {
+    try {
+      return identityEnvironmentTarget({
+        runtimeEnv: process.env.EXPO_PUBLIC_VOLUNSERVE_ENV,
+        firebaseTarget: process.env.EXPO_PUBLIC_VOLUNSERVE_FIREBASE_TARGET,
+        projectId: auth.app.options.projectId,
+      }) === "staging";
+    } catch {
+      return false;
+    }
+  })();
 
   const stopCamera = useCallback(() => {
     // Cancel any deferred camera start when navigating back or unmounting.
@@ -1489,6 +1504,18 @@ export default function IdentityVerificationWeb() {
           Government ID + real-time face detection + private
           1-to-1 AI face comparison.
         </Text>
+        {canOpenLocalFaceDemo ? (
+          <TouchableOpacity
+            accessibilityRole="button"
+            onPress={() => router.push("/identity-face-demo" as any)}
+            style={{ alignSelf: "flex-start", paddingVertical: 10, paddingHorizontal: 12,
+              marginTop: 8, backgroundColor: "#EFF6FF", borderRadius: 10 }}
+          >
+            <Text style={{ color: "#1D4ED8", fontSize: 12, fontWeight: "700" }}>
+              Try private face detector demo (no ID or selfie uploads)
+            </Text>
+          </TouchableOpacity>
+        ) : null}
       </View>
 
       <WizardProgress step={step} />
