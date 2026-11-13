@@ -161,6 +161,8 @@ def run_cli(argv=None, *, camera_factory=None, input_fn=input,
     parser.add_argument("--camera", type=int, default=0,
                         help="Local camera index (usually 0)")
     parser.add_argument("--trials-per-class", type=int, default=DEFAULT_TRIALS_PER_CLASS)
+    parser.add_argument("--only-live", action="store_true",
+                        help="Opt-in local LIVE-only diagnostic; print and replay remain UNTESTED")
     parser.add_argument("--frames-per-trial", type=int, default=DEFAULT_FRAMES_PER_TRIAL)
     parser.add_argument("--aggregate-json", type=Path,
                         help="Optional NEW aggregate-only JSON outside Git (no overwrite)")
@@ -207,6 +209,10 @@ def run_cli(argv=None, *, camera_factory=None, input_fn=input,
         # Injected fake cameras use legacy CLI by default for headless CI.
         use_preview = (args.preview if args.preview is not None else
                        (sys.platform.startswith("win") and camera_factory is None))
+        if args.only_live and not use_preview:
+            print("LIVE-only diagnostic requires visible preview; no data saved.",
+                  file=sys.stderr)
+            return 2
         if use_preview:
             try:
                 if preview_launcher is None:
@@ -214,9 +220,13 @@ def run_cli(argv=None, *, camera_factory=None, input_fn=input,
                     launcher = launch_webcam_preview
                 else:
                     launcher = preview_launcher
-                trial_data = launcher(
-                    capture, trials_per_class=args.trials_per_class,
-                    frames_per_trial=args.frames_per_trial)
+                kwargs = {
+                    "trials_per_class": args.trials_per_class,
+                    "frames_per_trial": args.frames_per_trial,
+                }
+                if args.only_live:
+                    kwargs["enabled_categories"] = ("live",)
+                trial_data = launcher(capture, **kwargs)
             except Exception:
                 print("Local camera preview could not start. Check Python Tkinter "
                       "and Windows desktop permissions; use --no-preview only "
@@ -244,6 +254,10 @@ def run_cli(argv=None, *, camera_factory=None, input_fn=input,
             capture.release()
 
     report = dual.aggregate_paired(trial_data)
+    if args.only_live and report["allPresentationTypesSampled"]:
+        print("Invalid LIVE-only report: expected print and replay untested.",
+              file=sys.stderr)
+        return 2
     # Nothing in result is a subject identifier, prediction on a person or image.
     output_fn(json.dumps(report, indent=2, sort_keys=True, allow_nan=False))
     if args.aggregate_json is not None:
