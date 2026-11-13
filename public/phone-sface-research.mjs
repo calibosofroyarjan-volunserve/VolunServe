@@ -17,7 +17,9 @@ const MODEL_URLS = [
 const VISION_JS = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.1.0/vision_bundle.mjs";
 const VISION_WASM = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.1.0/wasm";
 const LANDMARKER_MODEL = "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task";
-const ORT_JS = "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.20.1/dist/esm/ort.min.js";
+// ONNX Runtime Web 1.20.1 publishes native ESM at dist/*.mjs (no dist/esm/ directory).
+// Use the WASM-only ES module with sidecar WASM files pinned to the SAME package version.
+const ORT_JS = "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.20.1/dist/ort.wasm.min.mjs";
 const ORT_WASM = "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.20.1/dist/";
 const TARGET = [[38.2946, 51.6963], [73.5318, 51.5014],
                 [56.0252, 71.7366], [41.5493, 92.3655], [70.7299, 92.2041]];
