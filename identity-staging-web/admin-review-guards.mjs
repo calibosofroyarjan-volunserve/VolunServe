@@ -23,8 +23,11 @@ export function reviewBucket(review) {
   if (review?.identityVerified === true || review?.identityStatus === "verified" ||
       review?.status === "verified" ||
       review?.manualReviewDecision === "verified") return "verified";
-  if (review?.status === "pending" && review?.requiresManualReview === true) return "pending";
+  // The final Admin retry decision supersedes a stale pending snapshot.
+  // Node rejects re-adjudication transactionally, but the preview must not
+  // render a misleading enabled Verify/Require Retry action.
   if (review?.status === "failed" || review?.manualReviewDecision === "retry_required") return "retry_required";
+  if (review?.status === "pending" && review?.requiresManualReview === true) return "pending";
   return "other";
 }
 export function availableMethods(type) {
@@ -67,9 +70,13 @@ export function canRequireRetry({review,notes,busy}={}) {
 export function screeningDescription(screening) {
   if (!screening) return "No document OCR screening is available. Request a new submission.";
   const status = String(screening.status || "inconclusive");
-  if (status === "unsupported") return "Unsupported ID — school, employee and non-listed cards cannot proceed.";
-  if (status === "mismatch") return "Selected ID type conflicts with OCR signals.";
+  if (status === "unsupported" || !IDS.includes(screening.declaredIdType))
+    return "Unsupported or undeclared government ID type — request a supported ID rescan.";
+  if (status === "mismatch" || screening.detectedIdType !== screening.declaredIdType)
+    return "Selected government ID type conflicts with OCR signals. Retake the correct ID; no approval.";
   if (evidenceConflicts(screening)) return "Possible OCR, passport MRZ or birthday conflict. Resolve before approval; not proof of fraud.";
+  if (!Array.isArray(screening.warningCodes))
+    return "Document OCR warning results are missing or incomplete. Require a fresh screening.";
   if (screening.imageQualityStatus !== "adequate") return "Front ID photo quality unconfirmed or blurry. Retake the front; identity cannot be approved.";
   if (screening.declaredIdType !== "passport" &&
       screening.backImageQualityStatus !== "adequate") {
