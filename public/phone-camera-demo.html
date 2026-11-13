@@ -1,0 +1,298 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="robots" content="noindex,nofollow,noarchive">
+  <meta http-equiv="Cache-Control" content="no-store">
+  <meta name="referrer" content="no-referrer">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src blob:; media-src blob:; connect-src 'none'; form-action 'none'; base-uri 'none'; object-src 'none'">
+  <title>VolunServe | Phone Camera Lab (Staging Only)</title>
+  <style>
+    :root{font:16px/1.45 system-ui,-apple-system,Segoe UI,sans-serif;color:#123047;background:#f0f7f7;color-scheme:light}
+    *{box-sizing:border-box}
+    body{margin:0;padding:16px;padding-bottom:max(20px,env(safe-area-inset-bottom));min-height:100dvh}
+    main{width:100%;max-width:720px;margin:auto}
+    header{display:flex;align-items:center;gap:12px;margin:8px 0 18px}
+    .logo{width:50px;height:50px;border-radius:14px;display:grid;place-items:center;background:#087f70;color:white;font-size:24px;font-weight:800}
+    h1{font-size:1.36rem;margin:0}h2{font-size:1.1rem;margin:0 0 9px}
+    .sub{color:#547084;font-size:.85rem}
+    .panel{background:white;border:1px solid #d9e9e8;border-radius:16px;padding:16px;margin:12px 0}
+    .notice{background:#fff7e8;border-left:4px solid #a56c19;padding:12px;border-radius:8px;color:#633e0c;font-size:.9rem}
+    .muted{color:#516879;font-size:.86rem}.error{color:#ae2121;font-weight:650}.success{color:#086b57;font-weight:700}
+    .steps{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px;margin:12px 0}
+    .step{border-radius:10px;background:#e8f0f0;color:#577075;text-align:center;padding:10px 5px;font-weight:700;font-size:.82rem}
+    .step.active{background:#d1faf0;color:#065c51;outline:2px solid #0a907f}
+    .step.done{background:#e0f6e6;color:#266f40}
+    .camera{position:relative;background:#092528;border-radius:12px;aspect-ratio:4/3;max-height:70dvh;overflow:hidden;display:grid;place-items:center}
+    video{width:100%;height:100%;object-fit:contain;background:#112e31}
+    .guide{position:absolute;pointer-events:none;top:50%;left:50%;transform:translate(-50%,-50%);
+      width:77%;aspect-ratio:1.58;border:3px solid #f4bd32;border-radius:9px;box-shadow:0 0 0 200vmax rgba(0,0,0,.10)}
+    .guide.face{width:48%;aspect-ratio:.77;border-radius:48%;border-color:#2cd0af}
+    .guide[hidden]{display:none}
+    .overlay-note{position:absolute;bottom:12px;left:10px;right:10px;color:white;background:rgba(0,0,0,.62);
+      padding:7px 10px;font-size:.8rem;border-radius:8px;text-align:center}
+    label{display:flex;align-items:flex-start;gap:9px;font-size:.92rem;font-weight:600}
+    input[type=checkbox]{width:20px;height:20px;accent-color:#087f70;flex-shrink:0}
+    button{appearance:none;border:0;border-radius:10px;font-size:.95rem;font-weight:740;min-height:46px;padding:10px 15px;cursor:pointer}
+    button:disabled{opacity:.44;cursor:not-allowed}
+    button.primary{background:#057b6b;color:white}
+    button.secondary{background:#e3f0ee;color:#145249}
+    button.danger{background:#f9e9e8;color:#9d2424}
+    .actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+    .actions button{flex:1 1 130px}
+    .previews{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:12px 0}
+    .preview{background:#edf5f5;border-radius:10px;padding:8px;min-height:100px;text-align:center}
+    .preview img{width:100%;aspect-ratio:4/3;object-fit:contain;background:#e4ebec;border-radius:6px}
+    .preview small{display:block;font-size:.7rem;color:#476c65}
+    .footer{font-size:.8rem;color:#516779;text-align:center;padding:8px 4px}
+    [hidden]{display:none !important}
+  </style>
+</head>
+<body>
+<main>
+  <header><div class="logo" aria-hidden="true">V</div><div>
+    <h1>VolunServe Phone Camera Lab</h1>
+    <div class="sub">Full-staging only · On-device testing · No upload</div>
+  </div></header>
+  <div class="notice"><strong>TEST ONLY — NOT VERIFIED.</strong> This bypasses laptop OCR capture for a phone-camera demo, NOT identity security. No ID authenticity, face match, liveness, Admin approval or Firebase account action occurs. No photos are sent to VolunServe.</div>
+
+  <section class="panel" id="blocked" hidden role="alert">
+    <h2>Unavailable outside staging</h2><p>This camera lab is restricted to the isolated staging site.</p>
+  </section>
+  <div id="lab">
+    <section class="panel">
+      <label><input id="consent" type="checkbox">I consent to this <strong>local-only</strong> phone-camera test using my own document/face. I understand it does not verify my identity.</label>
+      <p class="muted">Use your phone's Chrome or Safari over HTTPS. Browser camera permission is required. The rear camera is preferred for ID photos and the front camera for selfie.</p>
+    </section>
+
+    <section class="panel">
+      <div class="steps" aria-label="Test progress">
+        <div class="step active" id="step0">1. ID front</div>
+        <div class="step" id="step1">2. ID back</div>
+        <div class="step" id="step2">3. Selfie</div>
+      </div>
+      <h2 id="title">Step 1 — National ID front</h2>
+      <p class="muted" id="instruction">Keep the whole document within the yellow guide. You can capture manually even if OCR fails; this is NOT verification.</p>
+      <div class="camera">
+        <video id="video" autoplay muted playsinline></video>
+        <div class="guide" id="guide" hidden></div>
+        <div class="overlay-note" id="cameraNote">Camera is off. Check consent and tap Open camera.</div>
+      </div>
+      <p class="muted" id="deviceInfo"></p>
+      <div class="actions">
+        <button class="primary" id="start" type="button" disabled>Open camera</button>
+        <button class="secondary" id="flip" type="button" disabled>Flip camera</button>
+        <button class="primary" id="capture" type="button" disabled>Capture locally — NOT VERIFIED</button>
+      </div>
+      <p id="status" role="status" aria-live="polite" class="muted">No document or selfie has been captured.</p>
+    </section>
+
+    <section class="panel">
+      <h2>On-device capture preview</h2>
+      <div class="previews">
+        <div class="preview"><img id="preview0" alt="Local ID front preview" hidden><small id="state0">Front: not captured</small></div>
+        <div class="preview"><img id="preview1" alt="Local ID back preview" hidden><small id="state1">Back: not captured</small></div>
+        <div class="preview"><img id="preview2" alt="Local selfie preview" hidden><small id="state2">Selfie: not captured</small></div>
+      </div>
+      <div class="actions">
+        <button id="reset" class="danger" type="button">Clear all &amp; release camera</button>
+      </div>
+      <p class="muted">Previews exist only in this browser tab's temporary memory. Closing/reloading clears them. This is not guaranteed secure memory zeroization. Avoid screenshots that expose ID numbers, address or face.</p>
+    </section>
+  </div>
+  <div class="footer">No signup required for this isolated test page. Real Resident verification, biometric matching and ID uploads remain disabled.</div>
+</main>
+<script>
+(() => {
+  "use strict";
+  const HOST = "volunserve-expo-resident-full-staging.onrender.com";
+  const allowed = location.hostname === HOST ||
+    location.hostname === "localhost" || location.hostname === "127.0.0.1";
+  const $ = id => document.getElementById(id);
+  if (!allowed) {
+    $("lab").hidden = true;
+    $("blocked").hidden = false;
+    return;
+  }
+
+  let stream = null;
+  let step = 0;
+  let facing = "environment";
+  let opening = false;
+  const snapshots = [null, null, null]; // temporary blob: URLs, never persisted
+  const titles = ["Step 1 — National ID front", "Step 2 — National ID back", "Step 3 — Live selfie"];
+  const instructions = [
+    "Hold your own ID front inside the guide. Manual capture is allowed for TEST ONLY; no OCR or authenticity check.",
+    "Turn the same ID around to show its back. Capture is still local and NOT VERIFIED.",
+    "Show one face to your phone's front camera. This demo does NOT match your selfie to the ID or prove liveness."
+  ];
+  const note = (message, type = "muted") => {
+    $("status").className = type;
+    $("status").textContent = message;
+  };
+  const release = () => {
+    if (stream) {
+      stream.getTracks().forEach(track => track.stop());
+      stream = null;
+    }
+    $("video").pause();
+    $("video").srcObject = null;
+    $("capture").disabled = true;
+    $("flip").disabled = true;
+    $("guide").hidden = true;
+  };
+  const discard = () => {
+    for (let i = 0; i < 3; i++) {
+      if (snapshots[i]) URL.revokeObjectURL(snapshots[i]);
+      snapshots[i] = null;
+      $("preview" + i).removeAttribute("src");
+      $("preview" + i).hidden = true;
+      $("state" + i).textContent = ["Front", "Back", "Selfie"][i] + ": not captured";
+    }
+  };
+  const update = () => {
+    $("title").textContent = step < 3 ? titles[step] : "Capture demo complete — NOT VERIFIED";
+    $("instruction").textContent = step < 3 ? instructions[step] :
+      "All three local images were captured. This does not establish identity or liveness. Clear all to restart.";
+    for (let i = 0; i < 3; i++) {
+      $("step" + i).className = "step" + (snapshots[i] ? " done" : i === step ? " active" : "");
+    }
+    $("start").disabled = !($("consent").checked && step < 3) || opening;
+    $("start").textContent = stream ? "Restart camera" : "Open camera";
+    $("flip").disabled = !stream || opening;
+    $("capture").disabled = !stream || step === 3 || opening;
+    $("guide").className = "guide" + (step === 2 ? " face" : "");
+    $("guide").hidden = !stream || step === 3;
+    $("cameraNote").textContent = step === 3 ? "All stages complete. No identity verification occurred." :
+      stream ? "Live camera · local capture only · NOT VERIFIED" :
+      "Camera is off. Tap Open camera for this step.";
+  };
+  async function openCamera() {
+    if (opening || !$("consent").checked || step >= 3) return;
+    opening = true;
+    release();
+    update();
+    facing = step === 2 ? "user" : "environment";
+    $("deviceInfo").textContent = "Requesting " + (facing === "user" ? "front" : "rear") + " camera permission...";
+    try {
+      if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia)
+        throw new Error("Use HTTPS in a supported phone browser to enable camera.");
+      let selected;
+      try {
+        selected = await navigator.mediaDevices.getUserMedia({
+          audio: false,
+          video: {facingMode: {ideal: facing}, width: {ideal: 1920}, height: {ideal: 1080}}
+        });
+      } catch (err) {
+        if (!["OverconstrainedError", "ConstraintNotSatisfiedError", "NotFoundError"].includes(String(err?.name))) throw err;
+        selected = await navigator.mediaDevices.getUserMedia({audio:false, video:true});
+      }
+      if (!$("consent").checked || step >= 3) {
+        selected.getTracks().forEach(track => track.stop());
+        return;
+      }
+      stream = selected;
+      $("video").srcObject = selected;
+      await $("video").play();
+      $("deviceInfo").textContent = "Camera started. For clearer text, clean the lens and use bright, indirect light.";
+      note("Camera ready. Capture is on-device only; NOT VERIFIED.");
+    } catch (err) {
+      release();
+      note("Camera unavailable: " + String(err?.message || "check permissions and retry"), "error");
+      $("deviceInfo").textContent = "Allow camera permission in the browser, or try Chrome/Safari.";
+    } finally {
+      opening = false;
+      update();
+    }
+  }
+  async function flipCamera() {
+    if (!stream || opening || step >= 3) return;
+    const next = facing === "environment" ? "user" : "environment";
+    opening = true;
+    release();
+    try {
+      const selected = await navigator.mediaDevices.getUserMedia({
+        audio:false, video:{facingMode:{ideal:next},width:{ideal:1280},height:{ideal:720}}
+      });
+      if (!$("consent").checked) {
+        selected.getTracks().forEach(t => t.stop());
+        return;
+      }
+      stream = selected;
+      $("video").srcObject = selected;
+      await $("video").play();
+      facing = next;
+      note("Camera flipped. This is still a local TEST ONLY.");
+    } catch {
+      note("Could not switch camera. Tap Open camera to try again.", "error");
+    } finally {
+      opening = false;
+      update();
+    }
+  }
+  function capture() {
+    if (!stream || !($("consent").checked) || step >= 3 || opening) return;
+    const video = $("video");
+    if (video.readyState < 2 || video.videoWidth < 120 || video.videoHeight < 120) {
+      note("Camera frame is not ready yet. Keep camera open and retry.", "error");
+      return;
+    }
+    const canvas = document.createElement("canvas");
+    const scale = Math.min(1, 1280 / Math.max(video.videoWidth, video.videoHeight));
+    canvas.width = Math.round(video.videoWidth * scale);
+    canvas.height = Math.round(video.videoHeight * scale);
+    const context = canvas.getContext("2d");
+    if (!context) {note("Cannot capture camera frame on this browser.", "error"); return;}
+    context.drawImage(video, 0, 0, canvas.width, canvas.height);
+    const capturedStep = step;
+    $("capture").disabled = true;
+    canvas.toBlob(blob => {
+      canvas.width = canvas.height = 0;
+      if (!blob || !$("consent").checked || capturedStep !== step) {
+        note("Frame not captured. Try again.", "error");
+        update();
+        return;
+      }
+      if (snapshots[capturedStep]) URL.revokeObjectURL(snapshots[capturedStep]);
+      snapshots[capturedStep] = URL.createObjectURL(blob);
+      $("preview" + capturedStep).src = snapshots[capturedStep];
+      $("preview" + capturedStep).hidden = false;
+      $("state" + capturedStep).textContent =
+        ["Front", "Back", "Selfie"][capturedStep] + ": captured locally — NOT VERIFIED";
+      step++;
+      release();
+      if (step === 3) {
+        note("All 3 local captures complete. No identity verification, ID OCR, face matching or liveness was performed.", "success");
+      } else {
+        note("Step captured locally (NOT VERIFIED). Open camera for the next step.", "success");
+      }
+      update();
+    }, "image/jpeg", 0.85);
+  }
+  $("consent").addEventListener("change", () => {
+    if (!$("consent").checked) {
+      release();
+      discard();
+      step = 0;
+      note("Consent revoked. Camera stopped and preview references discarded.");
+    }
+    update();
+  });
+  $("start").addEventListener("click", () => {void openCamera();});
+  $("flip").addEventListener("click", () => {void flipCamera();});
+  $("capture").addEventListener("click", capture);
+  $("reset").addEventListener("click", () => {
+    release(); discard(); step = 0; note("All previews discarded. No account action."); update();
+  });
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden) {
+      release(); note("Camera paused because the browser tab is hidden."); update();
+    }
+  });
+  window.addEventListener("pagehide", () => {release(); discard();});
+  update();
+})();
+</script>
+</body>
+</html>
