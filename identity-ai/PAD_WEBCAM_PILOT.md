@@ -1,6 +1,6 @@
 # VolunServe — Private webcam liveness research pilot
 
-**Status (Nov 13, 2026): Local pilot tool implemented. Real consenting camera trials have not been run through this chat.**
+**Status (Nov 13, 2026): Windows visual preview, framing and guided capture implemented in staging source. GUI integration has synthetic QA coverage; no independent real-device PAD accuracy or production verification is established.**
 
 This is a local-only research workflow for the experimental MiniFASNet anti-spoofing model. It uses the user's **own Windows webcam** without uploading or saving facial photos, video clips, ID images, face templates, names or per-frame scores.
 
@@ -22,7 +22,11 @@ With explicit consent from every adult on camera:
 
     py -3.11 identity-ai/run_pad_webcam_trials_local.py --consent-confirmed --camera 0 --trials-per-class 3 --frames-per-trial 3
 
-The program opens only your local webcam, tells you which physical presentation to prepare, and asks you to press Enter for each trial. It gives a two-second hands-free preparation pause and captures three in-memory, time-separated frames for that trial. **The camera photos/video are NOT saved.**
+**New Windows default:** The program opens a VISIBLE local webcam preview window using Python's built-in Tkinter, even though the installed OpenCV package is `opencv-contrib-python-headless`. It displays the actual camera frame, a framing guide showing whether the original model's full 2.7× face context fits, and **Start Capture / Cancel** controls. No additional GUI OpenCV package, browser, photo upload or separate Camera app is needed. Each completed presentation counts once even if three frames are sampled. **Camera photos/videos are NOT saved.**
+
+If the preview says **MOVE BACK**, move farther away and center the face so the enlarged green crop can fit entirely in the frame. Start Capture remains disabled while the crop is clipped, multiple faces are found, or the camera frame is invalid. Printed and replay presentations must still be physically held before the same webcam, NOT supplied as saved image/video files.
+
+If Tkinter is not available or no graphical desktop is attached, run `py -3.11 -m tkinter` to check the local Windows Python installation. For deliberate headless QA only, append `--no-preview` to use the original terminal workflow. **Don't reinstall OpenCV to add a GUI**; it would risk conflicting with the tested headless environment.
 
 It prompts for three presentations, with three trials per category by default:
 
@@ -30,7 +34,7 @@ It prompts for three presentations, with three trials per category by default:
 - **PRINT:** A physical **printed portrait** of a consenting adult displayed to the webcam (NEVER a government ID).
 - **REPLAY:** A separate phone/monitor playing a consenting face video **to the webcam** (not the original video file itself).
 
-No unrelated bystanders or minors; no screenshots or raw photos uploaded to ChatGPT, GitHub, Firebase or Render. Have a neutral background with sufficient context around the face (the crop needs a 2.7x face region). The terminal does NOT show a preview window, to remain compatible with the headless OpenCV package. Position the subject before pressing Enter.
+No unrelated bystanders or minors; no screenshots or raw photos uploaded to ChatGPT, GitHub, Firebase or Render. Have a neutral background with sufficient context around the face (the crop needs a 2.7x face region). The camera preview runs locally in a Tk window; frames and guidance boxes are transient in memory and are not logged or transmitted. Press the green **Start Capture (in-memory)** button only when the full 2.7× crop is visible.
 
 Press q to cancel at a prompt (the session is discarded). Camera failures abort the session without publishing partial findings. If camera 0 fails, check Windows Settings / Privacy / Camera and try --camera 1.
 
@@ -52,7 +56,7 @@ Run the **private live-face diagnostic** first (you do not need to repeat the pr
 
     py -3.11 identity-ai/diagnose_pad_webcam_local.py --consent-confirmed --camera 0 --frames 9
 
-Use a consenting adult's **actual live face** only, in front of your PC webcam. First check the camera framing in the **Windows Camera** app, then close that app before running Python. Center your head and shoulders and step far enough back so the model's required 2.7× face context fits inside the camera image. There is **no built-in camera preview** in the headless OpenCV tool, and no photos or videos are saved by this diagnostic.
+Use a consenting adult's **actual live face** only. For a visible framing guide instead of the original terminal-only diagnostic, launch `run_pad_webcam_trials_local.py --consent-confirmed` on Windows; its Tk window shows exactly where the required 2.7× crop fits. The standalone `diagnose_pad_webcam_local.py` is still a terminal-only analysis and outputs aggregate counts, without saving photos or videos. If you use Windows Camera to initially check the camera, close it before opening Python.
 
 The CLI outputs **only aggregate reason counts** (no pixels, coordinates, filenames, embeddings, or per-person scores). The most common reason explains next steps:
 
