@@ -133,6 +133,48 @@ class LivePreviewTests(unittest.TestCase):
         self.assertEqual({k:len(v) for k,v in progress.trials.items()},
                          {"live":2,"print":2,"replay":2})
 
+    def test_only_live_diagnostic_never_fabricates_print_or_replay(self):
+        state = preview.TrialProgress(
+            trials_per_class=3, enabled_categories=("live",))
+        self.assertEqual(state.current, ("live", 1))
+        for _ in range(3):
+            state.add(("live", "attack"))
+        self.assertTrue(state.complete)
+        self.assertEqual(state.current, (None, None))
+        self.assertEqual(state.trials["print"], [])
+        self.assertEqual(state.trials["replay"], [])
+        report = webcam.dual.aggregate_paired(state.trials)
+        self.assertFalse(report["allPresentationTypesSampled"])
+        self.assertEqual(report["trialCountsByPresentationType"],
+                         {"live": 3, "print": 0, "replay": 0})
+        self.assertFalse(report["independentPadValidated"])
+        self.assertEqual(report["identityDecisionUse"], "none")
+
+    def test_retry_discards_only_last_in_memory_trial(self):
+        state = preview.TrialProgress(
+            trials_per_class=3, enabled_categories=("live",))
+        self.assertEqual(state.undo_last(), (None, None))
+        state.add(("live", "attack"))
+        state.add(("attack", "attack"))
+        state.add(("live", "inconclusive"))
+        self.assertTrue(state.complete)
+        removed_kind, removed = state.undo_last()
+        self.assertEqual((removed_kind, removed), ("live", ("live", "inconclusive")))
+        self.assertFalse(state.complete)
+        self.assertEqual(state.current, ("live", 3))
+        self.assertEqual(state.trials["live"],
+                         [("live", "attack"), ("attack", "attack")])
+        state.add(("live", "live"))
+        self.assertTrue(state.complete)
+        with self.assertRaises(ValueError):
+            preview.TrialProgress(enabled_categories=("print", "live"))
+        with self.assertRaises(ValueError):
+            preview.TrialProgress(enabled_categories=())
+        with self.assertRaises(ValueError):
+            preview.TrialProgress(enabled_categories=("live", "live"))
+        with self.assertRaises(ValueError):
+            preview.TrialProgress(enabled_categories=("verified",))
+
     def test_operator_must_confirm_true_physical_presentation_each_trial(self):
         class FakeControl:
             def __init__(self, value=False):
@@ -148,6 +190,7 @@ class LivePreviewTests(unittest.TestCase):
         ui = preview.GuidedPadWebcamUI(
             FakeCapture(), trials_per_class=3, clock=lambda: 100.0)
         ui.capture_button = FakeControl()
+        ui.undo_button = FakeControl()
         ui.presentation_check = FakeControl()
         ui.presentation_consent_var = FakeControl()
         ui.step_label = FakeControl()
@@ -238,6 +281,50 @@ class LivePreviewTests(unittest.TestCase):
                          {"live":1,"print":1,"replay":1})
         self.assertFalse(aggregate["independentPadValidated"])
         self.assertEqual(aggregate["identityDecisionUse"],"none")
+
+    def test_live_only_webcam_cli_excludes_print_replay_and_keeps_approval_disabled(self):
+        camera = FakeCapture()
+        observed = []
+        lines = []
+        def launcher(cam, *, trials_per_class, frames_per_trial,
+                     enabled_categories):
+            observed.append((cam, trials_per_class, frames_per_trial,
+                             enabled_categories))
+            return {
+                "live": [("live", "attack")] * 3,
+                "print": [], "replay": [],
+            }
+        with patch.object(webcam.pad, "readiness", return_value={
+            "modelLoaded": True, "faceDetectorShadow": {"modelLoaded": True},
+        }):
+            code = webcam.run_cli(
+                ["--consent-confirmed", "--preview", "--only-live",
+                 "--trials-per-class", "3"],
+                camera_factory=lambda _: camera,
+                preview_launcher=launcher,
+                output_fn=lines.append)
+        self.assertEqual(code, 0)
+        self.assertEqual(observed, [(camera, 3, 3, ("live",))])
+        self.assertTrue(camera.released)
+        report = json.loads(lines[-1])
+        self.assertEqual(report["trialCountsByPresentationType"],
+                         {"live": 3, "print": 0, "replay": 0})
+        self.assertFalse(report["allPresentationTypesSampled"])
+        self.assertFalse(report["independentPadValidated"])
+        self.assertEqual(report["identityDecisionUse"], "none")
+
+    def test_live_only_refuses_headless_mode_instead_of_mislabelling_trials(self):
+        obj = FakeCapture()
+        with patch.object(webcam.pad, "readiness", return_value={
+            "modelLoaded": True, "faceDetectorShadow": {"modelLoaded": True},
+        }):
+            status = webcam.run_cli(
+                ["--consent-confirmed", "--only-live", "--no-preview"],
+                camera_factory=lambda _: obj,
+                preview_launcher=lambda *_a, **_kw: (
+                    _ for _ in ()).throw(AssertionError("unexpected GUI")))
+        self.assertEqual(status, 2)
+        self.assertTrue(obj.released)
 
     def test_preview_cancel_discards_aggregate_and_releases_camera(self):
         webcam_obj = FakeCapture()

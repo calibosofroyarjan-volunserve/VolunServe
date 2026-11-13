@@ -19,7 +19,7 @@ ROOT = SCRIPT_DIR.parent
 DEPS = ("numpy==1.26.4", "opencv-contrib-python-headless==4.11.0.86")
 
 
-def pilot_args(*, camera=0, trials=1, consent=False):
+def pilot_args(*, camera=0, trials=1, consent=False, live_only=False):
     """Build fixed, local-only CLI arguments. No arbitrary commands or URLs."""
     if not consent:
         raise ValueError("EXPLICIT_CONSENT_REQUIRED")
@@ -27,10 +27,15 @@ def pilot_args(*, camera=0, trials=1, consent=False):
         raise ValueError("INVALID_CAMERA_INDEX")
     if type(trials) is not int or trials not in (1, 3):
         raise ValueError("INVALID_TRIAL_COUNT")
-    return ["--consent-confirmed", "--preview",
+    if type(live_only) is not bool:
+        raise ValueError("INVALID_LIVE_ONLY_FLAG")
+    args = ["--consent-confirmed", "--preview",
             "--camera", str(camera),
             "--trials-per-class", str(trials),
             "--frames-per-trial", "3"]
+    if live_only:
+        args.append("--only-live")
+    return args
 
 
 def models_present():
@@ -98,6 +103,9 @@ def format_aggregate(report):
         "No participant has been identity verified.",
         "",
         "Actual physical presentations recorded in memory:",
+        "LIVE-ONLY: Print/replay not evaluated in this run."
+        if not report.get("allPresentationTypesSampled", True)
+        else "All three presentation categories sampled.",
     ]
     for kind in ("live", "print", "replay"):
         lines.append(f"  {kind.upper()}: {int(counts.get(kind, 0))} trial(s)")
@@ -183,7 +191,7 @@ def ask_user_settings():
     root = tk.Tk()
     root.title("VolunServe | Private Laptop Camera Validation")
     root.configure(bg="#f4f8fc")
-    root.geometry("640x610")
+    root.geometry("640x650")
     root.resizable(False, False)
     choice = {"accepted": False, "camera": 0, "trials": 1, "mode": "framing",
               "lighting": "indoor_artificial", "cameraType": "laptop_built_in"}
@@ -232,6 +240,9 @@ def ask_user_settings():
     tk.Radiobutton(box, variable=mode, value="full",
                    text="9-trial pilot: 3 real LIVE + 3 physical PRINT + 3 screen REPLAY",
                    bg="#f4f8fc").pack(anchor="w")
+    tk.Radiobutton(box, variable=mode, value="live_only",
+                   text="LIVE-only diagnostic: 3 real-face captures (NO print/replay)",
+                   bg="#f4f8fc").pack(anchor="w")
     tk.Checkbutton(box, variable=consent,
                    text="I consent. Any adult shown also consented.",
                    bg="#f4f8fc", font=("Segoe UI", 10, "bold")).pack(
@@ -245,7 +256,7 @@ def ask_user_settings():
             status.configure(text="Explicit consent is required.", fg="#b91c1c")
             return
         choice.update(accepted=True, camera=camera.get(),
-                      trials=3 if mode.get() == "full" else 1,
+                      trials=3 if mode.get() in ("full", "live_only") else 1,
                       mode=mode.get(), lighting=lighting.get(),
                       cameraType=camera_type.get())
         root.destroy()
@@ -286,7 +297,8 @@ def main():
         print("Cancelled without accessing camera, model, or identity data.")
         return 0
     try:
-        args = pilot_args(camera=user["camera"], trials=user["trials"], consent=True)
+        args = pilot_args(camera=user["camera"], trials=user["trials"],
+                          consent=True, live_only=user.get("mode") == "live_only")
         if setup_required():
             from tkinter import messagebox
             # A separate setup approval, after camera consent, is necessary.

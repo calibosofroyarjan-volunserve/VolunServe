@@ -33,6 +33,41 @@ does not permit software to recognize whether a photo or screen was
 physically presented. A larger, independently labeled trial is needed;
 do not repeat the same nine samples merely to optimize a reported score.
 
+## Easier LIVE-camera troubleshooting — no need to redo PRINT or REPLAY
+
+If the webcam easily detects a **3×3 photograph** but struggles with your real
+face, remember: YuNet's green rectangle means a face pattern is visible; it
+is **NOT** proof of liveness and does not mean a portrait photo has passed
+identity verification. Do **not** substitute a printed picture in a LIVE slot
+to force the guide green; that would corrupt the trial labels.
+
+The Windows launcher has an opt-in **LIVE-only diagnostic: 3 real-face
+captures (NO print/replay)**. It records three consenting genuine live
+presentations only. The report explicitly contains
+`print=0`, `replay=0`, `allPresentationTypesSampled=false`; it cannot
+be described as a full spoofing/PAD study or independent liveness validation.
+There is no need to repeat your previous 9-trial attack pilot just to
+investigate genuine-face detection.
+
+The preview also has **Discard last trial / Retake**. If you notice
+that the physical presentation is wrong, or poor framing produced a bad
+test, discard the most recently counted trial (still only in memory),
+return to its exact stage and capture again. The previous valid trials
+remain in memory. After the last trial, you can still discard the last
+one **before** pressing Finish / show aggregate. Once the window is
+closed, only aggregate counts exist; individual trial images are never
+retained, so an earlier trial cannot be re-labeled from that report.
+
+To help genuine-face framing, sit steady with even front-facing light,
+position your face approximately centered in the preview, and adjust your
+distance until the **full 2.7× green context rectangle** fits inside
+the webcam frame. Avoid bright backlighting. These steps help the camera
+detect a face and do not prove that the PAD model is accurate.
+
+This feature changes only the local research UI. No AI model weights,
+thresholds, backend identity decisions, real biometric uploads, or
+production branches are changed.
+
 ## Multi-session camera/lighting study
 
 After your confirmed 9-trial pilot, see
