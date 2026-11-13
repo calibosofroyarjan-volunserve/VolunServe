@@ -1,3 +1,4 @@
+import {blockProductionEvidenceUploadDuringStaging} from "../lib/stagingExpoServiceIsolation";
 import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 import * as Location from "expo-location";
@@ -621,6 +622,7 @@ export default function DisasterResponse() {
   const uploadEvidence = async (
     assets: EvidenceAsset[]
   ): Promise<Attachment[]> => {
+    blockProductionEvidenceUploadDuringStaging();
     const attachments: Attachment[] = [];
 
     for (
