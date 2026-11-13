@@ -1,0 +1,53 @@
+name: Authenticated Resident Admin Firebase Emulator E2E (NO DEPLOY)
+
+on:
+  pull_request:
+    paths:
+      - "backend/test-identity-emulator-auth-e2e.cjs"
+      - "backend/identity-e2e-emulators.json"
+      - ".github/workflows/test-identity-emulator-auth-no-deploy.yml"
+      - "backend/server.js"
+      - "backend/adminAccess.js"
+      - "backend/verifiedFirebaseToken.js"
+      - "backend/identityIssuerReviewPolicy.js"
+      - "backend/selectedIdPolicy.js"
+
+permissions:
+  contents: read
+
+jobs:
+  local-auth-firestore-emulator:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      CI: "true"
+      GCLOUD_PROJECT: demo-volunserve-identity-e2e
+      FIREBASE_AUTH_EMULATOR_HOST: "127.0.0.1:9099"
+      FIRESTORE_EMULATOR_HOST: "127.0.0.1:8080"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - name: Install locked frontend CLI and backend SDK (no postinstall scripts)
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          npm ci --prefix backend --ignore-scripts --no-audit --no-fund
+      - name: Start local-only demo-project emulators and run actual auth + Firestore test
+        run: |
+          npx --no-install firebase emulators:exec \
+            --config backend/identity-e2e-emulators.json \
+            --only auth,firestore \
+            --project demo-volunserve-identity-e2e \
+            "node --test backend/test-identity-emulator-auth-e2e.cjs"
+      - name: Confirm actual route sources and synthetic no-deploy acceptance
+        run: |
+          node --test backend/test-staging-identity-acceptance-e2e.cjs
+          node --test backend/test-staging-admin-review-ui-contract.cjs
+          node --test backend/test-identity-media-capability-preflight.cjs
+      - name: No-deployment confirmation
+        run: echo "NO DEPLOY. No account or biometric data leaves demo Firebase emulators."
