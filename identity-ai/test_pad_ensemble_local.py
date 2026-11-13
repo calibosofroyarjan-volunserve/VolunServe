@@ -79,7 +79,9 @@ class EnsembleResearchTests(unittest.TestCase):
         statuses = qa.assess_four_hypotheses(
             frame, v2_assessor=first, v1_crop=second, v1_net=fake)
         self.assertEqual(statuses, (LIVE, ATTACK, LIVE, ATTACK))
-        self.assertEqual(touched, [frame, frame])  # same original pixels
+        self.assertEqual(len(touched), 2)
+        self.assertIs(touched[0], frame)
+        self.assertIs(touched[1], frame)  # exact same original frame
         self.assertEqual(len(fake.blobs), 2)
         np.testing.assert_allclose(fake.blobs[0], fake.blobs[1] * 255,
                                    atol=1e-5, rtol=1e-6)
