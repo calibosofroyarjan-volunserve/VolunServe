@@ -112,7 +112,10 @@ test("authenticated operational Admin route and transactional self-approval bloc
 test("staging Admin points to isolated Node and shows MRZ without PII",()=>{
   assert(ui.includes('process.env.EXPO_PUBLIC_VOLUNSERVE_ENV === "staging"'));
   assert(ui.includes("https://volunserve-backend-staging.onrender.com"));
-  assert(ui.includes("unresolvedEvidence"));
+  // Expo Admin now uses one stronger document gate for ALL unresolved
+  // warnings, DOB/MRZ conflicts and reverse quality (not only MRZ fields).
+  assert(ui.includes("adminReviewDocumentEligible"));
+  assert(ui.includes("!documentEligible"));
   assert(ui.includes("disabled={!canVerify}"));
   assert(shared.includes("Passport MRZ checksum"));
   assert(shared.includes("MRZ birthday vs profile"));
