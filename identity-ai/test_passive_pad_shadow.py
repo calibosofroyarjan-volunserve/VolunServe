@@ -135,7 +135,7 @@ class PassivePadShadowTests(unittest.TestCase):
 
         model = ScaleSensitiveModel()
         self.model.stop()
-        with patch.object(pad, "_load_net", return_value=model), \\
+        with patch.object(pad, "_load_net", return_value=model), \
              patch.object(pad, "single_face_box", return_value=(165, 165, 70, 70)):
             report = pad.assess_frame_shadow(self.image)
         self.model.start()
