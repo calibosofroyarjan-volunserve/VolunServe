@@ -43,9 +43,9 @@ jobs:
           node <<'NODE'
           const cp = require("node:child_process"), assert = require("node:assert/strict");
           const paths = cp.execFileSync("git", ["diff", "--name-only", "2cd63d318ecb6b0dfc52706308e05d0b5806d874", "HEAD"], { encoding: "utf8" })
-            .trim().split("\\n").filter(Boolean);
+            .trim().split(String.fromCharCode(10)).filter(Boolean);
           const protectedPath = path =>
-            /(?:^|\\/)(?:certificate|certificates|attendance|communityCertificate)[^/]*\\.(?:ts|tsx|js|cjs|json)$/i.test(path)
+            /certificate|attendance/i.test(path)
             || path === "app/(tabs)/profile.tsx"
             || path === "app/(tabs)/_layout.tsx";
           const changedProtected = paths.filter(protectedPath);
