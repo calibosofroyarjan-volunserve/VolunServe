@@ -1,6 +1,8 @@
 """NO human camera/GUI: prove optional four-hypothesis path stays private and fail-closed."""
 import json
 import tempfile
+import io
+from contextlib import redirect_stdout
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -133,6 +135,78 @@ class CombinedWebcamTests(unittest.TestCase):
             with self.assertRaises((OSError, ValueError)):
                 gui.research_export(report, lighting="daylight",
                                     camera_type="external_usb", path=target)
+
+    def test_four_model_breakdown_is_copyable_and_rejects_unsafe_counts(self):
+        trials = {
+            "live": [research.combine_one_presentation(
+                [(LIVE, ATTACK, ATTACK, ATTACK)])],
+            "print": [research.combine_one_presentation([(ATTACK,) * 4])],
+            "replay": [research.combine_one_presentation([(ATTACK,) * 4])],
+        }
+        report = research.summarize_four_hypotheses(trials)
+        detailed = gui.format_combined_detailed_counts(report)
+        for expected in (
+            "V2 raw 0", "V2 normalized 0", "V1SE raw 0",
+            "V1SE normalized 0", "LIVE: trials=1",
+            "PRINT: trials=1", "REPLAY: trials=1",
+            "model-LIVE=1", "NOT BIOMETRIC VERIFICATION",
+        ):
+            self.assertIn(expected, detailed)
+        for forbidden in ("faceImage", "personName", "embedding", "rawScore"):
+            self.assertNotIn(forbidden, detailed)
+        malformed = json.loads(json.dumps(report))
+        malformed["perHypothesis"]["v2_raw_0_to_255"]["live"]["observedLive"] = 15
+        with self.assertRaisesRegex(ValueError, "INVALID_AGGREGATE_COUNT"):
+            gui.format_combined_detailed_counts(malformed)
+        malformed = json.loads(json.dumps(report))
+        malformed["automaticApprovalAllowed"] = True
+        with self.assertRaisesRegex(ValueError, "UNSAFE_OR_NOT_COMBINED"):
+            gui.format_combined_detailed_counts(malformed)
+
+    def test_combined_gui_prints_all_four_counts_even_if_user_never_saves(self):
+        report = research.summarize_four_hypotheses({
+            "live": [research.combine_one_presentation(
+                [(LIVE, ATTACK, ATTACK, ATTACK)])],
+            "print": [research.combine_one_presentation([(ATTACK,) * 4])],
+            "replay": [research.combine_one_presentation([(ATTACK,) * 4])],
+        })
+        settings = {"accepted": True, "mode": "combined_quick",
+                    "camera": 0, "trials": 1,
+                    "lighting": "indoor_artificial",
+                    "cameraType": "laptop_built_in"}
+        def mocked_cli(args, output_fn):
+            self.assertIn("--four-hypothesis", args)
+            output_fn(json.dumps(report, sort_keys=True))
+            return 0
+        terminal = io.StringIO()
+        with patch.object(gui.sys, "platform", "win32"), \\
+             patch.object(gui, "ask_user_settings", return_value=settings), \\
+             patch.object(gui, "setup_required", return_value=False), \\
+             patch("run_pad_webcam_trials_local.run_cli", side_effect=mocked_cli), \\
+             patch.object(gui, "show_copyable_combined_counts") as copy_window, \\
+             patch.object(gui, "notify",
+                          side_effect=AssertionError("Legacy modal should not hide counts")), \\
+             redirect_stdout(terminal):
+            self.assertEqual(gui.main(), 0)
+        self.assertEqual(copy_window.call_count, 1)
+        self.assertEqual(copy_window.call_args.kwargs["camera_type"],
+                         "laptop_built_in")
+        displayed = terminal.getvalue()
+        self.assertIn("V2 raw 0", displayed)
+        self.assertIn("V1SE normalized 0", displayed)
+        self.assertIn("PRINT: trials=1", displayed)
+        self.assertIn("model-LIVE=1", displayed)
+        self.assertIn("identity verification", displayed.lower())
+        self.assertNotIn("faceImage", displayed)
+
+    def test_direct_copy_save_controls_exist_without_automatic_export(self):
+        code = Path(gui.__file__).read_text(encoding="utf-8")
+        self.assertIn('text="Copy detailed counts"', code)
+        self.assertIn('text="Save anonymous JSON"', code)
+        self.assertIn('title="Save anonymous aggregate counts', code)
+        self.assertIn('root.clipboard_append(summary +', code)
+        self.assertIn("No biometric data is written.", code)
+        self.assertIn("return 0\n        else:\n            notify", code)
 
     def test_gui_secondary_downloader_requires_separate_approved_setup(self):
         cmds = []
