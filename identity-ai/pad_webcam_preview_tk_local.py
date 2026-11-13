@@ -16,6 +16,7 @@ import cv2
 import numpy as np
 
 import evaluate_pad_scales_local as paired
+import evaluate_pad_ensemble_local as ensemble
 from pad_frame_guidance_local import analyze_framing, draw_guidance, HELP
 from pad_camera_quality_local import quality_hint
 from run_pad_webcam_trials_local import valid_frame, CATEGORIES
@@ -38,7 +39,8 @@ def fit_preview_only(frame, *, max_width=690, max_height=450):
 
 class TrialProgress:
     """Pure state used by Tk and testable without a real camera/display."""
-    def __init__(self, *, trials_per_class=3, enabled_categories=CATEGORIES):
+    def __init__(self, *, trials_per_class=3, enabled_categories=CATEGORIES,
+                 four_hypothesis=False):
         if not isinstance(trials_per_class, int) or not 1 <= trials_per_class <= 10:
             raise ValueError("INVALID_TRIAL_COUNT")
         if (not isinstance(enabled_categories, tuple) or
@@ -48,6 +50,7 @@ class TrialProgress:
             raise ValueError("INVALID_PRESENTATION_CATEGORY_SELECTION")
         self.trials_per_class = trials_per_class
         self.enabled_categories = enabled_categories
+        self.four_hypothesis = four_hypothesis is True
         self.trials = {kind: [] for kind in CATEGORIES}
 
     @property
@@ -73,8 +76,22 @@ class TrialProgress:
         kind, _number = self.current
         if kind is None:
             raise ValueError("PILOT_ALREADY_COMPLETE")
-        if (not isinstance(pair, tuple) or len(pair) != 2 or
-                any(value not in PAIR_OUTCOMES for value in pair)):
+        if self.four_hypothesis:
+            # A four-model trial contains only categorical in-memory counts,
+            # not model vectors, scores, frames, filenames or subjects.
+            valid = (
+                type(pair) is dict and
+                set(pair) == {"hypotheses", "ensemble", "anyHypothesisObservedLive"} and
+                type(pair["hypotheses"]) in (tuple, list) and
+                len(pair["hypotheses"]) == 4 and
+                all(x in PAIR_OUTCOMES for x in pair["hypotheses"]) and
+                pair["ensemble"] in PAIR_OUTCOMES and
+                type(pair["anyHypothesisObservedLive"]) is bool
+            )
+        else:
+            valid = (isinstance(pair, tuple) and len(pair) == 2 and
+                     all(value in PAIR_OUTCOMES for value in pair))
+        if not valid:
             raise ValueError("INVALID_UNTRUSTED_TRIAL_OUTCOME")
         self.trials[kind].append(pair)
 
@@ -131,13 +148,16 @@ class GuidedPadWebcamUI:
     def __init__(self, camera, *, trials_per_class=3, frames_per_trial=3,
                  preview_only=False, enabled_categories=CATEGORIES,
                  tick_ms=105, clock=time.monotonic,
-                 framing=analyze_framing, assessor=assess_ready_frame):
+                 framing=analyze_framing, assessor=assess_ready_frame,
+                 four_hypothesis=False):
         if not 1 <= frames_per_trial <= MAX_FRAMES_PER_TRIAL:
             raise ValueError("INVALID_FRAME_COUNT")
         self.camera = camera
         self.preview_only = preview_only is True
         self.progress = TrialProgress(
-            trials_per_class=trials_per_class, enabled_categories=enabled_categories)
+            trials_per_class=trials_per_class, enabled_categories=enabled_categories,
+            four_hypothesis=four_hypothesis)
+        self.four_hypothesis = four_hypothesis is True
         self.frames_per_trial = frames_per_trial
         self.tick_ms = tick_ms
         self.clock = clock
@@ -325,7 +345,8 @@ class GuidedPadWebcamUI:
                 "Trial not counted: face crop lost. Move back / reposition then retry.")
             return
         result = self.assessor(frame, guidance)
-        if (not isinstance(result, tuple) or len(result) != 2 or
+        if (not isinstance(result, tuple) or
+                len(result) != (4 if self.four_hypothesis else 2) or
                 any(v not in (
                     "model_prefers_live_unvalidated",
                     "model_prefers_attack_unvalidated", "inconclusive") for v in result)):
@@ -337,7 +358,8 @@ class GuidedPadWebcamUI:
             text=f"Capturing frame {len(self._samples)}/{self.frames_per_trial} "
                  "(not independent trials)")
         if len(self._samples) == self.frames_per_trial:
-            trial = paired.combine_paired_frames(self._samples)
+            trial = (ensemble.combine_one_presentation(self._samples)
+                     if self.four_hypothesis else paired.combine_paired_frames(self._samples))
             self.progress.add(trial)
             self._samples = []
             self._capturing = False
@@ -449,10 +471,12 @@ class GuidedPadWebcamUI:
 
 
 def launch_webcam_preview(camera, *, trials_per_class, frames_per_trial,
-                          preview_only=False, enabled_categories=CATEGORIES):
+                          preview_only=False, enabled_categories=CATEGORIES,
+                          four_hypothesis=False, assessor=assess_ready_frame):
     """Safe, lazy GUI entry; caller owns/releases webcam in a finally block."""
     ui = GuidedPadWebcamUI(
         camera, trials_per_class=trials_per_class,
         frames_per_trial=frames_per_trial, preview_only=preview_only,
-        enabled_categories=enabled_categories)
+        enabled_categories=enabled_categories,
+        four_hypothesis=four_hypothesis, assessor=assessor)
     return ui.launch()
