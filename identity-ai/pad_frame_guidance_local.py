@@ -19,6 +19,8 @@ _ALLOWED_CONTEXT_SCALES = frozenset((PAD_CONTEXT_SCALE, V1SE_CONTEXT_SCALE))
 # Coarse statuses can be shown on screen without making any liveness claims.
 HELP = {
     "ready": "Framing OK for experimental crop. Not proof of liveness.",
+    "face_visible": "FACE VISIBLE — framing is suitable for selfie review. This does NOT match your National ID or prove liveness.",
+    "adjust_selfie": "Center one face with its full outline visible in good light; no 4x crop required.",
     "move_back": "Move farther from camera; keep space around your head.",
     "move_back_v1se": "V1SE needs a FULL 4.0x face crop; move farther from the camera. A 2.7x-ready frame is not enough for the combined pilot.",
     "no_face": "No face detected. Center one consenting face in good light.",
@@ -104,6 +106,42 @@ def analyze_framing(frame, *, detect_box=single_face_box, inspect=inspect_frame,
         return Guidance("face_uncertain")
 
 
+def analyze_selfie_preview(frame, *, detect_box=single_face_box,
+                           inspect=inspect_frame):
+    """Easy GREEN box for *visual selfie framing only*, never a PAD result.
+
+    This is intentionally separate from analyze_framing and its full 2.7x/4x
+    PAD context gate. No OCR, comparison, authenticity or trusted liveness.
+    Require one non-truncated face of useful pixel size, not an arbitrary
+    enlarged background crop. A camera operator still checks lighting.
+    """
+    if (not isinstance(frame, np.ndarray) or frame.dtype != np.uint8 or
+            frame.ndim != 3 or frame.shape[2] != 3 or
+            not 120 <= frame.shape[0] <= 3000 or
+            not 120 <= frame.shape[1] <= 3000):
+        return Guidance("camera_unavailable")
+    try:
+        box = detect_box(frame)
+        if box is not None:
+            x, y, w, h = (int(v) for v in box)
+            image_h, image_w = frame.shape[:2]
+            # A 720p built-in webcam may have a reasonably-sized selfie face
+            # without leaving room for V1SE's oversized 4x research context.
+            # Do not accept tiny, truncated or off-frame detections.
+            if (w >= 60 and h >= 60 and x >= 8 and y >= 8 and
+                    x + w <= image_w - 8 and y + h <= image_h - 8):
+                return Guidance("face_visible", face_rect=(x, y, w, h))
+            return Guidance("adjust_selfie", face_rect=(x, y, w, h))
+        result = inspect(frame)
+        return Guidance({
+            "no_face": "no_face",
+            "multiple_faces": "multiple_faces",
+            "unavailable": "detector_unavailable",
+        }.get(result, "face_uncertain"))
+    except (cv2.error, ValueError, TypeError, IndexError, OverflowError):
+        return Guidance("face_uncertain")
+
+
 def draw_guidance(frame, status, *, max_width=700, max_height=470):
     """Draw an ephemeral, on-screen preview with framing annotations.
 
@@ -116,13 +154,15 @@ def draw_guidance(frame, status, *, max_width=700, max_height=470):
     height, width = view.shape[:2]
     if status.face_rect is not None:
         x, y, w, h = status.face_rect
-        color = (75, 200, 80) if status.capture_ready else (0, 170, 255)
+        color = (75, 200, 80) if status.capture_ready or status.code == "face_visible" else (0, 170, 255)
         cv2.rectangle(view, (x, y), (x + w, y + h), color, 2)
     if status.context_rect is not None:
         left, top, right, bottom = status.context_rect
         cv2.rectangle(view, (left, top), (right, bottom), (75, 200, 80), 2)
     label = {
         "ready": "FRAMING READY - SHADOW RESEARCH ONLY",
+        "face_visible": "FACE VISIBLE - GREEN IS NOT ID MATCH OR PAD",
+        "adjust_selfie": "ADJUST SELFIE - CENTER ONE FULL FACE",
         "move_back": "MOVE BACK: leave space around face",
         "move_back_v1se": "MOVE BACK: V1SE needs FULL 4x face context",
         "no_face": "NO FACE: center the presentation",
