@@ -238,12 +238,49 @@ test("final Admin Require Retry overrides a stale pending verification snapshot"
  assert.equal(status.body.decision,"retry_required");
 });
 
+test("staging Admin queue exposes non-sensitive eligibility and blocks unauthorized targets",async()=>{
+ const h=harness();
+ const cases=[
+  ["staff_synthetic_001","admin","approved",true],
+  ["suspended_synthetic_001","resident","suspended",true],
+  ["noaccess_synthetic_001","resident","approved",false],
+  ["missing_synthetic_001",null,null,null],
+ ];
+ for(const [uid,role,status,residentAccess] of cases){
+  if(role){
+   h.records.set("users/"+uid,{
+    uid,role,status,residentAccess,identityStatus:"pending",
+    identityVerified:false,fullName:"Synthetic test account",
+   });
+  }
+  h.records.set("identityVerifications/"+uid,{
+   uid,status:"pending",decision:"manual_review",
+   requiresManualReview:true,documentScreening:{...good},
+   verificationId:"synthetic_"+uid,
+   updatedAt:"2026-11-13T09:00:00.000Z",
+  });
+ }
+ const response=await h.queue({});
+ assert.equal(response.code,200);
+ assertSanitized(response.body);
+ for(const [uid] of cases){
+  const row=response.body.items.find(x=>x.uid===uid);
+  assert(row,"expected synthetic queue record "+uid);
+  assert.equal(row.targetEligible,false);
+  assert.equal(row.identityVerified,false);
+  const attempt=await h.decision(uid,"verify");
+  assert.equal(attempt.code,uid==="missing_synthetic_001"?404:403);
+ }
+ assert.equal([...h.records].filter(([k])=>k.startsWith("adminActivityLogs/")).length,0);
+});
+
 test("actual queue to manual Verify to refreshed Resident verified status and log",async()=>{
  const h=harness(),initial=await h.queue({});
  assert.equal(initial.code,200);assert.equal(initial.body.items.length,2);
  const row=initial.body.items.find(x=>x.uid===RESIDENT);
  assert.equal(row.status,"pending");
  assert.equal(row.requiresManualReview,true);
+ assert.equal(row.targetEligible,true);
  assert.equal(selectedIdRecognized(row.documentScreening),true);
  assertSanitized(initial.body);
  const result=await h.decision(RESIDENT,"verify");
