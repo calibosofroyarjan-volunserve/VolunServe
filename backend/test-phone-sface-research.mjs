@@ -160,3 +160,13 @@ test("same-origin staged SFace model remains hash-verified and deployment-scoped
   assert(!source.includes("fetch(idUrl"));
   assert(!source.includes("fetch(selfieUrl"));
 });
+
+test("official Git LFS fallback remains in SHA-pinned staging build only",()=>{
+  const source=readFileSync("scripts/stage-staging-sface-model.cjs","utf8");
+  assert(source.includes("media.githubusercontent.com/media/opencv/opencv_zoo/main/models/face_recognition_sface/face_recognition_sface_2021dec.onnx"));
+  assert(source.includes("MODEL_SHA256"));
+  assert(source.includes("if(actual===MODEL_SHA256)return bytes;"));
+  assert(source.includes("throw Error(\"pinned_sface_download_or_integrity_failed\")"));
+  const guard=readFileSync("scripts/check-expo-resident-staging-release.cjs","utf8");
+  assert(guard.includes("stagePinnedSFaceStaticAssets().catch"));
+});
