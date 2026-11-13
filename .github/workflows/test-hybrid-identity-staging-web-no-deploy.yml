@@ -1,0 +1,53 @@
+name: Hybrid Identity pinned staging web export (NO DEPLOY)
+on:
+  pull_request:
+    branches:
+      - release/staging-hybrid-web-baseline-20261114
+      - preview/expo-resident-full-staging-web-20261113
+    paths:
+      - 'app/(admin)/identity-reviews.tsx'
+      - 'app/identity-verification.web.tsx'
+      - 'app/identity-verification.tsx'
+      - 'lib/identityAdminReviewGate.ts'
+      - 'backend/test-staging-admin-review-ui-contract.cjs'
+      - '.github/workflows/test-hybrid-identity-staging-web-no-deploy.yml'
+permissions:
+  contents: read
+jobs:
+  pinned-staging-web:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      CI: '1'
+      EXPO_PUBLIC_VOLUNSERVE_ENV: staging
+      EXPO_PUBLIC_VOLUNSERVE_FIREBASE_TARGET: staging
+      EXPO_PUBLIC_VOLUNSERVE_STAGING_FIREBASE_PROJECT_ID: volunserve-full-staging
+      EXPO_PUBLIC_VOLUNSERVE_STAGING_FIREBASE_AUTH_DOMAIN: volunserve-full-staging.firebaseapp.com
+      EXPO_PUBLIC_VOLUNSERVE_STAGING_FIREBASE_STORAGE_BUCKET: volunserve-full-staging.firebasestorage.app
+      EXPO_PUBLIC_VOLUNSERVE_STAGING_FIREBASE_MESSAGING_SENDER_ID: '429213950126'
+      EXPO_PUBLIC_VOLUNSERVE_STAGING_FIREBASE_APP_ID: '1:429213950126:web:955dbf575697826b674d3f'
+      EXPO_PUBLIC_VOLUNSERVE_STAGING_FIREBASE_API_KEY: AIzaSyntheticStageTestKey_NotForRequests000
+      EXPO_PUBLIC_IDENTITY_VERIFICATION_API_URL: https://volunserve-backend-staging.onrender.com
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          submodules: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - name: Install locked frontend dependencies without deploy scripts
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Execute real UI gate against synthetic ID cases
+        run: node --test backend/test-staging-admin-review-ui-contract.cjs
+      - name: Preserve environment and disabled biometric upload gate
+        run: node scripts/check-expo-resident-staging-release.cjs
+      - name: Check TypeScript
+        run: npx tsc --noEmit --pretty false
+      - name: Export Expo web without deploying
+        run: npx expo export --platform web --output-dir dist
+      - name: Assert staged export and no remote writes
+        run: |
+          test -f dist/index.html
+          echo "NO_DEPLOY: synthetic QA / staging build only"
