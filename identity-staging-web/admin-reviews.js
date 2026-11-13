@@ -219,15 +219,17 @@ function renderButtons() {
   });
   el("refresh").disabled=isBusy || !hasAccess;
 }
-async function loadReviews() {
+async function loadReviews({preserveNotice=false}={}) {
   if (!signedIn || isBusy) return;
   isBusy=true;
-  notice("");
+  if (!preserveNotice) notice("");
   renderButtons();
   try {
     const body=await authorizedRequest("/api/admin/identity/reviews");
     reviews=Array.isArray(body.items) ? body.items : [];
     hasAccess=true; // Node verifies a Firebase token and approved operational Admin.
+    el("account").textContent="Staging operational Admin access confirmed · " +
+      (signedIn?.email || "signed-in staging account");
     if (selectedUid && !getSelected()) selectedUid="";
     el("workspace").classList.remove("hidden");
     renderQueue();
@@ -266,12 +268,13 @@ async function decide(action) {
         issuerReviewAttested:action==="verify" && attested,notes,
       }),
     });
-    notice(action==="verify" ? "Staging manual verification saved and audited."
-      : "Retry required. Staging Resident must submit corrected evidence.");
+    notice(action==="verify" ? "Staging Admin decision recorded. Refresh confirmed; independent issuer check must have been performed."
+      : "Require Retry recorded. Staging Resident needs corrected evidence.");
     selectedUid="";
     reviews=[]; // Never show stale results after an Admin state change.
     isBusy=false;
-    await loadReviews();
+    // Do not erase the final save acknowledgement while fetching updated rows.
+    await loadReviews({preserveNotice:true});
   } catch (error) {
     notice(error instanceof Error ? error.message : "Unable to save decision.","bad");
   } finally {
