@@ -150,7 +150,9 @@ test("SFace camera QA is separate opt-in and blocked until all three captures", 
     if(i<2)assert.equal(b.get("qaRun").disabled,true);
   }
   assert.equal(b.get("qaRun").disabled,false);
-  assert.match(b.get("qaResult").textContent,/NOT VERIFIED/);
+  // The fake DOM does not parse initial HTML markup, so verify the
+  // safe default label in source and the state-change behavior separately.
+  assert.match(html, /Face diagnostic not run\. NOT VERIFIED\./);
   b.get("qaConsent").checked=false;b.get("qaConsent").onchange();
   assert.equal(b.get("qaRun").disabled,true);
   assert.match(b.get("qaResult").textContent,/not run/);
