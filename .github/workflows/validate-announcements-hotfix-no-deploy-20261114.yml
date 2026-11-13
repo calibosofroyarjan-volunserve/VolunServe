@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - hotfix/announcements-exact-live-20261114
+      - fix/announcements-carousel-fullbleed-20261114
   workflow_dispatch:
 
 permissions:
@@ -40,6 +41,19 @@ jobs:
         run: npx firebase emulators:exec --only firestore --project demo-volunserve "node scripts/test-announcements-published-audience-emulator.cjs"
       - name: Expo web export (no production credentials)
         run: npx expo export --platform web --clear
+      - name: Ensure carousel web photo fills hero panel (source regression)
+        run: |
+          node <<'NODE'
+          const fs = require('node:fs'), assert = require('node:assert/strict');
+          const src = fs.readFileSync('components/auth/PremiumAuthShell.tsx', 'utf8');
+          assert.match(src, /Image\.resolveAssetSource\(SLIDES\[slide\]\)/);
+          assert.match(src, /backgroundSize: "cover"/);
+          assert.match(src, /backgroundPosition: "center center"/);
+          assert.match(src, /styles\.heroSlideImage/);
+          assert.match(src, /width: "100%", height: "100%"/);
+          assert.match(src, /Platform\.OS === "web"/);
+          console.log('PASS: full-bleed CSS cover exists on web and native image fallback is retained.');
+          NODE
       - name: Read current production revision (READ ONLY)
         shell: bash
         run: |
