@@ -9,6 +9,26 @@ from __future__ import annotations
 
 import math
 import queue
+import hashlib
+
+
+def validate_distinct_local_captures(front_bytes, back_bytes, selfie_bytes):
+    """Reject exact reuse of a camera image before OCR or face comparison.
+
+    Only compares ephemeral in-memory digests. Different encodings of the
+    same print/screen image are NOT detected and this is NOT liveness/PAD.
+    """
+    images = (front_bytes, back_bytes, selfie_bytes)
+    if not all(isinstance(data, bytes) and
+               0 < len(data) <= MAX_IMAGE_BYTES for data in images):
+        raise ValueError("One or more camera frames are missing or invalid.")
+    hashes = tuple(hashlib.sha256(data).digest() for data in images)
+    if len(set(hashes)) != 3:
+        raise ValueError(
+            "A camera frame was reused for another scan. "
+            "Retake the ID front, back and selfie as distinct captures."
+        )
+
 
 
 def release_scan_buffers(captured=None, result_queue=None):
@@ -70,6 +90,10 @@ def safe_summary(screening: dict, comparison: dict | None = None) -> str:
 
 def perform_local_review(front_bytes: bytes, back_bytes: bytes, selfie_bytes: bytes) -> str:
     """Reuse actual staging OCR and 1:1 implementations, never a backend API."""
+    # Block missing and reused images BEFORE importing image engines or OCR.
+    # Mirrors the protected backend's exact-media-reuse restriction.
+    validate_distinct_local_captures(front_bytes, back_bytes, selfie_bytes)
+
     import main as ai  # Heavy local dependencies loaded only after explicit consent.
     from face_preflight_policy import screening_ready_for_face_comparison
 
