@@ -1,5 +1,6 @@
 import { auth } from "./firebase";
 import { identityEnvironmentTarget } from "./identityEnvironmentTarget";
+import { assertIdentityMediaSubmissionAllowed } from "./identityMediaAvailability";
 
 export type IdentityVerificationStatus =
   | "basic"
@@ -485,6 +486,10 @@ export async function checkIdentityEngineReady(): Promise<void> {
       ),
     );
   }
+  // A healthy Python AI service is NOT permission to POST private ID/selfie
+  // media. Staging Node currently rejects those requests with HTTP 423.
+  // Fail closed before any multipart body is assembled or a camera opened.
+  assertIdentityMediaSubmissionAllowed(body);
 }
 
 /**
