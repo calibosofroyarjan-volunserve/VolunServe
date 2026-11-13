@@ -11,6 +11,7 @@ and all PAD/class-map limitations. One physical presentation = one trial.
 """
 import base64
 import time
+from functools import partial
 
 import cv2
 import numpy as np
@@ -148,7 +149,7 @@ class GuidedPadWebcamUI:
     def __init__(self, camera, *, trials_per_class=3, frames_per_trial=3,
                  preview_only=False, enabled_categories=CATEGORIES,
                  tick_ms=105, clock=time.monotonic,
-                 framing=analyze_framing, assessor=assess_ready_frame,
+                 framing=None, assessor=assess_ready_frame,
                  four_hypothesis=False):
         if not 1 <= frames_per_trial <= MAX_FRAMES_PER_TRIAL:
             raise ValueError("INVALID_FRAME_COUNT")
@@ -164,11 +165,9 @@ class GuidedPadWebcamUI:
         # Combined study requires V1SE's full 4x crop, not just the old
         # V2-only 2.7x preview. Do not accept trial with missing V1SE context.
         # Retain injectable custom framing function for no-camera tests.
-        self.framing = (
-            (lambda frame: analyze_framing(frame, context_scale=4.0))
-            if self.four_hypothesis and framing is analyze_framing
-            else framing
-        )
+        self.framing = (framing if framing is not None else
+                        partial(analyze_framing,
+                                context_scale=4.0 if self.four_hypothesis else 2.7))
         self.assessor = assessor
         self.cancelled = True
         self.camera_failed = False
