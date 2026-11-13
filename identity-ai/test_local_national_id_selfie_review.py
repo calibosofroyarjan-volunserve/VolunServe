@@ -129,7 +129,8 @@ class CameraOnlyLocalReviewTests(unittest.TestCase):
         self.assertLess(script.index("download_sface_model.py"),
                         script.index('set "VOLUNSERVE_SFACE_SHADOW=1"'))
         self.assertNotIn("curl ", script.lower())
-        self.assertNotIn("upload", script.split(":CANCEL")[0].lower().replace("no upload", ""))
+        self.assertNotIn("requests.post", script)
+        self.assertNotIn("firebase", script.lower())
 
     def test_no_file_upload_or_picker_in_user_interface(self):
         source = inspect.getsource(local.main)
