@@ -6,7 +6,7 @@
   <meta name="robots" content="noindex,nofollow,noarchive">
   <meta http-equiv="Cache-Control" content="no-store">
   <meta name="referrer" content="no-referrer">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src blob:; media-src blob:; connect-src 'none'; form-action 'none'; base-uri 'none'; object-src 'none'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline' 'wasm-unsafe-eval' https://cdn.jsdelivr.net; style-src 'unsafe-inline'; img-src blob:; media-src blob:; connect-src https://cdn.jsdelivr.net https://storage.googleapis.com; worker-src blob:; form-action 'none'; base-uri 'none'; object-src 'none'">
   <title>VolunServe | Phone Camera Lab (Staging Only)</title>
   <style>
     :root{font:16px/1.45 system-ui,-apple-system,Segoe UI,sans-serif;color:#123047;background:#f0f7f7;color-scheme:light}
@@ -100,6 +100,15 @@
       </div>
       <p class="muted">Previews exist only in this browser tab's temporary memory. Closing/reloading clears them. This is not guaranteed secure memory zeroization. Avoid screenshots that expose ID numbers, address or face.</p>
     </section>
+    <section class="panel" id="localFacePanel">
+      <h2>Optional local AI face detection</h2>
+      <p class="muted">After all three captures, separately check whether a face detector can see the ID portrait and selfie. This does <strong>NOT</strong> compare faces, authenticate an ID, or validate liveness. Only the public face detection model/WASM files are downloaded; your photos stay in this browser.</p>
+      <label><input type="checkbox" id="qaConsent">I separately consent to LOCAL face detection of my own ID portrait and selfie (no upload).</label>
+      <div class="actions">
+        <button id="qaRun" type="button" class="secondary" disabled>Check ID portrait + selfie faces — research only</button>
+      </div>
+      <p id="qaResult" role="status" aria-live="polite" class="muted">Face diagnostic not run. NOT VERIFIED.</p>
+    </section>
   </div>
   <div class="footer">No signup required for this isolated test page. Real Resident verification, biometric matching and ID uploads remain disabled.</div>
 </main>
@@ -107,6 +116,10 @@
 (() => {
   "use strict";
   const HOST = "volunserve-expo-resident-full-staging.onrender.com";
+  // PUBLIC SDK/model files only. ID and selfie image data NEVER enter network.
+  const FACE_VISION = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.1.0/vision_bundle.mjs";
+  const FACE_WASM = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.1.0/wasm";
+  const FACE_MODEL = "https://storage.googleapis.com/mediapipe-models/face_detector/blaze_face_short_range/float16/1/blaze_face_short_range.tflite";
   const allowed = location.hostname === HOST ||
     location.hostname === "localhost" || location.hostname === "127.0.0.1";
   const $ = id => document.getElementById(id);
@@ -120,6 +133,8 @@
   let step = 0;
   let facing = "environment";
   let opening = false;
+  let qaBusy = false;
+  let qaGeneration = 0;
   const snapshots = [null, null, null]; // temporary blob: URLs, never persisted
   const titles = ["Step 1 — National ID front", "Step 2 — National ID back", "Step 3 — Live selfie"];
   const instructions = [
@@ -127,6 +142,11 @@
     "Turn the same ID around to show its back. Capture is still local and NOT VERIFIED.",
     "Show one face to your phone's front camera. This demo does NOT match your selfie to the ID or prove liveness."
   ];
+  const clearFaceQA = () => {
+    qaGeneration++;  // revoke permission to use any in-flight local result
+    $("qaResult").className = "muted";
+    $("qaResult").textContent = "Face diagnostic not run. NOT VERIFIED.";
+  };
   const note = (message, type = "muted") => {
     $("status").className = type;
     $("status").textContent = message;
@@ -162,6 +182,9 @@
     $("start").textContent = stream ? "Restart camera" : "Open camera";
     $("flip").disabled = !stream || opening;
     $("capture").disabled = !stream || step === 3 || opening;
+    $("qaRun").disabled = qaBusy || step !== 3 ||
+      !($("consent").checked && $("qaConsent").checked) ||
+      !snapshots[0] || !snapshots[2];
     $("guide").className = "guide" + (step === 2 ? " face" : "");
     $("guide").hidden = !stream || step === 3;
     $("cameraNote").textContent = step === 3 ? "All stages complete. No identity verification occurred." :
@@ -270,8 +293,70 @@
       update();
     }, "image/jpeg", 0.85);
   }
+  async function runFaceQA() {
+    if (qaBusy || step !== 3 || !$("consent").checked ||
+        !$("qaConsent").checked || !snapshots[0] || !snapshots[2])
+      return;
+    qaBusy = true;
+    const generation = ++qaGeneration;
+    $("qaResult").textContent = "Loading the public face detector onto this device; no images uploaded...";
+    $("qaResult").className = "muted";
+    update();
+    let detector = null;
+    try {
+      // Explicit opt-in only. Dynamic import retrieves MODEL CODE; no media.
+      const {FaceDetector, FilesetResolver} = await import(FACE_VISION);
+      if (generation !== qaGeneration) return;
+      const files = await FilesetResolver.forVisionTasks(FACE_WASM);
+      if (generation !== qaGeneration) return;
+      detector = await FaceDetector.createFromOptions(files, {
+        baseOptions: {modelAssetPath: FACE_MODEL, delegate: "CPU"},
+        runningMode: "IMAGE",
+        minDetectionConfidence: 0.45
+      });
+      if (generation !== qaGeneration) return;
+      const outcomes = [];
+      for (const index of [0, 2]) {
+        const image = new Image();
+        image.src = snapshots[index];
+        await image.decode();
+        if (generation !== qaGeneration) return;
+        const finding = detector.detect(image);
+        if (generation !== qaGeneration) return;
+        const n = Array.isArray(finding?.detections) ? finding.detections.length : 0;
+        const label = index === 0 ? "ID portrait" : "Selfie";
+        outcomes.push(n === 1 ? label + ": one face detected" :
+          n === 0 ? label + ": face not detected" :
+          label + ": multiple faces detected (" + Math.min(n, 10) + ")");
+        image.src = "";
+      }
+      if (generation === qaGeneration) {
+        $("qaResult").textContent = outcomes.join(" · ") +
+          ". Face presence only — NOT MATCHED, NOT VERIFIED, no liveness or ID authenticity test.";
+        $("qaResult").className = "success";
+      }
+    } catch {
+      if (generation === qaGeneration) {
+        $("qaResult").textContent =
+          "Face diagnostic unavailable on this browser/network. Try Chrome/Safari with internet. No identity decision.";
+        $("qaResult").className = "error";
+      }
+    } finally {
+      try {detector?.close();} catch {}
+      qaBusy = false;
+      update();
+    }
+  }
+
+  $("qaRun").addEventListener("click", () => {void runFaceQA();});
+  $("qaConsent").addEventListener("change", () => {
+    if (!$("qaConsent").checked) clearFaceQA();
+    update();
+  });
   $("consent").addEventListener("change", () => {
     if (!$("consent").checked) {
+      clearFaceQA();
+      $("qaConsent").checked = false;
       release();
       discard();
       step = 0;
@@ -283,6 +368,7 @@
   $("flip").addEventListener("click", () => {void flipCamera();});
   $("capture").addEventListener("click", capture);
   $("reset").addEventListener("click", () => {
+    clearFaceQA(); $("qaConsent").checked = false;
     release(); discard(); step = 0; note("All previews discarded. No account action."); update();
   });
   document.addEventListener("visibilitychange", () => {
@@ -290,7 +376,9 @@
       release(); note("Camera paused because the browser tab is hidden."); update();
     }
   });
-  window.addEventListener("pagehide", () => {release(); discard();});
+  window.addEventListener("pagehide", () => {
+    clearFaceQA(); release(); discard();
+  });
   update();
 })();
 </script>
