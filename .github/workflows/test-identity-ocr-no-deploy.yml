@@ -36,6 +36,9 @@ on:
       - "identity-ai/test_pad_webcam_trials_local.py"
       - "identity-ai/diagnose_pad_webcam_local.py"
       - "identity-ai/test_pad_webcam_diagnostics.py"
+      - "identity-ai/pad_frame_guidance_local.py"
+      - "identity-ai/pad_webcam_preview_tk_local.py"
+      - "identity-ai/test_pad_live_preview_local.py"
       - "identity-ai/PAD_WEBCAM_PILOT.md"
       - "identity-ai/PAD_REAL_DEVICE_DUAL_SCALE_QA.md"
       - "identity-ai/PAD_LOCAL_EVALUATION.md"
@@ -125,6 +128,8 @@ jobs:
           python -m unittest discover -s identity-ai -p 'test_pad_dual_scale_local_eval.py' -v
           python -m unittest discover -s identity-ai -p 'test_pad_webcam_trials_local.py' -v
           python -m unittest discover -s identity-ai -p 'test_pad_webcam_diagnostics.py' -v
+          python -m unittest discover -s identity-ai -p 'test_pad_live_preview_local.py' -v
+          python -m py_compile identity-ai/pad_frame_guidance_local.py identity-ai/pad_webcam_preview_tk_local.py
           python -m py_compile identity-ai/diagnose_pad_webcam_local.py
           python -m py_compile identity-ai/run_pad_webcam_trials_local.py
           python -m py_compile identity-ai/evaluate_pad_scales_local.py
