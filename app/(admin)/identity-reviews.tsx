@@ -8,6 +8,10 @@ import AdminReviewHero from "../../components/admin/AdminReviewHero";
 import DocumentScreeningSummary from "../../components/identity/DocumentScreeningSummary";
 import type { DocumentScreening } from "../../lib/identityVerification";
 import {
+  adminReviewDocumentEligible,
+  adminReviewStatusBucket,
+} from "../../lib/identityAdminReviewGate";
+import {
     ActivityIndicator,
     Alert,
     ScrollView,
@@ -92,26 +96,7 @@ function formatDate(value?: string) {
 }
 
 function reviewBucket(item: IdentityReview): ReviewFilter {
-  if (item.requiresManualReview === true && item.status === "pending") {
-    return "pending";
-  }
-
-  if (
-    item.identityVerified === true ||
-    item.status === "verified" ||
-    item.manualReviewDecision === "verified"
-  ) {
-    return "verified";
-  }
-
-  if (
-    item.status === "failed" ||
-    item.manualReviewDecision === "retry_required"
-  ) {
-    return "retry_required";
-  }
-
-  return "all";
+  return adminReviewStatusBucket(item);
 }
 
 export default function IdentityReviewsAdmin() {
@@ -263,6 +248,13 @@ export default function IdentityReviewsAdmin() {
     action: "verify" | "require_retry",
   ) => {
     if (!selected || !user || saving) return;
+    // Pending queue snapshots can turn stale while the Admin is reviewing.
+    // The server re-checks all eligibility fields inside its transaction.
+    if (reviewBucket(selected) !== "pending") {
+      Alert.alert("Review Changed",
+        "This submission is no longer pending. Refresh the queue before choosing a decision.");
+      return;
+    }
 
     if (action === "verify" && !validationMethod) {
       Alert.alert(
@@ -274,17 +266,10 @@ export default function IdentityReviewsAdmin() {
 
     if (action === "verify" && (
       !issuerReviewAttested || notes.trim().length < 10 ||
-      selected.documentScreening?.status !== "text_consistent_unverified" ||
-      selected.documentScreening?.profileBirthDateCheck === "possible_conflict" ||
-      selected.documentScreening?.passportMrzBirthDateCheck === "possible_conflict" ||
-      selected.documentScreening?.passportMrzCheck === "checksum_inconsistent_or_ocr_error" ||
-      selected.documentScreening?.passportMrzCheck === "multiple_candidates" ||
-      (selected.documentScreening?.declaredIdType !== "passport" &&
-       selected.documentScreening?.backSideScreened !== true) ||
-      selected.documentScreening?.imageQualityStatus === "low"
+      !adminReviewDocumentEligible(selected.documentScreening)
     )) {
       Alert.alert("Independent ID Verification Required",
-        "Review a legible supported ID, resolve passport MRZ and profile DOB conflicts, confirm both sides when applicable, independently check the issuer, and record at least 10 characters of review notes.");
+        "Verify is disabled for mismatched or unsupported ID types, missing or unclear front/back photo quality, unresolved OCR warnings, and profile date conflicts. Require a corrected scan and independently review the issuer before approval.");
       return;
     }
     if (action === "require_retry" && notes.trim().length < 5) {
@@ -722,15 +707,8 @@ function ReviewDetail({
 }) {
   const pending = reviewBucket(item) === "pending";
   const nationalId = item.documentScreening?.declaredIdType === "national_id";
-  const recognized = item.documentScreening?.status === "text_consistent_unverified";
-  const backComplete = item.documentScreening?.declaredIdType === "passport" ||
-    item.documentScreening?.backSideScreened === true;
-  const legible = item.documentScreening?.imageQualityStatus !== "low";
-  const unresolvedEvidence = item.documentScreening?.profileBirthDateCheck === "possible_conflict" ||
-    item.documentScreening?.passportMrzBirthDateCheck === "possible_conflict" ||
-    item.documentScreening?.passportMrzCheck === "checksum_inconsistent_or_ocr_error" ||
-    item.documentScreening?.passportMrzCheck === "multiple_candidates";
-  const canVerify = recognized && backComplete && legible && !unresolvedEvidence &&
+  const documentEligible = adminReviewDocumentEligible(item.documentScreening);
+  const canVerify = pending && documentEligible &&
     !!validationMethod && issuerReviewAttested && notes.trim().length >= 10 && !saving;
   const availableMethods = VALIDATION_METHODS.filter(method =>
     nationalId ? method.value === "psa_national_id_qr_check"
@@ -887,13 +865,14 @@ function ReviewDetail({
             textAlignVertical="top"
           />
 
-          {unresolvedEvidence ? (
+          {!documentEligible ? (
             <View style={styles.privacyNotice}>
               <Ionicons name="alert-circle-outline" size={19} color="#A13F2B" />
               <Text style={styles.noticeText}>
-                Verification is blocked: unresolved document or birth-date evidence.
-                Require corrected evidence and independent issuer review; do not
-                infer fraud from OCR alone.
+                Verify is blocked until both required ID images are adequately
+                screened, the selected ID matches recognized text, and all OCR
+                warnings or birth-date conflicts are resolved. Request a clearer
+                rescan or independent review; OCR alone does not prove fraud.
               </Text>
             </View>
           ) : null}
