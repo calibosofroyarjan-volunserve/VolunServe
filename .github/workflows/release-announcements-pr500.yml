@@ -35,7 +35,6 @@ jobs:
       - uses: actions/checkout@v4
         with:
           submodules: false
-          persist-credentials: false
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
@@ -62,7 +61,6 @@ jobs:
           ref: ${{ github.sha }}
           fetch-depth: 0
           submodules: false
-          persist-credentials: false
       - name: Checkout immutable PR 500 artifact derived from exact live site
         uses: actions/checkout@v4
         with:
@@ -70,7 +68,6 @@ jobs:
           ref: 5b7f769d3db8a906309f962930306a4c863a026c
           fetch-depth: 0
           submodules: false
-          persist-credentials: false
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
