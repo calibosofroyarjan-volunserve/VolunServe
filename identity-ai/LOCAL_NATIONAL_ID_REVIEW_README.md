@@ -1,21 +1,34 @@
-# Private local National ID + selfie experiment (staging only)
+# VolunServe camera-only National ID + selfie lab (STAGING / NO UPLOAD)
 
-This is **not** a government document authenticity service and does **not** grant Verified Resident. This is a user-owned, consented **local-only** proof-of-concept combining existing OCR/front-back screening with existing experimental MediaPipe landmark 1:1 comparison. No national issuer/PSA authentication is implemented. No biometric liveness or anti-spoofing validation is claimed.
+This desktop tool performs a **private in-memory experiment**, not a government-issuer authenticity check or final identity verification. It is independent of the live site, and it cannot change any Firebase user status.
 
-## Run on Windows
+## Run locally (Windows Python 3.11)
 
-Use Python 3.11 with `identity-ai/requirements.txt`, and install the separate Tesseract OCR executable. Run `py -3.11 identity-ai/local_national_id_selfie_review.py` from the repository root, or use `Start-VolunServe-Private-ID-Review.cmd` from the repo root. Select **your own** National ID FRONT and BACK photos, and a selfie file or a consented webcam capture. Click REVIEW LOCALLY.
+Use already installed Python 3.11 packages from `identity-ai/requirements.txt` and Tesseract OCR 5.x accessible on `PATH`. From the staging repo root:
 
-If the ID precheck is incomplete, it does **not** attempt face comparison. A green camera preview elsewhere indicates visible framing, not identity verification.
+```powershell
+$env:PATH = "C:\Program Files\Tesseract-OCR;$env:PATH"
+py -3.11 .\identity-ai\local_national_id_selfie_review.py
+```
 
-## Privacy / system boundaries
+Or double-click `Start-VolunServe-Private-ID-Review.cmd`. The old launcher filename is retained for compatibility; the app inside is now **CAMERA-ONLY**.
 
-- This standalone script never sends HTTP requests or calls Firebase, Render, Cloudinary or a user-role endpoint. No app-generated image, embedding, government ID number, OCR text, or result is persisted. Original operator-selected input files remain unchanged. The operating system file picker and camera stack may have their own audit or permissions behavior.
-- It executes OCR/screening in memory through existing `main.py` and `strict_document_screening.py`. A successful type-screen is **not** evidence of a genuine issued card.
-- It is separate from all production identity uploads. The staging backend's **HTTP 423 upload lock remains enabled**. The app never promotes a user to `verified`.
-- It does not compare stored profile name, birthday, address or barangay; does not check issuer validity; does not establish a live human is present. This is controlled local research and must never be used for a real account decision.
-- Experimental face similarity is uncalibrated. Any verified-account workflow requires independent government ID checks by an authorized Admin, documented consent, audited privacy controls and validated anti-spoofing.
+1. Read the consent statement and check it. Select webcam 0 (or 1 if Windows uses a different device).
+2. Press **START LIVE SCAN**. Keep the National ID physical **FRONT** inside the green/yellow guide, sharp and well lit. OCR tries periodically *locally*, not via a web API. It requires two successive readable front layout observations before capturing that frame in **memory only**.
+3. Without closing the camera, flip the same ID to the **BACK**. Two successive OCR frames showing independent back field labels are required. Identical front, school ID or unreadable reverse side does not advance.
+4. Remove the card; show exactly **one** face. An adequately framed, sharp face automatically triggers an in-memory selfie snapshot after stable video frames. Green only means a visible face, **not liveness or successful ID matching**.
+5. The existing `screen_government_id` OCR/front-back and `run_face_verification` experimental 1:1 comparison run locally. The resulting text shows only sanitized statuses, without raw OCR, photos, card numbers or saved face embeddings. Both ID authenticity and liveness remain **NOT validated**.
 
-## Tests
+No upload/gallery picker exists in the live camera screen. The app does not save photos to disk or upload to Firebase, Render, Cloudinary, GitHub or an identity backend. The staging HTTP 423 upload lock is unchanged. Stopping/closing discards incomplete captured frames; closing the app releases in-memory references.
 
-`cd identity-ai && python -m unittest test_local_national_id_selfie_review.py` uses entirely synthetic inputs and requires no real photos. This is *not* real-image, webcam, model performance or end-to-end validation. Never upload real ID/selfie files to GitHub, ChatGPT or CI.
+**Limits:** OCR heuristics can miss a genuine National ID in poor light or with an older webcam. Philippine National ID variants have different layouts; physical front/back heuristics are not independently validated across card variants. A computer screen or printed fake may still display readable text. This app deliberately makes **no authenticity or liveness claim** and never grants `verified`.
+
+## No-person synthetic tests
+
+```powershell
+cd "$HOME\VolunServe-Identity-Staging"
+py -3.11 -m unittest discover -s identity-ai -p test_live_camera_scan_policy.py -v
+py -3.11 -m unittest discover -s identity-ai -p test_local_national_id_selfie_review.py -v
+```
+
+These test pure OCR-side, quality, framing, and camera-only GUI contract logic using **fabricated text and bounding boxes**, not real ID images or user media. They cannot substitute for authorized physical camera/device verification or government ID validity checks.
