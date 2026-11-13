@@ -84,8 +84,16 @@ const tokens={};
 
 function createActualHandlers(app) {
   const silentConsole={error:()=>{},warn:()=>{},log:()=>{}};
+  // Node Firestore SDK requires a Promise from its OWN JS realm for
+  // transaction callbacks. Source routes run inside vm (different realm),
+  // so bridge their real callback promise to the host Promise. This does
+  // not mock any Firestore data, reads, writes or transaction decisions.
+  const transactionRealmBridge={
+    collection:(...args)=>db.collection(...args),
+    runTransaction:(callback)=>db.runTransaction(tx=>Promise.resolve(callback(tx))),
+  };
   const sandbox={
-    app,auth:firebaseAuth,db,FieldValue,
+    app,auth:firebaseAuth,db:transactionRealmBridge,FieldValue,
     isVerifiedFirebaseToken,isCompletedVolunServeProfile,
     classifyStagingFirestoreFailure:()=> "emulator_only",
     isOperationalAdminProfile,getProfileRole,isApprovedAccount,
