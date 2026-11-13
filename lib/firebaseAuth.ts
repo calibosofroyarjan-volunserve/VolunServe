@@ -308,13 +308,14 @@ export const getIdentityStatus = (
   if (!profile) {
     return "basic";
   }
-  if (
-    profile.identityVerified === true ||
-    profile.identityStatus === "verified"
-  ) {
+  // Only the approved Admin's server-owned boolean is authoritative.
+  // Legacy/stale status text alone must NEVER grant Verified Resident UI.
+  if (profile.identityVerified === true) {
     return "verified";
   }
-  return profile.identityStatus || "basic";
+  return profile.identityStatus === "verified"
+    ? "basic"
+    : (profile.identityStatus || "basic");
 };
 
 export const isIdentityVerified = (

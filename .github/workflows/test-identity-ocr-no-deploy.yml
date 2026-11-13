@@ -55,6 +55,15 @@ on:
       - "identity-ai/PAD_REAL_DEVICE_DUAL_SCALE_QA.md"
       - "identity-ai/PAD_LOCAL_EVALUATION.md"
       - "identity-ai/download_passive_pad_model.py"
+      - "identity-ai/download_pad_v1se_model.py"
+      - "identity-ai/pad_v1se_shadow.py"
+      - "identity-ai/test_pad_v1se_shadow.py"
+      - "identity-ai/evaluate_pad_ensemble_local.py"
+      - "identity-ai/test_pad_ensemble_local.py"
+      - "identity-ai/test_pad_ensemble_webcam_integration.py"
+      - "identity-ai/test_pad_four_x_framing_preflight.py"
+      - "identity-ai/test_easy_green_selfie_preview_local.py"
+      - "identity-ai/PAD_FOUR_MODEL_PRIVATE_EVALUATION.md"
       - "identity-ai/Dockerfile"
       - "identity-ai/test_ai_route_contract.py"
       - "identity-ai/test_staging_health_contract.py"
@@ -145,6 +154,11 @@ jobs:
         run: |
           python -m pip install --disable-pip-version-check numpy==1.26.4 opencv-contrib-python-headless==4.11.0.86
           python -m unittest discover -s identity-ai -p 'test_passive_pad_shadow.py' -v
+          python -m unittest discover -s identity-ai -p 'test_pad_v1se_shadow.py' -v
+          python -m unittest discover -s identity-ai -p 'test_pad_ensemble_local.py' -v
+          python -m unittest discover -s identity-ai -p 'test_pad_ensemble_webcam_integration.py' -v
+          python -m unittest discover -s identity-ai -p 'test_pad_four_x_framing_preflight.py' -v
+          python -m unittest discover -s identity-ai -p 'test_easy_green_selfie_preview_local.py' -v
           python -m unittest discover -s identity-ai -p 'test_pad_shadow_decision_isolation.py' -v
           python -m unittest discover -s identity-ai -p 'test_onnx_compatibility_synthetic.py' -v
           python -m unittest discover -s identity-ai -p 'test_yunet_shadow.py' -v
@@ -162,15 +176,17 @@ jobs:
           python -m py_compile identity-ai/pad_frame_guidance_local.py identity-ai/pad_webcam_preview_tk_local.py identity-ai/pad_camera_quality_local.py identity-ai/pad_camera_clarity_preview_local.py identity-ai/start_pad_laptop_gui.py identity-ai/pad_multisession_aggregate_local.py
           python -m py_compile identity-ai/diagnose_pad_webcam_local.py
           python -m py_compile identity-ai/run_pad_webcam_trials_local.py
-          python -m py_compile identity-ai/evaluate_pad_scales_local.py
-          python -m py_compile identity-ai/passive_pad_shadow.py identity-ai/download_passive_pad_model.py identity-ai/evaluate_passive_pad_local.py identity-ai/yunet_shadow.py identity-ai/download_yunet_model.py identity-ai/sface_shadow.py identity-ai/download_sface_model.py
+          python -m py_compile identity-ai/evaluate_pad_scales_local.py identity-ai/evaluate_pad_ensemble_local.py
+          python -m py_compile identity-ai/passive_pad_shadow.py identity-ai/download_passive_pad_model.py identity-ai/pad_v1se_shadow.py identity-ai/download_pad_v1se_model.py identity-ai/evaluate_passive_pad_local.py identity-ai/yunet_shadow.py identity-ai/download_yunet_model.py identity-ai/sface_shadow.py identity-ai/download_sface_model.py
       - name: Inspect actual pinned MiniFASNet ONNX graph and synthetic 0..255/0..1 responses (NO DEPLOY)
         env:
           PYTHONPATH: identity-ai
         run: |
           python -m pip install --disable-pip-version-check --no-cache-dir onnx==1.17.0
           python identity-ai/download_passive_pad_model.py
+          python identity-ai/download_pad_v1se_model.py
           python identity-ai/audit_minifasnet_onnx_synthetic.py
+          python -c "import sys; sys.path.insert(0,'identity-ai'); import pad_v1se_shadow as p; import os; os.environ['VOLUNSERVE_PAD_V1SE_SHADOW']='1'; state=p.readiness(); assert state['modelLoaded'] and not state['independentPadValidated'] and state['identityDecisionUse']=='none', state; print('PASS pinned secondary V1SE ONNX OpenCV smoke test; no identity approval')"
       - name: Validate Node identity gateway syntax and selected ID policy
         run: |
           node --check backend/server.js

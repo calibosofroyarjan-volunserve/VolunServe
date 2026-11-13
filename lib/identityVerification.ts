@@ -1,6 +1,8 @@
 import { auth } from "./firebase";
 import { identityEnvironmentTarget } from "./identityEnvironmentTarget";
 import { assertIdentityMediaSubmissionAllowed } from "./identityMediaAvailability";
+import { resolveIdentityPrecheckOutcome } from "./identityPrecheckContract";
+import { reconcileResidentIdentityStatus, reconcileResidentIdentityDecision } from "./identityResidentStatusContract";
 
 export type IdentityVerificationStatus =
   | "basic"
@@ -203,6 +205,9 @@ export async function precheckIdentityDocument(input: {
   if (input.idType !== "passport") {
     validateMedia(input.idBackDocument || undefined, "ID reverse scan");
   }
+  // Independent of screen navigation: no direct caller may build or send
+  // sensitive staging multipart data while the Node capability says paused.
+  await ensureStagingIdentityMediaTransferReady();
   const user = await getAuthenticatedUser();
   const token = await user.getIdToken(true);
   const body = new FormData();
@@ -229,15 +234,16 @@ export async function precheckIdentityDocument(input: {
       "Document screening is unavailable. No face-verification attempt was used."));
   }
   const screening = parseDocumentScreening(data?.documentScreening);
-  const outcome = data?.outcome === "pass" && screening?.status === "text_consistent_unverified"
-    && screening?.detectedIdType === input.idType
-    ? "pass"
-    : data?.outcome === "review" ? "review" : "retry";
+  const outcome = resolveIdentityPrecheckOutcome(
+    input.idType, data?.outcome, data?.documentScreening,
+  );
   return {
     outcome,
     detectedIdType: screening?.detectedIdType || null,
     documentScreening: screening,
-    message: getResponseMessage(data, "Retake the scanned government ID."),
+    message: outcome === "retry" && data?.outcome !== "retry"
+      ? "The ID precheck returned incomplete or conflicting evidence. Retake the ID; no selfie or account approval was granted."
+      : getResponseMessage(data, "Retake the scanned government ID."),
   };
 }
 
@@ -493,6 +499,22 @@ export async function checkIdentityEngineReady(): Promise<void> {
 }
 
 /**
+ * Guard the actual shared upload functions, not only their UI callers.
+ * Production behavior is preserved; staging always requires the current
+ * authenticated Node capability before we construct any FormData.
+ */
+async function ensureStagingIdentityMediaTransferReady(): Promise<void> {
+  const target = identityEnvironmentTarget({
+    runtimeEnv: process.env.EXPO_PUBLIC_VOLUNSERVE_ENV,
+    firebaseTarget: process.env.EXPO_PUBLIC_VOLUNSERVE_FIREBASE_TARGET,
+    projectId: auth.app.options.projectId,
+  });
+  if (target === "staging") {
+    await checkIdentityEngineReady();
+  }
+}
+
+/**
  * Sends the Resident's government ID image and live/selfie capture
  * directly to the VolunServe backend.
  *
@@ -526,6 +548,9 @@ export const submitIdentityVerification = async (
     "Live selfie",
   );
 
+  // Final submit is independently guarded against an expired or bypassed
+  // frontend camera preflight. No staging ID/selfie FormData while HTTP 423.
+  await ensureStagingIdentityMediaTransferReady();
   const user = await getAuthenticatedUser();
   const token = await user.getIdToken(true);
 
@@ -659,23 +684,18 @@ export const getIdentityVerificationStatus =
       );
     }
 
-    const identityStatus =
-      normalizeStatus(
-        body?.identityStatus,
-      );
+    const {identityStatus, identityVerified} = reconcileResidentIdentityStatus(
+      body?.identityStatus, body?.identityVerified,
+    );
 
     return {
       identityStatus,
-      identityVerified:
-        body?.identityVerified === true ||
-        identityStatus === "verified",
+      identityVerified,
       verificationId:
         body?.verificationId
           ? String(body.verificationId)
           : undefined,
-      decision: body?.decision
-        ? String(body.decision)
-        : undefined,
+      decision: reconcileResidentIdentityDecision(body?.decision, identityStatus),
       matchScore: optionalNumber(
         body?.matchScore,
       ),

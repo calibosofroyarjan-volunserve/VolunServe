@@ -19,7 +19,8 @@ ROOT = SCRIPT_DIR.parent
 DEPS = ("numpy==1.26.4", "opencv-contrib-python-headless==4.11.0.86")
 
 
-def pilot_args(*, camera=0, trials=1, consent=False, live_only=False):
+def pilot_args(*, camera=0, trials=1, consent=False, live_only=False,
+               four_hypothesis=False):
     """Build fixed, local-only CLI arguments. No arbitrary commands or URLs."""
     if not consent:
         raise ValueError("EXPLICIT_CONSENT_REQUIRED")
@@ -29,16 +30,20 @@ def pilot_args(*, camera=0, trials=1, consent=False, live_only=False):
         raise ValueError("INVALID_TRIAL_COUNT")
     if type(live_only) is not bool:
         raise ValueError("INVALID_LIVE_ONLY_FLAG")
+    if type(four_hypothesis) is not bool:
+        raise ValueError("INVALID_FOUR_HYPOTHESIS_FLAG")
     args = ["--consent-confirmed", "--preview",
             "--camera", str(camera),
             "--trials-per-class", str(trials),
             "--frames-per-trial", "3"]
     if live_only:
         args.append("--only-live")
+    if four_hypothesis:
+        args.append("--four-hypothesis")
     return args
 
 
-def models_present():
+def models_present(*, include_v1se=False):
     """Check locally pinned public weights; never inspect face media."""
     from download_passive_pad_model import (
         DESTINATION as pad_file, SHA256 as pad_hash,
@@ -48,10 +53,17 @@ def models_present():
         DESTINATION as yunet_file, SHA256 as yunet_hash,
         MAX_BYTES as yunet_limit,
     )
-    for path, digest, max_bytes, exact in (
+    expected = [
         (pad_file, pad_hash, pad_size, True),
         (yunet_file, yunet_hash, yunet_limit, False),
-    ):
+    ]
+    if include_v1se:
+        from download_pad_v1se_model import (
+            DESTINATION as second_file, SHA256 as second_hash,
+            MIN_BYTES as second_min, MAX_BYTES as second_max,
+        )
+        expected.append((second_file, second_hash, second_max, False))
+    for path, digest, max_bytes, exact in expected:
         try:
             if not path.is_file():
                 return False
@@ -67,13 +79,45 @@ def models_present():
     return True
 
 
+def yunet_present():
+    """Easy selfie framing uses YuNet ONLY; never require MiniFASNet/PAD."""
+    from download_yunet_model import (
+        DESTINATION as model_file, SHA256 as expected_sha,
+        MAX_BYTES as max_bytes,
+    )
+    try:
+        if not model_file.is_file():
+            return False
+        raw = model_file.read_bytes()
+        return (0 < len(raw) <= max_bytes and
+                hashlib.sha256(raw).hexdigest() == expected_sha)
+    except (OSError, ValueError):
+        return False
+
+
+def setup_selfie_preview(*, approved=False,
+                         runner=subprocess.check_call):
+    """Opt-in public packages and pinned face detector; NO PAD weights."""
+    if not approved:
+        raise PermissionError("SELFIE_FACE_PREVIEW_SETUP_NOT_APPROVED")
+    if not dependencies_present():
+        runner([sys.executable, "-m", "pip", "install",
+                "--disable-pip-version-check", *DEPS], cwd=str(ROOT))
+    if not yunet_present():
+        runner([sys.executable, str(SCRIPT_DIR / "download_yunet_model.py")],
+               cwd=str(ROOT))
+    if not dependencies_present() or not yunet_present():
+        raise RuntimeError("YuNet selfie preview setup incomplete.")
+
+
 def dependencies_present():
     return (importlib.util.find_spec("numpy") is not None and
             importlib.util.find_spec("cv2") is not None)
 
 
-def setup_required():
-    return not dependencies_present() or not models_present()
+def setup_required(*, include_v1se=False):
+    return not dependencies_present() or not models_present(
+        include_v1se=include_v1se)
 
 
 def install_camera_prerequisites(*, approved=False, runner=subprocess.check_call):
@@ -94,7 +138,8 @@ def run_camera_only(camera_index):
     return 0
 
 
-def install_prerequisites(*, approved=False, runner=subprocess.check_call):
+def install_prerequisites(*, approved=False, runner=subprocess.check_call,
+                          include_v1se=False):
     """No network/install action without a distinct affirmative setup click."""
     if not approved:
         raise PermissionError("LOCAL_SETUP_NOT_APPROVED")
@@ -107,12 +152,40 @@ def install_prerequisites(*, approved=False, runner=subprocess.check_call):
                cwd=str(ROOT))
         runner([sys.executable, str(SCRIPT_DIR / "download_yunet_model.py")],
                cwd=str(ROOT))
-    if not dependencies_present() or not models_present():
+    if include_v1se and not models_present(include_v1se=True):
+        # One additional public ONNX weight; checksum enforced in downloader.
+        runner([sys.executable, str(SCRIPT_DIR / "download_pad_v1se_model.py")],
+               cwd=str(ROOT))
+    if not dependencies_present() or not models_present(
+            include_v1se=include_v1se):
         raise RuntimeError("Pinned model or Python dependency setup incomplete.")
 
 
 def format_aggregate(report):
     """No people/photos/frames: summary is counts only, never PAD approval."""
+    if report.get("auditType") == "private_local_four_hypothesis_pad_exploratory":
+        risk = report.get("researchRiskCounts", {})
+        counts = report.get("trialCountsByPresentationType", {})
+        return "\n".join([
+            "PRIVATE V2 + V1SE FOUR-HYPOTHESIS PILOT — NOT ID VERIFICATION",
+            "These correlated pretrained models are NOT independently validated.",
+            *(f"{k.upper()}: {counts.get(k, 0)} presentation trial(s)"
+              for k in ("live", "print", "replay")),
+            "",
+            "CONSERVATIVE EXPERIMENTAL SAFETY WARNINGS:",
+            f"Physical PRINT/REPLAY with any model/scale called LIVE: "
+            f"{risk.get('printOrReplayAnyHypothesisObservedLive', 0)}/"
+            f"{risk.get('totalPrintAndReplay', 0)}",
+            f"Four-model apparent LIVE agreement on physical attacks: "
+            f"{risk.get('printOrReplayFourWayLive', 0)}",
+            f"Genuine presentations NOT four-way LIVE: "
+            f"{risk.get('genuineNotFourWayLive', 0)}/"
+            f"{risk.get('totalGenuine', 0)}",
+            "",
+            "A printed face accepted as LIVE by ANY model remains a safety flag.",
+            "DO NOT enable biometric approval; independent PAD study still required.",
+            "No images, videos, identification data or embeddings were saved.",
+        ])
     counts = report.get("trialCountsByPresentationType", {})
     disagreements = report.get("pairedTrialStatusDisagreements", {})
     scales = report.get("perScale", {})
@@ -186,6 +259,127 @@ def format_aggregate(report):
     return "\n".join(lines)
 
 
+def format_combined_detailed_counts(report):
+    """Only fixed-schema aggregate categories; no individual frame/face data."""
+    if (report.get("auditType") != "private_local_four_hypothesis_pad_exploratory"
+            or report.get("identityDecisionUse") != "none"
+            or report.get("independentPadValidated") is not False
+            or report.get("automaticApprovalAllowed") is not False):
+        raise ValueError("UNSAFE_OR_NOT_COMBINED_RESEARCH_REPORT")
+    by_model = report.get("perHypothesis")
+    if not isinstance(by_model, dict):
+        raise ValueError("MISSING_COMBINED_MODEL_COUNTS")
+    names = (
+        ("v2_raw_0_to_255", "V2 raw 0–255"),
+        ("v2_normalized_0_to_1", "V2 normalized 0–1"),
+        ("v1se_raw_0_to_255", "V1SE raw 0–255"),
+        ("v1se_normalized_0_to_1", "V1SE normalized 0–1"),
+    )
+    categories = ("live", "print", "replay")
+    lines = [
+        "PRIVATE PAD PILOT: FOUR-MODEL AGGREGATE COUNTS",
+        "UNVALIDATED MODEL OBSERVATIONS — NOT BIOMETRIC VERIFICATION",
+        "Each physical presentation is one trial, not one trial per frame.",
+        "",
+    ]
+    for mode, label in names:
+        rows = by_model.get(mode)
+        if not isinstance(rows, dict):
+            raise ValueError("MISSING_MODEL_COUNTS")
+        lines.append(label + ":")
+        for category in categories:
+            row = rows.get(category)
+            if not isinstance(row, dict):
+                raise ValueError("MISSING_PRESENTATION_COUNTS")
+            values = []
+            for key in ("trials", "observedLive", "observedAttack", "inconclusive"):
+                value = row.get(key)
+                if type(value) is not int or not 0 <= value <= 10:
+                    raise ValueError("INVALID_AGGREGATE_COUNT")
+                values.append(value)
+            if sum(values[1:]) != values[0]:
+                raise ValueError("INCONSISTENT_AGGREGATE_COUNTS")
+            lines.append(
+                f"  {category.upper()}: trials={values[0]}, "
+                f"model-LIVE={values[1]}, attack={values[2]}, "
+                f"inconclusive={values[3]}"
+            )
+        lines.append("")
+    lines.extend((
+        "A single PRINT/REPLAY classified LIVE remains a safety red flag.",
+        "No automatic Resident verification. Independent PAD study is required.",
+        "Only count data can be copied; no photos, videos, IDs or embeddings.",
+    ))
+    return "\n".join(lines)
+
+
+def show_copyable_combined_counts(summary, report, *, lighting, camera_type):
+    """Post-test window with clearly visible copyable counts, no auto-save.
+
+    Explicit clipboard action is the only local transfer; no media or cloud.
+    If the window cannot open, main() already printed all counts in terminal.
+    """
+    from tkinter import scrolledtext
+    import tkinter as tk
+
+    detailed = format_combined_detailed_counts(report)
+    root = tk.Tk()
+    root.title("VolunServe | Copyable FOUR-MODEL PAD research counts")
+    root.geometry("790x675")
+    root.minsize(650, 470)
+    root.configure(bg="#eef5f1")
+    root.lift()
+    header = tk.Label(
+        root, text="V2 + V1SE — PRIVATE AGGREGATE RESULTS",
+        bg="#eef5f1", fg="#0a503e", font=("Segoe UI", 14, "bold"))
+    header.pack(padx=16, pady=(14, 5), anchor="w")
+    tk.Label(
+        root,
+        text=("Four model/input combinations below. Counts are experimental. "
+              "No face image, government ID or video saved. "
+              "Use Copy counts to paste into a private text file."),
+        bg="#eef5f1", justify="left", wraplength=755,
+    ).pack(padx=16, pady=(0, 8), anchor="w")
+    display = scrolledtext.ScrolledText(
+        root, wrap="word", font=("Consolas", 10), height=29)
+    display.insert("1.0", summary + "\n\n" + detailed)
+    display.configure(state="disabled")
+    display.pack(fill="both", expand=True, padx=16, pady=(0, 8))
+    buttons = tk.Frame(root, bg="#eef5f1")
+    buttons.pack(fill="x", padx=16, pady=(0, 14))
+    copied = tk.StringVar(value="Nothing has been saved automatically.")
+    tk.Label(buttons, textvariable=copied, bg="#eef5f1").pack(side="left")
+    def copy_counts():
+        root.clipboard_clear()
+        root.clipboard_append(summary + "\n\n" + detailed)
+        root.update()
+        copied.set("Anonymous model counts copied. Paste in Notepad.")
+    def save_counts():
+        # Explicit user click only. No photos, embeddings, ID or video saved.
+        from tkinter import filedialog
+        target = filedialog.asksaveasfilename(
+            parent=root,
+            title="Save anonymous aggregate counts (NEW file outside Git)",
+            defaultextension=".json",
+            filetypes=[("Anonymous JSON counts", "*.json")],
+            initialfile="VolunServe-PAD-V2-V1SE-Counts.json",
+        )
+        if not target:
+            return
+        try:
+            research_export(report, lighting=lighting,
+                            camera_type=camera_type, path=target)
+            copied.set("Anonymous counts saved to your chosen NEW JSON file.")
+        except (OSError, ValueError):
+            copied.set("Not saved: choose a NEW JSON outside the project folder.")
+    tk.Button(buttons, text="Copy detailed counts",
+              command=copy_counts).pack(side="right", padx=(8, 0))
+    tk.Button(buttons, text="Save anonymous JSON",
+              command=save_counts).pack(side="right", padx=(8, 0))
+    tk.Button(buttons, text="Close", command=root.destroy).pack(side="right")
+    root.mainloop()
+
+
 def research_export(report, *, lighting, camera_type, path):
     """Explicitly opt-in to saving anonymous counters, never media or IDs.
 
@@ -198,6 +392,15 @@ def research_export(report, *, lighting, camera_type, path):
     result["researchSessionContext"] = {
         "lighting": lighting, "cameraType": camera_type,
     }
+    if result.get("auditType") == "private_local_four_hypothesis_pad_exploratory":
+        from evaluate_pad_ensemble_local import safe_output, write_exclusive
+        if (result.get("independentPadValidated") is not False or
+                result.get("identityDecisionUse") != "none" or
+                result.get("automaticApprovalAllowed") is not False or
+                not safe_output(Path(path), ROOT)):
+            raise ValueError("Unsafe research report or output destination.")
+        write_exclusive(Path(path), result)
+        return
     validate_report(result)
     write_aggregate_exclusive(Path(path), result)
 
@@ -209,19 +412,19 @@ def ask_user_settings():
     root = tk.Tk()
     root.title("VolunServe | Private Laptop Camera Validation")
     root.configure(bg="#f4f8fc")
-    root.geometry("640x680")
+    root.geometry("700x800")
     root.resizable(False, False)
-    choice = {"accepted": False, "camera": 0, "trials": 1, "mode": "camera_only",
+    choice = {"accepted": False, "camera": 0, "trials": 1, "mode": "id_selfie_preview",
               "lighting": "indoor_artificial", "cameraType": "laptop_built_in"}
     camera = tk.IntVar(value=0)
-    mode = tk.StringVar(value="camera_only")
+    mode = tk.StringVar(value="id_selfie_preview")
     lighting = tk.StringVar(value="indoor_artificial")
     camera_type = tk.StringVar(value="laptop_built_in")
     consent = tk.BooleanVar(value=False)
 
     box = tk.Frame(root, bg="#f4f8fc", padx=24, pady=19)
     box.pack(fill="both", expand=True)
-    tk.Label(box, text="VolunServe • Local PAD Pilot", bg="#f4f8fc",
+    tk.Label(box, text="VolunServe • Camera and Identity QA", bg="#f4f8fc",
              fg="#0f2f5a", font=("Segoe UI", 18, "bold")).pack(anchor="w")
     tk.Label(box, text=(
         "Works with the laptop webcam. A visible camera window opens with "
@@ -230,8 +433,9 @@ def ask_user_settings():
     ), bg="#f4f8fc", wraplength=570, justify="left",
         font=("Segoe UI", 10)).pack(anchor="w", pady=(10, 8))
     tk.Label(box, text=(
-        "This is experimental research, NOT validated liveness. No ID is "
-        "needed. No facial photo or recording is saved or uploaded."
+        "RECOMMENDED face preview: Green means ONE visible face only. "
+        "It does NOT read a National ID, match an ID photo or validate liveness. "
+        "All research modes remain separate. No images are saved or uploaded."
     ), bg="#e0f2fe", fg="#0c4a6e", padx=12, pady=10,
         wraplength=550, justify="left").pack(anchor="w", fill="x", pady=(4, 14))
     tk.Label(box, text="Camera number (normally 0)",
@@ -249,8 +453,11 @@ def ask_user_settings():
                   "phone_webcam", "not_recorded").pack(side="left")
     tk.Label(box, text="Session length", bg="#f4f8fc",
              font=("Segoe UI", 10, "bold")).pack(anchor="w", pady=(7, 0))
+    tk.Radiobutton(box, variable=mode, value="id_selfie_preview",
+                   text="RECOMMENDED: Easy GREEN face preview (no 4x, no PAD, no image saved)",
+                   bg="#f4f8fc").pack(anchor="w")
     tk.Radiobutton(box, variable=mode, value="camera_only",
-                   text="RECOMMENDED: Camera clarity only (NO AI models, no tests)",
+                   text="Camera clarity only (NO AI models, no tests)",
                    bg="#f4f8fc").pack(anchor="w")
     tk.Radiobutton(box, variable=mode, value="framing",
                    text="Face framing only (YuNet detection, NO captures)",
@@ -263,6 +470,12 @@ def ask_user_settings():
                    bg="#f4f8fc").pack(anchor="w")
     tk.Radiobutton(box, variable=mode, value="live_only",
                    text="LIVE-only diagnostic: 3 real-face captures (NO print/replay)",
+                   bg="#f4f8fc").pack(anchor="w")
+    tk.Radiobutton(box, variable=mode, value="combined_quick",
+                   text="NEW: V2 + V1SE pilot — 1 LIVE + 1 PRINT + 1 REPLAY",
+                   bg="#f4f8fc").pack(anchor="w")
+    tk.Radiobutton(box, variable=mode, value="combined_full",
+                   text="NEW: V2 + V1SE pilot — 3 each LIVE/PRINT/REPLAY",
                    bg="#f4f8fc").pack(anchor="w")
     tk.Checkbutton(box, variable=consent,
                    text="I consent. Any adult shown also consented.",
@@ -277,7 +490,7 @@ def ask_user_settings():
             status.configure(text="Explicit consent is required.", fg="#b91c1c")
             return
         choice.update(accepted=True, camera=camera.get(),
-                      trials=3 if mode.get() in ("full", "live_only") else 1,
+                      trials=3 if mode.get() in ("full", "live_only", "combined_full") else 1,
                       mode=mode.get(), lighting=lighting.get(),
                       cameraType=camera_type.get())
         root.destroy()
@@ -335,9 +548,43 @@ def main():
                 install_camera_prerequisites(approved=True)
             return run_camera_only(user["camera"])
 
+        if user.get("mode") == "id_selfie_preview":
+            # A GREEN face box means adequate basic framing ONLY. No PAD
+            # calibration, government-ID parsing or identity claim is made.
+            if not dependencies_present() or not yunet_present():
+                from tkinter import messagebox
+                if not messagebox.askyesno(
+                    "One-time selfie framing setup",
+                    "Install only the public Python webcam packages and "
+                    "checksum-pinned YuNet face detector? No MiniFASNet "
+                    "anti-spoofing models, photos or government IDs are used."
+                ):
+                    print("Optional YuNet setup declined. No camera accessed.")
+                    return 0
+                setup_selfie_preview(approved=True)
+            import cv2
+            from pad_camera_quality_local import request_supported_resolution
+            from pad_webcam_preview_tk_local import launch_webcam_preview
+            cam = cv2.VideoCapture(user["camera"])
+            try:
+                if not cam.isOpened():
+                    raise RuntimeError("Webcam unavailable. Check Windows camera permissions.")
+                request_supported_resolution(cam)
+                launch_webcam_preview(
+                    cam, trials_per_class=1, frames_per_trial=3,
+                    preview_only=True, id_selfie_preview=True,
+                )
+            finally:
+                cam.release()
+            print("Basic selfie GREEN face preview finished. No face matched "
+                  "against National ID; no PAD or identity approval.")
+            return 0
+
+        combined = user.get("mode") in ("combined_quick", "combined_full")
         args = pilot_args(camera=user["camera"], trials=user["trials"],
-                          consent=True, live_only=user.get("mode") == "live_only")
-        if setup_required():
+                          consent=True, live_only=user.get("mode") == "live_only",
+                          four_hypothesis=combined)
+        if setup_required(include_v1se=combined):
             from tkinter import messagebox
             # A separate setup approval, after camera consent, is necessary.
             approved = messagebox.askyesno(
@@ -350,7 +597,7 @@ def main():
                 print("Local setup declined. No camera or biometric data accessed.")
                 return 0
             print("Installing local Python packages / pinned models (no user media).")
-            install_prerequisites(approved=True)
+            install_prerequisites(approved=True, include_v1se=combined)
         # Import camera modules only AFTER explicit consent and local setup.
         if user.get("mode") == "framing":
             import cv2
@@ -361,8 +608,11 @@ def main():
                 if not camera.isOpened():
                     raise RuntimeError("No camera at that number. Try another camera or Windows privacy settings.")
                 request_supported_resolution(camera)
-                launch_webcam_preview(camera, trials_per_class=1,
-                                      frames_per_trial=3, preview_only=True)
+                launch_webcam_preview(
+                    camera, trials_per_class=1, frames_per_trial=3,
+                    preview_only=True,
+                    id_selfie_preview=False,
+                )
             finally:
                 camera.release()
             notify("Framing-only preview closed",
@@ -391,8 +641,30 @@ def main():
                 report.get("independentPadValidated") is not False):
             raise RuntimeError("Unexpected model validation claims; report withheld.")
         summary = format_aggregate(report)
-        print(summary)
-        notify("Local research result — NOT identity verification", summary)
+        print(summary, flush=True)
+        if combined:
+            # Previous GUI only printed SUMMARY and swallowed the actual JSON
+            # into an in-memory output list. Always print all four per-model
+            # aggregates to the terminal BEFORE showing any modal dialog.
+            # These are anonymous trial counts, never face media.
+            detailed = format_combined_detailed_counts(report)
+            print("\n" + detailed, flush=True)
+            try:
+                show_copyable_combined_counts(
+                    summary, report,
+                    lighting=user.get("lighting", "not_recorded"),
+                    camera_type=user.get("cameraType", "not_recorded"),
+                )
+            except (RuntimeError, OSError, ValueError):
+                # A broken/hidden Tk dialog must not erase the terminal output.
+                print("Copy window unavailable; detailed aggregate counts "
+                      "are printed above. No photos/IDs were saved.", flush=True)
+            # For combined reports the scrollable window offers Copy and Save
+            # without relying on a second hidden/stacked messagebox.
+            # The terminal also contains all anonymous per-model counts.
+            return 0
+        else:
+            notify("Local research result — NOT identity verification", summary)
 
         # No biometric data is written. Optional anonymous COUNT JSON is
         # saved only after a second explicit user opt-in and a local file choice.

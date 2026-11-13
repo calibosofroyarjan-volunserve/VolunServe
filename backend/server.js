@@ -1099,17 +1099,11 @@ function isVerifiedResidentProfile(
     isApprovedAccount(
       profile,
     ) &&
-    profile?.residentAccess ===
-      true &&
-    (
-      profile
-        ?.identityVerified ===
-        true ||
-      normalizeIdentityStatus(
-        profile
-          ?.identityStatus,
-      ) === "verified"
-    )
+    ["resident", "volunteer"].includes(getProfileRole(profile)) &&
+    profile?.residentAccess === true &&
+    // The Admin transaction owns this flag. A stale/forged status string
+    // can never authorize Request Assistance or Volunteer privileges.
+    profile?.identityVerified === true
   );
 }
 async function loadUserProfile(

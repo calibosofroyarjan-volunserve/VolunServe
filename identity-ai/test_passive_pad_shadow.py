@@ -12,9 +12,11 @@ class FakeNet:
     def __init__(self, values):
         self.values = values
         self.last_input = None
+        self.blobs = []
 
     def setInput(self, blob):
         self.last_input = blob
+        self.blobs.append(np.array(blob, copy=True))
 
     def forward(self):
         return np.array([self.values], dtype=np.float32)
@@ -101,7 +103,7 @@ class PassivePadShadowTests(unittest.TestCase):
         with patch.object(pad, "single_face_box", return_value=(0, 0, 120, 55)):
             self.assertIsNone(pad._face_crop(np.zeros((480, 640, 3), dtype=np.uint8)))
 
-    def test_bgr_normalization_stays_unmodified_pending_model_provenance(self):
+    def test_same_crop_has_raw_upstream_and_normalized_hypotheses(self):
         photo = np.zeros((480, 640, 3), dtype=np.uint8)
         photo[:, :, 0] = 10
         photo[:, :, 1] = 80
@@ -109,11 +111,60 @@ class PassivePadShadowTests(unittest.TestCase):
         with patch.object(pad, "single_face_box", return_value=(260, 180, 60, 60)):
             output = pad.assess_frame_shadow(photo)
         self.assertFalse(output["independentPadValidated"])
-        blob = self.net.last_input
-        self.assertEqual(blob.shape, (1, 3, 80, 80))
-        self.assertAlmostEqual(float(blob[0, 0, 20, 20]), 10 / 255, places=5)
-        self.assertAlmostEqual(float(blob[0, 1, 20, 20]), 80 / 255, places=5)
-        self.assertAlmostEqual(float(blob[0, 2, 20, 20]), 240 / 255, places=5)
+        self.assertEqual(output["identityDecisionUse"], "none")
+        self.assertTrue(output["scaleHypothesesAgree"])
+        self.assertEqual(len(self.net.blobs), 2)
+        raw, normalized = self.net.blobs
+        self.assertEqual(raw.shape, (1, 3, 80, 80))
+        np.testing.assert_allclose(raw, normalized * 255, atol=1e-5, rtol=1e-6)
+        self.assertAlmostEqual(float(raw[0, 0, 20, 20]), 10, places=5)
+        self.assertAlmostEqual(float(raw[0, 1, 20, 20]), 80, places=5)
+        self.assertAlmostEqual(float(raw[0, 2, 20, 20]), 240, places=5)
+
+    def test_conflicting_scale_labels_abstain_even_if_raw_calls_live(self):
+        class ScaleSensitiveModel:
+            def __init__(self):
+                self.blobs = []
+            def setInput(self, data):
+                self.current = np.asarray(data)
+                self.blobs.append(np.array(data, copy=True))
+            def forward(self):
+                if self.current.max() >= 2:
+                    return np.array([[0.0, 8.0, 0.0]], dtype=np.float32)
+                return np.array([[8.0, 0.0, 0.0]], dtype=np.float32)
+
+        model = ScaleSensitiveModel()
+        self.model.stop()
+        with patch.object(pad, "_load_net", return_value=model), \
+             patch.object(pad, "single_face_box", return_value=(165, 165, 70, 70)):
+            report = pad.assess_frame_shadow(self.image)
+        self.model.start()
+        self.assertEqual(report["status"], "inconclusive")
+        self.assertFalse(report["scaleHypothesesAgree"])
+        self.assertFalse(report["independentPadValidated"])
+        self.assertEqual(report["identityDecisionUse"], "none")
+        self.assertEqual(len(model.blobs), 2)
+
+    def test_invalid_secondary_model_output_cannot_inherit_raw_live(self):
+        class InvalidSecondPass:
+            def setInput(self, blob):
+                self.max_value = np.asarray(blob).max()
+            def forward(self):
+                return (np.array([[0.0, 7.0, 0.0]], dtype=np.float32)
+                        if self.max_value >= 2 else
+                        np.array([[float("nan"), 0.0, 0.0]], dtype=np.float32))
+        crop = np.full((80, 80, 3), 128, dtype=np.uint8)
+        self.assertEqual(pad._two_scale_shadow(crop, InvalidSecondPass()),
+                         ("inconclusive", False))
+
+    def test_invalid_crop_avoids_any_model_calls(self):
+        with patch.object(self.net, "setInput",
+                          side_effect=AssertionError("invalid crop reached model")):
+            self.assertEqual(pad._two_scale_shadow(None, self.net),
+                             ("inconclusive", False))
+            self.assertEqual(pad._two_scale_shadow(
+                np.zeros((80, 80, 3), dtype=np.float32), self.net),
+                ("inconclusive", False))
 
     def test_readiness_does_not_claim_label_or_input_scale_validated(self):
         report = pad.readiness()

@@ -2,6 +2,16 @@
 
 VolunServe integrates pretrained third-party components. The VolunServe product user interface may use its own design and branding: these models do not require a third-party logo or visual watermark. **Do not remove or falsify model provenance, copyright notices, or license conditions.** Academic documentation should describe which models are pretrained and what was built specifically for VolunServe.
 
+## Additional V1SE PAD research model (staging only)
+
+- **MiniFASNetV1SE, 4.0×80×80** (different crop/context than the V2 2.7×80×80).
+- Original architecture and weights: [MinivisionAI Silent-Face-Anti-Spoofing](https://github.com/minivision-ai/Silent-Face-Anti-Spoofing), Apache-2.0.
+- ONNX release/packaging: [yakhyo/face-anti-spoofing](https://github.com/yakhyo/face-anti-spoofing/releases/tag/weights), with its own repository license notice.
+- SHA-256 pin: `ebab7f90c7833fbccd46d3a555410e78d969db5438e169b6524be444862b3676`. The build refuses any downloaded file with mismatched hash or unexpected byte size.
+- Inference: one ephemeral YuNet-detected 4.0× face crop, upstream raw 0–255 and converted-card 0–1 hypotheses; contradictory labels abstain.
+- **Correlated evidence**: V1SE and V2 share the original family, training lineage and known domain limitations. Even if both say "live", that is still an **unvalidated model agreement**, not a fresh challenge, trusted liveness assertion, independent lab evaluation, or identity grant.
+- No live ID/selfie uploads are enabled, no images/embeddings/raw scores persist, and Admin review remains authoritative.
+
 ## 1. MiniFASNet-V2, anti-spoofing shadow model
 
 - Upstream: MinivisionAI, [Silent-Face-Anti-Spoofing](https://github.com/minivision-ai/Silent-Face-Anti-Spoofing)
