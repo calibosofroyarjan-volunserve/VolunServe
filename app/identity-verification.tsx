@@ -908,8 +908,9 @@ export default function IdentityVerification() {
               styles.failedNoticeText
             }
           >
-            Your previous verification needs another attempt. Use a
-            clear government ID photo and face scan with good lighting.
+            {statusResult?.decision === "rejected"
+              ? "Your previous identity submission was rejected by Admin. You are not Verified. Review the rejection reason before submitting new evidence."
+              : "Your previous verification needs another attempt. Use a clear government ID photo and face scan with good lighting."}
           </Text>
         </View>
       ) : null}
