@@ -1376,7 +1376,9 @@ export default function IdentityVerificationWeb() {
     return (
       <StatusScreen
         icon="alert-circle-outline"
-        title="Verification Attempt Failed"
+        title={statusResult?.decision === "rejected"
+          ? "Identity Submission Rejected"
+          : "Verification Attempt Failed"}
         message={
           localMessage ||
           statusResult?.message ||
@@ -1384,10 +1386,14 @@ export default function IdentityVerificationWeb() {
         }
         background={COLORS.dangerBg}
         color={COLORS.danger}
-        badge="Failed · Retry Allowed"
+        badge={statusResult?.decision === "rejected"
+          ? "Rejected · Not Verified"
+          : "Failed · Retry Allowed"}
         idPreviewUri={submittedIdPreviewUri}
         idPreviewLabel={selectedIdLabel}
-        primaryLabel="Try Verification Again"
+        primaryLabel={statusResult?.decision === "rejected"
+          ? "Submit New Application"
+          : "Try Verification Again"}
         primaryAction={() => {
           stopCamera();
           if (selfie?.uri?.startsWith("blob:")) {

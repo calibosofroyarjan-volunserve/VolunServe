@@ -138,6 +138,12 @@ test("Admin queue never treats stale AI/review text as a Verified Resident",()=>
   status:"failed",manualReviewDecision:"retry_required",requiresManualReview:false,targetEligible:true
  }),"retry_required");
  assert.equal(adminReviewStatusBucket({
+  status:"failed",manualReviewDecision:"rejected",requiresManualReview:false,targetEligible:true
+ }),"rejected");
+ assert.equal(adminReviewStatusBucket({
+  status:"pending",manualReviewDecision:"rejected",requiresManualReview:true,targetEligible:true
+ }),"all");
+ assert.equal(adminReviewStatusBucket({
   status:"pending",requiresManualReview:true,targetEligible:true
  }),"pending");
 });
@@ -153,6 +159,11 @@ test("real Expo Admin component uses the pure gate in button AND submission path
  assert.match(admin,/reviewBucket\(selected\) !== "pending"/);
  assert.match(admin,/selected\.targetEligible !== true/);
  assert.match(admin,/Require Retry/);
+ assert.match(admin,/Reject Submission/);
+ assert.match(admin,/onReject=\{\(\) => void saveDecision\("reject"\)\}/);
+ assert.match(admin,/reviewBucket\(selected\) !== "pending"/);
+ assert.match(admin,/Inconclusive — preliminary similarity only \(not calibrated\)/);
+ assert.match(admin,/Not validated — independent verification required/);
 });
 
 // Runtime destination assertions operate on the REAL shared Expo helper,
@@ -244,4 +255,22 @@ test("transactional Node permission gate and disabled media uploads remain autho
  assert.match(adminRoute,/db\.runTransaction/);
  assert.match(adminRoute,/identityVerified:\s*true/);
  assert.match(adminRoute,/adminActivityLogs/);
+ assert.match(adminRoute,/action !== "reject"/);
+ assert.match(adminRoute,/Resident Identity Submission Rejected/);
+ assert.match(adminRoute,/identityVerified:\s*false/);
+});
+
+test("Resident web/native renders Admin rejection distinctly without a Verified grant",()=>{
+ const web=fs.readFileSync("app/identity-verification.web.tsx","utf8");
+ const native=fs.readFileSync("app/identity-verification.tsx","utf8");
+ assert(web.includes('statusResult?.decision === "rejected"'));
+ assert(web.includes("Identity Submission Rejected"));
+ assert(web.includes("Rejected · Not Verified"));
+ assert(web.includes("Submit New Application"));
+ assert(native.includes('statusResult?.decision === "rejected"'));
+ assert(native.includes("You are not Verified"));
+ const server=fs.readFileSync("backend/server.js","utf8");
+ assert(server.includes('manualReviewDecision:\n            action === "verify"'));
+ assert(server.includes('action === "reject"'));
+ assert(server.includes('identityStatus: "failed"'));
 });
