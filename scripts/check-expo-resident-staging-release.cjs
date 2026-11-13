@@ -114,8 +114,10 @@ if(process.env.RENDER==="true" &&
     process.env.RENDER_GIT_REPO_SLUG!=="calibosofroyarjan-volunserve/VolunServe")
    throw Error("STAGING BLOCKED: SFace static build is outside isolated staging target");
  const {stagePinnedSFaceStaticAssets}=require("./stage-staging-sface-model.cjs");
- stagePinnedSFaceStaticAssets().catch(()=>{
-   console.error("STAGING BLOCKED: pinned public SFace model/license unavailable; previous deployment retained");
+ stagePinnedSFaceStaticAssets().catch((error)=>{
+   const stage=error?.message==="pinned_sface_download_or_integrity_failed" ? "model_download" :
+     error?.message==="official_sface_license_unavailable" ? "license_download" : "asset_write";
+   console.error("STAGING BLOCKED: public pinned SFace asset stage "+stage+" failed; previous deployment retained");
    process.exitCode=1;
  });
 }
