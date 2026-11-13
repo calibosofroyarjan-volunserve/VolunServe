@@ -1,6 +1,10 @@
 """Synthetic National ID camera OCR/side and live face framing tests (NO photos)."""
 import unittest
-from live_camera_scan_policy import evaluate_camera_side as assess, evaluate_selfie_face
+from pathlib import Path
+from live_camera_scan_policy import (
+    evaluate_camera_side as assess, evaluate_selfie_face,
+    advance_selfie_stability,
+)
 
 
 FRONT = (
@@ -72,6 +76,80 @@ class CameraSelfiePolicy(unittest.TestCase):
             with self.subTest(blur=blur, brightness=brightness):
                 self.assertFalse(evaluate_selfie_face(
                     faces, (480, 640, 3), blur, brightness)["ready"])
+
+
+
+
+class CameraSelfieStabilityPolicy(unittest.TestCase):
+    SHAPE = (480, 640, 3)
+    BOX = (180, 105, 170, 175)
+
+    def test_ten_continuous_well_framed_frames_reach_local_capture_count(self):
+        previous, count = None, 0
+        for i in range(10):
+            moving = (180 + i % 3, 105 + i % 2, 170, 175)
+            count, previous, steady = advance_selfie_stability(
+                previous, count, moving, self.SHAPE, ready=True)
+            self.assertTrue(steady)
+            self.assertEqual(count, i + 1)
+        self.assertEqual(count, 10)
+
+    def test_small_normal_camera_motion_is_tolerated(self):
+        count, box, steady = advance_selfie_stability(
+            self.BOX, 6, (197, 117, 181, 166),
+            self.SHAPE, ready=True)
+        self.assertEqual(count, 7)
+        self.assertTrue(steady)
+        self.assertEqual(box, (197.0, 117.0, 181.0, 166.0))
+
+    def test_large_jump_or_scale_change_restarts_count(self):
+        for moved in (
+            (355, 105, 170, 175),
+            (180, 230, 170, 175),
+            (170, 80, 275, 275),
+            (188, 110, 94, 94),
+        ):
+            with self.subTest(moved=moved):
+                count, box, steady = advance_selfie_stability(
+                    self.BOX, 9, moved, self.SHAPE, ready=True)
+                self.assertEqual(count, 1)
+                self.assertFalse(steady)
+                self.assertIsNotNone(box)
+
+    def test_missing_ambiguous_bad_frames_reset_count(self):
+        for candidate, ready in (
+            (None, False),
+            (self.BOX, False),
+            ((), True),
+            ((float("nan"), 10, 100, 100), True),
+            ((-1, 50, 160, 170), True),
+            ((520, 80, 200, 170), True),
+            ((200, 90, 0, 140), True),
+        ):
+            with self.subTest(box=str(candidate), ready=ready):
+                self.assertEqual(
+                    advance_selfie_stability(
+                        self.BOX, 9, candidate, self.SHAPE,
+                        ready=ready), (0, None, False))
+
+    def test_resuming_after_failure_starts_at_one_not_nine(self):
+        count, box, _ = advance_selfie_stability(
+            self.BOX, 9, None, self.SHAPE, ready=False)
+        self.assertEqual((count, box), (0, None))
+        count, box, steady = advance_selfie_stability(
+            box, count, self.BOX, self.SHAPE, ready=True)
+        self.assertEqual(count, 1)
+        self.assertTrue(steady)
+
+    def test_actual_scanner_uses_stability_and_resets_dropped_frames(self):
+        source = Path("identity-ai/local_national_id_selfie_review.py").read_text(
+            encoding="utf-8")
+        self.assertIn("advance_selfie_stability(", source)
+        self.assertIn('state["face_box"] = None', source)
+        self.assertIn('state["face_frames"] = 0', source)
+        self.assertIn('Camera frame interrupted.', source)
+        self.assertIn('if state["face_frames"] >= 10:', source)
+        self.assertNotIn("cv2.imwrite", source)
 
 
 if __name__ == "__main__":

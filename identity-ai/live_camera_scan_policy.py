@@ -72,6 +72,49 @@ def evaluate_camera_side(stage, ocr_text, blur_variance, brightness):
             "guidance": "Show BACK: keep the reverse-side details readable."}
 
 
+
+def advance_selfie_stability(previous_box, previous_count, current_box,
+                             image_shape, *, ready):
+    """Count consecutive well-framed, spatially consistent selfie frames.
+
+    A stable face box only authorizes an ephemeral camera snapshot. It cannot
+    establish that the same person remains present, identity match or liveness.
+    No frames, face embeddings, or personal attributes are retained here.
+    Returns (count, latest_box, spatially_consistent).
+    """
+    if ready is not True or current_box is None:
+        return 0, None, False
+    try:
+        height, width = (int(image_shape[0]), int(image_shape[1]))
+        box = tuple(float(v) for v in current_box)
+        if (len(box) != 4 or not 120 <= height <= 3000 or
+                not 120 <= width <= 3000 or
+                not all(math.isfinite(v) for v in box)):
+            return 0, None, False
+        x, y, w, h = box
+        if (w < 90 or h < 90 or x < 0 or y < 0 or
+                x + w > width or y + h > height):
+            return 0, None, False
+        if not isinstance(previous_count, int) or isinstance(previous_count, bool):
+            previous_count = 0
+        if previous_count <= 0 or previous_box is None:
+            return 1, box, True
+        px, py, pw, ph = (float(v) for v in previous_box)
+        if not all(math.isfinite(v) for v in (px, py, pw, ph)) or pw <= 0 or ph <= 0:
+            return 1, box, False
+        # Keep tolerance permissive for ordinary webcam movement, but reset
+        # after abrupt spatial jumps or large face-scale changes.
+        dx = abs((x + w / 2) - (px + pw / 2)) / width
+        dy = abs((y + h / 2) - (py + ph / 2)) / height
+        scale_w = max(w / pw, pw / w)
+        scale_h = max(h / ph, ph / h)
+        steady = (dx <= 0.12 and dy <= 0.12 and
+                  scale_w <= 1.4 and scale_h <= 1.4)
+        return (min(previous_count + 1, 10) if steady else 1), box, steady
+    except (TypeError, ValueError, IndexError, OverflowError, ZeroDivisionError):
+        return 0, None, False
+
+
 def evaluate_selfie_face(faces, image_shape, blur_variance, brightness):
     """Basic camera one-face framing; NOT liveness or face identity."""
     try:

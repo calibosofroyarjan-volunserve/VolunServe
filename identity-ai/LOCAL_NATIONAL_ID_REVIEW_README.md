@@ -36,3 +36,9 @@ These test pure OCR-side, quality, framing, and camera-only GUI contract logic u
 ## Exact duplicate camera-frame protection
 
 The local scanner now fails closed **before OCR or experimental face comparison** if the ID front, ID back, or selfie reuse exactly the same encoded camera bytes. It also refuses missing and oversized frames. This mirrors the existing Node identity endpoint's basic exact-image-reuse safeguard, but **does not detect a re-encoded photograph, screen replay, photo-of-photo, deepfake, or synthetic face**. It must not be described as validated liveness or government ID authentication. No image hashes, image data, or face embeddings are persisted by this check.
+
+## Selfie camera continuity (synthetic-tested)
+
+The local webcam scanner now counts its ten consecutive acceptable selfie frames only while the one-face bounding box moves smoothly. Mild ordinary movement is allowed; a large jump, major size change, no face, unacceptable framing, or dropped camera frame resets the capture countdown before a new automatic selfie snapshot. A green frame means the *camera framing* looks usable, **not that a real person or matching ID holder has been verified**.
+
+This check neither tracks identity across frames nor detects replayed videos, printed photos, masks or synthetic faces. It does not change YuNet/SFace similarity calibration or enable automatic Verified Resident approval. Actual camera quality and behavior across devices, lighting and accessibility needs still require consented human-in-the-loop testing.
