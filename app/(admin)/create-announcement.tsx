@@ -126,6 +126,8 @@ export default function CreateAnnouncement() {
 
     try {
       setSubmitting(true);
+      // Refresh verified Admin claims without overriding profile/role authorization.
+      await user.getIdToken(true);
 
       await addDoc(
         collection(db, "announcements"),
@@ -160,14 +162,16 @@ export default function CreateAnnouncement() {
       setTitle("");
       setMessage("");
 
-      setFormNotice({ kind: "success", text: "Announcement published successfully. Residents and volunteers can now see it in Community Updates and Notifications." });
+      setFormNotice({ kind: "success", text: "Announcement published successfully for residents and volunteers." });
     } catch (error: any) {
       console.error(
         "Create announcement error:",
         error
       );
 
-      setFormNotice({ kind: "error", text: error?.code === "permission-denied" ? "Publishing was blocked by account permissions. Please contact an administrator." : (error?.message || "The announcement could not be published. Please try again.") });
+      setFormNotice({ kind: "error", text: error?.code === "permission-denied" || error?.code === "firestore/permission-denied"
+        ? "Publishing blocked by Firestore permissions. Confirm your approved Admin profile, verified email, and deployed announcement rules. Nothing was published."
+        : (error?.message || "The announcement could not be published. Please try again.") });
     } finally {
       setSubmitting(false);
     }
