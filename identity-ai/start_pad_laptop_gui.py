@@ -282,7 +282,7 @@ def format_combined_detailed_counts(report):
     return "\n".join(lines)
 
 
-def show_copyable_combined_counts(summary, report):
+def show_copyable_combined_counts(summary, report, *, lighting, camera_type):
     """Post-test window with clearly visible copyable counts, no auto-save.
 
     Explicit clipboard action is the only local transfer; no media or cloud.
@@ -323,8 +323,28 @@ def show_copyable_combined_counts(summary, report):
         root.clipboard_append(summary + "\n\n" + detailed)
         root.update()
         copied.set("Anonymous model counts copied. Paste in Notepad.")
+    def save_counts():
+        # Explicit user click only. No photos, embeddings, ID or video saved.
+        from tkinter import filedialog
+        target = filedialog.asksaveasfilename(
+            parent=root,
+            title="Save anonymous aggregate counts (NEW file outside Git)",
+            defaultextension=".json",
+            filetypes=[("Anonymous JSON counts", "*.json")],
+            initialfile="VolunServe-PAD-V2-V1SE-Counts.json",
+        )
+        if not target:
+            return
+        try:
+            research_export(report, lighting=lighting,
+                            camera_type=camera_type, path=target)
+            copied.set("Anonymous counts saved to your chosen NEW JSON file.")
+        except (OSError, ValueError):
+            copied.set("Not saved: choose a NEW JSON outside the project folder.")
     tk.Button(buttons, text="Copy detailed counts",
               command=copy_counts).pack(side="right", padx=(8, 0))
+    tk.Button(buttons, text="Save anonymous JSON",
+              command=save_counts).pack(side="right", padx=(8, 0))
     tk.Button(buttons, text="Close", command=root.destroy).pack(side="right")
     root.mainloop()
 
@@ -558,13 +578,21 @@ def main():
             # aggregates to the terminal BEFORE showing any modal dialog.
             # These are anonymous trial counts, never face media.
             detailed = format_combined_detailed_counts(report)
-            print("\\n" + detailed, flush=True)
+            print("\n" + detailed, flush=True)
             try:
-                show_copyable_combined_counts(summary, report)
+                show_copyable_combined_counts(
+                    summary, report,
+                    lighting=user.get("lighting", "not_recorded"),
+                    camera_type=user.get("cameraType", "not_recorded"),
+                )
             except (RuntimeError, OSError, ValueError):
                 # A broken/hidden Tk dialog must not erase the terminal output.
                 print("Copy window unavailable; detailed aggregate counts "
                       "are printed above. No photos/IDs were saved.", flush=True)
+            # For combined reports the scrollable window offers Copy and Save
+            # without relying on a second hidden/stacked messagebox.
+            # The terminal also contains all anonymous per-model counts.
+            return 0
         else:
             notify("Local research result — NOT identity verification", summary)
 
