@@ -12,7 +12,7 @@ import start_pad_laptop_gui as launcher
 
 class CameraOnlyTests(unittest.TestCase):
     def test_camera_only_shows_native_size_and_never_upscales(self):
-        low = np.full((480, 640, 3), 86, dtype=np.uint8)
+        low = np.full((360, 640, 3), 86, dtype=np.uint8)
         self.assertIs(clarity.fit_camera_preview(low), low)
         frame = np.random.default_rng(7).integers(
             0, 256, size=(720, 1280, 3), dtype=np.uint8)
