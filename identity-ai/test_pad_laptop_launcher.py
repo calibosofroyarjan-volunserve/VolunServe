@@ -39,6 +39,16 @@ class LaptopLauncherTests(TestCase):
         self.assertNotIn("--url", args)
         self.assertNotIn("--identity-verify", args)
 
+    def test_only_live_args_are_explicitly_opted_in(self):
+        args = gui.pilot_args(camera=0, trials=3, consent=True, live_only=True)
+        self.assertEqual(args[-1], "--only-live")
+        self.assertEqual(args.count("--only-live"), 1)
+        self.assertNotIn("--aggregate-json", args)
+        self.assertNotIn("--only-live",
+                         gui.pilot_args(camera=0, trials=3, consent=True))
+        with self.assertRaisesRegex(ValueError, "INVALID_LIVE_ONLY_FLAG"):
+            gui.pilot_args(consent=True, live_only="true")
+
     def test_setup_fails_closed_without_separate_permission(self):
         calls = []
         with self.assertRaises(PermissionError):
