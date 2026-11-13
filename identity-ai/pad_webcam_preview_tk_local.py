@@ -11,6 +11,7 @@ and all PAD/class-map limitations. One physical presentation = one trial.
 """
 import base64
 import time
+from functools import partial
 
 import cv2
 import numpy as np
@@ -148,7 +149,7 @@ class GuidedPadWebcamUI:
     def __init__(self, camera, *, trials_per_class=3, frames_per_trial=3,
                  preview_only=False, enabled_categories=CATEGORIES,
                  tick_ms=105, clock=time.monotonic,
-                 framing=analyze_framing, assessor=assess_ready_frame,
+                 framing=None, assessor=assess_ready_frame,
                  four_hypothesis=False):
         if not 1 <= frames_per_trial <= MAX_FRAMES_PER_TRIAL:
             raise ValueError("INVALID_FRAME_COUNT")
@@ -161,7 +162,12 @@ class GuidedPadWebcamUI:
         self.frames_per_trial = frames_per_trial
         self.tick_ms = tick_ms
         self.clock = clock
-        self.framing = framing
+        # Combined study requires V1SE's full 4x crop, not just the old
+        # V2-only 2.7x preview. Do not accept trial with missing V1SE context.
+        # Retain injectable custom framing function for no-camera tests.
+        self.framing = (framing if framing is not None else
+                        partial(analyze_framing,
+                                context_scale=4.0 if self.four_hypothesis else 2.7))
         self.assessor = assessor
         self.cancelled = True
         self.camera_failed = False
@@ -304,7 +310,8 @@ class GuidedPadWebcamUI:
             state="normal",
             text=self.PRESENTATION_CONFIRMATIONS[kind])
         self.step_label.configure(
-            text=f"{self.PROMPTS[kind]}   Trial {number}/{self.progress.trials_per_class}")
+            text=(f"{self.PROMPTS[kind]}   Trial {number}/{self.progress.trials_per_class}"
+                  + ("   FULL 4x V1SE CROP REQUIRED" if self.four_hypothesis else "")))
         completed = sum(len(values) for values in self.progress.trials.values())
         target = self.progress.trials_per_class * len(self.progress.enabled_categories)
         self.progress_label.configure(

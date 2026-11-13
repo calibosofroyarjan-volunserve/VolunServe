@@ -61,6 +61,7 @@ on:
       - "identity-ai/evaluate_pad_ensemble_local.py"
       - "identity-ai/test_pad_ensemble_local.py"
       - "identity-ai/test_pad_ensemble_webcam_integration.py"
+      - "identity-ai/test_pad_four_x_framing_preflight.py"
       - "identity-ai/PAD_FOUR_MODEL_PRIVATE_EVALUATION.md"
       - "identity-ai/Dockerfile"
       - "identity-ai/test_ai_route_contract.py"
@@ -155,6 +156,7 @@ jobs:
           python -m unittest discover -s identity-ai -p 'test_pad_v1se_shadow.py' -v
           python -m unittest discover -s identity-ai -p 'test_pad_ensemble_local.py' -v
           python -m unittest discover -s identity-ai -p 'test_pad_ensemble_webcam_integration.py' -v
+          python -m unittest discover -s identity-ai -p 'test_pad_four_x_framing_preflight.py' -v
           python -m unittest discover -s identity-ai -p 'test_pad_shadow_decision_isolation.py' -v
           python -m unittest discover -s identity-ai -p 'test_onnx_compatibility_synthetic.py' -v
           python -m unittest discover -s identity-ai -p 'test_yunet_shadow.py' -v

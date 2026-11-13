@@ -26,6 +26,7 @@ import evaluate_pad_scales_local as scales
 import evaluate_passive_pad_local as base
 import passive_pad_shadow as v2
 import pad_v1se_shadow as v1
+from pad_frame_guidance_local import context_rect_for_face
 
 KINDS = ("live", "print", "replay")
 MODES = ("v2_raw_0_to_255", "v2_normalized_0_to_1",
@@ -41,15 +42,45 @@ UNDECIDED = ("inconclusive",) * 4
 ROOT = Path(__file__).resolve().parent.parent
 
 
-def assess_four_hypotheses(frame, *, v2_assessor=None, v1_crop=None, v1_net=None):
+def _crop_from_guided_box(frame, face_box, *, scale):
+    """Use the ONE face box approved in the visible QA frame for both nets.
+
+    The legacy two-model pilot independently ran YuNet again inside each crop
+    function. Those additional detections could differ from the displayed
+    box and each other, hiding a 4x out-of-frame failure as inconclusive.
+    """
+    if (not isinstance(frame, np.ndarray) or frame.dtype != np.uint8 or
+            frame.ndim != 3 or frame.shape[2] != 3):
+        return None
+    region = context_rect_for_face(face_box, frame.shape, scale=scale)
+    if region is None:
+        return None
+    x1, y1, x2, y2 = region
+    return cv2.resize(frame[y1:y2, x1:x2], (80, 80),
+                      interpolation=cv2.INTER_LINEAR)
+
+
+def assess_four_hypotheses(frame, *, v2_assessor=None, v1_crop=None,
+                           v1_net=None, face_box=None):
     """Same ORIGINAL camera frame; V2 2.7x and V1SE 4x crops, two scales each."""
     if (not isinstance(frame, np.ndarray) or frame.dtype != np.uint8 or
             frame.ndim != 3 or frame.shape[2] != 3 or
             not 120 <= frame.shape[0] <= 3000 or
             not 120 <= frame.shape[1] <= 3000):
         return UNDECIDED
-    evaluate_v2 = v2_assessor if v2_assessor is not None else scales.assess_paired_frame
-    first = evaluate_v2(frame)
+    # Offline prerecorded research has no preconfirmed preview box and keeps
+    # the existing cropper. In the live Tk preview, use the exact SAME box
+    # the operator sees (2.7x for V2; 4.0x for V1SE).
+    if v2_assessor is not None:
+        first = v2_assessor(frame)
+    elif face_box is not None:
+        first = scales.assess_paired_frame(
+            frame,
+            cropper=lambda image: _crop_from_guided_box(
+                image, face_box, scale=2.7),
+        )
+    else:
+        first = scales.assess_paired_frame(frame)
     if not (isinstance(first, tuple) and len(first) == 2 and
             all(x in PREDICTIONS for x in first)):
         first = UNDECIDED[:2]
@@ -57,7 +88,12 @@ def assess_four_hypotheses(frame, *, v2_assessor=None, v1_crop=None, v1_net=None
         net = v1_net if v1_net is not None else v1._load_net()
         if net is None:
             return tuple(first) + UNDECIDED[:2]
-        crop = v1_crop(frame) if v1_crop is not None else v1._face_crop_4x(frame)
+        if v1_crop is not None:
+            crop = v1_crop(frame)
+        elif face_box is not None:
+            crop = _crop_from_guided_box(frame, face_box, scale=4.0)
+        else:
+            crop = v1._face_crop_4x(frame)
         if (not isinstance(crop, np.ndarray) or crop.dtype != np.uint8 or
                 crop.shape != (80, 80, 3)):
             return tuple(first) + UNDECIDED[:2]

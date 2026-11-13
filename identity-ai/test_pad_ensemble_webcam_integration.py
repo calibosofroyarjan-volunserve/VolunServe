@@ -87,7 +87,8 @@ class CombinedWebcamTests(unittest.TestCase):
             self.assertIs(cam, camera)
             observed.update(kwargs)
             self.assertTrue(kwargs["four_hypothesis"])
-            guidance = type("Guidance", (), {"capture_ready": True})()
+            guidance = type("Guidance", (), {"capture_ready": True,
+                                            "face_rect": (520, 250, 100, 100)})()
             with patch.object(research, "assess_four_hypotheses",
                               return_value=(LIVE,) * 4):
                 results = kwargs["assessor"](np.zeros((720, 1280, 3), np.uint8),
