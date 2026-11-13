@@ -4,6 +4,8 @@ on:
   pull_request:
     paths:
       - "Start-VolunServe-Private-ID-Review.cmd"
+      - "identity-ai/local_id_card_crop.py"
+      - "identity-ai/test_local_id_card_crop.py"
       - "identity-ai/live_camera_scan_policy.py"
       - "identity-ai/local_national_id_selfie_review.py"
       - "identity-ai/test_live_camera_scan_policy.py"
@@ -24,14 +26,17 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+      - name: Install lightweight offline crop-test dependencies
+        run: python -m pip install --disable-pip-version-check numpy==1.26.4 opencv-python-headless==4.11.0.86
       - name: Compile standalone private local lab
         run: |
-          python -m py_compile identity-ai/local_national_id_selfie_review.py identity-ai/live_camera_scan_policy.py
+          python -m py_compile identity-ai/local_national_id_selfie_review.py identity-ai/live_camera_scan_policy.py identity-ai/local_id_card_crop.py
       - name: Validate camera-only OCR and selfie policies (synthetic data ONLY)
         env:
           PYTHONPATH: identity-ai
         run: |
           python -m unittest discover -s identity-ai -p 'test_live_camera_scan_policy.py' -v
           python -m unittest discover -s identity-ai -p 'test_local_national_id_selfie_review.py' -v
+          python -m unittest discover -s identity-ai -p 'test_local_id_card_crop.py' -v
       - name: Explicit no-deployment gate
         run: echo "NO DEPLOY - NO REAL IMAGES - NO MODEL DOWNLOAD - NO FIREBASE ACCESS"
