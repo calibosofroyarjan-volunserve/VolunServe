@@ -33,6 +33,19 @@ assert(after.includes("allow create: if isAdmin()"));
 assert(after.includes("request.resource.data.publishAt == request.time"));
 const digest = x => createHash("sha256").update(x).digest("hex").slice(0, 16);
 async function run() {
+  // Never inspect or publish production rules against an outdated Hosting UI.
+  // Re-run at action time, not only when the PR was opened. Read-only request.
+  const hostingResponse = await fetch("https://volunserve.com/volunserve-release.json", {
+    headers: { "Cache-Control": "no-cache" },
+    signal: AbortSignal.timeout(15000)
+  });
+  assert(hostingResponse.ok, "STOP: current live Hosting release marker unavailable");
+  const hostingRelease = await hostingResponse.json();
+  assert.equal(hostingRelease.app, "VolunServe", "STOP: wrong live app");
+  assert.equal(hostingRelease.firebaseProject, PROJECT, "STOP: wrong live Firebase project");
+  assert.equal(hostingRelease.revision, BASE,
+    "STOP: live Hosting changed; reconcile announcement hotfix from current production before any rules publish");
+  console.log("PASS: current Hosting revision matches verified production base " + BASE.slice(0, 12));
   const auth = new GoogleAuth({ scopes: ["https://www.googleapis.com/auth/cloud-platform"] });
   const c = await auth.getClient();
   const token = await c.getAccessToken();
