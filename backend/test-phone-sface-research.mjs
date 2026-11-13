@@ -94,7 +94,15 @@ test("every research result explicitly denies real identity / PAD decisions",()=
 test("only public model bytes can be fetched and validated; no photo/embedding upload",()=>{
   const source=readFileSync("public/phone-sface-research.mjs","utf8");
   const page=readFileSync("public/phone-camera-demo.html","utf8");
-  assert.match(source,/fetch\(MODEL_URL, \{mode:"cors", cache:"no-store", credentials:"omit"\}\)/);
+  assert.match(source,/const MODEL_URLS = \[/);
+  assert.match(source,/for \(const url of MODEL_URLS\)/);
+  assert.match(source,/fetch\(url, \{/);
+  assert.match(source,/credentials:"omit", redirect:"follow"/);
+  assert.match(source,/model_integrity_failed/);
+  assert.match(source,/model_download_failed/);
+  assert.match(source,/checkSFaceEnvironment/);
+  assert.match(source,/setup_ready_research_only/);
+  assert.match(page,/Check SFace setup — no ID photos needed/);
   assert.match(source,/crypto\.subtle\.digest\("SHA-256",buffer\)/);
   assert.match(source,/if \(hex!==SFACE_SHA256/);
   assert.match(source,/ORT_WASM/);
@@ -109,4 +117,24 @@ test("only public model bytes can be fetched and validated; no photo/embedding u
   }
   assert(!source.includes("fetch(idUrl"));
   assert(!source.includes("fetch(selfieUrl"));
+});
+
+test("setup errors stay stage-specific and never contain raw SDK errors or photos",()=>{
+  const source=readFileSync("public/phone-sface-research.mjs","utf8");
+  const page=readFileSync("public/phone-camera-demo.html","utf8");
+  for(const stage of ["vision_module_load_failed","face_landmarker_init_failed",
+    "model_download_failed","model_integrity_failed",
+    "onnx_runtime_import_failed","onnx_session_init_failed",
+    "image_or_inference_failed"]){
+    assert(source.includes(stage),stage);
+    assert(page.includes(stage),stage);
+    const output=researchResult(stage);
+    assert.equal(output.reason,stage);
+    assert.equal(output.status,"inconclusive");
+    assert.equal(output.identityDecisionUse,"none");
+    assert(!("cosineSimilarity" in output));
+  }
+  assert.match(source,/\/\*\*\s*\n \* Optional PUBLIC-MODELS-ONLY preflight/);
+  assert.match(source,/if\(!active\(\)\)return researchResult\("cancelled"\)/);
+  assert.match(page,/No photos used; no identity decision/);
 });
