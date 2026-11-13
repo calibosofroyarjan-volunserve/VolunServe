@@ -6,6 +6,43 @@ This is a local-only research workflow for the experimental MiniFASNet anti-spoo
 
 The model remains **SHADOW-ONLY**. These observations cannot verify a resident or satisfy formal PAD or ISO/IEC 30107-3 requirements.
 
+## One-click laptop procedure (recommended)
+
+After opening your **up-to-date staging Git checkout** on your Windows laptop,
+double-click **`Start-VolunServe-Camera-Test.cmd`** in the project root.
+
+A small window appears, before any camera access:
+- Keep **Framing only** selected first. This is the default and needs no
+  printed picture or second phone. Select your webcam (start with Camera 0),
+  read the local-processing notice, tick the consent box and press Start.
+- If pinned public dependencies or models are missing, a separate confirmation
+  asks whether to install/download them. Downloads are the existing checksum
+  verified public MiniFASNet and YuNet weights and Python packages; no photo
+  or ID is sent over the network. Cancel safely if you do not consent.
+- The existing local **visual preview** opens. Move back until the guide says
+  **FRAMING READY**. No liveness inference, model score, capture or identity
+  result is counted in this first mode. Close when framing works.
+- Relaunch the same one-click file, choose **Quick pilot** for one consenting
+  LIVE, physical PRINT and second-screen REPLAY presentation, or **Larger
+  pilot** for three of each. The on-screen Start Capture button becomes active
+  only when the full 2.7× face crop is inside the camera.
+- After all physical presentations finish, a local **aggregate-only summary**
+  shows the counts for both 0–255 and 0–1 experimental paths. The summary is
+  not liveness certification, and no image, face template, ID or video is saved.
+
+The first mode specifically avoids repeating the inconclusive 9/9 experiment
+before the reported crop/framing problem has been addressed. **Do not pretend
+that a displayed photo file is a physical print or screen-replay presentation**.
+If a print or second screen is not available, stop after the framing mode;
+those attacks remain unevaluated.
+
+This launcher requires Windows with Python 3.11 and the Windows `py` command,
+plus the staging checkout containing the existing camera QA scripts.
+It does not install Python itself, change your deployed site, enable media
+uploads or automatically change the verified status of any account. The
+terminal only displays local dependency installation and diagnostics when
+necessary; all consent and preview/capture controls are in windows.
+
 ## One-time setup on your Windows PC
 
 Open PowerShell at the root of your latest **staging VolunServe checkout**. Use Python 3.11, and run:
