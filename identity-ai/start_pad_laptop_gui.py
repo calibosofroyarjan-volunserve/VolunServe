@@ -136,11 +136,11 @@ def ask_user_settings():
     root = tk.Tk()
     root.title("VolunServe | Private Laptop Camera Validation")
     root.configure(bg="#f4f8fc")
-    root.geometry("640x475")
+    root.geometry("640x510")
     root.resizable(False, False)
-    choice = {"accepted": False, "camera": 0, "trials": 1}
+    choice = {"accepted": False, "camera": 0, "trials": 1, "mode": "framing"}
     camera = tk.IntVar(value=0)
-    trials = tk.IntVar(value=1)
+    mode = tk.StringVar(value="framing")
     consent = tk.BooleanVar(value=False)
 
     box = tk.Frame(root, bg="#f4f8fc", padx=24, pady=19)
@@ -162,11 +162,14 @@ def ask_user_settings():
     tk.OptionMenu(box, camera, 0, 1, 2, 3).pack(anchor="w")
     tk.Label(box, text="Session length", bg="#f4f8fc",
              font=("Segoe UI", 10, "bold")).pack(anchor="w", pady=(7, 0))
-    tk.Radiobutton(box, variable=trials, value=1,
-                   text="Quick diagnostic: 1 live + 1 print + 1 replay",
+    tk.Radiobutton(box, variable=mode, value="framing",
+                   text="First: camera + framing only (NO captures, no printer needed)",
                    bg="#f4f8fc").pack(anchor="w")
-    tk.Radiobutton(box, variable=trials, value=3,
-                   text="Research pilot: 3 live + 3 print + 3 replay",
+    tk.Radiobutton(box, variable=mode, value="quick",
+                   text="Quick pilot: 1 live + 1 print + 1 replay",
+                   bg="#f4f8fc").pack(anchor="w")
+    tk.Radiobutton(box, variable=mode, value="full",
+                   text="Larger pilot: 3 live + 3 print + 3 replay",
                    bg="#f4f8fc").pack(anchor="w")
     tk.Checkbutton(box, variable=consent,
                    text="I consent. Any adult shown also consented.",
@@ -180,7 +183,9 @@ def ask_user_settings():
         if not consent.get():
             status.configure(text="Explicit consent is required.", fg="#b91c1c")
             return
-        choice.update(accepted=True, camera=camera.get(), trials=trials.get())
+        choice.update(accepted=True, camera=camera.get(),
+                      trials=3 if mode.get() == "full" else 1,
+                      mode=mode.get())
         root.destroy()
 
     buttons = tk.Frame(box, bg="#f4f8fc")
@@ -235,6 +240,22 @@ def main():
             print("Installing local Python packages / pinned models (no user media).")
             install_prerequisites(approved=True)
         # Import camera modules only AFTER explicit consent and local setup.
+        if user.get("mode") == "framing":
+            import cv2
+            from pad_webcam_preview_tk_local import launch_webcam_preview
+            camera = cv2.VideoCapture(user["camera"])
+            try:
+                if not camera.isOpened():
+                    raise RuntimeError("No camera at that number. Try another camera or Windows privacy settings.")
+                launch_webcam_preview(camera, trials_per_class=1,
+                                      frames_per_trial=3, preview_only=True)
+            finally:
+                camera.release()
+            notify("Framing-only preview closed",
+                   "No liveness trial was counted. No photos, videos or IDs saved. "
+                   "Once FRAMING READY works, choose the Quick pilot to evaluate "
+                   "live, print and replay presentations separately.")
+            return 0
         from run_pad_webcam_trials_local import run_cli
         output = []
         code = run_cli(args, output_fn=output.append)
