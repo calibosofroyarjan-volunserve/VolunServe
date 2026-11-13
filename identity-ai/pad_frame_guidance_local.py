@@ -13,11 +13,14 @@ from yunet_shadow import single_face_box, inspect_frame
 
 
 PAD_CONTEXT_SCALE = 2.7
+V1SE_CONTEXT_SCALE = 4.0
+_ALLOWED_CONTEXT_SCALES = frozenset((PAD_CONTEXT_SCALE, V1SE_CONTEXT_SCALE))
 
 # Coarse statuses can be shown on screen without making any liveness claims.
 HELP = {
     "ready": "Framing OK for experimental crop. Not proof of liveness.",
     "move_back": "Move farther from camera; keep space around your head.",
+    "move_back_v1se": "V1SE needs a FULL 4.0x face crop; move farther from the camera. A 2.7x-ready frame is not enough for the combined pilot.",
     "no_face": "No face detected. Center one consenting face in good light.",
     "multiple_faces": "Multiple faces detected; show one face at a time.",
     "detector_unavailable": "YuNet unavailable. Check pinned local model.",
@@ -38,12 +41,14 @@ class Guidance:
         return self.code == "ready"
 
 
-def context_rect_for_face(box, image_shape):
-    """Exactly the original model's independent 2.7x face w/h expansion.
+def context_rect_for_face(box, image_shape, *, scale=PAD_CONTEXT_SCALE):
+    """Compute complete 2.7x (V2) or 4.0x (V1SE) face context.
 
     Unlike the upstream crop's edge shifting/padding, the staging shadow
     deliberately requires complete context within the camera frame.
     """
+    if scale not in _ALLOWED_CONTEXT_SCALES:
+        return None
     try:
         height, width = int(image_shape[0]), int(image_shape[1])
         x, y, w, h = (int(v) for v in box)
@@ -53,7 +58,7 @@ def context_rect_for_face(box, image_shape):
             w >= 40 and h >= 40 and x >= 0 and y >= 0 and
             x + w <= width and y + h <= height):
         return None
-    enlarged_w, enlarged_h = w * PAD_CONTEXT_SCALE, h * PAD_CONTEXT_SCALE
+    enlarged_w, enlarged_h = w * scale, h * scale
     left = int(round(x + w / 2 - enlarged_w / 2))
     top = int(round(y + h / 2 - enlarged_h / 2))
     right = int(round(x + w / 2 + enlarged_w / 2))
@@ -64,9 +69,11 @@ def context_rect_for_face(box, image_shape):
     return (left, top, right, bottom)
 
 
-def analyze_framing(frame, *, detect_box=single_face_box, inspect=inspect_frame):
+def analyze_framing(frame, *, detect_box=single_face_box, inspect=inspect_frame,
+                    context_scale=PAD_CONTEXT_SCALE):
     """Diagnose camera framing; no identity or anti-spoofing decision."""
-    if (not isinstance(frame, np.ndarray) or frame.dtype != np.uint8 or
+    if (context_scale not in _ALLOWED_CONTEXT_SCALES or
+            not isinstance(frame, np.ndarray) or frame.dtype != np.uint8 or
             frame.ndim != 3 or frame.shape[2] != 3 or
             not 120 <= frame.shape[0] <= 3000 or
             not 120 <= frame.shape[1] <= 3000):
@@ -74,8 +81,16 @@ def analyze_framing(frame, *, detect_box=single_face_box, inspect=inspect_frame)
     try:
         box = detect_box(frame)
         if box is not None:
-            rect = context_rect_for_face(box, frame.shape)
-            return Guidance("ready" if rect is not None else "move_back",
+            rect = context_rect_for_face(box, frame.shape, scale=context_scale)
+            if (rect is None and context_scale == V1SE_CONTEXT_SCALE and
+                    context_rect_for_face(box, frame.shape,
+                                          scale=PAD_CONTEXT_SCALE) is not None):
+                # Former combined-pilot bug: legacy 2.7x guidance marked READY
+                # although V1SE requires full 4x and silently abstained.
+                code = "move_back_v1se"
+            else:
+                code = "ready" if rect is not None else "move_back"
+            return Guidance(code,
                             face_rect=tuple(int(v) for v in box),
                             context_rect=rect)
         result = inspect(frame)
@@ -109,6 +124,7 @@ def draw_guidance(frame, status, *, max_width=700, max_height=470):
     label = {
         "ready": "FRAMING READY - SHADOW RESEARCH ONLY",
         "move_back": "MOVE BACK: leave space around face",
+        "move_back_v1se": "MOVE BACK: V1SE needs FULL 4x face context",
         "no_face": "NO FACE: center the presentation",
         "multiple_faces": "MULTIPLE FACES: only one",
         "camera_unavailable": "CAMERA FRAME INVALID",
