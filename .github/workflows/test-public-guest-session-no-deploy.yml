@@ -1,0 +1,33 @@
+name: Guest Public Auth Session Preservation (NO DEPLOY)
+
+on:
+  pull_request:
+    paths:
+      - "app/public/_layout.tsx"
+      - "backend/test-public-guest-session-preservation.cjs"
+      - ".github/workflows/test-public-guest-session-no-deploy.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  no-unexpected-logout:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install locked dependencies (no lifecycle scripts)
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Execute actual Guest layout session-preservation contract
+        run: |
+          node --test backend/test-public-guest-session-preservation.cjs
+          node --test backend/test-guest-landing-auth-redirect.cjs
+          node --test backend/test-identity-resident-status-client-contract.cjs
+      - name: Verify Expo Router + signed-in Resident / Admin typings
+        run: npx tsc --noEmit --pretty false
+      - name: No-deploy / no identity media
+        run: |
+          node --test backend/test-identity-media-capability-preflight.cjs
+          echo "NO DEPLOY. No real Firebase Auth sessions, credentials, user writes or identity media."
