@@ -133,7 +133,21 @@ def format_aggregate(report):
             f"  Live presentations not accepted: {genuine_not_accepted}/{live_count}",
             f"  Print/replay presentations seen as live: {attacks_observed_live}/{attack_count}",
         ))
+    risk = report.get("conservativeShadowRisk", {})
+    print_risk = int(risk.get("printPresentationsAnyScalePredictedLive", 0))
+    replay_risk = int(risk.get("replayPresentationsAnyScalePredictedLive", 0))
+    consent_limited = bool(risk.get("operatorLabelsNotIndependentlyVerified", True))
     lines.extend((
+        "",
+        "CONSERVATIVE SAFETY REVIEW (SHADOW ONLY):",
+        f"PRINT trials predicted LIVE by either scale: {print_risk}",
+        f"REPLAY trials predicted LIVE by either scale: {replay_risk}",
+        "Cross-scale disagreements/unknowns => INCONCLUSIVE, not live.",
+        "WARNING: Printed-photo false acceptance needs independent investigation."
+        if print_risk else "No print false-live observed in these limited trials.",
+        "Labels are operator-reported, not ground-truth independently verified."
+        if consent_limited else "Labels require independent assessment.",
+        "Automatic biometric approval remains BLOCKED.",
         "",
         "Physical labels are confirmed by the operator, NOT camera-verified.",
         "These are tiny pilot observations, NOT calibrated APCER/BPCER.",
