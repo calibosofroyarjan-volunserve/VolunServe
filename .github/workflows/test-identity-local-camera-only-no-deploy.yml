@@ -3,6 +3,7 @@ name: Local camera-only National ID staging tests (NO DEPLOY)
 on:
   pull_request:
     paths:
+      - "Start-VolunServe-Private-ID-Review.cmd"
       - "identity-ai/live_camera_scan_policy.py"
       - "identity-ai/local_national_id_selfie_review.py"
       - "identity-ai/test_live_camera_scan_policy.py"
