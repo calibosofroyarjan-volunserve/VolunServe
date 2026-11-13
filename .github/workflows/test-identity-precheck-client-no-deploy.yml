@@ -1,0 +1,32 @@
+name: Identity shared upload/ID OCR contract (NO DEPLOY)
+
+on:
+  pull_request:
+    paths:
+      - "lib/identityVerification.ts"
+      - "lib/identityPrecheckContract.ts"
+      - "backend/test-identity-precheck-client-contract.cjs"
+      - ".github/workflows/test-identity-precheck-client-no-deploy.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  shared-client-guard:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Install locked dependencies with no lifecycle scripts
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Run real shared-client contract with synthetic ID media
+        run: |
+          node --test backend/test-identity-precheck-client-contract.cjs
+          node --test backend/test-identity-media-capability-preflight.cjs
+          node --test backend/test-identity-contract-staging.js
+      - name: Typecheck Resident/Admin integration
+        run: npx tsc --noEmit --pretty false
+      - name: Confirm no deployments or personal-media capture
+        run: echo "NO DEPLOY - synthetic only - staging media upload remains HTTP 423"
