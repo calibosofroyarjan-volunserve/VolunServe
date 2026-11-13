@@ -1,4 +1,5 @@
 import { auth } from "./firebase";
+import { identityEnvironmentTarget } from "./identityEnvironmentTarget";
 
 export type IdentityVerificationStatus =
   | "basic"
@@ -251,7 +252,11 @@ const FALLBACK_BACKEND_URL = "https://volunserve.onrender.com";
 function getBackendBaseUrl() {
   // The separate Python AI service is private; clients use the Node backend.
   // A staging build must NEVER silently send ID or selfie images to production.
-  const staging = process.env.EXPO_PUBLIC_VOLUNSERVE_ENV === "staging";
+  const staging = identityEnvironmentTarget({
+    runtimeEnv: process.env.EXPO_PUBLIC_VOLUNSERVE_ENV,
+    firebaseTarget: process.env.EXPO_PUBLIC_VOLUNSERVE_FIREBASE_TARGET,
+    projectId: auth.app.options.projectId,
+  }) === "staging";
   const configured = process.env.EXPO_PUBLIC_IDENTITY_VERIFICATION_API_URL?.trim();
   if (staging && !configured) {
     throw new Error("Staging identity backend URL is required before verification.");
@@ -306,14 +311,11 @@ async function getAuthenticatedUser() {
   // Fail closed: the staging UI must not silently read production Firebase
   // accounts or forward production-issued Firebase tokens to a test backend.
   // A dedicated staging Firebase project must be explicitly configured first.
-  if (
-    process.env.EXPO_PUBLIC_VOLUNSERVE_ENV === "staging" &&
-    auth.app.options.projectId === "volunserve-3aa5b"
-  ) {
-    throw new Error(
-      "Staging identity verification is blocked: this build is connected to production Firebase. Configure an isolated staging Firebase project before testing.",
-    );
-  }
+  identityEnvironmentTarget({
+    runtimeEnv: process.env.EXPO_PUBLIC_VOLUNSERVE_ENV,
+    firebaseTarget: process.env.EXPO_PUBLIC_VOLUNSERVE_FIREBASE_TARGET,
+    projectId: auth.app.options.projectId,
+  });
 
   const user = auth.currentUser;
 

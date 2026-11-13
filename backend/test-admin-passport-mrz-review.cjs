@@ -110,8 +110,13 @@ test("authenticated operational Admin route and transactional self-approval bloc
   assert(server.includes("const STAGING_IDENTITY_MEDIA_UPLOADS_ENABLED = false;"));
 });
 test("staging Admin points to isolated Node and shows MRZ without PII",()=>{
-  assert(ui.includes('process.env.EXPO_PUBLIC_VOLUNSERVE_ENV === "staging"'));
-  assert(ui.includes("https://volunserve-backend-staging.onrender.com"));
+  // Gateway selection moved from an unsafe single-env ternary to a shared
+  // fail-closed Firebase/project/Node target resolver.
+  const target=fs.readFileSync("lib/identityEnvironmentTarget.ts","utf8");
+  assert(ui.includes("identityAdminApiBaseUrl"));
+  assert(ui.includes("getReviewBackendUrl()"));
+  assert(target.includes("https://volunserve-backend-staging.onrender.com"));
+  assert(target.includes("volunserve-full-staging"));
   // Expo Admin now uses one stronger document gate for ALL unresolved
   // warnings, DOB/MRZ conflicts and reverse quality (not only MRZ fields).
   assert(ui.includes("adminReviewDocumentEligible"));

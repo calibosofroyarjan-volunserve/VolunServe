@@ -25,12 +25,18 @@ import {
 } from "react-native";
 
 import { useUserSession } from "../../lib/useUserSession";
+import { auth } from "../../lib/firebase";
+import { identityAdminApiBaseUrl } from "../../lib/identityEnvironmentTarget";
 
-// A staging Admin UI must never forward private review tokens/data to
-// production. The Node gateway authorizes every GET/POST server-side.
-const BACKEND_URL = process.env.EXPO_PUBLIC_VOLUNSERVE_ENV === "staging"
-  ? "https://volunserve-backend-staging.onrender.com"
-  : "https://volunserve.onrender.com";
+// Fail closed before requesting a Firebase token or contacting a Node gateway.
+// Production and staging credentials must never cross environments.
+function getReviewBackendUrl() {
+  return identityAdminApiBaseUrl({
+    runtimeEnv: process.env.EXPO_PUBLIC_VOLUNSERVE_ENV,
+    firebaseTarget: process.env.EXPO_PUBLIC_VOLUNSERVE_FIREBASE_TARGET,
+    projectId: auth.app.options.projectId,
+  });
+}
 
 type ReviewFilter = "pending" | "verified" | "retry_required" | "all";
 
@@ -143,9 +149,10 @@ export default function IdentityReviewsAdmin() {
       setLoading(true);
       setError("");
 
+      const backendUrl = getReviewBackendUrl();
       const token = await user.getIdToken(true);
       const response = await fetch(
-        `${BACKEND_URL}/api/admin/identity/reviews`,
+        `${backendUrl}/api/admin/identity/reviews`,
         {
           method: "GET",
           headers: {
@@ -293,9 +300,10 @@ export default function IdentityReviewsAdmin() {
     try {
       setSaving(action);
 
+      const backendUrl = getReviewBackendUrl();
       const token = await user.getIdToken(true);
       const response = await fetch(
-        `${BACKEND_URL}/api/admin/identity/reviews/${encodeURIComponent(
+        `${backendUrl}/api/admin/identity/reviews/${encodeURIComponent(
           selected.uid,
         )}/decision`,
         {
