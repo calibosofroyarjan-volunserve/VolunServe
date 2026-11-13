@@ -1,3 +1,4 @@
+import {getSafeVolunServeBackendBaseUrl} from "../../lib/stagingExpoServiceIsolation";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import React, {useCallback,useEffect,useState} from "react";
 import {ActivityIndicator,Pressable,StyleSheet,Text,TextInput,View} from "react-native";
@@ -6,7 +7,7 @@ import WalletBrandLogo from "./WalletBrandLogo";
 
 type Channel="gcash"|"maya";
 type Wallet={configured:boolean;method?:Channel;walletLast4?:string;testOnly:true};
-const ROOT="https://volunserve.onrender.com/api/funds/my-release-wallet";
+const ROOT=getSafeVolunServeBackendBaseUrl()+"/api/funds/my-release-wallet";
 
 /** Verified Resident's private *fictional* TEST destination.
  * This never verifies ownership of an actual provider wallet and never initiates payments.
