@@ -259,3 +259,18 @@ test("transactional Node permission gate and disabled media uploads remain autho
  assert.match(adminRoute,/Resident Identity Submission Rejected/);
  assert.match(adminRoute,/identityVerified:\s*false/);
 });
+
+test("Resident web/native renders Admin rejection distinctly without a Verified grant",()=>{
+ const web=fs.readFileSync("app/identity-verification.web.tsx","utf8");
+ const native=fs.readFileSync("app/identity-verification.tsx","utf8");
+ assert(web.includes('statusResult?.decision === "rejected"'));
+ assert(web.includes("Identity Submission Rejected"));
+ assert(web.includes("Rejected · Not Verified"));
+ assert(web.includes("Submit New Application"));
+ assert(native.includes('statusResult?.decision === "rejected"'));
+ assert(native.includes("You are not Verified"));
+ const server=fs.readFileSync("backend/server.js","utf8");
+ assert(server.includes('manualReviewDecision:\n            action === "verify"'));
+ assert(server.includes('action === "reject"'));
+ assert(server.includes('identityStatus: "failed"'));
+});
