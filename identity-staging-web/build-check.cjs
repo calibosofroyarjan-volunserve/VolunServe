@@ -90,6 +90,9 @@ execFileSync(process.execPath,["--test","identity-staging-web/test-pad-qa-report
 // The browser challenge accepted a prerecorded replay. Keep captured selfies
 // quarantined as local-only QA previews; they must never reach identity forms.
 execFileSync(process.execPath,["--test","identity-staging-web/test-replay-qa-containment.cjs"],{stdio:"inherit"});
+// This legacy staging page is NOT the latest Expo Resident identity app.
+// Keep the legacy lab read-only and quarantine all experimental camera media.
+execFileSync(process.execPath,["--test","identity-staging-web/test-readonly-media-privacy.cjs"],{stdio:"inherit"});
 // Similarity observations are manual. Scores must NEVER be stored, networked,
 // used to modify production thresholds or interpreted as PAD certification.
 for (const qaPath of ["identity-staging-web/match-pad-metrics.mjs",

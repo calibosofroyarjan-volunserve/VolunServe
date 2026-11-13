@@ -1,0 +1,43 @@
+name: Identity staging web read-only privacy checks (no deploy)
+
+on:
+  pull_request:
+    branches:
+      - preview/identity-only-staging-web-20261108
+    paths:
+      - 'identity-staging-web/**'
+      - '.github/workflows/test-identity-staging-web-readonly.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify-staging-preview:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      # The repository's old gitlink "VolunServe" has no .gitmodules URL.
+      # actions/checkout fails during submodule credential cleanup even with
+      # submodules=false. Fetch only the GitHub-hosted PR source archive.
+      - name: Fetch reviewed source archive without Git submodule checkout
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          [[ "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]] || exit 2
+          curl -fLsS --retry 3 \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/zipball/$SOURCE_SHA" \
+            -o /tmp/staging-identity-source.zip
+          mkdir -p "$RUNNER_TEMP/staging-identity-source"
+          unzip -q /tmp/staging-identity-source.zip -d "$RUNNER_TEMP/staging-identity-source"
+          ROOT="$(find "$RUNNER_TEMP/staging-identity-source" -mindepth 1 -maxdepth 1 -type d -print -quit)"
+          test -f "$ROOT/identity-staging-web/build-check.cjs"
+          cd "$ROOT"
+          node --version
+          node identity-staging-web/build-check.cjs
+      - name: Confirm test workflow cannot deploy
+        run: echo "NO DEPLOY - static preview CI only"
