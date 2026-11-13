@@ -33,6 +33,27 @@ export function adminReviewDocumentEligible(
   return true;
 }
 
+/**
+ * A successful document precheck is not proof of issuance.
+ * Keep the Admin-selected independent review method aligned with the actual
+ * selected government ID, before the server validates it again in transaction.
+ */
+export function adminReviewMethodEligible(
+  screening?: DocumentScreening | null,
+  method?: string | null,
+): boolean {
+  if (!screening || !method) return false;
+  if (screening.declaredIdType === "national_id") {
+    return method === "psa_national_id_qr_check";
+  }
+  if (["drivers_license", "passport", "umid", "prc_id"].includes(
+      String(screening.declaredIdType || ""))) {
+    return method === "in_person_lgu_validation" ||
+      method === "official_document_check";
+  }
+  return false;
+}
+
 export type AdminReviewStatus = "pending" | "verified" | "retry_required" | "all";
 
 export type AdminReviewStatusInput = {
