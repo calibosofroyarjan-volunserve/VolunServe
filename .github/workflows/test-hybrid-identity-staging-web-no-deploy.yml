@@ -29,10 +29,24 @@ jobs:
       EXPO_PUBLIC_VOLUNSERVE_STAGING_FIREBASE_API_KEY: AIzaSyntheticStageTestKey_NotForRequests000
       EXPO_PUBLIC_IDENTITY_VERIFICATION_API_URL: https://volunserve-backend-staging.onrender.com
     steps:
-      - uses: actions/checkout@v4
-        with:
-          persist-credentials: false
-          submodules: false
+      # Existing repository has an incomplete nested Gitlink on some branches;
+      # obtain the immutable head archive so CI never depends on Gitlink metadata.
+      - name: Obtain exact PR head source archive (read-only)
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          [[ "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]] || exit 2
+          curl -fLsS --retry 3 -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/zipball/$SOURCE_SHA" \
+            -o /tmp/hybrid-staging-web.zip
+          mkdir -p "$RUNNER_TEMP/hybrid-staging-web"
+          unzip -q /tmp/hybrid-staging-web.zip -d "$RUNNER_TEMP/hybrid-staging-web"
+          ROOT="$(find "$RUNNER_TEMP/hybrid-staging-web" -mindepth 1 -maxdepth 1 -type d -print -quit)"
+          test -f "$ROOT/package.json"
+          cp -a "$ROOT/." "$GITHUB_WORKSPACE/"
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
