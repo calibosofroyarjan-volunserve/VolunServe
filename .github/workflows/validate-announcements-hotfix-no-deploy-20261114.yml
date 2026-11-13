@@ -52,6 +52,44 @@ jobs:
           assert.deepEqual(changedProtected, [], "STOP: certificate, attendance, profile or navigation code changed");
           console.log("PASS: certificate, attendance, profile and navigation code unchanged from exact live baseline.");
           NODE
+      - name: Verify 1-minute Community Certificates against deployed Render code (READ ONLY)
+        run: |
+          git fetch origin backend-live-protected
+          node <<'NODE'
+          const cp = require("node:child_process");
+          const assert = require("node:assert/strict");
+          const DEPLOYED_RENDER = "4f3db7b3d12082cf50f0b3a191d00768fdea78c4";
+          const run = (...args) => cp.execFileSync("git", args, {encoding:"utf8"});
+          const liveFiles = [
+            "backend/communityCertificateEligibility.js",
+            "backend/communityCertificates.js",
+            "backend/test-communityCertificateLiveTemporary.js",
+            "backend/test-communityCertificateEligibility.js",
+            "backend/test-communityCertificateIssuance.js"
+          ];
+          // Stop when the protected backend branch differs from the observed
+          // currently deployed Render backend on any certificate code/test.
+          for (const path of liveFiles) {
+            assert.equal(run("show", "origin/backend-live-protected:" + path),
+              run("show", DEPLOYED_RENDER + ":" + path),
+              "STOP: Render/Backend certificate source divergence at " + path);
+          }
+          const policy = run("show", DEPLOYED_RENDER + ":backend/communityCertificateEligibility.js");
+          assert.match(policy, /MIN_COMMUNITY_CERTIFICATE_ATTENDANCE_MINUTES = 30/);
+          assert.match(policy, /TEST_COMMUNITY_CERTIFICATE_ATTENDANCE_MINUTES = 1/);
+          assert.match(policy, /VOLUNSERVE_CERT_LIVE_ONE_MIN_PERMANENT_ENABLED/);
+          assert.match(policy, /2026-11-10T14:55:00Z/);
+          const changed = run("diff", "--name-only",
+            "2cd63d318ecb6b0dfc52706308e05d0b5806d874", "HEAD")
+            .trim().split(String.fromCharCode(10)).filter(Boolean);
+          assert.deepEqual(changed.filter(p => p.startsWith("backend/") ||
+            p.startsWith("functions/")), [], "STOP: backend or Firebase Functions changed");
+          console.log("PASS: live backend 1-minute certificate logic still matches current protected backend source; no backend changes in this hotfix.");
+          NODE
+          temp_dir="$(mktemp -d)"
+          git archive 4f3db7b3d12082cf50f0b3a191d00768fdea78c4 backend | tar -x -C "$temp_dir"
+          (cd "$temp_dir/backend" && node --test test-communityCertificateLiveTemporary.js test-communityCertificateEligibility.js test-communityCertificateIssuance.js)
+          rm -rf "$temp_dir"
       - name: Firestore announcement access tests on LOCAL emulator only
         run: npx firebase emulators:exec --only firestore --project demo-volunserve "node scripts/test-announcements-published-audience-emulator.cjs"
       - name: Expo web export (no production credentials)
