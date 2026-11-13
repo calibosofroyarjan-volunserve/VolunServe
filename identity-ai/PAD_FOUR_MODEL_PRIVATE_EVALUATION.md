@@ -1,5 +1,45 @@
 # VolunServe private V2 + V1SE PAD evaluation — November 13, 2026
 
+## V1SE 4x framing and same-bounding-box correction
+
+A review of the original code found a **confirmed integration mismatch**:
+the combined V2+V1SE Windows webcam GUI used V2's 2.7x context-only
+`FRAMING READY` criterion, although V1SE requires a larger full 4.0x
+context. The V1SE classifier refused crops outside the frame and returned
+`inconclusive`; the operator did not see that 4.0x capture was still
+impossible. This may explain *some*, but not necessarily all, inconclusive
+observations. The private operator's measurements are not committed here.
+
+The updated combined GUI now waits until the entire 4.0x V1SE context is
+inside the frame. If only V2's 2.7x crop fits, the preview instead says
+**MOVE BACK: V1SE needs FULL 4x face context**. The old V2-only and
+camera-framing-only modes retain their 2.7x guidance. The combined capture
+also forwards the **single face bounding box seen in the preview** to
+both models, with their appropriate 2.7x or 4.0x crop. This avoids
+independent re-detection in the same observed frame. No image or bbox is
+stored, logged, uploaded or added to result JSON.
+
+## Important limits
+
+The upstream ONNX inference example handles **raw float32 BGR inputs** and
+uses class index 1 for "Real"; its model reference documents V2=2.7x and
+V1SE=4x (see yakhyo/face-anti-spoofing). The additional normalized 0-1
+path remains a deliberately **unvalidated research hypothesis** for
+comparing scale sensitivity; it must not become an authentication gate.
+
+A full 4x crop is **necessary** for this particular staging no-padding
+implementation but is **not proof of model accuracy or liveness**. A
+4x-ready frame can still give inconclusive responses from raw or
+normalized model scores. Do not reduce the threshold or use raw-only
+predictions to auto-approve accounts based on one small pilot. Independent
+real-world PAD accuracy remains unvalidated.
+
+The already-deployed Python AI backend, identity uploading HTTP 423 gate,
+Admin approval requirements and live VolunServe production are unchanged.
+Only staging local QA diagnostics are adjusted.
+
+
+
 This is a **local research-only** tool to compare the already-integrated,
 checksum-pinned MiniFASNetV2 (2.7× face crop) and MiniFASNetV1SE (4.0× crop).
 Each model is evaluated with raw BGR 0–255 and normalized BGR 0–1 input.
