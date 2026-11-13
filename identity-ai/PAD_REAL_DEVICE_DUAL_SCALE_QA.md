@@ -1,5 +1,32 @@
 # VolunServe — real-device PAD dual-scale evaluation protocol (PRIVATE, QA ONLY)
 
+## November 13 staging improvement — dual-scale abstention (NOT accuracy validation)
+
+Original upstream preprocessing uses raw BGR 0–255 with class index 1 for genuine.
+The converted ONNX card lists different scale/class assumptions. The original
+PyTorch vs ONNX numerical parity was established on synthetic inputs; that did
+not validate genuine-user or attack accuracy on real cameras.
+
+The staging experimental `passive_pad_shadow.assess_frame_shadow` now feeds the
+same YuNet 2.7× context crop to BOTH raw 0–255 and normalized 0–1 input
+hypotheses, without saving the crop. Any disagreement, invalid output or
+uncertainty means `inconclusive`. Only model agreement preserves the existing
+`model_prefers_*_unvalidated` category. This is a research observation, never
+a liveness/PAD determination or permission to verify a Resident.
+
+The first nine-trial local test contained a PRINT in a LIVE-labeled slot,
+invalidating that trial's ground-truth claims. One correctly print-labeled
+presentation gave a raw-scale model-live result. The synthetic print-conflict
+regression now abstains as expected, but **NO new real-device accuracy data**
+has been collected. Do not claim this change 'fixes anti-spoofing' or increase
+the prototype completion estimate based on synthetic software tests.
+
+Hard gates remain: `independentPadValidated=false`,
+`modelInputScaleValidated=false`, `thresholdCalibrated=false`,
+`identityDecisionUse=none`, private ID/selfie uploads HTTP 423, and no
+automatic Verified Resident. Only independent, consented multi-camera and
+multi-session genuine/print/replay evaluation can establish real-world PAD
+performance and a defensible release policy.
 **Status (Nov 13, 2026): READY FOR LOCAL CONSENTED CAPTURES; NO REAL-DEVICE ACCURACY RESULTS COLLECTED.**
 
 This protocol supports the final unresolved technical question after authentic upstream PyTorch-to-ONNX numerical parity was confirmed: **how the same genuine face / physical print / replay presentation is classified with the original MiniVisionAI raw BGR 0–255 preprocessing versus the third-party ONNX card's BGR 0–1 preprocessing**. Both models have identical pinned weights; only input normalization differs. We do **not** automatically tune thresholds, determine a valid face, authenticate a government ID, issue a certificate, or approve a VolunServe Resident.
@@ -48,7 +75,7 @@ Use only supported media: JPEG/PNG/WebP and MP4/MOV/AVI/MKV, maximum 30 MiB per 
 ## Interpret the report without overclaiming
 
 - \`perScale.upstream_raw_0_to_255\`: exploratory shadow observations under original MiniVisionAI NumPy raw BGR input.
-- \`perScale.converted_card_0_to_1\`: same observations under the converted ONNX model card's normalization, which is used by the current staging shadow implementation.
+- \`perScale.converted_card_0_to_1\`: same observations under the converted ONNX model card's normalization, while the staging runtime shadow now compares BOTH input hypotheses on one crop and abstains on disagreement. Neither hypothesis authorizes real identity decisions.
 - \`perScale.<mode>.perClass.<category>\`: total media trials, \`observedLive\`, \`observedAttack\`, \`inconclusive\` counts. These are **not authenticated outcomes**.
 - \`exploratoryGenuineNotAcceptedFraction\`: genuine presentations classified attack **or inconclusive**, divided by all genuine trials. A value of 1.0 on a tiny pilot means that pilot's genuine attempts did not receive a model-live observation—not that the model is universally unusable.
 - \`exploratoryAttackAcceptedFraction\`: print and replay trials with **any sampled frame** marked model-live, divided by all recorded attack presentations; inconclusive outcomes remain in the denominator. Do not call this an officially calibrated ISO APCER.
