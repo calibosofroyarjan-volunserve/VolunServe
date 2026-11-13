@@ -54,7 +54,7 @@ export function adminReviewMethodEligible(
   return false;
 }
 
-export type AdminReviewStatus = "pending" | "verified" | "retry_required" | "all";
+export type AdminReviewStatus = "pending" | "verified" | "retry_required" | "rejected" | "all";
 
 export type AdminReviewStatusInput = {
   status?: string;
@@ -76,11 +76,15 @@ export function adminReviewStatusBucket(row: AdminReviewStatusInput): AdminRevie
   if (row.identityVerified === true) return "verified";
   if (row.manualReviewDecision === "retry_required" &&
       row.requiresManualReview !== true) return "retry_required";
+  // Rejection is a final result for this submission, not a verified account.
+  if (row.manualReviewDecision === "rejected" &&
+      row.requiresManualReview !== true) return "rejected";
   if (row.manualReviewDecision === "verified" ||
       row.status === "verified" || row.identityStatus === "verified")
     return "all";
   if (row.targetEligible !== true) return "all";
-  if (row.manualReviewDecision === "retry_required") return "all";
+  if (row.manualReviewDecision === "retry_required" ||
+      row.manualReviewDecision === "rejected") return "all";
   if (row.status === "pending" && row.requiresManualReview === true)
     return "pending";
   return "all";
