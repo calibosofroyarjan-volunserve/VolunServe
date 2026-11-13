@@ -75,6 +75,8 @@ on:
       - "backend/test-selectedIdPolicy.js"
       - "backend/test-id-backscan-quality.cjs"
       - "lib/identityVerification.ts"
+      - "lib/identityMediaAvailability.ts"
+      - "backend/test-identity-media-capability-preflight.cjs"
       - "app/identity-verification.web.tsx"
       - "app/identity-face-demo.web.tsx"
       - "app/identity-face-demo.tsx"
@@ -193,6 +195,8 @@ jobs:
         run: npm ci --ignore-scripts --no-audit --no-fund
       - name: Validate browser ID/selfie first-frame camera readiness (NO DEPLOY)
         run: node --test backend/test-identity-web-camera-preview.cjs
+      - name: Block private staging ID/selfie photos before web/native camera opens (NO DEPLOY)
+        run: node --test backend/test-identity-media-capability-preflight.cjs
       - name: Verify staging-only local face detection demo cannot upload biometric media
         run: node --test backend/test-identity-local-face-demo.cjs
       - name: Execute real Expo Admin approval UI gate against backend policy (NO DEPLOY)
