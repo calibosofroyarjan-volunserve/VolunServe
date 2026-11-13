@@ -4,6 +4,8 @@
  * No real or synthetic Firebase accounts, tokens, login attempts, ID media,
  * multipart submissions, user records, or production endpoints are used.
  * A 200 on a protected Admin endpoint is a security failure.
+ * Render free-tier cold starts may return transient 503 for ~50 seconds.
+ * Retry only GET requests; no account or user record is ever touched.
  */
 const assert = require("node:assert/strict");
 
@@ -13,7 +15,7 @@ const BASE = Object.freeze({
   web: "https://volunserve-expo-resident-full-staging.onrender.com",
 });
 
-async function request(url, attempts=3) {
+async function request(url, attempts=10) {
   let lastError;
   for(let i=0;i<attempts;i++){
     try {
@@ -24,13 +26,13 @@ async function request(url, attempts=3) {
       });
       if([502,503,504,429].includes(response.status) && i+1<attempts){
         await response.body?.cancel().catch(()=>{});
-        await new Promise(resolve=>setTimeout(resolve,1500));
+        await new Promise(resolve=>setTimeout(resolve,10000));
         continue;
       }
       return response;
     }catch(error){
       lastError=error;
-      if(i+1<attempts)await new Promise(resolve=>setTimeout(resolve,1500));
+      if(i+1<attempts)await new Promise(resolve=>setTimeout(resolve,10000));
     }
   }
   throw new Error("Staging endpoint unavailable after cold-start retries: "+
