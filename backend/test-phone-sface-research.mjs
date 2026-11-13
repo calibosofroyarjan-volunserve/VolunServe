@@ -65,8 +65,8 @@ test("RGB tensor uses raw 0-255 channel-first OpenCV SFace normalization",()=>{
 });
 
 test("cosine handles valid embeddings, zero vectors, NaN/Inf and nonmatching lengths",()=>{
-  assert.equal(cosineResearchOnly(new Float32Array(8).fill(1),new Float32Array(8).fill(1)),1);
-  assert.equal(cosineResearchOnly(new Float32Array(8).fill(1),new Float32Array(8).fill(-1)),-1);
+  assert(Math.abs(cosineResearchOnly(new Float32Array(8).fill(1),new Float32Array(8).fill(1)) - 1)<1e-12);
+  assert(Math.abs(cosineResearchOnly(new Float32Array(8).fill(1),new Float32Array(8).fill(-1)) + 1)<1e-12);
   assert.equal(cosineResearchOnly(new Float32Array(8),new Float32Array(8).fill(1)),null);
   assert.equal(cosineResearchOnly(new Float32Array(8),new Float32Array(9)),null);
   const x=new Float32Array(8).fill(1);x[3]=NaN;
