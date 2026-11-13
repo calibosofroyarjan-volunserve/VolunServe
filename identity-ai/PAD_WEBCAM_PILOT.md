@@ -33,6 +33,18 @@ does not permit software to recognize whether a photo or screen was
 physically presented. A larger, independently labeled trial is needed;
 do not repeat the same nine samples merely to optimize a reported score.
 
+## Multi-session camera/lighting study
+
+After your confirmed 9-trial pilot, see
+[PAD_MULTISESSION_STUDY.md](PAD_MULTISESSION_STUDY.md) for the new, optional
+anonymous counts export and multi-session local summary. Choose correct
+lighting/camera categories in the Windows launcher. After a completed pilot
+you may explicitly consent to save a NEW aggregate-only JSON outside Git,
+then compare actual separately collected sessions using the safe local
+`pad_multisession_aggregate_local.py` tool. No biometric images, videos,
+face templates, personal identifiers or cloud uploads are involved. Session
+counts do not establish independent participants or certified PAD.
+
 ## One-click laptop procedure (recommended)
 
 After opening your **up-to-date staging Git checkout** on your Windows laptop,
