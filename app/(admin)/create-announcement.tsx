@@ -127,6 +127,11 @@ export default function CreateAnnouncement() {
     try {
       setSubmitting(true);
 
+      // Refresh the ID token so a newly verified Admin email is reflected
+      // in the live Firestore rule's email_verified claim before publishing.
+      // This does not bypass any role or security checks.
+      await user.getIdToken(true);
+
       await addDoc(
         collection(db, "announcements"),
         {
@@ -167,7 +172,9 @@ export default function CreateAnnouncement() {
         error
       );
 
-      setFormNotice({ kind: "error", text: error?.code === "permission-denied" ? "Publishing was blocked by account permissions. Please contact an administrator." : (error?.message || "The announcement could not be published. Please try again.") });
+      setFormNotice({ kind: "error", text: error?.code === "permission-denied" || error?.code === "firestore/permission-denied"
+          ? "Publishing blocked by Firestore permissions. Check that this is an active approved Admin with verified email, and that deployed announcement rules permit audience 'all'. No announcement was published."
+          : (error?.message || "The announcement could not be published. Please try again.") });
     } finally {
       setSubmitting(false);
     }
