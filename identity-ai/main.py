@@ -573,6 +573,16 @@ def face_landmarks(
 def normalize_landmarks(
     points,
 ):
+    # Broken, unbounded or non-finite model landmarks must never turn into
+    # a misleading similarity score (or a JSON NaN that breaks the request).
+    points = np.asarray(points, dtype=np.float64)
+    if (
+        points.ndim != 2 or points.shape[1] != 2
+        or points.shape[0] <= max(MATCH_LANDMARKS)
+        or not np.isfinite(points).all()
+        or np.any(points < -0.25) or np.any(points > 1.25)
+    ):
+        raise ValueError("invalid_landmark_coordinates")
     left_eye = points[
         LEFT_EYE_OUTER
     ]
@@ -588,7 +598,7 @@ def normalize_landmarks(
             eye_vector
         )
     )
-    if eye_distance < 1e-5:
+    if not math.isfinite(eye_distance) or eye_distance < 1e-5:
         raise ValueError(
             "invalid_eye_geometry"
         )
@@ -630,6 +640,8 @@ def normalize_landmarks(
     selected = aligned[
         MATCH_LANDMARKS
     ]
+    if not np.isfinite(selected).all():
+        raise ValueError("nonfinite_normalized_landmarks")
     return selected
 
 
@@ -1100,10 +1112,19 @@ def run_face_verification(
         normalized_id,
         normalized_selfie,
     )
-    match_score = round(
-        similarity["score"],
-        4,
-    )
+    raw_score = similarity.get("score") if isinstance(similarity, dict) else None
+    if (isinstance(raw_score, bool)
+        or not isinstance(raw_score, (int, float, np.number))
+        or not math.isfinite(float(raw_score))
+        or not 0.0 <= float(raw_score) <= 1.0):
+        return manual_review_result(
+            uid=uid,
+            message="The facial geometry score is inconclusive. Independent Admin review is required.",
+            id_quality=id_quality,
+            selfie_quality=selfie_quality,
+            warning="face_geometry_unreliable",
+        )
+    match_score = round(float(raw_score), 4)
     # SHADOW ONLY: no impact on matching threshold or verification decision.
     # A one-frame passive classifier cannot establish true liveness.
     pad_shadow = assess_frame_shadow(selfie_image)
