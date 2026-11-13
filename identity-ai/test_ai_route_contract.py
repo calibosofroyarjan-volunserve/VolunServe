@@ -15,6 +15,7 @@ from strict_document_screening import (
     assess_document_sides, add_photo_quality, blurry_national_id_claim_needs_review,
 )
 from profile_consistency import profile_comparison
+from face_preflight_policy import screening_ready_for_face_comparison
 
 
 class RouteHTTPException(Exception):
@@ -92,6 +93,12 @@ def load_handlers():
                 if id_back_document_bytes is not None else None)
         screening = assess_document_sides(declared_type, front, back)
         screening = add_photo_quality(screening, 140.0)
+        # This stub represents an already-measured, clear reverse photo.
+        # Real production code uses add_back_photo_quality(image_variance).
+        screening["backImageQualityStatus"] = (
+            "not_required" if declared_type == "passport" else
+            "adequate" if id_back_document_bytes is not None else "not_checked"
+        )
         screening.update(profile_comparison(
             expected_date_of_birth, expected_barangay, front + "\n" + (back or "")
         ))
@@ -132,6 +139,7 @@ def load_handlers():
             "national_id", "drivers_license", "passport", "umid", "prc_id",
         },
         "hashlib": hashlib, "asyncio": asyncio, "logging": logging,
+        "screening_ready_for_face_comparison": screening_ready_for_face_comparison,
     }
     exec(compile(module, "main.py:selected_routes", "exec"), env)
     return env, hits
@@ -235,6 +243,53 @@ class RealRouteHandlerContractTests(unittest.TestCase):
         self.assertEqual(result["status"], "pending")
         self.assertEqual(self.hits["face"], 1)
         self.assertFalse(result["documentScreening"]["authenticityVerified"])
+
+    def test_precheck_denies_contradictory_positive_status_before_face(self):
+        original = self.env["screen_government_id"]
+
+        def adversarial_screen(**kwargs):
+            data = original(**kwargs)
+            data["status"] = "text_consistent_unverified"
+            data["detectedIdType"] = kwargs["declared_type"]
+            data["warningCodes"] = ["school_id_not_supported"]
+            return data
+
+        self.env["screen_government_id"] = adversarial_screen
+        result = self.call("document_precheck", self.form())
+        self.assertEqual(result["outcome"], "retry")
+        self.assertEqual(self.hits["face"], 0)
+
+    def test_verify_never_computes_face_for_incomplete_back_evidence(self):
+        original = self.env["screen_government_id"]
+
+        def missing_back_quality(**kwargs):
+            data = original(**kwargs)
+            data["status"] = "text_consistent_unverified"
+            data["backImageQualityStatus"] = "not_checked"
+            return data
+
+        self.env["screen_government_id"] = missing_back_quality
+        result = self.call("verify_identity", self.form(with_selfie=True))
+        self.assertEqual(result["status"], "failed")
+        self.assertEqual(self.hits["face"], 0)
+        self.assertFalse(result["documentScreening"]["authenticityVerified"])
+
+    def test_verify_never_computes_face_for_mrz_or_dob_conflicts(self):
+        original = self.env["screen_government_id"]
+        for field, value in (
+            ("profileBirthDateCheck", "possible_conflict"),
+            ("passportMrzCheck", "multiple_candidates"),
+        ):
+            def contradictory_screen(**kwargs):
+                data = original(**kwargs)
+                data["status"] = "text_consistent_unverified"
+                data[field] = value
+                return data
+            self.env["screen_government_id"] = contradictory_screen
+            result = self.call("verify_identity", self.form(with_selfie=True))
+            self.assertEqual(result["status"], "failed")
+            self.assertEqual(self.hits["face"], 0)
+        self.env["screen_government_id"] = original
 
     def test_verify_rejects_identical_front_used_as_selfie(self):
         form = self.form(with_selfie=True)
