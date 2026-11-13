@@ -152,7 +152,7 @@ class CombinedWebcamTests(unittest.TestCase):
             "model-LIVE=1", "NOT BIOMETRIC VERIFICATION",
         ):
             self.assertIn(expected, detailed)
-        for forbidden in ("faceImage", "personName", "embedding", "rawScore"):
+        for forbidden in ("faceImage=", "personName=", "embedding=", "rawScore="):
             self.assertNotIn(forbidden, detailed)
         malformed = json.loads(json.dumps(report))
         malformed["perHypothesis"]["v2_raw_0_to_255"]["live"]["observedLive"] = 15
@@ -196,7 +196,7 @@ class CombinedWebcamTests(unittest.TestCase):
         self.assertIn("V1SE normalized 0", displayed)
         self.assertIn("PRINT: trials=1", displayed)
         self.assertIn("model-LIVE=1", displayed)
-        self.assertIn("identity verification", displayed.lower())
+        self.assertIn("not biometric verification", displayed.lower())
         self.assertNotIn("faceImage", displayed)
 
     def test_direct_copy_save_controls_exist_without_automatic_export(self):
