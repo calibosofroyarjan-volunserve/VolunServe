@@ -16,6 +16,7 @@ from strict_document_screening import (
     blurry_national_id_claim_needs_review,
 )
 from profile_consistency import profile_comparison
+from face_preflight_policy import screening_ready_for_face_comparison
 from passport_mrz_shadow import assess_passport_mrz
 from passive_pad_shadow import readiness as passive_pad_readiness, assess_frame_shadow
 from sface_shadow import readiness as sface_readiness, assess_pair_shadow as sface_assess_pair_shadow
@@ -1346,16 +1347,11 @@ async def document_precheck(
         expected_barangay=x_volunserve_profile_barangay or "",
     )
     birthday_conflict = screening.get("profileBirthDateCheck") == "possible_conflict"
-    recognized = (
-        not birthday_conflict
-        and screening.get("status") == "text_consistent_unverified"
-        and screening.get("detectedIdType") == declared_type
-        and screening.get("imageQualityStatus") == "adequate"
-        and not any(code in (screening.get("warningCodes") or [])
-                    for code in ("document_front_back_swapped",
-                                 "document_front_side_conflict",
-                                 "document_back_looks_like_front"))
-    )
+    # Document precheck and the actual /verify route MUST share exactly the
+    # same fail-closed policy: no face comparison after contradictory ID OCR,
+    # missing/blurred back evidence or an unresolved DOB/MRZ conflict.
+    # "pass" here means eligible to attempt matching, NOT an authentic ID.
+    recognized = screening_ready_for_face_comparison(screening, declared_type)
     review = (
         not birthday_conflict
         and not recognized
@@ -1576,8 +1572,7 @@ async def verify_identity(
                 ),
                 warning="blurry_national_id_claim_review",
             )
-        elif (screening_status != "text_consistent_unverified"
-              or document_screening.get("detectedIdType") != id_type):
+        elif not screening_ready_for_face_comparison(document_screening, id_type):
             warnings = document_screening.get("warningCodes") or []
             if "document_front_back_swapped" in warnings:
                 reason = "Front and back appear reversed. Retake the portrait/front side in the Front slot and the reverse in the Back slot."
@@ -1585,8 +1580,16 @@ async def verify_identity(
                 reason = "The Back slot appears to show the front side. Check both images and retake the back side."
             elif "document_front_side_conflict" in warnings:
                 reason = "The Front slot appears to show back-side details. Retake a clear portrait/front image."
-            elif screening_status == "unsupported":
+            elif "school_id_not_supported" in warnings or screening_status == "unsupported":
                 reason = "School IDs are not supported. Select and scan a valid government-issued ID."
+            elif document_screening.get("backImageQualityStatus") in ("low", "unknown", "not_checked") and id_type != "passport":
+                reason = "The government ID back image quality is insufficient. Retake a clear photo of the reverse side."
+            elif document_screening.get("profileBirthDateCheck") == "possible_conflict":
+                reason = "The scanned birth date may conflict with your saved profile. Correct the evidence and request independent Admin review; this does not prove fraud."
+            elif document_screening.get("passportMrzCheck") in ("checksum_inconsistent_or_ocr_error", "multiple_candidates"):
+                reason = "The passport MRZ text could not be confirmed. Retake a clear bio-page scan for independent review."
+            elif document_screening.get("warningCodes"):
+                reason = "The ID scan contains unresolved OCR warnings. Correct the document photos before face comparison."
             elif screening_status == "mismatch":
                 reason = "The scanned document does not match the selected government ID type. Select the correct ID and retry."
             else:
