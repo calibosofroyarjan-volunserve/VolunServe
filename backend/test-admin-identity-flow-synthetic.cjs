@@ -35,7 +35,8 @@ const baseDoc = {
 function trial({doc={},admin=true,auth=true,approved=true,personUid=DEMO_UID,
                 action="verify",attested=true,validMethod=true,
                 currentStatus="pending", targetRole="resident",
-                residentAccess=true, targetStatus="approved"}={}) {
+                residentAccess=true, targetStatus="approved",
+                notes="Reviewed independently using the official document and in-person reference."}={}) {
   const records=new Map([
     ["users/"+DEMO_UID,{
       role:targetRole,residentAccess,status:targetStatus,
@@ -99,7 +100,7 @@ function trial({doc={},admin=true,auth=true,approved=true,personUid=DEMO_UID,
     body:{
       action, validationMethod:validMethod?"official_document_check":"",
       issuerReviewAttested:attested,
-      notes:"Reviewed independently using the official document and in-person reference.",
+      notes,
     },
   };
   const response={
@@ -143,7 +144,7 @@ test("Admin cannot review own identity",async()=>{
 });
 test("staff, Admin, Super Admin and applicant accounts cannot be targets of Resident decisions",async()=>{
  for(const role of ["admin","superadmin","lgu_personnel","applicant","guest",""]){
-   for(const action of ["verify","require_retry"]){
+   for(const action of ["verify","require_retry","reject"]){
      const r=await trial({targetRole:role,action});
      assert.equal(r.response.statusCode,403,role+" "+action);
      assert.equal(r.response.body.error,"identity_review_target_not_eligible");
@@ -159,7 +160,7 @@ test("a role claim in requested/active mode cannot replace a real Resident profi
 test("inactive or nonresident-access accounts cannot be verified or retried",async()=>{
  for(const args of [{targetStatus:"suspended"},{targetStatus:"pending"},
                     {targetStatus:"rejected"},{residentAccess:false}]){
-   for(const action of ["verify","require_retry"]){
+   for(const action of ["verify","require_retry","reject"]){
      const r=await trial({...args,action});
      assert.equal(r.response.statusCode,403,JSON.stringify({...args,action}));
      assert.equal(r.writes.length,0);
@@ -212,4 +213,41 @@ test("non-pending review cannot be approved or replayed",async()=>{
  const r=await trial({currentStatus:"verified"});
  assert.equal(r.response.statusCode,409);
  assert.equal(r.writes.length,0);
+});
+
+test("Reject Submission is a distinct audited, non-verifying Admin outcome",async()=>{
+ const r=await trial({action:"reject",attested:false,validMethod:false});
+ assert.equal(r.response.statusCode,200);
+ assert.equal(r.response.body.identityVerified,false);
+ assert.equal(r.records.get("users/"+DEMO_UID).identityVerified,false);
+ assert.equal(r.records.get("users/"+DEMO_UID).identityStatus,"failed");
+ const decision=r.records.get("identityVerifications/"+DEMO_UID);
+ assert.equal(decision.status,"failed");
+ assert.equal(decision.decision,"rejected");
+ assert.equal(decision.manualReviewDecision,"rejected");
+ assert.equal(decision.aiAttemptCount,1,"Reject must NOT silently reset attempts");
+ assert.equal(decision.requiresManualReview,false);
+ assert(r.writes.some(w=>w.ref.col==="adminActivityLogs" &&
+    w.data.action==="Resident Identity Submission Rejected"));
+ assert.equal(r.writes.length,3);
+});
+test("Reject requires a reason but not AI/issuer pass",async()=>{
+ const bad=await trial({action:"reject",notes:"No"});
+ assert.equal(bad.response.statusCode,400);
+ assert.equal(bad.response.body.error,"identity_retry_reason_required");
+ assert.equal(bad.writes.length,0);
+ const unsupported=await trial({action:"reject",doc:{detectedIdType:"school_id",status:"unsupported"}});
+ assert.equal(unsupported.response.statusCode,200);
+ assert.equal(unsupported.response.body.identityVerified,false);
+});
+test("Reject fails closed against stale review or unauthorized admin",async()=>{
+ const inactive=await trial({action:"reject",currentStatus:"failed"});
+ assert.equal(inactive.response.statusCode,409);
+ assert.equal(inactive.writes.length,0);
+ const ordinary=await trial({action:"reject",admin:false});
+ assert.equal(ordinary.response.statusCode,403);
+ assert.equal(ordinary.writes.length,0);
+ const self=await trial({action:"reject",personUid:ADMIN_UID});
+ assert.equal(self.response.statusCode,403);
+ assert.equal(self.writes.length,0);
 });
