@@ -2,10 +2,25 @@
 import inspect
 import queue
 import unittest
+from pathlib import Path
 import local_national_id_selfie_review as local
 
 
 class CameraOnlyLocalReviewTests(unittest.TestCase):
+    def test_windows_launcher_checks_real_tesseract_before_scan(self):
+        # Inspect only command text: no network, Windows OCR or personal media.
+        command = Path("Start-VolunServe-Private-ID-Review.cmd").read_text(
+            encoding="utf-8")
+        self.assertIn("where tesseract.exe", command)
+        self.assertIn("Tesseract-OCR\\tesseract.exe", command)
+        self.assertIn("pytesseract.get_tesseract_version()", command)
+        self.assertIn("goto OCR_MISSING", command)
+        self.assertIn(":OCR_MISSING", command)
+        self.assertLess(command.index("pytesseract.get_tesseract_version()"),
+                        command.index('py -3.11 "identity-ai\\local_national_id_selfie_review.py"'))
+        self.assertNotIn("curl ", command.lower())
+        self.assertNotIn("powershell -", command.lower())
+
     def test_each_camera_capture_must_be_distinct(self):
         # Fabricated bytes only. No IDs, faces, image models or network.
         local.validate_distinct_local_captures(
