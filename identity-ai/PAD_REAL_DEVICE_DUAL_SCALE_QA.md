@@ -6,6 +6,10 @@ This protocol supports the final unresolved technical question after authentic u
 
 The dual-scale evaluator runs **locally on the owner's computer** and does not call an HTTP API, use Firebase, write face templates, export frame scores, or upload media. It prints only aggregate counts. No production, staging backend or cloud service is involved.
 
+## New direct webcam pilot (no recorded files needed)
+
+For the fastest **local camera** evaluation without storing face photos or videos, use the guided terminal tool documented in [PAD_WEBCAM_PILOT.md](PAD_WEBCAM_PILOT.md). Run the private webcam pilot on your PC, after downloading pinned MiniFASNet + YuNet models, with explicit consent. It prompts for live / physically printed portrait / second-screen replay presentations and calculates only aggregate 0–255 versus 0–1 experimental status counts. **No data are uploaded, no account is verified, and no true real-device performance result exists until participants actually run the protocol.**
+
 ## Obtain only consensual private test recordings
 
 Prepare a folder outside the Git checkout, e.g.:
