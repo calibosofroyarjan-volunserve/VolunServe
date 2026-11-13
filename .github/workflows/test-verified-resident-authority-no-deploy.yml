@@ -1,0 +1,51 @@
+name: Verified Resident authority across Firestore / Node / UI (NO DEPLOY)
+
+on:
+  pull_request:
+    paths:
+      - "firestore.rules"
+      - "backend/server.js"
+      - "lib/firebaseAuth.ts"
+      - "backend/test-verified-resident-authority-parity.cjs"
+      - ".github/workflows/test-verified-resident-authority-no-deploy.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  real-firestore-rules-parity:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      CI: "true"
+      GCLOUD_PROJECT: demo-volunserve-verified-guard
+      FIRESTORE_EMULATOR_HOST: "127.0.0.1:8080"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - name: Install frontend rules-testing and backend SDK locks (no lifecycle scripts)
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          npm ci --prefix backend --ignore-scripts --no-audit --no-fund
+      - name: Real Firestore Rules Emulator and original Node/React client guards
+        run: |
+          npx --no-install firebase emulators:exec \
+            --config backend/identity-e2e-emulators.json \
+            --only firestore \
+            --project demo-volunserve-verified-guard \
+            "node --test backend/test-verified-resident-authority-parity.cjs"
+      - name: Recheck Node original authenticated route & staging policies
+        run: |
+          node --test backend/test-staging-identity-acceptance-e2e.cjs
+          node --test backend/test-identity-contract-staging.js
+          node --test backend/test-identity-resident-status-client-contract.cjs
+          node --test backend/test-identity-media-capability-preflight.cjs
+          npx tsc --noEmit --pretty false
+      - name: No-deploy boundary
+        run: echo "NO DEPLOY - demo emulator only - no real accounts, media or Firebase keys"
