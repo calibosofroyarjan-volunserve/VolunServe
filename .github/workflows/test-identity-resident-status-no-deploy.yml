@@ -1,0 +1,33 @@
+name: Identity Resident/Admin status consistency (NO DEPLOY)
+
+on:
+  pull_request:
+    paths:
+      - "lib/identityResidentStatusContract.ts"
+      - "lib/identityVerification.ts"
+      - "backend/test-identity-resident-status-client-contract.cjs"
+      - ".github/workflows/test-identity-resident-status-no-deploy.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  synthetic-resident-admin-flow:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Install locked dependencies without lifecycle scripts
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Check Resident/Node Admin review and status responses
+        run: |
+          node --test backend/test-identity-resident-status-client-contract.cjs
+          node --test backend/test-staging-identity-acceptance-e2e.cjs
+          node --test backend/test-staging-admin-review-ui-contract.cjs
+          node --test backend/test-identity-media-capability-preflight.cjs
+      - name: Check Expo web/native identity TypeScript integration
+        run: npx tsc --noEmit --pretty false
+      - name: Confirm no deployment or private images
+        run: echo "NO DEPLOY - synthetic records only - staging upload gate remains HTTP 423"
