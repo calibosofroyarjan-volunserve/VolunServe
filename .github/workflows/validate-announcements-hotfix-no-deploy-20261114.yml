@@ -34,5 +34,5 @@ jobs:
         run: npx firebase emulators:exec --only firestore --project demo-volunserve "node scripts/test-announcements-published-audience-emulator.cjs"
       - name: Expo web export (no production credentials)
         run: npx expo export --platform web --clear
-      - name: Guard: never deploy production
+      - name: No production deployment
         run: echo "Announcement tests only. No Firebase Hosting, Firestore production rules, Functions or Render deployment."
