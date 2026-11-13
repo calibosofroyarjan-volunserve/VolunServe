@@ -5663,12 +5663,13 @@ app.post(
       }
       if (
         action !== "verify" &&
-        action !== "require_retry"
+        action !== "require_retry" &&
+        action !== "reject"
       ) {
         throw makeHttpError(
           400,
           "invalid_identity_review_action",
-          "Choose Verify Resident or Require Retry.",
+          "Choose Verify Resident, Reject Submission, or Require Retry.",
         );
       }
       if (
@@ -5682,13 +5683,13 @@ app.post(
         );
       }
       if (
-        action === "require_retry" &&
+        (action === "require_retry" || action === "reject") &&
         notes.length < 5
       ) {
         throw makeHttpError(
           400,
           "identity_retry_reason_required",
-          "Enter a clear reason before requiring the Resident to retry identity verification.",
+          "Enter a clear reason before rejecting this submission or requiring a rescan.",
         );
       }
       const userRef = db.collection("users").doc(targetUid);
@@ -5791,7 +5792,9 @@ app.post(
           manualReviewDecision:
             action === "verify"
               ? "verified"
-              : "retry_required",
+              : action === "reject"
+                ? "rejected"
+                : "retry_required",
           manualValidationMethod:
             action === "verify"
               ? validationMethod
@@ -5853,16 +5856,24 @@ app.post(
             identityVerified: true,
           };
         }
+        // Reject closes this particular evidence submission. It is NOT an
+        // account ban and NEVER grants Verified Resident. Unlike Require Retry,
+        // rejection preserves the attempt count and cannot silently reset it.
+        // A new application may use remaining attempts; exhausted accounts
+        // require an authorized Admin to issue Require Retry under policy.
+        const rejected = action === "reject";
         transaction.set(
           verificationRef,
           {
             ...commonReviewFields,
             status: "failed",
-            decision: "retry_required",
+            decision: rejected ? "rejected" : "retry_required",
             message: notes,
-            aiAttemptCount: 0,
-            aiAttemptCycle: (Number.isSafeInteger(verification.aiAttemptCycle) && verification.aiAttemptCycle > 0
-              ? verification.aiAttemptCycle : 1) + 1,
+            ...(rejected ? {} : {
+              aiAttemptCount: 0,
+              aiAttemptCycle: (Number.isSafeInteger(verification.aiAttemptCycle) && verification.aiAttemptCycle > 0
+                ? verification.aiAttemptCycle : 1) + 1,
+            }),
           },
           { merge: true },
         );
@@ -5877,7 +5888,7 @@ app.post(
           { merge: true },
         );
         transaction.set(activityRef, {
-          action: "Resident Identity Retry Required",
+          action: rejected ? "Resident Identity Submission Rejected" : "Resident Identity Retry Required",
           residentUid: targetUid,
           verificationId: cleanText(
             verification.verificationId || "",
@@ -5905,7 +5916,9 @@ app.post(
         message:
           action === "verify"
             ? "Resident identity verified after manual LGU/Admin validation."
-            : "The Resident must retry identity verification with clearer or corrected information.",
+            : action === "reject"
+              ? "This identity submission was rejected by LGU/Admin. No Verified Resident access was granted."
+              : "The Resident must retry identity verification with clearer or corrected information.",
       });
     } catch (error) {
       console.error("Identity review decision failed:", error);
