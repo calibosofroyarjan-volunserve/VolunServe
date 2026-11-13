@@ -81,16 +81,10 @@ service cloud.firestore {
     }
     // Exact shared validation predicates hoisted from identical match-local helpers.
       function hasVerifiedIdentity(data) {
-        return (
-          (
-            'identityVerified' in data
-            && data.identityVerified == true
-          )
-          || (
-            'identityStatus' in data
-            && data.identityStatus == 'verified'
-          )
-        );
+        // Only the Admin-reviewed profile boolean is authoritative.
+        // Stale "verified" text alone must never grant privileged writes.
+        return 'identityVerified' in data
+          && data.identityVerified == true;
       }
       function isVerifiedResident() {
         return isResident()
