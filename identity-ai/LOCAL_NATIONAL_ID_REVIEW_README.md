@@ -63,3 +63,23 @@ For laptop cameras that cannot resolve the National ID's small printed labels, t
 If the webcam cannot read the ID after reasonable attempts, there is an explicit **MANUAL CAPTURE FOR REVIEW — NOT VERIFIED** button for steps FRONT and BACK. Only use this with your own document and camera consent. It asks for separate confirmation, captures **one current camera frame in local memory**, and labels that step **NOT VERIFIED / manual capture**. It is not photo/gallery upload, cannot alter an account, and does not bypass final OCR/document-side screening. The selfie stage still requires its existing single-face framing check. If final OCR lacks enough evidence, the experimental face comparison is **not performed**, and the private report remains inconclusive with human review required. Manual capture must never be presented as government ID validation or liveness.
 
 Keep card numbers, birthdays, full names and ID photos out of troubleshooting screenshots. If the laptop camera cannot deliver readable OCR text even after these changes, a higher-quality consenting webcam/phone-camera setup or an authorized manual review may be necessary; simply shrinking the yellow guide cannot add missing detail to a blurry image.
+
+## Optional SFace 1:1 RESEARCH when laptop OCR stays inconclusive
+
+If the private camera flow completes via **Manual Capture for Review** and the OCR report says `document_type_not_recognized`, the **normal** ID-photo-versus-selfie verification is intentionally **not performed**. That is correct fail-closed behavior; do not mark the ID accepted based on the picture or a similarity score.
+
+There is now a **separate opt-in, non-decisional research observation** for that situation. In the repository root, start:
+
+```powershell
+.\Start-VolunServe-Private-SFace-Research.cmd
+```
+
+The launcher explicitly asks for consent before checking/downloading official OpenCV YuNet/SFace model weights (~37 MB) from OpenCV Zoo's Hugging Face distribution. SHA256-pinned downloads are required, and already verified local models are reused. Only model binaries are requested; your camera frames, ID images, names, OCR text, account info and selfies **are never uploaded**. The model files are local and excluded from Git; they are not bundled into the live app. The normal launcher does not enable this research mode.
+
+On the camera tool main window, optionally check **SFace FACE RESEARCH ONLY**, scan your own ID front/back and selfie locally (manual capture permitted). After the existing strict OCR report, the tool *separately* attempts OpenCV YuNet one-face detection and SFace 1:1 cosine similarity on the **ephemeral** ID-front image and selfie.
+
+- When model weights are missing/bad: it says **models unavailable**.
+- When a face is too small, blurry, obscured, ambiguous or multiple faces are seen: **inconclusive**.
+- When both single-face crops are usable: it may show an **uncalibrated cosine similarity for RESEARCH ONLY**, never a "matched", "verified", "live", "genuine ID", "approved" or pass/fail verdict.
+
+This experimental observation does **not** bypass `screening_ready_for_face_comparison` for the normal verification path, does not certify identity or spoof resistance, and does not alter Firebase accounts, Admin decisions, or the blocked staging media upload. It has no accepted face-match threshold and is not fit for deployment. If laptop optics cannot produce a detectable ID portrait, the outcome may remain inconclusive even when the camera captures all three images. For actual authorization, readable ID documentation and independent manual/Admin review remain necessary. Do not send screenshots containing a real ID or face to debug this feature.

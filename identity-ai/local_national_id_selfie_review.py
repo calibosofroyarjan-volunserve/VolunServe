@@ -88,8 +88,33 @@ def safe_summary(screening: dict, comparison: dict | None = None) -> str:
     ))
 
 
-def perform_local_review(front_bytes: bytes, back_bytes: bytes, selfie_bytes: bytes) -> str:
-    """Reuse actual staging OCR and 1:1 implementations, never a backend API."""
+def shadow_sface_summary(observation: dict) -> str:
+    """Only human-readable, non-decisional local YuNet/SFace QA metadata.
+
+    Never report a match/nonmatch, score confidence, authentic ID, or liveness.
+    No image, embedding, OCR text, ID number, face box, or personal name.
+    """
+    base = (
+        "SEPARATE SFace RESEARCH ONLY (not ID verification): "
+    )
+    status = observation.get("status") if isinstance(observation, dict) else None
+    if status == "similarity_observed_unvalidated":
+        cosine = observation.get("cosineSimilarity")
+        if (isinstance(cosine, (int, float)) and not isinstance(cosine, bool)
+                and math.isfinite(cosine) and -1 <= cosine <= 1):
+            return (base + "Unvalidated cosine similarity {:.3f}. "
+                    "NO identity match decision; OCR may still be inconclusive.").format(cosine)
+        return base + "Inconclusive malformed similarity output; NO identity decision."
+    if status == "disabled":
+        return base + "Disabled. Start the explicit private SFace research launcher."
+    if status == "unavailable":
+        return base + "Models unavailable or invalid. No face matching performed."
+    return base + "Inconclusive (face detection, alignment or image quality); NO decision."
+
+
+def perform_local_review(front_bytes: bytes, back_bytes: bytes, selfie_bytes: bytes,
+                         *, shadow_qa: bool = False) -> str:
+    """Reuse strict OCR preflight; optional SFace QA NEVER bypasses verification."""
     # Block missing and reused images BEFORE importing image engines or OCR.
     # Mirrors the protected backend's exact-media-reuse restriction.
     validate_distinct_local_captures(front_bytes, back_bytes, selfie_bytes)
@@ -119,7 +144,21 @@ def perform_local_review(front_bytes: bytes, back_bytes: bytes, selfie_bytes: by
             uid="local-only-no-account", id_document_bytes=front_bytes,
             selfie_bytes=selfie_bytes,
         )
-    return safe_summary(screened, comparison)
+    report = safe_summary(screened, comparison)
+    if shadow_qa is True:
+        # Separate, explicitly opted-in research observation ONLY. It cannot
+        # influence the strict OCR preflight, the account, or the comparison
+        # authorization above. Useful when laptop OCR fails.
+        try:
+            import sface_shadow
+            observation = sface_shadow.assess_pair_shadow(
+                ai.decode_image(front_bytes, "Local ID portrait for QA"),
+                ai.decode_image(selfie_bytes, "Local selfie for QA"),
+            )
+        except Exception:
+            observation = {"status": "inconclusive"}
+        report += "\n" + shadow_sface_summary(observation)
+    return report
 
 
 def main() -> int:
@@ -137,6 +176,7 @@ def main() -> int:
     captured: dict[str, bytes] = {}
     manual_captures: set[str] = set()
     consent = tk.BooleanVar(value=False)
+    shadow_qa_optin = tk.BooleanVar(value=False)
     camera_index = tk.IntVar(value=0)
     active_window = {"close": None}
 
@@ -181,6 +221,7 @@ def main() -> int:
 
     def on_consent_change():
         if not consent.get():
+            shadow_qa_optin.set(False)
             if callable(active_window["close"]):
                 active_window["close"]()
             reset_captures()
@@ -188,6 +229,10 @@ def main() -> int:
     tk.Checkbutton(root, variable=consent, command=on_consent_change,
                    text="This is MY ID and face; I consent to LOCAL camera-only processing.",
                    bg="#f4f8fc").pack(anchor="w", padx=20, pady=(12, 4))
+    tk.Checkbutton(root, variable=shadow_qa_optin,
+                   text="Optional: SFace FACE RESEARCH ONLY (unverified, not an ID decision)",
+                   bg="#f4f8fc", fg="#82550f").pack(
+                       anchor="w", padx=20, pady=(0, 3))
 
     result = tk.Text(root, height=11, wrap="word", font=("Consolas", 10))
     result.pack(fill="both", expand=True, padx=20, pady=(10, 12))
@@ -212,7 +257,7 @@ def main() -> int:
         show_result("Reviewing in local memory... no upload or account action.")
         root.update_idletasks()
         try:
-            message = perform_local_review(*scans)
+            message = perform_local_review(*scans, shadow_qa=shadow_qa_optin.get())
             if manual_steps:
                 message += (
                     "\nLOCAL MANUAL CAMERA CAPTURE (not OCR-confirmed): "

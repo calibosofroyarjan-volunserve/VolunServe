@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - "Start-VolunServe-Private-ID-Review.cmd"
+      - "Start-VolunServe-Private-SFace-Research.cmd"
       - "identity-ai/local_id_card_crop.py"
       - "identity-ai/test_local_id_card_crop.py"
       - "identity-ai/live_camera_scan_policy.py"

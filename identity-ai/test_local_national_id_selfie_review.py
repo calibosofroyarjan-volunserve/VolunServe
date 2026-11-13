@@ -1,8 +1,11 @@
 """Synthetic no-media tests for camera-only National ID local research UI."""
 import inspect
 import queue
+import sys
+import types
 import unittest
 from pathlib import Path
+from unittest.mock import Mock, patch
 import local_national_id_selfie_review as local
 
 
@@ -48,6 +51,86 @@ class CameraOnlyLocalReviewTests(unittest.TestCase):
         source = inspect.getsource(local.perform_local_review)
         self.assertLess(source.index("validate_distinct_local_captures("),
                         source.index("import main as ai"))
+
+    def test_shadow_summary_reports_only_non_decisional_qa_metadata(self):
+        observed = local.shadow_sface_summary({
+            "status": "similarity_observed_unvalidated", "cosineSimilarity": 0.47,
+            "name": "PRIVATE", "identityVerified": True,
+        })
+        self.assertIn("RESEARCH ONLY", observed)
+        self.assertIn("Unvalidated cosine similarity", observed)
+        self.assertIn("NO identity match decision", observed)
+        self.assertNotIn("PRIVATE", observed)
+        self.assertNotIn("identityVerified", observed)
+        for value in (float("nan"), float("inf"), 2.0, True):
+            with self.subTest(value=str(value)):
+                output = local.shadow_sface_summary({
+                    "status": "similarity_observed_unvalidated",
+                    "cosineSimilarity": value,
+                })
+                self.assertIn("Inconclusive", output)
+                self.assertNotIn("similarity {:.3f}".format(value), output)
+        for value in ("unavailable", "disabled", "inconclusive", "unexpected"):
+            self.assertIn("RESEARCH ONLY", local.shadow_sface_summary({"status": value}))
+
+    def test_optional_research_only_runs_with_explicit_opt_in_and_does_not_skip_ocr_gate(self):
+        main = types.ModuleType("main")
+        main.document_ocr_ready = lambda: True
+        main.face_mesh_engine_ready = lambda: True
+        main.decode_image = lambda payload, _label: payload
+        main.screen_government_id = lambda **_kwargs: {
+            "status": "inconclusive",
+            "detectedIdType": None,
+            "warningCodes": ["document_type_not_recognized"],
+            "imageQualityStatus": "adequate",
+            "backImageQualityStatus": "adequate",
+        }
+        main.run_face_verification = Mock(side_effect=AssertionError(
+            "Normal face verification must remain behind OCR preflight"))
+        preflight = types.ModuleType("face_preflight_policy")
+        preflight.screening_ready_for_face_comparison = lambda *_args: False
+        sface = types.ModuleType("sface_shadow")
+        sface.assess_pair_shadow = Mock(return_value={
+            "status": "similarity_observed_unvalidated",
+            "cosineSimilarity": 0.42,
+        })
+        with patch.dict(sys.modules, {
+            "main": main, "face_preflight_policy": preflight,
+            "sface_shadow": sface,
+        }):
+            default = local.perform_local_review(b"front", b"back", b"selfie")
+            self.assertIn("Not performed", default)
+            self.assertNotIn("SEPARATE SFace", default)
+            sface.assess_pair_shadow.assert_not_called()
+            output = local.perform_local_review(
+                b"front", b"back", b"selfie", shadow_qa=True)
+            self.assertIn("NOT VERIFIED IDENTITY", output)
+            self.assertIn("OCR/type screening: inconclusive", output)
+            self.assertIn("Not performed", output)
+            self.assertIn("SEPARATE SFace RESEARCH ONLY", output)
+            self.assertIn("Unvalidated cosine similarity 0.420", output)
+            self.assertIn("Account action: NONE", output)
+            self.assertNotIn("front", output)
+            self.assertNotIn("back", output)
+            main.run_face_verification.assert_not_called()
+            sface.assess_pair_shadow.assert_called_once_with(b"front", b"selfie")
+
+    def test_research_launcher_only_fetches_verified_models_with_user_consent(self):
+        script = Path("Start-VolunServe-Private-SFace-Research.cmd").read_text(
+            encoding="utf8")
+        self.assertIn("choice /C YN", script)
+        self.assertIn("if errorlevel 2 goto CANCEL", script)
+        self.assertIn("download_yunet_model.py", script)
+        self.assertIn("download_sface_model.py", script)
+        self.assertIn('set "VOLUNSERVE_SFACE_SHADOW=1"', script)
+        self.assertIn("Start-VolunServe-Private-ID-Review.cmd", script)
+        self.assertLess(script.index("choice /C YN"),
+                        script.index("download_yunet_model.py"))
+        self.assertLess(script.index("download_sface_model.py"),
+                        script.index('set "VOLUNSERVE_SFACE_SHADOW=1"'))
+        self.assertNotIn("curl ", script.lower())
+        self.assertNotIn("requests.post", script)
+        self.assertNotIn("firebase", script.lower())
 
     def test_no_file_upload_or_picker_in_user_interface(self):
         source = inspect.getsource(local.main)
