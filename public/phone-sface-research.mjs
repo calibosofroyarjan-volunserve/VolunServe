@@ -155,7 +155,7 @@ async function validModelBytes(active) {
     try {
       // GET only official public model bytes. No IDs, faces or embeddings.
       const response=await fetch(url, {
-        mode:"cors", cache:"no-store", credentials:"omit", redirect:"follow"
+        mode:"cors", cache:"default", credentials:"omit", redirect:"follow"
       });
       if (!response.ok) continue;
       const buffer=await response.arrayBuffer();
@@ -181,6 +181,59 @@ async function validModelBytes(active) {
   throw new Error(integrityFailed ? "model_integrity_failed" :
     "model_download_failed");
 }
+/**
+ * Optional PUBLIC-MODELS-ONLY preflight. May be run WITHOUT any ID/selfie
+ * capture. Checks the very same MediaPipe -> SFace checksum -> ORT path used
+ * by research and reports an allowlisted setup stage, never a face result.
+ */
+export async function checkSFaceEnvironment({active, progress=()=>{}}) {
+  if(typeof active!=="function" || !active())
+    return researchResult("cancelled");
+  let stage="vision_module_load_failed";
+  let landmarker=null,session=null,model=null;
+  try {
+    progress("Checking public landmark module and model (no ID/selfie images).");
+    const vision=await import(VISION_JS);
+    if(!active())return researchResult("cancelled");
+    stage="face_landmarker_init_failed";
+    const files=await vision.FilesetResolver.forVisionTasks(VISION_WASM);
+    landmarker=await vision.FaceLandmarker.createFromOptions(files,{
+      baseOptions:{modelAssetPath:LANDMARKER_MODEL, delegate:"CPU"},
+      runningMode:"IMAGE",numFaces:2
+    });
+    if(!active())return researchResult("cancelled");
+    stage="sface_model_download_failed";
+    progress("Checking ~39 MB official SFace model download and SHA-256.");
+    model=await validModelBytes(active);
+    if(!active())return researchResult("cancelled");
+    stage="onnx_runtime_import_failed";
+    progress("SFace checksum passed. Checking ONNX runtime files.");
+    const ort=await import(ORT_JS);
+    if(!ort?.env?.wasm || !ort?.InferenceSession || !ort?.Tensor)
+      throw new Error("runtime_import_failed");
+    if(!active())return researchResult("cancelled");
+    ort.env.wasm.wasmPaths=ORT_WASM;
+    ort.env.wasm.numThreads=1;
+    stage="onnx_session_init_failed";
+    session=await ort.InferenceSession.create(model,{
+      executionProviders:["wasm"],graphOptimizationLevel:"all"
+    });
+    if(!active())return researchResult("cancelled");
+    if(!session.inputNames?.length || !session.outputNames?.length)
+      return researchResult("onnx_session_interface_invalid");
+    return researchResult("setup_ready_research_only");
+  } catch(error) {
+    if(!active())return researchResult("cancelled");
+    return researchResult(error instanceof Error && [
+      "model_download_failed","model_integrity_failed"
+    ].includes(error.message) ? error.message : stage);
+  } finally {
+    try{await session?.release();}catch{}
+    try{landmarker?.close();}catch{}
+    if(model)model.fill(0);
+  }
+}
+
 /**
  * Opt-in research ONLY. All image decoding and inference is local; network
  * fetches download public model runtime/weights (no ID/selfie in requests).
