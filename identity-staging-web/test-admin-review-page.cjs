@@ -28,6 +28,8 @@ for(const required of [
   "/api/admin/identity/reviews","encodeURIComponent(item.uid)",
   '"POST"',"canVerify","canRequireRetry","window.confirm",
   "document.createElement","textContent","replaceChildren",
+  "preserveNotice","loadReviews({preserveNotice:true})",
+  "Staging operational Admin access confirmed",
 ]){
   assert(js.includes(required),"Missing authenticated staging control: "+required);
 }
@@ -51,6 +53,9 @@ for(const forbidden of [
 }
 assert(home.includes('href="./admin-reviews.html"'),"Staging homepage must link to Admin review page");
 assert(guards.includes("review?.status === \"pending\""));
+assert(guards.indexOf('review?.manualReviewDecision === "retry_required"') <
+       guards.indexOf('review?.status === "pending"'),
+       "Final Retry decision must not be masked by stale pending record");
 assert(guards.includes("passportMrzBirthDateCheck"));
 assert(guards.includes("warningCodes.length > 0"));
 assert(guards.includes("backSideScreened !== true"));
