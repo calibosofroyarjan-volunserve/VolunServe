@@ -1,6 +1,10 @@
 """Safe synthetic tests for Windows GUI bootstrap; never open webcam/UI."""
 import importlib.util
 from pathlib import Path
+import json
+import tempfile
+
+import evaluate_pad_scales_local as dual
 from unittest import TestCase
 from unittest.mock import patch
 import unittest
@@ -110,6 +114,35 @@ class LaptopLauncherTests(TestCase):
         self.assertIn("Automatic biometric approval remains BLOCKED", summary)
         self.assertIn("Cross-scale disagreements/unknowns => INCONCLUSIVE", summary)
         self.assertNotIn("biometric validation passed", summary.lower())
+
+    def test_anonymous_session_export_opt_in_only_and_no_overwrite(self):
+        report = dual.aggregate_paired({
+            "live": [("live", "attack")],
+            "print": [("attack", "attack")],
+            "replay": [("attack", "attack")],
+        })
+        self.assertNotIn("researchSessionContext", report)
+        with tempfile.TemporaryDirectory() as folder:
+            target = Path(folder) / "My-Local-PAD-Counts.json"
+            gui.research_export(report, lighting="daylight",
+                                camera_type="external_usb", path=target)
+            written = json.loads(target.read_text(encoding="utf-8"))
+            self.assertEqual(written["researchSessionContext"], {
+                "lighting": "daylight", "cameraType": "external_usb",
+            })
+            self.assertFalse(written["independentPadValidated"])
+            self.assertEqual(written["identityDecisionUse"], "none")
+            self.assertNotIn("researchSessionContext", report)
+            with self.assertRaises(ValueError):
+                gui.research_export(report, lighting="daylight",
+                                    camera_type="external_usb", path=target)
+            with self.assertRaises(ValueError):
+                gui.research_export(report, lighting="photo of person",
+                                    camera_type="external_usb",
+                                    path=Path(folder) / "Not-Saved.json")
+            self.assertFalse((Path(folder) / "Not-Saved.json").exists())
+            for forbidden in ("facePhoto", "userId", "photo.jpg", "profileName"):
+                self.assertNotIn(forbidden, json.dumps(written))
 
     def test_no_work_is_started_when_windows_consent_is_cancelled(self):
         with patch.object(gui.sys, "platform", "win32"), \
