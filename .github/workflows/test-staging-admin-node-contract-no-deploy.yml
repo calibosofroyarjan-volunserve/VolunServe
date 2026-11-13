@@ -1,0 +1,38 @@
+name: Staging Admin preview / deployed Node API contract (NO DEPLOY)
+on:
+  pull_request:
+    paths:
+      - "identity-staging-web/admin-reviews.js"
+      - "identity-staging-web/admin-review-guards.mjs"
+      - "identity-staging-web/test-admin-review-page.cjs"
+      - "identity-staging-web/test-admin-review-guards.mjs"
+      - "identity-staging-web/test-admin-backend-contract.cjs"
+      - ".github/workflows/test-staging-admin-node-contract-no-deploy.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify-exact-staging-backend-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Checkout isolated Admin preview PR (read only)
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Checkout exact deployed staging Node SHA (read only)
+        uses: actions/checkout@v4
+        with:
+          ref: ba7d467935e9bcbcf08d856ddf583cd7309f48b5
+          path: staging-node-contract
+          persist-credentials: false
+      - name: Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Test actual client against staging Node source and manual issuer methods
+        run: |
+          node --test identity-staging-web/test-admin-backend-contract.cjs
+          node identity-staging-web/test-admin-review-page.cjs
+      - name: Explicitly forbid deployment
+        run: echo "READ ONLY - NO PRODUCTION OR STAGING DEPLOY BY THIS WORKFLOW"
