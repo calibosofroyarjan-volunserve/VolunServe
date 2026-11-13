@@ -123,6 +123,82 @@ test("real Expo Admin component uses the pure gate in button AND submission path
  assert.match(admin,/reviewBucket\(selected\) !== "pending"/);
  assert.match(admin,/Require Retry/);
 });
+
+// Runtime destination assertions operate on the REAL shared Expo helper,
+// transpiled to Node for deterministic no-network testing.
+const targetSrc=fs.readFileSync("lib/identityEnvironmentTarget.ts","utf8");
+const targetCompiled=ts.transpileModule(targetSrc,{
+  compilerOptions:{target:ts.ScriptTarget.ES2020,module:ts.ModuleKind.CommonJS},
+  reportDiagnostics:true,
+});
+assert.equal(targetCompiled.diagnostics?.length || 0,0);
+const targetModule={exports:{}};
+vm.runInNewContext(targetCompiled.outputText,{
+  exports:targetModule.exports,module:targetModule,
+  require:()=>{throw new Error("No imports allowed in target resolution");},
+},{filename:"identityEnvironmentTarget.transpiled.js"});
+const {identityEnvironmentTarget,identityAdminApiBaseUrl}=targetModule.exports;
+const fullStaging={
+  runtimeEnv:"staging",firebaseTarget:"staging",
+  projectId:"volunserve-full-staging",
+};
+const realProduction={
+  runtimeEnv:"production",firebaseTarget:"production",
+  projectId:"volunserve-3aa5b",
+};
+
+test("staging Admin and Resident requests route to isolated Node only",()=>{
+  assert.equal(identityEnvironmentTarget(fullStaging),"staging");
+  assert.equal(identityAdminApiBaseUrl(fullStaging),
+    "https://volunserve-backend-staging.onrender.com");
+  // Missing optional runtime label must not fall back to the live backend
+  // when the configured Firebase project is full-staging.
+  assert.equal(identityEnvironmentTarget({
+    firebaseTarget:"staging",projectId:"volunserve-full-staging",
+  }),"staging");
+});
+test("production identity target routes ONLY matching production Firebase",()=>{
+  assert.equal(identityEnvironmentTarget(realProduction),"production");
+  assert.equal(identityAdminApiBaseUrl(realProduction),"https://volunserve.onrender.com");
+  assert.equal(identityAdminApiBaseUrl({
+    firebaseTarget:"production",projectId:"volunserve-3aa5b",
+  }),"https://volunserve.onrender.com");
+});
+test("cross-environment or incomplete identity configurations fail closed",()=>{
+  for(const bad of [
+    {runtimeEnv:"staging",firebaseTarget:"production",projectId:"volunserve-3aa5b"},
+    {runtimeEnv:"staging",firebaseTarget:"production",projectId:"volunserve-full-staging"},
+    {runtimeEnv:"staging",firebaseTarget:"staging",projectId:"volunserve-3aa5b"},
+    {runtimeEnv:"production",firebaseTarget:"staging",projectId:"volunserve-full-staging"},
+    {runtimeEnv:"production",firebaseTarget:"production",projectId:"volunserve-full-staging"},
+    {runtimeEnv:"production",firebaseTarget:"staging",projectId:"volunserve-3aa5b"},
+    {runtimeEnv:"staging",firebaseTarget:"staging",projectId:"volunserve-auth-staging"},
+    {runtimeEnv:"staging",firebaseTarget:"staging",projectId:""},
+    {runtimeEnv:"production",firebaseTarget:"production",projectId:""},
+    {runtimeEnv:"testing",firebaseTarget:"production",projectId:"volunserve-3aa5b"},
+    {runtimeEnv:"production",firebaseTarget:"unknown",projectId:"volunserve-3aa5b"},
+    {},
+  ]) {
+    assert.throws(()=>identityAdminApiBaseUrl(bad),/identity|target|environment/i,
+      JSON.stringify(bad));
+  }
+});
+test("real Expo Resident and Admin identity network paths both validate target",()=>{
+  const admin=fs.readFileSync("app/(admin)/identity-reviews.tsx","utf8");
+  const resident=fs.readFileSync("lib/identityVerification.ts","utf8");
+  assert.match(admin,/identityAdminApiBaseUrl/);
+  assert.match(admin,/projectId:\s*auth\.app\.options\.projectId/);
+  assert.doesNotMatch(admin,/const BACKEND_URL =/);
+  const adminGet=admin.slice(admin.indexOf("const loadReviews = async"),admin.indexOf("  useEffect(() => {",admin.indexOf("const loadReviews = async")));
+  assert.match(adminGet,/getReviewBackendUrl\(\);[\s\S]*user\.getIdToken\(true\)/);
+  assert.match(adminGet,/\$\{backendUrl\}\/api\/admin\/identity\/reviews/);
+  const adminPost=admin.slice(admin.indexOf("const saveDecision = async"),admin.indexOf("  if (sessionLoading)",admin.indexOf("const saveDecision = async")));
+  assert.match(adminPost,/getReviewBackendUrl\(\);[\s\S]*user\.getIdToken\(true\)/);
+  assert.match(adminPost,/\$\{backendUrl\}\/api\/admin\/identity\/reviews/);
+  assert.match(resident,/const staging = identityEnvironmentTarget\(/);
+  assert.match(resident,/async function getAuthenticatedUser\(\)\s*\{[\s\S]*identityEnvironmentTarget\(/);
+});
+
 test("transactional Node permission gate and disabled media uploads remain authoritative",()=>{
  const server=fs.readFileSync("backend/server.js","utf8");
  assert.match(server,/const STAGING_IDENTITY_MEDIA_UPLOADS_ENABLED = false;/);
