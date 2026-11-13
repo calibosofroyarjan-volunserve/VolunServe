@@ -1,0 +1,40 @@
+name: Hybrid Identity Staging Postdeploy Anonymous Smoke (NO DEPLOY)
+on:
+  pull_request:
+    branches: [release/staging-hybrid-backend-baseline-20261114]
+    paths:
+      - 'scripts/verify-hybrid-staging-runtime-no-deploy.cjs'
+      - '.github/workflows/verify-hybrid-staging-runtime-no-deploy.yml'
+permissions:
+  contents: read
+jobs:
+  anonymous-staging-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 7
+    steps:
+      # The repository contains an incomplete nested Gitlink on some refs.
+      # Use the exact immutable PR-head archive instead of checkout.
+      - name: Extract pinned review source (no repository writes)
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          [[ "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]] || exit 2
+          curl -fLsS --retry 3 \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/zipball/$SOURCE_SHA" \
+            -o /tmp/hybrid-postdeploy.zip
+          mkdir -p "$RUNNER_TEMP/hybrid-source"
+          unzip -q /tmp/hybrid-postdeploy.zip -d "$RUNNER_TEMP/hybrid-source"
+          ROOT="$(find "$RUNNER_TEMP/hybrid-source" -mindepth 1 -maxdepth 1 -type d -print -quit)"
+          test -f "$ROOT/scripts/verify-hybrid-staging-runtime-no-deploy.cjs"
+          cp -a "$ROOT/." "$GITHUB_WORKSPACE/"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify isolated staging backend, AI, web, and anonymous access controls
+        run: node scripts/verify-hybrid-staging-runtime-no-deploy.cjs
+      - name: Confirm no deploy or private identity operations
+        run: echo 'NO_DEPLOY_NO_FIREBASE_AUTH_NO_PRIVATE_MEDIA_NO_WRITES'
