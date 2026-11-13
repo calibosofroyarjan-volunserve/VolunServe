@@ -32,3 +32,7 @@ py -3.11 -m unittest discover -s identity-ai -p test_local_national_id_selfie_re
 ```
 
 These test pure OCR-side, quality, framing, and camera-only GUI contract logic using **fabricated text and bounding boxes**, not real ID images or user media. They cannot substitute for authorized physical camera/device verification or government ID validity checks.
+
+## Exact duplicate camera-frame protection
+
+The local scanner now fails closed **before OCR or experimental face comparison** if the ID front, ID back, or selfie reuse exactly the same encoded camera bytes. It also refuses missing and oversized frames. This mirrors the existing Node identity endpoint's basic exact-image-reuse safeguard, but **does not detect a re-encoded photograph, screen replay, photo-of-photo, deepfake, or synthetic face**. It must not be described as validated liveness or government ID authentication. No image hashes, image data, or face embeddings are persisted by this check.
