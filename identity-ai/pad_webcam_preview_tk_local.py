@@ -137,9 +137,14 @@ class GuidedPadWebcamUI:
                  text="LOCAL ONLY · No photo/video saved · AI is NOT verified liveness",
                  bg="#eef5f1", fg="#6a4835",
                  font=("Segoe UI", 9)).pack(anchor="w", pady=(4, 9))
-        self.preview = tk.Label(container, bg="#152d2c",
-                                width=700, height=470)
-        self.preview.pack(pady=8)
+        # Tk text-label width/height are CHARACTER units, not pixels.
+        # Use a fixed-sized container so the preview never creates an
+        # enormous off-screen window before the first camera frame.
+        preview_panel = tk.Frame(container, bg="#152d2c", width=700, height=470)
+        preview_panel.pack(pady=8)
+        preview_panel.pack_propagate(False)
+        self.preview = tk.Label(preview_panel, bg="#152d2c")
+        self.preview.pack(fill="both", expand=True)
         self.guidance_label = tk.Label(
             container, text="Finding a face...", bg="#eef5f1",
             fg="#80520b", font=("Segoe UI", 10, "bold"),
@@ -289,8 +294,7 @@ class GuidedPadWebcamUI:
                 self._photo = self.tk.PhotoImage(
                     data=base64.b64encode(payload.tobytes()).decode("ascii"),
                     format="png")
-                self.preview.configure(image=self._photo,
-                                       width=view.shape[1], height=view.shape[0])
+                self.preview.configure(image=self._photo)
                 self._preview_frame = None
                 del view
                 del frame
