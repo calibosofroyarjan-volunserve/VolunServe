@@ -1,0 +1,59 @@
+name: Expo Resident staging isolation and web export (NO DEPLOY)
+
+on:
+  pull_request:
+    branches:
+      - integration/identity-full-staging-20261112
+    paths:
+      - 'lib/stagingExpoServiceIsolation.ts'
+      - 'app/(tabs)/donation.tsx'
+      - 'app/(tabs)/resident.tsx'
+      - 'app/(admin)/assistance-requests.tsx'
+      - 'app/(admin)/donation-list.tsx'
+      - 'lib/identityVerification.ts'
+      - 'lib/firebase.ts'
+      - 'scripts/check-expo-resident-staging-release.cjs'
+      - 'backend/test-expo-staging-service-isolation.cjs'
+      - '.github/workflows/test-expo-resident-staging-web-no-deploy.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  staging-expo-web:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      EXPO_PUBLIC_VOLUNSERVE_ENV: staging
+      EXPO_PUBLIC_VOLUNSERVE_FIREBASE_TARGET: staging
+      EXPO_PUBLIC_VOLUNSERVE_STAGING_FIREBASE_PROJECT_ID: volunserve-full-staging
+      EXPO_PUBLIC_VOLUNSERVE_STAGING_FIREBASE_AUTH_DOMAIN: volunserve-full-staging.firebaseapp.com
+      EXPO_PUBLIC_VOLUNSERVE_STAGING_FIREBASE_STORAGE_BUCKET: volunserve-full-staging.firebasestorage.app
+      EXPO_PUBLIC_VOLUNSERVE_STAGING_FIREBASE_MESSAGING_SENDER_ID: '429213950126'
+      EXPO_PUBLIC_VOLUNSERVE_STAGING_FIREBASE_APP_ID: '1:429213950126:web:955dbf575697826b674d3f'
+      # Test-only public-looking key; this workflow never authenticates or deploys.
+      EXPO_PUBLIC_VOLUNSERVE_STAGING_FIREBASE_API_KEY: AIzaSyntheticStageTestKey_NotForRequests000
+      EXPO_PUBLIC_IDENTITY_VERIFICATION_API_URL: https://volunserve-backend-staging.onrender.com
+      CI: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Install app dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Enforce staging environment, backend and privacy gates
+        run: |
+          node --test backend/test-expo-staging-service-isolation.cjs
+          node scripts/check-expo-resident-staging-release.cjs
+      - name: Check TypeScript screens
+        run: npx tsc --noEmit --pretty false
+      - name: Export the latest Expo Resident web UI (no deploy)
+        run: npx expo export --platform web --output-dir dist
+      - name: Confirm generated staged public assets
+        run: |
+          test -f dist/index.html
+          echo "Staging web export passed. No deploy or Firebase mutation."
