@@ -42,6 +42,18 @@ export default function PremiumAuthShell({ children }: Props) {
   }, []);
 
   const heroHeight = compact ? (narrow ? 325 : 355) : Math.max(height, 710);
+  // RN Web may keep the intrinsic image dimensions even with absolute positioning.
+  // CSS cover guarantees that the slideshow occupies the FULL left panel.
+  const slideUri = Platform.OS === "web" ? Image.resolveAssetSource(SLIDES[slide])?.uri : undefined;
+  const webSlideCover = slideUri
+    ? ({
+        backgroundImage: `url("${slideUri}")`,
+        backgroundSize: "cover",
+        backgroundPosition: "center center",
+        backgroundRepeat: "no-repeat",
+      } as any)
+    : undefined;
+
 
   return (
     <ScrollView style={styles.page} contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
@@ -60,15 +72,19 @@ export default function PremiumAuthShell({ children }: Props) {
               when styled with absoluteFillObject alone. Explicitly size it to
               the *measured hero panel* so each carousel slide fills the entire
               desktop and mobile panel while preserving cover cropping. */}
-          <Image
-            source={SLIDES[slide]}
-            resizeMode="cover"
-            accessibilityIgnoresInvertColors
-            style={[styles.heroSlideImage, heroBounds.width > 0 && {
-              width: heroBounds.width,
-              height: heroBounds.height,
-            }]}
-          />
+          {Platform.OS === "web" && slideUri ? (
+            <View pointerEvents="none" style={[styles.heroSlideImage, webSlideCover]} />
+          ) : (
+            <Image
+              source={SLIDES[slide]}
+              resizeMode="cover"
+              accessibilityIgnoresInvertColors
+              style={[styles.heroSlideImage, heroBounds.width > 0 && {
+                width: heroBounds.width,
+                height: heroBounds.height,
+              }]}
+            />
+          )}
           <LinearGradient
             colors={["rgba(5,41,32,0.42)", "rgba(0,44,38,0.64)", "rgba(0,43,37,0.98)"]}
             locations={[0, 0.46, 1]}
