@@ -154,7 +154,10 @@ test("same-origin staged SFace model remains hash-verified and deployment-scoped
   assert(html.includes("connect-src 'self'"));
   assert(build.includes("pinned_sface_download_or_integrity_failed"));
   assert(build.includes("MODEL_SHA256"));
-  assert(build.includes("fetchApacheLicense"));
+  assert(build.includes("official_sface_license_bundled_invalid"));
+  const license=readFileSync("public/staging-sface-2021dec-LICENSE.txt","utf8");
+  assert(license.includes("Apache License"));
+  assert(license.includes("END OF TERMS AND CONDITIONS"));
   assert(guard.includes('RENDER_SERVICE_ID==="srv-dbrfe0dbedkc73df01jg"'));
   assert(guard.includes('RENDER_GIT_BRANCH!=="preview/expo-resident-full-staging-web-20261113"'));
   assert(!source.includes("fetch(idUrl"));

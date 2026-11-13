@@ -8,7 +8,7 @@
  * Do not invoke from production or from any identity verification endpoint.
  */
 const {createHash}=require("node:crypto");
-const {mkdir,writeFile,rename,rm}=require("node:fs/promises");
+const {mkdir,readFile,writeFile,rename,rm}=require("node:fs/promises");
 const {join}=require("node:path");
 
 const MODEL_SHA256="0ba9fbfa01b5270c96627c4ef784da859931e02f04419c829e83484087c34e79";
@@ -18,10 +18,6 @@ const MODEL_SOURCES=[
  // Official upstream Git LFS media endpoint (no Hugging Face/Xet redirects).
  "https://media.githubusercontent.com/media/opencv/opencv_zoo/main/models/face_recognition_sface/face_recognition_sface_2021dec.onnx",
  "https://github.com/opencv/opencv_zoo/raw/refs/heads/main/models/face_recognition_sface/face_recognition_sface_2021dec.onnx",
-];
-const LICENSE_SOURCES=[
- "https://raw.githubusercontent.com/opencv/opencv_zoo/main/models/face_recognition_sface/LICENSE",
- "https://huggingface.co/opencv/face_recognition_sface/resolve/main/LICENSE",
 ];
 const MODEL_FILE="staging-sface-2021dec.onnx";
 const LICENSE_FILE="staging-sface-2021dec-LICENSE.txt";
@@ -61,28 +57,21 @@ async function fetchPinnedSFace(){
  }
  throw Error("pinned_sface_download_or_integrity_failed");
 }
-async function fetchApacheLicense(){
- for(const url of LICENSE_SOURCES){
-  try{
-   const bytes=await fetchBounded(url,30*1024);
-   const license=bytes.toString("utf8");
-   if(license.length>9000 && license.startsWith("Apache License") &&
-      license.includes("Version 2.0") && license.includes("END OF TERMS AND CONDITIONS"))
-     return license;
-  }catch{/* Try next official publisher license. */}
- }
- throw Error("official_sface_license_unavailable");
-}
 async function stagePinnedSFaceStaticAssets(){
- const [model,license]=await Promise.all([fetchPinnedSFace(),fetchApacheLicense()]);
  const dir=join(process.cwd(),"public");
+ // Apache-2.0 license copied byte-for-byte from upstream and committed to
+ // this staging source tree. Do NOT depend on a second external build fetch.
+ const license=await readFile(join(dir,LICENSE_FILE),"utf8");
+ if(!license.includes("Apache License") || !license.includes("Version 2.0") ||
+    !license.includes("END OF TERMS AND CONDITIONS"))
+   throw Error("official_sface_license_bundled_invalid");
+ const model=await fetchPinnedSFace();
  await mkdir(dir,{recursive:true});
  const modelPath=join(dir,MODEL_FILE);
  const tmp=modelPath+".tmp";
  try{
   await writeFile(tmp,model);
   await rename(tmp,modelPath);
-  await writeFile(join(dir,LICENSE_FILE),license,"utf8");
  }catch(error){
   await rm(tmp,{force:true}).catch(()=>{});
   await rm(modelPath,{force:true}).catch(()=>{});

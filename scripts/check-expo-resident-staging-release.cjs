@@ -116,7 +116,7 @@ if(process.env.RENDER==="true" &&
  const {stagePinnedSFaceStaticAssets}=require("./stage-staging-sface-model.cjs");
  stagePinnedSFaceStaticAssets().catch((error)=>{
    const stage=error?.message==="pinned_sface_download_or_integrity_failed" ? "model_download" :
-     error?.message==="official_sface_license_unavailable" ? "license_download" : "asset_write";
+     error?.message==="official_sface_license_bundled_invalid" ? "license_invalid" : "asset_write";
    console.error("STAGING BLOCKED: public pinned SFace asset stage "+stage+" failed; previous deployment retained");
    process.exitCode=1;
  });
