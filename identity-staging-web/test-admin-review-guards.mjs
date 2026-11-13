@@ -165,3 +165,28 @@ test("unknown backend error codes do not echo untrusted HTML or sensitive string
   assert(!message.includes(secret));
   assert.match(message,/access denied/i);
 });
+
+test("final Require Retry status wins over a stale pending queue snapshot",()=>{
+  const stale = {...pending(), status:"pending", requiresManualReview:true,
+    manualReviewDecision:"retry_required", identityVerified:false};
+  assert.equal(reviewBucket(stale),"retry_required");
+  assert.equal(canVerify({...valid,review:stale}),false);
+  assert.equal(canRequireRetry({review:stale,notes:"Please resubmit document"}),false);
+  const verified={...stale,identityVerified:true};
+  assert.equal(reviewBucket(verified),"verified");
+});
+test("OCR status must not hide a selected-versus-detected ID contradiction",()=>{
+  const mismatched=screening("national_id",{
+    detectedIdType:"school_id",status:"text_consistent_unverified",
+  });
+  assert.match(screeningDescription(mismatched),/conflicts with OCR/i);
+  assert.equal(documentEligibleForAdminReview(mismatched),false);
+  const unsupported=screening("school_id");
+  assert.match(screeningDescription(unsupported),/Unsupported/i);
+  assert.equal(documentEligibleForAdminReview(unsupported),false);
+});
+test("missing warning results are not a green OCR approval indication",()=>{
+  const missing=screening("prc_id",{warningCodes:undefined});
+  assert.match(screeningDescription(missing),/missing or incomplete/i);
+  assert.equal(documentEligibleForAdminReview(missing),false);
+});
