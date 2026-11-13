@@ -61,18 +61,42 @@ function collect(dir,files=[]){
  return files;
 }
 const issues=[];
+const guardedProductionFallbacks=[
+ "lib/stagingExpoServiceIsolation.ts",
+ "lib/identityVerification.ts",
+ "lib/identityEnvironmentTarget.ts",
+];
+const guardedMediaUploads=[
+ "app/(admin)/donation-list.tsx",
+ "app/(tabs)/my-cases.tsx",
+ "components/DisasterResponse.native.tsx",
+ "components/DisasterResponse.web.tsx",
+];
 for(const file of ["app","lib","components","constants"].flatMap(dir=>collect(dir))){
  const normalized=file.split(path.sep).join("/");
  const source=fs.readFileSync(file,"utf8");
- // Production fallback is allowed ONLY in the central guarded helper or the
- // legacy identity client, whose environment target is separately checked.
  if(source.includes("https://volunserve.onrender.com") &&
-    !["lib/stagingExpoServiceIsolation.ts","lib/identityVerification.ts"].includes(normalized)){
+    !guardedProductionFallbacks.includes(normalized)){
    issues.push(normalized+": direct production API host");
  }
  if(source.includes("api.cloudinary.com") &&
-    normalized!=="app/(admin)/donation-list.tsx"){
-   issues.push(normalized+": unreviewed direct Cloudinary endpoint");
+    (!guardedMediaUploads.includes(normalized) ||
+     !source.includes("blockProductionEvidenceUploadDuringStaging();"))){
+   issues.push(normalized+": unguarded direct Cloudinary upload");
+ }
+}
+// An exception for documented, environment-guarded production fallback is
+// NOT an exception to allowing production network calls in staging.
+for(const file of guardedProductionFallbacks.slice(1)){
+ const code=fs.readFileSync(file,"utf8");
+ if(!code.includes("identityEnvironmentTarget(")){
+   issues.push(file+": environment routing guard missing");
+ }
+}
+for(const file of guardedMediaUploads){
+ const code=fs.readFileSync(file,"utf8");
+ if(!code.includes("blockProductionEvidenceUploadDuringStaging();")){
+   issues.push(file+": staging Cloudinary guard missing");
  }
 }
 if(issues.length)throw Error("STAGING BLOCKED: "+issues.join(" | "));
