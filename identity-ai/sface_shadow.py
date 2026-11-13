@@ -141,10 +141,11 @@ def _valid_embedding(feature):
 
 
 def assess_pair_shadow(id_bgr, selfie_bgr):
-    """Ephemeral score for private QA, NEVER a verification or approval decision.
+    """Return a privacy-safe SHADOW QA stage, never verification.
 
-    Raw score is not persisted by this function; application callers must not
-    save it to a user profile or use it for automatic approval/rejection.
+    'qaStage' is a bounded internal processing outcome (not confidence,
+    portrait authenticity, identity match, or live/spoof classification).
+    No images, facial coordinates, OCR text or embeddings leave this module.
     """
     base = {"independentFaceMatchValidated": False,
             "independentPadValidated": False,
@@ -154,32 +155,48 @@ def assess_pair_shadow(id_bgr, selfie_bgr):
     matcher = _load_matcher()
     if matcher is None:
         return dict(base, status="unavailable")
+    stage = "input_invalid"
     try:
-        # Reusing exactly the same image is not a meaningful face-match trial.
         if not isinstance(id_bgr, np.ndarray) or not isinstance(selfie_bgr, np.ndarray):
-            return dict(base, status="inconclusive")
+            return dict(base, status="inconclusive", qaStage=stage)
         if id_bgr.shape == selfie_bgr.shape and np.array_equal(id_bgr, selfie_bgr):
-            return dict(base, status="inconclusive")
+            return dict(base, status="inconclusive", qaStage="duplicate_capture")
+
+        stage = "id_face_not_detected"
         first = _single_face_row(id_bgr)
+        if first is None:
+            return dict(base, status="inconclusive", qaStage=stage)
+        stage = "selfie_face_not_detected"
         second = _single_face_row(selfie_bgr)
-        if first is None or second is None:
-            return dict(base, status="inconclusive")
+        if second is None:
+            return dict(base, status="inconclusive", qaStage=stage)
+
         with _LOCK:
+            stage = "id_alignment_invalid"
             aligned_id = matcher.alignCrop(id_bgr, first)
+            if not _valid_aligned_face(aligned_id):
+                return dict(base, status="inconclusive", qaStage=stage)
+            stage = "selfie_alignment_invalid"
             aligned_selfie = matcher.alignCrop(selfie_bgr, second)
-            if not (_valid_aligned_face(aligned_id) and
-                    _valid_aligned_face(aligned_selfie)):
-                return dict(base, status="inconclusive")
+            if not _valid_aligned_face(aligned_selfie):
+                return dict(base, status="inconclusive", qaStage=stage)
+
+            stage = "id_embedding_invalid"
             ref = matcher.feature(aligned_id)
+            if not _valid_embedding(ref):
+                return dict(base, status="inconclusive", qaStage=stage)
+            stage = "selfie_embedding_invalid"
             probe = matcher.feature(aligned_selfie)
-            # Zero/NaN/Inf embeddings must not be passed into the matching
-            # operator or represented to a user as a similarity observation.
-            if not (_valid_embedding(ref) and _valid_embedding(probe)):
-                return dict(base, status="inconclusive")
+            if not _valid_embedding(probe):
+                return dict(base, status="inconclusive", qaStage=stage)
+
+            stage = "similarity_invalid"
             cosine = float(matcher.match(ref, probe, cv2.FaceRecognizerSF_FR_COSINE))
         if not math.isfinite(cosine) or not -1.0 <= cosine <= 1.0:
-            return dict(base, status="inconclusive")
+            return dict(base, status="inconclusive", qaStage=stage)
         return dict(base, status="similarity_observed_unvalidated",
+                    qaStage="research_score_only",
                     cosineSimilarity=round(cosine, 5))
     except (cv2.error, ValueError, AttributeError, TypeError, OverflowError):
-        return dict(base, status="inconclusive")
+        # Keep native errors and biometric data out of the UI or logs.
+        return dict(base, status="inconclusive", qaStage=stage)

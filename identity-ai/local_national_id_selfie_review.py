@@ -109,7 +109,24 @@ def shadow_sface_summary(observation: dict) -> str:
         return base + "Disabled. Start the explicit private SFace research launcher."
     if status == "unavailable":
         return base + "Models unavailable or invalid. No face matching performed."
-    return base + "Inconclusive (face detection, alignment or image quality); NO decision."
+    # Only fixed, non-personal diagnostic labels from this explicit allowlist.
+    # Never interpolate arbitrary model strings, errors, OCR text or media.
+    diagnostics = {
+        "input_invalid": "Camera frames unreadable by SFace",
+        "duplicate_capture": "Same image reused; cannot compare",
+        "id_face_not_detected": "ID portrait not detectable or usable",
+        "selfie_face_not_detected": "Selfie face not detectable or usable",
+        "id_alignment_invalid": "ID portrait face alignment failed",
+        "selfie_alignment_invalid": "Selfie face alignment failed",
+        "id_embedding_invalid": "ID portrait feature extraction failed",
+        "selfie_embedding_invalid": "Selfie feature extraction failed",
+        "similarity_invalid": "Similarity computation invalid",
+    }
+    detail = diagnostics.get(
+        observation.get("qaStage") if isinstance(observation, dict) else None)
+    if detail and status == "inconclusive":
+        return base + detail + "; research inconclusive. NO identity decision."
+    return base + "Inconclusive (stage unknown); NO identity decision."
 
 
 def perform_local_review(front_bytes: bytes, back_bytes: bytes, selfie_bytes: bytes,
