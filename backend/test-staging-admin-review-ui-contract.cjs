@@ -138,6 +138,12 @@ test("Admin queue never treats stale AI/review text as a Verified Resident",()=>
   status:"failed",manualReviewDecision:"retry_required",requiresManualReview:false,targetEligible:true
  }),"retry_required");
  assert.equal(adminReviewStatusBucket({
+  status:"failed",manualReviewDecision:"rejected",requiresManualReview:false,targetEligible:true
+ }),"rejected");
+ assert.equal(adminReviewStatusBucket({
+  status:"pending",manualReviewDecision:"rejected",requiresManualReview:true,targetEligible:true
+ }),"all");
+ assert.equal(adminReviewStatusBucket({
   status:"pending",requiresManualReview:true,targetEligible:true
  }),"pending");
 });
@@ -153,6 +159,11 @@ test("real Expo Admin component uses the pure gate in button AND submission path
  assert.match(admin,/reviewBucket\(selected\) !== "pending"/);
  assert.match(admin,/selected\.targetEligible !== true/);
  assert.match(admin,/Require Retry/);
+ assert.match(admin,/Reject Submission/);
+ assert.match(admin,/onReject=\{\(\) => void saveDecision\("reject"\)\}/);
+ assert.match(admin,/reviewBucket\(selected\) !== "pending"/);
+ assert.match(admin,/Inconclusive — preliminary similarity only \(not calibrated\)/);
+ assert.match(admin,/Not validated — independent verification required/);
 });
 
 // Runtime destination assertions operate on the REAL shared Expo helper,
@@ -244,4 +255,7 @@ test("transactional Node permission gate and disabled media uploads remain autho
  assert.match(adminRoute,/db\.runTransaction/);
  assert.match(adminRoute,/identityVerified:\s*true/);
  assert.match(adminRoute,/adminActivityLogs/);
+ assert.match(adminRoute,/action !== "reject"/);
+ assert.match(adminRoute,/Resident Identity Submission Rejected/);
+ assert.match(adminRoute,/identityVerified:\s*false/);
 });
