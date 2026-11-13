@@ -237,6 +237,7 @@ def main() -> int:
             from PIL import Image, ImageTk
             from live_camera_scan_policy import (
                 evaluate_camera_side, evaluate_selfie_face,
+                advance_selfie_stability,
             )
             import main as ai
             if not ai.document_ocr_ready():
@@ -287,8 +288,8 @@ def main() -> int:
         cancel_ocr = threading.Event()
         state = {
             "closed": False, "stage": "front", "working": False,
-            "matching": 0, "face_frames": 0, "next_ocr": 0.0,
-            "photo": None,
+            "matching": 0, "face_frames": 0, "face_box": None,
+            "next_ocr": 0.0, "photo": None,
         }
 
         def close(*, completed=False):
@@ -352,6 +353,7 @@ def main() -> int:
             progress[stage].configure(text="Captured locally (not verified)", fg="#116329")
             state["matching"] = 0
             state["face_frames"] = 0
+            state["face_box"] = None
             if stage == "front":
                 state["stage"] = "back"
                 step_label.configure(text="STEP 2: FLIP your National ID to its BACK")
@@ -425,9 +427,16 @@ def main() -> int:
                         cv2.rectangle(display, (x, y), (x + fw, y + fh),
                                       (60, 210, 70) if face_result["ready"] else
                                       (0, 170, 255), 3)
+                    count, last_box, steady = advance_selfie_stability(
+                        state["face_box"], state["face_frames"],
+                        faces[0] if face_result["ready"] else None,
+                        frame.shape, ready=face_result["ready"],
+                    )
+                    state["face_frames"], state["face_box"] = count, last_box
                     if face_result["ready"]:
-                        state["face_frames"] += 1
-                        feedback.configure(text=face_result["guidance"])
+                        feedback.configure(
+                            text=(face_result["guidance"] if steady else
+                                  "Face moved. Hold steady for a new local capture..."))
                         if state["face_frames"] >= 10:
                             ok_enc, encoded = cv2.imencode(".png", frame)
                             if (ok_enc and encoded is not None and
@@ -435,8 +444,8 @@ def main() -> int:
                                 advance_stage("selfie", encoded.tobytes())
                                 return
                             state["face_frames"] = 0
+                            state["face_box"] = None
                     else:
-                        state["face_frames"] = 0
                         feedback.configure(text=face_result["guidance"])
                 if not state["closed"]:
                     shown = cv2.cvtColor(display, cv2.COLOR_BGR2RGB)
@@ -447,6 +456,12 @@ def main() -> int:
                     photo = ImageTk.PhotoImage(Image.fromarray(shown))
                     state["photo"] = photo
                     video.configure(image=photo, text="")
+            else:
+                # A dropped camera frame must break the consecutive selfie
+                # sequence. This prevents counter carry-over after a pause.
+                state["face_frames"] = 0
+                state["face_box"] = None
+                feedback.configure(text="Camera frame interrupted. Reframe and hold steady.")
             if not state["closed"]:
                 pop.after(85, refresh)
 
