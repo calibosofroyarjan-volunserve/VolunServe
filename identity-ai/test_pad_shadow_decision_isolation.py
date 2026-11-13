@@ -5,8 +5,11 @@ All passive PAD statuses are SHADOW observations and cannot become independent
 liveness verification, a trusted PAD attestation or a Verified Resident grant.
 """
 import ast
+import math
 from pathlib import Path
 import unittest
+
+import numpy as np
 
 SOURCE = Path(__file__).with_name("main.py").read_text(encoding="utf-8")
 TREE = ast.parse(SOURCE)
@@ -29,6 +32,7 @@ def run_real_handler(pad_status, score=0.90):
         return {"status": "inconclusive", "independentFaceMatchValidated": False}
 
     env = {
+        "np": np, "math": math,
         "decode_image": lambda contents, _label: contents,
         "image_quality": lambda _image: {"score": 0.95},
         "face_landmarks": lambda _image: (["synthetic-landmarks"], {"reason": ""}),
