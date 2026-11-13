@@ -133,6 +133,30 @@ class LivePreviewTests(unittest.TestCase):
         self.assertEqual({k:len(v) for k,v in progress.trials.items()},
                          {"live":2,"print":2,"replay":2})
 
+    def test_framing_only_mode_cannot_capture_even_when_framing_ready(self):
+        ui = preview.GuidedPadWebcamUI(
+            FakeCapture(), preview_only=True,
+            framing=lambda _:guide.Guidance("ready", (160,90,100,100),
+                                             (75,5,345,275)),
+            assessor=lambda *_a, **_kw: (
+                _ for _ in ()).throw(
+                    AssertionError("framing mode must never invoke PAD model")))
+        ui._last_guidance = guide.Guidance(
+            "ready", (160,90,100,100), (75,5,345,275))
+        ui._start_capture()
+        self.assertFalse(ui._capturing)
+        self.assertFalse(ui.progress.complete)
+        self.assertEqual(ui.progress.current, ("live", 1))
+        self.assertEqual({k:len(v) for k,v in ui.progress.trials.items()},
+                         {"live":0,"print":0,"replay":0})
+
+    def test_explicit_framing_launcher_is_no_report_and_no_capture(self):
+        obj=FakeCapture()
+        with patch.object(preview.GuidedPadWebcamUI,"launch",return_value=None):
+            result=preview.launch_webcam_preview(
+                obj,trials_per_class=1,frames_per_trial=3,preview_only=True)
+        self.assertIsNone(result)
+
     def test_explicit_preview_path_renders_without_creating_real_Tk(self):
         webcam_obj = FakeCapture()
         calls = []
