@@ -74,7 +74,7 @@ def readiness():
             "identityDecisionUse": "none",
             "model": "minifasnet-v2-onnx-shadow",
             "faceDetectorShadow": yunet_readiness(),
-            "note": "Single-frame model: source and converted ONNX class/order and input-scale documentation conflict. Labels and threshold unvalidated; cannot establish liveness."}
+            "note": "Original PyTorch/ONNX numerical parity passed synthetic checks. Real-device class semantics, input-scale performance and threshold remain unvalidated. Experimental two-scale agreement can NEVER establish liveness."}
 
 
 def _face_crop(image):
@@ -112,8 +112,59 @@ def _face_crop(image):
     return cv2.resize(roi, (80, 80), interpolation=cv2.INTER_LINEAR)
 
 
+def _experimental_label(logits):
+    """Interpret one model hypothesis only; no identity approval or PAD claim."""
+    values = np.asarray(logits, dtype=np.float64).reshape(-1)
+    if values.shape != (3,) or not np.isfinite(values).all():
+        return "inconclusive"
+    shifted = values - float(np.max(values))
+    exp = np.exp(shifted)
+    total = float(exp.sum())
+    if not math.isfinite(total) or total <= 0:
+        return "inconclusive"
+    probs = exp / total
+    maximum = float(probs.max())
+    if not math.isfinite(maximum) or maximum < SHADOW_THRESHOLD:
+        return "inconclusive"
+    # Original MiniVisionAI convention: 1 means genuine in the unvalidated
+    # source example; 0/2 are attack labels. This is not a calibrated gate.
+    return ("model_prefers_live_unvalidated" if int(np.argmax(probs)) == 1
+            else "model_prefers_attack_unvalidated")
+
+
+def _two_scale_shadow(crop, net):
+    """Compare raw upstream 0..255 and converted-card 0..1 on ONE face crop.
+
+    Differences force abstention. Agreement does not validate either
+    preprocessing interpretation or the model's ability to reject prints.
+    Never return logits, images or embeddings to a user or persistence layer.
+    """
+    if (not isinstance(crop, np.ndarray) or crop.dtype != np.uint8 or
+            crop.shape != (80, 80, 3)):
+        return "inconclusive", False
+    labels = []
+    # Hash-pinned original PyTorch -> ONNX parity has been verified with
+    # synthetic inputs. Upstream ToTensor reads raw BGR; the converted model
+    # card says 0..1. Both remain uncalibrated in real-camera conditions.
+    with _LOCK:
+        for factor in (1.0, 1.0 / 255.0):
+            blob = cv2.dnn.blobFromImage(
+                crop, scalefactor=factor, size=(80, 80),
+                mean=(0, 0, 0), swapRB=False, crop=False)
+            net.setInput(blob)
+            labels.append(_experimental_label(net.forward()))
+    if labels[0] != labels[1] or labels[0] == "inconclusive":
+        return "inconclusive", False
+    return labels[0], True
+
+
 def assess_frame_shadow(image):
-    """Only label experimental predictions; NEVER use for Verified Resident."""
+    """Conservative TWO-scale research observation, never genuine liveness.
+
+    Any preprocessing disagreement, invalid tensor or uncertain logits is
+    inconclusive. A dual-agreement "live" observation is still unvalidated
+    and must not be used to authorize uploads, verification or Admin approval.
+    """
     if not shadow_enabled():
         return {"status": "disabled", "independentPadValidated": False}
     net = _load_net()
@@ -122,38 +173,14 @@ def assess_frame_shadow(image):
     try:
         crop = _face_crop(image)
         if crop is None:
-            return {"status": "inconclusive", "independentPadValidated": False}
-        # Third-party ONNX card documents BGR/[0,1]/NCHW 1x3x80x80.
-        # Upstream MiniVisionAI NumPy ToTensor appears to use raw 0..255.
-        # Both scales previously gave class_2 for one real-person test.
-        # Do NOT switch input scale, flip labels or lower the threshold
-        # based on a single observation; provenance needs independent audit.
-        blob = cv2.dnn.blobFromImage(
-            crop, scalefactor=1.0/255.0, size=(80, 80),
-            mean=(0, 0, 0), swapRB=False, crop=False)
-        with _LOCK:
-            net.setInput(blob)
-            logits = np.asarray(net.forward(), dtype=np.float64).reshape(-1)
-        if logits.size != 3 or not np.isfinite(logits).all():
-            return {"status": "inconclusive", "independentPadValidated": False}
-        shifted = logits - float(np.max(logits))
-        exp = np.exp(shifted)
-        probs = exp / exp.sum()
-        # IMPORTANT: the original MiniVisionAI Silent-Face-Anti-Spoofing
-        # test.py defines class 1 as REAL, while 0 and 2 are ATTACK classes.
-        # The third-party ONNX card incorrectly describes class 0 as live.
-        # These weights were converted from the upstream MiniFASNetV2 model.
-        # Until independently confirmed on representative camera samples,
-        # treat all labels as unvalidated SHADOW observations only.
-        label = int(np.argmax(probs))
-        confidence = float(probs[label])
-        if not math.isfinite(confidence) or confidence < SHADOW_THRESHOLD:
-            status = "inconclusive"
-        elif label == 1:
-            status = "model_prefers_live_unvalidated"
-        else:
-            status = "model_prefers_attack_unvalidated"
-        # Never expose raw images or scores to user profile/Firestore.
-        return {"status": status, "independentPadValidated": False}
-    except (cv2.error, ValueError, TypeError, OverflowError):
-        return {"status": "inconclusive", "independentPadValidated": False}
+            return {"status": "inconclusive", "independentPadValidated": False,
+                    "scaleHypothesesAgree": False}
+        status, agree = _two_scale_shadow(crop, net)
+        return {"status": status, "independentPadValidated": False,
+                "scaleHypothesesAgree": agree,
+                "identityDecisionUse": "none"}
+    except (cv2.error, ValueError, TypeError, OverflowError,
+            FloatingPointError, ZeroDivisionError):
+        return {"status": "inconclusive", "independentPadValidated": False,
+                "scaleHypothesesAgree": False,
+                "identityDecisionUse": "none"}
