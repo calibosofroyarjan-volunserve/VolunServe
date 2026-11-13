@@ -49,3 +49,9 @@ The local scanner now fails closed **before OCR or experimental face comparison*
 The local webcam scanner now counts its ten consecutive acceptable selfie frames only while the one-face bounding box moves smoothly. Mild ordinary movement is allowed; a large jump, major size change, no face, unacceptable framing, or dropped camera frame resets the capture countdown before a new automatic selfie snapshot. A green frame means the *camera framing* looks usable, **not that a real person or matching ID holder has been verified**.
 
 This check neither tracks identity across frames nor detects replayed videos, printed photos, masks or synthetic faces. It does not change YuNet/SFace similarity calibration or enable automatic Verified Resident approval. Actual camera quality and behavior across devices, lighting and accessibility needs still require consented human-in-the-loop testing.
+
+## Local card-region crop for hard-to-read ID text
+
+The camera preview guide is not an OCR confidence indicator. In the private scanner, a centered, card-shaped rectangle may now be isolated **in memory** before Tesseract reads it; this reduces unrelated background and makes the printed labels occupy more of the OCR image. If the outline is uncertain, the original guide crop is used. The existing OCR heading, demographic label, front/back distinction, image-quality checks, two good reads, and school-ID exclusion still decide whether a local scan advances.
+
+This does **not** enhance blurry pixels into authentic evidence, verify issuance, train a card recognition model, prove ownership or enable auto-approval. Card outline detection is heuristic; it can miss angled or low-contrast cards. A failed OCR read may still need better optics or a higher-resolution rear camera. The tool prints only sanitized guidance (never raw card text). Do not share photos or screenshots showing unredacted personal ID numbers, names, dates or faces when troubleshooting.
