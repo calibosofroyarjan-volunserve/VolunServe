@@ -6,6 +6,9 @@ on:
       - hotfix/announcements-exact-live-20261114
       - fix/announcements-carousel-fullbleed-20261114
   workflow_dispatch:
+  pull_request:
+    branches:
+      - snapshot/hosting-2cd63d-announcements-20261114
 
 permissions:
   contents: read
