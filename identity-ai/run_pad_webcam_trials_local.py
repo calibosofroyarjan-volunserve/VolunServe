@@ -28,6 +28,7 @@ import numpy as np
 import evaluate_pad_scales_local as dual
 import evaluate_passive_pad_local as original
 import passive_pad_shadow as pad
+from pad_camera_quality_local import request_supported_resolution
 
 # Short, bounded webcam access. Each presentation counts once even if 3 frames.
 DEFAULT_TRIALS_PER_CLASS = 3
@@ -199,6 +200,10 @@ def run_cli(argv=None, *, camera_factory=None, input_fn=input,
         if capture is None or not capture.isOpened():
             print("No camera at that index. Check Windows camera permissions.", file=sys.stderr)
             return 2
+        if camera_factory is None:
+            # Best effort only: the actual resolution is displayed in preview.
+            # Never resize or sharpen PAD input to fabricate higher detail.
+            request_supported_resolution(capture)
         output_fn("VolunServe PRIVATE webcam PAD pilot — QA only, not a verified identity test.")
         output_fn("No cloud uploads, no saved face images/videos. Close this program anytime to stop.")
         output_fn("You will capture live, printed-photo and screen-replay camera presentations.")
