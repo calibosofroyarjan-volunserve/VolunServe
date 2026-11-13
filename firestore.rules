@@ -753,12 +753,12 @@ service cloud.firestore {
       allow delete: if false;
     }
     match /announcements/{announcementId} {
+      // Every community-wide notice is published immediately on creation.
+      // List queries cannot prove a resource timestamp <= request.time, so
+      // authorize the same explicit audience constraint used by readers.
+      // Keep verification, approved status, active staff policy unchanged.
       allow read: if isAdminOrSuperAdmin()
-        || (
-          approved()
-          && resource.data.publishAt is timestamp
-          && resource.data.publishAt <= request.time
-        );
+        || (approved() && resource.data.audience == 'all');
       allow create: if isAdmin()
         && request.resource.data.keys().hasOnly([
           'title',
@@ -784,12 +784,13 @@ service cloud.firestore {
           'normal',
           'urgent'
         ]
-        && request.resource.data.publishAt is timestamp
+        && request.resource.data.publishAt == request.time
         && request.resource.data.createdBy == request.auth.uid
         && request.resource.data.audience == "all";
       allow update: if isAdmin()
         && resource.data.createdBy == request.auth.uid
         && request.resource.data.audience == resource.data.audience
+        && request.resource.data.publishAt == resource.data.publishAt
         && request.resource.data.createdBy == resource.data.createdBy;
       allow delete: if isAdmin()
         && resource.data.createdBy == request.auth.uid;
