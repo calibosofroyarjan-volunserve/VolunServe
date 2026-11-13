@@ -32,7 +32,7 @@ test("face detection stays in the browser without photo uploads or granted ident
   }
   assert.match(web,/does not recognize your/);
   assert.match(web,/No webcam image, biometric template/);
-  assert.match(web,/does not.*identity/i);
+  assert.match(web,/does not recognize your\s+identity/i);
   assert.match(identity,/const STAGING_IDENTITY_MEDIA_UPLOADS_ENABLED = false;/);
 });
 
