@@ -1,3 +1,4 @@
+import { getSafeVolunServeBackendBaseUrl } from "../../lib/stagingExpoServiceIsolation";
 import { volunserveTypography as vsType } from "../../constants/volunserveLiveUi";
 import { liveUi as designUi } from "../../constants/volunserveLiveUi";
 import Ionicons from "@expo/vector-icons/Ionicons";
@@ -936,7 +937,7 @@ export default function CommunityEventAdminScreen() {
                       try {
                         const authToken = await user?.getIdToken();
                         const response = await fetch(
-                          `https://volunserve.onrender.com/api/community-events/credentials/${encodeURIComponent(selectedProposal.id)}/access`,
+                          `${getSafeVolunServeBackendBaseUrl()}/api/community-events/credentials/${encodeURIComponent(selectedProposal.id)}/access`,
                           {headers:{Authorization:`Bearer ${authToken || ""}`}},
                         );
                         const body = await response.json().catch(() => null);
