@@ -5,9 +5,7 @@ import { useRouter } from "expo-router";
 import {
   collection,
   onSnapshot,
-  orderBy,
   query,
-  Timestamp,
   where,
 } from "firebase/firestore";
 import React, { useEffect, useMemo, useState } from "react";
@@ -33,7 +31,6 @@ import {
   setActiveUserMode,
 } from "../../lib/firebaseAuth";
 import { useUserSession } from "../../lib/useUserSession";
-import { usePublishedAnnouncementCutoff } from "../../lib/usePublishedAnnouncementCutoff";
 import { useAnnouncementAlerts } from "../../lib/announcementAlerts";
 
 type Announcement = {
@@ -145,7 +142,6 @@ export default function WebHome() {
   const router = useRouter();
   const { width } = useWindowDimensions();
   const { user, profile } = useUserSession();
-  const announcementCutoff = usePublishedAnnouncementCutoff();
   const { items: announcementAlerts } = useAnnouncementAlerts(user?.uid);
 
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
@@ -205,8 +201,7 @@ export default function WebHome() {
     }
     const announcementsQuery = query(
       collection(db, "announcements"),
-      where("publishAt", "<=", Timestamp.fromDate(announcementCutoff)),
-      orderBy("publishAt", "desc")
+      where("audience", "==", "all")
     );
 
     return onSnapshot(
@@ -216,7 +211,8 @@ export default function WebHome() {
           .map((item) => ({
             id: item.id,
             ...(item.data() as Omit<Announcement, "id">),
-          }));
+          }))
+          .sort((a, b) => toMillis(b.publishAt) - toMillis(a.publishAt));
 
         setAnnouncements(nextAnnouncements);
         setAnnouncementsError(false);
@@ -227,7 +223,7 @@ export default function WebHome() {
         setAnnouncementsError(true);
       }
     );
-  }, [announcementCutoff, user?.uid]);
+  }, [user?.uid]);
 
   useEffect(() => {
     if (!user) {
