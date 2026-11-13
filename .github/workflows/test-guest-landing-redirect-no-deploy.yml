@@ -1,0 +1,33 @@
+name: Authenticated Guest landing redirect (NO DEPLOY)
+
+on:
+  pull_request:
+    paths:
+      - "app/_layout.tsx"
+      - "lib/guestLandingRedirect.ts"
+      - "backend/test-guest-landing-auth-redirect.cjs"
+      - ".github/workflows/test-guest-landing-redirect-no-deploy.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  auth-landing-guard:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install exact dependency lock without lifecycle scripts
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Verify signed-in, signed-out, guest-preview, and mismatched-profile routing
+        run: |
+          node --test backend/test-guest-landing-auth-redirect.cjs
+          node --test backend/test-identity-resident-status-client-contract.cjs
+      - name: Typecheck Expo web and native route integration
+        run: npx tsc --noEmit --pretty false
+      - name: Keep real ID media and role changes locked
+        run: |
+          node --test backend/test-identity-media-capability-preflight.cjs
+          echo "NO DEPLOY - no Firebase role change - no guest account linking"
