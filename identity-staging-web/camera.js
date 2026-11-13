@@ -15,17 +15,23 @@ for(const stage of ["front","back","selfie"]){
  const input=$(stage),label=input.closest("label");
  input.required=false; // JS file() validation handles empty uploads, not invisible required inputs.
  const fallback=document.createElement("details");fallback.className="upload-backup";
- const summary=document.createElement("summary");summary.textContent=stage==="selfie"?"QA-only: preview a test face image (never sent for verification)":"Camera unavailable? Choose a test image instead";
+ const summary=document.createElement("summary");summary.textContent=stage==="selfie"?"QA-only: local face research preview (never sent for verification)":"ID image selection paused: private media uploads remain blocked";
  fallback.append(summary);label.before(fallback);fallback.append(label);
  const card=document.createElement("div");card.className="scan-card";card.dataset.stage=stage;
  card.innerHTML='<div class="scan-main"><span class="scan-symbol" aria-hidden="true">▣</span><img class="scan-thumb hidden" alt="Captured test image preview"><div><div class="scan-title"></div><div class="scan-sub" aria-live="polite">Not captured yet</div></div></div><div class="scan-actions"><button type="button" class="scan-open">Open camera</button><button type="button" class="alt scan-clear hidden">Retake</button></div>';
  card.querySelector(".scan-title").textContent=TYPES[stage].label;
+ // While backend media POSTs are HTTP 423, do not ask residents to scan IDs.
+ // Only independent, consented face QA remains available; not identity proof.
+ if(stage!=="selfie"){
+  card.querySelector(".scan-open").disabled=true;
+  card.querySelector(".scan-open").textContent="ID capture paused";
+ }
  card.querySelector(".scan-open").addEventListener("click",()=>start(stage));
  card.querySelector(".scan-clear").addEventListener("click",()=>clear(stage));
  cards.append(card);
  input.addEventListener("change",()=>{
   const selected=input.files?.[0]||null;
-  if(stage==="selfie")input.value=""; // Never attach a test image to identity form data.
+  input.value=""; // ALL local QA images remain separate from identity form data.
   preview(stage,selected);
  });
 }
@@ -112,6 +118,7 @@ async function faceDetector(){
  try{detector=await detectorLoading;return detector}catch(e){detectorUnavailable=true;throw e}finally{detectorLoading=null}
 }
 async function start(stage){
+ if(stage!=="selfie")return; // No government-ID camera capture while uploads are paused.
  if(!navigator.mediaDevices?.getUserMedia){alert("Camera requires HTTPS and supported browser. Use the image fallback.");return}
  stop();mode=stage;const current=++session;capturing=false;
  const random=()=>crypto.getRandomValues(new Uint32Array(1))[0]/4294967296;
@@ -209,25 +216,19 @@ async function capture(){
  const blob=await new Promise(resolve=>pic.toBlob(resolve,"image/jpeg",0.88));
  if(current!==session)return;
  if(!blob){status("Could not make local QA preview.");capturing=false;return}
+ // SECURITY BOUNDARY: a browser expression challenge has accepted replay.
+ // All ephemeral captures are QA-only. No ID/selfie ever attaches to a
+ // verification-form file field; the backend separately rejects HTTP 423.
+ $(stage).value="";
+ preview(stage,blob);
  if(stage==="selfie"){
-   // SECURITY BOUNDARY: the browser expression challenge accepted a prerecorded
-   // screen replay. Never turn its captured image into a verification-form file.
-   // Local QA preview is allowed; independent server-side PAD is still required.
-   $("selfie").value="";
-   preview("selfie",blob);
    const card=document.querySelector('[data-stage="selfie"] .scan-sub');
    if(card)card.textContent="UNVERIFIED QA ONLY — replay video may pass; not a valid identity selfie";
-   stop();
-   return;
  }
- if(typeof DataTransfer==="undefined"){status("Could not save local ID preview.");capturing=false;return}
- const file=new File([blob],"staging-"+stage+"-"+Date.now()+".jpg",{type:"image/jpeg"});
- const dt=new DataTransfer();dt.items.add(file);
- $(stage).files=dt.files;$(stage).dispatchEvent(new Event("change",{bubbles:true}));
  stop();
 }
 $("scanClose").addEventListener("click",stop);
 $("scanCancel").addEventListener("click",stop);modal.addEventListener("cancel",e=>{e.preventDefault();stop()});
 document.addEventListener("visibilitychange",()=>{if(document.hidden&&stream)stop()});
-window.addEventListener("pagehide",stop);
+window.addEventListener("pagehide",()=>{stop();for(const stage of Object.keys(TYPES))clear(stage)});
 $("logout").addEventListener("click",()=>{stop();for(const s of Object.keys(TYPES))clear(s)});
