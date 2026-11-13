@@ -19,7 +19,8 @@ ROOT = SCRIPT_DIR.parent
 DEPS = ("numpy==1.26.4", "opencv-contrib-python-headless==4.11.0.86")
 
 
-def pilot_args(*, camera=0, trials=1, consent=False, live_only=False):
+def pilot_args(*, camera=0, trials=1, consent=False, live_only=False,
+               four_hypothesis=False):
     """Build fixed, local-only CLI arguments. No arbitrary commands or URLs."""
     if not consent:
         raise ValueError("EXPLICIT_CONSENT_REQUIRED")
@@ -29,16 +30,20 @@ def pilot_args(*, camera=0, trials=1, consent=False, live_only=False):
         raise ValueError("INVALID_TRIAL_COUNT")
     if type(live_only) is not bool:
         raise ValueError("INVALID_LIVE_ONLY_FLAG")
+    if type(four_hypothesis) is not bool:
+        raise ValueError("INVALID_FOUR_HYPOTHESIS_FLAG")
     args = ["--consent-confirmed", "--preview",
             "--camera", str(camera),
             "--trials-per-class", str(trials),
             "--frames-per-trial", "3"]
     if live_only:
         args.append("--only-live")
+    if four_hypothesis:
+        args.append("--four-hypothesis")
     return args
 
 
-def models_present():
+def models_present(*, include_v1se=False):
     """Check locally pinned public weights; never inspect face media."""
     from download_passive_pad_model import (
         DESTINATION as pad_file, SHA256 as pad_hash,
@@ -48,10 +53,17 @@ def models_present():
         DESTINATION as yunet_file, SHA256 as yunet_hash,
         MAX_BYTES as yunet_limit,
     )
-    for path, digest, max_bytes, exact in (
+    expected = [
         (pad_file, pad_hash, pad_size, True),
         (yunet_file, yunet_hash, yunet_limit, False),
-    ):
+    ]
+    if include_v1se:
+        from download_pad_v1se_model import (
+            DESTINATION as second_file, SHA256 as second_hash,
+            MIN_BYTES as second_min, MAX_BYTES as second_max,
+        )
+        expected.append((second_file, second_hash, second_max, False))
+    for path, digest, max_bytes, exact in expected:
         try:
             if not path.is_file():
                 return False
@@ -72,8 +84,9 @@ def dependencies_present():
             importlib.util.find_spec("cv2") is not None)
 
 
-def setup_required():
-    return not dependencies_present() or not models_present()
+def setup_required(*, include_v1se=False):
+    return not dependencies_present() or not models_present(
+        include_v1se=include_v1se)
 
 
 def install_camera_prerequisites(*, approved=False, runner=subprocess.check_call):
@@ -94,7 +107,8 @@ def run_camera_only(camera_index):
     return 0
 
 
-def install_prerequisites(*, approved=False, runner=subprocess.check_call):
+def install_prerequisites(*, approved=False, runner=subprocess.check_call,
+                          include_v1se=False):
     """No network/install action without a distinct affirmative setup click."""
     if not approved:
         raise PermissionError("LOCAL_SETUP_NOT_APPROVED")
@@ -107,12 +121,40 @@ def install_prerequisites(*, approved=False, runner=subprocess.check_call):
                cwd=str(ROOT))
         runner([sys.executable, str(SCRIPT_DIR / "download_yunet_model.py")],
                cwd=str(ROOT))
-    if not dependencies_present() or not models_present():
+    if include_v1se and not models_present(include_v1se=True):
+        # One additional public ONNX weight; checksum enforced in downloader.
+        runner([sys.executable, str(SCRIPT_DIR / "download_pad_v1se_model.py")],
+               cwd=str(ROOT))
+    if not dependencies_present() or not models_present(
+            include_v1se=include_v1se):
         raise RuntimeError("Pinned model or Python dependency setup incomplete.")
 
 
 def format_aggregate(report):
     """No people/photos/frames: summary is counts only, never PAD approval."""
+    if report.get("auditType") == "private_local_four_hypothesis_pad_exploratory":
+        risk = report.get("researchRiskCounts", {})
+        counts = report.get("trialCountsByPresentationType", {})
+        return "\n".join([
+            "PRIVATE V2 + V1SE FOUR-HYPOTHESIS PILOT — NOT ID VERIFICATION",
+            "These correlated pretrained models are NOT independently validated.",
+            *(f"{k.upper()}: {counts.get(k, 0)} presentation trial(s)"
+              for k in ("live", "print", "replay")),
+            "",
+            "CONSERVATIVE EXPERIMENTAL SAFETY WARNINGS:",
+            f"Physical PRINT/REPLAY with any model/scale called LIVE: "
+            f"{risk.get('printOrReplayAnyHypothesisObservedLive', 0)}/"
+            f"{risk.get('totalPrintAndReplay', 0)}",
+            f"Four-model apparent LIVE agreement on physical attacks: "
+            f"{risk.get('printOrReplayFourWayLive', 0)}",
+            f"Genuine presentations NOT four-way LIVE: "
+            f"{risk.get('genuineNotFourWayLive', 0)}/"
+            f"{risk.get('totalGenuine', 0)}",
+            "",
+            "A printed face accepted as LIVE by ANY model remains a safety flag.",
+            "DO NOT enable biometric approval; independent PAD study still required.",
+            "No images, videos, identification data or embeddings were saved.",
+        ])
     counts = report.get("trialCountsByPresentationType", {})
     disagreements = report.get("pairedTrialStatusDisagreements", {})
     scales = report.get("perScale", {})
@@ -198,6 +240,15 @@ def research_export(report, *, lighting, camera_type, path):
     result["researchSessionContext"] = {
         "lighting": lighting, "cameraType": camera_type,
     }
+    if result.get("auditType") == "private_local_four_hypothesis_pad_exploratory":
+        from evaluate_pad_ensemble_local import safe_output, write_exclusive
+        if (result.get("independentPadValidated") is not False or
+                result.get("identityDecisionUse") != "none" or
+                result.get("automaticApprovalAllowed") is not False or
+                not safe_output(Path(path), ROOT)):
+            raise ValueError("Unsafe research report or output destination.")
+        write_exclusive(Path(path), result)
+        return
     validate_report(result)
     write_aggregate_exclusive(Path(path), result)
 
@@ -209,7 +260,7 @@ def ask_user_settings():
     root = tk.Tk()
     root.title("VolunServe | Private Laptop Camera Validation")
     root.configure(bg="#f4f8fc")
-    root.geometry("640x680")
+    root.geometry("680x760")
     root.resizable(False, False)
     choice = {"accepted": False, "camera": 0, "trials": 1, "mode": "camera_only",
               "lighting": "indoor_artificial", "cameraType": "laptop_built_in"}
@@ -264,6 +315,12 @@ def ask_user_settings():
     tk.Radiobutton(box, variable=mode, value="live_only",
                    text="LIVE-only diagnostic: 3 real-face captures (NO print/replay)",
                    bg="#f4f8fc").pack(anchor="w")
+    tk.Radiobutton(box, variable=mode, value="combined_quick",
+                   text="NEW: V2 + V1SE pilot — 1 LIVE + 1 PRINT + 1 REPLAY",
+                   bg="#f4f8fc").pack(anchor="w")
+    tk.Radiobutton(box, variable=mode, value="combined_full",
+                   text="NEW: V2 + V1SE pilot — 3 each LIVE/PRINT/REPLAY",
+                   bg="#f4f8fc").pack(anchor="w")
     tk.Checkbutton(box, variable=consent,
                    text="I consent. Any adult shown also consented.",
                    bg="#f4f8fc", font=("Segoe UI", 10, "bold")).pack(
@@ -277,7 +334,7 @@ def ask_user_settings():
             status.configure(text="Explicit consent is required.", fg="#b91c1c")
             return
         choice.update(accepted=True, camera=camera.get(),
-                      trials=3 if mode.get() in ("full", "live_only") else 1,
+                      trials=3 if mode.get() in ("full", "live_only", "combined_full") else 1,
                       mode=mode.get(), lighting=lighting.get(),
                       cameraType=camera_type.get())
         root.destroy()
@@ -335,9 +392,11 @@ def main():
                 install_camera_prerequisites(approved=True)
             return run_camera_only(user["camera"])
 
+        combined = user.get("mode") in ("combined_quick", "combined_full")
         args = pilot_args(camera=user["camera"], trials=user["trials"],
-                          consent=True, live_only=user.get("mode") == "live_only")
-        if setup_required():
+                          consent=True, live_only=user.get("mode") == "live_only",
+                          four_hypothesis=combined)
+        if setup_required(include_v1se=combined):
             from tkinter import messagebox
             # A separate setup approval, after camera consent, is necessary.
             approved = messagebox.askyesno(
@@ -350,7 +409,7 @@ def main():
                 print("Local setup declined. No camera or biometric data accessed.")
                 return 0
             print("Installing local Python packages / pinned models (no user media).")
-            install_prerequisites(approved=True)
+            install_prerequisites(approved=True, include_v1se=combined)
         # Import camera modules only AFTER explicit consent and local setup.
         if user.get("mode") == "framing":
             import cv2
