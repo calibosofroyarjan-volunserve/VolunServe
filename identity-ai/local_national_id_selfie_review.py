@@ -240,6 +240,7 @@ def main() -> int:
                 advance_selfie_stability, camera_id_roi_bounds,
             )
             import main as ai
+            from local_id_card_crop import crop_candidate_card
             if not ai.document_ocr_ready():
                 raise RuntimeError("Tesseract OCR is not available.")
             camera = (
@@ -324,14 +325,23 @@ def main() -> int:
             if cancel_ocr.is_set():
                 return
             try:
-                ok, encoded = cv2.imencode(".png", snapshot)
+                # OCR a confidently detected card-shaped region instead of
+                # shrinking its small printed text among the background.
+                # A missed outline falls back to the original central ROI.
+                # The same strict ID-side OCR checks remain mandatory.
+                card = crop_candidate_card(snapshot)
+                working_image = card if card is not None else snapshot
+                ok, encoded = cv2.imencode(".png", working_image)
                 if not ok or encoded is None or not 0 < len(encoded) <= MAX_IMAGE_BYTES:
                     raise ValueError("Camera frame could not be processed.")
                 payload = encoded.tobytes()
-                quality = ai.image_quality(snapshot)
+                quality = ai.image_quality(working_image)
                 ocr = ai.extract_government_id_text(payload, "Live camera ID " + stage)
                 guidance = evaluate_camera_side(stage, ocr, quality["blurVariance"],
                                                 quality["brightness"])
+                if card is not None and not guidance["ready"] and guidance["state"] == "retry":
+                    guidance = dict(guidance)
+                    guidance["guidance"] += " (Card region found; printed labels still unreadable.)"
                 if not cancel_ocr.is_set():
                     worker_results.put((stage, guidance, payload))
             except Exception:
