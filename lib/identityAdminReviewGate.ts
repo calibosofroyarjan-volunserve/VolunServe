@@ -62,15 +62,25 @@ export type AdminReviewStatusInput = {
   identityVerified?: boolean;
   manualReviewDecision?: string;
   requiresManualReview?: boolean;
+  targetEligible?: boolean;
 };
 
-/** A stale pending verification row cannot mask an already verified profile. */
+/**
+ * Server-owned profile flags decide the queue state. AI decisions, stale
+ * verification rows, and legacy identityStatus text are NOT sufficient to
+ * display a Resident as verified or offer an Admin approval action.
+ *
+ * "all" is an unresolved/inconsistent record, not an approval decision.
+ */
 export function adminReviewStatusBucket(row: AdminReviewStatusInput): AdminReviewStatus {
-  if (row.identityVerified === true || row.identityStatus === "verified" ||
-      row.status === "verified" || row.manualReviewDecision === "verified")
-    return "verified";
-  if (row.status === "failed" || row.manualReviewDecision === "retry_required")
-    return "retry_required";
+  if (row.identityVerified === true) return "verified";
+  if (row.manualReviewDecision === "retry_required" &&
+      row.requiresManualReview !== true) return "retry_required";
+  if (row.manualReviewDecision === "verified" ||
+      row.status === "verified" || row.identityStatus === "verified")
+    return "all";
+  if (row.targetEligible !== true) return "all";
+  if (row.manualReviewDecision === "retry_required") return "all";
   if (row.status === "pending" && row.requiresManualReview === true)
     return "pending";
   return "all";

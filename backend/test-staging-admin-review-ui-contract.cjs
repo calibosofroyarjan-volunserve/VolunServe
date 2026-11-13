@@ -119,19 +119,26 @@ test("DOB and passport MRZ contradictions prevent UI eligibility",()=>{
   assert.equal(selectedIdRecognized(data),false);
  }
 });
-test("stale pending snapshots always show verified/retry before pending",()=>{
+test("Admin queue never treats stale AI/review text as a Verified Resident",()=>{
+ assert.equal(adminReviewStatusBucket({
+  status:"pending",identityVerified:true,requiresManualReview:true,targetEligible:true
+ }),"verified");
  for(const row of [
-   {status:"pending",identityVerified:true,requiresManualReview:true},
-   {status:"pending",identityStatus:"verified",requiresManualReview:true},
-   {status:"pending",manualReviewDecision:"verified",requiresManualReview:true},
- ]){
-    assert.equal(adminReviewStatusBucket(row),"verified");
+   {status:"pending",identityStatus:"verified",requiresManualReview:true,targetEligible:true},
+   {status:"pending",manualReviewDecision:"verified",requiresManualReview:true,targetEligible:true},
+   {status:"verified",identityVerified:false,requiresManualReview:false,targetEligible:true},
+   {status:"pending",identityVerified:false,requiresManualReview:true,targetEligible:false},
+   {status:"pending",identityVerified:false,requiresManualReview:true},
+   {status:"failed",identityVerified:false,requiresManualReview:true,targetEligible:true},
+   {status:"pending",manualReviewDecision:"retry_required",requiresManualReview:true,targetEligible:true},
+ ]) {
+   assert.equal(adminReviewStatusBucket(row),"all",JSON.stringify(row));
  }
  assert.equal(adminReviewStatusBucket({
-  status:"pending",manualReviewDecision:"retry_required",requiresManualReview:true
+  status:"failed",manualReviewDecision:"retry_required",requiresManualReview:false,targetEligible:true
  }),"retry_required");
  assert.equal(adminReviewStatusBucket({
-  status:"pending",requiresManualReview:true
+  status:"pending",requiresManualReview:true,targetEligible:true
  }),"pending");
 });
 test("real Expo Admin component uses the pure gate in button AND submission path",()=>{
@@ -140,10 +147,11 @@ test("real Expo Admin component uses the pure gate in button AND submission path
  assert.match(admin,/function reviewBucket\(item: IdentityReview\): ReviewFilter \{\s*return adminReviewStatusBucket\(item\)/);
  assert.match(admin,/!adminReviewDocumentEligible\(selected\.documentScreening\)/);
  assert.match(admin,/const documentEligible = adminReviewDocumentEligible\(item\.documentScreening\)/);
- assert.match(admin,/const canVerify = pending && documentEligible/);
+ assert.match(admin,/const canVerify = pending && item\.targetEligible === true && documentEligible/);
  assert(admin.includes("adminReviewMethodEligible(item.documentScreening, validationMethod)"));
  assert(admin.includes("selected.documentScreening, validationMethod,"));
  assert.match(admin,/reviewBucket\(selected\) !== "pending"/);
+ assert.match(admin,/selected\.targetEligible !== true/);
  assert.match(admin,/Require Retry/);
 });
 
@@ -226,6 +234,7 @@ test("transactional Node permission gate and disabled media uploads remain autho
  const server=fs.readFileSync("backend/server.js","utf8");
  assert.match(server,/const STAGING_IDENTITY_MEDIA_UPLOADS_ENABLED = false;/);
  assert.match(server,/identity_review_target_not_eligible/);
+ assert.match(server,/targetEligible: userSnapshot\?\.exists === true/);
  assert.match(server,/self_identity_review_forbidden/);
  assert.match(server,/issuerReviewAttested/);
  const adminRoute=server.slice(server.indexOf('"/api/admin/identity/reviews/:uid/decision"'),

@@ -5513,6 +5513,13 @@ function identityAdminReviewPayload(verificationSnapshot, userSnapshot) {
       profile.identityStatus || verification.status || "basic",
     ),
     identityVerified: profile.identityVerified === true,
+    // The UI must NOT offer a manual identity decision for staff, missing,
+    // suspended, or unapproved profiles. The transactional server remains the
+    // final authority and checks these conditions again before writing.
+    targetEligible: userSnapshot?.exists === true &&
+      ["resident", "volunteer"].includes(getProfileRole(profile)) &&
+      profile.residentAccess === true &&
+      isApprovedAccount(profile),
     aiDecision: cleanText(verification.aiDecision || "", 80),
     decision: cleanText(verification.decision || "", 80),
     matchScore: numberOrNull(verification.matchScore),

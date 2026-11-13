@@ -47,6 +47,7 @@ type IdentityReview = {
   status?: string;
   identityStatus?: string;
   identityVerified?: boolean;
+  targetEligible?: boolean;
   aiDecision?: string;
   decision?: string;
   matchScore?: number | null;
@@ -256,6 +257,10 @@ export default function IdentityReviewsAdmin() {
     action: "verify" | "require_retry",
   ) => {
     if (!selected || !user || saving) return;
+    if (selected.targetEligible !== true) {
+      setError("This identity review is not an eligible approved Resident or Volunteer account.");
+      return;
+    }
     // Pending queue snapshots can turn stale while the Admin is reviewing.
     // The server re-checks all eligibility fields inside its transaction.
     if (reviewBucket(selected) !== "pending") {
@@ -719,7 +724,7 @@ function ReviewDetail({
   const pending = reviewBucket(item) === "pending";
   const nationalId = item.documentScreening?.declaredIdType === "national_id";
   const documentEligible = adminReviewDocumentEligible(item.documentScreening);
-  const canVerify = pending && documentEligible &&
+  const canVerify = pending && item.targetEligible === true && documentEligible &&
     adminReviewMethodEligible(item.documentScreening, validationMethod) &&
     issuerReviewAttested && notes.trim().length >= 10 && !saving;
   const availableMethods = VALIDATION_METHODS.filter(method =>
