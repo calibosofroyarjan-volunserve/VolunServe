@@ -79,6 +79,37 @@ def models_present(*, include_v1se=False):
     return True
 
 
+def yunet_present():
+    """Easy selfie framing uses YuNet ONLY; never require MiniFASNet/PAD."""
+    from download_yunet_model import (
+        DESTINATION as model_file, SHA256 as expected_sha,
+        MAX_BYTES as max_bytes,
+    )
+    try:
+        if not model_file.is_file():
+            return False
+        raw = model_file.read_bytes()
+        return (0 < len(raw) <= max_bytes and
+                hashlib.sha256(raw).hexdigest() == expected_sha)
+    except (OSError, ValueError):
+        return False
+
+
+def setup_selfie_preview(*, approved=False,
+                         runner=subprocess.check_call):
+    """Opt-in public packages and pinned face detector; NO PAD weights."""
+    if not approved:
+        raise PermissionError("SELFIE_FACE_PREVIEW_SETUP_NOT_APPROVED")
+    if not dependencies_present():
+        runner([sys.executable, "-m", "pip", "install",
+                "--disable-pip-version-check", *DEPS], cwd=str(ROOT))
+    if not yunet_present():
+        runner([sys.executable, str(SCRIPT_DIR / "download_yunet_model.py")],
+               cwd=str(ROOT))
+    if not dependencies_present() or not yunet_present():
+        raise RuntimeError("YuNet selfie preview setup incomplete.")
+
+
 def dependencies_present():
     return (importlib.util.find_spec("numpy") is not None and
             importlib.util.find_spec("cv2") is not None)
@@ -517,6 +548,38 @@ def main():
                 install_camera_prerequisites(approved=True)
             return run_camera_only(user["camera"])
 
+        if user.get("mode") == "id_selfie_preview":
+            # A GREEN face box means adequate basic framing ONLY. No PAD
+            # calibration, government-ID parsing or identity claim is made.
+            if not dependencies_present() or not yunet_present():
+                from tkinter import messagebox
+                if not messagebox.askyesno(
+                    "One-time selfie framing setup",
+                    "Install only the public Python webcam packages and "
+                    "checksum-pinned YuNet face detector? No MiniFASNet "
+                    "anti-spoofing models, photos or government IDs are used."
+                ):
+                    print("Optional YuNet setup declined. No camera accessed.")
+                    return 0
+                setup_selfie_preview(approved=True)
+            import cv2
+            from pad_camera_quality_local import request_supported_resolution
+            from pad_webcam_preview_tk_local import launch_webcam_preview
+            cam = cv2.VideoCapture(user["camera"])
+            try:
+                if not cam.isOpened():
+                    raise RuntimeError("Webcam unavailable. Check Windows camera permissions.")
+                request_supported_resolution(cam)
+                launch_webcam_preview(
+                    cam, trials_per_class=1, frames_per_trial=3,
+                    preview_only=True, id_selfie_preview=True,
+                )
+            finally:
+                cam.release()
+            print("Basic selfie GREEN face preview finished. No face matched "
+                  "against National ID; no PAD or identity approval.")
+            return 0
+
         combined = user.get("mode") in ("combined_quick", "combined_full")
         args = pilot_args(camera=user["camera"], trials=user["trials"],
                           consent=True, live_only=user.get("mode") == "live_only",
@@ -536,7 +599,7 @@ def main():
             print("Installing local Python packages / pinned models (no user media).")
             install_prerequisites(approved=True, include_v1se=combined)
         # Import camera modules only AFTER explicit consent and local setup.
-        if user.get("mode") in ("framing", "id_selfie_preview"):
+        if user.get("mode") == "framing":
             import cv2
             from pad_camera_quality_local import request_supported_resolution
             from pad_webcam_preview_tk_local import launch_webcam_preview
@@ -548,18 +611,14 @@ def main():
                 launch_webcam_preview(
                     camera, trials_per_class=1, frames_per_trial=3,
                     preview_only=True,
-                    id_selfie_preview=user.get("mode") == "id_selfie_preview",
+                    id_selfie_preview=False,
                 )
             finally:
                 camera.release()
-            if user.get("mode") == "id_selfie_preview":
-                print("Easy GREEN face preview closed. No National ID was read; "
-                      "no face-match or liveness decision performed.")
-            else:
-                notify("Framing-only preview closed",
-                       "No liveness trial was counted. No photos, videos or IDs saved. "
-                       "Once FRAMING READY works, choose the Quick pilot to evaluate "
-                       "live, print and replay presentations separately.")
+            notify("Framing-only preview closed",
+                   "No liveness trial was counted. No photos, videos or IDs saved. "
+                   "Once FRAMING READY works, choose the Quick pilot to evaluate "
+                   "live, print and replay presentations separately.")
             return 0
         from run_pad_webcam_trials_local import run_cli
         output = []
