@@ -87,8 +87,10 @@ def _single_face_row(image):
     try:
         with yunet_shadow._LOCK:
             detector.setInputSize((width, height))
-            _ok, faces = detector.detect(image)
-        if faces is None or len(faces) != 1:
+            ok, faces = detector.detect(image)
+        # A detector failure cannot be treated as a successful single-face
+        # observation even if a native wrapper returned stale face rows.
+        if not ok or faces is None or len(faces) != 1:
             return None
         row = np.asarray(faces[0], dtype=np.float32).reshape(-1)
         if row.size != 15 or not np.isfinite(row).all():
@@ -106,6 +108,36 @@ def _single_face_row(image):
         return row
     except (cv2.error, ValueError, TypeError, OverflowError):
         return None
+
+
+def _valid_aligned_face(image):
+    """Check the SFace alignment output before requesting an embedding."""
+    return (isinstance(image, np.ndarray) and image.dtype == np.uint8
+            and image.ndim == 3 and image.shape[2] == 3
+            and 32 <= image.shape[0] <= 1024
+            and 32 <= image.shape[1] <= 1024)
+
+
+def _valid_embedding(feature):
+    """Check model output is a finite, nonzero single-row embedding.
+
+    Shape/finite checks are deterministic API-integrity checks, NOT
+    calibration, image-quality certification, identity, or liveness.
+    """
+    if not isinstance(feature, np.ndarray):
+        return False
+    if feature.ndim == 2 and feature.shape[0] == 1:
+        values = feature[0]
+    elif feature.ndim == 1:
+        values = feature
+    else:
+        return False
+    if (values.size < 2 or values.size > 4096 or
+            not np.issubdtype(values.dtype, np.floating) or
+            not np.isfinite(values).all()):
+        return False
+    magnitude = float(np.linalg.norm(values.astype(np.float64)))
+    return math.isfinite(magnitude) and magnitude > 1e-8
 
 
 def assess_pair_shadow(id_bgr, selfie_bgr):
@@ -133,8 +165,17 @@ def assess_pair_shadow(id_bgr, selfie_bgr):
         if first is None or second is None:
             return dict(base, status="inconclusive")
         with _LOCK:
-            ref = matcher.feature(matcher.alignCrop(id_bgr, first))
-            probe = matcher.feature(matcher.alignCrop(selfie_bgr, second))
+            aligned_id = matcher.alignCrop(id_bgr, first)
+            aligned_selfie = matcher.alignCrop(selfie_bgr, second)
+            if not (_valid_aligned_face(aligned_id) and
+                    _valid_aligned_face(aligned_selfie)):
+                return dict(base, status="inconclusive")
+            ref = matcher.feature(aligned_id)
+            probe = matcher.feature(aligned_selfie)
+            # Zero/NaN/Inf embeddings must not be passed into the matching
+            # operator or represented to a user as a similarity observation.
+            if not (_valid_embedding(ref) and _valid_embedding(probe)):
+                return dict(base, status="inconclusive")
             cosine = float(matcher.match(ref, probe, cv2.FaceRecognizerSF_FR_COSINE))
         if not math.isfinite(cosine) or not -1.0 <= cosine <= 1.0:
             return dict(base, status="inconclusive")

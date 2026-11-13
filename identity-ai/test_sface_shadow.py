@@ -26,11 +26,13 @@ class FakeMatcher:
 
 
 class FakeDetector:
-    def __init__(self, face_count=1):
+    def __init__(self, face_count=1, retval=1):
         self.face_count = face_count
+        self.retval = retval
+        self.sizes = []
 
-    def setInputSize(self, _size):
-        pass
+    def setInputSize(self, size):
+        self.sizes.append(size)
 
     def detect(self, _frame):
         row = np.array(
@@ -38,8 +40,8 @@ class FakeDetector:
              110, 145, 145, 145, .99], dtype=np.float32
         )
         if self.face_count == 0:
-            return 1, None
-        return 1, np.repeat(row[np.newaxis, :], self.face_count, axis=0)
+            return self.retval, None
+        return self.retval, np.repeat(row[np.newaxis, :], self.face_count, axis=0)
 
 
 class SFaceShadowTests(unittest.TestCase):
@@ -91,6 +93,74 @@ class SFaceShadowTests(unittest.TestCase):
              patch.object(sface.yunet_shadow, "_load_detector", return_value=FakeDetector()):
             result = sface.assess_pair_shadow(self.first, self.second)
         self.assertEqual(result["status"], "inconclusive")
+
+    def test_camera_size_changes_are_applied_before_each_detection(self):
+        matcher = FakeMatcher()
+        detector = FakeDetector()
+        different_size_selfie = np.full((520, 640, 3), 127, np.uint8)
+        with patch.object(sface, "_load_matcher", return_value=matcher), \
+             patch.object(sface.yunet_shadow, "_load_detector", return_value=detector):
+            output = sface.assess_pair_shadow(self.first, different_size_selfie)
+        self.assertEqual(output["status"], "similarity_observed_unvalidated")
+        self.assertEqual(detector.sizes, [(400, 320), (640, 520)])
+        self.assertEqual(matcher.calls, 1)
+
+    def test_detector_failure_cannot_use_stale_face_coordinates(self):
+        matcher = FakeMatcher()
+        with patch.object(sface, "_load_matcher", return_value=matcher), \
+             patch.object(sface.yunet_shadow, "_load_detector",
+                          return_value=FakeDetector(retval=0)):
+            result = sface.assess_pair_shadow(self.first, self.second)
+        self.assertEqual(result["status"], "inconclusive")
+        self.assertEqual(matcher.calls, 0)
+
+    def test_embedding_integrity_blocks_invalid_model_outputs(self):
+        for feature in (
+            None,
+            np.zeros((1, 128), dtype=np.float32),
+            np.full((1, 128), np.nan, dtype=np.float32),
+            np.full((1, 128), np.inf, dtype=np.float32),
+            np.ones((2, 128), dtype=np.float32),
+            np.ones((1, 1), dtype=np.float32),
+            np.ones((1, 4097), dtype=np.float32),
+            np.array([[1, 2]], dtype=object),
+        ):
+            with self.subTest(feature_type=str(getattr(feature, "shape", None))):
+                matcher = FakeMatcher()
+                matcher.feature = lambda _aligned, output=feature: output
+                with patch.object(sface, "_load_matcher", return_value=matcher), \
+                     patch.object(sface.yunet_shadow, "_load_detector",
+                                  return_value=FakeDetector()):
+                    result = sface.assess_pair_shadow(self.first, self.second)
+                self.assertEqual(result["status"], "inconclusive")
+                self.assertNotIn("cosineSimilarity", result)
+                self.assertEqual(matcher.calls, 0)
+
+    def test_invalid_aligned_crops_cannot_yield_similarity(self):
+        for crop in (
+            None,
+            np.ones((112, 112), dtype=np.uint8),
+            np.ones((112, 112, 3), dtype=np.float32),
+            np.ones((12, 12, 3), dtype=np.uint8),
+            np.ones((112, 112, 4), dtype=np.uint8),
+        ):
+            with self.subTest(alignment=str(getattr(crop, "shape", None))):
+                matcher = FakeMatcher()
+                matcher.alignCrop = lambda _image, _face, output=crop: output
+                with patch.object(sface, "_load_matcher", return_value=matcher), \
+                     patch.object(sface.yunet_shadow, "_load_detector",
+                                  return_value=FakeDetector()):
+                    result = sface.assess_pair_shadow(self.first, self.second)
+                self.assertEqual(result["status"], "inconclusive")
+                self.assertEqual(matcher.calls, 0)
+
+    def test_finite_negative_or_tiny_embedding_remains_valid_api_output(self):
+        # Integrity checks do not claim any calibrated ID match. A nonzero
+        # signed embedding may be valid; a score is still shadow-only.
+        self.assertTrue(sface._valid_embedding(
+            np.array([[-1.0, 0.0, 0.5]], dtype=np.float32)))
+        self.assertFalse(sface._valid_embedding(
+            np.array([[1e-12, 0.0]], dtype=np.float32)))
 
     def test_readiness_is_not_a_validation_claim(self):
         with patch.object(sface, "_load_matcher", return_value=FakeMatcher()):
