@@ -61,6 +61,7 @@ on:
       - "identity-ai/evaluate_pad_ensemble_local.py"
       - "identity-ai/test_pad_ensemble_local.py"
       - "identity-ai/test_pad_ensemble_webcam_integration.py"
+      - "identity-ai/PAD_FOUR_MODEL_PRIVATE_EVALUATION.md"
       - "identity-ai/Dockerfile"
       - "identity-ai/test_ai_route_contract.py"
       - "identity-ai/test_staging_health_contract.py"
