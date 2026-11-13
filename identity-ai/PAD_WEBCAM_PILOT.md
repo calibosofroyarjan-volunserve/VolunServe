@@ -33,6 +33,38 @@ does not permit software to recognize whether a photo or screen was
 physically presented. A larger, independently labeled trial is needed;
 do not repeat the same nine samples merely to optimize a reported score.
 
+## One-click CAMERA ONLY check (no AI model download)
+
+Use this mode **before** attempting further AI/liveness trials if the laptop
+webcam looks blurry, dim or inconsistent.
+
+1. In your **updated separate staging PAD checkout**, run
+   `py -3.11 identity-ai/start_pad_laptop_gui.py` (Windows + Python 3.11).
+2. The launcher now selects **RECOMMENDED: Camera clarity only** by default.
+   Read the explanation, choose your camera index (usually 0), check explicit
+   consent, and press Start. If the public Python OpenCV/numpy packages are
+   missing, a separate optional setup confirmation appears; **NO YuNet or
+   MiniFASNet model is downloaded** for this camera-only mode.
+3. A private Windows camera preview opens **without face detection,
+   identification, PAD or photo/video recording**. On-screen text states the
+   ACTUAL camera frame size and heuristic brightness/softness hints.
+4. Clean the lens with a suitable soft cloth; turn to face daylight or put
+   a lamp **in front of** you; move away from a bright window behind you.
+   Compare in the built-in **Windows Camera** application with exactly the
+   same lighting. Camera preview size alone is not sensor detail.
+5. Close with **Close and release camera**. The device is released even if
+   there is a preview error. If both Windows Camera and the VolunServe preview
+   remain blurry despite good lighting and camera settings, the webcam's
+   **physical optics/driver** likely limit image quality. An external USB
+   webcam or phone webcam may help, but is **not independently validated PAD**.
+
+This mode intentionally does not load or require any liveness model. It does
+not bypass the media upload block, generate an ID verification, or imply the
+face matched any profile. In research mode only, use the separately labeled
+`Framing only`, `LIVE-only`, `Quick pilot` or `9-trial pilot` options
+when a genuinely consented PAD experiment is needed. Do not retake 9 trials
+just to check the laptop camera's sharpness.
+
 ## Laptop webcam clarity and real hardware limits
 
 The staging local laptop tester now asks the Windows camera driver for a
