@@ -14,6 +14,8 @@ on:
       - "identity-ai/test_passport_mrz_integration.py"
       - "identity-ai/ICAO_PASSPORT_MRZ_QA.md"
       - "identity-ai/main.py"
+      - "identity-ai/face_preflight_policy.py"
+      - "identity-ai/test_face_preflight_policy.py"
       - "identity-ai/passive_pad_shadow.py"
       - "identity-ai/test_passive_pad_shadow.py"
       - "identity-ai/test_pad_shadow_decision_isolation.py"
@@ -113,11 +115,13 @@ jobs:
       - name: Synthetic Python route-handler staging contract (no real photos, no network)
         env:
           PYTHONPATH: identity-ai
-        run: python -m unittest discover -s identity-ai -p 'test_ai_route_contract.py' -v
+        run: |
+          python -m unittest discover -s identity-ai -p 'test_ai_route_contract.py' -v
+          python -m unittest discover -s identity-ai -p 'test_face_preflight_policy.py' -v
       - name: Validate actual AI OCR/profile readiness health contract (synthetic only)
         run: python -m unittest discover -s identity-ai -p 'test_staging_health_contract.py' -v
       - name: Validate protected Python AI API syntax
-        run: python -m py_compile identity-ai/main.py identity-ai/strict_document_screening.py identity-ai/profile_consistency.py
+        run: python -m py_compile identity-ai/main.py identity-ai/strict_document_screening.py identity-ai/profile_consistency.py identity-ai/face_preflight_policy.py
       - name: Unit-test experimental PAD (synthetic images only, NO MODEL DOWNLOAD)
         env:
           PYTHONPATH: identity-ai
