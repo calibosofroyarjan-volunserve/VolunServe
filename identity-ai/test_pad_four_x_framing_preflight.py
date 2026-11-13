@@ -99,8 +99,8 @@ class FourXContextTests(unittest.TestCase):
             crops.append(crop)
             return LIVE, LIVE
         with patch.object(ensemble.scales, "assess_paired_frame",
-                          side_effect=check_v2), \\
-             patch.object(ensemble.v1, "_load_net", return_value=net), \\
+                          side_effect=check_v2), \
+             patch.object(ensemble.v1, "_load_net", return_value=net), \
              patch.object(ensemble.v1, "_face_crop_4x",
                           side_effect=AssertionError("unexpected re-detection")):
             result = ensemble.assess_four_hypotheses(
