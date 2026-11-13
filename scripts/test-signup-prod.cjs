@@ -316,7 +316,12 @@ function harness(source, enabled, options = {}) {
     assert(ui.includes("Guest Preview · No Account"));
     const publicLayout=read("app/public/_layout.tsx");
     assert(publicLayout.includes("onAuthStateChanged(auth"));
-    assert(publicLayout.includes("void signOut(auth)"));
+    // Public must NOT destroy an approved Resident session during routing.
+    assert(!publicLayout.includes("void signOut(auth)"));
+    assert(!publicLayout.includes("await signOut(auth)"));
+    assert(publicLayout.includes('router.replace("/login")'));
+    // The only intentional guest sign-out remains the explicit Login action.
+    assert(read("app/login.tsx").includes('firebaseSignOut(auth).then(() => router.replace("/public"))'));
   });
   await check("native Google signup owns OAuth and never bounces pending users to Login",()=>{
     assert(read("lib/useSignupGoogle.ts").includes("signInWithCredential"));
