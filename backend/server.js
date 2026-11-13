@@ -5160,23 +5160,27 @@ app.get(
           ? verificationSnapshot.data() ||
             {}
           : {};
-      const identityStatus =
-        normalizeIdentityStatus(
-          profile
-            .identityStatus ||
-            verification.status ||
-            "basic",
-        );
+      // The profile-owned verified flag is the ONLY authority for a Verified
+      // Resident. A stale/forged verification document (or inconsistent
+      // identityStatus text) must never grant verified access or a verified
+      // status response. Prefer a current manual-review queue to an older
+      // "basic" profile snapshot while the actual submission is pending.
+      const profileStatus = normalizeIdentityStatus(profile.identityStatus || "basic");
+      const verificationStatus = normalizeIdentityStatus(verification.status || "basic");
+      const verifiedFromProfile = profile.identityVerified === true;
+      const finalizedRetry = verification.manualReviewDecision === "retry_required" &&
+        verification.requiresManualReview !== true;
+      const identityStatus = verifiedFromProfile ? "verified" :
+        finalizedRetry ? "failed" :
+        (verificationStatus === "pending" && verification.requiresManualReview === true) ? "pending" :
+        profileStatus === "failed" ? "failed" :
+        profileStatus === "pending" ? "pending" :
+        verificationStatus === "failed" ? "failed" : "basic";
       response.json({
         ok:
           true,
         identityStatus,
-        identityVerified:
-          profile
-            .identityVerified ===
-            true ||
-          identityStatus ===
-            "verified",
+        identityVerified: verifiedFromProfile,
         verificationId:
           cleanText(
             verification
@@ -5190,12 +5194,15 @@ app.get(
         // No AI score can grant Verified status: the profile comes only from
         // the existing authenticated Admin transaction.
         decision: cleanText(
-          (identityStatus === "verified" && profile.identityVerified === true
+          (verifiedFromProfile
             ? "verified"
             : identityStatus === "failed" &&
                 verification.manualReviewDecision === "retry_required"
               ? "retry_required"
-              : verification.decision || verification.aiDecision || ""),
+              : [verification.manualReviewDecision, verification.decision, verification.aiDecision]
+                    .some(value => value === "verified")
+                ? identityStatus === "pending" ? "manual_review" : ""
+                : verification.decision || verification.aiDecision || ""),
           80,
         ),
         matchScore:
