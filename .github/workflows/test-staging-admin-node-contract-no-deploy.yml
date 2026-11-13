@@ -19,13 +19,11 @@ jobs:
       - name: Checkout isolated Admin preview PR (read only)
         uses: actions/checkout@v4
         with:
-          persist-credentials: false
       - name: Checkout exact deployed staging Node SHA (read only)
         uses: actions/checkout@v4
         with:
           ref: ba7d467935e9bcbcf08d856ddf583cd7309f48b5
           path: staging-node-contract
-          persist-credentials: false
       - name: Node 20
         uses: actions/setup-node@v4
         with:
