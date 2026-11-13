@@ -160,6 +160,22 @@ def format_aggregate(report):
     return "\n".join(lines)
 
 
+def research_export(report, *, lighting, camera_type, path):
+    """Explicitly opt-in to saving anonymous counters, never media or IDs.
+
+    Uses the existing atomic exclusive writer and the strict known-schema
+    validator. A caller must provide a chosen path outside the repository.
+    """
+    from pad_multisession_aggregate_local import validate_report
+    from run_pad_webcam_trials_local import write_aggregate_exclusive
+    result = dict(report)
+    result["researchSessionContext"] = {
+        "lighting": lighting, "cameraType": camera_type,
+    }
+    validate_report(result)
+    write_aggregate_exclusive(Path(path), result)
+
+
 def ask_user_settings():
     """Tk window is the consent boundary; no camera/network before acceptance."""
     import tkinter as tk
@@ -167,11 +183,14 @@ def ask_user_settings():
     root = tk.Tk()
     root.title("VolunServe | Private Laptop Camera Validation")
     root.configure(bg="#f4f8fc")
-    root.geometry("640x510")
+    root.geometry("640x610")
     root.resizable(False, False)
-    choice = {"accepted": False, "camera": 0, "trials": 1, "mode": "framing"}
+    choice = {"accepted": False, "camera": 0, "trials": 1, "mode": "framing",
+              "lighting": "indoor_artificial", "cameraType": "laptop_built_in"}
     camera = tk.IntVar(value=0)
     mode = tk.StringVar(value="framing")
+    lighting = tk.StringVar(value="indoor_artificial")
+    camera_type = tk.StringVar(value="laptop_built_in")
     consent = tk.BooleanVar(value=False)
 
     box = tk.Frame(root, bg="#f4f8fc", padx=24, pady=19)
@@ -192,6 +211,16 @@ def ask_user_settings():
     tk.Label(box, text="Camera number (normally 0)",
              bg="#f4f8fc", font=("Segoe UI", 10, "bold")).pack(anchor="w")
     tk.OptionMenu(box, camera, 0, 1, 2, 3).pack(anchor="w")
+    tk.Label(box, text="Non-identifying study conditions (optional counts export)",
+             bg="#f4f8fc", font=("Segoe UI", 10, "bold")).pack(anchor="w", pady=(7, 0))
+    conditions = tk.Frame(box, bg="#f4f8fc")
+    conditions.pack(anchor="w")
+    tk.Label(conditions, text="Lighting", bg="#f4f8fc").pack(side="left")
+    tk.OptionMenu(conditions, lighting, "daylight", "indoor_artificial",
+                  "low_light", "not_recorded").pack(side="left")
+    tk.Label(conditions, text="Camera type", bg="#f4f8fc").pack(side="left")
+    tk.OptionMenu(conditions, camera_type, "laptop_built_in", "external_usb",
+                  "phone_webcam", "not_recorded").pack(side="left")
     tk.Label(box, text="Session length", bg="#f4f8fc",
              font=("Segoe UI", 10, "bold")).pack(anchor="w", pady=(7, 0))
     tk.Radiobutton(box, variable=mode, value="framing",
@@ -217,7 +246,8 @@ def ask_user_settings():
             return
         choice.update(accepted=True, camera=camera.get(),
                       trials=3 if mode.get() == "full" else 1,
-                      mode=mode.get())
+                      mode=mode.get(), lighting=lighting.get(),
+                      cameraType=camera_type.get())
         root.destroy()
 
     buttons = tk.Frame(box, bg="#f4f8fc")
@@ -311,6 +341,39 @@ def main():
         summary = format_aggregate(report)
         print(summary)
         notify("Local research result — NOT identity verification", summary)
+
+        # No biometric data is written. Optional anonymous COUNT JSON is
+        # saved only after a second explicit user opt-in and a local file choice.
+        from tkinter import filedialog, messagebox
+        wants_counts = messagebox.askyesno(
+            "Optional private research counts",
+            "Save ONLY anonymous category counts and selected lighting/camera "
+            "labels to a NEW local JSON file? No selfie, video, embedding, "
+            "person name or ID is included. You can choose Cancel safely.",
+        )
+        if wants_counts:
+            target = filedialog.asksaveasfilename(
+                title="Choose a NEW JSON outside the VolunServe project",
+                defaultextension=".json",
+                filetypes=[("JSON counts", "*.json")],
+                initialfile="VolunServe-PAD-Session-Counts.json",
+            )
+            if target:
+                try:
+                    research_export(
+                        report,
+                        lighting=user.get("lighting", "not_recorded"),
+                        camera_type=user.get("cameraType", "not_recorded"),
+                        path=target,
+                    )
+                    notify("Research counts saved locally",
+                           "Only anonymous aggregates were saved. "
+                           "Do not upload face images or IDs.")
+                except (OSError, ValueError) as exc:
+                    notify("Counts were not saved",
+                           "Choose a NEW JSON outside Git. Existing files "
+                           "cannot be overwritten. " + str(exc)[:180],
+                           error=True)
         return 0
     except Exception as exc:
         print("Private laptop pilot could not complete:", type(exc).__name__, str(exc))

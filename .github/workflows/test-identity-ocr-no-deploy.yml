@@ -38,6 +38,8 @@ on:
       - "identity-ai/run_pad_webcam_trials_local.py"
       - "identity-ai/start_pad_laptop_gui.py"
       - "identity-ai/test_pad_laptop_launcher.py"
+      - "identity-ai/pad_multisession_aggregate_local.py"
+      - "identity-ai/test_pad_multisession_aggregate_local.py"
       - "Start-VolunServe-Camera-Test.cmd"
       - "identity-ai/test_pad_webcam_trials_local.py"
       - "identity-ai/diagnose_pad_webcam_local.py"
@@ -148,7 +150,8 @@ jobs:
           python -m unittest discover -s identity-ai -p 'test_pad_webcam_diagnostics.py' -v
           python -m unittest discover -s identity-ai -p 'test_pad_live_preview_local.py' -v
           python -m unittest discover -s identity-ai -p 'test_pad_laptop_launcher.py' -v
-          python -m py_compile identity-ai/pad_frame_guidance_local.py identity-ai/pad_webcam_preview_tk_local.py identity-ai/start_pad_laptop_gui.py
+          python -m unittest discover -s identity-ai -p 'test_pad_multisession_aggregate_local.py' -v
+          python -m py_compile identity-ai/pad_frame_guidance_local.py identity-ai/pad_webcam_preview_tk_local.py identity-ai/start_pad_laptop_gui.py identity-ai/pad_multisession_aggregate_local.py
           python -m py_compile identity-ai/diagnose_pad_webcam_local.py
           python -m py_compile identity-ai/run_pad_webcam_trials_local.py
           python -m py_compile identity-ai/evaluate_pad_scales_local.py
