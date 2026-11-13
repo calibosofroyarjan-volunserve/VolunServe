@@ -6,6 +6,33 @@ This is a local-only research workflow for the experimental MiniFASNet anti-spoo
 
 The model remains **SHADOW-ONLY**. These observations cannot verify a resident or satisfy formal PAD or ISO/IEC 30107-3 requirements.
 
+## November 13: printed-photo false-live finding and conservative mitigation
+
+In the operator-labeled 9-trial laptop pilot (3 LIVE, 3 PRINT, 3 REPLAY),
+the **raw 0–255** shadow model called all 3 LIVE presentations live,
+classified 1/3 physical printed-portrait presentations **live**, marked
+2/3 prints inconclusive, and called 3/3 screen replays attack.
+The **0–1** model classified all 9 presentations attack, including the
+3 actual LIVE faces. This confirms a **potential print false acceptance**
+and a **genuine-face false rejection tradeoff** in a tiny single-user pilot.
+No model is independently validated; do not pick the mode that appears
+most convenient or simply lower confidence thresholds.
+
+To avoid mistaken safety claims, the local pilot now emits an aggregate
+`conservativeShadowRisk` report section. It:
+- Flags **ANY print/replay presentation called live by EITHER scale**, even
+  when the other scale says attack, instead of hiding the print weakness.
+- Marks two-scale conflicting/uncertain predictions **inconclusive** for
+  research reporting, never a biometric green light.
+- Keeps `identityDecisionUse=none`, `independentPadValidated=false`,
+  uploads disabled and automatic approval prohibited.
+
+This is a **reporting/abstention mitigation**, NOT a repaired PAD model.
+It does not prove that both scales agreeing live would be authentic, and
+does not permit software to recognize whether a photo or screen was
+physically presented. A larger, independently labeled trial is needed;
+do not repeat the same nine samples merely to optimize a reported score.
+
 ## One-click laptop procedure (recommended)
 
 After opening your **up-to-date staging Git checkout** on your Windows laptop,
