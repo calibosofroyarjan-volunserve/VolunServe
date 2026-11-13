@@ -228,6 +228,127 @@ def format_aggregate(report):
     return "\n".join(lines)
 
 
+def format_combined_detailed_counts(report):
+    """Only fixed-schema aggregate categories; no individual frame/face data."""
+    if (report.get("auditType") != "private_local_four_hypothesis_pad_exploratory"
+            or report.get("identityDecisionUse") != "none"
+            or report.get("independentPadValidated") is not False
+            or report.get("automaticApprovalAllowed") is not False):
+        raise ValueError("UNSAFE_OR_NOT_COMBINED_RESEARCH_REPORT")
+    by_model = report.get("perHypothesis")
+    if not isinstance(by_model, dict):
+        raise ValueError("MISSING_COMBINED_MODEL_COUNTS")
+    names = (
+        ("v2_raw_0_to_255", "V2 raw 0–255"),
+        ("v2_normalized_0_to_1", "V2 normalized 0–1"),
+        ("v1se_raw_0_to_255", "V1SE raw 0–255"),
+        ("v1se_normalized_0_to_1", "V1SE normalized 0–1"),
+    )
+    categories = ("live", "print", "replay")
+    lines = [
+        "PRIVATE PAD PILOT: FOUR-MODEL AGGREGATE COUNTS",
+        "UNVALIDATED MODEL OBSERVATIONS — NOT BIOMETRIC VERIFICATION",
+        "Each physical presentation is one trial, not one trial per frame.",
+        "",
+    ]
+    for mode, label in names:
+        rows = by_model.get(mode)
+        if not isinstance(rows, dict):
+            raise ValueError("MISSING_MODEL_COUNTS")
+        lines.append(label + ":")
+        for category in categories:
+            row = rows.get(category)
+            if not isinstance(row, dict):
+                raise ValueError("MISSING_PRESENTATION_COUNTS")
+            values = []
+            for key in ("trials", "observedLive", "observedAttack", "inconclusive"):
+                value = row.get(key)
+                if type(value) is not int or not 0 <= value <= 10:
+                    raise ValueError("INVALID_AGGREGATE_COUNT")
+                values.append(value)
+            if sum(values[1:]) != values[0]:
+                raise ValueError("INCONSISTENT_AGGREGATE_COUNTS")
+            lines.append(
+                f"  {category.upper()}: trials={values[0]}, "
+                f"model-LIVE={values[1]}, attack={values[2]}, "
+                f"inconclusive={values[3]}"
+            )
+        lines.append("")
+    lines.extend((
+        "A single PRINT/REPLAY classified LIVE remains a safety red flag.",
+        "No automatic Resident verification. Independent PAD study is required.",
+        "Only count data can be copied; no photos, videos, IDs or embeddings.",
+    ))
+    return "\n".join(lines)
+
+
+def show_copyable_combined_counts(summary, report, *, lighting, camera_type):
+    """Post-test window with clearly visible copyable counts, no auto-save.
+
+    Explicit clipboard action is the only local transfer; no media or cloud.
+    If the window cannot open, main() already printed all counts in terminal.
+    """
+    from tkinter import scrolledtext
+    import tkinter as tk
+
+    detailed = format_combined_detailed_counts(report)
+    root = tk.Tk()
+    root.title("VolunServe | Copyable FOUR-MODEL PAD research counts")
+    root.geometry("790x675")
+    root.minsize(650, 470)
+    root.configure(bg="#eef5f1")
+    root.lift()
+    header = tk.Label(
+        root, text="V2 + V1SE — PRIVATE AGGREGATE RESULTS",
+        bg="#eef5f1", fg="#0a503e", font=("Segoe UI", 14, "bold"))
+    header.pack(padx=16, pady=(14, 5), anchor="w")
+    tk.Label(
+        root,
+        text=("Four model/input combinations below. Counts are experimental. "
+              "No face image, government ID or video saved. "
+              "Use Copy counts to paste into a private text file."),
+        bg="#eef5f1", justify="left", wraplength=755,
+    ).pack(padx=16, pady=(0, 8), anchor="w")
+    display = scrolledtext.ScrolledText(
+        root, wrap="word", font=("Consolas", 10), height=29)
+    display.insert("1.0", summary + "\n\n" + detailed)
+    display.configure(state="disabled")
+    display.pack(fill="both", expand=True, padx=16, pady=(0, 8))
+    buttons = tk.Frame(root, bg="#eef5f1")
+    buttons.pack(fill="x", padx=16, pady=(0, 14))
+    copied = tk.StringVar(value="Nothing has been saved automatically.")
+    tk.Label(buttons, textvariable=copied, bg="#eef5f1").pack(side="left")
+    def copy_counts():
+        root.clipboard_clear()
+        root.clipboard_append(summary + "\n\n" + detailed)
+        root.update()
+        copied.set("Anonymous model counts copied. Paste in Notepad.")
+    def save_counts():
+        # Explicit user click only. No photos, embeddings, ID or video saved.
+        from tkinter import filedialog
+        target = filedialog.asksaveasfilename(
+            parent=root,
+            title="Save anonymous aggregate counts (NEW file outside Git)",
+            defaultextension=".json",
+            filetypes=[("Anonymous JSON counts", "*.json")],
+            initialfile="VolunServe-PAD-V2-V1SE-Counts.json",
+        )
+        if not target:
+            return
+        try:
+            research_export(report, lighting=lighting,
+                            camera_type=camera_type, path=target)
+            copied.set("Anonymous counts saved to your chosen NEW JSON file.")
+        except (OSError, ValueError):
+            copied.set("Not saved: choose a NEW JSON outside the project folder.")
+    tk.Button(buttons, text="Copy detailed counts",
+              command=copy_counts).pack(side="right", padx=(8, 0))
+    tk.Button(buttons, text="Save anonymous JSON",
+              command=save_counts).pack(side="right", padx=(8, 0))
+    tk.Button(buttons, text="Close", command=root.destroy).pack(side="right")
+    root.mainloop()
+
+
 def research_export(report, *, lighting, camera_type, path):
     """Explicitly opt-in to saving anonymous counters, never media or IDs.
 
@@ -450,8 +571,30 @@ def main():
                 report.get("independentPadValidated") is not False):
             raise RuntimeError("Unexpected model validation claims; report withheld.")
         summary = format_aggregate(report)
-        print(summary)
-        notify("Local research result — NOT identity verification", summary)
+        print(summary, flush=True)
+        if combined:
+            # Previous GUI only printed SUMMARY and swallowed the actual JSON
+            # into an in-memory output list. Always print all four per-model
+            # aggregates to the terminal BEFORE showing any modal dialog.
+            # These are anonymous trial counts, never face media.
+            detailed = format_combined_detailed_counts(report)
+            print("\n" + detailed, flush=True)
+            try:
+                show_copyable_combined_counts(
+                    summary, report,
+                    lighting=user.get("lighting", "not_recorded"),
+                    camera_type=user.get("cameraType", "not_recorded"),
+                )
+            except (RuntimeError, OSError, ValueError):
+                # A broken/hidden Tk dialog must not erase the terminal output.
+                print("Copy window unavailable; detailed aggregate counts "
+                      "are printed above. No photos/IDs were saved.", flush=True)
+            # For combined reports the scrollable window offers Copy and Save
+            # without relying on a second hidden/stacked messagebox.
+            # The terminal also contains all anonymous per-model counts.
+            return 0
+        else:
+            notify("Local research result — NOT identity verification", summary)
 
         # No biometric data is written. Optional anonymous COUNT JSON is
         # saved only after a second explicit user opt-in and a local file choice.
