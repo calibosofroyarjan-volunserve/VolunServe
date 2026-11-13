@@ -8,6 +8,24 @@ Images and OCR text exist only transiently in memory for consented local study.
 from __future__ import annotations
 
 import math
+import queue
+
+
+def release_scan_buffers(captured=None, result_queue=None):
+    """Drop app-owned references to sensitive frames and pending worker results.
+
+    Python cannot guarantee physical zeroization of immutable bytes or copies
+    held by OCR/native libraries. This bounds retention, not secure erasure.
+    """
+    if captured is not None:
+        captured.clear()
+    if result_queue is not None:
+        while True:
+            try:
+                result_queue.get_nowait()
+            except queue.Empty:
+                break
+
 
 MAX_IMAGE_BYTES = 10 * 1024 * 1024
 
@@ -81,7 +99,6 @@ def perform_local_review(front_bytes: bytes, back_bytes: bytes, selfie_bytes: by
 
 
 def main() -> int:
-    import queue
     import sys
     import threading
     import time
@@ -128,7 +145,7 @@ def main() -> int:
         progress[name] = indicator
 
     def reset_captures():
-        captured.clear()
+        release_scan_buffers(captured)
         for label in progress.values():
             label.configure(text="Not scanned", fg="#875514")
         result.configure(state="normal")
@@ -159,13 +176,15 @@ def main() -> int:
 
     def review_in_memory():
         if not consent.get() or any(k not in captured for k in ("front", "back", "selfie")):
+            release_scan_buffers(captured)
             show_result("Incomplete. All three local camera scans are required.")
             return
+        # Move image references out of the persistent UI state immediately.
+        scans = tuple(captured.pop(key) for key in ("front", "back", "selfie"))
         show_result("Reviewing in local memory... no upload or account action.")
         root.update_idletasks()
         try:
-            message = perform_local_review(captured["front"], captured["back"],
-                                           captured["selfie"])
+            message = perform_local_review(*scans)
         except Exception as exc:
             # No filepaths, OCR or images included in the error display.
             message = (
@@ -173,9 +192,17 @@ def main() -> int:
                 "Check camera readability, Tesseract and MediaPipe setup. "
                 "No ID or account was approved."
             )
+        finally:
+            # Release application references on BOTH success and exception.
+            del scans
+            release_scan_buffers(captured)
         show_result(message)
 
     def start_live_camera():
+        if callable(active_window["close"]):
+            messagebox.showinfo("Camera already open",
+                                "Close the current camera scan first.", parent=root)
+            return
         if not consent.get():
             messagebox.showwarning("Consent", "Please confirm local camera consent.",
                                    parent=root)
@@ -233,22 +260,34 @@ def main() -> int:
             "one clearly framed selfie. No images saved."
         ), wraplength=720).pack()
         worker_results = queue.Queue()
+        cancel_ocr = threading.Event()
         state = {
             "closed": False, "stage": "front", "working": False,
             "matching": 0, "face_frames": 0, "next_ocr": 0.0,
             "photo": None,
         }
 
-        def close():
+        def close(*, completed=False):
             if state["closed"]:
                 return
             state["closed"] = True
+            cancel_ocr.set()
             active_window["close"] = None
+            # Clear queued OCR photos immediately and don't display the last frame.
+            release_scan_buffers(
+                None if completed else captured, worker_results)
+            state["photo"] = None
+            try:
+                video.configure(image="", text="")
+            except tk.TclError:
+                pass
             camera.release()
             try:
                 pop.destroy()
             except tk.TclError:
                 pass
+            if not completed:
+                reset_captures()
 
         active_window["close"] = close
         tk.Button(pop, text="CANCEL — discard incomplete scans", command=close).pack(pady=9)
@@ -264,6 +303,8 @@ def main() -> int:
 
         def run_ocr_worker(stage, snapshot):
             """One immutable camera ROI per OCR call; no file or network I/O."""
+            if cancel_ocr.is_set():
+                return
             try:
                 ok, encoded = cv2.imencode(".png", snapshot)
                 if not ok or encoded is None or not 0 < len(encoded) <= MAX_IMAGE_BYTES:
@@ -273,12 +314,14 @@ def main() -> int:
                 ocr = ai.extract_government_id_text(payload, "Live camera ID " + stage)
                 guidance = evaluate_camera_side(stage, ocr, quality["blurVariance"],
                                                 quality["brightness"])
-                worker_results.put((stage, guidance, payload))
+                if not cancel_ocr.is_set():
+                    worker_results.put((stage, guidance, payload))
             except Exception:
-                worker_results.put((stage, {
-                    "ready": False, "state": "retry",
-                    "guidance": "OCR could not read this frame. Adjust focus and try again.",
-                }, None))
+                if not cancel_ocr.is_set():
+                    worker_results.put((stage, {
+                        "ready": False, "state": "retry",
+                        "guidance": "OCR could not read this frame. Adjust focus and try again.",
+                    }, None))
 
         def advance_stage(stage, bytes_capture):
             captured[stage] = bytes_capture
@@ -295,7 +338,8 @@ def main() -> int:
                 step_label.configure(text="STEP 3: Remove ID and look at the camera")
                 feedback.configure(text="BACK captured. Show your own face, without the card.")
             else:
-                close()
+                # Keep completed captures only for the immediate local review.
+                close(completed=True)
                 root.after(100, review_in_memory)
 
         def poll_results():
@@ -389,7 +433,12 @@ def main() -> int:
     tk.Button(actions, text="START LIVE SCAN — FRONT > BACK > SELFIE",
               command=start_live_camera, bg="#0b8062", fg="white",
               padx=12, pady=8).pack(side="left")
-    tk.Button(actions, text="CLEAR SCANS", command=reset_captures,
+    def clear_scans():
+        if callable(active_window["close"]):
+            active_window["close"]()
+        reset_captures()
+
+    tk.Button(actions, text="CLEAR SCANS", command=clear_scans,
               padx=12, pady=8).pack(side="left", padx=10)
 
     def shutdown():
@@ -400,7 +449,7 @@ def main() -> int:
 
     root.protocol("WM_DELETE_WINDOW", shutdown)
     root.mainloop()
-    captured.clear()
+    release_scan_buffers(captured)
     return 0
 
 
