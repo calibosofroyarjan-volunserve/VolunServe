@@ -144,3 +144,14 @@ test("backend queue exposes the status fields and sanitized evidence expected by
   assert(!result.includes("base64"));
   assert(!result.includes("selfieBytes"));
 });
+test("staging Resident status uses final Admin decision, not stale provisional AI result",()=>{
+  const start=src.indexOf('"/api/identity/status"');
+  const end=src.indexOf('"/api/identity/verify"',start);
+  assert(start>0&&end>start);
+  const status=src.slice(start,end);
+  assert.match(status,/verification\.manualReviewDecision === "retry_required"/);
+  assert.match(status,/identityStatus === "verified"/);
+  assert.match(status,/profile\.identityVerified === true/);
+  assert.match(status,/verification\.decision \|\| verification\.aiDecision/);
+  assert.match(status,/padValidated: false/);
+});
