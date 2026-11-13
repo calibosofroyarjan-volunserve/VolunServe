@@ -3,7 +3,7 @@ import unittest
 from pathlib import Path
 from live_camera_scan_policy import (
     evaluate_camera_side as assess, evaluate_selfie_face,
-    advance_selfie_stability,
+    advance_selfie_stability, camera_id_roi_bounds,
 )
 
 
@@ -47,6 +47,48 @@ class CameraOCRPolicy(unittest.TestCase):
                 with self.subTest(stage=stage, blur=blur, bright=bright):
                     self.assertFalse(assess(stage, ocr, blur, bright)["ready"])
             self.assertFalse(assess(stage, None, 140.0, 120.0)["ready"])
+
+    def test_wider_camera_roi_preserves_card_edges_within_image(self):
+        for shape in ((720, 1280, 3), (480, 640, 3), (360, 480, 3)):
+            with self.subTest(shape=shape):
+                height, width = shape[:2]
+                x0, y0, x1, y1 = camera_id_roi_bounds(shape)
+                self.assertLess(0, x0)
+                self.assertLess(0, y0)
+                self.assertLess(x0, x1)
+                self.assertLess(y0, y1)
+                self.assertLess(x1, width)
+                self.assertLess(y1, height)
+                self.assertGreaterEqual((x1 - x0) / width, 0.90)
+                self.assertGreaterEqual((y1 - y0) / height, 0.88)
+        for invalid in (None, (), (0, 640), ("bad", 640), (5000, 640)):
+            self.assertEqual(camera_id_roi_bounds(invalid), (0, 0, 0, 0))
+
+    def test_front_retry_messages_identify_missing_signal_without_pii(self):
+        heading_only = assess("front", "PAMBANSANG PAGKAKAKILANLAN",
+                              120.0, 110.0)
+        labels_only = assess("front", "SURNAME DOE GIVEN NAMES JANE",
+                             120.0, 110.0)
+        neither = assess("front", "UNKNOWN BLURRED CARD", 120.0, 110.0)
+        for result in (heading_only, labels_only, neither):
+            self.assertFalse(result["ready"])
+            self.assertEqual(result["state"], "retry")
+            self.assertEqual(set(result), {"ready", "state", "guidance"})
+            self.assertNotIn("DOE", result["guidance"])
+            self.assertNotIn("JANE", result["guidance"])
+        self.assertIn("surname/given-name", heading_only["guidance"])
+        self.assertIn("heading", labels_only["guidance"].lower())
+        self.assertIn("four corners", neither["guidance"])
+
+    def test_scanner_uses_wide_roi_and_never_bypasses_OCR(self):
+        source = Path("identity-ai/local_national_id_selfie_review.py").read_text(
+            encoding="utf-8")
+        self.assertIn("camera_id_roi_bounds(frame.shape)", source)
+        self.assertNotIn("int(w * 0.76)", source)
+        self.assertIn("evaluate_camera_side(stage, ocr,", source)
+        self.assertIn('if evidence["ready"] and payload is not None:', source)
+        self.assertIn('if state["matching"] >= 2:', source)
+        self.assertNotIn("cv2.imwrite", source)
 
     def test_no_decision_or_sensitive_fields_returned(self):
         for kind, text in (("front", FRONT), ("back", BACK)):

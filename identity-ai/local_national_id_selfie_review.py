@@ -237,7 +237,7 @@ def main() -> int:
             from PIL import Image, ImageTk
             from live_camera_scan_policy import (
                 evaluate_camera_side, evaluate_selfie_face,
-                advance_selfie_stability,
+                advance_selfie_stability, camera_id_roi_bounds,
             )
             import main as ai
             if not ai.document_ocr_ready():
@@ -281,7 +281,8 @@ def main() -> int:
                             text="No upload. Text recognition takes a few seconds.")
         feedback.pack(pady=8)
         tk.Label(pop, bg="#eef5fa", fg="#4b5563", text=(
-            "Automatic capture needs 2 matching OCR checks for each ID side; "
+            "Fit ALL FOUR card corners inside the guide, keep the card level "
+            "and avoid glare. Two readable OCR checks are needed per ID side; "
             "one clearly framed selfie. No images saved."
         ), wraplength=720).pack()
         worker_results = queue.Queue()
@@ -317,14 +318,6 @@ def main() -> int:
         active_window["close"] = close
         tk.Button(pop, text="CANCEL — discard incomplete scans", command=close).pack(pady=9)
         pop.protocol("WM_DELETE_WINDOW", close)
-
-        def roi_bounds(image):
-            h, w = image.shape[:2]
-            rw = int(w * 0.76)
-            rh = min(int(h * 0.77), int(rw / 1.58))
-            x = max(0, (w - rw) // 2)
-            y = max(0, (h - rh) // 2)
-            return (x, y, min(w, x + rw), min(h, y + rh))
 
         def run_ocr_worker(stage, snapshot):
             """One immutable camera ROI per OCR call; no file or network I/O."""
@@ -402,7 +395,7 @@ def main() -> int:
                 display = frame.copy()
                 h, w = frame.shape[:2]
                 if stage in ("front", "back"):
-                    x0, y0, x1, y1 = roi_bounds(frame)
+                    x0, y0, x1, y1 = camera_id_roi_bounds(frame.shape)
                     viable = (x1 - x0 >= 420 and y1 - y0 >= 260)
                     cv2.rectangle(display, (x0, y0), (x1, y1),
                                   (40, 200, 50) if state["matching"] else (0, 180, 250), 3)

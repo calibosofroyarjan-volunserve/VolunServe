@@ -16,6 +16,26 @@ from strict_document_screening import (
 )
 
 
+
+def camera_id_roi_bounds(image_shape):
+    """Central wide OCR region with margins around the *whole* ID card.
+
+    Earlier UI scanned only 76% of camera width, cropping the portrait-side
+    title and trailing labels on many small laptop-camera frames. Keep a
+    narrow edge margin for framing but never return an out-of-bounds crop.
+    This changes only which camera pixels are scanned, NOT document policy.
+    """
+    try:
+        height, width = int(image_shape[0]), int(image_shape[1])
+        if not (120 <= height <= 3000 and 120 <= width <= 3000):
+            return (0, 0, 0, 0)
+    except (TypeError, ValueError, IndexError, OverflowError):
+        return (0, 0, 0, 0)
+    x_margin = max(1, int(width * 0.04))
+    y_margin = max(1, int(height * 0.05))
+    return (x_margin, y_margin, width - x_margin, height - y_margin)
+
+
 def evaluate_camera_side(stage, ocr_text, blur_variance, brightness):
     """Conservative visible OCR-side/quality guidance for live camera frames.
 
@@ -57,8 +77,24 @@ def evaluate_camera_side(stage, ocr_text, blur_variance, brightness):
                 and front_heading and front_fields and not back_fields):
             return {"ready": True, "state": "front_candidate",
                     "guidance": "National ID FRONT text detected. Hold steady..."}
-        return {"ready": False, "state": "retry",
-                "guidance": "Show FRONT: card heading, surname and given names readable."}
+        # Explain the missing OCR clue without displaying names, raw OCR
+        # text or government-ID numbers. These cues DO NOT accept the card.
+        if front_heading and not front_fields:
+            guidance = (
+                "Heading found; surname/given-name labels still unreadable. "
+                "Move the card slightly back, refocus and reduce glare."
+            )
+        elif front_fields and not front_heading:
+            guidance = (
+                "Name labels found; National ID heading is unreadable. "
+                "Fit all four card corners inside the guide."
+            )
+        else:
+            guidance = (
+                "Cannot read National ID FRONT yet. Fit all four corners "
+                "inside the guide, straighten the card, improve focus/light."
+            )
+        return {"ready": False, "state": "retry", "guidance": guidance}
 
     # The reverse of the physical PhilID can repeat a title, but the layout
     # must contain at least two independently recognized reverse field families.
