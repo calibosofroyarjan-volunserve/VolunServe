@@ -97,11 +97,12 @@ class GuidedPadWebcamUI:
     }
 
     def __init__(self, camera, *, trials_per_class=3, frames_per_trial=3,
-                 tick_ms=105, clock=time.monotonic,
+                 preview_only=False, tick_ms=105, clock=time.monotonic,
                  framing=analyze_framing, assessor=assess_ready_frame):
         if not 1 <= frames_per_trial <= MAX_FRAMES_PER_TRIAL:
             raise ValueError("INVALID_FRAME_COUNT")
         self.camera = camera
+        self.preview_only = preview_only is True
         self.progress = TrialProgress(trials_per_class=trials_per_class)
         self.frames_per_trial = frames_per_trial
         self.tick_ms = tick_ms
@@ -174,6 +175,13 @@ class GuidedPadWebcamUI:
 
     def _update_step(self):
         kind, number = self.progress.current
+        if self.preview_only:
+            self.step_label.configure(
+                text="FRAMING ONLY — check the full 2.7x face box. No test frames are sampled.")
+            self.progress_label.configure(
+                text="Move back until FRAMING READY. Close when finished; no trial is counted.")
+            self.capture_button.configure(state="disabled")
+            return
         if kind is None:
             self.step_label.configure(
                 text="Exploratory capture complete. No identity approval granted.")
@@ -189,7 +197,8 @@ class GuidedPadWebcamUI:
                  "(one presentation = one trial)")
 
     def _start_capture(self):
-        if (self._closing or self._capturing or self.progress.complete or
+        if (self.preview_only or self._closing or self._capturing or
+                self.progress.complete or
                 self._last_guidance is None or
                 not self._last_guidance.capture_ready):
             return
@@ -276,9 +285,10 @@ class GuidedPadWebcamUI:
                 self._last_guidance = guidance
                 self._sample_frame(frame, guidance)
                 if not self._capturing and not self.progress.complete:
-                    # Never start capture until the *full* 2.7x crop fits.
+                    # Framing-only never captures; the 2.7x guide is visual only.
                     self.capture_button.configure(
-                        state="normal" if guidance.capture_ready else "disabled")
+                        state="normal" if guidance.capture_ready and
+                        not self.preview_only else "disabled")
                     if guidance.code != "ready":
                         self.guidance_label.configure(
                             text=HELP.get(guidance.code, "Face not ready."),
@@ -330,9 +340,10 @@ class GuidedPadWebcamUI:
         return None if self.cancelled or self.camera_failed else self.progress.trials
 
 
-def launch_webcam_preview(camera, *, trials_per_class, frames_per_trial):
+def launch_webcam_preview(camera, *, trials_per_class, frames_per_trial,
+                          preview_only=False):
     """Safe, lazy GUI entry; caller owns/releases webcam in a finally block."""
     ui = GuidedPadWebcamUI(
         camera, trials_per_class=trials_per_class,
-        frames_per_trial=frames_per_trial)
+        frames_per_trial=frames_per_trial, preview_only=preview_only)
     return ui.launch()
