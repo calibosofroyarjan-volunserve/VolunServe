@@ -118,8 +118,25 @@ def format_aggregate(report):
                 f"attack={int(row.get('observedAttack', 0))}, "
                 f"inconclusive={int(row.get('inconclusive', 0))}"
             )
+        genuine = by_kind.get("live", {})
+        live_count = int(genuine.get("trials", 0))
+        genuine_not_accepted = (
+            int(genuine.get("observedAttack", 0)) +
+            int(genuine.get("inconclusive", 0)))
+        attack_count = sum(
+            int(by_kind.get(kind, {}).get("trials", 0))
+            for kind in ("print", "replay"))
+        attacks_observed_live = sum(
+            int(by_kind.get(kind, {}).get("observedLive", 0))
+            for kind in ("print", "replay"))
+        lines.extend((
+            f"  Live presentations not accepted: {genuine_not_accepted}/{live_count}",
+            f"  Print/replay presentations seen as live: {attacks_observed_live}/{attack_count}",
+        ))
     lines.extend((
         "",
+        "Physical labels are confirmed by the operator, NOT camera-verified.",
+        "These are tiny pilot observations, NOT calibrated APCER/BPCER.",
         "Liveness independently validated: NO",
         "Permission to approve Verified Resident: NO",
         "",
@@ -149,7 +166,8 @@ def ask_user_settings():
              fg="#0f2f5a", font=("Segoe UI", 18, "bold")).pack(anchor="w")
     tk.Label(box, text=(
         "Works with the laptop webcam. A visible camera window opens with "
-        "MOVE BACK / FRAMING READY guidance and a Start Capture button."
+        "MOVE BACK / FRAMING READY guidance, a per-trial physical presentation "
+        "confirmation checkbox, and Start Capture."
     ), bg="#f4f8fc", wraplength=570, justify="left",
         font=("Segoe UI", 10)).pack(anchor="w", pady=(10, 8))
     tk.Label(box, text=(
@@ -169,7 +187,7 @@ def ask_user_settings():
                    text="Quick pilot: 1 live + 1 print + 1 replay",
                    bg="#f4f8fc").pack(anchor="w")
     tk.Radiobutton(box, variable=mode, value="full",
-                   text="Larger pilot: 3 live + 3 print + 3 replay",
+                   text="9-trial pilot: 3 real LIVE + 3 physical PRINT + 3 screen REPLAY",
                    bg="#f4f8fc").pack(anchor="w")
     tk.Checkbutton(box, variable=consent,
                    text="I consent. Any adult shown also consented.",
