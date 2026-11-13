@@ -5184,15 +5184,20 @@ app.get(
               "",
             200,
           ),
-        decision:
-          cleanText(
-            verification
-              .aiDecision ||
-              verification
-                .decision ||
-              "",
-            80,
-          ),
+        // Report the authoritative final review outcome first. Previously
+        // aiDecision ("manual_review") shadowed an Admin's verified/retry
+        // decision, leaving the Resident UI with a stale outcome.
+        // No AI score can grant Verified status: the profile comes only from
+        // the existing authenticated Admin transaction.
+        decision: cleanText(
+          (identityStatus === "verified" && profile.identityVerified === true
+            ? "verified"
+            : identityStatus === "failed" &&
+                verification.manualReviewDecision === "retry_required"
+              ? "retry_required"
+              : verification.decision || verification.aiDecision || ""),
+          80,
+        ),
         matchScore:
           numberOrNull(
             verification
