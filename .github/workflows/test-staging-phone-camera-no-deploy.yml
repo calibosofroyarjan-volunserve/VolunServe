@@ -4,6 +4,8 @@ on:
   pull_request:
     paths:
       - "public/phone-camera-demo.html"
+      - "public/phone-sface-research.mjs"
+      - "backend/test-phone-sface-research.mjs"
       - "backend/test-staging-phone-camera-demo.cjs"
       - ".github/workflows/test-staging-phone-camera-no-deploy.yml"
 
@@ -19,7 +21,7 @@ jobs:
         with:
           node-version: "22"
       - name: Run synthetic browser consent, phone camera, capture, cleanup and host isolation checks
-        run: node --test backend/test-staging-phone-camera-demo.cjs
+        run: node --test backend/test-staging-phone-camera-demo.cjs backend/test-phone-sface-research.mjs
       - name: Verify production and backend protections were not changed
         run: |
           test -f scripts/check-expo-resident-staging-release.cjs
