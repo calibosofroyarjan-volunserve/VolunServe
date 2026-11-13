@@ -2,6 +2,7 @@ import { auth } from "./firebase";
 import { identityEnvironmentTarget } from "./identityEnvironmentTarget";
 import { assertIdentityMediaSubmissionAllowed } from "./identityMediaAvailability";
 import { resolveIdentityPrecheckOutcome } from "./identityPrecheckContract";
+import { reconcileResidentIdentityStatus, reconcileResidentIdentityDecision } from "./identityResidentStatusContract";
 
 export type IdentityVerificationStatus =
   | "basic"
@@ -683,23 +684,18 @@ export const getIdentityVerificationStatus =
       );
     }
 
-    const identityStatus =
-      normalizeStatus(
-        body?.identityStatus,
-      );
+    const {identityStatus, identityVerified} = reconcileResidentIdentityStatus(
+      body?.identityStatus, body?.identityVerified,
+    );
 
     return {
       identityStatus,
-      identityVerified:
-        body?.identityVerified === true ||
-        identityStatus === "verified",
+      identityVerified,
       verificationId:
         body?.verificationId
           ? String(body.verificationId)
           : undefined,
-      decision: body?.decision
-        ? String(body.decision)
-        : undefined,
+      decision: reconcileResidentIdentityDecision(body?.decision, identityStatus),
       matchScore: optionalNumber(
         body?.matchScore,
       ),
