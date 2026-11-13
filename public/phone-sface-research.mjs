@@ -11,6 +11,11 @@ export const SFACE_SHA256 = "0ba9fbfa01b5270c96627c4ef784da859931e02f04419c829e8
 // Same SHA256-pinned official bytes in two OpenCV publisher repositories.
 // Browser CORS can differ after Hugging Face's large-file redirect.
 const MODEL_URLS = [
+  // Same-origin asset exists only on the isolated Render staging static site.
+  // Render copies this SHA-pinned OpenCV model from public/ during Expo export.
+  ...(typeof location !== "undefined" &&
+      location.hostname === "volunserve-expo-resident-full-staging.onrender.com"
+     ? ["/staging-sface-2021dec.onnx"] : []),
   "https://huggingface.co/opencv/opencv_zoo/resolve/main/models/face_recognition_sface/face_recognition_sface_2021dec.onnx",
   "https://huggingface.co/opencv/face_recognition_sface/resolve/main/face_recognition_sface_2021dec.onnx",
 ];

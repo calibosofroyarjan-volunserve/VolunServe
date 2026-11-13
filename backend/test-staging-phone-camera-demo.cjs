@@ -197,7 +197,7 @@ test("diagnostic only loads public model weights on explicit permission and no i
 });
 
 test("no account access, remote media upload, fake model verification or production dependencies",()=>{
-  assert.match(html,/connect-src https:\/\/cdn\.jsdelivr\.net https:\/\/storage\.googleapis\.com/);
+  assert.match(html,/connect-src 'self' https:\/\/cdn\.jsdelivr\.net https:\/\/storage\.googleapis\.com/);
   assert.match(html,/No signup required/);
   assert.match(html,/No identity verification, ID OCR, face matching or liveness was performed/);
   assert.match(html,/facingMode: \{ideal: facing\}/);

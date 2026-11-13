@@ -102,3 +102,20 @@ for(const file of guardedMediaUploads){
 if(issues.length)throw Error("STAGING BLOCKED: "+issues.join(" | "));
 console.log("STAGING PASS: Full-staging Firebase, identity API, assistance/donation routes, Cloudinary and checkout guards audited.");
 console.log("IMPORTANT: This does not validate PAD/ID authenticity, authentication, read/write rules or live browser behavior.");
+
+ 
+// Isolated STAGING static service ONLY: package the official SHA-pinned
+// OpenCV SFace model into public/ before Expo exports the static assets.
+// This guard is not executed in CI, other Render services, or production.
+if(process.env.RENDER==="true" &&
+   process.env.RENDER_SERVICE_ID==="srv-dbrfe0dbedkc73df01jg"){
+ if(process.env.RENDER_GIT_BRANCH!=="preview/expo-resident-full-staging-web-20261113" ||
+    process.env.RENDER_EXTERNAL_HOSTNAME!=="volunserve-expo-resident-full-staging.onrender.com" ||
+    process.env.RENDER_GIT_REPO_SLUG!=="calibosofroyarjan-volunserve/VolunServe")
+   throw Error("STAGING BLOCKED: SFace static build is outside isolated staging target");
+ const {stagePinnedSFaceStaticAssets}=require("./stage-staging-sface-model.cjs");
+ stagePinnedSFaceStaticAssets().catch(()=>{
+   console.error("STAGING BLOCKED: pinned public SFace model/license unavailable; previous deployment retained");
+   process.exitCode=1;
+ });
+}
