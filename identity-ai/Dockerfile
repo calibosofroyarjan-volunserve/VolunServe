@@ -32,10 +32,12 @@ COPY . .
 # request time. Fail the build if source/checksum/model runtime is invalid.
 # The classifier cannot mark someone live, verified, or authenticated.
 ENV VOLUNSERVE_PASSIVE_PAD_SHADOW=1
+ENV VOLUNSERVE_PAD_V1SE_SHADOW=1
 ENV VOLUNSERVE_SFACE_SHADOW=1
 RUN python download_passive_pad_model.py && \
+    python download_pad_v1se_model.py && \
     python download_yunet_model.py && \
     python download_sface_model.py && \
-    python -c "from passive_pad_shadow import readiness; from sface_shadow import readiness as sface_status; pad = readiness(); face = sface_status(); assert pad['modelLoaded'] and pad['faceDetectorShadow']['modelLoaded'] and face['modelLoaded'] and not pad['independentPadValidated'] and not face['independentFaceMatchValidated'], (pad, face); print('PASS pinned MiniFASNet, YuNet and SFace shadow models loaded; no liveness or identity approval')"
+    python -c "from passive_pad_shadow import readiness; from pad_v1se_shadow import readiness as v1; from sface_shadow import readiness as sface_status; pad = readiness(); second = v1(); face = sface_status(); assert pad['modelLoaded'] and second['modelLoaded'] and pad['faceDetectorShadow']['modelLoaded'] and face['modelLoaded'] and not pad['independentPadValidated'] and not second['independentPadValidated'] and not face['independentFaceMatchValidated'], (pad, second, face); print('PASS pinned MiniFASNet V2, V1SE, YuNet and SFace research models loaded; no liveness or identity approval')"
 
 CMD ["sh", "-c", "uvicorn main:app --host 0.0.0.0 --port ${PORT:-10000}"]
