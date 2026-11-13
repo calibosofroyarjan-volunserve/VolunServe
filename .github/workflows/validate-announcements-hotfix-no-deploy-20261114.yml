@@ -34,5 +34,23 @@ jobs:
         run: npx firebase emulators:exec --only firestore --project demo-volunserve "node scripts/test-announcements-published-audience-emulator.cjs"
       - name: Expo web export (no production credentials)
         run: npx expo export --platform web --clear
+      - name: Read current production revision (READ ONLY)
+        shell: bash
+        run: |
+          node <<'NODE'
+          (async () => {
+            const url = 'https://volunserve.com/volunserve-release.json';
+            const response = await fetch(url, {
+              headers: { 'Cache-Control': 'no-cache' },
+              signal: AbortSignal.timeout(15000)
+            });
+            if (!response.ok) throw Error('Hosting revision marker unavailable: HTTP ' + response.status);
+            const data = await response.json();
+            if (data.app !== 'VolunServe' || data.firebaseProject !== 'volunserve-3aa5b')
+              throw Error('Live marker project mismatch');
+            console.log('LIVE_PRODUCTION_REVISION=' + data.revision);
+            console.log('SOURCE_HOTFIX_BASE=2cd63d318ecb6b0dfc52706308e05d0b5806d874');
+          })().catch(error => { console.error(error.message); process.exitCode = 1; });
+          NODE
       - name: No production deployment
         run: echo "Announcement tests only. No Firebase Hosting, Firestore production rules, Functions or Render deployment."
