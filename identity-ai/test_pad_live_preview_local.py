@@ -282,6 +282,50 @@ class LivePreviewTests(unittest.TestCase):
         self.assertFalse(aggregate["independentPadValidated"])
         self.assertEqual(aggregate["identityDecisionUse"],"none")
 
+    def test_live_only_webcam_cli_excludes_print_replay_and_keeps_approval_disabled(self):
+        camera = FakeCapture()
+        observed = []
+        lines = []
+        def launcher(cam, *, trials_per_class, frames_per_trial,
+                     enabled_categories):
+            observed.append((cam, trials_per_class, frames_per_trial,
+                             enabled_categories))
+            return {
+                "live": [("live", "attack")] * 3,
+                "print": [], "replay": [],
+            }
+        with patch.object(webcam.pad, "readiness", return_value={
+            "modelLoaded": True, "faceDetectorShadow": {"modelLoaded": True},
+        }):
+            code = webcam.run_cli(
+                ["--consent-confirmed", "--preview", "--only-live",
+                 "--trials-per-class", "3"],
+                camera_factory=lambda _: camera,
+                preview_launcher=launcher,
+                output_fn=lines.append)
+        self.assertEqual(code, 0)
+        self.assertEqual(observed, [(camera, 3, 3, ("live",))])
+        self.assertTrue(camera.released)
+        report = json.loads(lines[-1])
+        self.assertEqual(report["trialCountsByPresentationType"],
+                         {"live": 3, "print": 0, "replay": 0})
+        self.assertFalse(report["allPresentationTypesSampled"])
+        self.assertFalse(report["independentPadValidated"])
+        self.assertEqual(report["identityDecisionUse"], "none")
+
+    def test_live_only_refuses_headless_mode_instead_of_mislabelling_trials(self):
+        obj = FakeCapture()
+        with patch.object(webcam.pad, "readiness", return_value={
+            "modelLoaded": True, "faceDetectorShadow": {"modelLoaded": True},
+        }):
+            status = webcam.run_cli(
+                ["--consent-confirmed", "--only-live", "--no-preview"],
+                camera_factory=lambda _: obj,
+                preview_launcher=lambda *_a, **_kw: (
+                    _ for _ in ()).throw(AssertionError("unexpected GUI")))
+        self.assertEqual(status, 2)
+        self.assertTrue(obj.released)
+
     def test_preview_cancel_discards_aggregate_and_releases_camera(self):
         webcam_obj = FakeCapture()
         printed=[]
