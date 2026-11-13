@@ -12,11 +12,11 @@ const compilation=ts.transpileModule(source,{
   reportDiagnostics:true,
 });
 assert.equal(compilation.diagnostics?.length||0,0);
-const module={exports:{}};
+const mockModule={exports:{}};
 vm.runInNewContext(compilation.outputText,{
-  module,exports:module.exports,Error,String,
+  module:mockModule,exports:mockModule.exports,Error,String,
 },{timeout:4000});
-const shouldRedirect=module.exports.shouldLeaveGuestLanding;
+const shouldRedirect=mockModule.exports.shouldLeaveGuestLanding;
 const authenticated={
   rootSegment:"public",childSegment:"",
   authUid:"synthetic-resident",
