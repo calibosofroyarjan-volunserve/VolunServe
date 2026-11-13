@@ -105,6 +105,10 @@ test("only public model bytes can be fetched and validated; no photo/embedding u
   assert.match(page,/Check SFace setup — no ID photos needed/);
   assert.match(source,/crypto\.subtle\.digest\("SHA-256",buffer\)/);
   assert.match(source,/if \(hex!==SFACE_SHA256/);
+  // Regression: 1.20.1 has dist/ort.wasm.min.mjs; old dist/esm/ort.min.js does not exist.
+  assert.match(source,/onnxruntime-web@1\.20\.1\/dist\/ort\.wasm\.min\.mjs/);
+  assert.match(source,/onnxruntime-web@1\.20\.1\/dist\//);
+  assert(!source.includes("/dist/esm/ort.min.js"));
   assert.match(source,/ORT_WASM/);
   assert.match(source,/sfaceSimilarityMatrix\(points\)/);
   assert.match(page,/SFace not run\. Anti-spoofing: NOT TESTED/);
