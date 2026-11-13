@@ -133,6 +133,64 @@ class LivePreviewTests(unittest.TestCase):
         self.assertEqual({k:len(v) for k,v in progress.trials.items()},
                          {"live":2,"print":2,"replay":2})
 
+    def test_operator_must_confirm_true_physical_presentation_each_trial(self):
+        class FakeControl:
+            def __init__(self, value=False):
+                self.value = value
+                self.settings = {}
+            def configure(self, **kwargs):
+                self.settings.update(kwargs)
+            def set(self, value):
+                self.value = value
+            def get(self):
+                return self.value
+
+        ui = preview.GuidedPadWebcamUI(
+            FakeCapture(), trials_per_class=3, clock=lambda: 100.0)
+        ui.capture_button = FakeControl()
+        ui.presentation_check = FakeControl()
+        ui.presentation_consent_var = FakeControl()
+        ui.step_label = FakeControl()
+        ui.progress_label = FakeControl()
+        ui.guidance_label = FakeControl()
+        ui._last_guidance = guide.Guidance(
+            "ready", (160, 90, 100, 100), (75, 5, 345, 275))
+
+        ui._start_capture()
+        self.assertFalse(ui._capturing, "FRAMING READY alone cannot capture")
+
+        ui._update_step()
+        self.assertIn("actual consenting adult",
+                      ui.presentation_check.settings["text"])
+        ui.presentation_consent_var.set(True)
+        ui._confirm_current_presentation()
+        ui._start_capture()
+        self.assertTrue(ui._capturing)
+        self.assertEqual(ui._next_sample_at, 100.3)
+
+        # Recording a completed LIVE trial cannot carry consent into next LIVE
+        # or the PRINT / REPLAY section.
+        ui._capturing = False
+        ui.progress.add(("live", "attack"))
+        ui._update_step()
+        self.assertFalse(ui._presentation_confirmed)
+        self.assertFalse(ui.presentation_consent_var.get())
+        ui._start_capture()
+        self.assertFalse(ui._capturing)
+        ui.progress.add(("live", "attack"))
+        ui.progress.add(("live", "attack"))
+        ui._update_step()
+        self.assertIn("PHYSICAL PRINTED PORTRAIT",
+                      ui.presentation_check.settings["text"])
+        self.assertFalse(ui._presentation_confirmed)
+        ui.progress.add(("attack", "attack"))
+        ui.progress.add(("attack", "attack"))
+        ui.progress.add(("attack", "attack"))
+        ui._update_step()
+        self.assertIn("SECOND SCREEN",
+                      ui.presentation_check.settings["text"])
+        self.assertFalse(ui._presentation_confirmed)
+
     def test_framing_only_mode_cannot_capture_even_when_framing_ready(self):
         ui = preview.GuidedPadWebcamUI(
             FakeCapture(), preview_only=True,

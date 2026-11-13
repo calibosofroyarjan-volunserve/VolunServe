@@ -22,13 +22,25 @@ A small window appears, before any camera access:
 - The existing local **visual preview** opens. Move back until the guide says
   **FRAMING READY**. No liveness inference, model score, capture or identity
   result is counted in this first mode. Close when framing works.
-- Relaunch the same one-click file, choose **Quick pilot** for one consenting
-  LIVE, physical PRINT and second-screen REPLAY presentation, or **Larger
-  pilot** for three of each. The on-screen Start Capture button becomes active
-  only when the full 2.7× face crop is inside the camera.
+- Relaunch the same one-click file. **Quick pilot** uses one LIVE, one
+  PRINT and one REPLAY physical presentation; choose **9-trial pilot** for three
+  independently prepared LIVE, PRINT and REPLAY trials each. The camera
+  **FRAMING READY** indicator is only face detection.
+- For **EACH** trial, inspect the stage label, physically show that exact
+  presentation, tick the on-screen confirmation checkbox and then press
+  **Start Capture**. The button stays disabled until BOTH the 2.7× face crop
+  is inside the camera frame and the physical-presentation checkbox is ticked.
+  The checkbox resets after each sample to avoid accidental label carryover.
+- Consider changing ordinary lighting or camera conditions between the three
+  trials, without tuning thresholds to fit the result. Each presentation
+  must actually be live, printed portrait, or another screen's replay
+  as labeled; checking the box cannot prove the physical ground truth.
 - After all physical presentations finish, a local **aggregate-only summary**
-  shows the counts for both 0–255 and 0–1 experimental paths. The summary is
-  not liveness certification, and no image, face template, ID or video is saved.
+  shows the counts for both 0–255 and 0–1 experimental paths, including
+  genuinely live presentations misclassified/rejected/inconclusive and
+  print/replay presentations mistaken for live. These are **exploratory counts,
+  not validated population error rates, measured ISO APCER/BPCER or proof of
+  identity**. No image, face template, ID or video is saved.
 
 The first mode specifically avoids repeating the inconclusive 9/9 experiment
 before the reported crop/framing problem has been addressed. **Do not pretend

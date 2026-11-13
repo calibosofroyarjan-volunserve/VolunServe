@@ -68,9 +68,9 @@ class LaptopLauncherTests(TestCase):
             "perScale": {
                 "upstream_raw_0_to_255": {
                     "perClass": {
-                        "live": {"observedLive": 0, "observedAttack": 0,
+                        "live": {"trials": 1, "observedLive": 0, "observedAttack": 0,
                                  "inconclusive": 1},
-                        "print": {"observedLive": 0, "observedAttack": 1,
+                        "print": {"trials": 1, "observedLive": 0, "observedAttack": 1,
                                   "inconclusive": 0},
                     }
                 },
@@ -79,6 +79,10 @@ class LaptopLauncherTests(TestCase):
         summary = gui.format_aggregate(data)
         self.assertIn("LIVE: 1 trial(s)", summary)
         self.assertIn("inconclusive=1", summary)
+        self.assertIn("Live presentations not accepted: 1/1", summary)
+        self.assertIn("Print/replay presentations seen as live: 0/1", summary)
+        self.assertIn("Physical labels are confirmed by the operator", summary)
+        self.assertIn("NOT calibrated APCER/BPCER", summary)
         self.assertIn("Liveness independently validated: NO", summary)
         self.assertIn("Permission to approve Verified Resident: NO", summary)
         for private in ("faceImage", "embedding", "userId", "photo.jpg", "private_key"):

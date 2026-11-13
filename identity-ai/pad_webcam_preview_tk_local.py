@@ -95,6 +95,13 @@ class GuidedPadWebcamUI:
         "print": "PRINT — show a physical portrait print, NEVER a government ID.",
         "replay": "REPLAY — aim camera at a second screen playing a consenting face video.",
     }
+    # The operator must attest to the PHYSICAL presentation in front of the
+    # camera for EACH trial. The camera face box is not anti-spoofing evidence.
+    PRESENTATION_CONFIRMATIONS = {
+        "live": "I confirm: an actual consenting adult is in front of the webcam.",
+        "print": "I confirm: a PHYSICAL PRINTED PORTRAIT is in front of the webcam.",
+        "replay": "I confirm: a SECOND SCREEN is playing a consenting face VIDEO.",
+    }
 
     def __init__(self, camera, *, trials_per_class=3, frames_per_trial=3,
                  preview_only=False, tick_ms=105, clock=time.monotonic,
@@ -118,6 +125,7 @@ class GuidedPadWebcamUI:
         self._preview_frame = None
         self._photo = None
         self._last_guidance = None
+        self._presentation_confirmed = False
         self._failures = 0
 
     def _build(self):
@@ -159,6 +167,15 @@ class GuidedPadWebcamUI:
         self.progress_label = tk.Label(container, text="", bg="#eef5f1",
                                        fg="#415956", font=("Segoe UI", 9))
         self.progress_label.pack(anchor="w")
+        self.presentation_consent_var = tk.BooleanVar(value=False)
+        self.presentation_check = tk.Checkbutton(
+            container, variable=self.presentation_consent_var,
+            text="Confirm physical presentation for this trial",
+            command=self._confirm_current_presentation,
+            bg="#eef5f1", fg="#143d38",
+            font=("Segoe UI", 9, "bold"), wraplength=680,
+            justify="left")
+        self.presentation_check.pack(anchor="w", pady=(8, 2))
         buttons = tk.Frame(container, bg="#eef5f1")
         buttons.pack(anchor="w", pady=(10, 5), fill="x")
         self.capture_button = tk.Button(
@@ -173,9 +190,24 @@ class GuidedPadWebcamUI:
         self.cancel_button.pack(side="left", padx=12)
         self._update_step()
 
+    def _confirm_current_presentation(self):
+        # Operator-reported label only, NOT AI-authenticated ground truth.
+        self._presentation_confirmed = (
+            not self.preview_only and
+            not self.progress.complete and
+            bool(self.presentation_consent_var.get()))
+        if not self._presentation_confirmed:
+            self.capture_button.configure(state="disabled")
+
     def _update_step(self):
         kind, number = self.progress.current
+        # Require renewed confirmation for every trial, including repeated
+        # captures of the same type, to prevent accidental LIVE/PRINT/REPLAY
+        # label carryover.
+        self._presentation_confirmed = False
+        self.presentation_consent_var.set(False)
         if self.preview_only:
+            self.presentation_check.configure(state="disabled")
             self.step_label.configure(
                 text="FRAMING ONLY — check the full 2.7x face box. No test frames are sampled.")
             self.progress_label.configure(
@@ -183,11 +215,15 @@ class GuidedPadWebcamUI:
             self.capture_button.configure(state="disabled")
             return
         if kind is None:
+            self.presentation_check.configure(state="disabled")
             self.step_label.configure(
                 text="Exploratory capture complete. No identity approval granted.")
             self.progress_label.configure(text="All categories recorded.")
             self.capture_button.configure(state="disabled")
             return
+        self.presentation_check.configure(
+            state="normal",
+            text=self.PRESENTATION_CONFIRMATIONS[kind])
         self.step_label.configure(
             text=f"{self.PROMPTS[kind]}   Trial {number}/{self.progress.trials_per_class}")
         completed = sum(len(values) for values in self.progress.trials.values())
@@ -197,7 +233,8 @@ class GuidedPadWebcamUI:
                  "(one presentation = one trial)")
 
     def _start_capture(self):
-        if (self.preview_only or self._closing or self._capturing or
+        if (not self._presentation_confirmed or
+                self.preview_only or self._closing or self._capturing or
                 self.progress.complete or
                 self._last_guidance is None or
                 not self._last_guidance.capture_ready):
@@ -288,6 +325,7 @@ class GuidedPadWebcamUI:
                     # Framing-only never captures; the 2.7x guide is visual only.
                     self.capture_button.configure(
                         state="normal" if guidance.capture_ready and
+                        self._presentation_confirmed and
                         not self.preview_only else "disabled")
                     if guidance.code != "ready":
                         self.guidance_label.configure(
