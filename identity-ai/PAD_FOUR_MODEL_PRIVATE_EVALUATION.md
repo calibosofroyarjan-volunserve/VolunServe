@@ -1,5 +1,50 @@
 # VolunServe private V2 + V1SE PAD evaluation — November 13, 2026
 
+## November 13: Easy GREEN face framing for National ID + selfie workflows
+
+**The four-model PAD pilot was the wrong screen for an ordinary ID/selfie
+camera framing task.** A user with a clearly visible face on a built-in
+laptop webcam should not have to sit excessively far from the screen just
+to make a 4× *PAD research context crop* fit.
+
+A new default **Easy GREEN face preview (no 4x, no PAD, no image saved)**
+radio option in `start_pad_laptop_gui.py` uses only the checksum-pinned
+YuNet face detector. It turns the **face box green** once exactly one
+non-truncated face of usable size is inside the camera frame. No 2.7× or
+4× enlarged background context is needed; low-quality/edge/tiny/no/multiple
+face feedback remains explicit. This mode is **preview-only** and cannot
+capture, upload, save, or mark anyone verified.
+
+There are three **different** conditions:
+
+1. **GREEN = one face visible and framed for a prospective selfie.**
+   It is NOT "same person as National ID", OCR success, ID authenticity,
+   liveness, or account verification.
+2. **National ID OCR + front/back/profile screening** lives in the
+   separate `identity-ai/main.py` document precheck, via the
+   authenticated backend. A recognized layout or text is not evidence
+   that the Philippine National ID is authentic.
+3. **ID portrait vs selfie 1:1 face comparison** is separate from the
+   PAD pilot, with a non-decisional SFace shadow and manual Admin review.
+   The staging private ID/selfie submission gate remains HTTP 423
+   and must NOT be bypassed merely to make the camera box green.
+
+**No automatic Verified Resident, face match, liveness or ID-authenticity
+claims are made by green framing.** Real identity flows require explicit
+consent, appropriate document handling, identity-security review and a
+controlled authenticated staging acceptance test before any gate is changed.
+
+To run the simple local preview in a separate clean staging PAD checkout:
+
+```powershell
+py -3.11 .\identity-ai\start_pad_laptop_gui.py
+```
+
+The default mode is **Easy GREEN face preview**, requiring only public
+webcam packages and checksum-pinned YuNet detector (separate opt-in).
+The old four-hypothesis anti-spoofing research modes remain opt-in and
+preserve strict 4× framing and no identity approval.
+
 ## V1SE 4x framing and same-bounding-box correction
 
 A review of the original code found a **confirmed integration mismatch**:

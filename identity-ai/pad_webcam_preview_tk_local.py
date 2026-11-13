@@ -18,7 +18,7 @@ import numpy as np
 
 import evaluate_pad_scales_local as paired
 import evaluate_pad_ensemble_local as ensemble
-from pad_frame_guidance_local import analyze_framing, draw_guidance, HELP
+from pad_frame_guidance_local import analyze_framing, analyze_selfie_preview, draw_guidance, HELP
 from pad_camera_quality_local import quality_hint
 from run_pad_webcam_trials_local import valid_frame, CATEGORIES
 
@@ -150,11 +150,14 @@ class GuidedPadWebcamUI:
                  preview_only=False, enabled_categories=CATEGORIES,
                  tick_ms=105, clock=time.monotonic,
                  framing=None, assessor=assess_ready_frame,
-                 four_hypothesis=False):
+                 four_hypothesis=False, id_selfie_preview=False):
         if not 1 <= frames_per_trial <= MAX_FRAMES_PER_TRIAL:
             raise ValueError("INVALID_FRAME_COUNT")
         self.camera = camera
-        self.preview_only = preview_only is True
+        self.id_selfie_preview = id_selfie_preview is True
+        if self.id_selfie_preview and four_hypothesis:
+            raise ValueError("SELFIE_FRAMING_PREVIEW_IS_NOT_PAD")
+        self.preview_only = preview_only is True or self.id_selfie_preview
         self.progress = TrialProgress(
             trials_per_class=trials_per_class, enabled_categories=enabled_categories,
             four_hypothesis=four_hypothesis)
@@ -165,9 +168,12 @@ class GuidedPadWebcamUI:
         # Combined study requires V1SE's full 4x crop, not just the old
         # V2-only 2.7x preview. Do not accept trial with missing V1SE context.
         # Retain injectable custom framing function for no-camera tests.
-        self.framing = (framing if framing is not None else
-                        partial(analyze_framing,
-                                context_scale=4.0 if self.four_hypothesis else 2.7))
+        self.framing = (
+            framing if framing is not None else
+            (analyze_selfie_preview if self.id_selfie_preview else
+             partial(analyze_framing,
+                     context_scale=4.0 if self.four_hypothesis else 2.7))
+        )
         self.assessor = assessor
         self.cancelled = True
         self.camera_failed = False
@@ -193,11 +199,16 @@ class GuidedPadWebcamUI:
         self.root.protocol("WM_DELETE_WINDOW", self._close)
         container = tk.Frame(self.root, bg="#eef5f1", padx=19, pady=15)
         container.pack()
-        tk.Label(container, text="VolunServe · Private webcam preview",
+        tk.Label(container, text=("VolunServe · Easy selfie framing preview"
+                                  if self.id_selfie_preview else
+                                  "VolunServe · Private webcam preview"),
                  bg="#eef5f1", fg="#084938",
                  font=("Segoe UI", 16, "bold")).pack(anchor="w")
         tk.Label(container,
-                 text="LOCAL ONLY · No photo/video saved · AI is NOT verified liveness",
+                 text=("GREEN means one face is framed for selfie review, NOT an ID match or liveness. "
+                  "NO images saved or uploaded."
+                  if self.id_selfie_preview else
+                  "LOCAL ONLY · No photo/video saved · AI is NOT verified liveness"),
                  bg="#eef5f1", fg="#6a4835",
                  font=("Segoe UI", 9)).pack(anchor="w", pady=(4, 9))
         # Tk text-label width/height are CHARACTER units, not pixels.
@@ -294,9 +305,15 @@ class GuidedPadWebcamUI:
         if self.preview_only:
             self.presentation_check.configure(state="disabled")
             self.step_label.configure(
-                text="FRAMING ONLY — check the full 2.7x face box. No test frames are sampled.")
+                text=("SELFIE FRAMING ONLY — green is just single-face detection, "
+                      "NOT National ID OCR, face matching or liveness."
+                      if self.id_selfie_preview else
+                      "FRAMING ONLY — check the full 2.7x face box. No test frames are sampled."))
             self.progress_label.configure(
-                text="Move back until FRAMING READY. Close when finished; no trial is counted.")
+                text=("Look at the camera at a comfortable distance. "
+                      "Green means visible face; NO capture or identity approval."
+                      if self.id_selfie_preview else
+                      "Move back until FRAMING READY. Close when finished; no trial is counted."))
             self.capture_button.configure(state="disabled")
             return
         if kind is None:
@@ -426,7 +443,10 @@ class GuidedPadWebcamUI:
                         state="normal" if guidance.capture_ready and
                         self._presentation_confirmed and
                         not self.preview_only else "disabled")
-                    if guidance.code != "ready":
+                    if guidance.code == "face_visible" and self.id_selfie_preview:
+                        self.guidance_label.configure(
+                            text=HELP["face_visible"], fg="#095d48")
+                    elif guidance.code != "ready":
                         self.guidance_label.configure(
                             text=HELP.get(guidance.code, "Face not ready."),
                             fg="#a05616")
@@ -479,11 +499,13 @@ class GuidedPadWebcamUI:
 
 def launch_webcam_preview(camera, *, trials_per_class, frames_per_trial,
                           preview_only=False, enabled_categories=CATEGORIES,
-                          four_hypothesis=False, assessor=assess_ready_frame):
+                          four_hypothesis=False, assessor=assess_ready_frame,
+                          id_selfie_preview=False):
     """Safe, lazy GUI entry; caller owns/releases webcam in a finally block."""
     ui = GuidedPadWebcamUI(
         camera, trials_per_class=trials_per_class,
         frames_per_trial=frames_per_trial, preview_only=preview_only,
         enabled_categories=enabled_categories,
-        four_hypothesis=four_hypothesis, assessor=assessor)
+        four_hypothesis=four_hypothesis, assessor=assessor,
+        id_selfie_preview=id_selfie_preview)
     return ui.launch()

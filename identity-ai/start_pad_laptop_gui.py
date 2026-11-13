@@ -79,6 +79,37 @@ def models_present(*, include_v1se=False):
     return True
 
 
+def yunet_present():
+    """Easy selfie framing uses YuNet ONLY; never require MiniFASNet/PAD."""
+    from download_yunet_model import (
+        DESTINATION as model_file, SHA256 as expected_sha,
+        MAX_BYTES as max_bytes,
+    )
+    try:
+        if not model_file.is_file():
+            return False
+        raw = model_file.read_bytes()
+        return (0 < len(raw) <= max_bytes and
+                hashlib.sha256(raw).hexdigest() == expected_sha)
+    except (OSError, ValueError):
+        return False
+
+
+def setup_selfie_preview(*, approved=False,
+                         runner=subprocess.check_call):
+    """Opt-in public packages and pinned face detector; NO PAD weights."""
+    if not approved:
+        raise PermissionError("SELFIE_FACE_PREVIEW_SETUP_NOT_APPROVED")
+    if not dependencies_present():
+        runner([sys.executable, "-m", "pip", "install",
+                "--disable-pip-version-check", *DEPS], cwd=str(ROOT))
+    if not yunet_present():
+        runner([sys.executable, str(SCRIPT_DIR / "download_yunet_model.py")],
+               cwd=str(ROOT))
+    if not dependencies_present() or not yunet_present():
+        raise RuntimeError("YuNet selfie preview setup incomplete.")
+
+
 def dependencies_present():
     return (importlib.util.find_spec("numpy") is not None and
             importlib.util.find_spec("cv2") is not None)
@@ -381,19 +412,19 @@ def ask_user_settings():
     root = tk.Tk()
     root.title("VolunServe | Private Laptop Camera Validation")
     root.configure(bg="#f4f8fc")
-    root.geometry("680x760")
+    root.geometry("700x800")
     root.resizable(False, False)
-    choice = {"accepted": False, "camera": 0, "trials": 1, "mode": "camera_only",
+    choice = {"accepted": False, "camera": 0, "trials": 1, "mode": "id_selfie_preview",
               "lighting": "indoor_artificial", "cameraType": "laptop_built_in"}
     camera = tk.IntVar(value=0)
-    mode = tk.StringVar(value="camera_only")
+    mode = tk.StringVar(value="id_selfie_preview")
     lighting = tk.StringVar(value="indoor_artificial")
     camera_type = tk.StringVar(value="laptop_built_in")
     consent = tk.BooleanVar(value=False)
 
     box = tk.Frame(root, bg="#f4f8fc", padx=24, pady=19)
     box.pack(fill="both", expand=True)
-    tk.Label(box, text="VolunServe • Local PAD Pilot", bg="#f4f8fc",
+    tk.Label(box, text="VolunServe • Camera and Identity QA", bg="#f4f8fc",
              fg="#0f2f5a", font=("Segoe UI", 18, "bold")).pack(anchor="w")
     tk.Label(box, text=(
         "Works with the laptop webcam. A visible camera window opens with "
@@ -402,8 +433,9 @@ def ask_user_settings():
     ), bg="#f4f8fc", wraplength=570, justify="left",
         font=("Segoe UI", 10)).pack(anchor="w", pady=(10, 8))
     tk.Label(box, text=(
-        "This is experimental research, NOT validated liveness. No ID is "
-        "needed. No facial photo or recording is saved or uploaded."
+        "RECOMMENDED face preview: Green means ONE visible face only. "
+        "It does NOT read a National ID, match an ID photo or validate liveness. "
+        "All research modes remain separate. No images are saved or uploaded."
     ), bg="#e0f2fe", fg="#0c4a6e", padx=12, pady=10,
         wraplength=550, justify="left").pack(anchor="w", fill="x", pady=(4, 14))
     tk.Label(box, text="Camera number (normally 0)",
@@ -421,8 +453,11 @@ def ask_user_settings():
                   "phone_webcam", "not_recorded").pack(side="left")
     tk.Label(box, text="Session length", bg="#f4f8fc",
              font=("Segoe UI", 10, "bold")).pack(anchor="w", pady=(7, 0))
+    tk.Radiobutton(box, variable=mode, value="id_selfie_preview",
+                   text="RECOMMENDED: Easy GREEN face preview (no 4x, no PAD, no image saved)",
+                   bg="#f4f8fc").pack(anchor="w")
     tk.Radiobutton(box, variable=mode, value="camera_only",
-                   text="RECOMMENDED: Camera clarity only (NO AI models, no tests)",
+                   text="Camera clarity only (NO AI models, no tests)",
                    bg="#f4f8fc").pack(anchor="w")
     tk.Radiobutton(box, variable=mode, value="framing",
                    text="Face framing only (YuNet detection, NO captures)",
@@ -513,6 +548,38 @@ def main():
                 install_camera_prerequisites(approved=True)
             return run_camera_only(user["camera"])
 
+        if user.get("mode") == "id_selfie_preview":
+            # A GREEN face box means adequate basic framing ONLY. No PAD
+            # calibration, government-ID parsing or identity claim is made.
+            if not dependencies_present() or not yunet_present():
+                from tkinter import messagebox
+                if not messagebox.askyesno(
+                    "One-time selfie framing setup",
+                    "Install only the public Python webcam packages and "
+                    "checksum-pinned YuNet face detector? No MiniFASNet "
+                    "anti-spoofing models, photos or government IDs are used."
+                ):
+                    print("Optional YuNet setup declined. No camera accessed.")
+                    return 0
+                setup_selfie_preview(approved=True)
+            import cv2
+            from pad_camera_quality_local import request_supported_resolution
+            from pad_webcam_preview_tk_local import launch_webcam_preview
+            cam = cv2.VideoCapture(user["camera"])
+            try:
+                if not cam.isOpened():
+                    raise RuntimeError("Webcam unavailable. Check Windows camera permissions.")
+                request_supported_resolution(cam)
+                launch_webcam_preview(
+                    cam, trials_per_class=1, frames_per_trial=3,
+                    preview_only=True, id_selfie_preview=True,
+                )
+            finally:
+                cam.release()
+            print("Basic selfie GREEN face preview finished. No face matched "
+                  "against National ID; no PAD or identity approval.")
+            return 0
+
         combined = user.get("mode") in ("combined_quick", "combined_full")
         args = pilot_args(camera=user["camera"], trials=user["trials"],
                           consent=True, live_only=user.get("mode") == "live_only",
@@ -541,8 +608,11 @@ def main():
                 if not camera.isOpened():
                     raise RuntimeError("No camera at that number. Try another camera or Windows privacy settings.")
                 request_supported_resolution(camera)
-                launch_webcam_preview(camera, trials_per_class=1,
-                                      frames_per_trial=3, preview_only=True)
+                launch_webcam_preview(
+                    camera, trials_per_class=1, frames_per_trial=3,
+                    preview_only=True,
+                    id_selfie_preview=False,
+                )
             finally:
                 camera.release()
             notify("Framing-only preview closed",
