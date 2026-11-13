@@ -44,6 +44,26 @@ You can add this flag to the command:
 
 The tool creates a **new aggregate-only JSON file** outside the Git checkout. It refuses overwriting an existing file or saving inside the repository. Only counters, disagreement counts, research caveats and fixed not-validated flags appear; no face pixels, recordings, file paths or per-person data.
 
+## If every webcam trial returns inconclusive (0 observed live / 0 observed attack)
+
+The program may have read nine valid camera frames/trials successfully but failed to classify all of them. **This does not show that attack detection works.** It is usually caused by the wrong webcam being active, missing/ambiguous face detection, the 2.7× face crop falling outside the frame, or low experimental model confidence. You cannot tell which from the trial summary alone.
+
+Run the **private live-face diagnostic** first (you do not need to repeat the printed/replay trials yet):
+
+    py -3.11 identity-ai/diagnose_pad_webcam_local.py --consent-confirmed --camera 0 --frames 9
+
+Use a consenting adult's **actual live face** only, in front of your PC webcam. First check the camera framing in the **Windows Camera** app, then close that app before running Python. Center your head and shoulders and step far enough back so the model's required 2.7× face context fits inside the camera image. There is **no built-in camera preview** in the headless OpenCV tool, and no photos or videos are saved by this diagnostic.
+
+The CLI outputs **only aggregate reason counts** (no pixels, coordinates, filenames, embeddings, or per-person scores). The most common reason explains next steps:
+
+- `face_not_detected`: YuNet sees no face — check camera index, lighting, single centered face
+- `multiple_faces`: keep one consenting face in frame for this diagnostic
+- `face_context_out_of_frame`: face was detected but the required full-context 2.7× crop is clipped — step back, keep more background around the head
+- `low_model_confidence`: model received a face crop but outputs did not meet the **uncalibrated** 0.75 exploratory threshold — do **not** lower the threshold or claim liveness; independent validation remains necessary
+- `model_output_invalid` / `model_not_loaded`: QA inference/model problem, not a user identity failure
+
+If the camera output remains inconclusive, share a **terminal screenshot showing only the aggregate report**. Do not attach selfie photos, camera frames, government IDs, face recordings, or private account data. Re-run the full live/print/replay pilot only after resolving any camera/framing problem. A good result still does not validate live identity or allow automatic Verified Resident approval.
+
 ## Understanding the result
 
 A trial is **one physical presentation**, not three independent video frames. The same face crop is passed to two experimental configurations:
