@@ -316,11 +316,13 @@ def main():
         # Import camera modules only AFTER explicit consent and local setup.
         if user.get("mode") == "framing":
             import cv2
+            from pad_camera_quality_local import request_supported_resolution
             from pad_webcam_preview_tk_local import launch_webcam_preview
             camera = cv2.VideoCapture(user["camera"])
             try:
                 if not camera.isOpened():
                     raise RuntimeError("No camera at that number. Try another camera or Windows privacy settings.")
+                request_supported_resolution(camera)
                 launch_webcam_preview(camera, trials_per_class=1,
                                       frames_per_trial=3, preview_only=True)
             finally:

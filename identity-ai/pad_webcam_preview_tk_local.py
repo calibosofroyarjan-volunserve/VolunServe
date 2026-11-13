@@ -17,11 +17,23 @@ import numpy as np
 
 import evaluate_pad_scales_local as paired
 from pad_frame_guidance_local import analyze_framing, draw_guidance, HELP
+from pad_camera_quality_local import quality_hint
 from run_pad_webcam_trials_local import valid_frame, CATEGORIES
 
 
 PAIR_OUTCOMES = frozenset(("live", "attack", "inconclusive"))
 MAX_FRAMES_PER_TRIAL = 8
+
+
+def fit_preview_only(frame, *, max_width=690, max_height=450):
+    """Fit higher-resolution on-screen PNG; never change the PAD model input."""
+    height, width = frame.shape[:2]
+    factor = min(1.0, max_width / width, max_height / height)
+    if factor >= 1:
+        return frame
+    display_size = (max(1, round(width * factor)),
+                    max(1, round(height * factor)))
+    return cv2.resize(frame, display_size, interpolation=cv2.INTER_AREA)
 
 
 class TrialProgress:
@@ -142,6 +154,7 @@ class GuidedPadWebcamUI:
         self._last_guidance = None
         self._presentation_confirmed = False
         self._failures = 0
+        self._quality_ticks = 0
 
     def _build(self):
         # Tk import is delayed to keep the existing headless CI tests working.
@@ -174,6 +187,12 @@ class GuidedPadWebcamUI:
             fg="#80520b", font=("Segoe UI", 10, "bold"),
             wraplength=680, justify="left")
         self.guidance_label.pack(anchor="w")
+        self.quality_label = tk.Label(
+            container,
+            text="Checking actual webcam resolution, image detail and lighting...",
+            bg="#eef5f1", fg="#475569", font=("Segoe UI", 9),
+            wraplength=680, justify="left")
+        self.quality_label.pack(anchor="w", pady=(3, 1))
         self.step_label = tk.Label(
             container, text="", bg="#eef5f1",
             fg="#143d38", font=("Segoe UI", 10),
@@ -365,6 +384,12 @@ class GuidedPadWebcamUI:
                 self._failures = 0
                 guidance = self.framing(frame)
                 self._last_guidance = guidance
+                self._quality_ticks += 1
+                # A heuristic every ~0.8 sec, on ephemeral camera frames.
+                # This never influences the classifier or Start Capture gate.
+                if self._quality_ticks == 1 or self._quality_ticks % 8 == 0:
+                    self.quality_label.configure(
+                        text=quality_hint(frame, guidance.face_rect))
                 self._sample_frame(frame, guidance)
                 if not self._capturing and not self.progress.complete:
                     # Framing-only never captures; the 2.7x guide is visual only.
@@ -380,7 +405,7 @@ class GuidedPadWebcamUI:
                         self.guidance_label.configure(
                             text=HELP["ready"], fg="#095d48")
                 # draw_guidance only returns a RAM array for the local UI.
-                view = draw_guidance(frame, guidance)
+                view = fit_preview_only(draw_guidance(frame, guidance))
                 encoded, payload = cv2.imencode(".png", view)
                 if not encoded:
                     raise ValueError("INVALID_PREVIEW_PNG")
