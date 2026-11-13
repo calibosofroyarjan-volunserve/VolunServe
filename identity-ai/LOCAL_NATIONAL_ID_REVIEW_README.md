@@ -11,7 +11,14 @@ $env:PATH = "C:\Program Files\Tesseract-OCR;$env:PATH"
 py -3.11 .\identity-ai\local_national_id_selfie_review.py
 ```
 
-Or double-click `Start-VolunServe-Private-ID-Review.cmd`. The old launcher filename is retained for compatibility; the app inside is now **CAMERA-ONLY**.
+Or double-click `Start-VolunServe-Private-ID-Review.cmd`. The old launcher filename is retained for compatibility; the app inside is now **CAMERA-ONLY**. On Windows, this launcher looks for a working `tesseract.exe` on PATH, or in common Program Files/user-local Tesseract-OCR installation folders, and temporarily adds that folder to **its own process PATH**. It also checks the OCR version before opening the camera. It does not install software or edit the system PATH. If the error says **Tesseract OCR is not available**, confirm the desktop executable is installed (the `pytesseract` Python library alone is insufficient). In PowerShell, check:
+
+```powershell
+Test-Path "C:\\Program Files\\Tesseract-OCR\\tesseract.exe"
+& "C:\\Program Files\\Tesseract-OCR\\tesseract.exe" --version
+```
+
+If Tesseract is in a custom folder, add that folder to `$env:Path` for the current terminal session before launching the app. No government-ID, face or account data are needed to diagnose installation.
 
 1. Read the consent statement and check it. Select webcam 0 (or 1 if Windows uses a different device).
 2. Press **START LIVE SCAN**. Keep the National ID physical **FRONT** inside the green/yellow guide, sharp and well lit. OCR tries periodically *locally*, not via a web API. It requires two successive readable front layout observations before capturing that frame in **memory only**.
