@@ -88,6 +88,29 @@ class LaptopLauncherTests(TestCase):
         for private in ("faceImage", "embedding", "userId", "photo.jpg", "private_key"):
             self.assertNotIn(private, summary)
 
+    def test_print_false_live_risk_surfaces_in_gui_without_false_certification(self):
+        report = {
+            "identityDecisionUse": "none",
+            "independentPadValidated": False,
+            "trialCountsByPresentationType": {"live": 3, "print": 3, "replay": 3},
+            "pairedTrialStatusDisagreements": {"live": 3, "print": 3, "replay": 0},
+            "perScale": {},
+            "conservativeShadowRisk": {
+                "printPresentationsAnyScalePredictedLive": 1,
+                "replayPresentationsAnyScalePredictedLive": 0,
+                "operatorLabelsNotIndependentlyVerified": True,
+                "identityDecisionUse": "none",
+                "independentPadValidated": False,
+            },
+        }
+        summary = gui.format_aggregate(report)
+        self.assertIn("PRINT trials predicted LIVE by either scale: 1", summary)
+        self.assertIn("REPLAY trials predicted LIVE by either scale: 0", summary)
+        self.assertIn("false acceptance needs independent investigation", summary)
+        self.assertIn("Automatic biometric approval remains BLOCKED", summary)
+        self.assertIn("Cross-scale disagreements/unknowns => INCONCLUSIVE", summary)
+        self.assertNotIn("biometric validation passed", summary.lower())
+
     def test_no_work_is_started_when_windows_consent_is_cancelled(self):
         with patch.object(gui.sys, "platform", "win32"), \
              patch.object(gui, "ask_user_settings",
