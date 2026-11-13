@@ -39,7 +39,7 @@ jobs:
           node -e 'const fs=require("node:fs"),cp=require("node:child_process"),assert=require("node:assert/strict");const base=cp.execFileSync("git",["show","2cd63d318ecb6b0dfc52706308e05d0b5806d874:firestore.rules"],{encoding:"utf8"});const now=fs.readFileSync("firestore.rules","utf8");const a="    match /announcements/{announcementId} {",b="    match /identityVerifications/{uid} {";const take=x=>x.slice(x.indexOf(a),x.indexOf(b,x.indexOf(a)));assert.equal(base.replace(take(base),take(now)),now);console.log("PASS: rules differ only within announcements.");'
       - name: Protect all certificate and attendance implementation from regression
         run: |
-          node --test scripts/test-profile-certificates-account-menu.cjs scripts/test-resident-volunteer-sidebar.cjs
+          node --test scripts/test-profile-certificates-account-menu.cjs scripts/test-resident-volunteer-sidebar.cjs scripts/test-volunteer-donations-sidebar-removal.cjs
           node <<'NODE'
           const cp = require("node:child_process"), assert = require("node:assert/strict");
           const paths = cp.execFileSync("git", ["diff", "--name-only", "2cd63d318ecb6b0dfc52706308e05d0b5806d874", "HEAD"], { encoding: "utf8" })
