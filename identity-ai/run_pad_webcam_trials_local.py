@@ -11,6 +11,9 @@ aggregate counts only.
 
 Windows usage from the repository root (after downloading pinned models):
   py -3.11 identity-ai/run_pad_webcam_trials_local.py --consent-confirmed
+
+The Windows default is now a visible Tkinter camera preview with a framing
+guide, Capture and Cancel. Use --no-preview only for automated/headless QA.
 """
 import argparse
 import json
@@ -150,7 +153,8 @@ def run_pilot(capture, *, trials_per_class=DEFAULT_TRIALS_PER_CLASS,
 
 
 def run_cli(argv=None, *, camera_factory=None, input_fn=input,
-            output_fn=print, sampler=capture_one_trial, sleeper=time.sleep):
+            output_fn=print, sampler=capture_one_trial, sleeper=time.sleep,
+            preview_launcher=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--consent-confirmed", action="store_true",
                         help="Confirm every person shown consented and this is private local research")
@@ -160,6 +164,13 @@ def run_cli(argv=None, *, camera_factory=None, input_fn=input,
     parser.add_argument("--frames-per-trial", type=int, default=DEFAULT_FRAMES_PER_TRIAL)
     parser.add_argument("--aggregate-json", type=Path,
                         help="Optional NEW aggregate-only JSON outside Git (no overwrite)")
+    preview_group = parser.add_mutually_exclusive_group()
+    preview_group.add_argument(
+        "--preview", dest="preview", action="store_true", default=None,
+        help="Show local Tk webcam with real-time face/crop framing guide")
+    preview_group.add_argument(
+        "--no-preview", dest="preview", action="store_false",
+        help="Legacy headless terminal prompts (no live camera display)")
     args = parser.parse_args(argv)
     # No model/camera/media access before consent AND argument validation.
     if not args.consent_confirmed:
@@ -190,11 +201,37 @@ def run_cli(argv=None, *, camera_factory=None, input_fn=input,
         output_fn("No cloud uploads, no saved face images/videos. Close this program anytime to stop.")
         output_fn("You will capture live, printed-photo and screen-replay camera presentations.")
         output_fn("Model labels, normalization and threshold remain UNVALIDATED.")
-        output_fn("Camera preview is not shown; align the presentation before pressing Enter.")
-        trial_data = run_pilot(capture, trials_per_class=args.trials_per_class,
-                               frames_per_trial=args.frames_per_trial,
-                               input_fn=input_fn, output_fn=output_fn,
-                               sampler=sampler, sleeper=sleeper)
+        # On a real Windows PC, show the webcam without installing a new
+        # OpenCV GUI package: built-in Tk PhotoImage can display local PNG
+        # pixels entirely in memory even with opencv-headless installed.
+        # Injected fake cameras use legacy CLI by default for headless CI.
+        use_preview = (args.preview if args.preview is not None else
+                       (sys.platform.startswith("win") and camera_factory is None))
+        if use_preview:
+            try:
+                if preview_launcher is None:
+                    from pad_webcam_preview_tk_local import launch_webcam_preview
+                    launcher = launch_webcam_preview
+                else:
+                    launcher = preview_launcher
+                trial_data = launcher(
+                    capture, trials_per_class=args.trials_per_class,
+                    frames_per_trial=args.frames_per_trial)
+            except Exception:
+                print("Local camera preview could not start. Check Python Tkinter "
+                      "and Windows desktop permissions; use --no-preview only "
+                      "for headless research.", file=sys.stderr)
+                return 2
+            if trial_data is None:
+                print("Preview cancelled or camera failed; no report saved.",
+                      file=sys.stderr)
+                return 130
+        else:
+            output_fn("Headless CLI mode; no camera preview. Use --preview on Windows.")
+            trial_data = run_pilot(
+                capture, trials_per_class=args.trials_per_class,
+                frames_per_trial=args.frames_per_trial, input_fn=input_fn,
+                output_fn=output_fn, sampler=sampler, sleeper=sleeper)
     except CameraCaptureError:
         print("Camera capture failed; session discarded. No biometric media saved.",
               file=sys.stderr)
