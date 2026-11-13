@@ -31,6 +31,9 @@ def evaluate(ocr_ready, profile_ready):
         "passive_pad_readiness": lambda: {"shadowEnabled": True, "modelLoaded": False,
                                           "independentPadValidated": False,
                                           "identityDecisionUse": "none"},
+        "v1se_pad_readiness": lambda: {"shadowEnabled": True, "modelLoaded": False,
+                                         "independentPadValidated": False,
+                                         "identityDecisionUse": "none"},
         "sface_readiness": lambda: {"shadowEnabled": True, "modelLoaded": False,
                                     "independentFaceMatchValidated": False,
                                     "independentPadValidated": False,
@@ -62,6 +65,8 @@ class StagingHealthContractTests(unittest.TestCase):
         self.assertFalse(result["livenessImplemented"])
         self.assertFalse(result["passivePadShadow"]["independentPadValidated"])
         self.assertEqual(result["passivePadShadow"]["identityDecisionUse"], "none")
+        self.assertEqual(result["secondaryPadShadow"]["identityDecisionUse"], "none")
+        self.assertFalse(result["secondaryPadShadow"]["independentPadValidated"])
         self.assertFalse(result["sFaceShadow"]["independentFaceMatchValidated"])
         self.assertFalse(result["sFaceShadow"]["independentPadValidated"])
         self.assertEqual(result["sFaceShadow"]["identityDecisionUse"], "none")
