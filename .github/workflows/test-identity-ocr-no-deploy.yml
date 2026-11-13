@@ -32,6 +32,9 @@ on:
       - "identity-ai/test_pad_local_eval.py"
       - "identity-ai/evaluate_pad_scales_local.py"
       - "identity-ai/test_pad_dual_scale_local_eval.py"
+      - "identity-ai/run_pad_webcam_trials_local.py"
+      - "identity-ai/test_pad_webcam_trials_local.py"
+      - "identity-ai/PAD_WEBCAM_PILOT.md"
       - "identity-ai/PAD_REAL_DEVICE_DUAL_SCALE_QA.md"
       - "identity-ai/PAD_LOCAL_EVALUATION.md"
       - "identity-ai/download_passive_pad_model.py"
@@ -118,6 +121,8 @@ jobs:
           python -m unittest discover -s identity-ai -p 'test_sface_shadow.py' -v
           python -m unittest discover -s identity-ai -p 'test_pad_local_eval.py' -v
           python -m unittest discover -s identity-ai -p 'test_pad_dual_scale_local_eval.py' -v
+          python -m unittest discover -s identity-ai -p 'test_pad_webcam_trials_local.py' -v
+          python -m py_compile identity-ai/run_pad_webcam_trials_local.py
           python -m py_compile identity-ai/evaluate_pad_scales_local.py
           python -m py_compile identity-ai/passive_pad_shadow.py identity-ai/download_passive_pad_model.py identity-ai/evaluate_passive_pad_local.py identity-ai/yunet_shadow.py identity-ai/download_yunet_model.py identity-ai/sface_shadow.py identity-ai/download_sface_model.py
       - name: Inspect actual pinned MiniFASNet ONNX graph and synthetic 0..255/0..1 responses (NO DEPLOY)
