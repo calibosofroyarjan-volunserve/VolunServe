@@ -1,3 +1,4 @@
+import {getSafeVolunServeBackendBaseUrl} from "../../lib/stagingExpoServiceIsolation";
 import { useIsFocused } from "@react-navigation/native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import {
@@ -147,7 +148,7 @@ type SelectedMapItem =
   | { kind: "volunteer"; id: string }
   | null;
 
-const BACKEND_URL = "https://volunserve.onrender.com";
+const BACKEND_URL = getSafeVolunServeBackendBaseUrl();
 
 const SJDM_CENTER = {
   latitude: 14.813,
