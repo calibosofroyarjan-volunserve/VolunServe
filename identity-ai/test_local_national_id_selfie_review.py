@@ -73,6 +73,35 @@ class CameraOnlyLocalReviewTests(unittest.TestCase):
         for value in ("unavailable", "disabled", "inconclusive", "unexpected"):
             self.assertIn("RESEARCH ONLY", local.shadow_sface_summary({"status": value}))
 
+    def test_sface_research_stage_explains_id_versus_selfie_without_personal_data(self):
+        cases = (
+            ("id_face_not_detected", "ID portrait not detectable"),
+            ("selfie_face_not_detected", "Selfie face not detectable"),
+            ("id_alignment_invalid", "ID portrait face alignment"),
+            ("selfie_alignment_invalid", "Selfie face alignment"),
+            ("id_embedding_invalid", "ID portrait feature extraction"),
+            ("selfie_embedding_invalid", "Selfie feature extraction"),
+            ("similarity_invalid", "Similarity computation invalid"),
+        )
+        for stage, expected in cases:
+            with self.subTest(stage=stage):
+                output = local.shadow_sface_summary({
+                    "status": "inconclusive", "qaStage": stage,
+                    "ocrText": "SECRET-PERSONAL-STRING",
+                    "embedding": [1.0, 2.0],
+                })
+                self.assertIn(expected, output)
+                self.assertIn("NO identity decision", output)
+                self.assertNotIn("SECRET", output)
+                self.assertNotIn("embedding", output)
+                self.assertNotIn("verified ID", output)
+        attacker = local.shadow_sface_summary({
+            "status": "inconclusive",
+            "qaStage": "ID PHOTO: SECRET-PERSONAL-STRING",
+        })
+        self.assertIn("stage unknown", attacker)
+        self.assertNotIn("SECRET", attacker)
+
     def test_optional_research_only_runs_with_explicit_opt_in_and_does_not_skip_ocr_gate(self):
         main = types.ModuleType("main")
         main.document_ocr_ready = lambda: True
