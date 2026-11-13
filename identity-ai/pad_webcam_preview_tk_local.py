@@ -26,22 +26,35 @@ MAX_FRAMES_PER_TRIAL = 8
 
 class TrialProgress:
     """Pure state used by Tk and testable without a real camera/display."""
-    def __init__(self, *, trials_per_class=3):
+    def __init__(self, *, trials_per_class=3, enabled_categories=CATEGORIES):
         if not isinstance(trials_per_class, int) or not 1 <= trials_per_class <= 10:
             raise ValueError("INVALID_TRIAL_COUNT")
+        if (not isinstance(enabled_categories, tuple) or
+                not enabled_categories or len(set(enabled_categories)) != len(enabled_categories) or
+                any(kind not in CATEGORIES for kind in enabled_categories) or
+                tuple(kind for kind in CATEGORIES if kind in enabled_categories) != enabled_categories):
+            raise ValueError("INVALID_PRESENTATION_CATEGORY_SELECTION")
         self.trials_per_class = trials_per_class
+        self.enabled_categories = enabled_categories
         self.trials = {kind: [] for kind in CATEGORIES}
 
     @property
     def complete(self):
         return all(len(self.trials[kind]) == self.trials_per_class
-                   for kind in CATEGORIES)
+                   for kind in self.enabled_categories)
 
     @property
     def current(self):
-        for kind in CATEGORIES:
+        for kind in self.enabled_categories:
             if len(self.trials[kind]) < self.trials_per_class:
                 return kind, len(self.trials[kind]) + 1
+        return None, None
+
+    def undo_last(self):
+        """Discard only the most recently recorded label/count in RAM."""
+        for kind in reversed(self.enabled_categories):
+            if self.trials[kind]:
+                return kind, self.trials[kind].pop()
         return None, None
 
     def add(self, pair):
@@ -104,13 +117,15 @@ class GuidedPadWebcamUI:
     }
 
     def __init__(self, camera, *, trials_per_class=3, frames_per_trial=3,
-                 preview_only=False, tick_ms=105, clock=time.monotonic,
+                 preview_only=False, enabled_categories=CATEGORIES,
+                 tick_ms=105, clock=time.monotonic,
                  framing=analyze_framing, assessor=assess_ready_frame):
         if not 1 <= frames_per_trial <= MAX_FRAMES_PER_TRIAL:
             raise ValueError("INVALID_FRAME_COUNT")
         self.camera = camera
         self.preview_only = preview_only is True
-        self.progress = TrialProgress(trials_per_class=trials_per_class)
+        self.progress = TrialProgress(
+            trials_per_class=trials_per_class, enabled_categories=enabled_categories)
         self.frames_per_trial = frames_per_trial
         self.tick_ms = tick_ms
         self.clock = clock
@@ -184,6 +199,11 @@ class GuidedPadWebcamUI:
             activebackground="#0a644f", activeforeground="#ffffff",
             width=25, state="disabled", command=self._start_capture)
         self.capture_button.pack(side="left")
+        self.undo_button = tk.Button(
+            buttons, text="Discard last trial / Retake",
+            command=self._undo_last_trial,
+            font=("Segoe UI", 9), width=23, state="disabled")
+        self.undo_button.pack(side="left", padx=(8, 0))
         self.cancel_button = tk.Button(
             buttons, text="Cancel and close", command=self._close,
             font=("Segoe UI", 10), width=18)
@@ -199,8 +219,28 @@ class GuidedPadWebcamUI:
         if not self._presentation_confirmed:
             self.capture_button.configure(state="disabled")
 
+    def _undo_last_trial(self):
+        """Undo one wrong-label/poor-view attempt; keep other good trials in RAM."""
+        if self._capturing or self._closing or self.preview_only:
+            return
+        kind, _discarded = self.progress.undo_last()
+        if kind is None:
+            return
+        self.cancelled = True
+        self._samples = []
+        self.capture_button.configure(
+            text="Start capture (in-memory)", command=self._start_capture)
+        self._update_step()
+        self.guidance_label.configure(
+            text=f"Discarded last {kind.upper()} trial. Reposition and confirm the "
+                 "correct physical presentation before a new capture.",
+            fg="#a05616")
+
     def _update_step(self):
         kind, number = self.progress.current
+        completed = sum(len(values) for values in self.progress.trials.values())
+        self.undo_button.configure(
+            state="normal" if completed and not self.preview_only else "disabled")
         # Require renewed confirmation for every trial, including repeated
         # captures of the same type, to prevent accidental LIVE/PRINT/REPLAY
         # label carryover.
@@ -227,10 +267,12 @@ class GuidedPadWebcamUI:
         self.step_label.configure(
             text=f"{self.PROMPTS[kind]}   Trial {number}/{self.progress.trials_per_class}")
         completed = sum(len(values) for values in self.progress.trials.values())
-        target = self.progress.trials_per_class * len(CATEGORIES)
+        target = self.progress.trials_per_class * len(self.progress.enabled_categories)
         self.progress_label.configure(
             text=f"Trials recorded: {completed}/{target} "
-                 "(one presentation = one trial)")
+                 "(one presentation = one trial)"
+                 + (" | LIVE-ONLY DIAGNOSTIC: PRINT/REPLAY NOT TESTED"
+                    if self.progress.enabled_categories == ("live",) else ""))
 
     def _start_capture(self):
         if (not self._presentation_confirmed or
@@ -240,6 +282,7 @@ class GuidedPadWebcamUI:
                 not self._last_guidance.capture_ready):
             return
         self._capturing = True
+        self.undo_button.configure(state="disabled")
         self._samples = []
         self._next_sample_at = self.clock() + 0.3
         self.capture_button.configure(state="disabled")
@@ -250,6 +293,8 @@ class GuidedPadWebcamUI:
     def _abort_current(self, message):
         self._capturing = False
         self._samples = []
+        completed = sum(len(values) for values in self.progress.trials.values())
+        self.undo_button.configure(state="normal" if completed else "disabled")
         self.guidance_label.configure(text=message, fg="#a05616")
         self.capture_button.configure(state="disabled")
 
@@ -379,9 +424,10 @@ class GuidedPadWebcamUI:
 
 
 def launch_webcam_preview(camera, *, trials_per_class, frames_per_trial,
-                          preview_only=False):
+                          preview_only=False, enabled_categories=CATEGORIES):
     """Safe, lazy GUI entry; caller owns/releases webcam in a finally block."""
     ui = GuidedPadWebcamUI(
         camera, trials_per_class=trials_per_class,
-        frames_per_trial=frames_per_trial, preview_only=preview_only)
+        frames_per_trial=frames_per_trial, preview_only=preview_only,
+        enabled_categories=enabled_categories)
     return ui.launch()
