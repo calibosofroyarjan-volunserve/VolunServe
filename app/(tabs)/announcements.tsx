@@ -16,9 +16,7 @@ import {
 import {
   collection,
   onSnapshot,
-  orderBy,
   query,
-  Timestamp,
   where,
 } from "firebase/firestore";
 
@@ -29,7 +27,6 @@ import {
 import {
   useUserSession,
 } from "../../lib/useUserSession";
-import { usePublishedAnnouncementCutoff } from "../../lib/usePublishedAnnouncementCutoff";
 
 type Announcement = {
   id: string;
@@ -53,9 +50,8 @@ type Announcement = {
 export default function AnnouncementsScreen() {
   const {
     loading: sessionLoading,
+    user,
   } = useUserSession();
-
-  const announcementCutoff = usePublishedAnnouncementCutoff();
   const [announcements, setAnnouncements] =
     useState<Announcement[]>([]);
 
@@ -66,24 +62,17 @@ export default function AnnouncementsScreen() {
     useState("");
 
   useEffect(() => {
-    /*
-     * Only already-published announcements
-     * are loaded.
-     *
-     * This also matches the existing
-     * Firestore announcement read rule.
-     */
+    if (sessionLoading) return;
+    if (!user) {
+      setAnnouncements([]);
+      setLoading(false);
+      setError("Sign in to view official announcements.");
+      return;
+    }
+    // Query is constrained to the same audience authorized by Firestore rules.
     const announcementQuery = query(
       collection(db, "announcements"),
-      where(
-        "publishAt",
-        "<=",
-        Timestamp.fromDate(announcementCutoff)
-      ),
-      orderBy(
-        "publishAt",
-        "desc"
-      )
+      where("audience", "==", "all")
     );
 
     const unsubscribe = onSnapshot(
@@ -142,6 +131,10 @@ export default function AnnouncementsScreen() {
             };
           });
 
+        rows.sort((a, b) => {
+          const millis = (value: any) => typeof value?.toMillis === "function" ? value.toMillis() : 0;
+          return millis(b.publishAt) - millis(a.publishAt);
+        });
         setAnnouncements(rows);
         setLoading(false);
         setError("");
@@ -161,7 +154,7 @@ export default function AnnouncementsScreen() {
     );
 
     return unsubscribe;
-  }, [announcementCutoff]);
+  }, [sessionLoading, user?.uid]);
 
   const visibleAnnouncements = announcements;
 
