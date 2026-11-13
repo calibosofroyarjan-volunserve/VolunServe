@@ -37,6 +37,21 @@ jobs:
         run: |
           node --check scripts/publish-announcements-rules-safely.cjs
           node -e 'const fs=require("node:fs"),cp=require("node:child_process"),assert=require("node:assert/strict");const base=cp.execFileSync("git",["show","2cd63d318ecb6b0dfc52706308e05d0b5806d874:firestore.rules"],{encoding:"utf8"});const now=fs.readFileSync("firestore.rules","utf8");const a="    match /announcements/{announcementId} {",b="    match /identityVerifications/{uid} {";const take=x=>x.slice(x.indexOf(a),x.indexOf(b,x.indexOf(a)));assert.equal(base.replace(take(base),take(now)),now);console.log("PASS: rules differ only within announcements.");'
+      - name: Protect all certificate and attendance implementation from regression
+        run: |
+          node --test scripts/test-profile-certificates-account-menu.cjs scripts/test-resident-volunteer-sidebar.cjs
+          node <<'NODE'
+          const cp = require("node:child_process"), assert = require("node:assert/strict");
+          const paths = cp.execFileSync("git", ["diff", "--name-only", "2cd63d318ecb6b0dfc52706308e05d0b5806d874", "HEAD"], { encoding: "utf8" })
+            .trim().split("\\n").filter(Boolean);
+          const protectedPath = path =>
+            /(?:^|\\/)(?:certificate|certificates|attendance|communityCertificate)[^/]*\\.(?:ts|tsx|js|cjs|json)$/i.test(path)
+            || path === "app/(tabs)/profile.tsx"
+            || path === "app/(tabs)/_layout.tsx";
+          const changedProtected = paths.filter(protectedPath);
+          assert.deepEqual(changedProtected, [], "STOP: certificate, attendance, profile or navigation code changed");
+          console.log("PASS: certificate, attendance, profile and navigation code unchanged from exact live baseline.");
+          NODE
       - name: Firestore announcement access tests on LOCAL emulator only
         run: npx firebase emulators:exec --only firestore --project demo-volunserve "node scripts/test-announcements-published-audience-emulator.cjs"
       - name: Expo web export (no production credentials)
