@@ -1,3 +1,4 @@
+import {blockProductionEvidenceUploadDuringStaging} from "../../lib/stagingExpoServiceIsolation";
 import { volunserveTypography as vsType } from "../../constants/volunserveLiveUi";
 import { liveUi as designUi } from "../../constants/volunserveLiveUi";
 import * as ImagePicker from "expo-image-picker";
@@ -1122,6 +1123,7 @@ export default function MyCases() {
     caseId: string,
     assets: EvidenceAsset[],
   ): Promise<EvidenceAttachment[]> => {
+    blockProductionEvidenceUploadDuringStaging();
     const attachments: EvidenceAttachment[] = [];
 
     for (let index = 0; index < assets.length; index += 1) {
