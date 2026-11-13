@@ -15,6 +15,9 @@ const MODEL_SHA256="0ba9fbfa01b5270c96627c4ef784da859931e02f04419c829e83484087c3
 const MODEL_SOURCES=[
  "https://huggingface.co/opencv/opencv_zoo/resolve/main/models/face_recognition_sface/face_recognition_sface_2021dec.onnx",
  "https://huggingface.co/opencv/face_recognition_sface/resolve/main/face_recognition_sface_2021dec.onnx",
+ // Official upstream Git LFS media endpoint (no Hugging Face/Xet redirects).
+ "https://media.githubusercontent.com/media/opencv/opencv_zoo/main/models/face_recognition_sface/face_recognition_sface_2021dec.onnx",
+ "https://github.com/opencv/opencv_zoo/raw/refs/heads/main/models/face_recognition_sface/face_recognition_sface_2021dec.onnx",
 ];
 const LICENSE_SOURCES=[
  "https://raw.githubusercontent.com/opencv/opencv_zoo/main/models/face_recognition_sface/LICENSE",
@@ -53,7 +56,8 @@ async function fetchPinnedSFace(){
    if(bytes.length<MODEL_MIN)continue;
    const actual=createHash("sha256").update(bytes).digest("hex");
    if(actual===MODEL_SHA256)return bytes;
-  }catch{/* Try only the second official OpenCV source. */}
+  }catch{/* Try the next official OpenCV source. */}
+  console.warn("STAGING SFace: official model source "+(i+1)+" unavailable or checksum invalid");
  }
  throw Error("pinned_sface_download_or_integrity_failed");
 }
