@@ -216,7 +216,7 @@ async function capture(){
  const blob=await new Promise(resolve=>pic.toBlob(resolve,"image/jpeg",0.88));
  if(current!==session)return;
  if(!blob){status("Could not make local QA preview.");capturing=false;return}
- // SECURITY BOUNDARY: a browser expression challenge has accepted replay.
+ // SECURITY BOUNDARY: browser expression challenge accepted a prerecorded\n // replay in staging QA; this does not establish liveness.
  // All ephemeral captures are QA-only. No ID/selfie ever attaches to a
  // verification-form file field; the backend separately rejects HTTP 423.
  $(stage).value="";
