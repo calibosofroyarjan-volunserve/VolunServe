@@ -23,6 +23,7 @@ import {
 } from "react-native";
 
 import { db } from "../lib/firebase";
+import { waitForCameraPreview } from "../lib/identityCameraPreview";
 import {
     getIdentityStatus,
     onAuthChange,
@@ -143,7 +144,7 @@ function scanCopy(scanState: ScanState) {
     case "loading":
       return {
         title: "Starting secure face scan...",
-        text: "Opening your webcam and loading the on-device face detector.",
+        text: "Waiting for visible camera frames, then loading the face detector. Camera access alone is not enough.",
         color: COLORS.blue,
       };
     case "camera_error":
@@ -507,8 +508,7 @@ export default function IdentityVerificationWeb() {
         idStreamRef.current = stream;
         const element = idVideoRef.current;
         if (!element) throw new Error("Unable to initialize the ID camera preview.");
-        element.srcObject = stream;
-        await element.play();
+        await waitForCameraPreview(element, stream);
         if (!cancelled) setIdCameraReady(true);
       } catch (error: any) {
         if (!cancelled) {
@@ -1075,16 +1075,15 @@ export default function IdentityVerificationWeb() {
       phase = "preview";
       const video = videoRef.current as HTMLVideoElement | null;
       if (!video) throw new Error("Webcam preview element was not mounted.");
-      video.srcObject = stream;
-      video.muted = true;
-      video.playsInline = true;
-      await video.play();
+      await waitForCameraPreview(video, stream);
       if (requestId !== cameraRequestRef.current) return;
-
+      // Reveal visible live pixels immediately, before the MediaPipe bundle
+      // loads; a slow detector must never hide a working camera behind
+      // the full-screen "Allow Camera" overlay.
+      setCameraActive(true);
       phase = "detector";
       await ensureDetector();
       if (requestId !== cameraRequestRef.current) return;
-      setCameraActive(true);
       setScanState("no_face");
       detectLoop();
     } catch (error: any) {
