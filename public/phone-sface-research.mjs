@@ -52,13 +52,18 @@ export function sfaceSimilarityMatrix(points) {
     data.reduce((s,p) => s+p[1],0)/5
   ];
   const [mx,my] = mean(points), [tx0,ty0] = mean(TARGET);
-  let den=0, dot=0, cross=0, residual=0;
+  let den=0, dot=0, cross=0, residual=0, varianceX=0,varianceY=0,covarianceXY=0;
   for (let i=0; i<5; i++) {
     const x=points[i][0]-mx, y=points[i][1]-my;
     const u=TARGET[i][0]-tx0, v=TARGET[i][1]-ty0;
     den+=x*x+y*y; dot+=x*u+y*v; cross+=x*v-y*u;
+    varianceX+=x*x;varianceY+=y*y;covarianceXY+=x*y;
   }
   if (!valid(den) || den < 1) return null;
+  // Reject collinear or nearly collinear 5-point facial geometry. A numeric
+  // transform alone is not sufficient evidence that alignment is meaningful.
+  const area=varianceX*varianceY-covarianceXY*covarianceXY;
+  if (!valid(area) || area <= den*den*1e-5) return null;
   const a=dot/den, b=cross/den, tx=tx0-a*mx+b*my, ty=ty0-b*mx-a*my;
   const scale=Math.hypot(a,b);
   if (!valid(scale) || scale < 0.03 || scale > 25) return null;
