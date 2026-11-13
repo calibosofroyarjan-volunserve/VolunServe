@@ -381,19 +381,19 @@ def ask_user_settings():
     root = tk.Tk()
     root.title("VolunServe | Private Laptop Camera Validation")
     root.configure(bg="#f4f8fc")
-    root.geometry("680x760")
+    root.geometry("700x800")
     root.resizable(False, False)
-    choice = {"accepted": False, "camera": 0, "trials": 1, "mode": "camera_only",
+    choice = {"accepted": False, "camera": 0, "trials": 1, "mode": "id_selfie_preview",
               "lighting": "indoor_artificial", "cameraType": "laptop_built_in"}
     camera = tk.IntVar(value=0)
-    mode = tk.StringVar(value="camera_only")
+    mode = tk.StringVar(value="id_selfie_preview")
     lighting = tk.StringVar(value="indoor_artificial")
     camera_type = tk.StringVar(value="laptop_built_in")
     consent = tk.BooleanVar(value=False)
 
     box = tk.Frame(root, bg="#f4f8fc", padx=24, pady=19)
     box.pack(fill="both", expand=True)
-    tk.Label(box, text="VolunServe • Local PAD Pilot", bg="#f4f8fc",
+    tk.Label(box, text="VolunServe • Camera and Identity QA", bg="#f4f8fc",
              fg="#0f2f5a", font=("Segoe UI", 18, "bold")).pack(anchor="w")
     tk.Label(box, text=(
         "Works with the laptop webcam. A visible camera window opens with "
@@ -402,8 +402,9 @@ def ask_user_settings():
     ), bg="#f4f8fc", wraplength=570, justify="left",
         font=("Segoe UI", 10)).pack(anchor="w", pady=(10, 8))
     tk.Label(box, text=(
-        "This is experimental research, NOT validated liveness. No ID is "
-        "needed. No facial photo or recording is saved or uploaded."
+        "RECOMMENDED face preview: Green means ONE visible face only. "
+        "It does NOT read a National ID, match an ID photo or validate liveness. "
+        "All research modes remain separate. No images are saved or uploaded."
     ), bg="#e0f2fe", fg="#0c4a6e", padx=12, pady=10,
         wraplength=550, justify="left").pack(anchor="w", fill="x", pady=(4, 14))
     tk.Label(box, text="Camera number (normally 0)",
@@ -421,8 +422,11 @@ def ask_user_settings():
                   "phone_webcam", "not_recorded").pack(side="left")
     tk.Label(box, text="Session length", bg="#f4f8fc",
              font=("Segoe UI", 10, "bold")).pack(anchor="w", pady=(7, 0))
+    tk.Radiobutton(box, variable=mode, value="id_selfie_preview",
+                   text="RECOMMENDED: Easy GREEN face preview (no 4x, no PAD, no image saved)",
+                   bg="#f4f8fc").pack(anchor="w")
     tk.Radiobutton(box, variable=mode, value="camera_only",
-                   text="RECOMMENDED: Camera clarity only (NO AI models, no tests)",
+                   text="Camera clarity only (NO AI models, no tests)",
                    bg="#f4f8fc").pack(anchor="w")
     tk.Radiobutton(box, variable=mode, value="framing",
                    text="Face framing only (YuNet detection, NO captures)",
@@ -532,7 +536,7 @@ def main():
             print("Installing local Python packages / pinned models (no user media).")
             install_prerequisites(approved=True, include_v1se=combined)
         # Import camera modules only AFTER explicit consent and local setup.
-        if user.get("mode") == "framing":
+        if user.get("mode") in ("framing", "id_selfie_preview"):
             import cv2
             from pad_camera_quality_local import request_supported_resolution
             from pad_webcam_preview_tk_local import launch_webcam_preview
@@ -541,14 +545,21 @@ def main():
                 if not camera.isOpened():
                     raise RuntimeError("No camera at that number. Try another camera or Windows privacy settings.")
                 request_supported_resolution(camera)
-                launch_webcam_preview(camera, trials_per_class=1,
-                                      frames_per_trial=3, preview_only=True)
+                launch_webcam_preview(
+                    camera, trials_per_class=1, frames_per_trial=3,
+                    preview_only=True,
+                    id_selfie_preview=user.get("mode") == "id_selfie_preview",
+                )
             finally:
                 camera.release()
-            notify("Framing-only preview closed",
-                   "No liveness trial was counted. No photos, videos or IDs saved. "
-                   "Once FRAMING READY works, choose the Quick pilot to evaluate "
-                   "live, print and replay presentations separately.")
+            if user.get("mode") == "id_selfie_preview":
+                print("Easy GREEN face preview closed. No National ID was read; "
+                      "no face-match or liveness decision performed.")
+            else:
+                notify("Framing-only preview closed",
+                       "No liveness trial was counted. No photos, videos or IDs saved. "
+                       "Once FRAMING READY works, choose the Quick pilot to evaluate "
+                       "live, print and replay presentations separately.")
             return 0
         from run_pad_webcam_trials_local import run_cli
         output = []
