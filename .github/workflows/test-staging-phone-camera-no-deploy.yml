@@ -1,0 +1,28 @@
+name: Isolated phone camera preview (STAGING NO DEPLOY)
+
+on:
+  pull_request:
+    paths:
+      - "public/phone-camera-demo.html"
+      - "backend/test-staging-phone-camera-demo.cjs"
+      - ".github/workflows/test-staging-phone-camera-no-deploy.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  secure-local-phone-capture:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Run synthetic browser consent, phone camera, capture, cleanup and host isolation checks
+        run: node --test backend/test-staging-phone-camera-demo.cjs
+      - name: Verify production and backend protections were not changed
+        run: |
+          test -f scripts/check-expo-resident-staging-release.cjs
+          test -f public/phone-camera-demo.html
+          grep -q "STAGING_IDENTITY_MEDIA_UPLOADS_ENABLED = false" backend/server.js
+          echo "PASS: staging-only local camera capture; no Firebase or identity backend write; NO DEPLOY"
