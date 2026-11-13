@@ -1,0 +1,62 @@
+name: Validate Announcements Hotfix (NO DEPLOY)
+
+on:
+  push:
+    branches:
+      - hotfix/announcements-exact-live-20261114
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  announcements-emulator-and-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      CI: "true"
+      EXPO_NO_TELEMETRY: "1"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - name: Install exact dependencies
+        run: npm ci --no-audit --no-fund
+      - name: TypeScript check (no publish)
+        run: npx tsc --noEmit --incremental false
+      - name: Validate surgical rules deployment tool without credentials
+        run: |
+          node --check scripts/publish-announcements-rules-safely.cjs
+          node -e 'const fs=require("node:fs"),cp=require("node:child_process"),assert=require("node:assert/strict");const base=cp.execFileSync("git",["show","2cd63d318ecb6b0dfc52706308e05d0b5806d874:firestore.rules"],{encoding:"utf8"});const now=fs.readFileSync("firestore.rules","utf8");const a="    match /announcements/{announcementId} {",b="    match /identityVerifications/{uid} {";const take=x=>x.slice(x.indexOf(a),x.indexOf(b,x.indexOf(a)));assert.equal(base.replace(take(base),take(now)),now);console.log("PASS: rules differ only within announcements.");'
+      - name: Firestore announcement access tests on LOCAL emulator only
+        run: npx firebase emulators:exec --only firestore --project demo-volunserve "node scripts/test-announcements-published-audience-emulator.cjs"
+      - name: Expo web export (no production credentials)
+        run: npx expo export --platform web --clear
+      - name: Read current production revision (READ ONLY)
+        shell: bash
+        run: |
+          node <<'NODE'
+          (async () => {
+            const url = 'https://volunserve.com/volunserve-release.json';
+            const response = await fetch(url, {
+              headers: { 'Cache-Control': 'no-cache' },
+              signal: AbortSignal.timeout(15000)
+            });
+            if (!response.ok) throw Error('Hosting revision marker unavailable: HTTP ' + response.status);
+            const data = await response.json();
+            if (data.app !== 'VolunServe' || data.firebaseProject !== 'volunserve-3aa5b')
+              throw Error('Live marker project mismatch');
+            console.log('LIVE_PRODUCTION_REVISION=' + data.revision);
+            console.log('SOURCE_HOTFIX_BASE=2cd63d318ecb6b0dfc52706308e05d0b5806d874');
+          })().catch(error => { console.error(error.message); process.exitCode = 1; });
+          NODE
+      - name: No production deployment
+        run: echo "Announcement tests only. No Firebase Hosting, Firestore production rules, Functions or Render deployment."

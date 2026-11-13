@@ -3,7 +3,6 @@ import React, { useState } from "react";
 
 import {
   ActivityIndicator,
-  Alert,
   ScrollView,
   StyleSheet,
   Text,
@@ -48,6 +47,7 @@ export default function CreateAnnouncement() {
     { label: "Public Service Advisory", title: "Public Service Advisory", body: "Please review the latest official community service advisory and follow instructions from authorized personnel." },
   ];
 
+  const [formNotice, setFormNotice] = useState<{ kind: "error" | "success"; text: string } | null>(null);
   const [submitting, setSubmitting] =
     useState(false);
 
@@ -108,27 +108,25 @@ export default function CreateAnnouncement() {
   const handleSubmit = async () => {
     const cleanTitle = title.trim();
     const cleanMessage = message.trim();
+    setFormNotice(null);
 
     if (cleanTitle.length < 3) {
-      Alert.alert(
-        "Invalid Title",
-        "Please enter a clear announcement title."
-      );
+      setFormNotice({ kind: "error", text: "Title must be at least 3 characters." });
 
       return;
     }
 
     if (cleanMessage.length < 10) {
-      Alert.alert(
-        "Invalid Message",
-        "Write at least 10 characters so the announcement meets the official publishing rules."
-      );
+      setFormNotice({ kind: "error", text: "Message must be at least 10 characters." });
 
       return;
     }
 
     try {
       setSubmitting(true);
+
+      // Refresh a recently verified Admin email claim without bypassing security rules.
+      await user.getIdToken(true);
 
       await addDoc(
         collection(db, "announcements"),
@@ -163,21 +161,16 @@ export default function CreateAnnouncement() {
       setTitle("");
       setMessage("");
 
-      Alert.alert(
-        "Announcement Posted",
-        "Published to all residents and volunteers."
-      );
+      setFormNotice({ kind: "success", text: "Announcement published successfully for residents and volunteers." });
     } catch (error: any) {
       console.error(
         "Create announcement error:",
         error
       );
 
-      Alert.alert(
-        "Unable to Post",
-        error?.message ||
-          "The announcement could not be published."
-      );
+      setFormNotice({ kind: "error", text: error?.code === "permission-denied" || error?.code === "firestore/permission-denied"
+        ? "Publishing blocked by Firestore permissions. Verify your approved Admin account, verified email and deployed announcement rules. No announcement was published."
+        : (error?.message || "The announcement could not be published.") });
     } finally {
       setSubmitting(false);
     }
@@ -213,7 +206,7 @@ export default function CreateAnnouncement() {
         <TextInput
           style={styles.input}
           value={title}
-          onChangeText={setTitle}
+          onChangeText={value => { setTitle(value); if (formNotice) setFormNotice(null); }}
           placeholder="Announcement title"
           placeholderTextColor="#94A3B8"
           maxLength={120}
@@ -229,7 +222,7 @@ export default function CreateAnnouncement() {
             styles.messageInput,
           ]}
           value={message}
-          onChangeText={setMessage}
+          onChangeText={value => { setMessage(value); if (formNotice) setFormNotice(null); }}
           placeholder="Write the announcement..."
           placeholderTextColor="#94A3B8"
           multiline
@@ -240,6 +233,12 @@ export default function CreateAnnouncement() {
         <Text style={styles.characterCount}>
           {message.length}/2000
         </Text>
+
+        {formNotice ? (
+          <View accessibilityRole="alert" style={[styles.notice, formNotice.kind === "success" ? styles.noticeSuccess : styles.noticeError]}>
+            <Text style={styles.noticeText}>{formNotice.text}</Text>
+          </View>
+        ) : null}
 
         <TouchableOpacity
           style={[
@@ -390,6 +389,11 @@ const styles = StyleSheet.create({
     marginTop: -8,
     marginBottom: 15,
   },
+
+  notice: { borderWidth: 1, borderRadius: 9, padding: 13, marginBottom: 14 },
+  noticeError: { backgroundColor: "#FEF2F2", borderColor: "#FECACA" },
+  noticeSuccess: { backgroundColor: "#ECFDF5", borderColor: "#A7F3D0" },
+  noticeText: { color: "#163F34", fontSize: 14, fontWeight: "600" },
 
   submitButton: {
     minHeight: 48,
