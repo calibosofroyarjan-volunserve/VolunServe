@@ -142,3 +142,21 @@ test("setup errors stay stage-specific and never contain raw SDK errors or photo
   assert.match(source,/if\(!active\(\)\)return researchResult\("cancelled"\)/);
   assert.match(page,/No photos used; no identity decision/);
 });
+
+test("same-origin staged SFace model remains hash-verified and deployment-scoped",()=>{
+  const source=readFileSync("public/phone-sface-research.mjs","utf8");
+  const html=readFileSync("public/phone-camera-demo.html","utf8");
+  const build=readFileSync("scripts/stage-staging-sface-model.cjs","utf8");
+  const guard=readFileSync("scripts/check-expo-resident-staging-release.cjs","utf8");
+  assert(source.includes("/staging-sface-2021dec.onnx"));
+  assert(source.includes('location.hostname === "volunserve-expo-resident-full-staging.onrender.com"'));
+  assert(source.includes("if (hex!==SFACE_SHA256"));
+  assert(html.includes("connect-src 'self'"));
+  assert(build.includes("pinned_sface_download_or_integrity_failed"));
+  assert(build.includes("MODEL_SHA256"));
+  assert(build.includes("fetchApacheLicense"));
+  assert(guard.includes('RENDER_SERVICE_ID==="srv-dbrfe0dbedkc73df01jg"'));
+  assert(guard.includes('RENDER_GIT_BRANCH!=="preview/expo-resident-full-staging-web-20261113"'));
+  assert(!source.includes("fetch(idUrl"));
+  assert(!source.includes("fetch(selfieUrl"));
+});
