@@ -69,3 +69,8 @@ firestore-debug.log
 /identity-ai/private-pad-samples/
 /private-pad-results/
 /identity-ai/private-pad-results/
+
+# Generated ONLY by isolated staging Render static build, never commit these weights.
+/public/staging-sface-2021dec.onnx
+/public/staging-sface-2021dec.onnx.tmp
+/public/staging-sface-2021dec-LICENSE.txt
