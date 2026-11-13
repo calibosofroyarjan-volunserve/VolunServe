@@ -163,7 +163,7 @@ test("SFace camera QA is separate opt-in and blocked until all three captures", 
 
 test("diagnostic only loads public model weights on explicit permission and no identity decision",()=>{
   assert.match(html,/I separately consent to LOCAL face detection/);
-  assert.match(script,/if \(qaBusy \|\| step !== 3/);
+  assert.match(script,/if \(qaBusy \|\| sfaceBusy \|\| step !== 3/);
   assert.match(script,/await import\(FACE_VISION\)/);
   assert.match(script,/FilesetResolver\.forVisionTasks\(FACE_WASM\)/);
   assert.match(script,/FaceDetector\.createFromOptions/);
