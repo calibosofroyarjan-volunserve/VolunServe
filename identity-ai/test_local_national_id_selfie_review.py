@@ -59,6 +59,34 @@ class CameraOnlyLocalReviewTests(unittest.TestCase):
         self.assertIn("evaluate_camera_side", source)
         self.assertIn("evaluate_selfie_face", source)
 
+    def test_low_quality_camera_manual_capture_is_explicit_and_unverified(self):
+        source = inspect.getsource(local.main)
+        # The user must explicitly consent and confirm any manual snapshot.
+        # This is LOCAL in-memory review, not acceptance of a government ID.
+        self.assertIn("MANUAL CAPTURE FOR REVIEW — NOT VERIFIED", source)
+        self.assertIn("messagebox.askyesno(", source)
+        self.assertIn('if stage not in ("front", "back"):', source)
+        self.assertIn("manual_captures.add(stage)", source)
+        self.assertIn('text="Manual capture only — NOT VERIFIED"', source)
+        self.assertIn("manual_captures.clear()", source)
+        self.assertIn("camera_id_roi_bounds(frame.shape, compact=True)", source)
+        self.assertIn("cv2.imencode", source)
+        self.assertIn("review_in_memory", source)
+        self.assertIn("manual Admin review still required", inspect.getsource(local.safe_summary))
+        self.assertIn("screening_ready_for_face_comparison", inspect.getsource(local.perform_local_review))
+        self.assertNotIn("cv2.imwrite", source)
+        self.assertNotIn("requests.post", source)
+
+    def test_manual_capture_still_reports_no_verified_identity(self):
+        display = local.safe_summary({
+            "status": "inconclusive",
+            "detectedIdType": None,
+            "warningCodes": ["document_type_not_recognized"],
+        })
+        self.assertIn("NOT VERIFIED IDENTITY", display)
+        self.assertIn("Account action: NONE", display)
+        self.assertIn("Not performed", display)
+
     def test_automatic_review_does_not_verify_any_identity(self):
         result = local.safe_summary(
             {"status": "text_consistent_unverified",

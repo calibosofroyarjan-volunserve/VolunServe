@@ -135,6 +135,7 @@ def main() -> int:
     root.configure(bg="#f4f8fc")
 
     captured: dict[str, bytes] = {}
+    manual_captures: set[str] = set()
     consent = tk.BooleanVar(value=False)
     camera_index = tk.IntVar(value=0)
     active_window = {"close": None}
@@ -170,6 +171,7 @@ def main() -> int:
 
     def reset_captures():
         release_scan_buffers(captured)
+        manual_captures.clear()
         for label in progress.values():
             label.configure(text="Not scanned", fg="#875514")
         result.configure(state="normal")
@@ -205,10 +207,19 @@ def main() -> int:
             return
         # Move image references out of the persistent UI state immediately.
         scans = tuple(captured.pop(key) for key in ("front", "back", "selfie"))
+        manual_steps = tuple(sorted(manual_captures))
+        manual_captures.clear()
         show_result("Reviewing in local memory... no upload or account action.")
         root.update_idletasks()
         try:
             message = perform_local_review(*scans)
+            if manual_steps:
+                message += (
+                    "\nLOCAL MANUAL CAMERA CAPTURE (not OCR-confirmed): "
+                    + ", ".join(manual_steps)
+                    + "\nCard side and image authenticity NOT confirmed. "
+                      "Human review required; no identity approval."
+                )
         except Exception as exc:
             # No filepaths, OCR or images included in the error display.
             message = (
@@ -282,9 +293,10 @@ def main() -> int:
                             text="No upload. Text recognition takes a few seconds.")
         feedback.pack(pady=8)
         tk.Label(pop, bg="#eef5fa", fg="#4b5563", text=(
-            "Fit ALL FOUR card corners inside the guide, keep the card level "
-            "and avoid glare. Two readable OCR checks are needed per ID side; "
-            "one clearly framed selfie. No images saved."
+            "Smaller yellow guide: center the whole card without glare. "
+            "Automatic capture needs two readable OCR checks per side. "
+            "If your laptop camera cannot read it, choose MANUAL CAPTURE "
+            "for local review only (never verified). No images saved."
         ), wraplength=720).pack()
         worker_results = queue.Queue()
         cancel_ocr = threading.Event()
@@ -371,6 +383,56 @@ def main() -> int:
                 close(completed=True)
                 root.after(100, review_in_memory)
 
+        def manual_capture_for_review():
+            """Opt-in local in-memory camera capture; NEVER OCR verification."""
+            if state["closed"] or not consent.get():
+                return
+            stage = state["stage"]
+            if stage not in ("front", "back"):
+                return
+            confirmed = messagebox.askyesno(
+                "Manual capture — NOT VERIFIED",
+                "Only for your own National ID camera lab. OCR has NOT "
+                "confirmed this card or its side. Capture the current "
+                + stage.upper() +
+                " frame for PRIVATE LOCAL REVIEW ONLY? No account or "
+                "identity will be verified.",
+                parent=pop,
+            )
+            if not confirmed:
+                return
+            ok, frame = camera.read()
+            if not ok or frame is None:
+                feedback.configure(text="Camera interrupted; manual capture not saved.")
+                return
+            # Compact frame keeps only the on-screen card region. A plausible
+            # outline is preferred but never treated as proof of document type.
+            x0, y0, x1, y1 = camera_id_roi_bounds(frame.shape, compact=True)
+            if x1 - x0 < 240 or y1 - y0 < 150:
+                feedback.configure(text="Webcam resolution too low for manual capture.")
+                return
+            region = frame[y0:y1, x0:x1].copy()
+            card = crop_candidate_card(region)
+            working_image = card if card is not None else region
+            ok_enc, encoded = cv2.imencode(".png", working_image)
+            if not ok_enc or encoded is None or not 0 < len(encoded) <= MAX_IMAGE_BYTES:
+                feedback.configure(text="Manual capture could not encode this camera frame.")
+                return
+            manual_captures.add(stage)
+            advance_stage(stage, encoded.tobytes())
+            progress[stage].configure(
+                text="Manual capture only — NOT VERIFIED", fg="#92520A")
+            feedback.configure(
+                text="Manual " + stage.upper() +
+                " captured privately; OCR status remains unconfirmed. "
+                "Proceed to the next camera step.")
+
+        tk.Button(
+            pop, text="MANUAL CAPTURE FOR REVIEW — NOT VERIFIED",
+            command=manual_capture_for_review,
+            bg="#FFF2D5", fg="#754C12",
+        ).pack(pady=4)
+
         def poll_results():
             while True:
                 try:
@@ -405,10 +467,14 @@ def main() -> int:
                 display = frame.copy()
                 h, w = frame.shape[:2]
                 if stage in ("front", "back"):
+                    # Show a smaller ID-sized guide while retaining the
+                    # wider input for automatic card-crop/OCR fallback.
+                    gx0, gy0, gx1, gy1 = camera_id_roi_bounds(
+                        frame.shape, compact=True)
+                    cv2.rectangle(display, (gx0, gy0), (gx1, gy1),
+                                  (40, 200, 50) if state["matching"] else (0, 180, 250), 3)
                     x0, y0, x1, y1 = camera_id_roi_bounds(frame.shape)
                     viable = (x1 - x0 >= 420 and y1 - y0 >= 260)
-                    cv2.rectangle(display, (x0, y0), (x1, y1),
-                                  (40, 200, 50) if state["matching"] else (0, 180, 250), 3)
                     if not viable:
                         feedback.configure(text="Camera resolution too low for ID text. Use a higher-resolution webcam.")
                     elif time.monotonic() >= state["next_ocr"] and not state["working"]:

@@ -17,13 +17,12 @@ from strict_document_screening import (
 
 
 
-def camera_id_roi_bounds(image_shape):
-    """Central wide OCR region with margins around the *whole* ID card.
+def camera_id_roi_bounds(image_shape, *, compact=False):
+    """Center ID guide; keep original wide option for safe OCR fallback.
 
-    Earlier UI scanned only 76% of camera width, cropping the portrait-side
-    title and trailing labels on many small laptop-camera frames. Keep a
-    narrow edge margin for framing but never return an out-of-bounds crop.
-    This changes only which camera pixels are scanned, NOT document policy.
+    A compact visual guide fits the physical card without encouraging it to
+    fill the laptop camera frame. Choosing the guide size never weakens OCR
+    requirements, establishes document authenticity or verifies a holder.
     """
     try:
         height, width = int(image_shape[0]), int(image_shape[1])
@@ -31,6 +30,13 @@ def camera_id_roi_bounds(image_shape):
             return (0, 0, 0, 0)
     except (TypeError, ValueError, IndexError, OverflowError):
         return (0, 0, 0, 0)
+    if compact:
+        frame_width = int(width * 0.76)
+        frame_height = min(int(height * 0.80), int(frame_width / 1.55))
+        x_margin = (width - frame_width) // 2
+        y_margin = (height - frame_height) // 2
+        return (x_margin, y_margin, x_margin + frame_width,
+                y_margin + frame_height)
     x_margin = max(1, int(width * 0.04))
     y_margin = max(1, int(height * 0.05))
     return (x_margin, y_margin, width - x_margin, height - y_margin)
