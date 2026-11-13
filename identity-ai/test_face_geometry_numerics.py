@@ -108,6 +108,7 @@ class FaceGeometryNumericalTests(unittest.TestCase):
         env["get_min_quality_threshold"] = lambda: 0.34
         env["similarity_score"] = lambda *_: {"score": 0.92}
         env["assess_frame_shadow"] = lambda _: {"status": "disabled"}
+        env["assess_ensemble_shadow"] = lambda _, primary=None: {"status": "inconclusive", "independentPadValidated": False, "identityDecisionUse": "none", "automaticApprovalAllowed": False}
         env["sface_assess_pair_shadow"] = lambda *_: {"status": "disabled"}
         env["get_match_threshold"] = lambda: 0.78
         env["verification_id_for"] = lambda _: "synthetic-verification"
