@@ -1,0 +1,25 @@
+name: Hybrid Identity Staging Postdeploy Anonymous Smoke (NO DEPLOY)
+on:
+  pull_request:
+    branches: [release/staging-hybrid-backend-baseline-20261114]
+    paths:
+      - 'scripts/verify-hybrid-staging-runtime-no-deploy.cjs'
+      - '.github/workflows/verify-hybrid-staging-runtime-no-deploy.yml'
+permissions:
+  contents: read
+jobs:
+  anonymous-staging-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 7
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify isolated staging backend, AI, web, and anonymous access controls
+        run: node scripts/verify-hybrid-staging-runtime-no-deploy.cjs
+      - name: Confirm no deploy or private identity operations
+        run: echo 'NO_DEPLOY_NO_FIREBASE_AUTH_NO_PRIVATE_MEDIA_NO_WRITES'
