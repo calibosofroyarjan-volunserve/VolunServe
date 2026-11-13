@@ -113,6 +113,8 @@
       <h2>Experimental 1:1 SFace research</h2>
       <p class="muted">Available only when the optional face-presence diagnostic finds exactly one face in both the ID-front portrait and selfie. Separate consent is required before downloading the official SFace ONNX model (~37 MB). All photos and embeddings stay in this browser; <strong>no match / nonmatch or verification decision</strong> is made.</p>
       <label><input type="checkbox" id="sfaceConsent">I separately consent to local SFace similarity research. I understand the score is not calibrated, does not prove identity, and cannot authorize account access.</label>
+      <div class="actions"><button type="button" id="sfaceSetup" class="secondary" disabled>Check SFace setup — no ID photos needed</button></div>
+      <p id="sfaceSetupResult" class="muted" role="status" aria-live="polite">Setup not checked. Only public model files are downloaded.</p>
       <div class="actions"><button type="button" id="sfaceRun" class="secondary" disabled>Run 1:1 SFace research — NOT VERIFIED</button></div>
       <p id="sfaceResult" class="muted" role="status" aria-live="polite">SFace not run. Anti-spoofing: NOT TESTED. No identity decision.</p>
     </section>
@@ -164,6 +166,9 @@
     $("sfaceResult").className="muted";
     $("sfaceResult").textContent =
       "SFace not run. Anti-spoofing: NOT TESTED. No identity decision.";
+    $("sfaceSetupResult").className="muted";
+    $("sfaceSetupResult").textContent =
+      "Setup not checked. Only public model files are downloaded.";
   }
   const note = (message, type = "muted") => {
     $("status").className = type;
@@ -203,6 +208,8 @@
     $("qaRun").disabled = qaBusy || sfaceBusy || step !== 3 ||
       !($("consent").checked && $("qaConsent").checked) ||
       !snapshots[0] || !snapshots[2];
+    $("sfaceSetup").disabled = qaBusy || sfaceBusy ||
+      !($("consent").checked && $("sfaceConsent").checked);
     $("sfaceRun").disabled = qaBusy || sfaceBusy || !qaFacesReady ||
       step !== 3 || !$("consent").checked ||
       !$("qaConsent").checked || !$("sfaceConsent").checked ||
@@ -375,6 +382,60 @@
     }
   }
 
+  const safeSFaceStage = result => {
+    const stages = {
+      vision_module_load_failed: "MediaPipe library could not load (browser/network)",
+      face_landmarker_init_failed: "FaceLandmarker model/WASM initialization failed",
+      sface_model_download_failed: "Official SFace model download unavailable",
+      model_download_failed: "Official SFace download blocked or unavailable (network/CORS)",
+      model_integrity_failed: "Downloaded model failed SHA-256/size validation",
+      onnx_runtime_import_failed: "ONNX runtime module import failed",
+      onnx_session_init_failed: "ONNX WebAssembly/session initialization failed",
+      onnx_session_interface_invalid: "ONNX model interface is invalid",
+      image_or_inference_failed: "Face image processing or inference failed",
+      cancelled: "Cancelled",
+    };
+    return stages[result?.reason] || "Unclassified browser/model error";
+  };
+  async function checkSFaceSetup() {
+    if(sfaceBusy || qaBusy || !$("consent").checked ||
+       !$("sfaceConsent").checked) return;
+    sfaceBusy=true;
+    const generation=++sfaceGeneration;
+    const active=()=>generation===sfaceGeneration &&
+       $("consent").checked && $("sfaceConsent").checked && !document.hidden;
+    $("sfaceSetupResult").textContent="Checking only PUBLIC model/runtime files...";
+    $("sfaceSetupResult").className="muted";
+    update();
+    try {
+      const {checkSFaceEnvironment}=await import("./phone-sface-research.mjs");
+      if(!active()) return;
+      const result=await checkSFaceEnvironment({active,progress:message=>{
+        if(active()) $("sfaceSetupResult").textContent=message;
+      }});
+      if(!active())return;
+      if(result.reason==="setup_ready_research_only"){
+        $("sfaceSetupResult").textContent=
+          "Public SFace/ONNX setup READY for research. Face matching NOT validated; no identity or anti-spoof decision.";
+        $("sfaceSetupResult").className="success";
+      } else {
+        $("sfaceSetupResult").textContent=
+          "SFace setup issue: "+safeSFaceStage(result)+
+          ". No photos used; no identity decision.";
+        $("sfaceSetupResult").className="error";
+      }
+    } catch {
+      if(active()){
+        $("sfaceSetupResult").textContent=
+          "SFace setup module could not load. No photos used; no identity decision.";
+        $("sfaceSetupResult").className="error";
+      }
+    } finally {
+      sfaceBusy=false;
+      update();
+    }
+  }
+
   async function runSFaceQA() {
     if (sfaceBusy || qaBusy || !qaFacesReady || step !== 3 ||
         !$("consent").checked || !$("qaConsent").checked ||
@@ -411,9 +472,8 @@
             ["id_face_count_invalid","selfie_face_count_invalid",
              "id_alignment_invalid","selfie_alignment_invalid",
              "id_embedding_invalid","selfie_embedding_invalid",
-             "model_interface_invalid","runtime_or_model_unavailable",
-             "model_invalid","cancelled","embedding_invalid"].includes(result.reason)
-            ? result.reason : "model_or_browser_unavailable"
+             "model_interface_invalid","embedding_invalid"].includes(result.reason)
+            ? result.reason : safeSFaceStage(result)
           ) + "). No identity decision. Anti-spoofing NOT TESTED.";
         $("sfaceResult").className="error";
       }
@@ -429,6 +489,7 @@
     }
   }
 
+  $("sfaceSetup").addEventListener("click", () => {void checkSFaceSetup();});
   $("sfaceRun").addEventListener("click", () => {void runSFaceQA();});
   $("sfaceConsent").addEventListener("change", () => {
     if (!$("sfaceConsent").checked) clearSFaceQA();
@@ -464,7 +525,8 @@
   });
   document.addEventListener("visibilitychange", () => {
     if (document.hidden) {
-      release(); note("Camera paused because the browser tab is hidden."); update();
+      clearSFaceQA(); release();
+      note("Camera paused because the browser tab is hidden."); update();
     }
   });
   window.addEventListener("pagehide", () => {
