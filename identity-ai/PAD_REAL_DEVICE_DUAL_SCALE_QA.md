@@ -1,5 +1,21 @@
 # VolunServe — real-device PAD dual-scale evaluation protocol (PRIVATE, QA ONLY)
 
+## November 13 secondary-model integration — research only
+
+The staging build now downloads checksum-pinned MiniFASNetV1SE 4.0x80x80
+ONNX weights from the Apache-2.0 upstream-derived yakhyo distribution.
+YuNet's one-face bounding box is expanded by 4.0 separately in width/height.
+Both raw 0–255 and normalized 0–1 observations must agree to emit a
+`model_prefers_*_unvalidated` shadow label. A second coarse `ensemblePadShadow`
+field compares V1SE with V2; any disagreement or missing/invalid prediction
+reports `inconclusive`. The original V2 shadow result is retained unchanged.
+
+**Important:** this adds complementary model architecture/crop context,
+NOT independent liveness evidence. Both weights come from the same model
+family and may share failure modes. A `agreement_live_unvalidated` result
+must never auto-approve an account or override Admin/issuer checks.
+Real-world printed-photo false acceptance and genuine-user rejection remain
+open and have NOT been measured again after this code integration.
 ## November 13 staging improvement — dual-scale abstention (NOT accuracy validation)
 
 Original upstream preprocessing uses raw BGR 0–255 with class index 1 for genuine.

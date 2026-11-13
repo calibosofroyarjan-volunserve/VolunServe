@@ -21,11 +21,16 @@ MODULE = ast.fix_missing_locations(ast.Module(body=[HANDLER], type_ignores=[]))
 
 
 def run_real_handler(pad_status, score=0.90):
-    calls = {"pad": 0, "sface": 0}
+    calls = {"pad": 0, "ensemble": 0, "sface": 0}
 
     def shadow(_image):
         calls["pad"] += 1
         return {"status": pad_status, "independentPadValidated": False}
+
+    def ensemble(_image, primary=None):
+        calls["ensemble"] += 1
+        return {"status": "inconclusive", "independentPadValidated": False,
+                "identityDecisionUse": "none", "automaticApprovalAllowed": False}
 
     def sface(_id_image, _selfie_image):
         calls["sface"] += 1
@@ -40,6 +45,7 @@ def run_real_handler(pad_status, score=0.90):
         "normalize_landmarks": lambda input_points: input_points,
         "similarity_score": lambda _id_pts, _selfie_pts: {"score": score},
         "assess_frame_shadow": shadow,
+        "assess_ensemble_shadow": ensemble,
         "sface_assess_pair_shadow": sface,
         "get_match_threshold": lambda: 0.78,
         "verification_id_for": lambda _uid: "synthetic-verification-id",
@@ -71,6 +77,10 @@ class PassivePadDecisionIsolationTests(unittest.TestCase):
         self.assertNotIn("verified", output.values())
         pad = output.get("passivePadShadow", {})
         self.assertFalse(pad.get("independentPadValidated", True))
+        ensemble = output.get("ensemblePadShadow", {})
+        self.assertEqual(ensemble.get("identityDecisionUse"), "none")
+        self.assertFalse(ensemble.get("independentPadValidated", True))
+        self.assertFalse(ensemble.get("automaticApprovalAllowed", True))
 
     def test_every_shadow_observation_stays_manual_review(self):
         for status in (
@@ -81,7 +91,7 @@ class PassivePadDecisionIsolationTests(unittest.TestCase):
                 output, calls = run_real_handler(status)
                 self.assert_no_verified_identity(output)
                 self.assertEqual(output["passivePadShadow"]["status"], status)
-                self.assertEqual(calls, {"pad": 1, "sface": 1})
+                self.assertEqual(calls, {"pad": 1, "ensemble": 1, "sface": 1})
 
     def test_even_high_1to1_similarity_never_grants_verified_resident(self):
         output, calls = run_real_handler("model_prefers_live_unvalidated", score=0.9999)
@@ -91,7 +101,7 @@ class PassivePadDecisionIsolationTests(unittest.TestCase):
     def test_uncertain_1to1_similarity_also_stays_manual_review(self):
         output, calls = run_real_handler("model_prefers_live_unvalidated", score=0.10)
         self.assert_no_verified_identity(output)
-        self.assertEqual(calls, {"pad": 1, "sface": 1})
+        self.assertEqual(calls, {"pad": 1, "ensemble": 1, "sface": 1})
 
 
 if __name__ == "__main__":
