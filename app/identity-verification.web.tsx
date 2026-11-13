@@ -543,7 +543,19 @@ export default function IdentityVerificationWeb() {
     };
   }, [idCameraOpen, stopIdCamera]);
 
-  const chooseIdDocument = (side: "front" | "back") => {
+  const chooseIdDocument = async (side: "front" | "back") => {
+    // Check the actual private upload permission before even opening an ID
+    // camera. An AI engine can be healthy while staging uploads remain HTTP 423.
+    // Do not ask the Resident to photograph a sensitive government ID in
+    // that case, and do not consume a verification attempt.
+    try {
+      await checkIdentityEngineReady();
+    } catch (error: any) {
+      const reason = String(error?.message || "Identity media submission is unavailable.");
+      setDocumentPrecheckMessage(reason);
+      setLocalMessage(reason);
+      return;
+    }
     documentPrecheckRevisionRef.current += 1;
     setDocumentPrecheckOutcome(null);
     setDocumentPrecheckMessage("");
