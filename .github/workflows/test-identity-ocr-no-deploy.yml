@@ -67,6 +67,8 @@ on:
       - "backend/test-id-backscan-quality.cjs"
       - "lib/identityVerification.ts"
       - "app/identity-verification.web.tsx"
+      - "lib/identityCameraPreview.ts"
+      - "backend/test-identity-web-camera-preview.cjs"
       - "app/identity-verification.tsx"
       - "components/identity/DocumentScreeningSummary.tsx"
       - "lib/firebaseAuth.ts"
@@ -173,6 +175,8 @@ jobs:
           node --test backend/test-independentPadAttestation.cjs
       - name: Install frontend dependency lockfile (no lifecycle scripts)
         run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Validate browser ID/selfie first-frame camera readiness (NO DEPLOY)
+        run: node --test backend/test-identity-web-camera-preview.cjs
       - name: Execute real Expo Admin approval UI gate against backend policy (NO DEPLOY)
         run: node --test backend/test-staging-admin-review-ui-contract.cjs
       - name: Typecheck frontend identity UI and API client
