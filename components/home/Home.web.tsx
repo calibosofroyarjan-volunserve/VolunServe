@@ -149,6 +149,7 @@ export default function WebHome() {
   const { items: announcementAlerts } = useAnnouncementAlerts(user?.uid);
 
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
+  const [announcementsError, setAnnouncementsError] = useState(false);
   const [cases, setCases] = useState<DisasterCase[]>([]);
   const [assistanceRequests, setAssistanceRequests] = useState<
     AssistanceRequest[]
@@ -197,6 +198,11 @@ export default function WebHome() {
   const profileInitial = displayName.charAt(0).toUpperCase();
 
   useEffect(() => {
+    if (!user) {
+      setAnnouncements([]);
+      setAnnouncementsError(false);
+      return;
+    }
     const announcementsQuery = query(
       collection(db, "announcements"),
       where("publishAt", "<=", Timestamp.fromDate(announcementCutoff)),
@@ -213,10 +219,15 @@ export default function WebHome() {
           }));
 
         setAnnouncements(nextAnnouncements);
+        setAnnouncementsError(false);
       },
-      () => setAnnouncements([])
+      (error) => {
+        console.warn("Failed to load published announcements", error);
+        // Do not claim no published announcements when the read actually failed.
+        setAnnouncementsError(true);
+      }
     );
-  }, [announcementCutoff]);
+  }, [announcementCutoff, user?.uid]);
 
   useEffect(() => {
     if (!user) {
@@ -527,7 +538,7 @@ export default function WebHome() {
                     <Text style={styles.mobileHeroEyebrow}>COMMUNITY UPDATES</Text>
                     <Text style={styles.mobileHeroGreeting}>Stay connected with VolunServe</Text>
                     <Text style={styles.mobileHeroDescription}>
-                      {announcements.length ? `${announcements.length} published updates available.` : "No published updates yet. Official announcements will appear here."}
+                      {announcementsError ? "Unable to load published updates. Please refresh or contact an administrator." : announcements.length ? `${announcements.length} published updates available.` : "No published updates yet. Official announcements will appear here."}
                     </Text>
                     <Pressable style={styles.mobileSlideAction} onPress={() => router.push("/announcements")}>
                       <Text style={styles.mobileSlideActionText}>View announcements</Text>
@@ -975,10 +986,10 @@ export default function WebHome() {
                   </View>
                   <View style={styles.emptyUpdatesCopy}>
                     <Text style={styles.emptyUpdatesTitle}>
-                      No published updates
+                      {announcementsError ? "Community updates unavailable" : "No published updates"}
                     </Text>
                     <Text style={styles.emptyUpdatesText}>
-                      Official announcements will appear here.
+                      {announcementsError ? "Could not load announcements from Firestore. Refresh or ask an administrator to check access." : "Official announcements will appear here."}
                     </Text>
                   </View>
                 </View>
