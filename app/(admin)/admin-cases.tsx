@@ -4028,11 +4028,13 @@ export default function AdminCases() {
                 ) : (
                   <TouchableOpacity accessibilityRole="button"
                     style={styles.casePrimaryNeutral}
-                    onPress={() => setDetailTab("response")}>
-                    <Text style={styles.casePrimaryNeutralText}>View Response Controls</Text>
+                    onPress={() => setDetailTab(verificationStatus === "rejected" ? "evidence" : "response")}>
+                    <Text style={styles.casePrimaryNeutralText}>
+                      {verificationStatus === "rejected" ? "View Rejection Details" : "View Response Controls"}
+                    </Text>
                   </TouchableOpacity>
                 )}
-                {incident.severity === "critical" && (
+                {incident.severity === "critical" && verificationStatus !== "rejected" && (
                   <TouchableOpacity accessibilityRole="button"
                     accessibilityLabel="Call emergency hotline 911"
                     style={styles.casePrimaryEmergency}
