@@ -7,12 +7,14 @@ on:
     paths:
       - firestore.rules
       - scripts/audit-production-firestore-rules-structure.cjs
+      - scripts/audit-announcements-live-rules-readonly.cjs
       - .github/workflows/audit-production-firestore-rules-structure.yml
   pull_request:
     branches: [live-protected]
     paths:
       - firestore.rules
       - scripts/audit-production-firestore-rules-structure.cjs
+      - scripts/audit-announcements-live-rules-readonly.cjs
       - .github/workflows/audit-production-firestore-rules-structure.yml
 permissions:
   contents: read
@@ -31,6 +33,8 @@ jobs:
       - run: |
           node --check scripts/audit-production-firestore-rules-structure.cjs
           node scripts/audit-production-firestore-rules-structure.cjs --self-test
+          node --check scripts/audit-announcements-live-rules-readonly.cjs
+          node scripts/audit-announcements-live-rules-readonly.cjs --self-test
   protected-prod-readonly:
     if: github.event_name == 'push' && github.repository == 'calibosofroyarjan-volunserve/VolunServe' && github.ref == 'refs/heads/live-protected'
     needs: check
@@ -46,6 +50,10 @@ jobs:
         with:
           node-version: '22'
       - run: npm ci --prefix functions --no-audit --no-fund
+      - name: Compare LIVE Announcements rules to tested recovery (READ ONLY)
+        env:
+          VOLUNSERVE_PRODUCTION_HOSTING_SERVICE_ACCOUNT: ${{ secrets.VOLUNSERVE_PRODUCTION_HOSTING_SERVICE_ACCOUNT }}
+        run: node scripts/audit-announcements-live-rules-readonly.cjs
       - name: Read-only live Firestore Rules structure and candidate drift
         env:
           VOLUNSERVE_PRODUCTION_HOSTING_SERVICE_ACCOUNT: ${{ secrets.VOLUNSERVE_PRODUCTION_HOSTING_SERVICE_ACCOUNT }}
