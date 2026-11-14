@@ -402,8 +402,10 @@ const mappedIncidentAddress = (payload: unknown): string | null => {
   const building = clean(record.name);
   const house = street ? clean(a.house_number) : "";
   // Never pretend a city-only result is an exact incident address.
-  const specific = [house && street ? house + " " + street : street, area]
-    .filter(Boolean);
+  const specific = [
+    house && street ? house + " " + street : street,
+    /^(city of )?san jose del monte$/i.test(area) ? "" : area,
+  ].filter(Boolean);
   if (!specific.length && building &&
     !/^(city of )?san jose del monte$/i.test(building)) specific.push(building);
   if (!specific.length) return null;
