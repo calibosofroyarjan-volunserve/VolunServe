@@ -18,6 +18,11 @@ import {
 import React, { useEffect, useMemo, useState } from "react";
 import ListPagination from "../../components/ui/ListPagination";
 import {
+  ReferenceOverview,
+  ReferenceStatus,
+  ReferenceHistory,
+} from "../../components/admin/EmergencyFiveTabDesign";
+import {
   Alert,
   Image,
   Linking,
@@ -4093,166 +4098,17 @@ export default function AdminCases() {
               </View>
 
               {detailTab === "overview" && (
-                <View style={styles.cleanOverviewSection}>
-                  <View style={styles.cleanOverviewHeading}>
-                    <View>
-                      <Text style={styles.cleanOverviewKicker}>CASE WORKSPACE</Text>
-                      <Text style={styles.cleanOverviewTitle}>Emergency Overview</Text>
-                      <Text style={styles.cleanOverviewSubtitle}>
-                        Essential case information. Use the tabs for full evidence, assignment, and case history.
-                      </Text>
-                    </View>
-                  </View>
-
-                  <View style={styles.cleanOverviewGrid}>
-                    <View style={[styles.cleanOverviewCard, styles.completeResidentCard]}>
-                      <View style={styles.cleanOverviewCardHeader}>
-                        <Text style={styles.cleanOverviewCardIcon}>♙</Text>
-                        <Text style={styles.cleanOverviewCardTitle}>Resident Information</Text>
-                      </View>
-                      <Text style={styles.cleanOverviewResidentName}>
-                        {incident.reporterName || "Resident"}
-                      </Text>
-                      <View style={styles.overviewVerifiedPill}>
-                        <Text style={styles.overviewVerifiedText}>
-                          {incident.verification?.identityVerified ? "✓ Verified Resident" : "Resident account"}
-                        </Text>
-                      </View>
-                      <View style={styles.cleanOverviewSeparator} />
-                      <Text style={styles.cleanOverviewFieldLabel}>CONTACT NUMBER</Text>
-                      <Text style={styles.cleanOverviewFieldValue}>
-                        {incident.contactNumber || "Not provided"}
-                      </Text>
-                      <Text style={styles.cleanOverviewFieldLabel}>EMAIL ADDRESS</Text>
-                      <Text style={styles.cleanOverviewFieldValue} numberOfLines={2}>
-                        {incident.reporterEmail || "Not provided"}
-                      </Text>
-                      <Text style={styles.cleanOverviewFieldLabel}>ACCOUNT BARANGAY</Text>
-                      <Text style={styles.cleanOverviewFieldValue}>
-                        {incident.reporterBarangay
-                          ? `${incident.reporterBarangay}, San Jose del Monte, Bulacan`
-                          : incident.reporterAddress || "Barangay not provided"}
-                      </Text>
-                    </View>
-
-                    <View style={[styles.cleanOverviewCard, styles.completeIncidentCard]}>
-                      <View style={styles.cleanOverviewCardHeader}>
-                        <Text style={styles.cleanOverviewCardIcon}>◈</Text>
-                        <Text style={styles.cleanOverviewCardTitle}>Incident Details</Text>
-                      </View>
-                      <Text style={styles.cleanOverviewFieldLabel}>REPORTED SITUATION</Text>
-                      <Text style={styles.cleanOverviewDescription} numberOfLines={5}>
-                        {incident.details?.trim() || "No additional incident description provided."}
-                      </Text>
-                      <View style={styles.cleanOverviewSeparator} />
-                      <Text style={styles.cleanOverviewFieldLabel}>ASSISTANCE NEEDED</Text>
-                      <View style={styles.needChipRow}>
-                        {(incident.assistanceTypes || []).length
-                          ? (incident.assistanceTypes || []).slice(0, 4).map((item) => (
-                            <View key={item} style={styles.needChip}>
-                              <Text style={styles.needChipText}>{item}</Text>
-                            </View>
-                          ))
-                          : (
-                            <Text style={styles.cleanOverviewFieldValue}>
-                              {incident.needs || "Not specified"}
-                            </Text>
-                          )}
-                      </View>
-                      <View style={styles.cleanAffectedRow}>
-                        <Text style={styles.cleanOverviewFieldLabel}>PEOPLE AFFECTED</Text>
-                        <Text style={styles.cleanAffectedCount}>
-                          {incident.affectedPeople || 0}
-                        </Text>
-                      </View>
-                    </View>
-
-                    <View style={[styles.cleanOverviewCard, styles.completeStatusCard]}>
-                      <View style={styles.cleanOverviewCardHeader}>
-                        <Text style={styles.cleanOverviewCardIcon}>◉</Text>
-                        <Text style={styles.cleanOverviewCardTitle}>Case Status & Priority</Text>
-                      </View>
-                      <Text style={styles.cleanOverviewFieldLabel}>CURRENT STATUS</Text>
-                      <Text style={styles.completeStatusText}>
-                        {labelOfStatus(incident.status)}
-                      </Text>
-                      <Text style={styles.cleanOverviewFieldLabel}>ADMIN VERIFICATION</Text>
-                      <Text style={styles.cleanOverviewFieldValue}>
-                        {labelOfStatus(verificationStatus)}
-                      </Text>
-                      <View style={styles.cleanOverviewSeparator} />
-                      <Text style={styles.cleanOverviewFieldLabel}>REPORTED PRIORITY</Text>
-                      <View style={[styles.badge, severityStyle(incident.severity), styles.completeSeverityBadge]}>
-                        <Text style={styles.badgeText}>{severityLabel(incident.severity)}</Text>
-                      </View>
-                      <Text style={styles.cleanOverviewFieldLabel}>VOLUNTEER RESPONSE</Text>
-                      <Text style={styles.cleanOverviewFieldValue}>
-                        {activeAssignments.some((item) => ["responding", "on_site"].includes(String(item.status)))
-                          ? "Task in progress"
-                          : activeAssignments.some((item) => String(item.status) === "accepted")
-                            ? "Accepted · Awaiting Start"
-                            : activeAssignments.some((item) => String(item.status) === "offered")
-                              ? "Offer pending"
-                              : "No active task"}
-                      </Text>
-                    </View>
-                  </View>
-                </View>
-              )}
-
-              <View
-                style={[
-                  styles.locationActionCard,
-                  detailTab !== "overview" && styles.hiddenSection,
-                ]}
-              >
-                <View style={styles.locationActionMain}>
-                  <Text style={styles.sectionEyebrow}>MAP & ROUTE</Text>
-                  <Text style={styles.locationActionTitle}>Open full incident response map</Text>
-                  <Text style={styles.locationActionAddress}>
-                    {incident.location || "Exact response location not provided"}
-                  </Text>
-                  <Text style={styles.locationActionDescription}>
-                    SJDM boundary · incident pin · active Volunteer GPS and road route when available
-                  </Text>
-                  <Text style={styles.locationActionCoords}>
-                    {Number.isFinite(incident.latitude) && Number.isFinite(incident.longitude)
-                      ? `${incident.latitude?.toFixed(6)}, ${incident.longitude?.toFixed(6)}`
-                      : "GPS coordinates unavailable"}
-                  </Text>
-                </View>
-
-                <View style={styles.locationActionButtons}>
-                  <TouchableOpacity
-                    style={styles.locationLiveButton}
-                    disabled={
-                      !Number.isFinite(incident.latitude) ||
-                      !Number.isFinite(incident.longitude)
-                    }
-                    onPress={() =>
-                      router.push(
-                        `/(admin)/admin-live-map?caseId=${encodeURIComponent(incident.id)}` as any
-                      )
-                    }
-                  >
-                    <Text style={styles.locationLiveButtonText}>Open Response Map</Text>
-                  </TouchableOpacity>
-
-                </View>
-              </View>
-
-              {detailTab === "overview" && incident.severity === "critical" &&
-                verificationStatus !== "rejected" && (
-                <View style={styles.completeCriticalBanner}>
-                  <Text style={styles.completeCriticalTitle}>
-                    Critical case — official emergency services take priority
-                  </Text>
-                  <Text style={styles.completeCriticalText}>
-                    If lives are in immediate danger, call 911 and coordinate with official responders.
-                    VolunServe does not automatically dispatch police, fire, or medical teams.
-                    Volunteer coordination must not delay emergency escalation.
-                  </Text>
-                </View>
+                <ReferenceOverview
+                  incident={incident}
+                  verificationStatus={verificationStatus}
+                  statusText={labelOfStatus(incident.status)}
+                  severityText={severityLabel(incident.severity)}
+                  activeAssignments={activeAssignments}
+                  onEvidence={() => setDetailTab("evidence")}
+                  onMap={() => router.push(
+                    `/(admin)/admin-live-map?caseId=${encodeURIComponent(incident.id)}` as any,
+                  )}
+                />
               )}
 
               <View
@@ -4644,6 +4500,20 @@ export default function AdminCases() {
                 )}
               </View>
 
+              {detailTab === "response" && (
+                <ReferenceStatus
+                  incident={incident}
+                  verificationStatus={verificationStatus}
+                  statusText={labelOfStatus(incident.status)}
+                  severityText={severityLabel(incident.severity)}
+                  activeAssignments={activeAssignments}
+                  onEvidence={() => setDetailTab("evidence")}
+                  onMap={() => router.push(
+                    `/(admin)/admin-live-map?caseId=${encodeURIComponent(incident.id)}` as any,
+                  )}
+                  onAssignment={() => setDetailTab("personnel")}
+                />
+              )}
               {detailTab === "response" && (dispatchReady ? (
                 <View style={styles.adminSection}>
                   <View style={styles.responseControlHeader}>
@@ -5974,49 +5844,12 @@ export default function AdminCases() {
               )}
 
               {detailTab === "history" && (
-                <View style={styles.historyPanel}>
-                  <View style={styles.sectionHeader}>
-                    <View>
-                      <Text style={styles.sectionEyebrow}>CASE HISTORY</Text>
-                      <Text style={styles.sectionTitle}>Emergency Activity Timeline</Text>
-                    </View>
-                  </View>
-
-                  {[
-                    ["Report submitted", incident.createdAt],
-                    ["Report validated", incident.validatedAt],
-                    ["Responder assigned / response updated", incident.assignedAt],
-                    ["Case resolved", incident.resolvedAt],
-                    ["Case closed", incident.closedAt],
-                  ].filter(([, when]) => Boolean(when)).map(([label, when], index) => (
-                    <View key={`${label}-${index}`} style={styles.historyRow}>
-                      <View style={styles.historyDot} />
-                      <View style={{ flex: 1 }}>
-                        <Text style={styles.historyTitle}>{String(label)}</Text>
-                        <Text style={styles.historyTime}>{formatDate(when)}</Text>
-                      </View>
-                    </View>
-                  ))}
-
-                  {incidentAssignments.length > 0 && (
-                    <View style={styles.historyAssignments}>
-                      <Text style={styles.overviewLabel}>Volunteer support history</Text>
-                      <ListPagination page={Math.max(1, Math.min(historyAssignmentPage, Math.ceil(incidentAssignments.length / 5) || 1))} total={incidentAssignments.length} pageSize={5} onChange={setHistoryAssignmentPage} />
-                      {pageFive(incidentAssignments, historyAssignmentPage).map((assignment) => (
-                        <View key={assignment.id} style={styles.historyAssignmentRow}>
-                          <Text style={styles.historyAssignmentName}>
-                            {assignment.volunteerName || "Volunteer"}
-                          </Text>
-                          <Text style={styles.historyAssignmentStatus}>
-                            {labelOfStatus(String(assignment.status))}
-                          </Text>
-                        </View>
-                      ))}
-                    </View>
-                  )}
-                </View>
+                <ReferenceHistory
+                  incident={incident}
+                  assignments={incidentAssignments}
+                  formatDate={formatDate}
+                />
               )}
-
 
               {false && incidentFieldReports.length > 0 && (
                 <View style={styles.fieldReportsSection}>
