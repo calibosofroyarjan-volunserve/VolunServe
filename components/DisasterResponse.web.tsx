@@ -16,6 +16,7 @@ import {
 } from "@expo-google-fonts/inter";
 
 import { SJDM_REFERENCE_GEOMETRY } from "../constants/sjdmBoundaryReference";
+import { SJDM_BARANGAYS } from "../constants/sjdmBarangays";
 import { insideSjdmBoundary, sjdmOutsideMask, type SjdmBoundary } from "../lib/sjdmMapBoundary";
 
 const sjdmFeature: SjdmBoundary = {
@@ -113,6 +114,12 @@ const mapDocument = `
     const city = {"type":"Feature","properties":{"source":"geoBoundaries ADM3 simplified CC BY 4.0"},"geometry":${JSON.stringify(SJDM_REFERENCE_GEOMETRY)}};
     const outside = ${JSON.stringify(sjdmMask)};
     const ring = city.geometry.coordinates[0];
+    // Barangay names are allowed only when they appear as real visible map labels,
+    // and exactly match the city's official PSA list. No "Gumaoc" guessing.
+    const officialBarangays = ${JSON.stringify(SJDM_BARANGAYS)}.map(
+      name => String(name).toLowerCase().replace(/[^a-z0-9]/g, '')
+    );
+    const normalized = name => String(name || '').toLowerCase().replace(/[^a-z0-9]/g, '');
     function inCity(lat, lng) {
       let inside = false;
       for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
@@ -166,6 +173,60 @@ const mapDocument = `
         });
         let marker = null;
         let previousValidPin = [121.045, 14.813];
+        let labelRequest = 0;
+        function nearbyMapLabel(lat, lng) {
+          if (!map.isStyleLoaded()) return null;
+          const layers = (map.getStyle()?.layers || []).filter(layer =>
+            layer.type === 'symbol' && layer.layout?.visibility !== 'none'
+          ).map(layer => layer.id);
+          if (!layers.length) return null;
+          const point = map.project([lng, lat]);
+          const radius = 80;
+          const features = map.queryRenderedFeatures([
+            [point.x - radius, point.y - radius],
+            [point.x + radius, point.y + radius]
+          ], { layers });
+          const seen = new Set();
+          let street = null, landmark = null, barangay = null;
+          for (const feature of features) {
+            const prop = feature.properties || {};
+            const label = String(prop['name:en'] || prop.name_en || prop.name || '').trim();
+            if (label.length < 4 || label.length > 90 || seen.has(normalized(label))) continue;
+            seen.add(normalized(label));
+            const layerName = String(feature.layer?.id || '').toLowerCase();
+            const looksLikeStreet = /road|street|highway|transport/.test(layerName) ||
+              /(?:avenue|ave\\.?|road|street|st\\.?|highway|drive|boulevard)$/i.test(label);
+            const looksLikePlace = /place|settlement|locality|neighbou|suburb/.test(layerName);
+            const looksLikeLandmark = /poi|school|education|landmark|building/.test(layerName);
+            if (looksLikePlace && officialBarangays.includes(normalized(label))) {
+              barangay = barangay || label;
+            } else if (looksLikeStreet) {
+              street = street || label;
+            } else if (looksLikeLandmark) {
+              landmark = landmark || label;
+            }
+          }
+          // Use ONLY visible names from this map. Never infer an unshown barangay.
+          return barangay ? { label: barangay, kind: 'barangay' } :
+            street ? { label: street, kind: 'street' } :
+            landmark ? { label: landmark, kind: 'landmark' } : null;
+        }
+        function notifyMappedPlace(lat, lng) {
+          const id = ++labelRequest;
+          const send = () => {
+            if (id !== labelRequest) return;
+            if (Math.abs(previousValidPin[0] - lng) > 0.000001 ||
+                Math.abs(previousValidPin[1] - lat) > 0.000001) return;
+            let found = null;
+            try { found = nearbyMapLabel(lat, lng); } catch (_) { found = null; }
+            parent.postMessage({
+              kind: 'report-map-label', latitude: lat, longitude: lng,
+              mapLabel: found?.label || null, labelKind: found?.kind || null
+            }, '*');
+          };
+          if (map.isStyleLoaded() && !map.isMoving()) send();
+          else map.once('idle', send);
+        }
 
         function choose(lat, lng, notify) {
           if (
@@ -212,6 +273,9 @@ const mapDocument = `
               },
               '*'
             );
+            // Recenter on the exact pin so detailed, actually visible labels can load.
+            map.flyTo({ center: [lng, lat], zoom: Math.max(15, map.getZoom()), duration: 250 });
+            map.once('idle', () => notifyMappedPlace(lat, lng));
           }
         }
 
@@ -251,6 +315,7 @@ const mapDocument = `
               zoom: 16,
               essential: true
             });
+            map.once('idle', () => notifyMappedPlace(data.latitude, data.longitude));
           }
         );
 
@@ -384,35 +449,6 @@ const safeText = (
 const evidenceType = (file: File): "image" | "video" =>
   file.type.startsWith("video/") ? "video" : "image";
 
-/**
- * Reverse geocoding may return the nearest mapped object rather than the
- * precise incident address. Only fill when a mapped street, neighbourhood,
- * barangay or landmark is present; leave the final text editable.
- */
-const mappedIncidentAddress = (payload: unknown): string | null => {
-  if (!payload || typeof payload !== "object") return null;
-  const record = payload as Record<string, any>;
-  const fields = record.address;
-  if (!fields || typeof fields !== "object") return null;
-  const a = fields as Record<string, unknown>;
-  const clean = (field: unknown) => typeof field === "string" ? field.trim().slice(0, 100) : "";
-  const street = clean(a.road || a.pedestrian || a.footway || a.residential);
-  const area = clean(a.suburb || a.neighbourhood || a.quarter ||
-    a.village || a.hamlet || a.city_district);
-  const building = clean(record.name);
-  const house = street ? clean(a.house_number) : "";
-  // Never pretend a city-only result is an exact incident address.
-  const specific = [
-    house && street ? house + " " + street : street,
-    /^(city of )?san jose del monte$/i.test(area) ? "" : area,
-  ].filter(Boolean);
-  if (!specific.length && building &&
-    !/^(city of )?san jose del monte$/i.test(building)) specific.push(building);
-  if (!specific.length) return null;
-  return [...new Set([...specific, "San Jose del Monte", "Bulacan"])]
-    .join(", ").slice(0, 240);
-};
-
 type DuplicateBlock = {
   caseId: string;
   status: string;
@@ -509,12 +545,7 @@ export default function WebDisasterReport() {
   const [longitude, setLongitude] = useState("");
   const [incidentAddress, setIncidentAddress] = useState("");
   const [addressStatus, setAddressStatus] = useState("");
-  const lookupAbort = useRef<AbortController | null>(null);
-  const lookupTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const lookupSequence = useRef(0);
-  const addressEditSequence = useRef(0);
-  const lastLookupStartedAt = useRef(0);
-  const addressCache = useRef(new Map<string, string | null>());
+  const addressManuallyEdited = useRef(false);
 
   const [photoFiles, setPhotoFiles] = useState<File[]>([]);
   const [photoPreviews, setPhotoPreviews] = useState<string[]>([]);
@@ -549,78 +580,6 @@ export default function WebDisasterReport() {
     };
   }, [photoFiles]);
 
-  useEffect(() => () => {
-    lookupSequence.current += 1;
-    if (lookupTimer.current) clearTimeout(lookupTimer.current);
-    lookupAbort.current?.abort();
-  }, []);
-
-  // Only a user-selected SJDM pin triggers this optional external lookup.
-  // Nominatim receives that pin's coordinates; no report data is sent.
-  const lookupSelectedAddress = (lat: number, lng: number) => {
-    const lookupId = ++lookupSequence.current;
-    const editId = addressEditSequence.current;
-    if (lookupTimer.current) clearTimeout(lookupTimer.current);
-    lookupAbort.current?.abort();
-    lookupAbort.current = null;
-    setIncidentAddress("");
-    setAddressStatus("Finding a nearby street or barangay from the map…");
-
-    const key = lat.toFixed(5) + "," + lng.toFixed(5);
-    const applyIfCurrent = (address: string | null) => {
-      if (lookupSequence.current !== lookupId ||
-          addressEditSequence.current !== editId ||
-          !pinRef.current ||
-          Math.abs(pinRef.current.latitude - lat) > 0.000001 ||
-          Math.abs(pinRef.current.longitude - lng) > 0.000001) return;
-      if (address) {
-        setIncidentAddress(address);
-        setAddressStatus("Address suggested from map data. Confirm the street and landmark before submitting.");
-      } else {
-        setAddressStatus("No detailed address found for this pin. Enter a nearby street or landmark.");
-      }
-    };
-    if (addressCache.current.has(key)) {
-      applyIfCurrent(addressCache.current.get(key) || null);
-      return;
-    }
-
-    // One lookup per settled pin; throttle repeated map clicks/drags.
-    const wait = Math.max(650, 1400 - (Date.now() - lastLookupStartedAt.current));
-    lookupTimer.current = setTimeout(async () => {
-      if (lookupSequence.current !== lookupId) return;
-      const controller = new AbortController();
-      lookupAbort.current = controller;
-      lastLookupStartedAt.current = Date.now();
-      try {
-        const url = new URL("https://nominatim.openstreetmap.org/reverse");
-        url.searchParams.set("format", "jsonv2");
-        url.searchParams.set("lat", lat.toFixed(6));
-        url.searchParams.set("lon", lng.toFixed(6));
-        url.searchParams.set("zoom", "18");
-        url.searchParams.set("addressdetails", "1");
-        url.searchParams.set("accept-language", "en");
-        const result = await fetch(url.toString(), {
-          signal: controller.signal,
-          credentials: "omit",
-          referrerPolicy: "origin",
-          headers: { Accept: "application/json" },
-        });
-        if (!result.ok) throw new Error("Reverse geocoding unavailable");
-        const address = mappedIncidentAddress(await result.json());
-        // Small local cache avoids calling the public API again for the same pin.
-        if (addressCache.current.size >= 40) addressCache.current.clear();
-        addressCache.current.set(key, address);
-        applyIfCurrent(address);
-      } catch {
-        if (controller.signal.aborted || lookupSequence.current !== lookupId) return;
-        setAddressStatus("Automatic address lookup unavailable. Enter a nearby street or landmark.");
-      } finally {
-        if (lookupAbort.current === controller) lookupAbort.current = null;
-      }
-    }, wait);
-  };
-
   const selectPin = (
     lat: number,
     lng: number,
@@ -654,7 +613,11 @@ export default function WebDisasterReport() {
     setPin(selected);
     setLatitude(lat.toFixed(6));
     setLongitude(lng.toFixed(6));
-    if (!samePin) lookupSelectedAddress(lat, lng);
+    if (!samePin) {
+      addressManuallyEdited.current = false;
+      setIncidentAddress("");
+      setAddressStatus("Checking street, landmark or barangay labels shown on the map…");
+    }
 
     frame.current?.contentWindow?.postMessage(
       { kind: "set-pin", ...selected },
@@ -675,6 +638,23 @@ export default function WebDisasterReport() {
 
       if (data?.kind === "report-pin") {
         selectPin(data.latitude, data.longitude);
+      }
+      if (data?.kind === "report-map-label" && !addressManuallyEdited.current &&
+          pinRef.current &&
+          Math.abs(pinRef.current.latitude - data.latitude) < 0.000001 &&
+          Math.abs(pinRef.current.longitude - data.longitude) < 0.000001) {
+        const label = typeof data.mapLabel === "string" ? data.mapLabel.trim().slice(0, 90) : "";
+        const kind = data.labelKind;
+        if (label && ["barangay", "street", "landmark"].includes(kind)) {
+          const address = (kind === "landmark" ? "Near " : "") +
+            label + ", San Jose del Monte, Bulacan";
+          setIncidentAddress(address);
+          setAddressStatus(kind === "barangay"
+            ? "Barangay label found on the map. Confirm that the pin is correctly placed."
+            : "Nearby " + kind + " label shown on the map. Barangay not confirmed; verify before submitting.");
+        } else {
+          setAddressStatus("No verified barangay, street or landmark label nearby on this map. Enter a known barangay or landmark manually.");
+        }
       }
 
       if (
@@ -1514,20 +1494,16 @@ export default function WebDisasterReport() {
                     maxLength={240}
                     value={incidentAddress}
                     onChange={(event) => {
-                      addressEditSequence.current += 1;
-                      lookupSequence.current += 1;
-                      if (lookupTimer.current) clearTimeout(lookupTimer.current);
-                      lookupAbort.current?.abort();
+                      addressManuallyEdited.current = true;
                       setIncidentAddress(event.target.value);
                       setAddressStatus("");
                     }}
-                    placeholder="Select the incident pin to fill an address automatically"
+                    placeholder="Select a pin to use a street, landmark or barangay shown on the map"
                   />
                 </label>
                 <p className="pin-status" aria-live="polite">
-                  {addressStatus || "Select a pin for an address suggestion, then verify the landmark."}
-                  {" "}Coordinates of selected pins are sent to OpenStreetMap Nominatim for lookup.
-                  {" "}Address data © OpenStreetMap contributors.
+                  {addressStatus || "Only names visible on the map are suggested; confirm the incident place before submitting."}
+                  {" "}Map labels: © OpenStreetMap contributors.
                 </p>
               </section>
             </div>
