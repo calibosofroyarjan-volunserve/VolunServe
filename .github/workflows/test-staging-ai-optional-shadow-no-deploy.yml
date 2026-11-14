@@ -1,0 +1,42 @@
+name: Staging AI Optional Shadow Failure Isolation (NO DEPLOY)
+on:
+  pull_request:
+    branches:
+      - integration/identity-full-staging-20261112
+    paths:
+      - 'identity-ai/main.py'
+      - 'identity-ai/test_face_shadow_failure_isolation.py'
+      - '.github/workflows/test-staging-ai-optional-shadow-no-deploy.yml'
+permissions:
+  contents: read
+jobs:
+  optional-research-model-isolation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - name: Load immutable PR source without submodule recursion
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          [[ "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]] || exit 2
+          curl -fLsS --retry 3 \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/zipball/$SOURCE_SHA" \
+            -o /tmp/optional-face-shadow.zip
+          mkdir -p "$RUNNER_TEMP/staging-shadow-source"
+          unzip -q /tmp/optional-face-shadow.zip -d "$RUNNER_TEMP/staging-shadow-source"
+          ROOT="$(find "$RUNNER_TEMP/staging-shadow-source" -mindepth 1 -maxdepth 1 -type d -print -quit)"
+          test -f "$ROOT/identity-ai/test_face_shadow_failure_isolation.py"
+          cp -a "$ROOT/." "$GITHUB_WORKSPACE/"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Run synthetic optional research-model failure tests
+        run: |
+          python -m py_compile identity-ai/main.py
+          python -m unittest discover -s identity-ai -p test_face_shadow_failure_isolation.py -v
+      - name: No image, biometric, credential or deploy access
+        run: echo 'NO_DEPLOY_NO_FACE_IMAGES_NO_FIREBASE_NO_RENDER_WRITES'
