@@ -14,7 +14,7 @@ for (const word of [
 for (const word of ["Incident Summary", "Resident Information", "Case Status & Response",
  "Emergency Activity Timeline", "Case Progress", "Response controls locked",
  "Matching Waves", "Same Barangay", "Nearby Barangays", "SJDM Citywide",
- "No Volunteer assigned yet", "No automatic notification has been sent",
+ "No Volunteer assigned yet", "No volunteer has been automatically notified",
  "Manual task offering", "recorded case", "onEvidence",
 ]) {
  if(word !== "Manual task offering" && !panels.includes(word)) throw Error("Missing reference design contract: " + word);
