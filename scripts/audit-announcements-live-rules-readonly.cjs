@@ -108,8 +108,14 @@ async function main() {
     .split(/\s+/)[0];
   assert.equal(remote, REVIEWED_RECOVERY,
     "BLOCKED: recovery branch has moved since tested emulator/build");
+  const snapshotBranch = "snapshot/hosting-2cd63d-announcements-20261114";
+  const snapshotRemote = git("ls-remote", "--heads", "origin", snapshotBranch)
+    .split(/\s+/)[0];
+  assert.equal(snapshotRemote, LIVE_HOSTING_BASE,
+    "BLOCKED: Hosting source snapshot branch unexpectedly moved");
   // Fetch immutable reviewed commits as *data only*, not runnable scripts.
-  git("fetch", "--no-tags", "--depth=1", "origin", LIVE_HOSTING_BASE, REVIEWED_RECOVERY);
+  git("fetch", "--no-tags", "--depth=1", "origin",
+    "refs/heads/" + snapshotBranch, "refs/heads/" + RECOVERY_BRANCH);
   const base = git("show", LIVE_HOSTING_BASE + ":firestore.rules");
   const candidate = git("show", REVIEWED_RECOVERY + ":firestore.rules");
   assertOnlyAnnouncementPatch(base, candidate);
