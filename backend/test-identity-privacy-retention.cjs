@@ -182,6 +182,41 @@ test("real verification handler persists no provider OCR/private message and nev
   assert.equal(row.previousReview?.previousReviewNotes,undefined);
   assert.equal(h.records.get("users/"+UID).identityVerified,false);
 });
+
+test("actual AI proxy never trusts error message/detail/code from Python provider",async()=>{
+  const start=source.indexOf("async function callIdentityAiService(");
+  const end=source.indexOf("function diditCleanupFields()",start);
+  assert(start>=0&&end>start);
+  for(const status of [400,422,503]){
+    const code=source.slice(start,end)+"\ncallIdentityAiService";
+    const connection=vm.runInNewContext(code,{
+      Buffer,
+      fetch:async()=>({status,ok:false}),
+      getIdentityAiEndpoint:()=>"https://fictional-ai.invalid/verify",
+      readJsonResponse:async()=>({
+        message:"AI OCR error "+SECRET_MARKER,
+        detail:SECRET_MARKER,
+        error:"leaky_"+SECRET_MARKER,
+        accountDetails:SECRET_MARKER,
+      }),
+      getIdentityAiHeaders:()=>({"Content-Type":"multipart/form-data"}),
+      AbortSignal:{timeout:()=>({})},
+    });
+    const request={
+      body:Buffer.from("SYNTHETIC_NOT_A_REAL_PICTURE"),
+      headers:{"content-type":"multipart/form-data; boundary=synthetic"},
+    };
+    await assert.rejects(connection(request),error=>{
+      assert(!String(error.message).includes(SECRET_MARKER));
+      assert(!String(error.code).includes(SECRET_MARKER));
+      assert.equal(error.statusCode,status>=500?503:status);
+      assert.equal(error.code,status>=500
+        ?"identity_ai_unavailable":"identity_ai_submission_rejected");
+      return true;
+    });
+  }
+});
+
 test("privacy message policy never persists or returns provider-authored free text",()=>{
   const request={
     decision:"failed",requiresManualReview:false,attemptCount:1,
