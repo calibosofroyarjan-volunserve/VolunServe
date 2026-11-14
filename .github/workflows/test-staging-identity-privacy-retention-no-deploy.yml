@@ -1,0 +1,50 @@
+name: Staging Identity Privacy and Throttle Retention (NO DEPLOY)
+on:
+  pull_request:
+    branches:
+      - integration/identity-full-staging-20261112
+    paths:
+      - 'backend/server.js'
+      - 'backend/identityPrivacyPolicy.js'
+      - 'backend/test-identity-privacy-retention.cjs'
+      - 'identity-ai/main.py'
+      - 'docs/STAGING_HYBRID_IDENTITY_PRIVACY_RETENTION_20261114.md'
+      - '.github/workflows/test-staging-identity-privacy-retention-no-deploy.yml'
+permissions:
+  contents: read
+jobs:
+  identity-private-data-lifecycle:
+    runs-on: ubuntu-latest
+    timeout-minutes: 7
+    steps:
+      - name: Load pinned PR archive without repository submodule checkout
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          [[ "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]] || exit 2
+          curl -fLsS --retry 3 \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/zipball/$SOURCE_SHA" \
+            -o /tmp/hybrid-identity-privacy.zip
+          mkdir -p "$RUNNER_TEMP/hybrid-identity-privacy"
+          unzip -q /tmp/hybrid-identity-privacy.zip -d "$RUNNER_TEMP/hybrid-identity-privacy"
+          ROOT="$(find "$RUNNER_TEMP/hybrid-identity-privacy" -mindepth 1 -maxdepth 1 -type d -print -quit)"
+          test -f "$ROOT/backend/test-identity-privacy-retention.cjs"
+          cp -a "$ROOT/." "$GITHUB_WORKSPACE/"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Privacy regression on actual private identity route with fictional AI output
+        run: |
+          node --check backend/server.js
+          node --check backend/identityPrivacyPolicy.js
+          node --test backend/test-identity-privacy-retention.cjs
+          python -m py_compile identity-ai/main.py
+      - name: Confirm uploads remain blocked and no account/media/deploy access
+        run: echo 'NO_DEPLOY_NO_PRODUCTION_NO_REAL_IMAGES_NO_FIREBASE_CREDENTIALS'
