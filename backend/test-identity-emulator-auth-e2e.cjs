@@ -64,6 +64,7 @@ const names={
   admin:"admin_emulator_001",
   resident:"resident_emulator_001",
   retry:"volunteer_emulator_001",
+  reject:"rejected_resident_emulator_001",
   inactive:"inactive_emulator_001",
   unverified:"unverified_emulator_001",
   guest:"guest_emulator_001",
@@ -170,6 +171,8 @@ before(async()=>{
       identityStatus:"pending",identityVerified:false,fullName:"Fictional Resident"},
     retry:{role:"volunteer",status:"approved",residentAccess:true,
       identityStatus:"pending",identityVerified:false,fullName:"Fictional Volunteer"},
+    reject:{role:"resident",status:"approved",residentAccess:true,
+      identityStatus:"pending",identityVerified:false,fullName:"Fictional Rejected Resident"},
     inactive:{role:"admin",status:"suspended",fullName:"Fictional Suspended Admin"},
     unverified:{role:"resident",status:"approved",residentAccess:true,
       identityStatus:"pending",identityVerified:false,fullName:"Unverified Mailbox"},
@@ -182,6 +185,7 @@ before(async()=>{
     tokens[kind]=await emulatorSignIn(email);
   }
   await insertPending(names.resident);
+  await insertPending(names.reject);
   await insertPending(names.retry,{
     ...safeBase, passportMrzCheck:"checksum_inconsistent_or_ocr_error",
     warningCodes:["passport_mrz_conflict"],
@@ -223,7 +227,7 @@ test("Real Admin role middleware enforces persisted Firestore role, not client c
   const admin=await reviews(tokens.admin);
   assert.equal(admin.code,200);
   assert.equal(admin.body.ok,true);
-  assert.equal(admin.body.items.length,2);
+  assert.equal(admin.body.items.length,3);
   assert.equal(admin.body.items.find(x=>x.uid===names.resident).requiresManualReview,true);
   assert.equal(admin.body.items.find(x=>x.uid===names.resident).identityVerified,false);
 });
@@ -272,19 +276,58 @@ test("Conflicting evidence cannot Verify; Require Retry updates status and audit
   assert.equal(snapshot.data().identityStatus,"failed");
 });
 
+test("Authenticated Admin Reject -> Firestore -> Resident failed without AI auto-grant",async()=>{
+  assert.equal((await decision(undefined,names.reject,"reject")).code,401);
+  assert.equal((await decision(tokens.resident,names.reject,"reject")).code,403);
+  assert.equal((await decision(tokens.inactive,names.reject,"reject")).code,403);
+  assert.equal((await decision(tokens.admin,names.admin,"reject")).code,403);
+  const noReason=await decision(tokens.admin,names.reject,"reject",{
+    issuerReviewAttested:false,validationMethod:"",notes:"bad",
+  });
+  assert.equal(noReason.code,400);
+  assert.equal(noReason.body.error,"identity_retry_reason_required");
+  const rejected=await decision(tokens.admin,names.reject,"reject",{
+    issuerReviewAttested:false,validationMethod:"",
+    notes:"Fictional record had insufficient proof; new evidence required.",
+  });
+  assert.equal(rejected.code,200,JSON.stringify(rejected.body));
+  assert.equal(rejected.body.identityVerified,false);
+  assert.equal(rejected.body.status,"failed");
+  const user=await db.collection("users").doc(names.reject).get();
+  assert.equal(user.data().identityStatus,"failed");
+  assert.equal(user.data().identityVerified,false);
+  assert.equal(user.data().identityVerifiedAt,undefined);
+  const row=await db.collection("identityVerifications").doc(names.reject).get();
+  assert.equal(row.data().decision,"rejected");
+  assert.equal(row.data().manualReviewDecision,"rejected");
+  assert.equal(row.data().requiresManualReview,false);
+  assert.equal(row.data().aiAttemptCount,2);
+  const result=await status(tokens.reject);
+  assert.equal(result.code,200);
+  assert.equal(result.body.identityStatus,"failed");
+  assert.equal(result.body.identityVerified,false);
+  assert.equal(result.body.decision,"rejected");
+  assert.equal(result.body.attemptCount,2);
+  assert.equal((await decision(tokens.admin,names.reject,"verify")).code,409);
+  assert.equal((await decision(tokens.admin,names.reject,"reject")).code,409);
+});
 test("Admin queue & audit reflect ONLY original authorized transactions",async()=>{
   const queue=await reviews(tokens.admin);
   assert.equal(queue.code,200);
   const verified=queue.body.items.find(x=>x.uid===names.resident);
   const retry=queue.body.items.find(x=>x.uid===names.retry);
+  const rejected=queue.body.items.find(x=>x.uid===names.reject);
   assert.equal(verified.manualReviewDecision,"verified");
   assert.equal(verified.identityVerified,true);
   assert.equal(retry.manualReviewDecision,"retry_required");
   assert.equal(retry.identityVerified,false);
+  assert.equal(rejected.manualReviewDecision,"rejected");
+  assert.equal(rejected.identityVerified,false);
   const logs=await db.collection("adminActivityLogs").get();
-  assert.equal(logs.size,2);
+  assert.equal(logs.size,3);
   const types=logs.docs.map(doc=>doc.data().action).sort();
-  assert.deepEqual(types,["Resident Identity Manually Verified","Resident Identity Retry Required"]);
+  assert.deepEqual(types,["Resident Identity Manually Verified","Resident Identity Retry Required",
+    "Resident Identity Submission Rejected"].sort());
   for(const doc of logs.docs){
     assert.equal(doc.data().performedBy,names.admin);
   }
