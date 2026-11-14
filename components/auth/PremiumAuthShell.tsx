@@ -40,12 +40,31 @@ export default function PremiumAuthShell({ children }: Props) {
   }, []);
 
   const heroHeight = compact ? (narrow ? 325 : 355) : Math.max(height, 710);
+  // On RN Web, an absolutely positioned <Image> can render at intrinsic
+  // dimensions, leaving most of the carousel panel uncovered. Use CSS cover
+  // on the *full hero panel* for web, preserving native Image behavior.
+  const slideUri = Platform.OS === "web" ? Image.resolveAssetSource(SLIDES[slide])?.uri : undefined;
+  const webSlideCover = Platform.OS === "web" && slideUri
+    ? ({
+        backgroundImage: `url("${slideUri}")`,
+        backgroundSize: "cover",
+        backgroundPosition: "center center",
+        backgroundRepeat: "no-repeat",
+      } as any)
+    : undefined;
 
   return (
     <ScrollView style={styles.page} contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
       <View style={[styles.split, compact && styles.splitCompact]}>
         <View style={[styles.hero, { minHeight: heroHeight }, compact && styles.heroCompact]}>
-          <Image source={SLIDES[slide]} resizeMode="cover" style={StyleSheet.absoluteFillObject} />
+          {Platform.OS === "web" ? (
+            <View
+              pointerEvents="none"
+              style={[styles.heroSlideImage, webSlideCover]}
+            />
+          ) : (
+            <Image source={SLIDES[slide]} resizeMode="cover" style={styles.heroSlideImage} />
+          )}
           <LinearGradient
             colors={["rgba(5,41,32,0.42)", "rgba(0,44,38,0.64)", "rgba(0,43,37,0.98)"]}
             locations={[0, 0.46, 1]}
@@ -165,6 +184,8 @@ const styles = StyleSheet.create({
   splitCompact: { flexDirection: "column" },
   hero: { flex: 1.33, backgroundColor: "#064B3B", overflow: "hidden", minWidth: 0 },
   heroCompact: { flex: 0, width: "100%" },
+  // Explicit panel dimensions are required, rather than the photo's intrinsic size.
+  heroSlideImage: { ...StyleSheet.absoluteFillObject, width: "100%", height: "100%" },
   heroContent: { flex: 1, paddingHorizontal: 47, paddingTop: 36, paddingBottom: 34, justifyContent: "space-between" },
   heroContentCompact: { paddingHorizontal: 24, paddingTop: 22, paddingBottom: 26 },
   brand: { flexDirection: "row", alignItems: "center", gap: 13 },

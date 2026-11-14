@@ -5,9 +5,7 @@ import { useRouter } from "expo-router";
 import {
   collection,
   onSnapshot,
-  orderBy,
   query,
-  Timestamp,
   where,
 } from "firebase/firestore";
 import React, { useEffect, useMemo, useState } from "react";
@@ -33,7 +31,6 @@ import {
   setActiveUserMode,
 } from "../../lib/firebaseAuth";
 import { useUserSession } from "../../lib/useUserSession";
-import { usePublishedAnnouncementCutoff } from "../../lib/usePublishedAnnouncementCutoff";
 import { useAnnouncementAlerts } from "../../lib/announcementAlerts";
 
 type Announcement = {
@@ -145,10 +142,10 @@ export default function WebHome() {
   const router = useRouter();
   const { width } = useWindowDimensions();
   const { user, profile } = useUserSession();
-  const announcementCutoff = usePublishedAnnouncementCutoff();
   const { items: announcementAlerts } = useAnnouncementAlerts(user?.uid);
 
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
+  const [announcementsError, setAnnouncementsError] = useState(false);
   const [cases, setCases] = useState<DisasterCase[]>([]);
   const [assistanceRequests, setAssistanceRequests] = useState<
     AssistanceRequest[]
@@ -197,10 +194,14 @@ export default function WebHome() {
   const profileInitial = displayName.charAt(0).toUpperCase();
 
   useEffect(() => {
+    if (!user) {
+      setAnnouncements([]);
+      setAnnouncementsError(false);
+      return;
+    }
     const announcementsQuery = query(
       collection(db, "announcements"),
-      where("publishAt", "<=", Timestamp.fromDate(announcementCutoff)),
-      orderBy("publishAt", "desc")
+      where("audience", "==", "all")
     );
 
     return onSnapshot(
@@ -210,13 +211,19 @@ export default function WebHome() {
           .map((item) => ({
             id: item.id,
             ...(item.data() as Omit<Announcement, "id">),
-          }));
+          }))
+          .sort((a, b) => toMillis(b.publishAt) - toMillis(a.publishAt));
 
         setAnnouncements(nextAnnouncements);
+        setAnnouncementsError(false);
       },
-      () => setAnnouncements([])
+      (error) => {
+        console.warn("Failed to load published announcements", error);
+        // Do not claim no published announcements when the read actually failed.
+        setAnnouncementsError(true);
+      }
     );
-  }, [announcementCutoff]);
+  }, [user?.uid]);
 
   useEffect(() => {
     if (!user) {
@@ -527,7 +534,7 @@ export default function WebHome() {
                     <Text style={styles.mobileHeroEyebrow}>COMMUNITY UPDATES</Text>
                     <Text style={styles.mobileHeroGreeting}>Stay connected with VolunServe</Text>
                     <Text style={styles.mobileHeroDescription}>
-                      {announcements.length ? `${announcements.length} published updates available.` : "No published updates yet. Official announcements will appear here."}
+                      {announcementsError ? "Unable to load published updates. Please refresh or contact an administrator." : announcements.length ? `${announcements.length} published updates available.` : "No published updates yet. Official announcements will appear here."}
                     </Text>
                     <Pressable style={styles.mobileSlideAction} onPress={() => router.push("/announcements")}>
                       <Text style={styles.mobileSlideActionText}>View announcements</Text>
@@ -975,10 +982,10 @@ export default function WebHome() {
                   </View>
                   <View style={styles.emptyUpdatesCopy}>
                     <Text style={styles.emptyUpdatesTitle}>
-                      No published updates
+                      {announcementsError ? "Community updates unavailable" : "No published updates"}
                     </Text>
                     <Text style={styles.emptyUpdatesText}>
-                      Official announcements will appear here.
+                      {announcementsError ? "Could not load announcements from Firestore. Refresh or ask an administrator to check access." : "Official announcements will appear here."}
                     </Text>
                   </View>
                 </View>

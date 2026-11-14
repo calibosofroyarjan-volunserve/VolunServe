@@ -1,0 +1,134 @@
+name: Validate Announcements Hotfix (NO DEPLOY)
+
+on:
+  push:
+    branches:
+      - hotfix/announcements-exact-live-20261114
+      - fix/announcements-carousel-fullbleed-20261114
+  workflow_dispatch:
+  pull_request:
+    branches:
+      - snapshot/hosting-2cd63d-announcements-20261114
+
+permissions:
+  contents: read
+
+jobs:
+  announcements-emulator-and-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      CI: "true"
+      EXPO_NO_TELEMETRY: "1"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - name: Install exact dependencies
+        run: npm ci --no-audit --no-fund
+      - name: TypeScript check (no publish)
+        run: npx tsc --noEmit --incremental false
+      - name: Validate surgical rules deployment tool without credentials
+        run: |
+          node --check scripts/publish-announcements-rules-safely.cjs
+          node -e 'const fs=require("node:fs"),cp=require("node:child_process"),assert=require("node:assert/strict");const base=cp.execFileSync("git",["show","2cd63d318ecb6b0dfc52706308e05d0b5806d874:firestore.rules"],{encoding:"utf8"});const now=fs.readFileSync("firestore.rules","utf8");const a="    match /announcements/{announcementId} {",b="    match /identityVerifications/{uid} {";const take=x=>x.slice(x.indexOf(a),x.indexOf(b,x.indexOf(a)));assert.equal(base.replace(take(base),take(now)),now);console.log("PASS: rules differ only within announcements.");'
+      - name: Protect all certificate and attendance implementation from regression
+        run: |
+          node --test scripts/test-profile-certificates-account-menu.cjs scripts/test-resident-volunteer-sidebar.cjs scripts/test-volunteer-donations-sidebar-removal.cjs
+          node <<'NODE'
+          const cp = require("node:child_process"), assert = require("node:assert/strict");
+          const paths = cp.execFileSync("git", ["diff", "--name-only", "2cd63d318ecb6b0dfc52706308e05d0b5806d874", "HEAD"], { encoding: "utf8" })
+            .trim().split(String.fromCharCode(10)).filter(Boolean);
+          const protectedPath = path =>
+            /certificate|attendance/i.test(path)
+            || path === "app/(tabs)/profile.tsx"
+            || path === "app/(tabs)/_layout.tsx";
+          const changedProtected = paths.filter(protectedPath);
+          assert.deepEqual(changedProtected, [], "STOP: certificate, attendance, profile or navigation code changed");
+          console.log("PASS: certificate, attendance, profile and navigation code unchanged from exact live baseline.");
+          NODE
+      - name: Verify 1-minute Community Certificates against deployed Render code (READ ONLY)
+        run: |
+          git fetch origin backend-live-protected
+          node <<'NODE'
+          const cp = require("node:child_process");
+          const assert = require("node:assert/strict");
+          const DEPLOYED_RENDER = "4f3db7b3d12082cf50f0b3a191d00768fdea78c4";
+          const run = (...args) => cp.execFileSync("git", args, {encoding:"utf8"});
+          const liveFiles = [
+            "backend/communityCertificateEligibility.js",
+            "backend/communityCertificates.js",
+            "backend/test-communityCertificateLiveTemporary.js",
+            "backend/test-communityCertificateEligibility.js",
+            "backend/test-communityCertificateIssuance.js"
+          ];
+          // Stop when the protected backend branch differs from the observed
+          // currently deployed Render backend on any certificate code/test.
+          for (const path of liveFiles) {
+            assert.equal(run("show", "origin/backend-live-protected:" + path),
+              run("show", DEPLOYED_RENDER + ":" + path),
+              "STOP: Render/Backend certificate source divergence at " + path);
+          }
+          const policy = run("show", DEPLOYED_RENDER + ":backend/communityCertificateEligibility.js");
+          assert.match(policy, /MIN_COMMUNITY_CERTIFICATE_ATTENDANCE_MINUTES = 30/);
+          assert.match(policy, /TEST_COMMUNITY_CERTIFICATE_ATTENDANCE_MINUTES = 1/);
+          assert.match(policy, /VOLUNSERVE_CERT_LIVE_ONE_MIN_PERMANENT_ENABLED/);
+          assert.match(policy, /2026-11-10T14:55:00Z/);
+          const changed = run("diff", "--name-only",
+            "2cd63d318ecb6b0dfc52706308e05d0b5806d874", "HEAD")
+            .trim().split(String.fromCharCode(10)).filter(Boolean);
+          assert.deepEqual(changed.filter(p => p.startsWith("backend/") ||
+            p.startsWith("functions/")), [], "STOP: backend or Firebase Functions changed");
+          console.log("PASS: live backend 1-minute certificate logic still matches current protected backend source; no backend changes in this hotfix.");
+          NODE
+          temp_dir="$(mktemp -d)"
+          git archive 4f3db7b3d12082cf50f0b3a191d00768fdea78c4 backend | tar -x -C "$temp_dir"
+          (cd "$temp_dir/backend" && node --test test-communityCertificateLiveTemporary.js test-communityCertificateEligibility.js test-communityCertificateIssuance.js)
+          rm -rf "$temp_dir"
+      - name: Firestore announcement access tests on LOCAL emulator only
+        run: npx firebase emulators:exec --only firestore --project demo-volunserve "node scripts/test-announcements-published-audience-emulator.cjs"
+      - name: Expo web export (no production credentials)
+        run: npx expo export --platform web --clear
+      - name: Ensure carousel web photo fills hero panel (source regression)
+        run: |
+          node <<'NODE'
+          const fs = require('node:fs'), assert = require('node:assert/strict');
+          const src = fs.readFileSync('components/auth/PremiumAuthShell.tsx', 'utf8');
+          assert.match(src, /Image\.resolveAssetSource\(SLIDES\[slide\]\)/);
+          assert.match(src, /backgroundSize: "cover"/);
+          assert.match(src, /backgroundPosition: "center center"/);
+          assert.match(src, /styles\.heroSlideImage/);
+          assert.match(src, /width: "100%", height: "100%"/);
+          assert.match(src, /Platform\.OS === "web"/);
+          console.log('PASS: full-bleed CSS cover exists on web and native image fallback is retained.');
+          NODE
+      - name: Read current production revision (READ ONLY)
+        shell: bash
+        run: |
+          node <<'NODE'
+          (async () => {
+            const url = 'https://volunserve.com/volunserve-release.json';
+            const response = await fetch(url, {
+              headers: { 'Cache-Control': 'no-cache' },
+              signal: AbortSignal.timeout(15000)
+            });
+            if (!response.ok) throw Error('Hosting revision marker unavailable: HTTP ' + response.status);
+            const data = await response.json();
+            if (data.app !== 'VolunServe' || data.firebaseProject !== 'volunserve-3aa5b')
+              throw Error('Live marker project mismatch');
+            if (data.revision !== '2cd63d318ecb6b0dfc52706308e05d0b5806d874')
+              throw Error('STOP: actual live Hosting revision changed; recompute hotfix from the newly deployed source before any publish.');
+            console.log('LIVE_PRODUCTION_REVISION=' + data.revision);
+            console.log('SOURCE_HOTFIX_BASE=2cd63d318ecb6b0dfc52706308e05d0b5806d874');
+          })().catch(error => { console.error(error.message); process.exitCode = 1; });
+          NODE
+      - name: No production deployment
+        run: echo "Announcement tests only. No Firebase Hosting, Firestore production rules, Functions or Render deployment."
