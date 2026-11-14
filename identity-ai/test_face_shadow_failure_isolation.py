@@ -8,7 +8,6 @@ import math
 from pathlib import Path
 from types import SimpleNamespace
 import unittest
-from face_pair_integrity import exact_image_reuse
 
 SOURCE = Path(__file__).with_name("main.py").read_text(encoding="utf-8")
 TREE = ast.parse(SOURCE)
@@ -31,7 +30,7 @@ def execute(*, primary=None, ensemble=None, sface=None, score=0.91, quality=0.95
     environment = {
         "np": SimpleNamespace(number=float), "math": math,
         "decode_image": lambda contents, _label: contents,
-        "exact_image_reuse": exact_image_reuse,
+        "exact_image_reuse": lambda *_: False,
         "image_quality": lambda _image: {"score": quality},
         "face_landmarks": lambda _image: (["fictional-landmarks"], {"reason": ""}),
         "get_min_quality_threshold": lambda: 0.34,
