@@ -3,7 +3,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import React, { useEffect, useState } from "react";
 import Svg, { Path } from "react-native-svg";
 import {
-  Image, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View, useWindowDimensions,
+  Image, ImageBackground, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View, useWindowDimensions,
 } from "react-native";
 
 /**
@@ -44,11 +44,15 @@ export default function PremiumAuthShell({ children }: Props) {
   return (
     <ScrollView style={styles.page} contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
       <View style={[styles.split, compact && styles.splitCompact]}>
-        <View style={[styles.hero, { minHeight: heroHeight }, compact && styles.heroCompact]}>
-          <Image source={SLIDES[slide]} resizeMode="cover" style={StyleSheet.absoluteFillObject} />
+        <ImageBackground
+          source={SLIDES[slide]}
+          resizeMode="cover"
+          style={[styles.hero, { minHeight: heroHeight }, compact && styles.heroCompact]}
+          imageStyle={styles.heroFullBleedImage}
+        >
           <LinearGradient
-            colors={["rgba(5,41,32,0.42)", "rgba(0,44,38,0.64)", "rgba(0,43,37,0.98)"]}
-            locations={[0, 0.46, 1]}
+            colors={["rgba(5,41,32,0.38)", "rgba(0,44,38,0.52)", "rgba(0,43,37,0.72)"]}
+            locations={[0, 0.52, 1]}
             style={StyleSheet.absoluteFillObject}
           />
           <View style={[styles.heroContent, compact && styles.heroContentCompact]}>
@@ -114,7 +118,7 @@ export default function PremiumAuthShell({ children }: Props) {
             pointerEvents="none"
             style={[styles.cornerWash, authCornerCut(26)]}
           />
-        </View>
+        </ImageBackground>
 
         {/* One credential form; no role-selection tabs. */}
         <View style={[styles.right, compact && styles.rightCompact]}>
@@ -163,7 +167,8 @@ const styles = StyleSheet.create({
   scroll: { flexGrow: 1 },
   split: { flexDirection: "row", width: "100%", flex: 1, alignItems: "stretch" },
   splitCompact: { flexDirection: "column" },
-  hero: { flex: 1.33, backgroundColor: "#064B3B", overflow: "hidden", minWidth: 0 },
+  hero: { flex: 1.33, width: "100%", backgroundColor: "#064B3B", overflow: "hidden", minWidth: 0 },
+  heroFullBleedImage: { width: "100%", height: "100%" },
   heroCompact: { flex: 0, width: "100%" },
   heroContent: { flex: 1, paddingHorizontal: 47, paddingTop: 36, paddingBottom: 34, justifyContent: "space-between" },
   heroContentCompact: { paddingHorizontal: 24, paddingTop: 22, paddingBottom: 26 },
