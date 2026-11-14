@@ -247,6 +247,57 @@ export async function precheckIdentityDocument(input: {
   };
 }
 
+/**
+ * Staging-only fallback when biometrics cannot be safely processed.
+ * This route sends ONLY the selected government ID category and consent;
+ * it cannot grant identity verification or bypass the Admin review.
+ */
+export async function requestInPersonIdentityReview(input: {
+  idType: IdentityDocumentType;
+  consent: boolean;
+}): Promise<IdentityVerificationResult> {
+  if (identityEnvironmentTarget({
+    runtimeEnv: process.env.EXPO_PUBLIC_VOLUNSERVE_ENV,
+    firebaseTarget: process.env.EXPO_PUBLIC_VOLUNSERVE_FIREBASE_TARGET,
+    projectId: auth.app.options.projectId,
+  }) !== "staging") {
+    throw new Error("In-person manual identity requests are restricted to staging.");
+  }
+  if (!input.consent) {
+    throw new Error("Consent is required to request a manual LGU identity review.");
+  }
+  if (!["national_id", "drivers_license", "passport", "umid", "prc_id"].includes(input.idType)) {
+    throw new Error("Select one of the five supported government ID types.");
+  }
+  const user = await getAuthenticatedUser();
+  const token = await user.getIdToken(true);
+  const response = await fetchWithTimeout(
+    `${getBackendBaseUrl()}/api/identity/manual-review-request`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({idType: input.idType, consent: true}),
+    },
+  );
+  const body = await readResponseBody(response);
+  if (!response.ok) {
+    throw new Error(getResponseMessage(body, "The LGU review request could not be submitted."));
+  }
+  if (body?.status !== "pending" || body?.identityVerified !== false ||
+      body?.manualReviewChannel !== "lgu_in_person_no_media") {
+    throw new Error("Unexpected response from staging LGU manual review.");
+  }
+  return {
+    status: "pending", decision: "manual_review",
+    verificationId: String(body.verificationId || ""),
+    message: getResponseMessage(body,
+      "Please bring your original ID for independent in-person LGU review."),
+  };
+}
+
 export type SubmitIdentityVerificationInput = {
   idType: IdentityDocumentType;
   idDocument: CapturedIdentityMedia;
