@@ -1,0 +1,71 @@
+name: Live-Protected SJDM Only Propose Event Hotfix (NO DEPLOY)
+on:
+  pull_request:
+    branches: [live-protected]
+    paths:
+      - 'components/CommunityEventPinPicker.web.tsx'
+      - 'components/CommunityEventPinPicker.native.tsx'
+      - 'components/InteractiveEventPinMap.web.tsx'
+      - 'lib/eventVenueLookup.ts'
+      - 'lib/sjdmMapBoundary.ts'
+      - 'constants/sjdmBoundaryReference.ts'
+      - 'backend/sjdmEventBoundary.cjs'
+      - 'backend/sjdmEventBoundaryGeometry.json'
+      - 'backend/server.js'
+      - 'scripts/test-event-pin-picker.cjs'
+      - 'scripts/test-sjdm-event-border.cjs'
+      - '.github/workflows/test-live-community-events-sjdm-border-no-deploy.yml'
+permissions:
+  contents: read
+jobs:
+  sjdm-map-border-and-types:
+    runs-on: ubuntu-latest
+    timeout-minutes: 22
+    env:
+      EXPO_PUBLIC_VOLUNSERVE_ENV: staging
+      EXPO_PUBLIC_VOLUNSERVE_FIREBASE_TARGET: staging
+      EXPO_PUBLIC_VOLUNSERVE_STAGING_FIREBASE_PROJECT_ID: volunserve-full-staging
+      EXPO_PUBLIC_VOLUNSERVE_STAGING_FIREBASE_AUTH_DOMAIN: volunserve-full-staging.firebaseapp.com
+      EXPO_PUBLIC_VOLUNSERVE_STAGING_FIREBASE_STORAGE_BUCKET: volunserve-full-staging.firebasestorage.app
+      EXPO_PUBLIC_VOLUNSERVE_STAGING_FIREBASE_MESSAGING_SENDER_ID: '429213950126'
+      EXPO_PUBLIC_VOLUNSERVE_STAGING_FIREBASE_APP_ID: '1:429213950126:web:955dbf575697826b674d3f'
+      EXPO_PUBLIC_VOLUNSERVE_STAGING_FIREBASE_API_KEY: AIzaSyntheticStageTestKey_NotForRequests000
+      EXPO_PUBLIC_IDENTITY_VERIFICATION_API_URL: https://volunserve-backend-staging.onrender.com
+      CI: '1'
+    steps:
+      - name: Download immutable PR source without legacy gitlink checkout
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          [[ "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]] || exit 2
+          curl -fLsS --retry 3 \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/zipball/$SOURCE_SHA" \
+            -o /tmp/sjdm-event-map.zip
+          mkdir -p "$RUNNER_TEMP/sjdm-event-map"
+          unzip -q /tmp/sjdm-event-map.zip -d "$RUNNER_TEMP/sjdm-event-map"
+          ROOT="$(find "$RUNNER_TEMP/sjdm-event-map" -mindepth 1 -maxdepth 1 -type d -print -quit)"
+          test -f "$ROOT/scripts/test-sjdm-event-border.cjs"
+          cp -a "$ROOT/." "$GITHUB_WORKSPACE/"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Test exact SJDM boundary geometry and all event-pin platforms
+        run: |
+          node --check backend/server.js
+          node --check backend/sjdmEventBoundary.cjs
+          node scripts/test-event-pin-picker.cjs
+          node scripts/test-sjdm-event-border.cjs
+      - name: Install staging web dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Check TypeScript without modifying deployed site
+        run: npx tsc --noEmit --pretty false
+      - name: Export staging Propose Event website without deploying
+        run: npx expo export --platform web --output-dir dist
+      - name: Confirm no production writes or deployment
+        run: |
+          test -f dist/index.html
+          echo 'NO_DEPLOY_NO_FIREBASE_MUTATION_LIVE_VOLUNSERVE_UNCHANGED'
