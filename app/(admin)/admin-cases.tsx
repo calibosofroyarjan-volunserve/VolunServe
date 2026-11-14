@@ -3596,6 +3596,62 @@ export default function AdminCases() {
         >
           {!focusedTab && (
           <View style={[styles.caseListPane, compact && styles.caseListPaneCompact]}>
+            {detailTab === "personnel" && selectedCase && (
+              <View style={styles.assignmentCaseSidebar}>
+                <TouchableOpacity accessibilityRole="button"
+                  style={styles.assignmentBackButton} onPress={() => setDetailTab("overview")}>
+                  <Text style={styles.assignmentBackText}>← Back to All Cases</Text>
+                </TouchableOpacity>
+                <Text style={styles.assignmentSidebarEyebrow}>CURRENT CASE</Text>
+                {firstIncidentImage(selectedCase.attachments) && (
+                  <Image source={{ uri: firstIncidentImage(selectedCase.attachments)! }}
+                    style={styles.assignmentSidebarPhoto} resizeMode="cover" />
+                )}
+                <Text style={styles.assignmentSidebarTitle}>{selectedCase.title}</Text>
+                <Text style={styles.assignmentSidebarSeverity}>
+                  {severityLabel(selectedCase.severity)}  ·  {labelOfStatus(selectedCase.status)}
+                </Text>
+                <Text style={styles.assignmentSidebarDetail}>
+                  ⌖  {selectedCase.location || "Location pending"}
+                </Text>
+                <Text style={styles.assignmentSidebarDetail}>
+                  ♙  {selectedCase.reporterName || "Resident"}
+                </Text>
+                <Text style={styles.assignmentSidebarDetail}>
+                  ♧  {selectedCase.affectedPeople || 0} people affected
+                </Text>
+                <Text style={styles.assignmentSidebarDetail}>
+                  ◷  {formatDate(selectedCase.createdAt)}
+                </Text>
+                <View style={styles.assignmentSidebarDivider} />
+                <Text style={styles.assignmentSidebarEyebrow}>CASE PROGRESS</Text>
+                {[
+                  ["reported", "Reported"],
+                  ["validated", "Validated"],
+                  ["assigned", "Volunteer Offer"],
+                  ["in_progress", "In Progress"],
+                  ["resolved", "Resolved"],
+                  ["closed", "Closed"],
+                ].map(([key, label], index) => {
+                  const order = ["reported","validated","assigned","in_progress","resolved","closed"];
+                  const current = order.indexOf(selectedCase.status);
+                  return (
+                    <View key={key} style={styles.assignmentSideStage}>
+                      <Text style={[
+                        styles.assignmentSideDot,
+                        index <= current && styles.assignmentSideDotActive,
+                      ]}>{index < current ? "✓" : String(index + 1)}</Text>
+                      <Text style={[
+                        styles.assignmentSideText,
+                        index <= current && styles.assignmentSideTextActive,
+                      ]}>{label}</Text>
+                    </View>
+                  );
+                })}
+              </View>
+            )}
+            {detailTab !== "personnel" && (
+              <>
             <View style={styles.caseListHeader}>
               <View>
                 <Text style={styles.caseListTitle}>All Emergency Cases</Text>
@@ -3651,6 +3707,8 @@ export default function AdminCases() {
             <View style={styles.caseListPagination}>
               <ListPagination page={activeCasePage} total={visibleCases.length} pageSize={5} onChange={setRecordPage} />
             </View>
+              </>
+            )}
           </View>
           )}
 
@@ -8348,6 +8406,31 @@ const styles = StyleSheet.create({
   caseWorkspaceCompact: {
     flexDirection: "column",
   },
+  assignmentCaseSidebar: {
+    backgroundColor: "#FFFFFF", padding: 17, gap: 9, minHeight: 615,
+  },
+  assignmentBackButton: {
+    alignSelf: "flex-start", borderRadius: 9, borderWidth: 1,
+    borderColor: "#D3E2F4", backgroundColor: "#F2F7FE",
+    paddingVertical: 9, paddingHorizontal: 12, marginBottom: 10,
+  },
+  assignmentBackText: { color: "#1A5797", fontSize: 11, fontWeight: "900" },
+  assignmentSidebarEyebrow: { color: "#637A92", fontSize: 10, fontWeight: "900", letterSpacing: 1 },
+  assignmentSidebarPhoto: { width: 110, height: 92, borderRadius: 11, backgroundColor: "#EDF1F7" },
+  assignmentSidebarTitle: { color: "#17283D", fontSize: 19, fontWeight: "900", lineHeight: 24 },
+  assignmentSidebarSeverity: {
+    color: "#AC3029", fontSize: 11, fontWeight: "900", backgroundColor: "#FFF4F3",
+    alignSelf: "flex-start", paddingVertical: 5, paddingHorizontal: 9, borderRadius: 9,
+  },
+  assignmentSidebarDetail: { color: "#334B65", fontSize: 11, lineHeight: 18, fontWeight: "600" },
+  assignmentSidebarDivider: { height: 1, backgroundColor: "#E2EAF0", marginVertical: 11 },
+  assignmentSideStage: { flexDirection: "row", gap: 10, alignItems: "center", paddingVertical: 7 },
+  assignmentSideDot: { width: 25, height: 25, borderRadius: 13, backgroundColor: "#E8EDF2",
+    textAlign: "center", textAlignVertical: "center", lineHeight: 25,
+    color: "#72869A", fontSize: 11, fontWeight: "900" },
+  assignmentSideDotActive: { backgroundColor: "#0E8A67", color: "#FFFFFF" },
+  assignmentSideText: { color: "#708298", fontSize: 12, fontWeight: "700" },
+  assignmentSideTextActive: { color: "#184C3D", fontWeight: "900" },
   caseListPane: {
     width: 355,
     flexShrink: 0,
