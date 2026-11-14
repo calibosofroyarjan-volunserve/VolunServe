@@ -50,13 +50,23 @@ def _private_decode(path, cv2, np, Image, dimensions_allowed):
             raw = f.read(MAX_IMAGE_FILE_BYTES + 1)
         if len(raw) < 12 or len(raw) > MAX_IMAGE_FILE_BYTES:
             return None
+        from PIL import ImageOps
         with Image.open(BytesIO(raw)) as image:
+            # Mobile JPEGs often store the camera orientation in EXIF.
+            # Match main.py's EXIF-transpose semantics before YuNet/SFace.
+            # Check dimensions before expanding/compressing any pixels.
             if not dimensions_allowed(image.width, image.height):
                 return None
-        frame = cv2.imdecode(np.frombuffer(raw, np.uint8), cv2.IMREAD_COLOR)
-        if frame is None or frame.ndim != 3 or frame.shape[2] != 3:
-            return None
-        return frame
+            corrected = ImageOps.exif_transpose(image)
+            if not dimensions_allowed(corrected.width, corrected.height):
+                return None
+            rgb = corrected.convert("RGB")
+            # SFace/YuNet use BGR; Pillow gives RGB. Keep a private,
+            # contiguous ndarray in RAM only, never write a corrected copy.
+            frame = np.ascontiguousarray(np.asarray(rgb, dtype=np.uint8)[:, :, ::-1])
+            if frame.ndim != 3 or frame.shape[2] != 3:
+                return None
+            return frame
     except Exception:
         # No exception/filename/raw bytes ever logged or returned to caller.
         return None
