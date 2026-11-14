@@ -109,9 +109,16 @@ function installLguCredentialRoutes({ app, db, FieldValue, requireFirebaseUser, 
       res.set("Cache-Control", "no-store");
       const uid = validUid(req.firebaseUser.uid);
       const email = trimmed(req.firebaseUser.email, 320).toLowerCase();
-      if (!req.firebaseUser.email || !req.firebaseUser.email_verified &&
-          !req.firebaseUser.email.includes("@")) {
+      // A Firebase Auth email/password account is not eligible for staff
+      // onboarding until Auth confirms email verification. The earlier
+      // boolean expression accidentally accepted any unverified email with
+      // an @ sign. Always require the boolean token claim, not email shape.
+      if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
         throw error(400, "invalid_account_email", "Use a valid account email.");
+      }
+      if (req.firebaseUser.email_verified !== true) {
+        throw error(403, "email_verification_required",
+          "Verify your staging account email before applying for LGU Admin access.");
       }
       const name = validateText(req.body?.fullName, 5, 160, "full_name");
       const office = validateText(req.body?.lguOffice, 3, 160, "lgu_office");
