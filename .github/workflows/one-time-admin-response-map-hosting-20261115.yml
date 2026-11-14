@@ -1,0 +1,107 @@
+name: Guarded Admin Emergency focused map Hosting release
+on:
+  push:
+    branches: [live-protected]
+    paths:
+      - '.github/workflows/one-time-admin-response-map-hosting-20261115.yml'
+permissions:
+  contents: read
+concurrency:
+  group: volunserve-production-hosting-release
+  cancel-in-progress: false
+jobs:
+  verify-and-hosting-only:
+    if: github.repository == 'calibosofroyarjan-volunserve/VolunServe' && github.ref == 'refs/heads/live-protected'
+    environment: production
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      CI: 'true'
+      EXPO_NO_TELEMETRY: '1'
+      EXPECTED_LIVE: '17ea8e1f3dfbcc9a4056e353e56678c867b2ed5f'
+      SOURCE_SHA: '6c50b6409a7bbcd2d88eaccc01a25d55cedb76ed'
+    steps:
+      - name: Checkout exact, previously reviewed site-derived release
+        uses: actions/checkout@v4
+        with:
+          ref: '6c50b6409a7bbcd2d88eaccc01a25d55cedb76ed'
+          path: site
+          fetch-depth: 0
+          submodules: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: site/package-lock.json
+      - name: Fail closed if source or actual live website changed
+        working-directory: site
+        shell: bash
+        run: |
+          node <<'NODE'
+          const assert = require('node:assert/strict');
+          const cp = require('node:child_process');
+          const git = (...args) => cp.execFileSync('git',args,{encoding:'utf8'}).trim();
+          const base=process.env.EXPECTED_LIVE, head=process.env.SOURCE_SHA;
+          const approved=[".github/workflows/validate-admin-focused-response-map-20261115.yml","app/(admin)/admin-cases.tsx","components/tabs/MapTracking.web.tsx","scripts/test-admin-focused-response-map-20261115.cjs"].sort();
+          async function verify() {
+            assert.equal(git('rev-parse','HEAD'),head,'Wrong release commit');
+            cp.execFileSync('git',['merge-base','--is-ancestor',base,head]);
+            const changed=git('diff','--name-only','--no-renames',base+'..'+head).split('\n').filter(Boolean).sort();
+            assert.deepEqual(changed,approved,'Unreviewed release code');
+            assert(git('diff','--name-status','--no-renames',base+'..'+head).split('\n').filter(Boolean).every(x=>/^[AM]\t/.test(x)),'Deletions/renames disallowed');
+            const actualHead=git('ls-remote','--heads','origin','fix/admin-emergency-focused-response-map-20261115').split(/\s+/)[0];
+            assert.equal(actualHead,head,'PR release branch changed');
+            const response=await fetch('https://volunserve.com/volunserve-release.json?preflight='+Date.now(),{headers:{'Cache-Control':'no-cache'},signal:AbortSignal.timeout(15000)});
+            assert(response.ok,'Actual production Hosting marker unavailable');
+            const marker=await response.json();
+            assert.equal(marker.app,'VolunServe');
+            assert.equal(marker.firebaseProject,'volunserve-3aa5b');
+            assert.equal(marker.revision,base,'Live changed; do NOT deploy');
+            console.log('PASS: exact four-file focused Admin UI delta against actual live release');
+          }
+          verify().catch(e=>{console.error(e.message);process.exitCode=1});
+          NODE
+      - name: Install locked dependencies
+        working-directory: site
+        run: npm ci --no-audit --no-fund
+      - name: Run focused Admin map regression and existing navigation and privacy checks
+        working-directory: site
+        run: |
+          node scripts/test-admin-focused-response-map-20261115.cjs
+          node scripts/test-admin-navigation-contract.cjs
+          node scripts/test-emergency-announcement-advisory-link.cjs
+          node scripts/test-embedded-emergency-map-navigation.cjs
+      - name: TypeScript and Expo export on clean Linux runner
+        working-directory: site
+        run: |
+          npx tsc --noEmit --incremental false
+          npx expo export --platform web --clear
+          env -u GITHUB_SHA node scripts/verify-hosting-release.cjs
+          node -e "const m=require('./dist/volunserve-release.json');if(m.revision!==process.env.SOURCE_SHA||m.firebaseProject!=='volunserve-3aa5b')process.exit(1);console.log('PASS immutable Hosting release marker')"
+      - name: Final live marker and protected credentials gate
+        working-directory: site
+        shell: bash
+        env:
+          FIREBASE_SA: ${{ secrets.VOLUNSERVE_PRODUCTION_HOSTING_SERVICE_ACCOUNT }}
+        run: |
+          test -n "$FIREBASE_SA" || { echo 'STOP: missing protected production Hosting credential'; exit 1; }
+          node -e "fetch('https://volunserve.com/volunserve-release.json?recheck='+Date.now(),{headers:{'Cache-Control':'no-cache'},signal:AbortSignal.timeout(15000)}).then(r=>{if(!r.ok)throw Error('Live marker missing');return r.json()}).then(m=>{if(m.revision!==process.env.EXPECTED_LIVE)throw Error('Live changed; stop');console.log('PASS live unchanged')}).catch(e=>{console.error(e.message);process.exitCode=1})"
+      - name: Deploy Firebase Hosting assets ONLY - no Firestore rules, data, Functions or Render
+        uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          firebaseServiceAccount: ${{ secrets.VOLUNSERVE_PRODUCTION_HOSTING_SERVICE_ACCOUNT }}
+          projectId: volunserve-3aa5b
+          channelId: live
+          entryPoint: ./site
+      - name: Verify the exact release served on volunserve.com
+        working-directory: site
+        env:
+          VOLUNSERVE_HOSTING_URL: https://volunserve.com
+          VOLUNSERVE_EXPECTED_SHA: '6c50b6409a7bbcd2d88eaccc01a25d55cedb76ed'
+        run: |
+          for attempt in 1 2 3 4 5 6; do
+            if node scripts/check-live-hosting.cjs; then exit 0; fi
+            sleep 10
+          done
+          echo 'ERROR: production did not serve expected revision'
+          exit 1
