@@ -6,8 +6,8 @@ const panels = fs.readFileSync("components/admin/EmergencyFiveTabDesign.tsx", "u
 for (const word of [
   "ReferenceOverview", "ReferenceStatus", "ReferenceHistory", "ReferenceVolunteerMatching",
   "referenceEvidenceColumns", "referenceEvidenceMedia", "referenceEvidenceNotes",
-  "caseProgressPanel", "caseListPagination", "focusBackButton", "manualFallbackOpen",
-  "advancedResponseOpen", "Open Emergency Response Map", "Validate Report",
+  "caseProgressPanel", "caseListPagination", "focusBackButton",
+  "advancedResponseOpen", "EmergencyMapButton", "Validate Report",
   "Request More Evidence", "Reject Report", "Review & Validate", "Case Status",
   "Volunteer Assignment", "History", "Evidence (",
 ]) assert(cases.includes(word), "Missing functional or design element: " + word);
@@ -20,7 +20,7 @@ for (const word of ["Incident Summary", "Resident Information", "Case Status & R
  if(word !== "Manual task offering" && !panels.includes(word)) throw Error("Missing reference design contract: " + word);
 }
 for (const handler of ['reviewVerification(incident, "validate")', 'reviewVerification(incident, "reject")',
-  '"request_more_evidence"', "assignVolunteerToCase(incident, volunteer)", "cancelAssignment(assignment)"]) {
+  '"request_more_evidence"', "assignVolunteerToCase(incident, volunteer)", "cancelAssignment(savedAssignment)"]) {
   assert(cases.includes(handler), "Existing verified transaction must remain: " + handler);
 }
 assert(cases.includes("pageSize={5}"), "Five-case pagination must remain");
@@ -30,4 +30,13 @@ assert(panels.includes("events:") && panels.includes(".filter((item) => item.whe
  "History must use real recorded timestamps");
 assert(panels.includes("automation has not yet been enabled"),
  "Automatic assignment cannot be falsely claimed");
-console.log("PASS: Five-tab reference UI, real records, protected dispatch and review actions.");
+assert(!cases.includes("manualFallbackOpen"), "Fallback visibility state must be removed");
+assert(!panels.includes("fallbackStrip"), "Fallback CTA must be removed");
+assert(!panels.includes("Hide fallback") && !panels.includes("Show fallback"),
+  "Fallback buttons must not be visible");
+assert(cases.includes("eligibleVolunteerCount > 0 && volunteerSupportAvailable"),
+  "Offer list must only show for eligible, available cases");
+assert(panels.includes("No eligible local Volunteers found"),
+  "Zero-eligible cases need one empty state");
+assert(panels.includes("onCancelAssignment"), "Previously sent task cancellation preserved");
+console.log("PASS: Five-tab reference, clean assignment and preserved safe handlers.");
