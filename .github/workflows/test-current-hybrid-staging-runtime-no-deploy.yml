@@ -1,0 +1,43 @@
+name: Hybrid Identity Current Staging Read-Only Smoke (NO DEPLOY)
+on:
+  pull_request:
+    branches: [integration/identity-full-staging-20261112]
+    paths:
+      - 'scripts/verify-hybrid-staging-runtime-no-deploy.cjs'
+      - '.github/workflows/test-current-hybrid-staging-runtime-no-deploy.yml'
+permissions:
+  contents: read
+jobs:
+  anonymous-current-staging-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Load immutable pull-request source (no repository submodules)
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          [[ "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]] || exit 2
+          curl -fLsS --retry 3 \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/zipball/$SOURCE_SHA" \
+            -o /tmp/identity-runtime-smoke.zip
+          mkdir -p "$RUNNER_TEMP/identity-runtime-smoke"
+          unzip -q /tmp/identity-runtime-smoke.zip -d "$RUNNER_TEMP/identity-runtime-smoke"
+          ROOT="$(find "$RUNNER_TEMP/identity-runtime-smoke" -mindepth 1 -maxdepth 1 -type d -print -quit)"
+          test -f "$ROOT/scripts/verify-hybrid-staging-runtime-no-deploy.cjs"
+          cp -a "$ROOT/." "$GITHUB_WORKSPACE/"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Live staging health and anonymous Auth boundary (GET only)
+        run: |
+          node --check scripts/verify-hybrid-staging-runtime-no-deploy.cjs
+          node scripts/verify-hybrid-staging-runtime-no-deploy.cjs
+      - name: Explicitly report limitations
+        run: |
+          echo 'PUBLIC_STAGING_HEALTH_AND_ANONYMOUS_BOUNDARY_CHECKED'
+          echo 'NOT_AN_AUTHENTICATED_END_TO_END_IDENTITY_TEST'
+          echo 'NO_DEPLOY_NO_FIREBASE_CREDENTIALS_NO_ID_OR_SELFIE_MEDIA'
