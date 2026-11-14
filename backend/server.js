@@ -919,10 +919,9 @@ async function requireFirebaseUser(
       decodedToken;
     next();
   } catch (error) {
-    console.error(
-      "Firebase token verification failed:",
-      error?.message,
-    );
+    // Firebase SDK exceptions can include account details. Authentication
+    // failure logs must never echo token/UID/email/provider message.
+    console.warn("Firebase token verification failed: invalid_or_expired_token");
     response
       .status(401)
       .json({
@@ -5113,6 +5112,8 @@ app.get(
     request,
     response,
   ) => {
+    // Never allow browsers or shared caches to retain ID/face assessment.
+    response.set?.("Cache-Control", "private, no-store, max-age=0");
     try {
       const uid =
         request
@@ -5254,6 +5255,7 @@ app.post(
   express.raw({ type: "multipart/form-data", limit: IDENTITY_UPLOAD_LIMIT }),
   requireValidatedIdentityMultipart("verify"),
   async (request, response) => {
+    response.set?.("Cache-Control", "private, no-store, max-age=0");
     const uid = request.firebaseUser.uid;
     const userRef = db.collection("users").doc(uid);
     const verificationRef = db.collection("identityVerifications").doc(uid);
@@ -5583,6 +5585,7 @@ app.get(
   requireFirebaseUser,
   requireOperationalAdmin,
   async (request, response) => {
+    response.set?.("Cache-Control", "private, no-store, max-age=0");
     try {
       const verificationSnapshot = await db
         .collection("identityVerifications")
@@ -5646,6 +5649,7 @@ app.post(
   requireFirebaseUser,
   requireOperationalAdmin,
   async (request, response) => {
+    response.set?.("Cache-Control", "private, no-store, max-age=0");
     try {
       const adminUid = request.firebaseUser.uid;
       const targetUid = cleanText(request.params?.uid || "", 200);
