@@ -1273,7 +1273,7 @@ async function requireAdminOrSuperAdmin(request, response, next) {
 // Isolated private LGU staff onboarding using existing Cloudinary + Firebase Admin.
 // No changes to public uploads, Community Events, Assistance, or current Auth.
 require("./lguCredentialRoutes").installLguCredentialRoutes({
-  app, db, FieldValue, requireFirebaseUser, cloudinary, configureCloudinary,
+  app, db, auth, FieldValue, requireFirebaseUser, cloudinary, configureCloudinary,
 });
 
 require("./fundReleaseDemoRoutes").installFundReleaseDemoRoutes({

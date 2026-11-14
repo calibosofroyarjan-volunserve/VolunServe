@@ -52,8 +52,8 @@ function respondError(response, err) {
     message: status >= 500 ? "Could not process the private LGU credential request. Please try again." : err.message,
   });
 }
-function installLguCredentialRoutes({ app, db, FieldValue, requireFirebaseUser, cloudinary, configureCloudinary }) {
-  if (!app || !db || !FieldValue || !requireFirebaseUser || !cloudinary || !configureCloudinary) {
+function installLguCredentialRoutes({ app, db, auth, FieldValue, requireFirebaseUser, cloudinary, configureCloudinary }) {
+  if (!app || !db || !auth || !FieldValue || !requireFirebaseUser || !cloudinary || !configureCloudinary) {
     throw Error("LGU credential route dependencies are required");
   }
   const profiles = db.collection("users");
@@ -256,6 +256,23 @@ function installLguCredentialRoutes({ app, db, FieldValue, requireFirebaseUser, 
           req.body?.credentialsConfirmed !== true) {
         throw error(400, "credential_review_incomplete", "Confirm identity, employment, and reviewed documents.");
       }
+      // Check the actual *applicant's* Firebase Auth account, not the
+      // Super Admin reviewer's token or client-supplied profile fields.
+      // Both website-created and API-created pending applicants use this
+      // final promotion path. No client can claim email verification.
+      let targetAuth;
+      try {
+        targetAuth = await auth.getUser(uid);
+      } catch {
+        throw error(409, "lgu_target_auth_missing",
+          "The pending LGU applicant has no usable Firebase Auth account.");
+      }
+      if (targetAuth.disabled === true || targetAuth.emailVerified !== true ||
+          typeof targetAuth.email !== "string" || !targetAuth.email.trim()) {
+        throw error(409, "lgu_target_email_unverified",
+          "The applicant must verify their staging email before Admin approval.");
+      }
+      const targetEmail = targetAuth.email.trim().toLowerCase();
       const reviewerUid = req.firebaseUser.uid;
       await db.runTransaction(async tx => {
         const userRef = profiles.doc(uid), idRef = slotRef(uid, "staff-id"),
@@ -275,6 +292,11 @@ function installLguCredentialRoutes({ app, db, FieldValue, requireFirebaseUser, 
           }
         }
         const original = userSnap.data();
+        if (String(original.email || "").trim().toLowerCase() !== targetEmail ||
+            String(original.uid || "").trim() !== uid) {
+          throw error(409, "lgu_target_auth_profile_mismatch",
+            "The applicant's Firebase Auth identity and pending profile do not match.");
+        }
         tx.set(db.collection("lguAdminCredentialReviews").doc(uid), {
           targetUid: uid, accountEmail: original.email, reviewStatus: "verified",
           office, position, credentialReference, verificationMethod,

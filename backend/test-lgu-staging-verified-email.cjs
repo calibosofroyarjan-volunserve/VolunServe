@@ -48,7 +48,8 @@ function createHarness(existing=null){
     },
   },{filename:"lguCredentialRoutes.testisolated.js"});
   module.exports.installLguCredentialRoutes({
-    app,db,FieldValue:{serverTimestamp:()=>({fakeTimestamp:true})},
+    app,db,auth:{getUser:async()=>({emailVerified:true})},
+    FieldValue:{serverTimestamp:()=>({fakeTimestamp:true})},
     requireFirebaseUser:()=>{},cloudinary:{uploader:{}},
     configureCloudinary:()=>{},
   });
