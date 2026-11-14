@@ -28,6 +28,10 @@ jobs:
           node scripts/test-lgu-admin-global-ui-pagination.cjs
           node scripts/test-final-admin-scope.cjs
           node scripts/test-admin-response-workspace-ux.cjs
+      - name: Simulate Windows CRLF checkout and rerun admin navigation contract
+        run: |
+          node -e 'const fs=require("node:fs"); for(const file of ["app/(superadmin)/_layout.tsx","app/(admin)/_layout.tsx","app/(superadmin)/admin-accounts.tsx","firestore.rules","docs/final-admin-navigation-and-workflows.md"]) { const src=fs.readFileSync(file,"utf8"); fs.writeFileSync(file,src.replace(/\\r?\\n/g,"\\r\\n")); }'
+          node scripts/test-admin-navigation-contract.cjs
       - name: Install dependencies
         run: npm ci --no-audit --no-fund
       - name: TypeScript compiler
