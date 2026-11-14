@@ -86,29 +86,15 @@ function harness({project="volunserve-full-staging",staging=true,residentRole="r
        !isApprovedAccount(profile))return res.status(403).json({error:"admin_required"});
     req.volunServeProfile=profile;next();
   };
-  // Override process.env only for this fictional route, not the host machine.
-  // The module checks true staging from injected local fake Render identity.
-  const realEnv=process.env;
+  // Explicit synthetic staging runtime; host process.env remains untouched.
   const env={
     RENDER_SERVICE_NAME:staging?"volunserve-backend-staging":"production-only",
     VOLUNSERVE_STAGING_STRICT:staging?"1":"0",
     VOLUNSERVE_DEPLOYMENT_ENV:staging?"full-staging":"production",
   };
-  // The module's static require uses host process.env, so a temporary strict
-  // override is needed to call only the function under test. Restore safely.
-  const previous={
-    RENDER_SERVICE_NAME:realEnv.RENDER_SERVICE_NAME,
-    VOLUNSERVE_STAGING_STRICT:realEnv.VOLUNSERVE_STAGING_STRICT,
-    VOLUNSERVE_DEPLOYMENT_ENV:realEnv.VOLUNSERVE_DEPLOYMENT_ENV,
-  };
-  for(const [k,v] of Object.entries(env))realEnv[k]=v;
-  try{
-    installManualIdentityReviewRoutes({app,db,auth,FieldValue,requireFirebaseUser});
-  }finally{
-    for(const [k,v] of Object.entries(previous)){
-      if(v===undefined)delete realEnv[k];else realEnv[k]=v;
-    }
-  }
+  installManualIdentityReviewRoutes({
+    app,db,auth,FieldValue,requireFirebaseUser,runtimeEnvironment:env,
+  });
   const adminCtx={
     app,db,auth,FieldValue,process:{env},
     requireFirebaseUser,requireOperationalAdmin,
