@@ -53,7 +53,7 @@ export const buildPublicEmergencyAdvisory = (
     barangay,
     title: `Community Safety Advisory — Brgy. ${barangay}`,
     message: `Admin has validated a community safety report in Barangay ${barangay}, City of San Jose del Monte, Bulacan. Please remain alert, avoid unsafe areas, and follow instructions from official emergency services. For immediate danger, call 911. Further updates will be shared when verified.`,
-    priority: ["high", "critical"].includes(String(source.severity || ""))
+    priority: ["high", "critical"].includes(String(source?.severity || ""))
       ? "urgent" : "normal",
   };
 };
