@@ -1705,9 +1705,10 @@ async def verify_identity(
     except HTTPException:
         raise
     except Exception:
-        # Logs a technical stack trace in private Render service logs only.
-        # Never log ID/face media, user identifiers, keys, or submitted fields.
-        logging.exception("Face comparison engine error")
+        # Python exception text and tracebacks may contain OCR content,
+        # filenames or face-model internals. Never print them in Render logs.
+        # A constant marker is enough to identify an internal failure.
+        logging.error("Identity verification internal failure")
         raise HTTPException(
             status_code=500,
             detail=(
