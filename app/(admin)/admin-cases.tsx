@@ -33,6 +33,7 @@ import {
 } from "react-native";
 
 import { db } from "../../lib/firebase";
+import { buildPublicEmergencyAdvisory } from "../../lib/emergencyPublicAdvisory";
 
 const BACKEND_URL = "https://volunserve.onrender.com";
 
@@ -3632,6 +3633,8 @@ export default function AdminCases() {
           ).length;
           const verificationStatus =
             incident.verificationStatus || "pending_verification";
+          const mayCreatePublicAdvisory =
+            buildPublicEmergencyAdvisory(incident) !== null;
 
           const imageEvidence = (incident.attachments || []).filter((item) =>
             String(item.type || "").toLowerCase().includes("image")
@@ -3817,6 +3820,25 @@ export default function AdminCases() {
                     <Text style={styles.caseId}>CASE {incident.id}</Text>
                   </View>
 
+                  {mayCreatePublicAdvisory ? (
+                    <TouchableOpacity
+                      accessibilityRole="button"
+                      accessibilityLabel="Create reviewed public safety advisory in Admin Announcements"
+                      style={{
+                        alignSelf: "flex-start", backgroundColor: "#E9F7F2",
+                        borderColor: "#A6D6C5", borderWidth: 1, borderRadius: 8,
+                        paddingHorizontal: 14, paddingVertical: 10, marginBottom: 10,
+                      }}
+                      onPress={() => router.push({
+                        pathname: "/(admin)/create-announcement",
+                        params: { incidentId: incident.id },
+                      } as any)}
+                    >
+                      <Text style={{ color: "#087C61", fontSize: 13, fontWeight: "700" }}>
+                        Create Public Advisory in Announcements
+                      </Text>
+                    </TouchableOpacity>
+                  ) : null}
                   <Text style={styles.locationText}>⌖ {incident.location}</Text>
                   <Text style={styles.details}>{incident.details}</Text>
 
