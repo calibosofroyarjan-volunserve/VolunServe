@@ -3430,9 +3430,9 @@ export default function AdminCases() {
       showsVerticalScrollIndicator={true}
     >
       <AdminReviewHero
-        eyebrow="LGU OPERATIONS / EMERGENCY & ASSISTANCE"
+        eyebrow="ADMIN WORKSPACE / EMERGENCY & ASSISTANCE"
         title="Emergency Reports"
-        subtitle="Review resident incident reports, verify evidence, coordinate authorized LGU responders, and track case resolution."
+        subtitle="Validate resident reports, offer approved Volunteers emergency tasks, and monitor accepted responses."
         icon="warning-outline"
         tag="INCIDENT RESPONSE"
       />
@@ -3897,22 +3897,26 @@ export default function AdminCases() {
                     </View>
 
                     <View style={styles.metaItem}>
-                      <Text style={styles.metaLabel}>Volunteer Support</Text>
+                      <Text style={styles.metaLabel}>Volunteer Task</Text>
                       <Text style={styles.metaValue}>
-                        {activeAssignments.length > 0
-                          ? `${activeAssignments.length} active`
-                          : "None active"}
+                        {activeAssignments.some(item => ["responding", "on_site"].includes(String(item.status)))
+                          ? "Response underway"
+                          : activeAssignments.some(item => String(item.status) === "accepted")
+                            ? "Accepted · awaiting Start"
+                            : activeAssignments.some(item => String(item.status) === "offered")
+                              ? "Offer pending · awaiting acceptance"
+                              : "No active Volunteer"}
                       </Text>
                     </View>
 
                     <View style={styles.metaItem}>
-                      <Text style={styles.metaLabel}>LGU LIVE OWNER</Text>
+                      <Text style={styles.metaLabel}>Volunteer Availability</Text>
                       <Text style={styles.metaValue}>
-                        {incident.activeLguResponderUid
-                          ? lguOwnerFresh
-                            ? incident.activeLguResponderName || "Active LGU responder"
-                            : "Takeover available · previous session stale"
-                          : "Available"}
+                        {activeAssignments.some(item => String(item.status) === "offered")
+                          ? "Offer sent · may be offline"
+                          : eligibleVolunteerCount > 0
+                            ? `${eligibleVolunteerCount} approved candidate(s)`
+                            : "No eligible candidates"}
                       </Text>
                     </View>
                   </View>
@@ -3994,7 +3998,7 @@ export default function AdminCases() {
                       ["Reported", true, incident.createdAt],
                       ["Validated", verificationStatus === "validated", incident.validatedAt],
                       [
-                        "LGU Response",
+                        "Volunteer Offer",
                         ["assigned", "in_progress", "resolved", "closed"].includes(incident.status),
                         incident.assignedAt || incident.updatedAt,
                       ],
@@ -4242,12 +4246,12 @@ export default function AdminCases() {
                     verificationStatus !== "rejected" && (
                     <View style={styles.criticalResponseNotice}>
                       <Text style={styles.criticalResponseTitle}>
-                        Critical case — official LGU response takes priority
+                        Critical case — emergency services take priority when lives are at risk
                       </Text>
                       <Text style={styles.criticalResponseText}>
-                        Official LGU navigation may begin immediately while the
-                        evidence review continues. Qualified community responder
-                        assignment remains controlled by LGU verification.
+                        VolunServe does not automatically dispatch police, fire, or medical teams.
+                        Call 911 for immediate danger. Admin verifies reports
+                        before offering tasks to approved Volunteers.
                       </Text>
                       <TouchableOpacity
                         style={styles.criticalNavigateButton}
