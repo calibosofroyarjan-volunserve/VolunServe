@@ -1,60 +1,85 @@
 "use strict";
 /**
- * Usage (authorized operator's secured workstation only):
+ * Authorized staging operator only, read-only Firebase Auth + Firestore check:
+ *
  *   VOLUNSERVE_STAGING_STRICT=1 VOLUNSERVE_DEPLOYMENT_ENV=staging \
- *     FIREBASE_SERVICE_ACCOUNT_JSON=<from-secret-manager> \
- *     IDENTITY_AI_SERVICE_URL=https://volunserve-identity-ai-staging.onrender.com \
- *     IDENTITY_AI_INTERNAL_KEY=<from-secret-manager> \
+ *     FIREBASE_SERVICE_ACCOUNT_JSON=<from-approved-secret-manager> \
  *     node backend/scripts/check-staging-admin-account.cjs --email=account@example.org
  *
- * READ ONLY. The service-account JSON must never be pasted into a chat, ticket,
- * repository, log, shell history, or CLI argument. Run only on a secured
- * workstation with an authorized full-staging service-account credential.
+ * No IDENTITY_AI_* variables are required for account readiness checks.
+ * This is NOT a login shortcut, user invitation, role grant or Admin approval.
+ * NEVER paste a Firebase service-account key, access token, password, UID,
+ * or real applicant's ID/selfie into ChatGPT, tickets or GitHub.
  */
-const {assertStagingAccessOnly, classifyStagingAdminAccess} =
-  require("../stagingAdminAccessPreflight");
+const {
+  assertStagingAccessOnly, classifyStagingAdminAccess,
+} = require("../stagingAdminAccessPreflight");
 
-const args = process.argv.slice(2);
-const emailArgs = args.filter(a => /^--email=/.test(a));
-if (args.length !== 1 || emailArgs.length !== 1) {
-  console.error("USAGE: node backend/scripts/check-staging-admin-account.cjs --email=<staging-admin-email>");
+const args=process.argv.slice(2);
+const emailArgs=args.filter(x=>/^--email=/.test(x));
+if(args.length!==1 || emailArgs.length!==1){
+  console.error("USAGE: node backend/scripts/check-staging-admin-account.cjs --email=<staging-account-email>");
   process.exit(2);
 }
-const email = emailArgs[0].slice(8).trim().toLowerCase();
-if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email.length > 254) {
+const email=emailArgs[0].slice(8).trim().toLowerCase();
+if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email.length>254){
   console.error("STAGING_ADMIN_PREFLIGHT_BLOCKED: invalid email input");
   process.exit(2);
 }
 
-async function main() {
-  assertStagingAccessOnly(process.env); // fail closed BEFORE Firebase import
-  const {auth, db, app} = require("../firebaseAdmin");
-  if (app.options.projectId !== "volunserve-full-staging") {
-    throw Error("STAGING_ADMIN_PREFLIGHT_BLOCKED: SDK project mismatch");
-  }
-  let account;
+async function main(){
+  // Strict project flags, matching service-account project and no emulators:
+  // all checked BEFORE importing the SDK, initializing Firebase or accessing
+  // any real user. This prevents silent production/Google ADC fallbacks.
+  const projectId=assertStagingAccessOnly(process.env);
+  // A full backend import would demand the AI private key and network config
+  // just to ask whether a staging Admin can log in. A separate named,
+  // explicitly scoped app avoids that unnecessary dependency.
+  const {initializeApp,cert,deleteApp}=require("firebase-admin/app");
+  const {getAuth}=require("firebase-admin/auth");
+  const {getFirestore}=require("firebase-admin/firestore");
+  let app;
   try {
-    account = await auth.getUserByEmail(email);
-  } catch (error) {
-    if (error?.code === "auth/user-not-found") {
-      console.log("STAGING_ADMIN_ACCESS=AUTH_ACCOUNT_NOT_FOUND");
-      return;
+    const secret=JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_JSON);
+    if(secret.project_id!==projectId){
+      throw Error("STAGING_ADMIN_PREFLIGHT_BLOCKED: SDK project mismatch");
     }
-    throw Error("STAGING_ADMIN_PREFLIGHT_BLOCKED: Auth lookup unavailable");
+    if(typeof secret.private_key==="string"){
+      secret.private_key=secret.private_key.replace(/\\n/g,"\n");
+    }
+    app=initializeApp({
+      credential:cert(secret), projectId,
+    },"volunserve-staging-admin-access-preflight");
+    if(app.options.projectId!==projectId){
+      throw Error("STAGING_ADMIN_PREFLIGHT_BLOCKED: SDK project mismatch");
+    }
+    const auth=getAuth(app),db=getFirestore(app);
+    let account;
+    try{
+      account=await auth.getUserByEmail(email);
+    }catch(error){
+      if(error?.code==="auth/user-not-found"){
+        console.log("STAGING_ADMIN_ACCESS=AUTH_ACCOUNT_NOT_FOUND");
+        return;
+      }
+      throw Error("STAGING_ADMIN_PREFLIGHT_BLOCKED: Auth lookup unavailable");
+    }
+    const doc=await db.collection("users").doc(account.uid).get();
+    const profile=doc.exists?{...(doc.data()||{}),uid:doc.id}:null;
+    // Print only a fixed diagnostic code. Never log identities, keys, token,
+    // Firestore profile fields, Firebase response bodies or stack traces.
+    console.log("STAGING_ADMIN_ACCESS="+classifyStagingAdminAccess(account,profile));
+  }finally{
+    if(app)await deleteApp(app);
   }
-  const doc = await db.collection("users").doc(account.uid).get();
-  // UID comes from the canonical Auth record and the Firestore document key.
-  const profile = doc.exists ? {...(doc.data() || {}), uid: doc.id} : null;
-  console.log("STAGING_ADMIN_ACCESS=" + classifyStagingAdminAccess(account, profile));
 }
 
-main().catch(error => {
-  // Never log Firebase exception messages, identities, tokens or service keys.
-  const message = String(error?.message || "");
-  if (message.startsWith("STAGING_ADMIN_PREFLIGHT_BLOCKED:")) {
+main().catch(error=>{
+  const message=String(error?.message||"");
+  if(message.startsWith("STAGING_ADMIN_PREFLIGHT_BLOCKED:")){
     console.error(message);
-  } else {
+  }else{
     console.error("STAGING_ADMIN_PREFLIGHT_BLOCKED: staging Auth/profile check unavailable");
   }
-  process.exitCode = 1;
+  process.exitCode=1;
 });
