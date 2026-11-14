@@ -39,6 +39,7 @@ def run_real_handler(pad_status, score=0.90):
     env = {
         "np": np, "math": math,
         "decode_image": lambda contents, _label: contents,
+        "exact_image_reuse": lambda *_: False,
         "image_quality": lambda _image: {"score": 0.95},
         "face_landmarks": lambda _image: (["synthetic-landmarks"], {"reason": ""}),
         "get_min_quality_threshold": lambda: 0.34,

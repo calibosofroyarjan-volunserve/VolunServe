@@ -27,6 +27,7 @@ from starlette.datastructures import UploadFile as StarletteUploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from PIL import Image, ImageOps
 from image_upload_bounds import matching_image_signature, image_dimensions_allowed
+from face_pair_integrity import exact_image_reuse
 app = FastAPI(
     title="VolunServe Identity AI",
     version="2.1.0",
@@ -1037,6 +1038,18 @@ def run_face_verification(
         selfie_bytes,
         "Selfie image",
     )
+    # Basic media-integrity check: the exact same pixel array cannot be
+    # a fresh selfie distinct from the ID image. This is NOT liveness/PAD,
+    # and does not detect crops, replays, deepfakes or edited photographs.
+    if exact_image_reuse(id_image, selfie_image):
+        return failed_attempt_result(
+            uid=uid,
+            message=(
+                "The ID photo and selfie are identical images. "
+                "Take a separate, fresh selfie instead of reusing the ID image."
+            ),
+            warning="identical_id_selfie_image",
+        )
     id_quality = image_quality(
         id_image
     )
