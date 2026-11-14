@@ -24,6 +24,7 @@ function manualReviewInput(body){
 
 function installManualIdentityReviewRoutes({
   app,db,auth,FieldValue,requireFirebaseUser,
+  runtimeEnvironment=process.env,
 }) {
   if(!app||!db||!auth||!FieldValue||!requireFirebaseUser)
     throw new Error("Missing protected manual identity route dependencies");
@@ -33,7 +34,7 @@ function installManualIdentityReviewRoutes({
       res.set("Cache-Control","private, no-store, max-age=0");
       // Never make this privileged or a production shortcut even if this
       // staging source is accidentally copied into a live branch.
-      if(!isFullStagingRuntime(process.env) ||
+      if(!isFullStagingRuntime(runtimeEnvironment) ||
          auth.app?.options?.projectId!=="volunserve-full-staging") {
         return res.status(404).json({
           error:"manual_review_not_available",
