@@ -22,6 +22,7 @@ import {
   ReferenceStatus,
   ReferenceHistory,
   ReferenceVolunteerMatching,
+  EmergencyMapButton,
 } from "../../components/admin/EmergencyFiveTabDesign";
 import {
   Alert,
@@ -598,7 +599,6 @@ export default function AdminCases() {
   const [detailTab, setDetailTab] = useState<
     "overview" | "map" | "evidence" | "response" | "personnel" | "history"
   >("overview");
-  const [manualFallbackOpen, setManualFallbackOpen] = useState(false);
   const [advancedResponseOpen, setAdvancedResponseOpen] = useState(false);
   const focusedTab = detailTab === "evidence" || detailTab === "response";
 
@@ -1395,7 +1395,6 @@ export default function AdminCases() {
 
   useEffect(() => {
     setDetailTab("overview");
-    setManualFallbackOpen(false);
     setAdvancedResponseOpen(false);
     setAssignmentCaseId("");
     setPersonnelPage(1);
@@ -3745,10 +3744,14 @@ export default function AdminCases() {
           const onDutyPersonnel = lguPersonnel.filter(personnel =>
             personnel.uid !== incident.activeLguResponderUid && personnel.dutyStatus === "on_duty"
           );
+          // Total local eligibility is independent from the search filters.
+          // Filtering to zero must not hide the controls needed to clear a search.
+          const eligibleVolunteerCount = approvedVolunteers.filter(
+            (volunteer) => volunteerEligibilityForCase(incident, volunteer).eligible,
+          ).length;
           const eligibleVolunteerCandidates = volunteerCandidates.filter(
             (volunteer) => volunteerEligibilityForCase(incident, volunteer).eligible,
           );
-          const eligibleVolunteerCount = eligibleVolunteerCandidates.length;
           const verificationStatus =
             incident.verificationStatus || "pending_verification";
 
@@ -4306,16 +4309,16 @@ export default function AdminCases() {
                   {incident.severity === "critical" &&
                     verificationStatus !== "rejected" && (
                     <View style={styles.criticalResponseNotice}>
-                      <Text style={styles.criticalResponseTitle}>
-                        Critical case — emergency services take priority when lives are at risk
-                      </Text>
-                      <Text style={styles.criticalResponseText}>
-                        VolunServe does not automatically dispatch police, fire, or medical teams.
-                        Call 911 for immediate danger. Admin verifies reports
-                        before offering tasks to approved Volunteers.
-                      </Text>
-                      <TouchableOpacity
-                        style={styles.criticalNavigateButton}
+                      <View style={styles.criticalResponseCopy}>
+                        <Text style={styles.criticalResponseTitle}>
+                          Critical case — official emergency services take priority
+                        </Text>
+                        <Text style={styles.criticalResponseText}>
+                          For immediate danger, call 911. VolunServe does not automatically
+                          dispatch police, fire, or medical teams.
+                        </Text>
+                      </View>
+                      <EmergencyMapButton
                         onPress={() =>
                           router.push(
                             `/(admin)/admin-live-map?caseId=${encodeURIComponent(
@@ -4323,11 +4326,7 @@ export default function AdminCases() {
                             )}` as any,
                           )
                         }
-                      >
-                        <Text style={styles.criticalNavigateButtonText}>
-                          Open Emergency Response Map
-                        </Text>
-                      </TouchableOpacity>
+                      />
                     </View>
                   )}
 
@@ -5687,103 +5686,55 @@ export default function AdminCases() {
                   caseBarangay={barangayDisplay(caseBarangayValue(incident))}
                   eligibleCount={eligibleVolunteerCount}
                   activeAssignments={activeAssignments}
-                  showManualFallback={manualFallbackOpen}
-                  onToggleManualFallback={() => setManualFallbackOpen((previous) => !previous)}
+                  onCancelAssignment={(item) => {
+                    const savedAssignment = activeAssignments.find(
+                      (assignment) => assignment.id === item.id,
+                    );
+                    if (savedAssignment && savedAssignment.status !== "completed") {
+                      cancelAssignment(savedAssignment);
+                    }
+                  }}
                 />
               )}
-              {detailTab === "personnel" && manualFallbackOpen && (
+              {detailTab === "personnel" && dispatchReady &&
+                ["validated", "assigned", "in_progress"].includes(incident.status) &&
+                eligibleVolunteerCount > 0 && volunteerSupportAvailable && (
                 <View style={styles.personnelReferenceLayout}>
-                  <View style={styles.personnelReferenceMain}>
-                    <View style={styles.personnelCleanCard}>
-                      <View style={styles.personnelCleanHeader}>
-                        <View style={styles.personnelCleanHeaderLeft}>
-                          <View style={styles.personnelSectionIconPurple}>
-                            <Text style={styles.personnelSectionIconText}>♧</Text>
-                          </View>
-                          <View style={{ flex: 1 }}>
-                            <View style={styles.personnelCleanTitleRow}>
-                              <Text style={styles.personnelCleanTitle}>Volunteer Task Assignment</Text>
-                              <View style={styles.personnelCountBadgePurple}>
-                                <Text style={styles.personnelCountBadgePurpleText}>
-                                  {eligibleVolunteerCount} eligible
-                                </Text>
-                              </View>
-                            </View>
-                            <Text style={styles.personnelCleanSubtitle}>
-                              Approved Volunteers remain eligible for task offers when offline. Offers stay pending until acceptance; live GPS appears only after response starts.
-                            </Text>
-                          </View>
-                        </View>
-                      </View>
-
-                      <View style={styles.personnelBarangayStrip}>
-                        <View>
-                          <Text style={styles.personnelNeedLabel}>CASE BARANGAY</Text>
-                          <Text style={styles.personnelBarangayValue}>
-                            {barangayDisplay(caseBarangayValue(incident))}
-                          </Text>
-                        </View>
-                        <Text style={styles.personnelBarangayHint}>
-                          Local Volunteers appear first; out-of-barangay profiles are visible but cannot be assigned to this case.
+                  <View style={styles.personnelCleanCard}>
+                    <View style={styles.personnelCleanHeader}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.personnelCleanTitle}>Available Qualified Volunteers</Text>
+                        <Text style={styles.personnelCleanSubtitle}>
+                          Send an offer to an approved local Volunteer. A Volunteer must accept before starting a task.
                         </Text>
                       </View>
-
-                      {!volunteerSupportAvailable && (
-                        <View style={styles.personnelSupportNotice}>
-                          <Text style={styles.personnelSupportNoticeTitle}>
-                            One Volunteer support assignment is already active
-                          </Text>
-                          <Text style={styles.personnelSupportNoticeText}>
-                            Finish or cancel the active task before offering this emergency to another Volunteer.
-                          </Text>
-                        </View>
-                      )}
-
-                      <View style={styles.personnelVolunteerToolbar}>
-                        <Text style={styles.personnelListHeading}>
-                          Suggested Volunteers ({barangayDisplay(caseBarangayValue(incident))})
-                        </Text>
-
-                        <View style={styles.personnelVolunteerFilters}>
-                          <TextInput
-                            style={styles.personnelCompactFilter}
-                            value={skillFilter}
-                            placeholder="Search volunteers / skills"
-                            placeholderTextColor="#94a3b8"
-                            onChangeText={value => { setSkillFilter(value); setVolunteerPage(1); }}
-                          />
-                          <TextInput
-                            style={styles.personnelCompactFilter}
-                            value={availabilityFilter}
-                            placeholder="Filter availability (optional)"
-                            placeholderTextColor="#94a3b8"
-                            onChangeText={value => { setAvailabilityFilter(value); setVolunteerPage(1); }}
-                          />
-                        </View>
+                    </View>
+                    <View style={styles.personnelVolunteerToolbar}>
+                      <Text style={styles.personnelListHeading}>Local Volunteers</Text>
+                      <View style={styles.personnelVolunteerFilters}>
+                        <TextInput
+                          style={styles.personnelCompactFilter}
+                          value={skillFilter}
+                          placeholder="Search skills"
+                          placeholderTextColor="#94a3b8"
+                          onChangeText={value => { setSkillFilter(value); setVolunteerPage(1); }}
+                        />
+                        <TextInput
+                          style={styles.personnelCompactFilter}
+                          value={availabilityFilter}
+                          placeholder="Filter availability"
+                          placeholderTextColor="#94a3b8"
+                          onChangeText={value => { setAvailabilityFilter(value); setVolunteerPage(1); }}
+                        />
                       </View>
-
-                      {!dispatchReady && (
-                        <View style={styles.personnelCleanEmptyRow}>
-                          <Text style={styles.personnelCleanEmptyTitle}>Review approved volunteers before dispatch</Text>
-                          <Text style={styles.personnelCleanEmptyText}>
-                            Volunteers remain visible even when offline. Validate this emergency before sending an official support offer.
-                          </Text>
-                        </View>
-                      )}
-                      {eligibleVolunteerCandidates.length === 0 ? (
-                        <View style={styles.personnelCleanEmptyRow}>
-                          <Text style={styles.personnelCleanEmptyTitle}>
-                            {caseBarangayValue(incident)
-                              ? `No eligible approved Volunteers in ${barangayDisplay(caseBarangayValue(incident))}`
-                              : "Emergency barangay is missing"}
-                          </Text>
-                          <Text style={styles.personnelCleanEmptyText}>
-                            The Resident who filed this emergency is excluded automatically from this pool.
-                          </Text>
-                        </View>
-                      ) : (
-                        <View style={styles.personnelCompactList}>
-                          <ListPagination page={Math.max(1, Math.min(volunteerPage, Math.ceil(eligibleVolunteerCandidates.length / 5) || 1))} total={eligibleVolunteerCandidates.length} pageSize={5} onChange={setVolunteerPage} />
+                    </View>
+                    {eligibleVolunteerCandidates.length === 0 ? (
+                      <Text style={styles.personnelCleanEmptyText}>
+                        No qualified Volunteers match the current search filters. Clear the filters to see available local Volunteers.
+                      </Text>
+                    ) : (
+                      <View style={styles.personnelCompactList}>
+                        <ListPagination page={Math.max(1, Math.min(volunteerPage, Math.ceil(eligibleVolunteerCandidates.length / 5) || 1))} total={eligibleVolunteerCandidates.length} pageSize={5} onChange={setVolunteerPage} />
                           {pageFive(eligibleVolunteerCandidates, volunteerPage).map((volunteer) => {
                             const key = `${incident.id}_${volunteer.uid}`;
                             const eligibility = volunteerEligibilityForCase(incident, volunteer);
@@ -5879,82 +5830,9 @@ export default function AdminCases() {
                               </View>
                             );
                           })}
-                        </View>
-                      )}
-
-                      <View style={styles.personnelSupportDivider} />
-
-                      <View style={styles.personnelActiveSupportHeader}>
-                        <Text style={styles.personnelListHeading}>Assigned Volunteer Support</Text>
-                        <View style={styles.personnelCountBadgeMuted}>
-                          <Text style={styles.personnelCountBadgeMutedText}>{activeAssignments.length}</Text>
-                        </View>
                       </View>
-
-                      {activeAssignments.length === 0 ? (
-                        <View style={styles.personnelSupportEmpty}>
-                          <Text style={styles.personnelSupportEmptyIcon}>♧</Text>
-                          <View>
-                            <Text style={styles.personnelCleanEmptyTitle}>No Volunteer support assigned yet</Text>
-                            <Text style={styles.personnelCleanEmptyText}>
-                              Send a support offer to an approved, qualified local Volunteer, even when offline. The Volunteer must accept to respond.
-                            </Text>
-                          </View>
-                        </View>
-                      ) : (
-                        <View style={styles.personnelCompactList}>
-                          <ListPagination page={Math.max(1, Math.min(activeAssignmentPage, Math.ceil(activeAssignments.length / 5) || 1))} total={activeAssignments.length} pageSize={5} onChange={setActiveAssignmentPage} />
-                          {pageFive(activeAssignments, activeAssignmentPage).map((assignment) => {
-                            const currentVolunteer = approvedVolunteers.find(
-                              (item) => item.uid === assignment.volunteerId,
-                            );
-                            const displayName =
-                              currentVolunteer?.fullName || assignment.volunteerName || "Volunteer";
-
-                            return (
-                              <View key={assignment.id} style={styles.personnelActiveSupportRow}>
-                                <View style={styles.volunteerAvatarCompact}>
-                                  <Text style={styles.volunteerAvatarCompactText}>
-                                    {displayName
-                                      .split(" ")
-                                      .filter(Boolean)
-                                      .slice(0, 2)
-                                      .map((part) => part[0]?.toUpperCase())
-                                      .join("") || "V"}
-                                  </Text>
-                                </View>
-
-                                <View style={styles.personnelCompactIdentity}>
-                                  <Text style={styles.personnelCompactName}>{displayName}</Text>
-                                  <Text style={styles.personnelCompactMeta}>
-                                    {currentVolunteer?.barangay
-                                      ? barangayDisplay(currentVolunteer.barangay)
-                                      : `Updated ${formatDate(assignment.updatedAt)}`}
-                                  </Text>
-                                </View>
-
-                                <View style={[styles.assignmentStatus, statusStyle(String(assignment.status))]}>
-                                  <Text style={styles.badgeText}>
-                                    {labelOfStatus(String(assignment.status))}
-                                  </Text>
-                                </View>
-
-                                {!["completed"].includes(String(assignment.status)) && (
-                                  <TouchableOpacity
-                                    style={styles.cancelButton}
-                                    onPress={() => cancelAssignment(assignment)}
-                                  >
-                                    <Text style={styles.cancelButtonText}>Cancel</Text>
-                                  </TouchableOpacity>
-                                )}
-                              </View>
-                            );
-                          })}
-                        </View>
-                      )}
-                    </View>
+                    )}
                   </View>
-
                 </View>
               )}
 
@@ -6631,8 +6509,9 @@ const styles = StyleSheet.create({
   },
   detailTabText: {
     color: "#64748b",
-    fontSize: 10.5,
-    fontWeight: "800",
+    fontSize: 12,
+    fontWeight: "700",
+    lineHeight: 18,
   },
   detailTabTextActive: {
     color: "#08765B",
@@ -6903,8 +6782,8 @@ const styles = StyleSheet.create({
   },
   casePrimaryValidateText: {
     color: "#FFFFFF",
-    fontSize: 11,
-    fontWeight: "900",
+    fontSize: 12,
+    fontWeight: "800",
   },
   casePrimaryNeutral: {
     minHeight: 40,
@@ -6917,7 +6796,7 @@ const styles = StyleSheet.create({
   },
   casePrimaryNeutralText: {
     color: "#116B51",
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: "800",
   },
   casePrimaryReject: {
@@ -6931,7 +6810,7 @@ const styles = StyleSheet.create({
   },
   casePrimaryRejectText: {
     color: "#B42318",
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: "800",
   },
   casePrimaryEmergency: {
@@ -6945,8 +6824,8 @@ const styles = StyleSheet.create({
   },
   casePrimaryEmergencyText: {
     color: "#B42318",
-    fontSize: 11,
-    fontWeight: "900",
+    fontSize: 12,
+    fontWeight: "800",
   },
   caseActionHint: {
     paddingHorizontal: 14,
@@ -7243,15 +7122,16 @@ const styles = StyleSheet.create({
     gap: 7,
   },
   personnelCleanTitle: {
-    color: "#0f172a",
-    fontSize: 13,
-    fontWeight: "900",
+    color: "#14233B",
+    fontSize: 14,
+    lineHeight: 20,
+    fontWeight: "800",
   },
   personnelCleanSubtitle: {
-    marginTop: 2,
-    color: "#64748b",
-    fontSize: 10.5,
-    lineHeight: 12,
+    marginTop: 4,
+    color: "#64748B",
+    fontSize: 11,
+    lineHeight: 17,
   },
   personnelCleanStatusPill: {
     paddingHorizontal: 10,
@@ -7324,9 +7204,9 @@ const styles = StyleSheet.create({
     gap: 5,
   },
   personnelCompactName: {
-    color: "#0f172a",
-    fontSize: 10.5,
-    fontWeight: "900",
+    color: "#14233B",
+    fontSize: 12,
+    fontWeight: "800",
     textAlign: "left",
   },
   personnelCompactMeta: {
@@ -7621,9 +7501,9 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   personnelListHeading: {
-    color: "#0f172a",
-    fontSize: 10.5,
-    fontWeight: "900",
+    color: "#14233B",
+    fontSize: 13,
+    fontWeight: "800",
   },
   personnelVolunteerFilters: {
     flexDirection: "row",
@@ -8521,9 +8401,9 @@ const styles = StyleSheet.create({
   caseListItemTitle: {
     flex: 1,
     minWidth: 0,
-    color: "#0f172a",
-    fontSize: 12.5,
-    fontWeight: "900",
+    color: "#14233B",
+    fontSize: 13,
+    fontWeight: "800",
   },
   caseListSeverity: {
     paddingHorizontal: 7,
@@ -8914,22 +8794,33 @@ const styles = StyleSheet.create({
   },
   criticalResponseNotice: {
     marginTop: 11,
-    padding: 12,
+    padding: 14,
     borderRadius: 11,
     borderWidth: 1,
     borderColor: "#f2b8b5",
     backgroundColor: "#fff1f0",
+    flexDirection: "row",
+    flexWrap: "wrap",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+  },
+  criticalResponseCopy: {
+    flexGrow: 1,
+    flexBasis: 320,
+    minWidth: 230,
   },
   criticalResponseTitle: {
     color: "#b42318",
-    fontSize: 12.5,
+    fontSize: 14,
     fontWeight: "800",
+    lineHeight: 20,
   },
   criticalResponseText: {
     marginTop: 4,
     color: "#9f2f25",
-    fontSize: 10,
-    lineHeight: 14,
+    fontSize: 11,
+    lineHeight: 17,
   },
 
   verificationChecks: {
@@ -8977,10 +8868,10 @@ const styles = StyleSheet.create({
     flexBasis: 310, minWidth: 250, minHeight: 230,
   },
   referenceEvidenceColumnTitle: {
-    color: "#152B46", fontSize: 15, fontWeight: "900",
+    color: "#14233B", fontSize: 14, fontWeight: "800", lineHeight: 20,
   },
   referenceEvidenceColumnSub: {
-    color: "#6A7D91", fontSize: 10, lineHeight: 16,
+    color: "#64748B", fontSize: 11, lineHeight: 17,
     marginTop: 5,
   },
   evidenceGrid: {
@@ -9065,7 +8956,7 @@ const styles = StyleSheet.create({
   },
   moreEvidenceText: {
     color: "#9a6700",
-    fontSize: 12.5,
+    fontSize: 12,
     fontWeight: "800",
   },
   rejectButton: {
@@ -9078,7 +8969,7 @@ const styles = StyleSheet.create({
   },
   rejectButtonText: {
     color: "#b42318",
-    fontSize: 12.5,
+    fontSize: 12,
     fontWeight: "800",
   },
   reviewNotice: {
@@ -9153,9 +9044,10 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     marginTop: 2,
-    color: "#0f172a",
+    color: "#14233B",
     fontSize: 18,
     fontWeight: "800",
+    lineHeight: 25,
   },
   slotText: {
     color: "#64748b",
@@ -10920,6 +10812,4 @@ const styles = StyleSheet.create({
     fontSize: 11,
     textAlign: "center",
   },
-  criticalNavigateButton: { marginTop: 12, minHeight: 42, alignItems: "center", justifyContent: "center", borderRadius: 10, backgroundColor: "#b91c1c", paddingHorizontal: 14 },
-  criticalNavigateButtonText: { color: "#ffffff", fontSize: 12, fontWeight: "900" },
 });
