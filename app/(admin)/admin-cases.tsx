@@ -4317,6 +4317,10 @@ export default function AdminCases() {
                   </View>
                 </View>
 
+                <View style={styles.referenceEvidenceColumns}>
+                  <View style={styles.referenceEvidenceMedia}>
+                    <Text style={styles.referenceEvidenceColumnTitle}>▧  Evidence Preview ({imageEvidence.length + videoEvidence.length})</Text>
+                    <Text style={styles.referenceEvidenceColumnSub}>Select a photo to view the original submitted evidence.</Text>
                 {imageEvidence.length > 0 && (
                   <View style={styles.evidenceGrid}>
                     <ListPagination page={Math.max(1, Math.min(photoPage, Math.ceil(imageEvidence.length / 5) || 1))} total={imageEvidence.length} pageSize={5} onChange={setPhotoPage} />
@@ -4373,6 +4377,10 @@ export default function AdminCases() {
                   </View>
                 )}
 
+                  </View>
+                  <View style={styles.referenceEvidenceNotes}>
+                    <Text style={styles.referenceEvidenceColumnTitle}>▤  Review Notes (Optional)</Text>
+                    <Text style={styles.referenceEvidenceColumnSub}>Record observations or explain a request or rejection.</Text>
                 {verificationStatus !== "validated" &&
                   verificationStatus !== "rejected" && (
                     <>
@@ -4452,7 +4460,25 @@ export default function AdminCases() {
                         </View>
                       ) : null}
 
-                      <View style={styles.reviewActions}>
+
+                    </>
+                  )}
+
+                    {verificationStatus === "validated" && (
+                      <View style={styles.reviewNotice}>
+                        <Text style={styles.warningTitle}>Report validated</Text>
+                        <Text style={styles.warningText}>The review decision is already recorded.</Text>
+                      </View>
+                    )}
+                    {verificationStatus === "rejected" && (
+                      <View style={styles.rejectNotice}>
+                        <Text style={styles.rejectNoticeText}>This report has been rejected; Volunteer dispatch remains blocked.</Text>
+                      </View>
+                    )}
+                  </View>
+                </View>
+                {verificationStatus !== "validated" && verificationStatus !== "rejected" && (
+                  <View style={styles.reviewActions}>
                         <TouchableOpacity
                           style={styles.validateButton}
                           onPress={() =>
@@ -4489,8 +4515,7 @@ export default function AdminCases() {
                           </Text>
                         </TouchableOpacity>
                       </View>
-                    </>
-                  )}
+                )}
 
                 {verificationStatus === "needs_more_evidence" && (
                   <View style={styles.reviewNotice}>
@@ -8849,6 +8874,30 @@ const styles = StyleSheet.create({
     color: "#49646f",
     fontSize: 10,
     fontWeight: "800",
+  },
+  referenceEvidenceColumns: {
+    marginTop: 15,
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 12,
+    alignItems: "stretch",
+  },
+  referenceEvidenceMedia: {
+    borderWidth: 1, borderColor: "#D8E4EF", borderRadius: 13,
+    backgroundColor: "#FFFFFF", padding: 13, flexGrow: 1, flexBasis: 300,
+    minWidth: 250, minHeight: 230,
+  },
+  referenceEvidenceNotes: {
+    borderWidth: 1, borderColor: "#D8E4EF", borderRadius: 13,
+    backgroundColor: "#FFFFFF", padding: 13, flexGrow: 1.1,
+    flexBasis: 310, minWidth: 250, minHeight: 230,
+  },
+  referenceEvidenceColumnTitle: {
+    color: "#152B46", fontSize: 15, fontWeight: "900",
+  },
+  referenceEvidenceColumnSub: {
+    color: "#6A7D91", fontSize: 10, lineHeight: 16,
+    marginTop: 5,
   },
   evidenceGrid: {
     flexDirection: "row",
