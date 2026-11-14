@@ -2,6 +2,8 @@ import React, { useEffect, useRef, useState } from "react";
 import { Linking, Pressable, Text, TextInput, View } from "react-native";
 import InteractiveEventPinMap from "./InteractiveEventPinMap.web";
 import { lookUpEventVenue } from "../lib/eventVenueLookup";
+import { SJDM_REFERENCE_GEOMETRY } from "../constants/sjdmBoundaryReference";
+import { insideSjdmBoundary, sjdmOutsideMask, type SjdmBoundary } from "../lib/sjdmMapBoundary";
 
 type Venue = { latitude: number; longitude: number };
 type Props = {
@@ -13,13 +15,25 @@ type Props = {
 };
 
 const CENTER: Venue = { latitude: 14.8139, longitude: 121.0453 };
+// Same geoBoundaries city border as Community Events' volunteer and Emergency maps.
+const SJDM_CITY: SjdmBoundary = {
+  type: "Feature",
+  properties: {
+    source: "geoBoundaries ADM3 simplified CC BY 4.0",
+    city: "City of San Jose del Monte",
+    province: "Bulacan",
+  },
+  geometry: SJDM_REFERENCE_GEOMETRY as unknown as SjdmBoundary["geometry"],
+};
+const SJDM_OUTSIDE = sjdmOutsideMask(SJDM_CITY);
 const GOOGLE_JS_KEY = String(process.env.EXPO_PUBLIC_GOOGLE_MAPS_JS_API_KEY || "").trim();
 let googleScriptPromise: Promise<any> | null = null;
 
 function validVenue(lat: number, lng: number) {
-  // Matches the Node proposal API's broad SJDM-area coordinate guard.
+  // Keep existing broad server guard, but enforce the true city polygon in UI.
   return Number.isFinite(lat) && Number.isFinite(lng) &&
-    lat >= 14.65 && lat <= 15.0 && lng >= 120.88 && lng <= 121.30;
+    lat >= 14.65 && lat <= 15.0 && lng >= 120.88 && lng <= 121.30 &&
+    insideSjdmBoundary(SJDM_CITY, lat, lng);
 }
 function tidy(lat: number, lng: number): Venue {
   return { latitude: Number(lat.toFixed(6)), longitude: Number(lng.toFixed(6)) };
@@ -90,9 +104,18 @@ export default function CommunityEventPinPicker({ latitude, longitude, barangay 
   const googleRef = useRef<any>(null);
   const confirmed = same(saved, draft);
 
+  // Reject any older cached or manually entered proposal point outside SJDM.
+  useEffect(() => {
+    if (latitude !== null && longitude !== null && !validVenue(latitude, longitude)) {
+      onChangeRef.current(null, null);
+      setDraft(null);
+      setMessage("Previously selected pin lies outside the SJDM boundary. Pick a new point inside the city.");
+    }
+  }, [latitude, longitude]);
+
   const pick = (lat: number, lng: number) => {
     if (!validVenue(lat, lng)) {
-      setMessage("Pumili ng location sa San Jose del Monte area. Hindi tatanggapin ang pin na malayo sa service area.");
+      setMessage("Outside San Jose del Monte border. Piliin lamang ang meeting point sa loob ng berdeng SJDM outline.");
       return false;
     }
     const next = tidy(lat, lng);
@@ -115,15 +138,17 @@ export default function CommunityEventPinPicker({ latitude, longitude, barangay 
     const task = setTimeout(() => {
       void lookUpEventVenue(barangay, venue, controller.signal).then(result => {
         if (controller.signal.aborted) return;
-        if (result.status === "found") {
+        if (result.status === "found" && validVenue(result.point.latitude, result.point.longitude)) {
           setDraft(result.point);
           setLookupState("found");
-          setMessage("Suggested event venue found from the selected barangay and venue. Check the pin on the map, adjust if needed, then confirm.");
+          setMessage("Suggested event venue found inside the SJDM border. Check the pin on the map, adjust if needed, then confirm.");
         } else {
           setLookupState("unavailable");
-          setMessage(result.status === "ambiguous"
-            ? "More than one venue matched. Select the exact site on the map to avoid an incorrect pin."
-            : "Exact venue not found automatically. Tap the real event location on the map instead.");
+          setMessage(result.status === "found"
+            ? "Suggested venue is outside the SJDM border. Select a valid meeting point inside the city."
+            : result.status === "ambiguous"
+              ? "More than one venue matched. Select the exact site on the map to avoid an incorrect pin."
+              : "Exact venue not found automatically. Tap the real event location on the map instead.");
         }
       }).catch(() => {
         if (!controller.signal.aborted) setLookupState("unavailable");
@@ -146,7 +171,26 @@ export default function CommunityEventPinPicker({ latitude, longitude, barangay 
         streetViewControl: false,
         fullscreenControl: true,
         gestureHandling: "greedy",
+        minZoom: 11.3,
+        maxZoom: 19,
+        restriction: {
+          latLngBounds: { north: 14.877, south: 14.758, east: 121.178, west: 121.005 },
+          strictBounds: true,
+        },
       });
+      // Display the same city polygon and outside shading as Emergency Reports.
+      // The Google Data layer is non-clickable so normal map pin picking still works.
+      map.data.addGeoJson(SJDM_OUTSIDE);
+      map.data.addGeoJson(SJDM_CITY);
+      map.data.setStyle((feature: any) =>
+        feature.getProperty("scope") === "outside-sjdm-only"
+          ? { fillColor: "#334155", fillOpacity: 0.50, strokeOpacity: 0, clickable: false, zIndex: 1 }
+          : { fillColor: "#0d9488", fillOpacity: 0.07,
+              strokeColor: "#047857", strokeWeight: 3, clickable: false, zIndex: 2 }
+      );
+      if (!draft && !savedRef.current) {
+        map.fitBounds({ west: 121.013, south: 14.767, east: 121.169, north: 14.869 });
+      }
       mapInstance.current = map;
       map.addListener("click", (event: any) => {
         if (event.latLng) pick(event.latLng.lat(), event.latLng.lng());
@@ -240,7 +284,7 @@ export default function CommunityEventPinPicker({ latitude, longitude, barangay 
         <View style={{ flex: 1, minWidth: 190 }}>
           <Text style={{ ...title, fontSize: 15 }}>Event Meeting Point *</Text>
           <Text style={{ fontSize: 11.5, lineHeight: 17, color: "#688073", marginTop: 2 }}>
-            Your barangay and venue suggest a pin automatically. Verify it on the map and confirm.
+            Select an event pin inside the green SJDM boundary. Outside areas are shaded; verify and confirm.
           </Text>
         </View>
         <Text style={{
@@ -271,7 +315,7 @@ export default function CommunityEventPinPicker({ latitude, longitude, barangay 
       )}
       {mapMode === "google" && (
         <Text style={{ fontSize: 11.5, color: "#3E7D60", paddingVertical: 9 }}>
-          Tap any location on Google Maps, or drag the pin to adjust it.
+          Tap within the green SJDM boundary, or drag the pin inside the city to adjust it.
         </Text>
       )}
 
