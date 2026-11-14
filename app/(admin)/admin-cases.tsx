@@ -15,12 +15,13 @@ import {
   serverTimestamp,
   updateDoc,
 } from "firebase/firestore";
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import ListPagination from "../../components/ui/ListPagination";
 import {
   ReferenceOverview,
   ReferenceStatus,
   ReferenceHistory,
+  ReferenceVolunteerMatching,
 } from "../../components/admin/EmergencyFiveTabDesign";
 import {
   Alert,
@@ -562,6 +563,7 @@ export default function AdminCases() {
   const router = useRouter();
   const { width } = useWindowDimensions();
   const compact = width < 920;
+  const screenRef = useRef<ScrollView>(null);
 
   const [role, setRole] = useState<string | null>(null);
   const [loadingRole, setLoadingRole] = useState(true);
@@ -596,6 +598,9 @@ export default function AdminCases() {
   const [detailTab, setDetailTab] = useState<
     "overview" | "map" | "evidence" | "response" | "personnel" | "history"
   >("overview");
+  const [manualFallbackOpen, setManualFallbackOpen] = useState(false);
+  const [advancedResponseOpen, setAdvancedResponseOpen] = useState(false);
+  const focusedTab = detailTab === "evidence" || detailTab === "response";
 
   const [notes, setNotes] = useState<Record<string, string>>({});
   const [reviewReasons, setReviewReasons] = useState<Record<string, string>>({});
@@ -1390,6 +1395,8 @@ export default function AdminCases() {
 
   useEffect(() => {
     setDetailTab("overview");
+    setManualFallbackOpen(false);
+    setAdvancedResponseOpen(false);
     setAssignmentCaseId("");
     setPersonnelPage(1);
     setVolunteerPage(1);
@@ -1398,6 +1405,10 @@ export default function AdminCases() {
     setPhotoPage(1);
     setVideoPage(1);
   }, [selectedCaseId]);
+
+  useEffect(() => {
+    screenRef.current?.scrollTo({ y: 0, animated: false });
+  }, [detailTab]);
 
   const pageFive = <T,>(rows: T[], page: number): T[] => {
     const safe = Math.max(1, Math.min(page, Math.max(1, Math.ceil(rows.length / 5))));
@@ -3464,6 +3475,7 @@ export default function AdminCases() {
 
   return (
     <ScrollView
+      ref={screenRef}
       style={styles.screen}
       contentContainerStyle={styles.container}
       showsVerticalScrollIndicator={true}
@@ -3486,7 +3498,7 @@ export default function AdminCases() {
         </View>
       </View>
 
-      <View style={styles.pageHeader}>
+      <View style={[styles.pageHeader, focusedTab && styles.hiddenSection]}>
         <View style={styles.headerTools}>
           <View style={styles.searchBox}>
             <Text style={styles.searchIcon}>⌕</Text>
@@ -3502,7 +3514,7 @@ export default function AdminCases() {
         </View>
       </View>
 
-        <View style={styles.filterCard}>
+        <View style={[styles.filterCard, focusedTab && styles.hiddenSection]}>
           <View style={styles.filterGroup}>
             <Text style={styles.filterLabel}>STATUS</Text>
             <View style={styles.pillRow}>
@@ -3582,6 +3594,7 @@ export default function AdminCases() {
             compact && styles.caseWorkspaceCompact,
           ]}
         >
+          {!focusedTab && (
           <View style={[styles.caseListPane, compact && styles.caseListPaneCompact]}>
             <View style={styles.caseListHeader}>
               <View>
@@ -3639,8 +3652,15 @@ export default function AdminCases() {
               <ListPagination page={activeCasePage} total={visibleCases.length} pageSize={5} onChange={setRecordPage} />
             </View>
           </View>
+          )}
 
           <View style={styles.caseDetailPane}>
+            {focusedTab && (
+              <TouchableOpacity accessibilityRole="button" style={styles.focusBackButton}
+                onPress={() => setDetailTab("overview")}>
+                <Text style={styles.focusBackText}>← Back to All Emergency Cases</Text>
+              </TouchableOpacity>
+            )}
             {[selectedCase].map((incident) => {
           const incidentAssignments = assignmentsForCase(incident.id);
           const activeAssignments = activeAssignmentsForCase(incident.id);
@@ -4514,8 +4534,17 @@ export default function AdminCases() {
                   onAssignment={() => setDetailTab("personnel")}
                 />
               )}
+              {detailTab === "response" && dispatchReady && (
+                <TouchableOpacity style={styles.advancedControlToggle}
+                  accessibilityRole="button"
+                  onPress={() => setAdvancedResponseOpen((current) => !current)}>
+                  <Text style={styles.advancedControlText}>
+                    {advancedResponseOpen ? "Hide existing operational controls  ‹" : "Show existing operational controls  ›"}
+                  </Text>
+                </TouchableOpacity>
+              )}
               {detailTab === "response" && (dispatchReady ? (
-                <View style={styles.adminSection}>
+                <View style={[styles.adminSection, !advancedResponseOpen && styles.hiddenSection]}>
                   <View style={styles.responseControlHeader}>
                     <View style={{ flex: 1 }}>
                       <Text style={styles.sectionEyebrow}>ACTIVE RESPONSE</Text>
@@ -4924,16 +4953,7 @@ export default function AdminCases() {
                     </TouchableOpacity>
                   </View>
                 </View>
-              ) : (
-                <View style={styles.dispatchLocked}>
-                  <Text style={styles.dispatchLockedTitle}>
-                    Response controls locked
-                  </Text>
-                  <Text style={styles.dispatchLockedText}>
-                    Validate the emergency report first. Rejected or unverified reports cannot dispatch Volunteer support.
-                  </Text>
-                </View>
-              ))}
+              ) : null)}
 
               {false && dispatchReady &&
                 (directAssessmentExists ||
@@ -5577,6 +5597,17 @@ export default function AdminCases() {
                 )}
 
               {detailTab === "personnel" && (
+                <ReferenceVolunteerMatching
+                  incident={incident}
+                  verificationStatus={verificationStatus}
+                  caseBarangay={barangayDisplay(caseBarangayValue(incident))}
+                  eligibleCount={eligibleVolunteerCount}
+                  activeAssignments={activeAssignments}
+                  showManualFallback={manualFallbackOpen}
+                  onToggleManualFallback={() => setManualFallbackOpen((previous) => !previous)}
+                />
+              )}
+              {detailTab === "personnel" && manualFallbackOpen && (
                 <View style={styles.personnelReferenceLayout}>
                   <View style={styles.personnelReferenceMain}>
                     <View style={styles.personnelCleanCard}>
@@ -8273,6 +8304,17 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
 
+  focusBackButton: {
+    paddingVertical: 12, paddingHorizontal: 16, backgroundColor: "#F4F9FD",
+    borderRadius: 10, borderWidth: 1, borderColor: "#D7E6EF", marginBottom: 10,
+    alignSelf: "flex-start",
+  },
+  focusBackText: { color: "#165E94", fontWeight: "800", fontSize: 12 },
+  advancedControlToggle: {
+    margin: 15, padding: 11, backgroundColor: "#F6F9FD",
+    borderWidth: 1, borderColor: "#D9E6F2", borderRadius: 10,
+  },
+  advancedControlText: { color: "#1F5E9B", fontSize: 11, fontWeight: "900" },
   caseWorkspace: {
     flexDirection: "row",
     alignItems: "flex-start",
