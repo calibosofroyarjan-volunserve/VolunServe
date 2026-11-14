@@ -1,0 +1,42 @@
+name: Staging Identity Private Error Boundary (NO DEPLOY)
+on:
+  pull_request:
+    branches:
+      - integration/identity-full-staging-20261112
+    paths:
+      - 'backend/server.js'
+      - 'backend/test-identity-private-errors-no-leaks.cjs'
+      - '.github/workflows/test-staging-identity-private-errors-no-deploy.yml'
+permissions:
+  contents: read
+jobs:
+  identity-private-error-boundary:
+    runs-on: ubuntu-latest
+    timeout-minutes: 7
+    steps:
+      - name: Read pinned PR source without installing dependencies
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          [[ "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]] || exit 2
+          curl -fLsS --retry 3 \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/zipball/$SOURCE_SHA" \
+            -o /tmp/identity-privacy-test.zip
+          mkdir -p "$RUNNER_TEMP/identity-privacy-source"
+          unzip -q /tmp/identity-privacy-test.zip -d "$RUNNER_TEMP/identity-privacy-source"
+          ROOT="$(find "$RUNNER_TEMP/identity-privacy-source" -mindepth 1 -maxdepth 1 -type d -print -quit)"
+          test -f "$ROOT/backend/test-identity-private-errors-no-leaks.cjs"
+          cp -a "$ROOT/." "$GITHUB_WORKSPACE/"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Syntax and synthetic privacy-safe error response tests
+        run: |
+          node --check backend/server.js
+          node --test backend/test-identity-private-errors-no-leaks.cjs
+      - name: Confirm no Firebase, Render, real identities or deploy
+        run: echo 'NO_DEPLOY_NO_SERVICE_CREDENTIALS_NO_PRIVATE_MEDIA'
