@@ -41,6 +41,7 @@ import {
 import { db } from "../../lib/firebase";
 import { safePublicAdvisoryBarangay } from "../../lib/emergencyPublicAdvisory";
 import { SJDM_BARANGAYS } from "../../constants/sjdmBarangays";
+import { VolunteerEligibilityValidation } from "../../components/admin/VolunteerEligibilityValidation";
 import { publishVerifiedCommunityAdvisory } from "../../lib/publishVerifiedCommunityAdvisory";
 
 const BACKEND_URL = "https://volunserve.onrender.com";
@@ -575,6 +576,7 @@ export default function AdminCases() {
   const [approvedVolunteers, setApprovedVolunteers] = useState<VolunteerProfile[]>(
     []
   );
+  const [volunteerDirectoryState, setVolunteerDirectoryState] = useState<"loading" | "loaded" | "error">("loading");
   const [lguPersonnel, setLguPersonnel] = useState<LguPersonnelCandidate[]>([]);
   const [lguPersonnelLoading, setLguPersonnelLoading] = useState(false);
   const [lguPersonnelError, setLguPersonnelError] = useState("");
@@ -1208,13 +1210,16 @@ export default function AdminCases() {
             a.fullName.localeCompare(b.fullName)
           );
           setApprovedVolunteers(visibleApprovedVolunteers);
+          setVolunteerDirectoryState("loaded");
         } catch (error) {
           console.log("Approved volunteer merge error:", error);
           setApprovedVolunteers([]);
+          setVolunteerDirectoryState("error");
         }
       },
       (error) => {
         console.log("Volunteer applications listener error:", error);
+        setVolunteerDirectoryState("error");
         Alert.alert(
           "Permission Error",
           "Unable to load approved volunteer applications."
@@ -5694,6 +5699,28 @@ export default function AdminCases() {
                       cancelAssignment(savedAssignment);
                     }
                   }}
+                />
+              )}
+              {detailTab === "personnel" && (
+                <VolunteerEligibilityValidation
+                  rows={approvedVolunteers.map((volunteer) => {
+                    const result = volunteerEligibilityForCase(incident, volunteer);
+                    const incidentBarangay = normalizeBarangay(caseBarangayValue(incident));
+                    const local = Boolean(incidentBarangay) &&
+                      normalizeBarangay(volunteer.barangay) === incidentBarangay;
+                    return {
+                      id: volunteer.uid,
+                      name: volunteer.fullName,
+                      barangay: barangayDisplay(volunteer.barangay),
+                      eligible: result.eligible,
+                      reason: result.reason,
+                      inCaseBarangay: local,
+                    };
+                  })}
+                  loaded={volunteerDirectoryState !== "loading"}
+                  failed={volunteerDirectoryState === "error"}
+                  caseBarangay={barangayDisplay(caseBarangayValue(incident))}
+                  isValidated={dispatchReady}
                 />
               )}
               {detailTab === "personnel" && dispatchReady &&
