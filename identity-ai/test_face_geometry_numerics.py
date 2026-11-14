@@ -10,6 +10,7 @@ from pathlib import Path
 import unittest
 
 import numpy as np
+from face_pair_integrity import exact_image_reuse
 
 
 def real_functions():
@@ -36,6 +37,7 @@ def real_functions():
     environment = {
         "np": np, "math": math, "MATCH_LANDMARKS": names,
         "LEFT_EYE_OUTER": 33, "RIGHT_EYE_OUTER": 263,
+        "exact_image_reuse": exact_image_reuse,
     }
     exec(compile(module, "main.py:real_face_functions", "exec"), environment)
     return environment
@@ -80,7 +82,8 @@ class FaceGeometryNumericalTests(unittest.TestCase):
 
     def test_bad_similarity_never_returns_a_score_or_verified_status(self):
         env = self.env
-        env["decode_image"] = lambda *_: np.zeros((320, 320, 3), np.uint8)
+        env["decode_image"] = lambda b, _: np.full((320, 320, 3),
+                                            0 if b == b"a" else 1, np.uint8)
         env["image_quality"] = lambda _: {"score": 0.95}
         env["face_landmarks"] = lambda _: (sample_points(), {"reason": ""})
         env["get_min_quality_threshold"] = lambda: 0.34
@@ -102,7 +105,8 @@ class FaceGeometryNumericalTests(unittest.TestCase):
 
     def test_finite_similarity_is_still_manual_review_not_identity_approval(self):
         env = self.env
-        env["decode_image"] = lambda *_: np.zeros((320, 320, 3), np.uint8)
+        env["decode_image"] = lambda b, _: np.full((320, 320, 3),
+                                            0 if b == b"a" else 1, np.uint8)
         env["image_quality"] = lambda _: {"score": 0.95}
         env["face_landmarks"] = lambda _: (sample_points(), {"reason": ""})
         env["get_min_quality_threshold"] = lambda: 0.34
