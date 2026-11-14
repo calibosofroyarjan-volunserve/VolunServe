@@ -14,9 +14,9 @@ function normalizeBarangay(value) {
   return String(value || "")
     .normalize("NFKC")
     .trim().toLowerCase()
-    .replace(/^brgy\\.?\\s*|^barangay\\s*/i, "")
+    .replace(/^brgy\.?\s*|^barangay\s*/i, "")
     .replace(/[.,-]/g, " ")
-    .replace(/\\s+/g, " ")
+    .replace(/\s+/g, " ")
     .trim();
 }
 function list(value) {
@@ -67,10 +67,10 @@ function validateVolunteer(caseData, volunteer, options = {}) {
   const caseBarangay = normalizeBarangay(
     caseData.incidentBarangay || caseData.emergencyBarangay || caseData.barangay || caseData.reporterBarangay);
   const volunteerBarangay = normalizeBarangay(user.barangay || user.addressBarangay);
-  if (!caseBarangay || (allowed.size && !allowed.has(caseBarangay))) {
+  if (!allowed.size || !caseBarangay || !allowed.has(caseBarangay)) {
     return result("invalid_incident_barangay", "Incident barangay is not confirmed within SJDM");
   }
-  if (!volunteerBarangay || (allowed.size && !allowed.has(volunteerBarangay))) {
+  if (!volunteerBarangay || !allowed.has(volunteerBarangay)) {
     return result("invalid_volunteer_barangay", "Volunteer current barangay is not confirmed within SJDM");
   }
 
@@ -157,16 +157,15 @@ function recommendNextWave(plan, state = {}) {
   if (state.pendingOffer === true) return { action: "wait", reason: "await_volunteer_acceptance" };
   if (state.expiredOfferNotReleased === true) return { action: "stop", reason: "release_previous_offer_first" };
   const completed = new Set((state.completedWaves || []).map(Number));
+  const attempted = new Set((state.attemptedVolunteerIds || []).map(String));
   for (const wave of [1, 2, 3]) {
     if (completed.has(wave)) continue;
     if (wave >= 2 && !plan.wave2Configured) {
       return { action: "admin_review", wave: 2, reason: "verified_nearby_barangays_not_configured" };
     }
-    if (!plan.waves[wave]?.length) {
-      completed.add(wave);
-      continue;
-    }
-    return { action: "offer", wave, volunteerIds: plan.waves[wave].map((row) => row.uid) };
+    const candidate = (plan.waves[wave] || []).find((person) => !attempted.has(person.uid));
+    if (candidate) return { action: "offer", wave, volunteerId: candidate.uid };
+    completed.add(wave);
   }
   return { action: "admin_review", reason: "no_eligible_volunteer_accepted" };
 }
