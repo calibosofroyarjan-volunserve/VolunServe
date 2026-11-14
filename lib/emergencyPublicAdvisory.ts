@@ -17,7 +17,7 @@ export type PublicEmergencyAdvisoryDraft = {
   barangay: string;
 };
 
-const safeBarangay = (value: unknown): string | null => {
+export const safePublicAdvisoryBarangay = (value: unknown): string | null => {
   if (typeof value !== "string") return null;
   const normalized = value.trim()
     .replace(/^(?:barangay|brgy\.?)\s+/i, "")
@@ -31,15 +31,22 @@ const safeBarangay = (value: unknown): string | null => {
   ) || null;
 };
 
-export const buildPublicEmergencyAdvisory = (
+export const canPreparePublicEmergencyAdvisory = (
   source: SourceCase | null | undefined
+): boolean => Boolean(source && source.verificationStatus === "validated" &&
+  ["validated", "assigned", "in_progress"].includes(String(source.status || "")));
+
+export const buildPublicEmergencyAdvisory = (
+  source: SourceCase | null | undefined,
+  adminConfirmedBarangay?: unknown,
 ): PublicEmergencyAdvisoryDraft | null => {
-  if (!source || source.verificationStatus !== "validated" ||
-      !["validated", "assigned", "in_progress"].includes(String(source.status || ""))) {
-    return null;
-  }
-  // Incident barangay ONLY. A reporter's home barangay can be different.
-  const barangay = safeBarangay(source.incidentBarangay);
+  if (!canPreparePublicEmergencyAdvisory(source)) return null;
+
+  // Never fall back to reporterBarangay. If the case has no trustworthy
+  // incidentBarangay, the Admin explicitly chooses one from the SJDM list.
+  const barangay = safePublicAdvisoryBarangay(
+    adminConfirmedBarangay === undefined ? source?.incidentBarangay : adminConfirmedBarangay
+  );
   if (!barangay) return null;
 
   return {
