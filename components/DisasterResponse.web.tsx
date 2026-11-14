@@ -384,6 +384,35 @@ const safeText = (
 const evidenceType = (file: File): "image" | "video" =>
   file.type.startsWith("video/") ? "video" : "image";
 
+/**
+ * Reverse geocoding may return the nearest mapped object rather than the
+ * precise incident address. Only fill when a mapped street, neighbourhood,
+ * barangay or landmark is present; leave the final text editable.
+ */
+const mappedIncidentAddress = (payload: unknown): string | null => {
+  if (!payload || typeof payload !== "object") return null;
+  const record = payload as Record<string, any>;
+  const fields = record.address;
+  if (!fields || typeof fields !== "object") return null;
+  const a = fields as Record<string, unknown>;
+  const clean = (field: unknown) => typeof field === "string" ? field.trim().slice(0, 100) : "";
+  const street = clean(a.road || a.pedestrian || a.footway || a.residential);
+  const area = clean(a.suburb || a.neighbourhood || a.quarter ||
+    a.village || a.hamlet || a.city_district);
+  const building = clean(record.name);
+  const house = street ? clean(a.house_number) : "";
+  // Never pretend a city-only result is an exact incident address.
+  const specific = [
+    house && street ? house + " " + street : street,
+    /^(city of )?san jose del monte$/i.test(area) ? "" : area,
+  ].filter(Boolean);
+  if (!specific.length && building &&
+    !/^(city of )?san jose del monte$/i.test(building)) specific.push(building);
+  if (!specific.length) return null;
+  return [...new Set([...specific, "San Jose del Monte", "Bulacan"])]
+    .join(", ").slice(0, 240);
+};
+
 type DuplicateBlock = {
   caseId: string;
   status: string;
@@ -478,6 +507,14 @@ export default function WebDisasterReport() {
   const [pin, setPin] = useState<Pin | null>(null);
   const [latitude, setLatitude] = useState("");
   const [longitude, setLongitude] = useState("");
+  const [incidentAddress, setIncidentAddress] = useState("");
+  const [addressStatus, setAddressStatus] = useState("");
+  const lookupAbort = useRef<AbortController | null>(null);
+  const lookupTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lookupSequence = useRef(0);
+  const addressEditSequence = useRef(0);
+  const lastLookupStartedAt = useRef(0);
+  const addressCache = useRef(new Map<string, string | null>());
 
   const [photoFiles, setPhotoFiles] = useState<File[]>([]);
   const [photoPreviews, setPhotoPreviews] = useState<string[]>([]);
@@ -512,6 +549,78 @@ export default function WebDisasterReport() {
     };
   }, [photoFiles]);
 
+  useEffect(() => () => {
+    lookupSequence.current += 1;
+    if (lookupTimer.current) clearTimeout(lookupTimer.current);
+    lookupAbort.current?.abort();
+  }, []);
+
+  // Only a user-selected SJDM pin triggers this optional external lookup.
+  // Nominatim receives that pin's coordinates; no report data is sent.
+  const lookupSelectedAddress = (lat: number, lng: number) => {
+    const lookupId = ++lookupSequence.current;
+    const editId = addressEditSequence.current;
+    if (lookupTimer.current) clearTimeout(lookupTimer.current);
+    lookupAbort.current?.abort();
+    lookupAbort.current = null;
+    setIncidentAddress("");
+    setAddressStatus("Finding a nearby street or barangay from the map…");
+
+    const key = lat.toFixed(5) + "," + lng.toFixed(5);
+    const applyIfCurrent = (address: string | null) => {
+      if (lookupSequence.current !== lookupId ||
+          addressEditSequence.current !== editId ||
+          !pinRef.current ||
+          Math.abs(pinRef.current.latitude - lat) > 0.000001 ||
+          Math.abs(pinRef.current.longitude - lng) > 0.000001) return;
+      if (address) {
+        setIncidentAddress(address);
+        setAddressStatus("Address suggested from map data. Confirm the street and landmark before submitting.");
+      } else {
+        setAddressStatus("No detailed address found for this pin. Enter a nearby street or landmark.");
+      }
+    };
+    if (addressCache.current.has(key)) {
+      applyIfCurrent(addressCache.current.get(key) || null);
+      return;
+    }
+
+    // One lookup per settled pin; throttle repeated map clicks/drags.
+    const wait = Math.max(650, 1400 - (Date.now() - lastLookupStartedAt.current));
+    lookupTimer.current = setTimeout(async () => {
+      if (lookupSequence.current !== lookupId) return;
+      const controller = new AbortController();
+      lookupAbort.current = controller;
+      lastLookupStartedAt.current = Date.now();
+      try {
+        const url = new URL("https://nominatim.openstreetmap.org/reverse");
+        url.searchParams.set("format", "jsonv2");
+        url.searchParams.set("lat", lat.toFixed(6));
+        url.searchParams.set("lon", lng.toFixed(6));
+        url.searchParams.set("zoom", "18");
+        url.searchParams.set("addressdetails", "1");
+        url.searchParams.set("accept-language", "en");
+        const result = await fetch(url.toString(), {
+          signal: controller.signal,
+          credentials: "omit",
+          referrerPolicy: "origin",
+          headers: { Accept: "application/json" },
+        });
+        if (!result.ok) throw new Error("Reverse geocoding unavailable");
+        const address = mappedIncidentAddress(await result.json());
+        // Small local cache avoids calling the public API again for the same pin.
+        if (addressCache.current.size >= 40) addressCache.current.clear();
+        addressCache.current.set(key, address);
+        applyIfCurrent(address);
+      } catch {
+        if (controller.signal.aborted || lookupSequence.current !== lookupId) return;
+        setAddressStatus("Automatic address lookup unavailable. Enter a nearby street or landmark.");
+      } finally {
+        if (lookupAbort.current === controller) lookupAbort.current = null;
+      }
+    }, wait);
+  };
+
   const selectPin = (
     lat: number,
     lng: number,
@@ -537,10 +646,15 @@ export default function WebDisasterReport() {
       accuracy,
     };
 
+    // Reselecting the exact same pin must not clear a manually corrected address.
+    const samePin = pinRef.current &&
+      Math.abs(pinRef.current.latitude - lat) < 0.000001 &&
+      Math.abs(pinRef.current.longitude - lng) < 0.000001;
     pinRef.current = selected;
     setPin(selected);
     setLatitude(lat.toFixed(6));
     setLongitude(lng.toFixed(6));
+    if (!samePin) lookupSelectedAddress(lat, lng);
 
     frame.current?.contentWindow?.postMessage(
       { kind: "set-pin", ...selected },
@@ -1398,9 +1512,23 @@ export default function WebDisasterReport() {
                     required
                     minLength={3}
                     maxLength={240}
-                    placeholder="Example: Block 4, Brgy. Muzon, near ..."
+                    value={incidentAddress}
+                    onChange={(event) => {
+                      addressEditSequence.current += 1;
+                      lookupSequence.current += 1;
+                      if (lookupTimer.current) clearTimeout(lookupTimer.current);
+                      lookupAbort.current?.abort();
+                      setIncidentAddress(event.target.value);
+                      setAddressStatus("");
+                    }}
+                    placeholder="Select the incident pin to fill an address automatically"
                   />
                 </label>
+                <p className="pin-status" aria-live="polite">
+                  {addressStatus || "Select a pin for an address suggestion, then verify the landmark."}
+                  {" "}Coordinates of selected pins are sent to OpenStreetMap Nominatim for lookup.
+                  {" "}Address data © OpenStreetMap contributors.
+                </p>
               </section>
             </div>
 
