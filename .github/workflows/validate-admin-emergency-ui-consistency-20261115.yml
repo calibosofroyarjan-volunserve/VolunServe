@@ -1,0 +1,33 @@
+name: Validate Admin Emergency UI cleanup (NO DEPLOY)
+on:
+  push:
+    branches:
+      - fix/admin-emergency-ui-consistency-20261115
+permissions:
+  contents: read
+jobs:
+  admin-ui-cleanup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Verify cleanup and preserved case flows
+        run: |
+          node scripts/test-admin-emergency-ui-consistency-20261115.cjs
+          node scripts/test-admin-five-tab-reference-20261115.cjs
+          node scripts/test-admin-clean-overview-20261115.cjs
+          node scripts/test-admin-complete-workspace-20261115.cjs
+          node scripts/test-admin-focused-response-map-20261115.cjs
+          node scripts/test-admin-navigation-contract.cjs
+          node scripts/test-emergency-announcement-advisory-link.cjs
+          node scripts/test-module-announcements-publishing-20261115.cjs
+      - name: Install locked dependencies
+        run: npm ci --no-audit --no-fund
+      - name: TypeScript compile
+        run: npx tsc --noEmit --incremental false
+      - name: Expo web build
+        run: npx expo export --platform web --clear
