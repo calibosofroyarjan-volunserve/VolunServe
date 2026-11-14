@@ -3963,7 +3963,6 @@ export default function AdminCases() {
                 {(
                   [
                     ["overview", "Overview"],
-                    ["map", "Map & Route"],
                     ["evidence", `Evidence (${imageEvidence.length + videoEvidence.length})`],
                     ["response", "Case Status"],
                     ["personnel", "Volunteer Assignment"],
@@ -4115,12 +4114,12 @@ export default function AdminCases() {
               <View
                 style={[
                   styles.locationActionCard,
-                  !["overview", "map"].includes(detailTab) && styles.hiddenSection,
+                  detailTab !== "overview" && styles.hiddenSection,
                 ]}
               >
                 <View style={styles.locationActionMain}>
-                  <Text style={styles.sectionEyebrow}>LOCATION & ROUTE</Text>
-                  <Text style={styles.locationActionTitle}>Resident response location</Text>
+                  <Text style={styles.sectionEyebrow}>INCIDENT LOCATION</Text>
+                  <Text style={styles.locationActionTitle}>Saved emergency location</Text>
                   <Text style={styles.locationActionAddress}>
                     {incident.location || "Exact response location not provided"}
                   </Text>
@@ -4144,27 +4143,12 @@ export default function AdminCases() {
                       )
                     }
                   >
-                    <Text style={styles.locationLiveButtonText}>Open Live Map</Text>
+                    <Text style={styles.locationLiveButtonText}>Open Response Map</Text>
                   </TouchableOpacity>
 
                 </View>
               </View>
 
-              {detailTab === "map" && Platform.OS === "web" &&
-                Number.isFinite(incident.latitude) && Number.isFinite(incident.longitude) && (
-                <View style={{ marginTop: 12, marginBottom: 18, borderRadius: 12, overflow: "hidden", backgroundColor: "#FFFFFF", borderWidth: 1, borderColor: "#D9E7DF" }}>
-                  <Text style={{ padding: 13, color: "#173D32", fontWeight: "800", fontSize: 13 }}>
-                    Live Response Map · This emergency report
-                  </Text>
-                  {React.createElement("iframe" as any, {
-                    title: "Embedded authorized LGU live response map for selected emergency",
-                    src: "/admin-live-map?caseId=" + encodeURIComponent(incident.id),
-                    loading: "lazy",
-                    allow: "geolocation",
-                    style: { width: "100%", height: 480, border: 0, display: "block" },
-                  })}
-                </View>
-              )}
               <View
                 style={[
                   styles.verificationPanel,
@@ -4300,7 +4284,7 @@ export default function AdminCases() {
                         }
                       >
                         <Text style={styles.criticalNavigateButtonText}>
-                          Start / Open Critical LGU Live Response
+                          Open Emergency Response Map
                         </Text>
                       </TouchableOpacity>
                     </View>
