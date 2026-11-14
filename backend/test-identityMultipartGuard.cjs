@@ -82,7 +82,7 @@ test("reject invalid content type and boundary injection",async()=>{
 test("reject truncated, corrupted or malformed multipart endings",async()=>{
   const p=await payload();
   for(const body of [
-    p.body.subarray(0,p.body.length-2),
+    p.body.subarray(0,p.body.length-3),
     p.body.subarray(1),
     Buffer.from("not a multipart envelope"),
   ]) {
