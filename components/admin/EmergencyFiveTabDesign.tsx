@@ -234,6 +234,109 @@ export function ReferenceHistory({ incident, assignments, formatDate }: {
   </View>;
 }
 
+
+export function ReferenceVolunteerMatching({ incident, verificationStatus, caseBarangay,
+  eligibleCount, activeAssignments, showManualFallback, onToggleManualFallback }: {
+  incident: AdminCaseView;
+  verificationStatus: string;
+  caseBarangay: string;
+  eligibleCount: number;
+  activeAssignments: AdminAssignmentView[];
+  showManualFallback: boolean;
+  onToggleManualFallback: () => void;
+}) {
+  const ready = verificationStatus === "validated" &&
+    ["validated", "assigned", "in_progress"].includes(incident.status);
+  const taskStatus = responseLabel(activeAssignments);
+  return <View style={styles.page}>
+    <View style={styles.matchHeading}>
+      <View style={styles.grow}>
+        <Heading icon="♧" title="Volunteer Assignment" sub="Location-first response coordination with qualification and acceptance checks." />
+      </View>
+      <View style={styles.matchBanner}>
+        <Text style={styles.matchBannerTitle}>◇ Three-wave automatic matching</Text>
+        <Text style={styles.matchBannerSub}>
+          {ready
+            ? "Planned workflow — automation has not yet been enabled. Existing recorded offers are shown below."
+            : "Starts only after Admin validation. No volunteer has been automatically notified by this design."}
+        </Text>
+      </View>
+    </View>
+    <View style={styles.kpiRow}>
+      <View style={[styles.kpi, styles.greenTint]}>
+        <Text style={styles.kpiIcon}>♧</Text>
+        <Text style={styles.kpiTitle}>Eligible local volunteers</Text>
+        <Text style={styles.kpiValue}>{ready ? String(eligibleCount) : "—"}</Text>
+        <Text style={styles.kpiDesc}>{ready ? "Approved, currently eligible in the incident barangay" : "Visible after report verification"}</Text>
+      </View>
+      <View style={styles.kpi}>
+        <Text style={styles.kpiIcon}>⌖</Text>
+        <Text style={styles.kpiTitle}>Case Barangay</Text>
+        <Text style={styles.kpiValue}>{caseBarangay || "Location needs review"}</Text>
+        <Text style={styles.kpiDesc}>City of San Jose del Monte, Bulacan</Text>
+      </View>
+      <View style={styles.kpi}>
+        <Text style={styles.kpiIcon}>▱</Text>
+        <Text style={styles.kpiTitle}>Assignment plan</Text>
+        <Text style={styles.kpiValue}>3 waves</Text>
+        <Text style={styles.kpiDesc}>Same barangay → nearby → SJDM citywide</Text>
+      </View>
+      <View style={[styles.kpi, styles.goldTint]}>
+        <Text style={styles.kpiIcon}>◉</Text>
+        <Text style={styles.kpiTitle}>Actual assignment</Text>
+        <Text style={styles.kpiValue}>{taskStatus}</Text>
+        <Text style={styles.kpiDesc}>Based on saved task records, not an automatic-notification claim</Text>
+      </View>
+    </View>
+    <Card>
+      <Heading icon="▤" title="Matching Waves" sub="Wave progression will require verified server-side automation; this page does not send offers itself." />
+      <View style={styles.waveRow}>
+        {[
+          ["01", "Same Barangay", caseBarangay || "Incident barangay", "First matching group"],
+          ["02", "Nearby Barangays", "Adjacent SJDM areas", "Not configured"],
+          ["03", "SJDM Citywide", "Other SJDM barangays", "Not configured"],
+        ].map(([n, title, area, status]) =>
+          <View key={n} style={styles.waveTile}>
+            <Text style={styles.waveNumber}>{n}</Text>
+            <Text style={styles.waveTitle}>{title}</Text>
+            <Text style={styles.muted}>{area}</Text>
+            <Text style={styles.waveState}>{ready ? status : "Awaiting validation"}</Text>
+          </View>)}
+      </View>
+    </Card>
+    <Card>
+      <Heading icon="♧" title="Assigned Volunteer Support" />
+      {activeAssignments.length === 0
+        ? <View style={styles.assignedEmpty}>
+            <Text style={styles.assignedEmptyIcon}>♧</Text>
+            <Text style={styles.headingText}>No Volunteer assigned yet</Text>
+            <Text style={styles.muted}>{ready
+              ? "There are no recorded accepted or pending offers. No automatic notification has been sent."
+              : "Validate the case first. An accepted response will appear here with its actual status."}</Text>
+          </View>
+        : activeAssignments.map((x) =>
+            <View key={x.id} style={styles.assignedRow}>
+              <View style={styles.volAvatar}><Text style={styles.volAvatarText}>
+                {(x.volunteerName || "V").slice(0, 1).toUpperCase()}
+              </Text></View>
+              <View style={styles.grow}>
+                <Text style={styles.personName}>{x.volunteerName || "Volunteer"}</Text>
+                <Text style={styles.muted}>Task status: {cap(x.status)}</Text>
+              </View>
+            </View>)}
+    </Card>
+    <View style={styles.fallbackStrip}>
+      <View style={styles.grow}>
+        <Text style={styles.fallbackTitle}>Admin manual offer fallback</Text>
+        <Text style={styles.muted}>
+          Existing authorized manual task offering is retained until the automatic three-wave engine is implemented and tested.
+        </Text>
+      </View>
+      <Action label={showManualFallback ? "Hide fallback  ‹" : "Show fallback  ›"} kind="outline" onPress={onToggleManualFallback} />
+    </View>
+  </View>;
+}
+
 export const referencePalette = COLOR;
 const styles = StyleSheet.create({
   page: { padding: 18, gap: 13, backgroundColor: "#FBFDFC" },
@@ -265,6 +368,31 @@ const styles = StyleSheet.create({
   kpiRow: { flexDirection: "row", flexWrap: "wrap", gap: 12 },
   kpi: { flexBasis: 160, flexGrow: 1, minWidth: 155, borderWidth: 1, borderColor: "#DBE5ED", borderRadius: 12, padding: 14, gap: 6 },
   blueTint: { backgroundColor: "#F0F6FF" },
+
+  greenTint: { backgroundColor: "#EDF9F3" },
+  matchHeading: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 13 },
+  matchBanner: { backgroundColor: "#F0F6FF", borderColor: "#D5E5FD", borderWidth: 1, borderRadius: 12,
+    padding: 13, flexGrow: 1, flexBasis: 250 },
+  matchBannerTitle: { color: "#174D9A", fontWeight: "900", fontSize: 12 },
+  matchBannerSub: { color: "#546C8F", fontSize: 10, lineHeight: 16, marginTop: 4 },
+  waveRow: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
+  waveTile: { flexBasis: 170, minWidth: 140, flexGrow: 1, borderRadius: 10,
+    borderWidth: 1, borderColor: "#E4EBF4", backgroundColor: "#FAFCFF", padding: 13, gap: 4 },
+  waveNumber: { color: "#1E64B6", fontSize: 10, fontWeight: "900" },
+  waveTitle: { color: COLOR.navy, fontSize: 12, fontWeight: "900" },
+  waveState: { color: COLOR.orange, fontSize: 10, fontWeight: "800", marginTop: 8 },
+  assignedEmpty: { minHeight: 155, alignItems: "center", justifyContent: "center",
+    gap: 6, paddingHorizontal: 18, backgroundColor: "#F8FBFF", borderRadius: 11 },
+  assignedEmptyIcon: { color: "#3C7FD7", fontSize: 28 },
+  assignedRow: { flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 8,
+    borderBottomWidth: 1, borderBottomColor: "#E9EFF5" },
+  volAvatar: { width: 33, height: 33, borderRadius: 33, backgroundColor: "#E5EDFF",
+    justifyContent: "center", alignItems: "center" },
+  volAvatarText: { color: "#205BB4", fontWeight: "900" },
+  fallbackStrip: { backgroundColor: "#F7F9FB", borderColor: "#DCE6ED", borderWidth: 1,
+    borderRadius: 12, padding: 13, flexDirection: "row", flexWrap: "wrap", gap: 10, alignItems: "center" },
+  fallbackTitle: { color: COLOR.navy, fontSize: 12, fontWeight: "900" },
+
   goldTint: { backgroundColor: "#FFFAF0" },
   redTint: { backgroundColor: "#FFF4F3" },
   kpiIcon: { color: COLOR.blue, fontSize: 21, fontWeight: "900" },
