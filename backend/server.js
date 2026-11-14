@@ -20,6 +20,9 @@ const {classifyStagingFirestoreFailure} = require("./stagingProfileDiagnostics")
 const {verifyIndependentPadAttestation} = require("./independentPadAttestation");
 const {requireValidatedIdentityMultipart} = require("./identityMultipartGuard");
 const {
+  identityPrecheckExpiresAt, boundedVerificationId, safeIdentityOutcomeMessage,
+} = require("./identityPrivacyPolicy");
+const {
   getProfileRole,
   isApprovedAccount,
   isOperationalAdminProfile,
@@ -5034,6 +5037,10 @@ app.post(
           lastRequestedAt: FieldValue.serverTimestamp(),
           windowStartedAt: newWindow ? FieldValue.serverTimestamp() : saved.windowStartedAt,
           requestCount: count + 1,
+          // Short-lived operational rate-limit metadata. An authorized
+          // operator must enable Firestore TTL on 'expiresAt'; setting this
+          // timestamp alone does NOT delete stored documents.
+          expiresAt: identityPrecheckExpiresAt(now),
         }, { merge: true });
       });
       // Never allow client-uploaded fields to override a saved profile DOB
@@ -5339,8 +5346,10 @@ app.post(
         ? "failed" : selectedIdDecision;
       const matchScore = numberOrNull(aiResult?.matchScore);
       const livenessScore = null; // Never manufacture or trust a still-photo PAD score.
-      const verificationId = cleanText(
-        aiResult?.verificationId || `identity_${uid}_${Date.now()}`, 200,
+      // A raw provider-generated identifier might contain private OCR text.
+      // Only a constrained opaque ID is safe for Firestore and API responses.
+      const verificationId = boundedVerificationId(
+        aiResult?.verificationId, `identity_${requestId.replace(/-/g, "")}`,
       );
 
       const outcome = await db.runTransaction(async (transaction) => {
@@ -5361,18 +5370,20 @@ app.post(
         const attemptCycle = Number.isSafeInteger(current.aiAttemptCycle) && current.aiAttemptCycle > 0
           ? current.aiAttemptCycle : 1;
         const result = identityAttemptOutcome(decision, attemptCount);
-        const resultMessage = result.requiresManualReview && decision === "failed"
-          ? "Three identity verification attempts were unsuccessful. Your case has been referred for Admin review."
-          : cleanText(aiResult?.message || (
-            decision === "verified" ? "The AI comparison is complete. Your application is pending independent Admin review." :
-            decision === "failed" ? "Identity verification attempt failed. Please retry with clear, valid images." :
-            "The submission requires LGU/Admin manual review."
-          ), 500);
+        // Provider free-text is not a safe storage field. Some OCR/face
+        // services echo document names, birth dates or scanned text in an
+        // error message. Persist only a fixed message from bounded enums.
+        const resultMessage = safeIdentityOutcomeMessage({
+          decision, requiresManualReview: result.requiresManualReview,
+          attemptCount, maxAttempts: MAX_IDENTITY_AI_ATTEMPTS,
+          documentScreening,
+        });
         const previousReview = current.reviewedAt || current.manualReviewDecision ? {
           previousDecision: cleanText(current.manualReviewDecision || current.decision, 80),
           previousValidationMethod: cleanText(current.manualValidationMethod, 120),
-          previousReviewNotes: cleanText(current.manualReviewNotes, 1000),
-          previousReviewedBy: cleanText(current.reviewedBy, 200),
+          // Full review notes and reviewer identity already belong to the
+          // authorized audit/review records, not duplicated in immutable AI
+          // attempt metadata. Reduce long-lived sensitive copies.
           previousReviewedAt: current.reviewedAt || null,
         } : null;
 
@@ -5417,10 +5428,11 @@ app.post(
             aiDecision: decision,
             status: result.status,
             requiresManualReview: result.requiresManualReview,
-            matchScore, livenessScore,
+            // Active review retains normalized evidence; immutable attempt
+            // history needs only operational outcome codes, not a second
+            // copy of biometric scores or complete screening details.
             padStatus: pad.status,
             padValidated: false,
-            documentScreening,
             verificationMethod: "volunserve_ai",
             previousReview,
             createdAt: FieldValue.serverTimestamp(),
