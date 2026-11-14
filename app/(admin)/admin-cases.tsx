@@ -33,7 +33,9 @@ import {
 } from "react-native";
 
 import { db } from "../../lib/firebase";
-import { canPreparePublicEmergencyAdvisory } from "../../lib/emergencyPublicAdvisory";
+import { safePublicAdvisoryBarangay } from "../../lib/emergencyPublicAdvisory";
+import { SJDM_BARANGAYS } from "../../constants/sjdmBarangays";
+import { publishVerifiedCommunityAdvisory } from "../../lib/publishVerifiedCommunityAdvisory";
 
 const BACKEND_URL = "https://volunserve.onrender.com";
 
@@ -593,6 +595,8 @@ export default function AdminCases() {
 
   const [notes, setNotes] = useState<Record<string, string>>({});
   const [reviewReasons, setReviewReasons] = useState<Record<string, string>>({});
+  const [publicImpactConfirmed, setPublicImpactConfirmed] = useState<Record<string, boolean>>({});
+  const [publicImpactBarangays, setPublicImpactBarangays] = useState<Record<string, string>>({});
   const [assignmentCaseId, setAssignmentCaseId] = useState("");
   const [skillFilter, setSkillFilter] = useState("");
   const [availabilityFilter, setAvailabilityFilter] = useState("");
@@ -1779,6 +1783,18 @@ export default function AdminCases() {
       return;
     }
 
+    const publicImpact = action === "validate" &&
+      ["high", "critical"].includes(incident.severity) &&
+      publicImpactConfirmed[incident.id] === true;
+    const confirmedIncidentBarangay = publicImpact
+      ? safePublicAdvisoryBarangay(publicImpactBarangays[incident.id]) : null;
+
+    if (publicImpact && !confirmedIncidentBarangay) {
+      Alert.alert("Confirm Incident Barangay",
+        "Select the actual SJDM incident barangay to automatically publish a public safety advisory. If the location is not known, switch off the public-impact option and validate the report privately.");
+      return;
+    }
+
     const caseRef = doc(db, "disasterCases", incident.id);
     const notificationRef = doc(collection(db, "notifications"));
     const activityLogRef = doc(collection(db, "adminActivityLogs"));
@@ -1881,10 +1897,28 @@ export default function AdminCases() {
       });
 
       if (action === "validate") {
-        Alert.alert(
-          "Request Validated",
-          "The case is now eligible for responder assignment."
-        );
+        // Publishing is separate, so an Announcements permission error cannot
+        // undo successful emergency validation or delay Volunteer offers.
+        let advisoryMessage = "No public advisory requested; the emergency report remains private.";
+        if (publicImpact && confirmedIncidentBarangay) {
+          try {
+            const publication = await publishVerifiedCommunityAdvisory({
+              caseId: incident.id,
+              adminUid: adminUser.uid,
+              confirmedIncidentBarangay,
+            });
+            advisoryMessage = publication === "published"
+              ? "A privacy-safe public advisory was automatically posted in Community Updates."
+              : publication === "already_published"
+                ? "An advisory for this case is already published; no duplicate created."
+                : "No advisory posted; case status or severity changed.";
+          } catch (publicationError) {
+            console.error("Automatic public advisory publication failed:", publicationError);
+            advisoryMessage = "Case validated, but the public advisory was NOT published. Review Announcements permissions separately.";
+          }
+        }
+        Alert.alert("Request Validated",
+          "The case is now eligible for Volunteer offers. " + advisoryMessage);
       } else if (action === "request_more_evidence") {
         Alert.alert(
           "Resident Notified",
@@ -3633,8 +3667,7 @@ export default function AdminCases() {
           ).length;
           const verificationStatus =
             incident.verificationStatus || "pending_verification";
-          const mayCreatePublicAdvisory =
-            canPreparePublicEmergencyAdvisory(incident);
+
 
           const imageEvidence = (incident.attachments || []).filter((item) =>
             String(item.type || "").toLowerCase().includes("image")
@@ -3820,25 +3853,6 @@ export default function AdminCases() {
                     <Text style={styles.caseId}>CASE {incident.id}</Text>
                   </View>
 
-                  {mayCreatePublicAdvisory ? (
-                    <TouchableOpacity
-                      accessibilityRole="button"
-                      accessibilityLabel="Create reviewed public safety advisory in Admin Announcements"
-                      style={{
-                        alignSelf: "flex-start", backgroundColor: "#E9F7F2",
-                        borderColor: "#A6D6C5", borderWidth: 1, borderRadius: 8,
-                        paddingHorizontal: 14, paddingVertical: 10, marginBottom: 10,
-                      }}
-                      onPress={() => router.push({
-                        pathname: "/(admin)/create-announcement",
-                        params: { incidentId: incident.id },
-                      } as any)}
-                    >
-                      <Text style={{ color: "#087C61", fontSize: 13, fontWeight: "700" }}>
-                        Create Public Advisory in Announcements
-                      </Text>
-                    </TouchableOpacity>
-                  ) : null}
                   <Text style={styles.locationText}>⌖ {incident.location}</Text>
                   <Text style={styles.details}>{incident.details}</Text>
 
@@ -4411,6 +4425,66 @@ export default function AdminCases() {
                           }))
                         }
                       />
+
+                      {["high", "critical"].includes(incident.severity) ? (
+                        <View style={{
+                          backgroundColor: "#F0F8F5", borderWidth: 1, borderColor: "#B8DDD0",
+                          borderRadius: 10, padding: 13, marginTop: 12, marginBottom: 14,
+                        }}>
+                          <Text style={{ fontWeight: "700", color: "#173D32", fontSize: 13 }}>
+                            Public safety warning — only for community-impact incidents
+                          </Text>
+                          <Text style={{ fontSize: 12, color: "#516A65", marginTop: 5 }}>
+                            Do not broadcast personal medical emergencies or private rescues. No resident information, photos, precise addresses or GPS will appear.
+                          </Text>
+                          <TouchableOpacity
+                            accessibilityRole="checkbox"
+                            accessibilityState={{ checked: Boolean(publicImpactConfirmed[incident.id]) }}
+                            onPress={() => setPublicImpactConfirmed(current => ({
+                              ...current, [incident.id]: !current[incident.id],
+                            }))}
+                            style={{ paddingVertical: 12 }}
+                          >
+                            <Text style={{ color: "#087C61", fontWeight: "700" }}>
+                              {publicImpactConfirmed[incident.id] ? "☑" : "☐"} Automatically publish a public advisory when I validate
+                            </Text>
+                          </TouchableOpacity>
+                          {publicImpactConfirmed[incident.id] ? (
+                            <View>
+                              <Text style={styles.controlLabel}>Confirm actual incident barangay in SJDM</Text>
+                              <TextInput
+                                style={styles.input}
+                                value={publicImpactBarangays[incident.id] || ""}
+                                onChangeText={value => setPublicImpactBarangays(current => ({
+                                  ...current, [incident.id]: value.slice(0, 70),
+                                }))}
+                                placeholder="Type an official incident barangay"
+                                placeholderTextColor="#64748B"
+                                maxLength={70}
+                              />
+                              {publicImpactBarangays[incident.id]?.trim().length >= 2 &&
+                               !safePublicAdvisoryBarangay(publicImpactBarangays[incident.id]) ? (
+                                <View style={{ borderWidth: 1, borderColor: "#D5E9E1", borderRadius: 8 }}>
+                                  {SJDM_BARANGAYS.filter(name => name.toLowerCase().includes(
+                                    String(publicImpactBarangays[incident.id] || "").trim().toLowerCase()
+                                  )).slice(0, 6).map(name => (
+                                    <TouchableOpacity key={name} accessibilityRole="button"
+                                      onPress={() => setPublicImpactBarangays(current => ({
+                                        ...current, [incident.id]: name,
+                                      }))}
+                                      style={{ padding: 10, borderBottomWidth: 1, borderBottomColor: "#E9F1EE" }}>
+                                      <Text style={{ color: "#173D32" }}>{name}</Text>
+                                    </TouchableOpacity>
+                                  ))}
+                                </View>
+                              ) : null}
+                              <Text style={{ color: "#516A65", fontSize: 11, marginTop: 8 }}>
+                                Check the actual incident location; do not use the reporter's home barangay. If unsure, uncheck public warning and validate privately.
+                              </Text>
+                            </View>
+                          ) : null}
+                        </View>
+                      ) : null}
 
                       <View style={styles.reviewActions}>
                         <TouchableOpacity
