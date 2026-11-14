@@ -26,6 +26,7 @@ from fastapi import FastAPI, Header, HTTPException, Request
 from starlette.datastructures import UploadFile as StarletteUploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from PIL import Image, ImageOps
+from image_upload_bounds import matching_image_signature, image_dimensions_allowed
 app = FastAPI(
     title="VolunServe Identity AI",
     version="2.1.0",
@@ -291,7 +292,9 @@ async def read_upload(
                 "or WebP image."
             ),
         )
-    data = await upload.read()
+    # Never read an arbitrarily large ID/selfie into Python memory just to
+    # reject it after the fact. One extra byte proves an oversized upload.
+    data = await upload.read(maximum_bytes + 1)
     if not data:
         raise HTTPException(
             status_code=400,
@@ -305,6 +308,11 @@ async def read_upload(
                 f"{maximum_bytes // (1024 * 1024)} MB limit."
             ),
         )
+    if not matching_image_signature(data, content_type):
+        raise HTTPException(
+            status_code=415,
+            detail=f"{label} must contain a genuine JPEG, PNG or WebP image.",
+        )
     return data
 
 
@@ -316,6 +324,10 @@ def decode_image(
         with Image.open(
             BytesIO(data)
         ) as image:
+            # Pillow opens headers lazily: check pixel count BEFORE EXIF
+            # transpose, RGB conversion or memory-intensive resize.
+            if not image_dimensions_allowed(image.width, image.height):
+                raise ValueError("image_pixels_exceeded")
             image = ImageOps.exif_transpose(
                 image
             ).convert("RGB")
@@ -367,6 +379,11 @@ def decode_image(
             cv2.COLOR_RGB2BGR,
         )
     except ValueError as error:
+        if str(error) == "image_pixels_exceeded":
+            raise HTTPException(
+                status_code=413,
+                detail=f"{label} has too many pixels for safe processing.",
+            ) from error
         if str(error) == "image_too_small":
             raise HTTPException(
                 status_code=400,
