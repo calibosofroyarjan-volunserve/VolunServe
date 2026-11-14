@@ -77,15 +77,11 @@ function mapHtml(destination: Point, origin: Point | null, route: RoadRoute | nu
     #credit{position:absolute;bottom:8px;left:9px;max-width:calc(100% - 70px);
       background:#ffffffef;border-radius:6px;padding:5px 8px;
       font:10px system-ui;color:#35584b;pointer-events:none;z-index:2}
-    #scope{position:absolute;top:9px;left:9px;z-index:2;
-      padding:7px 10px;background:#ffffffef;border-radius:7px;
-      color:#126A51;font:700 11px system-ui;pointer-events:none}
     #fallback{display:none;position:absolute;inset:0;place-items:center;text-align:center;
       background:#e8f1ec;padding:18px;font:13px system-ui;color:#295848}
   </style>
 </head><body>
   <div id="map"></div>
-  <div id="scope">San Jose del Monte city only</div>
   <div id="credit">OpenStreetMap / OpenFreeMap · SJDM boundary: geoBoundaries ADM3 (CC BY 4.0) · OSRM</div>
   <div id="fallback">Map tiles are unavailable. Use Open in Google Maps for directions.</div>
   <script src="https://unpkg.com/maplibre-gl@5/dist/maplibre-gl.js"><\/script>
@@ -97,14 +93,14 @@ function mapHtml(destination: Point, origin: Point | null, route: RoadRoute | nu
       try {
         const map = new maplibregl.Map({
           container: "map", style: "https://tiles.openfreemap.org/styles/liberty",
-          center: [(data.cityBounds.west + data.cityBounds.east) / 2,
-            (data.cityBounds.south + data.cityBounds.north) / 2],
-          zoom: 11.5, attributionControl: true, interactive: true,
+          center: [121.045, 14.813],
+          zoom: 13, attributionControl: true, interactive: true,
           renderWorldCopies: false,
-          maxBounds: [[data.cityBounds.west - 0.008, data.cityBounds.south - 0.008],
-                      [data.cityBounds.east + 0.008, data.cityBounds.north + 0.008]]
+          maxBounds: [[121.005, 14.758], [121.178, 14.877]],
+          minZoom: 11.3, maxZoom: 19
         });
-        map.addControl(new maplibregl.NavigationControl({showCompass:false}), "top-right");
+        // Match the Emergency Reports map controls and viewport.
+        map.addControl(new maplibregl.NavigationControl({visualizePitch:true}), "top-left");
         if (data.venueInCity) {
           const venue = document.createElement("div");
           venue.className = "marker";
@@ -131,7 +127,7 @@ function mapHtml(destination: Point, origin: Point | null, route: RoadRoute | nu
             type:"geojson", data:data.outsideMask,
           });
           map.addLayer({ id:"sjdm-city-fill", type:"fill", source:"sjdm-city-boundary",
-            paint:{"fill-color":"#0E916C","fill-opacity":0.07} });
+            paint:{"fill-color":"#0d9488","fill-opacity":0.07} });
           if (data.route && data.route.length > 1) {
             map.addSource("volunserve-road-route", {
               type:"geojson", data:{type:"Feature",properties:{},
@@ -142,19 +138,16 @@ function mapHtml(destination: Point, origin: Point | null, route: RoadRoute | nu
             map.addLayer({id:"route",type:"line",source:"volunserve-road-route",
               paint:{"line-color":"#097D66","line-width":5}});
           }
-          // Paint above the route: any streets/route sections beyond the real
-          // city polygon stay hidden. The border comes from the 134-point ADM3 shape.
-          map.addLayer({ id:"sjdm-outside-hidden", type:"fill", source:"sjdm-outside-mask",
-            paint:{"fill-color":"#E8F1EC","fill-opacity":1} });
+          // Same SJDM outside shading and green outline as Emergency Reports:
+          // surrounding towns remain visible for context, but are greyed out.
+          // Existing route drawing and venue GPS marker remain unchanged.
+          map.addLayer({ id:"sjdm-outside-shade", type:"fill", source:"sjdm-outside-mask",
+            paint:{"fill-color":"#334155","fill-opacity":0.50} });
           map.addLayer({ id:"sjdm-city-outline", type:"line", source:"sjdm-city-boundary",
-            paint:{"line-color":"#078668","line-width":3,"line-opacity":1} });
-          // Keep camera focused on SJDM even for routes from GPS outside the city.
-          // External directions remain available via the existing Navigate button.
-          map.fitBounds(
-            [[data.cityBounds.west,data.cityBounds.south],
-             [data.cityBounds.east,data.cityBounds.north]],
-            {padding:22,maxZoom:13.8,duration:0}
-          );
+            paint:{"line-color":"#047857","line-width":3,"line-opacity":1} });
+          // Use the same city-wide camera view as Emergency Reports.
+          map.fitBounds([[121.013,14.767],[121.169,14.869]],
+            {padding:20,duration:0});
         });
         map.on("error", e => {
           if (e?.error?.message?.includes("style")) fallback();
