@@ -110,7 +110,8 @@ function reviewBucket(item: IdentityReview): ReviewFilter {
   return adminReviewStatusBucket(item);
 }
 function isNoMediaLGUReview(item: IdentityReview): boolean {
-  return item.manualReviewChannel === "lgu_in_person_no_media";
+  return item.manualReviewChannel === "lgu_in_person_no_media" &&
+    item.verificationMethod === "manual_lgu_in_person_no_media";
 }
 function reviewMethodAllowed(item: IdentityReview, method: string): boolean {
   if (!isNoMediaLGUReview(item)) return adminReviewMethodEligible(item.documentScreening, method);
