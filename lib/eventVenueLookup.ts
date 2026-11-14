@@ -3,14 +3,18 @@
  * A geocoder result is only a suggestion; LGU approval and explicit pin
  * confirmation are still required. Never guess coordinates from barangay alone.
  */
+import {
+  boundaryBounds, insideSjdmBoundary, loadSjdmBoundary,
+  type SjdmBoundary,
+} from "./sjdmMapBoundary";
+
 export type EventVenuePoint = { latitude: number; longitude: number };
 export type EventVenueResult =
   | { status: "found"; point: EventVenuePoint; label: string }
   | { status: "ambiguous" | "not-found" | "unavailable"; point?: never; label?: never };
 
-const insideSJDM = (lat: number, lng: number) =>
-  Number.isFinite(lat) && Number.isFinite(lng) &&
-  lat >= 14.65 && lat <= 15.0 && lng >= 120.88 && lng <= 121.30;
+const insideSJDM = (boundary: SjdmBoundary, lat: number, lng: number) =>
+  insideSjdmBoundary(boundary, lat, lng);
 
 const genericVenue = /^(barangay hall|covered court|multi-purpose hall|community center|public plaza|school grounds)$/i;
 
@@ -20,11 +24,17 @@ export async function lookUpEventVenue(
   const area = barangay.trim().slice(0, 90);
   const place = venue.trim().slice(0, 150);
   if (!area || !place) return { status: "not-found" };
+  // Do not geocode or suggest a venue without the same verified polygon
+  // used by the Volunteer map and Resident Propose Event pin picker.
+  const boundary = await loadSjdmBoundary();
+  if (!boundary) return { status: "unavailable" };
+  const bounds = boundaryBounds(boundary);
   // Avoid accepting barangay centroids as the actual sports court or hall.
   const query = [place, area, "San Jose del Monte", "Bulacan", "Philippines"].join(", ");
   const url = "https://nominatim.openstreetmap.org/search?" +
     new URLSearchParams({ q: query, format: "jsonv2", limit: "5", addressdetails: "1",
-      viewbox: "120.88,15.00,121.30,14.65", bounded: "1" }).toString();
+      viewbox: [bounds.west,bounds.north,bounds.east,bounds.south].join(","),
+      bounded: "1" }).toString();
   try {
     const response = await fetch(url, { signal, headers: { Accept: "application/json" } });
     if (!response.ok) return { status: "unavailable" };
@@ -36,7 +46,7 @@ export async function lookUpEventVenue(
       const actualName = String(entry?.name || "").toLowerCase();
       const venueName = place.toLowerCase();
       const barangayName = area.toLowerCase();
-      return insideSJDM(lat, lng) &&
+      return insideSJDM(boundary, lat, lng) &&
         display.includes("bulacan") &&
         (display.includes("san jose del monte") || display.includes(barangayName)) &&
         (actualName.includes(venueName) || display.split(",")[0]?.trim().includes(venueName)) &&
