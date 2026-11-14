@@ -167,7 +167,7 @@ const styles = StyleSheet.create({
   scroll: { flexGrow: 1 },
   split: { flexDirection: "row", width: "100%", flex: 1, alignItems: "stretch" },
   splitCompact: { flexDirection: "column" },
-  hero: { flex: 1.33, width: "100%", backgroundColor: "#064B3B", overflow: "hidden", minWidth: 0 },
+  hero: { flex: 1.33, backgroundColor: "#064B3B", overflow: "hidden", minWidth: 0 },
   heroFullBleedImage: { width: "100%", height: "100%" },
   heroCompact: { flex: 0, width: "100%" },
   heroContent: { flex: 1, paddingHorizontal: 47, paddingTop: 36, paddingBottom: 34, justifyContent: "space-between" },
