@@ -1,5 +1,5 @@
 import AdminReviewHero from "../../components/admin/AdminReviewHero";
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 
 import {
   ActivityIndicator,
@@ -14,12 +14,15 @@ import {
 
 import {
   Redirect,
+  useLocalSearchParams,
   type Href,
 } from "expo-router";
 
 import {
   addDoc,
   collection,
+  doc,
+  getDoc,
   serverTimestamp,
 } from "firebase/firestore";
 
@@ -30,6 +33,7 @@ import {
 import {
   useUserSession,
 } from "../../lib/useUserSession";
+import { buildPublicEmergencyAdvisory } from "../../lib/emergencyPublicAdvisory";
 
 export default function CreateAnnouncement() {
   const {
@@ -37,6 +41,11 @@ export default function CreateAnnouncement() {
     user,
     profile,
   } = useUserSession();
+
+  const params = useLocalSearchParams<{ incidentId?: string }>();
+  const incidentId = typeof params.incidentId === "string"
+    ? params.incidentId.trim() : "";
+  const role = typeof profile?.role === "string" ? profile.role.toLowerCase() : "";
 
   const [title, setTitle] = useState("");
   const [message, setMessage] = useState("");
@@ -48,8 +57,47 @@ export default function CreateAnnouncement() {
     { label: "Public Service Advisory", title: "Public Service Advisory", body: "Please review the latest official community service advisory and follow instructions from authorized personnel." },
   ];
 
-  const [submitting, setSubmitting] =
-    useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [advisoryLoading, setAdvisoryLoading] = useState(false);
+  const [advisoryError, setAdvisoryError] = useState("");
+  const [advisoryBarangay, setAdvisoryBarangay] = useState("");
+  const [advisoryPriority, setAdvisoryPriority] = useState<"normal" | "urgent">("normal");
+  const [advisoryReviewed, setAdvisoryReviewed] = useState(false);
+
+  // The emergency ID is an Admin-only route parameter. Never copy raw
+  // report text, reporter information, photo URLs or exact coordinates.
+  useEffect(() => {
+    if (!incidentId || loading || !user || role !== "admin") return;
+    let current = true;
+    setAdvisoryLoading(true);
+    setAdvisoryError("");
+    setAdvisoryReviewed(false);
+    getDoc(doc(db, "disasterCases", incidentId))
+      .then(snapshot => {
+        if (!current) return;
+        const draft = snapshot.exists()
+          ? buildPublicEmergencyAdvisory(snapshot.data()) : null;
+        if (!draft) {
+          setAdvisoryBarangay("");
+          setAdvisoryError("This report is not currently validated for a public advisory, or its incident barangay is not confirmed. Review the case in Emergency Reports.");
+          return;
+        }
+        setTitle(draft.title);
+        setMessage(draft.message);
+        setCustomAnnouncement(false);
+        setAdvisoryPriority(draft.priority);
+        setAdvisoryBarangay(draft.barangay);
+      })
+      .catch(() => {
+        if (current) {
+          setAdvisoryBarangay("");
+          setAdvisoryError("Unable to verify the emergency report. No public advisory may be published from this case.");
+        }
+      })
+      .finally(() => { if (current) setAdvisoryLoading(false); });
+    return () => { current = false; };
+  }, [incidentId, loading, role, user?.uid]);
+
 
   if (loading) {
     return (
@@ -73,11 +121,6 @@ export default function CreateAnnouncement() {
       />
     );
   }
-
-  const role =
-    typeof profile?.role === "string"
-      ? profile.role.toLowerCase()
-      : "";
 
   /*
    * ADMIN ONLY
@@ -127,8 +170,26 @@ export default function CreateAnnouncement() {
       return;
     }
 
+    if (incidentId && (advisoryLoading || advisoryError ||
+        !advisoryBarangay || !advisoryReviewed)) {
+      Alert.alert("Public Advisory Review Required",
+        "Only validated cases with an official SJDM incident barangay may be shared. Review the message and confirm that no personal or exact-location details are included.");
+      return;
+    }
+
     try {
       setSubmitting(true);
+
+      if (incidentId) {
+        // Re-check current verification just before publication. A link to
+        // Announcements is not an authorization to publish unverified cases.
+        const latest = await getDoc(doc(db, "disasterCases", incidentId));
+        const refreshed = latest.exists()
+          ? buildPublicEmergencyAdvisory(latest.data()) : null;
+        if (!refreshed || refreshed.barangay !== advisoryBarangay) {
+          throw new Error("Case verification or incident barangay changed. Return to Emergency Reports and review this advisory again.");
+        }
+      }
 
       await addDoc(
         collection(db, "announcements"),
@@ -139,7 +200,7 @@ export default function CreateAnnouncement() {
 
           audience: "all",
 
-          priority: "normal",
+          priority: incidentId ? advisoryPriority : "normal",
 
           /*
            * Publish immediately.
@@ -162,6 +223,7 @@ export default function CreateAnnouncement() {
 
       setTitle("");
       setMessage("");
+      setAdvisoryReviewed(false);
 
       Alert.alert(
         "Announcement Posted",
@@ -188,7 +250,34 @@ export default function CreateAnnouncement() {
       style={styles.screen}
       contentContainerStyle={styles.content}
     >
-      <AdminReviewHero eyebrow="LGU OPERATIONS / COMMUNICATION & REPORTS" title="Announcements" subtitle="Prepare and publish authorized operational notices to residents and volunteers across VolunServe." icon="megaphone-outline" tag="COMMUNITY-WIDE" />
+      <AdminReviewHero eyebrow="ADMIN WORKSPACE / COMMUNITY UPDATES" title="Announcements" subtitle="Admin reviews and publishes public notices to Residents and Volunteers. Emergency reports remain private." icon="megaphone-outline" tag="COMMUNITY-WIDE" />
+
+      {incidentId ? (
+        <View style={styles.scopeCard}>
+          <Text style={styles.scopeLabel}>VERIFIED EMERGENCY → PUBLIC ADVISORY</Text>
+          <Text style={styles.scopeHelp}>
+            {advisoryLoading
+              ? "Checking the report before preparing a public draft…"
+              : advisoryError || `Draft for Barangay ${advisoryBarangay}. This will publish to all approved Residents and Volunteers only after Admin review.`}
+          </Text>
+          <Text style={styles.scopeHelp}>
+            Never publish resident names, contact information, private photos, house addresses, or GPS pins. A public advisory does not mean official responders have been dispatched.
+          </Text>
+          {!advisoryLoading && !advisoryError && advisoryBarangay ? (
+            <TouchableOpacity
+              accessibilityRole="checkbox"
+              accessibilityState={{ checked: advisoryReviewed }}
+              accessibilityLabel="Confirm public advisory contains no private report details"
+              onPress={() => setAdvisoryReviewed(value => !value)}
+              style={{ paddingVertical: 11 }}
+            >
+              <Text style={{ color: "#173D32", fontWeight: "700" }}>
+                {advisoryReviewed ? "☑" : "☐"} I checked the advisory for accuracy and private information.
+              </Text>
+            </TouchableOpacity>
+          ) : null}
+        </View>
+      ) : null}
 
       <View style={styles.formCard}>
         <Text style={styles.inputLabel}>ANNOUNCEMENT TYPE</Text>
@@ -244,10 +333,12 @@ export default function CreateAnnouncement() {
         <TouchableOpacity
           style={[
             styles.submitButton,
-            submitting &&
+            (submitting || (Boolean(incidentId) &&
+              (advisoryLoading || Boolean(advisoryError) || !advisoryBarangay || !advisoryReviewed))) &&
               styles.submitButtonDisabled,
           ]}
-          disabled={submitting}
+          disabled={submitting || (Boolean(incidentId) &&
+            (advisoryLoading || Boolean(advisoryError) || !advisoryBarangay || !advisoryReviewed))}
           onPress={handleSubmit}
         >
           {submitting ? (
