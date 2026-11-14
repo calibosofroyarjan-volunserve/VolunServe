@@ -380,7 +380,7 @@ export default function CommandCenter() {
             <View style={styles.heroCopy}>
               <View style={styles.heroEyebrow}>
                 <View style={styles.heroEyebrowMark} />
-                <Text style={styles.heroEyebrowText}>VOLUNSERVE  /  LGU OPERATIONS</Text>
+                <Text style={styles.heroEyebrowText}>VOLUNSERVE  /  ADMIN COMMAND CENTER</Text>
               </View>
               <Text style={styles.heroTitle}>Command Center</Text>
               <Text style={styles.heroSubtitle}>

@@ -52,7 +52,6 @@ type NavItem = {
 const NAV_ITEMS: NavItem[] = [
   { label: "Command Center", icon: "home-outline", route: "/(admin)/command-center" },
   { label: "Resident Identity Reviews", icon: "shield-checkmark-outline", route: "/(admin)/identity-reviews" },
-  { label: "LGU Operations", icon: "time-outline", route: "/(admin)/lgu-attendance" },
   { label: "Emergency Reports", icon: "warning-outline", route: "/(admin)/admin-cases" },
   { label: "Assistance Requests", icon: "hand-left-outline", route: "/(admin)/assistance-requests" },
   { label: "Community Events", icon: "leaf-outline", route: "/(admin)/community-events" },
@@ -64,7 +63,7 @@ const NAV_ITEMS: NavItem[] = [
 
 type NavSectionId = "people" | "response" | "events" | "funds" | "updates";
 const NAV_SECTIONS: { id: NavSectionId; title: string; icon: React.ComponentProps<typeof Ionicons>["name"]; labels: string[] }[] = [
-  { id: "people", title: "People & Verification", icon: "people-outline", labels: ["Resident Identity Reviews", "LGU Operations"] },
+  { id: "people", title: "People & Verification", icon: "people-outline", labels: ["Resident Identity Reviews"] },
   { id: "response", title: "Emergency & Assistance", icon: "alert-circle-outline", labels: ["Emergency Reports", "Assistance Requests"] },
   { id: "events", title: "Events & Volunteering", icon: "calendar-outline", labels: ["Community Events", "Event Attendance", "Certificates"] },
   { id: "funds", title: "Donations & Funds", icon: "heart-outline", labels: ["Donation Management"] },

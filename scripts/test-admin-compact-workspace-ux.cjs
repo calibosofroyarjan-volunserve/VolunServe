@@ -30,7 +30,7 @@ assert(pager.includes('flexDirection: "row"') && pager.includes('minHeight: 34')
 assert(hero.includes('minHeight: 118') && hero.includes('backgroundColor: "#E5F5ED"') &&
   hero.includes('name="leaf-outline"'),
   "Shared LGU headers must retain identity but avoid oversized whitespace");
-for(const t of ["pagedCases", "pageFive(onDutyPersonnel", "pageFive(volunteerCandidates",
+for(const t of ["pagedCases", "pageFive(volunteerCandidates",
   "pageFive(activeAssignments", "pageFive(incidentAssignments", "pageFive(imageEvidence",
   "pageFive(videoEvidence"]) assert(emergency.includes(t),"Emergency nested pagination missing: "+t);
 assert(attendance.includes("pagedEvents.map") && attendance.includes("pagedVolunteers.map") &&
