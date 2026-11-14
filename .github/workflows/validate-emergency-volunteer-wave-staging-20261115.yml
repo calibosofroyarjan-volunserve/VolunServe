@@ -1,0 +1,31 @@
+name: Validate Volunteer eligibility and guarded auto-wave engine (NO DEPLOY)
+on:
+  push:
+    branches:
+      - feat/emergency-volunteer-eligibility-and-matching-staging-20261115
+permissions:
+  contents: read
+jobs:
+  matching:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Safe matching and existing Admin regression tests
+        run: |
+          node scripts/test-emergency-volunteer-wave-planner-20261115.cjs
+          node scripts/test-admin-emergency-ui-consistency-20261115.cjs
+          node scripts/test-admin-five-tab-reference-20261115.cjs
+          node scripts/test-admin-focused-response-map-20261115.cjs
+          node scripts/test-preserved-volunteer-invitation-rules.cjs
+          node scripts/test-admin-volunteer-authorization.cjs
+      - name: Locked dependencies
+        run: npm ci --no-audit --no-fund
+      - name: TypeScript
+        run: npx tsc --noEmit --incremental false
+      - name: Expo web build
+        run: npx expo export --platform web --clear
