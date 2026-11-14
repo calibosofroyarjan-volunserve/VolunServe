@@ -1,0 +1,44 @@
+name: Staging Identity Multipart Guard (NO DEPLOY)
+on:
+  pull_request:
+    branches:
+      - integration/identity-full-staging-20261112
+    paths:
+      - 'backend/server.js'
+      - 'backend/identityMultipartGuard.js'
+      - 'backend/test-identityMultipartGuard.cjs'
+      - '.github/workflows/test-staging-identity-multipart-guard-no-deploy.yml'
+permissions:
+  contents: read
+jobs:
+  private-identity-media-boundary:
+    runs-on: ubuntu-latest
+    timeout-minutes: 7
+    steps:
+      - name: Load pinned source archive without installing dependencies
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          [[ "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]] || exit 2
+          curl -fLsS --retry 3 \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/zipball/$SOURCE_SHA" \
+            -o /tmp/staging-multipart-guard.zip
+          mkdir -p "$RUNNER_TEMP/staging-multipart-source"
+          unzip -q /tmp/staging-multipart-guard.zip -d "$RUNNER_TEMP/staging-multipart-source"
+          ROOT="$(find "$RUNNER_TEMP/staging-multipart-source" -mindepth 1 -maxdepth 1 -type d -print -quit)"
+          test -f "$ROOT/backend/test-identityMultipartGuard.cjs"
+          cp -a "$ROOT/." "$GITHUB_WORKSPACE/"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Syntax and synthetic multipart boundary contract
+        run: |
+          node --check backend/server.js
+          node --check backend/identityMultipartGuard.js
+          node --test backend/test-identityMultipartGuard.cjs
+      - name: Confirm no deploy and no private media access
+        run: echo 'NO_DEPLOY_NO_FIREBASE_NO_REAL_ID_OR_SELFIE_MEDIA'
