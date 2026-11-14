@@ -4097,56 +4097,15 @@ export default function AdminCases() {
                   <View style={styles.cleanOverviewHeading}>
                     <View>
                       <Text style={styles.cleanOverviewKicker}>CASE WORKSPACE</Text>
-                      <Text style={styles.cleanOverviewTitle}>Incident overview</Text>
+                      <Text style={styles.cleanOverviewTitle}>Emergency Overview</Text>
                       <Text style={styles.cleanOverviewSubtitle}>
-                        Review the essentials here. Evidence, response controls, and full history stay in their own tabs.
+                        Essential case information. Use the tabs for full evidence, assignment, and case history.
                       </Text>
                     </View>
-                    <TouchableOpacity
-                      accessibilityRole="button"
-                      accessibilityLabel="Review evidence and validate this report"
-                      style={styles.cleanEvidenceShortcut}
-                      onPress={() => setDetailTab("evidence")}
-                    >
-                      <Text style={styles.cleanEvidenceShortcutText}>Review Evidence  ›</Text>
-                    </TouchableOpacity>
                   </View>
 
                   <View style={styles.cleanOverviewGrid}>
-                    <View style={[styles.cleanOverviewCard, styles.cleanOverviewIncident]}>
-                      <View style={styles.cleanOverviewCardHeader}>
-                        <Text style={styles.cleanOverviewCardIcon}>◈</Text>
-                        <Text style={styles.cleanOverviewCardTitle}>Incident Summary</Text>
-                      </View>
-                      <Text style={styles.cleanOverviewFieldLabel}>REPORTED SITUATION</Text>
-                      <Text style={styles.cleanOverviewDescription}>
-                        {incident.details?.trim() || "No additional incident description provided."}
-                      </Text>
-
-                      <View style={styles.cleanOverviewSeparator} />
-                      <Text style={styles.cleanOverviewFieldLabel}>ASSISTANCE NEEDED</Text>
-                      <View style={styles.needChipRow}>
-                        {(incident.assistanceTypes || []).length ? (
-                          (incident.assistanceTypes || []).slice(0, 5).map((item) => (
-                            <View key={item} style={styles.needChip}>
-                              <Text style={styles.needChipText}>{item}</Text>
-                            </View>
-                          ))
-                        ) : (
-                          <Text style={styles.cleanOverviewFieldValue}>
-                            {incident.needs || "Not specified"}
-                          </Text>
-                        )}
-                      </View>
-                      <View style={styles.cleanAffectedRow}>
-                        <Text style={styles.cleanOverviewFieldLabel}>PEOPLE AFFECTED</Text>
-                        <Text style={styles.cleanAffectedCount}>
-                          {incident.affectedPeople || 0}
-                        </Text>
-                      </View>
-                    </View>
-
-                    <View style={[styles.cleanOverviewCard, styles.cleanOverviewResident]}>
+                    <View style={[styles.cleanOverviewCard, styles.completeResidentCard]}>
                       <View style={styles.cleanOverviewCardHeader}>
                         <Text style={styles.cleanOverviewCardIcon}>♙</Text>
                         <Text style={styles.cleanOverviewCardTitle}>Resident Information</Text>
@@ -4156,9 +4115,7 @@ export default function AdminCases() {
                       </Text>
                       <View style={styles.overviewVerifiedPill}>
                         <Text style={styles.overviewVerifiedText}>
-                          {incident.verification?.identityVerified
-                            ? "✓ Verified Resident"
-                            : "Resident account"}
+                          {incident.verification?.identityVerified ? "✓ Verified Resident" : "Resident account"}
                         </Text>
                       </View>
                       <View style={styles.cleanOverviewSeparator} />
@@ -4177,40 +4134,68 @@ export default function AdminCases() {
                           : incident.reporterAddress || "Barangay not provided"}
                       </Text>
                     </View>
-                  </View>
 
-                  <View style={styles.cleanOverviewStatusBar}>
-                    <View style={styles.cleanStatusItem}>
-                      <Text style={styles.cleanOverviewFieldLabel}>VERIFICATION</Text>
-                      <Text style={styles.cleanStatusValue}>
+                    <View style={[styles.cleanOverviewCard, styles.completeIncidentCard]}>
+                      <View style={styles.cleanOverviewCardHeader}>
+                        <Text style={styles.cleanOverviewCardIcon}>◈</Text>
+                        <Text style={styles.cleanOverviewCardTitle}>Incident Details</Text>
+                      </View>
+                      <Text style={styles.cleanOverviewFieldLabel}>REPORTED SITUATION</Text>
+                      <Text style={styles.cleanOverviewDescription} numberOfLines={5}>
+                        {incident.details?.trim() || "No additional incident description provided."}
+                      </Text>
+                      <View style={styles.cleanOverviewSeparator} />
+                      <Text style={styles.cleanOverviewFieldLabel}>ASSISTANCE NEEDED</Text>
+                      <View style={styles.needChipRow}>
+                        {(incident.assistanceTypes || []).length
+                          ? (incident.assistanceTypes || []).slice(0, 4).map((item) => (
+                            <View key={item} style={styles.needChip}>
+                              <Text style={styles.needChipText}>{item}</Text>
+                            </View>
+                          ))
+                          : (
+                            <Text style={styles.cleanOverviewFieldValue}>
+                              {incident.needs || "Not specified"}
+                            </Text>
+                          )}
+                      </View>
+                      <View style={styles.cleanAffectedRow}>
+                        <Text style={styles.cleanOverviewFieldLabel}>PEOPLE AFFECTED</Text>
+                        <Text style={styles.cleanAffectedCount}>
+                          {incident.affectedPeople || 0}
+                        </Text>
+                      </View>
+                    </View>
+
+                    <View style={[styles.cleanOverviewCard, styles.completeStatusCard]}>
+                      <View style={styles.cleanOverviewCardHeader}>
+                        <Text style={styles.cleanOverviewCardIcon}>◉</Text>
+                        <Text style={styles.cleanOverviewCardTitle}>Case Status & Priority</Text>
+                      </View>
+                      <Text style={styles.cleanOverviewFieldLabel}>CURRENT STATUS</Text>
+                      <Text style={styles.completeStatusText}>
+                        {labelOfStatus(incident.status)}
+                      </Text>
+                      <Text style={styles.cleanOverviewFieldLabel}>ADMIN VERIFICATION</Text>
+                      <Text style={styles.cleanOverviewFieldValue}>
                         {labelOfStatus(verificationStatus)}
                       </Text>
-                    </View>
-                    <View style={styles.cleanStatusItem}>
-                      <Text style={styles.cleanOverviewFieldLabel}>VOLUNTEER COORDINATION</Text>
-                      <Text style={styles.cleanStatusValue}>
+                      <View style={styles.cleanOverviewSeparator} />
+                      <Text style={styles.cleanOverviewFieldLabel}>REPORTED PRIORITY</Text>
+                      <View style={[styles.badge, severityStyle(incident.severity), styles.completeSeverityBadge]}>
+                        <Text style={styles.badgeText}>{severityLabel(incident.severity)}</Text>
+                      </View>
+                      <Text style={styles.cleanOverviewFieldLabel}>VOLUNTEER RESPONSE</Text>
+                      <Text style={styles.cleanOverviewFieldValue}>
                         {activeAssignments.some((item) => ["responding", "on_site"].includes(String(item.status)))
-                          ? "Response underway"
+                          ? "Task in progress"
                           : activeAssignments.some((item) => String(item.status) === "accepted")
-                            ? "Accepted · Awaiting task start"
+                            ? "Accepted · Awaiting Start"
                             : activeAssignments.some((item) => String(item.status) === "offered")
                               ? "Offer pending"
-                              : "No active Volunteer task"}
+                              : "No active task"}
                       </Text>
                     </View>
-                    <TouchableOpacity
-                      accessibilityRole="button"
-                      accessibilityLabel="Open volunteer assignment details"
-                      onPress={() => {
-                        setDetailTab("personnel");
-                        setAssignmentCaseId(incident.id);
-                        setSkillFilter("");
-                        setAvailabilityFilter("");
-                      }}
-                      style={styles.cleanAssignmentShortcut}
-                    >
-                      <Text style={styles.cleanAssignmentShortcutText}>View Assignment  ›</Text>
-                    </TouchableOpacity>
                   </View>
                 </View>
               )}
@@ -4222,10 +4207,13 @@ export default function AdminCases() {
                 ]}
               >
                 <View style={styles.locationActionMain}>
-                  <Text style={styles.sectionEyebrow}>INCIDENT LOCATION</Text>
-                  <Text style={styles.locationActionTitle}>Saved emergency location</Text>
+                  <Text style={styles.sectionEyebrow}>MAP & ROUTE</Text>
+                  <Text style={styles.locationActionTitle}>Open full incident response map</Text>
                   <Text style={styles.locationActionAddress}>
                     {incident.location || "Exact response location not provided"}
+                  </Text>
+                  <Text style={styles.locationActionDescription}>
+                    SJDM boundary · incident pin · active Volunteer GPS and road route when available
                   </Text>
                   <Text style={styles.locationActionCoords}>
                     {Number.isFinite(incident.latitude) && Number.isFinite(incident.longitude)
@@ -4252,6 +4240,20 @@ export default function AdminCases() {
 
                 </View>
               </View>
+
+              {detailTab === "overview" && incident.severity === "critical" &&
+                verificationStatus !== "rejected" && (
+                <View style={styles.completeCriticalBanner}>
+                  <Text style={styles.completeCriticalTitle}>
+                    Critical case — official emergency services take priority
+                  </Text>
+                  <Text style={styles.completeCriticalText}>
+                    If lives are in immediate danger, call 911 and coordinate with official responders.
+                    VolunServe does not automatically dispatch police, fire, or medical teams.
+                    Volunteer coordination must not delay emergency escalation.
+                  </Text>
+                </View>
+              )}
 
               <View
                 style={[
