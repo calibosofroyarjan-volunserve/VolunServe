@@ -54,6 +54,7 @@ type IdentityReview = {
   livenessScore?: number | null;
   documentScreening?: DocumentScreening;
   manualReviewChannel?: string;
+  verificationMethod?: string;
   manualIdType?: string;
   message?: string;
   requiresManualReview?: boolean;
