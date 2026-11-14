@@ -15,8 +15,14 @@ import {
   serverTimestamp,
   updateDoc,
 } from "firebase/firestore";
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import ListPagination from "../../components/ui/ListPagination";
+import {
+  ReferenceOverview,
+  ReferenceStatus,
+  ReferenceHistory,
+  ReferenceVolunteerMatching,
+} from "../../components/admin/EmergencyFiveTabDesign";
 import {
   Alert,
   Image,
@@ -557,6 +563,7 @@ export default function AdminCases() {
   const router = useRouter();
   const { width } = useWindowDimensions();
   const compact = width < 920;
+  const screenRef = useRef<ScrollView>(null);
 
   const [role, setRole] = useState<string | null>(null);
   const [loadingRole, setLoadingRole] = useState(true);
@@ -591,6 +598,9 @@ export default function AdminCases() {
   const [detailTab, setDetailTab] = useState<
     "overview" | "map" | "evidence" | "response" | "personnel" | "history"
   >("overview");
+  const [manualFallbackOpen, setManualFallbackOpen] = useState(false);
+  const [advancedResponseOpen, setAdvancedResponseOpen] = useState(false);
+  const focusedTab = detailTab === "evidence" || detailTab === "response";
 
   const [notes, setNotes] = useState<Record<string, string>>({});
   const [reviewReasons, setReviewReasons] = useState<Record<string, string>>({});
@@ -1385,6 +1395,8 @@ export default function AdminCases() {
 
   useEffect(() => {
     setDetailTab("overview");
+    setManualFallbackOpen(false);
+    setAdvancedResponseOpen(false);
     setAssignmentCaseId("");
     setPersonnelPage(1);
     setVolunteerPage(1);
@@ -1393,6 +1405,10 @@ export default function AdminCases() {
     setPhotoPage(1);
     setVideoPage(1);
   }, [selectedCaseId]);
+
+  useEffect(() => {
+    screenRef.current?.scrollTo({ y: 0, animated: false });
+  }, [detailTab]);
 
   const pageFive = <T,>(rows: T[], page: number): T[] => {
     const safe = Math.max(1, Math.min(page, Math.max(1, Math.ceil(rows.length / 5))));
@@ -3459,6 +3475,7 @@ export default function AdminCases() {
 
   return (
     <ScrollView
+      ref={screenRef}
       style={styles.screen}
       contentContainerStyle={styles.container}
       showsVerticalScrollIndicator={true}
@@ -3481,7 +3498,7 @@ export default function AdminCases() {
         </View>
       </View>
 
-      <View style={styles.pageHeader}>
+      <View style={[styles.pageHeader, focusedTab && styles.hiddenSection]}>
         <View style={styles.headerTools}>
           <View style={styles.searchBox}>
             <Text style={styles.searchIcon}>⌕</Text>
@@ -3497,7 +3514,7 @@ export default function AdminCases() {
         </View>
       </View>
 
-        <View style={styles.filterCard}>
+        <View style={[styles.filterCard, focusedTab && styles.hiddenSection]}>
           <View style={styles.filterGroup}>
             <Text style={styles.filterLabel}>STATUS</Text>
             <View style={styles.pillRow}>
@@ -3577,7 +3594,64 @@ export default function AdminCases() {
             compact && styles.caseWorkspaceCompact,
           ]}
         >
+          {!focusedTab && (
           <View style={[styles.caseListPane, compact && styles.caseListPaneCompact]}>
+            {detailTab === "personnel" && selectedCase && (
+              <View style={styles.assignmentCaseSidebar}>
+                <TouchableOpacity accessibilityRole="button"
+                  style={styles.assignmentBackButton} onPress={() => setDetailTab("overview")}>
+                  <Text style={styles.assignmentBackText}>← Back to All Cases</Text>
+                </TouchableOpacity>
+                <Text style={styles.assignmentSidebarEyebrow}>CURRENT CASE</Text>
+                {firstIncidentImage(selectedCase.attachments) && (
+                  <Image source={{ uri: firstIncidentImage(selectedCase.attachments)! }}
+                    style={styles.assignmentSidebarPhoto} resizeMode="cover" />
+                )}
+                <Text style={styles.assignmentSidebarTitle}>{selectedCase.title}</Text>
+                <Text style={styles.assignmentSidebarSeverity}>
+                  {severityLabel(selectedCase.severity)}  ·  {labelOfStatus(selectedCase.status)}
+                </Text>
+                <Text style={styles.assignmentSidebarDetail}>
+                  ⌖  {selectedCase.location || "Location pending"}
+                </Text>
+                <Text style={styles.assignmentSidebarDetail}>
+                  ♙  {selectedCase.reporterName || "Resident"}
+                </Text>
+                <Text style={styles.assignmentSidebarDetail}>
+                  ♧  {selectedCase.affectedPeople || 0} people affected
+                </Text>
+                <Text style={styles.assignmentSidebarDetail}>
+                  ◷  {formatDate(selectedCase.createdAt)}
+                </Text>
+                <View style={styles.assignmentSidebarDivider} />
+                <Text style={styles.assignmentSidebarEyebrow}>CASE PROGRESS</Text>
+                {[
+                  ["reported", "Reported"],
+                  ["validated", "Validated"],
+                  ["assigned", "Volunteer Offer"],
+                  ["in_progress", "In Progress"],
+                  ["resolved", "Resolved"],
+                  ["closed", "Closed"],
+                ].map(([key, label], index) => {
+                  const order = ["reported","validated","assigned","in_progress","resolved","closed"];
+                  const current = order.indexOf(selectedCase.status);
+                  return (
+                    <View key={key} style={styles.assignmentSideStage}>
+                      <Text style={[
+                        styles.assignmentSideDot,
+                        index <= current && styles.assignmentSideDotActive,
+                      ]}>{index < current ? "✓" : String(index + 1)}</Text>
+                      <Text style={[
+                        styles.assignmentSideText,
+                        index <= current && styles.assignmentSideTextActive,
+                      ]}>{label}</Text>
+                    </View>
+                  );
+                })}
+              </View>
+            )}
+            {detailTab !== "personnel" && (
+              <>
             <View style={styles.caseListHeader}>
               <View>
                 <Text style={styles.caseListTitle}>All Emergency Cases</Text>
@@ -3633,9 +3707,18 @@ export default function AdminCases() {
             <View style={styles.caseListPagination}>
               <ListPagination page={activeCasePage} total={visibleCases.length} pageSize={5} onChange={setRecordPage} />
             </View>
+              </>
+            )}
           </View>
+          )}
 
           <View style={styles.caseDetailPane}>
+            {focusedTab && (
+              <TouchableOpacity accessibilityRole="button" style={styles.focusBackButton}
+                onPress={() => setDetailTab("overview")}>
+                <Text style={styles.focusBackText}>← Back to All Emergency Cases</Text>
+              </TouchableOpacity>
+            )}
             {[selectedCase].map((incident) => {
           const incidentAssignments = assignmentsForCase(incident.id);
           const activeAssignments = activeAssignmentsForCase(incident.id);
@@ -3662,9 +3745,10 @@ export default function AdminCases() {
           const onDutyPersonnel = lguPersonnel.filter(personnel =>
             personnel.uid !== incident.activeLguResponderUid && personnel.dutyStatus === "on_duty"
           );
-          const eligibleVolunteerCount = volunteerCandidates.filter(
-            (volunteer) => volunteerEligibilityForCase(incident, volunteer).eligible
-          ).length;
+          const eligibleVolunteerCandidates = volunteerCandidates.filter(
+            (volunteer) => volunteerEligibilityForCase(incident, volunteer).eligible,
+          );
+          const eligibleVolunteerCount = eligibleVolunteerCandidates.length;
           const verificationStatus =
             incident.verificationStatus || "pending_verification";
 
@@ -4093,166 +4177,17 @@ export default function AdminCases() {
               </View>
 
               {detailTab === "overview" && (
-                <View style={styles.cleanOverviewSection}>
-                  <View style={styles.cleanOverviewHeading}>
-                    <View>
-                      <Text style={styles.cleanOverviewKicker}>CASE WORKSPACE</Text>
-                      <Text style={styles.cleanOverviewTitle}>Emergency Overview</Text>
-                      <Text style={styles.cleanOverviewSubtitle}>
-                        Essential case information. Use the tabs for full evidence, assignment, and case history.
-                      </Text>
-                    </View>
-                  </View>
-
-                  <View style={styles.cleanOverviewGrid}>
-                    <View style={[styles.cleanOverviewCard, styles.completeResidentCard]}>
-                      <View style={styles.cleanOverviewCardHeader}>
-                        <Text style={styles.cleanOverviewCardIcon}>♙</Text>
-                        <Text style={styles.cleanOverviewCardTitle}>Resident Information</Text>
-                      </View>
-                      <Text style={styles.cleanOverviewResidentName}>
-                        {incident.reporterName || "Resident"}
-                      </Text>
-                      <View style={styles.overviewVerifiedPill}>
-                        <Text style={styles.overviewVerifiedText}>
-                          {incident.verification?.identityVerified ? "✓ Verified Resident" : "Resident account"}
-                        </Text>
-                      </View>
-                      <View style={styles.cleanOverviewSeparator} />
-                      <Text style={styles.cleanOverviewFieldLabel}>CONTACT NUMBER</Text>
-                      <Text style={styles.cleanOverviewFieldValue}>
-                        {incident.contactNumber || "Not provided"}
-                      </Text>
-                      <Text style={styles.cleanOverviewFieldLabel}>EMAIL ADDRESS</Text>
-                      <Text style={styles.cleanOverviewFieldValue} numberOfLines={2}>
-                        {incident.reporterEmail || "Not provided"}
-                      </Text>
-                      <Text style={styles.cleanOverviewFieldLabel}>ACCOUNT BARANGAY</Text>
-                      <Text style={styles.cleanOverviewFieldValue}>
-                        {incident.reporterBarangay
-                          ? `${incident.reporterBarangay}, San Jose del Monte, Bulacan`
-                          : incident.reporterAddress || "Barangay not provided"}
-                      </Text>
-                    </View>
-
-                    <View style={[styles.cleanOverviewCard, styles.completeIncidentCard]}>
-                      <View style={styles.cleanOverviewCardHeader}>
-                        <Text style={styles.cleanOverviewCardIcon}>◈</Text>
-                        <Text style={styles.cleanOverviewCardTitle}>Incident Details</Text>
-                      </View>
-                      <Text style={styles.cleanOverviewFieldLabel}>REPORTED SITUATION</Text>
-                      <Text style={styles.cleanOverviewDescription} numberOfLines={5}>
-                        {incident.details?.trim() || "No additional incident description provided."}
-                      </Text>
-                      <View style={styles.cleanOverviewSeparator} />
-                      <Text style={styles.cleanOverviewFieldLabel}>ASSISTANCE NEEDED</Text>
-                      <View style={styles.needChipRow}>
-                        {(incident.assistanceTypes || []).length
-                          ? (incident.assistanceTypes || []).slice(0, 4).map((item) => (
-                            <View key={item} style={styles.needChip}>
-                              <Text style={styles.needChipText}>{item}</Text>
-                            </View>
-                          ))
-                          : (
-                            <Text style={styles.cleanOverviewFieldValue}>
-                              {incident.needs || "Not specified"}
-                            </Text>
-                          )}
-                      </View>
-                      <View style={styles.cleanAffectedRow}>
-                        <Text style={styles.cleanOverviewFieldLabel}>PEOPLE AFFECTED</Text>
-                        <Text style={styles.cleanAffectedCount}>
-                          {incident.affectedPeople || 0}
-                        </Text>
-                      </View>
-                    </View>
-
-                    <View style={[styles.cleanOverviewCard, styles.completeStatusCard]}>
-                      <View style={styles.cleanOverviewCardHeader}>
-                        <Text style={styles.cleanOverviewCardIcon}>◉</Text>
-                        <Text style={styles.cleanOverviewCardTitle}>Case Status & Priority</Text>
-                      </View>
-                      <Text style={styles.cleanOverviewFieldLabel}>CURRENT STATUS</Text>
-                      <Text style={styles.completeStatusText}>
-                        {labelOfStatus(incident.status)}
-                      </Text>
-                      <Text style={styles.cleanOverviewFieldLabel}>ADMIN VERIFICATION</Text>
-                      <Text style={styles.cleanOverviewFieldValue}>
-                        {labelOfStatus(verificationStatus)}
-                      </Text>
-                      <View style={styles.cleanOverviewSeparator} />
-                      <Text style={styles.cleanOverviewFieldLabel}>REPORTED PRIORITY</Text>
-                      <View style={[styles.badge, severityStyle(incident.severity), styles.completeSeverityBadge]}>
-                        <Text style={styles.badgeText}>{severityLabel(incident.severity)}</Text>
-                      </View>
-                      <Text style={styles.cleanOverviewFieldLabel}>VOLUNTEER RESPONSE</Text>
-                      <Text style={styles.cleanOverviewFieldValue}>
-                        {activeAssignments.some((item) => ["responding", "on_site"].includes(String(item.status)))
-                          ? "Task in progress"
-                          : activeAssignments.some((item) => String(item.status) === "accepted")
-                            ? "Accepted · Awaiting Start"
-                            : activeAssignments.some((item) => String(item.status) === "offered")
-                              ? "Offer pending"
-                              : "No active task"}
-                      </Text>
-                    </View>
-                  </View>
-                </View>
-              )}
-
-              <View
-                style={[
-                  styles.locationActionCard,
-                  detailTab !== "overview" && styles.hiddenSection,
-                ]}
-              >
-                <View style={styles.locationActionMain}>
-                  <Text style={styles.sectionEyebrow}>MAP & ROUTE</Text>
-                  <Text style={styles.locationActionTitle}>Open full incident response map</Text>
-                  <Text style={styles.locationActionAddress}>
-                    {incident.location || "Exact response location not provided"}
-                  </Text>
-                  <Text style={styles.locationActionDescription}>
-                    SJDM boundary · incident pin · active Volunteer GPS and road route when available
-                  </Text>
-                  <Text style={styles.locationActionCoords}>
-                    {Number.isFinite(incident.latitude) && Number.isFinite(incident.longitude)
-                      ? `${incident.latitude?.toFixed(6)}, ${incident.longitude?.toFixed(6)}`
-                      : "GPS coordinates unavailable"}
-                  </Text>
-                </View>
-
-                <View style={styles.locationActionButtons}>
-                  <TouchableOpacity
-                    style={styles.locationLiveButton}
-                    disabled={
-                      !Number.isFinite(incident.latitude) ||
-                      !Number.isFinite(incident.longitude)
-                    }
-                    onPress={() =>
-                      router.push(
-                        `/(admin)/admin-live-map?caseId=${encodeURIComponent(incident.id)}` as any
-                      )
-                    }
-                  >
-                    <Text style={styles.locationLiveButtonText}>Open Response Map</Text>
-                  </TouchableOpacity>
-
-                </View>
-              </View>
-
-              {detailTab === "overview" && incident.severity === "critical" &&
-                verificationStatus !== "rejected" && (
-                <View style={styles.completeCriticalBanner}>
-                  <Text style={styles.completeCriticalTitle}>
-                    Critical case — official emergency services take priority
-                  </Text>
-                  <Text style={styles.completeCriticalText}>
-                    If lives are in immediate danger, call 911 and coordinate with official responders.
-                    VolunServe does not automatically dispatch police, fire, or medical teams.
-                    Volunteer coordination must not delay emergency escalation.
-                  </Text>
-                </View>
+                <ReferenceOverview
+                  incident={incident}
+                  verificationStatus={verificationStatus}
+                  statusText={labelOfStatus(incident.status)}
+                  severityText={severityLabel(incident.severity)}
+                  activeAssignments={activeAssignments}
+                  onEvidence={() => setDetailTab("evidence")}
+                  onMap={() => router.push(
+                    `/(admin)/admin-live-map?caseId=${encodeURIComponent(incident.id)}` as any,
+                  )}
+                />
               )}
 
               <View
@@ -4441,6 +4376,10 @@ export default function AdminCases() {
                   </View>
                 </View>
 
+                <View style={styles.referenceEvidenceColumns}>
+                  <View style={styles.referenceEvidenceMedia}>
+                    <Text style={styles.referenceEvidenceColumnTitle}>▧  Evidence Preview ({imageEvidence.length + videoEvidence.length})</Text>
+                    <Text style={styles.referenceEvidenceColumnSub}>Select a photo to view the original submitted evidence.</Text>
                 {imageEvidence.length > 0 && (
                   <View style={styles.evidenceGrid}>
                     <ListPagination page={Math.max(1, Math.min(photoPage, Math.ceil(imageEvidence.length / 5) || 1))} total={imageEvidence.length} pageSize={5} onChange={setPhotoPage} />
@@ -4497,6 +4436,10 @@ export default function AdminCases() {
                   </View>
                 )}
 
+                  </View>
+                  <View style={styles.referenceEvidenceNotes}>
+                    <Text style={styles.referenceEvidenceColumnTitle}>▤  Review Notes (Optional)</Text>
+                    <Text style={styles.referenceEvidenceColumnSub}>Record observations or explain a request or rejection.</Text>
                 {verificationStatus !== "validated" &&
                   verificationStatus !== "rejected" && (
                     <>
@@ -4576,7 +4519,25 @@ export default function AdminCases() {
                         </View>
                       ) : null}
 
-                      <View style={styles.reviewActions}>
+
+                    </>
+                  )}
+
+                    {verificationStatus === "validated" && (
+                      <View style={styles.reviewNotice}>
+                        <Text style={styles.warningTitle}>Report validated</Text>
+                        <Text style={styles.warningText}>The review decision is already recorded.</Text>
+                      </View>
+                    )}
+                    {verificationStatus === "rejected" && (
+                      <View style={styles.rejectNotice}>
+                        <Text style={styles.rejectNoticeText}>This report has been rejected; Volunteer dispatch remains blocked.</Text>
+                      </View>
+                    )}
+                  </View>
+                </View>
+                {verificationStatus !== "validated" && verificationStatus !== "rejected" && (
+                  <View style={styles.reviewActions}>
                         <TouchableOpacity
                           style={styles.validateButton}
                           onPress={() =>
@@ -4613,8 +4574,7 @@ export default function AdminCases() {
                           </Text>
                         </TouchableOpacity>
                       </View>
-                    </>
-                  )}
+                )}
 
                 {verificationStatus === "needs_more_evidence" && (
                   <View style={styles.reviewNotice}>
@@ -4644,8 +4604,31 @@ export default function AdminCases() {
                 )}
               </View>
 
+              {detailTab === "response" && (
+                <ReferenceStatus
+                  incident={incident}
+                  verificationStatus={verificationStatus}
+                  statusText={labelOfStatus(incident.status)}
+                  severityText={severityLabel(incident.severity)}
+                  activeAssignments={activeAssignments}
+                  onEvidence={() => setDetailTab("evidence")}
+                  onMap={() => router.push(
+                    `/(admin)/admin-live-map?caseId=${encodeURIComponent(incident.id)}` as any,
+                  )}
+                  onAssignment={() => setDetailTab("personnel")}
+                />
+              )}
+              {detailTab === "response" && dispatchReady && (
+                <TouchableOpacity style={styles.advancedControlToggle}
+                  accessibilityRole="button"
+                  onPress={() => setAdvancedResponseOpen((current) => !current)}>
+                  <Text style={styles.advancedControlText}>
+                    {advancedResponseOpen ? "Hide existing operational controls  ‹" : "Show existing operational controls  ›"}
+                  </Text>
+                </TouchableOpacity>
+              )}
               {detailTab === "response" && (dispatchReady ? (
-                <View style={styles.adminSection}>
+                <View style={[styles.adminSection, !advancedResponseOpen && styles.hiddenSection]}>
                   <View style={styles.responseControlHeader}>
                     <View style={{ flex: 1 }}>
                       <Text style={styles.sectionEyebrow}>ACTIVE RESPONSE</Text>
@@ -5054,16 +5037,7 @@ export default function AdminCases() {
                     </TouchableOpacity>
                   </View>
                 </View>
-              ) : (
-                <View style={styles.dispatchLocked}>
-                  <Text style={styles.dispatchLockedTitle}>
-                    Response controls locked
-                  </Text>
-                  <Text style={styles.dispatchLockedText}>
-                    Validate the emergency report first. Rejected or unverified reports cannot dispatch Volunteer support.
-                  </Text>
-                </View>
-              ))}
+              ) : null)}
 
               {false && dispatchReady &&
                 (directAssessmentExists ||
@@ -5707,6 +5681,17 @@ export default function AdminCases() {
                 )}
 
               {detailTab === "personnel" && (
+                <ReferenceVolunteerMatching
+                  incident={incident}
+                  verificationStatus={verificationStatus}
+                  caseBarangay={barangayDisplay(caseBarangayValue(incident))}
+                  eligibleCount={eligibleVolunteerCount}
+                  activeAssignments={activeAssignments}
+                  showManualFallback={manualFallbackOpen}
+                  onToggleManualFallback={() => setManualFallbackOpen((previous) => !previous)}
+                />
+              )}
+              {detailTab === "personnel" && manualFallbackOpen && (
                 <View style={styles.personnelReferenceLayout}>
                   <View style={styles.personnelReferenceMain}>
                     <View style={styles.personnelCleanCard}>
@@ -5785,11 +5770,11 @@ export default function AdminCases() {
                           </Text>
                         </View>
                       )}
-                      {volunteerCandidates.length === 0 ? (
+                      {eligibleVolunteerCandidates.length === 0 ? (
                         <View style={styles.personnelCleanEmptyRow}>
                           <Text style={styles.personnelCleanEmptyTitle}>
                             {caseBarangayValue(incident)
-                              ? `No approved Volunteers in ${barangayDisplay(caseBarangayValue(incident))}`
+                              ? `No eligible approved Volunteers in ${barangayDisplay(caseBarangayValue(incident))}`
                               : "Emergency barangay is missing"}
                           </Text>
                           <Text style={styles.personnelCleanEmptyText}>
@@ -5798,8 +5783,8 @@ export default function AdminCases() {
                         </View>
                       ) : (
                         <View style={styles.personnelCompactList}>
-                          <ListPagination page={Math.max(1, Math.min(volunteerPage, Math.ceil(volunteerCandidates.length / 5) || 1))} total={volunteerCandidates.length} pageSize={5} onChange={setVolunteerPage} />
-                          {pageFive(volunteerCandidates, volunteerPage).map((volunteer) => {
+                          <ListPagination page={Math.max(1, Math.min(volunteerPage, Math.ceil(eligibleVolunteerCandidates.length / 5) || 1))} total={eligibleVolunteerCandidates.length} pageSize={5} onChange={setVolunteerPage} />
+                          {pageFive(eligibleVolunteerCandidates, volunteerPage).map((volunteer) => {
                             const key = `${incident.id}_${volunteer.uid}`;
                             const eligibility = volunteerEligibilityForCase(incident, volunteer);
                             const caseOpenForSupport = ["validated", "assigned", "in_progress"].includes(
@@ -5974,49 +5959,12 @@ export default function AdminCases() {
               )}
 
               {detailTab === "history" && (
-                <View style={styles.historyPanel}>
-                  <View style={styles.sectionHeader}>
-                    <View>
-                      <Text style={styles.sectionEyebrow}>CASE HISTORY</Text>
-                      <Text style={styles.sectionTitle}>Emergency Activity Timeline</Text>
-                    </View>
-                  </View>
-
-                  {[
-                    ["Report submitted", incident.createdAt],
-                    ["Report validated", incident.validatedAt],
-                    ["Responder assigned / response updated", incident.assignedAt],
-                    ["Case resolved", incident.resolvedAt],
-                    ["Case closed", incident.closedAt],
-                  ].filter(([, when]) => Boolean(when)).map(([label, when], index) => (
-                    <View key={`${label}-${index}`} style={styles.historyRow}>
-                      <View style={styles.historyDot} />
-                      <View style={{ flex: 1 }}>
-                        <Text style={styles.historyTitle}>{String(label)}</Text>
-                        <Text style={styles.historyTime}>{formatDate(when)}</Text>
-                      </View>
-                    </View>
-                  ))}
-
-                  {incidentAssignments.length > 0 && (
-                    <View style={styles.historyAssignments}>
-                      <Text style={styles.overviewLabel}>Volunteer support history</Text>
-                      <ListPagination page={Math.max(1, Math.min(historyAssignmentPage, Math.ceil(incidentAssignments.length / 5) || 1))} total={incidentAssignments.length} pageSize={5} onChange={setHistoryAssignmentPage} />
-                      {pageFive(incidentAssignments, historyAssignmentPage).map((assignment) => (
-                        <View key={assignment.id} style={styles.historyAssignmentRow}>
-                          <Text style={styles.historyAssignmentName}>
-                            {assignment.volunteerName || "Volunteer"}
-                          </Text>
-                          <Text style={styles.historyAssignmentStatus}>
-                            {labelOfStatus(String(assignment.status))}
-                          </Text>
-                        </View>
-                      ))}
-                    </View>
-                  )}
-                </View>
+                <ReferenceHistory
+                  incident={incident}
+                  assignments={incidentAssignments}
+                  formatDate={formatDate}
+                />
               )}
-
 
               {false && incidentFieldReports.length > 0 && (
                 <View style={styles.fieldReportsSection}>
@@ -8440,6 +8388,17 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
 
+  focusBackButton: {
+    paddingVertical: 12, paddingHorizontal: 16, backgroundColor: "#F4F9FD",
+    borderRadius: 10, borderWidth: 1, borderColor: "#D7E6EF", marginBottom: 10,
+    alignSelf: "flex-start",
+  },
+  focusBackText: { color: "#165E94", fontWeight: "800", fontSize: 12 },
+  advancedControlToggle: {
+    margin: 15, padding: 11, backgroundColor: "#F6F9FD",
+    borderWidth: 1, borderColor: "#D9E6F2", borderRadius: 10,
+  },
+  advancedControlText: { color: "#1F5E9B", fontSize: 11, fontWeight: "900" },
   caseWorkspace: {
     flexDirection: "row",
     alignItems: "flex-start",
@@ -8448,6 +8407,31 @@ const styles = StyleSheet.create({
   caseWorkspaceCompact: {
     flexDirection: "column",
   },
+  assignmentCaseSidebar: {
+    backgroundColor: "#FFFFFF", padding: 17, gap: 9, minHeight: 615,
+  },
+  assignmentBackButton: {
+    alignSelf: "flex-start", borderRadius: 9, borderWidth: 1,
+    borderColor: "#D3E2F4", backgroundColor: "#F2F7FE",
+    paddingVertical: 9, paddingHorizontal: 12, marginBottom: 10,
+  },
+  assignmentBackText: { color: "#1A5797", fontSize: 11, fontWeight: "900" },
+  assignmentSidebarEyebrow: { color: "#637A92", fontSize: 10, fontWeight: "900", letterSpacing: 1 },
+  assignmentSidebarPhoto: { width: 110, height: 92, borderRadius: 11, backgroundColor: "#EDF1F7" },
+  assignmentSidebarTitle: { color: "#17283D", fontSize: 19, fontWeight: "900", lineHeight: 24 },
+  assignmentSidebarSeverity: {
+    color: "#AC3029", fontSize: 11, fontWeight: "900", backgroundColor: "#FFF4F3",
+    alignSelf: "flex-start", paddingVertical: 5, paddingHorizontal: 9, borderRadius: 9,
+  },
+  assignmentSidebarDetail: { color: "#334B65", fontSize: 11, lineHeight: 18, fontWeight: "600" },
+  assignmentSidebarDivider: { height: 1, backgroundColor: "#E2EAF0", marginVertical: 11 },
+  assignmentSideStage: { flexDirection: "row", gap: 10, alignItems: "center", paddingVertical: 7 },
+  assignmentSideDot: { width: 25, height: 25, borderRadius: 13, backgroundColor: "#E8EDF2",
+    textAlign: "center", textAlignVertical: "center", lineHeight: 25,
+    color: "#72869A", fontSize: 11, fontWeight: "900" },
+  assignmentSideDotActive: { backgroundColor: "#0E8A67", color: "#FFFFFF" },
+  assignmentSideText: { color: "#708298", fontSize: 12, fontWeight: "700" },
+  assignmentSideTextActive: { color: "#184C3D", fontWeight: "900" },
   caseListPane: {
     width: 355,
     flexShrink: 0,
@@ -8974,6 +8958,30 @@ const styles = StyleSheet.create({
     color: "#49646f",
     fontSize: 10,
     fontWeight: "800",
+  },
+  referenceEvidenceColumns: {
+    marginTop: 15,
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 12,
+    alignItems: "stretch",
+  },
+  referenceEvidenceMedia: {
+    borderWidth: 1, borderColor: "#D8E4EF", borderRadius: 13,
+    backgroundColor: "#FFFFFF", padding: 13, flexGrow: 1, flexBasis: 300,
+    minWidth: 250, minHeight: 230,
+  },
+  referenceEvidenceNotes: {
+    borderWidth: 1, borderColor: "#D8E4EF", borderRadius: 13,
+    backgroundColor: "#FFFFFF", padding: 13, flexGrow: 1.1,
+    flexBasis: 310, minWidth: 250, minHeight: 230,
+  },
+  referenceEvidenceColumnTitle: {
+    color: "#152B46", fontSize: 15, fontWeight: "900",
+  },
+  referenceEvidenceColumnSub: {
+    color: "#6A7D91", fontSize: 10, lineHeight: 16,
+    marginTop: 5,
   },
   evidenceGrid: {
     flexDirection: "row",

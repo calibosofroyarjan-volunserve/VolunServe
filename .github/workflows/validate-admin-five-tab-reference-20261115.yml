@@ -1,0 +1,30 @@
+name: Validate exact-reference Admin Emergency UI (no deploy)
+on:
+  push:
+    branches:
+      - feat/admin-emergency-five-tab-exact-ui-20261115
+permissions:
+  contents: read
+jobs:
+  admin-five-tabs:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Verify five-tab contract, old functionality and privacy
+        run: |
+          node scripts/test-admin-five-tab-reference-20261115.cjs
+          node scripts/test-admin-focused-response-map-20261115.cjs
+          node scripts/test-admin-navigation-contract.cjs
+          node scripts/test-emergency-announcement-advisory-link.cjs
+          node scripts/test-module-announcements-publishing-20261115.cjs
+      - name: Install locked dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Check TypeScript
+        run: npx tsc --noEmit --incremental false
+      - name: Build Expo web
+        run: npx expo export --platform web --clear
