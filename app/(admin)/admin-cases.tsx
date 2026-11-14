@@ -3745,9 +3745,10 @@ export default function AdminCases() {
           const onDutyPersonnel = lguPersonnel.filter(personnel =>
             personnel.uid !== incident.activeLguResponderUid && personnel.dutyStatus === "on_duty"
           );
-          const eligibleVolunteerCount = volunteerCandidates.filter(
-            (volunteer) => volunteerEligibilityForCase(incident, volunteer).eligible
-          ).length;
+          const eligibleVolunteerCandidates = volunteerCandidates.filter(
+            (volunteer) => volunteerEligibilityForCase(incident, volunteer).eligible,
+          );
+          const eligibleVolunteerCount = eligibleVolunteerCandidates.length;
           const verificationStatus =
             incident.verificationStatus || "pending_verification";
 
@@ -5769,11 +5770,11 @@ export default function AdminCases() {
                           </Text>
                         </View>
                       )}
-                      {volunteerCandidates.length === 0 ? (
+                      {eligibleVolunteerCandidates.length === 0 ? (
                         <View style={styles.personnelCleanEmptyRow}>
                           <Text style={styles.personnelCleanEmptyTitle}>
                             {caseBarangayValue(incident)
-                              ? `No approved Volunteers in ${barangayDisplay(caseBarangayValue(incident))}`
+                              ? `No eligible approved Volunteers in ${barangayDisplay(caseBarangayValue(incident))}`
                               : "Emergency barangay is missing"}
                           </Text>
                           <Text style={styles.personnelCleanEmptyText}>
@@ -5782,8 +5783,8 @@ export default function AdminCases() {
                         </View>
                       ) : (
                         <View style={styles.personnelCompactList}>
-                          <ListPagination page={Math.max(1, Math.min(volunteerPage, Math.ceil(volunteerCandidates.length / 5) || 1))} total={volunteerCandidates.length} pageSize={5} onChange={setVolunteerPage} />
-                          {pageFive(volunteerCandidates, volunteerPage).map((volunteer) => {
+                          <ListPagination page={Math.max(1, Math.min(volunteerPage, Math.ceil(eligibleVolunteerCandidates.length / 5) || 1))} total={eligibleVolunteerCandidates.length} pageSize={5} onChange={setVolunteerPage} />
+                          {pageFive(eligibleVolunteerCandidates, volunteerPage).map((volunteer) => {
                             const key = `${incident.id}_${volunteer.uid}`;
                             const eligibility = volunteerEligibilityForCase(incident, volunteer);
                             const caseOpenForSupport = ["validated", "assigned", "in_progress"].includes(
