@@ -1,0 +1,53 @@
+name: Staging Face Recognition Replay Guard and SFace Metrics (NO DEPLOY)
+on:
+  pull_request:
+    branches: [integration/identity-full-staging-20261112]
+    paths:
+      - 'identity-ai/face_pair_integrity.py'
+      - 'identity-ai/main.py'
+      - 'identity-ai/sface_pair_metrics.py'
+      - 'identity-ai/evaluate_sface_pairs_local.py'
+      - 'identity-ai/test_face_pair_integrity.py'
+      - 'identity-ai/test_sface_pair_metrics_local.py'
+      - 'identity-ai/test_face_geometry_numerics.py'
+      - 'identity-ai/test_face_shadow_failure_isolation.py'
+      - '.github/workflows/test-staging-face-pair-metrics-no-deploy.yml'
+permissions:
+  contents: read
+jobs:
+  face-pair-integrity-and-metrics:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Fetch immutable PR source without submodule checkout
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          [[ "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]] || exit 2
+          curl -fLsS --retry 3 \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/zipball/$SOURCE_SHA" \
+            -o /tmp/face-pair-source.zip
+          mkdir -p "$RUNNER_TEMP/face-pair-source"
+          unzip -q /tmp/face-pair-source.zip -d "$RUNNER_TEMP/face-pair-source"
+          ROOT="$(find "$RUNNER_TEMP/face-pair-source" -mindepth 1 -maxdepth 1 -type d -print -quit)"
+          test -f "$ROOT/identity-ai/test_face_pair_integrity.py"
+          cp -a "$ROOT/." "$GITHUB_WORKSPACE/"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Lightweight synthetic arrays and actual face-handler contract
+        env:
+          PYTHONPATH: identity-ai
+        run: |
+          python -m pip install --disable-pip-version-check numpy==1.26.4
+          python -m py_compile identity-ai/main.py identity-ai/face_pair_integrity.py identity-ai/sface_pair_metrics.py identity-ai/evaluate_sface_pairs_local.py
+          python -m unittest discover -s identity-ai -p 'test_face_pair_integrity.py' -v
+          python -m unittest discover -s identity-ai -p 'test_face_geometry_numerics.py' -v
+          python -m unittest discover -s identity-ai -p 'test_face_shadow_failure_isolation.py' -v
+          python -m unittest discover -s identity-ai -p 'test_sface_pair_metrics_local.py' -v
+      - name: No camera, biometric files, model downloads, Firebase or deployment
+        run: echo 'SYNTHETIC_ONLY_NO_LIVE_FACE_DATA_NO_DEPLOY_NO_ADMIN_GRANTS'
