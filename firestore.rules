@@ -790,7 +790,6 @@ service cloud.firestore {
       allow update: if isAdmin()
         && resource.data.createdBy == request.auth.uid
         && request.resource.data.audience == resource.data.audience
-        && request.resource.data.publishAt == resource.data.publishAt
         && request.resource.data.createdBy == resource.data.createdBy;
       allow delete: if isAdmin()
         && resource.data.createdBy == request.auth.uid;
