@@ -20,6 +20,9 @@ const {classifyStagingFirestoreFailure} = require("./stagingProfileDiagnostics")
 const {verifyIndependentPadAttestation} = require("./independentPadAttestation");
 const {requireValidatedIdentityMultipart} = require("./identityMultipartGuard");
 const {
+  identityPrecheckExpiresAt, boundedVerificationId, safeIdentityOutcomeMessage,
+} = require("./identityPrivacyPolicy");
+const {
   getProfileRole,
   isApprovedAccount,
   isOperationalAdminProfile,
@@ -916,10 +919,9 @@ async function requireFirebaseUser(
       decodedToken;
     next();
   } catch (error) {
-    console.error(
-      "Firebase token verification failed:",
-      error?.message,
-    );
+    // Firebase SDK exceptions can include account details. Authentication
+    // failure logs must never echo token/UID/email/provider message.
+    console.warn("Firebase token verification failed: invalid_or_expired_token");
     response
       .status(401)
       .json({
@@ -4843,7 +4845,7 @@ async function callIdentityAiService(
       signal: AbortSignal.timeout(55000),
     });
   } catch (error) {
-    console.error("Identity AI connection failed:", error?.name || "network_error");
+    console.warn("Identity AI connection unavailable: network_error");
     throw makeHttpError(
       503,
       "identity_ai_unreachable",
@@ -4857,29 +4859,17 @@ async function callIdentityAiService(
   if (
     !aiResponse.ok
   ) {
-    const error =
-      new Error(
-        cleanText(
-          body?.message ||
-            body?.detail ||
-            body?.error ||
-            "The VolunServe AI identity service could not process the submission.",
-          500,
-        ),
-      );
-    error.code =
-      cleanText(
-        body?.error ||
-          "identity_ai_failed",
-        100,
-      );
-    error.statusCode =
-      aiResponse.status >=
-        400 &&
-      aiResponse.status <=
-        599
-        ? aiResponse.status
-        : 502;
+    // AI error payloads are untrusted. Some providers return OCR text,
+    // names, passport details or internal paths inside "detail"/"message".
+    // Do not promote any of them into Node exceptions, API responses, or logs.
+    const safeClientRejection = Number.isInteger(aiResponse.status) &&
+      aiResponse.status >= 400 && aiResponse.status < 500;
+    const error = new Error(safeClientRejection
+      ? "The ID/selfie scan could not be processed. Retake the images or request Admin review."
+      : "The identity AI service is temporarily unavailable.");
+    error.code = safeClientRejection
+      ? "identity_ai_submission_rejected" : "identity_ai_unavailable";
+    error.statusCode = safeClientRejection ? aiResponse.status : 503;
     throw error;
   }
   return body;
@@ -5034,6 +5024,10 @@ app.post(
           lastRequestedAt: FieldValue.serverTimestamp(),
           windowStartedAt: newWindow ? FieldValue.serverTimestamp() : saved.windowStartedAt,
           requestCount: count + 1,
+          // Short-lived operational rate-limit metadata. An authorized
+          // operator must enable Firestore TTL on 'expiresAt'; setting this
+          // timestamp alone does NOT delete stored documents.
+          expiresAt: identityPrecheckExpiresAt(now),
         }, { merge: true });
       });
       // Never allow client-uploaded fields to override a saved profile DOB
@@ -5106,6 +5100,8 @@ app.get(
     request,
     response,
   ) => {
+    // Never allow browsers or shared caches to retain ID/face assessment.
+    response.set?.("Cache-Control", "private, no-store, max-age=0");
     try {
       const uid =
         request
@@ -5247,6 +5243,7 @@ app.post(
   express.raw({ type: "multipart/form-data", limit: IDENTITY_UPLOAD_LIMIT }),
   requireValidatedIdentityMultipart("verify"),
   async (request, response) => {
+    response.set?.("Cache-Control", "private, no-store, max-age=0");
     const uid = request.firebaseUser.uid;
     const userRef = db.collection("users").doc(uid);
     const verificationRef = db.collection("identityVerifications").doc(uid);
@@ -5339,8 +5336,10 @@ app.post(
         ? "failed" : selectedIdDecision;
       const matchScore = numberOrNull(aiResult?.matchScore);
       const livenessScore = null; // Never manufacture or trust a still-photo PAD score.
-      const verificationId = cleanText(
-        aiResult?.verificationId || `identity_${uid}_${Date.now()}`, 200,
+      // A raw provider-generated identifier might contain private OCR text.
+      // Only a constrained opaque ID is safe for Firestore and API responses.
+      const verificationId = boundedVerificationId(
+        aiResult?.verificationId, `identity_${requestId.replace(/-/g, "")}`,
       );
 
       const outcome = await db.runTransaction(async (transaction) => {
@@ -5361,18 +5360,20 @@ app.post(
         const attemptCycle = Number.isSafeInteger(current.aiAttemptCycle) && current.aiAttemptCycle > 0
           ? current.aiAttemptCycle : 1;
         const result = identityAttemptOutcome(decision, attemptCount);
-        const resultMessage = result.requiresManualReview && decision === "failed"
-          ? "Three identity verification attempts were unsuccessful. Your case has been referred for Admin review."
-          : cleanText(aiResult?.message || (
-            decision === "verified" ? "The AI comparison is complete. Your application is pending independent Admin review." :
-            decision === "failed" ? "Identity verification attempt failed. Please retry with clear, valid images." :
-            "The submission requires LGU/Admin manual review."
-          ), 500);
+        // Provider free-text is not a safe storage field. Some OCR/face
+        // services echo document names, birth dates or scanned text in an
+        // error message. Persist only a fixed message from bounded enums.
+        const resultMessage = safeIdentityOutcomeMessage({
+          decision, requiresManualReview: result.requiresManualReview,
+          attemptCount, maxAttempts: MAX_IDENTITY_AI_ATTEMPTS,
+          documentScreening,
+        });
         const previousReview = current.reviewedAt || current.manualReviewDecision ? {
           previousDecision: cleanText(current.manualReviewDecision || current.decision, 80),
           previousValidationMethod: cleanText(current.manualValidationMethod, 120),
-          previousReviewNotes: cleanText(current.manualReviewNotes, 1000),
-          previousReviewedBy: cleanText(current.reviewedBy, 200),
+          // Full review notes and reviewer identity already belong to the
+          // authorized audit/review records, not duplicated in immutable AI
+          // attempt metadata. Reduce long-lived sensitive copies.
           previousReviewedAt: current.reviewedAt || null,
         } : null;
 
@@ -5417,10 +5418,11 @@ app.post(
             aiDecision: decision,
             status: result.status,
             requiresManualReview: result.requiresManualReview,
-            matchScore, livenessScore,
+            // Active review retains normalized evidence; immutable attempt
+            // history needs only operational outcome codes, not a second
+            // copy of biometric scores or complete screening details.
             padStatus: pad.status,
             padValidated: false,
-            documentScreening,
             verificationMethod: "volunserve_ai",
             previousReview,
             createdAt: FieldValue.serverTimestamp(),
@@ -5571,6 +5573,7 @@ app.get(
   requireFirebaseUser,
   requireOperationalAdmin,
   async (request, response) => {
+    response.set?.("Cache-Control", "private, no-store, max-age=0");
     try {
       const verificationSnapshot = await db
         .collection("identityVerifications")
@@ -5634,6 +5637,7 @@ app.post(
   requireFirebaseUser,
   requireOperationalAdmin,
   async (request, response) => {
+    response.set?.("Cache-Control", "private, no-store, max-age=0");
     try {
       const adminUid = request.firebaseUser.uid;
       const targetUid = cleanText(request.params?.uid || "", 200);
