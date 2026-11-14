@@ -1161,7 +1161,7 @@ def run_face_verification(
         if isinstance(pad_observation, dict) else None
     )
     pad_shadow = {
-        "status": pad_status if pad_status in allowed_pad_status else "unavailable",
+        "status": pad_status if isinstance(pad_status, str) and pad_status in allowed_pad_status else "unavailable",
         "independentPadValidated": False,
         "identityDecisionUse": "none",
     }
@@ -1181,7 +1181,7 @@ def run_face_verification(
         "agreement_live_unvalidated", "agreement_attack_unvalidated",
     }
     pad_ensemble_shadow = {
-        "status": (ensemble_status if ensemble_status in allowed_ensemble_status
+        "status": (ensemble_status if isinstance(ensemble_status, str) and ensemble_status in allowed_ensemble_status
                    else "unavailable"),
         "independentPadValidated": False,
         "identityDecisionUse": "none",
@@ -1199,7 +1199,7 @@ def run_face_verification(
         if isinstance(sface_observation, dict) else None
     )
     sface_diagnostic = {
-        "status": (sface_status if sface_status in {
+        "status": (sface_status if isinstance(sface_status, str) and sface_status in {
             "disabled", "unavailable", "inconclusive",
             "similarity_observed_unvalidated",
         } else "unavailable"),
