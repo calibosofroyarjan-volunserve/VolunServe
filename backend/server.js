@@ -18,6 +18,7 @@ const {reviewIssuerEvidence} = require("./identityIssuerReviewPolicy");
 const {isVerifiedFirebaseToken, isCompletedVolunServeProfile} = require("./verifiedFirebaseToken");
 const {classifyStagingFirestoreFailure} = require("./stagingProfileDiagnostics");
 const {verifyIndependentPadAttestation} = require("./independentPadAttestation");
+const {requireValidatedIdentityMultipart} = require("./identityMultipartGuard");
 const {
   getProfileRole,
   isApprovedAccount,
@@ -4993,6 +4994,7 @@ app.post(
   requireFirebaseUser,
   requireStagingIdentityMediaApproval,
   express.raw({ type: "multipart/form-data", limit: "21mb" }),
+  requireValidatedIdentityMultipart("precheck"),
   async (request, response) => {
     response.set("Cache-Control", "no-store");
     try {
@@ -5243,6 +5245,7 @@ app.post(
   requireFirebaseUser,
   requireStagingIdentityMediaApproval,
   express.raw({ type: "multipart/form-data", limit: IDENTITY_UPLOAD_LIMIT }),
+  requireValidatedIdentityMultipart("verify"),
   async (request, response) => {
     const uid = request.firebaseUser.uid;
     const userRef = db.collection("users").doc(uid);
