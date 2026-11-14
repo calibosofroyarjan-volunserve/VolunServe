@@ -6654,7 +6654,7 @@ const styles = StyleSheet.create({
     color: "#334155",
     fontSize: 11.5,
     lineHeight: 17,
-    fontWeight: "650",
+    fontWeight: "600",
   },
   cleanOverviewDescription: {
     color: "#334155",
