@@ -1536,6 +1536,19 @@ export default function IdentityVerificationWeb() {
         ) : null}
       </View>
 
+      <TouchableOpacity
+        accessibilityRole="button"
+        onPress={() => router.push("/identity-manual-review" as any)}
+        style={{backgroundColor:"#ECFDF5",borderRadius:11,borderWidth:1,
+          borderColor:"#A7F3D0",padding:13,marginVertical:12,
+          alignSelf:"stretch",flexDirection:"row",alignItems:"center",gap:9}}
+      >
+        <Ionicons name="people-outline" size={21} color="#047857" />
+        <Text style={{color:"#065F46",fontWeight:"700",fontSize:13,flex:1}}>
+          Cannot complete camera/ID scan? Request an in-person LGU review (no photo upload)
+        </Text>
+      </TouchableOpacity>
+
       <WizardProgress step={step} />
 
       {step === 1 ? (

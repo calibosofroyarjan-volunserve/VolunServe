@@ -19,6 +19,7 @@ const {isVerifiedFirebaseToken, isCompletedVolunServeProfile} = require("./verif
 const {classifyStagingFirestoreFailure} = require("./stagingProfileDiagnostics");
 const {verifyIndependentPadAttestation} = require("./independentPadAttestation");
 const {requireValidatedIdentityMultipart} = require("./identityMultipartGuard");
+const {isFullStagingRuntime} = require("./stagingFirebaseIsolation");
 const {
   identityPrecheckExpiresAt, boundedVerificationId, safeIdentityOutcomeMessage,
 } = require("./identityPrivacyPolicy");
@@ -5093,6 +5094,11 @@ app.post(
   },
 );
 
+// Staging-only media-free alternative. It never overrides the ID/selfie
+// HTTP 423 safety gate, and creates ONLY a pending Admin review.
+require("./identityManualReviewRoutes").installManualIdentityReviewRoutes({
+  app, db, auth, FieldValue, requireFirebaseUser,
+});
 app.get(
   "/api/identity/status",
   requireFirebaseUser,
@@ -5382,6 +5388,11 @@ app.post(
           uid,
           verificationId,
           verificationMethod: "volunserve_ai",
+          // A Resident may return to the AI scan after LGU Require Retry.
+          // Do not let an old no-media request pollute the new Admin queue.
+          manualReviewChannel: FieldValue.delete(),
+          manualIdType: FieldValue.delete(),
+          manualRequestConsentAt: FieldValue.delete(),
           status: result.status,
           aiDecision: decision,
           decision: FieldValue.delete(),
@@ -5511,6 +5522,10 @@ function identityAdminReviewPayload(verificationSnapshot, userSnapshot) {
     uid,
     verificationId: cleanText(verification.verificationId || "", 200),
     verificationMethod: cleanText(verification.verificationMethod || "", 80),
+    manualReviewChannel: verification.manualReviewChannel === "lgu_in_person_no_media"
+      ? "lgu_in_person_no_media" : "",
+    manualIdType: ["national_id", "drivers_license", "passport", "umid", "prc_id"]
+      .includes(verification.manualIdType) ? verification.manualIdType : "",
     status: normalizeIdentityStatus(
       verification.status || profile.identityStatus || "basic",
     ),
@@ -5769,26 +5784,47 @@ app.post(
             "This identity verification is no longer waiting for manual review.",
           );
         }
+        // Staging-only media-free requests need real authorized human checks.
+        // They do not imply AI face matching, valid liveness, or ID issuance.
+        const manualNoMedia = verification.manualReviewChannel === "lgu_in_person_no_media" &&
+          verification.verificationMethod === "manual_lgu_in_person_no_media" &&
+          isFullStagingRuntime(process.env) &&
+          auth.app?.options?.projectId === "volunserve-full-staging";
         if (action === "verify") {
-          // OCR and face similarity are unverified clues, not identity approval.
-          const selectedIdCheck = normalizeIdDocumentScreening(verification.documentScreening);
-          if (!selectedIdRecognized(selectedIdCheck)) {
-            throw makeHttpError(409, "selected_government_id_not_recognized",
-              "ID type, image quality or required front/back evidence is incomplete. Require a new scan.");
-          }
-          // Independent issuer attestation does not override conflicting
-          // birthday evidence or broken passport MRZ checks. Human correction
-          // and a new authorized review are required; never claim fraud.
-          if (selectedIdCheck.profileBirthDateCheck === "possible_conflict" ||
-              selectedIdCheck.passportMrzBirthDateCheck === "possible_conflict" ||
-              ["checksum_inconsistent_or_ocr_error", "multiple_candidates"].includes(
-                selectedIdCheck.passportMrzCheck
-              )) {
-            throw makeHttpError(409, "identity_document_evidence_conflict",
-              "Passport/ID evidence has unresolved inconsistencies. Request corrected evidence and review again; this does not establish fraud.");
+          let declaredReviewIdType = "";
+          if (manualNoMedia) {
+            if (!["national_id","drivers_license","passport","umid","prc_id"].includes(
+              verification.manualIdType
+            )) {
+              throw makeHttpError(409, "manual_id_type_invalid",
+                "The request does not identify a supported government ID.");
+            }
+            if (request.body?.inPersonIdInspected !== true ||
+                request.body?.inPersonFaceCompared !== true ||
+                notes.length < 25) {
+              throw makeHttpError(400, "manual_in_person_evidence_required",
+                "Before verifying, personally inspect the original ID, compare the person to the ID, and record a meaningful independent LGU review (25 characters minimum).");
+            }
+            declaredReviewIdType = verification.manualIdType;
+          } else {
+            // Keep every original OCR/quality/conflict gate for AI submissions.
+            const selectedIdCheck = normalizeIdDocumentScreening(verification.documentScreening);
+            if (!selectedIdRecognized(selectedIdCheck)) {
+              throw makeHttpError(409, "selected_government_id_not_recognized",
+                "ID type, image quality or required front/back evidence is incomplete. Require a new scan.");
+            }
+            if (selectedIdCheck.profileBirthDateCheck === "possible_conflict" ||
+                selectedIdCheck.passportMrzBirthDateCheck === "possible_conflict" ||
+                ["checksum_inconsistent_or_ocr_error", "multiple_candidates"].includes(
+                  selectedIdCheck.passportMrzCheck
+                )) {
+              throw makeHttpError(409, "identity_document_evidence_conflict",
+                "Passport/ID evidence has unresolved inconsistencies. Request corrected evidence and review again; this does not establish fraud.");
+            }
+            declaredReviewIdType = selectedIdCheck.declaredIdType;
           }
           const independentCheck = reviewIssuerEvidence({
-            declaredType: selectedIdCheck.declaredIdType,
+            declaredType: declaredReviewIdType,
             validationMethod, confirmed: issuerReviewAttested, notes,
           });
           if (!independentCheck.ok) {
@@ -5808,6 +5844,8 @@ app.post(
               ? validationMethod
               : "",
           independentAdminCheckAttested: action === "verify" && issuerReviewAttested,
+          originalIdInspectedInPerson: manualNoMedia && action === "verify" && request.body?.inPersonIdInspected === true,
+          faceComparedInPerson: manualNoMedia && action === "verify" && request.body?.inPersonFaceCompared === true,
           issuerApiAuthenticityVerified: false,
           manualReviewNotes: notes,
           reviewedAt: FieldValue.serverTimestamp(),
@@ -5832,8 +5870,9 @@ app.post(
             {
               identityStatus: "verified",
               identityVerified: true,
-              identityVerificationMethod:
-                "volunserve_ai_lgu_manual_review",
+              identityVerificationMethod: manualNoMedia
+                ? "volunserve_lgu_in_person_manual_review"
+                : "volunserve_ai_lgu_manual_review",
               identityVerifiedAt: FieldValue.serverTimestamp(),
               identityVerifiedBy: adminUid,
               identityFailureReason: FieldValue.delete(),

@@ -1,0 +1,51 @@
+name: Staging No-Media LGU Manual Identity E2E (NO DEPLOY)
+on:
+  pull_request:
+    branches: [integration/identity-full-staging-20261112]
+    paths:
+      - 'backend/identityManualReviewRoutes.js'
+      - 'backend/server.js'
+      - 'backend/test-identity-no-media-manual-e2e.cjs'
+      - 'lib/identityVerification.ts'
+      - 'app/identity-manual-review.tsx'
+      - 'app/identity-verification.web.tsx'
+      - 'app/identity-verification.tsx'
+      - 'app/(admin)/identity-reviews.tsx'
+      - '.github/workflows/test-staging-identity-no-media-manual-no-deploy.yml'
+permissions:
+  contents: read
+jobs:
+  no-media-manual-review:
+    runs-on: ubuntu-latest
+    timeout-minutes: 7
+    steps:
+      - name: Get immutable PR source without nested submodule
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          [[ "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]] || exit 2
+          curl -fLsS --retry 3 \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/zipball/$SOURCE_SHA" \
+            -o /tmp/manual-identity-staging.zip
+          mkdir -p "$RUNNER_TEMP/manual-identity-staging"
+          unzip -q /tmp/manual-identity-staging.zip -d "$RUNNER_TEMP/manual-identity-staging"
+          ROOT="$(find "$RUNNER_TEMP/manual-identity-staging" -mindepth 1 -maxdepth 1 -type d -print -quit)"
+          test -f "$ROOT/backend/test-identity-no-media-manual-e2e.cjs"
+          cp -a "$ROOT/." "$GITHUB_WORKSPACE/"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Actual no-media Resident and Admin route contract using fictional records
+        run: |
+          node --check backend/server.js
+          node --check backend/identityManualReviewRoutes.js
+          node --test backend/test-identity-no-media-manual-e2e.cjs
+      - name: Check fail-closed real media gate and reviewer requirements unchanged
+        run: |
+          grep -Fq 'const STAGING_IDENTITY_MEDIA_UPLOADS_ENABLED = false' backend/server.js
+          grep -Fq 'requireStagingIdentityMediaApproval,' backend/server.js
+          echo 'NO_DEPLOY_NO_REAL_IDS_NO_FACES_NO_FIREBASE_CREDENTIALS'
