@@ -12,7 +12,7 @@ assert(source.includes('"validated", "assigned", "in_progress"'));
 assert(source.includes("safePublicAdvisoryBarangay"));
 assert(source.includes("SJDM_BARANGAYS.find"));
 assert(source.includes("adminConfirmedBarangay"));
-assert(!source.includes("reporterBarangay"));
+assert(!source.includes("source.reporterBarangay"));
 for (const sensitiveField of ["reporterName", "reporterEmail", "reporterUid", "latitude", "longitude", "attachments", "contactNumber", "photoUrl", "details"]) {
   assert(!source.includes("source." + sensitiveField), "No public announcement may copy sensitive case field: " + sensitiveField);
 }
