@@ -5388,6 +5388,11 @@ app.post(
           uid,
           verificationId,
           verificationMethod: "volunserve_ai",
+          // A Resident may return to the AI scan after LGU Require Retry.
+          // Do not let an old no-media request pollute the new Admin queue.
+          manualReviewChannel: FieldValue.delete(),
+          manualIdType: FieldValue.delete(),
+          manualRequestConsentAt: FieldValue.delete(),
           status: result.status,
           aiDecision: decision,
           decision: FieldValue.delete(),
