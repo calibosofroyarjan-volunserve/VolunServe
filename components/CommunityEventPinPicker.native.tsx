@@ -1,7 +1,11 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Linking, Platform, Pressable, Text, TextInput, View } from "react-native";
-import MapView, { Marker, PROVIDER_GOOGLE } from "react-native-maps";
+import MapView, { Marker, Polygon, PROVIDER_GOOGLE } from "react-native-maps";
 import { lookUpEventVenue } from "../lib/eventVenueLookup";
+import {
+  boundaryBounds, boundaryRings, insideSjdmBoundary, loadSjdmBoundary,
+  sjdmSafeCenter, SJDM_MASK_EXTERIOR, type SjdmBoundary,
+} from "../lib/sjdmMapBoundary";
 
 type Venue = { latitude: number; longitude: number };
 type Props = {
@@ -12,39 +16,63 @@ type Props = {
   onChange: (lat: number | null, lng: number | null) => void;
 };
 const CENTER: Venue = {latitude:14.8139,longitude:121.0453};
-const valid = (a: number,b: number) => Number.isFinite(a)&&Number.isFinite(b)&&a>=14.65&&a<=15.0&&b>=120.88&&b<=121.30;
+const valid = (boundary:SjdmBoundary|null,a:number,b:number) =>
+  !!boundary && insideSjdmBoundary(boundary,a,b);
 const tidy = (latitude: number,longitude: number): Venue => ({
   latitude:Number(latitude.toFixed(6)),longitude:Number(longitude.toFixed(6)),
 });
 const equal = (a: Venue|null,b: Venue|null) => !!a&&!!b&&a.latitude===b.latitude&&a.longitude===b.longitude;
 
 export default function CommunityEventPinPicker({latitude,longitude,barangay="",venue="",onChange}:Props) {
-  const saved:Venue|null = latitude!==null&&longitude!==null&&valid(latitude,longitude)?tidy(latitude,longitude):null;
-  const [draft,setDraft] = useState<Venue|null>(saved);
+  const [cityBoundary,setCityBoundary] = useState<SjdmBoundary|null>(null);
+  const saved:Venue|null = latitude!==null&&longitude!==null&&valid(cityBoundary,latitude,longitude)?tidy(latitude,longitude):null;
+  const [draft,setDraft] = useState<Venue|null>(null);
   const lastValidPinRef=useRef<Venue|null>(draft);
   lastValidPinRef.current=draft;
   const [notice,setNotice] = useState("");
   useEffect(()=>{
-    if(!barangay.trim()||!venue.trim())return;
+    let active=true;
+    void loadSjdmBoundary().then(boundary=>{
+      if(!active)return;
+      setCityBoundary(boundary);
+      if(!boundary)setNotice("SJDM city boundary unavailable. Pin selection is disabled.");
+    }).catch(()=>{
+      if(active)setNotice("SJDM city boundary unavailable. Pin selection is disabled.");
+    });
+    return ()=>{active=false;};
+  },[]);
+  useEffect(()=>{
+    if(!cityBoundary)return;
+    if(latitude!==null&&longitude!==null){
+      if(valid(cityBoundary,latitude,longitude))setDraft(tidy(latitude,longitude));
+      else {
+        setDraft(null);
+        onChange(null,null);
+        setNotice("Old meeting point is outside the SJDM border. Choose an in-city pin.");
+      }
+    }
+  },[cityBoundary]);
+  useEffect(()=>{
+    if(!cityBoundary||!barangay.trim()||!venue.trim())return;
     const controller=new AbortController();
     const timer=setTimeout(()=>{
       void lookUpEventVenue(barangay,venue,controller.signal).then(result=>{
         if(controller.signal.aborted)return;
-        if(result.status==="found"){
+        if(result.status==="found"&&valid(cityBoundary,result.point.latitude,result.point.longitude)){
           setDraft(result.point);
           setNotice("Suggested venue pin found. Verify it on the map and confirm.");
         }else setNotice("Exact venue was not found automatically. Tap the correct venue on the map.");
       }).catch(()=>{if(!controller.signal.aborted)setNotice("Venue lookup unavailable. Select the pin on the map.");});
     },900);
     return ()=>{controller.abort();clearTimeout(timer);};
-  },[barangay,venue]);
+  },[barangay,venue,cityBoundary]);
   const [manual,setManual] = useState("");
   const mapRef = useRef<MapView|null>(null);
-  const selected = draft||saved||CENTER;
+  const selected = draft||saved||(cityBoundary?sjdmSafeCenter(cityBoundary):CENTER);
   const confirmed = equal(saved,draft);
 
   const pick = (a:number,b:number) => {
-    if(!valid(a,b)){setNotice("Pumili ng meeting point within the SJDM area.");return false;}
+    if(!valid(cityBoundary,a,b)){setNotice("Outside SJDM city border. Pumili ng pin sa loob ng outlined city lamang.");return false;}
     const point=tidy(a,b);
     setDraft(point);
     lastValidPinRef.current=point;
@@ -53,9 +81,24 @@ export default function CommunityEventPinPicker({latitude,longitude,barangay="",
     return true;
   };
   useEffect(()=>{
-    if(!draft)return;
+    if(!cityBoundary)return;
+    const box=boundaryBounds(cityBoundary);
+    // Same camera restriction as the Volunteer map; the polygon below
+    // masks the surrounding cities. Viewport bounds alone are not a border.
+    mapRef.current?.setMapBoundaries(
+      {latitude:box.north,longitude:box.east},
+      {latitude:box.south,longitude:box.west},
+    );
+    mapRef.current?.animateToRegion({
+      ...sjdmSafeCenter(cityBoundary),
+      latitudeDelta:box.north-box.south+0.012,
+      longitudeDelta:box.east-box.west+0.012,
+    },300);
+  },[cityBoundary]);
+  useEffect(()=>{
+    if(!draft||!valid(cityBoundary,draft.latitude,draft.longitude))return;
     mapRef.current?.animateToRegion({...draft,latitudeDelta:0.015,longitudeDelta:0.015},300);
-  },[draft?.latitude,draft?.longitude]);
+  },[draft?.latitude,draft?.longitude,cityBoundary]);
 
   const locate=async()=>{
     setNotice("Select the actual event venue on the map, not your current GPS.");
@@ -66,7 +109,7 @@ export default function CommunityEventPinPicker({latitude,longitude,barangay="",
     pick(Number(match[1]),Number(match[2]));
   };
   const confirm=()=>{
-    if(!draft||!valid(draft.latitude,draft.longitude)){setNotice("Choose a valid location first.");return;}
+    if(!draft||!valid(cityBoundary,draft.latitude,draft.longitude)){setNotice("Choose a pin inside the SJDM city boundary first.");return;}
     onChange(draft.latitude,draft.longitude);
     setNotice("Event meeting point confirmed for Admin review and Volunteer navigation.");
   };
@@ -75,10 +118,30 @@ export default function CommunityEventPinPicker({latitude,longitude,barangay="",
     <Text style={{color:"#526C76",fontSize:12,marginVertical:9}}>
       Select your event venue above, tap or drag its exact pin, then confirm the meeting point. Admin will review it before Volunteers see the route.
     </Text>
+    {!cityBoundary ? (
+      <Text accessibilityRole="alert" style={{padding:15,color:"#835A48",backgroundColor:"#F0F5F0"}}>
+        Loading the verified SJDM city boundary. Pin selection is disabled until it loads.
+      </Text>
+    ) : (
     <MapView ref={mapRef} provider={Platform.OS==="android"?PROVIDER_GOOGLE:undefined}
       style={{height:270,width:"100%",borderRadius:10}}
-      initialRegion={{...selected,latitudeDelta:0.055,longitudeDelta:0.055}}
+      minZoomLevel={11}
+      initialRegion={{...selected,latitudeDelta:0.13,longitudeDelta:0.17}}
       onPress={event=>pick(event.nativeEvent.coordinate.latitude,event.nativeEvent.coordinate.longitude)}>
+      <Polygon
+        coordinates={SJDM_MASK_EXTERIOR.map(([longitude,latitude])=>({latitude,longitude}))}
+        holes={boundaryRings(cityBoundary).map(rings=>
+          rings[0].map(([longitude,latitude])=>({latitude,longitude})))}
+        fillColor="rgba(231,238,234,1)" strokeColor="transparent" strokeWidth={0}
+        tappable={false}
+      />
+      {boundaryRings(cityBoundary).map((rings,index)=>(
+        <Polygon key={index}
+          coordinates={rings[0].map(([longitude,latitude])=>({latitude,longitude}))}
+          strokeColor="#07815E" strokeWidth={4}
+          fillColor="rgba(10,139,106,0.06)" tappable={false}
+        />
+      ))}
       {draft?<Marker draggable coordinate={draft}
         onDragEnd={event=>{
           const next=event.nativeEvent.coordinate;
@@ -89,6 +152,10 @@ export default function CommunityEventPinPicker({latitude,longitude,barangay="",
         }}
         title="Event Meeting Point"/>:null}
     </MapView>
+    )}
+    <Text style={{color:"#3E7D60",fontSize:11,marginTop:8}}>
+      SJDM city border only · Outside locations are masked and cannot be selected.
+    </Text>
     <View style={{flexDirection:"row",flexWrap:"wrap",gap:9,marginTop:11}}>
       <Pressable onPress={()=>void Linking.openURL("https://www.google.com/maps/@14.8139,121.0453,13z")}
         style={{padding:12,backgroundColor:"#E7F1FC",borderRadius:8}}>
