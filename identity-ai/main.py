@@ -1143,17 +1143,68 @@ def run_face_verification(
             warning="face_geometry_unreliable",
         )
     match_score = round(float(raw_score), 4)
-    # SHADOW ONLY: no impact on matching threshold or verification decision.
-    # A one-frame passive classifier cannot establish true liveness.
-    pad_shadow = assess_frame_shadow(selfie_image)
-    # A second Apache-2.0 model only provides a correlated shadow observation.
-    # No model label can approve a resident or assert real liveness.
-    pad_ensemble_shadow = assess_ensemble_shadow(selfie_image, primary=pad_shadow)
-    # Independent staging QA observation only: never change match/approval policy.
-    sface_result = sface_assess_pair_shadow(id_image, selfie_image)
+    # SHADOW ONLY: optional research models must never be a single point
+    # of failure for the primary ID/selfie geometry assessment. A corrupted
+    # optional ONNX file, unavailable detector or malformed research output
+    # means "unavailable" — not identity approval, a 500, or a PAD claim.
+    # No raw exception details, embeddings, image metadata or user IDs leave.
+    try:
+        pad_observation = assess_frame_shadow(selfie_image)
+    except Exception:
+        pad_observation = None
+    allowed_pad_status = {
+        "disabled", "unavailable", "inconclusive",
+        "model_prefers_live_unvalidated", "model_prefers_attack_unvalidated",
+    }
+    pad_status = (
+        pad_observation.get("status")
+        if isinstance(pad_observation, dict) else None
+    )
+    pad_shadow = {
+        "status": pad_status if pad_status in allowed_pad_status else "unavailable",
+        "independentPadValidated": False,
+        "identityDecisionUse": "none",
+    }
+    # Two models from the same training family cannot establish liveness.
+    try:
+        ensemble_observation = assess_ensemble_shadow(
+            selfie_image, primary=pad_shadow
+        )
+    except Exception:
+        ensemble_observation = None
+    ensemble_status = (
+        ensemble_observation.get("status")
+        if isinstance(ensemble_observation, dict) else None
+    )
+    allowed_ensemble_status = {
+        "disabled", "unavailable", "inconclusive",
+        "agreement_live_unvalidated", "agreement_attack_unvalidated",
+    }
+    pad_ensemble_shadow = {
+        "status": (ensemble_status if ensemble_status in allowed_ensemble_status
+                   else "unavailable"),
+        "independentPadValidated": False,
+        "identityDecisionUse": "none",
+        "automaticApprovalAllowed": False,
+        "modelsIndependent": False,
+    }
+    # SFace is optional, shadow-only; neither raw cosine similarity nor
+    # independent identity validation may be inferred from this signal.
+    try:
+        sface_observation = sface_assess_pair_shadow(id_image, selfie_image)
+    except Exception:
+        sface_observation = None
+    sface_status = (
+        sface_observation.get("status")
+        if isinstance(sface_observation, dict) else None
+    )
     sface_diagnostic = {
-        "status": sface_result["status"],
+        "status": (sface_status if sface_status in {
+            "disabled", "unavailable", "inconclusive",
+            "similarity_observed_unvalidated",
+        } else "unavailable"),
         "independentFaceMatchValidated": False,
+        "independentPadValidated": False,
         "identityDecisionUse": "none",
     }
     threshold = (
