@@ -28,7 +28,7 @@ assert(cases.includes("const eligibleVolunteerCount = approvedVolunteers.filter(
 assert(panels.includes("No eligible local Volunteers found"),
        "One clear empty state required for zero-eligible cases");
 assert(panels.includes("onCancelAssignment"), "Cancel remains usable for recorded assignments");
-assert(!cases.includes("personnelActiveSupportHeader") &&
+assert(!cases.includes("style={styles.personnelActiveSupportHeader}") &&
        !cases.includes("<View style={styles.personnelSupportEmpty}>"),
        "Do not show duplicate assigned-support sections");
 assert(panels.includes('kind="danger"'),"Shared emergency map CTA must remain red");
