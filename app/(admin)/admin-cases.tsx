@@ -33,7 +33,7 @@ import {
 } from "react-native";
 
 import { db } from "../../lib/firebase";
-import { buildPublicEmergencyAdvisory } from "../../lib/emergencyPublicAdvisory";
+import { canPreparePublicEmergencyAdvisory } from "../../lib/emergencyPublicAdvisory";
 
 const BACKEND_URL = "https://volunserve.onrender.com";
 
@@ -3634,7 +3634,7 @@ export default function AdminCases() {
           const verificationStatus =
             incident.verificationStatus || "pending_verification";
           const mayCreatePublicAdvisory =
-            buildPublicEmergencyAdvisory(incident) !== null;
+            canPreparePublicEmergencyAdvisory(incident);
 
           const imageEvidence = (incident.attachments || []).filter((item) =>
             String(item.type || "").toLowerCase().includes("image")
