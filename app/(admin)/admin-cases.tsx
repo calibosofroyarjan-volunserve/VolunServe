@@ -3565,7 +3565,6 @@ export default function AdminCases() {
           </View>
         </View>
 
-      <ListPagination page={activeCasePage} total={visibleCases.length} pageSize={5} onChange={setRecordPage} />
       {visibleCases.length === 0 ? (
         <View style={styles.emptyCard}>
           <Text style={styles.emptyTitle}>No emergency cases found</Text>
@@ -3632,6 +3631,9 @@ export default function AdminCases() {
                   </TouchableOpacity>
                 );
               })}
+            </View>
+            <View style={styles.caseListPagination}>
+              <ListPagination page={activeCasePage} total={visibleCases.length} pageSize={5} onChange={setRecordPage} />
             </View>
           </View>
 
@@ -3773,6 +3775,20 @@ export default function AdminCases() {
             incident.evidenceRequestReason ??
             incident.rejectionReason ??
             "";
+
+          const progressStages: { key: CaseStatus; title: string }[] = [
+            { key: "reported", title: "Reported" },
+            { key: "validated", title: "Validated" },
+            { key: "assigned", title: "Volunteer Offer" },
+            { key: "in_progress", title: "In Progress" },
+            { key: "resolved", title: "Resolved" },
+            { key: "closed", title: "Closed" },
+          ];
+          const progressIndex = Math.max(
+            0, progressStages.findIndex((stage) => stage.key === incident.status),
+          );
+          const awaitingAdminVerification = verificationStatus !== "validated" &&
+            verificationStatus !== "rejected";
 
           return (
             <View key={incident.id} style={styles.caseCard}>
@@ -3958,6 +3974,83 @@ export default function AdminCases() {
                   </View>
                 </View>
               </View>
+
+              <View style={styles.caseProgressPanel}>
+                <View style={styles.caseProgressCaptionRow}>
+                  <Text style={styles.caseProgressCaption}>CASE PROGRESS</Text>
+                  <Text style={styles.caseProgressCreated}>Reported {formatDate(incident.createdAt)}</Text>
+                </View>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={styles.caseProgressRow}>
+                  {progressStages.map((stage, index) => {
+                    const done = index < progressIndex;
+                    const current = index === progressIndex;
+                    return (
+                      <View key={stage.key}
+                        style={[styles.caseProgressStage,
+                          current && styles.caseProgressCurrent,
+                          done && styles.caseProgressDone]}>
+                        <View style={[styles.caseProgressDot,
+                          (done || current) && styles.caseProgressDotActive]}>
+                          <Text style={[styles.caseProgressDotText,
+                            (done || current) && styles.caseProgressDotTextActive]}>
+                            {done ? "✓" : String(index + 1)}
+                          </Text>
+                        </View>
+                        <Text style={[styles.caseProgressName,
+                          (done || current) && styles.caseProgressNameActive]}>
+                          {stage.title}
+                        </Text>
+                      </View>
+                    );
+                  })}
+                </ScrollView>
+              </View>
+
+              <View style={styles.casePrimaryActionBar}>
+                {awaitingAdminVerification ? (
+                  <>
+                    <TouchableOpacity accessibilityRole="button"
+                      accessibilityLabel="Review the report evidence before validating"
+                      style={styles.casePrimaryValidate}
+                      onPress={() => setDetailTab("evidence")}>
+                      <Text style={styles.casePrimaryValidateText}>✓ Review & Validate</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity accessibilityRole="button"
+                      style={styles.casePrimaryNeutral}
+                      onPress={() => setDetailTab("evidence")}>
+                      <Text style={styles.casePrimaryNeutralText}>Request Evidence</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity accessibilityRole="button"
+                      style={styles.casePrimaryReject}
+                      onPress={() => setDetailTab("evidence")}>
+                      <Text style={styles.casePrimaryRejectText}>Reject Report</Text>
+                    </TouchableOpacity>
+                  </>
+                ) : (
+                  <TouchableOpacity accessibilityRole="button"
+                    style={styles.casePrimaryNeutral}
+                    onPress={() => setDetailTab("response")}>
+                    <Text style={styles.casePrimaryNeutralText}>View Response Controls</Text>
+                  </TouchableOpacity>
+                )}
+                {incident.severity === "critical" && (
+                  <TouchableOpacity accessibilityRole="button"
+                    accessibilityLabel="Call emergency hotline 911"
+                    style={styles.casePrimaryEmergency}
+                    onPress={() => {
+                      void Linking.openURL("tel:911").catch(() =>
+                        Alert.alert("Emergency hotline", "For immediate danger, call 911."));
+                    }}>
+                    <Text style={styles.casePrimaryEmergencyText}>Call Emergency 911</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+              {awaitingAdminVerification && (
+                <Text style={styles.caseActionHint}>
+                  Review the evidence and confirm your decision in the Evidence tab. These shortcuts do not approve or reject automatically.
+                </Text>
+              )}
 
               <View style={styles.detailTabs}>
                 {(
