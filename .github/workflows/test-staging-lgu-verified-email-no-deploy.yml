@@ -1,0 +1,42 @@
+name: Staging LGU Applicant Verified Auth Onboarding (NO DEPLOY)
+on:
+  pull_request:
+    branches:
+      - integration/identity-full-staging-20261112
+    paths:
+      - 'backend/lguCredentialRoutes.js'
+      - 'backend/test-lgu-staging-verified-email.cjs'
+      - '.github/workflows/test-staging-lgu-verified-email-no-deploy.yml'
+permissions:
+  contents: read
+jobs:
+  staff-onboarding-auth-policy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - name: Extract pinned PR source without repository submodule checkout
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          [[ "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]] || exit 2
+          curl -fLsS --retry 3 \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/zipball/$SOURCE_SHA" \
+            -o /tmp/staging-lgu-verified-email.zip
+          mkdir -p "$RUNNER_TEMP/staging-lgu-source"
+          unzip -q /tmp/staging-lgu-verified-email.zip -d "$RUNNER_TEMP/staging-lgu-source"
+          ROOT="$(find "$RUNNER_TEMP/staging-lgu-source" -mindepth 1 -maxdepth 1 -type d -print -quit)"
+          test -f "$ROOT/backend/test-lgu-staging-verified-email.cjs"
+          cp -a "$ROOT/." "$GITHUB_WORKSPACE/"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Test actual LGU staging application policy with fictional accounts
+        run: |
+          node --check backend/lguCredentialRoutes.js
+          node --test backend/test-lgu-staging-verified-email.cjs
+      - name: No credentials, Firebase access, Admin grants or deploy
+        run: echo 'NO_DEPLOY_NO_REAL_ACCOUNTS_NO_ADMIN_GRANT'
