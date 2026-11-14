@@ -3,9 +3,10 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const cases = fs.readFileSync("app/(admin)/admin-cases.tsx","utf8");
 const map = fs.readFileSync("components/tabs/MapTracking.web.tsx","utf8");
+const panels = fs.readFileSync("components/admin/EmergencyFiveTabDesign.tsx","utf8");
 
-assert(cases.includes('Open Response Map'), "Case workspace must have a dedicated map button");
-assert(cases.includes('detailTab !== "overview" && styles.hiddenSection'), "Show the location shortcut only in Overview");
+assert(panels.includes("Open Emergency Response Map"), "Overview must contain a dedicated map action");
+assert(cases.includes('detailTab === "overview"') && cases.includes("<ReferenceOverview"), "Dedicated map button must be Overview-only");
 assert(!cases.includes('src: "/admin-live-map?caseId="'), "Never embed full Admin navigation within itself");
 assert(!cases.includes('["map", "Map & Route"]'), "No redundant embedded map tab");
 assert(cases.includes('/(admin)/admin-live-map?caseId='), "Focused route must keep the exact Admin case ID");
