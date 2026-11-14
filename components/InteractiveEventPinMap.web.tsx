@@ -1,20 +1,28 @@
 import React, { useEffect, useRef, useState } from "react";
 import { View, Text } from "react-native";
+import {
+  boundaryBounds, insideSjdmBoundary, sjdmOutsideMask, sjdmSafeCenter,
+  type SjdmBoundary,
+} from "../lib/sjdmMapBoundary";
 
 type Props = {
+  boundary: SjdmBoundary;
   latitude: number | null;
   longitude: number | null;
   onPick: (latitude: number, longitude: number) => void;
 };
-const FALLBACK_CENTER = { latitude: 14.8139, longitude: 121.0453 };
-const isPoint = (lat: unknown, lng: unknown): lat is number =>
+ const isPoint = (lat: unknown, lng: unknown): lat is number =>
   typeof lat === "number" && typeof lng === "number" &&
   Number.isFinite(lat) && Number.isFinite(lng) &&
   Math.abs(lat) <= 90 && Math.abs(lng) <= 180;
 
-function iframeDocument(token: string, latitude: number, longitude: number) {
-  // Embed numbers + an unpredictable instance token; no user-supplied HTML.
-  const initial = JSON.stringify({ token, latitude, longitude }).replace(/</g, "\\u003c");
+function iframeDocument(token: string, latitude: number, longitude: number, boundary: SjdmBoundary) {
+  // Reuse exactly the Volunteer map's polygon, outside mask and bounds. No
+  // user-generated HTML is embedded; escape serialized data for srcDoc.
+  const initial = JSON.stringify({
+    token, latitude, longitude, boundary, outsideMask: sjdmOutsideMask(boundary),
+    bounds: boundaryBounds(boundary),
+  }).replace(/</g, "\\u003c");
   return `<!doctype html><html lang="en"><head>
   <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
   <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@5/dist/maplibre-gl.css">
@@ -42,15 +50,30 @@ function iframeDocument(token: string, latitude: number, longitude: number) {
       const showFallback = () => { document.getElementById("fallback").style.display = "grid"; };
       const valid = (lat,lng) => typeof lat === "number" && typeof lng === "number" &&
         Number.isFinite(lat) && Number.isFinite(lng) && Math.abs(lat) <= 90 && Math.abs(lng) <= 180;
+      function inRing(lng,lat,ring) {
+        let inside=false;
+        for(let i=0,j=ring.length-1;i<ring.length;j=i++){
+          const a=ring[i],b=ring[j];
+          if((a[1]>lat)!==(b[1]>lat) &&
+             lng<(b[0]-a[0])*(lat-a[1])/(b[1]-a[1])+a[0]) inside=!inside;
+        }
+        return inside;
+      }
+      const polygons=initial.boundary.geometry.type==="Polygon"
+        ? [initial.boundary.geometry.coordinates]
+        : initial.boundary.geometry.coordinates;
+      const withinCity=(lat,lng)=> valid(lat,lng) && polygons.some(rings=>
+        rings.length>0 && inRing(lng,lat,rings[0]) &&
+        !rings.slice(1).some(hole=>inRing(lng,lat,hole)));
       function pinElement() {
         const el = document.createElement("div");el.className="pin";
         const label=document.createElement("span");label.textContent="●";el.appendChild(label);return el;
       }
       function move(lat,lng,notify) {
         if (!valid(lat,lng) || !map) return;
-        // Mirror backend's existing SJDM service-area bounds. An out-of-area
-        // click reports validation feedback but never displays a false venue pin.
-        if (lat < 14.65 || lat > 15.0 || lng < 120.88 || lng > 121.30) {
+        // The actual city polygon, not the previous rectangular SJDM service
+        // area. The parent independently checks the same shared geometry.
+        if (!withinCity(lat,lng)) {
           if (marker && acceptedPoint) marker.setLngLat(acceptedPoint);
           if (notify) parent.postMessage({kind:"volunserve:event-pin:select",token,latitude:lat,longitude:lng},"*");
           return;
@@ -79,8 +102,23 @@ function iframeDocument(token: string, latitude: number, longitude: number) {
       try {
         map = new maplibregl.Map({container:"map",
           style:"https://tiles.openfreemap.org/styles/liberty",
-          center:[initial.longitude,initial.latitude],zoom:14,attributionControl:true});
+          center:[initial.longitude,initial.latitude],zoom:13,attributionControl:true});
+        const area=initial.bounds;
+        map.setMaxBounds([[area.west,area.south],[area.east,area.north]]);
         map.addControl(new maplibregl.NavigationControl({showCompass:false}),"top-right");
+        map.on("load",()=>{
+          map.addSource("sjdm-boundary",{type:"geojson",data:initial.boundary});
+          map.addSource("sjdm-outside-mask",{type:"geojson",data:initial.outsideMask});
+          map.addLayer({id:"sjdm-area-fill",type:"fill",source:"sjdm-boundary",
+            paint:{"fill-color":"#0A8B6A","fill-opacity":0.06}});
+          map.addLayer({id:"sjdm-exterior-blocked",type:"fill",source:"sjdm-outside-mask",
+            paint:{"fill-color":"#E7EEEA","fill-opacity":1}});
+          map.addLayer({id:"sjdm-city-outline",type:"line",source:"sjdm-boundary",
+            paint:{"line-color":"#07815E","line-width":4,"line-opacity":0.95}});
+          // Focus on exactly the city shape, never the whole surrounding map.
+          map.fitBounds([[area.west,area.south],[area.east,area.north]],
+            {padding:24,maxZoom:15,duration:0});
+        });
         map.on("click", event => move(event.lngLat.lat,event.lngLat.lng,true));
         map.on("error", event => {
           if (String(event?.error?.message||"").includes("style")) showFallback();
@@ -92,17 +130,20 @@ function iframeDocument(token: string, latitude: number, longitude: number) {
 }
 
 /** Interactive web fallback. A Google Maps browser key is not required. */
-export default function InteractiveEventPinMap({ latitude, longitude, onPick }: Props) {
+export default function InteractiveEventPinMap({ boundary, latitude, longitude, onPick }: Props) {
   const onPickRef = useRef(onPick);
   onPickRef.current = onPick;
   const frame = useRef<any>(null);
   const token = useRef("pin-" + Math.random().toString(36).slice(2) + "-" + Date.now());
+  const safeCenter = sjdmSafeCenter(boundary);
   const firstPoint = useRef({
-    latitude: isPoint(latitude, longitude) ? latitude! : FALLBACK_CENTER.latitude,
-    longitude: isPoint(latitude, longitude) ? longitude! : FALLBACK_CENTER.longitude,
+    latitude: isPoint(latitude, longitude) &&
+      insideSjdmBoundary(boundary, latitude!, longitude!) ? latitude! : safeCenter.latitude,
+    longitude: isPoint(latitude, longitude) &&
+      insideSjdmBoundary(boundary, latitude!, longitude!) ? longitude! : safeCenter.longitude,
   });
   const [source] = useState(() =>
-    iframeDocument(token.current, firstPoint.current.latitude, firstPoint.current.longitude)
+    iframeDocument(token.current, firstPoint.current.latitude, firstPoint.current.longitude, boundary)
   );
 
   useEffect(() => {
@@ -121,8 +162,10 @@ export default function InteractiveEventPinMap({ latitude, longitude, onPick }: 
     frame.current?.contentWindow?.postMessage({
       kind: "volunserve:event-pin:sync",
       token: token.current,
-      latitude: isPoint(latitude, longitude) ? latitude : null,
-      longitude: isPoint(latitude, longitude) ? longitude : null,
+      latitude: isPoint(latitude, longitude) &&
+        insideSjdmBoundary(boundary, latitude!, longitude!) ? latitude : null,
+      longitude: isPoint(latitude, longitude) &&
+        insideSjdmBoundary(boundary, latitude!, longitude!) ? longitude : null,
     }, "*");
   };
   useEffect(sync, [latitude, longitude]);
@@ -138,7 +181,7 @@ export default function InteractiveEventPinMap({ latitude, longitude, onPick }: 
         style: {width:"100%",height:"315px",display:"block",border:"0"},
       })}
       <Text style={{fontSize:11,lineHeight:17,color:"#607C6D",paddingVertical:8,paddingHorizontal:11}}>
-        Interactive OpenStreetMap map · Tap to place, drag to adjust. Map locations require final confirmation.
+        SJDM city border only · Outside areas are masked. Tap or drag a pin inside the outlined city.
       </Text>
     </View>
   );

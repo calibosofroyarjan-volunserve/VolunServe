@@ -8047,6 +8047,7 @@ app.post(
 );
 // Authenticated production path for Resident community event proposals.
 // Firestore Admin SDK writes are server-authorized, not client-rule bypasses.
+const { isSjdmEventPoint } = require("./sjdmEventBoundary.cjs");
 const COMMUNITY_EVENT_CATEGORIES = new Set([
   "Clean-up Drive",
   "Tree Planting",
@@ -8133,10 +8134,12 @@ app.post(
       }
       const latitude = Number(input.latitude);
       const longitude = Number(input.longitude);
-      if (!Number.isFinite(latitude) || !Number.isFinite(longitude) ||
-          latitude < 14.65 || latitude > 15.0 ||
-          longitude < 120.88 || longitude > 121.30) {
-        throw makeHttpError(400, "event_pin_required", "Select an event GPS meeting point near San Jose del Monte, Bulacan.");
+      if (!isSjdmEventPoint(latitude, longitude)) {
+        // Defend the server-authorized proposal path too: a forged client,
+        // stale mobile build or manual coordinate entry must never bypass
+        // the *actual* Volunteer map SJDM polygon.
+        throw makeHttpError(400, "event_pin_required",
+          "Select an event GPS meeting point strictly inside the City of San Jose del Monte boundary.");
       }
 
       const capacity = Number(input.capacity);
