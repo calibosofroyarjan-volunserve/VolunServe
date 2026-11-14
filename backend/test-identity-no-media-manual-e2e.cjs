@@ -39,7 +39,7 @@ function harness({project="volunserve-full-staging",staging=true,residentRole="r
   const db={
     collection(collection) {
       return {
-        doc(id){return {collection,id:id||"fake_activity_"+(++nextId)}},
+        doc(id){const ref={collection,id:id||"fake_activity_"+(++nextId)};return {...ref,get:async()=>snapshot(ref)}},
         orderBy(){return {limit(n){return {get:async()=>({
           docs:[...records.keys()].filter(x=>x.startsWith(collection+"/"))
             .slice(0,n).map(k=>snapshot({collection,id:k.slice(collection.length+1)})),
