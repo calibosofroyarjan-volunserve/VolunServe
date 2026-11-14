@@ -19,12 +19,12 @@ jobs:
       CI: 'true'
       EXPO_NO_TELEMETRY: '1'
       EXPECTED_LIVE: 'b09e93826a9760293c53fbc34643c52fee37dd88'
-      SOURCE_SHA: '09338e5c76ef31a78228dbec9aed4c2a85b10619'
+      SOURCE_SHA: 'b3c1a4d6c347a2b6df876ed950dee55a84c60848'
     steps:
       - name: Checkout exact, previously reviewed site-derived release
         uses: actions/checkout@v4
         with:
-          ref: '09338e5c76ef31a78228dbec9aed4c2a85b10619'
+          ref: 'b3c1a4d6c347a2b6df876ed950dee55a84c60848'
           path: site
           fetch-depth: 0
           submodules: false
@@ -99,7 +99,7 @@ jobs:
         working-directory: site
         env:
           VOLUNSERVE_HOSTING_URL: https://volunserve.com
-          VOLUNSERVE_EXPECTED_SHA: '09338e5c76ef31a78228dbec9aed4c2a85b10619'
+          VOLUNSERVE_EXPECTED_SHA: 'b3c1a4d6c347a2b6df876ed950dee55a84c60848'
         run: |
           for attempt in 1 2 3 4 5 6; do
             if node scripts/check-live-hosting.cjs; then exit 0; fi
