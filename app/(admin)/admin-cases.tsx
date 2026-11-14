@@ -17,7 +17,6 @@ import {
 } from "firebase/firestore";
 import React, { useEffect, useMemo, useState } from "react";
 import ListPagination from "../../components/ui/ListPagination";
-import AdminReviewHero from "../../components/admin/AdminReviewHero";
 import {
   Alert,
   Image,
@@ -3464,41 +3463,40 @@ export default function AdminCases() {
       contentContainerStyle={styles.container}
       showsVerticalScrollIndicator={true}
     >
-      <AdminReviewHero
-        eyebrow="ADMIN WORKSPACE / EMERGENCY & ASSISTANCE"
-        title="Emergency Reports"
-        subtitle="Validate resident reports, offer approved Volunteers emergency tasks, and monitor accepted responses."
-        icon="warning-outline"
-        tag="INCIDENT RESPONSE"
-      />
+      <View style={styles.emergencyPageIntro}>
+        <View style={styles.emergencyPageIntroText}>
+          <Text style={styles.emergencyPageEyebrow}>ADMIN WORKSPACE / EMERGENCY RESPONSE</Text>
+          <Text style={styles.emergencyPageHeading}>Emergency Reports</Text>
+          <Text style={styles.emergencyPageSubheading}>
+            Validate reports, coordinate qualified Volunteers, and monitor responses in one focused workspace.
+          </Text>
+        </View>
+        <View style={styles.liveSummary}>
+          <Text style={styles.liveSummaryNumber}>
+            {cases.filter((item) =>
+              ["reported", "validated", "assigned", "in_progress"].includes(item.status),
+            ).length}
+          </Text>
+          <Text style={styles.liveSummaryLabel}>Open Cases</Text>
+        </View>
+      </View>
+
       <View style={styles.pageHeader}>
         <View style={styles.headerTools}>
-            <View style={styles.searchBox}>
-              <Text style={styles.searchIcon}>⌕</Text>
-              <TextInput
-                value={caseSearch}
-                onChangeText={value => { setCaseSearch(value); setRecordPage(1); }}
-                placeholder="Search case, resident, location…"
-                placeholderTextColor="#94a3b8"
-                style={styles.searchInput}
-              />
-            </View>
-  
-            <View style={styles.liveSummary}>
-              <Text style={styles.liveSummaryNumber}>
-                {
-                  cases.filter((item) =>
-                    ["reported", "validated", "assigned", "in_progress"].includes(
-                      item.status
-                    )
-                  ).length
-                }
-              </Text>
-              <Text style={styles.liveSummaryLabel}>Open Cases</Text>
-            </View>
+          <View style={styles.searchBox}>
+            <Text style={styles.searchIcon}>⌕</Text>
+            <TextInput
+              value={caseSearch}
+              onChangeText={value => { setCaseSearch(value); setRecordPage(1); }}
+              placeholder="Search case, resident, location…"
+              placeholderTextColor="#94a3b8"
+              style={styles.searchInput}
+              accessibilityLabel="Search emergency reports"
+            />
           </View>
         </View>
-  
+      </View>
+
         <View style={styles.filterCard}>
           <View style={styles.filterGroup}>
             <Text style={styles.filterLabel}>STATUS</Text>
@@ -3565,7 +3563,6 @@ export default function AdminCases() {
           </View>
         </View>
 
-      <ListPagination page={activeCasePage} total={visibleCases.length} pageSize={5} onChange={setRecordPage} />
       {visibleCases.length === 0 ? (
         <View style={styles.emptyCard}>
           <Text style={styles.emptyTitle}>No emergency cases found</Text>
@@ -3632,6 +3629,9 @@ export default function AdminCases() {
                   </TouchableOpacity>
                 );
               })}
+            </View>
+            <View style={styles.caseListPagination}>
+              <ListPagination page={activeCasePage} total={visibleCases.length} pageSize={5} onChange={setRecordPage} />
             </View>
           </View>
 
@@ -3773,6 +3773,20 @@ export default function AdminCases() {
             incident.evidenceRequestReason ??
             incident.rejectionReason ??
             "";
+
+          const progressStages: { key: CaseStatus; title: string }[] = [
+            { key: "reported", title: "Reported" },
+            { key: "validated", title: "Validated" },
+            { key: "assigned", title: "Volunteer Offer" },
+            { key: "in_progress", title: "In Progress" },
+            { key: "resolved", title: "Resolved" },
+            { key: "closed", title: "Closed" },
+          ];
+          const progressIndex = Math.max(
+            0, progressStages.findIndex((stage) => stage.key === incident.status),
+          );
+          const awaitingAdminVerification = verificationStatus !== "validated" &&
+            verificationStatus !== "rejected";
 
           return (
             <View key={incident.id} style={styles.caseCard}>
@@ -3959,6 +3973,85 @@ export default function AdminCases() {
                 </View>
               </View>
 
+              <View style={styles.caseProgressPanel}>
+                <View style={styles.caseProgressCaptionRow}>
+                  <Text style={styles.caseProgressCaption}>CASE PROGRESS</Text>
+                  <Text style={styles.caseProgressCreated}>Reported {formatDate(incident.createdAt)}</Text>
+                </View>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={styles.caseProgressRow}>
+                  {progressStages.map((stage, index) => {
+                    const done = index < progressIndex;
+                    const current = index === progressIndex;
+                    return (
+                      <View key={stage.key}
+                        style={[styles.caseProgressStage,
+                          current && styles.caseProgressCurrent,
+                          done && styles.caseProgressDone]}>
+                        <View style={[styles.caseProgressDot,
+                          (done || current) && styles.caseProgressDotActive]}>
+                          <Text style={[styles.caseProgressDotText,
+                            (done || current) && styles.caseProgressDotTextActive]}>
+                            {done ? "✓" : String(index + 1)}
+                          </Text>
+                        </View>
+                        <Text style={[styles.caseProgressName,
+                          (done || current) && styles.caseProgressNameActive]}>
+                          {stage.title}
+                        </Text>
+                      </View>
+                    );
+                  })}
+                </ScrollView>
+              </View>
+
+              <View style={styles.casePrimaryActionBar}>
+                {awaitingAdminVerification ? (
+                  <>
+                    <TouchableOpacity accessibilityRole="button"
+                      accessibilityLabel="Review the report evidence before validating"
+                      style={styles.casePrimaryValidate}
+                      onPress={() => setDetailTab("evidence")}>
+                      <Text style={styles.casePrimaryValidateText}>✓ Review & Validate</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity accessibilityRole="button"
+                      style={styles.casePrimaryNeutral}
+                      onPress={() => setDetailTab("evidence")}>
+                      <Text style={styles.casePrimaryNeutralText}>Request Evidence</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity accessibilityRole="button"
+                      style={styles.casePrimaryReject}
+                      onPress={() => setDetailTab("evidence")}>
+                      <Text style={styles.casePrimaryRejectText}>Reject Report</Text>
+                    </TouchableOpacity>
+                  </>
+                ) : (
+                  <TouchableOpacity accessibilityRole="button"
+                    style={styles.casePrimaryNeutral}
+                    onPress={() => setDetailTab(verificationStatus === "rejected" ? "evidence" : "response")}>
+                    <Text style={styles.casePrimaryNeutralText}>
+                      {verificationStatus === "rejected" ? "View Rejection Details" : "View Response Controls"}
+                    </Text>
+                  </TouchableOpacity>
+                )}
+                {incident.severity === "critical" && verificationStatus !== "rejected" && (
+                  <TouchableOpacity accessibilityRole="button"
+                    accessibilityLabel="Call emergency hotline 911"
+                    style={styles.casePrimaryEmergency}
+                    onPress={() => {
+                      void Linking.openURL("tel:911").catch(() =>
+                        Alert.alert("Emergency hotline", "For immediate danger, call 911."));
+                    }}>
+                    <Text style={styles.casePrimaryEmergencyText}>Call Emergency 911</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+              {awaitingAdminVerification && (
+                <Text style={styles.caseActionHint}>
+                  Review the evidence and confirm your decision in the Evidence tab. These shortcuts do not approve or reject automatically.
+                </Text>
+              )}
+
               <View style={styles.detailTabs}>
                 {(
                   [
@@ -4004,56 +4097,15 @@ export default function AdminCases() {
                   <View style={styles.cleanOverviewHeading}>
                     <View>
                       <Text style={styles.cleanOverviewKicker}>CASE WORKSPACE</Text>
-                      <Text style={styles.cleanOverviewTitle}>Incident overview</Text>
+                      <Text style={styles.cleanOverviewTitle}>Emergency Overview</Text>
                       <Text style={styles.cleanOverviewSubtitle}>
-                        Review the essentials here. Evidence, response controls, and full history stay in their own tabs.
+                        Essential case information. Use the tabs for full evidence, assignment, and case history.
                       </Text>
                     </View>
-                    <TouchableOpacity
-                      accessibilityRole="button"
-                      accessibilityLabel="Review evidence and validate this report"
-                      style={styles.cleanEvidenceShortcut}
-                      onPress={() => setDetailTab("evidence")}
-                    >
-                      <Text style={styles.cleanEvidenceShortcutText}>Review Evidence  ›</Text>
-                    </TouchableOpacity>
                   </View>
 
                   <View style={styles.cleanOverviewGrid}>
-                    <View style={[styles.cleanOverviewCard, styles.cleanOverviewIncident]}>
-                      <View style={styles.cleanOverviewCardHeader}>
-                        <Text style={styles.cleanOverviewCardIcon}>◈</Text>
-                        <Text style={styles.cleanOverviewCardTitle}>Incident Summary</Text>
-                      </View>
-                      <Text style={styles.cleanOverviewFieldLabel}>REPORTED SITUATION</Text>
-                      <Text style={styles.cleanOverviewDescription}>
-                        {incident.details?.trim() || "No additional incident description provided."}
-                      </Text>
-
-                      <View style={styles.cleanOverviewSeparator} />
-                      <Text style={styles.cleanOverviewFieldLabel}>ASSISTANCE NEEDED</Text>
-                      <View style={styles.needChipRow}>
-                        {(incident.assistanceTypes || []).length ? (
-                          (incident.assistanceTypes || []).slice(0, 5).map((item) => (
-                            <View key={item} style={styles.needChip}>
-                              <Text style={styles.needChipText}>{item}</Text>
-                            </View>
-                          ))
-                        ) : (
-                          <Text style={styles.cleanOverviewFieldValue}>
-                            {incident.needs || "Not specified"}
-                          </Text>
-                        )}
-                      </View>
-                      <View style={styles.cleanAffectedRow}>
-                        <Text style={styles.cleanOverviewFieldLabel}>PEOPLE AFFECTED</Text>
-                        <Text style={styles.cleanAffectedCount}>
-                          {incident.affectedPeople || 0}
-                        </Text>
-                      </View>
-                    </View>
-
-                    <View style={[styles.cleanOverviewCard, styles.cleanOverviewResident]}>
+                    <View style={[styles.cleanOverviewCard, styles.completeResidentCard]}>
                       <View style={styles.cleanOverviewCardHeader}>
                         <Text style={styles.cleanOverviewCardIcon}>♙</Text>
                         <Text style={styles.cleanOverviewCardTitle}>Resident Information</Text>
@@ -4063,9 +4115,7 @@ export default function AdminCases() {
                       </Text>
                       <View style={styles.overviewVerifiedPill}>
                         <Text style={styles.overviewVerifiedText}>
-                          {incident.verification?.identityVerified
-                            ? "✓ Verified Resident"
-                            : "Resident account"}
+                          {incident.verification?.identityVerified ? "✓ Verified Resident" : "Resident account"}
                         </Text>
                       </View>
                       <View style={styles.cleanOverviewSeparator} />
@@ -4084,40 +4134,68 @@ export default function AdminCases() {
                           : incident.reporterAddress || "Barangay not provided"}
                       </Text>
                     </View>
-                  </View>
 
-                  <View style={styles.cleanOverviewStatusBar}>
-                    <View style={styles.cleanStatusItem}>
-                      <Text style={styles.cleanOverviewFieldLabel}>VERIFICATION</Text>
-                      <Text style={styles.cleanStatusValue}>
+                    <View style={[styles.cleanOverviewCard, styles.completeIncidentCard]}>
+                      <View style={styles.cleanOverviewCardHeader}>
+                        <Text style={styles.cleanOverviewCardIcon}>◈</Text>
+                        <Text style={styles.cleanOverviewCardTitle}>Incident Details</Text>
+                      </View>
+                      <Text style={styles.cleanOverviewFieldLabel}>REPORTED SITUATION</Text>
+                      <Text style={styles.cleanOverviewDescription} numberOfLines={5}>
+                        {incident.details?.trim() || "No additional incident description provided."}
+                      </Text>
+                      <View style={styles.cleanOverviewSeparator} />
+                      <Text style={styles.cleanOverviewFieldLabel}>ASSISTANCE NEEDED</Text>
+                      <View style={styles.needChipRow}>
+                        {(incident.assistanceTypes || []).length
+                          ? (incident.assistanceTypes || []).slice(0, 4).map((item) => (
+                            <View key={item} style={styles.needChip}>
+                              <Text style={styles.needChipText}>{item}</Text>
+                            </View>
+                          ))
+                          : (
+                            <Text style={styles.cleanOverviewFieldValue}>
+                              {incident.needs || "Not specified"}
+                            </Text>
+                          )}
+                      </View>
+                      <View style={styles.cleanAffectedRow}>
+                        <Text style={styles.cleanOverviewFieldLabel}>PEOPLE AFFECTED</Text>
+                        <Text style={styles.cleanAffectedCount}>
+                          {incident.affectedPeople || 0}
+                        </Text>
+                      </View>
+                    </View>
+
+                    <View style={[styles.cleanOverviewCard, styles.completeStatusCard]}>
+                      <View style={styles.cleanOverviewCardHeader}>
+                        <Text style={styles.cleanOverviewCardIcon}>◉</Text>
+                        <Text style={styles.cleanOverviewCardTitle}>Case Status & Priority</Text>
+                      </View>
+                      <Text style={styles.cleanOverviewFieldLabel}>CURRENT STATUS</Text>
+                      <Text style={styles.completeStatusText}>
+                        {labelOfStatus(incident.status)}
+                      </Text>
+                      <Text style={styles.cleanOverviewFieldLabel}>ADMIN VERIFICATION</Text>
+                      <Text style={styles.cleanOverviewFieldValue}>
                         {labelOfStatus(verificationStatus)}
                       </Text>
-                    </View>
-                    <View style={styles.cleanStatusItem}>
-                      <Text style={styles.cleanOverviewFieldLabel}>VOLUNTEER COORDINATION</Text>
-                      <Text style={styles.cleanStatusValue}>
+                      <View style={styles.cleanOverviewSeparator} />
+                      <Text style={styles.cleanOverviewFieldLabel}>REPORTED PRIORITY</Text>
+                      <View style={[styles.badge, severityStyle(incident.severity), styles.completeSeverityBadge]}>
+                        <Text style={styles.badgeText}>{severityLabel(incident.severity)}</Text>
+                      </View>
+                      <Text style={styles.cleanOverviewFieldLabel}>VOLUNTEER RESPONSE</Text>
+                      <Text style={styles.cleanOverviewFieldValue}>
                         {activeAssignments.some((item) => ["responding", "on_site"].includes(String(item.status)))
-                          ? "Response underway"
+                          ? "Task in progress"
                           : activeAssignments.some((item) => String(item.status) === "accepted")
-                            ? "Accepted · Awaiting task start"
+                            ? "Accepted · Awaiting Start"
                             : activeAssignments.some((item) => String(item.status) === "offered")
                               ? "Offer pending"
-                              : "No active Volunteer task"}
+                              : "No active task"}
                       </Text>
                     </View>
-                    <TouchableOpacity
-                      accessibilityRole="button"
-                      accessibilityLabel="Open volunteer assignment details"
-                      onPress={() => {
-                        setDetailTab("personnel");
-                        setAssignmentCaseId(incident.id);
-                        setSkillFilter("");
-                        setAvailabilityFilter("");
-                      }}
-                      style={styles.cleanAssignmentShortcut}
-                    >
-                      <Text style={styles.cleanAssignmentShortcutText}>View Assignment  ›</Text>
-                    </TouchableOpacity>
                   </View>
                 </View>
               )}
@@ -4129,10 +4207,13 @@ export default function AdminCases() {
                 ]}
               >
                 <View style={styles.locationActionMain}>
-                  <Text style={styles.sectionEyebrow}>INCIDENT LOCATION</Text>
-                  <Text style={styles.locationActionTitle}>Saved emergency location</Text>
+                  <Text style={styles.sectionEyebrow}>MAP & ROUTE</Text>
+                  <Text style={styles.locationActionTitle}>Open full incident response map</Text>
                   <Text style={styles.locationActionAddress}>
                     {incident.location || "Exact response location not provided"}
+                  </Text>
+                  <Text style={styles.locationActionDescription}>
+                    SJDM boundary · incident pin · active Volunteer GPS and road route when available
                   </Text>
                   <Text style={styles.locationActionCoords}>
                     {Number.isFinite(incident.latitude) && Number.isFinite(incident.longitude)
@@ -4159,6 +4240,20 @@ export default function AdminCases() {
 
                 </View>
               </View>
+
+              {detailTab === "overview" && incident.severity === "critical" &&
+                verificationStatus !== "rejected" && (
+                <View style={styles.completeCriticalBanner}>
+                  <Text style={styles.completeCriticalTitle}>
+                    Critical case — official emergency services take priority
+                  </Text>
+                  <Text style={styles.completeCriticalText}>
+                    If lives are in immediate danger, call 911 and coordinate with official responders.
+                    VolunServe does not automatically dispatch police, fire, or medical teams.
+                    Volunteer coordination must not delay emergency escalation.
+                  </Text>
+                </View>
+              )}
 
               <View
                 style={[
@@ -6396,6 +6491,44 @@ const styles = StyleSheet.create({
     color: "#b42318",
   },
 
+  emergencyPageIntro: {
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: "#E0ECE6",
+    borderRadius: 16,
+    paddingHorizontal: 19,
+    paddingVertical: 15,
+    marginBottom: 11,
+    flexDirection: "row",
+    flexWrap: "wrap",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: 15,
+  },
+  emergencyPageIntroText: {
+    flexGrow: 1,
+    flexBasis: 325,
+  },
+  emergencyPageEyebrow: {
+    color: "#078566",
+    fontSize: 9,
+    letterSpacing: 1,
+    fontWeight: "900",
+  },
+  emergencyPageHeading: {
+    color: "#123D32",
+    fontSize: 24,
+    lineHeight: 30,
+    fontWeight: "900",
+    marginTop: 4,
+  },
+  emergencyPageSubheading: {
+    color: "#5E776B",
+    fontSize: 11.5,
+    marginTop: 4,
+    lineHeight: 18,
+    maxWidth: 750,
+  },
   pageHeader: {
     flexDirection: "row",
     alignItems: "center",
@@ -6546,7 +6679,7 @@ const styles = StyleSheet.create({
     borderBottomColor: "transparent",
   },
   detailTabButtonActive: {
-    borderBottomColor: "#2563eb",
+    borderBottomColor: "#08856C",
   },
   detailTabText: {
     color: "#64748b",
@@ -6554,13 +6687,13 @@ const styles = StyleSheet.create({
     fontWeight: "800",
   },
   detailTabTextActive: {
-    color: "#1d4ed8",
+    color: "#08765B",
   },
   // Focused, low-clutter Admin overview. The map lives in its dedicated route.
   cleanOverviewSection: {
     paddingHorizontal: 14,
-    paddingTop: 15,
-    gap: 12,
+    paddingTop: 13,
+    gap: 11,
   },
   cleanOverviewHeading: {
     flexDirection: "row",
@@ -6612,11 +6745,11 @@ const styles = StyleSheet.create({
   cleanOverviewCard: {
     borderWidth: 1,
     borderColor: "#DEE9E4",
-    borderRadius: 14,
-    padding: 16,
+    borderRadius: 13,
+    padding: 13,
     backgroundColor: "#FFFFFF",
-    minHeight: 255,
-    minWidth: 255,
+    minHeight: 260,
+    minWidth: 185,
   },
   cleanOverviewIncident: {
     flexGrow: 1.4,
@@ -6719,6 +6852,210 @@ const styles = StyleSheet.create({
     color: "#08765B",
     fontSize: 11,
     fontWeight: "800",
+  },
+  caseListPagination: {
+    borderTopWidth: 1,
+    borderTopColor: "#EEF3F0",
+    paddingHorizontal: 9,
+    paddingVertical: 8,
+    backgroundColor: "#FBFDFC",
+  },
+  caseProgressPanel: {
+    borderTopWidth: 1,
+    borderTopColor: "#E3ECE8",
+    paddingHorizontal: 14,
+    paddingTop: 11,
+    paddingBottom: 10,
+    backgroundColor: "#FAFCFB",
+  },
+  caseProgressCaptionRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: 10,
+    marginBottom: 9,
+  },
+  caseProgressCaption: {
+    color: "#607A6C",
+    fontSize: 9,
+    fontWeight: "900",
+    letterSpacing: 0.7,
+  },
+  caseProgressCreated: {
+    color: "#7A8D83",
+    fontSize: 9.5,
+    fontWeight: "600",
+  },
+  caseProgressRow: {
+    flexDirection: "row",
+    gap: 6,
+    paddingRight: 2,
+  },
+  caseProgressStage: {
+    minWidth: 95,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingVertical: 7,
+    paddingHorizontal: 9,
+    borderRadius: 9,
+    backgroundColor: "#F0F4F2",
+  },
+  caseProgressCurrent: {
+    backgroundColor: "#E5F6ED",
+    borderWidth: 1,
+    borderColor: "#A6D6BC",
+  },
+  caseProgressDone: {
+    backgroundColor: "#EDF7F2",
+  },
+  caseProgressDot: {
+    width: 20,
+    height: 20,
+    borderRadius: 99,
+    backgroundColor: "#DFE7E3",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  caseProgressDotActive: {
+    backgroundColor: "#078C69",
+  },
+  caseProgressDotText: {
+    color: "#71857A",
+    fontSize: 10,
+    fontWeight: "900",
+  },
+  caseProgressDotTextActive: {
+    color: "#FFFFFF",
+  },
+  caseProgressName: {
+    color: "#72877B",
+    fontSize: 10,
+    fontWeight: "700",
+  },
+  caseProgressNameActive: {
+    color: "#155240",
+    fontWeight: "900",
+  },
+  casePrimaryActionBar: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    alignItems: "center",
+    gap: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 11,
+    backgroundColor: "#FFFFFF",
+  },
+  casePrimaryValidate: {
+    minHeight: 40,
+    justifyContent: "center",
+    paddingHorizontal: 17,
+    borderRadius: 9,
+    backgroundColor: "#087A56",
+  },
+  casePrimaryValidateText: {
+    color: "#FFFFFF",
+    fontSize: 11,
+    fontWeight: "900",
+  },
+  casePrimaryNeutral: {
+    minHeight: 40,
+    justifyContent: "center",
+    paddingHorizontal: 14,
+    borderRadius: 9,
+    backgroundColor: "#F8FCFA",
+    borderWidth: 1,
+    borderColor: "#B4D6C6",
+  },
+  casePrimaryNeutralText: {
+    color: "#116B51",
+    fontSize: 11,
+    fontWeight: "800",
+  },
+  casePrimaryReject: {
+    minHeight: 40,
+    justifyContent: "center",
+    paddingHorizontal: 14,
+    borderRadius: 9,
+    backgroundColor: "#FFF8F7",
+    borderWidth: 1,
+    borderColor: "#E7ADA8",
+  },
+  casePrimaryRejectText: {
+    color: "#B42318",
+    fontSize: 11,
+    fontWeight: "800",
+  },
+  casePrimaryEmergency: {
+    minHeight: 40,
+    justifyContent: "center",
+    paddingHorizontal: 14,
+    borderRadius: 9,
+    backgroundColor: "#FFF5F4",
+    borderWidth: 1,
+    borderColor: "#D9958F",
+  },
+  casePrimaryEmergencyText: {
+    color: "#B42318",
+    fontSize: 11,
+    fontWeight: "900",
+  },
+  caseActionHint: {
+    paddingHorizontal: 14,
+    paddingBottom: 9,
+    backgroundColor: "#FFFFFF",
+    fontSize: 9.5,
+    color: "#6B7C74",
+  },
+  completeResidentCard: {
+    flexGrow: 1,
+    flexBasis: 208,
+  },
+  completeIncidentCard: {
+    flexGrow: 1.06,
+    flexBasis: 220,
+  },
+  completeStatusCard: {
+    flexGrow: 1,
+    flexBasis: 200,
+  },
+  completeStatusText: {
+    color: "#195944",
+    fontWeight: "900",
+    fontSize: 12,
+    marginBottom: 6,
+  },
+  completeSeverityBadge: {
+    alignSelf: "flex-start",
+    marginTop: 5,
+    marginBottom: 3,
+  },
+  completeCriticalBanner: {
+    marginHorizontal: 14,
+    marginTop: 10,
+    borderWidth: 1,
+    borderColor: "#EAC2BD",
+    borderRadius: 12,
+    backgroundColor: "#FFF5F4",
+    paddingHorizontal: 15,
+    paddingVertical: 12,
+  },
+  completeCriticalTitle: {
+    color: "#A7231B",
+    fontWeight: "900",
+    fontSize: 12,
+  },
+  completeCriticalText: {
+    marginTop: 5,
+    color: "#884841",
+    fontSize: 10.5,
+    lineHeight: 16,
+  },
+  locationActionDescription: {
+    marginTop: 7,
+    fontSize: 10.5,
+    lineHeight: 16,
+    color: "#497D67",
   },
   overviewDashboard: {
     flexDirection: "row",
@@ -8112,7 +8449,7 @@ const styles = StyleSheet.create({
     flexDirection: "column",
   },
   caseListPane: {
-    width: 400,
+    width: 355,
     flexShrink: 0,
     backgroundColor: "#ffffff",
     borderWidth: 1,
@@ -8135,7 +8472,7 @@ const styles = StyleSheet.create({
   },
   caseListTitle: {
     color: "#0f172a",
-    fontSize: 17,
+    fontSize: 16,
     fontWeight: "900",
   },
   caseListCount: {
@@ -8154,7 +8491,7 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   caseListItem: {
-    minHeight: 82,
+    minHeight: 78,
     flexDirection: "row",
     alignItems: "center",
     gap: 9,
@@ -8169,8 +8506,8 @@ const styles = StyleSheet.create({
     borderColor: "#37b8aa",
   },
   caseListThumb: {
-    width: 70,
-    height: 58,
+    width: 64,
+    height: 56,
     flexShrink: 0,
     borderRadius: 8,
     overflow: "hidden",
@@ -8322,7 +8659,7 @@ const styles = StyleSheet.create({
   },
   caseTitle: {
     color: "#0f172a",
-    fontSize: 18.5,
+    fontSize: 17.5,
     lineHeight: 24,
     fontWeight: "900",
   },
@@ -8449,18 +8786,18 @@ const styles = StyleSheet.create({
   },
 
   locationActionCard: {
-    margin: 12,
+    margin: 14,
     marginBottom: 0,
     flexDirection: "row",
     flexWrap: "wrap",
     alignItems: "center",
     justifyContent: "space-between",
     gap: 12,
-    padding: 12,
+    padding: 16,
     borderWidth: 1,
-    borderColor: "#dfe7ee",
-    borderRadius: 11,
-    backgroundColor: "#f8fafc",
+    borderColor: "#C6E4D6",
+    borderRadius: 13,
+    backgroundColor: "#EDF9F2",
   },
   locationActionMain: {
     flex: 1,
@@ -8490,11 +8827,11 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   locationLiveButton: {
-    minHeight: 36,
+    minHeight: 44,
     justifyContent: "center",
-    paddingHorizontal: 13,
+    paddingHorizontal: 20,
     borderRadius: 9,
-    backgroundColor: "#0f766e",
+    backgroundColor: "#087A56",
   },
   locationLiveButtonText: {
     color: "#ffffff",
