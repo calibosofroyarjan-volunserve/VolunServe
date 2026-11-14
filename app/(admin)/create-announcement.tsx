@@ -33,7 +33,11 @@ import {
 import {
   useUserSession,
 } from "../../lib/useUserSession";
-import { buildPublicEmergencyAdvisory } from "../../lib/emergencyPublicAdvisory";
+import {
+  buildPublicEmergencyAdvisory, canPreparePublicEmergencyAdvisory,
+  safePublicAdvisoryBarangay,
+} from "../../lib/emergencyPublicAdvisory";
+import { SJDM_BARANGAYS } from "../../constants/sjdmBarangays";
 
 export default function CreateAnnouncement() {
   const {
@@ -60,6 +64,8 @@ export default function CreateAnnouncement() {
   const [submitting, setSubmitting] = useState(false);
   const [advisoryLoading, setAdvisoryLoading] = useState(false);
   const [advisoryError, setAdvisoryError] = useState("");
+  const [advisorySourceValidated, setAdvisorySourceValidated] = useState(false);
+  const [advisorySourceSeverity, setAdvisorySourceSeverity] = useState("normal");
   const [advisoryBarangay, setAdvisoryBarangay] = useState("");
   const [advisoryPriority, setAdvisoryPriority] = useState<"normal" | "urgent">("normal");
   const [advisoryReviewed, setAdvisoryReviewed] = useState(false);
@@ -70,23 +76,35 @@ export default function CreateAnnouncement() {
     if (!incidentId || loading || !user || role !== "admin") return;
     let current = true;
     setAdvisoryLoading(true);
+    setAdvisorySourceValidated(false);
     setAdvisoryError("");
     setAdvisoryReviewed(false);
     getDoc(doc(db, "disasterCases", incidentId))
       .then(snapshot => {
         if (!current) return;
-        const draft = snapshot.exists()
-          ? buildPublicEmergencyAdvisory(snapshot.data()) : null;
-        if (!draft) {
+        const caseData = snapshot.exists() ? snapshot.data() : null;
+        if (!canPreparePublicEmergencyAdvisory(caseData)) {
           setAdvisoryBarangay("");
-          setAdvisoryError("This report is not currently validated for a public advisory, or its incident barangay is not confirmed. Review the case in Emergency Reports.");
+          setAdvisoryError("This report is not currently validated for a public advisory. Review the active case in Emergency Reports.");
           return;
         }
-        setTitle(draft.title);
-        setMessage(draft.message);
-        setCustomAnnouncement(false);
-        setAdvisoryPriority(draft.priority);
-        setAdvisoryBarangay(draft.barangay);
+        setAdvisorySourceValidated(true);
+        setAdvisorySourceSeverity(String(caseData?.severity || "normal"));
+        const draft = buildPublicEmergencyAdvisory(caseData);
+        if (draft) {
+          setTitle(draft.title);
+          setMessage(draft.message);
+          setCustomAnnouncement(false);
+          setAdvisoryPriority(draft.priority);
+          setAdvisoryBarangay(draft.barangay);
+        } else {
+          // Never infer incident location from reporter's home barangay.
+          setTitle("");
+          setMessage("");
+          setAdvisoryBarangay("");
+          setAdvisoryPriority(["high", "critical"].includes(String(caseData?.severity || ""))
+            ? "urgent" : "normal");
+        }
       })
       .catch(() => {
         if (current) {
@@ -170,8 +188,8 @@ export default function CreateAnnouncement() {
       return;
     }
 
-    if (incidentId && (advisoryLoading || advisoryError ||
-        !advisoryBarangay || !advisoryReviewed)) {
+    if (incidentId && (advisoryLoading || advisoryError || !advisorySourceValidated ||
+        !safePublicAdvisoryBarangay(advisoryBarangay) || !advisoryReviewed)) {
       Alert.alert("Public Advisory Review Required",
         "Only validated cases with an official SJDM incident barangay may be shared. Review the message and confirm that no personal or exact-location details are included.");
       return;
@@ -185,8 +203,8 @@ export default function CreateAnnouncement() {
         // Announcements is not an authorization to publish unverified cases.
         const latest = await getDoc(doc(db, "disasterCases", incidentId));
         const refreshed = latest.exists()
-          ? buildPublicEmergencyAdvisory(latest.data()) : null;
-        if (!refreshed || refreshed.barangay !== advisoryBarangay) {
+          ? buildPublicEmergencyAdvisory(latest.data(), advisoryBarangay) : null;
+        if (!refreshed || refreshed.barangay !== safePublicAdvisoryBarangay(advisoryBarangay)) {
           throw new Error("Case verification or incident barangay changed. Return to Emergency Reports and review this advisory again.");
         }
       }
@@ -258,12 +276,66 @@ export default function CreateAnnouncement() {
           <Text style={styles.scopeHelp}>
             {advisoryLoading
               ? "Checking the report before preparing a public draft…"
-              : advisoryError || `Draft for Barangay ${advisoryBarangay}. This will publish to all approved Residents and Volunteers only after Admin review.`}
+              : advisoryError || (advisoryBarangay
+                ? `Draft for Barangay ${advisoryBarangay}. Admin review is required before publishing.`
+                : "Confirm the actual incident barangay below. Never assume the reporter's home barangay is the emergency location.")}
           </Text>
           <Text style={styles.scopeHelp}>
             Never publish resident names, contact information, private photos, house addresses, or GPS pins. A public advisory does not mean official responders have been dispatched.
           </Text>
-          {!advisoryLoading && !advisoryError && advisoryBarangay ? (
+          {!advisoryLoading && !advisoryError && advisorySourceValidated ? (
+            <View style={{ marginTop: 12, marginBottom: 6 }}>
+              <Text style={styles.inputLabel}>CONFIRM ACTUAL INCIDENT BARANGAY</Text>
+              <TextInput
+                style={styles.input}
+                value={advisoryBarangay}
+                onChangeText={value => {
+                  const next = value.slice(0, 70);
+                  setAdvisoryBarangay(next);
+                  setAdvisoryReviewed(false);
+                  const draft = buildPublicEmergencyAdvisory({
+                    verificationStatus: "validated", status: "validated",
+                    severity: advisorySourceSeverity,
+                  }, next);
+                  setTitle(draft?.title || "");
+                  setMessage(draft?.message || "");
+                }}
+                placeholder="Type barangay from the official SJDM list"
+                placeholderTextColor="#64748B"
+                maxLength={70}
+              />
+              {advisoryBarangay.trim().length >= 2 &&
+                !safePublicAdvisoryBarangay(advisoryBarangay) ? (
+                <View style={{ borderWidth: 1, borderColor: "#DBE9E3", borderRadius: 8 }}>
+                  {SJDM_BARANGAYS.filter(name =>
+                    name.toLowerCase().includes(advisoryBarangay.trim().toLowerCase())
+                  ).slice(0, 5).map(name => (
+                    <TouchableOpacity key={name} accessibilityRole="button"
+                      onPress={() => {
+                        const draft = buildPublicEmergencyAdvisory({
+                          verificationStatus: "validated", status: "validated",
+                          severity: advisorySourceSeverity,
+                        }, name);
+                        if (!draft) return;
+                        setAdvisoryBarangay(draft.barangay);
+                        setTitle(draft.title);
+                        setMessage(draft.message);
+                        setAdvisoryReviewed(false);
+                      }}
+                      style={{ padding: 10, borderBottomWidth: 1, borderBottomColor: "#EDF3EF" }}
+                    >
+                      <Text style={{ color: "#173D32" }}>{name}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              ) : null}
+              <Text style={styles.scopeHelp}>
+                Use the actual incident location, not the reporter's registered barangay.
+              </Text>
+            </View>
+          ) : null}
+          {!advisoryLoading && !advisoryError && advisorySourceValidated &&
+            safePublicAdvisoryBarangay(advisoryBarangay) ? (
             <TouchableOpacity
               accessibilityRole="checkbox"
               accessibilityState={{ checked: advisoryReviewed }}
@@ -334,11 +406,13 @@ export default function CreateAnnouncement() {
           style={[
             styles.submitButton,
             (submitting || (Boolean(incidentId) &&
-              (advisoryLoading || Boolean(advisoryError) || !advisoryBarangay || !advisoryReviewed))) &&
+              (advisoryLoading || Boolean(advisoryError) || !advisorySourceValidated ||
+              !safePublicAdvisoryBarangay(advisoryBarangay) || !advisoryReviewed))) &&
               styles.submitButtonDisabled,
           ]}
           disabled={submitting || (Boolean(incidentId) &&
-            (advisoryLoading || Boolean(advisoryError) || !advisoryBarangay || !advisoryReviewed))}
+            (advisoryLoading || Boolean(advisoryError) || !advisorySourceValidated ||
+              !safePublicAdvisoryBarangay(advisoryBarangay) || !advisoryReviewed))}
           onPress={handleSubmit}
         >
           {submitting ? (
