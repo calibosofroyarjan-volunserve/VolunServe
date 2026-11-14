@@ -78,7 +78,14 @@ test("unapproved, suspended, non-Admin and requested-role claims cannot pass", (
 });
 test("operator CLI is read-only, does not create users, modify roles or expose an API", () => {
   const src=fs.readFileSync("backend/scripts/check-staging-admin-account.cjs","utf8");
-  assert(src.indexOf("assertStagingAccessOnly(process.env)") < src.indexOf('require("../firebaseAdmin")'));
+  assert(!src.includes('require("../firebaseAdmin")'));
+  assert(src.indexOf("assertStagingAccessOnly(process.env)") <
+    src.indexOf('require("firebase-admin/app")'));
+  assert(src.includes('getAuth(app)'));
+  assert(src.includes('getFirestore(app)'));
+  assert(src.includes("await deleteApp(app)"));
+  assert(!src.includes("process.env.IDENTITY_AI_INTERNAL_KEY"));
+  assert(!src.includes("process.env.IDENTITY_AI_SERVICE_URL"));
   for(const forbidden of [
     "createUser(", "updateUser(", "deleteUser(", ".update(", ".set(", ".create(",
     "setCustomUserClaims(", "generatePasswordResetLink(", "express()", "app.post(",

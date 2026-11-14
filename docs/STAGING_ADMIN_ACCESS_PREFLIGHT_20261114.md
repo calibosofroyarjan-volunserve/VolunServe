@@ -24,6 +24,14 @@ no email/password account exists in `volunserve-full-staging`, or the supplied
 credentials are wrong. Do not ask users to send passwords, Auth tokens or
 screenshots showing secrets.
 
+## Direct setup path for an authorized staging operator
+
+1. In the Firebase Console, select **volunserve-full-staging** and check **Authentication → Users**. A production account in `volunserve-3aa5b` is not a staging account. An authorized person signs up with a separate staging email/password or uses the approved invitation process and completes normal email verification. Do not share passwords or private keys.
+2. Use the existing staging **LGU staff application** route with genuine organizational credentials. An already approved staging Super Admin independently confirms employment and identity and approves the applicant through the protected LGU staff-review workflow. Do not self-grant roles, import production Admin records, or edit Firestore role flags to simulate approval.
+3. On the operator's secured workstation, run the **read-only** `check-staging-admin-account.cjs` command below. Once it prints `READY_FOR_STAGING_ADMIN_SIGN_IN`, that user can independently sign in to the staging website. If it prints any other status, use the corresponding next action in the table.
+
+**If no authorized staging Super Admin exists:** the Firebase project owner and responsible institution must establish initial reviewer privileges through their approved administrative procedure. This repository deliberately does **not** bootstrap a Super Admin or create a privileged public signup.
+
 ## Read-only staging owner diagnosis (no writes)
 
 An **authorized Firebase project operator**, working on a secured workstation
@@ -34,10 +42,9 @@ with credentials obtained from an approved secret manager, can run:
 # NEVER paste keys into chat, code, GitHub, logs or shell history.
 export VOLUNSERVE_STAGING_STRICT=1
 export VOLUNSERVE_DEPLOYMENT_ENV=staging
-# Pre-existing authorized variables, not shown here:
-# FIREBASE_SERVICE_ACCOUNT_JSON (belongs to volunserve-full-staging)
-# IDENTITY_AI_INTERNAL_KEY
-export IDENTITY_AI_SERVICE_URL=https://volunserve-identity-ai-staging.onrender.com
+# Pre-existing authorized variable, not shown here:
+# FIREBASE_SERVICE_ACCOUNT_JSON (belongs only to volunserve-full-staging)
+# This READ-ONLY checker requires no AI service URL or internal AI key.
 node backend/scripts/check-staging-admin-account.cjs --email=staging-admin@example.org
 ```
 
