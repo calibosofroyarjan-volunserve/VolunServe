@@ -738,7 +738,7 @@ export default function WebHome() {
               styles.heroImage,
               { objectPosition: "center 82%" } as any,
               styles.fullBleedHeroImage,
-            ]
+            ]}
           >
             <LinearGradient
               pointerEvents="none"
