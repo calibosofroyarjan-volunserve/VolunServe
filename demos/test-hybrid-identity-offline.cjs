@@ -13,7 +13,7 @@ test("standalone demo is consistently labeled fictional and no-user-data",()=>{
 });
 test("fictional demo has five supported government IDs and three final decisions",()=>{
   for(const id of ["national_id","passport","drivers_license","umid","prc_id"]) assert(html.includes('key:"'+id+'"'));
-  for(const code of ["verified","retry_required","rejected"]) assert(html.includes("outcome===""+code+""")||html.includes('"'+code+'"'));
+  for(const code of ["verified","retry_required","rejected"]) assert(html.includes(String.fromCharCode(34)+code+String.fromCharCode(34)),code);
   for(const phase of ["page1","page2","page3","page4"]) assert(html.includes('id="'+phase+'"'));
 });
 test("isolated inline script parses and cannot call camera, auth, network or storage",()=>{
