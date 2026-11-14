@@ -27,6 +27,7 @@ import { db } from "../../lib/firebase";
 import ListPagination from "../../components/ui/ListPagination";
 import { isApprovedProfile } from "../../lib/firebaseAuth";
 import { useUserSession } from "../../lib/useUserSession";
+import { publishModuleAnnouncement } from "../../lib/publishModuleAnnouncement";
 
 type NeedAssessmentStatus =
   | "verified"
@@ -430,6 +431,7 @@ export default function DonationAdministration() {
   const [assistanceSourceReady, setAssistanceSourceReady] = useState(false);
   const [dataReady, setDataReady] = useState(false);
   const [error, setError] = useState("");
+  const [failedCampaignAnnouncementId, setFailedCampaignAnnouncementId] = useState("");
   const [busyKey, setBusyKey] = useState("");
 
   const scrollRef = useRef<ScrollView | null>(null);
@@ -1454,7 +1456,7 @@ export default function DonationAdministration() {
       setBusyKey("create_campaign");
       setError("");
 
-      await secureAdminPost("/api/admin/donations/campaigns", {
+      const published = await secureAdminPost("/api/admin/donations/campaigns", {
         sourceType: openedFromAssistance
           ? "community_assistance_request"
           : "disaster_relief_need",
@@ -1479,12 +1481,35 @@ export default function DonationAdministration() {
       });
 
       setShowCampaignForm(false);
-      Alert.alert(
-        "Campaign Published",
-        openedFromAssistance
-          ? "The verified Community Assistance campaign is now active. Only privacy-safe campaign information and the LGU-approved public location are exposed to donors."
-          : "The disaster relief campaign is now active. Residents can donate through the official LGU monetary channel.",
-      );
+      const publishedCampaignId = typeof published?.campaignId === "string"
+        ? published.campaignId : "";
+      if (!publishedCampaignId) {
+        setError("Campaign published, but campaign ID was not returned. No public announcement was sent. Check the campaign register.");
+        Alert.alert("Campaign Published — Announcement Pending",
+          "The campaign was created, but its announcement could not be verified. Check the campaign register before retrying.");
+      } else {
+        try {
+          const outcome = await publishModuleAnnouncement({
+            kind: "donation", sourceId: publishedCampaignId, adminUid: user.uid,
+          });
+          if (outcome === "published" || outcome === "already_published") {
+            setFailedCampaignAnnouncementId("");
+            Alert.alert("Campaign Published and Announced",
+              "The verified campaign is live. A generic notice was automatically posted in Community Updates without beneficiary or donor information.");
+          } else {
+            setFailedCampaignAnnouncementId(publishedCampaignId);
+            setError("Campaign published, but its public announcement was not posted. Use Retry Announcement; no donation or campaign payment was changed.");
+            Alert.alert("Campaign Published — Announcement Pending",
+              "The donation campaign is live, but its public announcement is still pending.");
+          }
+        } catch (noticeError) {
+          console.error("Published Donation Campaign announcement failed:", noticeError);
+          setFailedCampaignAnnouncementId(publishedCampaignId);
+          setError("Campaign published successfully, but the public announcement failed. Use Retry Announcement below. Do not create another campaign.");
+          Alert.alert("Campaign Published — Announcement Failed",
+            "The campaign is live. Its public announcement was not posted; payments and donor records are unchanged.");
+        }
+      }
     } catch (problem) {
       const message =
         problem instanceof Error ? problem.message : "Unable to create the campaign.";
@@ -1744,6 +1769,40 @@ export default function DonationAdministration() {
           <Ionicons name="warning-outline" size={18} color="#B42318" />
           <Text style={styles.errorText}>{error}</Text>
         </View>
+      )}
+      {!!failedCampaignAnnouncementId && (
+        <TouchableOpacity
+          accessibilityRole="button"
+          disabled={Boolean(busyKey)}
+          style={{ backgroundColor: "#EAF7F2", borderRadius: 10, padding: 12, marginBottom: 12 }}
+          onPress={async () => {
+            if (!user || !isAdmin || busyKey) return;
+            setBusyKey("retry_campaign_announcement");
+            try {
+              const outcome = await publishModuleAnnouncement({
+                kind: "donation",
+                sourceId: failedCampaignAnnouncementId,
+                adminUid: user.uid,
+              });
+              if (outcome === "not_eligible") {
+                setError("Announcement not posted: campaign is no longer published and eligible.");
+              } else {
+                setFailedCampaignAnnouncementId("");
+                setError("");
+                Alert.alert("Announcement Published",
+                  "Community Updates now contains the campaign notice. No duplicate was created.");
+              }
+            } catch (noticeError) {
+              setError("Announcement retry failed. The existing donation campaign remains unchanged.");
+            } finally {
+              setBusyKey("");
+            }
+          }}
+        >
+          <Text style={{ color: "#087C61", fontWeight: "700" }}>
+            Retry Public Campaign Announcement (do not recreate the campaign)
+          </Text>
+        </TouchableOpacity>
       )}
 
       <View style={styles.viewTabs}>
