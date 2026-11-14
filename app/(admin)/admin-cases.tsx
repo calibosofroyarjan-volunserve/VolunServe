@@ -17,7 +17,6 @@ import {
 } from "firebase/firestore";
 import React, { useEffect, useMemo, useState } from "react";
 import ListPagination from "../../components/ui/ListPagination";
-import AdminReviewHero from "../../components/admin/AdminReviewHero";
 import {
   Alert,
   Image,
@@ -3464,41 +3463,40 @@ export default function AdminCases() {
       contentContainerStyle={styles.container}
       showsVerticalScrollIndicator={true}
     >
-      <AdminReviewHero
-        eyebrow="ADMIN WORKSPACE / EMERGENCY & ASSISTANCE"
-        title="Emergency Reports"
-        subtitle="Validate resident reports, offer approved Volunteers emergency tasks, and monitor accepted responses."
-        icon="warning-outline"
-        tag="INCIDENT RESPONSE"
-      />
+      <View style={styles.emergencyPageIntro}>
+        <View style={styles.emergencyPageIntroText}>
+          <Text style={styles.emergencyPageEyebrow}>ADMIN WORKSPACE / EMERGENCY RESPONSE</Text>
+          <Text style={styles.emergencyPageHeading}>Emergency Reports</Text>
+          <Text style={styles.emergencyPageSubheading}>
+            Validate reports, coordinate qualified Volunteers, and monitor responses in one focused workspace.
+          </Text>
+        </View>
+        <View style={styles.liveSummary}>
+          <Text style={styles.liveSummaryNumber}>
+            {cases.filter((item) =>
+              ["reported", "validated", "assigned", "in_progress"].includes(item.status),
+            ).length}
+          </Text>
+          <Text style={styles.liveSummaryLabel}>Open Cases</Text>
+        </View>
+      </View>
+
       <View style={styles.pageHeader}>
         <View style={styles.headerTools}>
-            <View style={styles.searchBox}>
-              <Text style={styles.searchIcon}>⌕</Text>
-              <TextInput
-                value={caseSearch}
-                onChangeText={value => { setCaseSearch(value); setRecordPage(1); }}
-                placeholder="Search case, resident, location…"
-                placeholderTextColor="#94a3b8"
-                style={styles.searchInput}
-              />
-            </View>
-  
-            <View style={styles.liveSummary}>
-              <Text style={styles.liveSummaryNumber}>
-                {
-                  cases.filter((item) =>
-                    ["reported", "validated", "assigned", "in_progress"].includes(
-                      item.status
-                    )
-                  ).length
-                }
-              </Text>
-              <Text style={styles.liveSummaryLabel}>Open Cases</Text>
-            </View>
+          <View style={styles.searchBox}>
+            <Text style={styles.searchIcon}>⌕</Text>
+            <TextInput
+              value={caseSearch}
+              onChangeText={value => { setCaseSearch(value); setRecordPage(1); }}
+              placeholder="Search case, resident, location…"
+              placeholderTextColor="#94a3b8"
+              style={styles.searchInput}
+              accessibilityLabel="Search emergency reports"
+            />
           </View>
         </View>
-  
+      </View>
+
         <View style={styles.filterCard}>
           <View style={styles.filterGroup}>
             <Text style={styles.filterLabel}>STATUS</Text>
@@ -6491,6 +6489,44 @@ const styles = StyleSheet.create({
     color: "#b42318",
   },
 
+  emergencyPageIntro: {
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: "#E0ECE6",
+    borderRadius: 16,
+    paddingHorizontal: 19,
+    paddingVertical: 15,
+    marginBottom: 11,
+    flexDirection: "row",
+    flexWrap: "wrap",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: 15,
+  },
+  emergencyPageIntroText: {
+    flexGrow: 1,
+    flexBasis: 325,
+  },
+  emergencyPageEyebrow: {
+    color: "#078566",
+    fontSize: 9,
+    letterSpacing: 1,
+    fontWeight: "900",
+  },
+  emergencyPageHeading: {
+    color: "#123D32",
+    fontSize: 24,
+    lineHeight: 30,
+    fontWeight: "900",
+    marginTop: 4,
+  },
+  emergencyPageSubheading: {
+    color: "#5E776B",
+    fontSize: 11.5,
+    marginTop: 4,
+    lineHeight: 18,
+    maxWidth: 750,
+  },
   pageHeader: {
     flexDirection: "row",
     alignItems: "center",
