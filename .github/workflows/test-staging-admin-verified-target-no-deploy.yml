@@ -1,0 +1,46 @@
+name: Staging Admin Promotion Verified Applicant (NO DEPLOY)
+on:
+  pull_request:
+    branches:
+      - integration/identity-full-staging-20261112
+    paths:
+      - 'backend/lguCredentialRoutes.js'
+      - 'backend/server.js'
+      - 'backend/test-lgu-staging-approved-target-auth.cjs'
+      - 'backend/test-lgu-staging-verified-email.cjs'
+      - '.github/workflows/test-staging-admin-verified-target-no-deploy.yml'
+permissions:
+  contents: read
+jobs:
+  verified-target-only:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - name: Load immutable PR source, without problematic Gitlinks
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          [[ "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]] || exit 2
+          curl -fLsS --retry 3 \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/zipball/$SOURCE_SHA" \
+            -o /tmp/staging-admin-auth-review.zip
+          mkdir -p "$RUNNER_TEMP/staging-auth-review"
+          unzip -q /tmp/staging-admin-auth-review.zip -d "$RUNNER_TEMP/staging-auth-review"
+          ROOT="$(find "$RUNNER_TEMP/staging-auth-review" -mindepth 1 -maxdepth 1 -type d -print -quit)"
+          test -f "$ROOT/backend/test-lgu-staging-approved-target-auth.cjs"
+          cp -a "$ROOT/." "$GITHUB_WORKSPACE/"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Test actual staff applicant and Super Admin review routes
+        run: |
+          node --check backend/server.js
+          node --check backend/lguCredentialRoutes.js
+          node --test backend/test-lgu-staging-verified-email.cjs
+          node --test backend/test-lgu-staging-approved-target-auth.cjs
+      - name: Confirm no secret use or privileged account mutation
+        run: echo 'NO_DEPLOY_NO_REAL_USERS_NO_FIREBASE_REQUESTS'
