@@ -281,7 +281,7 @@ const styles = StyleSheet.create({
   stage: { flexGrow: 1, flexBasis: 85, minWidth: 84, gap: 4, alignItems: "center" },
   stageDot: { width: 29, height: 29, overflow: "hidden", borderRadius: 99, backgroundColor: "#EFF3F7", textAlign: "center", textAlignVertical: "center", lineHeight: 29, color: "#667D8F", fontWeight: "900" },
   stageDotActive: { backgroundColor: "#0C8B68", color: "#FFFFFF" },
-  stageLabel: { fontSize: 10, fontWeight: "750", color: "#718096", textAlign: "center" },
+  stageLabel: { fontSize: 10, fontWeight: "700", color: "#718096", textAlign: "center" },
   stageLabelActive: { color: COLOR.deep },
   stageFine: { fontSize: 9, color: "#94A3B8", textAlign: "center" },
   cardSectionTitle: { fontSize: 13, color: COLOR.navy, fontWeight: "900" },
