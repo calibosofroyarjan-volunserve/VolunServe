@@ -57,8 +57,13 @@ function createHarness(existing=null){
   return {
     writes,
     documents,
-    async apply({uid="staging_applicant_fixture_001",email="fictional@example.invalid",
-       email_verified=true,body=null}={}){
+    async apply(options={}){
+      const {uid="staging_applicant_fixture_001",body=null}=options;
+      // A missing Firebase token claim must stay missing, not default true.
+      const email=Object.prototype.hasOwnProperty.call(options,"email")
+        ? options.email : "fictional@example.invalid";
+      const email_verified=Object.prototype.hasOwnProperty.call(options,"email_verified")
+        ? options.email_verified : true;
       const req={
         firebaseUser:{uid,email,email_verified},
         body:body||{
