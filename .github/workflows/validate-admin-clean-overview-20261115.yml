@@ -1,0 +1,28 @@
+name: Validate clean Admin Emergency Overview (NO DEPLOY)
+on:
+  push:
+    branches: [fix/admin-emergency-clean-overview-20261115]
+permissions:
+  contents: read
+jobs:
+  overview:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Admin case layout and prior map checks
+        run: |
+          node scripts/test-admin-clean-overview-20261115.cjs
+          node scripts/test-admin-focused-response-map-20261115.cjs
+          node scripts/test-admin-navigation-contract.cjs
+          node scripts/test-emergency-announcement-advisory-link.cjs
+      - name: Locked dependencies
+        run: npm ci --no-audit --no-fund
+      - name: TypeScript and Expo web build
+        run: |
+          npx tsc --noEmit --incremental false
+          npx expo export --platform web --clear
