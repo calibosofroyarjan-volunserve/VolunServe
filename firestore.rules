@@ -9,29 +9,16 @@ service cloud.firestore {
         /databases/$(database)/documents/users/$(request.auth.uid)
       ).data;
     }
-    // Firebase Auth sign-in alone never grants Firestore permissions.
-    // Staff and community routes require a verified mailbox in the token.
     function verifiedEmailSession() {
       return signedIn()
         && request.auth.token.get('email_verified', false) == true;
     }
-    // Reuse profile data inside role helpers instead of repeating get() expressions.
-    // Equivalent to the previously deployed approved() predicate:
-    // 1) verifiedEmailSession already guarantees email_verified == true;
-    // 2) the explicit role allow-list excludes 'applicant', so a missing
-    //    status field is 'approved' but a present null/nonapproved status is not.
-    // This reduces repeated compiled expressions across role-sensitive rules.
-    // Recent temp-mail.org delivery domains reviewed 2026-11-10.
-    // Deny-only for community profiles; staff policies remain unchanged.
-    // This is a finite provider snapshot and cannot detect every new domain.
     function blockedTempMailOrgAlias(email) {
       return email.matches("(?i).*@(?:[a-z0-9-]+[.])*(?:(?:adujudi01|crystalfact|indonesiacentral|livetogelhk|luontaisterveys|wbcom)[.]info|(?:avtomaty-online|emailgeneratorai|huanqiu6)[.]cc|(?:baimengshu|bankwen|berkshireonstage|boffweb|crackclue|digeros|drtall|emailkeep|gmail[.]shagni|huicuiguan|javafs|jjwxb|jlmmarine|kxdyy|macsnipe|mail[.]chosenx|mail[.]gianes|mail[.]sc2hub|mmamemories|nmwxb|prejuge|prestigegroupnet|sofabazar|spicylog|stebie|tobiquegaming-license|ttbtt|wencuigu|wxfwb|yesrox|yyqzw)[.]com|ctd[.]nl8[.]eu|doisongtinhduc[.]xyz|dragontranslation[.]net|ghostmailz[.]club|ghostmailz[.]online|ghostmailz[.]store|mailer[.]pics|(?:mpmail|wandera|zymapi)[.]top)");
     }
     function approved() {
       let p = signedIn() ? profile() : {};
       let role = p.get('role', '');
-      // Exactly the original five-role allowlist: staff bypass profile-email
-      // matching; only Resident/Volunteer require the Firebase email match.
       return verifiedEmailSession()
         && (
           role in ['admin', 'superadmin', 'lgu_personnel']
@@ -44,15 +31,8 @@ service cloud.firestore {
         && p.get('status', 'approved') == 'approved'
         && p.get('adminStatus', 'active') != 'suspended';
     }
-    // Reuse one verified-active staff role gate for all three staff helpers.
-    // Same semantics as the previous independent isAdmin/isSuperAdmin helpers:
-    // only a verified Firebase email, approved/non-suspended user profile,
-    // and the exact allowed role can pass. Other roles never get staff access.
     function hasApprovedStaffRole(roles) {
       let p = signedIn() ? profile() : {};
-      // roles is always a subset of ['admin','superadmin'] at call sites.
-      // Therefore approved() already enforces verified mailbox and active
-      // approved/non-suspended staff state. Keep exact role restriction.
       return approved()
         && p.get('role', '') in roles;
     }
@@ -86,7 +66,6 @@ service cloud.firestore {
       let p = signedIn() ? profile() : {};
       return hasResidentAccess() && p.get('activeMode', 'resident') == 'resident';
     }
-    // Exact shared validation predicates hoisted from identical match-local helpers.
       function hasVerifiedIdentity(data) {
         return (
           (
@@ -123,8 +102,6 @@ service cloud.firestore {
           /databases/$(database)/documents/volunteerApplications/$(uid)
         ).data;
       }
-      // Firestore creation must enforce the same required inputs as the wizard.
-      // These lists are synchronized against the local SJDM/occupation constants.
       function validInitialResidentInputs() {
         let d = request.resource.data;
         return d.firstName is string && d.firstName.size() >= 2 && d.firstName.size() <= 80
@@ -151,9 +128,6 @@ service cloud.firestore {
           )
           && (d.occupationCategory != 'Other (Specify)' || d.get('occupationOther', '').size() >= 2);
       }
-      // A role grant is only valid with a same-commit, reviewed LGU credential record.
-      // getAfter + verifiedAt == request.time requires a fresh review in the same batch,
-      // rather than a stale record from an earlier promotion.
       function hasFreshLguCredentialReview() {
         let review = getAfter(
           /databases/$(database)/documents/lguAdminCredentialReviews/$(uid)
@@ -178,7 +152,6 @@ service cloud.firestore {
         && request.resource.data.age is int
         && request.resource.data.age >= 18
         && request.resource.data.age <= 100
-        // Already enforced by validInitialResidentInputs(); uid checked above.
         && request.resource.data.province in [
           'Bulacan',
           'BULACAN',
@@ -227,8 +200,6 @@ service cloud.firestore {
           'profilePictureUrl',
           'createdAt'
         ])
-        // Missing DOB on legacy entry paths defaults to a valid placeholder.
-        // Present DOB must follow the canonical calendar-date format.
         && request.resource.data.get('dateOfBirth', '2000-01-01').matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
         && request.resource.data.role == 'resident'
         && request.resource.data.status == 'approved'
@@ -246,8 +217,6 @@ service cloud.firestore {
         && request.resource.data.availability is list
         && request.resource.data.availability.size() == 0
         && request.resource.data.createdAt is timestamp;
-      // Staff applications never receive operational permissions at signup.
-      // Only a separately verified Super Admin can promote the pending account.
       allow create: if signedIn()
         && request.auth.uid == uid
         && request.auth.token.get('email', '') == request.resource.data.email
@@ -277,8 +246,6 @@ service cloud.firestore {
         && request.resource.data.province == 'Bulacan'
         && request.resource.data.city == 'City of San Jose del Monte'
         && request.resource.data.createdAt == request.time;
-      // Direct privileged account creation is intentionally disabled.
-      // Verified LGU staff must submit a pending application and be promoted.
       allow get: if signedIn()
         && (
           request.auth.uid == uid
@@ -753,10 +720,6 @@ service cloud.firestore {
       allow delete: if false;
     }
     match /announcements/{announcementId} {
-      // Every community-wide notice is published immediately on creation.
-      // List queries cannot prove a resource timestamp <= request.time, so
-      // authorize the same explicit audience constraint used by readers.
-      // Keep verification, approved status, active staff policy unchanged.
       allow read: if isAdminOrSuperAdmin()
         || (approved() && resource.data.audience == 'all');
       allow create: if isAdmin()
@@ -1507,9 +1470,6 @@ service cloud.firestore {
           && document.label is string
           && document.label.size() >= 2
           && document.label.size() <= 160
-          // The fixed URL prefix/suffix contribute exactly 72 ASCII chars.
-          // 1-428 evidence ID chars give exactly the same valid 73-500 length
-          // range as the previous URL size checks, with no broader matches.
           && document.url.matches(
             '^https://volunserve[.]onrender[.]com/api/assistance/evidence/evidence_[A-Za-z0-9]{1,428}/access$'
           )
@@ -1641,7 +1601,6 @@ service cloud.firestore {
           rd.beneficiaryType != 'self'
           || rd.relationshipToBeneficiary == 'self'
         )
-        // Both enums are enforced by the category-pair validator below.
         && validAssistanceCategoryPair()
         && rd.categoryLabel is string
         && rd.categoryLabel.size() >= 2
@@ -2827,8 +2786,6 @@ service cloud.firestore {
             ])
         );
     }
-    // Backend Admin SDK only: private review/approval/acknowledgment audit.
-    // Clients must use role-validated API, never write or inspect direct records.
     match /fundReleaseDemos/{releaseId} {
       allow read, write: if false;
     }
@@ -3080,7 +3037,6 @@ service cloud.firestore {
           == need.barangay;
       }
 
-      // Financial operations and campaign oversight are LGU Admin duties.
       allow read: if isAdmin()
         || hasResidentAccess();
       allow create: if isAdmin()
@@ -3718,8 +3674,6 @@ service cloud.firestore {
           resource.data.userId == request.auth.uid
           || resource.data.recipientUid == request.auth.uid
         );
-      // Recipients may acknowledge their own notification but cannot change
-      // the recipient, origin, content, status, or delivery metadata.
       allow update: if approved()
         && (
           resource.data.userId == request.auth.uid
@@ -3771,8 +3725,6 @@ service cloud.firestore {
       allow delete: if false;
     }
     match /evacuation_centers/{centerId} {
-      // Public may read facility metadata, but clients display ACTIVE only when
-      // LGU has supplied independent verification and official coordinates.
       function validCenterPayload() {
         let rd = request.resource.data;
         return rd.name is string
@@ -3919,8 +3871,6 @@ service cloud.firestore {
         );
       allow update, delete: if false;
     }
-    // Preserve the exact previously deployed volunteer-invitation policy.
-    // This invitation is consent/availability only, not dispatch or live GPS.
     match /volunteerInvitations/{invitationId} {
       function selectedVolunteer() {
         return get(
@@ -4110,8 +4060,6 @@ service cloud.firestore {
           && volunteer.volunteerStatus == 'approved'
           && hasVerifiedIdentity(volunteer);
       }
-      // Read access belongs to an approved capability + document ownership,
-      // not the user's active UI mode (which can change between sessions).
       allow read: if isAdminOrSuperAdmin()
         || (
           hasVolunteerAccess()
@@ -4885,8 +4833,6 @@ service cloud.firestore {
           && resource.data.residentId == request.auth.uid
         );
     }
-    // Private human-verified LGU credentials: reference only, never ID scans.
-    // Admin access requires a fresh review in the same commit as role promotion.
     match /lguAdminCredentialReviews/{targetUid} {
       function validReview() {
         return isSuperAdmin()
@@ -4936,13 +4882,7 @@ service cloud.firestore {
     match /aiMapRateLimits/{uid} {
       allow read, write: if false;
     }
-    // =========================================================
-    // COMMUNITY SERVICE EVENTS
-    // Separate from the legacy volunteerEvents emergency/training flow.
-    // =========================================================
 
-    // Private opt-in organizer GPS, separate from the public event location.
-    // No collection listing, no unjoined Volunteer access, and stale GPS is unreadable.
     match /communityEventLiveLocations/{eventId} {
       function eventPath() {
         return /databases/$(database)/documents/communityEvents/$(eventId);
@@ -4992,7 +4932,6 @@ service cloud.firestore {
         && request.resource.data.expiresAt <= request.time + duration.value(3, 'm');
       }
 
-      // Precise temporary organizer GPS is operational, not programmer oversight.
       allow get: if isAdmin()
         || (
           approved()
@@ -5013,8 +4952,6 @@ service cloud.firestore {
         && isEventOrganizer()
         && resource.data.residentId == request.auth.uid
         && validLiveCoordinates();
-      // A Resident organizer must be able to stop sharing after switching
-      // their active account mode to Volunteer. Ownership is still enforced.
       allow delete: if isAdmin()
         || (hasResidentAccess()
           && isEventOrganizer()
@@ -5028,8 +4965,6 @@ service cloud.firestore {
         ).data;
       }
 
-      // Resident site photos can be uploaded to an owner-scoped Storage path
-      // or provided as HTTPS URLs; Admin must review them before publication.
       function validPhotoUrl(url) {
         return url is string
           && url.size() >= 12
@@ -5054,10 +4989,6 @@ service cloud.firestore {
           );
       }
 
-      // Only the proposal owner (or an administrator) may read it.
-      // Reading one's own history must not depend on the current UI mode:
-      // the app can fall back to Resident mode if Volunteer access is revoked.
-      // Writes remain restricted by isResident() below.
       allow get, list: if isAdminOrSuperAdmin()
         || (hasResidentAccess()
           && resource.data.proposedBy == request.auth.uid);
@@ -5072,8 +5003,6 @@ service cloud.firestore {
           'qualificationNotes', 'whatToBring', 'photoUrls', 'videoUrl',
           'coverPhotoUrl'
         ])
-        // New fields remain optional for older Resident clients.
-        // Present fields are validated so data cannot bypass review limits.
         && request.resource.data.get('volunteerTasks', '') is string
         && request.resource.data.get('volunteerTasks', '').size() <= 1200
         && (
@@ -5139,8 +5068,6 @@ service cloud.firestore {
         && request.resource.data.createdAt == request.time
         && request.resource.data.updatedAt == request.time;
 
-      // Only the Admin can review a pending proposal.
-      // Approval must atomically create a matching published event.
       allow update: if isAdmin()
         && resource.data.status == 'pending'
         && request.resource.data.diff(resource.data)
@@ -5184,7 +5111,6 @@ service cloud.firestore {
         return /databases/$(database)/documents/communityEventParticipants/$(participationId);
       }
 
-      // Keep approved proposal state loaded once for the entire guarded creation.
       function validApprovedProposalCopy() {
         let proposal = proposalAfter();
         return proposal.status == 'approved'
@@ -5193,8 +5119,6 @@ service cloud.firestore {
         && proposal.reviewedAt == request.time
         && request.resource.data.title == proposal.title
         && request.resource.data.description == proposal.description
-        // Admin can only copy these fields from the approved proposal.
-        // Defaults preserve compatibility with proposals made before this update.
         && request.resource.data.volunteerTasks == proposal.get('volunteerTasks', '')
         && request.resource.data.lookingFor == proposal.get('lookingFor', '')
         && request.resource.data.requiredRoles == proposal.get('requiredRoles', [])
@@ -5236,12 +5160,10 @@ service cloud.firestore {
         && request.resource.data.proposerName == proposal.proposerName;
       }
 
-      // The query on the client filters publicationStatus == published.
       allow get, list: if isAdminOrSuperAdmin()
         || (approved()
           && resource.data.publicationStatus == 'published');
 
-      // Creation requires same-transaction Admin approval of this proposal.
       allow create: if isAdmin()
         && request.resource.data.keys().hasOnly([
           'title', 'description', 'category', 'barangay',
@@ -5267,7 +5189,6 @@ service cloud.firestore {
         && request.resource.data.updatedAt == request.time
         && validApprovedProposalCopy();
 
-      // Admin can advance status; completion is recorded by the Admin.
       allow update: if isAdmin()
         && resource.data.publicationStatus == 'published'
         && resource.data.status in ['upcoming', 'active']
@@ -5291,8 +5212,6 @@ service cloud.firestore {
           )
         );
 
-      // A Volunteer can increase count only when their matching Join write
-      // is part of this same Firestore transaction.
       allow update: if isVolunteer()
         && resource.data.publicationStatus == 'published'
         && resource.data.status in ['upcoming', 'active']
@@ -5332,18 +5251,12 @@ service cloud.firestore {
         ).data;
       }
 
-      // Volunteers may read their OWN participation history even after
-      // switching to Resident mode. Revoking Volunteer approval still denies
-      // access. Keep the deterministic get and owner-scoped list restrictions.
-      // Volunteer writes continue to require the active Volunteer mode below.
       allow get: if isAdminOrSuperAdmin()
         || (hasVolunteerAccess()
           && participantId.matches('^.+_' + request.auth.uid + '$'));
-      // Firestore queries must include where("uid", "==", auth.uid).
       allow list: if isAdminOrSuperAdmin()
         || (hasVolunteerAccess() && resource.data.uid == request.auth.uid);
 
-      // The participant's document ID is eventId_uid.
       function validJoinedEventCapacity(event) {
         let later = eventAfter();
         return event.participantsCount is int
@@ -5395,11 +5308,7 @@ service cloud.firestore {
       allow create: if isVolunteer()
         && validParticipantCreation();
 
-      // All participant updates use one role gate, reducing evaluation cost.
-      // Each volunteer transition retains its original field whitelist.
       allow update: if request.auth != null
-        // An event participant may never mark their own attendance as verified.
-        // Evaluate this denial before the longer Volunteer/Admin checks.
         && !(
           resource.data.uid == request.auth.uid
           && request.resource.data.keys().hasAny(['attendanceVerified'])
@@ -5407,13 +5316,11 @@ service cloud.firestore {
         )
         && (
           (
-            // A volunteer can only modify their own participant document.
             resource.data.uid == request.auth.uid
             && request.resource.data.get('attendanceVerified', false) == false
             && isVolunteer()
             && (
               (
-                // Repeat decline; never change participant status or slots.
                 resource.data.status == 'declined'
                 && request.resource.data.status == 'declined'
                 && request.resource.data.uid == resource.data.uid
@@ -5426,7 +5333,6 @@ service cloud.firestore {
               )
               ||
               (
-                // Declined volunteer joins; event slot count increments atomically.
                 resource.data.status == 'declined'
                 && request.resource.data.status == 'joined'
                 && request.resource.data.uid == resource.data.uid
@@ -5456,7 +5362,6 @@ service cloud.firestore {
               )
               ||
               (
-                // Volunteer Time In/Out, cannot self-verify.
                 resource.data.status == 'joined'
                 && resource.data.attendanceVerified == false
                 && request.resource.data.attendanceVerified == false
@@ -5486,7 +5391,6 @@ service cloud.firestore {
           )
           ||
           (
-            // LGU Admin-only attendance corrections/verification.
             isAdmin()
             && (
               request.resource.data.attendanceVerified == false
