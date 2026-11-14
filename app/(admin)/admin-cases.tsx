@@ -4000,113 +4000,124 @@ export default function AdminCases() {
               </View>
 
               {detailTab === "overview" && (
-                <View style={styles.overviewDashboard}>
-                  <View style={styles.overviewCard}>
-                    <View style={styles.overviewCardHeader}>
-                      <Text style={styles.overviewCardIcon}>♙</Text>
-                      <Text style={styles.overviewCardTitle}>Resident Information</Text>
-                    </View>
-                    <Text style={styles.overviewPrimary}>{incident.reporterName || "Resident"}</Text>
-                    <Text style={styles.overviewLine}>{incident.contactNumber || "No contact number"}</Text>
-                    <Text style={styles.overviewLine}>{incident.reporterEmail || "No email on file"}</Text>
-                    <Text style={styles.overviewLine}>
-                      {incident.reporterBarangay
-                        ? `${incident.reporterBarangay}, San Jose del Monte, Bulacan`
-                        : incident.reporterAddress || "Barangay not provided"}
-                    </Text>
-                    <View style={styles.overviewVerifiedPill}>
-                      <Text style={styles.overviewVerifiedText}>
-                        {incident.verification?.identityVerified
-                          ? "✓ Verified Resident"
-                          : "Resident account"}
+                <View style={styles.cleanOverviewSection}>
+                  <View style={styles.cleanOverviewHeading}>
+                    <View>
+                      <Text style={styles.cleanOverviewKicker}>CASE WORKSPACE</Text>
+                      <Text style={styles.cleanOverviewTitle}>Incident overview</Text>
+                      <Text style={styles.cleanOverviewSubtitle}>
+                        Review the essentials here. Evidence, response controls, and full history stay in their own tabs.
                       </Text>
                     </View>
+                    <TouchableOpacity
+                      accessibilityRole="button"
+                      accessibilityLabel="Review evidence and validate this report"
+                      style={styles.cleanEvidenceShortcut}
+                      onPress={() => setDetailTab("evidence")}
+                    >
+                      <Text style={styles.cleanEvidenceShortcutText}>Review Evidence  ›</Text>
+                    </TouchableOpacity>
                   </View>
 
-                  <View style={styles.overviewCard}>
-                    <View style={styles.overviewCardHeader}>
-                      <Text style={styles.overviewCardIcon}>◉</Text>
-                      <Text style={styles.overviewCardTitle}>Case Status</Text>
-                    </View>
+                  <View style={styles.cleanOverviewGrid}>
+                    <View style={[styles.cleanOverviewCard, styles.cleanOverviewIncident]}>
+                      <View style={styles.cleanOverviewCardHeader}>
+                        <Text style={styles.cleanOverviewCardIcon}>◈</Text>
+                        <Text style={styles.cleanOverviewCardTitle}>Incident Summary</Text>
+                      </View>
+                      <Text style={styles.cleanOverviewFieldLabel}>REPORTED SITUATION</Text>
+                      <Text style={styles.cleanOverviewDescription}>
+                        {incident.details?.trim() || "No additional incident description provided."}
+                      </Text>
 
-                    {[
-                      ["Reported", true, incident.createdAt],
-                      ["Validated", verificationStatus === "validated", incident.validatedAt],
-                      [
-                        "Volunteer Offer",
-                        ["assigned", "in_progress", "resolved", "closed"].includes(incident.status),
-                        incident.assignedAt || incident.updatedAt,
-                      ],
-                      [
-                        "In Progress",
-                        ["in_progress", "resolved", "closed"].includes(incident.status),
-                        incident.status === "in_progress" ? incident.updatedAt : null,
-                      ],
-                      [
-                        "Resolved",
-                        ["resolved", "closed"].includes(incident.status),
-                        incident.resolvedAt,
-                      ],
-                      ["Closed", incident.status === "closed", incident.closedAt],
-                    ].map(([label, done, when], index) => (
-                      <View key={`${label}-${index}`} style={styles.statusTimelineRow}>
-                        <View
-                          style={[
-                            styles.statusTimelineDot,
-                            done ? styles.statusTimelineDotDone : styles.statusTimelineDotPending,
-                          ]}
-                        />
-                        <View style={{ flex: 1 }}>
-                          <Text
-                            style={[
-                              styles.statusTimelineLabel,
-                              done && styles.statusTimelineLabelDone,
-                            ]}
-                          >
-                            {String(label)}
+                      <View style={styles.cleanOverviewSeparator} />
+                      <Text style={styles.cleanOverviewFieldLabel}>ASSISTANCE NEEDED</Text>
+                      <View style={styles.needChipRow}>
+                        {(incident.assistanceTypes || []).length ? (
+                          (incident.assistanceTypes || []).slice(0, 5).map((item) => (
+                            <View key={item} style={styles.needChip}>
+                              <Text style={styles.needChipText}>{item}</Text>
+                            </View>
+                          ))
+                        ) : (
+                          <Text style={styles.cleanOverviewFieldValue}>
+                            {incident.needs || "Not specified"}
                           </Text>
-                          {done && when ? (
-                            <Text style={styles.statusTimelineTime}>{formatDate(when)}</Text>
-                          ) : null}
-                        </View>
+                        )}
                       </View>
-                    ))}
-                  </View>
-
-                  <View style={styles.overviewCard}>
-                    <View style={styles.overviewCardHeader}>
-                      <Text style={styles.overviewCardIcon}>⚑</Text>
-                      <Text style={styles.overviewCardTitle}>Priority & Needs</Text>
+                      <View style={styles.cleanAffectedRow}>
+                        <Text style={styles.cleanOverviewFieldLabel}>PEOPLE AFFECTED</Text>
+                        <Text style={styles.cleanAffectedCount}>
+                          {incident.affectedPeople || 0}
+                        </Text>
+                      </View>
                     </View>
 
-                    <View style={styles.priorityRow}>
-                      <View style={[styles.badge, severityStyle(incident.severity)]}>
-                        <Text style={styles.badgeText}>{severityLabel(incident.severity)}</Text>
+                    <View style={[styles.cleanOverviewCard, styles.cleanOverviewResident]}>
+                      <View style={styles.cleanOverviewCardHeader}>
+                        <Text style={styles.cleanOverviewCardIcon}>♙</Text>
+                        <Text style={styles.cleanOverviewCardTitle}>Resident Information</Text>
                       </View>
-                      <Text style={styles.priorityPeople}>
-                        {incident.affectedPeople || 0} affected
+                      <Text style={styles.cleanOverviewResidentName}>
+                        {incident.reporterName || "Resident"}
+                      </Text>
+                      <View style={styles.overviewVerifiedPill}>
+                        <Text style={styles.overviewVerifiedText}>
+                          {incident.verification?.identityVerified
+                            ? "✓ Verified Resident"
+                            : "Resident account"}
+                        </Text>
+                      </View>
+                      <View style={styles.cleanOverviewSeparator} />
+                      <Text style={styles.cleanOverviewFieldLabel}>CONTACT NUMBER</Text>
+                      <Text style={styles.cleanOverviewFieldValue}>
+                        {incident.contactNumber || "Not provided"}
+                      </Text>
+                      <Text style={styles.cleanOverviewFieldLabel}>EMAIL ADDRESS</Text>
+                      <Text style={styles.cleanOverviewFieldValue} numberOfLines={2}>
+                        {incident.reporterEmail || "Not provided"}
+                      </Text>
+                      <Text style={styles.cleanOverviewFieldLabel}>ACCOUNT BARANGAY</Text>
+                      <Text style={styles.cleanOverviewFieldValue}>
+                        {incident.reporterBarangay
+                          ? `${incident.reporterBarangay}, San Jose del Monte, Bulacan`
+                          : incident.reporterAddress || "Barangay not provided"}
                       </Text>
                     </View>
+                  </View>
 
-                    <Text style={styles.overviewLabel}>Assistance Needed</Text>
-                    <View style={styles.needChipRow}>
-                      {(incident.assistanceTypes || []).length ? (
-                        (incident.assistanceTypes || []).slice(0, 5).map((item) => (
-                          <View key={item} style={styles.needChip}>
-                            <Text style={styles.needChipText}>{item}</Text>
-                          </View>
-                        ))
-                      ) : (
-                        <Text style={styles.overviewLine}>
-                          {incident.needs || "Not specified"}
-                        </Text>
-                      )}
+                  <View style={styles.cleanOverviewStatusBar}>
+                    <View style={styles.cleanStatusItem}>
+                      <Text style={styles.cleanOverviewFieldLabel}>VERIFICATION</Text>
+                      <Text style={styles.cleanStatusValue}>
+                        {labelOfStatus(verificationStatus)}
+                      </Text>
                     </View>
-
-                    <Text style={styles.overviewLabel}>Description</Text>
-                    <Text style={styles.overviewDescription}>
-                      {incident.details || "No additional incident description."}
-                    </Text>
+                    <View style={styles.cleanStatusItem}>
+                      <Text style={styles.cleanOverviewFieldLabel}>VOLUNTEER COORDINATION</Text>
+                      <Text style={styles.cleanStatusValue}>
+                        {activeAssignments.some((item) => ["responding", "on_site"].includes(String(item.status)))
+                          ? "Response underway"
+                          : activeAssignments.some((item) => String(item.status) === "accepted")
+                            ? "Accepted · Awaiting task start"
+                            : activeAssignments.some((item) => String(item.status) === "offered")
+                              ? "Offer pending"
+                              : "No active Volunteer task"}
+                      </Text>
+                    </View>
+                    <TouchableOpacity
+                      accessibilityRole="button"
+                      accessibilityLabel="Open volunteer assignment details"
+                      onPress={() => {
+                        setDetailTab("personnel");
+                        setAssignmentCaseId(incident.id);
+                        setSkillFilter("");
+                        setAvailabilityFilter("");
+                      }}
+                      style={styles.cleanAssignmentShortcut}
+                    >
+                      <Text style={styles.cleanAssignmentShortcutText}>View Assignment  ›</Text>
+                    </TouchableOpacity>
                   </View>
                 </View>
               )}
@@ -6544,6 +6555,170 @@ const styles = StyleSheet.create({
   },
   detailTabTextActive: {
     color: "#1d4ed8",
+  },
+  // Focused, low-clutter Admin overview. The map lives in its dedicated route.
+  cleanOverviewSection: {
+    paddingHorizontal: 14,
+    paddingTop: 15,
+    gap: 12,
+  },
+  cleanOverviewHeading: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+    paddingHorizontal: 2,
+  },
+  cleanOverviewKicker: {
+    color: "#0F766E",
+    fontSize: 9,
+    fontWeight: "900",
+    letterSpacing: 1,
+  },
+  cleanOverviewTitle: {
+    marginTop: 3,
+    color: "#123D32",
+    fontSize: 17,
+    fontWeight: "900",
+  },
+  cleanOverviewSubtitle: {
+    marginTop: 4,
+    maxWidth: 520,
+    fontSize: 11,
+    lineHeight: 17,
+    color: "#64748B",
+  },
+  cleanEvidenceShortcut: {
+    minHeight: 35,
+    justifyContent: "center",
+    paddingHorizontal: 13,
+    backgroundColor: "#F3F9F6",
+    borderWidth: 1,
+    borderColor: "#B8DACC",
+    borderRadius: 10,
+  },
+  cleanEvidenceShortcutText: {
+    fontWeight: "800",
+    fontSize: 11,
+    color: "#0B6D55",
+  },
+  cleanOverviewGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 12,
+    alignItems: "stretch",
+  },
+  cleanOverviewCard: {
+    borderWidth: 1,
+    borderColor: "#DEE9E4",
+    borderRadius: 14,
+    padding: 16,
+    backgroundColor: "#FFFFFF",
+    minHeight: 255,
+    minWidth: 255,
+  },
+  cleanOverviewIncident: {
+    flexGrow: 1.4,
+    flexBasis: 325,
+  },
+  cleanOverviewResident: {
+    flexGrow: 1,
+    flexBasis: 265,
+  },
+  cleanOverviewCardHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 9,
+    marginBottom: 13,
+  },
+  cleanOverviewCardIcon: {
+    color: "#0D896D",
+    fontSize: 17,
+    fontWeight: "900",
+  },
+  cleanOverviewCardTitle: {
+    color: "#173D32",
+    fontSize: 14,
+    fontWeight: "900",
+  },
+  cleanOverviewFieldLabel: {
+    color: "#748A84",
+    fontSize: 9,
+    letterSpacing: 0.5,
+    fontWeight: "900",
+    marginTop: 8,
+    marginBottom: 5,
+  },
+  cleanOverviewFieldValue: {
+    color: "#334155",
+    fontSize: 11.5,
+    lineHeight: 17,
+    fontWeight: "650",
+  },
+  cleanOverviewDescription: {
+    color: "#334155",
+    fontSize: 12,
+    lineHeight: 19,
+  },
+  cleanOverviewSeparator: {
+    marginTop: 15,
+    marginBottom: 6,
+    height: 1,
+    backgroundColor: "#E7EEEB",
+  },
+  cleanOverviewResidentName: {
+    color: "#102E26",
+    fontSize: 15,
+    fontWeight: "900",
+  },
+  cleanAffectedRow: {
+    marginTop: 13,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  cleanAffectedCount: {
+    color: "#124B3B",
+    fontWeight: "900",
+    fontSize: 17,
+  },
+  cleanOverviewStatusBar: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 16,
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "#DCE9E4",
+    borderRadius: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    backgroundColor: "#F5FAF7",
+  },
+  cleanStatusItem: {
+    flexGrow: 1,
+    flexBasis: 180,
+    minWidth: 145,
+  },
+  cleanStatusValue: {
+    fontWeight: "800",
+    fontSize: 12,
+    color: "#214B3F",
+  },
+  cleanAssignmentShortcut: {
+    minHeight: 35,
+    paddingHorizontal: 11,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderRadius: 9,
+    borderColor: "#C2DFD2",
+    backgroundColor: "#FFFFFF",
+  },
+  cleanAssignmentShortcutText: {
+    color: "#08765B",
+    fontSize: 11,
+    fontWeight: "800",
   },
   overviewDashboard: {
     flexDirection: "row",
