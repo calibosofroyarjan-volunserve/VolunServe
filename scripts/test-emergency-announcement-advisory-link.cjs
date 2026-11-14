@@ -2,35 +2,57 @@
 const fs = require("node:fs");
 const assert = require("node:assert/strict");
 const read = path => fs.readFileSync(path, "utf8");
-const source = read("lib/emergencyPublicAdvisory.ts");
+
+const safeDraft = read("lib/emergencyPublicAdvisory.ts");
+const auto = read("lib/publishVerifiedCommunityAdvisory.ts");
 const admin = read("app/(admin)/admin-cases.tsx");
 const announcements = read("app/(admin)/create-announcement.tsx");
 
-// A public advisory is an intentional Admin publication, never a raw report feed.
-assert(source.includes('source.verificationStatus === "validated"'));
-assert(source.includes('"validated", "assigned", "in_progress"'));
-assert(source.includes("safePublicAdvisoryBarangay"));
-assert(source.includes("SJDM_BARANGAYS.find"));
-assert(source.includes("adminConfirmedBarangay"));
-assert(!source.includes("source.reporterBarangay"));
-for (const sensitiveField of ["reporterName", "reporterEmail", "reporterUid", "latitude", "longitude", "attachments", "contactNumber", "photoUrl", "details"]) {
-  assert(!source.includes("source." + sensitiveField), "No public announcement may copy sensitive case field: " + sensitiveField);
+// Full report stays private; any public warning is a short anonymous template.
+assert(safeDraft.includes('source.verificationStatus === "validated"'));
+assert(safeDraft.includes('"validated", "assigned", "in_progress"'));
+assert(safeDraft.includes("SJDM_BARANGAYS.find"));
+assert(safeDraft.includes("adminConfirmedBarangay"));
+assert(!safeDraft.includes("source.reporterBarangay"));
+for(const field of ["reporterName","reporterEmail","reporterUid","latitude","longitude","attachments","contactNumber","photoUrl","details"]) {
+  assert(!safeDraft.includes("source." + field), "Unsafe private case data in public draft: " + field);
+  assert(!auto.includes("current." + field), "Unsafe private case data in publisher: " + field);
 }
 
-assert(admin.includes("canPreparePublicEmergencyAdvisory(incident)"));
-assert(admin.includes('pathname: "/(admin)/create-announcement"'));
-assert(admin.includes("params: { incidentId: incident.id }"));
-assert(!admin.includes('collection(db, "announcements")'),
-  "Emergency Reports must not directly publish announcements");
-assert(announcements.includes("getDoc(doc(db, \"disasterCases\", incidentId))"));
-assert(announcements.includes("buildPublicEmergencyAdvisory(latest.data(), advisoryBarangay)"));
-assert(announcements.includes("safePublicAdvisoryBarangay(advisoryBarangay)"));
-assert(announcements.includes("advisorySourceValidated"));
-assert(announcements.includes("!advisoryReviewed"));
-assert(announcements.includes('role !== "admin"'));
-assert(announcements.includes("SJDM_BARANGAYS.filter"));
-assert(announcements.includes('audience: "all"'));
-assert(announcements.includes('linkUrl: ""') && announcements.includes('imageUrl: ""'));
+// One-click Validate Report triggers optional automatic publication for verified
+// wider-impact HIGH or CRITICAL cases; no Create Public Advisory UI on case.
+assert(admin.includes('reviewVerification(incident, "validate")'));
+assert(admin.includes('Automatically publish a public advisory when I validate'));
+assert(admin.includes('["high", "critical"].includes(incident.severity)'));
+assert(admin.includes("publicImpactConfirmed[incident.id] === true"));
+assert(admin.includes("safePublicAdvisoryBarangay(publicImpactBarangays[incident.id])"));
+assert(admin.includes("publishVerifiedCommunityAdvisory({"));
+assert(!admin.includes("Create Public Advisory in Announcements"));
+assert(!admin.includes('collection(db, "announcements")'));
+assert(admin.indexOf("const publication = await publishVerifiedCommunityAdvisory(") >
+  admin.indexOf("await runTransaction(db, async (transaction) => {"));
+assert(admin.includes("Case validated, but the public advisory was NOT published"),
+  "Announce failure must not invalidate private Emergency Report");
+
+// Independent posting transaction must check live case status & severity,
+// record PRIVATE link for idempotence, and use the ALREADY AUTHORIZED
+// announcements schema with no case id/photos/coordinates.
+assert(auto.includes('doc(db, "disasterCases", args.caseId)'));
+assert(auto.includes('doc(collection(db, "announcements"))'));
+assert(auto.includes('["high", "critical"].includes(String(current.severity || ""))'));
+assert(auto.includes("buildPublicEmergencyAdvisory(current, barangay)"));
+assert(auto.includes('typeof current.publicAdvisoryId === "string"'));
+assert(auto.includes("transaction.set(noticeRef, {"));
+assert(auto.includes("transaction.update(privateCaseRef, {"));
+assert(auto.includes("publicAdvisoryId: noticeRef.id"));
+for(const field of ['title: draft.title','message: draft.message','audience: "all"','priority: "urgent"','publishAt: serverTimestamp()','linkUrl: ""','imageUrl: ""','createdBy: args.adminUid']) {
+  assert(auto.includes(field),"Missing authorized public announcement field: "+field);
+}
+assert(!auto.includes("caseId: args.caseId"), "Do not publish private case ID in public post");
+assert(!auto.includes("reporterBarangay"), "Must not infer incident location from reporter residence");
+
+// Existing manually-authored Admin Announcements still works for unrelated updates.
 assert(announcements.includes("onPress={handleSubmit}"));
-assert(!announcements.includes("autoPublishEmergency"));
-console.log("PASS privacy-safe Admin-validated incident -> reviewed existing Announcements with no raw report or Rules changes");
+assert(announcements.includes('collection(db, "announcements")'));
+assert(announcements.includes("safePublicAdvisoryBarangay(advisoryBarangay)"));
+console.log("PASS: Admin Validate -> eligible public-impact advisory auto-published with privacy guards; original report private");
