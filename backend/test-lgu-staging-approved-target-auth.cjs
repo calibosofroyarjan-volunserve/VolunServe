@@ -35,6 +35,9 @@ function harness({
     ["lguStaffCredentialAssets/"+TARGET_UID+"_staff-id",staffId],
     ["lguStaffCredentialAssets/"+TARGET_UID+"_appointment-letter",letter],
   ]);
+  // An absent Firestore document has exists=false, not exists=true/data=null.
+  if(staffId===null)documents.delete("lguStaffCredentialAssets/"+TARGET_UID+"_staff-id");
+  if(letter===null)documents.delete("lguStaffCredentialAssets/"+TARGET_UID+"_appointment-letter");
   const writes=[],authQueries=[],routes=new Map();
   let nextId=0;
   const db={
