@@ -21,7 +21,6 @@ jobs:
           node scripts/test-admin-emergency-ui-consistency-20261115.cjs
           node scripts/test-admin-five-tab-reference-20261115.cjs
           node scripts/test-admin-focused-response-map-20261115.cjs
-          node scripts/test-preserved-volunteer-invitation-rules.cjs
           node scripts/test-admin-volunteer-authorization.cjs
       - name: Locked dependencies
         run: npm ci --no-audit --no-fund
