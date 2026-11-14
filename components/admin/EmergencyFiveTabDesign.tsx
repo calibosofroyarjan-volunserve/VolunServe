@@ -60,11 +60,13 @@ type Basics = {
 function Card({ children, style }: { children: React.ReactNode; style?: any }) {
   return <View style={[styles.card, style]}>{children}</View>;
 }
-function Heading({ icon, title, sub }: { icon: string; title: string; sub?: string }) {
+function Heading({ icon, title, sub, level = "card" }: {
+  icon: string; title: string; sub?: string; level?: "page" | "card";
+}) {
   return <View style={styles.headingRow}>
-    <Text style={styles.headingIcon}>{icon}</Text>
+    <Text style={[styles.headingIcon, level === "page" && styles.headingIconPage]}>{icon}</Text>
     <View style={styles.headingBody}>
-      <Text style={styles.headingText}>{title}</Text>
+      <Text style={[styles.headingText, level === "page" && styles.headingTextPage]}>{title}</Text>
       {!!sub && <Text style={styles.muted}>{sub}</Text>}
     </View>
   </View>;
@@ -73,11 +75,18 @@ function RowField({ label, value }: { label: string; value: React.ReactNode }) {
   return <View style={styles.field}><Text style={styles.fieldLabel}>{label}</Text>
     <Text style={styles.fieldValue}>{value}</Text></View>;
 }
-function Action({ label, onPress, kind = "primary" }: { label: string; onPress: () => void; kind?: "primary" | "outline" }) {
+function Action({ label, onPress, kind = "primary" }: {
+  label: string; onPress: () => void; kind?: "primary" | "outline" | "danger";
+}) {
   return <TouchableOpacity accessibilityRole="button" onPress={onPress}
-    style={[styles.action, kind === "primary" ? styles.actionPrimary : styles.actionOutline]}>
-    <Text style={kind === "primary" ? styles.actionPrimaryText : styles.actionOutlineText}>{label}</Text>
+    style={[styles.action, kind === "primary" ? styles.actionPrimary :
+      kind === "danger" ? styles.actionDanger : styles.actionOutline]}>
+    <Text style={kind === "outline" ? styles.actionOutlineText : styles.actionPrimaryText}>{label}</Text>
   </TouchableOpacity>;
+}
+
+export function EmergencyMapButton({ onPress }: { onPress: () => void }) {
+  return <Action label="⌖  Open Emergency Response Map  ›" kind="danger" onPress={onPress} />;
 }
 function cap(t: string): string { return t.replace(/_/g, " ").replace(/\b\w/g, (x) => x.toUpperCase()); }
 function responseLabel(assignments: AdminAssignmentView[]): string {
@@ -90,7 +99,7 @@ function validCoord(n: unknown): n is number { return typeof n === "number" && N
 
 export function ReferenceOverview({ incident, verificationStatus, statusText, severityText, activeAssignments, onMap }: Basics) {
   return <View style={styles.page}>
-    <Heading icon="▦" title="Incident overview" sub="The essentials, organized exactly where an Admin expects them." />
+    <Heading level="page" icon="▦" title="Incident overview" sub="The essentials, organized exactly where an Admin expects them." />
     <View style={styles.twoColumn}>
       <Card style={styles.grow}>
         <Heading icon="▤" title="Incident Summary" />
@@ -134,7 +143,7 @@ export function ReferenceStatus({ incident, verificationStatus, statusText, acti
     { title: "Escalation Status", value: incident.officialLguResponseStatus ? cap(incident.officialLguResponseStatus) : "Not recorded", sub: "Critical incidents: contact official services immediately", tint: styles.redTint, icon: "⚑" },
   ];
   return <View style={styles.page}>
-    <Heading icon="◈" title="Case Status" sub="Current verification, coordination and progress of this emergency report." />
+    <Heading level="page" icon="◈" title="Case Status" sub="Current verification, coordination and progress of this emergency report." />
     <View style={styles.kpiRow}>{cards.map((x) =>
       <View key={x.title} style={[styles.kpi, x.tint]}>
         <Text style={styles.kpiIcon}>{x.icon}</Text>
@@ -200,7 +209,7 @@ export function ReferenceHistory({ incident, assignments, formatDate }: {
     return millis(a.when) - millis(b.when);
   });
   return <View style={styles.page}>
-    <Heading icon="◷" title="Emergency Activity Timeline" sub="Real recorded case and Volunteer activity, without invented events or timestamps." />
+    <Heading level="page" icon="◷" title="Emergency Activity Timeline" sub="Real recorded case and Volunteer activity, without invented events or timestamps." />
     <View style={styles.twoColumn}>
       <Card style={[styles.grow, { flexGrow: 2 }]}>
         <Text style={styles.cardSectionTitle}>Case history</Text>
@@ -236,14 +245,13 @@ export function ReferenceHistory({ incident, assignments, formatDate }: {
 
 
 export function ReferenceVolunteerMatching({ incident, verificationStatus, caseBarangay,
-  eligibleCount, activeAssignments, showManualFallback, onToggleManualFallback }: {
+  eligibleCount, activeAssignments, onCancelAssignment }: {
   incident: AdminCaseView;
   verificationStatus: string;
   caseBarangay: string;
   eligibleCount: number;
   activeAssignments: AdminAssignmentView[];
-  showManualFallback: boolean;
-  onToggleManualFallback: () => void;
+  onCancelAssignment?: (assignment: AdminAssignmentView) => void;
 }) {
   const ready = verificationStatus === "validated" &&
     ["validated", "assigned", "in_progress"].includes(incident.status);
@@ -251,7 +259,7 @@ export function ReferenceVolunteerMatching({ incident, verificationStatus, caseB
   return <View style={styles.page}>
     <View style={styles.matchHeading}>
       <View style={styles.grow}>
-        <Heading icon="♧" title="Volunteer Assignment" sub="Location-first response coordination with qualification and acceptance checks." />
+        <Heading level="page" icon="♧" title="Volunteer Assignment" sub="Location-first response coordination with qualification and acceptance checks." />
       </View>
       <View style={styles.matchBanner}>
         <Text style={styles.matchBannerTitle}>◇ Three-wave automatic matching</Text>
@@ -305,14 +313,22 @@ export function ReferenceVolunteerMatching({ incident, verificationStatus, caseB
       </View>
     </Card>
     <Card>
-      <Heading icon="♧" title="Assigned Volunteer Support" />
+      <Heading icon="♧" title="Volunteer Task Status" />
       {activeAssignments.length === 0
         ? <View style={styles.assignedEmpty}>
             <Text style={styles.assignedEmptyIcon}>♧</Text>
-            <Text style={styles.headingText}>No Volunteer assigned yet</Text>
-            <Text style={styles.muted}>{ready
-              ? "There are no recorded accepted or pending offers. No automatic notification has been sent."
-              : "Validate the case first. An accepted response will appear here with its actual status."}</Text>
+            <Text style={styles.emptyTitle}>
+              {!ready ? "Awaiting Admin validation" :
+                eligibleCount === 0 ? "No eligible local Volunteers found" :
+                "No Volunteer assigned yet"}
+            </Text>
+            <Text style={styles.muted}>
+              {!ready
+                ? "Validate the case before sending a Volunteer task offer."
+                : eligibleCount === 0
+                  ? "No approved, qualified Volunteers currently match this incident barangay. Nearby and citywide automatic matching is not active yet; escalate urgent needs to official services."
+                  : "Qualified local Volunteers are available below. An offer requires Volunteer acceptance before the response begins."}
+            </Text>
           </View>
         : activeAssignments.map((x) =>
             <View key={x.id} style={styles.assignedRow}>
@@ -323,17 +339,11 @@ export function ReferenceVolunteerMatching({ incident, verificationStatus, caseB
                 <Text style={styles.personName}>{x.volunteerName || "Volunteer"}</Text>
                 <Text style={styles.muted}>Task status: {cap(x.status)}</Text>
               </View>
+              {onCancelAssignment && x.status !== "completed" && (
+                <Action kind="outline" label="Cancel offer" onPress={() => onCancelAssignment(x)} />
+              )}
             </View>)}
     </Card>
-    <View style={styles.fallbackStrip}>
-      <View style={styles.grow}>
-        <Text style={styles.fallbackTitle}>Admin manual offer fallback</Text>
-        <Text style={styles.muted}>
-          Existing authorized manual task offering is retained until the automatic three-wave engine is implemented and tested.
-        </Text>
-      </View>
-      <Action label={showManualFallback ? "Hide fallback  ‹" : "Show fallback  ›"} kind="outline" onPress={onToggleManualFallback} />
-    </View>
   </View>;
 }
 
@@ -345,13 +355,16 @@ const styles = StyleSheet.create({
   twoColumn: { flexDirection: "row", flexWrap: "wrap", alignItems: "stretch", gap: 12 },
   headingRow: { flexDirection: "row", alignItems: "flex-start", gap: 10, marginBottom: 8 },
   headingBody: { flex: 1 },
-  headingIcon: { color: COLOR.blue, fontSize: 21, fontWeight: "800", minWidth: 23 },
-  headingText: { color: COLOR.navy, fontWeight: "900", fontSize: 18 },
+  headingIcon: { color: COLOR.blue, fontSize: 17, fontWeight: "700", minWidth: 21 },
+  headingIconPage: { fontSize: 20, minWidth: 24 },
+  headingText: { color: COLOR.navy, fontWeight: "800", fontSize: 14, lineHeight: 20 },
+  headingTextPage: { fontSize: 18, lineHeight: 26 },
+  emptyTitle: { fontSize: 14, lineHeight: 20, fontWeight: "800", color: COLOR.navy, textAlign: "center" },
   muted: { color: COLOR.mute, fontSize: 11, lineHeight: 17, marginTop: 3 },
   field: { marginTop: 3, gap: 3 },
-  fieldLabel: { fontWeight: "800", color: "#536B6A", fontSize: 10, letterSpacing: 0.35 },
-  fieldValue: { fontSize: 12.5, color: COLOR.navy, fontWeight: "600", lineHeight: 19 },
-  personName: { fontSize: 14, fontWeight: "900", color: COLOR.deep },
+  fieldLabel: { fontWeight: "700", color: "#536B6A", fontSize: 10, letterSpacing: 0.35 },
+  fieldValue: { fontSize: 12, color: COLOR.navy, fontWeight: "500", lineHeight: 19 },
+  personName: { fontSize: 14, fontWeight: "800", color: COLOR.deep },
   verified: { alignSelf: "flex-start", color: COLOR.green, fontSize: 10, fontWeight: "800", paddingVertical: 5, paddingHorizontal: 9, borderRadius: 20, backgroundColor: "#E6F6EC" },
   chipRow: { flexDirection: "row", flexWrap: "wrap", gap: 7, marginVertical: 4 },
   chip: { borderRadius: 8, paddingVertical: 6, paddingHorizontal: 9, backgroundColor: "#EDF3FC" },
@@ -361,9 +374,10 @@ const styles = StyleSheet.create({
   summaryAction: { flexGrow: 1, flexBasis: 220 },
   action: { minHeight: 40, borderRadius: 9, justifyContent: "center", alignItems: "center", paddingHorizontal: 13, paddingVertical: 9 },
   actionPrimary: { backgroundColor: COLOR.blue },
+  actionDanger: { backgroundColor: COLOR.red },
   actionOutline: { backgroundColor: "#F3F9FF", borderColor: "#C9DDF4", borderWidth: 1 },
-  actionPrimaryText: { color: "#FFFFFF", fontWeight: "900", fontSize: 11 },
-  actionOutlineText: { color: "#1857A8", fontWeight: "900", fontSize: 11 },
+  actionPrimaryText: { color: "#FFFFFF", fontWeight: "800", fontSize: 12, lineHeight: 17 },
+  actionOutlineText: { color: "#1857A8", fontWeight: "800", fontSize: 12, lineHeight: 17 },
   smallFinePrint: { color: "#7C8C98", fontSize: 10, marginTop: 3 },
   kpiRow: { flexDirection: "row", flexWrap: "wrap", gap: 12 },
   kpi: { flexBasis: 160, flexGrow: 1, minWidth: 155, borderWidth: 1, borderColor: "#DBE5ED", borderRadius: 12, padding: 14, gap: 6 },
@@ -379,7 +393,7 @@ const styles = StyleSheet.create({
   waveTile: { flexBasis: 170, minWidth: 140, flexGrow: 1, borderRadius: 10,
     borderWidth: 1, borderColor: "#E4EBF4", backgroundColor: "#FAFCFF", padding: 13, gap: 4 },
   waveNumber: { color: "#1E64B6", fontSize: 10, fontWeight: "900" },
-  waveTitle: { color: COLOR.navy, fontSize: 12, fontWeight: "900" },
+  waveTitle: { color: COLOR.navy, fontSize: 12, fontWeight: "800" },
   waveState: { color: COLOR.orange, fontSize: 10, fontWeight: "800", marginTop: 8 },
   assignedEmpty: { minHeight: 155, alignItems: "center", justifyContent: "center",
     gap: 6, paddingHorizontal: 18, backgroundColor: "#F8FBFF", borderRadius: 11 },
@@ -389,16 +403,13 @@ const styles = StyleSheet.create({
   volAvatar: { width: 33, height: 33, borderRadius: 33, backgroundColor: "#E5EDFF",
     justifyContent: "center", alignItems: "center" },
   volAvatarText: { color: "#205BB4", fontWeight: "900" },
-  fallbackStrip: { backgroundColor: "#F7F9FB", borderColor: "#DCE6ED", borderWidth: 1,
-    borderRadius: 12, padding: 13, flexDirection: "row", flexWrap: "wrap", gap: 10, alignItems: "center" },
-  fallbackTitle: { color: COLOR.navy, fontSize: 12, fontWeight: "900" },
 
   goldTint: { backgroundColor: "#FFFAF0" },
   redTint: { backgroundColor: "#FFF4F3" },
   kpiIcon: { color: COLOR.blue, fontSize: 21, fontWeight: "900" },
-  kpiTitle: { color: COLOR.navy, fontSize: 11, fontWeight: "900" },
-  kpiValue: { color: COLOR.navy, fontSize: 15, fontWeight: "900" },
-  kpiDesc: { color: COLOR.mute, fontSize: 10, lineHeight: 15 },
+  kpiTitle: { color: COLOR.navy, fontSize: 11, fontWeight: "700" },
+  kpiValue: { color: COLOR.navy, fontSize: 14, fontWeight: "800", lineHeight: 20 },
+  kpiDesc: { color: COLOR.mute, fontSize: 11, lineHeight: 16 },
   lockStrip: { flexDirection: "row", flexWrap: "wrap", gap: 13, alignItems: "center", borderWidth: 1, borderRadius: 12, padding: 13 },
   redStrip: { borderColor: "#EEB6B3", backgroundColor: "#FFF5F4" },
   readyStrip: { borderColor: "#ACDFC3", backgroundColor: "#F1FCF5" },
@@ -412,14 +423,14 @@ const styles = StyleSheet.create({
   stageLabel: { fontSize: 10, fontWeight: "700", color: "#718096", textAlign: "center" },
   stageLabelActive: { color: COLOR.deep },
   stageFine: { fontSize: 9, color: "#94A3B8", textAlign: "center" },
-  cardSectionTitle: { fontSize: 13, color: COLOR.navy, fontWeight: "900" },
+  cardSectionTitle: { fontSize: 14, color: COLOR.navy, fontWeight: "800" },
   timelineRow: { flexDirection: "row", gap: 12, minHeight: 72 },
   timelineRail: { width: 22, alignItems: "center" },
   timelineDot: { width: 19, height: 19, borderRadius: 99, backgroundColor: COLOR.blue, borderWidth: 4, borderColor: "#DDEAFD" },
   timelineNewest: { backgroundColor: COLOR.green, borderColor: "#DAF3E7" },
   timelineConnector: { width: 2, flexGrow: 1, backgroundColor: "#D7E5F3", marginTop: 4 },
   timelineBody: { flex: 1, paddingBottom: 10 },
-  timelineTitle: { fontSize: 12, color: COLOR.navy, fontWeight: "900" },
+  timelineTitle: { fontSize: 12, color: COLOR.navy, fontWeight: "800" },
   timeStamp: { fontSize: 10, marginTop: 6, fontWeight: "700", color: "#586E8B" },
   summarySide: { flexBasis: 235, flexGrow: 1, minWidth: 220, gap: 12 },
 });
