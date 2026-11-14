@@ -2,6 +2,10 @@ import React, { useEffect, useRef, useState } from "react";
 import { Linking, Pressable, Text, TextInput, View } from "react-native";
 import InteractiveEventPinMap from "./InteractiveEventPinMap.web";
 import { lookUpEventVenue } from "../lib/eventVenueLookup";
+import {
+  boundaryBounds, insideSjdmBoundary, loadSjdmBoundary, sjdmOutsideMask,
+  sjdmSafeCenter, type SjdmBoundary,
+} from "../lib/sjdmMapBoundary";
 
 type Venue = { latitude: number; longitude: number };
 type Props = {
@@ -16,10 +20,10 @@ const CENTER: Venue = { latitude: 14.8139, longitude: 121.0453 };
 const GOOGLE_JS_KEY = String(process.env.EXPO_PUBLIC_GOOGLE_MAPS_JS_API_KEY || "").trim();
 let googleScriptPromise: Promise<any> | null = null;
 
-function validVenue(lat: number, lng: number) {
-  // Matches the Node proposal API's broad SJDM-area coordinate guard.
-  return Number.isFinite(lat) && Number.isFinite(lng) &&
-    lat >= 14.65 && lat <= 15.0 && lng >= 120.88 && lng <= 121.30;
+function validVenue(boundary: SjdmBoundary | null, lat: number, lng: number) {
+  // The city's actual referenced polygon, not the old broad service box.
+  // Fail closed if the boundary cannot be loaded/validated.
+  return !!boundary && insideSjdmBoundary(boundary, lat, lng);
 }
 function tidy(lat: number, lng: number): Venue {
   return { latitude: Number(lat.toFixed(6)), longitude: Number(lng.toFixed(6)) };
@@ -68,13 +72,15 @@ function loadGoogleMaps(key: string): Promise<any> {
 }
 
 export default function CommunityEventPinPicker({ latitude, longitude, barangay = "", venue = "", onChange }: Props) {
-  const saved = latitude !== null && longitude !== null && validVenue(latitude, longitude)
+  const [cityBoundary, setCityBoundary] = useState<SjdmBoundary | null>(null);
+  const saved = latitude !== null && longitude !== null &&
+    validVenue(cityBoundary, latitude, longitude)
     ? tidy(latitude, longitude) : null;
   const savedRef = useRef<Venue | null>(saved);
   savedRef.current = saved;
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
-  const [draft, setDraft] = useState<Venue | null>(saved);
+  const [draft, setDraft] = useState<Venue | null>(null);
   const lastValidPinRef = useRef<Venue | null>(draft);
   lastValidPinRef.current = draft;
   const [manual, setManual] = useState("");
@@ -86,13 +92,42 @@ export default function CommunityEventPinPicker({ latitude, longitude, barangay 
   );
   const mapContainer = useRef<any>(null);
   const mapInstance = useRef<any>(null);
+  const exteriorOverlay = useRef<any>(null);
+  const cityOutline = useRef<any>(null);
   const markerInstance = useRef<any>(null);
   const googleRef = useRef<any>(null);
   const confirmed = same(saved, draft);
 
+  useEffect(() => {
+    let active = true;
+    void loadSjdmBoundary().then(boundary => {
+      if (!active) return;
+      setCityBoundary(boundary);
+      if (!boundary) setMessage("SJDM boundary unavailable. Map selection is disabled to prevent an out-of-city event pin.");
+    }).catch(() => {
+      if (active) setMessage("SJDM boundary unavailable. Event pin selection is disabled.");
+    });
+    return () => { active = false; };
+  }, []);
+
+  // Old proposals may contain coordinates from the earlier overly broad box.
+  // Do not silently display or submit those as valid city meeting points.
+  useEffect(() => {
+    if (!cityBoundary) return;
+    if (latitude !== null && longitude !== null) {
+      if (validVenue(cityBoundary, latitude, longitude)) {
+        setDraft(tidy(latitude, longitude));
+      } else {
+        setDraft(null);
+        onChangeRef.current(null, null);
+        setMessage("Existing pin is outside the actual SJDM boundary. Select a new meeting point inside the city.");
+      }
+    }
+  }, [cityBoundary]);
+
   const pick = (lat: number, lng: number) => {
-    if (!validVenue(lat, lng)) {
-      setMessage("Pumili ng location sa San Jose del Monte area. Hindi tatanggapin ang pin na malayo sa service area.");
+    if (!validVenue(cityBoundary, lat, lng)) {
+      setMessage("Outside the City of San Jose del Monte boundary. Piliin ang pin sa loob ng green SJDM border lamang.");
       return false;
     }
     const next = tidy(lat, lng);
@@ -106,7 +141,7 @@ export default function CommunityEventPinPicker({ latitude, longitude, barangay 
   // Resolve the named event venue, not the proposing Resident's current position.
   // The result remains unconfirmed until the Resident verifies its map pin.
   useEffect(() => {
-    if (!barangay.trim() || !venue.trim()) {
+    if (!cityBoundary || !barangay.trim() || !venue.trim()) {
       setLookupState("idle");
       return;
     }
@@ -115,7 +150,8 @@ export default function CommunityEventPinPicker({ latitude, longitude, barangay 
     const task = setTimeout(() => {
       void lookUpEventVenue(barangay, venue, controller.signal).then(result => {
         if (controller.signal.aborted) return;
-        if (result.status === "found") {
+        if (result.status === "found" &&
+            validVenue(cityBoundary, result.point.latitude, result.point.longitude)) {
           setDraft(result.point);
           setLookupState("found");
           setMessage("Suggested event venue found from the selected barangay and venue. Check the pin on the map, adjust if needed, then confirm.");
@@ -130,24 +166,47 @@ export default function CommunityEventPinPicker({ latitude, longitude, barangay 
       });
     }, 900);
     return () => { controller.abort(); clearTimeout(task); };
-  }, [barangay, venue]);
+  }, [barangay, venue, cityBoundary]);
 
   useEffect(() => {
-    if (!GOOGLE_JS_KEY) return;
+    if (!GOOGLE_JS_KEY || !cityBoundary) return;
     let active = true;
     loadGoogleMaps(GOOGLE_JS_KEY).then((g) => {
       if (!active || !mapContainer.current) return;
       googleRef.current = g;
-      const point = draft || savedRef.current || CENTER;
+      const bounds = boundaryBounds(cityBoundary);
+      const center = sjdmSafeCenter(cityBoundary);
       const map = new g.maps.Map(mapContainer.current, {
-        center: { lat: point.latitude, lng: point.longitude },
-        zoom: draft || savedRef.current ? 16 : 13,
+        center: { lat: center.latitude, lng: center.longitude },
+        zoom: 13,
         mapTypeControl: false,
         streetViewControl: false,
         fullscreenControl: true,
         gestureHandling: "greedy",
+        // As with the Volunteer map, the rectangular camera restriction is
+        // only a viewport guard. The GeoJSON city polygon below is the real
+        // pin boundary and the solid exterior mask hides neighboring towns.
+        restriction: {
+          latLngBounds: {north:bounds.north,south:bounds.south,
+            east:bounds.east,west:bounds.west},
+          strictBounds: true,
+        },
       });
       mapInstance.current = map;
+      const exterior = new g.maps.Data({map});
+      exterior.addGeoJson(sjdmOutsideMask(cityBoundary));
+      exterior.setStyle({fillColor:"#E7EEEA", fillOpacity:1,
+        strokeWeight:0, clickable:false});
+      exteriorOverlay.current = exterior;
+      const outline = new g.maps.Data({map});
+      outline.addGeoJson(cityBoundary);
+      outline.setStyle({fillColor:"#0A8B6A", fillOpacity:0.06,
+        strokeColor:"#07815E", strokeWeight:4, clickable:false});
+      cityOutline.current = outline;
+      map.fitBounds(new g.maps.LatLngBounds(
+        {lat:bounds.south,lng:bounds.west},
+        {lat:bounds.north,lng:bounds.east},
+      ));
       map.addListener("click", (event: any) => {
         if (event.latLng) pick(event.latLng.lat(), event.latLng.lng());
       });
@@ -165,16 +224,20 @@ export default function CommunityEventPinPicker({ latitude, longitude, barangay 
         g.maps.event.clearInstanceListeners(mapInstance.current);
       }
       if (markerInstance.current?.setMap) markerInstance.current.setMap(null);
+      exteriorOverlay.current?.setMap(null);
+      cityOutline.current?.setMap(null);
+      exteriorOverlay.current = null;
+      cityOutline.current = null;
       markerInstance.current = null;
       mapInstance.current = null;
     };
-  }, []);
+  }, [cityBoundary]);
 
   useEffect(() => {
     const map = mapInstance.current;
     const g = googleRef.current;
     if (!map || !g) return;
-    if (!draft) {
+    if (!draft || !validVenue(cityBoundary, draft.latitude, draft.longitude)) {
       if (markerInstance.current) markerInstance.current.setMap(null);
       markerInstance.current = null;
       return;
@@ -193,7 +256,7 @@ export default function CommunityEventPinPicker({ latitude, longitude, barangay 
     } else markerInstance.current.setPosition(position);
     map.panTo(position);
     map.setZoom(16);
-  }, [draft?.latitude, draft?.longitude, mapMode]);
+  }, [draft?.latitude, draft?.longitude, mapMode, cityBoundary]);
 
   const locate = () => {
     const geo = (globalThis as any).navigator?.geolocation;
@@ -214,7 +277,7 @@ export default function CommunityEventPinPicker({ latitude, longitude, barangay 
     pick(coords.latitude, coords.longitude);
   };
   const confirm = () => {
-    if (!draft || !validVenue(draft.latitude,draft.longitude)) {
+    if (!draft || !validVenue(cityBoundary, draft.latitude,draft.longitude)) {
       setMessage("Pumili muna ng valid event venue pin.");
       return;
     }
@@ -251,13 +314,19 @@ export default function CommunityEventPinPicker({ latitude, longitude, barangay 
 
       {lookupState === "searching" && <Text style={{ fontSize: 11, color: "#356C56", marginBottom: 8 }}>Finding the selected venue on the map…</Text>}
       <View style={{ borderRadius: 12, overflow: "hidden", borderWidth: 1, borderColor: "#D6E5D9" }}>
-        {GOOGLE_JS_KEY ? React.createElement("div" as any, {
+        {!cityBoundary ? (
+          <Text accessibilityRole="alert" style={{padding:15,color:"#7A5142",backgroundColor:"#F3F5F0"}}>
+            Loading SJDM boundary. The event map is unavailable until city limits are verified.
+          </Text>
+        ) : null}
+        {cityBoundary && GOOGLE_JS_KEY ? React.createElement("div" as any, {
           ref: mapContainer, role: "application",
           "aria-label": "Interactive Google Maps. Click or drag to select the event meeting point.",
           style: { width: "100%", height: "315px", display: mapMode === "google" || mapMode === "loading" ? "block" : "none" },
         }) : null}
-        {mapMode === "preview" ? (
+        {cityBoundary && mapMode === "preview" ? (
           <InteractiveEventPinMap
+            boundary={cityBoundary}
             latitude={draft?.latitude ?? null}
             longitude={draft?.longitude ?? null}
             onPick={pick}
@@ -271,7 +340,7 @@ export default function CommunityEventPinPicker({ latitude, longitude, barangay 
       )}
       {mapMode === "google" && (
         <Text style={{ fontSize: 11.5, color: "#3E7D60", paddingVertical: 9 }}>
-          Tap any location on Google Maps, or drag the pin to adjust it.
+          SJDM city border only · Tap or drag the meeting point within the outlined city. Neighboring areas are masked.
         </Text>
       )}
 
