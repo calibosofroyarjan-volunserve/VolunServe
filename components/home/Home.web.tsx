@@ -140,7 +140,7 @@ const weatherDescription = (
 
 export default function WebHome() {
   const router = useRouter();
-  const { width, height } = useWindowDimensions();
+  const { width } = useWindowDimensions();
   const { user, profile } = useUserSession();
   const { items: announcementAlerts } = useAnnouncementAlerts(user?.uid);
 
@@ -491,8 +491,8 @@ export default function WebHome() {
             <ImageBackground
               source={require("../../assets/images/sjdm-aerial.png")}
               resizeMode="cover"
-              style={[styles.mobileHero, styles.fullBleedMobileHero, { minHeight: Math.max(560, Math.round(height * 0.8)) }]}
-              imageStyle={[styles.mobileHeroImage, styles.fullBleedHeroImage]}
+              style={styles.mobileHero}
+              imageStyle={styles.mobileHeroImage}
             >
               <View style={styles.mobileHeroShade} />
               <View style={styles.mobileHeroBody}>
@@ -733,26 +733,24 @@ export default function WebHome() {
           <ImageBackground
             source={require("../../assets/images/sjdm-aerial.png")}
             resizeMode="cover"
-            style={[styles.hero, compact && styles.heroCompact, styles.fullBleedDesktopHero, { minHeight: Math.max(540, Math.round(height * 0.76)) }]}
+            style={[styles.hero, compact && styles.heroCompact]}
             imageStyle={[
               styles.heroImage,
               { objectPosition: "center 82%" } as any,
-              styles.fullBleedHeroImage,
             ]}
           >
             <LinearGradient
               pointerEvents="none"
               colors={["rgba(5,32,45,0.72)", "rgba(8,51,55,0.15)", "rgba(5,34,44,0.65)"]}
               start={{ x: 0, y: 0.45 }} end={{ x: 1, y: 0.58 }}
-              style={[styles.heroGradientOverlay, styles.fullBleedOverlay]}
+              style={styles.heroGradientOverlay}
             />
             {/* Same original SJDM aerial photo; subtly lighten the existing cloud area. */}
             <LinearGradient pointerEvents="none"
               colors={["rgba(244,251,255,0.23)", "rgba(245,251,252,0.08)", "rgba(255,255,255,0)"]}
               start={{ x: 0.5, y: 0 }} end={{ x: 0.5, y: 1 }}
-              style={[styles.heroSkyHighlight, styles.fullBleedOverlay]}
+              style={styles.heroSkyHighlight}
             />
-            {mobileSlide === 0 ? (
             <View style={[styles.heroContent, compact && styles.heroContentCompact]}>
               <View style={styles.heroLeft}>
                 <Text style={styles.eyebrow}>
@@ -829,50 +827,6 @@ export default function WebHome() {
                 </Text>
                 <View style={styles.heroRightAccent} />
               </View>
-            </View>
-            ) : (
-              <View style={styles.desktopCarouselPanel}>
-                <Text style={styles.desktopCarouselEyebrow}>
-                  {mobileSlide === 1 ? "COMMUNITY OVERVIEW" : "COMMUNITY UPDATES"}
-                </Text>
-                <Text style={styles.desktopCarouselTitle}>
-                  {mobileSlide === 1 ? "Your community at a glance" : "Stay connected with VolunServe"}
-                </Text>
-                <Text style={styles.desktopCarouselDescription}>
-                  {mobileSlide === 1
-                    ? "Official announcements and community services for San Jose del Monte, Bulacan."
-                    : announcementsError
-                      ? "Unable to load published updates. Please refresh or contact an administrator."
-                      : announcements.length
-                        ? `${announcements.length} published updates available.`
-                        : "No published updates yet. Official announcements will appear here."}
-                </Text>
-                {mobileSlide === 1 ? (
-                  <>
-                    <Text style={styles.desktopCarouselSlogan}>Together for a Safer Tomorrow</Text>
-                    <Image source={require("../../assets/images/sjdm-rising-city.png")} style={styles.desktopCarouselSeal} resizeMode="contain" />
-                  </>
-                ) : (
-                  <Pressable style={styles.mobileSlideAction} onPress={() => router.push("/announcements")}>
-                    <Text style={styles.mobileSlideActionText}>View announcements</Text>
-                    <Ionicons name="arrow-forward" size={17} color="#FFFFFF" />
-                  </Pressable>
-                )}
-              </View>
-            )}
-            <View style={styles.desktopCarouselControls}>
-              <Pressable accessibilityRole="button" accessibilityLabel="Previous carousel slide" onPress={() => setMobileSlide(index => (index + 2) % 3)} style={styles.mobileSlideArrow}>
-                <Ionicons name="chevron-back" color="#FFFFFF" size={18} />
-              </Pressable>
-              <View style={styles.mobileSlideDots}>
-                {[0, 1, 2].map(i => (
-                  <Pressable key={i} accessibilityRole="button" accessibilityLabel={`Open carousel slide ${i + 1}`} onPress={() => setMobileSlide(i)} style={[styles.mobileSlideDot, mobileSlide === i && styles.mobileSlideDotActive]} />
-                ))}
-              </View>
-              <Text style={styles.mobileSlideCount}>{mobileSlide + 1} / 3</Text>
-              <Pressable accessibilityRole="button" accessibilityLabel="Next carousel slide" onPress={() => setMobileSlide(index => (index + 1) % 3)} style={styles.mobileSlideArrow}>
-                <Ionicons name="chevron-forward" color="#FFFFFF" size={18} />
-              </Pressable>
             </View>
           </ImageBackground>
           </>
@@ -1287,27 +1241,6 @@ const styles = StyleSheet.create({
   journeyLabel: { fontSize: 10, letterSpacing: 1, fontWeight: "800", color: "#23765F" },
   journeyText: { fontSize: 12, lineHeight: 19, fontWeight: "500", color: "#385E50", flexShrink: 1 },
 
-  fullBleedMobileHero: {
-    marginHorizontal: -11, borderRadius: 0, paddingHorizontal: 20, paddingVertical: 22,
-  },
-  fullBleedDesktopHero: {
-    marginHorizontal: -20, borderRadius: 0, paddingHorizontal: 38, paddingTop: 24, paddingBottom: 28,
-  },
-  fullBleedHeroImage: { borderRadius: 0 },
-  fullBleedOverlay: { borderRadius: 0 },
-  desktopCarouselPanel: {
-    flex: 1, width: "100%", maxWidth: 850, justifyContent: "center",
-    alignItems: "flex-start", paddingHorizontal: 22, paddingVertical: 24,
-  },
-  desktopCarouselEyebrow: { color: "#E9F9FC", fontSize: 13, fontWeight: "900", letterSpacing: 2, marginBottom: 14 },
-  desktopCarouselTitle: { color: "#FFFFFF", fontSize: 43, lineHeight: 52, fontWeight: "900", letterSpacing: -1 },
-  desktopCarouselDescription: { color: "#FFFFFF", fontSize: 18, lineHeight: 28, fontWeight: "600", marginTop: 14, maxWidth: 700 },
-  desktopCarouselSlogan: { marginTop: 20, fontSize: 16, fontWeight: "800", color: "#FFFFFF" },
-  desktopCarouselSeal: { width: 105, height: 105, marginTop: 20, borderRadius: 53 },
-  desktopCarouselControls: {
-    flexDirection: "row", justifyContent: "center", alignItems: "center", gap: 12,
-    zIndex: 2, marginTop: 18,
-  },
   mobileHero: {
     minHeight: 335, borderRadius: 18, overflow: "hidden",
     backgroundColor: "#174F63", justifyContent: "space-between", padding: 17,
