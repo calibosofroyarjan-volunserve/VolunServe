@@ -120,7 +120,7 @@ function harness(){
    normalizeIdDocumentScreening,selectedIdRecognized,reviewIssuerEvidence,
    getProfileRole,isApprovedAccount,
    makeHttpError:(statusCode,code,message)=>Object.assign(new Error(message),{statusCode,code}),
-   console:{error:()=>{}},
+   console:{error:()=>{},warn:()=>{}},
  };
  vm.runInNewContext(statusSource,sandbox,{filename:"actual_status_handler.js"});
  vm.runInNewContext(reviewSource,sandbox,{filename:"actual_admin_handlers.js"});

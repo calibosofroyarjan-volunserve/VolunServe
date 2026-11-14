@@ -5225,10 +5225,8 @@ app.get(
         documentScreening: verification.documentScreening ? normalizeIdDocumentScreening(verification.documentScreening) : null,
       });
     } catch (error) {
-      console.error(
-        "Identity status failed:",
-        error,
-      );
+      // Never log raw Firebase error objects from private identity records.
+      console.warn("Identity status unavailable: internal_failure");
       response
         .status(500)
         .json({
@@ -5463,14 +5461,22 @@ app.post(
             }
           });
         } catch (cleanupError) {
-          console.error("Identity verification lease cleanup failed:", cleanupError?.message);
+          // Private errors can contain document paths, UIDs or provider text.
+          console.warn("Identity verification lease cleanup unavailable: internal_failure");
         }
       }
-      console.error("Identity verification failed:", error?.message);
+      // Keep application-owned 4xx validation messages; never echo external
+      // AI/Firebase 5xx error text, stack, UID, OCR or provider diagnostics.
       const statusCode = Number(error?.statusCode);
-      response.status(statusCode >= 400 && statusCode <= 599 ? statusCode : 500).json({
-        error: cleanText(error?.code || "identity_verification_failed", 100),
-        message: cleanText(error?.message || "Unable to process identity verification.", 500),
+      const expectedClientError = Number.isInteger(statusCode) &&
+        statusCode >= 400 && statusCode < 500 &&
+        typeof error?.code === "string" && /^[a-z0-9_]{3,100}$/.test(error.code);
+      console.warn("Identity verification failed:", expectedClientError ? "client_error" : "internal_failure");
+      response.status(expectedClientError ? statusCode : 500).json({
+        error: expectedClientError ? error.code : "identity_verification_failed",
+        message: expectedClientError
+          ? cleanText(error?.message || "Identity verification could not continue.", 500)
+          : "Identity verification is temporarily unavailable. No identity status was approved.",
       });
     }
   },
@@ -5604,17 +5610,18 @@ app.get(
         items,
       });
     } catch (error) {
-      console.error("Identity review queue failed:", error);
-      response.status(Number(error?.statusCode) || 500).json({
-        error: cleanText(
-          error?.code || "identity_review_queue_failed",
-          120,
-        ),
-        message: cleanText(
-          error?.message ||
-            "Unable to load identity verification reviews.",
-          700,
-        ),
+      // This route reads private Resident evidence summaries. Never print a
+      // raw Firestore exception or expose internal 5xx messages to the UI.
+      const statusCode = Number(error?.statusCode);
+      const expectedClientError = Number.isInteger(statusCode) &&
+        statusCode >= 400 && statusCode < 500 &&
+        typeof error?.code === "string" && /^[a-z0-9_]{3,120}$/.test(error.code);
+      console.warn("Identity review queue unavailable:", expectedClientError ? "client_error" : "internal_failure");
+      response.status(expectedClientError ? statusCode : 500).json({
+        error: expectedClientError ? error.code : "identity_review_queue_failed",
+        message: expectedClientError
+          ? cleanText(error?.message || "Unable to load identity verification reviews.", 700)
+          : "Unable to load identity verification reviews. Try again later.",
       });
     }
   },
@@ -5915,17 +5922,18 @@ app.post(
               : "The Resident must retry identity verification with clearer or corrected information.",
       });
     } catch (error) {
-      console.error("Identity review decision failed:", error);
-      response.status(Number(error?.statusCode) || 500).json({
-        error: cleanText(
-          error?.code || "identity_review_decision_failed",
-          120,
-        ),
-        message: cleanText(
-          error?.message ||
-            "Unable to save the identity review decision.",
-          700,
-        ),
+      // Do not leak private verification metadata through a provider's
+      // unexpected exception. Preserve known Admin validation responses.
+      const statusCode = Number(error?.statusCode);
+      const expectedClientError = Number.isInteger(statusCode) &&
+        statusCode >= 400 && statusCode < 500 &&
+        typeof error?.code === "string" && /^[a-z0-9_]{3,120}$/.test(error.code);
+      console.warn("Identity review decision failed:", expectedClientError ? "client_error" : "internal_failure");
+      response.status(expectedClientError ? statusCode : 500).json({
+        error: expectedClientError ? error.code : "identity_review_decision_failed",
+        message: expectedClientError
+          ? cleanText(error?.message || "Unable to save the identity review decision.", 700)
+          : "Unable to save the identity review decision. Try again later.",
       });
     }
   },

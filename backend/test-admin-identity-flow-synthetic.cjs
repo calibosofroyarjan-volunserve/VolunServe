@@ -91,7 +91,7 @@ function trial({doc={},admin=true,auth=true,approved=true,personUid=DEMO_UID,
     normalizeIdDocumentScreening, selectedIdRecognized,reviewIssuerEvidence,
     getProfileRole,isApprovedAccount,
     makeHttpError:(status,code,message)=>Object.assign(new Error(message),{statusCode:status,code}),
-    console:{error:()=>{}},
+    console:{error:()=>{},warn:()=>{}},
   };
   vm.runInNewContext(actualRoute,stage,{filename:"synthetic_actual_admin_route.js"});
   assert.equal(handlers.length,3);
