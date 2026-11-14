@@ -14,9 +14,7 @@ import {
 import {
   collection,
   onSnapshot,
-  orderBy,
   query,
-  Timestamp,
   where,
 } from "firebase/firestore";
 
@@ -27,7 +25,6 @@ import {
 import {
   useUserSession,
 } from "../../lib/useUserSession";
-import { usePublishedAnnouncementCutoff } from "../../lib/usePublishedAnnouncementCutoff";
 
 type Announcement = {
   id: string;
@@ -51,9 +48,8 @@ type Announcement = {
 export default function AnnouncementsScreen() {
   const {
     loading: sessionLoading,
+    user,
   } = useUserSession();
-
-  const announcementCutoff = usePublishedAnnouncementCutoff();
   const [announcements, setAnnouncements] =
     useState<Announcement[]>([]);
 
@@ -64,24 +60,17 @@ export default function AnnouncementsScreen() {
     useState("");
 
   useEffect(() => {
-    /*
-     * Only already-published announcements
-     * are loaded.
-     *
-     * This also matches the existing
-     * Firestore announcement read rule.
-     */
+    if (sessionLoading) return;
+    if (!user) {
+      setAnnouncements([]);
+      setLoading(false);
+      setError("Sign in to view official announcements.");
+      return;
+    }
+    // Approved community announcements are created as immediately published.
     const announcementQuery = query(
       collection(db, "announcements"),
-      where(
-        "publishAt",
-        "<=",
-        Timestamp.fromDate(announcementCutoff)
-      ),
-      orderBy(
-        "publishAt",
-        "desc"
-      )
+      where("audience", "==", "all")
     );
 
     const unsubscribe = onSnapshot(
@@ -140,6 +129,10 @@ export default function AnnouncementsScreen() {
             };
           });
 
+        rows.sort((a, b) => {
+          const millis = (value: any) => typeof value?.toMillis === "function" ? value.toMillis() : 0;
+          return millis(b.publishAt) - millis(a.publishAt);
+        });
         setAnnouncements(rows);
         setLoading(false);
         setError("");
@@ -159,7 +152,7 @@ export default function AnnouncementsScreen() {
     );
 
     return unsubscribe;
-  }, [announcementCutoff]);
+  }, [sessionLoading, user?.uid]);
 
   const visibleAnnouncements = announcements;
 
@@ -252,13 +245,6 @@ export default function AnnouncementsScreen() {
 
       {visibleAnnouncements.map(
         (announcement) => {
-          const isGlobal =
-            (
-              announcement.audience || ""
-            )
-              .trim()
-              .toLowerCase() === "all";
-
           return (
             <View
               key={announcement.id}
@@ -269,23 +255,17 @@ export default function AnnouncementsScreen() {
                   style={[
                     styles.scopeBadge,
 
-                    isGlobal
-                      ? styles.globalBadge
-                      : styles.localBadge,
+                    styles.localBadge,
                   ]}
                 >
                   <Text
                     style={[
                       styles.scopeBadgeText,
 
-                      isGlobal
-                        ? styles.globalBadgeText
-                        : styles.localBadgeText,
+                      styles.localBadgeText,
                     ]}
                   >
-                    {isGlobal
-                      ? "GLOBAL"
-                      : "LOCAL"}
+                    {"SJDM"}
                   </Text>
                 </View>
 
