@@ -4845,7 +4845,7 @@ async function callIdentityAiService(
       signal: AbortSignal.timeout(55000),
     });
   } catch (error) {
-    console.error("Identity AI connection failed:", error?.name || "network_error");
+    console.warn("Identity AI connection unavailable: network_error");
     throw makeHttpError(
       503,
       "identity_ai_unreachable",
@@ -4859,29 +4859,17 @@ async function callIdentityAiService(
   if (
     !aiResponse.ok
   ) {
-    const error =
-      new Error(
-        cleanText(
-          body?.message ||
-            body?.detail ||
-            body?.error ||
-            "The VolunServe AI identity service could not process the submission.",
-          500,
-        ),
-      );
-    error.code =
-      cleanText(
-        body?.error ||
-          "identity_ai_failed",
-        100,
-      );
-    error.statusCode =
-      aiResponse.status >=
-        400 &&
-      aiResponse.status <=
-        599
-        ? aiResponse.status
-        : 502;
+    // AI error payloads are untrusted. Some providers return OCR text,
+    // names, passport details or internal paths inside "detail"/"message".
+    // Do not promote any of them into Node exceptions, API responses, or logs.
+    const safeClientRejection = Number.isInteger(aiResponse.status) &&
+      aiResponse.status >= 400 && aiResponse.status < 500;
+    const error = new Error(safeClientRejection
+      ? "The ID/selfie scan could not be processed. Retake the images or request Admin review."
+      : "The identity AI service is temporarily unavailable.");
+    error.code = safeClientRejection
+      ? "identity_ai_submission_rejected" : "identity_ai_unavailable";
+    error.statusCode = safeClientRejection ? aiResponse.status : 503;
     throw error;
   }
   return body;
