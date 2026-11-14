@@ -1,0 +1,41 @@
+name: Staging Admin Access Preflight Policy (NO DEPLOY)
+on:
+  pull_request:
+    paths:
+      - 'backend/stagingAdminAccessPreflight.js'
+      - 'backend/scripts/check-staging-admin-account.cjs'
+      - 'backend/test-stagingAdminAccessPreflight.cjs'
+      - '.github/workflows/test-staging-admin-access-preflight-no-deploy.yml'
+permissions:
+  contents: read
+jobs:
+  staging-access-readonly:
+    runs-on: ubuntu-latest
+    timeout-minutes: 7
+    steps:
+      - name: Load immutable PR head without repository Gitlink checkout
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          [[ "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]] || exit 2
+          curl -fLsS --retry 3 \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/zipball/$SOURCE_SHA" \
+            -o /tmp/staging-admin-preflight.zip
+          mkdir -p "$RUNNER_TEMP/staging-admin-preflight"
+          unzip -q /tmp/staging-admin-preflight.zip -d "$RUNNER_TEMP/staging-admin-preflight"
+          ROOT="$(find "$RUNNER_TEMP/staging-admin-preflight" -mindepth 1 -maxdepth 1 -type d -print -quit)"
+          test -f "$ROOT/backend/test-stagingAdminAccessPreflight.cjs"
+          cp -a "$ROOT/." "$GITHUB_WORKSPACE/"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Check staging-only Admin read-only policy with synthetic accounts
+        run: |
+          node --check backend/scripts/check-staging-admin-account.cjs
+          node --test backend/test-stagingAdminAccessPreflight.cjs
+      - name: No real project access, role change, deployment or media operations
+        run: echo 'NO_DEPLOY_NO_FIREBASE_REQUESTS_NO_ADMIN_ROLE_GRANT'
