@@ -41,6 +41,7 @@ there is no background timeout guarantee while Render sleeps.
   - `EXPO_PUBLIC_AUTO_VOLUNTEER_DISPATCH_ENABLED=true`
   - `EXPO_PUBLIC_AUTO_VOLUNTEER_MATCH_PROVIDER=render`
   - `EXPO_PUBLIC_AUTO_VOLUNTEER_STAGING_ONLY=true`
+  - `EXPO_PUBLIC_AUTO_VOLUNTEER_STAGING_PROJECT_ID=<actual separate Firebase project ID>`
 - The existing protected production API URL is not used by this staging mode.
   The client calls `https://volunserve-emergency-match-staging-free.onrender.com` with a
   verified staging Firebase ID token. The API checks an approved operational
@@ -89,6 +90,23 @@ been made by this PR.
 - **Do not enable real case offers for unverified test accounts.** Use only
   synthetic/test cases in the isolated Firebase project; release to live
   requires separate QA and reliable operational uptime.
+
+## Read-only, zero-credential preview (deployed)
+
+- Demo URL: https://volunserve-emergency-match-staging-free.onrender.com/demo
+- Uses four fictional Volunteer profiles and the shared pure `planVolunteerWaves`
+  eligibility planner. The UI simulates decline/accept only in the browser;
+  no Firestore data, Auth, notification, GPS or official dispatch is accessed.
+- The demo deliberately uses Wave 1 and Wave 3 only. There is **no**
+  independently verified neighboring-barangay map for Wave 2.
+- A distinct free Spark Firebase project with Firestore and Email/Password Auth
+  plus reviewed test accounts is required for authenticated Admin-to-Volunteer
+  staging tests. Never provide service-account JSON in chat or GitHub.
+- Production Firebase project `volunserve-3aa5b` is forbidden by the backend
+  and staging client. The client requires its actual Auth project ID to match
+  `EXPO_PUBLIC_AUTO_VOLUNTEER_STAGING_PROJECT_ID` exactly.
+- Render Free remains on-demand only: no guarantee of automatic timeout
+  processing or official emergency response.
 
 ## Production activation prerequisites (NOT COMPLETED)
 1. Obtain **explicit billing approval**, then upgrade the actual live/staging backend Render service from Free to Starter (or more reliable plan); do not do this automatically on the user's behalf.
