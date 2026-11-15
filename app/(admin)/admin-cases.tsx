@@ -1,5 +1,6 @@
 import { useRouter } from "expo-router";
 import { getAuth } from "firebase/auth";
+import { getFunctions, httpsCallable } from "firebase/functions";
 import {
   arrayRemove,
   arrayUnion,
@@ -45,6 +46,7 @@ import { VolunteerEligibilityValidation } from "../../components/admin/Volunteer
 import { publishVerifiedCommunityAdvisory } from "../../lib/publishVerifiedCommunityAdvisory";
 
 const BACKEND_URL = "https://volunserve.onrender.com";
+const AUTOMATIC_VOLUNTEER_RUNTIME_ENABLED = process.env.EXPO_PUBLIC_AUTO_VOLUNTEER_DISPATCH_ENABLED === "true";
 
 type Severity = "low" | "medium" | "high" | "critical";
 type CaseStatus =
@@ -1783,6 +1785,40 @@ export default function AdminCases() {
 
         return a.fullName.localeCompare(b.fullName);
       });
+  };
+
+  const requestAutomaticMatching = async (
+    incident: DisasterCase, action: "start" | "disable"
+  ) => {
+    if (!AUTOMATIC_VOLUNTEER_RUNTIME_ENABLED) return;
+    const user = getAuth().currentUser;
+    if (!user) {
+      Alert.alert("Session Expired", "Sign in as an approved Admin.");
+      return;
+    }
+    if (action === "start" && !incident.incidentBarangay) {
+      Alert.alert("Confirm Incident Barangay First",
+        "Open Evidence and save the actual emergency barangay before starting automatic matching.");
+      setDetailTab("evidence");
+      return;
+    }
+    setBusyKey("auto_" + incident.id);
+    try {
+      const functions = getFunctions(getAuth().app, "us-central1");
+      const fn = httpsCallable(functions, action === "start"
+        ? "startAutomaticEmergencyVolunteerMatching"
+        : "disableAutomaticEmergencyVolunteerMatching");
+      await fn({ caseId: incident.id });
+      Alert.alert(action === "start" ? "Automatic Matching Checked" : "Automatic Matching Disabled",
+        action === "start"
+          ? "The server checked eligible Volunteers. Review the saved matching status and do not assume anyone has accepted yet."
+          : "Unaccepted offers have been cancelled where possible. Manual case coordination is available again.");
+    } catch (error) {
+      Alert.alert("Matching Action Not Completed",
+        error instanceof Error ? error.message : "Confirm the Functions deployment and Admin authorization.");
+    } finally {
+      setBusyKey("");
+    }
   };
 
   const saveConfirmedIncidentBarangay = async (incident: DisasterCase) => {
@@ -5828,6 +5864,34 @@ export default function AdminCases() {
                   caseBarangay={barangayDisplay(caseBarangayValue(incident))}
                   isValidated={dispatchReady}
                 />
+              )}
+              {detailTab === "personnel" && AUTOMATIC_VOLUNTEER_RUNTIME_ENABLED &&
+                dispatchReady && (
+                <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 9, paddingHorizontal: 18 }}>
+                  {(!incident.autoVolunteerDispatch?.state ||
+                    ["needs_admin", "disabled"].includes(String(incident.autoVolunteerDispatch.state))) && (
+                    <TouchableOpacity accessibilityRole="button"
+                      disabled={busyKey === "auto_" + incident.id}
+                      onPress={() => requestAutomaticMatching(incident, "start")}
+                      style={{ borderRadius: 9, backgroundColor: "#1479BE", padding: 11 }}>
+                      <Text style={{ color: "#FFFFFF", fontSize: 12, fontWeight: "800" }}>
+                        Start / Retry Automatic Matching
+                      </Text>
+                    </TouchableOpacity>
+                  )}
+                  {["waiting", "ready"].includes(
+                    String(incident.autoVolunteerDispatch?.state || "")) && (
+                    <TouchableOpacity accessibilityRole="button"
+                      disabled={busyKey === "auto_" + incident.id}
+                      onPress={() => requestAutomaticMatching(incident, "disable")}
+                      style={{ borderRadius: 9, borderWidth: 1,
+                        borderColor: "#B9C9DC", padding: 11 }}>
+                      <Text style={{ color: "#375775", fontSize: 12, fontWeight: "800" }}>
+                        Disable Matching (Admin Override)
+                      </Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
               )}
               {detailTab === "personnel" && dispatchReady &&
                 ["validated", "assigned", "in_progress"].includes(incident.status) &&
