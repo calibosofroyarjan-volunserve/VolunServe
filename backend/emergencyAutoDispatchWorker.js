@@ -2,10 +2,13 @@
 
 /**
  * Render Starter / always-on alternative to Firebase Blaze Functions.
+ * Staging-only Admin-triggered matching may be used without a background timer.
  *
  * WARNING: The existing Render Free plan sleeps when idle. Never enable this
  * worker on a sleeping service or imply it is an official emergency dispatch.
- * Opt-in requires an explicit cutoff timestamp and a reviewed paid-host flag.
+ * Background opt-in requires a reviewed always-on runtime and UTC cutoff.
+ * Free staging can run only a single authorized Admin-triggered match, never
+ * autonomous expiry handling while the service is sleeping.
  *
  * Firestore is authoritative; no in-memory offer deadlines. The same
  * transactional auto-dispatch engine is shared by the Firebase Functions path.
@@ -23,12 +26,27 @@ function parseCutoff(value) {
   if (!Number.isFinite(timestamp) || timestamp > Date.now() + 120000) return null;
   return timestamp;
 }
+function verifiedStagingProject(env) {
+  const expected = String(env.VOLUNSERVE_AUTO_VOLUNTEER_STAGING_PROJECT_ID || "").trim();
+  if (!expected || expected === "volunserve-3aa5b") return false;
+  try {
+    const serviceAccount = JSON.parse(String(env.FIREBASE_SERVICE_ACCOUNT_JSON || ""));
+    return serviceAccount.project_id === expected;
+  } catch {
+    return false;
+  }
+}
 function renderWorkerConfig(env = process.env) {
   const enabled = env.VOLUNSERVE_AUTO_VOLUNTEER_RENDER_WORKER_ENABLED === "true";
   const paidRuntimeApproved = env.VOLUNSERVE_RENDER_PAID_ALWAYS_ON_CONFIRMED === "true";
   const cutoffMs = parseCutoff(env.VOLUNSERVE_AUTO_VOLUNTEER_CUTOFF_UTC);
+  // This deliberately does NOT authorize runOnce() or a background timer.
+  // A known, separate staging Firebase service account is mandatory.
+  const onDemandReady = env.VOLUNSERVE_AUTO_VOLUNTEER_ON_DEMAND_STAGING_ENABLED === "true" &&
+    verifiedStagingProject(env);
   return {
     ready: enabled && paidRuntimeApproved && cutoffMs !== null,
+    onDemandReady,
     enabled, paidRuntimeApproved, cutoffMs,
     reasons: [
       !enabled ? "worker_not_enabled" : null,
@@ -102,17 +120,21 @@ function createRenderAutoDispatchWorker({
     }};
   }
   async function requestStart(caseId) {
-    if (!config.ready) throw new Error("Automatic matching is not enabled on an approved always-on runtime");
+    if (!config.ready && !config.onDemandReady) {
+      throw new Error("Automatic matching is not enabled on verified staging or an approved always-on runtime");
+    }
     return engine.requestAdminStart(caseId);
   }
   async function requestDisable(caseId) {
-    if (!config.ready) throw new Error("Automatic matching is not enabled on an approved always-on runtime");
+    if (!config.ready && !config.onDemandReady) {
+      throw new Error("Automatic matching is not enabled on verified staging or an approved always-on runtime");
+    }
     return engine.disableCase(caseId);
   }
   return {config,runOnce,start,requestStart,requestDisable};
 }
 
 module.exports={
-  parseCutoff,renderWorkerConfig,createRenderAutoDispatchWorker,
+  parseCutoff,verifiedStagingProject,renderWorkerConfig,createRenderAutoDispatchWorker,
   DEFAULT_POLL_MS,MAX_DISCOVERY,
 };
