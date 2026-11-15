@@ -47,6 +47,7 @@ import { publishVerifiedCommunityAdvisory } from "../../lib/publishVerifiedCommu
 
 const BACKEND_URL = "https://volunserve.onrender.com";
 const AUTOMATIC_VOLUNTEER_RUNTIME_ENABLED = process.env.EXPO_PUBLIC_AUTO_VOLUNTEER_DISPATCH_ENABLED === "true";
+const AUTOMATIC_VOLUNTEER_PROVIDER = process.env.EXPO_PUBLIC_AUTO_VOLUNTEER_MATCH_PROVIDER === "render" ? "render" : "firebase";
 
 type Severity = "low" | "medium" | "high" | "critical";
 type CaseStatus =
@@ -1804,11 +1805,28 @@ export default function AdminCases() {
     }
     setBusyKey("auto_" + incident.id);
     try {
-      const functions = getFunctions(getAuth().app, "us-central1");
-      const fn = httpsCallable(functions, action === "start"
-        ? "startAutomaticEmergencyVolunteerMatching"
-        : "disableAutomaticEmergencyVolunteerMatching");
-      await fn({ caseId: incident.id });
+      if (AUTOMATIC_VOLUNTEER_PROVIDER === "render") {
+        const token = await user.getIdToken();
+        const response = await fetch(
+          `${BACKEND_URL}/api/admin/emergency-auto/${action}`,
+          { method: "POST", headers: {
+              Authorization: `Bearer ${token}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({caseId:incident.id}),
+          },
+        );
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok || payload.ok !== true) {
+          throw new Error(payload.message || "Server-side matching is unavailable.");
+        }
+      } else {
+        const functions = getFunctions(getAuth().app, "us-central1");
+        const fn = httpsCallable(functions, action === "start"
+          ? "startAutomaticEmergencyVolunteerMatching"
+          : "disableAutomaticEmergencyVolunteerMatching");
+        await fn({caseId:incident.id});
+      }
       Alert.alert(action === "start" ? "Automatic Matching Checked" : "Automatic Matching Disabled",
         action === "start"
           ? "The server checked eligible Volunteers. Review the saved matching status and do not assume anyone has accepted yet."
