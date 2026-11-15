@@ -135,6 +135,9 @@ interface DisasterCase {
   activeVolunteerSupportUid?: string;
   activeVolunteerSupportName?: string;
   activeVolunteerSupportAssignmentId?: string;
+  autoVolunteerDispatch?: {
+    state?: string; wave?: number; note?: string; attemptedCount?: number;
+  };
 
   // Legacy compatibility fields from the older Volunteer-as-primary design.
   activeResponderUid?: string;
@@ -1022,6 +1025,7 @@ export default function AdminCases() {
             activeVolunteerSupportName: data.activeVolunteerSupportName || "",
             activeVolunteerSupportAssignmentId:
               data.activeVolunteerSupportAssignmentId || "",
+            autoVolunteerDispatch: data.autoVolunteerDispatch || undefined,
             activeResponderUid: data.activeResponderUid || "",
             activeResponderName: data.activeResponderName || "",
             activeResponderAssignmentId: data.activeResponderAssignmentId || "",
@@ -3034,6 +3038,11 @@ export default function AdminCases() {
 
         const currentCase: any = caseSnapshot.data();
         const currentVolunteer: any = volunteerSnapshot.data();
+        if (["waiting", "ready", "accepted"].includes(
+          String(currentCase.autoVolunteerDispatch?.state || ""),
+        )) {
+          throw new Error("Automatic Volunteer matching is managing this case. Manual offers are blocked to prevent duplicate tasks.");
+        }
 
         const currentCaseBarangayRaw = String(
           currentCase.incidentBarangay ||
@@ -5691,6 +5700,7 @@ export default function AdminCases() {
                   caseBarangay={barangayDisplay(caseBarangayValue(incident))}
                   eligibleCount={eligibleVolunteerCount}
                   activeAssignments={activeAssignments}
+                  autoDispatch={incident.autoVolunteerDispatch}
                   onCancelAssignment={(item) => {
                     const savedAssignment = activeAssignments.find(
                       (assignment) => assignment.id === item.id,
@@ -5725,7 +5735,10 @@ export default function AdminCases() {
               )}
               {detailTab === "personnel" && dispatchReady &&
                 ["validated", "assigned", "in_progress"].includes(incident.status) &&
-                eligibleVolunteerCount > 0 && volunteerSupportAvailable && (
+                eligibleVolunteerCount > 0 && volunteerSupportAvailable &&
+                !["waiting", "ready", "accepted"].includes(
+                  String(incident.autoVolunteerDispatch?.state || ""),
+                ) && (
                 <View style={styles.personnelReferenceLayout}>
                   <View style={styles.personnelCleanCard}>
                     <View style={styles.personnelCleanHeader}>
