@@ -1,6 +1,5 @@
 "use strict";
 
-const { FieldValue, Timestamp } = require("firebase-admin/firestore");
 const { planVolunteerWaves, recommendNextWave } = require("./emergencyVolunteerWavePlanner");
 const knownBarangays = require("./sjdmBarangays.json");
 
@@ -12,14 +11,10 @@ const INTERVAL_MS = 3 * 60 * 1000;
 const MAX_APPLICATIONS = 200;
 
 function str(value) { return String(value || "").trim(); }
-function nowTimestamp(nowMs) { return Timestamp.fromMillis(nowMs); }
 function cleanCase(caseId, caseData) { return { id: caseId, ...caseData }; }
 function validCase(incident) {
   return incident.verificationStatus === "validated" &&
     OPEN_STATUSES.has(incident.status) && incident.dispatchBlocked !== true;
-}
-function autoStatus(state, wave, attemptedCount, note) {
-  return { state, wave: Number(wave || 0), attemptedCount, note, updatedAt: FieldValue.serverTimestamp() };
 }
 function validAdjacencyConfig(config, all) {
   if (!config || config.approved !== true || config.enabled !== true ||
@@ -70,7 +65,15 @@ function notification(docRef, to, caseId, assignmentId, title, message) {
     },
   };
 }
-function createEngine({ db, clock = Date.now, log = console }) {
+function createEngine({ db, clock = Date.now, log = console, firestore }) {
+  // Dependency injection also supports a Render backend with its own
+  // installed firebase-admin, without requiring a separate Functions install.
+  const {FieldValue,Timestamp} = firestore || require("firebase-admin/firestore");
+  const nowTimestamp = (milliseconds) => Timestamp.fromMillis(milliseconds);
+  const autoStatus = (state, wave, attemptedCount, note) => ({
+    state, wave: Number(wave || 0), attemptedCount, note,
+    updatedAt: FieldValue.serverTimestamp(),
+  });
   async function updateStateOnly(caseId, state, reason, wave = 0, attempted = []) {
     const { stateRef, caseRef } = getStorage(db, caseId);
     await db.runTransaction(async (tx) => {
