@@ -20,6 +20,45 @@
 - When the verified nearest-barangay dataset is unavailable, the server skips Wave 2 instead of guessing and continues with qualified Volunteers elsewhere **within SJDM** (Wave 3).
 - No new public listing, no disclosure of reporter GPS/contact to unrelated Volunteers; the existing authorized assignment flow governs visibility.
 
+## Free Render staging — Admin-on-demand matching (code prepared, NOT deployed)
+
+A safe, limited Free alternative has been added **in this draft branch only**.
+After an authorized Admin validates a Resident Emergency Report **in a correctly
+configured isolated staging app**, the client calls the authenticated staging
+backend to offer one task to the next qualified approved Volunteer. This is
+automatic candidate selection, **NOT autonomous 24/7 dispatch**. The Admin can
+press `Check / Advance Pending Offer` to reconcile a declined or expired offer;
+there is no background timeout guarantee while Render sleeps.
+
+**Safety gates for a separate STAGING Firebase project (never production):**
+- Backend service must deploy this reviewed staging branch, with server-side:
+  - `VOLUNSERVE_AUTO_VOLUNTEER_ON_DEMAND_STAGING_ENABLED=true`
+  - `VOLUNSERVE_AUTO_VOLUNTEER_STAGING_PROJECT_ID=<isolated staging Firebase project ID>`
+  - `FIREBASE_SERVICE_ACCOUNT_JSON` must be the credentials for that **same
+    staging** Firebase project; the actual production ID `volunserve-3aa5b`
+    is explicitly rejected by the on-demand gate.
+- On the **isolated staging web build only**:
+  - `EXPO_PUBLIC_AUTO_VOLUNTEER_DISPATCH_ENABLED=true`
+  - `EXPO_PUBLIC_AUTO_VOLUNTEER_MATCH_PROVIDER=render`
+  - `EXPO_PUBLIC_AUTO_VOLUNTEER_STAGING_ONLY=true`
+- The existing protected production API URL is not used by this staging mode.
+  The client calls `https://volunserve-backend-staging.onrender.com` with a
+  verified staging Firebase ID token. The API checks an approved operational
+  Admin account; no public offers or unauthenticated writes are allowed.
+- `VOLUNSERVE_AUTO_VOLUNTEER_RENDER_WORKER_ENABLED` stays **false** and
+  `VOLUNSERVE_RENDER_PAID_ALWAYS_ON_CONFIRMED` stays **unset/false** on Free.
+  Do not use keepalives to bypass sleep and do not claim a three-minute timeout
+  is guaranteed on Free.
+- If matching fails, the report remains validated, the Admin is warned, and
+  manual coordination and official emergency hotline escalation remain available.
+  A Volunteer is not assigned until they explicitly accept.
+
+**Outstanding activation work:** deploy staging branch to a separate approved
+staging service; verify staging Auth and Firestore project isolation, Admin
+credentials and end-to-end real devices; do not test with live incidents or
+private Resident data. No protected/live branch or paid plan changes have
+been made by this PR.
+
 ## Production activation prerequisites (NOT COMPLETED)
 1. Obtain **explicit billing approval**, then upgrade the actual live/staging backend Render service from Free to Starter (or more reliable plan); do not do this automatically on the user's behalf.
 2. Verify deployment uses an approved protected branch, stable health checks and a working Firebase Admin service account with only necessary permissions.
