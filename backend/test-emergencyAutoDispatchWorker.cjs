@@ -153,9 +153,9 @@ test("Existing backend admin endpoints remain protected and feature gated",()=>{
   assert.match(server,/requireFirebaseUser, requireOperationalAdmin, approvedAutomaticResponse/);
   assert.match(admin,/EXPO_PUBLIC_AUTO_VOLUNTEER_MATCH_PROVIDER/);
   assert.match(admin,/EXPO_PUBLIC_AUTO_VOLUNTEER_STAGING_ONLY/);
-  assert.match(admin,/volunserve-backend-staging\\.onrender\\.com/);
-  assert.match(admin,/requestAutomaticMatching\\(\\s*\\{ \\.\\.\\.incident, incidentBarangay: verifiedIncidentBarangay \\}, "start", true/);
-  assert.match(server,/emergencyAutoWorker\\.config\\.onDemandReady/);
+  assert.ok(admin.includes("volunserve-backend-staging.onrender.com"));
+  assert.ok(admin.includes('{ ...incident, incidentBarangay: verifiedIncidentBarangay }, "start", true'));
+  assert.ok(server.includes("emergencyAutoWorker.config.onDemandReady"));
   assert.match(admin,/user\.getIdToken\(\)/);
   assert.match(server,/emergencyAutoWorker\.start\(\)/);
   assert.ok(!server.includes("VOLUNSERVE_RENDER_PAID_ALWAYS_ON_CONFIRMED=true"),
