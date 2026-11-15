@@ -78,7 +78,7 @@ function createEngine({ db, clock = Date.now, log = console }) {
         tx.get(caseRef), tx.get(stateRef),
       ]);
       if (!incidentSnap.exists) return;
-      if (statusSnap.exists && ["accepted", "responding", "completed"].includes(statusSnap.data().status)) return;
+      if (statusSnap.exists && ["waiting", "accepted", "responding", "completed", "disabled"].includes(statusSnap.data().status)) return;
       const previous = statusSnap.exists ? statusSnap.data() : {};
       const nextAttempted = [...new Set([...(previous.attemptedVolunteerIds || []), ...attempted])];
       tx.set(stateRef, {
