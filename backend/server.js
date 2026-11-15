@@ -11546,6 +11546,61 @@ const { installPublicAssistanceAppeals } = require("./publicAssistanceAppeals");
 installPublicAssistanceAppeals({
   app, db, FieldValue, requireFirebaseUser, requireOperationalAdmin, cleanText, makeHttpError,
 });
+// Automatic Volunteer matching for a separately verified always-on Render service.
+// Defaults disabled. The current Free service may sleep and MUST NOT run this.
+const {createRenderAutoDispatchWorker} = require("./emergencyAutoDispatchWorker");
+const emergencyAutoWorker = createRenderAutoDispatchWorker({db, logger:console});
+
+function approvedAutomaticResponse(request,response,next) {
+  if (emergencyAutoWorker.config.ready) return next();
+  response.status(503).json({
+    ok:false, error:"automatic_matching_unavailable",
+    message:"Automatic Volunteer matching requires a verified always-on backend. Manual Admin coordination remains available.",
+  });
+}
+app.get("/api/admin/emergency-auto/status",
+  requireFirebaseUser, requireOperationalAdmin, (request,response) => {
+    response.json({
+      ok:true, workerEnabled:emergencyAutoWorker.config.ready,
+      workerMode:"render_always_on", activationReady:emergencyAutoWorker.config.ready,
+      reasons:emergencyAutoWorker.config.reasons,
+    });
+  });
+app.post("/api/admin/emergency-auto/start",
+  requireFirebaseUser, requireOperationalAdmin, approvedAutomaticResponse,
+  async(request,response) => {
+    try {
+      const caseId=cleanText(request.body?.caseId,160);
+      if (!/^[A-Za-z0-9_-]{1,160}$/.test(caseId)) {
+        throw makeHttpError(400,"invalid_case_id","A valid Emergency Report ID is required");
+      }
+      const result=await emergencyAutoWorker.requestStart(caseId);
+      response.json({ok:true,...result});
+    } catch(error) {
+      response.status(Number(error?.statusCode)||409).json({
+        ok:false,error:cleanText(error?.code||"emergency_auto_match_blocked",100),
+        message:cleanText(error?.message||"Automatic matching could not start",450),
+      });
+    }
+  });
+app.post("/api/admin/emergency-auto/disable",
+  requireFirebaseUser, requireOperationalAdmin, approvedAutomaticResponse,
+  async(request,response) => {
+    try {
+      const caseId=cleanText(request.body?.caseId,160);
+      if (!/^[A-Za-z0-9_-]{1,160}$/.test(caseId)) {
+        throw makeHttpError(400,"invalid_case_id","A valid Emergency Report ID is required");
+      }
+      const result=await emergencyAutoWorker.requestDisable(caseId);
+      response.json({ok:true,...result});
+    } catch(error) {
+      response.status(Number(error?.statusCode)||409).json({
+        ok:false,error:cleanText(error?.code||"emergency_auto_disable_blocked",100),
+        message:cleanText(error?.message||"Cannot disable an accepted Volunteer response",450),
+      });
+    }
+  });
+
 // Automatic, idempotent recovery for eligible completed event certificates.
 // Does not change attendance, roles, certificates that already exist, or rules.
 startCommunityCertificateAutoSync({db,reconcile:reconcileCommunityEventCertificates});
@@ -11561,5 +11616,6 @@ app.listen(
     console.log(
       `VolunServe backend listening on port ${port}`,
     );
+    emergencyAutoWorker.start();
   },
 );
