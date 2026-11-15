@@ -11,6 +11,9 @@
  */
 const express = require("express");
 const cors = require("cors");
+const path = require("node:path");
+const {planVolunteerWaves} = require("../functions/emergencyVolunteerWavePlanner");
+const knownBarangays = require("../functions/sjdmBarangays.json");
 const {auth, db} = require("./firebaseAdmin");
 const {isOperationalAdminProfile} = require("./adminAccess");
 const {createRenderAutoDispatchWorker} = require("./emergencyAutoDispatchWorker");
@@ -38,6 +41,38 @@ function makeApp({authClient = auth, firestore = db, worker, env = process.env} 
     backgroundMatchingEnabled:false,
     officialEmergencyDispatch:false,
   }));
+
+  // SAFE DEMONSTRATION: pure planner, all data synthetic. Never calls Firebase,
+  // writes Firestore, sends notifications or accesses real user identities.
+  app.get("/demo", (_request, response) => {
+    response.set("Cache-Control", "no-store");
+    response.set("X-Robots-Tag", "noindex, nofollow");
+    response.sendFile(path.join(__dirname, "emergencyMatchingDemo.html"));
+  });
+  app.get("/demo-data", (_request, response) => {
+    const incident={id:"DEMO-CASE-001",title:"Synthetic flooding report",
+      status:"validated",verificationStatus:"validated",dispatchBlocked:false,
+      reporterUid:"fictional-resident",incidentBarangay:"Bagong Buhay I",
+      severity:"medium",requiredSkills:["First Aid"]};
+    const volunteer=(id,barangay,identityVerified=true)=>({
+      uid:id,
+      user:{role:"volunteer",status:"approved",volunteerAccess:true,
+        volunteerStatus:"approved",identityVerified,barangay,
+        fullName:"Volunteer "+id+" (Test)",skills:["First Aid"]},
+      application:{uid:id,status:"approved",skills:["First Aid"]},
+    });
+    const roster=[volunteer("A","Bagong Buhay I"),
+      volunteer("B","Bagong Buhay I"),volunteer("C","Francisco Homes-Narra"),
+      volunteer("D","Bagong Buhay II",false)];
+    // No Wave 2 neighbors are declared. We never invent geographic adjacency.
+    const plan=planVolunteerWaves(incident,roster,{
+      knownBarangays,neighborsByBarangay:{},activeAssignments:[],
+    });
+    response.set("Cache-Control", "no-store");
+    response.json({mode:"synthetic",caseTitle:incident.title,
+      caseBarangay:incident.incidentBarangay,reviewed:plan.reviewed,
+      counts:plan.counts,wave2Configured:false,doesNotSendOffers:true});
+  });
 
   async function requireStagingAdmin(request, response, next) {
     try {
