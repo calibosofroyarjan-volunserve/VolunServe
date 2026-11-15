@@ -405,7 +405,13 @@ function createEngine({ db, clock = Date.now, log = console, firestore }) {
       throw new Error("Only a validated, open Emergency Report can start Volunteer matching");
     }
     const stateSnap = await stateRef.get();
-    if (stateSnap.exists && ["waiting", "accepted", "completed"].includes(stateSnap.data().status)) {
+    if (stateSnap.exists && stateSnap.data().status === "waiting") {
+      // Admin can reconcile an expired or declined offer on a sleeping Free
+      // staging service when they explicitly check the case. No background
+      // timer or guarantee of three-minute escalation is implied.
+      return advanceCase(caseId);
+    }
+    if (stateSnap.exists && ["accepted", "completed"].includes(stateSnap.data().status)) {
       return {action:"already_started", state:stateSnap.data().status};
     }
     if (stateSnap.exists && ["needs_admin", "disabled"].includes(stateSnap.data().status)) {
