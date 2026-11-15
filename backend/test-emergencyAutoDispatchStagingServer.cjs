@@ -79,3 +79,21 @@ test("approved Admin can explicitly start or disable only an eligible case ID",(
   assert.equal(r.status,400);
   assert.deepEqual(calls,[["start","case1"],["disable","case1"]]);
 }));
+
+
+test("synthetic demo uses the real eligibility planner without Firebase writes or production data",()=>withServer({},async({url,calls})=>{
+  const page=await fetch(url+"/demo");assert.equal(page.status,200);
+  const html=await page.text();
+  assert.match(html,/SYNTHETIC STAGING DEMO/);
+  assert.match(html,/No real reports, Firestore writes/);
+  const r=await fetch(url+"/demo-data");assert.equal(r.status,200);
+  const data=await r.json();
+  assert.equal(data.mode,"synthetic");
+  assert.equal(data.doesNotSendOffers,true);
+  assert.equal(data.counts.reviewed,4);
+  assert.equal(data.counts.wave1,2);
+  assert.equal(data.counts.wave2,0);
+  assert.equal(data.counts.wave3,1);
+  assert.equal(data.counts.excluded,1);
+  assert.deepEqual(calls,[]);
+}));
