@@ -1797,6 +1797,19 @@ export default function AdminCases() {
     incident: DisasterCase, action: "start" | "disable", quiet = false
   ): Promise<boolean> => {
     if (!AUTOMATIC_VOLUNTEER_RUNTIME_ENABLED) return false;
+    // A staging build must never use a production Firebase token or project.
+    // This guard is independent of server-side project isolation and fails closed.
+    if (AUTOMATIC_VOLUNTEER_STAGING_ONLY) {
+      const selectedProject = String(process.env.EXPO_PUBLIC_AUTO_VOLUNTEER_STAGING_PROJECT_ID || "").trim();
+      const authProject = String(getAuth().app.options.projectId || "").trim();
+      if (AUTOMATIC_VOLUNTEER_PROVIDER !== "render" ||
+          !selectedProject || selectedProject === "volunserve-3aa5b" ||
+          authProject !== selectedProject) {
+        if (!quiet) Alert.alert("Isolated Staging Required",
+          "Volunteer auto-matching is disabled until this test build uses a separately verified Firebase staging project.");
+        return false;
+      }
+    }
     const user = getAuth().currentUser;
     if (!user) {
       if (!quiet) Alert.alert("Session Expired", "Sign in as an approved Admin.");
