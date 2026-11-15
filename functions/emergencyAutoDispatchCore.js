@@ -481,15 +481,18 @@ function createEngine({ db, clock = Date.now, log = console }) {
     return {action:stopped?"disabled":"not_changed"};
   }
 
-  async function sweep() {
+  async function sweep({pollPending=false}={}) {
     const waiting = await db.collection("emergencyAutoDispatch")
       .where("status", "==", "waiting").limit(80).get();
     const due = waiting.docs.filter((doc) => Number(doc.data().expiresAtMs || 0) <= clock());
+    // Always-on Render worker polls pending offers so Volunteer acceptance
+    // or decline is handled promptly without Firebase Functions triggers.
+    const pendingCheck = pollPending ? waiting.docs : due;
     const ready = await db.collection("emergencyAutoDispatch")
       .where("status", "==", "ready").limit(40).get();
     const accepted = await db.collection("emergencyAutoDispatch")
       .where("status", "==", "accepted").limit(40).get();
-    for (const doc of [...due, ...ready.docs]) {
+    for (const doc of [...pendingCheck, ...ready.docs]) {
       try { await advanceCase(doc.id); } catch (error) {
         log.error("Emergency Volunteer automatic retry failed", { caseId: doc.id, error: String(error) });
       }
