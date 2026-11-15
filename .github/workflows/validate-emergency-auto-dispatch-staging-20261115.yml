@@ -28,6 +28,7 @@ jobs:
       - name: Real automatic matching scenarios
         run: |
           node scripts/test-automatic-emergency-dispatch-20261115.cjs
+          node scripts/test-automatic-volunteer-responder-lock-20261115.cjs
           node scripts/test-emergency-volunteer-wave-planner-20261115.cjs
           node scripts/test-admin-emergency-ui-consistency-20261115.cjs
           node scripts/test-admin-volunteer-authorization.cjs
