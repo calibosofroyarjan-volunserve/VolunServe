@@ -3,7 +3,7 @@
 const test=require("node:test");
 const assert=require("node:assert/strict");
 const fs=require("node:fs");
-const {parseCutoff,renderWorkerConfig,createRenderAutoDispatchWorker}=
+const {parseCutoff,verifiedStagingProject,renderWorkerConfig,createRenderAutoDispatchWorker}=
   require("./emergencyAutoDispatchWorker");
 
 const validEnvironment = {
@@ -59,6 +59,51 @@ test("Free or unconfirmed Render never queries Firestore or starts matching",asy
   assert.equal(db.reads,0);
   await assert.rejects(worker.requestStart("case1"),/always-on/);
 });
+test("Free Render permits ONLY Admin-triggered offers on a verified separate staging Firebase project",async()=>{
+  const env={
+    VOLUNSERVE_AUTO_VOLUNTEER_ON_DEMAND_STAGING_ENABLED:"true",
+    VOLUNSERVE_AUTO_VOLUNTEER_STAGING_PROJECT_ID:"volunserve-isolated-testing",
+    FIREBASE_SERVICE_ACCOUNT_JSON:JSON.stringify({project_id:"volunserve-isolated-testing"}),
+  };
+  const calls=[];
+  const db=fakeFirestore([]);
+  const worker=createRenderAutoDispatchWorker({db,env,logger:{warn(){}},engineFactory:()=>({
+    requestAdminStart:async(id)=>{calls.push(["start",id]);return {action:"offered"};},
+    disableCase:async(id)=>{calls.push(["disable",id]);return {action:"disabled"};},
+  })});
+  assert.equal(verifiedStagingProject(env),true);
+  assert.equal(worker.config.onDemandReady,true);
+  assert.equal(worker.config.ready,false);
+  assert.equal((await worker.runOnce()).status,"disabled");
+  assert.equal(worker.start().enabled,false);
+  assert.equal(db.reads,0);
+  assert.deepEqual(await worker.requestStart("case1"),{action:"offered"});
+  assert.deepEqual(await worker.requestDisable("case1"),{action:"disabled"});
+  assert.deepEqual(calls,[["start","case1"],["disable","case1"]]);
+});
+
+test("Staging on-demand gate fails closed without a matching non-production service account",async()=>{
+  const base={
+    VOLUNSERVE_AUTO_VOLUNTEER_ON_DEMAND_STAGING_ENABLED:"true",
+    VOLUNSERVE_AUTO_VOLUNTEER_STAGING_PROJECT_ID:"volunserve-isolated-testing",
+  };
+  const cases=[
+    base,
+    {...base,FIREBASE_SERVICE_ACCOUNT_JSON:"{bad-json"},
+    {...base,FIREBASE_SERVICE_ACCOUNT_JSON:JSON.stringify({project_id:"volunserve-3aa5b"})},
+    {...base,VOLUNSERVE_AUTO_VOLUNTEER_STAGING_PROJECT_ID:"volunserve-3aa5b",
+      FIREBASE_SERVICE_ACCOUNT_JSON:JSON.stringify({project_id:"volunserve-3aa5b"})},
+    {...base,FIREBASE_SERVICE_ACCOUNT_JSON:JSON.stringify({project_id:"another-staging-project"})},
+  ];
+  for(const env of cases){
+    assert.equal(verifiedStagingProject(env),false);
+    const worker=createRenderAutoDispatchWorker({db:fakeFirestore([]),env,
+      logger:{warn(){}},engineFactory:()=>({requestAdminStart:()=>{throw Error("unauthorized");}})});
+    assert.equal(worker.config.onDemandReady,false);
+    await assert.rejects(worker.requestStart("case1"),/verified staging/);
+  }
+});
+
 test("Only new validated cases after reviewed UTC cutoff enter automatic matching",async()=>{
   const calls=[];
   const cutoff=Date.parse("2026-01-01T00:00:00Z");
@@ -107,6 +152,10 @@ test("Existing backend admin endpoints remain protected and feature gated",()=>{
   }
   assert.match(server,/requireFirebaseUser, requireOperationalAdmin, approvedAutomaticResponse/);
   assert.match(admin,/EXPO_PUBLIC_AUTO_VOLUNTEER_MATCH_PROVIDER/);
+  assert.match(admin,/EXPO_PUBLIC_AUTO_VOLUNTEER_STAGING_ONLY/);
+  assert.match(admin,/volunserve-backend-staging\\.onrender\\.com/);
+  assert.match(admin,/requestAutomaticMatching\\(\\s*\\{ \\.\\.\\.incident, incidentBarangay: verifiedIncidentBarangay \\}, "start", true/);
+  assert.match(server,/emergencyAutoWorker\\.config\\.onDemandReady/);
   assert.match(admin,/user\.getIdToken\(\)/);
   assert.match(server,/emergencyAutoWorker\.start\(\)/);
   assert.ok(!server.includes("VOLUNSERVE_RENDER_PAID_ALWAYS_ON_CONFIRMED=true"),
