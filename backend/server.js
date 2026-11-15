@@ -11546,23 +11546,26 @@ const { installPublicAssistanceAppeals } = require("./publicAssistanceAppeals");
 installPublicAssistanceAppeals({
   app, db, FieldValue, requireFirebaseUser, requireOperationalAdmin, cleanText, makeHttpError,
 });
-// Automatic Volunteer matching for a separately verified always-on Render service.
-// Defaults disabled. The current Free service may sleep and MUST NOT run this.
+// Automatic Volunteer matching: always-on worker or a strictly isolated staging
+// Admin-triggered one-shot. Free Render NEVER runs the background worker.
 const {createRenderAutoDispatchWorker} = require("./emergencyAutoDispatchWorker");
 const emergencyAutoWorker = createRenderAutoDispatchWorker({db, logger:console});
 
 function approvedAutomaticResponse(request,response,next) {
-  if (emergencyAutoWorker.config.ready) return next();
+  if (emergencyAutoWorker.config.ready || emergencyAutoWorker.config.onDemandReady) return next();
   response.status(503).json({
     ok:false, error:"automatic_matching_unavailable",
-    message:"Automatic Volunteer matching requires a verified always-on backend. Manual Admin coordination remains available.",
+    message:"Matching is disabled. Use a verified isolated staging project for Admin on-demand matching, or a reviewed always-on backend. Manual Admin coordination remains available.",
   });
 }
 app.get("/api/admin/emergency-auto/status",
   requireFirebaseUser, requireOperationalAdmin, (request,response) => {
     response.json({
       ok:true, workerEnabled:emergencyAutoWorker.config.ready,
-      workerMode:"render_always_on", activationReady:emergencyAutoWorker.config.ready,
+      workerMode:emergencyAutoWorker.config.ready ? "render_always_on" :
+        emergencyAutoWorker.config.onDemandReady ? "staging_admin_on_demand_only" : "disabled",
+      onDemandEnabled:emergencyAutoWorker.config.onDemandReady,
+      activationReady:emergencyAutoWorker.config.ready || emergencyAutoWorker.config.onDemandReady,
       reasons:emergencyAutoWorker.config.reasons,
     });
   });
