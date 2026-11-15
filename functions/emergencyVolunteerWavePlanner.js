@@ -159,8 +159,12 @@ function recommendNextWave(plan, state = {}) {
   const attempted = new Set((state.attemptedVolunteerIds || []).map(String));
   for (const wave of [1, 2, 3]) {
     if (completed.has(wave)) continue;
-    if (wave >= 2 && !plan.wave2Configured) {
-      return { action: "admin_review", wave: 2, reason: "verified_nearby_barangays_not_configured" };
+    // A missing reviewed adjacency map must never create fake "nearby"
+    // matches. Safely skip Wave 2 and continue the documented SJDM-wide
+    // fallback, where Volunteers still explicitly choose to accept.
+    if (wave === 2 && !plan.wave2Configured) {
+      completed.add(2);
+      continue;
     }
     const candidate = (plan.waves[wave] || []).find((person) => !attempted.has(person.uid));
     if (candidate) return { action: "offer", wave, volunteerId: candidate.uid };
