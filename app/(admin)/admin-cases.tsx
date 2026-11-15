@@ -52,7 +52,7 @@ const AUTOMATIC_VOLUNTEER_PROVIDER = process.env.EXPO_PUBLIC_AUTO_VOLUNTEER_MATC
 // Never silently send staging task offers to the protected production backend.
 const AUTOMATIC_VOLUNTEER_STAGING_ONLY = process.env.EXPO_PUBLIC_AUTO_VOLUNTEER_STAGING_ONLY === "true";
 const AUTOMATIC_VOLUNTEER_BACKEND_URL = AUTOMATIC_VOLUNTEER_STAGING_ONLY
-  ? "https://volunserve-backend-staging.onrender.com" : BACKEND_URL;
+  ? "https://volunserve-emergency-match-staging-free.onrender.com" : BACKEND_URL;
 
 type Severity = "low" | "medium" | "high" | "critical";
 type CaseStatus =
