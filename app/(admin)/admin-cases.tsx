@@ -612,6 +612,7 @@ export default function AdminCases() {
   const [reviewReasons, setReviewReasons] = useState<Record<string, string>>({});
   const [publicImpactConfirmed, setPublicImpactConfirmed] = useState<Record<string, boolean>>({});
   const [publicImpactBarangays, setPublicImpactBarangays] = useState<Record<string, string>>({});
+  const [confirmedResponseBarangays, setConfirmedResponseBarangays] = useState<Record<string, string>>({});
   const [assignmentCaseId, setAssignmentCaseId] = useState("");
   const [skillFilter, setSkillFilter] = useState("");
   const [availabilityFilter, setAvailabilityFilter] = useState("");
@@ -977,7 +978,6 @@ export default function AdminCases() {
               data.incidentBarangay ||
               data.emergencyBarangay ||
               data.barangay ||
-              data.reporterBarangay ||
               "",
             reporterAddress: data.reporterAddress || "",
             contactNumber: data.contactNumber || "",
@@ -1821,11 +1821,22 @@ export default function AdminCases() {
       return;
     }
 
+    const desiredIncidentBarangay = String(
+      confirmedResponseBarangays[incident.id] || incident.incidentBarangay || ""
+    ).trim();
+    const verifiedIncidentBarangay = SJDM_BARANGAYS.find(
+      (name) => normalizeBarangay(name) === normalizeBarangay(desiredIncidentBarangay)
+    ) || "";
+    if (action === "validate" && !verifiedIncidentBarangay) {
+      Alert.alert("Incident Barangay Required",
+        "Confirm the ACTUAL emergency location from the GPS pin and evidence. The reporter's home barangay cannot be used automatically for Volunteer matching.");
+      return;
+    }
     const publicImpact = action === "validate" &&
       ["high", "critical"].includes(incident.severity) &&
       publicImpactConfirmed[incident.id] === true;
     const confirmedIncidentBarangay = publicImpact
-      ? safePublicAdvisoryBarangay(publicImpactBarangays[incident.id]) : null;
+      ? safePublicAdvisoryBarangay(verifiedIncidentBarangay) : null;
 
     if (publicImpact && !confirmedIncidentBarangay) {
       Alert.alert("Confirm Incident Barangay",
@@ -1870,6 +1881,8 @@ export default function AdminCases() {
         if (action === "validate") {
           basePatch.status = "validated";
           basePatch.verificationStatus = "validated";
+          // Actual incident barangay confirmed by Admin (not resident home).
+          basePatch.incidentBarangay = verifiedIncidentBarangay;
           basePatch.evidenceReviewStatus = "approved";
           basePatch.validatedAt = serverTimestamp();
           basePatch.validatedBy = adminUser.uid;
@@ -4466,6 +4479,37 @@ export default function AdminCases() {
 
                   </View>
                   <View style={styles.referenceEvidenceNotes}>
+                    <Text style={styles.referenceEvidenceColumnTitle}>⌖  Actual Incident Barangay</Text>
+                    <Text style={styles.referenceEvidenceColumnSub}>
+                      Confirm the emergency GPS location; do not assume the Resident's home barangay.
+                      Required for automatic Volunteer matching.
+                    </Text>
+                    <TextInput
+                      style={styles.input}
+                      value={confirmedResponseBarangays[incident.id] ?? incident.incidentBarangay ?? ""}
+                      placeholder="Search SJDM incident barangay"
+                      onChangeText={(value) => setConfirmedResponseBarangays((current) => ({
+                        ...current, [incident.id]: value,
+                      }))}
+                      editable={verificationStatus !== "rejected"}
+                    />
+                    {!!confirmedResponseBarangays[incident.id] &&
+                      !SJDM_BARANGAYS.some((value) => normalizeBarangay(value) ===
+                        normalizeBarangay(confirmedResponseBarangays[incident.id])) ? (
+                      <View style={{ borderWidth: 1, borderColor: "#DEE8E7", borderRadius: 10 }}>
+                        {SJDM_BARANGAYS.filter((name) => name.toLowerCase().includes(
+                          confirmedResponseBarangays[incident.id].trim().toLowerCase()
+                        )).slice(0, 5).map((name) => (
+                          <TouchableOpacity key={name} accessibilityRole="button"
+                            onPress={() => setConfirmedResponseBarangays((current) => ({
+                              ...current, [incident.id]: name,
+                            }))}
+                            style={{ padding: 10, borderBottomWidth: 1, borderColor: "#E3EBF0" }}>
+                            <Text style={{ color: "#143C32", fontSize: 12 }}>{name}</Text>
+                          </TouchableOpacity>
+                        ))}
+                      </View>
+                    ) : null}
                     <Text style={styles.referenceEvidenceColumnTitle}>▤  Review Notes (Optional)</Text>
                     <Text style={styles.referenceEvidenceColumnSub}>Record observations or explain a request or rejection.</Text>
                 {verificationStatus !== "validated" &&
