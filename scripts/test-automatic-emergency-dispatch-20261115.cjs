@@ -101,6 +101,12 @@ async function testDeclineAndAccept() {
   await engine.onAssignmentChanged("case1_v2",{status:"offered"},{status:"accepted",caseId:"case1"});
   assert.equal(db.get("emergencyAutoDispatch/case1").status,"accepted");
   assert.equal(db.get("responseAssignments/case1_v3"),undefined);
+  db.seed("responseAssignments/case1_v2",
+    {...db.get("responseAssignments/case1_v2"),status:"completed"});
+  await engine.onAssignmentChanged("case1_v2",{status:"accepted"},
+    {status:"completed",caseId:"case1"});
+  assert.equal(db.get("emergencyAutoDispatch/case1").status,"completed");
+  assert.equal(db.get("autoVolunteerReservations/v2"),undefined);
   clock+=INTERVAL_MS*20;
   assert.equal((await engine.sweep()).due,0);
 }
@@ -117,6 +123,11 @@ async function testTimedOutOffer() {
   assert.equal(db.get("emergencyAutoDispatch/case2").wave,2);
   assert.equal(db.get("responseAssignments/case2_t2").status,"offered");
   assert.equal(db.get("autoVolunteerReservations/t1"),undefined);
+  clock+=INTERVAL_MS+1;
+  await engine.sweep();
+  assert.equal(db.get("responseAssignments/case2_t2").status,"cancelled");
+  assert.equal(db.get("emergencyAutoDispatch/case2").status,"needs_admin");
+  assert.equal(db.get("notifications/auto_escalation_case2").userId,"admin-1");
 }
 async function testMisconfigAndLocks() {
   const db=new FakeDb();
@@ -143,6 +154,20 @@ async function testMisconfigAndLocks() {
   const stop=createEngine({db:unverified,clock:()=>100000});
   assert.equal((await stop.advanceCase("case5")).action,"stop");
   assert.equal(unverified.get("emergencyAutoDispatch/case5"),undefined);
+  const acceptance=new FakeDb();seedCase(acceptance,"case6");seedConfig(acceptance);
+  seedVolunteer(acceptance,"n1","Bagong Buhay I");
+  const cancelEngine=createEngine({db:acceptance,clock:()=>100000,log:{warn(){},error(){}}});
+  await cancelEngine.advanceCase("case6");
+  acceptance.seed("responseAssignments/case6_n1",
+    {...acceptance.get("responseAssignments/case6_n1"),status:"accepted"});
+  await cancelEngine.onAssignmentChanged("case6_n1",{status:"offered"},
+    {status:"accepted",caseId:"case6"});
+  acceptance.seed("responseAssignments/case6_n1",
+    {...acceptance.get("responseAssignments/case6_n1"),status:"cancelled"});
+  await cancelEngine.onAssignmentChanged("case6_n1",{status:"accepted"},
+    {status:"cancelled",caseId:"case6"});
+  assert.equal(acceptance.get("emergencyAutoDispatch/case6").status,"needs_admin");
+  assert.equal(acceptance.get("autoVolunteerReservations/n1"),undefined);
 }
 (async()=>{
   await testDeclineAndAccept();
