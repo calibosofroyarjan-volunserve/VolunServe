@@ -204,6 +204,10 @@ function createEngine({ db, clock = Date.now, log = console }) {
     }
     const busySnap = await db.collection("responseAssignments")
       .where("status", "in", [...RESPONSE_ACTIVE]).limit(200).get();
+    if (busySnap.size >= 200) {
+      await updateStateOnly(caseId, "needs_admin", "Too many simultaneous Volunteer assignments to audit safely");
+      return { action: "admin_review", reason: "busy_pool_limit" };
+    }
     const busy = busySnap.docs.map((d) => d.data());
     const plan = planVolunteerWaves(incident, roster, {
       knownBarangays, neighborsByBarangay: neighbors || {}, activeAssignments: busy,
@@ -301,33 +305,92 @@ function createEngine({ db, clock = Date.now, log = console }) {
     return { action: "offered", wave: recommendation.wave, uid };
   }
 
+  async function finalizeAccepted(caseId, assignmentId) {
+    const { stateRef, caseRef } = getStorage(db, caseId);
+    const assignmentRef = db.collection("responseAssignments").doc(assignmentId);
+    const stateSnap = await stateRef.get();
+    const uid = str(stateSnap.data()?.volunteerId);
+    if (!uid || stateSnap.data()?.assignmentId !== assignmentId) return;
+    const reserveRef = db.collection("autoVolunteerReservations").doc(uid);
+    await db.runTransaction(async (tx) => {
+      const [sessionSnap, caseSnap, assignmentSnap, reserveSnap] = await Promise.all([
+        stateRef, caseRef, assignmentRef, reserveRef,
+      ].map((ref) => tx.get(ref)));
+      if (!sessionSnap.exists || !caseSnap.exists || !assignmentSnap.exists) return;
+      const session = sessionSnap.data();
+      if (session.assignmentId !== assignmentId ||
+          !["accepted", "waiting"].includes(session.status)) return;
+      const status = str(assignmentSnap.data().status);
+      if (!["responding", "on_site", "completed", "cancelled"].includes(status)) return;
+      const completed = status === "completed";
+      const cancelled = status === "cancelled";
+      const newStatus = completed ? "completed" : cancelled ? "needs_admin" : "accepted";
+      const explanation = completed ? "Volunteer completed support; awaiting case review" :
+        cancelled ? "Accepted response was cancelled; Admin must review" :
+        status === "on_site" ? "Volunteer marked on-site arrival" :
+        "Volunteer started responding";
+      tx.update(stateRef, {
+        status: newStatus, reason: explanation, updatedAt: FieldValue.serverTimestamp(),
+      });
+      const incident = caseSnap.data();
+      const casePatch = {
+        autoVolunteerDispatch: autoStatus(newStatus, session.wave,
+          (session.attemptedVolunteerIds || []).length, explanation),
+        updatedAt: FieldValue.serverTimestamp(),
+      };
+      if ((completed || cancelled) &&
+          incident.activeVolunteerSupportAssignmentId === assignmentId) {
+        casePatch.activeVolunteerSupportUid = "";
+        casePatch.activeVolunteerSupportName = "";
+        casePatch.activeVolunteerSupportAssignmentId = "";
+      }
+      tx.update(caseRef, casePatch);
+      if ((completed || cancelled) && reserveSnap.exists &&
+          reserveSnap.data().assignmentId === assignmentId) tx.delete(reserveRef);
+    });
+  }
+
   async function onAssignmentChanged(assignmentId, previous, next) {
     if (previous.status === next.status || !next.caseId) return;
     const stateRef = db.collection("emergencyAutoDispatch").doc(next.caseId);
     const state = (await stateRef.get()).data() || {};
     if (state.assignmentId !== assignmentId) return;
-    if (RESPONSE_ACCEPTED.has(str(next.status))) {
+    if (state.status === "waiting" && RESPONSE_ACCEPTED.has(str(next.status))) {
       await reconcileOffer(next.caseId);
+    }
+    if (["responding", "on_site", "completed", "cancelled"].includes(str(next.status))) {
+      await finalizeAccepted(next.caseId, assignmentId);
       return;
     }
-    if (RESPONSE_TERMINAL.has(str(next.status))) {
+    if (state.status === "waiting" && RESPONSE_TERMINAL.has(str(next.status))) {
       await reconcileOffer(next.caseId);
       await advanceCase(next.caseId);
     }
   }
 
   async function sweep() {
-    const due = await db.collection("emergencyAutoDispatch")
+    const waiting = await db.collection("emergencyAutoDispatch")
       .where("status", "==", "waiting").limit(80).get();
-    const runnable = due.docs.filter((doc) => Number(doc.data().expiresAtMs || 0) <= clock());
-    for (const doc of runnable) {
+    const due = waiting.docs.filter((doc) => Number(doc.data().expiresAtMs || 0) <= clock());
+    const ready = await db.collection("emergencyAutoDispatch")
+      .where("status", "==", "ready").limit(40).get();
+    const accepted = await db.collection("emergencyAutoDispatch")
+      .where("status", "==", "accepted").limit(40).get();
+    for (const doc of [...due, ...ready.docs]) {
       try { await advanceCase(doc.id); } catch (error) {
         log.error("Emergency Volunteer automatic retry failed", { caseId: doc.id, error: String(error) });
       }
     }
-    return { scanned: due.size, due: runnable.length };
+    for (const doc of accepted.docs) {
+      if (!doc.data().assignmentId) continue;
+      try { await finalizeAccepted(doc.id, doc.data().assignmentId); } catch (error) {
+        log.error("Emergency Volunteer accepted-state reconciliation failed",
+          {caseId: doc.id, error: String(error)});
+      }
+    }
+    return { scanned: waiting.size + ready.size + accepted.size, due: due.length + ready.size };
   }
 
-  return { advanceCase, reconcileOffer, onAssignmentChanged, sweep };
+  return { advanceCase, reconcileOffer, onAssignmentChanged, finalizeAccepted, sweep };
 }
 module.exports = { createEngine, validAdjacencyConfig, validCase, INTERVAL_MS };
