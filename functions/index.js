@@ -2769,6 +2769,49 @@ if (process.env.VOLUNSERVE_AUTO_VOLUNTEER_DISPATCH_ENABLED === "true") {
     await getEngine().onAssignmentChanged(event.params.assignmentId, before, after);
   });
 
+  async function requireMatchingAdmin(request) {
+    const uid = request.auth?.uid;
+    if (!uid) throw new HttpsError("unauthenticated", "Sign in as an approved Admin");
+    const snap = await getFirestore().collection("users").doc(uid).get();
+    const profile = snap.data() || {};
+    if (!snap.exists || profile.role !== "admin" ||
+        profile.status !== "approved" ||
+        profile.adminStatus === "suspended") {
+      throw new HttpsError("permission-denied", "An approved operational Admin is required");
+    }
+    return uid;
+  }
+  exports.startAutomaticEmergencyVolunteerMatching = onCall({
+    maxInstances: 2, timeoutSeconds: 120, enforceAppCheck: false,
+  }, async (request) => {
+    await requireMatchingAdmin(request);
+    const caseId = String(request.data?.caseId || "").trim();
+    if (!/^[A-Za-z0-9_-]{1,160}$/.test(caseId)) {
+      throw new HttpsError("invalid-argument", "A valid emergency case ID is required");
+    }
+    try {
+      return await getEngine().requestAdminStart(caseId);
+    } catch (error) {
+      logger.warn("Admin-started matching was blocked", {caseId, reason:String(error.message)});
+      throw new HttpsError("failed-precondition", String(error.message || "Matching cannot start"));
+    }
+  });
+  exports.disableAutomaticEmergencyVolunteerMatching = onCall({
+    maxInstances: 2, timeoutSeconds: 120, enforceAppCheck: false,
+  }, async (request) => {
+    await requireMatchingAdmin(request);
+    const caseId = String(request.data?.caseId || "").trim();
+    if (!/^[A-Za-z0-9_-]{1,160}$/.test(caseId)) {
+      throw new HttpsError("invalid-argument", "A valid emergency case ID is required");
+    }
+    try {
+      return await getEngine().disableCase(caseId);
+    } catch (error) {
+      logger.warn("Admin disable matching was blocked", {caseId, reason:String(error.message)});
+      throw new HttpsError("failed-precondition", String(error.message || "Matching cannot be disabled"));
+    }
+  });
+
   // Durable Firestore state is the source of truth. No in-memory timers or
   // browser polling are relied on for response deadlines or retry decisions.
   exports.autoVolunteerOfferTimeoutSweep = onSchedule({
