@@ -4,6 +4,7 @@ const {getFirestore, FieldValue} = require("firebase-admin/firestore");
 const {setGlobalOptions} = require("firebase-functions");
 const {onCall, HttpsError} = require("firebase-functions/https");
 const {onDocumentCreated, onDocumentUpdated} = require("firebase-functions/v2/firestore");
+const {onSchedule} = require("firebase-functions/v2/scheduler");
 const {defineSecret} = require("firebase-functions/params");
 const logger = require("firebase-functions/logger");
 
@@ -2732,3 +2733,49 @@ exports.deliverAndroidPushForNotification = onDocumentCreated(
       }
     },
 );
+
+
+// Emergency Volunteer dispatch is opt-in and disabled unless a reviewed,
+// reliable Cloud Functions deployment explicitly enables the feature. This
+// never dispatches police, ambulances, fire departments or official responders.
+if (process.env.VOLUNSERVE_AUTO_VOLUNTEER_DISPATCH_ENABLED === "true") {
+  const {createEngine} = require("./emergencyAutoDispatchCore");
+  const getEngine = () => createEngine({db: getFirestore(), log: logger});
+
+  exports.autoVolunteerOfferAfterValidation = onDocumentUpdated({
+    document: "disasterCases/{caseId}", retry: true, maxInstances: 2,
+    timeoutSeconds: 120,
+  }, async (event) => {
+    const before = event.data?.before.data() || {};
+    const after = event.data?.after.data() || {};
+    // Only a new, explicit Admin validation initiates automatic Volunteer
+    // coordination. Existing historical cases cannot be auto-dispatched.
+    if (before.verificationStatus === "validated" ||
+        after.verificationStatus !== "validated" ||
+        after.status !== "validated" || after.dispatchBlocked === true) return;
+    const result = await getEngine().advanceCase(event.params.caseId);
+    logger.info("Automatic Volunteer matching after validation", {
+      caseId: event.params.caseId, action: result.action,
+    });
+  });
+
+  exports.autoVolunteerMatchAfterResponse = onDocumentUpdated({
+    document: "responseAssignments/{assignmentId}", retry: true,
+    maxInstances: 2, timeoutSeconds: 120,
+  }, async (event) => {
+    const before = event.data?.before.data() || {};
+    const after = event.data?.after.data() || {};
+    if (before.status === after.status || !after.caseId) return;
+    await getEngine().onAssignmentChanged(event.params.assignmentId, before, after);
+  });
+
+  // Durable Firestore state is the source of truth. No in-memory timers or
+  // browser polling are relied on for response deadlines or retry decisions.
+  exports.autoVolunteerOfferTimeoutSweep = onSchedule({
+    schedule: "every 1 minutes", retryCount: 1,
+    timeoutSeconds: 540, maxInstances: 1,
+  }, async () => {
+    const result = await getEngine().sweep();
+    if (result.due) logger.info("Emergency Volunteer deadline sweep", result);
+  });
+}
