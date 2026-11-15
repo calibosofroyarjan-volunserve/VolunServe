@@ -39,7 +39,7 @@ jobs:
         run: |
           node --check backend/server.js
           node --check backend/emergencyAutoDispatchWorker.js
-          node --test backend/test-emergencyAutoDispatchWorker.cjs
+          node --test backend/test-emergencyAutoDispatchWorker.cjs backend/test-emergencyAutoDispatchStagingServer.cjs
       - name: Install app
         run: npm ci --no-audit --no-fund
       - name: Compile and export
