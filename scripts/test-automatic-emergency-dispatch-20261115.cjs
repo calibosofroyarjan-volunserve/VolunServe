@@ -161,10 +161,17 @@ async function testMisconfigAndLocks() {
   seedVolunteer(db,"n1","Francisco Homes-Narra");
   const engine=createEngine({db,clock:()=>100000,log:{warn(){},error(){}}});
   const result=await engine.advanceCase("case3");
-  assert.equal(result.action,"admin_review");
-  assert.equal(db.get("emergencyAutoDispatch/case3").status,"needs_admin");
-  assert.equal(db.get("notifications/auto_escalation_case3").userId,"admin-1");
-  assert.equal(db.get("responseAssignments/case3_n1"),undefined);
+  assert.deepEqual(result,{action:"offered",wave:3,uid:"n1"});
+  assert.equal(db.get("emergencyAutoDispatch/case3").status,"waiting");
+  assert.equal(db.get("responseAssignments/case3_n1").status,"offered");
+  // No verified nearby-barangay list means NO Wave-2 claim, but eligible
+  // citywide Volunteers are still reachable with explicit acceptance.
+  const noVolunteer=new FakeDb();
+  seedCase(noVolunteer,"case0");
+  const emptyEngine=createEngine({db:noVolunteer,clock:()=>100000,log:{warn(){},error(){}}});
+  assert.equal((await emptyEngine.advanceCase("case0")).action,"admin_review");
+  assert.equal(noVolunteer.get("emergencyAutoDispatch/case0").status,"needs_admin");
+  assert.equal(noVolunteer.get("notifications/auto_escalation_case0").userId,"admin-1");
   assert.equal(validAdjacencyConfig({approved:true,enabled:true,
     neighborsByBarangay:{"Bagong Buhay I":["Outside SJDM"]}},barangays),null);
   const blocked=new FakeDb();seedCase(blocked,"case4");seedConfig(blocked);
