@@ -33,6 +33,13 @@ jobs:
           node scripts/test-admin-emergency-ui-consistency-20261115.cjs
           node scripts/test-emergency-announcement-advisory-link.cjs
           node scripts/test-admin-volunteer-authorization.cjs
+      - name: Install Render backend dependencies
+        run: npm ci --prefix backend --no-audit --no-fund
+      - name: Verify Render paid-worker gate and no historical unexpected dispatch
+        run: |
+          node --check backend/server.js
+          node --check backend/emergencyAutoDispatchWorker.js
+          node --test backend/test-emergencyAutoDispatchWorker.cjs
       - name: Install app
         run: npm ci --no-audit --no-fund
       - name: Compile and export
