@@ -56,15 +56,6 @@ async function fetchRoster(db) {
   }));
   return roster;
 }
-function notification(docRef, to, caseId, assignmentId, title, message) {
-  return {
-    ref: docRef, data: {
-      userId: to, audience: "volunteer", type: "response_assignment",
-      caseId, assignmentId, title, message, read: false,
-      createdAt: FieldValue.serverTimestamp(),
-    },
-  };
-}
 function createEngine({ db, clock = Date.now, log = console, firestore }) {
   // Dependency injection also supports a Render backend with its own
   // installed firebase-admin, without requiring a separate Functions install.
@@ -74,6 +65,15 @@ function createEngine({ db, clock = Date.now, log = console, firestore }) {
     state, wave: Number(wave || 0), attemptedCount, note,
     updatedAt: FieldValue.serverTimestamp(),
   });
+  function notification(docRef, to, caseId, assignmentId, title, message) {
+    return {
+      ref: docRef, data: {
+        userId: to, audience: "volunteer", type: "response_assignment",
+        caseId, assignmentId, title, message, read: false,
+        createdAt: FieldValue.serverTimestamp(),
+      },
+    };
+  }
   async function updateStateOnly(caseId, state, reason, wave = 0, attempted = []) {
     const { stateRef, caseRef } = getStorage(db, caseId);
     await db.runTransaction(async (tx) => {
