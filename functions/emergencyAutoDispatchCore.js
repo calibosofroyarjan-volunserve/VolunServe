@@ -368,6 +368,95 @@ function createEngine({ db, clock = Date.now, log = console }) {
     }
   }
 
+  async function requestAdminStart(caseId) {
+    if (!/^[A-Za-z0-9_-]{1,160}$/.test(String(caseId))) {
+      throw new Error("Invalid emergency case ID");
+    }
+    const { caseRef, stateRef } = getStorage(db, caseId);
+    const caseSnap = await caseRef.get();
+    if (!caseSnap.exists || !validCase(caseSnap.data())) {
+      throw new Error("Only a validated, open Emergency Report can start Volunteer matching");
+    }
+    const stateSnap = await stateRef.get();
+    if (stateSnap.exists && ["waiting", "accepted", "completed"].includes(stateSnap.data().status)) {
+      return {action:"already_started", state:stateSnap.data().status};
+    }
+    if (stateSnap.exists && stateSnap.data().status === "needs_admin") {
+      await db.runTransaction(async (tx) => {
+        const [currentCase, currentSession] =
+          await Promise.all([tx.get(caseRef), tx.get(stateRef)]);
+        if (!currentCase.exists || !validCase(currentCase.data()) ||
+            !currentSession.exists || currentSession.data().status !== "needs_admin") return;
+        tx.update(stateRef, {
+          status:"ready", reason:"admin_authorized_retry",
+          updatedAt:FieldValue.serverTimestamp(),
+        });
+        tx.update(caseRef, {
+          autoVolunteerDispatch: autoStatus("ready",
+            currentSession.data().wave,
+            (currentSession.data().attemptedVolunteerIds || []).length,
+            "Admin requested a safe Volunteer matching retry"),
+        });
+      });
+    }
+    return advanceCase(caseId);
+  }
+
+  async function disableCase(caseId) {
+    if (!/^[A-Za-z0-9_-]{1,160}$/.test(String(caseId))) {
+      throw new Error("Invalid emergency case ID");
+    }
+    const { caseRef, stateRef } = getStorage(db, caseId);
+    const snapshot = await stateRef.get();
+    if (!snapshot.exists) return {action:"not_started"};
+    const current = snapshot.data();
+    const assignmentRef = current.assignmentId ?
+      db.collection("responseAssignments").doc(current.assignmentId) : null;
+    const reserveRef = current.volunteerId ?
+      db.collection("autoVolunteerReservations").doc(current.volunteerId) : null;
+    let stopped = false;
+    await db.runTransaction(async (tx) => {
+      const refs = [caseRef,stateRef,...(assignmentRef?[assignmentRef]:[]),
+        ...(reserveRef?[reserveRef]:[])];
+      const docs = await Promise.all(refs.map((ref)=>tx.get(ref)));
+      const [caseSnap, stateSnap] = docs;
+      if (!caseSnap.exists || !stateSnap.exists) return;
+      const session = stateSnap.data();
+      if (session.status === "disabled") {stopped=true;return;}
+      if (["accepted", "completed"].includes(session.status)) {
+        throw new Error("An accepted response cannot be disabled automatically; use authorized Admin case controls");
+      }
+      let assignmentSnap = null;
+      let reserveSnap = null;
+      if (assignmentRef) assignmentSnap = docs[2];
+      if (reserveRef) reserveSnap = docs[assignmentRef?3:2];
+      if (assignmentSnap?.exists &&
+          ["accepted","responding","on_site","completed"].includes(assignmentSnap.data().status)) {
+        throw new Error("A Volunteer already accepted. Admin must coordinate cancellation");
+      }
+      if (assignmentSnap?.exists && assignmentSnap.data().status === "offered") {
+        tx.update(assignmentRef,{status:"cancelled",updatedAt:FieldValue.serverTimestamp()});
+      }
+      if (reserveRef && reserveSnap?.exists &&
+          reserveSnap.data().assignmentId === session.assignmentId) tx.delete(reserveRef);
+      const patch={autoVolunteerDispatch:autoStatus("disabled",session.wave,
+        (session.attemptedVolunteerIds || []).length,
+        "Disabled by authorized Admin; manual coordination restored"),
+        updatedAt:FieldValue.serverTimestamp()};
+      if (caseSnap.data().activeVolunteerSupportAssignmentId === session.assignmentId) {
+        patch.activeVolunteerSupportUid="";
+        patch.activeVolunteerSupportName="";
+        patch.activeVolunteerSupportAssignmentId="";
+      }
+      tx.update(caseRef,patch);
+      tx.update(stateRef,{
+        status:"disabled",reason:"admin_disabled",updatedAt:FieldValue.serverTimestamp(),
+      });
+      stopped=true;
+    });
+    return {action:stopped?"disabled":"not_changed"};
+  }
+
   async function sweep() {
     const waiting = await db.collection("emergencyAutoDispatch")
       .where("status", "==", "waiting").limit(80).get();
@@ -391,6 +480,6 @@ function createEngine({ db, clock = Date.now, log = console }) {
     return { scanned: waiting.size + ready.size + accepted.size, due: due.length + ready.size };
   }
 
-  return { advanceCase, reconcileOffer, onAssignmentChanged, finalizeAccepted, sweep };
+  return { advanceCase, reconcileOffer, onAssignmentChanged, finalizeAccepted, requestAdminStart, disableCase, sweep };
 }
 module.exports = { createEngine, validAdjacencyConfig, validCase, INTERVAL_MS };
