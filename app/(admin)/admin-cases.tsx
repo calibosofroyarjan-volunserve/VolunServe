@@ -182,6 +182,7 @@ type VolunteerProfile = {
   identityVerified?: boolean;
   identityStatus?: string;
   applicationApproved?: boolean;
+  serverReady?: boolean;
 };
 
 type ResponseAssignment = {
@@ -1186,6 +1187,15 @@ export default function AdminCases() {
                   .trim()
                   .toLowerCase(),
                 applicationApproved: true,
+                // Mirrors the existing responseAssignments create security rule.
+                // A legacy approved application alone is NOT sufficient to dispatch.
+                serverReady:
+                  String(userData.status || "").toLowerCase() === "approved" &&
+                  ["resident", "volunteer"].includes(String(userData.role || "").toLowerCase()) &&
+                  userData.volunteerAccess === true &&
+                  String(userData.volunteerStatus || "").toLowerCase() === "approved" &&
+                  (userData.identityVerified === true ||
+                   String(userData.identityStatus || "").toLowerCase() === "verified"),
               } as VolunteerProfile;
             })
           );
@@ -1680,6 +1690,11 @@ export default function AdminCases() {
       Boolean(volunteerBarangay) &&
       caseBarangay === volunteerBarangay;
 
+    if (!volunteer.serverReady) {
+      return { eligible: false,
+        reason: "Volunteer account must have approved profile, confirmed Volunteer access and verified identity before a secure task offer",
+        skillMatches };
+    }
     if (reporterIsVolunteer) {
       return { eligible: false, reason: "Reporter cannot respond to own case", skillMatches };
     }
