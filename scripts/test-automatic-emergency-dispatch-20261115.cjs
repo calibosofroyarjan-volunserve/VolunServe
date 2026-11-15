@@ -3,6 +3,12 @@ const assert = require("node:assert/strict");
 const {createEngine, validAdjacencyConfig, INTERVAL_MS} =
   require("../functions/emergencyAutoDispatchCore");
 
+// Dependency-injected synthetic Firestore for offline tests, no Firebase SDK required.
+const SYNTHETIC_FIRESTORE={
+  FieldValue:{serverTimestamp:()=>({syntheticServerTimestamp:true})},
+  Timestamp:{fromMillis:milliseconds=>({toMillis:()=>milliseconds})},
+};
+
 class FakeSnap {
   constructor(id, ref, value) { this.id=id; this.ref=ref; this.value=value; this.exists=value!==undefined; }
   data() { return this.value; }
@@ -83,7 +89,7 @@ async function testDeclineAndAccept() {
   seedVolunteer(db,"v1","Bagong Buhay I");
   seedVolunteer(db,"v2","Bagong Buhay II");
   seedVolunteer(db,"v3","Francisco Homes-Narra");
-  const engine=createEngine({db,clock:()=>clock,log:{warn(){},error(){}}});
+  const engine=createEngine({firestore:SYNTHETIC_FIRESTORE,db,clock:()=>clock,log:{warn(){},error(){}}});
   const first=await engine.advanceCase("case1");
   assert.deepEqual(first,{action:"offered",wave:1,uid:"v1"});
   assert.equal(db.get("responseAssignments/case1_v1").status,"offered");
@@ -114,7 +120,7 @@ async function testTimedOutOffer() {
   const db=new FakeDb();let clock=200000;
   seedCase(db,"case2");seedConfig(db);
   seedVolunteer(db,"t1","Bagong Buhay I");seedVolunteer(db,"t2","Bagong Buhay II");
-  const engine=createEngine({db,clock:()=>clock,log:{warn(){},error(){}}});
+  const engine=createEngine({firestore:SYNTHETIC_FIRESTORE,db,clock:()=>clock,log:{warn(){},error(){}}});
   await engine.advanceCase("case2");
   clock+=INTERVAL_MS+1;
   const sweep=await engine.sweep();
@@ -135,7 +141,7 @@ async function testFullThreeWavesAndAdminOverride() {
   seedVolunteer(db,"w1","Bagong Buhay I");
   seedVolunteer(db,"w2","Bagong Buhay II");
   seedVolunteer(db,"w3","Francisco Homes-Narra");
-  const engine=createEngine({db,clock:()=>now,log:{warn(){},error(){}}});
+  const engine=createEngine({firestore:SYNTHETIC_FIRESTORE,db,clock:()=>now,log:{warn(){},error(){}}});
   await engine.advanceCase("case7");
   for(const [id,nextWave] of [["w1",2],["w2",3]]) {
     const key="case7_"+id;
@@ -159,7 +165,7 @@ async function testMisconfigAndLocks() {
   const db=new FakeDb();
   seedCase(db,"case3");
   seedVolunteer(db,"n1","Francisco Homes-Narra");
-  const engine=createEngine({db,clock:()=>100000,log:{warn(){},error(){}}});
+  const engine=createEngine({firestore:SYNTHETIC_FIRESTORE,db,clock:()=>100000,log:{warn(){},error(){}}});
   const result=await engine.advanceCase("case3");
   assert.deepEqual(result,{action:"offered",wave:3,uid:"n1"});
   assert.equal(db.get("emergencyAutoDispatch/case3").status,"waiting");
@@ -168,7 +174,7 @@ async function testMisconfigAndLocks() {
   // citywide Volunteers are still reachable with explicit acceptance.
   const noVolunteer=new FakeDb();
   seedCase(noVolunteer,"case0");
-  const emptyEngine=createEngine({db:noVolunteer,clock:()=>100000,log:{warn(){},error(){}}});
+  const emptyEngine=createEngine({firestore:SYNTHETIC_FIRESTORE,db:noVolunteer,clock:()=>100000,log:{warn(){},error(){}}});
   assert.equal((await emptyEngine.advanceCase("case0")).action,"admin_review");
   assert.equal(noVolunteer.get("emergencyAutoDispatch/case0").status,"needs_admin");
   assert.equal(noVolunteer.get("notifications/auto_escalation_case0").userId,"admin-1");
@@ -177,19 +183,19 @@ async function testMisconfigAndLocks() {
   const blocked=new FakeDb();seedCase(blocked,"case4");seedConfig(blocked);
   seedVolunteer(blocked,"only","Bagong Buhay I");
   blocked.seed("responderLocks/only",{assignmentId:"busy_case",caseId:"busy"});
-  const guarded=createEngine({db:blocked,clock:()=>100000,log:{warn(){},error(){}}});
+  const guarded=createEngine({firestore:SYNTHETIC_FIRESTORE,db:blocked,clock:()=>100000,log:{warn(){},error(){}}});
   const step=await guarded.advanceCase("case4");
   assert.equal(step.action,"retry");
   assert.equal(blocked.get("responseAssignments/case4_only"),undefined);
   const unverified=new FakeDb();seedCase(unverified,"case5");seedConfig(unverified);
   unverified.seed("disasterCases/case5",{...unverified.get("disasterCases/case5"),
     verificationStatus:"pending_verification"});
-  const stop=createEngine({db:unverified,clock:()=>100000});
+  const stop=createEngine({firestore:SYNTHETIC_FIRESTORE,db:unverified,clock:()=>100000});
   assert.equal((await stop.advanceCase("case5")).action,"stop");
   assert.equal(unverified.get("emergencyAutoDispatch/case5"),undefined);
   const acceptance=new FakeDb();seedCase(acceptance,"case6");seedConfig(acceptance);
   seedVolunteer(acceptance,"n1","Bagong Buhay I");
-  const cancelEngine=createEngine({db:acceptance,clock:()=>100000,log:{warn(){},error(){}}});
+  const cancelEngine=createEngine({firestore:SYNTHETIC_FIRESTORE,db:acceptance,clock:()=>100000,log:{warn(){},error(){}}});
   await cancelEngine.advanceCase("case6");
   acceptance.seed("responseAssignments/case6_n1",
     {...acceptance.get("responseAssignments/case6_n1"),status:"accepted"});
