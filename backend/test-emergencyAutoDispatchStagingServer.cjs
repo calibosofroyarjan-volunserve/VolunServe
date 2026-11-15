@@ -97,3 +97,12 @@ test("synthetic demo uses the real eligibility planner without Firebase writes o
   assert.equal(data.counts.excluded,1);
   assert.deepEqual(calls,[]);
 }));
+
+test("staging frontend refuses production Firebase Auth in automatic match flow",()=>{
+  const fs=require("node:fs");
+  const source=fs.readFileSync("app/(admin)/admin-cases.tsx","utf8");
+  assert.match(source,/EXPO_PUBLIC_AUTO_VOLUNTEER_STAGING_PROJECT_ID/);
+  assert.ok(source.includes('selectedProject === "volunserve-3aa5b"'));
+  assert.ok(source.includes("authProject !== selectedProject"));
+  assert.ok(source.includes("volunserve-emergency-match-staging-free.onrender.com"));
+});
