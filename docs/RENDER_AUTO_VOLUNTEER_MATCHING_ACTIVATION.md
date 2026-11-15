@@ -42,7 +42,7 @@ there is no background timeout guarantee while Render sleeps.
   - `EXPO_PUBLIC_AUTO_VOLUNTEER_MATCH_PROVIDER=render`
   - `EXPO_PUBLIC_AUTO_VOLUNTEER_STAGING_ONLY=true`
 - The existing protected production API URL is not used by this staging mode.
-  The client calls `https://volunserve-backend-staging.onrender.com` with a
+  The client calls `https://volunserve-emergency-match-staging-free.onrender.com` with a
   verified staging Firebase ID token. The API checks an approved operational
   Admin account; no public offers or unauthenticated writes are allowed.
 - `VOLUNSERVE_AUTO_VOLUNTEER_RENDER_WORKER_ENABLED` stays **false** and
@@ -58,6 +58,37 @@ staging service; verify staging Auth and Firestore project isolation, Admin
 credentials and end-to-end real devices; do not test with live incidents or
 private Resident data. No protected/live branch or paid plan changes have
 been made by this PR.
+
+## Actual dedicated Free staging service — created November 15, 2026
+
+- Render service: `volunserve-emergency-match-staging-free`
+- Service dashboard: https://dashboard.render.com/web/srv-dbsglle1egvs73dq7i8g
+- Public health: https://volunserve-emergency-match-staging-free.onrender.com/health
+- Source branch: `feat/emergency-auto-dispatch-server-staging-20261115`
+- Startup: `node backend/emergencyAutoDispatchStagingServer.js`
+- Render plan is **Free**, with `autoDeploy:no`. Deploys must be triggered manually.
+- Dedicated server intentionally does **not** run other VolunServe backend jobs
+  (identity, payments, certificates, announcements, live API, etc.)
+- Build gate runs 10 Node access-control/worker tests + two synthetic
+  incident matching/locking scripts. Initial module-resolution failure was
+  corrected by injecting synthetic Firestore into the offline test script.
+- **Default server activation is OFF**, even though `/health` can return 200.
+  This is intentional until staging Firebase and authenticated Admin flows are verified.
+- The default CORS allowlist is empty. Only add the actual verified isolated
+  staging web preview URL to `VOLUNSERVE_AUTO_VOLUNTEER_STAGING_ALLOWED_ORIGINS`.
+  Do not add `https://volunserve.com` or production Origins.
+- Set `VOLUNSERVE_AUTO_VOLUNTEER_STAGING_PROJECT_ID` to the separate Spark
+  Firebase project ID, and securely paste `FIREBASE_SERVICE_ACCOUNT_JSON`
+  into the **new staging service Render environment settings** (not chat,
+  not GitHub, not client source). The project IDs must match, and production
+  project `volunserve-3aa5b` is always blocked. Do not configure live credentials.
+- After confirming Admin Auth + isolated Firestore and real-device checks,
+  set `VOLUNSERVE_AUTO_VOLUNTEER_ON_DEMAND_STAGING_ENABLED=true`. Leave
+  `VOLUNSERVE_AUTO_VOLUNTEER_RENDER_WORKER_ENABLED=false` and
+  `VOLUNSERVE_RENDER_PAID_ALWAYS_ON_CONFIRMED=false` on Free.
+- **Do not enable real case offers for unverified test accounts.** Use only
+  synthetic/test cases in the isolated Firebase project; release to live
+  requires separate QA and reliable operational uptime.
 
 ## Production activation prerequisites (NOT COMPLETED)
 1. Obtain **explicit billing approval**, then upgrade the actual live/staging backend Render service from Free to Starter (or more reliable plan); do not do this automatically on the user's behalf.
