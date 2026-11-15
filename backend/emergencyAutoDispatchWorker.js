@@ -11,6 +11,8 @@
  * transactional auto-dispatch engine is shared by the Firebase Functions path.
  */
 const {createEngine} = require("../functions/emergencyAutoDispatchCore");
+const {FieldValue} = require("./firebaseAdmin");
+const {Timestamp} = require("firebase-admin/firestore");
 
 const MAX_DISCOVERY = 80;
 const DEFAULT_POLL_MS = 30000;
@@ -39,7 +41,7 @@ function createRenderAutoDispatchWorker({
   db, logger = console, env = process.env, clock = Date.now, engineFactory = createEngine,
 }) {
   const config = renderWorkerConfig(env);
-  const engine = engineFactory({db, log:logger, clock});
+  const engine = engineFactory({db, log:logger, clock, firestore:{FieldValue,Timestamp}});
   let running = false;
   let timer = null;
   async function runOnce() {
