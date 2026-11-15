@@ -31,6 +31,7 @@ jobs:
           node scripts/test-automatic-volunteer-responder-lock-20261115.cjs
           node scripts/test-emergency-volunteer-wave-planner-20261115.cjs
           node scripts/test-admin-emergency-ui-consistency-20261115.cjs
+          node scripts/test-emergency-announcement-advisory-link.cjs
           node scripts/test-admin-volunteer-authorization.cjs
       - name: Install app
         run: npm ci --no-audit --no-fund
