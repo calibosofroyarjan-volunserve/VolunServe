@@ -98,6 +98,20 @@ function createEngine({ db, clock = Date.now, log = console }) {
             read: false, createdAt: FieldValue.serverTimestamp(),
           }, { merge: true });
         }
+        const residentUid = str(incidentSnap.data().reporterUid);
+        if (residentUid) {
+          tx.set(db.collection("notifications").doc("auto_resident_escalation_" + caseId), {
+            userId: residentUid, audience: "resident", type: "emergency_response_update",
+            caseId, title: "Emergency Volunteer support needs review",
+            message: "No Volunteer has accepted a support task yet. Do not wait for this app in an immediate emergency; contact official emergency services.",
+            read: false, createdAt: FieldValue.serverTimestamp(),
+          }, { merge: true });
+        }
+        tx.set(db.collection("adminActivityLogs").doc("auto_escalation_" + caseId), {
+          action: "Auto Volunteer Matching Escalated",
+          caseId, reason, performedBy: "automatic_matching_engine",
+          timestamp: FieldValue.serverTimestamp(),
+        }, { merge: true });
       }
     });
   }
@@ -277,6 +291,11 @@ function createEngine({ db, clock = Date.now, log = console }) {
       tx.set(db.collection("notifications").doc("auto_response_" + assignmentId), notification(
         null, uid, caseId, assignmentId, "Emergency Volunteer task offer",
         "An approved emergency support task is available. Open Volunteer Tasks to accept or decline.").data);
+      tx.create(db.collection("adminActivityLogs").doc("auto_offer_" + assignmentId), {
+        action: "Automatic Volunteer Task Offered", caseId, volunteerUid: uid,
+        wave: recommendation.wave, performedBy: "automatic_matching_engine",
+        timestamp: FieldValue.serverTimestamp(),
+      });
       const patch = {
         activeVolunteerSupportUid: uid, activeVolunteerSupportName: volunteerName,
         activeVolunteerSupportAssignmentId: assignmentId,
