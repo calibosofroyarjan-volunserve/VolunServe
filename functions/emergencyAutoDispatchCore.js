@@ -319,6 +319,11 @@ function createEngine({ db, clock = Date.now, log = console }) {
     });
     if (!committed) {
       log.warn("Auto Volunteer candidate not committed due to concurrent change", {caseId});
+      // Persist a retry marker. Without this, a transient reservation/lock or
+      // worker failure after validation could leave the case with no timer.
+      // Skip an unavailable candidate and let the scheduled worker continue.
+      await updateStateOnly(caseId, "ready",
+        "candidate_unavailable_or_concurrent_change", recommendation.wave, [uid]);
       return { action: "retry", reason: "concurrent_update" };
     }
     return { action: "offered", wave: recommendation.wave, uid };
@@ -400,12 +405,12 @@ function createEngine({ db, clock = Date.now, log = console }) {
     if (stateSnap.exists && ["waiting", "accepted", "completed"].includes(stateSnap.data().status)) {
       return {action:"already_started", state:stateSnap.data().status};
     }
-    if (stateSnap.exists && stateSnap.data().status === "needs_admin") {
+    if (stateSnap.exists && ["needs_admin", "disabled"].includes(stateSnap.data().status)) {
       await db.runTransaction(async (tx) => {
         const [currentCase, currentSession] =
           await Promise.all([tx.get(caseRef), tx.get(stateRef)]);
         if (!currentCase.exists || !validCase(currentCase.data()) ||
-            !currentSession.exists || currentSession.data().status !== "needs_admin") return;
+            !currentSession.exists || !["needs_admin", "disabled"].includes(currentSession.data().status)) return;
         tx.update(stateRef, {
           status:"ready", reason:"admin_authorized_retry",
           updatedAt:FieldValue.serverTimestamp(),
