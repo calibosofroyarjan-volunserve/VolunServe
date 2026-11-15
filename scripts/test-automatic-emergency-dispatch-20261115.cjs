@@ -129,6 +129,32 @@ async function testTimedOutOffer() {
   assert.equal(db.get("emergencyAutoDispatch/case2").status,"needs_admin");
   assert.equal(db.get("notifications/auto_escalation_case2").userId,"admin-1");
 }
+async function testFullThreeWavesAndAdminOverride() {
+  const db=new FakeDb();let now=100000;
+  seedCase(db,"case7");seedConfig(db);
+  seedVolunteer(db,"w1","Bagong Buhay I");
+  seedVolunteer(db,"w2","Bagong Buhay II");
+  seedVolunteer(db,"w3","Francisco Homes-Narra");
+  const engine=createEngine({db,clock:()=>now,log:{warn(){},error(){}}});
+  await engine.advanceCase("case7");
+  for(const [id,nextWave] of [["w1",2],["w2",3]]) {
+    const key="case7_"+id;
+    db.seed("responseAssignments/"+key,{
+      ...db.get("responseAssignments/"+key),status:"declined"});
+    await engine.onAssignmentChanged(key,{status:"offered"},
+      {status:"declined",caseId:"case7"});
+    assert.equal(db.get("emergencyAutoDispatch/case7").wave,nextWave);
+  }
+  assert.equal(db.get("responseAssignments/case7_w3").status,"offered");
+  const stop=await engine.disableCase("case7");
+  assert.equal(stop.action,"disabled");
+  assert.equal(db.get("responseAssignments/case7_w3").status,"cancelled");
+  assert.equal(db.get("autoVolunteerReservations/w3"),undefined);
+  assert.equal(db.get("disasterCases/case7").autoVolunteerDispatch.state,"disabled");
+  assert.equal((await engine.advanceCase("case7")).reason,"disabled");
+  assert.equal((await engine.requestAdminStart("case7")).action,"admin_review");
+  assert.equal(db.get("emergencyAutoDispatch/case7").status,"needs_admin");
+}
 async function testMisconfigAndLocks() {
   const db=new FakeDb();
   seedCase(db,"case3");
@@ -172,6 +198,7 @@ async function testMisconfigAndLocks() {
 (async()=>{
   await testDeclineAndAccept();
   await testTimedOutOffer();
+  await testFullThreeWavesAndAdminOverride();
   await testMisconfigAndLocks();
   console.log("PASS: automatic Wave 1→2, single offer, decline/timeout/accept, concurrency locks, no false-nearby or unverified dispatch");
 })().catch(e=>{console.error(e);process.exitCode=1;});
