@@ -48,6 +48,11 @@ import { publishVerifiedCommunityAdvisory } from "../../lib/publishVerifiedCommu
 const BACKEND_URL = "https://volunserve.onrender.com";
 const AUTOMATIC_VOLUNTEER_RUNTIME_ENABLED = process.env.EXPO_PUBLIC_AUTO_VOLUNTEER_DISPATCH_ENABLED === "true";
 const AUTOMATIC_VOLUNTEER_PROVIDER = process.env.EXPO_PUBLIC_AUTO_VOLUNTEER_MATCH_PROVIDER === "render" ? "render" : "firebase";
+// Only the explicitly enabled staging build uses the Free staging API.
+// Never silently send staging task offers to the protected production backend.
+const AUTOMATIC_VOLUNTEER_STAGING_ONLY = process.env.EXPO_PUBLIC_AUTO_VOLUNTEER_STAGING_ONLY === "true";
+const AUTOMATIC_VOLUNTEER_BACKEND_URL = AUTOMATIC_VOLUNTEER_STAGING_ONLY
+  ? "https://volunserve-backend-staging.onrender.com" : BACKEND_URL;
 
 type Severity = "low" | "medium" | "high" | "critical";
 type CaseStatus =
@@ -1789,26 +1794,28 @@ export default function AdminCases() {
   };
 
   const requestAutomaticMatching = async (
-    incident: DisasterCase, action: "start" | "disable"
-  ) => {
-    if (!AUTOMATIC_VOLUNTEER_RUNTIME_ENABLED) return;
+    incident: DisasterCase, action: "start" | "disable", quiet = false
+  ): Promise<boolean> => {
+    if (!AUTOMATIC_VOLUNTEER_RUNTIME_ENABLED) return false;
     const user = getAuth().currentUser;
     if (!user) {
-      Alert.alert("Session Expired", "Sign in as an approved Admin.");
-      return;
+      if (!quiet) Alert.alert("Session Expired", "Sign in as an approved Admin.");
+      return false;
     }
     if (action === "start" && !incident.incidentBarangay) {
-      Alert.alert("Confirm Incident Barangay First",
-        "Open Evidence and save the actual emergency barangay before starting automatic matching.");
-      setDetailTab("evidence");
-      return;
+      if (!quiet) {
+        Alert.alert("Confirm Incident Barangay First",
+          "Open Evidence and save the actual emergency barangay before starting automatic matching.");
+        setDetailTab("evidence");
+      }
+      return false;
     }
     setBusyKey("auto_" + incident.id);
     try {
       if (AUTOMATIC_VOLUNTEER_PROVIDER === "render") {
         const token = await user.getIdToken();
         const response = await fetch(
-          `${BACKEND_URL}/api/admin/emergency-auto/${action}`,
+          `${AUTOMATIC_VOLUNTEER_BACKEND_URL}/api/admin/emergency-auto/${action}`,
           { method: "POST", headers: {
               Authorization: `Bearer ${token}`,
               "Content-Type": "application/json",
@@ -1827,13 +1834,18 @@ export default function AdminCases() {
           : "disableAutomaticEmergencyVolunteerMatching");
         await fn({caseId:incident.id});
       }
-      Alert.alert(action === "start" ? "Automatic Matching Checked" : "Automatic Matching Disabled",
-        action === "start"
-          ? "The server checked eligible Volunteers. Review the saved matching status and do not assume anyone has accepted yet."
-          : "Unaccepted offers have been cancelled where possible. Manual case coordination is available again.");
+      if (!quiet) {
+        Alert.alert(action === "start" ? "Automatic Matching Checked" : "Automatic Matching Disabled",
+          action === "start"
+            ? "The server checked eligible Volunteers. Review the saved matching status and do not assume anyone has accepted yet."
+            : "Unaccepted offers have been cancelled where possible. Manual case coordination is available again.");
+      }
+      return true;
     } catch (error) {
-      Alert.alert("Matching Action Not Completed",
+      if (quiet) console.warn("Admin-validated case: automatic Volunteer matching did not complete", error);
+      else Alert.alert("Matching Action Not Completed",
         error instanceof Error ? error.message : "Confirm the Functions deployment and Admin authorization.");
+      return false;
     } finally {
       setBusyKey("");
     }
@@ -2052,6 +2064,19 @@ export default function AdminCases() {
       });
 
       if (action === "validate") {
+        // After the Admin's successful Firestore validation transaction,
+        // automatically ask the authenticated server to find the first
+        // qualified Volunteer. On a sleeping Free service this may fail, so
+        // validation must succeed independently and manual coordination remains.
+        let volunteerMessage = "Volunteer offers remain under Admin coordination.";
+        if (AUTOMATIC_VOLUNTEER_RUNTIME_ENABLED) {
+          const matchingChecked = await requestAutomaticMatching(
+            { ...incident, incidentBarangay: verifiedIncidentBarangay }, "start", true,
+          );
+          volunteerMessage = matchingChecked
+            ? "The server checked automatic Volunteer matching. Check the saved offer status; nobody is assigned until they accept."
+            : "Automatic matching was unavailable. Use the Admin Volunteer Matching tab to retry or coordinate manually.";
+        }
         // Publishing is separate, so an Announcements permission error cannot
         // undo successful emergency validation or delay Volunteer offers.
         let advisoryMessage = "No public advisory requested; the emergency report remains private.";
@@ -2073,7 +2098,7 @@ export default function AdminCases() {
           }
         }
         Alert.alert("Request Validated",
-          "The case is now eligible for Volunteer offers. " + advisoryMessage);
+          volunteerMessage + " " + advisoryMessage);
       } else if (action === "request_more_evidence") {
         Alert.alert(
           "Resident Notified",
@@ -5887,13 +5912,16 @@ export default function AdminCases() {
                 dispatchReady && (
                 <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 9, paddingHorizontal: 18 }}>
                   {(!incident.autoVolunteerDispatch?.state ||
-                    ["needs_admin", "disabled"].includes(String(incident.autoVolunteerDispatch.state))) && (
+                    ["needs_admin", "disabled"].includes(String(incident.autoVolunteerDispatch.state)) ||
+                    (AUTOMATIC_VOLUNTEER_STAGING_ONLY &&
+                      incident.autoVolunteerDispatch.state === "waiting")) && (
                     <TouchableOpacity accessibilityRole="button"
                       disabled={busyKey === "auto_" + incident.id}
                       onPress={() => requestAutomaticMatching(incident, "start")}
                       style={{ borderRadius: 9, backgroundColor: "#1479BE", padding: 11 }}>
                       <Text style={{ color: "#FFFFFF", fontSize: 12, fontWeight: "800" }}>
-                        Start / Retry Automatic Matching
+                        {AUTOMATIC_VOLUNTEER_STAGING_ONLY && incident.autoVolunteerDispatch?.state === "waiting"
+                          ? "Check / Advance Pending Offer" : "Start / Retry Automatic Matching"}
                       </Text>
                     </TouchableOpacity>
                   )}
@@ -5908,6 +5936,13 @@ export default function AdminCases() {
                         Disable Matching (Admin Override)
                       </Text>
                     </TouchableOpacity>
+                  )}
+                  {AUTOMATIC_VOLUNTEER_STAGING_ONLY && (
+                    <Text style={{ color: "#875600", fontSize: 12, lineHeight: 18, width: "100%" }}>
+                      Free staging only: the server may sleep, so pending offers and timeout retries
+                      are not continuously monitored. Admin must check the case and contact official
+                      emergency services for urgent incidents.
+                    </Text>
                   )}
                 </View>
               )}
