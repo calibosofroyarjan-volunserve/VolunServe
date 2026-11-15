@@ -611,7 +611,6 @@ export default function AdminCases() {
   const [notes, setNotes] = useState<Record<string, string>>({});
   const [reviewReasons, setReviewReasons] = useState<Record<string, string>>({});
   const [publicImpactConfirmed, setPublicImpactConfirmed] = useState<Record<string, boolean>>({});
-  const [publicImpactBarangays, setPublicImpactBarangays] = useState<Record<string, string>>({});
   const [confirmedResponseBarangays, setConfirmedResponseBarangays] = useState<Record<string, string>>({});
   const [assignmentCaseId, setAssignmentCaseId] = useState("");
   const [skillFilter, setSkillFilter] = useState("");
@@ -4555,38 +4554,10 @@ export default function AdminCases() {
                             </Text>
                           </TouchableOpacity>
                           {publicImpactConfirmed[incident.id] ? (
-                            <View>
-                              <Text style={styles.controlLabel}>Confirm actual incident barangay in SJDM</Text>
-                              <TextInput
-                                style={styles.input}
-                                value={publicImpactBarangays[incident.id] || ""}
-                                onChangeText={value => setPublicImpactBarangays(current => ({
-                                  ...current, [incident.id]: value.slice(0, 70),
-                                }))}
-                                placeholder="Type an official incident barangay"
-                                placeholderTextColor="#64748B"
-                                maxLength={70}
-                              />
-                              {publicImpactBarangays[incident.id]?.trim().length >= 2 &&
-                               !safePublicAdvisoryBarangay(publicImpactBarangays[incident.id]) ? (
-                                <View style={{ borderWidth: 1, borderColor: "#D5E9E1", borderRadius: 8 }}>
-                                  {SJDM_BARANGAYS.filter(name => name.toLowerCase().includes(
-                                    String(publicImpactBarangays[incident.id] || "").trim().toLowerCase()
-                                  )).slice(0, 6).map(name => (
-                                    <TouchableOpacity key={name} accessibilityRole="button"
-                                      onPress={() => setPublicImpactBarangays(current => ({
-                                        ...current, [incident.id]: name,
-                                      }))}
-                                      style={{ padding: 10, borderBottomWidth: 1, borderBottomColor: "#E9F1EE" }}>
-                                      <Text style={{ color: "#173D32" }}>{name}</Text>
-                                    </TouchableOpacity>
-                                  ))}
-                                </View>
-                              ) : null}
-                              <Text style={{ color: "#516A65", fontSize: 11, marginTop: 8 }}>
-                                Check the actual incident location; do not use the reporter's home barangay. If unsure, uncheck public warning and validate privately.
-                              </Text>
-                            </View>
+                            <Text style={{ color: "#516A65", fontSize: 11, marginTop: 6 }}>
+                              Any public advisory uses the actual confirmed incident barangay above.
+                              No personal details, photos or GPS coordinates will be published.
+                            </Text>
                           ) : null}
                         </View>
                       ) : null}
