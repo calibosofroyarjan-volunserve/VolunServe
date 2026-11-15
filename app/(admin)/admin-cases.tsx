@@ -460,7 +460,9 @@ const barangayDisplay = (value?: string) => {
 };
 
 const caseBarangayValue = (incident: DisasterCase) =>
-  String(incident.incidentBarangay || incident.reporterBarangay || "").trim();
+  // The report's GPS incident location must be confirmed by Admin first.
+  // A reporter may live in a different barangay from the emergency.
+  String(incident.incidentBarangay || "").trim();
 
 const firstIncidentImage = (attachments?: Attachment[]) => {
   if (!Array.isArray(attachments)) return "";
@@ -1781,6 +1783,55 @@ export default function AdminCases() {
 
         return a.fullName.localeCompare(b.fullName);
       });
+  };
+
+  const saveConfirmedIncidentBarangay = async (incident: DisasterCase) => {
+    const adminUser = getAuth().currentUser;
+    if (!adminUser) {
+      Alert.alert("Sign in required", "An approved Admin session is required.");
+      return;
+    }
+    const selected = String(confirmedResponseBarangays[incident.id] || incident.incidentBarangay || "");
+    const exact = SJDM_BARANGAYS.find((name) =>
+      normalizeBarangay(name) === normalizeBarangay(selected)) || "";
+    if (!exact) {
+      Alert.alert("Actual Incident Barangay Required",
+        "Choose the official SJDM barangay supported by the emergency GPS pin. Do not use the reporter's home barangay.");
+      return;
+    }
+    try {
+      await runTransaction(db, async (transaction) => {
+        const caseRef = doc(db, "disasterCases", incident.id);
+        const snapshot = await transaction.get(caseRef);
+        if (!snapshot.exists()) throw new Error("Emergency case no longer exists.");
+        const current: any = snapshot.data();
+        if (String(current.verificationStatus || "") !== "validated") {
+          throw new Error("Validate this report before confirming its operational response barangay.");
+        }
+        if (current.activeVolunteerSupportAssignmentId ||
+            ["waiting", "ready", "accepted"].includes(
+              String(current.autoVolunteerDispatch?.state || ""),
+            )) {
+          throw new Error("An active Volunteer task prevents changing this location. Resolve the assignment through authorized Admin controls.");
+        }
+        transaction.update(caseRef, {
+          incidentBarangay: exact,
+          updatedAt: serverTimestamp(),
+        });
+        transaction.set(doc(collection(db, "adminActivityLogs")), {
+          action: "Incident Barangay Confirmed",
+          caseId: incident.id,
+          incidentBarangay: exact,
+          performedBy: adminUser.uid,
+          timestamp: serverTimestamp(),
+        });
+      });
+      Alert.alert("Incident Location Confirmed",
+        "The actual incident barangay is saved for secure Volunteer matching.");
+    } catch (error) {
+      Alert.alert("Unable to Confirm Incident Barangay",
+        error instanceof Error ? error.message : "Please review this case again.");
+    }
   };
 
   const reviewVerification = async (
@@ -4492,6 +4543,21 @@ export default function AdminCases() {
                       }))}
                       editable={verificationStatus !== "rejected"}
                     />
+                    {verificationStatus === "validated" &&
+                      !["waiting", "ready", "accepted"].includes(
+                        String(incident.autoVolunteerDispatch?.state || ""),
+                      ) && (
+                      <TouchableOpacity accessibilityRole="button"
+                        onPress={() => saveConfirmedIncidentBarangay(incident)}
+                        style={{ alignSelf: "flex-start", borderWidth: 1,
+                          borderColor: "#A8D4C9", backgroundColor: "#EAF7F1",
+                          borderRadius: 9, paddingHorizontal: 14, paddingVertical: 10,
+                          marginTop: 5 }}>
+                        <Text style={{ color: "#116B51", fontSize: 12, fontWeight: "800" }}>
+                          ✓ Confirm Actual Incident Barangay
+                        </Text>
+                      </TouchableOpacity>
+                    )}
                     {!!confirmedResponseBarangays[incident.id] &&
                       !SJDM_BARANGAYS.some((value) => normalizeBarangay(value) ===
                         normalizeBarangay(confirmedResponseBarangays[incident.id])) ? (
