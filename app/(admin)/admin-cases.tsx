@@ -5914,7 +5914,7 @@ export default function AdminCases() {
                   {(!incident.autoVolunteerDispatch?.state ||
                     ["needs_admin", "disabled"].includes(String(incident.autoVolunteerDispatch.state)) ||
                     (AUTOMATIC_VOLUNTEER_STAGING_ONLY &&
-                      incident.autoVolunteerDispatch.state === "waiting")) && (
+                      incident.autoVolunteerDispatch?.state === "waiting")) && (
                     <TouchableOpacity accessibilityRole="button"
                       disabled={busyKey === "auto_" + incident.id}
                       onPress={() => requestAutomaticMatching(incident, "start")}
