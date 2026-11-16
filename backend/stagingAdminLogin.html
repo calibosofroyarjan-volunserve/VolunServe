@@ -27,7 +27,7 @@ a{color:#075c49}input:focus-visible,button:focus-visible{outline:3px solid #4db8
 <section class="panel">
 <h1>Staging Admin Login Check</h1>
 <p>Sign in with your <strong>staging-only Admin test account</strong> to check whether the Free Render API accepts the Firebase login.</p>
-<div class="notice"><strong>Read-only check.</strong> This page does not submit an Emergency Report, dispatch a Volunteer, create a task offer, or modify Firestore. Never use real emergency information or production credentials.</div>
+<div class="notice"><strong>Admin login verification is read-only.</strong> A separate confirmed test button can create one fictional staging Volunteer offer only after activation. It never dispatches official responders or touches live VolunServe. Never use real emergency information or production credentials.</div>
 <form id="login">
 <label for="email">Staging Admin email</label>
 <input id="email" autocomplete="username" type="email" required placeholder="test admin email">
@@ -47,7 +47,7 @@ a{color:#075c49}input:focus-visible,button:focus-visible{outline:3px solid #4db8
 <li>Render verifies a Firebase ID token and approved Admin profile.</li>
 <li>The separate staging Firestore test case is eligible for Wave 1.</li>
 </ul>
-<div class="footer">This is a private QA login page, not the production VolunServe application. Matching stays disabled until full safety review. <a href="/health">Backend health</a> · <a href="/demo">Synthetic demo</a></div>
+<div class="footer">This is a private QA login page, not the production VolunServe application. Only the dedicated synthetic staging test is permitted; real emergency dispatch remains disabled. <a href="/health">Backend health</a> · <a href="/demo">Synthetic demo</a></div>
 </section>
 </main>
 <script type="module">
