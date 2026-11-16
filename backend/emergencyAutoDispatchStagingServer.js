@@ -16,11 +16,30 @@ const {planVolunteerWaves} = require("../functions/emergencyVolunteerWavePlanner
 const knownBarangays = require("../functions/sjdmBarangays.json");
 const {auth, db} = require("./firebaseAdmin");
 const {isOperationalAdminProfile} = require("./adminAccess");
-const {createRenderAutoDispatchWorker} = require("./emergencyAutoDispatchWorker");
+const {createRenderAutoDispatchWorker,verifiedStagingProject} = require("./emergencyAutoDispatchWorker");
 
 function makeApp({authClient = auth, firestore = db, worker, env = process.env} = {}) {
   const app = express();
   const matcher = worker || createRenderAutoDispatchWorker({db: firestore, env});
+  // One-time, read-only connectivity probe on isolated staging only.
+  // Never reads user data, creates accounts, changes Firestore or enables offers.
+  // Does not block HTTP startup if Firebase is temporarily unavailable.
+  const stagingServiceAccountMatches = verifiedStagingProject(env);
+  let stagingFirestoreReadStatus = stagingServiceAccountMatches ? "checking" : "not_configured";
+  if (stagingServiceAccountMatches) {
+    void Promise.resolve()
+      .then(() => firestore.collection("systemSettings").doc("emergencyVolunteerMatching").get())
+      .then(() => {
+        stagingFirestoreReadStatus = "verified";
+        console.info("[staging-readiness] isolated Firestore read succeeded");
+      })
+      .catch(error => {
+        stagingFirestoreReadStatus = "unavailable";
+        // Error code only, never output service account, document or private data.
+        console.warn("[staging-readiness] isolated Firestore read unavailable",
+          String(error?.code || "unknown").slice(0,80));
+      });
+  }
   const allowedOrigins = new Set(String(env.VOLUNSERVE_AUTO_VOLUNTEER_STAGING_ALLOWED_ORIGINS || "")
     .split(",").map(x => x.trim()).filter(x => /^https:\/\/[a-z0-9.-]+$/i.test(x)));
   app.disable("x-powered-by");
@@ -40,6 +59,8 @@ function makeApp({authClient = auth, firestore = db, worker, env = process.env} 
     matchingEnabled:matcher.config.onDemandReady === true,
     backgroundMatchingEnabled:false,
     officialEmergencyDispatch:false,
+    stagingServiceAccountMatches,
+    stagingFirestoreReadStatus,
   }));
 
   // SAFE DEMONSTRATION: pure planner, all data synthetic. Never calls Firebase,
