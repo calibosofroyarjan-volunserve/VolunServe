@@ -228,7 +228,7 @@ test("read-only staging preflight refuses unrecognized real incident",async()=>{
 });
 
 
-test("isolated staging login page is read-only and only uses the separate Firebase project",()=>withServer({},async({url,calls})=>{
+test("staging login requires explicit confirmation for isolated test-only offer",()=>withServer({},async({url,calls})=>{
   const response=await fetch(url+"/staging-login");
   assert.equal(response.status,200);
   assert.equal(response.headers.get("x-frame-options"),"DENY");
@@ -240,6 +240,10 @@ test("isolated staging login page is read-only and only uses the separate Fireba
   assert.match(html,/api\/admin\/emergency-auto\/status/);
   assert.ok(!html.includes("volunserve-3aa5b"));
   assert.ok(!html.includes("FIREBASE_SERVICE_ACCOUNT_JSON"));
-  assert.ok(!html.includes("api/admin/emergency-auto/start"));
+  assert.ok(html.includes("api/admin/emergency-auto/start"));
+  assert.ok(html.includes("STAGING_TEST_001"));
+  assert.ok(html.includes("window.confirm"));
+  assert.ok(html.includes("startTest.disabled"));
+  assert.ok(!html.includes("volunserve.com/api"));
   assert.deepEqual(calls,[],"Loading login must not dispatch offers");
 }));
