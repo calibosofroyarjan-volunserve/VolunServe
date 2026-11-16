@@ -144,3 +144,76 @@ test("matching stays disabled while staging Firestore credentials pass a single 
     await new Promise(resolve=>server.close(resolve));
   }
 });
+
+
+test("isolated read-only preflight recognizes eligible synthetic case without writes",async()=>{
+  const {inspectStagingTestCase}=require("./emergencyStagingReadiness");
+  const incident={title:"TEST ONLY - Dummy Emergency",status:"validated",
+    verificationStatus:"validated",validatedBy:"fakeAdmin",reporterUid:"fakeResident",
+    incidentBarangay:"Bagong Buhay I",requiredSkills:["First Aid"],dispatchBlocked:false};
+  const users={
+    fakeAdmin:{role:"admin",status:"approved"},
+    fakeResident:{role:"resident",status:"approved"},
+    fakeVolunteer:{role:"volunteer",status:"approved",
+      volunteerAccess:true,volunteerStatus:"approved",identityVerified:true,
+      barangay:"Bagong Buhay I"}
+  };
+  const application={uid:"fakeVolunteer",status:"approved",skills:["First Aid"]};
+  let reads=0;
+  const db={
+    collection(name){
+      if(name==="volunteerApplications"){
+        return {
+          where(field,operator,value){
+            assert.deepEqual([field,operator,value],["status","==","approved"]);
+            return {
+              limit(n){
+                assert.equal(n,201);
+                return {
+                  async get(){
+                    reads++;
+                    return {size:1,docs:[{id:"fakeVolunteer",data:()=>application}]};
+                  }
+                };
+              }
+            };
+          }
+        };
+      }
+      return {
+        doc(id){
+          return {
+            async get(){
+              reads++;
+              if(name==="disasterCases"){
+                assert.equal(id,"STAGING_TEST_001");
+                return {exists:true,data:()=>incident};
+              }
+              assert.equal(name,"users");
+              return {exists:!!users[id],data:()=>users[id]};
+            }
+          };
+        }
+      };
+    }
+  };
+  const result=await inspectStagingTestCase(db);
+  assert.deepEqual(result,{status:"ready",reason:"eligible_synthetic_case_no_write",eligible:1,wave:1});
+  assert.equal(reads,5);
+});
+
+test("read-only staging preflight refuses unrecognized real incident",async()=>{
+  const {inspectStagingTestCase}=require("./emergencyStagingReadiness");
+  const db={collection(name){
+    assert.equal(name,"disasterCases");
+    return {doc(id){
+      assert.equal(id,"STAGING_TEST_001");
+      return {get:async()=>({
+        exists:true,data:()=>({title:"Real emergency",status:"validated"})
+      })};
+    }};
+  }};
+  const r=await inspectStagingTestCase(db);
+  assert.equal(r.status,"blocked");
+  assert.equal(r.reason,"not_a_recognized_dummy_case");
+});
