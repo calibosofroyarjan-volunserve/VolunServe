@@ -17,6 +17,7 @@ const knownBarangays = require("../functions/sjdmBarangays.json");
 const {auth, db} = require("./firebaseAdmin");
 const {isOperationalAdminProfile} = require("./adminAccess");
 const {createRenderAutoDispatchWorker,verifiedStagingProject} = require("./emergencyAutoDispatchWorker");
+const {inspectStagingTestCase} = require("./emergencyStagingReadiness");
 
 function makeApp({authClient = auth, firestore = db, worker, env = process.env} = {}) {
   const app = express();
@@ -26,15 +27,25 @@ function makeApp({authClient = auth, firestore = db, worker, env = process.env} 
   // Does not block HTTP startup if Firebase is temporarily unavailable.
   const stagingServiceAccountMatches = verifiedStagingProject(env);
   let stagingFirestoreReadStatus = stagingServiceAccountMatches ? "checking" : "not_configured";
+  let stagingTestCaseReadiness = {status:stagingServiceAccountMatches?"checking":"not_configured"};
   if (stagingServiceAccountMatches) {
     void Promise.resolve()
       .then(() => firestore.collection("systemSettings").doc("emergencyVolunteerMatching").get())
       .then(() => {
         stagingFirestoreReadStatus = "verified";
         console.info("[staging-readiness] isolated Firestore read succeeded");
+        return inspectStagingTestCase(firestore).then(result=>{
+          stagingTestCaseReadiness = result;
+          console.info("[staging-readiness] synthetic fixture preflight:",result.status,result.reason);
+        }).catch(error=>{
+          stagingTestCaseReadiness = {status:"unavailable"};
+          console.warn("[staging-readiness] synthetic fixture check unavailable",
+            String(error?.code || "unknown").slice(0,60));
+        });
       })
       .catch(error => {
         stagingFirestoreReadStatus = "unavailable";
+        stagingTestCaseReadiness = {status:"unavailable"};
         // Error code only, never output service account, document or private data.
         console.warn("[staging-readiness] isolated Firestore read unavailable",
           String(error?.code || "unknown").slice(0,80));
@@ -61,6 +72,7 @@ function makeApp({authClient = auth, firestore = db, worker, env = process.env} 
     officialEmergencyDispatch:false,
     stagingServiceAccountMatches,
     stagingFirestoreReadStatus,
+    stagingTestCaseReadiness,
   }));
 
   // SAFE DEMONSTRATION: pure planner, all data synthetic. Never calls Firebase,
