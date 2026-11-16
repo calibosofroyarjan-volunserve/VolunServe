@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>VolunServe · Staging Admin Login Check</title>
+<style>
+:root{font:15px/1.5 system-ui,-apple-system,Segoe UI,sans-serif;background:#f4f8f7;color:#16322c}
+*{box-sizing:border-box}body{margin:0}.shell{max-width:720px;margin:auto;padding:35px 18px}
+.header{display:flex;justify-content:space-between;align-items:center;gap:15px;flex-wrap:wrap}.brand{font-size:21px;font-weight:800;color:#066e54}
+.flag{border:1px solid #b9ddd0;border-radius:40px;background:#e8f7f0;color:#086246;font-weight:700;font-size:12px;padding:6px 11px}
+.panel{background:white;border:1px solid #dce9e4;border-radius:18px;padding:28px;margin-top:22px;box-shadow:0 6px 28px #0d3e310a}
+h1{font-size:26px;letter-spacing:-.5px;margin:0 0 11px}h2{font-size:17px;margin:18px 0 8px}p{color:#52665e}
+.notice{border:1px solid #ead8a8;background:#fff8e7;border-radius:9px;padding:12px;font-size:13px;color:#715318}
+label{display:block;font-size:13px;font-weight:700;margin:16px 0 5px}
+input{width:100%;height:45px;border:1px solid #cbdcd4;border-radius:9px;padding:10px 12px;font-size:15px}
+button{background:#0c775b;color:white;border:0;border-radius:9px;font:inherit;font-weight:700;font-size:14px;padding:12px 17px;cursor:pointer}
+button:disabled{opacity:.5;cursor:not-allowed}.secondary{background:#edf5f1;color:#1b5947}
+.buttons{display:flex;gap:9px;flex-wrap:wrap;margin-top:18px}
+.result{border:1px solid #dce9e4;background:#f5f9f7;border-radius:10px;padding:15px;margin-top:18px;white-space:pre-wrap;overflow-wrap:anywhere;min-height:72px;font-size:13px}
+ul{padding-left:19px;color:#475f57}li{margin:5px 0}.footer{color:#72847d;font-size:12px;margin-top:21px}
+a{color:#075c49}input:focus-visible,button:focus-visible{outline:3px solid #4db896;outline-offset:2px}
+</style>
+</head>
+<body><main class="shell">
+<div class="header"><div class="brand">VolunServe</div><span class="flag">ISOLATED STAGING · FREE</span></div>
+<section class="panel">
+<h1>Staging Admin Login Check</h1>
+<p>Sign in with your <strong>staging-only Admin test account</strong> to check whether the Free Render API accepts the Firebase login.</p>
+<div class="notice"><strong>Read-only check.</strong> This page does not submit an Emergency Report, dispatch a Volunteer, create a task offer, or modify Firestore. Never use real emergency information or production credentials.</div>
+<form id="login">
+<label for="email">Staging Admin email</label>
+<input id="email" autocomplete="username" type="email" required placeholder="test admin email">
+<label for="password">Password</label>
+<input id="password" autocomplete="current-password" type="password" required placeholder="Staging password">
+<div class="buttons"><button id="submit" type="submit">Sign in &amp; check authorization</button>
+<button type="button" class="secondary" id="logout">Sign out</button></div>
+</form>
+<h2>Verification</h2>
+<div id="result" class="result" aria-live="polite">Not checked yet. Only the staging Firebase project will be contacted.</div>
+<h2>What a successful test proves</h2>
+<ul>
+<li>Staging Firebase Email/Password accepts your Admin test login.</li>
+<li>Render verifies a Firebase ID token and approved Admin profile.</li>
+<li>The separate staging Firestore test case is eligible for Wave 1.</li>
+</ul>
+<div class="footer">This is a private QA login page, not the production VolunServe application. Matching stays disabled until full safety review. <a href="/health">Backend health</a> · <a href="/demo">Synthetic demo</a></div>
+</section>
+</main>
+<script type="module">
+import {initializeApp} from "https://www.gstatic.com/firebasejs/11.10.0/firebase-app.js";
+import {getAuth,signInWithEmailAndPassword,signOut,setPersistence,inMemoryPersistence} from "https://www.gstatic.com/firebasejs/11.10.0/firebase-auth.js";
+const config={
+  apiKey:"AIzaSyCGS-VySgPPEcqgKH0tBqQCZX_YYhJFuuM",
+  authDomain:"volunserve-volunteer-staging.firebaseapp.com",
+  projectId:"volunserve-volunteer-staging",
+  appId:"1:310291888299:web:de6c284904657b0bed9fee",
+  messagingSenderId:"310291888299"
+};
+const app=initializeApp(config,"volunserve-staging-login-only");
+const auth=getAuth(app);
+const result=document.getElementById("result");
+const submit=document.getElementById("submit");
+const passwordInput=document.getElementById("password");
+const report=x=>{result.textContent=x;};
+document.getElementById("login").addEventListener("submit",async(e)=>{
+  e.preventDefault();submit.disabled=true;report("Checking staging credentials...");
+  try{
+    await setPersistence(auth,inMemoryPersistence);
+    const session=await signInWithEmailAndPassword(auth,document.getElementById("email").value.trim(),passwordInput.value);
+    passwordInput.value="";
+    if(session.user?.app?.options?.projectId!=="volunserve-volunteer-staging")
+      throw new Error("Wrong Firebase project. Stopping.");
+    const token=await session.user.getIdToken();
+    const r=await fetch("/api/admin/emergency-auto/status",{
+      headers:{Authorization:"Bearer "+token},cache:"no-store"
+    });
+    const data=await r.json();
+    if(!r.ok)throw new Error(r.status===403?
+      "Staging account is not an approved Admin in Firestore.":
+      r.status===401?"Staging session could not be validated by Render.":
+      "Authorization check returned HTTP "+r.status);
+    const health=await (await fetch("/health",{cache:"no-store"})).json();
+    report("Admin authentication: VERIFIED\n"+
+      "Staging backend: "+(health.ok?"ONLINE":"UNAVAILABLE")+"\n"+
+      "Firestore read: "+String(health.stagingFirestoreReadStatus||"unknown")+"\n"+
+      "Test report eligibility: "+String(health.stagingTestCaseReadiness?.status||"unknown")+"\n"+
+      "First matching wave: "+String(health.stagingTestCaseReadiness?.wave||"not confirmed")+"\n"+
+      "Actual Volunteer task offers: "+(data.activationReady?"staging gate enabled":"DISABLED (safe)"));
+  }catch(error){
+    passwordInput.value="";
+    const code=String(error?.code||"");
+    const safeMessage=code.includes("auth/")?"Firebase login failed. Check the staging email/password.":
+      String(error?.message||"Unexpected error");
+    report("Not verified: "+safeMessage);
+  }finally{submit.disabled=false;}
+});
+document.getElementById("logout").addEventListener("click",async()=>{
+  await signOut(auth);passwordInput.value="";report("Signed out of staging. No task offers were sent.");
+});
+</script>
+</body>
+</html>
