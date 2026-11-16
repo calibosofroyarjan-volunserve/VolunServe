@@ -75,6 +75,15 @@ function makeApp({authClient = auth, firestore = db, worker, env = process.env} 
     stagingTestCaseReadiness,
   }));
 
+  // Passwords go only to Firebase Auth over HTTPS from the browser.
+  // The server never receives passwords, stores tokens, or dispatches tasks here.
+  app.get("/staging-login", (_request, response) => {
+    response.set("Cache-Control", "no-store");
+    response.set("X-Robots-Tag", "noindex, nofollow");
+    response.set("X-Frame-Options", "DENY");
+    response.sendFile(path.join(__dirname, "stagingAdminLogin.html"));
+  });
+
   // SAFE DEMONSTRATION: pure planner, all data synthetic. Never calls Firebase,
   // writes Firestore, sends notifications or accesses real user identities.
   app.get("/demo", (_request, response) => {
