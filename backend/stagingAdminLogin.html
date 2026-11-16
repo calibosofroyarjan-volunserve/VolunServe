@@ -69,7 +69,7 @@ document.getElementById("login").addEventListener("submit",async(e)=>{
     await setPersistence(auth,inMemoryPersistence);
     const session=await signInWithEmailAndPassword(auth,document.getElementById("email").value.trim(),passwordInput.value);
     passwordInput.value="";
-    if(session.user?.app?.options?.projectId!=="volunserve-volunteer-staging")
+    if(auth.app?.options?.projectId!=="volunserve-volunteer-staging")
       throw new Error("Wrong Firebase project. Stopping.");
     const token=await session.user.getIdToken();
     const r=await fetch("/api/admin/emergency-auto/status",{
