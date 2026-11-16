@@ -14,6 +14,14 @@ async function withServer({admin=true,validToken=true,enabled=false}={},run) {
     throw Error("test-invalid-token");
   })()};
   const firestore={collection(name){
+    if(name==="disasterCases")return {doc(id){
+      assert.equal(id,"STAGING_TEST_001");
+      return {get:async()=>({exists:true,data:()=>({
+        title:"TEST ONLY - Dummy Emergency",status:"validated",
+        verificationStatus:"validated",dispatchBlocked:false,
+        reporterUid:"resident1",validatedBy:"admin1",requiredSkills:["First Aid"]
+      })})};
+    }};
     assert.equal(name,"users");
     return {doc(uid){
       assert.equal(uid,"admin1");
@@ -73,13 +81,14 @@ test("approved Admin can explicitly start or disable only an eligible case ID",(
   const headers={"Content-Type":"application/json",Authorization:"Bearer demo-token"};
   const request=(method,body)=>fetch(url+"/api/admin/emergency-auto/"+method,
     {method:"POST",headers,body:JSON.stringify(body)});
-  let r=await request("start",{caseId:"case1"});
+  let r=await request("start",{caseId:"STAGING_TEST_001"});
   assert.equal(r.status,200);assert.equal((await r.json()).action,"offered");
-  r=await request("disable",{caseId:"case1"});
+  r=await request("disable",{caseId:"STAGING_TEST_001"});
   assert.equal(r.status,200);assert.equal((await r.json()).action,"disabled");
   r=await request("start",{caseId:"../../other"});
-  assert.equal(r.status,400);
-  assert.deepEqual(calls,[["start","case1"],["disable","case1"]]);
+  assert.equal(r.status,403);
+  assert.equal((await r.json()).error,"only_fixed_staging_test_case_allowed");
+  assert.deepEqual(calls,[["start","STAGING_TEST_001"],["disable","STAGING_TEST_001"]]);
 }));
 
 
