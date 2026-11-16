@@ -39,6 +39,8 @@ test("isolated staging service reports disabled Free worker without starting job
   assert.equal(data.matchingEnabled,false);
   assert.equal(data.backgroundMatchingEnabled,false);
   assert.equal(data.officialEmergencyDispatch,false);
+  assert.equal(data.stagingServiceAccountMatches,false);
+  assert.equal(data.stagingFirestoreReadStatus,"not_configured");
 }));
 test("no token, invalid token and Resident cannot submit Volunteer offers",async()=>{
   await withServer({enabled:true},async({url,calls})=>{
@@ -105,4 +107,40 @@ test("staging frontend refuses production Firebase Auth in automatic match flow"
   assert.ok(source.includes('selectedProject === "volunserve-3aa5b"'));
   assert.ok(source.includes("authProject !== selectedProject"));
   assert.ok(source.includes("volunserve-emergency-match-staging-free.onrender.com"));
+});
+
+test("matching stays disabled while staging Firestore credentials pass a single read-only probe",async()=>{
+  const projectId="volunserve-isolated-test-project";
+  let reads=0;
+  const firestore={collection(collection){
+    assert.equal(collection,"systemSettings");
+    return {doc(document){
+      assert.equal(document,"emergencyVolunteerMatching");
+      return {get:async()=>{reads++;return {exists:false};}};
+    }};
+  }};
+  const app=makeApp({
+    firestore,worker:{config:{onDemandReady:false}},
+    env:{VOLUNSERVE_AUTO_VOLUNTEER_STAGING_PROJECT_ID:projectId,
+      FIREBASE_SERVICE_ACCOUNT_JSON:JSON.stringify({project_id:projectId})},
+  });
+  const server=app.listen(0,"127.0.0.1");
+  try {
+    await new Promise((resolve,reject)=>{
+      if(server.listening)resolve();
+      else {server.once("listening",resolve);server.once("error",reject);}
+    });
+    await new Promise(resolve=>setImmediate(resolve));
+    const base="http://127.0.0.1:"+server.address().port;
+    const first=await (await fetch(base+"/health")).json();
+    const second=await (await fetch(base+"/health")).json();
+    assert.equal(first.stagingServiceAccountMatches,true);
+    assert.equal(first.stagingFirestoreReadStatus,"verified");
+    assert.equal(first.matchingEnabled,false);
+    assert.equal(first.backgroundMatchingEnabled,false);
+    assert.equal(second.stagingFirestoreReadStatus,"verified");
+    assert.equal(reads,1,"health checks must not repeatedly query Firestore");
+  } finally {
+    await new Promise(resolve=>server.close(resolve));
+  }
 });
