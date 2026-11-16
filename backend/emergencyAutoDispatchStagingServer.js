@@ -147,6 +147,30 @@ function makeApp({authClient = auth, firestore = db, worker, env = process.env} 
       onDemandEnabled:matcher.config.onDemandReady === true,
       workerEnabled:false,workerMode:"staging_admin_on_demand_only"});
   });
+  // Free preview activation is deliberately restricted to a SINGLE fictional
+  // staging fixture; never permit a generic Admin to submit an arbitrary case.
+  async function requireSyntheticFixture(request,response,next){
+    if(String(request.body?.caseId || "")!=="STAGING_TEST_001"){
+      return response.status(403).json({ok:false,error:"only_fixed_staging_test_case_allowed"});
+    }
+    try {
+      const doc=await firestore.collection("disasterCases").doc("STAGING_TEST_001").get();
+      const data=doc.exists?doc.data():null;
+      if(!data || data.title!=="TEST ONLY - Dummy Emergency" ||
+         data.verificationStatus!=="validated" ||
+         !["validated","assigned","in_progress"].includes(data.status) ||
+         data.dispatchBlocked === true ||
+         !Array.isArray(data.requiredSkills) ||
+         !data.reporterUid || !data.validatedBy ||
+         data.reporterUid===data.validatedBy){
+        return response.status(409).json({ok:false,error:"staging_test_case_not_ready"});
+      }
+      return next();
+    } catch(error){
+      console.warn("Staging-only case verification unavailable:",String(error?.code||"unknown").slice(0,80));
+      return response.status(503).json({ok:false,error:"staging_test_case_read_unavailable"});
+    }
+  }
   function action(method) {
     return async (request,response) => {
       const caseId = String(request.body?.caseId || "").trim();
@@ -165,8 +189,8 @@ function makeApp({authClient = auth, firestore = db, worker, env = process.env} 
       }
     };
   }
-  app.post("/api/admin/emergency-auto/start",requireStagingAdmin,requireActivation,action("start"));
-  app.post("/api/admin/emergency-auto/disable",requireStagingAdmin,requireActivation,action("disable"));
+  app.post("/api/admin/emergency-auto/start",requireStagingAdmin,requireActivation,requireSyntheticFixture,action("start"));
+  app.post("/api/admin/emergency-auto/disable",requireStagingAdmin,requireActivation,requireSyntheticFixture,action("disable"));
   app.use((error, _request, response, _next) => {
     if (error?.type === "entity.too.large") return response.status(413).json({ok:false,error:"payload_too_large"});
     response.status(403).json({ok:false,error:"staging_request_blocked"});
