@@ -36,6 +36,9 @@ a{color:#075c49}input:focus-visible,button:focus-visible{outline:3px solid #4db8
 <div class="buttons"><button id="submit" type="submit">Sign in &amp; check authorization</button>
 <button type="button" class="secondary" id="logout">Sign out</button></div>
 </form>
+<h2>Controlled dummy matching test</h2>
+<p>After verification, send one test-only offer for <code>STAGING_TEST_001</code>. This writes exclusively to the isolated staging database. It does not alert official responders or production users.</p>
+<button type="button" id="start-test" disabled>Start synthetic Emergency Volunteer offer</button>
 <h2>Verification</h2>
 <div id="result" class="result" aria-live="polite">Not checked yet. Only the staging Firebase project will be contacted.</div>
 <h2>What a successful test proves</h2>
@@ -62,6 +65,29 @@ const auth=getAuth(app);
 const result=document.getElementById("result");
 const submit=document.getElementById("submit");
 const passwordInput=document.getElementById("password");
+const startTest=document.getElementById("start-test");
+startTest.addEventListener("click",async()=>{
+  if(!auth.currentUser)return report("Sign in as the staging Admin first.");
+  if(!window.confirm("Send ONE test-only Volunteer task offer for STAGING_TEST_001 in the isolated staging database?"))return;
+  startTest.disabled=true;
+  report("Requesting the single staged test offer…");
+  try {
+    const token=await auth.currentUser.getIdToken();
+    const response=await fetch("/api/admin/emergency-auto/start",{
+      method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+token},
+      body:JSON.stringify({caseId:"STAGING_TEST_001"}),
+      cache:"no-store"
+    });
+    const data=await response.json();
+    if(!response.ok)throw new Error("Test request rejected: "+(data.error||response.status));
+    report("Controlled staging task offer result: "+String(data.action||"unknown")+"\n"+
+      "Test case: STAGING_TEST_001\n"+
+      "Matching wave: "+String(data.wave||"previously active / none")+"\n"+
+      "No production case or official emergency responder contacted.");
+  } catch(err){
+    report("Test offer not completed: "+String(err?.message||"unknown").slice(0,180));
+  } finally {startTest.disabled=false;}
+});
 const report=x=>{result.textContent=x;};
 document.getElementById("login").addEventListener("submit",async(e)=>{
   e.preventDefault();submit.disabled=true;report("Checking staging credentials...");
@@ -81,6 +107,9 @@ document.getElementById("login").addEventListener("submit",async(e)=>{
       r.status===401?"Staging session could not be validated by Render.":
       "Authorization check returned HTTP "+r.status);
     const health=await (await fetch("/health",{cache:"no-store"})).json();
+    startTest.disabled=!(data.activationReady===true &&
+      health.stagingServiceAccountMatches===true &&
+      health.stagingTestCaseReadiness?.status==="ready");
     report("Admin authentication: VERIFIED\n"+
       "Staging backend: "+(health.ok?"ONLINE":"UNAVAILABLE")+"\n"+
       "Firestore read: "+String(health.stagingFirestoreReadStatus||"unknown")+"\n"+
@@ -96,7 +125,7 @@ document.getElementById("login").addEventListener("submit",async(e)=>{
   }finally{submit.disabled=false;}
 });
 document.getElementById("logout").addEventListener("click",async()=>{
-  await signOut(auth);passwordInput.value="";report("Signed out of staging. No task offers were sent.");
+  await signOut(auth);startTest.disabled=true;passwordInput.value="";report("Signed out of staging.");
 });
 </script>
 </body>
