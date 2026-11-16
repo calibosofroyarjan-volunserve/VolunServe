@@ -217,3 +217,20 @@ test("read-only staging preflight refuses unrecognized real incident",async()=>{
   assert.equal(r.status,"blocked");
   assert.equal(r.reason,"not_a_recognized_dummy_case");
 });
+
+
+test("isolated staging login page is read-only and only uses the separate Firebase project",()=>withServer({},async({url,calls})=>{
+  const response=await fetch(url+"/staging-login");
+  assert.equal(response.status,200);
+  assert.equal(response.headers.get("x-frame-options"),"DENY");
+  const html=await response.text();
+  assert.match(html,/Staging Admin Login Check/);
+  assert.match(html,/signInWithEmailAndPassword/);
+  assert.match(html,/inMemoryPersistence/);
+  assert.match(html,/volunserve-volunteer-staging/);
+  assert.match(html,/api\/admin\/emergency-auto\/status/);
+  assert.ok(!html.includes("volunserve-3aa5b"));
+  assert.ok(!html.includes("FIREBASE_SERVICE_ACCOUNT_JSON"));
+  assert.ok(!html.includes("api/admin/emergency-auto/start"));
+  assert.deepEqual(calls,[],"Loading login must not dispatch offers");
+}));
