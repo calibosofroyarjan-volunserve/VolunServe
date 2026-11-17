@@ -59,3 +59,15 @@ No new Firebase credentials or staging account details are stored in code.
   matching. Staging previews are not official emergency response.
 
 Production and real emergencies remain unchanged by this review branch.
+
+## Legacy sidebar test expectation predates the published baseline
+
+The archived `scripts/test-resident-volunteer-sidebar.cjs` expects the
+Volunteer sidebar to contain only Home, Emergency Tasks and Community Events,
+but the pinned, published-source `app/(tabs)/_layout.tsx` already contains
+the separate Certificate tab. That old test therefore fails *before this
+change*; it is not evidence that this feature-flagged preview broke navigation.
+We preserve the existing sidebar file byte-for-byte and do not delete
+Certificates to satisfy an outdated snapshot. The CI instead executes the
+actual-source portal, existing Volunteer dispatch, and Community Events
+regressions in addition to strict original-line preservation.
