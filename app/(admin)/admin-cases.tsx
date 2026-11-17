@@ -43,7 +43,7 @@ import { safePublicAdvisoryBarangay } from "../../lib/emergencyPublicAdvisory";
 import { SJDM_BARANGAYS } from "../../constants/sjdmBarangays";
 import { VolunteerEligibilityValidation } from "../../components/admin/VolunteerEligibilityValidation";
 import AutoVolunteerMatchPreview from "../../components/admin/AutoVolunteerMatchPreview";
-import { AUTO_VOLUNTEER_MATCH_UI_PREVIEW } from "../../lib/automaticVolunteerMatchPreview";
+import { AUTO_VOLUNTEER_MATCH_UI_PREVIEW, requestStagingAutoOfferAfterAdminValidation } from "../../lib/automaticVolunteerMatchPreview";
 import { publishVerifiedCommunityAdvisory } from "../../lib/publishVerifiedCommunityAdvisory";
 
 const BACKEND_URL = "https://volunserve.onrender.com";
@@ -1918,6 +1918,25 @@ export default function AdminCases() {
       });
 
       if (action === "validate") {
+        // This is an opt-in staging-only synthetic demonstration. The live
+        // project, normal cases and existing manual assignments stay unchanged.
+        // Never call the staging backend before the Firestore validation commit.
+        if (AUTO_VOLUNTEER_MATCH_UI_PREVIEW) {
+          const stagingOffer = await requestStagingAutoOfferAfterAdminValidation({
+            caseId: incident.id,
+            originalCaseStatus: incident.status,
+            originalVerificationStatus: String(
+              incident.verificationStatus || "pending_verification"
+            ),
+            getIdToken: () => adminUser.getIdToken(),
+          });
+          if (stagingOffer.offered) {
+            console.info("[staging Volunteer match] fictional offer confirmed by server");
+          } else {
+            console.info("[staging Volunteer match] no offer", stagingOffer.reason);
+          }
+        }
+
         // Publishing is separate, so an Announcements permission error cannot
         // undo successful emergency validation or delay Volunteer offers.
         let advisoryMessage = "No public advisory requested; the emergency report remains private.";
