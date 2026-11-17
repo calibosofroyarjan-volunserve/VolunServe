@@ -26,9 +26,12 @@ test("Resident navigation has five service modules; Profile stays in account men
 test("Volunteer navigation exposes Emergency Tasks not redundant progress or alerts",()=>{
  const menuText=menu("volunteerDesktopTabs");
  const found=[...menuText.matchAll(/name:"([^"]+)"/g)].map(x=>x[1]);
- assert.deepEqual(found,["index","volunteer","community-events"]);
+ // The published Hosting source already has a dedicated My Certificates tab.
+ // Preserve it; do not strip a live feature to satisfy this older regression.
+ assert.deepEqual(found,["index","volunteer","community-events","certificate"]);
  assert.match(menuText,/label:"Emergency Tasks"/);
- assert.doesNotMatch(menuText,/My Progress|Volunteer Tasks|Notifications|Announcements|Certificates|My Profile/);
+ assert.match(menuText,/name:"certificate",label:"My Certificates"/);
+ assert.doesNotMatch(menuText,/My Progress|Volunteer Tasks|Notifications|Announcements|My Profile/);
  assert.match(web,/Emergency Tasks/);
  assert.match(native,/Emergency Tasks/);
 });
