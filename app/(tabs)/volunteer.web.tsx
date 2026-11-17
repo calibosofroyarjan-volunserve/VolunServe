@@ -576,6 +576,23 @@ export default function VolunteerTasksWeb() {
           }
         }
 
+        // The accepted response and responder lock commit atomically.
+        // Existing legacy assignments without a lock may still finish.
+        const responderLockRef = doc(db, "responderLocks", user.uid);
+        const responderLockSnapshot = await transaction.get(responderLockRef);
+        const recordedLock = responderLockSnapshot.exists()
+          ? (responderLockSnapshot.data() as { assignmentId?: string })
+          : null;
+        if (next === "accepted" && recordedLock) {
+          throw new Error(
+            "You already have an active emergency task. Complete or cancel it before accepting another."
+          );
+        }
+        if (["responding", "on_site", "completed"].includes(next) &&
+            recordedLock && recordedLock.assignmentId !== assignment.id) {
+          throw new Error("Another emergency has an active responder lock on this account.");
+        }
+
         if (next === "completed") {
           if (!caseId || !caseData) {
             throw new Error(
@@ -615,6 +632,23 @@ export default function VolunteerTasksWeb() {
         }
 
         transaction.update(assignmentRef, patch);
+        if (next === "accepted") {
+          transaction.set(responderLockRef, {
+            responderUid: user.uid,
+            assignmentId: assignment.id,
+            caseId,
+            status: "accepted",
+            updatedAt: serverTimestamp(),
+          });
+        } else if ((next === "responding" || next === "on_site") && recordedLock) {
+          transaction.update(responderLockRef, {
+            status: next,
+            updatedAt: serverTimestamp(),
+          });
+        } else if (next === "completed" && recordedLock) {
+          transaction.delete(responderLockRef);
+        }
+
 
         if (next === "completed" && caseId && caseData) {
           const volunteerName =

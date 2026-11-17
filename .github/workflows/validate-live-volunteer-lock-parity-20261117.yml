@@ -1,0 +1,34 @@
+name: Review Volunteer responder-lock parity
+
+on:
+  pull_request:
+    branches: [live-protected]
+    paths:
+      - "app/(tabs)/volunteer.web.tsx"
+      - "app/(tabs)/volunteer.tsx"
+      - "scripts/test-live-volunteer-lock-parity-20261117.cjs"
+      - ".github/workflows/validate-live-volunteer-lock-parity-20261117.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  responder-lock-source-contract:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout review branch
+        uses: actions/checkout@v4
+      - name: Check web and Android lock lifecycle against current approved Rules
+        run: node scripts/test-live-volunteer-lock-parity-20261117.cjs
+      - name: Set up Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install exact dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Validate Volunteer web and Android TypeScript (no deploy)
+        run: npx tsc --noEmit --incremental false
+      - name: Confirm this job never deploys
+        run: echo "Read-only CI only; production Hosting, backend and Firestore untouched"
