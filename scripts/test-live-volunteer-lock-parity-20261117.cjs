@@ -32,12 +32,11 @@ const lockStart=rules.indexOf("match /responderLocks/{uid}");
 assert.ok(assStart>0 && lockStart>0);
 const assignment=rules.slice(assStart,rules.indexOf("match /",assStart+10));
 const lock=rules.slice(lockStart,rules.indexOf("match /",lockStart+10));
-assert.match(assignment,/function validAutoMatchingResponderLock\(\)/);
-assert.match(assignment,/&& validAutoMatchingResponderLock\(\)/);
-assert.match(assignment,/resource\.data\.createdBy != 'automatic_matching_engine'/);
-assert.match(assignment,/request\.resource\.data\.status != 'accepted'/);
-assert.match(lock,/function completedLockAssignmentAfter\(\)/);
-assert.match(lock,/&& completedLockAssignmentAfter\(\)/);
-assert.ok(!lock.includes("allow delete: if isAdmin()\n        || (\n          isVolunteer()\n          && request.auth.uid == uid\n        );"),
-  "Volunteer may not unilaterally clear an active lock");
-console.log("PASS: web + Android atomic lock handling, notifications and Firestore rules guards present");
+// This code-only PR retains the EXACT current approved live rules.
+// Security strengthening is separated into DRAFT #573 pending policy approval.
+assert.match(assignment,/function validVolunteerResponseFields\\(\\)/);
+assert.match(assignment,/validVolunteerResponseFields\\(\\)/);
+assert.match(lock,/lockTargetsMatch\\('accepted'\\)/);
+assert.ok(!rules.includes("function validAutoMatchingResponderLock()"),
+  "New Firestore permission change belongs exclusively to draft rules PR #573");
+console.log("PASS: web + Android atomic responder lock lifecycle; current live Firestore Rules preserved; security review isolated in PR #573");
