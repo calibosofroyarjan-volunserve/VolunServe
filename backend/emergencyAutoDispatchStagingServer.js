@@ -51,8 +51,13 @@ function makeApp({authClient = auth, firestore = db, worker, env = process.env} 
           String(error?.code || "unknown").slice(0,80));
       });
   }
-  const allowedOrigins = new Set(String(env.VOLUNSERVE_AUTO_VOLUNTEER_STAGING_ALLOWED_ORIGINS || "")
-    .split(",").map(x => x.trim()).filter(x => /^https:\/\/[a-z0-9.-]+$/i.test(x)));
+  // Browser POSTs from /staging-login include an Origin header, even when
+  // same-origin. Without this exact origin they hit staging_request_blocked.
+  // Explicit allowlisting preserves the cross-origin deny-by-default policy.
+  const SAME_ORIGIN_STAGING = "https://volunserve-emergency-match-staging-free.onrender.com";
+  const allowedOrigins = new Set([SAME_ORIGIN_STAGING,
+    ...String(env.VOLUNSERVE_AUTO_VOLUNTEER_STAGING_ALLOWED_ORIGINS || "")
+      .split(",").map(x => x.trim()).filter(x => /^https:\/\/[a-z0-9.-]+$/i.test(x))]);
   app.disable("x-powered-by");
   app.use(cors({
     origin(origin, next) {
