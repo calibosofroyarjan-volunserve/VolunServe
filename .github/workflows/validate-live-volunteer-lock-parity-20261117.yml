@@ -1,0 +1,24 @@
+name: Review Volunteer responder-lock parity
+
+on:
+  pull_request:
+    branches: [live-protected]
+    paths:
+      - "app/(tabs)/volunteer.web.tsx"
+      - "app/(tabs)/volunteer.tsx"
+      - "firestore.rules"
+      - "scripts/test-live-volunteer-lock-parity-20261117.cjs"
+      - ".github/workflows/validate-live-volunteer-lock-parity-20261117.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  responder-lock-source-contract:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout review branch
+        uses: actions/checkout@v4
+      - name: Check web, Android and Firestore Rules lock lifecycle
+        run: node scripts/test-live-volunteer-lock-parity-20261117.cjs
