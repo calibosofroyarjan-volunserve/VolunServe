@@ -42,6 +42,8 @@ import { db } from "../../lib/firebase";
 import { safePublicAdvisoryBarangay } from "../../lib/emergencyPublicAdvisory";
 import { SJDM_BARANGAYS } from "../../constants/sjdmBarangays";
 import { VolunteerEligibilityValidation } from "../../components/admin/VolunteerEligibilityValidation";
+import AutoVolunteerMatchPreview from "../../components/admin/AutoVolunteerMatchPreview";
+import { AUTO_VOLUNTEER_MATCH_UI_PREVIEW } from "../../lib/automaticVolunteerMatchPreview";
 import { publishVerifiedCommunityAdvisory } from "../../lib/publishVerifiedCommunityAdvisory";
 
 const BACKEND_URL = "https://volunserve.onrender.com";
@@ -5684,6 +5686,16 @@ export default function AdminCases() {
                   </View>
                 )}
 
+              {AUTO_VOLUNTEER_MATCH_UI_PREVIEW &&
+                detailTab === "personnel" && (
+                  <AutoVolunteerMatchPreview
+                    incident={incident}
+                    approvedVolunteers={approvedVolunteers}
+                    assignments={assignments}
+                    authorized={isAuthorized}
+                    knownBarangays={SJDM_BARANGAYS}
+                  />
+                )}
               {detailTab === "personnel" && (
                 <ReferenceVolunteerMatching
                   incident={incident}
