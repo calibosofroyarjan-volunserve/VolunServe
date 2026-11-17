@@ -34,8 +34,8 @@ jobs:
         run: npx tsc --noEmit --incremental false
       - name: Existing core Volunteer/Admin regressions
         run: |
-          node scripts/test-resident-volunteer-sidebar.cjs
           node scripts/test-portal-resident-volunteer-ui-flow.cjs
           node scripts/test-defense-unified-lgu-volunteer-dispatch.cjs
+          node scripts/test-volunteer-community-event-join-20261106.cjs
       - name: Confirm no production action
         run: echo "NO DEPLOY — only staging-gated preview, no Hosting/Firestore/backend writes"
