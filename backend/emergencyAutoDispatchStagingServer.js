@@ -18,6 +18,8 @@ const {auth, db} = require("./firebaseAdmin");
 const {isOperationalAdminProfile} = require("./adminAccess");
 const {createRenderAutoDispatchWorker,verifiedStagingProject} = require("./emergencyAutoDispatchWorker");
 const {inspectStagingTestCase} = require("./emergencyStagingReadiness");
+const {getVolunteerOffer,respondToStagingOffer,resetExpiredFixture,CASE_ID} =
+  require("./stagingVolunteerTask");
 
 function makeApp({authClient = auth, firestore = db, worker, env = process.env} = {}) {
   const app = express();
@@ -89,6 +91,13 @@ function makeApp({authClient = auth, firestore = db, worker, env = process.env} 
     response.sendFile(path.join(__dirname, "stagingAdminLogin.html"));
   });
 
+  app.get("/staging-volunteer", (_request, response) => {
+    response.set("Cache-Control", "no-store");
+    response.set("X-Robots-Tag", "noindex, nofollow");
+    response.set("X-Frame-Options", "DENY");
+    response.sendFile(path.join(__dirname, "stagingVolunteerLogin.html"));
+  });
+
   // SAFE DEMONSTRATION: pure planner, all data synthetic. Never calls Firebase,
   // writes Firestore, sends notifications or accesses real user identities.
   app.get("/demo", (_request, response) => {
@@ -142,6 +151,61 @@ function makeApp({authClient = auth, firestore = db, worker, env = process.env} 
       response.status(401).json({ok:false,error:"invalid_admin_session"});
     }
   }
+  async function requireStagingVolunteer(request,response,next){
+    if(!stagingServiceAccountMatches)
+      return response.status(503).json({ok:false,error:"isolated_staging_not_configured"});
+    try {
+      const bearer=String(request.headers.authorization||"");
+      const token=/^Bearer (\\S+)$/i.exec(bearer)?.[1];
+      if(!token)return response.status(401).json({ok:false,error:"sign_in_required"});
+      const decoded=await authClient.verifyIdToken(token,true);
+      if(!decoded?.uid || !/^[A-Za-z0-9_-]{1,160}$/.test(decoded.uid))
+        return response.status(401).json({ok:false,error:"invalid_account"});
+      const [user,application]=await Promise.all([
+        firestore.collection("users").doc(decoded.uid).get(),
+        firestore.collection("volunteerApplications").doc(decoded.uid).get()
+      ]);
+      const profile=user.exists?user.data()||{}:{};
+      const volunteer=application.exists?application.data()||{}:{};
+      if(profile.role!=="volunteer" || profile.status!=="approved" ||
+         profile.volunteerStatus!=="approved" ||
+         profile.volunteerAccess!==true || profile.identityVerified!==true ||
+         volunteer.status!=="approved" ||
+         (volunteer.uid && volunteer.uid!==decoded.uid)){
+        return response.status(403).json({ok:false,error:"approved_test_volunteer_required"});
+      }
+      response.locals.stagingVolunteerUid=decoded.uid;
+      next();
+    } catch(error){
+      console.warn("Staging Volunteer auth rejected:",String(error?.code||"unknown").slice(0,80));
+      response.status(401).json({ok:false,error:"invalid_volunteer_session"});
+    }
+  }
+  app.get("/api/staging/volunteer/task",requireStagingVolunteer,async(_request,response)=>{
+    try {
+      const task=await getVolunteerOffer(firestore,response.locals.stagingVolunteerUid);
+      response.set("Cache-Control","no-store");
+      response.json({ok:true,...task});
+    }catch(error){
+      console.warn("Staging task read unavailable:",String(error?.code||"unknown").slice(0,80));
+      response.status(503).json({ok:false,error:"staging_task_unavailable"});
+    }
+  });
+  app.post("/api/staging/volunteer/respond",requireStagingVolunteer,requireActivation,
+    async(request,response)=>{
+      const decision=request.body?.decision;
+      if(!["accepted","declined"].includes(decision))
+        return response.status(400).json({ok:false,error:"invalid_decision"});
+      try{
+        const outcome=await respondToStagingOffer(
+          firestore,response.locals.stagingVolunteerUid,decision);
+        response.status(["accepted","declined","already_accepted","already_declined"].includes(outcome.status)?200:409)
+          .json({ok:outcome.status===decision,...outcome});
+      }catch(error){
+        console.warn("Staging Volunteer decision failed:",String(error?.code||"unknown").slice(0,80));
+        response.status(409).json({ok:false,error:"staging_response_conflict"});
+      }
+    });
   function requireActivation(_req, res, next) {
     if (matcher.config.onDemandReady) return next();
     res.status(503).json({ok:false,error:"isolated_staging_not_configured",
@@ -194,6 +258,19 @@ function makeApp({authClient = auth, firestore = db, worker, env = process.env} 
       }
     };
   }
+  app.post("/api/admin/emergency-auto/reissue-test",
+    requireStagingAdmin,requireActivation,requireSyntheticFixture,async(_request,response)=>{
+      try {
+        const cleared=await resetExpiredFixture(firestore);
+        if(!["ready","reset"].includes(cleared.status))
+          return response.status(409).json({ok:false,error:cleared.status});
+        const r=await matcher.requestStart(CASE_ID);
+        response.json({ok:true,...r,caseId:CASE_ID});
+      }catch(error){
+        console.warn("Staging fixture reissue failed:",String(error?.code||"unknown").slice(0,80));
+        response.status(409).json({ok:false,error:"reissue_review_required"});
+      }
+    });
   app.post("/api/admin/emergency-auto/start",requireStagingAdmin,requireActivation,requireSyntheticFixture,action("start"));
   app.post("/api/admin/emergency-auto/disable",requireStagingAdmin,requireActivation,requireSyntheticFixture,action("disable"));
   app.use((error, _request, response, _next) => {
