@@ -34,9 +34,9 @@ const assignment=rules.slice(assStart,rules.indexOf("match /",assStart+10));
 const lock=rules.slice(lockStart,rules.indexOf("match /",lockStart+10));
 // This code-only PR retains the EXACT current approved live rules.
 // Security strengthening is separated into DRAFT #573 pending policy approval.
-assert.match(assignment,/function validVolunteerResponseFields\\(\\)/);
-assert.match(assignment,/validVolunteerResponseFields\\(\\)/);
-assert.match(lock,/lockTargetsMatch\\('accepted'\\)/);
+assert.ok(assignment.includes("function validVolunteerResponseFields()"));
+assert.ok(assignment.includes("&& validVolunteerResponseFields()"));
+assert.ok(lock.includes("lockTargetsMatch('accepted')"));
 assert.ok(!rules.includes("function validAutoMatchingResponderLock()"),
   "New Firestore permission change belongs exclusively to draft rules PR #573");
 console.log("PASS: web + Android atomic responder lock lifecycle; current live Firestore Rules preserved; security review isolated in PR #573");
