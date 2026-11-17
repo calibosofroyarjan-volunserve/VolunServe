@@ -109,7 +109,7 @@ function checkManualAssignmentConflict(caseData,assignments){
  */
 function previewExistingLiveEmergency({
   caseId,caseData,approvedApplications=[],usersByUid={},
-  assignments=[],responderLocksByUid={},
+  assignments=[],responderLocksByUid,
   knownBarangays=[],neighborsByBarangay={},
 }={}){
   const safe={kind:"preview",offerSent:false,productionDispatchEnabled:false};
@@ -120,6 +120,13 @@ function previewExistingLiveEmergency({
      !["validated","assigned","in_progress"].includes(incident.status)||
      incident.dispatchBlocked||!isSafeId(incident.reporterUid)){
     return {...safe,status:"blocked",reason:"not_validated_open_case"};
+  }
+  // A missing lock snapshot must not look like an empty lock roster.
+  // Read-only previews are not an authorization decision, but should not
+  // imply an available candidate without this safety input.
+  if(!responderLocksByUid||typeof responderLocksByUid!=="object"||
+     Array.isArray(responderLocksByUid)){
+    return {...safe,status:"blocked",reason:"lock_snapshot_missing"};
   }
   const normalizedAssignments=normalizeLiveAssignments(assignments);
   const manualConflict=checkManualAssignmentConflict(incident,normalizedAssignments);
@@ -157,8 +164,52 @@ function previewExistingLiveEmergency({
     requiresOfficialEscalation:result.requiresOfficialEscalation===true
   };
 }
+
+/**
+ * Compatibility with the ALREADY-MERGED Admin screen's approvedVolunteers
+ * interface, without requiring duplicate subscriptions to applications/users.
+ * It consumes the existing UI profiles but still requires a separately
+ * reviewed responder-lock snapshot for any confident preview. No writes.
+ */
+function previewFromLiveAdminDirectory({
+  incident,approvedVolunteers,assignments=[],
+  responderLocksByUid,knownBarangays=[],neighborsByBarangay={}
+}={}){
+  const safe={kind:"preview",offerSent:false,productionDispatchEnabled:false};
+  if(!incident||typeof incident!=="object"||
+     !Array.isArray(approvedVolunteers)){
+    return {...safe,status:"blocked",reason:"missing_admin_directory"};
+  }
+  const approvedApplications=[];
+  const usersByUid=Object.create(null);
+  for(const row of approvedVolunteers){
+    if(!row||typeof row!=="object"||row.applicationApproved!==true||
+       !isSafeId(row.uid))continue;
+    const uid=clean(row.uid);
+    approvedApplications.push({
+      id:uid,application:{
+        uid,status:"approved",fullName:clean(row.fullName),
+        skills:strings(row.skills),identityVerified:row.identityVerified===true,
+        identityStatus:clean(row.identityStatus)
+      }
+    });
+    usersByUid[uid]={
+      uid,role:clean(row.role),status:clean(row.status),
+      volunteerAccess:row.volunteerAccess===true,
+      volunteerStatus:clean(row.volunteerStatus),
+      identityVerified:row.identityVerified===true,
+      identityStatus:clean(row.identityStatus),
+      barangay:clean(row.barangay),skills:strings(row.skills)
+    };
+  }
+  return previewExistingLiveEmergency({
+    caseId:incident.id,caseData:incident,
+    approvedApplications,usersByUid,assignments,
+    responderLocksByUid,knownBarangays,neighborsByBarangay
+  });
+}
 module.exports={
   normalizeLiveDisasterCase,normalizeLiveApprovedVolunteer,
   normalizeLiveAssignments,checkManualAssignmentConflict,
-  previewExistingLiveEmergency,
+  previewExistingLiveEmergency,previewFromLiveAdminDirectory,
 };
