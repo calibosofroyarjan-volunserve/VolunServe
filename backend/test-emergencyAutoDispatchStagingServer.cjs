@@ -384,6 +384,8 @@ test("Volunteer API requires approved Volunteer Firebase role and never exposes 
       {caseId:"STAGING_TEST_001",volunteerId:"test-vol",createdBy:"automatic_matching_engine",status:"offered"}:undefined
     )};}};
     if(name==="systemSettings")return {doc(){return {get:async()=>snap(undefined)};}};
+    if(name==="autoVolunteerReservations" || name==="responderLocks")
+      return {doc(){return {get:async()=>snap(undefined)};}};
     throw Error("unexpected collection "+name);
   },runTransaction:async()=>{writes++;throw Error("no writes expected");}};
   const direct=await require("./stagingVolunteerTask").getVolunteerOffer(firestore,"test-vol");
