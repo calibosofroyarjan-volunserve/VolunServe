@@ -8,7 +8,7 @@ const assert=require("node:assert/strict");
 const {
  normalizeLiveDisasterCase,normalizeLiveApprovedVolunteer,
  normalizeLiveAssignments,checkManualAssignmentConflict,
- previewExistingLiveEmergency
+ previewExistingLiveEmergency,previewFromLiveAdminDirectory
 }=require("../backend/additiveEmergencyMatching/liveCompatibility.cjs");
 
 let checks=0;
@@ -123,4 +123,38 @@ const historicalFallback=preview({
   usersByUid:{"vol-1":{...approvedUser,volunteerAccess:undefined}}
 });
 ok(historicalFallback.status!=="offer","do not auto-approve incomplete legacy profile");
+const screenProfile={
+  uid:"vol-1",fullName:"Fictional Approved Volunteer",
+  barangay:"Bagong Buhay I",skills:["First Aid"],availability:[],
+  role:"resident",status:"approved",volunteerStatus:"approved",
+  volunteerAccess:true,identityVerified:true,identityStatus:"verified",
+  applicationApproved:true
+};
+const fromScreen=previewFromLiveAdminDirectory({
+  incident:{id:"dummy-case-1",...baseIncident},
+  approvedVolunteers:[screenProfile],assignments:[],responderLocksByUid:{},
+  knownBarangays
+});
+eq(fromScreen.status,"offer","existing Admin merged Volunteer directory compatibility");
+eq(fromScreen.volunteerId,"vol-1","Admin directory uses original Volunteer UID");
+eq(fromScreen.offerSent,false,"Admin screen preview remains read only");
+const blockedWithoutLocks=previewFromLiveAdminDirectory({
+  incident:{id:"dummy-case-1",...baseIncident},
+  approvedVolunteers:[screenProfile],assignments:[],knownBarangays
+});
+eq(blockedWithoutLocks.status,"blocked","missing lock subscription must block");
+eq(blockedWithoutLocks.reason,"lock_snapshot_missing","missing lock snapshot reason");
+eq(previewExistingLiveEmergency({...input,responderLocksByUid:undefined}).reason,
+  "lock_snapshot_missing","raw adapter also blocks missing lock snapshots");
+eq(previewFromLiveAdminDirectory({
+  incident:{id:"dummy-case-1",...baseIncident},
+  approvedVolunteers:[{...screenProfile,applicationApproved:false}],
+  assignments:[],responderLocksByUid:{},knownBarangays
+}).status,"admin_review","only approved Admin directory applicants may be eligible");
+eq(previewFromLiveAdminDirectory({
+  incident:{id:"dummy-case-1",...baseIncident},
+  approvedVolunteers:[screenProfile],assignments:[
+    {caseId:"dummy-case-1",volunteerId:"vol-1",status:"offered"}
+  ],responderLocksByUid:{},knownBarangays
+}).reason,"existing_manual_or_auto_assignment","manual assignments take precedence");
 console.log("PASS: "+checks+" compatibility assertions for deployed Admin case schema, Volunteer approval, manual response locks, SJDM matching and no-write behavior");
