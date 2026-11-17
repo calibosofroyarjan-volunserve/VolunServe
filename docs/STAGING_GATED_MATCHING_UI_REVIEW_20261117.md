@@ -90,3 +90,40 @@ lines are independently proven unmodified by the additive UI test.
 
 **This remains a code-only staging preview, not an end-to-end backend
 acceptance or a production release.**
+
+## Synthetic automatic offer trigger after Admin validation (Nov 17)
+
+The review branch now also contains an **explicitly staging-gated hook**
+`requestStagingAutoOfferAfterAdminValidation`. It runs only after
+`reviewVerification(..., "validate")` commits the original Firestore
+validation transaction, and only for an **initial** validation of the
+fictional `STAGING_TEST_001` case.
+
+- Gate: isolated Firebase project `volunserve-volunteer-staging` AND
+  `EXPO_PUBLIC_VOLUNSERVE_AUTO_MATCH_UI_PREVIEW=true`.
+- Only `STAGING_TEST_001`, previously `reported` and not already
+  `validated`, may send a request. Real incidents cannot use this hook.
+- The request uses the current staging Admin's Firebase ID token and calls
+  the isolated Render staging backend's existing `/api/admin/emergency-auto/start`
+  endpoint. That backend still checks Admin authorization, synthetic fixture,
+  expiry and transactional Volunteer/lock eligibility independently.
+- A backend refusal, missing token, failed fetch or sleeping Free Render
+  results in **no confirmed offer** and does not undo case validation or
+  remove manual Volunteer assignment controls. Never treat HTTP 200
+  alone as proof of an actual assigned Volunteer.
+- The Render staging server enforces an exact Origin allowlist; until a
+  staging UI origin is explicitly allowlisted, a browser can be
+  rejected. **Do not weaken CORS or allow production site origins.**
+- New offline behavioral tests mock the backend, verify no production-case
+  requests, validate token + case ID, and refuse false successes.
+- This hook is **not deployed to a staging Expo web build** by the current
+  PR. Existing isolated Render test pages are separate and remain unchanged.
+- Real-time automatic dispatch on actual production reports is **NOT
+  enabled**. Real emergencies still require official channels and
+  reliable, approved responder operations.
+- A separate historical test update only changes expectations to protect
+  the already-published My Certificates desktop tab. Donation role gates
+  and mobile navigation stay unchanged.
+
+Do not merge into production while the protected Hosting revision
+reconciliation and Firestore Rules review remain blocked.
