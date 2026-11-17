@@ -1,0 +1,35 @@
+name: Add-only automatic Volunteer preview — NO DEPLOY
+on:
+  pull_request:
+    branches:
+      - review/verified-live-source-baseline-20261117
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  preview-preserves-live:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Syntax check — isolated modules
+        run: |
+          node --check backend/additiveEmergencyMatching/planner.cjs
+          node --check backend/additiveEmergencyMatching/preview.cjs
+          node --check backend/additiveEmergencyMatching/liveCompatibility.cjs
+          node --check scripts/test-additive-auto-volunteer-20261117.cjs
+          node --check scripts/test-live-compatibility-adapter-20261117.cjs
+      - name: Matching safety tests and no-existing-file-changes guard
+        run: node scripts/test-additive-auto-volunteer-20261117.cjs
+      - name: Live-source Admin/Volunteer compatibility regression (synthetic, no writes)
+        run: node scripts/test-live-compatibility-adapter-20261117.cjs
+      - name: Confirm zero production release permissions
+        run: echo "No deployment, no Firestore credentials, no background jobs"
