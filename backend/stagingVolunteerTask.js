@@ -81,7 +81,9 @@ async function respondToStagingOffer(db,uid,decision,now=Date.now()) {
     }else{
       tx.delete(refs.reserveRef);
       tx.update(refs.stateRef,{status:"needs_admin",reason:"test_volunteer_declined",
-        attemptedVolunteerIds:[uid],assignmentId:null,volunteerId:null,
+        attemptedVolunteerIds:[uid],
+        // Preserve deterministic ownership for safe Admin-only reissue.
+        assignmentId:refs.assignmentId,volunteerId:uid,
         expiresAtMs:null,updatedAt:stamp});
       tx.update(refs.caseRef,{
         activeVolunteerSupportUid:"",
