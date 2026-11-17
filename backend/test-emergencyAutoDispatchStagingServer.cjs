@@ -359,3 +359,69 @@ test("staging Volunteer acceptance and decline are atomic, isolated, and expire 
   assert.equal(declined.map.get("emergencyAutoDispatch/"+caseId).status,"needs_admin");
   assert.equal((await resetExpiredFixture(declined,now)).status,"reset");
 });
+
+
+test("Volunteer API requires approved Volunteer Firebase role and never exposes other users",async()=>{
+  const project="test-isolated-volunteer-firebase";
+  let writes=0;
+  const snap=data=>({exists:data!==undefined,data:()=>data});
+  const firestore={collection(name){
+    if(name==="users")return {doc(uid){return {get:async()=>snap({
+      role:uid==="test-vol"?"volunteer":"admin",status:"approved",
+      volunteerAccess:true,volunteerStatus:"approved",identityVerified:true
+    })};}};
+    if(name==="volunteerApplications")return {doc(uid){return {get:async()=>snap({
+      uid,status:"approved"
+    })};}};
+    if(name==="disasterCases")return {doc(id){return {get:async()=>snap(id==="STAGING_TEST_001"?
+      {title:"TEST ONLY - Dummy Emergency",verificationStatus:"validated"}:undefined)};}};
+    if(name==="emergencyAutoDispatch")return {doc(){return {get:async()=>snap({
+      status:"waiting",assignmentId:"STAGING_TEST_001_test-vol",
+      volunteerId:"test-vol",expiresAtMs:Date.now()+300000,wave:1
+    })};}};
+    if(name==="responseAssignments")return {doc(id){return {get:async()=>snap(
+      id==="STAGING_TEST_001_test-vol"?
+      {caseId:"STAGING_TEST_001",volunteerId:"test-vol",createdBy:"automatic_matching_engine",status:"offered"}:undefined
+    )};}};
+    if(name==="systemSettings")return {doc(){return {get:async()=>snap(undefined)};}};
+    throw Error("unexpected collection "+name);
+  },runTransaction:async()=>{writes++;throw Error("no writes expected");}};
+  const app=makeApp({
+    env:{VOLUNSERVE_AUTO_VOLUNTEER_STAGING_PROJECT_ID:project,
+      FIREBASE_SERVICE_ACCOUNT_JSON:JSON.stringify({project_id:project})},
+    worker:{config:{onDemandReady:true,ready:false}},
+    authClient:{verifyIdToken:async(token)=>({uid:token==="vol"?"test-vol":"test-admin"})},
+    firestore
+  });
+  const server=app.listen(0,"127.0.0.1");
+  try{
+    await new Promise((resolve,reject)=>server.listening?resolve():
+      (server.once("listening",resolve),server.once("error",reject)));
+    const base="http://127.0.0.1:"+server.address().port;
+    let r=await fetch(base+"/api/staging/volunteer/task");
+    assert.equal(r.status,401);
+    r=await fetch(base+"/api/staging/volunteer/task",{
+      headers:{Authorization:"Bearer admin"}
+    });
+    assert.equal(r.status,403);
+    r=await fetch(base+"/api/staging/volunteer/task",{
+      headers:{Authorization:"Bearer vol"}
+    });
+    assert.equal(r.status,200);
+    const task=await r.json();
+    assert.equal(task.status,"offered");
+    assert.equal(task.canRespond,true);
+    assert.equal(task.caseId,"STAGING_TEST_001");
+    r=await fetch(base+"/api/staging/volunteer/respond",{
+      method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer admin"},
+      body:JSON.stringify({decision:"accepted"})
+    });
+    assert.equal(r.status,403);
+    r=await fetch(base+"/api/staging/volunteer/respond",{
+      method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer vol"},
+      body:JSON.stringify({decision:"invalid"})
+    });
+    assert.equal(r.status,400);
+    assert.equal(writes,0);
+  }finally{await new Promise(resolve=>server.close(resolve));}
+});
