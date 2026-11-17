@@ -15,6 +15,7 @@ const ui=[
  "app/(tabs)/volunteer.tsx",
 ];
 const baselineSidebar="scripts/test-resident-volunteer-sidebar.cjs";
+const baselineDonationSidebar="scripts/test-volunteer-donations-sidebar-removal.cjs";
 const additions=new Set([
  "components/admin/AutoVolunteerMatchPreview.tsx",
  "lib/automaticVolunteerMatchPreview.ts",
@@ -85,14 +86,32 @@ assert.ok(oldSidebar.includes(stale),"Unknown original sidebar expectations");
 assert.equal(fs.readFileSync(baselineSidebar,"utf8"),oldSidebar.replace(stale,current),
  "BLOCKED: sidebar regression changed beyond approved live-certificate assertion");
 checks++;
+const oldDonation=original(baselineDonationSidebar);
+const removedOnly=`test("Volunteer desktop and mobile menus contain only three scope-focused modules",()=>{
+  for(const menu of ["volunteerDesktopTabs","volunteerMobileTabs"]) {
+    assert.deepEqual(names(menu),["index","volunteer","community-events"]);
+  }
+});`;
+const accepted=`test("Volunteer menus preserve live My Certificates desktop tab without restoring Donations",()=>{
+  assert.deepEqual(names("volunteerDesktopTabs"),["index","volunteer","community-events","certificate"]);
+  assert.deepEqual(names("volunteerMobileTabs"),["index","volunteer","community-events"]);
+  assert.ok(!names("volunteerDesktopTabs").includes("donation"));
+  assert.ok(!names("volunteerMobileTabs").includes("donation"));
+  assert.match(tabs,/name:"certificate",label:"My Certificates"/);
+});`;
+assert.ok(oldDonation.includes(removedOnly),"Unknown original donation-sidebar expectations");
+assert.equal(fs.readFileSync(baselineDonationSidebar,"utf8"),
+ oldDonation.replace(removedOnly,accepted),
+ "BLOCKED: donation-sidebar test changed beyond approved live-Certificates assertion");
+checks++;
 // Verify exact new/changed paths only; not even a config/rules file touched.
 const diff=cp.execFileSync("git",["diff","--name-status","--no-renames",BASE,"HEAD"],{encoding:"utf8"});
 const entries=diff.split("\n").filter(Boolean).map(line=>line.split("\t"));
-assert.equal(entries.length,ui.length+additions.size+1);checks++;
+assert.equal(entries.length,ui.length+additions.size+2);checks++;
 for(const [status,path] of entries){
  assert.ok((status==="M" && ui.includes(path))||
    (status==="A" && additions.has(path))||
-   (status==="M" && path===baselineSidebar),
+   (status==="M" && (path===baselineSidebar || path===baselineDonationSidebar)),
   "Not an approved additive UI change: "+status+" "+path);checks++;
 }
 console.log("PASS: "+checks+" UI preview safety assertions; original live-derived UI lines preserved verbatim; no original modules deleted, rules changed, backend started or production release.");
