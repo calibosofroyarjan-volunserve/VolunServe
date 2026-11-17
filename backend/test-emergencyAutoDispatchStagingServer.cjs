@@ -247,3 +247,29 @@ test("staging login requires explicit confirmation for isolated test-only offer"
   assert.ok(!html.includes("volunserve.com/api"));
   assert.deepEqual(calls,[],"Loading login must not dispatch offers");
 }));
+
+
+test("browser same-origin POST is allowed while foreign origins are denied",()=>withServer({enabled:true},async({url,calls})=>{
+  const ownOrigin="https://volunserve-emergency-match-staging-free.onrender.com";
+  const headers={"Content-Type":"application/json","Authorization":"Bearer test-token","Origin":ownOrigin};
+  let r=await fetch(url+"/api/admin/emergency-auto/start",{
+    method:"POST",headers,body:JSON.stringify({caseId:"STAGING_TEST_001"})
+  });
+  assert.equal(r.status,200);
+  assert.equal(r.headers.get("access-control-allow-origin"),ownOrigin);
+  assert.equal((await r.json()).action,"offered");
+  r=await fetch(url+"/api/admin/emergency-auto/start",{
+    method:"POST",headers:{...headers,Origin:"https://other.example"},
+    body:JSON.stringify({caseId:"STAGING_TEST_001"})
+  });
+  assert.equal(r.status,403);
+  assert.equal((await r.json()).error,"staging_request_blocked");
+  assert.deepEqual(calls,[["start","STAGING_TEST_001"]]);
+  r=await fetch(url+"/api/admin/emergency-auto/start",{
+    method:"OPTIONS",headers:{Origin:ownOrigin,
+      "Access-Control-Request-Method":"POST",
+      "Access-Control-Request-Headers":"authorization,content-type"}
+  });
+  assert.equal(r.status,204);
+  assert.equal(r.headers.get("access-control-allow-origin"),ownOrigin);
+}));
