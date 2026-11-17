@@ -1,0 +1,33 @@
+name: Audit published VolunServe vs protected source (NO DEPLOY)
+
+on:
+  pull_request:
+    branches:
+      - review/verified-live-source-baseline-20261117
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  read-only-source-inventory:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - name: Checkout full history (read-only)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: false
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Fetch current protected branch metadata (read-only)
+        run: git fetch --no-tags origin +refs/heads/live-protected:refs/remotes/origin/live-protected
+      - name: Verify audit script syntax
+        run: node --check scripts/audit-live-source-reconciliation-20261117.cjs
+      - name: Compare current public Hosting marker and exact source files
+        run: node scripts/audit-live-source-reconciliation-20261117.cjs
+      - name: Confirm non-deployment
+        run: echo "No live Hosting, backend, Firebase Auth, Firestore, Rules or Render mutations"
