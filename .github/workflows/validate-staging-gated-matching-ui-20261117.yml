@@ -42,7 +42,7 @@ jobs:
         run: echo "NO DEPLOY — only staging-gated preview, no Hosting/Firestore/backend writes"
 
   public-staging-browser-smoke:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
       - name: Checkout review test script
