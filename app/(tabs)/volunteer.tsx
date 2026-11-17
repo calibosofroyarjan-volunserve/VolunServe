@@ -33,6 +33,7 @@ import {
   isApprovedProfile,
 } from "../../lib/firebaseAuth";
 import { useUserSession } from "../../lib/useUserSession";
+import { isStagingAutoMatchedTask } from "../../lib/automaticVolunteerMatchPreview";
 
 type AssignmentStatus =
   | "offered"
@@ -523,6 +524,17 @@ export default function VolunteerTasks() {
       !profile ||
       busyId
     ) {
+      return;
+    }
+
+    // Staging auto-offers are server-validated for expiry/ownership via
+    // the dedicated staging portal, not the legacy direct Firestore write.
+    if (isStagingAutoMatchedTask(assignment) &&
+        (next === "accepted" || next === "declined")) {
+      Alert.alert(
+        "Staging Auto-Match Preview",
+        "Use the verified staging Volunteer task page for this test offer. Existing manual assignment controls are unchanged."
+      );
       return;
     }
 
@@ -1419,6 +1431,12 @@ export default function VolunteerTasks() {
                       </Text>
                     </View>
                   </View>
+
+                  {isStagingAutoMatchedTask(assignment) && (
+                    <Text style={{ color: "#0f766e", fontSize: 11, marginBottom: 9, fontWeight: "700" }}>
+                      STAGING AUTO-MATCH PREVIEW ONLY — Respond through the verified staging Volunteer portal.
+                    </Text>
+                  )}
 
                   {status ===
                     "offered" && (
