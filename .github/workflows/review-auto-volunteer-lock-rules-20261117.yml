@@ -1,0 +1,41 @@
+name: Review Automatic Volunteer Firestore Locks (NO DEPLOY)
+
+on:
+  pull_request:
+    branches: [live-protected]
+    paths:
+      - "firestore.rules"
+      - "scripts/test-automatic-volunteer-lock-rules-emulator-20261117.cjs"
+      - ".github/workflows/review-auto-volunteer-lock-rules-20261117.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  isolated-lock-rules-emulator:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      CI: 'true'
+      FIREBASE_CLI_EXPERIMENTS: webframeworks
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Install locked dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Assert isolated test syntax
+        run: node --check scripts/test-automatic-volunteer-lock-rules-emulator-20261117.cjs
+      - name: Verify Firestore Rules with authenticated emulator users
+        run: npx firebase-tools emulators:exec --only firestore --project demo-volunserve-auto-volunteer-lock-review "node scripts/test-automatic-volunteer-lock-rules-emulator-20261117.cjs"
+      - name: Confirm no production mutation
+        run: echo "QA only — no deployment or live data updates"
