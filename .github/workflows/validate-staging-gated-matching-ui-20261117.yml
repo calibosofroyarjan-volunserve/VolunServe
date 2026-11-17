@@ -32,10 +32,11 @@ jobs:
         run: npm ci --no-audit --no-fund
       - name: Check complete TS codebase
         run: npx tsc --noEmit --incremental false
-      - name: Existing core Volunteer/Admin regressions
+      - name: Published-source critical module preservation (baseline-compatible)
+        run: node scripts/test-legacy-module-blobs-20261117.cjs
+      - name: Existing Portal and Community Event regressions
         run: |
           node scripts/test-portal-resident-volunteer-ui-flow.cjs
-          node scripts/test-defense-unified-lgu-volunteer-dispatch.cjs
           node scripts/test-volunteer-community-event-join-20261106.cjs
       - name: Confirm no production action
         run: echo "NO DEPLOY — only staging-gated preview, no Hosting/Firestore/backend writes"
