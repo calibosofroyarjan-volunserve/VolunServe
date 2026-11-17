@@ -30,6 +30,7 @@ import {
   isApprovedProfile,
 } from "../../lib/firebaseAuth";
 import { useUserSession } from "../../lib/useUserSession";
+import { isStagingAutoMatchedTask } from "../../lib/automaticVolunteerMatchPreview";
 
 type AssignmentStatus =
   | "offered"
@@ -480,6 +481,14 @@ export default function VolunteerTasksWeb() {
     next: "accepted" | "declined" | "responding" | "on_site" | "completed",
   ) => {
     if (!user || !profile || busyId) return;
+
+    // Never accept/decline staged auto offers via an unchecked legacy write.
+    // The validated staging portal checks expiry and ownership server-side.
+    if (isStagingAutoMatchedTask(assignment) &&
+        (next === "accepted" || next === "declined")) {
+      setError("Staging auto-matched offers require the verified staging Volunteer task page. Manual task controls are unchanged.");
+      return;
+    }
 
     const allowedPrevious: Record<string, string> = {
       accepted: "offered",
@@ -1056,6 +1065,12 @@ export default function VolunteerTasksWeb() {
                 </View>
 
                 <View style={[styles.actionsColumn, compact && styles.actionsColumnCompact, mobile && styles.actionsColumnMobile]}>
+                  {isStagingAutoMatchedTask(assignment) && (
+                    <Text style={{ color: "#0f766e", fontSize: 11, marginBottom: 9, fontWeight: "700" }}>
+                      STAGING AUTO-MATCH PREVIEW ONLY — Respond through the verified staging Volunteer portal.
+                      Existing manual assignments are unchanged.
+                    </Text>
+                  )}
                   {offered && (
                     <>
                       <TouchableOpacity
