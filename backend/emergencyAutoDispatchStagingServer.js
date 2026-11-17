@@ -18,7 +18,8 @@ const {auth, db} = require("./firebaseAdmin");
 const {isOperationalAdminProfile} = require("./adminAccess");
 const {createRenderAutoDispatchWorker,verifiedStagingProject} = require("./emergencyAutoDispatchWorker");
 const {inspectStagingTestCase} = require("./emergencyStagingReadiness");
-const {getVolunteerOffer,respondToStagingOffer,resetExpiredFixture,CASE_ID} =
+const {getVolunteerOffer,respondToStagingOffer,resetExpiredFixture,
+  inspectStagingAssignmentConsistency,CASE_ID} =
   require("./stagingVolunteerTask");
 
 function makeApp({authClient = auth, firestore = db, worker, env = process.env} = {}) {
@@ -216,6 +217,21 @@ function makeApp({authClient = auth, firestore = db, worker, env = process.env} 
       onDemandEnabled:matcher.config.onDemandReady === true,
       workerEnabled:false,workerMode:"staging_admin_on_demand_only"});
   });
+  // One fictional case only. Authenticated, read-only diagnostics; no
+  // UIDs, user details or payloads from actual Emergency Reports are returned.
+  app.get("/api/admin/emergency-auto/verify-test",requireStagingAdmin,async(_request,response)=>{
+    if(!stagingServiceAccountMatches)
+      return response.status(503).json({ok:false,error:"isolated_staging_not_configured"});
+    try{
+      const review=await inspectStagingAssignmentConsistency(firestore);
+      response.set("Cache-Control","no-store");
+      response.json({ok:true,...review});
+    }catch(error){
+      console.warn("Isolated test assignment review unavailable",String(error?.code||"unknown").slice(0,70));
+      response.status(503).json({ok:false,error:"test_verification_unavailable"});
+    }
+  });
+
   // Free preview activation is deliberately restricted to a SINGLE fictional
   // staging fixture; never permit a generic Admin to submit an arbitrary case.
   async function requireSyntheticFixture(request,response,next){
