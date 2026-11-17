@@ -3985,6 +3985,22 @@ service cloud.firestore {
     match /responseAssignments/{assignmentId} {
 
 
+      // Auto-matched offers require a matching responder lock in the
+      // same atomic acceptance transaction. Legacy manual offers remain
+      // compatible until their separate migration is reviewed.
+      function validAutoMatchingResponderLock() {
+        return !('createdBy' in resource.data)
+          || resource.data.createdBy != 'automatic_matching_engine'
+          || request.resource.data.status != 'accepted'
+          || (
+            getAfter(
+              /databases/$(database)/documents/responderLocks/$(request.auth.uid)
+            ).data.assignmentId == assignmentId
+            && getAfter(
+              /databases/$(database)/documents/responderLocks/$(request.auth.uid)
+            ).data.responderUid == request.auth.uid
+          );
+      }
       function validVolunteerResponseTransition() {
         return (
           resource.data.status == 'offered'
@@ -4173,7 +4189,8 @@ service cloud.firestore {
         && assignmentCase().reporterUid != request.auth.uid
         && validVolunteerResponseTransition()
         && validVolunteerResponseFields()
-        && request.resource.data.updatedAt is timestamp;
+        && request.resource.data.updatedAt is timestamp
+        && validAutoMatchingResponderLock();
       allow update: if isResident()
         && assignmentCase().reporterUid == request.auth.uid
         && resource.data.status == 'completed'
@@ -4504,10 +4521,22 @@ service cloud.firestore {
         ]
         && request.resource.data.updatedAt is timestamp
         && lockTargetsMatch(request.resource.data.status);
+      // Volunteers may release the lock only as part of completing
+      // that same assignment. Admin retains authorized cancellation controls.
+      function completedLockAssignmentAfter() {
+        let assignment = getAfter(
+          /databases/$(database)/documents/responseAssignments/$(resource.data.assignmentId)
+        ).data;
+        return assignment.volunteerId == request.auth.uid
+          && assignment.caseId == resource.data.caseId
+          && assignment.status == 'completed';
+      }
       allow delete: if isAdmin()
         || (
           isVolunteer()
           && request.auth.uid == uid
+          && resource.data.responderUid == request.auth.uid
+          && completedLockAssignmentAfter()
         );
     }
     match /responseLocations/{uid} {
