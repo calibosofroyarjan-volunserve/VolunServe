@@ -65,12 +65,27 @@ async function respondToStagingOffer(db,uid,decision,now=Date.now()) {
       return result("reservation_missing");
     if(lockSnap.exists)return result("already_busy");
     const wave=Number(s.wave||1);
-    tx.update(refs.assignmentRef,{status:decision,updatedAt:stamp,
-      ...(decision==="accepted"?{acceptedAt:stamp}:{declinedAt:stamp})});
+    // Mirror production Firestore Rules: Volunteer transition may change
+    // only status and updatedAt. Stage uses Admin SDK, so test this parity.
+    tx.update(refs.assignmentRef,{status:decision,updatedAt:stamp});
     if(decision==="accepted") {
       tx.create(refs.lockRef,{
         responderUid:uid,assignmentId:refs.assignmentId,caseId:CASE_ID,
         status:"accepted",updatedAt:stamp
+      });
+      const reporterUid=caseSnap.data()?.reporterUid;
+      if(safeUid(reporterUid) && reporterUid!==uid){
+        tx.set(db.collection("notifications").doc("auto_test_accepted_"+refs.assignmentId),{
+          userId:reporterUid,audience:"resident",type:"resident_response_update",
+          caseId:CASE_ID,assignmentId:refs.assignmentId,responderId:uid,
+          title:"Test Volunteer accepted your case",
+          message:"A test Volunteer accepted the fictional emergency support task.",
+          status:"accepted",read:false,createdAt:stamp,
+        });
+      }
+      tx.set(db.collection("adminActivityLogs").doc("auto_test_decision_"+refs.assignmentId),{
+        action:"Synthetic Volunteer Accepted",caseId:CASE_ID,
+        volunteerUid:uid,performedBy:"staging_volunteer",timestamp:stamp,
       });
       tx.update(refs.stateRef,{status:"accepted",reason:"volunteer_accepted",
         updatedAt:stamp});
@@ -79,6 +94,20 @@ async function respondToStagingOffer(db,uid,decision,now=Date.now()) {
         note:"Test Volunteer accepted the dummy offer",updatedAt:stamp
       },updatedAt:stamp});
     }else{
+      const adminUid=caseSnap.data()?.validatedBy;
+      if(safeUid(adminUid) && adminUid!==uid){
+        tx.set(db.collection("notifications").doc("auto_test_declined_"+refs.assignmentId),{
+          userId:adminUid,audience:"admin",type:"emergency_dispatch_escalation",
+          caseId:CASE_ID,assignmentId:refs.assignmentId,
+          title:"Test Volunteer declined",
+          message:"The fictional Volunteer offer was declined. Admin may reissue the test.",
+          read:false,createdAt:stamp,
+        });
+      }
+      tx.set(db.collection("adminActivityLogs").doc("auto_test_decision_"+refs.assignmentId),{
+        action:"Synthetic Volunteer Declined",caseId:CASE_ID,
+        volunteerUid:uid,performedBy:"staging_volunteer",timestamp:stamp,
+      });
       tx.delete(refs.reserveRef);
       tx.update(refs.stateRef,{status:"needs_admin",reason:"test_volunteer_declined",
         attemptedVolunteerIds:[uid],
@@ -139,6 +168,9 @@ async function resetExpiredFixture(db,now=Date.now()) {
     if(r.exists)tx.delete(refs.reserveRef);
     tx.delete(stateRef);
     if(log.exists)tx.delete(db.collection("adminActivityLogs").doc("auto_offer_"+refs.assignmentId));
+    tx.delete(db.collection("adminActivityLogs").doc("auto_test_decision_"+refs.assignmentId));
+    tx.delete(db.collection("notifications").doc("auto_test_accepted_"+refs.assignmentId));
+    tx.delete(db.collection("notifications").doc("auto_test_declined_"+refs.assignmentId));
     tx.delete(db.collection("notifications").doc("auto_response_"+refs.assignmentId));
     tx.update(caseRef,{
       status:"validated",activeVolunteerSupportUid:"",
@@ -148,4 +180,60 @@ async function resetExpiredFixture(db,now=Date.now()) {
     return result("reset");
   });
 }
-module.exports={getVolunteerOffer,respondToStagingOffer,resetExpiredFixture,CASE_ID,CASE_TITLE};
+
+/**
+ * Admin-only, read-only QA diagnostic for a single fictional case.
+ * All lookups are hardcoded to the recognized staging case, and output
+ * exposes statuses only. No UIDs, names, credentials or token data.
+ */
+async function inspectStagingAssignmentConsistency(db) {
+  const caseSnap=await db.collection("disasterCases").doc(CASE_ID).get();
+  if(!caseSnap.exists||caseSnap.data()?.title!==CASE_TITLE)
+    return {status:"unavailable",reason:"fictional_case_missing"};
+  const sessionSnap=await db.collection("emergencyAutoDispatch").doc(CASE_ID).get();
+  if(!sessionSnap.exists)return {status:"not_started"};
+  const session=sessionSnap.data()||{};
+  const uid=String(session.volunteerId||"");
+  if(!safeUid(uid)||session.assignmentId!==CASE_ID+"_"+uid)
+    return {status:"review_required",reason:"invalid_session_ownership"};
+  const refs=refSet(db,uid);
+  const [assignment,lock,reservation,initialNotification,acceptanceNotification,
+    declineNotification,decisionLog]=await Promise.all([
+    refs.assignmentRef.get(),refs.lockRef.get(),refs.reserveRef.get(),
+    db.collection("notifications").doc("auto_response_"+refs.assignmentId).get(),
+    db.collection("notifications").doc("auto_test_accepted_"+refs.assignmentId).get(),
+    db.collection("notifications").doc("auto_test_declined_"+refs.assignmentId).get(),
+    db.collection("adminActivityLogs").doc("auto_test_decision_"+refs.assignmentId).get(),
+  ]);
+  const a=assignment.exists?assignment.data()||{}:{};
+  const owned=assignment.exists && a.caseId===CASE_ID && a.volunteerId===uid &&
+    a.createdBy==="automatic_matching_engine";
+  const accepted=owned && a.status==="accepted" && session.status==="accepted";
+  const lockCorrect=lock.exists && lock.data()?.assignmentId===refs.assignmentId &&
+    lock.data()?.responderUid===uid;
+  const caseCorrect=caseSnap.data()?.activeVolunteerSupportAssignmentId===refs.assignmentId &&
+    caseSnap.data()?.autoVolunteerDispatch?.state==="accepted";
+  const notificationCorrect=acceptanceNotification.exists &&
+    acceptanceNotification.data()?.caseId===CASE_ID &&
+    acceptanceNotification.data()?.assignmentId===refs.assignmentId &&
+    acceptanceNotification.data()?.userId===caseSnap.data()?.reporterUid;
+  const result={
+    status:!owned?"review_required":String(a.status||"unknown"),
+    assignmentStatus:String(a.status||"missing"),
+    sessionStatus:String(session.status||"missing"),
+    wave:Number(session.wave||0),
+    initialOfferNotificationPresent:initialNotification.exists,
+    acceptedResponderLockCorrect:lockCorrect,
+    acceptedCaseStatusCorrect:caseCorrect,
+    acceptedResidentNotificationPresent:notificationCorrect,
+    adminAuditPresent:decisionLog.exists,
+    declineAlertPresent:declineNotification.exists,
+    reservationPresent:reservation.exists,
+    fullAcceptanceVerified:accepted && lockCorrect && caseCorrect && notificationCorrect &&
+      initialNotification.exists && decisionLog.exists && reservation.exists,
+  };
+  return result;
+}
+
+module.exports={getVolunteerOffer,respondToStagingOffer,resetExpiredFixture,
+  inspectStagingAssignmentConsistency,CASE_ID,CASE_TITLE};
