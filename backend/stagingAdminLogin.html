@@ -131,7 +131,11 @@ document.getElementById("login").addEventListener("submit",async(e)=>{
     startTest.disabled=!(data.activationReady===true &&
       health.stagingServiceAccountMatches===true &&
       health.stagingTestCaseReadiness?.status==="ready");
-    reissueTest.disabled=startTest.disabled;
+    // Reissue remains available after the existing 3-minute test offer expires.
+    // Startup preflight is not re-run whenever an offer changes case status.
+    reissueTest.disabled=!(data.activationReady===true &&
+      health.stagingServiceAccountMatches===true &&
+      health.stagingFirestoreReadStatus==="verified");
     report("Admin authentication: VERIFIED\n"+
       "Staging backend: "+(health.ok?"ONLINE":"UNAVAILABLE")+"\n"+
       "Firestore read: "+String(health.stagingFirestoreReadStatus||"unknown")+"\n"+
