@@ -18,7 +18,10 @@ async function smoke(){
     page.on("pageerror",e=>errors.push(String(e?.message||e).slice(0,110)));
     for(const route of ["/staging-login","/staging-volunteer"]){
       const response=await page.goto(ORIGIN+route,{waitUntil:"domcontentloaded",timeout:120000});
-      assert.equal(response?.status(),200,route+" must serve HTTP 200");
+      const httpStatus=response?.status()||0;
+      console.log("Staging Chromium page response: "+route+" status="+httpStatus+
+        " title="+String(await page.title()).slice(0,85));
+      assert.equal(httpStatus,200,route+" must serve HTTP 200; staging may be sleeping or blocked by the host");
       const html=await page.content();
       assert.ok(!html.includes("volunserve-3aa5b"),"staging page must not target production Firebase");
       assert.ok(html.includes("volunserve-volunteer-staging"),"staging Auth project must be pinned");
