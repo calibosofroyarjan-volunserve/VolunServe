@@ -1,0 +1,41 @@
+name: Staging-only Admin / Volunteer auto matching UI — NO DEPLOY
+
+on:
+  pull_request:
+    branches:
+      - feat/live-derived-additive-volunteer-matching-20261117
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  preserve-original-flows:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      CI: 'true'
+    steps:
+      - name: Checkout exact review source
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: false
+      - name: Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Check read-only safety additions
+        run: node scripts/test-staging-gated-matching-ui-20261117.cjs
+      - name: Install exact locked dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Check complete TS codebase
+        run: npx tsc --noEmit --incremental false
+      - name: Existing core Volunteer/Admin regressions
+        run: |
+          node scripts/test-volunteer-time-controls-20261106.cjs
+          node scripts/test-portal-resident-volunteer-ui-flow.cjs
+          node scripts/test-defense-unified-lgu-volunteer-dispatch.cjs
+      - name: Confirm no production action
+        run: echo "NO DEPLOY — only staging-gated preview, no Hosting/Firestore/backend writes"
