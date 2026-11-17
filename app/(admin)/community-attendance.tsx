@@ -45,6 +45,8 @@ type EventItem = {
   category?: string;
   status: EventStatus;
   publicationStatus: string;
+  // Existing Firestore event completion timestamp; needed for cutoff check.
+  completedAt?: unknown;
   capacity: number;
   participantsCount?: number;
   description?: string;
