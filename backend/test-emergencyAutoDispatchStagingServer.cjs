@@ -273,3 +273,89 @@ test("browser same-origin POST is allowed while foreign origins are denied",()=>
   assert.equal(r.status,204);
   assert.equal(r.headers.get("access-control-allow-origin"),ownOrigin);
 }));
+
+
+test("dedicated Volunteer page is served without admin credentials or private keys",()=>withServer({},async({url})=>{
+  const response=await fetch(url+"/staging-volunteer");
+  assert.equal(response.status,200);
+  assert.equal(response.headers.get("x-frame-options"),"DENY");
+  const html=await response.text();
+  assert.match(html,/Volunteer Task Acceptance/);
+  assert.match(html,/signInWithEmailAndPassword/);
+  assert.match(html,/inMemoryPersistence/);
+  assert.match(html,/api\/staging\/volunteer\/task/);
+  assert.match(html,/api\/staging\/volunteer\/respond/);
+  assert.ok(!html.includes("volunserve-3aa5b"));
+  assert.ok(!html.includes("FIREBASE_SERVICE_ACCOUNT_JSON"));
+}));
+test("staging Volunteer acceptance and decline are atomic, isolated, and expire safely",async()=>{
+  const {getVolunteerOffer,respondToStagingOffer,resetExpiredFixture}=
+    require("./stagingVolunteerTask");
+  const uid="testVolunteer",id="STAGING_TEST_001_"+uid,caseId="STAGING_TEST_001";
+  const now=Date.now();
+  class FakeDoc {
+    constructor(collection,id,data){this.collection=collection;this.id=id;this.value=data;this.exists=data!==undefined;}
+    data(){return this.value;}
+  }
+  class FakeStore {
+    constructor(){this.map=new Map();}
+    collection(name){return {doc:id=>({path:name+"/"+id,get:async()=>this.snap(name+"/"+id)})};}
+    snap(key){const value=this.map.get(key);const slash=key.indexOf("/");
+      return new FakeDoc(key.slice(0,slash),key.slice(slash+1),value);
+    }
+    seed(key,value){this.map.set(key,value);}
+    async runTransaction(callback){
+      const operations=[],tx={
+        get:ref=>ref.get(),
+        update:(ref,value)=>operations.push(["update",ref.path,value]),
+        set:(ref,value)=>operations.push(["set",ref.path,value]),
+        create:(ref,value)=>operations.push(["create",ref.path,value]),
+        delete:ref=>operations.push(["delete",ref.path])
+      };
+      const answer=await callback(tx);
+      for(const [kind,key,value] of operations){
+        if(kind==="delete"){this.map.delete(key);continue;}
+        if(kind==="create")assert.equal(this.map.has(key),false,"duplicate create");
+        if(kind==="update")assert.equal(this.map.has(key),true,"missing update");
+        this.map.set(key,kind==="update"?{...this.map.get(key),...value}:value);
+      }
+      return answer;
+    }
+  }
+  function fixture(store,expireAt){
+    store.seed("disasterCases/"+caseId,{title:"TEST ONLY - Dummy Emergency",
+      status:"assigned",verificationStatus:"validated",reporterUid:"testResident",
+      validatedBy:"testAdmin",activeVolunteerSupportAssignmentId:id});
+    store.seed("emergencyAutoDispatch/"+caseId,{
+      status:"waiting",assignmentId:id,volunteerId:uid,expiresAtMs:expireAt,wave:1
+    });
+    store.seed("responseAssignments/"+id,{
+      status:"offered",caseId,volunteerId:uid,createdBy:"automatic_matching_engine"
+    });
+    store.seed("autoVolunteerReservations/"+uid,{assignmentId:id,caseId,uid});
+    store.seed("adminActivityLogs/auto_offer_"+id,{action:"Automatic Volunteer Task Offered"});
+  }
+  const accepted=new FakeStore();fixture(accepted,now+100000);
+  assert.equal((await getVolunteerOffer(accepted,uid,now)).canRespond,true);
+  assert.equal((await respondToStagingOffer(accepted,"anotherVolunteer","accepted",now)).status,"not_offered");
+  assert.equal((await respondToStagingOffer(accepted,uid,"accepted",now)).status,"accepted");
+  assert.equal(accepted.map.get("responseAssignments/"+id).status,"accepted");
+  assert.equal(accepted.map.get("emergencyAutoDispatch/"+caseId).status,"accepted");
+  assert.equal(accepted.map.get("responderLocks/"+uid).assignmentId,id);
+  assert.equal((await respondToStagingOffer(accepted,uid,"accepted",now)).status,"already_accepted");
+  assert.equal((await resetExpiredFixture(accepted,now+500000)).status,"cannot_reset_accepted_task");
+  const expired=new FakeStore();fixture(expired,now-1000);
+  assert.equal((await getVolunteerOffer(expired,uid,now)).status,"expired");
+  assert.equal((await respondToStagingOffer(expired,uid,"accepted",now)).status,"expired");
+  assert.equal(expired.map.get("responseAssignments/"+id).status,"offered");
+  assert.equal((await resetExpiredFixture(expired,now)).status,"reset");
+  assert.equal(expired.map.has("responseAssignments/"+id),false);
+  assert.equal(expired.map.has("autoVolunteerReservations/"+uid),false);
+  assert.equal(expired.map.get("disasterCases/"+caseId).status,"validated");
+  const declined=new FakeStore();fixture(declined,now+100000);
+  assert.equal((await respondToStagingOffer(declined,uid,"declined",now)).status,"declined");
+  assert.equal(declined.map.get("responseAssignments/"+id).status,"declined");
+  assert.equal(declined.map.has("autoVolunteerReservations/"+uid),false);
+  assert.equal(declined.map.get("emergencyAutoDispatch/"+caseId).status,"needs_admin");
+  assert.equal((await resetExpiredFixture(declined,now)).status,"reset");
+});
