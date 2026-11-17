@@ -36,3 +36,35 @@ This package **does not automatically assign any real volunteers**. It intention
 6. Back up approved state, use feature flag OFF by default, inspect a staging release, and require an explicit deployment approval with rollback.
 
 **Do not merge this branch into protected live** until the divergent-history release guard is resolved.
+
+
+## November 17 — live-schema compatibility adapter
+
+An **add-only**, read-only integration adapter now exists at
+`backend/additiveEmergencyMatching/liveCompatibility.cjs`.
+It interprets the **actual published-source** `app/(admin)/admin-cases.tsx`
+data structure without overwriting any original file:
+
+- `disasterCases`: validated status, official incident barangay (then existing
+  Admin fallbacks), reporter UID, required skills, dispatch blocked, and legacy
+  / currently active Volunteer responder signals.
+- `volunteerApplications`: uses approved application UID and skills; does not
+  substitute application barangay for current `users/{uid}.barangay`.
+- `users/{uid}`: explicit approved active Resident/Volunteer account, approved
+  Volunteer capability, identity verification. Any rejected/revoked/disabled
+  state blocks automatic matching, even if the manual Admin UI still lists
+  the approved historical application for review.
+- `responseAssignments` and `responderLocks`: active manual/automatic offers,
+  responder locks, and duplicate-task conflicts block new recommendations.
+  Previously completed manual tasks remain untouched and readable.
+- Wave 1 same barangay, Wave 2 only with verified adjacency, Wave 3 SJDM-wide,
+  with a separate high/critical official-emergency escalation flag.
+
+`scripts/test-live-compatibility-adapter-20261117.cjs` exercises these cases
+with *synthetic fixtures*, including resident-as-volunteer, invalid identity,
+revoked access, busy responders, pre-existing manual offers, mismatched skills,
+outside-SJDM location and unauthorised self-assignments.
+
+**Important:** This adapter is not wired to the production UI and has no
+Firebase SDK. It is an integration *contract* and pure preview, not an
+operational real-time dispatcher. No production release gate was bypassed.
