@@ -71,3 +71,22 @@ We preserve the existing sidebar file byte-for-byte and do not delete
 Certificates to satisfy an outdated snapshot. The CI instead executes the
 actual-source portal, existing Volunteer dispatch, and Community Events
 regressions in addition to strict original-line preservation.
+
+## Additional baseline-dependent historical regression
+
+The existing `scripts/test-defense-unified-lgu-volunteer-dispatch.cjs`
+fails a condition that expects a retired external Google Maps call in the
+historical Admin file. The published-source `admin-cases.tsx` still has
+that reference. This feature branch did **not** add or alter it. We are
+not deleting a map feature or changing existing Emergency Reports UI to make
+an unrelated historical expectation pass.
+
+Instead, the review CI uses `test-legacy-module-blobs-20261117.cjs`
+to verify the exact Git object IDs of existing login, signup, map,
+Events, Certificates, Donations, backend, Firebase Rules and Functions
+against the pinned live-derived base; it also runs compatible Portal
+and Community Events regressions. The original Admin/Volunteer screen
+lines are independently proven unmodified by the additive UI test.
+
+**This remains a code-only staging preview, not an end-to-end backend
+acceptance or a production release.**
