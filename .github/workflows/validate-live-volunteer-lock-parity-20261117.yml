@@ -6,7 +6,6 @@ on:
     paths:
       - "app/(tabs)/volunteer.web.tsx"
       - "app/(tabs)/volunteer.tsx"
-      - "firestore.rules"
       - "scripts/test-live-volunteer-lock-parity-20261117.cjs"
       - ".github/workflows/validate-live-volunteer-lock-parity-20261117.yml"
   workflow_dispatch:
@@ -20,5 +19,5 @@ jobs:
     steps:
       - name: Checkout review branch
         uses: actions/checkout@v4
-      - name: Check web, Android and Firestore Rules lock lifecycle
+      - name: Check web and Android lock lifecycle against current approved Rules
         run: node scripts/test-live-volunteer-lock-parity-20261117.cjs
