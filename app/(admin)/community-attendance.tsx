@@ -45,6 +45,8 @@ type EventItem = {
   category?: string;
   status: EventStatus;
   publicationStatus: string;
+  // Existing Firestore event completion timestamp; needed for cutoff check.
+  completedAt?: unknown;
   capacity: number;
   participantsCount?: number;
   description?: string;
@@ -267,11 +269,23 @@ function imageFor(event: EventItem): string {
   return /^https:\/\//i.test(candidate) ? candidate : "";
 }
 
-function verifiedServiceMeetsMinimum(person: Participant): boolean {
+// DISPLAY-ONLY mirror of the deployed Render certificate policy.
+// The backend must still confirm whether the 1-minute flag is active.
+const LIVE_CERTIFICATE_ONE_MINUTE_START = Date.parse("2026-11-10T14:55:00Z");
+function displayedCertificateMinimumMinutes(person: Participant, event?: EventItem | null): number {
+  const checkedIn = asDate(person.checkedInAt)?.getTime() ?? 0;
+  const checkedOut = asDate(person.checkedOutAt)?.getTime() ?? 0;
+  const completed = asDate(event?.completedAt)?.getTime() ?? 0;
+  return checkedIn >= LIVE_CERTIFICATE_ONE_MINUTE_START &&
+    checkedOut >= LIVE_CERTIFICATE_ONE_MINUTE_START &&
+    completed >= LIVE_CERTIFICATE_ONE_MINUTE_START && completed <= Date.now() ? 1 : 30;
+}
+function verifiedServiceMeetsMinimum(person: Participant, event?: EventItem | null): boolean {
   const start = asDate(person.checkedInAt)?.getTime() ?? 0;
   const end = asDate(person.checkedOutAt)?.getTime() ?? 0;
   return person.attendanceVerified === true &&
-    start > 0 && end >= start && end - start >= 30 * 60 * 1000;
+    start > 0 && end >= start && end - start <= 24 * 60 * 60 * 1000 &&
+    end - start >= displayedCertificateMinimumMinutes(person, event) * 60 * 1000;
 }
 
 function safeProfileImage(value: unknown): string {
@@ -551,7 +565,7 @@ export default function CommunityAttendanceAdmin() {
   const awaitingVerificationCount = joined.filter(
     (person) => !person.attendanceVerified && !!person.checkedInAt && !!person.checkedOutAt
   ).length;
-  const serviceMinimumCount = joined.filter(verifiedServiceMeetsMinimum).length;
+  const serviceMinimumCount = joined.filter((person) => verifiedServiceMeetsMinimum(person, selected)).length;
 
   // Cache profile images for the selected event; failures gracefully use initials.
   // This only reads profiles that Admin can already access through View Profile.
@@ -1332,8 +1346,10 @@ export default function CommunityAttendanceAdmin() {
                           <View style={styles.mobileTimeBlock}>
                             <Text style={styles.mobileTimeLabel}>DURATION</Text>
                             <Text style={styles.timeText}>{readableDuration(hoursFor(person))}</Text>
-                            {verifiedServiceMeetsMinimum(person) &&
-                              <Text style={styles.mobileDurationEligible}>30m minimum met</Text>}
+                            {verifiedServiceMeetsMinimum(person, selected) &&
+                              <Text style={styles.mobileDurationEligible}>
+                                {displayedCertificateMinimumMinutes(person, selected)}m time minimum met · server confirms
+                              </Text>}
                           </View>
                         </View>
                         <View style={styles.mobileRosterActions}>
@@ -1461,7 +1477,7 @@ export default function CommunityAttendanceAdmin() {
               <View style={styles.readinessChip}>
                 <Ionicons name="ribbon-outline" color="#0A806C" size={15} />
                 <Text style={styles.readinessText}>
-                  {serviceMinimumCount} verified with 30+ minutes
+                  {serviceMinimumCount} verified with minimum service time
                   {selected.status === "completed" ? " · Eligible for certificate check" : " · Certificate check after completion"}
                 </Text>
               </View>
@@ -1471,7 +1487,7 @@ export default function CommunityAttendanceAdmin() {
                 <Ionicons name="information-circle-outline" size={24} color="#3874CF" />
               </View>
               <Text style={styles.eligibilityText}>
-                Volunteers record their own Time In and Time Out. Admin only reviews and verifies the recorded times; verification does not edit timestamps. Community Event certificates also require event completion and at least 30 minutes of verified service.
+                Volunteers record their own Time In and Time Out. Admin only reviews and verifies the recorded times; verification does not edit timestamps. Community Event certificates require event completion and Admin-verified service. The duration policy is 1 minute for attendance and events completed from Nov 10, 2026 at 10:55 PM (PHT); earlier records require 30 minutes. The server confirms actual eligibility and issues certificates.
               </Text>
             </View>
           </View>
