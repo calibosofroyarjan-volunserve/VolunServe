@@ -22,6 +22,7 @@ const additions=new Set([
  "scripts/test-staging-gated-matching-ui-20261117.cjs",
  "scripts/test-legacy-module-blobs-20261117.cjs",
  "scripts/test-public-staging-browser-20261117.cjs",
+ "scripts/test-staging-validation-auto-offer-20261117.cjs",
  ".github/workflows/validate-staging-gated-matching-ui-20261117.yml",
  "docs/STAGING_GATED_MATCHING_UI_REVIEW_20261117.md",
 ]);
