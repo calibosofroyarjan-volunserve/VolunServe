@@ -69,7 +69,7 @@ const rows=out.trim().split("\n").filter(Boolean).map(l=>l.split("\t"));
 check(rows.length>=3,"review branch should contain additive feature package");
 for(const [status,path] of rows){
   check(status==="A","no existing file may be changed or removed: "+path);
-  check(/^(backend\/additiveEmergencyMatching\/|scripts\/test-additive-auto-volunteer-20261117\.cjs$|docs\/AUTO_VOLUNTEER_ADD_ONLY_LIVE_REVIEW_20261117\.md$|\.github\/workflows\/validate-auto-volunteer-add-only-20261117\.yml$)/.test(path),
+  check(/^(backend\/additiveEmergencyMatching\/|scripts\/(test-additive-auto-volunteer-20261117|test-live-compatibility-adapter-20261117)\.cjs$|docs\/AUTO_VOLUNTEER_ADD_ONLY_LIVE_REVIEW_20261117\.md$|\.github\/workflows\/validate-auto-volunteer-add-only-20261117\.yml$)/.test(path),
     "addition outside explicit whitelist blocked: "+path);
 }
 console.log("PASS: "+checks+" pure matching, fail-closed staging gates and add-only live-source preservation checks");
