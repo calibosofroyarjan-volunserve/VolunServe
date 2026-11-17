@@ -30,6 +30,8 @@ jobs:
         run: node scripts/test-staging-gated-matching-ui-20261117.cjs
       - name: Install exact locked dependencies
         run: npm ci --no-audit --no-fund
+      - name: Test staged Admin validation automatically requests only synthetic offers
+        run: node --test scripts/test-staging-validation-auto-offer-20261117.cjs
       - name: Check complete TS codebase
         run: npx tsc --noEmit --incremental false
       - name: Published-source critical module preservation (baseline-compatible)
