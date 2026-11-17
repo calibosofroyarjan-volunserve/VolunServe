@@ -289,8 +289,8 @@ test("dedicated Volunteer page is served without admin credentials or private ke
   assert.ok(!html.includes("FIREBASE_SERVICE_ACCOUNT_JSON"));
 }));
 test("staging Volunteer acceptance and decline are atomic, isolated, and expire safely",async()=>{
-  const {getVolunteerOffer,respondToStagingOffer,resetExpiredFixture}=
-    require("./stagingVolunteerTask");
+  const {getVolunteerOffer,respondToStagingOffer,resetExpiredFixture,
+    inspectStagingAssignmentConsistency}=require("./stagingVolunteerTask");
   const uid="testVolunteer",id="STAGING_TEST_001_"+uid,caseId="STAGING_TEST_001";
   const now=Date.now();
   class FakeDoc {
@@ -334,6 +334,9 @@ test("staging Volunteer acceptance and decline are atomic, isolated, and expire 
     });
     store.seed("autoVolunteerReservations/"+uid,{assignmentId:id,caseId,uid});
     store.seed("adminActivityLogs/auto_offer_"+id,{action:"Automatic Volunteer Task Offered"});
+    store.seed("notifications/auto_response_"+id,{
+      userId:uid,caseId,assignmentId:id,type:"response_assignment"
+    });
   }
   const accepted=new FakeStore();fixture(accepted,now+100000);
   assert.equal((await getVolunteerOffer(accepted,uid,now)).canRespond,true);
@@ -342,6 +345,12 @@ test("staging Volunteer acceptance and decline are atomic, isolated, and expire 
   assert.equal(accepted.map.get("responseAssignments/"+id).status,"accepted");
   assert.equal(accepted.map.get("emergencyAutoDispatch/"+caseId).status,"accepted");
   assert.equal(accepted.map.get("responderLocks/"+uid).assignmentId,id);
+  assert.equal(accepted.map.get("notifications/auto_test_accepted_"+id).userId,"testResident");
+  assert.equal(accepted.map.get("adminActivityLogs/auto_test_decision_"+id).action,
+    "Synthetic Volunteer Accepted");
+  const verified=await inspectStagingAssignmentConsistency(accepted);
+  assert.equal(verified.status,"accepted");
+  assert.equal(verified.fullAcceptanceVerified,true);
   assert.equal((await respondToStagingOffer(accepted,uid,"accepted",now)).status,"already_accepted");
   assert.equal((await resetExpiredFixture(accepted,now+500000)).status,"cannot_reset_accepted_task");
   const expired=new FakeStore();fixture(expired,now-1000);
@@ -357,7 +366,11 @@ test("staging Volunteer acceptance and decline are atomic, isolated, and expire 
   assert.equal(declined.map.get("responseAssignments/"+id).status,"declined");
   assert.equal(declined.map.has("autoVolunteerReservations/"+uid),false);
   assert.equal(declined.map.get("emergencyAutoDispatch/"+caseId).status,"needs_admin");
+  assert.equal(declined.map.get("notifications/auto_test_declined_"+id).userId,"testAdmin");
+  assert.equal(declined.map.get("adminActivityLogs/auto_test_decision_"+id).action,
+    "Synthetic Volunteer Declined");
   assert.equal((await resetExpiredFixture(declined,now)).status,"reset");
+  assert.equal(declined.map.has("notifications/auto_test_declined_"+id),false);
 });
 
 
@@ -428,4 +441,32 @@ test("Volunteer API requires approved Volunteer Firebase role and never exposes 
     assert.equal(r.status,400);
     assert.equal(writes,0);
   }finally{await new Promise(resolve=>server.close(resolve));}
+});
+
+
+test("Volunteer and Admin production-compatible staging integration remains fail-closed",()=>{
+  const fs=require("node:fs");
+  const rules=fs.readFileSync("firestore.rules","utf8");
+  const engine=fs.readFileSync("functions/emergencyAutoDispatchCore.js","utf8");
+  const stage=fs.readFileSync("backend/stagingVolunteerTask.js","utf8");
+  const web=fs.readFileSync("app/(tabs)/volunteer.web.tsx","utf8");
+  const android=fs.readFileSync("app/(tabs)/volunteer.tsx","utf8");
+  assert.match(rules,/match \/responseAssignments\/\{assignmentId\}/);
+  assert.match(rules,/validVolunteerResponseFields/);
+  assert.match(rules,/match \/responderLocks\/\{uid\}/);
+  assert.match(stage,/tx.update\(refs.assignmentRef,\{status:decision,updatedAt:stamp\}\)/);
+  assert.ok(!stage.includes("acceptedAt:stamp"));
+  assert.ok(!stage.includes("declinedAt:stamp"));
+  assert.match(stage,/auto_test_accepted_/);
+  assert.match(stage,/inspectStagingAssignmentConsistency/);
+  assert.match(engine,/tx.create\(reserveRef/);
+  assert.match(engine,/createdBy: "automatic_matching_engine"/);
+  for(const code of [web,android]){
+    assert.ok(code.includes('const responderLockRef = doc(db, "responderLocks", user.uid)'));
+    assert.ok(code.includes('if (next === "accepted" && recordedLock)'));
+    assert.ok(code.includes('transaction.set(responderLockRef,'));
+  }
+  const admin=fs.readFileSync("backend/stagingAdminLogin.html","utf8");
+  assert.match(admin,/api\/admin\/emergency-auto\/verify-test/);
+  assert.match(admin,/verifyTest.disabled/);
 });
