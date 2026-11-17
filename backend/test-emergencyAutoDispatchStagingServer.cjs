@@ -386,6 +386,8 @@ test("Volunteer API requires approved Volunteer Firebase role and never exposes 
     if(name==="systemSettings")return {doc(){return {get:async()=>snap(undefined)};}};
     throw Error("unexpected collection "+name);
   },runTransaction:async()=>{writes++;throw Error("no writes expected");}};
+  const direct=await require("./stagingVolunteerTask").getVolunteerOffer(firestore,"test-vol");
+  assert.equal(direct.status,"offered");
   const app=makeApp({
     env:{VOLUNSERVE_AUTO_VOLUNTEER_STAGING_PROJECT_ID:project,
       FIREBASE_SERVICE_ACCOUNT_JSON:JSON.stringify({project_id:project})},
