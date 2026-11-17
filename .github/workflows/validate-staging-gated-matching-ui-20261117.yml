@@ -34,7 +34,7 @@ jobs:
         run: npx tsc --noEmit --incremental false
       - name: Existing core Volunteer/Admin regressions
         run: |
-          node scripts/test-volunteer-time-controls-20261106.cjs
+          node scripts/test-resident-volunteer-sidebar.cjs
           node scripts/test-portal-resident-volunteer-ui-flow.cjs
           node scripts/test-defense-unified-lgu-volunteer-dispatch.cjs
       - name: Confirm no production action
