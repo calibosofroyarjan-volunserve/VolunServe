@@ -156,7 +156,7 @@ function makeApp({authClient = auth, firestore = db, worker, env = process.env} 
       return response.status(503).json({ok:false,error:"isolated_staging_not_configured"});
     try {
       const bearer=String(request.headers.authorization||"");
-      const token=/^Bearer (\\S+)$/i.exec(bearer)?.[1];
+      const token=/^Bearer (\S+)$/i.exec(bearer)?.[1];
       if(!token)return response.status(401).json({ok:false,error:"sign_in_required"});
       const decoded=await authClient.verifyIdToken(token,true);
       if(!decoded?.uid || !/^[A-Za-z0-9_-]{1,160}$/.test(decoded.uid))
