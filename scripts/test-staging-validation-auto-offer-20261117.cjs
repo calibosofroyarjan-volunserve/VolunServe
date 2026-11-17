@@ -85,8 +85,8 @@ test("network and missing ID token fail closed without breaking Admin case valid
  const net=load({enabled:true,fetchImpl:async()=>{throw Error("staging offline");}});
  assert.equal((await net(opts())).reason,"staging_dispatch_request_unavailable");
  const r=load({enabled:true,fetchImpl:async()=>{throw Error("fetch must not run");}});
- assert.equal((await r(opts({getIdToken:async()=>""})).offered,false);
- assert.equal((await r(opts({getIdToken:async()=>{throw Error("expired")}})).offered,false);
+ assert.equal((await r(opts({getIdToken:async()=>""}))).offered,false);
+ assert.equal((await r(opts({getIdToken:async()=>{throw Error("expired")}}))).offered,false);
 });
 test("only static staging origin and fixture are permitted; production flow untouched",()=>{
  assert.match(lib,/usingStagingFirebase\s*&&\s*firebaseConfig\.projectId === "volunserve-volunteer-staging"/);
