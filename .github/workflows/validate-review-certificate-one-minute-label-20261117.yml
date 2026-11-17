@@ -1,0 +1,32 @@
+name: Review stale 30-minute Certificate UI label — NO DEPLOY
+
+on:
+  pull_request:
+    branches:
+      - review/verified-live-source-baseline-20261117
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  certificate-label-no-deploy:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Exact dependencies only
+        run: npm ci --no-audit --no-fund
+      - name: Validate 1 minute new attendance, 30 minute historical attendance, no issuance bypass
+        run: node --test scripts/test-review-certificate-one-minute-label-20261117.cjs
+      - name: Validate TypeScript source
+        run: npx tsc --noEmit --incremental false
+      - name: No production deploy
+        run: echo "No Hosting, backend, Firestore Rules, certificates, or attendance records modified"
