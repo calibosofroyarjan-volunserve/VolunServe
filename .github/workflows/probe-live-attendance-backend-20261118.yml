@@ -1,0 +1,50 @@
+name: Probe Live VolunServe Attendance Backend (READ ONLY NO DEPLOY)
+
+on:
+  push:
+    branches:
+      - ci/probe-live-attendance-backend-20261118
+
+permissions:
+  contents: read
+
+jobs:
+  production-api-smoke:
+    name: Public health and unauthenticated endpoint guards
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify deployed backend health and authentication guards without modifying data
+        run: |
+          node - <<'NODE'
+          const assert = require('node:assert/strict');
+          const base = 'https://volunserve.onrender.com';
+          async function main() {
+            const response = await fetch(base + '/health', {signal: AbortSignal.timeout(45000)});
+            assert.equal(response.status, 200, 'Backend health must return HTTP 200');
+            const body = await response.json();
+            assert.equal(body.ok, true);
+            assert.equal(body.service, 'volunserve-backend');
+            console.log('PASS: live backend /health returns ok');
+
+            for (const pathname of [
+              '/api/community-events/attendance/auto-verify',
+              '/api/admin/community-certificates/reconcile',
+            ]) {
+              const check = await fetch(base + pathname, {
+                method:'POST', headers:{'Content-Type':'application/json'},
+                body: JSON.stringify({eventId:'smoke-test-no-auth'}),
+                signal: AbortSignal.timeout(30000),
+              });
+              assert.ok(check.status >= 400 && check.status < 500,
+                pathname + ' must reject unauthenticated callers, got HTTP ' + check.status);
+              console.log('PASS: ' + pathname + ' rejects unauthenticated requests: HTTP ' + check.status);
+            }
+            console.log('READ ONLY: no Firebase, attendance, certificate or Render settings were changed.');
+          }
+          main().catch(error=>{console.error(error);process.exitCode=1;});
+          NODE
