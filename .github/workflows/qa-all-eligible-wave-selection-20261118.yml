@@ -6,6 +6,8 @@ on:
     paths:
       - "functions/emergencyAllEligibleWavePlanner.js"
       - "backend/test-all-eligible-wave-planner.cjs"
+      - "backend/test-stagingFreshEndToEnd.cjs"
+      - "backend/emergencyAutoDispatchStagingServer.js"
       - ".github/workflows/qa-all-eligible-wave-selection-20261118.yml"
   workflow_dispatch:
 permissions:
@@ -23,5 +25,9 @@ jobs:
         run: node --check functions/emergencyAllEligibleWavePlanner.js
       - name: Verify all-eligible selection without Firestore
         run: node --test backend/test-all-eligible-wave-planner.cjs
+      - name: Install backend locked dependencies
+        run: npm ci --prefix backend --no-audit --no-fund
+      - name: Check isolated staging endpoint tests
+        run: node --test backend/test-stagingFreshEndToEnd.cjs
       - name: Confirm no deployment
         run: echo "NO FIRESTORE WRITES OR PRODUCTION DISPATCH"
