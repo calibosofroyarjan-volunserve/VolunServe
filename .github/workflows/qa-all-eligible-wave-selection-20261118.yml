@@ -9,6 +9,7 @@ on:
       - "backend/test-stagingFreshEndToEnd.cjs"
       - "backend/emergencyAutoDispatchStagingServer.js"
       - "backend/stagingBulkVolunteerOffers.js"
+      - "backend/stagingBulkWaveAdvance.js"
       - "backend/stagingAdminLogin.html"
       - "backend/stagingVolunteerLogin.html"
       - ".github/workflows/qa-all-eligible-wave-selection-20261118.yml"
@@ -28,6 +29,7 @@ jobs:
         run: |
           node --check functions/emergencyAllEligibleWavePlanner.js
           node --check backend/stagingBulkVolunteerOffers.js
+          node --check backend/stagingBulkWaveAdvance.js
           node --check backend/emergencyAutoDispatchStagingServer.js
       - name: Verify all-eligible selection without Firestore
         run: node --test backend/test-all-eligible-wave-planner.cjs
