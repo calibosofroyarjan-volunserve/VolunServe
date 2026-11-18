@@ -13,7 +13,7 @@ function refSet(db,uid,caseId=CASE_ID) {
   const assignmentId=caseId+"_"+uid;
   return {
     caseRef:db.collection("disasterCases").doc(caseId),
-    stateRef:db.collection("emergencyAutoDispatch").doc(CASE_ID),
+    stateRef:db.collection("emergencyAutoDispatch").doc(caseId),
     assignmentRef:db.collection("responseAssignments").doc(assignmentId),
     reserveRef:db.collection("autoVolunteerReservations").doc(uid),
     lockRef:db.collection("responderLocks").doc(uid),
@@ -47,7 +47,7 @@ async function getVolunteerOffer(db,uid,now=Date.now(),caseId=CASE_ID) {
 async function respondToStagingOffer(db,uid,decision,now=Date.now(),caseId=CASE_ID) {
   if(!safeUid(uid) || !titleForCase(caseId) || !["accepted","declined"].includes(decision))
     return result("invalid_request");
-  const refs=refSet(db,uid),stamp=FieldValue.serverTimestamp();
+  const refs=refSet(db,uid,caseId),stamp=FieldValue.serverTimestamp();
   return db.runTransaction(async tx=>{
     // All reads precede writes; Firestore transactions resolve races safely.
     const [caseSnap,stateSnap,assignmentSnap,reserveSnap,lockSnap]=await Promise.all(
