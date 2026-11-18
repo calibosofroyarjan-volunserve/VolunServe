@@ -2128,6 +2128,33 @@ service cloud.firestore {
     }
     match /disasterCases/{caseId} {
 
+      // Phase 5 DRAFT: old Admin clients cannot overwrite an accepted
+      // automatic responder or fabricate a winner. Only an atomic,
+      // same-transaction cancellation of THAT assignment may clear it.
+      // The server Admin SDK must still revalidate before writing.
+      function preserveAcceptedAutoWinner() {
+        let oldWinner = resource.data.get('autoVolunteerAcceptedAssignmentId', '');
+        let newWinner = request.resource.data.get('autoVolunteerAcceptedAssignmentId', '');
+        return (
+          (oldWinner == '' && newWinner == '')
+          || (
+            oldWinner != '' && newWinner == oldWinner
+            && request.resource.data.get('activeVolunteerSupportAssignmentId', '')
+              == resource.data.get('activeVolunteerSupportAssignmentId', '')
+            && request.resource.data.get('activeVolunteerSupportUid', '')
+              == resource.data.get('activeVolunteerSupportUid', '')
+          )
+          || (
+            oldWinner != '' && newWinner == ''
+            && request.resource.data.get('activeVolunteerSupportAssignmentId', '') == ''
+            && request.resource.data.get('activeVolunteerSupportUid', '') == ''
+            && getAfter(
+              /databases/$(database)/documents/responseAssignments/$(oldWinner)
+            ).data.status == 'cancelled'
+          )
+        );
+      }
+
       function isLguPersonnel() {
         return approved()
           && profile().role == 'lgu_personnel'
@@ -2364,6 +2391,7 @@ service cloud.firestore {
         && request.resource.data.updatedAt is timestamp;
       allow update: if isAdmin()
         && validStatusTransition()
+        && preserveAcceptedAutoWinner()
         && (
           !('responseVehicleType' in request.resource.data)
           || request.resource.data.responseVehicleType in [
