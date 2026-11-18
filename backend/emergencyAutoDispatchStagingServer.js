@@ -66,6 +66,14 @@ function makeApp({authClient = auth, firestore = db, worker, env = process.env} 
                   "session:",String(check.sessionStatus||"unknown"),
                   "assignment:",String(check.assignmentStatus||"unknown"),
                   "acceptedVerified:",check.fullAcceptanceVerified===true);
+                // Status-only quality checks for the ONE recognized fictional
+                // case, with no identities, values, or assignment IDs logged.
+                const flags=["initialOfferNotificationPresent",
+                  "acceptedResponderLockCorrect","acceptedCaseStatusCorrect",
+                  "acceptedResidentNotificationPresent","adminAuditPresent",
+                  "reservationPresent"];
+                console.info("[staging-readiness] fictional acceptance flags:",
+                  flags.map(key=>key+"="+(check[key]===true?"yes":"no")).join(" "));
               }
             }
           }
