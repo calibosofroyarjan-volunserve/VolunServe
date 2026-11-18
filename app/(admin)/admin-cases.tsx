@@ -3675,50 +3675,78 @@ export default function AdminCases() {
               <Text style={styles.caseListSort}>Priority · Newest</Text>
             </View>
 
+            {!compact && <View style={styles.queueTableHead}>
+              <Text style={[styles.queueHeadCell,{flex:2.6}]}>REPORT CASE</Text>
+              <Text style={[styles.queueHeadCell,{flex:1.7}]}>RESIDENT</Text>
+              <Text style={[styles.queueHeadCell,{flex:1.5}]}>BARANGAY</Text>
+              <Text style={[styles.queueHeadCell,{flex:1}]}>SEVERITY</Text>
+              <Text style={[styles.queueHeadCell,{flex:1}]}>STATUS</Text>
+              <Text style={[styles.queueHeadCell,{flex:1.3}]}>SUBMITTED</Text>
+            </View>}
             <View style={styles.caseListItems}>
               {pagedCases.map((item) => {
-                const active = selectedCase?.id === item.id;
-                const thumb = firstIncidentImage(item.attachments);
-
-                return (
-                  <TouchableOpacity
-                    key={item.id}
-                    activeOpacity={0.86}
-                    style={[styles.caseListItem, active && styles.caseListItemActive]}
-                    accessibilityRole="button"
-                    accessibilityLabel={`View ${item.title} reported by ${item.reporterName || "Resident"}`}
-                    onPress={() => { setSelectedCaseId(item.id); setIsCaseDetailOpen(true); setDetailTab("overview"); }}
-                  >
+                const thumb=firstIncidentImage(item.attachments);
+                return <TouchableOpacity
+                  key={item.id}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Open ${item.title} from ${item.reporterName || "Resident"}`}
+                  activeOpacity={0.88}
+                  style={styles.queueReportRow}
+                  onPress={() => {
+                    setSelectedCaseId(item.id);
+                    setDetailTab("overview");
+                    setIsCaseDetailOpen(true);
+                  }}>
+                  <View style={styles.queueCaseColumn}>
                     <View style={styles.caseListThumb}>
-                      {thumb ? (
-                        <Image source={{ uri: thumb }} style={styles.caseListThumbImage} resizeMode="cover" />
-                      ) : (
+                      {thumb ? <Image source={{uri:thumb}}
+                        style={styles.caseListThumbImage} resizeMode="cover"/> :
                         <View style={styles.caseListThumbFallback}>
                           <Text style={styles.caseListThumbFallbackIcon}>{categoryIcon(item.category)}</Text>
-                        </View>
-                      )}
+                        </View>}
                     </View>
-
-                    <View style={styles.caseListBody}>
-                      <View style={styles.caseListTitleRow}>
-                        <Text numberOfLines={1} style={styles.caseListItemTitle}>{item.title}</Text>
-                        <View style={[styles.caseListSeverity, severityStyle(item.severity)]}>
-                          <Text style={styles.caseListSeverityText}>{severityLabel(item.severity)}</Text>
-                        </View>
-                      </View>
-                      <Text numberOfLines={1} style={styles.caseListLocation}>⌖ {item.location || "Location pending"}</Text>
-                      <View style={styles.caseListMetaRow}>
-                        <Text numberOfLines={1} style={styles.caseListMeta}>♙ {item.reporterName || "Resident"}</Text>
-                        <Text style={styles.caseListMeta}>◉ {item.affectedPeople || 0} affected</Text>
-                      </View>
+                    <View style={styles.queueCaseTitle}>
+                      <Text style={styles.caseListItemTitle} numberOfLines={2}>
+                        {item.title || "Emergency report"}
+                      </Text>
+                      <Text style={styles.queueCaseId}>CASE {item.id}</Text>
+                      {compact && <Text style={styles.queueSmallMeta}>
+                        {item.reporterName || "Resident"} · {item.incidentBarangay || item.reporterBarangay || "Location pending"}
+                      </Text>}
                     </View>
-
-                    <View style={styles.caseListRight}>
-                      <Text style={styles.caseListDate}>{formatDate(item.createdAt)}</Text>
-                      <Text style={styles.caseListChevron}>›</Text>
+                  </View>
+                  {!compact && <View style={[styles.queueDataColumn,{flex:1.7}]}>
+                    <Text style={styles.queueRowText} numberOfLines={2}>
+                      {item.reporterName || "Resident"}
+                    </Text>
+                    <Text style={styles.queueMuted}>
+                      {item.verification?.identityVerified ? "Verified Resident" : "Resident"}
+                    </Text>
+                  </View>}
+                  {!compact && <View style={[styles.queueDataColumn,{flex:1.5}]}>
+                    <Text style={styles.queueRowText} numberOfLines={2}>
+                      {item.incidentBarangay || item.reporterBarangay || "Not provided"}
+                    </Text>
+                  </View>}
+                  <View style={[styles.queueDataColumn,{flex:1}]}>
+                    <View style={[styles.caseListSeverity,severityStyle(item.severity)]}>
+                      <Text style={styles.caseListSeverityText}>
+                        {severityLabel(item.severity)}
+                      </Text>
                     </View>
-                  </TouchableOpacity>
-                );
+                  </View>
+                  <View style={[styles.queueDataColumn,{flex:1}]}>
+                    <View style={[styles.caseListSeverity,statusStyle(item.status)]}>
+                      <Text style={styles.caseListSeverityText}>
+                        {labelOfStatus(item.status)}
+                      </Text>
+                    </View>
+                  </View>
+                  {!compact && <View style={[styles.queueDataColumn,{flex:1.3}]}>
+                    <Text style={styles.queueMuted}>{formatDate(item.createdAt)}</Text>
+                  </View>}
+                  <Text style={styles.queueChevron}>›</Text>
+                </Touchable>;
               })}
             </View>
             <View style={styles.caseListPagination}>
@@ -8354,6 +8382,24 @@ const styles = StyleSheet.create({
   assignmentSideDotActive: { backgroundColor: "#0E8A67", color: "#FFFFFF" },
   assignmentSideText: { color: "#708298", fontSize: 12, fontWeight: "700" },
   assignmentSideTextActive: { color: "#184C3D", fontWeight: "900" },
+  queueTableHead:{
+    flexDirection:"row",gap:14,paddingHorizontal:18,paddingVertical:13,
+    backgroundColor:"#F6F9F8",borderBottomWidth:1,borderBottomColor:"#E1E9E4",
+  },
+  queueHeadCell:{ fontSize:11,fontWeight:"800",color:"#60766B",letterSpacing:0.4 },
+  queueReportRow:{
+    flexDirection:"row",alignItems:"center",gap:14,paddingHorizontal:12,
+    minHeight:92,paddingVertical:13,backgroundColor:"#FFFFFF",
+    borderBottomWidth:1,borderBottomColor:"#E8EFEB",
+  },
+  queueCaseColumn:{ flex:2.6,flexDirection:"row",alignItems:"center",minWidth:140,gap:12 },
+  queueCaseTitle:{ flex:1,minWidth:0,gap:5 },
+  queueCaseId:{ color:"#7A8D84",fontSize:11,fontWeight:"600" },
+  queueSmallMeta:{ color:"#506F60",fontSize:11,marginTop:4 },
+  queueDataColumn:{ minWidth:0,alignItems:"flex-start" },
+  queueRowText:{ color:"#233D32",fontSize:13,fontWeight:"700" },
+  queueMuted:{ color:"#71867C",fontSize:11,lineHeight:17 },
+  queueChevron:{ color:"#0D7254",fontSize:22,fontWeight:"800" },
   caseListPane: {
     width: "100%",
     flexShrink: 1,
