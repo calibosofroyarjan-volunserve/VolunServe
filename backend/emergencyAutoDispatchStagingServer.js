@@ -48,6 +48,15 @@ function makeApp({authClient = auth, firestore = db, worker, env = process.env} 
             const fields = diagnoseSyntheticFixtureFields(dummy.exists ? dummy.data() : null);
             console.info("[staging-readiness] invalid dummy field names:",
               fields.join(",") || "none");
+            const fixture = dummy.exists ? dummy.data() : null;
+            if (fixture?.title === "TEST ONLY - Dummy Emergency") {
+              const category=["reported","validated","assigned","in_progress",
+                "resolved","closed"].includes(fixture.status)?fixture.status:"other";
+              console.info("[staging-readiness] fictional case status category:",
+                category,"hasAssignmentMarker:",Boolean(
+                  fixture.activeVolunteerSupportAssignmentId ||
+                  fixture.autoVolunteerDispatch?.state));
+            }
           }
         }).catch(error=>{
           stagingTestCaseReadiness = {status:"unavailable"};
