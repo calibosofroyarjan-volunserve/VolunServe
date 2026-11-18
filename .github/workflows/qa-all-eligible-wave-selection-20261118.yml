@@ -1,0 +1,27 @@
+name: All eligible Volunteer wave planner - staging only
+on:
+  pull_request:
+    branches:
+      - feat/emergency-auto-dispatch-server-staging-20261115
+    paths:
+      - "functions/emergencyAllEligibleWavePlanner.js"
+      - "backend/test-all-eligible-wave-planner.cjs"
+      - ".github/workflows/qa-all-eligible-wave-selection-20261118.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  planner-tests:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Check syntax
+        run: node --check functions/emergencyAllEligibleWavePlanner.js
+      - name: Verify all-eligible selection without Firestore
+        run: node --test backend/test-all-eligible-wave-planner.cjs
+      - name: Confirm no deployment
+        run: echo "NO FIRESTORE WRITES OR PRODUCTION DISPATCH"
