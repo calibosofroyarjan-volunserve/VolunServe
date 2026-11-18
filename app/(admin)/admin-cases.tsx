@@ -38,6 +38,7 @@ import {
   View,
 } from "react-native";
 
+import { ensureStagingBulkOffersAfterAdminValidation, STAGING_BULK_CASE_ID } from "../../lib/stagingBulkVolunteerClient";
 import { db } from "../../lib/firebase";
 import { safePublicAdvisoryBarangay } from "../../lib/emergencyPublicAdvisory";
 import { SJDM_BARANGAYS } from "../../constants/sjdmBarangays";
@@ -1921,6 +1922,25 @@ export default function AdminCases() {
         // This is an opt-in staging-only synthetic demonstration. The live
         // project, normal cases and existing manual assignments stay unchanged.
         // Never call the staging backend before the Firestore validation commit.
+        let fictionalBulkNotice = "";
+        // Additive-only: exact synthetic 002 can request batch fanout after
+        // successful Admin validation. Existing 001/real/manual flows remain.
+        if (AUTO_VOLUNTEER_MATCH_UI_PREVIEW &&
+            incident.id === STAGING_BULK_CASE_ID &&
+            incident.status === "reported" &&
+            String(incident.verificationStatus || "") !== "validated") {
+          try {
+            const result = await ensureStagingBulkOffersAfterAdminValidation(
+              incident.id, String(auth.app.options.projectId || ""), adminUser,
+            );
+            fictionalBulkNotice = result.status === "already_started"
+              ? " Existing fictional staging offers preserved, no duplicates."
+              : ` Fictional staging Wave ${result.wave || "?"}: ${result.offered || 0} separate Volunteer offers confirmed.`;
+          } catch {
+            fictionalBulkNotice = " Fictional staging bulk offers NOT confirmed; review the isolated Admin status.";
+          }
+        }
+
         if (AUTO_VOLUNTEER_MATCH_UI_PREVIEW) {
           const stagingOffer = await requestStagingAutoOfferAfterAdminValidation({
             caseId: incident.id,
@@ -1957,6 +1977,7 @@ export default function AdminCases() {
             advisoryMessage = "Case validated, but the public advisory was NOT published. Review Announcements permissions separately.";
           }
         }
+        advisoryMessage += fictionalBulkNotice;
         Alert.alert("Request Validated",
           "The case is now eligible for Volunteer offers. " + advisoryMessage);
       } else if (action === "request_more_evidence") {
