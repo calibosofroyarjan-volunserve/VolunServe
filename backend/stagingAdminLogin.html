@@ -58,6 +58,7 @@ a{color:#075c49}input:focus-visible,button:focus-visible{outline:3px solid #4db8
 <button type="button" id="bulk-offer-002" disabled>Offer to ALL eligible Volunteers (isolated test)</button>
 <button type="button" class="secondary" id="bulk-status-002" disabled>Check ALL eligible offer statuses</button>
 <button type="button" class="secondary" id="bulk-verify-002" disabled>Verify BULK acceptance &amp; responder locks (read-only)</button>
+<button type="button" class="secondary" id="wave-stop-002" disabled>Verify automatic wave STOP (read-only)</button>
 <button type="button" class="secondary" id="bulk-reissue-002" disabled>Reissue expired ALL 3 (fictional bulk)</button>
 <button type="button" class="secondary" id="verify-002" disabled>Verify 002 acceptance</button>
 <button type="button" class="secondary" id="reissue-002" disabled>Reissue expired 002 only</button>
@@ -176,7 +177,7 @@ qaEl("qa-create").addEventListener("click",async()=>{
     qaPrepared=false;
   }
 });
-const ids002=["check-002","create-002","validate-002","offer-002","verify-002","reissue-002","bulk-offer-002","bulk-status-002","bulk-reissue-002","bulk-verify-002","eligibility-002"];
+const ids002=["check-002","create-002","validate-002","offer-002","verify-002","reissue-002","bulk-offer-002","bulk-status-002","bulk-reissue-002","bulk-verify-002","wave-stop-002","eligibility-002"];
 const el002=id=>document.getElementById(id);
 const show002=message=>{el002("e2e-002-status").textContent=message;};
 function disable002(){ids002.forEach(id=>{el002(id).disabled=true;});}
@@ -204,11 +205,13 @@ async function refresh002(){
   el002("bulk-offer-002").disabled=true;
   el002("bulk-status-002").disabled=true;
   el002("bulk-verify-002").disabled=true;
+  el002("wave-stop-002").disabled=true;
   el002("bulk-reissue-002").disabled=true;
   try{
     const bulk=await api002("/api/admin/emergency-auto/e2e-002/bulk-status");
     el002("bulk-status-002").disabled=false;
     el002("bulk-verify-002").disabled=bulk.status==="not_started";
+    el002("wave-stop-002").disabled=bulk.status==="not_started";
     el002("bulk-reissue-002").disabled=!(stagingActivationReady &&
       bulk.status==="waiting" && Number(bulk.offered)===3 &&
       Number(bulk.expired)===3 && Number(bulk.pending)===3 &&
@@ -285,6 +288,26 @@ async function do002(action,confirmation){
   }catch(error){show002("Action blocked: "+String(error?.message||"unknown").slice(0,160));
     try{await refresh002();}catch{}}
 }
+el002("wave-stop-002").addEventListener("click",async()=>{
+  try{
+    const d=await api002("/api/admin/emergency-auto/e2e-002/bulk-wave-stop");
+    show002("FICTIONAL 002 AUTOMATIC WAVE-STOP CHECK (READ ONLY)\n"+
+      "Result: "+String(d.status)+"\n"+
+      "Wave: "+String(d.currentWave)+"\n"+
+      "Accepted: "+String(d.accepted)+"\n"+
+      "Accepted responder locks: "+String(d.correctResponderLocks)+"\n"+
+      "Other pending offers: "+String(d.otherPendingOffers)+"\n"+
+      "Expired other offers: "+String(d.expiredOtherOffers)+"\n"+
+      "Later-wave offers: "+String(d.laterWaveOffers)+"\n"+
+      "Acceptance evidence: "+(d.acceptanceEvidenceVerified?"VERIFIED":"NOT VERIFIED")+"\n"+
+      "Stop guard: "+(d.waveStopGuardConfirmed?"CONFIRMED":"NOT CONFIRMED")+"\n"+
+      "No later wave observed: "+(d.noLaterWaveObserved?"YES":"NO")+"\n"+
+      "After remaining offers expired: "+(d.observedAfterOtherOffersExpired?"YES":"NO")+"\n"+
+      "Automatic timer configured: "+(d.automaticWaveTimerConfigured?"YES":"NO")+"\n"+
+      "Actual timer execution: NOT PROVEN BY THIS READ-ONLY CHECK\n"+
+      "No resets, reissues or Firebase writes.");
+  }catch(error){show002("Wave-stop verification blocked: "+String(error?.message||"unknown"));}
+});
 el002("bulk-verify-002").addEventListener("click",async()=>{
   try{
     const d=await api002("/api/admin/emergency-auto/e2e-002/bulk-verify-acceptance");
