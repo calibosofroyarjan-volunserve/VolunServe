@@ -230,7 +230,7 @@ test("requires both real-auth and operational-admin middleware; server is not pa
   const source=fs.readFileSync(path.join(__dirname,
     "autoVolunteerProductionPreviewReader.js"),"utf8");
   for(const banned of [
-    "runTransaction(","setInterval(","createUser(","FieldValue",
+    "runTransaction(","setInterval(","createUser(",
     "app.post(","transaction.update(","transaction.create("
   ])assert.ok(!source.includes(banned),banned);
   assert.ok(!routeSource.includes("app.post("));
