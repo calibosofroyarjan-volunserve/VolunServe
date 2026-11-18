@@ -1,0 +1,35 @@
+name: Isolated Automatic Volunteer Expo Staging Browser Smoke — NO DEPLOY
+
+on:
+  pull_request:
+    branches:
+      - feat/staging-gated-admin-volunteer-preview-ui-20261117
+    paths:
+      - "scripts/test-isolated-staging-expo-browser-20261118.cjs"
+      - ".github/workflows/smoke-isolated-auto-volunteer-expo-ui-20261118.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  anonymous-browser-smoke:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install isolated browser dependency (not project code)
+        run: npm install --prefix /tmp/volunserve-auto-preview-browser --no-save --no-package-lock playwright@1.56.1
+      - name: Install Chromium
+        run: /tmp/volunserve-auto-preview-browser/node_modules/.bin/playwright install --with-deps chromium
+      - name: Check actual live isolated staging UI and rejected invalid admin token
+        env:
+          NODE_PATH: /tmp/volunserve-auto-preview-browser/node_modules
+        run: node scripts/test-isolated-staging-expo-browser-20261118.cjs
+      - name: No production actions
+        run: echo "Anonymous staging UI verification only; no deployment, login, offers or Firestore writes"
