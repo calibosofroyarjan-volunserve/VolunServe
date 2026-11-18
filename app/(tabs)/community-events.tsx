@@ -1852,12 +1852,14 @@ export default function CommunityEventsScreen() {
               }
             );
             const result = await response.json().catch(() => null) as
-              | {ok?: boolean; status?: string}
+              | {ok?: boolean; status?: string; reason?: string}
               | null;
             if (response.ok && result?.ok === true) {
               savedMessage = result.status === "verified" || result.status === "already_verified"
                 ? "Time Out saved. Attendance automatically verified. Certificate follows Admin event completion."
-                : "Time Out saved. Attendance needs Admin review because one or more automatic checks did not pass.";
+                : result.reason === "auto_verification_disabled"
+                  ? "Time Out saved. Automatic verification is not active yet; Admin can verify your attendance."
+                  : "Time Out saved. Attendance needs Admin review because one or more automatic checks did not pass.";
             }
           } finally {
             clearTimeout(timeout);
