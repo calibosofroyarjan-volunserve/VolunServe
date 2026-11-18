@@ -1,0 +1,50 @@
+name: Staging Volunteer Web Release Safety Gate - NO DEPLOY
+on:
+  pull_request:
+    branches:
+      - feat/emergency-auto-dispatch-server-staging-20261115
+    paths:
+      - "scripts/guard-volunteer-staging-web-release-20261119.cjs"
+      - "scripts/test-volunteer-staging-web-release-guard-20261119.cjs"
+      - ".github/workflows/qa-staging-volunteer-web-release-safety-20261119.yml"
+      - "lib/stagingBulkVolunteerClient.ts"
+      - "app/(admin)/admin-cases.tsx"
+      - "app/(tabs)/volunteer.tsx"
+      - "app/(tabs)/volunteer.web.tsx"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  preflight-no-deploy:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - name: Run negative test matrix (real keys never used)
+        run: node --test scripts/test-volunteer-staging-web-release-guard-20261119.cjs
+      - name: Validate isolated staging-only web configuration with synthetic public values
+        env:
+          EXPO_PUBLIC_VOLUNSERVE_ENV: staging
+          EXPO_PUBLIC_FIREBASE_API_KEY: synthetic-not-a-real-key
+          EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN: volunserve-volunteer-staging.firebaseapp.com
+          EXPO_PUBLIC_FIREBASE_PROJECT_ID: volunserve-volunteer-staging
+          EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET: volunserve-volunteer-staging.firebasestorage.app
+          EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID: "123456789"
+          EXPO_PUBLIC_FIREBASE_APP_ID: "1:123456789:web:fake"
+          EXPO_PUBLIC_AUTO_VOLUNTEER_DISPATCH_ENABLED: "true"
+          EXPO_PUBLIC_AUTO_VOLUNTEER_STAGING_ONLY: "true"
+          EXPO_PUBLIC_AUTO_VOLUNTEER_MATCH_PROVIDER: render
+          EXPO_PUBLIC_AUTO_VOLUNTEER_STAGING_PROJECT_ID: volunserve-volunteer-staging
+        run: node scripts/guard-volunteer-staging-web-release-20261119.cjs
+      - name: Install dependencies without lifecycle scripts
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Test staging Admin/Volunteer bridge without backend calls
+        run: node --test scripts/test-staging-bulk-client-integration-20261119.cjs
+      - name: Type-check staging bridge
+        run: ./node_modules/.bin/tsc --noEmit --strict --skipLibCheck --target es2022 --lib es2022,dom --moduleResolution node lib/stagingBulkVolunteerClient.ts
+      - name: Confirm no deployment, secrets, or Firebase access
+        run: echo "STATIC PREFLIGHT ONLY. NO RENDER/FIREBASE/PRODUCTION DEPLOY."
