@@ -25,6 +25,13 @@ const additions=new Set([
  "scripts/test-staging-validation-auto-offer-20261117.cjs",
  ".github/workflows/validate-staging-gated-matching-ui-20261117.yml",
  "docs/STAGING_GATED_MATCHING_UI_REVIEW_20261117.md",
+ // PR #607: separately reviewed staging-only files. The strict assertion
+ // that EVERY original live-derived UI line is preserved remains unchanged.
+ "lib/stagingBulkVolunteerClient.ts",
+ "scripts/test-staging-bulk-client-integration-20261119.cjs",
+ "scripts/guard-volunteer-staging-web-release-20261119.cjs",
+ "scripts/test-volunteer-staging-web-release-guard-20261119.cjs",
+ ".github/workflows/qa-staging-ui-bulk-volunteer-002-20261119.yml",
 ]);
 // Render checks out staging deploys with shallow history. Recover the exact
 // public review baseline from its named branch, rather than skipping checks.
