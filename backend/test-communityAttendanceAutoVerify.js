@@ -44,6 +44,17 @@ test("future-date event with earlier attendance requires manual Admin review",()
   f.event.date="2026-11-20";
   assert.equal(automaticAttendanceDecision(f),"outside_event_schedule");
 });
+test("historical attendance is never auto-approved by a future rollout",()=>{
+  const f=fixture();
+  f.event.date="2026-11-17";
+  f.event.time="09:00";
+  f.event.endTime="10:00";
+  const originalIn=checkIn-24*60*60*1000;
+  f.attendance.joinedAt=ts(originalIn-10000);
+  f.attendance.checkedInAt=ts(originalIn);
+  f.attendance.checkedOutAt=ts(originalIn+60000);
+  assert.equal(automaticAttendanceDecision(f),"historical_attendance_requires_admin");
+});
 test("a non-approved volunteer and a proposer cannot be auto verified",()=>{
   const f=fixture();
   f.volunteer.volunteerStatus="applied";
