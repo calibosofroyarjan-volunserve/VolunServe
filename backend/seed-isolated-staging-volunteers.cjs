@@ -80,7 +80,43 @@ async function run(argv=process.argv.slice(2),environment=process.env){
       console.log(s.fixture.uid+": Auth="+s.auth+", profile="+s.user+", application="+s.application);
     }
     if(mode==="--inspect"){
-      console.log("Read-only staging fixture inspection complete. No writes.");
+      const incidentSnap=await db.collection("disasterCases").doc(CASE_ID).get();
+      if(incidentSnap.exists){
+        const d=incidentSnap.data()||{};
+        const recognized=d.testOnly===true&&
+          d.testCategory==="staging_synthetic_volunteer_e2e_002"&&
+          d.source==="staging_synthetic_e2e";
+        if(!recognized)throw new Error("Case 002 is NOT the authorized synthetic staging fixture");
+        const [active,existing]=await Promise.all([
+          db.collection("responseAssignments")
+            .where("status","in",["offered","accepted","responding","on_site"])
+            .limit(201).get(),
+          db.collection("responseAssignments")
+            .where("caseId","==",CASE_ID).limit(201).get()
+        ]);
+        if(active.size>200||existing.size>200)throw new Error("Audit limit exceeded");
+        const {planVolunteerWaves}=require("../functions/emergencyVolunteerWavePlanner");
+        const known=require("../functions/sjdmBarangays.json");
+        const roster=await Promise.all(TESTS.map(async t=>{
+          const [user,application]=await Promise.all([
+            db.collection("users").doc(t.uid).get(),
+            db.collection("volunteerApplications").doc(t.uid).get()
+          ]);
+          return {uid:t.uid,user:user.exists?user.data():{},
+            application:application.exists?application.data():{}};
+        }));
+        const plan=planVolunteerWaves({id:CASE_ID,...d},roster,{
+          knownBarangays:known,neighborsByBarangay:{},
+          activeAssignments:active.docs.map(s=>s.data())
+        });
+        console.log("Case 002 stage: "+String(d.status||"unknown"));
+        console.log("Existing Case 002 assignment count: "+existing.size);
+        console.log("Eligible among these 3 fixture IDs: "+plan.counts.eligible);
+        console.log("Eligible Wave 1 among fixture IDs: "+plan.counts.wave1);
+        console.log("Case 002 auto-trigger is NOT retroactive after an earlier validation.");
+        console.log("Never reset an accepted task to repeat a test.");
+      }else console.log("Case 002 is not created yet.");
+      console.log("Read-only staging inspection complete. No writes.");
       return;
     }
     if(before.some(s=>s.auth||s.user||s.application))
