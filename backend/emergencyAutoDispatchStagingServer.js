@@ -18,6 +18,7 @@ const {auth, db} = require("./firebaseAdmin");
 const {isOperationalAdminProfile} = require("./adminAccess");
 const {createRenderAutoDispatchWorker,verifiedStagingProject} = require("./emergencyAutoDispatchWorker");
 const {inspectStagingTestCase,diagnoseSyntheticFixtureFields} = require("./emergencyStagingReadiness");
+const {prepareSyntheticCaseForTest} = require("./stagingSyntheticCasePreparation");
 const {getVolunteerOffer,respondToStagingOffer,resetExpiredFixture,
   inspectStagingAssignmentConsistency,CASE_ID} =
   require("./stagingVolunteerTask");
@@ -248,6 +249,23 @@ function makeApp({authClient = auth, firestore = db, worker, env = process.env} 
       response.status(503).json({ok:false,error:"staging_preflight_unavailable"});
     }
   });
+  // Requires approved staging Admin and explicitly enabled isolated Firebase.
+  // Never use this on live reports. No offer or notification is sent here.
+  app.post("/api/admin/emergency-auto/prepare-test-status",
+    requireStagingAdmin,requireActivation,async(_request,response)=>{
+      if(!stagingServiceAccountMatches)
+        return response.status(503).json({ok:false,error:"isolated_staging_not_configured"});
+      try{
+        const result=await prepareSyntheticCaseForTest(firestore);
+        response.set("Cache-Control","no-store");
+        response.status(result.status==="blocked"?409:200)
+          .json({ok:result.status!=="blocked",...result});
+      }catch(error){
+        console.warn("Synthetic case status preparation unavailable",
+          String(error?.code||"unknown").slice(0,70));
+        response.status(503).json({ok:false,error:"test_status_preparation_unavailable"});
+      }
+    });
   // One fictional case only. Authenticated, read-only diagnostics; no
   // UIDs, user details or payloads from actual Emergency Reports are returned.
   app.get("/api/admin/emergency-auto/verify-test",requireStagingAdmin,async(_request,response)=>{
