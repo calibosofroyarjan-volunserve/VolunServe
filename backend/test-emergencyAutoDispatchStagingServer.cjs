@@ -486,3 +486,35 @@ test("Volunteer and Admin production-compatible staging integration remains fail
   assert.match(admin,/api\/admin\/emergency-auto\/verify-test/);
   assert.match(admin,/verifyTest.disabled/);
 });
+
+
+test("staging fixture diagnostic returns field names only, never identities or values",()=>{
+  const {diagnoseSyntheticFixtureFields}=require("./emergencyStagingReadiness");
+  const base={title:"TEST ONLY - Dummy Emergency",status:"validated",
+    verificationStatus:"validated",dispatchBlocked:false,
+    requiredSkills:["First Aid"],reporterUid:"private-resident-123"};
+  assert.deepEqual(diagnoseSyntheticFixtureFields(base),[]);
+  const invalid={...base,status:"draft",verificationStatus:"pending",
+    dispatchBlocked:true,requiredSkills:"text"};
+  const fields=diagnoseSyntheticFixtureFields(invalid);
+  assert.deepEqual(fields,["status","verificationStatus","dispatchBlocked","requiredSkills"]);
+  assert.ok(!JSON.stringify(fields).includes("private-resident"));
+  assert.ok(!JSON.stringify(fields).includes("draft"));
+  assert.deepEqual(diagnoseSyntheticFixtureFields({...invalid,title:"Actual emergency"}),[]);
+});
+test("fresh staging diagnostic requires approved Admin authentication and isolated project",async()=>{
+  const path="/api/admin/emergency-auto/preflight";
+  await withServer({},async({url,calls})=>{
+    let response=await fetch(url+path);
+    assert.equal(response.status,401);
+    response=await fetch(url+path,{headers:{Authorization:"Bearer test-token"}});
+    assert.equal(response.status,503);
+    assert.equal((await response.json()).error,"isolated_staging_not_configured");
+    assert.deepEqual(calls,[]);
+  });
+  await withServer({admin:false},async({url,calls})=>{
+    const response=await fetch(url+path,{headers:{Authorization:"Bearer test-token"}});
+    assert.equal(response.status,403);
+    assert.deepEqual(calls,[]);
+  });
+});
