@@ -70,6 +70,7 @@ type Participant = {
   checkedOutAt?: unknown;
   attendanceVerified?: boolean;
   attendanceVerifiedAt?: unknown;
+  attendanceVerifiedBy?: string;
   assignedRole?: string;
   preferredRole?: string;
   // Present on some legacy participant records; otherwise read the user profile.
@@ -97,6 +98,7 @@ type CertificateSyncResult = {
   eligibleCount?: number;
   failedCount?: number;
   skippedCount?: number;
+  autoAttendance?: { verified?: number; reviewRequired?: number; failed?: number };
   message?: string;
   reason?: string;
 };
@@ -139,9 +141,13 @@ async function reconcileCommunityCertificates(
 }
 
 function certificateSyncSummary(result: CertificateSyncResult): string {
-  return `Certificates: ${result.issuedCount ?? 0} issued, ` +
+  const certificates = `Certificates: ${result.issuedCount ?? 0} issued, ` +
     `${result.alreadyExistingCount ?? 0} already existing, ` +
     `${result.skippedCount ?? 0} skipped.`;
+  return result.autoAttendance
+    ? `${certificates} Attendance: ${result.autoAttendance.verified ?? 0} auto-verified, ` +
+      `${result.autoAttendance.reviewRequired ?? 0} for Admin review.`
+    : certificates;
 }
 
 const GREEN = "#078F82";
@@ -329,7 +335,7 @@ function participantStatus(person: Participant): {
   label: string;
   kind: "verified" | "pending" | "checked" | "idle";
 } {
-  if (person.attendanceVerified) return {label: "VERIFIED", kind: "verified"};
+  if (person.attendanceVerified) return {label: person.attendanceVerifiedBy === "system:auto_attendance_v1" ? "AUTO VERIFIED" : "VERIFIED", kind: "verified"};
   if (person.checkedOutAt) return {label: "FOR VERIFICATION", kind: "pending"};
   if (person.checkedInAt) return {label: "CHECKED IN", kind: "checked"};
   return {label: "NOT CHECKED IN", kind: "idle"};
@@ -806,7 +812,7 @@ export default function CommunityAttendanceAdmin() {
   }
 
   // Volunteers record their own Time In / Time Out in Community Events.
-  // Admin can ONLY review these existing server timestamps and verify attendance.
+  // Admin remains the fallback verifier when automatic eligibility checks fail.
   async function verifyAttendance(person: Participant) {
     if (!user || !allowed || !selected || busy) {
       return;
@@ -1182,7 +1188,7 @@ export default function CommunityAttendanceAdmin() {
                       <Ionicons name="warning-outline" color="#A3610A" size={20} />
                       <Text style={styles.confirmText}>
                         Complete this event? Volunteers who are still checked in must record their own Time Out first.
-                        Only Admin-verified attendance is considered for certificate eligibility.
+                        Only verified attendance (automatic or Admin-reviewed) is considered for certificate eligibility.
                       </Text>
                     </View>
                     <View style={styles.buttonRow}>
@@ -1490,7 +1496,7 @@ export default function CommunityAttendanceAdmin() {
                 <Ionicons name="information-circle-outline" size={24} color="#3874CF" />
               </View>
               <Text style={styles.eligibilityText}>
-                Volunteers record their own Time In and Time Out. Admin only reviews and verifies the recorded times; verification does not edit timestamps. Community Event certificates require event completion and Admin-verified service. Permanent minimum: 1 minute for attendance and events completed from Nov 10, 2026 at 10:55 PM (PHT); earlier records require 30 minutes. The server confirms actual eligibility and issues certificates.
+                Volunteers record their own Time In and Time Out using server time. The backend automatically verifies attendance that passes validation; Admin verifies exceptions without changing the original timestamps. Certificates require manual Admin event completion and verified service. Permanent minimum: 1 minute for attendance and events completed from Nov 10, 2026 at 10:55 PM (PHT); earlier records require 30 minutes. The server confirms actual eligibility and issues certificates.
               </Text>
             </View>
           </View>
