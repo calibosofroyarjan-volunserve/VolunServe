@@ -8,7 +8,7 @@ const {
   db,
   FieldValue,
 } = require("./firebaseAdmin");
-const { reconcileCommunityEventCertificates } = require("./communityCertificates");
+const { reconcileCommunityEventCertificates: issueVerifiedCommunityEventCertificates } = require("./communityCertificates");
 const { startCommunityCertificateAutoSync } = require("./communityCertificateAutoSync");
 const {
   verifyCommunityEventAttendance,
@@ -11799,7 +11799,7 @@ app.post(
   },
 );
 
-async function autoVerifyThenReconcileCertificates(options) {
+async function reconcileCommunityEventCertificates(options) {
   let autoAttendance = null;
   if (options.execute === true) {
     try {
@@ -11812,7 +11812,7 @@ async function autoVerifyThenReconcileCertificates(options) {
       console.warn("[Community attendance] auto verification retry failed", error?.message);
     }
   }
-  const certificates = await reconcileCommunityEventCertificates(options);
+  const certificates = await issueVerifiedCommunityEventCertificates(options);
   return autoAttendance ? {...certificates,autoAttendance} : certificates;
 }
 
@@ -11834,7 +11834,7 @@ app.post(
       if (request.body?.execute != null && typeof request.body.execute !== "boolean") {
         throw makeHttpError(400, "invalid_execute", "execute must be a boolean.");
       }
-      const result = await autoVerifyThenReconcileCertificates({
+      const result = await reconcileCommunityEventCertificates({
         eventId, participantId, execute,
       });
       const status = result.ok ? 200 : (
@@ -11862,7 +11862,7 @@ installPublicAssistanceAppeals({
 });
 // Automatic, idempotent recovery for eligible completed event certificates.
 // Does not change attendance, roles, certificates that already exist, or rules.
-startCommunityCertificateAutoSync({db,reconcile:autoVerifyThenReconcileCertificates});
+startCommunityCertificateAutoSync({db,reconcile:reconcileCommunityEventCertificates});
 const port =
   Number(
     process.env.PORT ||
