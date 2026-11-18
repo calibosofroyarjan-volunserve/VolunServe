@@ -65,7 +65,12 @@ function automaticAttendanceDecision({eventId, participantId, event, attendance,
   return "eligible";
 }
 
-async function verifyCommunityEventAttendance({db, FieldValue, eventId, volunteerId, nowMs = Date.now()}) {
+async function verifyCommunityEventAttendance({
+  db, FieldValue, eventId, volunteerId, nowMs = Date.now(),
+  enabled = process.env.VOLUNSERVE_ATTENDANCE_AUTO_VERIFY_ENABLED === "true",
+}) {
+  // Explicit opt-in: deploying code alone cannot silently verify live attendance.
+  if (!enabled) return {status:"needs_admin_review",reason:"auto_verification_disabled"};
   const participantId = `${eventId}_${volunteerId}`;
   const eventRef = db.collection("communityEvents").doc(eventId);
   const participantRef = db.collection("communityEventParticipants").doc(participantId);
@@ -93,7 +98,11 @@ async function verifyCommunityEventAttendance({db, FieldValue, eventId, voluntee
   });
 }
 
-async function reconcileCommunityEventAttendance({db, FieldValue, eventId, participantId = ""}) {
+async function reconcileCommunityEventAttendance({
+  db, FieldValue, eventId, participantId = "",
+  enabled = process.env.VOLUNSERVE_ATTENDANCE_AUTO_VERIFY_ENABLED === "true",
+}) {
+  if (!enabled) return {verified:0,reviewRequired:0,reason:"auto_verification_disabled"};
   const eventSnap = await db.collection("communityEvents").doc(eventId).get();
   if (!eventSnap.exists || eventSnap.data()?.status !== "completed" ||
       eventSnap.data()?.publicationStatus !== "published") {
@@ -117,7 +126,7 @@ async function reconcileCommunityEventAttendance({db, FieldValue, eventId, parti
   const summary = {verified:0,reviewRequired:0,failed:0};
   for (let i=0;i<pending.length;i+=5) {
     const results = await Promise.allSettled(pending.slice(i,i+5).map((snap) =>
-      verifyCommunityEventAttendance({db,FieldValue,eventId,volunteerId:snap.data().uid})
+      verifyCommunityEventAttendance({db,FieldValue,eventId,volunteerId:snap.data().uid,enabled})
     ));
     for (const result of results) {
       if (result.status === "rejected") summary.failed++;
