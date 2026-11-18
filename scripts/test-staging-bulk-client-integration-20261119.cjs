@@ -125,7 +125,7 @@ test("Existing Volunteer web/native cards guard backend-owned batch BEFORE Fires
   const write=data.indexOf("await runTransaction",guard);
   assert.ok(guard>-1&&write>guard,name+" staging path precedes legacy Firestore write");
   assert.ok(data.slice(guard,write).includes("return;"),name+" staging always returns");
-  assert.ok(data.includes("!isStagingBulkAssignment(assignment)"),name+" stage cannot claim live map");
+  assert.ok(data.includes("isStagingBulkAssignment(assignment) ? ("),name+" fictional stage UI excludes live map/action controls");
  }
  const admin=fs.readFileSync(path.join(ROOT,"app/(admin)/admin-cases.tsx"),"utf8");
  assert.ok(admin.includes("ensureStagingBulkOffersAfterAdminValidation("));
