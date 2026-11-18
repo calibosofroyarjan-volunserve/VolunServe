@@ -1,0 +1,57 @@
+name: Auto Volunteer Phase 3 atomic decision SIMULATION - NO DEPLOY
+on:
+  pull_request:
+    branches:
+      - feat/auto-volunteer-phase2-admin-preview-review-20261119
+    paths:
+      - "backend/autoVolunteerAtomicDecisionPolicy.js"
+      - "backend/test-autoVolunteerAtomicDecisionPolicy.cjs"
+      - "docs/emergency-volunteer/PHASE3_ATOMIC_ACCEPTANCE_SIMULATION_20261119.md"
+      - ".github/workflows/qa-auto-volunteer-phase3-no-deploy-20261119.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  review-concurrency-policy-no-production-write:
+    if: github.repository == 'calibosofroyarjan-volunserve/VolunServe'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - name: Phase 3 strict file allowlist, no live runtime updates
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin feat/auto-volunteer-phase2-admin-preview-review-20261119
+          git diff --name-only origin/feat/auto-volunteer-phase2-admin-preview-review-20261119 HEAD > /tmp/phase3-changes.txt
+          OTHER="$(grep -Ev '^(backend/autoVolunteerAtomicDecisionPolicy\.js|backend/test-autoVolunteerAtomicDecisionPolicy\.cjs|docs/emergency-volunteer/PHASE3_ATOMIC_ACCEPTANCE_SIMULATION_20261119\.md|\.github/workflows/qa-auto-volunteer-phase3-no-deploy-20261119\.yml)$' /tmp/phase3-changes.txt || true)"
+          test -z "$OTHER" || { echo "BLOCKED: unexpected Phase 3 files"; printf '%s\n' "$OTHER"; exit 1; }
+          echo "PASS: only four additive review/simulation files."
+      - name: Run single-winner policy simulation, default-OFF and security checks
+        run: |
+          node --check backend/autoVolunteerAtomicDecisionPolicy.js
+          node --check backend/test-autoVolunteerAtomicDecisionPolicy.cjs
+          node --test backend/test-autoVolunteerAtomicDecisionPolicy.cjs
+      - name: Preserve Phase 1 and 2 offline planner and Admin read-only tests
+        run: |
+          node --test backend/test-emergencyAutoVolunteerReadOnlyPlanner.cjs
+          node --test backend/test-autoVolunteerAdminReadOnlyPreview.cjs
+      - name: Install locked backend dependencies without scripts
+        run: npm ci --prefix backend --ignore-scripts --no-audit --no-fund
+      - name: Existing production signup/identity/certificate regressions
+        run: npm run check --prefix backend
+      - name: Prohibit runtime integration or deployment in Phase 3
+        run: |
+          if grep -Fq 'autoVolunteerAtomicDecisionPolicy' backend/server.js; then
+            echo "BLOCKED: simulation policy wired into production server"
+            exit 1
+          fi
+          echo "NO LIVE CHANGES / NO FIREBASE WRITES / NO RENDER DEPLOY."
