@@ -246,6 +246,41 @@ const capacityChoices = [
   "100",
 ] as const;
 
+// Shared client-side word ranges (also enforced by /api/community-events/proposals).
+type ProposalWordField = "title" | "description" | "volunteerTasks" | "otherRole" | "whatToBring";
+const PROPOSAL_WORD_LIMITS: Record<ProposalWordField, { label: string; min: number; max: number; minChars: number; maxChars: number }> = {
+  title: { label: "Event title", min: 2, max: 15, minChars: 5, maxChars: 100 },
+  description: { label: "Description", min: 20, max: 200, minChars: 20, maxChars: 1500 },
+  volunteerTasks: { label: "Volunteer tasks", min: 8, max: 150, minChars: 12, maxChars: 1200 },
+  otherRole: { label: "Other role / occupation", min: 0, max: 12, minChars: 0, maxChars: 80 },
+  whatToBring: { label: "What to bring", min: 0, max: 60, minChars: 0, maxChars: 500 },
+};
+const countProposalWords = (value: string): number =>
+  value.trim() ? value.trim().split(/\s+/u).length : 0;
+
+const proposalWordError = (field: ProposalWordField, value: string): string => {
+  const rule = PROPOSAL_WORD_LIMITS[field];
+  const words = countProposalWords(value);
+  if (words < rule.min || words > rule.max) {
+    return `${rule.label} must contain ${rule.min}–${rule.max} words (currently ${words}).`;
+  }
+  if (value.trim().length < rule.minChars || value.trim().length > rule.maxChars) {
+    return `${rule.label} must contain ${rule.minChars}–${rule.maxChars} characters.`;
+  }
+  return "";
+};
+
+function ProposalWordFeedback({field,value,showError}: {field: ProposalWordField;value:string;showError:boolean}) {
+  const limit = PROPOSAL_WORD_LIMITS[field];
+  const issue = showError ? proposalWordError(field, value) : "";
+  return <View style={styles.ruiWordFeedback}>
+    <Text style={[styles.ruiWordCounter, !!issue && styles.ruiWordCounterError]}>
+      {countProposalWords(value)} words · {limit.min}–{limit.max} allowed · max {limit.maxChars} characters
+    </Text>
+    {!!issue && <Text style={styles.ruiFieldError}>{issue}</Text>}
+  </View>;
+}
+
 const initialForm: ProposalForm = {
   title: "",
   category: "Clean-up Drive",
@@ -556,6 +591,7 @@ function ProposalNeedsAndMedia({
   onCredentialPick,
   credentialPreview,
   credentialError,
+  showWordErrors = false,
 }: {
   form: ProposalForm;
   update: <K extends keyof ProposalForm>(field: K, value: ProposalForm[K]) => void;
@@ -563,6 +599,7 @@ function ProposalNeedsAndMedia({
   onCredentialPick: () => void;
   credentialPreview: string;
   credentialError: string;
+  showWordErrors?: boolean;
 }) {
   const roles = [...new Set([...suggestedRoles[form.category], ...form.requiredRoles])];
   const skills = [...new Set([...suggestedSkills[form.category], ...form.requiredSkills])];
@@ -582,13 +619,15 @@ function ProposalNeedsAndMedia({
       </View>
       <Text style={styles.fieldLabel}>What will volunteers actually do? *</Text>
       <TextInput
-        style={[styles.input, styles.residentMultiline]}
+        nativeID="community-proposal-volunteerTasks"
+        style={[styles.input, styles.residentMultiline, (showWordErrors || !!form.volunteerTasks.trim()) && !!proposalWordError("volunteerTasks",form.volunteerTasks) && styles.ruiWordInputError]}
         placeholder="e.g. Plant seedlings, prepare soil, distribute water and monitor planting areas..."
         placeholderTextColor="#91A2AF"
         multiline textAlignVertical="top" maxLength={1200}
         value={form.volunteerTasks}
         onChangeText={(value) => update("volunteerTasks", value)}
       />
+      <ProposalWordFeedback field="volunteerTasks" value={form.volunteerTasks} showError={showWordErrors || !!form.volunteerTasks.trim()}/>
       <Text style={styles.fieldLabel}>Needed volunteer roles / occupations *</Text>
       <Text style={styles.residentHelp}>Choose one or more. Suggestions change with the event category.</Text>
       <View style={styles.residentChipRow}>
@@ -608,13 +647,15 @@ function ProposalNeedsAndMedia({
         })}
       </View>
       <TextInput
-        style={[styles.input, styles.residentSmallInput]}
+        nativeID="community-proposal-otherRole"
+        style={[styles.input, styles.residentSmallInput, (showWordErrors || !!form.otherRole.trim()) && !!proposalWordError("otherRole",form.otherRole) && styles.ruiWordInputError]}
         placeholder="Another role or occupation? (optional)"
         placeholderTextColor="#91A2AF"
         value={form.otherRole}
         onChangeText={(value) => update("otherRole", value)}
         maxLength={80}
       />
+      <ProposalWordFeedback field="otherRole" value={form.otherRole} showError={showWordErrors || !!form.otherRole.trim()}/>
       <Text style={styles.fieldLabel}>Helpful skills (optional)</Text>
       <View style={styles.residentChipRow}>
         {skills.map((skill) => {
@@ -643,10 +684,11 @@ function ProposalNeedsAndMedia({
       )}
       <CredentialPhotoField preview={credentialPreview} onPick={onCredentialPick} error={credentialError}/>
       <Text style={styles.fieldLabel}>What volunteers should bring (optional)</Text>
-      <TextInput style={[styles.input, styles.residentSmallInput]}
+      <TextInput nativeID="community-proposal-whatToBring" style={[styles.input, styles.residentSmallInput, (showWordErrors || !!form.whatToBring.trim()) && !!proposalWordError("whatToBring",form.whatToBring) && styles.ruiWordInputError]}
         placeholder="e.g. Gloves, reusable water bottle, closed shoes"
         placeholderTextColor="#91A2AF" value={form.whatToBring}
         onChangeText={(value) => update("whatToBring", value)} maxLength={500} />
+      <ProposalWordFeedback field="whatToBring" value={form.whatToBring} showError={showWordErrors || !!form.whatToBring.trim()}/>
 
       <View style={styles.residentSectionHeading}>
         <View style={styles.residentSectionIcon}><Ionicons name="images-outline" size={20} color="#047E73" /></View>
@@ -743,6 +785,7 @@ export default function CommunityEventsScreen() {
 
   const [form, setForm] =
     useState<ProposalForm>(initialForm);
+  const [proposalAttempted, setProposalAttempted] = useState(false);
 
   const [selectPicker, setSelectPicker] =
     useState<SelectPicker | null>(null);
@@ -1124,6 +1167,7 @@ export default function CommunityEventsScreen() {
     field: K,
     value: ProposalForm[K]
   ) => {
+    if (section === "propose") setNotice("");
     setForm((previous) => ({
       ...previous,
       [field]: value,
@@ -1312,6 +1356,20 @@ export default function CommunityEventsScreen() {
     }
 
     setNotice("");
+    setProposalAttempted(true);
+    const wordIssues = (Object.keys(PROPOSAL_WORD_LIMITS) as ProposalWordField[])
+      .map((field) => ({ field, issue: proposalWordError(field, form[field]) }))
+      .filter(({issue}) => !!issue);
+    if (wordIssues.length) {
+      setNotice("Please correct the highlighted word limits before submitting.");
+      if (Platform.OS === "web") {
+        const d = (globalThis as any).document;
+        const fieldElement = d?.getElementById?.(`community-proposal-${wordIssues[0].field}`);
+        fieldElement?.scrollIntoView?.({behavior:"smooth",block:"center"});
+        fieldElement?.focus?.();
+      }
+      return;
+    }
 
     const title = form.title.trim();
     const location = form.location.trim();
@@ -1461,6 +1519,7 @@ export default function CommunityEventsScreen() {
       }
 
       setForm(initialForm);
+      setProposalAttempted(false);
       setLocalPhotoFiles([null, null, null]);
       setLocalPhotoPreviews(["", "", ""]);
       setCredentialFile(null);
@@ -2529,7 +2588,7 @@ export default function CommunityEventsScreen() {
               </View>
               {section === "explore" && <View style={[styles.webSearchWrap, styles.lockedSearch]}><Ionicons name="search-outline" size={17} color="#6B8392" /><TextInput style={styles.webSearchInput} value={search} onChangeText={setSearch} placeholder="Search community events..." placeholderTextColor="#91A4B1" autoCorrect={false}/></View>}
             </View>
-            {!!notice && <View style={styles.webNotice}><Ionicons name="information-circle-outline" size={18} color="#0D8273" /><Text style={styles.webNoticeText}>{notice}</Text></View>}
+            {!!notice && <View style={section === "propose" && !busy ? styles.webError : styles.webNotice}><Ionicons name={section === "propose" && !busy ? "alert-circle-outline" : "information-circle-outline"} size={18} color={section === "propose" && !busy ? "#B42318" : "#0D8273"} /><Text style={section === "propose" && !busy ? styles.webErrorText : styles.webNoticeText}>{notice}</Text></View>}
             {section === "mine" && !!recordError && <View style={styles.webError}><Ionicons name="alert-circle-outline" size={17} color="#B42318" /><Text style={styles.webErrorText}>{recordError}</Text></View>}
             {section === "explore" && canPropose && !residentDetailsId && (
               <View style={styles.ruiFilterBar}>
@@ -2785,28 +2844,33 @@ export default function CommunityEventsScreen() {
           <View style={styles.ruiFormSection}>
             <View style={styles.ruiStepRow}><Text style={styles.ruiStepNumber}>1</Text><Text style={styles.ruiStepHeading}>Basic Information</Text></View>
             <View style={[styles.ruiFormRow, isCompact && styles.ruiFormRowStack]}>
-              <View style={styles.ruiFormCell}><Text style={styles.fieldLabel}>Event title *</Text><TextInput style={styles.input} value={form.title} placeholder="e.g. Barangay Clean-up Drive" placeholderTextColor="#99ACBA" maxLength={100} onChangeText={v=>setValue("title",v)}/></View>
+              <View style={styles.ruiFormCell}><Text style={styles.fieldLabel}>Event title *</Text>
+                <TextInput nativeID="community-proposal-title" style={[styles.input,(proposalAttempted || !!form.title.trim()) && !!proposalWordError("title",form.title) && styles.ruiWordInputError]} value={form.title} placeholder="e.g. Barangay Clean-up Drive" placeholderTextColor="#99ACBA" maxLength={100} onChangeText={v=>setValue("title",v)}/>
+                <ProposalWordFeedback field="title" value={form.title} showError={proposalAttempted || !!form.title.trim()}/>
+              </View>
               <View style={styles.ruiFormCell}><Text style={styles.fieldLabel}>Category *</Text><Pressable style={styles.pickerField} onPress={()=>openSelect("category")}><Ionicons name="apps-outline" size={18} color={colors.green}/><Text style={styles.pickerFieldText}>{form.category}</Text><Ionicons name="chevron-down" size={16} color={colors.muted}/></Pressable></View>
             </View>
             <View style={[styles.ruiFormRow, isCompact && styles.ruiFormRowStack]}>
-              <View style={styles.ruiFormCell}><Text style={styles.fieldLabel}>Barangay *</Text><Pressable style={styles.pickerField} onPress={()=>openSelect("barangay")}><Ionicons name="location-outline" size={18} color={colors.green}/><Text style={[styles.pickerFieldText,!form.barangay&&styles.pickerPlaceholder]}>{form.barangay||"Select barangay"}</Text><Ionicons name="chevron-down" size={16} color={colors.muted}/></Pressable></View>
-              <View style={styles.ruiFormCell}><Text style={styles.fieldLabel}>Venue / Location *</Text><Pressable style={styles.pickerField} onPress={()=>openSelect("venue")}><Ionicons name="business-outline" size={18} color={colors.green}/><Text style={[styles.pickerFieldText,!form.location&&styles.pickerPlaceholder]}>{customVenue?"Specify exact location":form.location||"Select venue or type location"}</Text><Ionicons name="chevron-down" size={16} color={colors.muted}/></Pressable>{customVenue&&<TextInput style={[styles.input,{marginTop:6}]} value={form.location} placeholder="Street / landmark / meeting point" maxLength={150} onChangeText={v=>setValue("location",v)}/>}</View>
+              <View style={styles.ruiFormCell}><Text style={styles.fieldLabel}>Barangay *</Text><Pressable style={styles.pickerField} onPress={()=>openSelect("barangay")}><Ionicons name="location-outline" size={18} color={colors.green}/><Text style={[styles.pickerFieldText,!form.barangay&&styles.pickerPlaceholder]}>{form.barangay||"Select barangay"}</Text><Ionicons name="chevron-down" size={16} color={colors.muted}/></Pressable>{proposalAttempted && !form.barangay.trim() && <Text style={styles.ruiFieldError}>Select the event barangay.</Text>}</View>
+              <View style={styles.ruiFormCell}><Text style={styles.fieldLabel}>Venue / Location *</Text><Pressable style={styles.pickerField} onPress={()=>openSelect("venue")}><Ionicons name="business-outline" size={18} color={colors.green}/><Text style={[styles.pickerFieldText,!form.location&&styles.pickerPlaceholder]}>{customVenue?"Specify exact location":form.location||"Select venue or type location"}</Text><Ionicons name="chevron-down" size={16} color={colors.muted}/></Pressable>{customVenue&&<TextInput style={[styles.input,{marginTop:6}]} value={form.location} placeholder="Street / landmark / meeting point" maxLength={150} onChangeText={v=>setValue("location",v)}/>} {proposalAttempted && !form.location.trim() && <Text style={styles.ruiFieldError}>Select or enter a venue.</Text>}</View>
             </View>
             <View style={[styles.ruiFormRow, isCompact && styles.ruiFormRowStack]}>
-              <View style={styles.ruiFormCell}><Text style={styles.fieldLabel}>Event date *</Text><Pressable style={styles.pickerField} onPress={openDatePicker}><Ionicons name="calendar-outline" size={18} color={colors.green}/><Text style={[styles.pickerFieldText,!form.date&&styles.pickerPlaceholder]}>{form.date||"Choose date"}</Text><Ionicons name="chevron-down" size={16} color={colors.muted}/></Pressable></View>
-              <View style={styles.ruiFormCell}><Text style={styles.fieldLabel}>Event time *</Text><Pressable style={styles.pickerField} onPress={() => openTimePicker("start")}><Ionicons name="time-outline" size={18} color={colors.green}/><Text style={styles.pickerFieldText}>{formatChosenTime(form.time)}</Text><Ionicons name="chevron-down" size={16} color={colors.muted}/></Pressable></View>
-              <View style={styles.ruiFormCell}><Text style={styles.fieldLabel}>End time *</Text><Pressable style={styles.pickerField} onPress={()=>openTimePicker("end")}><Ionicons name="time-outline" size={18} color={colors.green}/><Text style={[styles.pickerFieldText,!form.endTime&&styles.pickerPlaceholder]}>{formatChosenTime(form.endTime)}</Text><Ionicons name="chevron-down" size={16} color={colors.muted}/></Pressable></View>
-              <View style={styles.ruiFormCell}><Text style={styles.fieldLabel}>Volunteer capacity *</Text><Pressable style={styles.pickerField} onPress={()=>openSelect("capacity")}><Ionicons name="people-outline" size={18} color={colors.green}/><Text style={styles.pickerFieldText}>{form.capacity?`${form.capacity} volunteers`:"Select capacity"}</Text><Ionicons name="chevron-down" size={16} color={colors.muted}/></Pressable>{customCapacity&&<TextInput style={[styles.input,{marginTop:6}]} value={form.capacity} keyboardType="number-pad" maxLength={3} onChangeText={v=>setValue("capacity",v.replace(/[^0-9]/g,""))}/>}</View>
+              <View style={styles.ruiFormCell}><Text style={styles.fieldLabel}>Event date *</Text><Pressable style={styles.pickerField} onPress={openDatePicker}><Ionicons name="calendar-outline" size={18} color={colors.green}/><Text style={[styles.pickerFieldText,!form.date&&styles.pickerPlaceholder]}>{form.date||"Choose date"}</Text><Ionicons name="chevron-down" size={16} color={colors.muted}/></Pressable>{proposalAttempted && !form.date && <Text style={styles.ruiFieldError}>Choose a future event date.</Text>}</View>
+              <View style={styles.ruiFormCell}><Text style={styles.fieldLabel}>Event time *</Text><Pressable style={styles.pickerField} onPress={() => openTimePicker("start")}><Ionicons name="time-outline" size={18} color={colors.green}/><Text style={styles.pickerFieldText}>{formatChosenTime(form.time)}</Text><Ionicons name="chevron-down" size={16} color={colors.muted}/></Pressable>{proposalAttempted && !form.time && <Text style={styles.ruiFieldError}>Choose a start time.</Text>}</View>
+              <View style={styles.ruiFormCell}><Text style={styles.fieldLabel}>End time *</Text><Pressable style={styles.pickerField} onPress={()=>openTimePicker("end")}><Ionicons name="time-outline" size={18} color={colors.green}/><Text style={[styles.pickerFieldText,!form.endTime&&styles.pickerPlaceholder]}>{formatChosenTime(form.endTime)}</Text><Ionicons name="chevron-down" size={16} color={colors.muted}/></Pressable>{proposalAttempted && (!form.endTime || (!!form.time && form.endTime<=form.time)) && <Text style={styles.ruiFieldError}>End time must be later than the start time.</Text>}</View>
+              <View style={styles.ruiFormCell}><Text style={styles.fieldLabel}>Volunteer capacity *</Text><Pressable style={styles.pickerField} onPress={()=>openSelect("capacity")}><Ionicons name="people-outline" size={18} color={colors.green}/><Text style={styles.pickerFieldText}>{form.capacity?`${form.capacity} volunteers`:"Select capacity"}</Text><Ionicons name="chevron-down" size={16} color={colors.muted}/></Pressable>{customCapacity&&<TextInput style={[styles.input,{marginTop:6}]} value={form.capacity} keyboardType="number-pad" maxLength={3} onChangeText={v=>setValue("capacity",v.replace(/[^0-9]/g,""))}/>}{proposalAttempted && (!Number.isInteger(Number(form.capacity)) || Number(form.capacity)<1 || Number(form.capacity)>500) && <Text style={styles.ruiFieldError}>Choose a capacity between 1 and 500 volunteers.</Text>}</View>
             </View>
             <CommunityEventPinPicker key={`${form.barangay}:${form.location}`} barangay={form.barangay} venue={form.location} latitude={form.latitude} longitude={form.longitude}
               onChange={(latitude,longitude)=>setForm(previous=>({...previous,latitude,longitude}))}/>
+            {proposalAttempted && (form.latitude === null || form.longitude === null) && <Text style={styles.ruiFieldError}>Tap the map to select the exact event meeting point.</Text>}
           </View>
 
           <View style={styles.ruiFormSection}>
             <View style={styles.ruiStepRow}><Text style={styles.ruiStepNumber}>2</Text><Text style={styles.ruiStepHeading}>Event Details</Text></View>
-            <Text style={styles.fieldLabel}>Description *</Text><TextInput multiline textAlignVertical="top" style={[styles.input,styles.ruiTextarea]} value={form.description} onChangeText={v=>setValue("description",v)} placeholder="Describe the activity, purpose, location conditions, and what the community needs..." placeholderTextColor="#94A8B8" maxLength={1500}/>
-            <Text style={styles.ruiCharCount}>{form.description.length}/1500</Text>
-            <Text style={styles.fieldLabel}>What volunteers will actually do *</Text><TextInput multiline textAlignVertical="top" style={[styles.input,styles.ruiSmallTextarea]} value={form.volunteerTasks} onChangeText={v=>setValue("volunteerTasks",v)} placeholder="e.g. Segregate waste, clean pathways, carry supplies and document the activity" placeholderTextColor="#94A8B8" maxLength={1200}/>
+            <Text style={styles.fieldLabel}>Description *</Text><TextInput nativeID="community-proposal-description" multiline textAlignVertical="top" style={[styles.input,styles.ruiTextarea,(proposalAttempted || !!form.description.trim()) && !!proposalWordError("description",form.description) && styles.ruiWordInputError]} value={form.description} onChangeText={v=>setValue("description",v)} placeholder="Describe the activity, purpose, location conditions, and what the community needs..." placeholderTextColor="#94A8B8" maxLength={1500}/>
+            <ProposalWordFeedback field="description" value={form.description} showError={proposalAttempted || !!form.description.trim()}/>
+            <Text style={styles.fieldLabel}>What volunteers will actually do *</Text><TextInput nativeID="community-proposal-volunteerTasks" multiline textAlignVertical="top" style={[styles.input,styles.ruiSmallTextarea,(proposalAttempted || !!form.volunteerTasks.trim()) && !!proposalWordError("volunteerTasks",form.volunteerTasks) && styles.ruiWordInputError]} value={form.volunteerTasks} onChangeText={v=>setValue("volunteerTasks",v)} placeholder="e.g. Segregate waste, clean pathways, carry supplies and document the activity" placeholderTextColor="#94A8B8" maxLength={1200}/>
+            <ProposalWordFeedback field="volunteerTasks" value={form.volunteerTasks} showError={proposalAttempted || !!form.volunteerTasks.trim()}/>
             <View style={[styles.ruiFormRow, isCompact&&styles.ruiFormRowStack]}>
               <View style={[styles.ruiFormCell,styles.ruiChecklistColumn]}>
                 <Text style={styles.ruiChecklistTitle}>Type of Help / Event *</Text>
@@ -2817,23 +2881,26 @@ export default function CommunityEventsScreen() {
                 <Text style={styles.ruiChecklistTitle}>Required Skills / Occupation *</Text>
                 <Text style={styles.ruiChecklistSubtitle}>Multiple selections allowed. Licenses checked by Admin/LGU.</Text>
                 {[...new Set([...suggestedRoles[form.category],...form.requiredRoles])].map((role)=><Pressable key={role} style={styles.ruiChecklistItem} onPress={()=>setValue("requiredRoles",form.requiredRoles.includes(role)?form.requiredRoles.filter(v=>v!==role):[...form.requiredRoles,role])}><Ionicons name={form.requiredRoles.includes(role)?"checkbox":"square-outline"} size={17} color={form.requiredRoles.includes(role)?"#038B7C":"#92AAC0"}/><Text style={styles.ruiChecklistText}>{role}</Text></Pressable>)}
-                <TextInput style={[styles.input,styles.ruiMiniInput]} value={form.otherRole} maxLength={80} onChangeText={v=>setValue("otherRole",v)} placeholder="Other occupation / role (optional)" placeholderTextColor="#94A8B8"/>
+                {proposalAttempted && form.requiredRoles.length === 0 && !form.otherRole.trim() && <Text style={styles.ruiFieldError}>Select at least one volunteer role.</Text>}
+                <TextInput nativeID="community-proposal-otherRole" style={[styles.input,styles.ruiMiniInput,(proposalAttempted || !!form.otherRole.trim()) && !!proposalWordError("otherRole",form.otherRole) && styles.ruiWordInputError]} value={form.otherRole} maxLength={80} onChangeText={v=>setValue("otherRole",v)} placeholder="Other occupation / role (optional)" placeholderTextColor="#94A8B8"/>
+                <ProposalWordFeedback field="otherRole" value={form.otherRole} showError={proposalAttempted || !!form.otherRole.trim()}/>
               </View>
             </View>
             <Text style={styles.fieldLabel}>Other helpful skills (optional)</Text>
             <View style={styles.ruiSkillsChips}>{suggestedSkills[form.category].map(name=><Pressable key={name} onPress={()=>setValue("requiredSkills",form.requiredSkills.includes(name)?form.requiredSkills.filter(v=>v!==name):[...form.requiredSkills,name])} style={[styles.ruiSkillChip,form.requiredSkills.includes(name)&&styles.ruiSkillChipSelected]}><Text style={[styles.ruiSkillChipText,form.requiredSkills.includes(name)&&styles.ruiSkillChipTextSelected]}>{form.requiredSkills.includes(name)?"✓ ":"+ "}{name}</Text></Pressable>)}</View>
             {needsProfessionalCheck([...form.requiredRoles,form.otherRole])&&<View style={styles.residentSafeguard}><Ionicons name="shield-checkmark-outline" size={19} color="#8A5B13"/><Text style={styles.residentSafeguardText}>Clinical and veterinary work requires verified professional qualifications. General volunteers may assist with non-clinical duties.</Text></View>}
-            <View style={[styles.ruiFormRow,isCompact&&styles.ruiFormRowStack]}><View style={styles.ruiFormCell}><CredentialPhotoField preview={credentialPreview} onPick={()=>void pickCredentialPhoto()} error={credentialError}/></View><View style={styles.ruiFormCell}><Text style={styles.fieldLabel}>What to bring (optional)</Text><TextInput style={styles.input} value={form.whatToBring} maxLength={500} onChangeText={v=>setValue("whatToBring",v)} placeholder="e.g. Gloves, water, closed shoes"/></View></View>
+            <View style={[styles.ruiFormRow,isCompact&&styles.ruiFormRowStack]}><View style={styles.ruiFormCell}><CredentialPhotoField preview={credentialPreview} onPick={()=>void pickCredentialPhoto()} error={credentialError}/></View><View style={styles.ruiFormCell}><Text style={styles.fieldLabel}>What to bring (optional)</Text><TextInput nativeID="community-proposal-whatToBring" style={[styles.input,(proposalAttempted || !!form.whatToBring.trim()) && !!proposalWordError("whatToBring",form.whatToBring) && styles.ruiWordInputError]} value={form.whatToBring} maxLength={500} onChangeText={v=>setValue("whatToBring",v)} placeholder="e.g. Gloves, water, closed shoes"/><ProposalWordFeedback field="whatToBring" value={form.whatToBring} showError={proposalAttempted || !!form.whatToBring.trim()}/></View></View>
           </View>
 
           <View style={styles.ruiFormSection}>
             <View style={styles.ruiStepRow}><Text style={styles.ruiStepNumber}>3</Text><Text style={styles.ruiStepHeading}>Media (Required)</Text></View>
             <Text style={styles.ruiChecklistSubtitle}>Upload at least one real venue/activity evidence photo (Main Photo required). Up to 3 JPG, PNG or WebP images, 5 MB each. Video optional. Never upload private IDs here.</Text>
             <View style={[styles.ruiFormRow,isCompact&&styles.ruiFormRowStack]}>
-              <View style={[styles.ruiFormCell,{flex:1.25}]}><Text style={styles.fieldLabel}>Event photos</Text><View style={styles.ruiUploadRow}>{[0,1,2].map(index=><Pressable key={index} onPress={()=>pickResidentPhoto(index)} style={styles.ruiUploadTile}>{localPhotoPreviews[index]?<Image source={{uri:localPhotoPreviews[index]}} resizeMode="cover" style={styles.ruiTilePreview}/>:<Ionicons name="camera-outline" size={24} color="#41718B"/>}<Text style={styles.ruiUploadText}>{index===0?"Main Photo":`Photo ${index+1}`}</Text><Text style={styles.ruiUploadHint}>{localPhotoFiles[index]?"Selected":index===0?"Required":"Optional"}</Text></Pressable>)}</View><Pressable style={styles.ruiBack} onPress={()=>setShowPhotoLinkFallback((v)=>!v)}><Ionicons name="link-outline" size={15} color="#0B786F"/><Text style={styles.ruiBackText}>{showPhotoLinkFallback?"Hide photo links":"Use HTTPS photo links instead"}</Text></Pressable>{showPhotoLinkFallback&&form.photoUrls.map((url,index)=><TextInput key={index} style={[styles.input,{marginBottom:6}]} placeholder={`Photo ${index+1} HTTPS image URL (optional)`} autoCapitalize="none" keyboardType="url" value={url} maxLength={2048} onChangeText={value=>updateProposalPhoto(index,value)}/>)}<Text style={styles.ruiChecklistSubtitle}>At least one photo is required. Files upload on submission; HTTPS photo URLs are an alternative.</Text>{!!photoPickerError&&<Text style={styles.webErrorText}>{photoPickerError}</Text>}</View>
-              <View style={styles.ruiFormCell}><Text style={styles.fieldLabel}>Video (Optional)</Text><Text style={styles.ruiChecklistSubtitle}>Add a link to a short YouTube or Vimeo video showing the venue or sample activity.</Text><TextInput style={styles.input} value={form.videoUrl} onChangeText={v=>setValue("videoUrl",v)} maxLength={2048} autoCapitalize="none" keyboardType="url" placeholder="https://youtu.be/..." placeholderTextColor="#94A8B8" />{!!form.videoUrl&&videoLinkSupported(form.videoUrl)&&<Pressable onPress={()=>void Linking.openURL(form.videoUrl)} style={styles.ruiBack}><Ionicons name="play-circle-outline" color="#048D7B" size={17}/><Text style={styles.ruiBackText}>Preview Video</Text></Pressable>}</View>
+              <View style={[styles.ruiFormCell,{flex:1.25}]}><Text style={styles.fieldLabel}>Event photos</Text><View style={styles.ruiUploadRow}>{[0,1,2].map(index=><Pressable key={index} onPress={()=>pickResidentPhoto(index)} style={styles.ruiUploadTile}>{localPhotoPreviews[index]?<Image source={{uri:localPhotoPreviews[index]}} resizeMode="cover" style={styles.ruiTilePreview}/>:<Ionicons name="camera-outline" size={24} color="#41718B"/>}<Text style={styles.ruiUploadText}>{index===0?"Main Photo":`Photo ${index+1}`}</Text><Text style={styles.ruiUploadHint}>{localPhotoFiles[index]?"Selected":index===0?"Required":"Optional"}</Text></Pressable>)}</View><Pressable style={styles.ruiBack} onPress={()=>setShowPhotoLinkFallback((v)=>!v)}><Ionicons name="link-outline" size={15} color="#0B786F"/><Text style={styles.ruiBackText}>{showPhotoLinkFallback?"Hide photo links":"Use HTTPS photo links instead"}</Text></Pressable>{showPhotoLinkFallback&&form.photoUrls.map((url,index)=><TextInput key={index} style={[styles.input,{marginBottom:6}]} placeholder={`Photo ${index+1} HTTPS image URL (optional)`} autoCapitalize="none" keyboardType="url" value={url} maxLength={2048} onChangeText={value=>updateProposalPhoto(index,value)}/>)}<Text style={styles.ruiChecklistSubtitle}>At least one photo is required. Files upload on submission; HTTPS photo URLs are an alternative.</Text>{proposalAttempted && !localPhotoFiles.some(Boolean) && !form.photoUrls.some(url=>!!url.trim()) && <Text style={styles.ruiFieldError}>Add at least one event site/activity photo.</Text>}{!!photoPickerError&&<Text style={styles.webErrorText}>{photoPickerError}</Text>}</View>
+              <View style={styles.ruiFormCell}><Text style={styles.fieldLabel}>Video (Optional)</Text><Text style={styles.ruiChecklistSubtitle}>Add a link to a short YouTube or Vimeo video showing the venue or sample activity.</Text><TextInput style={styles.input} value={form.videoUrl} onChangeText={v=>setValue("videoUrl",v)} maxLength={2048} autoCapitalize="none" keyboardType="url" placeholder="https://youtu.be/..." placeholderTextColor="#94A8B8" />{proposalAttempted && !videoLinkSupported(form.videoUrl.trim()) && <Text style={styles.ruiFieldError}>Use a valid HTTPS YouTube or Vimeo link.</Text>}{!!form.videoUrl&&videoLinkSupported(form.videoUrl)&&<Pressable onPress={()=>void Linking.openURL(form.videoUrl)} style={styles.ruiBack}><Ionicons name="play-circle-outline" color="#048D7B" size={17}/><Text style={styles.ruiBackText}>Preview Video</Text></Pressable>}</View>
             </View>
           </View>
+          {!!notice && <View style={busy ? styles.webNotice : styles.webError}><Ionicons name={busy ? "information-circle-outline" : "alert-circle-outline"} size={17} color={busy ? "#0D8273" : "#B42318"}/><Text style={busy ? styles.webNoticeText : styles.webErrorText}>{notice}</Text></View>}
           <View style={styles.ruiFormFooter}><Pressable style={styles.ruiCancelButton} onPress={()=>setSection("explore")}><Text style={styles.ruiCancelText}>Cancel</Text></Pressable><Pressable disabled={busy} style={[styles.ruiPrimary,styles.ruiSubmitButton,busy&&styles.disabledButton]} onPress={()=>void submitProposal()}>{busy?<ActivityIndicator color="white" size="small"/>:<Text style={styles.ruiPrimaryText}>Submit Proposal</Text>}<Ionicons name="arrow-forward" color="white" size={16}/></Pressable></View>
         </View>}
 
@@ -3358,7 +3425,8 @@ export default function CommunityEventsScreen() {
               <Text style={styles.fieldLabel}>Event title *</Text>
 
               <TextInput
-                style={styles.input}
+                nativeID="community-proposal-title"
+                style={[styles.input,(proposalAttempted || !!form.title.trim()) && !!proposalWordError("title",form.title) && styles.ruiWordInputError]}
                 placeholder="e.g. Barangay Clean-up Drive"
                 placeholderTextColor="#9AABB4"
                 value={form.title}
@@ -3370,6 +3438,7 @@ export default function CommunityEventsScreen() {
                 }
                 maxLength={100}
               />
+              <ProposalWordFeedback field="title" value={form.title} showError={proposalAttempted || !!form.title.trim()}/>
 
               {/* Category */}
               <Text
@@ -3751,9 +3820,11 @@ export default function CommunityEventsScreen() {
               </Text>
 
               <TextInput
+                nativeID="community-proposal-description"
                 style={[
                   styles.input,
                   styles.textarea,
+                  (proposalAttempted || !!form.description.trim()) && !!proposalWordError("description",form.description) && styles.ruiWordInputError,
                 ]}
                 placeholder="Describe the activity, purpose, and what volunteers will do..."
                 placeholderTextColor="#9AABB4"
@@ -3770,9 +3841,10 @@ export default function CommunityEventsScreen() {
                 }
                 maxLength={1500}
               />
+              <ProposalWordFeedback field="description" value={form.description} showError={proposalAttempted || !!form.description.trim()}/>
 
               <ProposalNeedsAndMedia form={form} update={setValue} onPhotoChange={updateProposalPhoto}
-                onCredentialPick={()=>void pickCredentialPhoto()} credentialPreview={credentialPreview} credentialError={credentialError}/>
+                onCredentialPick={()=>void pickCredentialPhoto()} credentialPreview={credentialPreview} credentialError={credentialError} showWordErrors={proposalAttempted}/>
 
               <View style={styles.residentSubmissionFooter}>
                 <View style={styles.residentSectionIcon}><Ionicons name="shield-checkmark-outline" size={20} color="#047E73" /></View>
@@ -3791,6 +3863,7 @@ export default function CommunityEventsScreen() {
                 publishes an event automatically.
               </Text>
 
+              {!!notice && <View style={busy ? styles.webNotice : styles.webError}><Ionicons name={busy ? "information-circle-outline" : "alert-circle-outline"} size={17} color={busy ? "#0D8273" : "#B42318"}/><Text style={busy ? styles.webNoticeText : styles.webErrorText}>{notice}</Text></View>}
               <Pressable
                 disabled={busy}
                 style={[
@@ -5648,6 +5721,11 @@ const styles = StyleSheet.create({
   ruiTextarea: { minHeight: 85, paddingTop: 12, marginBottom: 2 },
   ruiSmallTextarea: { minHeight: 69, paddingTop: 10, marginBottom: 11 },
   ruiCharCount: { fontSize: 10, color: "#8B9EA9", textAlign: "right", marginBottom: 11 },
+  ruiWordFeedback: { marginTop: 4, marginBottom: 8, gap: 3 },
+  ruiWordCounter: { color: "#607C8C", fontSize: 10, textAlign: "right" },
+  ruiWordCounterError: { color: "#B42318" },
+  ruiFieldError: { color: "#B42318", fontSize: 10.5, marginTop: 3, marginBottom: 5 },
+  ruiWordInputError: { borderColor: "#C52B27", borderWidth: 1.5 },
   ruiChecklistColumn: { padding: 11, borderWidth: 1, borderColor: "#EEF2F2", borderRadius: 8 },
   ruiChecklistTitle: { fontFamily:"EventInterBold", color: "#14354C", fontWeight: "900", fontSize: 12, marginBottom: 4 },
   ruiChecklistSubtitle: { color: "#7E94A5", fontSize: 10.5, lineHeight: 16, marginBottom: 10 },
