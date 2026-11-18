@@ -46,6 +46,20 @@ a{color:#075c49}input:focus-visible,button:focus-visible{outline:3px solid #4db8
 <button type="button" class="secondary" id="reconcile-test" disabled>Record missing acceptance evidence (late staging QA)</button>
 <p class="small">Use Reissue only after the prior test offer has expired or been declined. Accepted offers cannot be reset. Reconciliation is only for an already-accepted fictional task; it creates explicitly labelled late records and does not prove the original acceptance flow.</p>
 <p class="small">A case already assigned or in progress must not be manually reset to validated. Use the read-only verification and controlled reissue flow instead. The preparation control only works for the pre-existing, fictional status="reported" case with no matching assignments and already-validated verification.</p>
+<section aria-labelledby="fresh-heading" style="border-top:1px solid #dce9e4;margin-top:24px;padding-top:12px">
+<h2 id="fresh-heading">Fresh isolated E2E test — STAGING_E2E_002</h2>
+<p>This is a NEW fictional report, separate from the accepted STAGING_TEST_001. It starts unvalidated and uses only the already-approved staging test Resident. Admin must explicitly create, validate, and offer. It cannot assign official responders or operate on production Firebase.</p>
+<div class="buttons">
+<button type="button" class="secondary" id="check-002" disabled>Check 002 readiness</button>
+<button type="button" class="secondary" id="create-002" disabled>Create fictional 002</button>
+<button type="button" class="secondary" id="validate-002" disabled>Validate fictional 002</button>
+<button type="button" id="offer-002" disabled>Offer task for 002</button>
+<button type="button" class="secondary" id="verify-002" disabled>Verify 002 acceptance</button>
+<button type="button" class="secondary" id="reissue-002" disabled>Reissue expired 002 only</button>
+</div>
+<div id="e2e-002-status" class="result" role="status" aria-live="polite">Sign in with an approved staging Admin account first.</div>
+<p class="small">If readiness says <code>no_free_approved_test_volunteer</code>, an additional approved and available staging Volunteer is required. Never reuse the accepted 001 assignment. Test offers expire after 3 minutes. No reissue for accepted tasks.</p>
+</section>
 <h2>Verification</h2>
 <div id="result" class="result" aria-live="polite">Not checked yet. Only the staging Firebase project will be contacted.</div>
 <h2>What a successful test proves</h2>
@@ -77,6 +91,88 @@ const reissueTest=document.getElementById("reissue-test");
 const verifyTest=document.getElementById("verify-test");
 const fixtureCheck=document.getElementById("fixture-check");
 const prepareTest=document.getElementById("prepare-test");
+const ids002=["check-002","create-002","validate-002","offer-002","verify-002","reissue-002"];
+const el002=id=>document.getElementById(id);
+const show002=message=>{el002("e2e-002-status").textContent=message;};
+function disable002(){ids002.forEach(id=>{el002(id).disabled=true;});}
+async function api002(endpoint,options={}){
+  if(!auth.currentUser)throw new Error("Sign in with the approved staging Admin first.");
+  const token=await auth.currentUser.getIdToken();
+  const response=await fetch(endpoint,{
+    ...options,headers:{...(options.headers||{}),Authorization:"Bearer "+token},
+    cache:"no-store"
+  });
+  const data=await response.json();
+  if(!response.ok)throw new Error(String(data.reason||data.error||response.status));
+  return data;
+}
+async function refresh002(){
+  const data=await api002("/api/admin/emergency-auto/e2e-002/preflight");
+  const status=String(data.status||"unknown");
+  el002("check-002").disabled=false;
+  el002("create-002").disabled=!(stagingActivationReady&&status==="not_created");
+  el002("validate-002").disabled=!(stagingActivationReady&&status==="reported");
+  el002("offer-002").disabled=!(stagingActivationReady&&status==="ready");
+  el002("verify-002").disabled=status!=="existing_assignment";
+  el002("reissue-002").disabled=!(stagingActivationReady&&status==="existing_assignment");
+  show002("FICTIONAL STAGING_E2E_002 ONLY\n"+
+    "Readiness: "+status+"\n"+
+    "Reason: "+String(data.reason||"none")+"\n"+
+    "Eligible free Volunteers: "+String(data.eligible||0)+"\n"+
+    "Next wave: "+String(data.wave||"not yet offered")+"\n"+
+    "No real dispatch. This readiness check is read-only.");
+  return data;
+}
+el002("check-002").addEventListener("click",async()=>{
+  try{await refresh002();}catch(error){show002(String(error?.message||"Readiness unavailable"));}
+});
+async function do002(action,confirmation){
+  if(!auth.currentUser)return show002("Sign in to staging first.");
+  if(!window.confirm(confirmation))return;
+  disable002();
+  try{
+    const routes={
+      create:"/api/admin/emergency-auto/e2e-002/create",
+      validate:"/api/admin/emergency-auto/e2e-002/validate",
+      offer:"/api/admin/emergency-auto/start",
+      reissue:"/api/admin/emergency-auto/e2e-002/reissue",
+    };
+    const result=await api002(routes[action],{
+      method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({
+        caseId:"STAGING_E2E_002",
+        ...(action==="reissue"?{confirmReissue:true}:
+          {confirmFictionalTest:true})
+      })
+    });
+    await refresh002();
+    show002("Staging E2E 002 "+action+": "+String(result.status||result.action||"completed")+
+      "\nNo production records changed. "+
+      (action==="offer"?"Open the staging Volunteer page and select E2E 002 within 3 minutes.":""));
+  }catch(error){show002("Action blocked: "+String(error?.message||"unknown").slice(0,160));
+    try{await refresh002();}catch{}}
+}
+el002("create-002").addEventListener("click",()=>do002("create",
+  "Create a NEW, explicitly fictional STAGING_E2E_002 report in isolated Firebase staging? It uses the already-approved staging test Resident, never real emergency data."));
+el002("validate-002").addEventListener("click",()=>do002("validate",
+  "Validate ONLY the fictional STAGING_E2E_002 report in staging? It does not validate a real emergency."));
+el002("offer-002").addEventListener("click",()=>do002("offer",
+  "Send ONE synthetic task offer for STAGING_E2E_002 only to an eligible, approved staging Volunteer? This does not contact official responders."));
+el002("reissue-002").addEventListener("click",()=>do002("reissue",
+  "Reissue ONLY an expired or declined FICTIONAL E2E 002 offer? Accepted tasks are protected and cannot be reset."));
+el002("verify-002").addEventListener("click",async()=>{
+  try{
+    const d=await api002("/api/admin/emergency-auto/verify-test?caseId=STAGING_E2E_002");
+    show002("Read-only 002 acceptance review\n"+
+      "Assignment: "+String(d.assignmentStatus||d.status||"unknown")+"\n"+
+      "Session: "+String(d.sessionStatus||"unknown")+"\n"+
+      "Responder lock: "+Boolean(d.acceptedResponderLockCorrect)+"\n"+
+      "Resident notification: "+Boolean(d.acceptedResidentNotificationPresent)+"\n"+
+      "Admin audit: "+Boolean(d.adminAuditCorrect)+"\n"+
+      "Original full acceptance verified: "+Boolean(d.fullAcceptanceVerified));
+  }catch(error){show002("002 verification unavailable: "+String(error?.message||"unknown").slice(0,150));}
+});
+
 const reconcileTest=document.getElementById("reconcile-test");
 let stagingActivationReady=false;
 async function refreshFixturePreflight({silent=false}={}) {
@@ -260,6 +356,7 @@ document.getElementById("login").addEventListener("submit",async(e)=>{
       health.stagingServiceAccountMatches===true &&
       health.stagingFirestoreReadStatus==="verified");
     verifyTest.disabled=health.stagingServiceAccountMatches!==true;
+    await refresh002();
     report("Admin authentication: VERIFIED\n"+
       "Staging backend: "+(health.ok?"ONLINE":"UNAVAILABLE")+"\n"+
       "Firestore read: "+String(health.stagingFirestoreReadStatus||"unknown")+"\n"+
@@ -277,7 +374,7 @@ document.getElementById("login").addEventListener("submit",async(e)=>{
   }finally{submit.disabled=false;}
 });
 document.getElementById("logout").addEventListener("click",async()=>{
-  await signOut(auth);stagingActivationReady=false;fixtureCheck.disabled=true;prepareTest.disabled=true;reconcileTest.disabled=true;startTest.disabled=true;reissueTest.disabled=true;verifyTest.disabled=true;passwordInput.value="";report("Signed out of staging.");
+  await signOut(auth);stagingActivationReady=false;disable002();fixtureCheck.disabled=true;prepareTest.disabled=true;reconcileTest.disabled=true;startTest.disabled=true;reissueTest.disabled=true;verifyTest.disabled=true;passwordInput.value="";report("Signed out of staging.");
 });
 </script>
 </body>
