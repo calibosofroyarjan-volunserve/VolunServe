@@ -1,0 +1,49 @@
+name: Auto Volunteer Phase 1 pure planner - NO DEPLOY
+on:
+  pull_request:
+    branches:
+      - backend-live-protected
+    paths:
+      - "backend/emergencyAutoVolunteerReadOnlyPlanner.js"
+      - "backend/autoVolunteerSJDMBarangays.review.json"
+      - "backend/test-emergencyAutoVolunteerReadOnlyPlanner.cjs"
+      - "docs/emergency-volunteer/PHASE1_PREVIEW_PLANNER_20261119.md"
+      - ".github/workflows/qa-auto-volunteer-phase1-no-deploy-20261119.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  offline-planner-source-contracts:
+    if: github.repository == 'calibosofroyarjan-volunserve/VolunServe'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - name: Verify no unrelated live runtime changes against protected branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin backend-live-protected
+          git diff --name-only origin/backend-live-protected HEAD > /tmp/auto-volunteer-phase1-files
+          UNEXPECTED="$(grep -Ev '^(backend/emergencyAutoVolunteerReadOnlyPlanner\.js|backend/autoVolunteerSJDMBarangays\.review\.json|backend/test-emergencyAutoVolunteerReadOnlyPlanner\.cjs|docs/emergency-volunteer/PHASE1_PREVIEW_PLANNER_20261119\.md|\.github/workflows/qa-auto-volunteer-phase1-no-deploy-20261119\.yml)$' /tmp/auto-volunteer-phase1-files || true)"
+          test -z "$UNEXPECTED" || { echo "BLOCKED: unrelated live files changed"; printf '%s\n' "$UNEXPECTED"; exit 1; }
+          echo "PASS: source differences contain only 5 explicitly approved new preview/review files."
+      - name: Check syntax, revised provisional SJDM list and pure function unit tests
+        run: |
+          node --check backend/emergencyAutoVolunteerReadOnlyPlanner.js
+          node --check backend/test-emergencyAutoVolunteerReadOnlyPlanner.cjs
+          node --test backend/test-emergencyAutoVolunteerReadOnlyPlanner.cjs
+      - name: Install locked production backend dependencies without lifecycle scripts
+        run: npm ci --prefix backend --ignore-scripts --no-audit --no-fund
+      - name: Ensure production identity, signup and certificate backend tests still pass
+        run: npm run check --prefix backend
+      - name: Explicitly prohibit cloud actions
+        run: echo "NO FIREBASE DEPLOY / NO RENDER DEPLOY / NO LIVE MATCHING / NO REAL ASSIGNMENTS."
