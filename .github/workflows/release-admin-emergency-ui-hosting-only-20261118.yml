@@ -15,11 +15,10 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  verified-admin-ui-only-release:
+  verify-admin-ui-before-release:
     if: github.repository == 'calibosofroyarjan-volunserve/VolunServe'
     runs-on: ubuntu-24.04
     timeout-minutes: 50
-    environment: production
     env:
       CI: "true"
       EXPO_NO_TELEMETRY: "1"
@@ -29,7 +28,6 @@ jobs:
       SITE: volunserve-3aa5b
       BACKUP_CHANNEL: admin-ui-before-20261118
       VOLUNSERVE_HOSTING_URL: https://volunserve.com
-      FIREBASE_SA: ${{ secrets.VOLUNSERVE_PRODUCTION_HOSTING_SERVICE_ACCOUNT }}
 
     steps:
       - uses: actions/checkout@v4
@@ -64,6 +62,49 @@ jobs:
         env:
           VOLUNSERVE_EXPECTED_SHA: 3f173ad686ee3d19ac102a9ae132814e28b4ef8a
         run: node scripts/check-live-hosting.cjs
+      - name: Upload tested Hosting web export, never deploy in this job
+        uses: actions/upload-artifact@v4
+        with:
+          name: verified-admin-emergency-ui-web
+          path: dist/
+          retention-days: 3
+          if-no-files-found: error
+
+  publish-admin-ui-hosting-only:
+    needs: verify-admin-ui-before-release
+    if: github.repository == 'calibosofroyarjan-volunserve/VolunServe'
+    runs-on: ubuntu-24.04
+    environment: production
+    timeout-minutes: 25
+    env:
+      CI: "true"
+      EXPO_NO_TELEMETRY: "1"
+      BASE_SHA: 3f173ad686ee3d19ac102a9ae132814e28b4ef8a
+      SITE: volunserve-3aa5b
+      BACKUP_CHANNEL: admin-ui-before-20261118
+      VOLUNSERVE_HOSTING_URL: https://volunserve.com
+      FIREBASE_SA: ${{ secrets.VOLUNSERVE_PRODUCTION_HOSTING_SERVICE_ACCOUNT }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Retrieve exact tested release artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: verified-admin-emergency-ui-web
+          path: dist/
+      - name: Confirm artifact from same exact commit before release
+        shell: bash
+        run: |
+          set -euo pipefail
+          node - <<'NODE'
+          const fs=require("node:fs");
+          const info=JSON.parse(fs.readFileSync("dist/volunserve-release.json","utf8"));
+          if(info.revision!==process.env.GITHUB_SHA||
+             info.firebaseProject!=="volunserve-3aa5b")throw Error("Artifact/release commit mismatch");
+          console.log("PASS: Hosting artifact is exactly this reviewed UI-only SHA");
+          NODE
       - name: Confirm production Hosting credentials only
         shell: bash
         run: |
