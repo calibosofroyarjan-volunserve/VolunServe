@@ -23,6 +23,26 @@ jobs:
         run: npx tsc --noEmit
       - name: Attendance regression tests
         run: node --test scripts/test-hybrid-attendance-current-hosting-20261118.cjs
+      - name: Verify current live Firebase Hosting marker (read-only)
+        env:
+          EXPECTED_REVISION: 3f173ad686ee3d19ac102a9ae132814e28b4ef8a
+        run: |
+          node - <<'NODE'
+          const assert = require("node:assert/strict");
+          (async () => {
+            const response = await fetch("https://volunserve.com/volunserve-release.json", {
+              headers: {"Cache-Control": "no-cache"},
+              signal: AbortSignal.timeout(15000),
+            });
+            assert.equal(response.status, 200, "Live Hosting marker unavailable");
+            const marker = await response.json();
+            assert.equal(marker.app, "VolunServe");
+            assert.equal(marker.firebaseProject, "volunserve-3aa5b");
+            assert.equal(marker.revision, process.env.EXPECTED_REVISION,
+              "Live Hosting changed since baseline; do not deploy");
+            console.log("PASS: live Hosting matches hosting-derived code baseline");
+          })().catch(error => { console.error(error); process.exitCode = 1; });
+          NODE
       - name: Verify read-only deploy-critical source guard
         shell: bash
         run: |
