@@ -16,12 +16,20 @@ async function inspectStagingTestCase(db) {
   const incident=snap.data() || {};
   if(incident.title !== "TEST ONLY - Dummy Emergency")
     return BLOCKED("not_a_recognized_dummy_case");
-  if(incident.status !== "validated" || incident.verificationStatus !== "validated" ||
+  if(incident.verificationStatus !== "validated" ||
     incident.dispatchBlocked === true || !Array.isArray(incident.requiredSkills))
     return BLOCKED("invalid_test_case_fields");
   if(!incident.validatedBy || !incident.reporterUid ||
     incident.validatedBy === incident.reporterUid)
     return BLOCKED("test_case_roles_missing");
+  // A *previously* offered synthetic case legitimately becomes assigned.
+  // Do not mislabel that as an invalid new case or try to offer it again.
+  if(["assigned","in_progress"].includes(incident.status) &&
+     (incident.activeVolunteerSupportAssignmentId ||
+      incident.autoVolunteerDispatch?.state))
+    return {status:"existing_assignment",reason:"verify_existing_test_offer",
+      eligible:0,wave:0};
+  if(incident.status !== "validated")return BLOCKED("invalid_test_case_fields");
   const [admin, reporter, apps]=await Promise.all([
     db.collection("users").doc(incident.validatedBy).get(),
     db.collection("users").doc(incident.reporterUid).get(),
