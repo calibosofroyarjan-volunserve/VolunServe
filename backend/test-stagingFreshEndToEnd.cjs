@@ -826,3 +826,160 @@ test("validated fictional report remains validated, but reports blocked automati
     VOLUNSERVE_STAGING_E2E_002_AUTO_AFTER_VALIDATION:"enabled"
   });
 });
+
+
+test("staging 002 auto progression offers ALL same wave candidates then Wave 2 after expiry, never reissues Wave 1",async()=>{
+  const {startBatchOffers,respondBatchOffer,batchStatus}=require("./stagingBulkVolunteerOffers");
+  const {advanceBatchWave}=require("./stagingBulkWaveAdvance");
+  const db=new FakeDb();seedAccounts(db);
+  for(const [uid,barangay] of [["qaSecond","Bagong Buhay I"],["qaThird","Bagong Buhay II"],["qaOtherVolunteer","San Manuel"]]){
+    db.seed("users/"+uid,{role:"volunteer",status:"approved",
+      volunteerAccess:true,volunteerStatus:"approved",identityVerified:true,
+      barangay,skills:["First Aid"],fullName:"QA "+uid});
+    db.seed("volunteerApplications/"+uid,{uid,status:"approved",skills:["First Aid"]});
+  }
+  db.seed("systemSettings/emergencyVolunteerMatching",{
+    enabled:true,approved:true,neighborsByBarangay:{"Bagong Buhay I":["Bagong Buhay II"]}
+  });
+  db.seed("disasterCases/"+FRESH_ID,{
+    title:"TEST ONLY - Fresh Volunteer E2E 002",testOnly:true,
+    testCategory:"staging_synthetic_volunteer_e2e_002",source:"staging_synthetic_e2e",
+    status:"validated",verificationStatus:"validated",
+    validatedBy:ADMIN,reporterUid:RESIDENT,
+    incidentBarangay:"Bagong Buhay I",requiredSkills:["First Aid"],dispatchBlocked:false
+  });
+  const startAt=Date.now();
+  const created=await startBatchOffers(db,ADMIN,startAt);
+  assert.equal(created.status,"offered");assert.equal(created.wave,1);
+  assert.equal(created.offered,2);
+  const waiting=await advanceBatchWave(db,startAt+10000);
+  assert.equal(waiting.status,"waiting");
+  assert.equal(db.list("responseAssignments/").length,2);
+  const first=await respondBatchOffer(db,VOL,"declined",startAt+20000);
+  assert.equal(first.status,"declined");
+  const expired=await advanceBatchWave(db,startAt+180001);
+  assert.equal(expired.status,"offered");
+  assert.equal(expired.wave,2);assert.equal(expired.offered,1);
+  assert.equal(db.get("responseAssignments/"+FRESH_ID+"_qaSecond").status,"expired");
+  assert.equal(db.get("responseAssignments/"+FRESH_ID+"_qaThird").status,"offered");
+  assert.equal(db.get("autoVolunteerReservations/qaSecond"),undefined);
+  assert.equal(db.list("responseAssignments/").length,3);
+  assert.equal((await advanceBatchWave(db,startAt+180010)).status,"waiting");
+  const two=await respondBatchOffer(db,"qaThird","declined",startAt+181000);
+  assert.equal(two.status,"declined");
+  const city=await advanceBatchWave(db,startAt+182000);
+  assert.equal(city.status,"offered");assert.equal(city.wave,3);
+  assert.equal(city.offered,1);
+  assert.equal(db.list("responseAssignments/").length,4);
+  const end=await advanceBatchWave(db,startAt+182001);
+  assert.equal(end.status,"waiting");
+  const declined=await respondBatchOffer(db,"qaOtherVolunteer","declined",startAt+182050);
+  assert.equal(declined.status,"declined");
+  const exhausted=await advanceBatchWave(db,startAt+182060);
+  assert.equal(exhausted.status,"exhausted");
+  assert.equal(db.get("disasterCases/"+FRESH_ID).status,"validated");
+  assert.equal(db.get("emergencyAutoDispatchBatches/"+FRESH_ID).status,"exhausted");
+  assert.equal((await advanceBatchWave(db,startAt+182080)).status,"exhausted");
+  assert.equal(db.list("responseAssignments/").length,4);
+});
+test("staging 002 does NOT advance any wave after acceptance, even if other offers expired",async()=>{
+  const {startBatchOffers,respondBatchOffer}=require("./stagingBulkVolunteerOffers");
+  const {advanceBatchWave}=require("./stagingBulkWaveAdvance");
+  const db=new FakeDb();seedAccounts(db);
+  db.seed("users/qaSecond",{role:"volunteer",status:"approved",
+    volunteerAccess:true,volunteerStatus:"approved",identityVerified:true,
+    barangay:"San Manuel",skills:["First Aid"]});
+  db.seed("volunteerApplications/qaSecond",{uid:"qaSecond",status:"approved",skills:["First Aid"]});
+  db.seed("disasterCases/"+FRESH_ID,{
+    title:"TEST ONLY - Fresh Volunteer E2E 002",
+    testOnly:true,testCategory:"staging_synthetic_volunteer_e2e_002",
+    source:"staging_synthetic_e2e",status:"validated",verificationStatus:"validated",
+    reporterUid:RESIDENT,validatedBy:ADMIN,
+    incidentBarangay:"Bagong Buhay I",requiredSkills:["First Aid"]
+  });
+  const now=Date.now();
+  assert.equal((await startBatchOffers(db,ADMIN,now)).wave,1);
+  assert.equal((await respondBatchOffer(db,VOL,"accepted",now+10000)).status,"accepted");
+  const result=await advanceBatchWave(db,now+3600000);
+  assert.equal(result.status,"supported");
+  assert.equal(db.get("responseAssignments/"+FRESH_ID+"_qaSecond"),undefined);
+  assert.equal(db.get("responderLocks/"+VOL).caseId,FRESH_ID);
+  assert.equal(db.get("emergencyAutoDispatchBatches/"+FRESH_ID).wave,1);
+});
+test("staging wave advancement fails closed for missing or non-fictional 002 batch",async()=>{
+  const {advanceBatchWave}=require("./stagingBulkWaveAdvance");
+  const db=new FakeDb();
+  const res=await advanceBatchWave(db);
+  assert.equal(res.status,"blocked");assert.equal(res.reason,"not_isolated_batch_002");
+  db.seed("disasterCases/"+FRESH_ID,{
+    title:"Real emergency",status:"assigned",verificationStatus:"validated"
+  });
+  db.seed("emergencyAutoDispatchBatches/"+FRESH_ID,{status:"waiting",wave:1});
+  assert.equal((await advanceBatchWave(db)).status,"blocked");
+  assert.equal(db.list("notifications/").length,0);
+});
+
+
+test("authenticated staging HTTP automatically advances after every same-wave decline; requires separate flags",async()=>{
+  const db=new FakeDb();seedAccounts(db);
+  db.seed("users/qaSecond",{
+    role:"volunteer",status:"approved",volunteerAccess:true,
+    volunteerStatus:"approved",identityVerified:true,
+    barangay:"Bagong Buhay II",skills:["First Aid"]});
+  db.seed("volunteerApplications/qaSecond",{
+    uid:"qaSecond",status:"approved",skills:["First Aid"]});
+  db.seed("systemSettings/emergencyVolunteerMatching",{
+    enabled:true,approved:true,
+    neighborsByBarangay:{"Bagong Buhay I":["Bagong Buhay II"]}
+  });
+  db.seed("disasterCases/"+FRESH_ID,{
+    title:"TEST ONLY - Fresh Volunteer E2E 002",
+    testOnly:true,testCategory:"staging_synthetic_volunteer_e2e_002",
+    source:"staging_synthetic_e2e",status:"validated",
+    verificationStatus:"validated",validatedBy:ADMIN,reporterUid:RESIDENT,
+    incidentBarangay:"Bagong Buhay I",requiredSkills:["First Aid"]
+  });
+  await serve(db,async({req})=>{
+    const url="/api/admin/emergency-auto/e2e-002/bulk-send";
+    const send=await req(url,{who:ADMIN,method:"POST",
+      body:{caseId:FRESH_ID,confirmAllEligibleTestOffers:true}});
+    assert.equal(send.code,200);
+    assert.equal(send.body.wave,1);assert.equal(send.body.offered,1);
+    const forbidden=await req("/api/admin/emergency-auto/e2e-002/bulk-reconcile",{
+      who:RESIDENT,method:"POST",body:{caseId:FRESH_ID}});
+    assert.equal(forbidden.code,403);
+    const declined=await req("/api/staging/volunteer/e2e-002/bulk-respond",{
+      who:VOL,method:"POST",body:{decision:"declined"}});
+    assert.equal(declined.code,200);
+    assert.equal(declined.body.status,"declined");
+    assert.equal(declined.body.automaticWave.status,"offered");
+    assert.equal(declined.body.automaticWave.wave,2);
+    assert.equal(db.get("responseAssignments/"+FRESH_ID+"_qaSecond").status,"offered");
+    assert.equal((await req("/api/staging/volunteer/e2e-002/bulk-task",{who:"qaSecond"})).body.status,"offered");
+    assert.equal(db.list("responseAssignments/").length,2);
+    const retry=await req("/api/admin/emergency-auto/e2e-002/bulk-reconcile",{
+      who:ADMIN,method:"POST",body:{caseId:FRESH_ID}});
+    assert.equal(retry.body.status,"waiting");
+    assert.equal(db.list("responseAssignments/").length,2);
+    const accepted=await req("/api/staging/volunteer/e2e-002/bulk-respond",{
+      who:"qaSecond",method:"POST",body:{decision:"accepted"}});
+    assert.equal(accepted.code,200);assert.equal(accepted.body.status,"accepted");
+    assert.equal(db.get("responderLocks/qaSecond").caseId,FRESH_ID);
+    const after=await req("/api/admin/emergency-auto/e2e-002/bulk-reconcile",{
+      who:ADMIN,method:"POST",body:{caseId:FRESH_ID}});
+    assert.equal(after.body.status,"supported");
+    assert.equal(db.list("responseAssignments/").length,2);
+  },{VOLUNSERVE_STAGING_E2E_002_BULK:"enabled",
+    VOLUNSERVE_STAGING_E2E_002_AUTO_AFTER_VALIDATION:"enabled",
+    VOLUNSERVE_STAGING_E2E_002_AUTO_WAVES:"enabled"});
+});
+test("unconfigured automatic waves block staging Admin retries without changing accepted cases",async()=>{
+  const db=new FakeDb();seedAccounts(db);
+  await serve(db,async({req})=>{
+    const r=await req("/api/admin/emergency-auto/e2e-002/bulk-reconcile",{
+      who:ADMIN,method:"POST",body:{caseId:FRESH_ID}});
+    assert.equal(r.code,503);
+    assert.equal(r.body.error,"staging_wave_reconcile_disabled");
+    assert.equal(db.list("responseAssignments/").length,0);
+  });
+});

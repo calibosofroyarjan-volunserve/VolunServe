@@ -26,6 +26,7 @@ const {getVolunteerOffer,respondToStagingOffer,resetExpiredFixture,
 const {chooseAllEligibleWave}=require("../functions/emergencyAllEligibleWavePlanner");
 const {startBatchOffers,getBatchOffer,respondBatchOffer,batchStatus}
   =require("./stagingBulkVolunteerOffers");
+const {advanceBatchWave}=require("./stagingBulkWaveAdvance");
 const knownSJDMBgy=require("../functions/sjdmBarangays.json");
 const {createFreshTestCase,validateFreshTestCase,inspectFreshTestCase,recognized}
   =require("./stagingFreshCase002");
@@ -44,6 +45,22 @@ function makeApp({authClient = auth, firestore = db, worker, env = process.env} 
   // Never reads user data, creates accounts, changes Firestore or enables offers.
   // Does not block HTTP startup if Firebase is temporarily unavailable.
   const stagingServiceAccountMatches = verifiedStagingProject(env);
+  // OFF by default; fixed fictional 002 only, on the isolated staging Firebase.
+  // Render Free may sleep: this is a staging QA timer, not 24/7 dispatch.
+  const autoWaves002=stagingServiceAccountMatches&&bulk002OnValidation&&
+    env.VOLUNSERVE_STAGING_E2E_002_AUTO_WAVES==="enabled";
+  if(autoWaves002){
+    const timer=setInterval(()=>{
+      void advanceBatchWave(firestore).then(result=>{
+        if(["offered","exhausted"].includes(result.status))
+          console.info("[staging-002-waves] safe transition:",result.status,
+            "wave",result.wave||0);
+      }).catch(error=>
+        console.warn("[staging-002-waves] retryable reconciliation failure",
+          String(error?.code||"unknown").slice(0,60)));
+    },20000);
+    timer.unref?.();
+  }
   let stagingFirestoreReadStatus = stagingServiceAccountMatches ? "checking" : "not_configured";
   let stagingTestCaseReadiness = {status:stagingServiceAccountMatches?"checking":"not_configured"};
   if (stagingServiceAccountMatches) {
@@ -371,6 +388,23 @@ function makeApp({authClient = auth, firestore = db, worker, env = process.env} 
         response.status(503).json({ok:false,error:"bulk_send_unavailable"});
       }
     });
+  // Explicit Admin retry is useful when a Free staging instance was asleep
+  // during the 3-minute offer deadline. No real-case requests are accepted.
+  app.post("/api/admin/emergency-auto/e2e-002/bulk-reconcile",
+    requireStagingAdmin,requireActivation,async(request,response)=>{
+      if(!autoWaves002||request.body?.caseId!==E2E_CASE_ID)
+        return response.status(503).json({ok:false,error:"staging_wave_reconcile_disabled"});
+      try{
+        const result=await advanceBatchWave(firestore);
+        response.set("Cache-Control","no-store");
+        response.status(result.status==="blocked"?409:200)
+          .json({ok:result.status!=="blocked",...result});
+      }catch(error){
+        console.warn("[staging-002-waves] Admin retry failed",
+          String(error?.code||"unknown").slice(0,60));
+        response.status(503).json({ok:false,error:"wave_reconcile_unavailable"});
+      }
+    });
   app.get("/api/admin/emergency-auto/e2e-002/bulk-status",
     requireStagingAdmin,async(_request,response)=>{
       if(!stagingServiceAccountMatches||!bulk002Enabled)
@@ -404,9 +438,20 @@ function makeApp({authClient = auth, firestore = db, worker, env = process.env} 
       try{
         const result=await respondBatchOffer(firestore,
           response.locals.stagingVolunteerUid,decision);
+        let automaticWave={status:"disabled"};
+        if(result.status==="declined"&&autoWaves002){
+          try{
+            automaticWave=await advanceBatchWave(firestore);
+          }catch(error){
+            console.warn("[staging-002-waves] persisted decline; automatic transition deferred",
+              String(error?.code||"unknown").slice(0,60));
+            automaticWave={status:"pending_retry"};
+          }
+        }
         response.set("Cache-Control","no-store");
         response.status(result.status==="blocked"?409:200)
-          .json({ok:result.status!=="blocked",...result});
+          .json({ok:result.status!=="blocked",...result,
+            ...(autoWaves002?{automaticWave}:{})});
       }catch(error){
         console.warn("Staging bulk response failed",String(error?.code||"unknown").slice(0,60));
         response.status(409).json({ok:false,error:"bulk_response_conflict"});
