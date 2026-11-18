@@ -133,26 +133,27 @@ async function respondToStagingOffer(db,uid,decision,now=Date.now(),caseId=CASE_
 /** Admin-only: reset only the one synthetic assignment, never an accepted task.
  * Used after expiry, so testers do not manually edit Firestore fields.
  */
-async function resetExpiredFixture(db,now=Date.now()) {
-  const caseRef=db.collection("disasterCases").doc(CASE_ID);
-  const stateRef=db.collection("emergencyAutoDispatch").doc(CASE_ID);
+async function resetExpiredFixture(db,now=Date.now(),caseId=CASE_ID) {
+  if(!titleForCase(caseId))return result("not_staging_case");
+  const caseRef=db.collection("disasterCases").doc(caseId);
+  const stateRef=db.collection("emergencyAutoDispatch").doc(caseId);
   const caseSnap=await caseRef.get(),stateSnap=await stateRef.get();
-  if(!caseSnap.exists||caseSnap.data()?.title!==CASE_TITLE)return result("not_staging_case");
+  if(!caseSnap.exists||caseSnap.data()?.title!==titleForCase(caseId))return result("not_staging_case");
   if(!stateSnap.exists)return result("ready");
   const state=stateSnap.data()||{};
   if(!safeUid(state.volunteerId) || !state.assignmentId ||
-     state.assignmentId!==CASE_ID+"_"+state.volunteerId){
+     state.assignmentId!==caseId+"_"+state.volunteerId){
     // For declined state, the original volunteer id has been cleared. Never
     // guess an unrelated UID or inspect other real users.
     return result("manual_review_required");
   }
-  const refs=refSet(db,state.volunteerId);
+  const refs=refSet(db,state.volunteerId,caseId);
   return db.runTransaction(async tx=>{
     const [c,s,a,r,l,log]=await Promise.all([
       caseRef,stateRef,refs.assignmentRef,refs.reserveRef,refs.lockRef,
       db.collection("adminActivityLogs").doc("auto_offer_"+refs.assignmentId),
     ].map(ref=>tx.get(ref)));
-    if(!c.exists||c.data()?.title!==CASE_TITLE||!s.exists)return result("not_staging_case");
+    if(!c.exists||c.data()?.title!==titleForCase(caseId)||!s.exists)return result("not_staging_case");
     const current=s.data()||{},offer=a.exists?a.data()||{}:{};
     if(current.assignmentId!==refs.assignmentId||
        current.volunteerId!==state.volunteerId||
