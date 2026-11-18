@@ -833,3 +833,7 @@ test("staging reconciliation endpoint denies anonymous, wrong case and missing e
     assert.equal(writes,0);
   }finally{await new Promise(resolve=>server.close(resolve));}
 });
+
+// Fresh completely in-memory authorized Admin/Volunteer end-to-end regression.
+// Register without modifying the isolated Render build command.
+require("./test-stagingFreshEndToEnd.cjs");
