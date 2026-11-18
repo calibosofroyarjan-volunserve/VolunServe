@@ -8,8 +8,12 @@ const {
   db,
   FieldValue,
 } = require("./firebaseAdmin");
-const { reconcileCommunityEventCertificates } = require("./communityCertificates");
+const { reconcileCommunityEventCertificates: issueVerifiedCommunityEventCertificates } = require("./communityCertificates");
 const { startCommunityCertificateAutoSync } = require("./communityCertificateAutoSync");
+const {
+  verifyCommunityEventAttendance,
+  reconcileCommunityEventAttendance,
+} = require("./communityAttendanceAutoVerify");
 const { combineApprovedBudget } = require("./assistanceDonationBudget");
 const { probeIdentityAiReadiness } = require("./identityAiReadiness");
 const {isVerifiedFirebaseToken, isCompletedVolunServeProfile} = require("./verifiedFirebaseToken");
@@ -11768,6 +11772,50 @@ app.post(
 // existing certificate records remain unchanged.
 // Preview/read-only by default. Call execute:true only AFTER the
 // Admin completion or attendance-verification Firestore write succeeds.
+// Volunteer can request verification only for their own recorded Time Out.
+// No client can send a duration, attendance status or another volunteer UID.
+app.post(
+  "/api/community-events/attendance/auto-verify",
+  requireFirebaseUser,
+  async (request, response) => {
+    try {
+      const eventId = cleanText(request.body?.eventId, 160);
+      if (!/^[A-Za-z0-9_-]{1,160}$/.test(eventId)) {
+        throw makeHttpError(400, "invalid_event_id", "A valid Community Event ID is required.");
+      }
+      const result = await verifyCommunityEventAttendance({
+        db, FieldValue, eventId, volunteerId:request.firebaseUser.uid,
+      });
+      // Invalid, off-schedule or exceptional records remain pending for Admin review.
+      response.status(200).json({ok:true,...result});
+    } catch (error) {
+      console.error("Community attendance automatic verification failed:", error?.message);
+      response.status(Number(error?.statusCode) || 500).json({
+        ok:false,
+        error:cleanText(error?.code || "auto_attendance_verification_failed",120),
+        message:"Time Out was saved, but automatic verification is unavailable. Admin can review attendance.",
+      });
+    }
+  },
+);
+
+async function reconcileCommunityEventCertificates(options) {
+  let autoAttendance = null;
+  if (options.execute === true) {
+    try {
+      autoAttendance = await reconcileCommunityEventAttendance({
+        db, FieldValue, eventId:options.eventId,
+        participantId:options.participantId || "",
+      });
+    } catch (error) {
+      // Certificate issuance for already-verified records must remain available.
+      console.warn("[Community attendance] auto verification retry failed", error?.message);
+    }
+  }
+  const certificates = await issueVerifiedCommunityEventCertificates(options);
+  return autoAttendance ? {...certificates,autoAttendance} : certificates;
+}
+
 app.post(
   "/api/admin/community-certificates/reconcile",
   requireFirebaseUser,
