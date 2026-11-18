@@ -778,7 +778,7 @@ test("Admin-only late staging reconciliation creates accurate evidence, never ba
   }
   const partial=fixture();
   partial.seed("notifications/auto_test_accepted_"+aid,{
-    userId:"fakeResident",caseId,assignmentId:aid,recordOrigin:ORIGIN});
+    userId:"fakeResident",caseId,assignmentId:aid,status:"accepted",recordOrigin:ORIGIN});
   const one=await reconcileAcceptedStagingSupport(partial,adminUid);
   assert.equal(one.createdNotification,false);
   assert.equal(one.createdAudit,true);
