@@ -53,7 +53,9 @@ a{color:#075c49}input:focus-visible,button:focus-visible{outline:3px solid #4db8
 <button type="button" class="secondary" id="check-002" disabled>Check 002 readiness</button>
 <button type="button" class="secondary" id="create-002" disabled>Create fictional 002</button>
 <button type="button" class="secondary" id="validate-002" disabled>Validate fictional 002</button>
-<button type="button" id="offer-002" disabled>Offer task for 002</button>
+<button type="button" id="offer-002" disabled>Offer single task for 002 (legacy)</button>
+<button type="button" id="bulk-offer-002" disabled>Offer to ALL eligible Volunteers (isolated test)</button>
+<button type="button" class="secondary" id="bulk-status-002" disabled>Check ALL eligible offer statuses</button>
 <button type="button" class="secondary" id="verify-002" disabled>Verify 002 acceptance</button>
 <button type="button" class="secondary" id="reissue-002" disabled>Reissue expired 002 only</button>
 </div>
@@ -91,7 +93,7 @@ const reissueTest=document.getElementById("reissue-test");
 const verifyTest=document.getElementById("verify-test");
 const fixtureCheck=document.getElementById("fixture-check");
 const prepareTest=document.getElementById("prepare-test");
-const ids002=["check-002","create-002","validate-002","offer-002","verify-002","reissue-002"];
+const ids002=["check-002","create-002","validate-002","offer-002","verify-002","reissue-002","bulk-offer-002","bulk-status-002"];
 const el002=id=>document.getElementById(id);
 const show002=message=>{el002("e2e-002-status").textContent=message;};
 function disable002(){ids002.forEach(id=>{el002(id).disabled=true;});}
@@ -113,6 +115,16 @@ async function refresh002(){
   el002("create-002").disabled=!(stagingActivationReady&&status==="not_created");
   el002("validate-002").disabled=!(stagingActivationReady&&status==="reported");
   el002("offer-002").disabled=!(stagingActivationReady&&status==="ready");
+  el002("bulk-offer-002").disabled=true;
+  el002("bulk-status-002").disabled=true;
+  try{
+    const bulk=await api002("/api/admin/emergency-auto/e2e-002/bulk-status");
+    el002("bulk-status-002").disabled=false;
+    el002("offer-002").disabled=true; // Never mix single-offer and batch paths.
+    el002("bulk-offer-002").disabled=!(stagingActivationReady&&status==="ready"&&bulk.status==="not_started");
+  }catch(error){
+    // Bulk flag stays disabled until explicitly enabled by isolated staging.
+  }
   el002("verify-002").disabled=status!=="existing_assignment";
   el002("reissue-002").disabled=!(stagingActivationReady&&status==="existing_assignment");
   show002("FICTIONAL STAGING_E2E_002 ONLY\n"+
@@ -152,6 +164,41 @@ async function do002(action,confirmation){
   }catch(error){show002("Action blocked: "+String(error?.message||"unknown").slice(0,160));
     try{await refresh002();}catch{}}
 }
+el002("bulk-status-002").addEventListener("click",async()=>{
+  try{
+    const d=await api002("/api/admin/emergency-auto/e2e-002/bulk-status");
+    show002("REAL STAGING BATCH STATUS\n"+
+      "Status: "+String(d.status)+"\n"+
+      "Task offers: "+String(d.offered)+"\n"+
+      "Pending: "+String(d.pending)+"\n"+
+      "Accepted: "+String(d.accepted)+"\n"+
+      "Declined: "+String(d.declined)+"\n"+
+      "Source: actual fixed fictional staging 002 assignment documents.");
+  }catch(error){show002("Bulk status unavailable: "+String(error?.message||"disabled"));}
+});
+el002("bulk-offer-002").addEventListener("click",async()=>{
+  if(!stagingActivationReady)return show002("Approved isolated staging Admin required.");
+  try{
+    const preview=await api002("/api/admin/emergency-auto/e2e-002/bulk-preview");
+    if(preview.status!=="offer_all"||preview.eligibleInSelectedWave<1)
+      return show002("No safe eligible wave for batch: "+String(preview.status));
+    if(!window.confirm(
+      "TEST ONLY: Send an automatic Volunteer offer to ALL "+
+      preview.eligibleInSelectedWave+" eligible approved Volunteers in Wave "+
+      preview.wave+"? Every Volunteer must independently Accept/Decline. "+
+      "Existing 001 and production reports are unaffected."
+    ))return;
+    disable002();
+    const result=await api002("/api/admin/emergency-auto/e2e-002/bulk-send",{
+      method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({caseId:"STAGING_E2E_002",confirmAllEligibleTestOffers:true})
+    });
+    show002("Fictional wave "+result.wave+": "+
+      result.offered+" individual task offers written atomically. "+
+      "Open the separate staging Volunteer page and select bulk test 002.");
+  }catch(error){show002("Bulk send blocked: "+String(error?.message||"unknown"));}
+  finally{try{await refresh002();}catch{}}
+});
 el002("create-002").addEventListener("click",()=>do002("create",
   "Create a NEW, explicitly fictional STAGING_E2E_002 report in isolated Firebase staging? It uses the already-approved staging test Resident, never real emergency data."));
 el002("validate-002").addEventListener("click",()=>do002("validate",
