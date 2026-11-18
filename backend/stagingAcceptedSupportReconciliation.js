@@ -72,13 +72,15 @@ async function reconcileAcceptedStagingSupport(db,adminUid) {
     if(notice.exists){
       const n=notice.data()||{};
       if(n.caseId!==CASE_ID || n.assignmentId!==assignmentId ||
-         n.userId!==caseData.reporterUid ||
+         n.userId!==caseData.reporterUid || n.status!=="accepted" ||
          (n.recordOrigin && n.recordOrigin!==ORIGIN))
         return blocked("existing_notification_needs_review");
     }
     if(audit.exists){
       const record=audit.data()||{};
       if(record.caseId!==CASE_ID || record.volunteerUid!==uid ||
+         !["Synthetic Volunteer Accepted",
+           "Synthetic Volunteer Acceptance Reconciled (Later QA)"].includes(record.action) ||
          (record.recordOrigin && record.recordOrigin!==ORIGIN))
         return blocked("existing_audit_needs_review");
     }
