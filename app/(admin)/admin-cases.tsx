@@ -3236,7 +3236,7 @@ export default function AdminCases() {
               {pagedCases.map((item) => {
                 const active = selectedCase?.id === item.id;
                 const displayName = String(item.reporterName || "Resident").trim();
-                const initials = displayName.split(/\\s+/).slice(0, 2).map(part => part.charAt(0).toUpperCase()).join("") || "R";
+                const initials = displayName.split(/\s+/).slice(0, 2).map(part => part.charAt(0).toUpperCase()).join("") || "R";
                 const adminStatus = String(item.verificationStatus || "pending_verification");
 
                 return (
@@ -3618,7 +3618,7 @@ export default function AdminCases() {
                       <View style={styles.reportResidentAvatar}>
                         <Text style={styles.reportResidentInitials}>
                           {String(incident.reporterName || "Resident").trim()
-                            .split(/\\s+/).slice(0, 2)
+                            .split(/\s+/).slice(0, 2)
                             .map(part => part.charAt(0).toUpperCase()).join("") || "R"}
                         </Text>
                       </View>
@@ -3634,6 +3634,18 @@ export default function AdminCases() {
                         ? `${incident.reporterBarangay}, San Jose del Monte, Bulacan`
                         : incident.reporterAddress || "Barangay not provided"}
                     </Text>
+                    {verificationStatus !== "validated" && verificationStatus !== "rejected" && (
+                      <TouchableOpacity
+                        style={styles.reviewQueueTab}
+                        accessibilityRole="button"
+                        accessibilityLabel="Open report evidence and Admin review actions"
+                        onPress={() => setDetailTab("evidence")}
+                      >
+                        <Text style={styles.reviewQueueTabTextActive}>
+                          Review evidence and decide
+                        </Text>
+                      </TouchableOpacity>
+                    )}
                     <View style={styles.overviewVerifiedPill}>
                       <Text style={styles.overviewVerifiedText}>
                         {incident.verification?.identityVerified
@@ -4073,7 +4085,9 @@ export default function AdminCases() {
 
                       <View style={styles.reviewActions}>
                         <TouchableOpacity
-                          style={styles.validateButton}
+                          style={[styles.validateButton, !!reviewingCaseId && styles.disabledButton]}
+                          disabled={!!reviewingCaseId}
+                          accessibilityRole="button"
                           onPress={() =>
                             reviewVerification(incident, "validate")
                           }
@@ -4084,7 +4098,9 @@ export default function AdminCases() {
                         </TouchableOpacity>
 
                         <TouchableOpacity
-                          style={styles.moreEvidenceButton}
+                          style={[styles.moreEvidenceButton, !!reviewingCaseId && styles.disabledButton]}
+                          disabled={!!reviewingCaseId}
+                          accessibilityRole="button"
                           onPress={() =>
                             reviewVerification(
                               incident,
@@ -4098,7 +4114,9 @@ export default function AdminCases() {
                         </TouchableOpacity>
 
                         <TouchableOpacity
-                          style={styles.rejectButton}
+                          style={[styles.rejectButton, !!reviewingCaseId && styles.disabledButton]}
+                          disabled={!!reviewingCaseId}
+                          accessibilityRole="button"
                           onPress={() =>
                             reviewVerification(incident, "reject")
                           }
