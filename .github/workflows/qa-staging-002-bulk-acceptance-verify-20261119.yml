@@ -1,0 +1,37 @@
+name: Staging 002 read-only bulk acceptance and lock verification - NO DEPLOY
+on:
+  pull_request:
+    branches:
+      - feat/emergency-auto-dispatch-server-staging-20261115
+    paths:
+      - "backend/staging002BulkAcceptanceVerifier.js"
+      - "backend/test-staging002BulkAcceptanceVerifier.cjs"
+      - "backend/stagingAdminLogin.html"
+      - "backend/emergencyAutoDispatchStagingServer.js"
+      - ".github/workflows/qa-staging-002-bulk-acceptance-verify-20261119.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify-isolated-bulk-readonly:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install backend dependencies with scripts disabled
+        run: npm ci --prefix backend --ignore-scripts --no-audit --no-fund
+      - name: Check syntax
+        run: |
+          node --check backend/staging002BulkAcceptanceVerifier.js
+          node --check backend/emergencyAutoDispatchStagingServer.js
+      - name: Verify accepted bulk task, lock, reservation, notification and audits
+        run: node --test backend/test-staging002BulkAcceptanceVerifier.cjs
+      - name: Preserve fictional E2E and accepted 001 regressions
+        run: |
+          node --test backend/test-staging002ExpiredBulkRetry.cjs
+          node --test backend/test-stagingFreshEndToEnd.cjs
+      - name: CI never deploys or writes Firebase
+        run: echo "Synthetic mocks only. No Render or Firebase write actions."

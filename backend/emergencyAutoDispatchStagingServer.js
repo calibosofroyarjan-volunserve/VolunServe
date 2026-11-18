@@ -30,6 +30,7 @@ const {advanceBatchWave}=require("./stagingBulkWaveAdvance");
 const {retryExpiredBatch002}=require("./staging002ExpiredBulkRetry");
 const {summarizeStaging002Eligibility}=require("./staging002EligibilitySummary");
 const {fixtureSummary,provisionFixtures}=require("./staging002TestVolunteerProvisioning");
+const {verifyStaging002BulkAcceptance}=require("./staging002BulkAcceptanceVerifier");
 const knownSJDMBgy=require("../functions/sjdmBarangays.json");
 const {createFreshTestCase,validateFreshTestCase,inspectFreshTestCase,recognized}
   =require("./stagingFreshCase002");
@@ -438,6 +439,23 @@ function makeApp({authClient = auth, firestore = db, worker, env = process.env} 
         response.json({ok:true,...await batchStatus(firestore)});
       }catch(error){
         response.status(503).json({ok:false,error:"bulk_status_unavailable"});
+      }
+    });
+  // Read-only independent verification for BATCH 002. Legacy 001/002
+  // single-task verifier does not inspect this batch model.
+  app.get("/api/admin/emergency-auto/e2e-002/bulk-verify-acceptance",
+    requireStagingAdmin,async(_request,response)=>{
+      if(!stagingServiceAccountMatches||!bulk002Enabled)
+        return response.status(503).json({ok:false,error:"isolated_bulk_staging_disabled"});
+      try{
+        const result=await verifyStaging002BulkAcceptance(firestore);
+        response.set("Cache-Control","no-store");
+        response.status(result.status==="blocked"?409:200)
+          .json({ok:result.status!=="blocked",...result});
+      }catch(error){
+        console.warn("Staging fictional 002 bulk verification unavailable",
+          String(error?.code||"unknown").slice(0,55));
+        response.status(503).json({ok:false,error:"staging_bulk_acceptance_verification_unavailable"});
       }
     });
   app.get("/api/staging/volunteer/e2e-002/bulk-task",
