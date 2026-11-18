@@ -1,0 +1,113 @@
+name: Release ONLY Admin Emergency Reports UI to verified production Hosting
+
+on:
+  push:
+    branches:
+      - release/admin-emergency-ui-hosting-only-20261118
+    paths:
+      - ".github/workflows/release-admin-emergency-ui-hosting-only-20261118.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: volunserve-production-hosting-release
+  cancel-in-progress: false
+
+jobs:
+  verified-admin-ui-only-release:
+    if: github.repository == 'calibosofroyarjan-volunserve/VolunServe'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 50
+    environment: production
+    env:
+      CI: "true"
+      EXPO_NO_TELEMETRY: "1"
+      EXPO_PUBLIC_VOLUNSERVE_ENV: production
+      EXPO_PUBLIC_IDENTITY_VERIFICATION_API_URL: https://volunserve.onrender.com
+      BASE_SHA: 3f173ad686ee3d19ac102a9ae132814e28b4ef8a
+      SITE: volunserve-3aa5b
+      BACKUP_CHANNEL: admin-ui-before-20261118
+      VOLUNSERVE_HOSTING_URL: https://volunserve.com
+      FIREBASE_SA: ${{ secrets.VOLUNSERVE_PRODUCTION_HOSTING_SERVICE_ACCOUNT }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - name: Block any unapproved changed file or non-live source ancestry
+        shell: bash
+        run: |
+          set -euo pipefail
+          git merge-base --is-ancestor "$BASE_SHA" HEAD
+          git diff --name-only "$BASE_SHA" HEAD | tee /tmp/admin-ui-scope.txt
+          if grep -v -E '^(app/\(admin\)/admin-cases\.tsx|components/admin/EmergencyFiveTabDesign\.tsx|scripts/test-admin-emergency-master-detail-20261118\.cjs|\.github/workflows/(qa-admin-emergency-live-safe-20261118|release-admin-emergency-ui-hosting-only-20261118)\.yml)$' /tmp/admin-ui-scope.txt; then
+            echo "::error::Unexpected code or config changes; blocked"
+            exit 1
+          fi
+          git diff --quiet "$BASE_SHA" HEAD -- functions backend firestore.rules firestore.indexes.json firebase.json package.json package-lock.json
+          echo "PASS: ONLY the scoped Admin UI, no-write test, and workflow changed"
+      - name: Build exact production-source web assets and run UI regression
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci --no-audit --no-fund
+          node scripts/test-admin-emergency-master-detail-20261118.cjs
+          npx expo export --platform web --clear
+          node scripts/verify-hosting-release.cjs
+          test -f dist/admin-cases.html || test -f dist/admin-cases/index.html
+      - name: Verify live release marker has NOT changed since approved baseline
+        env:
+          VOLUNSERVE_EXPECTED_SHA: 3f173ad686ee3d19ac102a9ae132814e28b4ef8a
+        run: node scripts/check-live-hosting.cjs
+      - name: Confirm production Hosting credentials only
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$FIREBASE_SA" || { echo "::error::No production Hosting credentials"; exit 1; }
+          node - <<'NODE'
+          const fs=require("node:fs"),p=JSON.parse(process.env.FIREBASE_SA);
+          if(p.type!=="service_account"||p.project_id!=="volunserve-3aa5b"||
+             !p.client_email||!p.private_key)throw Error("Wrong Firebase project; abort");
+          fs.writeFileSync(process.env.RUNNER_TEMP+"/admin-ui-hosting-key.json",
+            process.env.FIREBASE_SA,{mode:0o600});
+          console.log("PASS: production Hosting project confirmed");
+          NODE
+          echo "GOOGLE_APPLICATION_CREDENTIALS=$RUNNER_TEMP/admin-ui-hosting-key.json" >> "$GITHUB_ENV"
+      - name: Final race check, back up old live Hosting, then deploy Hosting ONLY
+        shell: bash
+        run: |
+          set -euo pipefail
+          export VOLUNSERVE_EXPECTED_SHA="$BASE_SHA"
+          node scripts/check-live-hosting.cjs
+          npx firebase-tools hosting:clone "$SITE:live" "$SITE:$BACKUP_CHANNEL" --project "$SITE" --non-interactive
+          echo "PASS: old Hosting release backed up. Starting Hosting-only upload."
+          npx firebase-tools deploy --only hosting --project "$SITE" --non-interactive
+          export VOLUNSERVE_EXPECTED_SHA="$GITHUB_SHA"
+          SUCCESS=0
+          for attempt in 1 2 3 4 5 6; do
+            if node scripts/check-live-hosting.cjs && node - <<'NODE'
+          (async()=>{const r=await fetch("https://volunserve.com/admin-cases",{signal:AbortSignal.timeout(15000)});
+            const t=await r.text();
+            if(!r.ok||!t.includes("<html"))throw Error("Admin route HTML missing");
+            console.log("PASS: live /admin-cases HTTP "+r.status);
+          })().catch(e=>{console.error(e.message);process.exitCode=1});
+          NODE
+            then
+              SUCCESS=1
+              break
+            fi
+            sleep 12
+          done
+          if [ "$SUCCESS" != 1 ]; then
+            echo "::error::Post-deploy verification failed. Attempting Hosting rollback."
+            npx firebase-tools hosting:clone "$SITE:$BACKUP_CHANNEL" "$SITE:live" --project "$SITE" --non-interactive || echo "::error::Automatic Hosting rollback failed; manual restoration required."
+            export VOLUNSERVE_EXPECTED_SHA="$BASE_SHA"
+            node scripts/check-live-hosting.cjs || true
+            exit 1
+          fi
+          echo "PASS: ONLY production Hosting updated. No Firebase Functions, Firestore or Rules touched."
