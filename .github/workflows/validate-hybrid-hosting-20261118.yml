@@ -1,0 +1,33 @@
+name: Validate Hybrid Attendance Hosting Candidate (NO DEPLOY)
+
+on:
+  push:
+    branches:
+      - ci/validate-hybrid-hosting-20261118
+
+permissions:
+  contents: read
+
+jobs:
+  validate-hybrid-hosting:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install locked frontend dependencies
+        run: npm ci --no-audit --no-fund
+      - name: TypeScript check with no source writes
+        run: npx tsc --noEmit
+      - name: Attendance regression tests
+        run: node --test scripts/test-hybrid-attendance-current-hosting-20261118.cjs
+      - name: Verify read-only deploy-critical source guard
+        shell: bash
+        run: |
+          if git diff --name-only HEAD~4 HEAD | grep -E '^(firestore.rules|storage.rules|functions/|firebase.json|\.firebaserc|backend/)' ; then
+            echo "BLOCKED: sensitive backend or Firebase change detected" >&2
+            exit 1
+          fi
+          echo "PASS: No backend, Firebase rules, or deployment-config changes"
