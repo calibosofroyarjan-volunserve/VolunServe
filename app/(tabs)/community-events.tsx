@@ -646,6 +646,9 @@ function ProposalNeedsAndMedia({
           );
         })}
       </View>
+      {showWordErrors && form.requiredRoles.length === 0 && !form.otherRole.trim() && (
+        <Text style={styles.ruiFieldError}>Select at least one needed volunteer role or specify another role.</Text>
+      )}
       <TextInput
         nativeID="community-proposal-otherRole"
         style={[styles.input, styles.residentSmallInput, (showWordErrors || !!form.otherRole.trim()) && !!proposalWordError("otherRole",form.otherRole) && styles.ruiWordInputError]}
@@ -703,6 +706,9 @@ function ProposalNeedsAndMedia({
           At least one JPG/PNG/WebP event venue or activity photo is required. Add up to 3 photos using the site upload or valid HTTPS photo links. A YouTube/Vimeo link is optional.
         </Text>
       </View>
+      {showWordErrors && !form.photoUrls.some(url => !!url.trim()) && (
+        <Text style={styles.ruiFieldError}>Provide at least one valid HTTPS event site photo link.</Text>
+      )}
       {form.photoUrls.map((url, index) => (
         <View key={index} style={styles.residentMediaField}>
           <Text style={styles.fieldLabel}>{index === 0 ? "Main site photo *" : `Additional site photo ${index + 1} (optional)`}</Text>
@@ -711,6 +717,7 @@ function ProposalNeedsAndMedia({
             placeholder="https://example.com/location-photo.jpg"
             placeholderTextColor="#91A2AF" value={url} maxLength={2048}
             onChangeText={(value) => onPhotoChange(index, value)} />
+          {!!url.trim() && !validPublicMediaUrl(url.trim()) && <Text style={styles.ruiFieldError}>Use a valid public HTTPS image link.</Text>}
           {!!url.trim() && validPublicMediaUrl(url.trim()) && (
             <Image source={{ uri: url.trim() }} resizeMode="cover" style={styles.residentMediaPreview} />
           )}
@@ -722,6 +729,7 @@ function ProposalNeedsAndMedia({
         placeholder="https://youtu.be/... or https://vimeo.com/..."
         placeholderTextColor="#91A2AF" value={form.videoUrl} maxLength={2048}
         onChangeText={(value) => update("videoUrl", value)} />
+      {!!form.videoUrl.trim() && !videoLinkSupported(form.videoUrl.trim()) && <Text style={styles.ruiFieldError}>Video must be an HTTPS YouTube or Vimeo link.</Text>}
       {form.videoUrl.trim().length > 0 && videoLinkSupported(form.videoUrl.trim()) && (
         <Pressable style={styles.residentMediaLink} onPress={() => void Linking.openURL(form.videoUrl.trim())}>
           <Ionicons name="play-circle-outline" size={18} color="#067F75" />
@@ -3538,6 +3546,7 @@ export default function CommunityEventsScreen() {
                       color={colors.muted}
                     />
                   </Pressable>
+                  {proposalAttempted && !form.barangay.trim() && <Text style={styles.ruiFieldError}>Select a barangay.</Text>}
                 </View>
 
                 {/* Venue */}
@@ -3613,6 +3622,7 @@ export default function CommunityEventsScreen() {
                       maxLength={150}
                     />
                   )}
+                  {proposalAttempted && !form.location.trim() && <Text style={styles.ruiFieldError}>Choose or enter the event venue.</Text>}
                 </View>
               </View>
 
@@ -3666,6 +3676,7 @@ export default function CommunityEventsScreen() {
                       color={colors.muted}
                     />
                   </Pressable>
+                  {proposalAttempted && !form.date && <Text style={styles.ruiFieldError}>Choose the event date.</Text>}
                 </View>
 
                 {/* Time */}
@@ -3714,6 +3725,7 @@ export default function CommunityEventsScreen() {
                       color={colors.muted}
                     />
                   </Pressable>
+                  {proposalAttempted && !form.time && <Text style={styles.ruiFieldError}>Choose the event start time.</Text>}
                 </View>
 
                 {/* End Time */}
@@ -3724,6 +3736,8 @@ export default function CommunityEventsScreen() {
                     <Text style={styles.pickerFieldText}>{formatChosenTime(form.endTime)}</Text>
                     <Ionicons name="chevron-down" size={17} color={colors.muted}/>
                   </Pressable>
+                  {proposalAttempted && (!form.endTime || (!!form.time && form.endTime <= form.time)) &&
+                    <Text style={styles.ruiFieldError}>End time must be later than start time.</Text>}
                 </View>
 
                 {/* Capacity */}
@@ -3806,11 +3820,15 @@ export default function CommunityEventsScreen() {
                       maxLength={3}
                     />
                   )}
+                  {proposalAttempted && (!Number.isInteger(Number(form.capacity)) || Number(form.capacity) < 1 || Number(form.capacity) > 500) &&
+                    <Text style={styles.ruiFieldError}>Capacity must be between 1 and 500 volunteers.</Text>}
                 </View>
               </View>
 
               <CommunityEventPinPicker key={`${form.barangay}:${form.location}`} barangay={form.barangay} venue={form.location} latitude={form.latitude} longitude={form.longitude}
                 onChange={(latitude,longitude)=>setForm(previous=>({...previous,latitude,longitude}))} />
+              {proposalAttempted && (form.latitude === null || form.longitude === null) &&
+                <Text style={styles.ruiFieldError}>Tap the map to select the exact event meeting point.</Text>}
 
               {/* Description */}
               <Text
