@@ -31,6 +31,7 @@ const {retryExpiredBatch002}=require("./staging002ExpiredBulkRetry");
 const {summarizeStaging002Eligibility}=require("./staging002EligibilitySummary");
 const {fixtureSummary,provisionFixtures}=require("./staging002TestVolunteerProvisioning");
 const {verifyStaging002BulkAcceptance}=require("./staging002BulkAcceptanceVerifier");
+const {verifyStaging002WaveStop}=require("./staging002WaveStopVerification");
 const knownSJDMBgy=require("../functions/sjdmBarangays.json");
 const {createFreshTestCase,validateFreshTestCase,inspectFreshTestCase,recognized}
   =require("./stagingFreshCase002");
@@ -456,6 +457,24 @@ function makeApp({authClient = auth, firestore = db, worker, env = process.env} 
         console.warn("Staging fictional 002 bulk verification unavailable",
           String(error?.code||"unknown").slice(0,55));
         response.status(503).json({ok:false,error:"staging_bulk_acceptance_verification_unavailable"});
+      }
+    });
+  // Authenticated, aggregate-only wave-stop readout. DOES NOT execute
+  // the wave-advance worker or change any accepted offer/lock.
+  app.get("/api/admin/emergency-auto/e2e-002/bulk-wave-stop",
+    requireStagingAdmin,async(_request,response)=>{
+      if(!stagingServiceAccountMatches||!bulk002Enabled)
+        return response.status(503).json({ok:false,error:"isolated_bulk_staging_disabled"});
+      try{
+        const result=await verifyStaging002WaveStop(firestore,
+          {timerConfigured:autoWaves002});
+        response.set("Cache-Control","no-store");
+        response.status(result.status==="blocked"?409:200)
+          .json({ok:result.status!=="blocked",...result});
+      }catch(error){
+        console.warn("[staging-002-waves] read-only stop check failed",
+          String(error?.code||"unknown").slice(0,60));
+        response.status(503).json({ok:false,error:"wave_stop_check_unavailable"});
       }
     });
   app.get("/api/staging/volunteer/e2e-002/bulk-task",
