@@ -41,12 +41,12 @@ const SOURCES=[
   ["app/(tabs)/volunteer.web.tsx",[
     "respondToStagingBulkOffer(",
     "if (isStagingBulkAssignment(assignment))",
-    "!isStagingBulkAssignment(assignment)"
+    "isStagingBulkAssignment(assignment) ? ("
   ]],
   ["app/(tabs)/volunteer.tsx",[
     "respondToStagingBulkOffer(",
     "if (isStagingBulkAssignment(assignment))",
-    "!isStagingBulkAssignment(assignment)"
+    "isStagingBulkAssignment(assignment) ? ("
   ]],
 ];
 function verify(env, read=(file)=>fs.readFileSync(path.join(ROOT,file),"utf8")){
