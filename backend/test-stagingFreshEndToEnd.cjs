@@ -798,3 +798,31 @@ test("auto-on-validation is OFF by default even when bulk status test feature is
     assert.equal(db.list("responseAssignments/").length,0);
   },{VOLUNSERVE_STAGING_E2E_002_BULK:"enabled"});
 });
+
+
+test("validated fictional report remains validated, but reports blocked automatic matching when every Volunteer is busy",async()=>{
+  const db=new FakeDb();seedAccounts(db);
+  db.seed("disasterCases/"+FIXED_ID,{
+    title:"TEST ONLY - Dummy Emergency",status:"assigned",
+    verificationStatus:"validated",reporterUid:RESIDENT
+  });
+  db.seed("responseAssignments/OTHER_BUSY_CASE_"+VOL,{
+    caseId:"OTHER_BUSY_CASE",volunteerId:VOL,status:"accepted"
+  });
+  await serve(db,async({req})=>{
+    const url="/api/admin/emergency-auto/e2e-002/";
+    assert.equal((await req(url+"create",{method:"POST",who:ADMIN,
+      body:{caseId:FRESH_ID,confirmFictionalTest:true}})).body.status,"created");
+    const result=await req(url+"validate",{method:"POST",who:ADMIN,
+      body:{caseId:FRESH_ID,confirmFictionalTest:true}});
+    assert.equal(result.code,200);
+    assert.equal(result.body.status,"validated");
+    assert.equal(result.body.automaticOffers.status,"blocked");
+    assert.equal(db.get("disasterCases/"+FRESH_ID).status,"validated");
+    assert.equal(db.get("emergencyAutoDispatchBatches/"+FRESH_ID),undefined);
+    assert.equal(db.list("responseAssignments/"+FRESH_ID+"_").length,0);
+  },{
+    VOLUNSERVE_STAGING_E2E_002_BULK:"enabled",
+    VOLUNSERVE_STAGING_E2E_002_AUTO_AFTER_VALIDATION:"enabled"
+  });
+});
