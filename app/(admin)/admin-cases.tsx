@@ -2970,6 +2970,13 @@ export default function AdminCases() {
     }
   };
 
+  const adminReviewLabel = (verification?: VerificationStatus) => {
+    if (verification === "validated") return "APPROVED";
+    if (verification === "rejected") return "REJECTED";
+    if (verification === "needs_more_evidence") return "NEEDS EVIDENCE";
+    return "PENDING REVIEW";
+  };
+
   const severityLabel = (severity: Severity) => {
     if (severity === "critical") return "CRITICAL";
     if (severity === "medium") return "URGENT";
@@ -3039,7 +3046,7 @@ export default function AdminCases() {
       <AdminReviewHero
         eyebrow="ADMIN / EMERGENCY & ASSISTANCE"
         title="Emergency Reports"
-        subtitle="Validate resident emergency reports, assign volunteers, review task updates and field reports, and close resolved cases."
+        subtitle="Review resident profiles and evidence, track Admin decisions, and coordinate Volunteer responses from one organized workspace."
         icon="warning-outline"
         tag="INCIDENT RESPONSE"
       />
@@ -3163,6 +3170,40 @@ export default function AdminCases() {
           )}
         </View>
 
+      <View style={styles.reviewQueueCard}>
+        <View style={styles.reviewQueueHeading}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.reviewQueueTitle}>Emergency review queue</Text>
+            <Text style={styles.reviewQueueSubtitle}>
+              Review requests by Admin status. Select a resident below to see their profile and case details.
+            </Text>
+          </View>
+          <Text style={styles.reviewQueueTotal}>{reviewCounts.all} total</Text>
+        </View>
+        <View style={styles.reviewQueueTabs}>
+          {([
+            ["all", "All reports", reviewCounts.all],
+            ["pending", "Pending", reviewCounts.pending],
+            ["validated", "Approved", reviewCounts.validated],
+            ["needs_more_evidence", "Needs evidence", reviewCounts.needs_more_evidence],
+            ["rejected", "Rejected", reviewCounts.rejected],
+          ] as const).map(([key, label, count]) => (
+            <TouchableOpacity
+              key={key}
+              accessibilityRole="button"
+              accessibilityLabel={`Show ${label.toLowerCase()} emergency reports`}
+              accessibilityState={{ selected: reviewFilter === key }}
+              onPress={() => { setReviewFilter(key); setRecordPage(1); }}
+              style={[styles.reviewQueueTab, reviewFilter === key && styles.reviewQueueTabActive]}
+            >
+              <Text style={[styles.reviewQueueTabText, reviewFilter === key && styles.reviewQueueTabTextActive]}>
+                {label} · {count}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      </View>
+
       <ListPagination page={activeCasePage} total={visibleCases.length} pageSize={5} onChange={setRecordPage} />
       {visibleCases.length === 0 ? (
         <View style={styles.emptyCard}>
@@ -3185,45 +3226,50 @@ export default function AdminCases() {
           ]}>
             <View style={styles.caseListHeader}>
               <View>
-                <Text style={styles.caseListTitle}>All Emergency Cases</Text>
+                <Text style={styles.caseListTitle}>Resident Reports</Text>
                 <Text style={styles.caseListCount}>{visibleCases.length} case{visibleCases.length === 1 ? "" : "s"}</Text>
               </View>
-              <Text style={styles.caseListSort}>Priority · Newest</Text>
+              <Text style={styles.caseListSort}>Priority · Date</Text>
             </View>
 
             <View style={styles.caseListItems}>
               {pagedCases.map((item) => {
                 const active = selectedCase?.id === item.id;
-                const thumb = firstIncidentImage(item.attachments);
+                const displayName = String(item.reporterName || "Resident").trim();
+                const initials = displayName.split(/\\s+/).slice(0, 2).map(part => part.charAt(0).toUpperCase()).join("") || "R";
+                const adminStatus = String(item.verificationStatus || "pending_verification");
 
                 return (
                   <TouchableOpacity
                     key={item.id}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Open ${displayName}'s ${item.title} report. Admin status: ${adminReviewLabel(adminStatus)}`}
+                    accessibilityState={{ selected: active }}
                     activeOpacity={0.86}
                     style={[styles.caseListItem, active && styles.caseListItemActive]}
                     onPress={() => setSelectedCaseId(item.id)}
                   >
-                    <View style={styles.caseListThumb}>
-                      {thumb ? (
-                        <Image source={{ uri: thumb }} style={styles.caseListThumbImage} resizeMode="cover" />
-                      ) : (
-                        <View style={styles.caseListThumbFallback}>
-                          <Text style={styles.caseListThumbFallbackIcon}>{categoryIcon(item.category)}</Text>
-                        </View>
-                      )}
+                    <View style={styles.reportResidentAvatar}>
+                      <Text style={styles.reportResidentInitials}>{initials}</Text>
                     </View>
 
                     <View style={styles.caseListBody}>
-                      <View style={styles.caseListTitleRow}>
-                        <Text numberOfLines={1} style={styles.caseListItemTitle}>{item.title}</Text>
-                        <View style={[styles.caseListSeverity, severityStyle(item.severity)]}>
-                          <Text style={styles.caseListSeverityText}>{severityLabel(item.severity)}</Text>
+                      <Text numberOfLines={1} style={styles.caseListItemTitle}>{displayName}</Text>
+                      <Text numberOfLines={1} style={styles.caseListLocation}>{item.title || "Emergency report"}</Text>
+                      <Text numberOfLines={1} style={styles.caseListMeta}>
+                        {item.incidentBarangay || item.reporterBarangay || "Barangay not provided"}
+                      </Text>
+                      <View style={styles.reportRowStatusLine}>
+                        <View style={[
+                          styles.reportReviewPill,
+                          adminStatus === "validated" ? styles.reportReviewApproved :
+                            adminStatus === "rejected" ? styles.reportReviewRejected :
+                            adminStatus === "needs_more_evidence" ? styles.reportReviewNeedsEvidence :
+                            styles.reportReviewPending,
+                        ]}>
+                          <Text style={styles.reportReviewPillText}>{adminReviewLabel(adminStatus)}</Text>
                         </View>
-                      </View>
-                      <Text numberOfLines={1} style={styles.caseListLocation}>⌖ {item.location || "Location pending"}</Text>
-                      <View style={styles.caseListMetaRow}>
-                        <Text numberOfLines={1} style={styles.caseListMeta}>♙ {item.reporterName || "Resident"}</Text>
-                        <Text style={styles.caseListMeta}>◉ {item.affectedPeople || 0} affected</Text>
+                        <Text style={styles.reportRowPriority}>{severityLabel(item.severity)}</Text>
                       </View>
                     </View>
 
@@ -3568,7 +3614,19 @@ export default function AdminCases() {
                       <Text style={styles.overviewCardIcon}>♙</Text>
                       <Text style={styles.overviewCardTitle}>Resident Information</Text>
                     </View>
-                    <Text style={styles.overviewPrimary}>{incident.reporterName || "Resident"}</Text>
+                    <View style={styles.overviewResidentProfile}>
+                      <View style={styles.reportResidentAvatar}>
+                        <Text style={styles.reportResidentInitials}>
+                          {String(incident.reporterName || "Resident").trim()
+                            .split(/\\s+/).slice(0, 2)
+                            .map(part => part.charAt(0).toUpperCase()).join("") || "R"}
+                        </Text>
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.overviewPrimary}>{incident.reporterName || "Resident"}</Text>
+                        <Text style={styles.overviewLine}>Admin review: {adminReviewLabel(verificationStatus)}</Text>
+                      </View>
+                    </View>
                     <Text style={styles.overviewLine}>{incident.contactNumber || "No contact number"}</Text>
                     <Text style={styles.overviewLine}>{incident.reporterEmail || "No email on file"}</Text>
                     <Text style={styles.overviewLine}>
