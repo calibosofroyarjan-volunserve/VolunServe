@@ -39,7 +39,6 @@ import {
 } from "react-native";
 
 import { db } from "../../lib/firebase";
-import { ensureStagingBulkOffersAfterAdminValidation, STAGING_BULK_CASE_ID } from "../../lib/stagingBulkVolunteerClient";
 import { safePublicAdvisoryBarangay } from "../../lib/emergencyPublicAdvisory";
 import { SJDM_BARANGAYS } from "../../constants/sjdmBarangays";
 import { VolunteerEligibilityValidation } from "../../components/admin/VolunteerEligibilityValidation";
@@ -1922,26 +1921,7 @@ export default function AdminCases() {
         // This is an opt-in staging-only synthetic demonstration. The live
         // project, normal cases and existing manual assignments stay unchanged.
         // Never call the staging backend before the Firestore validation commit.
-        let fictionalBulkNotice = "";
-        // Only the FIXED fictional 002 may start all-eligible batch offers.
-        // Existing synthetic 001, real cases, and manual workflows are unchanged.
-        if (AUTO_VOLUNTEER_MATCH_UI_PREVIEW &&
-            incident.id === STAGING_BULK_CASE_ID &&
-            incident.status === "reported" &&
-            String(incident.verificationStatus || "") !== "validated") {
-          try {
-            const result = await ensureStagingBulkOffersAfterAdminValidation(
-              incident.id, String(auth.app.options.projectId || ""), adminUser,
-            );
-            fictionalBulkNotice = result.status === "already_started"
-              ? " Existing fictional staging offers were preserved without duplicates."
-              : ` Fictional staging Wave ${result.wave || "?"}: ${result.offered || 0} eligible Volunteer offers confirmed. Accept/Decline separately.`;
-          } catch {
-            // A successful verification is not the same as successful offers.
-            // Do not claim volunteers were assigned; do not change the case.
-            fictionalBulkNotice = " Fictional staging bulk offers were NOT confirmed. Check the isolated Admin status before retry.";
-          }
-        } else if (AUTO_VOLUNTEER_MATCH_UI_PREVIEW) {
+        if (AUTO_VOLUNTEER_MATCH_UI_PREVIEW) {
           const stagingOffer = await requestStagingAutoOfferAfterAdminValidation({
             caseId: incident.id,
             originalCaseStatus: incident.status,
@@ -1978,7 +1958,7 @@ export default function AdminCases() {
           }
         }
         Alert.alert("Request Validated",
-          "The case is now eligible for Volunteer offers. " + advisoryMessage + fictionalBulkNotice);
+          "The case is now eligible for Volunteer offers. " + advisoryMessage);
       } else if (action === "request_more_evidence") {
         Alert.alert(
           "Resident Notified",
