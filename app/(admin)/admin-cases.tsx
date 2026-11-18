@@ -3756,7 +3756,7 @@ export default function AdminCases() {
                     <Text style={styles.queueMuted}>{formatDate(item.createdAt)}</Text>
                   </View>}
                   <Text style={styles.queueChevron}>›</Text>
-                </Touchable>;
+                </TouchableOpacity>;
               })}
             </View>
             <View style={styles.caseListPagination}>
