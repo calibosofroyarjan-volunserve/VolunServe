@@ -587,6 +587,10 @@ export default function AdminCases() {
   );
   const [filterStatus, setFilterStatus] = useState<CaseStatus | "all">("all");
   const [filterSeverity, setFilterSeverity] = useState<Severity | "all">("all");
+  // Quick Admin review queue is independent from the operational case status.
+  const [reviewFilter, setReviewFilter] = useState<
+    "all" | "pending" | "validated" | "needs_more_evidence" | "rejected"
+  >("all");
   const [filtersExpanded, setFiltersExpanded] = useState(false);
   const [caseSearch, setCaseSearch] = useState("");
   const [recordPage, setRecordPage] = useState(1);
@@ -603,6 +607,7 @@ export default function AdminCases() {
 
   const [notes, setNotes] = useState<Record<string, string>>({});
   const [reviewReasons, setReviewReasons] = useState<Record<string, string>>({});
+  const [reviewingCaseId, setReviewingCaseId] = useState("");
   const [assignmentCaseId, setAssignmentCaseId] = useState("");
   const [skillFilter, setSkillFilter] = useState("");
   const [availabilityFilter, setAvailabilityFilter] = useState("");
@@ -1069,6 +1074,15 @@ export default function AdminCases() {
       list = list.filter((item) => item.severity === filterSeverity);
     }
 
+    if (reviewFilter !== "all") {
+      list = list.filter((item) => {
+        const verification = String(item.verificationStatus || "pending_verification");
+        return reviewFilter === "pending"
+          ? verification === "pending_verification"
+          : verification === reviewFilter;
+      });
+    }
+
     list.sort((a, b) => {
       const severityDifference =
         (severityRank[b.severity] || 0) - (severityRank[a.severity] || 0);
@@ -1082,7 +1096,19 @@ export default function AdminCases() {
     });
 
     return list;
-  }, [cases, filterStatus, filterSeverity]);
+  }, [cases, filterStatus, filterSeverity, reviewFilter]);
+
+  const reviewCounts = useMemo(() => {
+    const counts = { all: cases.length, pending: 0, validated: 0, needs_more_evidence: 0, rejected: 0 };
+    cases.forEach((item) => {
+      const state = String(item.verificationStatus || "pending_verification");
+      if (state === "validated") counts.validated += 1;
+      else if (state === "needs_more_evidence") counts.needs_more_evidence += 1;
+      else if (state === "rejected") counts.rejected += 1;
+      else counts.pending += 1;
+    });
+    return counts;
+  }, [cases]);
 
   const visibleCases = useMemo(() => {
     const term = caseSearch.trim().toLowerCase();
@@ -1485,10 +1511,12 @@ export default function AdminCases() {
       return;
     }
 
+    if (reviewingCaseId) return;
     const caseRef = doc(db, "disasterCases", incident.id);
     const notificationRef = doc(collection(db, "notifications"));
     const activityLogRef = doc(collection(db, "adminActivityLogs"));
 
+    setReviewingCaseId(incident.id);
     try {
       await runTransaction(db, async (transaction) => {
         const caseSnapshot = await transaction.get(caseRef);
@@ -1502,13 +1530,28 @@ export default function AdminCases() {
           current.verificationStatus || "pending_verification"
         );
 
+        // Re-check live Firestore state INSIDE the transaction to prevent
+        // duplicate Admin decisions or resetting an already assigned report.
+        if (currentVerification === "validated" || currentVerification === "rejected") {
+          throw new Error("This report has already received a final Admin decision. Refresh the case.");
+        }
         if (
-          currentVerification === "validated" &&
-          action !== "validate"
+          ["assigned", "in_progress", "resolved", "closed"].includes(String(current.status || "")) ||
+          !!current.activeVolunteerSupportAssignmentId ||
+          !!current.activeResponderAssignmentId ||
+          !!current.activeLguResponderUid ||
+          !!current.autoVolunteerDispatch?.state
         ) {
-          throw new Error(
-            "This request is already validated. Do not reject it after dispatch preparation has started."
-          );
+          throw new Error("Volunteer or response coordination already started. Do not reset the case during review.");
+        }
+        if (
+          action === "validate" &&
+          current.source === "resident_emergency_assistance" &&
+          !(Array.isArray(current.attachments) && current.attachments.some(
+            (file: any) => String(file?.type || "").toLowerCase().includes("image")
+          ))
+        ) {
+          throw new Error("Photo evidence is missing from the latest report. Request more evidence first.");
         }
 
         const basePatch: any = {
@@ -1563,9 +1606,9 @@ export default function AdminCases() {
 
         transaction.update(caseRef, basePatch);
 
-        if (incident.reporterUid) {
+        if (current.reporterUid) {
           transaction.set(notificationRef, {
-            userId: incident.reporterUid,
+            userId: current.reporterUid,
             audience: "resident",
             type: "emergency_verification",
             caseId: incident.id,
@@ -1579,7 +1622,7 @@ export default function AdminCases() {
         transaction.set(activityLogRef, {
           action: logAction,
           caseId: incident.id,
-          residentUid: incident.reporterUid || "",
+          residentUid: current.reporterUid || "",
           performedBy: adminUser.uid,
           reason: action === "validate" ? "" : reason,
           timestamp: serverTimestamp(),
@@ -1615,6 +1658,8 @@ export default function AdminCases() {
           ? error.message
           : "Unable to update verification status."
       );
+    } finally {
+      setReviewingCaseId("");
     }
   };
 
@@ -2925,6 +2970,13 @@ export default function AdminCases() {
     }
   };
 
+  const adminReviewLabel = (verification?: VerificationStatus) => {
+    if (verification === "validated") return "APPROVED";
+    if (verification === "rejected") return "REJECTED";
+    if (verification === "needs_more_evidence") return "NEEDS EVIDENCE";
+    return "PENDING REVIEW";
+  };
+
   const severityLabel = (severity: Severity) => {
     if (severity === "critical") return "CRITICAL";
     if (severity === "medium") return "URGENT";
@@ -2994,7 +3046,7 @@ export default function AdminCases() {
       <AdminReviewHero
         eyebrow="ADMIN / EMERGENCY & ASSISTANCE"
         title="Emergency Reports"
-        subtitle="Validate resident emergency reports, assign volunteers, review task updates and field reports, and close resolved cases."
+        subtitle="Review resident profiles and evidence, track Admin decisions, and coordinate Volunteer responses from one organized workspace."
         icon="warning-outline"
         tag="INCIDENT RESPONSE"
       />
@@ -3118,6 +3170,40 @@ export default function AdminCases() {
           )}
         </View>
 
+      <View style={styles.reviewQueueCard}>
+        <View style={styles.reviewQueueHeading}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.reviewQueueTitle}>Emergency review queue</Text>
+            <Text style={styles.reviewQueueSubtitle}>
+              Review requests by Admin status. Select a resident below to see their profile and case details.
+            </Text>
+          </View>
+          <Text style={styles.reviewQueueTotal}>{reviewCounts.all} total</Text>
+        </View>
+        <View style={styles.reviewQueueTabs}>
+          {([
+            ["all", "All reports", reviewCounts.all],
+            ["pending", "Pending", reviewCounts.pending],
+            ["validated", "Approved", reviewCounts.validated],
+            ["needs_more_evidence", "Needs evidence", reviewCounts.needs_more_evidence],
+            ["rejected", "Rejected", reviewCounts.rejected],
+          ] as const).map(([key, label, count]) => (
+            <TouchableOpacity
+              key={key}
+              accessibilityRole="button"
+              accessibilityLabel={`Show ${label.toLowerCase()} emergency reports`}
+              accessibilityState={{ selected: reviewFilter === key }}
+              onPress={() => { setReviewFilter(key); setRecordPage(1); }}
+              style={[styles.reviewQueueTab, reviewFilter === key && styles.reviewQueueTabActive]}
+            >
+              <Text style={[styles.reviewQueueTabText, reviewFilter === key && styles.reviewQueueTabTextActive]}>
+                {label} · {count}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      </View>
+
       <ListPagination page={activeCasePage} total={visibleCases.length} pageSize={5} onChange={setRecordPage} />
       {visibleCases.length === 0 ? (
         <View style={styles.emptyCard}>
@@ -3140,45 +3226,50 @@ export default function AdminCases() {
           ]}>
             <View style={styles.caseListHeader}>
               <View>
-                <Text style={styles.caseListTitle}>All Emergency Cases</Text>
+                <Text style={styles.caseListTitle}>Resident Reports</Text>
                 <Text style={styles.caseListCount}>{visibleCases.length} case{visibleCases.length === 1 ? "" : "s"}</Text>
               </View>
-              <Text style={styles.caseListSort}>Priority · Newest</Text>
+              <Text style={styles.caseListSort}>Priority · Date</Text>
             </View>
 
             <View style={styles.caseListItems}>
               {pagedCases.map((item) => {
                 const active = selectedCase?.id === item.id;
-                const thumb = firstIncidentImage(item.attachments);
+                const displayName = String(item.reporterName || "Resident").trim();
+                const initials = displayName.split(/\s+/).slice(0, 2).map(part => part.charAt(0).toUpperCase()).join("") || "R";
+                const adminStatus = String(item.verificationStatus || "pending_verification");
 
                 return (
                   <TouchableOpacity
                     key={item.id}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Open ${displayName}'s ${item.title} report. Admin status: ${adminReviewLabel(adminStatus)}`}
+                    accessibilityState={{ selected: active }}
                     activeOpacity={0.86}
                     style={[styles.caseListItem, active && styles.caseListItemActive]}
                     onPress={() => setSelectedCaseId(item.id)}
                   >
-                    <View style={styles.caseListThumb}>
-                      {thumb ? (
-                        <Image source={{ uri: thumb }} style={styles.caseListThumbImage} resizeMode="cover" />
-                      ) : (
-                        <View style={styles.caseListThumbFallback}>
-                          <Text style={styles.caseListThumbFallbackIcon}>{categoryIcon(item.category)}</Text>
-                        </View>
-                      )}
+                    <View style={styles.reportResidentAvatar}>
+                      <Text style={styles.reportResidentInitials}>{initials}</Text>
                     </View>
 
                     <View style={styles.caseListBody}>
-                      <View style={styles.caseListTitleRow}>
-                        <Text numberOfLines={1} style={styles.caseListItemTitle}>{item.title}</Text>
-                        <View style={[styles.caseListSeverity, severityStyle(item.severity)]}>
-                          <Text style={styles.caseListSeverityText}>{severityLabel(item.severity)}</Text>
+                      <Text numberOfLines={1} style={styles.caseListItemTitle}>{displayName}</Text>
+                      <Text numberOfLines={1} style={styles.caseListLocation}>{item.title || "Emergency report"}</Text>
+                      <Text numberOfLines={1} style={styles.caseListMeta}>
+                        {item.incidentBarangay || item.reporterBarangay || "Barangay not provided"}
+                      </Text>
+                      <View style={styles.reportRowStatusLine}>
+                        <View style={[
+                          styles.reportReviewPill,
+                          adminStatus === "validated" ? styles.reportReviewApproved :
+                            adminStatus === "rejected" ? styles.reportReviewRejected :
+                            adminStatus === "needs_more_evidence" ? styles.reportReviewNeedsEvidence :
+                            styles.reportReviewPending,
+                        ]}>
+                          <Text style={styles.reportReviewPillText}>{adminReviewLabel(adminStatus)}</Text>
                         </View>
-                      </View>
-                      <Text numberOfLines={1} style={styles.caseListLocation}>⌖ {item.location || "Location pending"}</Text>
-                      <View style={styles.caseListMetaRow}>
-                        <Text numberOfLines={1} style={styles.caseListMeta}>♙ {item.reporterName || "Resident"}</Text>
-                        <Text style={styles.caseListMeta}>◉ {item.affectedPeople || 0} affected</Text>
+                        <Text style={styles.reportRowPriority}>{severityLabel(item.severity)}</Text>
                       </View>
                     </View>
 
@@ -3523,7 +3614,19 @@ export default function AdminCases() {
                       <Text style={styles.overviewCardIcon}>♙</Text>
                       <Text style={styles.overviewCardTitle}>Resident Information</Text>
                     </View>
-                    <Text style={styles.overviewPrimary}>{incident.reporterName || "Resident"}</Text>
+                    <View style={styles.overviewResidentProfile}>
+                      <View style={styles.reportResidentAvatar}>
+                        <Text style={styles.reportResidentInitials}>
+                          {String(incident.reporterName || "Resident").trim()
+                            .split(/\s+/).slice(0, 2)
+                            .map(part => part.charAt(0).toUpperCase()).join("") || "R"}
+                        </Text>
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.overviewPrimary}>{incident.reporterName || "Resident"}</Text>
+                        <Text style={styles.overviewLine}>Admin review: {adminReviewLabel(verificationStatus)}</Text>
+                      </View>
+                    </View>
                     <Text style={styles.overviewLine}>{incident.contactNumber || "No contact number"}</Text>
                     <Text style={styles.overviewLine}>{incident.reporterEmail || "No email on file"}</Text>
                     <Text style={styles.overviewLine}>
@@ -3531,6 +3634,18 @@ export default function AdminCases() {
                         ? `${incident.reporterBarangay}, San Jose del Monte, Bulacan`
                         : incident.reporterAddress || "Barangay not provided"}
                     </Text>
+                    {verificationStatus !== "validated" && verificationStatus !== "rejected" && (
+                      <TouchableOpacity
+                        style={styles.reviewQueueTab}
+                        accessibilityRole="button"
+                        accessibilityLabel="Open report evidence and Admin review actions"
+                        onPress={() => setDetailTab("evidence")}
+                      >
+                        <Text style={styles.reviewQueueTabTextActive}>
+                          Review evidence and decide
+                        </Text>
+                      </TouchableOpacity>
+                    )}
                     <View style={styles.overviewVerifiedPill}>
                       <Text style={styles.overviewVerifiedText}>
                         {incident.verification?.identityVerified
@@ -3970,7 +4085,9 @@ export default function AdminCases() {
 
                       <View style={styles.reviewActions}>
                         <TouchableOpacity
-                          style={styles.validateButton}
+                          style={[styles.validateButton, !!reviewingCaseId && styles.disabledButton]}
+                          disabled={!!reviewingCaseId}
+                          accessibilityRole="button"
                           onPress={() =>
                             reviewVerification(incident, "validate")
                           }
@@ -3981,7 +4098,9 @@ export default function AdminCases() {
                         </TouchableOpacity>
 
                         <TouchableOpacity
-                          style={styles.moreEvidenceButton}
+                          style={[styles.moreEvidenceButton, !!reviewingCaseId && styles.disabledButton]}
+                          disabled={!!reviewingCaseId}
+                          accessibilityRole="button"
                           onPress={() =>
                             reviewVerification(
                               incident,
@@ -3995,7 +4114,9 @@ export default function AdminCases() {
                         </TouchableOpacity>
 
                         <TouchableOpacity
-                          style={styles.rejectButton}
+                          style={[styles.rejectButton, !!reviewingCaseId && styles.disabledButton]}
+                          disabled={!!reviewingCaseId}
+                          accessibilityRole="button"
                           onPress={() =>
                             reviewVerification(incident, "reject")
                           }
@@ -6616,6 +6737,136 @@ const styles = StyleSheet.create({
   caseListPaneCompact: {
     width: "100%",
     flexShrink: 1,
+  },
+  reviewQueueCard: {
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: "#D8E9DF",
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 14,
+    gap: 14,
+  },
+  reviewQueueHeading: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  reviewQueueTitle: {
+    color: "#173D32",
+    fontSize: vsType.size.card,
+    fontFamily: vsType.family,
+    fontWeight: "800",
+  },
+  reviewQueueSubtitle: {
+    color: "#64786F",
+    fontSize: vsType.size.caption,
+    fontFamily: vsType.family,
+    marginTop: 4,
+  },
+  reviewQueueTotal: {
+    color: "#127359",
+    backgroundColor: "#EDF9F2",
+    borderRadius: 999,
+    overflow: "hidden",
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    fontSize: vsType.size.caption,
+    fontFamily: vsType.family,
+    fontWeight: "800",
+  },
+  reviewQueueTabs: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  reviewQueueTab: {
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "#DCE9E2",
+    backgroundColor: "#F7FAF8",
+    paddingVertical: 9,
+    paddingHorizontal: 12,
+  },
+  reviewQueueTabActive: {
+    backgroundColor: "#E0F6E9",
+    borderColor: "#65B998",
+  },
+  reviewQueueTabText: {
+    color: "#50685E",
+    fontSize: vsType.size.caption,
+    fontFamily: vsType.family,
+    fontWeight: "700",
+  },
+  reviewQueueTabTextActive: {
+    color: "#096C51",
+    fontWeight: "800",
+  },
+  reportResidentAvatar: {
+    width: 46,
+    height: 46,
+    borderRadius: 23,
+    flexShrink: 0,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#E1F5EA",
+    borderWidth: 1,
+    borderColor: "#BDE7CF",
+  },
+  reportResidentInitials: {
+    color: "#096D53",
+    fontSize: vsType.size.label,
+    fontFamily: vsType.family,
+    fontWeight: "800",
+  },
+  reportRowStatusLine: {
+    marginTop: 8,
+    flexDirection: "row",
+    flexWrap: "wrap",
+    alignItems: "center",
+    gap: 6,
+  },
+  reportReviewPill: {
+    borderRadius: 999,
+    paddingVertical: 4,
+    paddingHorizontal: 9,
+    borderWidth: 1,
+    borderColor: "transparent",
+    alignSelf: "flex-start",
+  },
+  reportReviewApproved: {
+    backgroundColor: "#DFF8E9",
+    borderColor: "#ADE3C4",
+  },
+  reportReviewRejected: {
+    backgroundColor: "#FFE8E6",
+    borderColor: "#F6C4BF",
+  },
+  reportReviewNeedsEvidence: {
+    backgroundColor: "#FFF1D1",
+    borderColor: "#F0D797",
+  },
+  reportReviewPending: {
+    backgroundColor: "#F2F4F7",
+    borderColor: "#DEE3E8",
+  },
+  reportReviewPillText: {
+    color: "#314B41",
+    fontSize: vsType.size.micro,
+    fontFamily: vsType.family,
+    fontWeight: "800",
+  },
+  reportRowPriority: {
+    color: "#677B71",
+    fontSize: vsType.size.micro,
+    fontFamily: vsType.family,
+    fontWeight: "700",
+  },
+  overviewResidentProfile: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    marginBottom: 8,
   },
   caseListHeader: {
     minHeight: 64,
