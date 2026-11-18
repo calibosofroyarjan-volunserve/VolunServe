@@ -100,6 +100,7 @@ interface DisasterCase {
 
   verificationStatus?: VerificationStatus;
   evidenceReviewStatus?: string;
+  autoVolunteerDispatch?: {state?:string;wave?:number;attemptedCount?:number};
   verification?: {
     accountApproved?: boolean;
     reporterTrust?: string;
@@ -190,6 +191,10 @@ type ResponseAssignment = {
   status: AssignmentStatus;
   createdAt?: any;
   updatedAt?: any;
+  createdBy?: string;
+  barangay?: string;
+  acceptedAt?: any;
+  declinedAt?: any;
 };
 
 type LguPersonnelCandidate = {
@@ -598,6 +603,7 @@ export default function AdminCases() {
   const [photoPage, setPhotoPage] = useState(1);
   const [videoPage, setVideoPage] = useState(1);
   const [selectedCaseId, setSelectedCaseId] = useState("");
+  const [isCaseDetailOpen, setIsCaseDetailOpen] = useState(false);
   const [detailTab, setDetailTab] = useState<
     "overview" | "map" | "evidence" | "response" | "personnel" | "history"
   >("overview");
@@ -995,6 +1001,7 @@ export default function AdminCases() {
                 ? "validated"
                 : "pending_verification"),
             evidenceReviewStatus: data.evidenceReviewStatus || "",
+            autoVolunteerDispatch: data.autoVolunteerDispatch || undefined,
             verification:
               data.verification && typeof data.verification === "object"
                 ? data.verification
@@ -1246,6 +1253,10 @@ export default function AdminCases() {
             status: data.status || "offered",
             createdAt: data.createdAt,
             updatedAt: data.updatedAt,
+            createdBy: String(data.createdBy || ""),
+            barangay: String(data.barangay || ""),
+            acceptedAt: data.acceptedAt,
+            declinedAt: data.declinedAt,
           };
         });
 
@@ -3484,7 +3495,7 @@ export default function AdminCases() {
       contentContainerStyle={styles.container}
       showsVerticalScrollIndicator={true}
     >
-      <View style={styles.emergencyPageIntro}>
+      {!isCaseDetailOpen && <View style={styles.emergencyPageIntro}>
         <View style={styles.emergencyPageIntroText}>
           <Text style={styles.emergencyPageEyebrow}>ADMIN WORKSPACE / EMERGENCY RESPONSE</Text>
           <Text style={styles.emergencyPageHeading}>Emergency Reports</Text>
@@ -3492,17 +3503,27 @@ export default function AdminCases() {
             Validate reports, coordinate qualified Volunteers, and monitor responses in one focused workspace.
           </Text>
         </View>
-        <View style={styles.liveSummary}>
-          <Text style={styles.liveSummaryNumber}>
-            {cases.filter((item) =>
-              ["reported", "validated", "assigned", "in_progress"].includes(item.status),
-            ).length}
-          </Text>
-          <Text style={styles.liveSummaryLabel}>Open Cases</Text>
-        </View>
-      </View>
+      </View>}
+      {!isCaseDetailOpen && <View style={styles.reportStatsRow}>
+        {([
+          ["Total Reports", cases.length, "#DFF6E9", "#0B7253"],
+          ["Pending Review", cases.filter(item =>
+            ["pending_verification","needs_more_evidence"].includes(
+              String(item.verificationStatus || "pending_verification"))
+          ).length, "#FFF3DF", "#AD6D0B"],
+          ["Validated", cases.filter(item => item.verificationStatus==="validated").length,
+            "#E5F6EB","#0B7253"],
+          ["In Progress", cases.filter(item => item.status==="in_progress").length,
+            "#E7F0FF","#265EAE"],
+        ] as const).map(([label, count, tint, ink]) =>
+          <View key={label} style={[styles.reportStatCard,{backgroundColor:tint}]}>
+            <Text style={[styles.reportStatNumber,{color:ink}]}>{count}</Text>
+            <Text style={styles.reportStatLabel}>{label}</Text>
+          </View>
+        )}
+      </View>}
 
-      <View style={[styles.pageHeader, focusedTab && styles.hiddenSection]}>
+      <View style={[styles.pageHeader, isCaseDetailOpen && styles.hiddenSection]}>
         <View style={styles.headerTools}>
           <View style={styles.searchBox}>
             <Text style={styles.searchIcon}>⌕</Text>
@@ -3518,7 +3539,7 @@ export default function AdminCases() {
         </View>
       </View>
 
-        <View style={[styles.filterCard, focusedTab && styles.hiddenSection]}>
+        <View style={[styles.filterCard, isCaseDetailOpen && styles.hiddenSection]}>
           <View style={styles.filterGroup}>
             <Text style={styles.filterLabel}>STATUS</Text>
             <View style={styles.pillRow}>
@@ -3598,7 +3619,7 @@ export default function AdminCases() {
             compact && styles.caseWorkspaceCompact,
           ]}
         >
-          {!focusedTab && (
+          {!isCaseDetailOpen && (
           <View style={[styles.caseListPane, compact && styles.caseListPaneCompact]}>
             {detailTab === "personnel" && selectedCase && (
               <View style={styles.assignmentCaseSidebar}>
@@ -3658,54 +3679,84 @@ export default function AdminCases() {
               <>
             <View style={styles.caseListHeader}>
               <View>
-                <Text style={styles.caseListTitle}>All Emergency Cases</Text>
+                <Text style={styles.caseListTitle}>Emergency Report Queue</Text>
                 <Text style={styles.caseListCount}>{visibleCases.length} case{visibleCases.length === 1 ? "" : "s"}</Text>
               </View>
               <Text style={styles.caseListSort}>Priority · Newest</Text>
             </View>
 
+            {!compact && <View style={styles.queueTableHead}>
+              <Text style={[styles.queueHeadCell,{flex:2.6}]}>REPORT CASE</Text>
+              <Text style={[styles.queueHeadCell,{flex:1.7}]}>RESIDENT</Text>
+              <Text style={[styles.queueHeadCell,{flex:1.5}]}>BARANGAY</Text>
+              <Text style={[styles.queueHeadCell,{flex:1}]}>SEVERITY</Text>
+              <Text style={[styles.queueHeadCell,{flex:1}]}>STATUS</Text>
+              <Text style={[styles.queueHeadCell,{flex:1.3}]}>SUBMITTED</Text>
+            </View>}
             <View style={styles.caseListItems}>
               {pagedCases.map((item) => {
-                const active = selectedCase?.id === item.id;
-                const thumb = firstIncidentImage(item.attachments);
-
-                return (
-                  <TouchableOpacity
-                    key={item.id}
-                    activeOpacity={0.86}
-                    style={[styles.caseListItem, active && styles.caseListItemActive]}
-                    onPress={() => setSelectedCaseId(item.id)}
-                  >
+                const thumb=firstIncidentImage(item.attachments);
+                return <TouchableOpacity
+                  key={item.id}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Open ${item.title} from ${item.reporterName || "Resident"}`}
+                  activeOpacity={0.88}
+                  style={styles.queueReportRow}
+                  onPress={() => {
+                    setSelectedCaseId(item.id);
+                    setDetailTab("overview");
+                    setIsCaseDetailOpen(true);
+                  }}>
+                  <View style={styles.queueCaseColumn}>
                     <View style={styles.caseListThumb}>
-                      {thumb ? (
-                        <Image source={{ uri: thumb }} style={styles.caseListThumbImage} resizeMode="cover" />
-                      ) : (
+                      {thumb ? <Image source={{uri:thumb}}
+                        style={styles.caseListThumbImage} resizeMode="cover"/> :
                         <View style={styles.caseListThumbFallback}>
                           <Text style={styles.caseListThumbFallbackIcon}>{categoryIcon(item.category)}</Text>
-                        </View>
-                      )}
+                        </View>}
                     </View>
-
-                    <View style={styles.caseListBody}>
-                      <View style={styles.caseListTitleRow}>
-                        <Text numberOfLines={1} style={styles.caseListItemTitle}>{item.title}</Text>
-                        <View style={[styles.caseListSeverity, severityStyle(item.severity)]}>
-                          <Text style={styles.caseListSeverityText}>{severityLabel(item.severity)}</Text>
-                        </View>
-                      </View>
-                      <Text numberOfLines={1} style={styles.caseListLocation}>⌖ {item.location || "Location pending"}</Text>
-                      <View style={styles.caseListMetaRow}>
-                        <Text numberOfLines={1} style={styles.caseListMeta}>♙ {item.reporterName || "Resident"}</Text>
-                        <Text style={styles.caseListMeta}>◉ {item.affectedPeople || 0} affected</Text>
-                      </View>
+                    <View style={styles.queueCaseTitle}>
+                      <Text style={styles.caseListItemTitle} numberOfLines={2}>
+                        {item.title || "Emergency report"}
+                      </Text>
+                      <Text style={styles.queueCaseId}>CASE {item.id}</Text>
+                      {compact && <Text style={styles.queueSmallMeta}>
+                        {item.reporterName || "Resident"} · {item.incidentBarangay || item.reporterBarangay || "Location pending"}
+                      </Text>}
                     </View>
-
-                    <View style={styles.caseListRight}>
-                      <Text style={styles.caseListDate}>{formatDate(item.createdAt)}</Text>
-                      <Text style={styles.caseListChevron}>›</Text>
+                  </View>
+                  {!compact && <View style={[styles.queueDataColumn,{flex:1.7}]}>
+                    <Text style={styles.queueRowText} numberOfLines={2}>
+                      {item.reporterName || "Resident"}
+                    </Text>
+                    <Text style={styles.queueMuted}>
+                      {item.verification?.identityVerified ? "Verified Resident" : "Resident"}
+                    </Text>
+                  </View>}
+                  {!compact && <View style={[styles.queueDataColumn,{flex:1.5}]}>
+                    <Text style={styles.queueRowText} numberOfLines={2}>
+                      {item.incidentBarangay || item.reporterBarangay || "Not provided"}
+                    </Text>
+                  </View>}
+                  <View style={[styles.queueDataColumn,{flex:1}]}>
+                    <View style={[styles.caseListSeverity,severityStyle(item.severity)]}>
+                      <Text style={styles.caseListSeverityText}>
+                        {severityLabel(item.severity)}
+                      </Text>
                     </View>
-                  </TouchableOpacity>
-                );
+                  </View>
+                  <View style={[styles.queueDataColumn,{flex:1}]}>
+                    <View style={[styles.caseListSeverity,statusStyle(item.status)]}>
+                      <Text style={styles.caseListSeverityText}>
+                        {labelOfStatus(item.status)}
+                      </Text>
+                    </View>
+                  </View>
+                  {!compact && <View style={[styles.queueDataColumn,{flex:1.3}]}>
+                    <Text style={styles.queueMuted}>{formatDate(item.createdAt)}</Text>
+                  </View>}
+                  <Text style={styles.queueChevron}>›</Text>
+                </TouchableOpacity>;
               })}
             </View>
             <View style={styles.caseListPagination}>
@@ -3716,11 +3767,12 @@ export default function AdminCases() {
           </View>
           )}
 
+          {isCaseDetailOpen && selectedCase && (
           <View style={styles.caseDetailPane}>
-            {focusedTab && (
+            {isCaseDetailOpen && (
               <TouchableOpacity accessibilityRole="button" style={styles.focusBackButton}
-                onPress={() => setDetailTab("overview")}>
-                <Text style={styles.focusBackText}>← Back to All Emergency Cases</Text>
+                onPress={() => { setIsCaseDetailOpen(false); setDetailTab("overview"); }}>
+                <Text style={styles.focusBackText}>← Back to Emergency Reports</Text>
               </TouchableOpacity>
             )}
             {[selectedCase].map((incident) => {
@@ -4149,9 +4201,9 @@ export default function AdminCases() {
                   [
                     ["overview", "Overview"],
                     ["evidence", `Evidence (${imageEvidence.length + videoEvidence.length})`],
-                    ["response", "Case Status"],
-                    ["personnel", "Volunteer Assignment"],
-                    ["history", "History"],
+                    ["response", "Response"],
+                    ["personnel", "Volunteers"],
+                    ["history", "Activity Log"],
                   ] as const
                 ).map(([key, label]) => {
                   const active = detailTab === key;
@@ -4207,10 +4259,10 @@ export default function AdminCases() {
                 <View style={styles.sectionHeader}>
                   <View>
                     <Text style={styles.sectionEyebrow}>
-                      ANTI-SCAM VERIFICATION
+                      REPORT VERIFICATION
                     </Text>
                     <Text style={styles.sectionTitle}>
-                      Review Resident Request
+                      Resident Report Review
                     </Text>
                   </View>
 
@@ -5691,6 +5743,8 @@ export default function AdminCases() {
                   caseBarangay={barangayDisplay(caseBarangayValue(incident))}
                   eligibleCount={eligibleVolunteerCount}
                   activeAssignments={activeAssignments}
+                  allAssignments={incidentAssignments}
+                  automaticStatus={incident.autoVolunteerDispatch?.state}
                   onCancelAssignment={(item) => {
                     const savedAssignment = activeAssignments.find(
                       (assignment) => assignment.id === item.id,
@@ -6206,6 +6260,7 @@ export default function AdminCases() {
         })}
 
           </View>
+          )}
         </View>
       )}
     </ScrollView>
@@ -8300,7 +8355,7 @@ const styles = StyleSheet.create({
     borderRadius: 10, borderWidth: 1, borderColor: "#D7E6EF", marginBottom: 10,
     alignSelf: "flex-start",
   },
-  focusBackText: { color: "#165E94", fontWeight: "800", fontSize: 12 },
+  focusBackText: { color: "#0B7052", fontWeight: "800", fontSize: 14 },
   advancedControlToggle: {
     margin: 15, padding: 11, backgroundColor: "#F6F9FD",
     borderWidth: 1, borderColor: "#D9E6F2", borderRadius: 10,
@@ -8339,9 +8394,27 @@ const styles = StyleSheet.create({
   assignmentSideDotActive: { backgroundColor: "#0E8A67", color: "#FFFFFF" },
   assignmentSideText: { color: "#708298", fontSize: 12, fontWeight: "700" },
   assignmentSideTextActive: { color: "#184C3D", fontWeight: "900" },
+  queueTableHead:{
+    flexDirection:"row",gap:14,paddingHorizontal:18,paddingVertical:13,
+    backgroundColor:"#F6F9F8",borderBottomWidth:1,borderBottomColor:"#E1E9E4",
+  },
+  queueHeadCell:{ fontSize:11,fontWeight:"800",color:"#60766B",letterSpacing:0.4 },
+  queueReportRow:{
+    flexDirection:"row",alignItems:"center",gap:14,paddingHorizontal:12,
+    minHeight:92,paddingVertical:13,backgroundColor:"#FFFFFF",
+    borderBottomWidth:1,borderBottomColor:"#E8EFEB",
+  },
+  queueCaseColumn:{ flex:2.6,flexDirection:"row",alignItems:"center",minWidth:140,gap:12 },
+  queueCaseTitle:{ flex:1,minWidth:0,gap:5 },
+  queueCaseId:{ color:"#7A8D84",fontSize:11,fontWeight:"600" },
+  queueSmallMeta:{ color:"#506F60",fontSize:11,marginTop:4 },
+  queueDataColumn:{ minWidth:0,alignItems:"flex-start" },
+  queueRowText:{ color:"#233D32",fontSize:13,fontWeight:"700" },
+  queueMuted:{ color:"#71867C",fontSize:11,lineHeight:17 },
+  queueChevron:{ color:"#0D7254",fontSize:22,fontWeight:"800" },
   caseListPane: {
-    width: 355,
-    flexShrink: 0,
+    width: "100%",
+    flexShrink: 1,
     backgroundColor: "#ffffff",
     borderWidth: 1,
     borderColor: "#dfe7ee",
@@ -8350,6 +8423,20 @@ const styles = StyleSheet.create({
   },
   caseListPaneCompact: {
     width: "100%",
+  },
+  reportStatsRow: {
+    flexDirection: "row", flexWrap: "wrap", gap: 12, marginBottom: 16,
+  },
+  reportStatCard: {
+    minWidth: 145, flexBasis: 170, flexGrow: 1, borderRadius: 14,
+    paddingHorizontal: 20, paddingVertical: 15, gap: 4,
+    borderWidth: 1, borderColor: "#DDE9E4",
+  },
+  reportStatNumber: {
+    fontSize: 25, fontWeight: "800", lineHeight: 29,
+  },
+  reportStatLabel: {
+    fontSize: 13, color: "#345349", fontWeight: "700",
   },
   caseListHeader: {
     minHeight: 58,
@@ -8378,11 +8465,11 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
   caseListItems: {
-    padding: 8,
-    gap: 6,
+    padding: 14,
+    gap: 9,
   },
   caseListItem: {
-    minHeight: 78,
+    minHeight: 102,
     flexDirection: "row",
     alignItems: "center",
     gap: 9,
