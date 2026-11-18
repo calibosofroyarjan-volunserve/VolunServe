@@ -1,0 +1,38 @@
+name: Check Current Live Hosting Revision After Backend Release (NO DEPLOY)
+
+on:
+  push:
+    branches:
+      - ci/check-current-hosting-marker-after-backend-20261118
+
+permissions:
+  contents: read
+
+jobs:
+  current-live-hosting:
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify Hosting marker matches tested attendance UI baseline
+        run: |
+          node - <<'NODE'
+          const assert = require('node:assert/strict');
+          (async () => {
+            const response = await fetch('https://volunserve.com/volunserve-release.json', {
+              headers: {'Cache-Control':'no-cache'},
+              signal:AbortSignal.timeout(20000),
+            });
+            assert.equal(response.status,200,'Hosting marker unavailable');
+            const marker=await response.json();
+            assert.equal(marker.app,'VolunServe');
+            assert.equal(marker.firebaseProject,'volunserve-3aa5b');
+            assert.equal(marker.revision,'3f173ad686ee3d19ac102a9ae132814e28b4ef8a',
+              'STOP: Live Hosting revision changed; do not publish tested web candidate');
+            console.log('PASS: Hosting is unchanged and matches tested UI baseline');
+            console.log('NO DEPLOY; production left unchanged');
+          })().catch(e=>{console.error(e);process.exitCode=1});
+          NODE
