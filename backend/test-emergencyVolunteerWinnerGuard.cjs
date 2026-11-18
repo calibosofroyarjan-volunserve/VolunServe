@@ -103,7 +103,7 @@ test("guard code is shared by LIVE Admin and BOTH Volunteer variants; no remote 
   assert.match(s,/const conflict = volunteerTransitionConflictReason\(/);
   const transitionIndex=s.indexOf("const transitionAssignment");
   const guardIndex=s.indexOf("const conflict = volunteerTransitionConflictReason",transitionIndex);
-  const updateOffset=s.slice(transitionIndex).search(/transaction\.update\(\s*assignmentRef,\s*patch\)/);
+  const updateOffset=s.slice(transitionIndex).search(/transaction\.update\(\s*assignmentRef,\s*patch\s*\)/);
   assert.ok(guardIndex>transitionIndex);
   assert.ok(updateOffset>0);
   assert.ok(guardIndex<transitionIndex+updateOffset);
