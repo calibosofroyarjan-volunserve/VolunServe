@@ -131,7 +131,7 @@ function makeMatchingEngine(db,clock=Date.now){
   return createEngine({db,clock,firestore:syntheticFirestore,
     log:{info(){},warn(){},error(){}}});
 }
-async function serve(db,callback){
+async function serve(db,callback,additionalEnv={}){
   const engine=makeMatchingEngine(db);
   const worker={
     config:{onDemandReady:true,ready:false},
@@ -139,13 +139,14 @@ async function serve(db,callback){
     requestDisable:id=>engine.disableCase(id),
   };
   const authClient={verifyIdToken:async token=>{
-    if(![ADMIN,VOL,"qaOtherVolunteer",RESIDENT].includes(token))
+    if(![ADMIN,VOL,"qaOtherVolunteer","qaSecond","qaThird",RESIDENT].includes(token))
       throw Error("invalid fake Firebase ID token");
     return {uid:token};
   }};
   const env={
     VOLUNSERVE_AUTO_VOLUNTEER_STAGING_PROJECT_ID:PROJECT,
     FIREBASE_SERVICE_ACCOUNT_JSON:JSON.stringify({project_id:PROJECT}),
+    ...additionalEnv,
   };
   const app=makeApp({firestore:db,authClient,worker,env});
   const server=app.listen(0,"127.0.0.1");
@@ -663,4 +664,65 @@ test("bulk staging fails closed for non-002 reports, existing single offers and 
   assert.equal(r.reason,"candidate_busy_or_conflicting_records");
   assert.equal(db.list("responseAssignments/").length,0);
   assert.equal(db.list("notifications/").length,0);
+});
+
+
+test("HTTP staging-only bulk E2E offers all eligible, with independently authorized Volunteer Accept/Decline",async()=>{
+  const db=new FakeDb();seedAccounts(db);
+  db.seed("users/qaSecond",{role:"volunteer",status:"approved",
+    volunteerAccess:true,volunteerStatus:"approved",identityVerified:true,
+    barangay:"Bagong Buhay I",skills:["First Aid"]});
+  db.seed("volunteerApplications/qaSecond",{uid:"qaSecond",status:"approved",skills:["First Aid"]});
+  db.seed("disasterCases/"+FRESH_ID,{
+    title:"TEST ONLY - Fresh Volunteer E2E 002",
+    testOnly:true,testCategory:"staging_synthetic_volunteer_e2e_002",
+    source:"staging_synthetic_e2e",status:"validated",
+    verificationStatus:"validated",validatedBy:ADMIN,reporterUid:RESIDENT,
+    incidentBarangay:"Bagong Buhay I",requiredSkills:["First Aid"],
+    dispatchBlocked:false
+  });
+  const endpoint="/api/admin/emergency-auto/e2e-002/bulk-send";
+  await serve(db,async({req})=>{
+    const base={caseId:FRESH_ID,confirmAllEligibleTestOffers:true};
+    assert.equal((await req(endpoint,{method:"POST",body:base})).code,401);
+    assert.equal((await req(endpoint,{method:"POST",who:RESIDENT,body:base})).code,403);
+    assert.equal((await req(endpoint,{method:"POST",who:ADMIN,body:{caseId:FRESH_ID}})).code,400);
+    assert.equal(db.list("responseAssignments/").length,0);
+    const sent=await req(endpoint,{method:"POST",who:ADMIN,body:base});
+    assert.equal(sent.code,200);assert.equal(sent.body.offered,2);
+    const attemptLegacy=await req("/api/admin/emergency-auto/start",{
+      method:"POST",who:ADMIN,body:{caseId:FRESH_ID}});
+    assert.equal(attemptLegacy.code,409);
+    const outsider=await req("/api/staging/volunteer/e2e-002/bulk-task",{who:RESIDENT});
+    assert.equal(outsider.code,403);
+    for(const who of [VOL,"qaSecond"]){
+      const v=await req("/api/staging/volunteer/e2e-002/bulk-task",{who});
+      assert.equal(v.code,200);assert.equal(v.body.status,"offered");
+      assert.equal(v.body.canRespond,true);
+    }
+    const accept=await req("/api/staging/volunteer/e2e-002/bulk-respond",{
+      method:"POST",who:VOL,body:{decision:"accepted"}});
+    assert.equal(accept.code,200);
+    const decline=await req("/api/staging/volunteer/e2e-002/bulk-respond",{
+      method:"POST",who:"qaSecond",body:{decision:"declined"}});
+    assert.equal(decline.code,200);
+    const stats=await req("/api/admin/emergency-auto/e2e-002/bulk-status",{who:ADMIN});
+    assert.equal(stats.code,200);
+    assert.deepEqual([stats.body.offered,stats.body.accepted,stats.body.declined],
+      [2,1,1]);
+    const repeat=await req("/api/staging/volunteer/e2e-002/bulk-respond",{
+      method:"POST",who:VOL,body:{decision:"accepted"}});
+    assert.equal(repeat.body.status,"already_accepted");
+  },{VOLUNSERVE_STAGING_E2E_002_BULK:"enabled"});
+});
+test("bulk test OFF by default, even for approved staging Admin",async()=>{
+  const db=new FakeDb();seedAccounts(db);
+  await serve(db,async({req})=>{
+    const result=await req("/api/admin/emergency-auto/e2e-002/bulk-send",{
+      method:"POST",who:ADMIN,
+      body:{caseId:FRESH_ID,confirmAllEligibleTestOffers:true}});
+    assert.equal(result.code,503);
+    assert.equal(result.body.error,"isolated_bulk_staging_disabled");
+    assert.equal(db.list("responseAssignments/").length,0);
+  });
 });
