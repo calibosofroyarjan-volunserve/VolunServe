@@ -100,6 +100,7 @@ interface DisasterCase {
 
   verificationStatus?: VerificationStatus;
   evidenceReviewStatus?: string;
+  autoVolunteerDispatch?: {state?:string;wave?:number;attemptedCount?:number};
   verification?: {
     accountApproved?: boolean;
     reporterTrust?: string;
@@ -190,6 +191,10 @@ type ResponseAssignment = {
   status: AssignmentStatus;
   createdAt?: any;
   updatedAt?: any;
+  createdBy?: string;
+  barangay?: string;
+  acceptedAt?: any;
+  declinedAt?: any;
 };
 
 type LguPersonnelCandidate = {
@@ -996,6 +1001,7 @@ export default function AdminCases() {
                 ? "validated"
                 : "pending_verification"),
             evidenceReviewStatus: data.evidenceReviewStatus || "",
+            autoVolunteerDispatch: data.autoVolunteerDispatch || undefined,
             verification:
               data.verification && typeof data.verification === "object"
                 ? data.verification
@@ -1247,6 +1253,10 @@ export default function AdminCases() {
             status: data.status || "offered",
             createdAt: data.createdAt,
             updatedAt: data.updatedAt,
+            createdBy: String(data.createdBy || ""),
+            barangay: String(data.barangay || ""),
+            acceptedAt: data.acceptedAt,
+            declinedAt: data.declinedAt,
           };
         });
 
@@ -5733,6 +5743,8 @@ export default function AdminCases() {
                   caseBarangay={barangayDisplay(caseBarangayValue(incident))}
                   eligibleCount={eligibleVolunteerCount}
                   activeAssignments={activeAssignments}
+                  allAssignments={incidentAssignments}
+                  automaticStatus={incident.autoVolunteerDispatch?.state}
                   onCancelAssignment={(item) => {
                     const savedAssignment = activeAssignments.find(
                       (assignment) => assignment.id === item.id,
