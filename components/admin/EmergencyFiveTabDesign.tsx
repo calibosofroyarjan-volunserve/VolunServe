@@ -1,5 +1,5 @@
 import React from "react";
-import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { Platform, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 
 const COLOR = {
   green: "#08775C", deep: "#103D32", navy: "#14233B",
@@ -98,38 +98,86 @@ function responseLabel(assignments: AdminAssignmentView[]): string {
 function validCoord(n: unknown): n is number { return typeof n === "number" && Number.isFinite(n); }
 
 export function ReferenceOverview({ incident, verificationStatus, statusText, severityText, activeAssignments, onMap }: Basics) {
+  const lat=Number(incident.latitude),lng=Number(incident.longitude);
+  const hasGPS=Number.isFinite(lat) && Number.isFinite(lng) &&
+    Math.abs(lat)>0.001 && Math.abs(lng)>0.001;
+  // Coordinates come from the authorized incident report, never a dummy pin.
+  const mapUrl=hasGPS
+    ? `https://maps.google.com/maps?q=${encodeURIComponent(lat+","+lng)}&z=15&output=embed`
+    : "";
   return <View style={styles.page}>
-    <Heading level="page" icon="▦" title="Incident overview" sub="The essentials, organized exactly where an Admin expects them." />
+    <View style={styles.overviewIntro}>
+      <Heading level="page" icon="▣" title="Incident Overview"
+        sub="Review the details and location reported by the resident." />
+      <Text style={styles.overviewBadge}>{statusText} · {severityText}</Text>
+    </View>
     <View style={styles.twoColumn}>
       <Card style={styles.grow}>
         <Heading icon="▤" title="Incident Summary" />
-        <RowField label="Description" value={incident.details || "No description recorded"} />
-        <Text style={styles.fieldLabel}>Assistance needed</Text>
-        <View style={styles.chipRow}>{(incident.assistanceTypes || []).length > 0
-          ? (incident.assistanceTypes || []).slice(0, 5).map((x, i) =>
-              <View key={x + i} style={styles.chip}><Text style={styles.chipText}>{x}</Text></View>)
+        <RowField label="Description" value={incident.details || "No description provided"} />
+        <Text style={styles.fieldLabel}>Assistance Needed</Text>
+        <View style={styles.chipRow}>{(incident.assistanceTypes || []).length>0
+          ? (incident.assistanceTypes || []).slice(0,8).map((need,i)=>
+              <View key={need+i} style={styles.chip}><Text style={styles.chipText}>{need}</Text></View>)
           : <Text style={styles.fieldValue}>{incident.needs || "Not specified"}</Text>}
         </View>
-        <RowField label="People affected" value={String(incident.affectedPeople || 0)} />
+        <View style={styles.overviewMetrics}>
+          <RowField label="People Affected" value={String(incident.affectedPeople ?? 0)} />
+          <RowField label="Final Severity" value={severityText} />
+          <RowField label="Volunteer Response" value={responseLabel(activeAssignments)} />
+        </View>
       </Card>
       <Card style={styles.grow}>
-        <Heading icon="♙" title="Resident Information" />
-        <Text style={styles.personName}>{incident.reporterName || "Resident"}</Text>
-        <Text style={styles.verified}>{incident.verification?.identityVerified ? "✓ Verified Resident" : "Resident account"}</Text>
-        <RowField label="Contact number" value={incident.contactNumber || "Not provided"} />
-        <RowField label="Email address" value={incident.reporterEmail || "Not provided"} />
-        <RowField label="Account barangay" value={incident.reporterBarangay || incident.reporterAddress || "Not provided"} />
+        <Heading icon="⌖" title="Incident Location" />
+        {hasGPS && Platform.OS==="web" ?
+          React.createElement("iframe" as any,{
+            src:mapUrl,title:"Map of the reported incident location",
+            loading:"lazy",referrerPolicy:"no-referrer",
+            style:{width:"100%",height:275,border:0,borderRadius:10,
+              backgroundColor:"#F1F6F4"}
+          }) :
+          <View style={styles.mapUnavailable}>
+            <Text style={styles.mapUnavailableTitle}>
+              {hasGPS ? "Use Open Response Map to view this incident" : "Incident GPS unavailable"}
+            </Text>
+            <Text style={styles.muted}>
+              {hasGPS ? "Native map opens in the authorized response map screen."
+                : "No verified coordinate was submitted with this report. Do not assume a map pin."}
+            </Text>
+          </View>
+        }
+        <Text style={styles.mapLocationText}>
+          {incident.incidentBarangay || incident.location || "Location not provided"}
+        </Text>
+        {hasGPS && <Text style={styles.mapGpsText}>
+          {lat.toFixed(6)}, {lng.toFixed(6)} · Resident-submitted coordinates
+        </Text>}
+        <Action label="Open Full Response Map" onPress={onMap}/>
       </Card>
     </View>
     <Card>
-      <Heading icon="◈" title="Case Status & Response" />
-      <View style={styles.summaryRow}>
-        <View style={styles.summaryCell}><RowField label="Current status" value={statusText} /></View>
-        <View style={styles.summaryCell}><RowField label="Final severity" value={severityText} /></View>
-        <View style={styles.summaryCell}><RowField label="Volunteer coordination" value={responseLabel(activeAssignments)} /></View>
-        <View style={styles.summaryAction}><Action label="⌖  Open Emergency Response Map  ›" onPress={onMap} /></View>
+      <Heading icon="♙" title="Resident Information" />
+      <View style={styles.overviewResidentRow}>
+        <View style={styles.overviewAvatar}>
+          <Text style={styles.overviewAvatarText}>
+            {(incident.reporterName || "Resident").trim().slice(0,1).toUpperCase()}
+          </Text>
+        </View>
+        <View style={styles.overviewResidentPerson}>
+          <Text style={styles.personName}>{incident.reporterName || "Resident"}</Text>
+          <Text style={styles.verified}>{incident.verification?.identityVerified ?
+            "✓ Verified Resident" : "Resident account — identity not confirmed here"}</Text>
+        </View>
+        <View style={styles.overviewResidentContact}>
+          <RowField label="Email" value={incident.reporterEmail || "Not provided"} />
+        </View>
+        <View style={styles.overviewResidentContact}>
+          <RowField label="Contact" value={incident.contactNumber || "Not provided"} />
+        </View>
+        <View style={styles.overviewResidentContact}>
+          <RowField label="Barangay" value={incident.reporterBarangay || "Not provided"} />
+        </View>
       </View>
-      <Text style={styles.smallFinePrint}>Exact incident GPS and personal details remain visible only to authorized users.</Text>
     </Card>
   </View>;
 }
@@ -350,6 +398,26 @@ export function ReferenceVolunteerMatching({ incident, verificationStatus, caseB
 export const referencePalette = COLOR;
 const styles = StyleSheet.create({
   page: { padding: 18, gap: 13, backgroundColor: "#FBFDFC" },
+  overviewIntro:{ flexDirection:"row",alignItems:"center",flexWrap:"wrap",
+    justifyContent:"space-between",gap:10 },
+  overviewBadge:{ color:"#146245",backgroundColor:"#E5F6EC",
+    paddingVertical:7,paddingHorizontal:12,overflow:"hidden",borderRadius:999,
+    fontSize:12,fontWeight:"800" },
+  overviewMetrics:{ flexDirection:"row",flexWrap:"wrap",justifyContent:"space-between",
+    marginTop:12,paddingTop:14,borderTopWidth:1,borderTopColor:"#E3EDE8",gap:12 },
+  mapUnavailable:{ minHeight:200,backgroundColor:"#F3F8F5",borderRadius:12,
+    justifyContent:"center",paddingHorizontal:22,alignItems:"center" },
+  mapUnavailableTitle:{ color:"#25473C",fontSize:15,fontWeight:"800",
+    textAlign:"center" },
+  mapLocationText:{ color:"#26463D",fontWeight:"800",fontSize:12,marginTop:8 },
+  mapGpsText:{ color:"#697A73",fontSize:11 },
+  overviewResidentRow:{ flexDirection:"row",alignItems:"center",flexWrap:"wrap",gap:14 },
+  overviewAvatar:{ width:42,height:42,borderRadius:21,backgroundColor:"#CFF1DF",
+    alignItems:"center",justifyContent:"center" },
+  overviewAvatarText:{ color:"#0A7656",fontWeight:"900",fontSize:18 },
+  overviewResidentPerson:{ minWidth:180,flexGrow:1 },
+  overviewResidentContact:{ flexGrow:1,flexBasis:145,minWidth:120 },
+
   card: { borderWidth: 1, borderColor: COLOR.border, borderRadius: 13, backgroundColor: "#FFFFFF", padding: 16, gap: 9 },
   grow: { flexGrow: 1, flexBasis: 250, minWidth: 210 },
   twoColumn: { flexDirection: "row", flexWrap: "wrap", alignItems: "stretch", gap: 12 },
