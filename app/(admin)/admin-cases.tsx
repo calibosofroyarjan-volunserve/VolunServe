@@ -598,6 +598,7 @@ export default function AdminCases() {
   const [photoPage, setPhotoPage] = useState(1);
   const [videoPage, setVideoPage] = useState(1);
   const [selectedCaseId, setSelectedCaseId] = useState("");
+  const [isCaseDetailOpen, setIsCaseDetailOpen] = useState(false);
   const [detailTab, setDetailTab] = useState<
     "overview" | "map" | "evidence" | "response" | "personnel" | "history"
   >("overview");
@@ -3502,7 +3503,7 @@ export default function AdminCases() {
         </View>
       </View>
 
-      <View style={[styles.pageHeader, focusedTab && styles.hiddenSection]}>
+      <View style={[styles.pageHeader, isCaseDetailOpen && styles.hiddenSection]}>
         <View style={styles.headerTools}>
           <View style={styles.searchBox}>
             <Text style={styles.searchIcon}>⌕</Text>
@@ -3518,7 +3519,7 @@ export default function AdminCases() {
         </View>
       </View>
 
-        <View style={[styles.filterCard, focusedTab && styles.hiddenSection]}>
+        <View style={[styles.filterCard, isCaseDetailOpen && styles.hiddenSection]}>
           <View style={styles.filterGroup}>
             <Text style={styles.filterLabel}>STATUS</Text>
             <View style={styles.pillRow}>
@@ -3598,7 +3599,7 @@ export default function AdminCases() {
             compact && styles.caseWorkspaceCompact,
           ]}
         >
-          {!focusedTab && (
+          {!isCaseDetailOpen && (
           <View style={[styles.caseListPane, compact && styles.caseListPaneCompact]}>
             {detailTab === "personnel" && selectedCase && (
               <View style={styles.assignmentCaseSidebar}>
@@ -3658,7 +3659,7 @@ export default function AdminCases() {
               <>
             <View style={styles.caseListHeader}>
               <View>
-                <Text style={styles.caseListTitle}>All Emergency Cases</Text>
+                <Text style={styles.caseListTitle}>Emergency Report Queue</Text>
                 <Text style={styles.caseListCount}>{visibleCases.length} case{visibleCases.length === 1 ? "" : "s"}</Text>
               </View>
               <Text style={styles.caseListSort}>Priority · Newest</Text>
@@ -3674,7 +3675,9 @@ export default function AdminCases() {
                     key={item.id}
                     activeOpacity={0.86}
                     style={[styles.caseListItem, active && styles.caseListItemActive]}
-                    onPress={() => setSelectedCaseId(item.id)}
+                    accessibilityRole="button"
+                    accessibilityLabel={`View ${item.title} reported by ${item.reporterName || "Resident"}`}
+                    onPress={() => { setSelectedCaseId(item.id); setIsCaseDetailOpen(true); setDetailTab("overview"); }}
                   >
                     <View style={styles.caseListThumb}>
                       {thumb ? (
@@ -3716,11 +3719,12 @@ export default function AdminCases() {
           </View>
           )}
 
+          {isCaseDetailOpen && selectedCase && (
           <View style={styles.caseDetailPane}>
-            {focusedTab && (
+            {isCaseDetailOpen && (
               <TouchableOpacity accessibilityRole="button" style={styles.focusBackButton}
-                onPress={() => setDetailTab("overview")}>
-                <Text style={styles.focusBackText}>← Back to All Emergency Cases</Text>
+                onPress={() => { setIsCaseDetailOpen(false); setDetailTab("overview"); }}>
+                <Text style={styles.focusBackText}>← Back to Emergency Reports</Text>
               </TouchableOpacity>
             )}
             {[selectedCase].map((incident) => {
@@ -6206,6 +6210,7 @@ export default function AdminCases() {
         })}
 
           </View>
+          )}
         </View>
       )}
     </ScrollView>
@@ -8300,7 +8305,7 @@ const styles = StyleSheet.create({
     borderRadius: 10, borderWidth: 1, borderColor: "#D7E6EF", marginBottom: 10,
     alignSelf: "flex-start",
   },
-  focusBackText: { color: "#165E94", fontWeight: "800", fontSize: 12 },
+  focusBackText: { color: "#0B7052", fontWeight: "800", fontSize: 14 },
   advancedControlToggle: {
     margin: 15, padding: 11, backgroundColor: "#F6F9FD",
     borderWidth: 1, borderColor: "#D9E6F2", borderRadius: 10,
@@ -8340,8 +8345,8 @@ const styles = StyleSheet.create({
   assignmentSideText: { color: "#708298", fontSize: 12, fontWeight: "700" },
   assignmentSideTextActive: { color: "#184C3D", fontWeight: "900" },
   caseListPane: {
-    width: 355,
-    flexShrink: 0,
+    width: "100%",
+    flexShrink: 1,
     backgroundColor: "#ffffff",
     borderWidth: 1,
     borderColor: "#dfe7ee",
@@ -8378,11 +8383,11 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
   caseListItems: {
-    padding: 8,
-    gap: 6,
+    padding: 14,
+    gap: 9,
   },
   caseListItem: {
-    minHeight: 78,
+    minHeight: 102,
     flexDirection: "row",
     alignItems: "center",
     gap: 9,
