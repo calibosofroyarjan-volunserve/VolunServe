@@ -19,6 +19,7 @@ const {isOperationalAdminProfile} = require("./adminAccess");
 const {createRenderAutoDispatchWorker,verifiedStagingProject} = require("./emergencyAutoDispatchWorker");
 const {inspectStagingTestCase,diagnoseSyntheticFixtureFields} = require("./emergencyStagingReadiness");
 const {prepareSyntheticCaseForTest} = require("./stagingSyntheticCasePreparation");
+const {reconcileAcceptedStagingSupport} = require("./stagingAcceptedSupportReconciliation");
 const {getVolunteerOffer,respondToStagingOffer,resetExpiredFixture,
   inspectStagingAssignmentConsistency,CASE_ID} =
   require("./stagingVolunteerTask");
@@ -184,6 +185,7 @@ function makeApp({authClient = auth, firestore = db, worker, env = process.env} 
       if (!profileSnap.exists || !isOperationalAdminProfile(profileSnap.data())) {
         return response.status(403).json({ok:false,error:"approved_admin_required"});
       }
+      response.locals.stagingAdminUid=decoded.uid;
       next();
     } catch (error) {
       // Do not log Firebase token, document, or credentials.
@@ -309,6 +311,28 @@ function makeApp({authClient = auth, firestore = db, worker, env = process.env} 
     }
   });
 
+  // An explicit staging Admin action. Never runs automatically at startup.
+  // It adds late, truthfully labelled support records only after full accepted
+  // task ownership/lock/reservation checks; it never replays an acceptance.
+  app.post("/api/admin/emergency-auto/reconcile-accepted-test",
+    requireStagingAdmin,requireActivation,async(request,response)=>{
+      if(!stagingServiceAccountMatches)
+        return response.status(503).json({ok:false,error:"isolated_staging_not_configured"});
+      if(request.body?.caseId!==CASE_ID ||
+         request.body?.confirmLateReconciliation!==true)
+        return response.status(400).json({ok:false,error:"explicit_dummy_reconciliation_confirmation_required"});
+      try {
+        const outcome=await reconcileAcceptedStagingSupport(
+          firestore,response.locals.stagingAdminUid);
+        response.set("Cache-Control","no-store");
+        response.status(outcome.status==="blocked"?409:200)
+          .json({ok:outcome.status!=="blocked",...outcome});
+      }catch(error){
+        console.warn("Isolated late acceptance QA reconciliation unavailable",
+          String(error?.code||"unknown").slice(0,70));
+        response.status(503).json({ok:false,error:"staging_reconciliation_unavailable"});
+      }
+    });
   // Free preview activation is deliberately restricted to a SINGLE fictional
   // staging fixture; never permit a generic Admin to submit an arbitrary case.
   async function requireSyntheticFixture(request,response,next){
