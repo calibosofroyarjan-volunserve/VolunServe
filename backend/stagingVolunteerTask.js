@@ -217,6 +217,16 @@ async function inspectStagingAssignmentConsistency(db) {
     acceptanceNotification.data()?.caseId===CASE_ID &&
     acceptanceNotification.data()?.assignmentId===refs.assignmentId &&
     acceptanceNotification.data()?.userId===caseSnap.data()?.reporterUid;
+  const auditAction=decisionLog.exists?decisionLog.data()?.action:null;
+  const auditCorrect=decisionLog.exists &&
+    decisionLog.data()?.caseId===CASE_ID &&
+    decisionLog.data()?.volunteerUid===uid &&
+    ["Synthetic Volunteer Accepted",
+      "Synthetic Volunteer Acceptance Reconciled (Later QA)"].includes(auditAction);
+  const reconciled=acceptanceNotification.data()?.recordOrigin==="staging_acceptance_reconciliation" ||
+    decisionLog.data()?.recordOrigin==="staging_acceptance_reconciliation";
+  const supportRecordsVerified=accepted && lockCorrect && caseCorrect && notificationCorrect &&
+    initialNotification.exists && auditCorrect && reservation.exists;
   const result={
     status:!owned?"review_required":String(a.status||"unknown"),
     assignmentStatus:String(a.status||"missing"),
@@ -227,10 +237,14 @@ async function inspectStagingAssignmentConsistency(db) {
     acceptedCaseStatusCorrect:caseCorrect,
     acceptedResidentNotificationPresent:notificationCorrect,
     adminAuditPresent:decisionLog.exists,
+    adminAuditCorrect:auditCorrect,
     declineAlertPresent:declineNotification.exists,
     reservationPresent:reservation.exists,
-    fullAcceptanceVerified:accepted && lockCorrect && caseCorrect && notificationCorrect &&
-      initialNotification.exists && decisionLog.exists && reservation.exists,
+    supportRecordsVerified,
+    reconciliationRecorded:reconciled && notificationCorrect && auditCorrect,
+    historicalOriginalAcceptanceVerified:supportRecordsVerified && !reconciled,
+    // A later QA repair never proves the ORIGINAL acceptance wrote everything.
+    fullAcceptanceVerified:supportRecordsVerified && !reconciled,
   };
   return result;
 }
