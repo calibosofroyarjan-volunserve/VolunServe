@@ -265,6 +265,22 @@ test("browser same-origin POST is allowed while foreign origins are denied",()=>
   assert.equal(r.status,403);
   assert.equal((await r.json()).error,"staging_request_blocked");
   assert.deepEqual(calls,[["start","STAGING_TEST_001"]]);
+  // Only the dedicated, isolated staging UI is additionally allowed.
+  const reviewOrigin="https://volunserve-auto-volunteer-ui-staging.onrender.com";
+  r=await fetch(url+"/api/admin/emergency-auto/start",{
+    method:"OPTIONS",headers:{Origin:reviewOrigin,
+      "Access-Control-Request-Method":"POST",
+      "Access-Control-Request-Headers":"authorization,content-type"}
+  });
+  assert.equal(r.status,204);
+  assert.equal(r.headers.get("access-control-allow-origin"),reviewOrigin);
+  // Production and unrelated origins MUST NOT be allowlisted.
+  r=await fetch(url+"/api/admin/emergency-auto/start",{
+    method:"OPTIONS",headers:{Origin:"https://volunserve.com",
+      "Access-Control-Request-Method":"POST",
+      "Access-Control-Request-Headers":"authorization,content-type"}
+  });
+  assert.notEqual(r.headers.get("access-control-allow-origin"),"https://volunserve.com");
   r=await fetch(url+"/api/admin/emergency-auto/start",{
     method:"OPTIONS",headers:{Origin:ownOrigin,
       "Access-Control-Request-Method":"POST",
