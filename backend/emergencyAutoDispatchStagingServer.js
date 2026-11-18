@@ -37,9 +37,17 @@ function makeApp({authClient = auth, firestore = db, worker, env = process.env} 
       .then(() => {
         stagingFirestoreReadStatus = "verified";
         console.info("[staging-readiness] isolated Firestore read succeeded");
-        return inspectStagingTestCase(firestore).then(result=>{
+        return inspectStagingTestCase(firestore).then(async result=>{
           stagingTestCaseReadiness = result;
           console.info("[staging-readiness] synthetic fixture preflight:",result.status,result.reason);
+          // Only the fixed fictional fixture. Log missing field NAMES (never values
+          // or user IDs) to the private staging service logs for authorized QA.
+          if (result.reason === "invalid_test_case_fields") {
+            const dummy = await firestore.collection("disasterCases").doc(CASE_ID).get();
+            const fields = diagnoseSyntheticFixtureFields(dummy.exists ? dummy.data() : null);
+            console.info("[staging-readiness] invalid dummy field names:",
+              fields.join(",") || "none");
+          }
         }).catch(error=>{
           stagingTestCaseReadiness = {status:"unavailable"};
           console.warn("[staging-readiness] synthetic fixture check unavailable",
