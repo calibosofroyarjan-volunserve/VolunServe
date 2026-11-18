@@ -1768,13 +1768,40 @@ export default function CommunityEventsScreen() {
         }
       });
 
-      setAttendanceFeedback({
-        eventId: event.id,
-        type: "success",
-        message: action === "check-in"
-          ? "Time In recorded using server time. Remember to Time Out when your participation ends."
-          : "Time Out recorded using server time. Your hours are pending Admin/LGU verification.",
-      });
+      // Time Out is already committed in Firestore before contacting Render.
+      // If the request fails, never undo attendance: Admin verification remains
+      // available, and the completed-event backend will retry automatically.
+      let message = "Time In recorded using server time. Remember to Time Out when your participation ends.";
+      if (action === "check-out") {
+        message = "Time Out saved. Automatic attendance verification is pending; Admin can review exceptions.";
+        try {
+          const token = await user.getIdToken();
+          const response = await fetch(
+            `${COMMUNITY_EVENT_PHOTO_BACKEND_URL}/api/community-events/attendance/auto-verify`,
+            {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${token}`,
+              },
+              body: JSON.stringify({ eventId: event.id }),
+            }
+          );
+          const result = await response.json().catch(() => null) as
+            | { ok?: boolean; status?: string }
+            | null;
+          if (response.ok && result?.ok === true) {
+            if (result.status === "verified" || result.status === "already_verified") {
+              message = "Time Out saved. Attendance verified automatically! Certificate issuance follows Admin event completion.";
+            } else {
+              message = "Time Out saved. Attendance needs Admin review because an automatic validation check was not met.";
+            }
+          }
+        } catch {
+          // The Firestore Time Out remains saved even if Render is offline.
+        }
+      }
+      setAttendanceFeedback({ eventId:event.id, type:"success", message });
     } catch (error) {
       setAttendanceFeedback({
         eventId: event.id,
@@ -2065,9 +2092,7 @@ export default function CommunityEventsScreen() {
 
         {joined && (
           <Text style={styles.helper}>
-            Attendance and certificates
-            are subject to Admin verification
-            after event completion.
+            Attendance is verified automatically when valid; exceptions go to Admin. Certificates follow Admin event completion.
           </Text>
         )}
         {joined && isVolunteer && !isOwnProposal && (
@@ -2077,7 +2102,7 @@ export default function CommunityEventsScreen() {
               <Text style={styles.lockedSectionTitle}>My Attendance</Text>
             </View>
             <Text style={styles.lockedAttendanceHistoryDate}>Time In: {prettyAttendanceTime(participation?.checkedInAt)} · Time Out: {prettyAttendanceTime(participation?.checkedOutAt)}</Text>
-            <Text style={styles.lockedAttendanceHistoryDate}>{participation?.attendanceVerified ? `Verified · ${formatHours(durationMinutes(participation))} credited` : participation?.checkedOutAt ? "Pending Admin/LGU verification" : participation?.checkedInAt ? "Time In recorded" : "Waiting for Time In"}</Text>
+            <Text style={styles.lockedAttendanceHistoryDate}>{participation?.attendanceVerified ? `Verified · ${formatHours(durationMinutes(participation))} credited` : participation?.checkedOutAt ? "Awaiting automatic verification or Admin review" : participation?.checkedInAt ? "Time In recorded" : "Waiting for Time In"}</Text>
             {!participation?.attendanceVerified && event.status === "active" && !participation?.checkedOutAt && (
               attendanceConfirmation?.eventId === event.id ? (
                 <View style={styles.webAttendanceConfirmBox}>
@@ -2684,7 +2709,7 @@ export default function CommunityEventsScreen() {
                     <View style={styles.lockedAttendanceVerifier}>
                       <Ionicons name="shield-checkmark-outline" size={15} color="#08766F" />
                       <Text style={styles.lockedAttendanceVerifierText} numberOfLines={3}>
-                        {selectedParticipation?.attendanceVerified ? "Verified by Admin/LGU" : selectedParticipation?.checkedOutAt ? "Pending Admin/LGU verification" : selectedParticipation?.checkedInAt ? "Checked in · Not yet verified" : selectedEvent.status === "upcoming" ? "Waiting for Admin Start Event" : selectedEvent.status === "completed" ? "Event completed" : "Ready for Time In"}
+                        {selectedParticipation?.attendanceVerified ? "Attendance verified" : selectedParticipation?.checkedOutAt ? "Awaiting automatic verification or Admin review" : selectedParticipation?.checkedInAt ? "Checked in · Not yet verified" : selectedEvent.status === "upcoming" ? "Waiting for Admin Start Event" : selectedEvent.status === "completed" ? "Event completed" : "Ready for Time In"}
                       </Text>
                     </View>
 
@@ -2701,7 +2726,7 @@ export default function CommunityEventsScreen() {
                                 ? "At the event venue? Record your actual arrival with Time In."
                                 : !selectedParticipation?.checkedOutAt
                                   ? "Time In saved. Record your departure with Time Out when finished."
-                                  : "Time In and Time Out are recorded. Admin will verify your volunteer hours."}
+                                  : "Time In and Time Out are recorded. Attendance is checked automatically; Admin reviews exceptions."}
                         </Text>
                         <View style={styles.webAttendanceConfirmButtons}>
                           <Pressable
