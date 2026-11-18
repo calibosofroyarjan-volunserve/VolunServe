@@ -1,0 +1,39 @@
+name: Admin Emergency Reports UI — safe build (NO DEPLOY)
+on:
+  pull_request:
+    branches:
+      - live-protected
+    paths:
+      - "app/(admin)/admin-cases.tsx"
+      - "scripts/test-admin-emergency-review-20261118.cjs"
+      - ".github/workflows/admin-emergency-review-safe-check-20261118.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  admin-emergency-review:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      CI: "1"
+      EXPO_NO_TELEMETRY: "1"
+    steps:
+      - name: Checkout only PR source; no hosting credentials
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+      - name: Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - name: Install locked frontend dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Parse TSX and check Admin review invariants
+        run: node scripts/test-admin-emergency-review-20261118.cjs
+      - name: Export web bundle for verification, never deploy
+        run: npx expo export --platform web --output-dir /tmp/volunserve-admin-review-check
+      - name: Confirm read-only workflow
+        run: echo "NO FIREBASE SERVICE ACCOUNT, NO LIVE DEPLOYMENT, NO FIRESTORE WRITES"
