@@ -43,6 +43,7 @@ a{color:#075c49}input:focus-visible,button:focus-visible{outline:3px solid #4db8
 <button type="button" class="secondary" id="reissue-test" disabled>Reissue expired dummy offer</button>
 <button type="button" class="secondary" id="verify-test" disabled>Verify acceptance, responder lock &amp; notifications</button>
 <p class="small">Use Reissue only after the prior test offer has expired or been declined. Accepted offers cannot be reset.</p>
+<p class="small">A case already assigned or in progress must not be manually reset to validated. Use the read-only verification and controlled reissue flow instead.</p>
 <h2>Verification</h2>
 <div id="result" class="result" aria-live="polite">Not checked yet. Only the staging Firebase project will be contacted.</div>
 <h2>What a successful test proves</h2>
@@ -161,7 +162,7 @@ startTest.addEventListener("click",async()=>{
       "No production case or official emergency responder contacted.");
   } catch(err){
     report("Test offer not completed: "+String(err?.message||"unknown").slice(0,180));
-  } finally {startTest.disabled=false;}
+  } finally {startTest.disabled=true; /* Re-check fixture before another test offer. */}
 });
 const report=x=>{result.textContent=x;};
 document.getElementById("login").addEventListener("submit",async(e)=>{
