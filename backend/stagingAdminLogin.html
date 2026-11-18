@@ -143,15 +143,15 @@ el002("eligibility-002").addEventListener("click",async()=>{
     const reasons=Object.entries(d.excludedByReason||{})
       .sort((a,b)=>Number(b[1])-Number(a[1]))
       .map(([reason,count])=>"  "+reason+": "+count)
-      .join("\\n") || "  none";
-    show002("FICTIONAL 002 — READ-ONLY VOLUNTEER ELIGIBILITY\\n"+
-      "Approved applications: "+d.approvedApplications+"\\n"+
-      "Evaluated: "+d.evaluated+"\\n"+
-      "Eligible free Volunteers: "+d.eligible+"\\n"+
-      "Same barangay (Wave 1): "+d.eligibleByWave?.wave1+"\\n"+
-      "Neighbor (Wave 2): "+d.eligibleByWave?.wave2+"\\n"+
-      "SJDM-wide (Wave 3): "+d.eligibleByWave?.wave3+"\\n"+
-      "Exclusion reasons:\\n"+reasons+"\\n"+
+      .join("\n") || "  none";
+    show002("FICTIONAL 002 — READ-ONLY VOLUNTEER ELIGIBILITY\n"+
+      "Approved applications: "+d.approvedApplications+"\n"+
+      "Evaluated: "+d.evaluated+"\n"+
+      "Eligible free Volunteers: "+d.eligible+"\n"+
+      "Same barangay (Wave 1): "+d.eligibleByWave?.wave1+"\n"+
+      "Neighbor (Wave 2): "+d.eligibleByWave?.wave2+"\n"+
+      "SJDM-wide (Wave 3): "+d.eligibleByWave?.wave3+"\n"+
+      "Exclusion reasons:\n"+reasons+"\n"+
       "No names, UIDs, assignments, or user data returned. No records changed.");
   }catch(error){show002("Eligibility check blocked: "+String(error?.message||"unknown"));}
 });
