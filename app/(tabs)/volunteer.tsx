@@ -1,5 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { Redirect, useRouter } from "expo-router";
+import { getAuth } from "firebase/auth";
 import {
   collection,
   doc,
@@ -27,6 +28,7 @@ import {
 } from "react-native";
 
 import { db } from "../../lib/firebase";
+import { isStagingBulkAssignment, respondToStagingBulkOffer } from "../../lib/stagingBulkVolunteerClient";
 import {
   activeModeForProfile,
   hasVolunteerAccess,
@@ -53,6 +55,9 @@ type ResponseAssignment = {
   volunteerName?: string;
   status?: AssignmentStatus;
   createdBy?: string;
+  offerMode?: string;
+  wave?: number;
+  expiresAtMs?: number;
   createdAt?: any;
   updatedAt?: any;
   responseStartedAt?: any;
@@ -524,6 +529,38 @@ export default function VolunteerTasks() {
       !profile ||
       busyId
     ) {
+      return;
+    }
+
+    // Isolated synthetic 002 requests must be written by the staging server;
+    // no legacy Firestore transition or real mission workflow is allowed.
+    if (isStagingBulkAssignment(assignment)) {
+      try {
+        setBusyId(assignment.id);
+        setError("");
+        if (next !== "accepted" && next !== "declined") {
+          throw new Error("Fictional staging offers support Accept/Decline only.");
+        }
+        const auth = getAuth();
+        const signedIn = auth.currentUser;
+        if (!signedIn || signedIn.uid !== user.uid) {
+          throw new Error("Sign in with your isolated staging Volunteer test account.");
+        }
+        await respondToStagingBulkOffer(
+          assignment, next, user.uid, String(auth.app.options.projectId || ""), signedIn,
+        );
+        Alert.alert(
+          next === "accepted" ? "Fictional Offer Accepted" : "Fictional Offer Declined",
+          "Saved by isolated staging server. No real emergency response started.",
+        );
+        if (next === "accepted") setFilter("active");
+      } catch (problem) {
+        const message = problem instanceof Error ? problem.message : "Staging offer response unavailable.";
+        setError(message);
+        Alert.alert("Staging Test", message);
+      } finally {
+        setBusyId("");
+      }
       return;
     }
 
@@ -1432,6 +1469,37 @@ export default function VolunteerTasks() {
                     </View>
                   </View>
 
+                  {isStagingBulkAssignment(assignment) ? (
+                    <View style={styles.actionRow}>
+                      <Text style={styles.metaLabel}>
+                        FICTIONAL STAGING OFFER · Wave {assignment.wave || "?"} · Accept/Decline only
+                      </Text>
+                      {status === "offered" && (
+                        <>
+                          <TouchableOpacity
+                            style={[styles.primaryButton, busy && styles.disabled]}
+                            disabled={busy}
+                            onPress={() => transitionAssignment(assignment, "accepted")}
+                          >
+                            <Ionicons name="checkmark" size={18} color="#ffffff" />
+                            <Text style={styles.primaryButtonText}>Accept Fictional Offer</Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            style={[styles.secondaryButton, busy && styles.disabled]}
+                            disabled={busy}
+                            onPress={() => transitionAssignment(assignment, "declined")}
+                          >
+                            <Ionicons name="close" size={18} color="#334155" />
+                            <Text style={styles.secondaryButtonText}>Decline Fictional Offer</Text>
+                          </TouchableOpacity>
+                        </>
+                      )}
+                      {status === "accepted" && (
+                        <Text style={styles.metaLabel}>Staging acceptance saved. Real response tracking disabled.</Text>
+                      )}
+                    </View>
+                  ) : (
+                    <>
                   {isStagingAutoMatchedTask(assignment) && (
                     <Text style={{ color: "#0f766e", fontSize: 11, marginBottom: 9, fontWeight: "700" }}>
                       STAGING AUTO-MATCH PREVIEW ONLY — Respond through the verified staging Volunteer portal.
@@ -1686,6 +1754,9 @@ export default function VolunteerTasks() {
                         )}
                       </Text>
                     </View>
+                  )}
+
+                    </>
                   )}
 
                   {completionId ===

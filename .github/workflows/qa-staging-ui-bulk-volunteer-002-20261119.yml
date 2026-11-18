@@ -1,0 +1,57 @@
+name: Staging UI fixed-002 bulk Volunteer integration - NO DEPLOY
+on:
+  pull_request:
+    branches:
+      - feat/staging-gated-admin-volunteer-preview-ui-20261117
+    paths:
+      - "lib/stagingBulkVolunteerClient.ts"
+      - "app/(admin)/admin-cases.tsx"
+      - "app/(tabs)/volunteer.tsx"
+      - "app/(tabs)/volunteer.web.tsx"
+      - "scripts/test-staging-bulk-client-integration-20261119.cjs"
+      - "scripts/guard-volunteer-staging-web-release-20261119.cjs"
+      - "scripts/test-volunteer-staging-web-release-guard-20261119.cjs"
+      - ".github/workflows/qa-staging-ui-bulk-volunteer-002-20261119.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  web-integration-safety-no-deploy:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      EXPO_PUBLIC_VOLUNSERVE_ENV: staging
+      EXPO_PUBLIC_FIREBASE_API_KEY: synthetic-not-a-real-key
+      EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN: volunserve-volunteer-staging.firebaseapp.com
+      EXPO_PUBLIC_FIREBASE_PROJECT_ID: volunserve-volunteer-staging
+      EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET: volunserve-volunteer-staging.firebasestorage.app
+      EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID: "123456789"
+      EXPO_PUBLIC_FIREBASE_APP_ID: "1:123456789:web:fake"
+      EXPO_PUBLIC_AUTO_VOLUNTEER_DISPATCH_ENABLED: "true"
+      EXPO_PUBLIC_AUTO_VOLUNTEER_STAGING_ONLY: "true"
+      EXPO_PUBLIC_AUTO_VOLUNTEER_MATCH_PROVIDER: render
+      EXPO_PUBLIC_AUTO_VOLUNTEER_STAGING_PROJECT_ID: volunserve-volunteer-staging
+      EXPO_PUBLIC_VOLUNSERVE_AUTO_MATCH_UI_PREVIEW: "true"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - name: Install locked dependencies without lifecycle scripts
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Strict separate staging project preflight
+        run: node scripts/guard-volunteer-staging-web-release-20261119.cjs
+      - name: Test stage release config fail closed
+        run: node --test scripts/test-volunteer-staging-web-release-guard-20261119.cjs
+      - name: Test 001 preview and 002 backend-owned client without actual Firebase
+        run: |
+          node scripts/test-staging-gated-matching-ui-20261117.cjs
+          node --test scripts/test-staging-validation-auto-offer-20261117.cjs
+          node --test scripts/test-staging-bulk-client-integration-20261119.cjs
+      - name: Type-check app without deploying
+        run: npx tsc --noEmit --pretty false
+      - name: Produce synthetic staging web export without hosting deployment
+        run: npx expo export --platform web --output-dir dist-staging-audit
+      - name: No deployment, secret, or authenticated account access
+        run: echo "CI ONLY. No real credentials. No Firebase access. No Render or production deployment."
