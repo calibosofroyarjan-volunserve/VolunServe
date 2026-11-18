@@ -574,3 +574,88 @@ test("approved staging Admin receives only fresh dummy case field names, with ze
     await new Promise(resolve=>server.close(resolve));
   }
 });
+
+
+test("one-field synthetic status preparation is transactional, isolated and rejects unsafe states",async()=>{
+  const {prepareSyntheticCaseForTest}=require("./stagingSyntheticCasePreparation");
+  const valid={title:"TEST ONLY - Dummy Emergency",status:"reported",
+    verificationStatus:"validated",dispatchBlocked:false,
+    requiredSkills:["First Aid"],validatedBy:"test-admin",reporterUid:"test-resident",
+    incidentBarangay:"Bagong Buhay I"};
+  async function attempt(input,{hasSession=false,hasAssignment=false,missing=false}={}){
+    let updated=[];
+    const firestore={
+      collection(name){
+        assert.ok(["disasterCases","emergencyAutoDispatch","responseAssignments"].includes(name));
+        if(name==="responseAssignments")return {
+          where(key,op,id){
+            assert.equal(key,"caseId");assert.equal(op,"==");assert.equal(id,"STAGING_TEST_001");
+            return {limit(n){assert.equal(n,1);return {type:"assignment-query"};}};
+          }
+        };
+        return {doc(id){assert.equal(id,"STAGING_TEST_001");return {type:name};}};
+      },
+      runTransaction:async fn=>fn({
+        get:async ref=>ref.type==="disasterCases"?
+          {exists:!missing,data:()=>input}:
+          ref.type==="emergencyAutoDispatch"?{exists:hasSession}:
+          {empty:!hasAssignment},
+        update:(ref,patch)=>{assert.equal(ref.type,"disasterCases");updated.push(patch);}
+      })
+    };
+    return {result:await prepareSyntheticCaseForTest(firestore),updated};
+  }
+  let a=await attempt(valid);
+  assert.equal(a.result.status,"prepared");
+  assert.equal(a.updated.length,1);
+  assert.deepEqual(Object.keys(a.updated[0]).sort(),["status","updatedAt"]);
+  assert.equal(a.updated[0].status,"validated");
+  a=await attempt({...valid,status:"validated"});
+  assert.equal(a.result.status,"already_validated");assert.equal(a.updated.length,0);
+  for(const input of [
+    {...valid,status:"assigned"},
+    {...valid,status:"in_progress"},
+    {...valid,verificationStatus:"pending_verification"},
+    {...valid,title:"Actual resident incident"},
+    {...valid,incidentBarangay:"Outside SJDM"},
+    {...valid,activeVolunteerSupportAssignmentId:"existing-assignment"}
+  ]){
+    a=await attempt(input);
+    assert.equal(a.result.status,"blocked");
+    assert.equal(a.updated.length,0);
+  }
+  for(const opts of [{hasSession:true},{hasAssignment:true},{missing:true}]){
+    a=await attempt(valid,opts);
+    assert.equal(a.result.status,"blocked");
+    assert.equal(a.updated.length,0);
+  }
+});
+test("only approved staging Admin may repair the fixed fictional case status",async()=>{
+  const tenant="volunserve-volunteer-staging";
+  let writes=0;
+  const firebase={collection(name){
+    if(name==="users")return {doc:()=>({get:async()=>({exists:true,data:()=>({role:"admin",status:"approved"})})})};
+    if(name==="systemSettings")return {doc:()=>({get:async()=>({exists:true})})};
+    throw Error("Unexpected collection "+name);
+  },runTransaction:async()=>{writes++;throw Error("Unexpected write");}};
+  async function serve(env,ready){
+    const app=makeApp({authClient:{verifyIdToken:async()=>({uid:"test-admin"})},
+      firestore:firebase,worker:{config:{onDemandReady:ready,ready:false}},env});
+    const server=app.listen(0,"127.0.0.1");
+    await new Promise((resolve,reject)=>{
+      if(server.listening)resolve();else{server.once("listening",resolve);server.once("error",reject);}
+    });
+    try{
+      const base="http://127.0.0.1:"+server.address().port;
+      let r=await fetch(base+"/api/admin/emergency-auto/prepare-test-status",{method:"POST"});
+      assert.equal(r.status,401);
+      r=await fetch(base+"/api/admin/emergency-auto/prepare-test-status",{
+        method:"POST",headers:{Authorization:"Bearer fake-admin"}});
+      assert.equal(r.status,503);
+    }finally{await new Promise(resolve=>server.close(resolve));}
+  }
+  await serve({},false);
+  await serve({VOLUNSERVE_AUTO_VOLUNTEER_STAGING_PROJECT_ID:tenant,
+    FIREBASE_SERVICE_ACCOUNT_JSON:JSON.stringify({project_id:tenant})},false);
+  assert.equal(writes,0);
+});
