@@ -502,3 +502,41 @@ test("staging 002: decline allows controlled new offer while 001 remains indepen
     assert.equal(db.get("disasterCases/"+FIXED_ID).status,"assigned");
   });
 });
+
+
+test("staging 002 protection: arbitrary case IDs and lookalike reports never send offers",async()=>{
+  const {titleForCase}=require("./stagingVolunteerTask");
+  assert.equal(titleForCase("constructor"),null);
+  assert.equal(titleForCase("__proto__"),null);
+  assert.equal(titleForCase("STAGING_E2E_003"),null);
+  const db=new FakeDb();seedAccounts(db);
+  db.seed("disasterCases/"+FIXED_ID,{
+    title:"TEST ONLY - Dummy Emergency",status:"assigned",
+    verificationStatus:"validated",reporterUid:RESIDENT
+  });
+  db.seed("disasterCases/"+FRESH_ID,{
+    title:"TEST ONLY - Fresh Volunteer E2E 002",
+    status:"validated",verificationStatus:"validated",dispatchBlocked:false,
+    reporterUid:RESIDENT,validatedBy:ADMIN,
+    incidentBarangay:"Bagong Buhay I",requiredSkills:["First Aid"],
+    testOnly:false,source:"staging_synthetic_e2e",
+    testCategory:"staging_synthetic_volunteer_e2e_002"
+  });
+  await serve(db,async({req})=>{
+    const spoof=await req("/api/admin/emergency-auto/start",{
+      method:"POST",who:ADMIN,body:{caseId:FRESH_ID}
+    });
+    assert.equal(spoof.code,409,"Lookalike report without testOnly flag is denied");
+    const unknown=await req("/api/admin/emergency-auto/start",{
+      method:"POST",who:ADMIN,body:{caseId:"constructor"}
+    });
+    assert.equal(unknown.code,403);
+    const task=await req("/api/staging/volunteer/task?caseId=constructor",{who:VOL});
+    assert.equal(task.code,403);
+    const bogus=await req("/api/staging/volunteer/respond",{
+      method:"POST",who:VOL,body:{caseId:"STAGING_E2E_003",decision:"accepted"}
+    });
+    assert.equal(bogus.code,403);
+    assert.equal(db.list("responseAssignments/").length,0);
+  });
+});
