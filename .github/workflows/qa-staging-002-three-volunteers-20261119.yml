@@ -1,0 +1,40 @@
+name: Staging only - 3 fixed synthetic Volunteers account provisioning NO DEPLOY
+on:
+  pull_request:
+    branches:
+      - feat/emergency-auto-dispatch-server-staging-20261115
+    paths:
+      - "backend/staging002TestVolunteerProvisioning.js"
+      - "backend/emergencyAutoDispatchStagingServer.js"
+      - "backend/stagingAdminLogin.html"
+      - "backend/test-staging002TestVolunteerProvisioning.cjs"
+      - "backend/test-staging002VolunteerAdminUI.cjs"
+      - ".github/workflows/qa-staging-002-three-volunteers-20261119.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  fixed-qa-account-provisioning-no-deploy:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install locked staging backend dependencies
+        run: npm ci --prefix backend --ignore-scripts --no-audit --no-fund
+      - name: Syntax check
+        run: |
+          node --check backend/staging002TestVolunteerProvisioning.js
+          node --check backend/emergencyAutoDispatchStagingServer.js
+      - name: Test synthetic user provisioning, password privacy, idempotence and protected UI
+        run: |
+          node --test backend/test-staging002TestVolunteerProvisioning.cjs
+          node --test backend/test-staging002VolunteerAdminUI.cjs
+      - name: Regression test accepted 001 and fixed 002 matching
+        run: |
+          node --test backend/test-stagingFreshEndToEnd.cjs
+          node --test backend/test-staging002EligibilitySummary.cjs
+      - name: Explicitly no credentials, Firebase writes, Render deploy, or production release in CI
+        run: echo "ALL TESTS ARE SYNTHETIC LOCAL MOCKS. NO DEPLOYMENT."

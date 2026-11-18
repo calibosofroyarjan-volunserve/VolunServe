@@ -28,6 +28,7 @@ const {startBatchOffers,getBatchOffer,respondBatchOffer,batchStatus}
   =require("./stagingBulkVolunteerOffers");
 const {advanceBatchWave}=require("./stagingBulkWaveAdvance");
 const {summarizeStaging002Eligibility}=require("./staging002EligibilitySummary");
+const {fixtureSummary,provisionFixtures}=require("./staging002TestVolunteerProvisioning");
 const knownSJDMBgy=require("../functions/sjdmBarangays.json");
 const {createFreshTestCase,validateFreshTestCase,inspectFreshTestCase,recognized}
   =require("./stagingFreshCase002");
@@ -543,6 +544,46 @@ function makeApp({authClient = auth, firestore = db, worker, env = process.env} 
         console.warn("Fictional staging 002 aggregate diagnosis failed",
           String(error?.code||"unknown").slice(0,60));
         response.status(503).json({ok:false,error:"staging_eligibility_summary_unavailable"});
+      }
+    });
+  // Exact THREE synthetic staging Volunteers only; never accepts arbitrary
+  // user identifiers, emails or case IDs. POST requires verified staging Admin.
+  app.get("/api/admin/emergency-auto/e2e-002/test-volunteers",
+    requireStagingAdmin,async(_request,response)=>{
+      if(!stagingServiceAccountMatches)
+        return response.status(503).json({ok:false,error:"isolated_staging_not_configured"});
+      try{
+        const result=await fixtureSummary({db:firestore,authClient,env});
+        response.set("Cache-Control","no-store");
+        response.status(result.status==="blocked"?409:200)
+          .json({ok:result.status!=="blocked",...result});
+      }catch(error){
+        console.warn("Staging 002 test Volunteer status unavailable",
+          String(error?.code||"unknown").slice(0,60));
+        response.status(503).json({ok:false,error:"test_volunteer_fixture_status_unavailable"});
+      }
+    });
+  app.post("/api/admin/emergency-auto/e2e-002/test-volunteers",
+    requireStagingAdmin,requireActivation,async(request,response)=>{
+      if(!stagingServiceAccountMatches)
+        return response.status(503).json({ok:false,error:"isolated_staging_not_configured"});
+      if(request.body?.caseId!==E2E_CASE_ID ||
+         request.body?.confirmFictionalTestUsers!==true)
+        return response.status(400).json({ok:false,error:"explicit_fictional_test_confirmation_required"});
+      try{
+        const result=await provisionFixtures({
+          db:firestore,authClient,env,
+          adminUid:response.locals.stagingAdminUid,
+          passwords:request.body?.passwords
+        });
+        response.set("Cache-Control","no-store");
+        response.status(result.status==="blocked"?409:200)
+          .json({ok:result.status!=="blocked",...result});
+      }catch(error){
+        // Never log passwords, requests or user records.
+        console.warn("Staging 002 test Volunteer setup unavailable",
+          String(error?.code||"unknown").slice(0,60));
+        response.status(503).json({ok:false,error:"test_volunteer_fixture_setup_unavailable"});
       }
     });
   function explicitFreshAction(action){
