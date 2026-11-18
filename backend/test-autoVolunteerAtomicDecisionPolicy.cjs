@@ -115,7 +115,8 @@ test("role/status/identity/skill/revoked application fail closed",()=>{
    {skills:["Baking"]}
  ];
  for(const patch of badUsers){
-  const input={...base,volunteer:{...base.volunteer,...patch}};
+  const input={...base,volunteer:{...base.volunteer,...patch},
+   application:patch.skills?{...base.application,skills:["Baking"]}:base.application};
   const p=proposeAutoVolunteerDecision(input);
   assert.equal(p.status,"blocked",JSON.stringify(patch));
  }
