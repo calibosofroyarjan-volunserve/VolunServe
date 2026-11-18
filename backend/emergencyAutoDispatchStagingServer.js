@@ -23,11 +23,17 @@ const {reconcileAcceptedStagingSupport} = require("./stagingAcceptedSupportRecon
 const {getVolunteerOffer,respondToStagingOffer,resetExpiredFixture,
   inspectStagingAssignmentConsistency,CASE_ID,E2E_CASE_ID,titleForCase} =
   require("./stagingVolunteerTask");
+const {chooseAllEligibleWave}=require("../functions/emergencyAllEligibleWavePlanner");
+const {startBatchOffers,getBatchOffer,respondBatchOffer,batchStatus}
+  =require("./stagingBulkVolunteerOffers");
+const knownSJDMBgy=require("../functions/sjdmBarangays.json");
 const {createFreshTestCase,validateFreshTestCase,inspectFreshTestCase,recognized}
   =require("./stagingFreshCase002");
 
 function makeApp({authClient = auth, firestore = db, worker, env = process.env} = {}) {
   const app = express();
+  // OFF unless specifically enabled for the fixed, fictional E2E 002.
+  const bulk002Enabled=env.VOLUNSERVE_STAGING_E2E_002_BULK==="enabled";
   const matcher = worker || createRenderAutoDispatchWorker({db: firestore, env});
   // One-time, read-only connectivity probe on isolated staging only.
   // Never reads user data, creates accounts, changes Firestore or enables offers.
@@ -341,6 +347,120 @@ function makeApp({authClient = auth, firestore = db, worker, env = process.env} 
         response.status(503).json({ok:false,error:"staging_reconciliation_unavailable"});
       }
     });
+  // Transactional all-eligible task offers; feature-gated, staging-only.
+  // Does not run automatically on server startup or on real reports.
+  app.post("/api/admin/emergency-auto/e2e-002/bulk-send",
+    requireStagingAdmin,requireActivation,async(request,response)=>{
+      if(!stagingServiceAccountMatches||!bulk002Enabled)
+        return response.status(503).json({ok:false,error:"isolated_bulk_staging_disabled"});
+      if(request.body?.caseId!==E2E_CASE_ID||
+         request.body?.confirmAllEligibleTestOffers!==true)
+        return response.status(400).json({ok:false,error:"explicit_bulk_test_confirmation_required"});
+      try{
+        const result=await startBatchOffers(firestore,response.locals.stagingAdminUid);
+        response.set("Cache-Control","no-store");
+        response.status(result.status==="blocked"?409:200).json({
+          ok:result.status!=="blocked",...result});
+      }catch(error){
+        console.warn("Staging bulk offers unavailable",String(error?.code||"unknown").slice(0,60));
+        response.status(503).json({ok:false,error:"bulk_send_unavailable"});
+      }
+    });
+  app.get("/api/admin/emergency-auto/e2e-002/bulk-status",
+    requireStagingAdmin,async(_request,response)=>{
+      if(!stagingServiceAccountMatches||!bulk002Enabled)
+        return response.status(503).json({ok:false,error:"isolated_bulk_staging_disabled"});
+      try{
+        response.set("Cache-Control","no-store");
+        response.json({ok:true,...await batchStatus(firestore)});
+      }catch(error){
+        response.status(503).json({ok:false,error:"bulk_status_unavailable"});
+      }
+    });
+  app.get("/api/staging/volunteer/e2e-002/bulk-task",
+    requireStagingVolunteer,async(_request,response)=>{
+      if(!stagingServiceAccountMatches||!bulk002Enabled)
+        return response.status(503).json({ok:false,error:"isolated_bulk_staging_disabled"});
+      try{
+        response.set("Cache-Control","no-store");
+        response.json({ok:true,...await getBatchOffer(
+          firestore,response.locals.stagingVolunteerUid)});
+      }catch(error){
+        response.status(503).json({ok:false,error:"bulk_task_unavailable"});
+      }
+    });
+  app.post("/api/staging/volunteer/e2e-002/bulk-respond",
+    requireStagingVolunteer,requireActivation,async(request,response)=>{
+      if(!stagingServiceAccountMatches||!bulk002Enabled)
+        return response.status(503).json({ok:false,error:"isolated_bulk_staging_disabled"});
+      const decision=request.body?.decision;
+      if(!["accepted","declined"].includes(decision))
+        return response.status(400).json({ok:false,error:"invalid_decision"});
+      try{
+        const result=await respondBatchOffer(firestore,
+          response.locals.stagingVolunteerUid,decision);
+        response.set("Cache-Control","no-store");
+        response.status(result.status==="blocked"?409:200)
+          .json({ok:result.status!=="blocked",...result});
+      }catch(error){
+        console.warn("Staging bulk response failed",String(error?.code||"unknown").slice(0,60));
+        response.status(409).json({ok:false,error:"bulk_response_conflict"});
+      }
+    });
+  // Read-only staging Admin preview of ALL eligible Volunteers in the first
+  // available wave. Does NOT create assignments or notifications. Counts only.
+  app.get("/api/admin/emergency-auto/e2e-002/bulk-preview",
+    requireStagingAdmin,async(_request,response)=>{
+      if(!stagingServiceAccountMatches)
+        return response.status(503).json({ok:false,error:"isolated_staging_not_configured"});
+      try {
+        const caseSnap=await firestore.collection("disasterCases").doc(E2E_CASE_ID).get();
+        if(!caseSnap.exists||!recognized(caseSnap.data()))
+          return response.status(409).json({ok:false,error:"fictional_002_not_created"});
+        const c={id:E2E_CASE_ID,...caseSnap.data()};
+        const [apps,busy,existing,config]=await Promise.all([
+          firestore.collection("volunteerApplications").where("status","==","approved").limit(201).get(),
+          firestore.collection("responseAssignments")
+            .where("status","in",["offered","accepted","responding","on_site"]).limit(201).get(),
+          firestore.collection("responseAssignments").where("caseId","==",E2E_CASE_ID).limit(201).get(),
+          firestore.collection("systemSettings").doc("emergencyVolunteerMatching").get()
+        ]);
+        if(apps.size>200||busy.size>200||existing.size>200)
+          return response.status(409).json({ok:false,error:"audited_staging_pool_limit"});
+        const roster=await Promise.all(apps.docs.map(async d=>{
+          const application=d.data()||{};
+          const uid=String(application.uid||application.userId||application.volunteerId||d.id);
+          if(!/^[A-Za-z0-9_-]{1,160}$/.test(uid))return null;
+          const u=await firestore.collection("users").doc(uid).get();
+          return {uid,application,user:u.exists?u.data()||{}:{}};
+        }));
+        // Never pretend a barangay is nearby unless an approved SJDM-only
+        // adjacency configuration exists and ALL entries are known SJDM areas.
+        let neighbors={};
+        const settings=config.exists?config.data()||{}:{};
+        if(settings.enabled===true&&settings.approved===true&&
+          settings.neighborsByBarangay&&typeof settings.neighborsByBarangay==="object"){
+          const known=new Set(knownSJDMBgy.map(v=>String(v).toLowerCase()));
+          const entries=Object.entries(settings.neighborsByBarangay);
+          if(entries.every(([name,values])=>known.has(String(name).toLowerCase())&&
+            Array.isArray(values)&&values.every(v=>known.has(String(v).toLowerCase()))))
+            neighbors=Object.fromEntries(entries);
+        }
+        const outcome=chooseAllEligibleWave(c,roster.filter(Boolean),{
+          knownBarangays:knownSJDMBgy,neighborsByBarangay:neighbors,
+          activeAssignments:busy.docs.map(d=>d.data()),
+          existingAssignments:existing.docs.map(d=>d.data())
+        });
+        response.set("Cache-Control","no-store");
+        response.json({ok:true,status:outcome.action,wave:outcome.wave,
+          eligibleInSelectedWave:outcome.volunteers.length,
+          count:outcome.counts||{},willSendOffers:false,
+          note:"Read-only preview. No Volunteer offers sent; multi-offer transactions and acceptance checks still required."});
+      }catch(error){
+        console.warn("Isolated 002 bulk readiness failed",String(error?.code||"unknown").slice(0,65));
+        response.status(503).json({ok:false,error:"bulk_preview_unavailable"});
+      }
+    });
   // NEW separate fictional E2E 002. This does not create staging accounts,
   // touch 001, or activate autonomous emergency dispatch. Every write requires
   // an approved staging Admin with explicit consent.
@@ -454,7 +574,12 @@ function makeApp({authClient = auth, firestore = db, worker, env = process.env} 
         response.status(409).json({ok:false,error:"e2e_002_reissue_review_required"});
       }
     });
-  app.post("/api/admin/emergency-auto/start",requireStagingAdmin,requireActivation,requireSyntheticFixture,action("start"));
+  app.post("/api/admin/emergency-auto/start",requireStagingAdmin,requireActivation,
+    (request,response,next)=>{
+      if(bulk002Enabled&&request.body?.caseId===E2E_CASE_ID)
+        return response.status(409).json({ok:false,error:"use_isolated_bulk_test_endpoint"});
+      next();
+    },requireSyntheticFixture,action("start"));
   app.post("/api/admin/emergency-auto/disable",requireStagingAdmin,requireActivation,requireSyntheticFixture,action("disable"));
   app.use((error, _request, response, _next) => {
     if (error?.type === "entity.too.large") return response.status(413).json({ok:false,error:"payload_too_large"});
