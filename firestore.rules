@@ -4080,6 +4080,22 @@ service cloud.firestore {
     }
     match /responseAssignments/{assignmentId} {
 
+      // Phase 5 DRAFT: never allow a client-side "offered" -> accepted
+      // transition on a server-managed automatic offer. The automatic
+      // case winner and lock must be decided together by the reviewed
+      // backend transaction. Manual client transitions remain unchanged.
+      function isServerManagedAutomaticOffer() {
+        return ('offerMode' in resource.data)
+          && resource.data.offerMode is string
+          && resource.data.offerMode.matches('^automatic_.*');
+      }
+      function autoWinnerMatchesThisAssignment() {
+        let incident = assignmentCase();
+        return incident.get('autoVolunteerAcceptedAssignmentId', '') == assignmentId
+          && incident.get('activeVolunteerSupportAssignmentId', '') == assignmentId
+          && incident.get('activeVolunteerSupportUid', '') == request.auth.uid;
+      }
+
       function hasVerifiedIdentity(data) {
         return (
           (
@@ -4280,6 +4296,16 @@ service cloud.firestore {
         && assignmentCase().reporterUid != request.auth.uid
         && validVolunteerResponseTransition()
         && validVolunteerResponseFields()
+        // Automatic offers are NOT accepted/declined by old browser/mobile
+        // clients. Once accepted by the server and marked as the selected
+        // winner, only that Volunteer may continue the task lifecycle.
+        && (
+          !isServerManagedAutomaticOffer()
+          || (
+            resource.data.status != 'offered'
+            && autoWinnerMatchesThisAssignment()
+          )
+        )
         && request.resource.data.updatedAt is timestamp;
       allow update: if isResident()
         && assignmentCase().reporterUid == request.auth.uid
