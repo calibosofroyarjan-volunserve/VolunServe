@@ -57,7 +57,7 @@ async function startBatchOffers(db,adminUid,now=Date.now()){
     const uid=String(data.uid||data.userId||data.volunteerId||app.id);
     if(!uidOK(uid))return null;
     const person=await userRef(db,uid).get();
-    return {uid,application:data,user:person.exists?person.data()||{}:{}};
+    return {uid,application:data,applicationRef:app.ref,user:person.exists?person.data()||{}:{}};
   }));
   const plan=chooseAllEligibleWave(incident,roster.filter(Boolean),{
     knownBarangays:known,neighborsByBarangay:neighbors,
@@ -66,6 +66,7 @@ async function startBatchOffers(db,adminUid,now=Date.now()){
   });
   if(plan.action!=="offer_all")return fail(plan.action);
   const targets=plan.volunteers;
+  const applicationRefs=new Map(roster.filter(Boolean).map(x=>[x.uid,x.applicationRef]));
   if(targets.length>40)return fail("fanout_exceeds_single_atomic_wave_limit");
   const expiresAtMs=now+expirationMs;
   return db.runTransaction(async tx=>{
@@ -74,7 +75,7 @@ async function startBatchOffers(db,adminUid,now=Date.now()){
     const refs=targets.flatMap(uid=>[
       assignmentRef(db,uid),reserveRef(db,uid),lockRef(db,uid),
       userRef(db,uid),
-      db.collection("volunteerApplications").doc(uid),
+      applicationRefs.get(uid),
       noteRef(db,uid),auditRef(db,uid)
     ]);
     const snapshots=await Promise.all([...base,...refs].map(r=>tx.get(r)));
