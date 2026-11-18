@@ -101,8 +101,12 @@ test("guard code is shared by LIVE Admin and BOTH Volunteer variants; no remote 
  for(const s of [web,mobile]){
   assert.match(s,/import \{ volunteerTransitionConflictReason \} from "\.\.\/\.\.\/lib\/emergencyVolunteerWinnerGuard"/);
   assert.match(s,/const conflict = volunteerTransitionConflictReason\(/);
-  assert.ok(s.indexOf("const conflict = volunteerTransitionConflictReason") <
-    s.indexOf("transaction.update(assignmentRef, patch)",s.indexOf("const transitionAssignment")));
+  const transitionIndex=s.indexOf("const transitionAssignment");
+  const guardIndex=s.indexOf("const conflict = volunteerTransitionConflictReason",transitionIndex);
+  const updateOffset=s.slice(transitionIndex).search(/transaction\.update\(\s*assignmentRef,\s*patch\)/);
+  assert.ok(guardIndex>transitionIndex);
+  assert.ok(updateOffset>0);
+  assert.ok(guardIndex<transitionIndex+updateOffset);
  }
  for(const s of [helper,backend]){
   assert.equal(/STAGING_E2E_002/.test(s),false);
