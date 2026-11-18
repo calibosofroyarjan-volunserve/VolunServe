@@ -38,10 +38,13 @@ import {
   View,
 } from "react-native";
 
+import { ensureStagingBulkOffersAfterAdminValidation, STAGING_BULK_CASE_ID } from "../../lib/stagingBulkVolunteerClient";
 import { db } from "../../lib/firebase";
 import { safePublicAdvisoryBarangay } from "../../lib/emergencyPublicAdvisory";
 import { SJDM_BARANGAYS } from "../../constants/sjdmBarangays";
 import { VolunteerEligibilityValidation } from "../../components/admin/VolunteerEligibilityValidation";
+import AutoVolunteerMatchPreview from "../../components/admin/AutoVolunteerMatchPreview";
+import { AUTO_VOLUNTEER_MATCH_UI_PREVIEW, requestStagingAutoOfferAfterAdminValidation } from "../../lib/automaticVolunteerMatchPreview";
 import { publishVerifiedCommunityAdvisory } from "../../lib/publishVerifiedCommunityAdvisory";
 
 const BACKEND_URL = "https://volunserve.onrender.com";
@@ -1916,6 +1919,44 @@ export default function AdminCases() {
       });
 
       if (action === "validate") {
+        // This is an opt-in staging-only synthetic demonstration. The live
+        // project, normal cases and existing manual assignments stay unchanged.
+        // Never call the staging backend before the Firestore validation commit.
+        let fictionalBulkNotice = "";
+        // Additive-only: exact synthetic 002 can request batch fanout after
+        // successful Admin validation. Existing 001/real/manual flows remain.
+        if (AUTO_VOLUNTEER_MATCH_UI_PREVIEW &&
+            incident.id === STAGING_BULK_CASE_ID &&
+            incident.status === "reported" &&
+            String(incident.verificationStatus || "") !== "validated") {
+          try {
+            const result = await ensureStagingBulkOffersAfterAdminValidation(
+              incident.id, String(auth.app.options.projectId || ""), adminUser,
+            );
+            fictionalBulkNotice = result.status === "already_started"
+              ? " Existing fictional staging offers preserved, no duplicates."
+              : ` Fictional staging Wave ${result.wave || "?"}: ${result.offered || 0} separate Volunteer offers confirmed.`;
+          } catch {
+            fictionalBulkNotice = " Fictional staging bulk offers NOT confirmed; review the isolated Admin status.";
+          }
+        }
+
+        if (AUTO_VOLUNTEER_MATCH_UI_PREVIEW) {
+          const stagingOffer = await requestStagingAutoOfferAfterAdminValidation({
+            caseId: incident.id,
+            originalCaseStatus: incident.status,
+            originalVerificationStatus: String(
+              incident.verificationStatus || "pending_verification"
+            ),
+            getIdToken: () => adminUser.getIdToken(),
+          });
+          if (stagingOffer.offered) {
+            console.info("[staging Volunteer match] fictional offer confirmed by server");
+          } else {
+            console.info("[staging Volunteer match] no offer", stagingOffer.reason);
+          }
+        }
+
         // Publishing is separate, so an Announcements permission error cannot
         // undo successful emergency validation or delay Volunteer offers.
         let advisoryMessage = "No public advisory requested; the emergency report remains private.";
@@ -1936,6 +1977,7 @@ export default function AdminCases() {
             advisoryMessage = "Case validated, but the public advisory was NOT published. Review Announcements permissions separately.";
           }
         }
+        advisoryMessage += fictionalBulkNotice;
         Alert.alert("Request Validated",
           "The case is now eligible for Volunteer offers. " + advisoryMessage);
       } else if (action === "request_more_evidence") {
@@ -5684,6 +5726,16 @@ export default function AdminCases() {
                   </View>
                 )}
 
+              {AUTO_VOLUNTEER_MATCH_UI_PREVIEW &&
+                detailTab === "personnel" && (
+                  <AutoVolunteerMatchPreview
+                    incident={incident}
+                    approvedVolunteers={approvedVolunteers}
+                    assignments={assignments}
+                    authorized={isAuthorized}
+                    knownBarangays={SJDM_BARANGAYS}
+                  />
+                )}
               {detailTab === "personnel" && (
                 <ReferenceVolunteerMatching
                   incident={incident}

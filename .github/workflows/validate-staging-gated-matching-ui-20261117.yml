@@ -1,0 +1,68 @@
+name: Staging-only Admin / Volunteer auto matching UI — NO DEPLOY
+
+on:
+  pull_request:
+    branches:
+      - feat/live-derived-additive-volunteer-matching-20261117
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  preserve-original-flows:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      CI: 'true'
+    steps:
+      - name: Checkout exact review source
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: false
+      - name: Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Check read-only safety additions
+        run: node scripts/test-staging-gated-matching-ui-20261117.cjs
+      - name: Install exact locked dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Test staged Admin validation automatically requests only synthetic offers
+        run: node --test scripts/test-staging-validation-auto-offer-20261117.cjs
+      - name: Check complete TS codebase
+        run: npx tsc --noEmit --incremental false
+      - name: Published-source critical module preservation (baseline-compatible)
+        run: node scripts/test-legacy-module-blobs-20261117.cjs
+      - name: Existing Portal and Community Event regressions
+        run: |
+          node scripts/test-portal-resident-volunteer-ui-flow.cjs
+          node scripts/test-volunteer-community-event-join-20261106.cjs
+      - name: Confirm no production action
+        run: echo "NO DEPLOY — only staging-gated preview, no Hosting/Firestore/backend writes"
+
+  public-staging-browser-smoke:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Checkout review test script
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          submodules: false
+      - name: Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install browser test runtime into temporary directory only
+        run: npm install --prefix /tmp/volunserve-browser-tools --no-save --no-package-lock playwright@1.56.1
+      - name: Install Chromium system dependencies
+        run: /tmp/volunserve-browser-tools/node_modules/.bin/playwright install --with-deps chromium
+      - name: Smoke-test actual isolated staging Admin and Volunteer login pages
+        env:
+          NODE_PATH: /tmp/volunserve-browser-tools/node_modules
+        run: node scripts/test-public-staging-browser-20261117.cjs
+      - name: Confirm no login, staging mutation, or production deployment
+        run: echo "Browser visited anonymous pages only; no credentials or Firebase writes"
