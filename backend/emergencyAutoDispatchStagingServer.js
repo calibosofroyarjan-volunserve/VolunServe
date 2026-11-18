@@ -56,6 +56,17 @@ function makeApp({authClient = auth, firestore = db, worker, env = process.env} 
                 category,"hasAssignmentMarker:",Boolean(
                   fixture.activeVolunteerSupportAssignmentId ||
                   fixture.autoVolunteerDispatch?.state));
+              if (fixture.activeVolunteerSupportAssignmentId ||
+                  fixture.autoVolunteerDispatch?.state) {
+                // Read-only private staging diagnostics: status/boolean values
+                // only, never Volunteer IDs, personal data or tokens.
+                const check=await inspectStagingAssignmentConsistency(firestore);
+                console.info("[staging-readiness] existing fictional assignment:",
+                  "checkStatus:",String(check.status||"unknown"),
+                  "session:",String(check.sessionStatus||"unknown"),
+                  "assignment:",String(check.assignmentStatus||"unknown"),
+                  "acceptedVerified:",check.fullAcceptanceVerified===true);
+              }
             }
           }
         }).catch(error=>{
