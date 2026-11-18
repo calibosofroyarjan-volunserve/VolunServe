@@ -2588,7 +2588,7 @@ export default function CommunityEventsScreen() {
               </View>
               {section === "explore" && <View style={[styles.webSearchWrap, styles.lockedSearch]}><Ionicons name="search-outline" size={17} color="#6B8392" /><TextInput style={styles.webSearchInput} value={search} onChangeText={setSearch} placeholder="Search community events..." placeholderTextColor="#91A4B1" autoCorrect={false}/></View>}
             </View>
-            {!!notice && <View style={section === "propose" && !busy ? styles.webError : styles.webNotice}><Ionicons name={section === "propose" && !busy ? "alert-circle-outline" : "information-circle-outline"} size={18} color={section === "propose" && !busy ? "#B42318" : "#0D8273"} /><Text style={section === "propose" && !busy ? styles.webErrorText : styles.webNoticeText}>{notice}</Text></View>}
+            {section !== "propose" && !!notice && <View style={styles.webNotice}><Ionicons name="information-circle-outline" size={18} color="#0D8273" /><Text style={styles.webNoticeText}>{notice}</Text></View>}}
             {section === "mine" && !!recordError && <View style={styles.webError}><Ionicons name="alert-circle-outline" size={17} color="#B42318" /><Text style={styles.webErrorText}>{recordError}</Text></View>}
             {section === "explore" && canPropose && !residentDetailsId && (
               <View style={styles.ruiFilterBar}>
@@ -2900,8 +2900,8 @@ export default function CommunityEventsScreen() {
               <View style={styles.ruiFormCell}><Text style={styles.fieldLabel}>Video (Optional)</Text><Text style={styles.ruiChecklistSubtitle}>Add a link to a short YouTube or Vimeo video showing the venue or sample activity.</Text><TextInput style={styles.input} value={form.videoUrl} onChangeText={v=>setValue("videoUrl",v)} maxLength={2048} autoCapitalize="none" keyboardType="url" placeholder="https://youtu.be/..." placeholderTextColor="#94A8B8" />{proposalAttempted && !videoLinkSupported(form.videoUrl.trim()) && <Text style={styles.ruiFieldError}>Use a valid HTTPS YouTube or Vimeo link.</Text>}{!!form.videoUrl&&videoLinkSupported(form.videoUrl)&&<Pressable onPress={()=>void Linking.openURL(form.videoUrl)} style={styles.ruiBack}><Ionicons name="play-circle-outline" color="#048D7B" size={17}/><Text style={styles.ruiBackText}>Preview Video</Text></Pressable>}</View>
             </View>
           </View>
-          {!!notice && <View style={busy ? styles.webNotice : styles.webError}><Ionicons name={busy ? "information-circle-outline" : "alert-circle-outline"} size={17} color={busy ? "#0D8273" : "#B42318"}/><Text style={busy ? styles.webNoticeText : styles.webErrorText}>{notice}</Text></View>}
           <View style={styles.ruiFormFooter}><Pressable style={styles.ruiCancelButton} onPress={()=>setSection("explore")}><Text style={styles.ruiCancelText}>Cancel</Text></Pressable><Pressable disabled={busy} style={[styles.ruiPrimary,styles.ruiSubmitButton,busy&&styles.disabledButton]} onPress={()=>void submitProposal()}>{busy?<ActivityIndicator color="white" size="small"/>:<Text style={styles.ruiPrimaryText}>Submit Proposal</Text>}<Ionicons name="arrow-forward" color="white" size={16}/></Pressable></View>
+          {!!notice && <View style={busy ? styles.webNotice : styles.webError}><Ionicons name={busy ? "information-circle-outline" : "alert-circle-outline"} size={17} color={busy ? "#0D8273" : "#B42318"}/><Text style={busy ? styles.webNoticeText : styles.webErrorText}>{notice}</Text></View>}
         </View>}
 
         {isVolunteer && (
@@ -3147,7 +3147,7 @@ export default function CommunityEventsScreen() {
           )}
         </View>
 
-        {!!notice && (
+        {section !== "propose" && !!notice && (
           <View style={styles.notice}>
             <Ionicons
               name="information-circle-outline"
@@ -3863,7 +3863,6 @@ export default function CommunityEventsScreen() {
                 publishes an event automatically.
               </Text>
 
-              {!!notice && <View style={busy ? styles.webNotice : styles.webError}><Ionicons name={busy ? "information-circle-outline" : "alert-circle-outline"} size={17} color={busy ? "#0D8273" : "#B42318"}/><Text style={busy ? styles.webNoticeText : styles.webErrorText}>{notice}</Text></View>}
               <Pressable
                 disabled={busy}
                 style={[
@@ -3892,6 +3891,7 @@ export default function CommunityEventsScreen() {
                   color="white"
                 />
               </Pressable>
+              {!!notice && <View style={busy ? styles.webNotice : styles.webError}><Ionicons name={busy ? "information-circle-outline" : "alert-circle-outline"} size={17} color={busy ? "#0D8273" : "#B42318"}/><Text style={busy ? styles.webNoticeText : styles.webErrorText}>{notice}</Text></View>}
             </View>
           )}
 
