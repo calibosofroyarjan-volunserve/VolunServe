@@ -726,3 +726,103 @@ test("bulk test OFF by default, even for approved staging Admin",async()=>{
     assert.equal(db.list("responseAssignments/").length,0);
   });
 });
+
+
+test("explicit Admin validation automatically offers to EVERY eligible staging 002 Volunteer only with both safe flags",async()=>{
+  const db=new FakeDb();seedAccounts(db);
+  for(const uid of ["qaSecond","qaThird"]){
+    db.seed("users/"+uid,{
+      role:"volunteer",status:"approved",volunteerAccess:true,
+      volunteerStatus:"approved",identityVerified:true,
+      barangay:"Bagong Buhay I",skills:["First Aid"],fullName:"Staging "+uid
+    });
+    db.seed("volunteerApplications/"+uid,{uid,status:"approved",skills:["First Aid"]});
+  }
+  const previous={
+    title:"TEST ONLY - Dummy Emergency",status:"assigned",
+    verificationStatus:"validated",reporterUid:RESIDENT,
+    activeVolunteerSupportAssignmentId:FIXED_ID+"_old",
+    autoVolunteerDispatch:{state:"accepted"}
+  };
+  db.seed("disasterCases/"+FIXED_ID,previous);
+  await serve(db,async({req})=>{
+    const url="/api/admin/emergency-auto/e2e-002/";
+    assert.equal((await req(url+"create",{
+      method:"POST",who:ADMIN,body:{caseId:FRESH_ID,confirmFictionalTest:true}
+    })).body.status,"created");
+    const attempted=await req(url+"validate",{
+      method:"POST",who:RESIDENT,body:{caseId:FRESH_ID,confirmFictionalTest:true}});
+    assert.equal(attempted.code,403);
+    assert.equal(db.list("responseAssignments/").length,0);
+    const val=await req(url+"validate",{
+      method:"POST",who:ADMIN,body:{caseId:FRESH_ID,confirmFictionalTest:true}});
+    assert.equal(val.code,200);
+    assert.equal(val.body.status,"validated");
+    assert.deepEqual(val.body.automaticOffers,{
+      status:"offered",wave:1,offered:3,
+      expiresAtMs:val.body.automaticOffers.expiresAtMs,fullWaveAtomic:true
+    });
+    assert.equal(db.list("responseAssignments/").length,3);
+    assert.equal(db.list("notifications/auto_response_"+FRESH_ID+"_").length,3);
+    assert.equal(db.list("adminActivityLogs/auto_offer_"+FRESH_ID+"_").length,3);
+    assert.deepEqual(db.get("disasterCases/"+FIXED_ID),previous);
+    const repeat=await req(url+"validate",{
+      method:"POST",who:ADMIN,body:{caseId:FRESH_ID,confirmFictionalTest:true}});
+    assert.equal(repeat.code,409); // Existing assignment cannot be revalidated.
+    assert.equal(db.list("responseAssignments/").length,3);
+    const tasks=await req("/api/admin/emergency-auto/e2e-002/bulk-status",{who:ADMIN});
+    assert.equal(tasks.body.offered,3);
+    for(const who of [VOL,"qaSecond","qaThird"]){
+      const item=await req("/api/staging/volunteer/e2e-002/bulk-task",{who});
+      assert.equal(item.body.status,"offered");
+    }
+  },{
+    VOLUNSERVE_STAGING_E2E_002_BULK:"enabled",
+    VOLUNSERVE_STAGING_E2E_002_AUTO_AFTER_VALIDATION:"enabled"
+  });
+});
+test("auto-on-validation is OFF by default even when bulk status test feature is enabled",async()=>{
+  const db=new FakeDb();seedAccounts(db);
+  db.seed("disasterCases/"+FIXED_ID,{
+    title:"TEST ONLY - Dummy Emergency",status:"assigned",
+    verificationStatus:"validated",reporterUid:RESIDENT
+  });
+  await serve(db,async({req})=>{
+    const url="/api/admin/emergency-auto/e2e-002/";
+    await req(url+"create",{method:"POST",who:ADMIN,
+      body:{caseId:FRESH_ID,confirmFictionalTest:true}});
+    const response=await req(url+"validate",{method:"POST",who:ADMIN,
+      body:{caseId:FRESH_ID,confirmFictionalTest:true}});
+    assert.equal(response.body.status,"validated");
+    assert.equal(response.body.automaticOffers.status,"disabled");
+    assert.equal(db.list("responseAssignments/").length,0);
+  },{VOLUNSERVE_STAGING_E2E_002_BULK:"enabled"});
+});
+
+
+test("validated fictional report remains validated, but reports blocked automatic matching when every Volunteer is busy",async()=>{
+  const db=new FakeDb();seedAccounts(db);
+  db.seed("disasterCases/"+FIXED_ID,{
+    title:"TEST ONLY - Dummy Emergency",status:"assigned",
+    verificationStatus:"validated",reporterUid:RESIDENT
+  });
+  db.seed("responseAssignments/OTHER_BUSY_CASE_"+VOL,{
+    caseId:"OTHER_BUSY_CASE",volunteerId:VOL,status:"accepted"
+  });
+  await serve(db,async({req})=>{
+    const url="/api/admin/emergency-auto/e2e-002/";
+    assert.equal((await req(url+"create",{method:"POST",who:ADMIN,
+      body:{caseId:FRESH_ID,confirmFictionalTest:true}})).body.status,"created");
+    const result=await req(url+"validate",{method:"POST",who:ADMIN,
+      body:{caseId:FRESH_ID,confirmFictionalTest:true}});
+    assert.equal(result.code,200);
+    assert.equal(result.body.status,"validated");
+    assert.equal(result.body.automaticOffers.status,"blocked");
+    assert.equal(db.get("disasterCases/"+FRESH_ID).status,"validated");
+    assert.equal(db.get("emergencyAutoDispatchBatches/"+FRESH_ID),undefined);
+    assert.equal(db.list("responseAssignments/"+FRESH_ID+"_").length,0);
+  },{
+    VOLUNSERVE_STAGING_E2E_002_BULK:"enabled",
+    VOLUNSERVE_STAGING_E2E_002_AUTO_AFTER_VALIDATION:"enabled"
+  });
+});

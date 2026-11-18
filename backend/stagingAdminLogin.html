@@ -158,8 +158,18 @@ async function do002(action,confirmation){
       })
     });
     await refresh002();
+    const batch=result.automaticOffers;
+    const autoInfo=action==="validate" ?
+      batch?.status==="offered" ?
+        "\nAUTO-MATCH SUCCESS: "+String(batch.offered)+" separate eligible Volunteer offers sent in Wave "+String(batch.wave)+
+        ". Every Volunteer must Accept or Decline independently." :
+      batch?.status==="blocked" ?
+        "\nVALIDATION SAVED, BUT AUTOMATIC MATCHING BLOCKED: "+
+        String(batch.reason||"review_needed")+". No automatic assignments claimed." :
+        "\nAutomatic offers are disabled in this isolated staging test. No offers sent." :
+      "";
     show002("Staging E2E 002 "+action+": "+String(result.status||result.action||"completed")+
-      "\nNo production records changed. "+
+      autoInfo+"\nNo production records changed. "+
       (action==="offer"?"Open the staging Volunteer page and select E2E 002 within 3 minutes.":""));
   }catch(error){show002("Action blocked: "+String(error?.message||"unknown").slice(0,160));
     try{await refresh002();}catch{}}

@@ -34,6 +34,11 @@ function makeApp({authClient = auth, firestore = db, worker, env = process.env} 
   const app = express();
   // OFF unless specifically enabled for the fixed, fictional E2E 002.
   const bulk002Enabled=env.VOLUNSERVE_STAGING_E2E_002_BULK==="enabled";
+  // Isolated opt-in: automatically fan out to ALL eligible volunteers only
+  // after the approved Admin validates the fixed fictional case 002.
+  // This is disabled by default and cannot dispatch a real emergency.
+  const bulk002OnValidation=bulk002Enabled &&
+    env.VOLUNSERVE_STAGING_E2E_002_AUTO_AFTER_VALIDATION==="enabled";
   const matcher = worker || createRenderAutoDispatchWorker({db: firestore, env});
   // One-time, read-only connectivity probe on isolated staging only.
   // Never reads user data, creates accounts, changes Firestore or enables offers.
@@ -486,9 +491,26 @@ function makeApp({authClient = auth, firestore = db, worker, env = process.env} 
         const result=await (action==="create"?
           createFreshTestCase(firestore,response.locals.stagingAdminUid):
           validateFreshTestCase(firestore,response.locals.stagingAdminUid));
+        // A successful approved Admin validation is the ONLY trigger.
+        // Retrying "already_validated" does not silently send new offers.
+        // Never hide a successful validation if offer creation fails: report
+        // the failed matching separately so the Admin knows it needs review.
+        let automaticOffers={status:"disabled"};
+        if(action==="validate" && result.status==="validated" &&
+          bulk002OnValidation && stagingServiceAccountMatches){
+          try{
+            automaticOffers=await startBatchOffers(
+              firestore,response.locals.stagingAdminUid);
+          }catch(error){
+            console.warn("Isolated 002 automatic fanout needs review",
+              String(error?.code||"unknown").slice(0,70));
+            automaticOffers={status:"blocked",reason:"staging_batch_offer_unavailable"};
+          }
+        }
         response.set("Cache-Control","no-store");
         response.status(result.status==="blocked"?409:200)
-          .json({ok:result.status!=="blocked",...result});
+          .json({ok:result.status!=="blocked",...result,
+            ...(action==="validate"?{automaticOffers}: {})});
       }catch(error){
         console.warn("Fresh staging 002 setup unavailable",
           String(error?.code||"unknown").slice(0,65));
