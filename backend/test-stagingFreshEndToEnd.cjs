@@ -540,3 +540,44 @@ test("staging 002 protection: arbitrary case IDs and lookalike reports never sen
     assert.equal(db.list("responseAssignments/").length,0);
   });
 });
+
+
+test("isolated bulk preview returns all approved same-wave Volunteer counts, no Firestore writes",async()=>{
+  const db=new FakeDb();
+  seedAccounts(db);
+  for(const uid of ["qaSecond","qaThird"]){
+    db.seed("users/"+uid,{role:"volunteer",status:"approved",
+      volunteerAccess:true,volunteerStatus:"approved",
+      identityVerified:true,barangay:"Bagong Buhay I",
+      skills:["First Aid"]});
+    db.seed("volunteerApplications/"+uid,{
+      uid,status:"approved",skills:["First Aid"]
+    });
+  }
+  const fixture={
+    title:"TEST ONLY - Fresh Volunteer E2E 002",
+    testOnly:true,testCategory:"staging_synthetic_volunteer_e2e_002",
+    source:"staging_synthetic_e2e",
+    status:"validated",verificationStatus:"validated",
+    validatedBy:ADMIN,reporterUid:RESIDENT,dispatchBlocked:false,
+    incidentBarangay:"Bagong Buhay I",requiredSkills:["First Aid"]
+  };
+  db.seed("disasterCases/"+FRESH_ID,fixture);
+  await serve(db,async({req})=>{
+    const uri="/api/admin/emergency-auto/e2e-002/bulk-preview";
+    const unauthorized=await req(uri);
+    assert.equal(unauthorized.code,401);
+    const wrongRole=await req(uri,{who:RESIDENT});
+    assert.equal(wrongRole.code,403);
+    const before=JSON.stringify([...db.docs.entries()]);
+    const preview=await req(uri,{who:ADMIN});
+    assert.equal(preview.code,200);
+    assert.equal(preview.body.status,"offer_all");
+    assert.equal(preview.body.wave,1);
+    assert.equal(preview.body.eligibleInSelectedWave,3);
+    assert.equal(preview.body.willSendOffers,false);
+    assert.equal(JSON.stringify([...db.docs.entries()]),before);
+    assert.equal(db.list("responseAssignments/").length,0);
+    assert.equal(db.list("notifications/").length,0);
+  });
+});
