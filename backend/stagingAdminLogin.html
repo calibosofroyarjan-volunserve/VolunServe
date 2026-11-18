@@ -304,7 +304,11 @@ el002("wave-stop-002").addEventListener("click",async()=>{
       "No later wave observed: "+(d.noLaterWaveObserved?"YES":"NO")+"\n"+
       "After remaining offers expired: "+(d.observedAfterOtherOffersExpired?"YES":"NO")+"\n"+
       "Automatic timer configured: "+(d.automaticWaveTimerConfigured?"YES":"NO")+"\n"+
-      "Actual timer execution: NOT PROVEN BY THIS READ-ONLY CHECK\n"+
+      "Scheduler executed in current process: "+(d.timerExecutionObserved?"YES":"NO")+"\n"+
+      "Scheduled runs recorded: "+String(d.schedulerRunCount||0)+"\n"+
+      "Last scheduled result: "+String(d.schedulerLastResult||"not_run")+"\n"+
+      "Last completed UTC: "+String(d.schedulerLastCompletedAtUtc||"not yet")+"\n"+
+      "Accepted wave-stop observed after a scheduler run: "+(d.schedulerStopObservedThisProcess?"YES":"NO")+"\n"+
       "No resets, reissues or Firebase writes.");
   }catch(error){show002("Wave-stop verification blocked: "+String(error?.message||"unknown"));}
 });
