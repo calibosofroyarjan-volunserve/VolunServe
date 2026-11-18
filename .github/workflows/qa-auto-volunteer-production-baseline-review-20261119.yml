@@ -1,0 +1,47 @@
+name: Production Automatic Volunteer readiness BASELINE REVIEW ONLY — NO DEPLOY
+on:
+  pull_request:
+    branches:
+      - backend-live-protected
+    paths:
+      - "docs/emergency-volunteer/PRODUCTION_READINESS_REVIEW_20261119.md"
+      - "scripts/guard-auto-volunteer-production-baseline-20261119.cjs"
+      - ".github/workflows/qa-auto-volunteer-production-baseline-review-20261119.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  no-deploy-source-preservation-only:
+    if: github.repository == 'calibosofroyarjan-volunserve/VolunServe'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: false
+          # Keep checkout default credential lifecycle; persist-credentials:false
+          # invokes broken legacy recursive submodule cleanup in this repository.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Validate review guard source and existing production baseline
+        run: |
+          node --check scripts/guard-auto-volunteer-production-baseline-20261119.cjs
+          node scripts/guard-auto-volunteer-production-baseline-20261119.cjs
+      - name: Assert PR is review-only with NO LIVE application changes
+        if: github.event_name == 'pull_request'
+        shell: bash
+        env:
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          git diff --name-only "$PR_BASE" "$PR_HEAD" > /tmp/auto-volunteer-review-changes.txt
+          UNEXPECTED="$(grep -Ev '^(docs/emergency-volunteer/PRODUCTION_READINESS_REVIEW_20261119\.md|scripts/guard-auto-volunteer-production-baseline-20261119\.cjs|\.github/workflows/qa-auto-volunteer-production-baseline-review-20261119\.yml)$' /tmp/auto-volunteer-review-changes.txt || true)"
+          test -z "$UNEXPECTED" || { echo "BLOCKED: Unreviewed production changes"; printf '%s\n' "$UNEXPECTED"; exit 1; }
+          echo "PASS: this PR has review documentation / QA guard only; no runtime changes."
+      - name: Explicit NO DEPLOY evidence
+        run: |
+          echo "No Firebase Admin credentials, no staging synthetic accounts, no Firebase CLI, no Render deploy."
+          echo "This CI is a baseline preservation smoke check, NOT a release authorization."
