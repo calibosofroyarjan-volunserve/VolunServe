@@ -593,6 +593,7 @@ function ProposalNeedsAndMedia({
   onCredentialPick,
   credentialPreview,
   credentialError,
+  showWordErrors = false,
 }: {
   form: ProposalForm;
   update: <K extends keyof ProposalForm>(field: K, value: ProposalForm[K]) => void;
@@ -600,6 +601,7 @@ function ProposalNeedsAndMedia({
   onCredentialPick: () => void;
   credentialPreview: string;
   credentialError: string;
+  showWordErrors?: boolean;
 }) {
   const roles = [...new Set([...suggestedRoles[form.category], ...form.requiredRoles])];
   const skills = [...new Set([...suggestedSkills[form.category], ...form.requiredSkills])];
@@ -619,13 +621,15 @@ function ProposalNeedsAndMedia({
       </View>
       <Text style={styles.fieldLabel}>What will volunteers actually do? *</Text>
       <TextInput
-        style={[styles.input, styles.residentMultiline]}
+        nativeID="community-proposal-volunteerTasks"
+        style={[styles.input, styles.residentMultiline, (showWordErrors || !!form.volunteerTasks.trim()) && !!proposalWordError("volunteerTasks",form.volunteerTasks) && styles.ruiWordInputError]}
         placeholder="e.g. Plant seedlings, prepare soil, distribute water and monitor planting areas..."
         placeholderTextColor="#91A2AF"
         multiline textAlignVertical="top" maxLength={1200}
         value={form.volunteerTasks}
         onChangeText={(value) => update("volunteerTasks", value)}
       />
+      <ProposalWordFeedback field="volunteerTasks" value={form.volunteerTasks} showError={showWordErrors || !!form.volunteerTasks.trim()}/>
       <Text style={styles.fieldLabel}>Needed volunteer roles / occupations *</Text>
       <Text style={styles.residentHelp}>Choose one or more. Suggestions change with the event category.</Text>
       <View style={styles.residentChipRow}>
@@ -645,13 +649,15 @@ function ProposalNeedsAndMedia({
         })}
       </View>
       <TextInput
-        style={[styles.input, styles.residentSmallInput]}
+        nativeID="community-proposal-otherRole"
+        style={[styles.input, styles.residentSmallInput, (showWordErrors || !!form.otherRole.trim()) && !!proposalWordError("otherRole",form.otherRole) && styles.ruiWordInputError]}
         placeholder="Another role or occupation? (optional)"
         placeholderTextColor="#91A2AF"
         value={form.otherRole}
         onChangeText={(value) => update("otherRole", value)}
         maxLength={80}
       />
+      <ProposalWordFeedback field="otherRole" value={form.otherRole} showError={showWordErrors || !!form.otherRole.trim()}/>
       <Text style={styles.fieldLabel}>Helpful skills (optional)</Text>
       <View style={styles.residentChipRow}>
         {skills.map((skill) => {
@@ -680,10 +686,11 @@ function ProposalNeedsAndMedia({
       )}
       <CredentialPhotoField preview={credentialPreview} onPick={onCredentialPick} error={credentialError}/>
       <Text style={styles.fieldLabel}>What volunteers should bring (optional)</Text>
-      <TextInput style={[styles.input, styles.residentSmallInput]}
+      <TextInput nativeID="community-proposal-whatToBring" style={[styles.input, styles.residentSmallInput, (showWordErrors || !!form.whatToBring.trim()) && !!proposalWordError("whatToBring",form.whatToBring) && styles.ruiWordInputError]}
         placeholder="e.g. Gloves, reusable water bottle, closed shoes"
         placeholderTextColor="#91A2AF" value={form.whatToBring}
         onChangeText={(value) => update("whatToBring", value)} maxLength={500} />
+      <ProposalWordFeedback field="whatToBring" value={form.whatToBring} showError={showWordErrors || !!form.whatToBring.trim()}/>
 
       <View style={styles.residentSectionHeading}>
         <View style={styles.residentSectionIcon}><Ionicons name="images-outline" size={20} color="#047E73" /></View>
@@ -3436,7 +3443,8 @@ export default function CommunityEventsScreen() {
               <Text style={styles.fieldLabel}>Event title *</Text>
 
               <TextInput
-                style={styles.input}
+                nativeID="community-proposal-title"
+                style={[styles.input,(proposalAttempted || !!form.title.trim()) && !!proposalWordError("title",form.title) && styles.ruiWordInputError]}
                 placeholder="e.g. Barangay Clean-up Drive"
                 placeholderTextColor="#9AABB4"
                 value={form.title}
@@ -3448,6 +3456,7 @@ export default function CommunityEventsScreen() {
                 }
                 maxLength={100}
               />
+              <ProposalWordFeedback field="title" value={form.title} showError={proposalAttempted || !!form.title.trim()}/>
 
               {/* Category */}
               <Text
@@ -3829,9 +3838,11 @@ export default function CommunityEventsScreen() {
               </Text>
 
               <TextInput
+                nativeID="community-proposal-description"
                 style={[
                   styles.input,
                   styles.textarea,
+                  (proposalAttempted || !!form.description.trim()) && !!proposalWordError("description",form.description) && styles.ruiWordInputError,
                 ]}
                 placeholder="Describe the activity, purpose, and what volunteers will do..."
                 placeholderTextColor="#9AABB4"
@@ -3848,9 +3859,10 @@ export default function CommunityEventsScreen() {
                 }
                 maxLength={1500}
               />
+              <ProposalWordFeedback field="description" value={form.description} showError={proposalAttempted || !!form.description.trim()}/>
 
               <ProposalNeedsAndMedia form={form} update={setValue} onPhotoChange={updateProposalPhoto}
-                onCredentialPick={()=>void pickCredentialPhoto()} credentialPreview={credentialPreview} credentialError={credentialError}/>
+                onCredentialPick={()=>void pickCredentialPhoto()} credentialPreview={credentialPreview} credentialError={credentialError} showWordErrors={proposalAttempted}/>
 
               <View style={styles.residentSubmissionFooter}>
                 <View style={styles.residentSectionIcon}><Ionicons name="shield-checkmark-outline" size={20} color="#047E73" /></View>
@@ -3869,6 +3881,7 @@ export default function CommunityEventsScreen() {
                 publishes an event automatically.
               </Text>
 
+              {!!notice && <View style={styles.webError}><Ionicons name="alert-circle-outline" size={17} color="#B42318"/><Text style={styles.webErrorText}>{notice}</Text></View>}
               <Pressable
                 disabled={busy}
                 style={[
