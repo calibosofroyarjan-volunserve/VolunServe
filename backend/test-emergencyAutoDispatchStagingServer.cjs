@@ -685,3 +685,151 @@ test("already assigned fictional case is not misclassified as invalid or re-offe
   assert.equal(noMarker.status,"blocked");
   assert.equal(noMarker.reason,"invalid_test_case_fields");
 });
+
+
+test("Admin-only late staging reconciliation creates accurate evidence, never backdates acceptance",async()=>{
+  const {reconcileAcceptedStagingSupport,ORIGIN}
+    =require("./stagingAcceptedSupportReconciliation");
+  const {inspectStagingAssignmentConsistency}=require("./stagingVolunteerTask");
+  const caseId="STAGING_TEST_001",uid="fakeVolunteer";
+  const aid=caseId+"_"+uid,adminUid="fakeAdmin";
+  class FakeStore {
+    constructor(){this.data=new Map();this.writes=0;}
+    collection(name){return {doc:id=>({path:name+"/"+id,get:async()=>this.snap(name+"/"+id)})};}
+    snap(key){const value=this.data.get(key);return {exists:value!==undefined,data:()=>value};}
+    seed(key,value){this.data.set(key,value);}
+    async runTransaction(callback){
+      const mutations=[],tx={
+        get:ref=>ref.get(),
+        create:(ref,data)=>mutations.push(["create",ref.path,data])
+      };
+      const result=await callback(tx);
+      for(const [mode,path,data] of mutations){
+        assert.equal(mode,"create");
+        assert.equal(this.data.has(path),false,"must never overwrite original records");
+        this.data.set(path,data);this.writes++;
+      }
+      return result;
+    }
+  }
+  function fixture(){
+    const db=new FakeStore();
+    db.seed("disasterCases/"+caseId,{title:"TEST ONLY - Dummy Emergency",
+      status:"assigned",verificationStatus:"validated",
+      validatedBy:adminUid,reporterUid:"fakeResident",
+      activeVolunteerSupportAssignmentId:aid,
+      autoVolunteerDispatch:{state:"accepted"}});
+    db.seed("emergencyAutoDispatch/"+caseId,{
+      status:"accepted",volunteerId:uid,assignmentId:aid,wave:1});
+    db.seed("responseAssignments/"+aid,{
+      status:"accepted",volunteerId:uid,caseId,createdBy:"automatic_matching_engine"});
+    db.seed("responderLocks/"+uid,{assignmentId:aid,responderUid:uid,caseId});
+    db.seed("autoVolunteerReservations/"+uid,{assignmentId:aid,caseId,uid});
+    db.seed("notifications/auto_response_"+aid,{userId:uid,caseId,assignmentId:aid});
+    return db;
+  }
+  const db=fixture();
+  const before=await inspectStagingAssignmentConsistency(db);
+  assert.equal(before.status,"accepted");
+  assert.equal(before.fullAcceptanceVerified,false);
+  assert.equal(before.acceptedResidentNotificationPresent,false);
+  assert.equal(before.adminAuditPresent,false);
+  const first=await reconcileAcceptedStagingSupport(db,adminUid);
+  assert.deepEqual(first,{status:"reconciled",createdNotification:true,
+    createdAudit:true,historicalOriginalAcceptanceVerified:false});
+  assert.equal(db.writes,2);
+  const n=db.data.get("notifications/auto_test_accepted_"+aid);
+  const a=db.data.get("adminActivityLogs/auto_test_decision_"+aid);
+  assert.equal(n.userId,"fakeResident");
+  assert.equal(n.recordOrigin,ORIGIN);
+  assert.equal(n.isLateNotification,true);
+  assert.match(n.message,/created later/);
+  assert.equal(a.recordOrigin,ORIGIN);
+  assert.equal(a.originalAcceptanceTimeUnknown,true);
+  assert.match(a.action,/Reconciled/);
+  assert.ok(a.timestamp,"Only server-supplied CURRENT reconciliation timestamp");
+  const check=await inspectStagingAssignmentConsistency(db);
+  assert.equal(check.acceptedResidentNotificationPresent,true);
+  assert.equal(check.adminAuditPresent,true);
+  assert.equal(check.supportRecordsVerified,true);
+  assert.equal(check.reconciliationRecorded,true);
+  assert.equal(check.historicalOriginalAcceptanceVerified,false);
+  assert.equal(check.fullAcceptanceVerified,false);
+  const again=await reconcileAcceptedStagingSupport(db,adminUid);
+  assert.equal(again.status,"already_present");
+  assert.equal(again.createdAudit,false);
+  assert.equal(again.createdNotification,false);
+  assert.equal(db.writes,2,"idempotent: no duplicate notifications or audit");
+
+  for(const mutation of [
+    store=>store.data.get("disasterCases/"+caseId).title="Actual emergency report",
+    store=>store.data.get("responseAssignments/"+aid).status="declined",
+    store=>store.data.get("emergencyAutoDispatch/"+caseId).status="waiting",
+    store=>store.data.get("responderLocks/"+uid).assignmentId="other_task",
+    store=>store.data.get("autoVolunteerReservations/"+uid).assignmentId="other_task",
+    store=>store.data.delete("notifications/auto_response_"+aid),
+    store=>store.data.get("disasterCases/"+caseId).reporterUid=uid
+  ]){
+    const unsafe=fixture();
+    mutation(unsafe);
+    const outcome=await reconcileAcceptedStagingSupport(unsafe,adminUid);
+    assert.equal(outcome.status,"blocked");
+    assert.equal(unsafe.writes,0);
+  }
+  const partial=fixture();
+  partial.seed("notifications/auto_test_accepted_"+aid,{
+    userId:"fakeResident",caseId,assignmentId:aid,recordOrigin:ORIGIN});
+  const one=await reconcileAcceptedStagingSupport(partial,adminUid);
+  assert.equal(one.createdNotification,false);
+  assert.equal(one.createdAudit,true);
+  assert.equal(partial.writes,1);
+  const tampered=fixture();
+  tampered.seed("notifications/auto_test_accepted_"+aid,{
+    userId:"differentResident",caseId,assignmentId:aid});
+  assert.equal((await reconcileAcceptedStagingSupport(tampered,adminUid)).status,"blocked");
+  assert.equal(tampered.writes,0);
+});
+
+test("staging reconciliation endpoint denies anonymous, wrong case and missing explicit confirmation",async()=>{
+  const tenant="volunserve-volunteer-staging";
+  let writes=0;
+  const firestore={
+    collection(name){
+      if(name==="users")return {doc:()=>({get:async()=>({
+        exists:true,data:()=>({role:"admin",status:"approved"})})})};
+      if(name==="systemSettings")return {doc:()=>({get:async()=>({exists:true})})};
+      throw Error("Unexpected write/data collection "+name);
+    },
+    runTransaction:async()=>{writes++;throw Error("No writes expected");}
+  };
+  const app=makeApp({
+    authClient:{verifyIdToken:async()=>({uid:"testAdmin"})},firestore,
+    worker:{config:{onDemandReady:true,ready:false}},
+    env:{VOLUNSERVE_AUTO_VOLUNTEER_STAGING_PROJECT_ID:tenant,
+      FIREBASE_SERVICE_ACCOUNT_JSON:JSON.stringify({project_id:tenant})},
+  });
+  const server=app.listen(0,"127.0.0.1");
+  try{
+    await new Promise((resolve,reject)=>{
+      if(server.listening)resolve();
+      else {server.once("listening",resolve);server.once("error",reject);}
+    });
+    const endpoint="http://127.0.0.1:"+server.address().port+
+      "/api/admin/emergency-auto/reconcile-accepted-test";
+    let response=await fetch(endpoint,{method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({caseId:"STAGING_TEST_001",confirmLateReconciliation:true})});
+    assert.equal(response.status,401);
+    const headers={"Content-Type":"application/json",Authorization:"Bearer fake-admin"};
+    for(const data of [
+      {caseId:"DIFFERENT_CASE",confirmLateReconciliation:true},
+      {caseId:"STAGING_TEST_001",confirmLateReconciliation:false},
+      {caseId:"STAGING_TEST_001"}
+    ]){
+      response=await fetch(endpoint,{method:"POST",
+        headers,body:JSON.stringify(data)});
+      assert.equal(response.status,400);
+    }
+    assert.equal(writes,0);
+  }finally{await new Promise(resolve=>server.close(resolve));}
+});
