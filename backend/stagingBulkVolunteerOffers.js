@@ -4,7 +4,8 @@
  * Never imported by production. No background worker, no real emergencies.
  * Offers are atomic for the selected wave (up to 40 users per transaction).
  */
-const {FieldValue,Timestamp}=require("./firebaseAdmin");
+const {FieldValue}=require("./firebaseAdmin");
+const {Timestamp}=require("firebase-admin/firestore");
 const {chooseAllEligibleWave}=require("../functions/emergencyAllEligibleWavePlanner");
 const {validateVolunteer}=require("../functions/emergencyVolunteerWavePlanner");
 const known=require("../functions/sjdmBarangays.json");
