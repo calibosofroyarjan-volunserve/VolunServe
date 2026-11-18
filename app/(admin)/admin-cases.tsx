@@ -587,6 +587,10 @@ export default function AdminCases() {
   );
   const [filterStatus, setFilterStatus] = useState<CaseStatus | "all">("all");
   const [filterSeverity, setFilterSeverity] = useState<Severity | "all">("all");
+  // Quick Admin review queue is independent from the operational case status.
+  const [reviewFilter, setReviewFilter] = useState<
+    "all" | "pending" | "validated" | "needs_more_evidence" | "rejected"
+  >("all");
   const [filtersExpanded, setFiltersExpanded] = useState(false);
   const [caseSearch, setCaseSearch] = useState("");
   const [recordPage, setRecordPage] = useState(1);
@@ -603,6 +607,7 @@ export default function AdminCases() {
 
   const [notes, setNotes] = useState<Record<string, string>>({});
   const [reviewReasons, setReviewReasons] = useState<Record<string, string>>({});
+  const [reviewingCaseId, setReviewingCaseId] = useState("");
   const [assignmentCaseId, setAssignmentCaseId] = useState("");
   const [skillFilter, setSkillFilter] = useState("");
   const [availabilityFilter, setAvailabilityFilter] = useState("");
@@ -1069,6 +1074,15 @@ export default function AdminCases() {
       list = list.filter((item) => item.severity === filterSeverity);
     }
 
+    if (reviewFilter !== "all") {
+      list = list.filter((item) => {
+        const verification = String(item.verificationStatus || "pending_verification");
+        return reviewFilter === "pending"
+          ? verification === "pending_verification"
+          : verification === reviewFilter;
+      });
+    }
+
     list.sort((a, b) => {
       const severityDifference =
         (severityRank[b.severity] || 0) - (severityRank[a.severity] || 0);
@@ -1082,7 +1096,19 @@ export default function AdminCases() {
     });
 
     return list;
-  }, [cases, filterStatus, filterSeverity]);
+  }, [cases, filterStatus, filterSeverity, reviewFilter]);
+
+  const reviewCounts = useMemo(() => {
+    const counts = { all: cases.length, pending: 0, validated: 0, needs_more_evidence: 0, rejected: 0 };
+    cases.forEach((item) => {
+      const state = String(item.verificationStatus || "pending_verification");
+      if (state === "validated") counts.validated += 1;
+      else if (state === "needs_more_evidence") counts.needs_more_evidence += 1;
+      else if (state === "rejected") counts.rejected += 1;
+      else counts.pending += 1;
+    });
+    return counts;
+  }, [cases]);
 
   const visibleCases = useMemo(() => {
     const term = caseSearch.trim().toLowerCase();
@@ -1485,10 +1511,12 @@ export default function AdminCases() {
       return;
     }
 
+    if (reviewingCaseId) return;
     const caseRef = doc(db, "disasterCases", incident.id);
     const notificationRef = doc(collection(db, "notifications"));
     const activityLogRef = doc(collection(db, "adminActivityLogs"));
 
+    setReviewingCaseId(incident.id);
     try {
       await runTransaction(db, async (transaction) => {
         const caseSnapshot = await transaction.get(caseRef);
@@ -1502,13 +1530,28 @@ export default function AdminCases() {
           current.verificationStatus || "pending_verification"
         );
 
+        // Re-check live Firestore state INSIDE the transaction to prevent
+        // duplicate Admin decisions or resetting an already assigned report.
+        if (currentVerification === "validated" || currentVerification === "rejected") {
+          throw new Error("This report has already received a final Admin decision. Refresh the case.");
+        }
         if (
-          currentVerification === "validated" &&
-          action !== "validate"
+          ["assigned", "in_progress", "resolved", "closed"].includes(String(current.status || "")) ||
+          !!current.activeVolunteerSupportAssignmentId ||
+          !!current.activeResponderAssignmentId ||
+          !!current.activeLguResponderUid ||
+          !!current.autoVolunteerDispatch?.state
         ) {
-          throw new Error(
-            "This request is already validated. Do not reject it after dispatch preparation has started."
-          );
+          throw new Error("Volunteer or response coordination already started. Do not reset the case during review.");
+        }
+        if (
+          action === "validate" &&
+          current.source === "resident_emergency_assistance" &&
+          !(Array.isArray(current.attachments) && current.attachments.some(
+            (file: any) => String(file?.type || "").toLowerCase().includes("image")
+          ))
+        ) {
+          throw new Error("Photo evidence is missing from the latest report. Request more evidence first.");
         }
 
         const basePatch: any = {
@@ -1563,9 +1606,9 @@ export default function AdminCases() {
 
         transaction.update(caseRef, basePatch);
 
-        if (incident.reporterUid) {
+        if (current.reporterUid) {
           transaction.set(notificationRef, {
-            userId: incident.reporterUid,
+            userId: current.reporterUid,
             audience: "resident",
             type: "emergency_verification",
             caseId: incident.id,
@@ -1579,7 +1622,7 @@ export default function AdminCases() {
         transaction.set(activityLogRef, {
           action: logAction,
           caseId: incident.id,
-          residentUid: incident.reporterUid || "",
+          residentUid: current.reporterUid || "",
           performedBy: adminUser.uid,
           reason: action === "validate" ? "" : reason,
           timestamp: serverTimestamp(),
@@ -1615,6 +1658,8 @@ export default function AdminCases() {
           ? error.message
           : "Unable to update verification status."
       );
+    } finally {
+      setReviewingCaseId("");
     }
   };
 
