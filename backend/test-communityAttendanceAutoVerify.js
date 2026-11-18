@@ -78,6 +78,23 @@ test("verified records are idempotent",()=>{
   f.attendance.attendanceVerified=true;
   assert.equal(automaticAttendanceDecision(f),"already_verified");
 });
+test("auto verification defaults to OFF unless explicitly opted in",async()=>{
+  const original=process.env.VOLUNSERVE_ATTENDANCE_AUTO_VERIFY_ENABLED;
+  delete process.env.VOLUNSERVE_ATTENDANCE_AUTO_VERIFY_ENABLED;
+  try {
+    let reads=0;
+    const result=await verifyCommunityEventAttendance({
+      db:{runTransaction(){reads++;throw Error("must not read or write");}},
+      FieldValue:{},eventId:"eventA",volunteerId:"volA",nowMs:now,
+    });
+    assert.equal(result.status,"needs_admin_review");
+    assert.equal(result.reason,"auto_verification_disabled");
+    assert.equal(reads,0);
+  } finally {
+    if (original === undefined) delete process.env.VOLUNSERVE_ATTENDANCE_AUTO_VERIFY_ENABLED;
+    else process.env.VOLUNSERVE_ATTENDANCE_AUTO_VERIFY_ENABLED=original;
+  }
+});
 test("server transaction updates verification fields only and does not modify timestamps or event",async()=>{
   const f=fixture();
   const records={
@@ -97,7 +114,7 @@ test("server transaction updates verification fields only and does not modify ti
   };
   const FieldValue={serverTimestamp:()=>({serverTimestamp:true})};
   const result=await verifyCommunityEventAttendance({
-    db,FieldValue,eventId:"eventA",volunteerId:"volA",nowMs:now,
+    db,FieldValue,eventId:"eventA",volunteerId:"volA",nowMs:now,enabled:true,
   });
   assert.equal(result.status,"verified");
   assert.equal(updates.length,1);
