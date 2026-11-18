@@ -659,3 +659,29 @@ test("only approved staging Admin may repair the fixed fictional case status",as
     FIREBASE_SERVICE_ACCOUNT_JSON:JSON.stringify({project_id:tenant})},false);
   assert.equal(writes,0);
 });
+
+
+test("already assigned fictional case is not misclassified as invalid or re-offerable",async()=>{
+  const {inspectStagingTestCase}=require("./emergencyStagingReadiness");
+  const base={title:"TEST ONLY - Dummy Emergency",status:"assigned",
+    verificationStatus:"validated",dispatchBlocked:false,
+    requiredSkills:["First Aid"],validatedBy:"dummy-admin",
+    reporterUid:"dummy-reporter",
+    activeVolunteerSupportAssignmentId:"STAGING_TEST_001_dummy-volunteer",
+    autoVolunteerDispatch:{state:"accepted"}};
+  const db={collection(name){
+    assert.equal(name,"disasterCases");
+    return {doc(id){
+      assert.equal(id,"STAGING_TEST_001");
+      return {get:async()=>({exists:true,data:()=>base})};
+    }};
+  }};
+  const result=await inspectStagingTestCase(db);
+  assert.deepEqual(result,{status:"existing_assignment",reason:"verify_existing_test_offer",
+    eligible:0,wave:0});
+  delete base.activeVolunteerSupportAssignmentId;
+  delete base.autoVolunteerDispatch;
+  const noMarker=await inspectStagingTestCase(db);
+  assert.equal(noMarker.status,"blocked");
+  assert.equal(noMarker.reason,"invalid_test_case_fields");
+});
