@@ -1,0 +1,38 @@
+name: Isolated staging 002 accepted-responder wave-stop verification - NO DEPLOY
+on:
+  pull_request:
+    branches:
+      - feat/emergency-auto-dispatch-server-staging-20261115
+    paths:
+      - "backend/staging002WaveStopVerification.js"
+      - "backend/test-staging002WaveStopVerification.cjs"
+      - "backend/emergencyAutoDispatchStagingServer.js"
+      - "backend/stagingAdminLogin.html"
+      - ".github/workflows/qa-staging-002-wave-stop-readonly-20261119.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  accepted-responder-wave-stop-no-deploy:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install locked backend dependencies without scripts
+        run: npm ci --prefix backend --ignore-scripts --no-audit --no-fund
+      - name: Check source syntax
+        run: |
+          node --check backend/staging002WaveStopVerification.js
+          node --check backend/emergencyAutoDispatchStagingServer.js
+      - name: Check actual wave engine no-write stop and read-only Admin report
+        run: node --test backend/test-staging002WaveStopVerification.cjs
+      - name: Existing accepted Volunteer and bulk retry preservation
+        run: |
+          node --test backend/test-staging002BulkAcceptanceVerifier.cjs
+          node --test backend/test-staging002ExpiredBulkRetry.cjs
+          node --test backend/test-stagingFreshEndToEnd.cjs
+      - name: CI is synthetic and never deploys
+        run: echo "No credentials, Firebase writes, Render deployment, or production changes."
