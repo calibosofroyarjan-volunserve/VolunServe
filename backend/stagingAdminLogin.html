@@ -290,6 +290,10 @@ el002("bulk-status-002").addEventListener("click",async()=>{
       "Task offers: "+String(d.offered)+"\n"+
       "Pending: "+String(d.pending)+"\n"+
       "Expired: "+String(d.expired||0)+"\n"+
+      "Unknown deadline format: "+String(d.unreadableDeadlines||0)+"\n"+
+      "Server time (UTC): "+String(d.serverTimeUtc||"unavailable")+"\n"+
+      "Earliest deadline (UTC): "+String(d.earliestOfferDeadlineUtc||"unknown")+"\n"+
+      "Latest deadline (UTC): "+String(d.latestOfferDeadlineUtc||"unknown")+"\n"+
       "Accepted: "+String(d.accepted)+"\n"+
       "Declined: "+String(d.declined)+"\n"+
       "Source: actual fixed fictional staging 002 assignment documents.");
