@@ -61,6 +61,26 @@ a{color:#075c49}input:focus-visible,button:focus-visible{outline:3px solid #4db8
 <button type="button" class="secondary" id="reissue-002" disabled>Reissue expired 002 only</button>
 </div>
 <div id="e2e-002-status" class="result" role="status" aria-live="polite">Sign in with an approved staging Admin account first.</div>
+<section aria-labelledby="qa-volunteers-title" style="border-top:1px solid #dce9e4;margin-top:22px;padding-top:10px">
+<h2 id="qa-volunteers-title">Create 3 FICTIONAL Volunteer test accounts — isolated staging ONLY</h2>
+<p class="small">Admin-only test setup. All 3 are marked FICTIONAL and belong to STAGING_E2E_002. They have First Aid and Bagong Buhay I so the same-wave bulk test can reach all 3. No real identity documents and no production accounts.</p>
+<p class="notice">Test credentials are shown only in this browser page. Copy the three email/password pairs somewhere private before refreshing. Do not share real passwords or screenshots containing these test passwords.</p>
+<div class="buttons">
+<button type="button" class="secondary" id="qa-prepare" disabled>Generate 3 temporary test passwords</button>
+<button type="button" class="secondary" id="qa-check" disabled>Check test account slots (read-only)</button>
+<button type="button" id="qa-create" disabled>Create these 3 fictional Volunteers</button>
+</div>
+<div style="margin-top:12px">
+<label for="qa-secret-1">Fictional Volunteer 1 — staging002.qa.volunteer1@example.com</label>
+<input id="qa-secret-1" type="text" autocomplete="off" spellcheck="false" placeholder="Generate a temporary staging-only password" readonly>
+<label for="qa-secret-2">Fictional Volunteer 2 — staging002.qa.volunteer2@example.com</label>
+<input id="qa-secret-2" type="text" autocomplete="off" spellcheck="false" placeholder="Generate a temporary staging-only password" readonly>
+<label for="qa-secret-3">Fictional Volunteer 3 — staging002.qa.volunteer3@example.com</label>
+<input id="qa-secret-3" type="text" autocomplete="off" spellcheck="false" placeholder="Generate a temporary staging-only password" readonly>
+</div>
+<div id="qa-result" class="result" role="status" aria-live="polite">Sign in as an approved staging Admin first. Nothing has been created yet.</div>
+<p class="small">After creation, open the <a href="/staging-volunteer" target="_blank" rel="noopener noreferrer">separate staging Volunteer login</a> for each test account, using its own password. Existing accounts are never reset. Do not use these QA credentials in production.</p>
+</section>
 <p class="small">If readiness says <code>no_free_approved_test_volunteer</code>, an additional approved and available staging Volunteer is required. Never reuse the accepted 001 assignment. Test offers expire after 3 minutes. No reissue for accepted tasks.</p>
 </section>
 <h2>Verification</h2>
@@ -94,6 +114,66 @@ const reissueTest=document.getElementById("reissue-test");
 const verifyTest=document.getElementById("verify-test");
 const fixtureCheck=document.getElementById("fixture-check");
 const prepareTest=document.getElementById("prepare-test");
+
+const qaEl=id=>document.getElementById(id);
+const qaResult=message=>{qaEl("qa-result").textContent=message;};
+const qaSecrets=[1,2,3].map(n=>qaEl("qa-secret-"+n));
+let qaPrepared=false;
+const qaEmail=n=>"staging002.qa.volunteer"+n+"@example.com";
+function makeQaPassword(){
+  const chars="ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789";
+  const raw=window.crypto.getRandomValues(new Uint8Array(28));
+  return "Qa9"+Array.from(raw,b=>chars[b%chars.length]).join("");
+}
+qaEl("qa-prepare").addEventListener("click",()=>{
+  if(!stagingActivationReady || !auth.currentUser)
+    return qaResult("Approved isolated staging Admin login is required.");
+  qaSecrets.forEach(el=>{el.value=makeQaPassword();});
+  qaPrepared=true;
+  qaEl("qa-create").disabled=false;
+  qaResult("3 unique staging-only passwords generated. COPY each email/password now.\n"+
+    "No Firebase accounts have been created yet. Click the separate Create button to provision.");
+});
+qaEl("qa-check").addEventListener("click",async()=>{
+  try{
+    const d=await api002("/api/admin/emergency-auto/e2e-002/test-volunteers");
+    qaResult("FICTIONAL STAGING 002 ACCOUNT SLOTS — READ ONLY\n"+
+      d.slots.map(s=>"Volunteer "+s.slot+": "+s.state).join("\n")+
+      "\nOnly fixed synthetic test slots examined. No accounts changed.");
+  }catch(error){
+    qaResult("Staging QA account check blocked: "+String(error?.message||"unknown"));
+  }
+});
+qaEl("qa-create").addEventListener("click",async()=>{
+  if(!stagingActivationReady || !auth.currentUser || !qaPrepared)
+    return qaResult("Sign in as staging Admin and generate the 3 test passwords first.");
+  if(!window.confirm("CREATE EXACTLY 3 FICTIONAL staging Volunteer accounts? No existing Firebase account will be changed, and no real emergency task is sent."))return;
+  const passwords=qaSecrets.map(el=>el.value);
+  if(passwords.some(x=>!x))return qaResult("First generate the 3 temporary passwords.");
+  qaEl("qa-create").disabled=true;
+  try{
+    const d=await api002("/api/admin/emergency-auto/e2e-002/test-volunteers",{
+      method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({
+        caseId:"STAGING_E2E_002",
+        confirmFictionalTestUsers:true,
+        passwords
+      })
+    });
+    qaResult("FICTIONAL TEST USER SETUP: "+d.status+
+      "\nNew test accounts: "+d.created+
+      "\nAlready-existing fictional test accounts preserved: "+d.alreadyExisting+
+      "\n"+
+      [1,2,3].map(n=>qaEmail(n)).join("\n")+
+      "\nPasswords remain shown above ONLY in your browser. Copy them now."+
+      "\nNext: Check 002 readiness, then test all-eligible offers.");
+  }catch(error){
+    qaResult("Test account setup blocked: "+String(error?.message||"unknown")+
+      "\nNo existing account passwords were changed. Inspect test account slots before retry.");
+  }finally{
+    qaPrepared=false;
+  }
+});
 const ids002=["check-002","create-002","validate-002","offer-002","verify-002","reissue-002","bulk-offer-002","bulk-status-002","eligibility-002"];
 const el002=id=>document.getElementById(id);
 const show002=message=>{el002("e2e-002-status").textContent=message;};
@@ -112,6 +192,8 @@ async function api002(endpoint,options={}){
 async function refresh002(){
   const data=await api002("/api/admin/emergency-auto/e2e-002/preflight");
   const status=String(data.status||"unknown");
+  qaEl("qa-prepare").disabled=!stagingActivationReady;
+  qaEl("qa-check").disabled=!stagingActivationReady;
   el002("check-002").disabled=false;
   el002("eligibility-002").disabled=false;
   el002("create-002").disabled=!(stagingActivationReady&&status==="not_created");
