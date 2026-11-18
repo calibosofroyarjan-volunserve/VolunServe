@@ -38,6 +38,7 @@ a{color:#075c49}input:focus-visible,button:focus-visible{outline:3px solid #4db8
 </form>
 <h2>Controlled dummy matching test</h2>
 <p>After verification, send one test-only offer for <code>STAGING_TEST_001</code>. This writes exclusively to the isolated staging database. It does not alert official responders or production users.</p>
+<button type="button" class="secondary" id="fixture-check" disabled>Check dummy report fields (read-only)</button>
 <button type="button" id="start-test" disabled>Start synthetic Emergency Volunteer offer</button>
 <button type="button" class="secondary" id="reissue-test" disabled>Reissue expired dummy offer</button>
 <button type="button" class="secondary" id="verify-test" disabled>Verify acceptance, responder lock &amp; notifications</button>
@@ -71,6 +72,31 @@ const passwordInput=document.getElementById("password");
 const startTest=document.getElementById("start-test");
 const reissueTest=document.getElementById("reissue-test");
 const verifyTest=document.getElementById("verify-test");
+const fixtureCheck=document.getElementById("fixture-check");
+let stagingActivationReady=false;
+async function refreshFixturePreflight({silent=false}={}) {
+  if(!auth.currentUser)throw new Error("Sign in as staging Admin first.");
+  const token=await auth.currentUser.getIdToken();
+  const r=await fetch("/api/admin/emergency-auto/preflight",{
+    headers:{Authorization:"Bearer "+token},cache:"no-store"
+  });
+  const data=await r.json();
+  if(!r.ok)throw new Error("Preflight unavailable: "+String(data.error||r.status));
+  startTest.disabled=!(stagingActivationReady && data.status==="ready");
+  if(!silent)report("Read-only staging dummy report preflight\n"+
+    "Eligibility: "+String(data.status||"unknown")+"\n"+
+    "Reason: "+String(data.reason||"none")+"\n"+
+    "Invalid fields (names only): "+(data.invalidFields?.join(", ")||"none")+"\n"+
+    "Matching wave: "+String(data.wave||"not confirmed")+"\n"+
+    "Only the fictional staging case was read. No database changes.");
+  return data;
+}
+fixtureCheck.addEventListener("click",async()=>{
+  fixtureCheck.disabled=true;startTest.disabled=true;
+  try{await refreshFixturePreflight(); }
+  catch(error){report(String(error?.message||"Preflight unavailable").slice(0,200));}
+  finally{fixtureCheck.disabled=false;}
+});
 verifyTest.addEventListener("click",async()=>{
   if(!auth.currentUser)return report("Sign in as staging Admin first.");
   verifyTest.disabled=true;
@@ -156,9 +182,12 @@ document.getElementById("login").addEventListener("submit",async(e)=>{
       r.status===401?"Staging session could not be validated by Render.":
       "Authorization check returned HTTP "+r.status);
     const health=await (await fetch("/health",{cache:"no-store"})).json();
-    startTest.disabled=!(data.activationReady===true &&
+    stagingActivationReady=data.activationReady===true &&
       health.stagingServiceAccountMatches===true &&
-      health.stagingTestCaseReadiness?.status==="ready");
+      health.stagingFirestoreReadStatus==="verified";
+    fixtureCheck.disabled=health.stagingServiceAccountMatches!==true;
+    // Fresh authenticated preflight, not the one-time startup /health cache.
+    const preflight=await refreshFixturePreflight({silent:true});
     // Reissue remains available after the existing 3-minute test offer expires.
     // Startup preflight is not re-run whenever an offer changes case status.
     reissueTest.disabled=!(data.activationReady===true &&
@@ -168,8 +197,10 @@ document.getElementById("login").addEventListener("submit",async(e)=>{
     report("Admin authentication: VERIFIED\n"+
       "Staging backend: "+(health.ok?"ONLINE":"UNAVAILABLE")+"\n"+
       "Firestore read: "+String(health.stagingFirestoreReadStatus||"unknown")+"\n"+
-      "Test report eligibility: "+String(health.stagingTestCaseReadiness?.status||"unknown")+"\n"+
-      "First matching wave: "+String(health.stagingTestCaseReadiness?.wave||"not confirmed")+"\n"+
+      "Test report eligibility: "+String(preflight.status||"unknown")+"\n"+
+      "Preflight reason: "+String(preflight.reason||"none")+"\n"+
+      "Invalid test fields: "+(preflight.invalidFields?.join(", ")||"none")+"\n"+
+      "First matching wave: "+String(preflight.wave||"not confirmed")+"\n"+
       "Actual Volunteer task offers: "+(data.activationReady?"staging gate enabled":"DISABLED (safe)"));
   }catch(error){
     passwordInput.value="";
@@ -180,7 +211,7 @@ document.getElementById("login").addEventListener("submit",async(e)=>{
   }finally{submit.disabled=false;}
 });
 document.getElementById("logout").addEventListener("click",async()=>{
-  await signOut(auth);startTest.disabled=true;reissueTest.disabled=true;verifyTest.disabled=true;passwordInput.value="";report("Signed out of staging.");
+  await signOut(auth);stagingActivationReady=false;fixtureCheck.disabled=true;startTest.disabled=true;reissueTest.disabled=true;verifyTest.disabled=true;passwordInput.value="";report("Signed out of staging.");
 });
 </script>
 </body>
