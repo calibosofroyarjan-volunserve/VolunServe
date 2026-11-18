@@ -248,6 +248,41 @@ const capacityChoices = [
   "100",
 ] as const;
 
+// Shared client-side word ranges (also enforced by /api/community-events/proposals).
+type ProposalWordField = "title" | "description" | "volunteerTasks" | "otherRole" | "whatToBring";
+const PROPOSAL_WORD_LIMITS: Record<ProposalWordField, { label: string; min: number; max: number; minChars: number; maxChars: number }> = {
+  title: { label: "Event title", min: 2, max: 15, minChars: 5, maxChars: 100 },
+  description: { label: "Description", min: 20, max: 200, minChars: 20, maxChars: 1500 },
+  volunteerTasks: { label: "Volunteer tasks", min: 8, max: 150, minChars: 12, maxChars: 1200 },
+  otherRole: { label: "Other role / occupation", min: 0, max: 12, minChars: 0, maxChars: 80 },
+  whatToBring: { label: "What to bring", min: 0, max: 60, minChars: 0, maxChars: 500 },
+};
+const countProposalWords = (value: string): number =>
+  value.trim() ? value.trim().split(/\s+/u).length : 0;
+
+const proposalWordError = (field: ProposalWordField, value: string): string => {
+  const rule = PROPOSAL_WORD_LIMITS[field];
+  const words = countProposalWords(value);
+  if (words < rule.min || words > rule.max) {
+    return `${rule.label} must contain ${rule.min}–${rule.max} words (currently ${words}).`;
+  }
+  if (value.trim().length < rule.minChars || value.trim().length > rule.maxChars) {
+    return `${rule.label} must contain ${rule.minChars}–${rule.maxChars} characters.`;
+  }
+  return "";
+};
+
+function ProposalWordFeedback({field,value,showError}: {field: ProposalWordField;value:string;showError:boolean}) {
+  const limit = PROPOSAL_WORD_LIMITS[field];
+  const issue = showError ? proposalWordError(field, value) : "";
+  return <View style={styles.ruiWordFeedback}>
+    <Text style={[styles.ruiWordCounter, !!issue && styles.ruiWordCounterError]}>
+      {countProposalWords(value)} words · {limit.min}–{limit.max} allowed · max {limit.maxChars} characters
+    </Text>
+    {!!issue && <Text style={styles.ruiFieldError}>{issue}</Text>}
+  </View>;
+}
+
 const initialForm: ProposalForm = {
   title: "",
   category: "Clean-up Drive",
@@ -745,6 +780,7 @@ export default function CommunityEventsScreen() {
 
   const [form, setForm] =
     useState<ProposalForm>(initialForm);
+  const [proposalAttempted, setProposalAttempted] = useState(false);
 
   const [selectPicker, setSelectPicker] =
     useState<SelectPicker | null>(null);
@@ -1126,6 +1162,7 @@ export default function CommunityEventsScreen() {
     field: K,
     value: ProposalForm[K]
   ) => {
+    if (section === "propose") setNotice("");
     setForm((previous) => ({
       ...previous,
       [field]: value,
@@ -1314,6 +1351,20 @@ export default function CommunityEventsScreen() {
     }
 
     setNotice("");
+    setProposalAttempted(true);
+    const wordIssues = (Object.keys(PROPOSAL_WORD_LIMITS) as ProposalWordField[])
+      .map((field) => ({ field, issue: proposalWordError(field, form[field]) }))
+      .filter(({issue}) => !!issue);
+    if (wordIssues.length) {
+      setNotice("Please correct the highlighted word limits before submitting.");
+      if (Platform.OS === "web") {
+        const d = (globalThis as any).document;
+        const fieldElement = d?.getElementById?.(`community-proposal-${wordIssues[0].field}`);
+        fieldElement?.scrollIntoView?.({behavior:"smooth",block:"center"});
+        fieldElement?.focus?.();
+      }
+      return;
+    }
 
     const title = form.title.trim();
     const location = form.location.trim();
@@ -1463,6 +1514,7 @@ export default function CommunityEventsScreen() {
       }
 
       setForm(initialForm);
+      setProposalAttempted(false);
       setLocalPhotoFiles([null, null, null]);
       setLocalPhotoPreviews(["", "", ""]);
       setCredentialFile(null);
