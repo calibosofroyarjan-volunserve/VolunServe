@@ -332,3 +332,211 @@ test("fresh in-memory Volunteer decline creates Admin alert and retains no respo
     assert.equal(db.get("notifications/auto_test_accepted_"+aid),undefined);
   });
 });
+
+
+test("staging-only 002: authenticated Admin creates and validates new fictional report, Volunteer accepts with original records",async()=>{
+  const db=new FakeDb();
+  seedAccounts(db);
+  const previous={
+    title:"TEST ONLY - Dummy Emergency",status:"assigned",
+    verificationStatus:"validated",reporterUid:RESIDENT,
+    activeVolunteerSupportAssignmentId:FIXED_ID+"_previousVolunteer",
+    autoVolunteerDispatch:{state:"accepted"}
+  };
+  db.seed("disasterCases/"+FIXED_ID,{...previous});
+  await serve(db,async({req})=>{
+    const url="/api/admin/emergency-auto/e2e-002/";
+    let response=await req(url+"preflight",{who:ADMIN});
+    assert.equal(response.body.status,"not_created");
+    response=await req(url+"create",{method:"POST",
+      body:{caseId:FRESH_ID,confirmFictionalTest:true}});
+    assert.equal(response.code,401);
+    response=await req(url+"create",{method:"POST",who:RESIDENT,
+      body:{caseId:FRESH_ID,confirmFictionalTest:true}});
+    assert.equal(response.code,403);
+    response=await req(url+"create",{method:"POST",who:ADMIN,
+      body:{caseId:FRESH_ID}});
+    assert.equal(response.code,400);
+    response=await req(url+"create",{method:"POST",who:ADMIN,
+      body:{caseId:FRESH_ID,confirmFictionalTest:true}});
+    assert.equal(response.code,200);
+    assert.equal(response.body.status,"created");
+    assert.deepEqual(db.get("disasterCases/"+FIXED_ID),previous);
+    assert.equal(db.get("disasterCases/"+FRESH_ID).status,"reported");
+    assert.equal(db.get("disasterCases/"+FRESH_ID).dispatchBlocked,true);
+    const createdAgain=await req(url+"create",{method:"POST",who:ADMIN,
+      body:{caseId:FRESH_ID,confirmFictionalTest:true}});
+    assert.equal(createdAgain.body.status,"already_exists");
+    response=await req(url+"preflight",{who:ADMIN});
+    assert.equal(response.body.status,"reported");
+    const beforeOffer=await req("/api/admin/emergency-auto/start",{method:"POST",
+      who:ADMIN,body:{caseId:FRESH_ID}});
+    assert.equal(beforeOffer.code,409);
+    response=await req(url+"validate",{method:"POST",who:ADMIN,
+      body:{caseId:FRESH_ID,confirmFictionalTest:true}});
+    assert.equal(response.code,200);
+    assert.equal(response.body.status,"validated");
+    assert.equal(db.get("disasterCases/"+FRESH_ID).verificationStatus,"validated");
+    assert.equal(db.get("disasterCases/"+FRESH_ID).validatedBy,ADMIN);
+    assert.equal(db.get("adminActivityLogs/auto_test_002_validated").action,
+      "Synthetic Staging 002 Test Report Validated");
+    response=await req(url+"preflight",{who:ADMIN});
+    assert.equal(response.code,200);
+    assert.equal(response.body.status,"ready");
+    assert.equal(response.body.wave,1);
+    const noOffer=await req("/api/staging/volunteer/task?caseId="+FRESH_ID,{who:VOL});
+    assert.equal(noOffer.body.status,"not_offered");
+    const offer=await req("/api/admin/emergency-auto/start",{method:"POST",
+      who:ADMIN,body:{caseId:FRESH_ID}});
+    assert.equal(offer.code,200);
+    assert.equal(offer.body.action,"offered");
+    const aid=FRESH_ID+"_"+VOL;
+    assert.equal(db.get("responseAssignments/"+aid).status,"offered");
+    assert.equal(db.get("notifications/auto_response_"+aid).userId,VOL);
+    response=await req(url+"preflight",{who:ADMIN});
+    assert.equal(response.body.status,"existing_assignment");
+    const other=await req("/api/staging/volunteer/task?caseId="+FIXED_ID,{who:VOL});
+    assert.equal(other.body.status,"not_offered");
+    response=await req("/api/staging/volunteer/task?caseId="+FRESH_ID,{who:VOL});
+    assert.equal(response.body.status,"offered");
+    assert.equal(response.body.canRespond,true);
+    const invalidCase=await req("/api/staging/volunteer/respond",{
+      method:"POST",who:VOL,body:{caseId:"UNRECOGNIZED_CASE",decision:"accepted"}
+    });
+    assert.equal(invalidCase.code,403);
+    const accept=await req("/api/staging/volunteer/respond",{
+      method:"POST",who:VOL,body:{caseId:FRESH_ID,decision:"accepted"}
+    });
+    assert.equal(accept.code,200);
+    assert.equal(accept.body.status,"accepted");
+    const review=await req("/api/admin/emergency-auto/verify-test?caseId="+FRESH_ID,
+      {who:ADMIN});
+    assert.equal(review.code,200);
+    assert.equal(review.body.fullAcceptanceVerified,true);
+    assert.equal(review.body.reconciliationRecorded,false);
+    assert.equal(review.body.acceptedResponderLockCorrect,true);
+    assert.equal(review.body.acceptedResidentNotificationPresent,true);
+    assert.equal(review.body.adminAuditCorrect,true);
+    assert.equal(db.get("notifications/auto_test_accepted_"+aid).userId,RESIDENT);
+    assert.equal(db.get("adminActivityLogs/auto_test_decision_"+aid).action,
+      "Synthetic Volunteer Accepted");
+    const priorNoticeCount=db.list("notifications/").length;
+    const replay=await req("/api/staging/volunteer/respond",{
+      method:"POST",who:VOL,body:{caseId:FRESH_ID,decision:"accepted"}
+    });
+    assert.equal(replay.body.status,"already_accepted");
+    assert.equal(db.list("notifications/").length,priorNoticeCount);
+    const refuseReissue=await req("/api/admin/emergency-auto/e2e-002/reissue",{
+      method:"POST",who:ADMIN,
+      body:{caseId:FRESH_ID,confirmReissue:true}
+    });
+    assert.equal(refuseReissue.code,409);
+    assert.equal(refuseReissue.body.error,"cannot_reset_accepted_task");
+    assert.deepEqual(db.get("disasterCases/"+FIXED_ID),previous);
+  });
+});
+
+test("staging 002: busy accepted 001 responder excluded from readiness; no invented test accounts",async()=>{
+  const db=new FakeDb();
+  seedAccounts(db);
+  db.seed("disasterCases/"+FIXED_ID,{
+    title:"TEST ONLY - Dummy Emergency",reporterUid:RESIDENT,
+    status:"assigned",verificationStatus:"validated"
+  });
+  db.seed("responseAssignments/"+FIXED_ID+"_"+VOL,{
+    caseId:FIXED_ID,volunteerId:VOL,status:"accepted"
+  });
+  await serve(db,async({req})=>{
+    await req("/api/admin/emergency-auto/e2e-002/create",{
+      method:"POST",who:ADMIN,
+      body:{caseId:FRESH_ID,confirmFictionalTest:true}
+    });
+    await req("/api/admin/emergency-auto/e2e-002/validate",{
+      method:"POST",who:ADMIN,
+      body:{caseId:FRESH_ID,confirmFictionalTest:true}
+    });
+    const readiness=await req("/api/admin/emergency-auto/e2e-002/preflight",
+      {who:ADMIN});
+    assert.equal(readiness.body.status,"blocked");
+    assert.equal(readiness.body.reason,"no_free_approved_test_volunteer");
+    assert.equal(db.list("responseAssignments/"+FRESH_ID+"_").length,0);
+    assert.equal(db.get("responseAssignments/"+FIXED_ID+"_"+VOL).status,"accepted");
+  });
+});
+
+test("staging 002: decline allows controlled new offer while 001 remains independent",async()=>{
+  const db=new FakeDb();seedAccounts(db);
+  db.seed("disasterCases/"+FIXED_ID,{
+    title:"TEST ONLY - Dummy Emergency",reporterUid:RESIDENT,
+    status:"assigned",verificationStatus:"validated"
+  });
+  await serve(db,async({req})=>{
+    for(const method of ["create","validate"]){
+      const response=await req("/api/admin/emergency-auto/e2e-002/"+method,{
+        method:"POST",who:ADMIN,
+        body:{caseId:FRESH_ID,confirmFictionalTest:true}
+      });
+      assert.equal(response.code,200);
+    }
+    await req("/api/admin/emergency-auto/start",{
+      method:"POST",who:ADMIN,body:{caseId:FRESH_ID}
+    });
+    const aid=FRESH_ID+"_"+VOL;
+    const decline=await req("/api/staging/volunteer/respond",{
+      method:"POST",who:VOL,body:{caseId:FRESH_ID,decision:"declined"}
+    });
+    assert.equal(decline.code,200);
+    assert.equal(db.get("notifications/auto_test_declined_"+aid).userId,ADMIN);
+    assert.equal(db.get("responderLocks/"+VOL),undefined);
+    const noConsent=await req("/api/admin/emergency-auto/e2e-002/reissue",{
+      method:"POST",who:ADMIN,body:{caseId:FRESH_ID}
+    });
+    assert.equal(noConsent.code,400);
+    const reissue=await req("/api/admin/emergency-auto/e2e-002/reissue",{
+      method:"POST",who:ADMIN,body:{caseId:FRESH_ID,confirmReissue:true}
+    });
+    assert.equal(reissue.code,200);
+    assert.equal(reissue.body.action,"offered");
+    assert.equal(db.get("responseAssignments/"+aid).status,"offered");
+    assert.equal(db.get("notifications/auto_test_declined_"+aid),undefined);
+    assert.equal(db.get("disasterCases/"+FIXED_ID).status,"assigned");
+  });
+});
+
+
+test("staging 002 protection: arbitrary case IDs and lookalike reports never send offers",async()=>{
+  const {titleForCase}=require("./stagingVolunteerTask");
+  assert.equal(titleForCase("constructor"),null);
+  assert.equal(titleForCase("__proto__"),null);
+  assert.equal(titleForCase("STAGING_E2E_003"),null);
+  const db=new FakeDb();seedAccounts(db);
+  db.seed("disasterCases/"+FIXED_ID,{
+    title:"TEST ONLY - Dummy Emergency",status:"assigned",
+    verificationStatus:"validated",reporterUid:RESIDENT
+  });
+  db.seed("disasterCases/"+FRESH_ID,{
+    title:"TEST ONLY - Fresh Volunteer E2E 002",
+    status:"validated",verificationStatus:"validated",dispatchBlocked:false,
+    reporterUid:RESIDENT,validatedBy:ADMIN,
+    incidentBarangay:"Bagong Buhay I",requiredSkills:["First Aid"],
+    testOnly:false,source:"staging_synthetic_e2e",
+    testCategory:"staging_synthetic_volunteer_e2e_002"
+  });
+  await serve(db,async({req})=>{
+    const spoof=await req("/api/admin/emergency-auto/start",{
+      method:"POST",who:ADMIN,body:{caseId:FRESH_ID}
+    });
+    assert.equal(spoof.code,409,"Lookalike report without testOnly flag is denied");
+    const unknown=await req("/api/admin/emergency-auto/start",{
+      method:"POST",who:ADMIN,body:{caseId:"constructor"}
+    });
+    assert.equal(unknown.code,403);
+    const task=await req("/api/staging/volunteer/task?caseId=constructor",{who:VOL});
+    assert.equal(task.code,403);
+    const bogus=await req("/api/staging/volunteer/respond",{
+      method:"POST",who:VOL,body:{caseId:"STAGING_E2E_003",decision:"accepted"}
+    });
+    assert.equal(bogus.code,403);
+    assert.equal(db.list("responseAssignments/").length,0);
+  });
+});

@@ -21,8 +21,10 @@ const {inspectStagingTestCase,diagnoseSyntheticFixtureFields} = require("./emerg
 const {prepareSyntheticCaseForTest} = require("./stagingSyntheticCasePreparation");
 const {reconcileAcceptedStagingSupport} = require("./stagingAcceptedSupportReconciliation");
 const {getVolunteerOffer,respondToStagingOffer,resetExpiredFixture,
-  inspectStagingAssignmentConsistency,CASE_ID} =
+  inspectStagingAssignmentConsistency,CASE_ID,E2E_CASE_ID,titleForCase} =
   require("./stagingVolunteerTask");
+const {createFreshTestCase,validateFreshTestCase,inspectFreshTestCase,recognized}
+  =require("./stagingFreshCase002");
 
 function makeApp({authClient = auth, firestore = db, worker, env = process.env} = {}) {
   const app = express();
@@ -225,7 +227,9 @@ function makeApp({authClient = auth, firestore = db, worker, env = process.env} 
   }
   app.get("/api/staging/volunteer/task",requireStagingVolunteer,async(_request,response)=>{
     try {
-      const task=await getVolunteerOffer(firestore,response.locals.stagingVolunteerUid);
+      const caseId=String(_request.query?.caseId || CASE_ID);
+      if(!titleForCase(caseId))return response.status(403).json({ok:false,error:"only_fixed_staging_cases_allowed"});
+      const task=await getVolunteerOffer(firestore,response.locals.stagingVolunteerUid,Date.now(),caseId);
       response.set("Cache-Control","no-store");
       response.json({ok:true,...task});
     }catch(error){
@@ -236,11 +240,13 @@ function makeApp({authClient = auth, firestore = db, worker, env = process.env} 
   app.post("/api/staging/volunteer/respond",requireStagingVolunteer,requireActivation,
     async(request,response)=>{
       const decision=request.body?.decision;
+      const caseId=String(request.body?.caseId || CASE_ID);
+      if(!titleForCase(caseId))return response.status(403).json({ok:false,error:"only_fixed_staging_cases_allowed"});
       if(!["accepted","declined"].includes(decision))
         return response.status(400).json({ok:false,error:"invalid_decision"});
       try{
         const outcome=await respondToStagingOffer(
-          firestore,response.locals.stagingVolunteerUid,decision);
+          firestore,response.locals.stagingVolunteerUid,decision,Date.now(),caseId);
         response.status(["accepted","declined","already_accepted","already_declined"].includes(outcome.status)?200:409)
           .json({ok:outcome.status===decision,...outcome});
       }catch(error){
@@ -302,7 +308,9 @@ function makeApp({authClient = auth, firestore = db, worker, env = process.env} 
     if(!stagingServiceAccountMatches)
       return response.status(503).json({ok:false,error:"isolated_staging_not_configured"});
     try{
-      const review=await inspectStagingAssignmentConsistency(firestore);
+      const caseId=String(_request.query?.caseId || CASE_ID);
+      if(!titleForCase(caseId))return response.status(403).json({ok:false,error:"only_fixed_staging_cases_allowed"});
+      const review=await inspectStagingAssignmentConsistency(firestore,caseId);
       response.set("Cache-Control","no-store");
       response.json({ok:true,...review});
     }catch(error){
@@ -333,16 +341,56 @@ function makeApp({authClient = auth, firestore = db, worker, env = process.env} 
         response.status(503).json({ok:false,error:"staging_reconciliation_unavailable"});
       }
     });
-  // Free preview activation is deliberately restricted to a SINGLE fictional
-  // staging fixture; never permit a generic Admin to submit an arbitrary case.
+  // NEW separate fictional E2E 002. This does not create staging accounts,
+  // touch 001, or activate autonomous emergency dispatch. Every write requires
+  // an approved staging Admin with explicit consent.
+  app.get("/api/admin/emergency-auto/e2e-002/preflight",requireStagingAdmin,
+    async(_request,response)=>{
+      if(!stagingServiceAccountMatches)
+        return response.status(503).json({ok:false,error:"isolated_staging_not_configured"});
+      try{
+        const data=await inspectFreshTestCase(firestore);
+        response.set("Cache-Control","no-store");
+        response.json({ok:true,...data,caseId:E2E_CASE_ID});
+      }catch(error){
+        console.warn("Fresh staging test readiness unavailable",String(error?.code||"unknown").slice(0,65));
+        response.status(503).json({ok:false,error:"e2e_002_preflight_unavailable"});
+      }
+    });
+  function explicitFreshAction(action){
+    return async(request,response)=>{
+      if(request.body?.caseId!==E2E_CASE_ID ||
+         request.body?.confirmFictionalTest!==true)
+        return response.status(400).json({ok:false,error:"explicit_e2e_002_confirmation_required"});
+      try{
+        const result=await (action==="create"?
+          createFreshTestCase(firestore,response.locals.stagingAdminUid):
+          validateFreshTestCase(firestore,response.locals.stagingAdminUid));
+        response.set("Cache-Control","no-store");
+        response.status(result.status==="blocked"?409:200)
+          .json({ok:result.status!=="blocked",...result});
+      }catch(error){
+        console.warn("Fresh staging 002 setup unavailable",
+          String(error?.code||"unknown").slice(0,65));
+        response.status(503).json({ok:false,error:"e2e_002_setup_unavailable"});
+      }
+    };
+  }
+  app.post("/api/admin/emergency-auto/e2e-002/create",
+    requireStagingAdmin,requireActivation,explicitFreshAction("create"));
+  app.post("/api/admin/emergency-auto/e2e-002/validate",
+    requireStagingAdmin,requireActivation,explicitFreshAction("validate"));
+  // Only TWO exact fictional case IDs. Never accept arbitrary report IDs.
   async function requireSyntheticFixture(request,response,next){
-    if(String(request.body?.caseId || "")!=="STAGING_TEST_001"){
+    const caseId=String(request.body?.caseId || "");
+    if(!titleForCase(caseId)){
       return response.status(403).json({ok:false,error:"only_fixed_staging_test_case_allowed"});
     }
     try {
-      const doc=await firestore.collection("disasterCases").doc("STAGING_TEST_001").get();
+      const doc=await firestore.collection("disasterCases").doc(caseId).get();
       const data=doc.exists?doc.data():null;
-      if(!data || data.title!=="TEST ONLY - Dummy Emergency" ||
+      if(!data || data.title!==titleForCase(caseId) ||
+         (caseId===E2E_CASE_ID && !recognized(data)) ||
          data.verificationStatus!=="validated" ||
          !["validated","assigned","in_progress"].includes(data.status) ||
          data.dispatchBlocked === true ||
@@ -386,6 +434,24 @@ function makeApp({authClient = auth, firestore = db, worker, env = process.env} 
       }catch(error){
         console.warn("Staging fixture reissue failed:",String(error?.code||"unknown").slice(0,80));
         response.status(409).json({ok:false,error:"reissue_review_required"});
+      }
+    });
+  // Separate 002 reissue: only after expiry/decline, never accepted.
+  app.post("/api/admin/emergency-auto/e2e-002/reissue",
+    requireStagingAdmin,requireActivation,requireSyntheticFixture,
+    async(request,response)=>{
+      if(request.body?.caseId!==E2E_CASE_ID ||
+         request.body?.confirmReissue!==true)
+        return response.status(400).json({ok:false,error:"explicit_test_reissue_required"});
+      try{
+        const cleared=await resetExpiredFixture(firestore,Date.now(),E2E_CASE_ID);
+        if(!["ready","reset"].includes(cleared.status))
+          return response.status(409).json({ok:false,error:cleared.status});
+        const result=await matcher.requestStart(E2E_CASE_ID);
+        response.json({ok:true,...result,caseId:E2E_CASE_ID});
+      }catch(error){
+        console.warn("Fresh staging 002 reissue failed",String(error?.code||"unknown").slice(0,65));
+        response.status(409).json({ok:false,error:"e2e_002_reissue_review_required"});
       }
     });
   app.post("/api/admin/emergency-auto/start",requireStagingAdmin,requireActivation,requireSyntheticFixture,action("start"));
