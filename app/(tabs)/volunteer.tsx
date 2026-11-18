@@ -701,7 +701,7 @@ export default function VolunteerTasks() {
             }
           }
 
-                    // Phase 5 draft: fail closed for direct client decisions on automatic
+          // Phase 5 draft: fail closed for direct client decisions on automatic
           // offers. Those require a separate authenticated server transaction.
           // Preserve existing manual Accept/Decline and later lifecycle behavior
           // unless the refreshed case points to a DIFFERENT winning assignment.
@@ -719,7 +719,7 @@ export default function VolunteerTasks() {
           if (conflict) {
             throw new Error(conflict);
           }
-if (next === "completed") {
+          if (next === "completed") {
             if (!caseId || !caseData) {
               throw new Error(
                 "The linked emergency case could not be loaded. The field report cannot be submitted."
