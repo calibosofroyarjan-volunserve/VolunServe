@@ -97,6 +97,10 @@ function previewAllEligibleWave({
   if(existingAssignments.some(a=>a&&a.caseId===caseData.id&&
     CASE_ACTIVE.has(String(a.status||"").toLowerCase())))
     return blocked("existing_manual_or_auto_offers");
+  if(existingAssignments.some(a=>a&&a.caseId===caseData.id&&
+     !CASE_ACTIVE.has(String(a.status||"").toLowerCase())&&
+     !["declined","cancelled"].includes(String(a.status||"").toLowerCase())))
+    return blocked("unknown_existing_case_assignment_status");
   if(activeLocks.some(x=>x&&x.caseId===caseData.id))
     return blocked("existing_responder_lock");
   const tried=new Set([
@@ -127,7 +131,7 @@ function previewAllEligibleWave({
           !hasApprovedIdentity(user))exclude="not_currently_approved";
       else if(tried.has(uid)||existingAssignments.some(a=>a&&
           a.volunteerId===uid&&ACTIVE.has(String(a.status||"").toLowerCase()))||
-          activeLocks.some(x=>x&&x.uid===uid))
+          activeLocks.some(x=>x&&(x.uid===uid||x.responderUid===uid)))
           exclude="previous_offer_or_busy";
       else if(!hasRequiredSkills(caseData,user,app))
           exclude="specialized_skill_not_verified";
