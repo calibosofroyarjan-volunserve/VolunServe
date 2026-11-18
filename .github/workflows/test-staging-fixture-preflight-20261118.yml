@@ -9,6 +9,10 @@ on:
       - "backend/emergencyAutoDispatchStagingServer.js"
       - "backend/stagingAdminLogin.html"
       - "backend/test-emergencyAutoDispatchStagingServer.cjs"
+      - "backend/test-stagingFreshEndToEnd.cjs"
+      - "backend/stagingFreshCase002.js"
+      - "backend/stagingVolunteerTask.js"
+      - "backend/stagingVolunteerLogin.html"
       - ".github/workflows/test-staging-fixture-preflight-20261118.yml"
   workflow_dispatch:
 
