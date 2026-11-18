@@ -8,6 +8,13 @@ const E2E_CASE_ID="STAGING_E2E_002";
 const E2E_CASE_TITLE="TEST ONLY - Fresh Volunteer E2E 002";
 const TITLES=Object.freeze({[CASE_ID]:CASE_TITLE,[E2E_CASE_ID]:E2E_CASE_TITLE});
 const titleForCase=caseId=>TITLES[caseId] || null;
+function recognizedStagingCase(data,caseId){
+  return !!data && data.title===titleForCase(caseId) &&
+    (caseId===CASE_ID ||
+      (caseId===E2E_CASE_ID && data.testOnly===true &&
+       data.testCategory==="staging_synthetic_volunteer_e2e_002" &&
+       data.source==="staging_synthetic_e2e"));
+}
 
 function refSet(db,uid,caseId=CASE_ID) {
   const assignmentId=caseId+"_"+uid;
@@ -28,7 +35,7 @@ async function getVolunteerOffer(db,uid,now=Date.now(),caseId=CASE_ID) {
   const [caseSnap,stateSnap,assignmentSnap]=await Promise.all([
     refs.caseRef.get(),refs.stateRef.get(),refs.assignmentRef.get()
   ]);
-  if(!caseSnap.exists||caseSnap.data()?.title!==titleForCase(caseId))return result("unavailable");
+  if(!caseSnap.exists||!recognizedStagingCase(caseSnap.data(),caseId))return result("unavailable");
   if(!assignmentSnap.exists)return result("not_offered");
   const data=assignmentSnap.data()||{},session=stateSnap.exists?stateSnap.data()||{}:{};
   if(data.caseId!==caseId||data.volunteerId!==uid||
@@ -52,7 +59,7 @@ async function respondToStagingOffer(db,uid,decision,now=Date.now(),caseId=CASE_
     // All reads precede writes; Firestore transactions resolve races safely.
     const [caseSnap,stateSnap,assignmentSnap,reserveSnap,lockSnap]=await Promise.all(
       [refs.caseRef,refs.stateRef,refs.assignmentRef,refs.reserveRef,refs.lockRef].map(r=>tx.get(r)));
-    if(!caseSnap.exists||caseSnap.data()?.title!==titleForCase(caseId) ||
+    if(!caseSnap.exists||!recognizedStagingCase(caseSnap.data(),caseId) ||
        caseSnap.data()?.verificationStatus!=="validated")
       return result("not_staging_case");
     if(!assignmentSnap.exists||!stateSnap.exists)return result("not_offered");
@@ -138,7 +145,7 @@ async function resetExpiredFixture(db,now=Date.now(),caseId=CASE_ID) {
   const caseRef=db.collection("disasterCases").doc(caseId);
   const stateRef=db.collection("emergencyAutoDispatch").doc(caseId);
   const caseSnap=await caseRef.get(),stateSnap=await stateRef.get();
-  if(!caseSnap.exists||caseSnap.data()?.title!==titleForCase(caseId))return result("not_staging_case");
+  if(!caseSnap.exists||!recognizedStagingCase(caseSnap.data(),caseId))return result("not_staging_case");
   if(!stateSnap.exists)return result("ready");
   const state=stateSnap.data()||{};
   if(!safeUid(state.volunteerId) || !state.assignmentId ||
@@ -153,7 +160,7 @@ async function resetExpiredFixture(db,now=Date.now(),caseId=CASE_ID) {
       caseRef,stateRef,refs.assignmentRef,refs.reserveRef,refs.lockRef,
       db.collection("adminActivityLogs").doc("auto_offer_"+refs.assignmentId),
     ].map(ref=>tx.get(ref)));
-    if(!c.exists||c.data()?.title!==titleForCase(caseId)||!s.exists)return result("not_staging_case");
+    if(!c.exists||!recognizedStagingCase(c.data(),caseId)||!s.exists)return result("not_staging_case");
     const current=s.data()||{},offer=a.exists?a.data()||{}:{};
     if(current.assignmentId!==refs.assignmentId||
        current.volunteerId!==state.volunteerId||
@@ -194,7 +201,7 @@ async function resetExpiredFixture(db,now=Date.now(),caseId=CASE_ID) {
 async function inspectStagingAssignmentConsistency(db,caseId=CASE_ID) {
   if(!titleForCase(caseId))return {status:"unavailable",reason:"unrecognized_dummy_case"};
   const caseSnap=await db.collection("disasterCases").doc(caseId).get();
-  if(!caseSnap.exists||caseSnap.data()?.title!==titleForCase(caseId))
+  if(!caseSnap.exists||!recognizedStagingCase(caseSnap.data(),caseId))
     return {status:"unavailable",reason:"fictional_case_missing"};
   const sessionSnap=await db.collection("emergencyAutoDispatch").doc(caseId).get();
   if(!sessionSnap.exists)return {status:"not_started"};
@@ -257,4 +264,4 @@ async function inspectStagingAssignmentConsistency(db,caseId=CASE_ID) {
 
 module.exports={getVolunteerOffer,respondToStagingOffer,resetExpiredFixture,
   inspectStagingAssignmentConsistency,CASE_ID,CASE_TITLE,
-  E2E_CASE_ID,E2E_CASE_TITLE,titleForCase};
+  E2E_CASE_ID,E2E_CASE_TITLE,titleForCase,recognizedStagingCase};
