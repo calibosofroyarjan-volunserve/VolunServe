@@ -1,0 +1,54 @@
+name: Emergency Reports Live UI Compatibility Gate — NO DEPLOY
+on:
+  push:
+    branches:
+      - release/admin-emergency-ui-hosting-only-20261118
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  approved-admin-ui-compatibility:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      CI: "true"
+      EXPO_NO_TELEMETRY: "1"
+      EXPO_PUBLIC_VOLUNSERVE_ENV: production
+      EXPO_PUBLIC_IDENTITY_VERIFICATION_API_URL: https://volunserve.onrender.com
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - name: Prove additive admin UI-only change scope
+        run: |
+          set -euo pipefail
+          BASE=3f173ad686ee3d19ac102a9ae132814e28b4ef8a
+          git cat-file -e "$BASE^{commit}"
+          git merge-base --is-ancestor "$BASE" HEAD
+          git diff --name-only "$BASE" HEAD | tee /tmp/ui-changed-paths
+          if grep -v -E '^(app/\(admin\)/admin-cases\.tsx|components/admin/EmergencyFiveTabDesign\.tsx|scripts/test-admin-emergency-master-detail-20261118\.cjs|\.github/workflows/(qa-admin-emergency-live-safe-20261118|release-admin-emergency-ui-hosting-only-20261118)\.yml)$' /tmp/ui-changed-paths; then
+            echo "::error::Unrelated file modification blocked"
+            exit 1
+          fi
+          git diff --quiet "$BASE" HEAD -- functions backend firestore.rules firestore.indexes.json firebase.json package.json package-lock.json
+      - name: Install original locked frontend dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Check old actions retained and approved UI compiles
+        run: node scripts/test-admin-emergency-master-detail-20261118.cjs
+      - name: Export exact web app — NO DEPLOY
+        run: |
+          npx expo export --platform web --clear
+          node scripts/verify-hosting-release.cjs
+      - name: Verify public production routes and unmodified source revision
+        env:
+          VOLUNSERVE_HOSTING_URL: https://volunserve.com
+          VOLUNSERVE_EXPECTED_SHA: 3f173ad686ee3d19ac102a9ae132814e28b4ef8a
+        run: node scripts/check-live-hosting.cjs
+      - name: Confirm no Firebase writes
+        run: echo "NO DEPLOYMENT performed by compatibility workflow"
