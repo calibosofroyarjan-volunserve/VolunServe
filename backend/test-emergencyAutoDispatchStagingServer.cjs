@@ -518,3 +518,59 @@ test("fresh staging diagnostic requires approved Admin authentication and isolat
     assert.deepEqual(calls,[]);
   });
 });
+
+
+test("approved staging Admin receives only fresh dummy case field names, with zero writes",async()=>{
+  const tenant="volunserve-volunteer-staging";
+  const original={title:"TEST ONLY - Dummy Emergency",status:"unverified",
+    verificationStatus:"pending_verification",dispatchBlocked:true,
+    requiredSkills:"First Aid",reporterUid:"synthetic-resident",
+    validatedBy:"synthetic-admin",incidentBarangay:"Bagong Buhay I"};
+  let readCount=0,writes=0;
+  const firestore={collection(name){
+    if(name==="disasterCases") return {doc(id){
+      assert.equal(id,"STAGING_TEST_001");
+      return {get:async()=>{readCount++;return {exists:true,data:()=>({...original})};}};
+    }};
+    if(name==="systemSettings") return {doc(){return {get:async()=>({exists:true})};}};
+    if(name==="users") return {doc(uid){
+      const records={
+        "synthetic-admin":{role:"admin",status:"approved"},
+        "synthetic-resident":{role:"resident",status:"approved"},
+      };
+      return {get:async()=>({exists:!!records[uid],data:()=>records[uid]})};
+    }};
+    throw Error("Unexpected Firestore collection "+name);
+  },set:()=>{writes++;throw Error("No writes allowed");}};
+  const app=makeApp({
+    authClient:{verifyIdToken:async()=>({uid:"synthetic-admin"})},
+    firestore,
+    worker:{config:{onDemandReady:false,ready:false}},
+    env:{VOLUNSERVE_AUTO_VOLUNTEER_STAGING_PROJECT_ID:tenant,
+      FIREBASE_SERVICE_ACCOUNT_JSON:JSON.stringify({project_id:tenant})}
+  });
+  const server=app.listen(0,"127.0.0.1");
+  try {
+    await new Promise((resolve,reject)=>{
+      if(server.listening)resolve();
+      else {server.once("listening",resolve);server.once("error",reject);}
+    });
+    const base="http://127.0.0.1:"+server.address().port;
+    const response=await fetch(base+"/api/admin/emergency-auto/preflight",{
+      headers:{Authorization:"Bearer synthetic-admin-token"}
+    });
+    assert.equal(response.status,200);
+    const result=await response.json();
+    assert.deepEqual(result.invalidFields,[
+      "status","verificationStatus","dispatchBlocked","requiredSkills"]);
+    assert.equal(result.status,"blocked");
+    assert.equal(result.reason,"invalid_test_case_fields");
+    assert.equal(result.eligible,0);
+    assert.ok(readCount>=1);
+    assert.equal(writes,0);
+    assert.ok(!JSON.stringify(result).includes("synthetic-resident"));
+    assert.ok(!JSON.stringify(result).includes("unverified"));
+  } finally {
+    await new Promise(resolve=>server.close(resolve));
+  }
+});
