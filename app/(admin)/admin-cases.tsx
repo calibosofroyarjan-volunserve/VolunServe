@@ -3485,7 +3485,7 @@ export default function AdminCases() {
       contentContainerStyle={styles.container}
       showsVerticalScrollIndicator={true}
     >
-      <View style={styles.emergencyPageIntro}>
+      {!isCaseDetailOpen && <View style={styles.emergencyPageIntro}>
         <View style={styles.emergencyPageIntroText}>
           <Text style={styles.emergencyPageEyebrow}>ADMIN WORKSPACE / EMERGENCY RESPONSE</Text>
           <Text style={styles.emergencyPageHeading}>Emergency Reports</Text>
@@ -3493,15 +3493,25 @@ export default function AdminCases() {
             Validate reports, coordinate qualified Volunteers, and monitor responses in one focused workspace.
           </Text>
         </View>
-        <View style={styles.liveSummary}>
-          <Text style={styles.liveSummaryNumber}>
-            {cases.filter((item) =>
-              ["reported", "validated", "assigned", "in_progress"].includes(item.status),
-            ).length}
-          </Text>
-          <Text style={styles.liveSummaryLabel}>Open Cases</Text>
-        </View>
-      </View>
+      </View>}
+      {!isCaseDetailOpen && <View style={styles.reportStatsRow}>
+        {([
+          ["Total Reports", cases.length, "#DFF6E9", "#0B7253"],
+          ["Pending Review", cases.filter(item =>
+            ["pending_verification","needs_more_evidence"].includes(
+              String(item.verificationStatus || "pending_verification"))
+          ).length, "#FFF3DF", "#AD6D0B"],
+          ["Validated", cases.filter(item => item.verificationStatus==="validated").length,
+            "#E5F6EB","#0B7253"],
+          ["In Progress", cases.filter(item => item.status==="in_progress").length,
+            "#E7F0FF","#265EAE"],
+        ] as const).map(([label, count, tint, ink]) =>
+          <View key={label} style={[styles.reportStatCard,{backgroundColor:tint}]}>
+            <Text style={[styles.reportStatNumber,{color:ink}]}>{count}</Text>
+            <Text style={styles.reportStatLabel}>{label}</Text>
+          </View>
+        )}
+      </View>}
 
       <View style={[styles.pageHeader, isCaseDetailOpen && styles.hiddenSection]}>
         <View style={styles.headerTools}>
@@ -4153,9 +4163,9 @@ export default function AdminCases() {
                   [
                     ["overview", "Overview"],
                     ["evidence", `Evidence (${imageEvidence.length + videoEvidence.length})`],
-                    ["response", "Case Status"],
-                    ["personnel", "Volunteer Assignment"],
-                    ["history", "History"],
+                    ["response", "Response"],
+                    ["personnel", "Volunteers"],
+                    ["history", "Activity Log"],
                   ] as const
                 ).map(([key, label]) => {
                   const active = detailTab === key;
@@ -4211,10 +4221,10 @@ export default function AdminCases() {
                 <View style={styles.sectionHeader}>
                   <View>
                     <Text style={styles.sectionEyebrow}>
-                      ANTI-SCAM VERIFICATION
+                      REPORT VERIFICATION
                     </Text>
                     <Text style={styles.sectionTitle}>
-                      Review Resident Request
+                      Resident Report Review
                     </Text>
                   </View>
 
@@ -8355,6 +8365,20 @@ const styles = StyleSheet.create({
   },
   caseListPaneCompact: {
     width: "100%",
+  },
+  reportStatsRow: {
+    flexDirection: "row", flexWrap: "wrap", gap: 12, marginBottom: 16,
+  },
+  reportStatCard: {
+    minWidth: 145, flexBasis: 170, flexGrow: 1, borderRadius: 14,
+    paddingHorizontal: 20, paddingVertical: 15, gap: 4,
+    borderWidth: 1, borderColor: "#DDE9E4",
+  },
+  reportStatNumber: {
+    fontSize: 25, fontWeight: "800", lineHeight: 29,
+  },
+  reportStatLabel: {
+    fontSize: 13, color: "#345349", fontWeight: "700",
   },
   caseListHeader: {
     minHeight: 58,
