@@ -3343,6 +3343,16 @@ export default function AdminCases() {
             casePatch.activeVolunteerSupportAssignmentId = "";
           }
 
+          // If an Admin explicitly cancels the accepted automatic task,
+          // clear only THAT case winner marker, never another responder.
+          // No other assignment, notification, or audit record is deleted.
+          if (
+            String(currentCase.autoVolunteerAcceptedAssignmentId || "") ===
+            assignment.id
+          ) {
+            casePatch.autoVolunteerAcceptedAssignmentId = "";
+          }
+
           // Clean up legacy Volunteer-as-primary fields only when they point to
           // this same assignment. Official LGU fields are never touched here.
           if (
