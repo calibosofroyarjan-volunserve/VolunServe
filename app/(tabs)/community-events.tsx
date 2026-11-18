@@ -2789,15 +2789,15 @@ export default function CommunityEventsScreen() {
                         <Text style={[styles.webAttendanceFeedbackText, attendanceFeedback.type === "error" && styles.webAttendanceFeedbackErrorText]}>{attendanceFeedback.message}</Text>
                       </View>
                     )}
-                    {selectedParticipation?.attendanceVerified && selectedEvent.status === "completed" && durationMinutes(selectedParticipation) >= 30 &&
+                    {selectedParticipation?.attendanceVerified && selectedEvent.status === "completed" &&
                       <View style={styles.lockedVerifiedSummary}>
                         <Ionicons name="ribbon-outline" size={17} color="#087B68" />
-                        <Text style={styles.lockedVerifiedSummaryText}>Meets the attendance and event-completion requirements. Certificate issuance is processed separately.</Text>
+                        <Text style={styles.lockedVerifiedSummaryText}>Attendance verified. The server checks certificate eligibility after Admin completion. View My Certificates for issuance status.</Text>
                       </View>}
-                    {selectedParticipation?.attendanceVerified && durationMinutes(selectedParticipation) < 30 &&
+                    {selectedParticipation?.attendanceVerified && selectedEvent.status !== "completed" &&
                       <View style={styles.lockedCertificateLine}>
                         <Ionicons name="ribbon-outline" size={15} color="#758A96" />
-                        <Text style={styles.lockedCertificateLineText}>Certificate: {durationMinutes(selectedParticipation)} / 30 min · Event completion required</Text>
+                        <Text style={styles.lockedCertificateLineText}>Certificate check follows manual Admin event completion.</Text>
                       </View>}
                     {!selectedParticipation?.attendanceVerified && <Text style={styles.webAttendanceNote}>Time In/Out uses server time. Admin/LGU verifies participation.</Text>}
                   </View>}
