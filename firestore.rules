@@ -2128,6 +2128,33 @@ service cloud.firestore {
     }
     match /disasterCases/{caseId} {
 
+      // Phase 5 DRAFT: old Admin clients cannot overwrite an accepted
+      // automatic responder or fabricate a winner. Only an atomic,
+      // same-transaction cancellation of THAT assignment may clear it.
+      // The server Admin SDK must still revalidate before writing.
+      function preserveAcceptedAutoWinner() {
+        let oldWinner = resource.data.get('autoVolunteerAcceptedAssignmentId', '');
+        let newWinner = request.resource.data.get('autoVolunteerAcceptedAssignmentId', '');
+        return (
+          (oldWinner == '' && newWinner == '')
+          || (
+            oldWinner != '' && newWinner == oldWinner
+            && request.resource.data.get('activeVolunteerSupportAssignmentId', '')
+              == resource.data.get('activeVolunteerSupportAssignmentId', '')
+            && request.resource.data.get('activeVolunteerSupportUid', '')
+              == resource.data.get('activeVolunteerSupportUid', '')
+          )
+          || (
+            oldWinner != '' && newWinner == ''
+            && request.resource.data.get('activeVolunteerSupportAssignmentId', '') == ''
+            && request.resource.data.get('activeVolunteerSupportUid', '') == ''
+            && getAfter(
+              /databases/$(database)/documents/responseAssignments/$(oldWinner)
+            ).data.status == 'cancelled'
+          )
+        );
+      }
+
       function isLguPersonnel() {
         return approved()
           && profile().role == 'lgu_personnel'
@@ -2364,6 +2391,7 @@ service cloud.firestore {
         && request.resource.data.updatedAt is timestamp;
       allow update: if isAdmin()
         && validStatusTransition()
+        && preserveAcceptedAutoWinner()
         && (
           !('responseVehicleType' in request.resource.data)
           || request.resource.data.responseVehicleType in [
@@ -4080,6 +4108,22 @@ service cloud.firestore {
     }
     match /responseAssignments/{assignmentId} {
 
+      // Phase 5 DRAFT: never allow a client-side "offered" -> accepted
+      // transition on a server-managed automatic offer. The automatic
+      // case winner and lock must be decided together by the reviewed
+      // backend transaction. Manual client transitions remain unchanged.
+      function isServerManagedAutomaticOffer() {
+        return ('offerMode' in resource.data)
+          && resource.data.offerMode is string
+          && resource.data.offerMode.matches('^automatic_.*');
+      }
+      function autoWinnerMatchesThisAssignment() {
+        let incident = assignmentCase();
+        return incident.get('autoVolunteerAcceptedAssignmentId', '') == assignmentId
+          && incident.get('activeVolunteerSupportAssignmentId', '') == assignmentId
+          && incident.get('activeVolunteerSupportUid', '') == request.auth.uid;
+      }
+
       function hasVerifiedIdentity(data) {
         return (
           (
@@ -4270,6 +4314,11 @@ service cloud.firestore {
           'declined',
           'cancelled'
         ]
+        // Admin may cancel an automatic task but never forge automatic acceptance.
+        && (
+          !isServerManagedAutomaticOffer()
+          || request.resource.data.status == 'cancelled'
+        )
         && request.resource.data.updatedAt is timestamp;
       allow update: if isVolunteer()
         && resource.data.volunteerId == request.auth.uid
@@ -4280,6 +4329,16 @@ service cloud.firestore {
         && assignmentCase().reporterUid != request.auth.uid
         && validVolunteerResponseTransition()
         && validVolunteerResponseFields()
+        // Automatic offers are NOT accepted/declined by old browser/mobile
+        // clients. Once accepted by the server and marked as the selected
+        // winner, only that Volunteer may continue the task lifecycle.
+        && (
+          !isServerManagedAutomaticOffer()
+          || (
+            resource.data.status != 'offered'
+            && autoWinnerMatchesThisAssignment()
+          )
+        )
         && request.resource.data.updatedAt is timestamp;
       allow update: if isResident()
         && assignmentCase().reporterUid == request.auth.uid

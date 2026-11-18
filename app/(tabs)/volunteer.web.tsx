@@ -24,6 +24,7 @@ import {
 } from "react-native";
 
 import { db } from "../../lib/firebase";
+import { volunteerTransitionConflictReason } from "../../lib/emergencyVolunteerWinnerGuard";
 import {
   activeModeForProfile,
   hasVolunteerAccess,
@@ -574,6 +575,24 @@ export default function VolunteerTasksWeb() {
           }
         }
 
+        // Phase 5 draft: fail closed for direct client decisions on automatic
+        // offers. Those require a separate authenticated server transaction.
+        // Preserve existing manual Accept/Decline and later lifecycle behavior
+        // unless the refreshed case points to a DIFFERENT winning assignment.
+        // This is UI protection only; production Firestore Rules must also
+        // enforce the invariant before enabling automatic offers.
+        const conflict = volunteerTransitionConflictReason(
+          caseData,
+          {
+            id: assignment.id,
+            volunteerId: current.volunteerId,
+            offerMode: (current as any).offerMode,
+          },
+          next
+        );
+        if (conflict) {
+          throw new Error(conflict);
+        }
         if (next === "completed") {
           if (!caseId || !caseData) {
             throw new Error(
