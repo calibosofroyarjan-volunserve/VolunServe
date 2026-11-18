@@ -58,15 +58,15 @@ async function fixtureSummary({db,authClient,env}) {
       db.collection("users").doc(f.uid).get(),
       db.collection("volunteerApplications").doc(f.uid).get()
     ]);
-    let authExists=false;
+    let authRecord=null;
     try{
-      await authClient.getUser(f.uid);
-      authExists=true;
+      authRecord=await authClient.getUser(f.uid);
     }catch(error){
       if(error?.code!=="auth/user-not-found")throw error;
     }
-    const owned=u.exists&&a.exists&&isOurs(u.data(),a.data(),f);
-    const unused=!u.exists&&!a.exists&&!authExists;
+    const owned=u.exists&&a.exists&&isOurs(u.data(),a.data(),f) &&
+      authRecord?.email===f.email;
+    const unused=!u.exists&&!a.exists&&!authRecord;
     slots.push({slot:f.slot,email:f.email,
       state:owned&&authExists?"existing":unused?"available":"blocked"});
   }
