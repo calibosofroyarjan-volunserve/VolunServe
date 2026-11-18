@@ -33,6 +33,7 @@ import {
 } from "react-native";
 
 import { db } from "../../lib/firebase";
+import { manualOfferConflictReason } from "../../lib/emergencyVolunteerWinnerGuard";
 
 const BACKEND_URL = "https://volunserve.onrender.com";
 
@@ -2974,6 +2975,21 @@ export default function AdminCases() {
 
         const currentCase: any = caseSnapshot.data();
         const currentVolunteer: any = volunteerSnapshot.data();
+
+        // Phase 5 compatibility: check the latest case document INSIDE the
+        // existing manual-offer transaction. Since this case is read and
+        // later updated by the transaction, an accepted automatic responder
+        // racing with this offer forces a retry and recheck of this guard.
+        // Prevent overwriting a confirmed automatic winner OR a different
+        // active manual offer. Preserve reoffer for the same declined task.
+        const winnerConflict = manualOfferConflictReason(
+          currentCase,
+          assignmentRef.id,
+          volunteer.uid
+        );
+        if (winnerConflict) {
+          throw new Error(winnerConflict);
+        }
 
         const currentCaseBarangayRaw = String(
           currentCase.incidentBarangay ||
