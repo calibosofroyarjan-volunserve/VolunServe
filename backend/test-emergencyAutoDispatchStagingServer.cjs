@@ -486,3 +486,91 @@ test("Volunteer and Admin production-compatible staging integration remains fail
   assert.match(admin,/api\/admin\/emergency-auto\/verify-test/);
   assert.match(admin,/verifyTest.disabled/);
 });
+
+
+test("staging fixture diagnostic returns field names only, never identities or values",()=>{
+  const {diagnoseSyntheticFixtureFields}=require("./emergencyStagingReadiness");
+  const base={title:"TEST ONLY - Dummy Emergency",status:"validated",
+    verificationStatus:"validated",dispatchBlocked:false,
+    requiredSkills:["First Aid"],reporterUid:"private-resident-123"};
+  assert.deepEqual(diagnoseSyntheticFixtureFields(base),[]);
+  const invalid={...base,status:"draft",verificationStatus:"pending",
+    dispatchBlocked:true,requiredSkills:"text"};
+  const fields=diagnoseSyntheticFixtureFields(invalid);
+  assert.deepEqual(fields,["status","verificationStatus","dispatchBlocked","requiredSkills"]);
+  assert.ok(!JSON.stringify(fields).includes("private-resident"));
+  assert.ok(!JSON.stringify(fields).includes("draft"));
+  assert.deepEqual(diagnoseSyntheticFixtureFields({...invalid,title:"Actual emergency"}),[]);
+});
+test("fresh staging diagnostic requires approved Admin authentication and isolated project",async()=>{
+  const path="/api/admin/emergency-auto/preflight";
+  await withServer({},async({url,calls})=>{
+    let response=await fetch(url+path);
+    assert.equal(response.status,401);
+    response=await fetch(url+path,{headers:{Authorization:"Bearer test-token"}});
+    assert.equal(response.status,503);
+    assert.equal((await response.json()).error,"isolated_staging_not_configured");
+    assert.deepEqual(calls,[]);
+  });
+  await withServer({admin:false},async({url,calls})=>{
+    const response=await fetch(url+path,{headers:{Authorization:"Bearer test-token"}});
+    assert.equal(response.status,403);
+    assert.deepEqual(calls,[]);
+  });
+});
+
+
+test("approved staging Admin receives only fresh dummy case field names, with zero writes",async()=>{
+  const tenant="volunserve-volunteer-staging";
+  const original={title:"TEST ONLY - Dummy Emergency",status:"unverified",
+    verificationStatus:"pending_verification",dispatchBlocked:true,
+    requiredSkills:"First Aid",reporterUid:"synthetic-resident",
+    validatedBy:"synthetic-admin",incidentBarangay:"Bagong Buhay I"};
+  let readCount=0,writes=0;
+  const firestore={collection(name){
+    if(name==="disasterCases") return {doc(id){
+      assert.equal(id,"STAGING_TEST_001");
+      return {get:async()=>{readCount++;return {exists:true,data:()=>({...original})};}};
+    }};
+    if(name==="systemSettings") return {doc(){return {get:async()=>({exists:true})};}};
+    if(name==="users") return {doc(uid){
+      const records={
+        "synthetic-admin":{role:"admin",status:"approved"},
+        "synthetic-resident":{role:"resident",status:"approved"},
+      };
+      return {get:async()=>({exists:!!records[uid],data:()=>records[uid]})};
+    }};
+    throw Error("Unexpected Firestore collection "+name);
+  },set:()=>{writes++;throw Error("No writes allowed");}};
+  const app=makeApp({
+    authClient:{verifyIdToken:async()=>({uid:"synthetic-admin"})},
+    firestore,
+    worker:{config:{onDemandReady:false,ready:false}},
+    env:{VOLUNSERVE_AUTO_VOLUNTEER_STAGING_PROJECT_ID:tenant,
+      FIREBASE_SERVICE_ACCOUNT_JSON:JSON.stringify({project_id:tenant})}
+  });
+  const server=app.listen(0,"127.0.0.1");
+  try {
+    await new Promise((resolve,reject)=>{
+      if(server.listening)resolve();
+      else {server.once("listening",resolve);server.once("error",reject);}
+    });
+    const base="http://127.0.0.1:"+server.address().port;
+    const response=await fetch(base+"/api/admin/emergency-auto/preflight",{
+      headers:{Authorization:"Bearer synthetic-admin-token"}
+    });
+    assert.equal(response.status,200);
+    const result=await response.json();
+    assert.deepEqual(result.invalidFields,[
+      "status","verificationStatus","dispatchBlocked","requiredSkills"]);
+    assert.equal(result.status,"blocked");
+    assert.equal(result.reason,"invalid_test_case_fields");
+    assert.equal(result.eligible,0);
+    assert.ok(readCount>=1);
+    assert.equal(writes,0);
+    assert.ok(!JSON.stringify(result).includes("synthetic-resident"));
+    assert.ok(!JSON.stringify(result).includes("unverified"));
+  } finally {
+    await new Promise(resolve=>server.close(resolve));
+  }
+});

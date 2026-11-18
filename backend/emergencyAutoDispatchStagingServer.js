@@ -17,7 +17,7 @@ const knownBarangays = require("../functions/sjdmBarangays.json");
 const {auth, db} = require("./firebaseAdmin");
 const {isOperationalAdminProfile} = require("./adminAccess");
 const {createRenderAutoDispatchWorker,verifiedStagingProject} = require("./emergencyAutoDispatchWorker");
-const {inspectStagingTestCase} = require("./emergencyStagingReadiness");
+const {inspectStagingTestCase,diagnoseSyntheticFixtureFields} = require("./emergencyStagingReadiness");
 const {getVolunteerOffer,respondToStagingOffer,resetExpiredFixture,
   inspectStagingAssignmentConsistency,CASE_ID} =
   require("./stagingVolunteerTask");
@@ -218,6 +218,27 @@ function makeApp({authClient = auth, firestore = db, worker, env = process.env} 
     response.json({ok:true,activationReady:matcher.config.onDemandReady === true,
       onDemandEnabled:matcher.config.onDemandReady === true,
       workerEnabled:false,workerMode:"staging_admin_on_demand_only"});
+  });
+  // Fresh, authenticated diagnostic for the ONLY fictional staging case.
+  // Unlike startup /health, this reflects edits made after server startup.
+  // Return field NAMES only; never expose user IDs or the raw report payload.
+  app.get("/api/admin/emergency-auto/preflight",requireStagingAdmin,async(_request,response)=>{
+    if(!stagingServiceAccountMatches)
+      return response.status(503).json({ok:false,error:"isolated_staging_not_configured"});
+    try {
+      const readiness=await inspectStagingTestCase(firestore);
+      let invalidFields=[];
+      if(readiness.reason==="invalid_test_case_fields"){
+        const fixture=await firestore.collection("disasterCases").doc(CASE_ID).get();
+        if(fixture.exists)invalidFields=diagnoseSyntheticFixtureFields(fixture.data());
+      }
+      response.set("Cache-Control","no-store");
+      response.json({ok:true,...readiness,invalidFields});
+    }catch(error){
+      console.warn("Staging fixture preflight unavailable",
+        String(error?.code||"unknown").slice(0,70));
+      response.status(503).json({ok:false,error:"staging_preflight_unavailable"});
+    }
   });
   // One fictional case only. Authenticated, read-only diagnostics; no
   // UIDs, user details or payloads from actual Emergency Reports are returned.

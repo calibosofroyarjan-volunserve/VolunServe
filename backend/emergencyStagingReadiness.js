@@ -50,4 +50,18 @@ async function inspectStagingTestCase(db) {
   return {status:"ready",reason:"eligible_synthetic_case_no_write",
     eligible:plan.counts.eligible,wave:recommendation.wave};
 }
-module.exports={inspectStagingTestCase,TEST_CASE_ID};
+/**
+ * Field names only. This is for an authenticated staging Admin diagnostic;
+ * never echo incident values, IDs, identities, or arbitrary Firestore data.
+ * Existing preflight result shapes and matching logic remain unchanged.
+ */
+function diagnoseSyntheticFixtureFields(incident) {
+  if (!incident || incident.title !== "TEST ONLY - Dummy Emergency") return [];
+  const invalid=[];
+  if (incident.status !== "validated") invalid.push("status");
+  if (incident.verificationStatus !== "validated") invalid.push("verificationStatus");
+  if (incident.dispatchBlocked === true) invalid.push("dispatchBlocked");
+  if (!Array.isArray(incident.requiredSkills)) invalid.push("requiredSkills");
+  return invalid;
+}
+module.exports={inspectStagingTestCase,diagnoseSyntheticFixtureFields,TEST_CASE_ID};
