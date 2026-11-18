@@ -40,6 +40,7 @@ import {
 } from "react-native";
 
 import { db } from "../../lib/firebase";
+import { ensureStagingBulkOffersAfterAdminValidation, STAGING_BULK_CASE_ID } from "../../lib/stagingBulkVolunteerClient";
 import { safePublicAdvisoryBarangay } from "../../lib/emergencyPublicAdvisory";
 import { SJDM_BARANGAYS } from "../../constants/sjdmBarangays";
 import { VolunteerEligibilityValidation } from "../../components/admin/VolunteerEligibilityValidation";
@@ -1825,6 +1826,26 @@ export default function AdminCases() {
     }
     setBusyKey("auto_" + incident.id);
     try {
+      if (AUTOMATIC_VOLUNTEER_STAGING_ONLY &&
+          incident.id === STAGING_BULK_CASE_ID) {
+        if (action !== "start") {
+          throw new Error(
+            "Fictional batch test control cannot disable active responder offers. Use isolated staging Admin review.",
+          );
+        }
+        const outcome = await ensureStagingBulkOffersAfterAdminValidation(
+          incident.id, String(getAuth().app.options.projectId || ""), user,
+        );
+        if (!quiet) {
+          Alert.alert(
+            "Fictional Bulk Offers",
+            outcome.status === "already_started"
+              ? "Existing staging offers preserved. No duplicate tasks were sent."
+              : `Staging server offered Wave ${outcome.wave || "?"} to ${outcome.offered || 0} eligible Volunteers. Each must Accept/Decline separately.`,
+          );
+        }
+        return true;
+      }
       if (AUTOMATIC_VOLUNTEER_PROVIDER === "render") {
         const token = await user.getIdToken();
         const response = await fetch(
@@ -2087,7 +2108,9 @@ export default function AdminCases() {
             { ...incident, incidentBarangay: verifiedIncidentBarangay }, "start", true,
           );
           volunteerMessage = matchingChecked
-            ? "The server checked automatic Volunteer matching. Check the saved offer status; nobody is assigned until they accept."
+            ? AUTOMATIC_VOLUNTEER_STAGING_ONLY && incident.id === STAGING_BULK_CASE_ID
+              ? "The isolated staging server checked all-eligible offers for the fictional test. Volunteers must Accept/Decline individually; no real response started."
+              : "The server checked automatic Volunteer matching. Check the saved offer status; nobody is assigned until they accept."
             : "Automatic matching was unavailable. Use the Admin Volunteer Matching tab to retry or coordinate manually.";
         }
         // Publishing is separate, so an Announcements permission error cannot
