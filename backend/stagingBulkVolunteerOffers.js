@@ -225,6 +225,8 @@ async function batchStatus(db){
   const rows=all.docs.map(d=>d.data()).filter(a=>a.offerMode==="staging_bulk_all_eligible");
   return {status:session.data().status,wave:session.data().wave,
     offered:rows.length,pending:rows.filter(a=>a.status==="offered").length,
+    expired:rows.filter(a=>a.status==="offered" &&
+      Number(a.expiresAtMs||0)<=Date.now()).length,
     accepted:rows.filter(a=>["accepted","responding","on_site","completed"].includes(a.status)).length,
     declined:rows.filter(a=>a.status==="declined").length};
 }

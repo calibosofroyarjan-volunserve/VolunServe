@@ -27,6 +27,7 @@ const {chooseAllEligibleWave}=require("../functions/emergencyAllEligibleWavePlan
 const {startBatchOffers,getBatchOffer,respondBatchOffer,batchStatus}
   =require("./stagingBulkVolunteerOffers");
 const {advanceBatchWave}=require("./stagingBulkWaveAdvance");
+const {retryExpiredBatch002}=require("./staging002ExpiredBulkRetry");
 const {summarizeStaging002Eligibility}=require("./staging002EligibilitySummary");
 const {fixtureSummary,provisionFixtures}=require("./staging002TestVolunteerProvisioning");
 const knownSJDMBgy=require("../functions/sjdmBarangays.json");
@@ -392,6 +393,27 @@ function makeApp({authClient = auth, firestore = db, worker, env = process.env} 
     });
   // Explicit Admin retry is useful when a Free staging instance was asleep
   // during the 3-minute offer deadline. No real-case requests are accepted.
+  // Separate TEST-ONLY expired batch retry. Not the legacy single-offer
+  // reissue path; explicitly confirmed by approved staging Admin only.
+  app.post("/api/admin/emergency-auto/e2e-002/bulk-reissue",
+    requireStagingAdmin,requireActivation,async(request,response)=>{
+      if(!stagingServiceAccountMatches||!bulk002Enabled)
+        return response.status(503).json({ok:false,error:"isolated_bulk_staging_disabled"});
+      if(request.body?.caseId!==E2E_CASE_ID ||
+        request.body?.confirmExpiredBulkRetry!==true)
+        return response.status(400).json({ok:false,error:"explicit_bulk_retry_confirmation_required"});
+      try{
+        const result=await retryExpiredBatch002(
+          firestore,response.locals.stagingAdminUid);
+        response.set("Cache-Control","no-store");
+        response.status(result.status==="blocked"?409:200)
+          .json({ok:result.status!=="blocked",...result});
+      }catch(error){
+        console.warn("Fixed fictional expired bulk retry unavailable",
+          String(error?.code||"unknown").slice(0,60));
+        response.status(503).json({ok:false,error:"staging_bulk_retry_unavailable"});
+      }
+    });
   app.post("/api/admin/emergency-auto/e2e-002/bulk-reconcile",
     requireStagingAdmin,requireActivation,async(request,response)=>{
       if(!autoWaves002||request.body?.caseId!==E2E_CASE_ID)
