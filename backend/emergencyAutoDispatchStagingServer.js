@@ -58,7 +58,9 @@ function makeApp({authClient = auth, firestore = db, worker, env = process.env} 
   // same-origin. Without this exact origin they hit staging_request_blocked.
   // Explicit allowlisting preserves the cross-origin deny-by-default policy.
   const SAME_ORIGIN_STAGING = "https://volunserve-emergency-match-staging-free.onrender.com";
-  const allowedOrigins = new Set([SAME_ORIGIN_STAGING,
+  // Separate read-only Expo web review deployed from PR #576, NEVER the live site.
+  const REVIEW_WEB_ORIGIN = "https://volunserve-auto-volunteer-ui-staging.onrender.com";
+  const allowedOrigins = new Set([SAME_ORIGIN_STAGING, REVIEW_WEB_ORIGIN,
     ...String(env.VOLUNSERVE_AUTO_VOLUNTEER_STAGING_ALLOWED_ORIGINS || "")
       .split(",").map(x => x.trim()).filter(x => /^https:\/\/[a-z0-9.-]+$/i.test(x))]);
   app.disable("x-powered-by");
