@@ -1,5 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { Redirect, useRouter } from "expo-router";
+import { getAuth } from "firebase/auth";
 import {
   collection,
   doc,
@@ -27,6 +28,7 @@ import {
 } from "react-native";
 
 import { db } from "../../lib/firebase";
+import { isStagingBulkAssignment, respondToStagingBulkOffer } from "../../lib/stagingBulkVolunteerClient";
 import {
   activeModeForProfile,
   hasVolunteerAccess,
@@ -52,6 +54,9 @@ type ResponseAssignment = {
   volunteerName?: string;
   status?: AssignmentStatus;
   createdBy?: string;
+  offerMode?: string;
+  wave?: number;
+  expiresAtMs?: number;
   createdAt?: any;
   updatedAt?: any;
   responseStartedAt?: any;
@@ -523,6 +528,38 @@ export default function VolunteerTasks() {
       !profile ||
       busyId
     ) {
+      return;
+    }
+
+    // Bulk staging offers require server-owned reservation, response lock
+    // and audit writes. Never fall through to a client Firestore transaction.
+    if (isStagingBulkAssignment(assignment)) {
+      try {
+        setBusyId(assignment.id);
+        setError("");
+        if (next !== "accepted" && next !== "declined") {
+          throw new Error("Fictional staging tasks only support Accept/Decline. Live response tracking remains disabled.");
+        }
+        const auth = getAuth();
+        const signedIn = auth.currentUser;
+        if (!signedIn || signedIn.uid !== user.uid) {
+          throw new Error("Sign in with your staging Volunteer test account.");
+        }
+        await respondToStagingBulkOffer(
+          assignment, next, user.uid, String(auth.app.options.projectId || ""), signedIn,
+        );
+        Alert.alert(
+          next === "accepted" ? "Fictional Offer Accepted" : "Fictional Offer Declined",
+          "Saved by the isolated staging server. No real emergency response was started.",
+        );
+        if (next === "accepted") setFilter("active");
+      } catch (problem) {
+        const message = problem instanceof Error ? problem.message : "Staging response unavailable.";
+        setError(message);
+        Alert.alert("Staging Test", message);
+      } finally {
+        setBusyId("");
+      }
       return;
     }
 
@@ -1454,6 +1491,12 @@ export default function VolunteerTasks() {
                     </View>
                   </View>
 
+                  {isStagingBulkAssignment(assignment) && (
+                    <Text style={styles.metaLabel}>
+                      FICTIONAL STAGING OFFER · Wave {assignment.wave || "?"} · Accept/Decline only
+                    </Text>
+                  )}
+
                   {status ===
                     "offered" && (
                     <View
@@ -1529,7 +1572,7 @@ export default function VolunteerTasks() {
                   )}
 
                   {status ===
-                    "accepted" && (
+                    "accepted" && !isStagingBulkAssignment(assignment) && (
                     <TouchableOpacity
                       style={[
                         styles.responseButton,
@@ -1561,7 +1604,7 @@ export default function VolunteerTasks() {
                   )}
 
                   {status ===
-                    "responding" && (
+                    "responding" && !isStagingBulkAssignment(assignment) && (
                     <TouchableOpacity
                       style={[
                         styles.arrivalButton,
@@ -1593,7 +1636,7 @@ export default function VolunteerTasks() {
                   )}
 
                   {status ===
-                    "on_site" && (
+                    "on_site" && !isStagingBulkAssignment(assignment) && (
                     <TouchableOpacity
                       style={
                         styles.completeButton
@@ -1633,7 +1676,7 @@ export default function VolunteerTasks() {
 
                   {ACTIVE_STATUSES.includes(
                     status
-                  ) && (
+                  ) && !isStagingBulkAssignment(assignment) && (
                     <TouchableOpacity
                       style={
                         styles.mapButton
