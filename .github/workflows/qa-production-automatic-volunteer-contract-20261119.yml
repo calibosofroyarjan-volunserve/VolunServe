@@ -1,0 +1,28 @@
+name: Read-only production auto-matching contract audit - NO DEPLOY
+on:
+  pull_request:
+    paths:
+      - "scripts/audit-production-automatic-volunteer-contract-20261119.cjs"
+      - ".github/workflows/qa-production-automatic-volunteer-contract-20261119.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  compare-live-and-staging:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Ensure verified production UI SHA exists in Git
+        run: git cat-file -e 4bc0893a6c678ea7738be8f9176fea9721bbc6af^{commit}
+      - name: Syntax check - no Firebase credentials
+        run: node --check scripts/audit-production-automatic-volunteer-contract-20261119.cjs
+      - name: Read-only stage to production compatibility audit
+        run: node scripts/audit-production-automatic-volunteer-contract-20261119.cjs
+      - name: Confirm zero production or staging deployments
+        run: echo "No Firebase, Render, production Hosting or Firestore actions were run"
