@@ -4286,6 +4286,11 @@ service cloud.firestore {
           'declined',
           'cancelled'
         ]
+        // Admin may cancel an automatic task but never forge automatic acceptance.
+        && (
+          !isServerManagedAutomaticOffer()
+          || request.resource.data.status == 'cancelled'
+        )
         && request.resource.data.updatedAt is timestamp;
       allow update: if isVolunteer()
         && resource.data.volunteerId == request.auth.uid
