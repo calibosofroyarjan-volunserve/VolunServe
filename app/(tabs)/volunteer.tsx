@@ -1,6 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
 import { Redirect, useRouter } from "expo-router";
-import { getAuth } from "firebase/auth";
 import {
   collection,
   doc,
@@ -28,7 +27,6 @@ import {
 } from "react-native";
 
 import { db } from "../../lib/firebase";
-import { isStagingBulkAssignment, respondToStagingBulkOffer } from "../../lib/stagingBulkVolunteerClient";
 import {
   activeModeForProfile,
   hasVolunteerAccess,
@@ -55,9 +53,6 @@ type ResponseAssignment = {
   volunteerName?: string;
   status?: AssignmentStatus;
   createdBy?: string;
-  offerMode?: string;
-  wave?: number;
-  expiresAtMs?: number;
   createdAt?: any;
   updatedAt?: any;
   responseStartedAt?: any;
@@ -532,41 +527,9 @@ export default function VolunteerTasks() {
       return;
     }
 
-    // Fictional case 002 is owned exclusively by the isolated backend.
-    // No legacy Firestore fallback on any server or authorization failure.
-    if (isStagingBulkAssignment(assignment)) {
-      try {
-        setBusyId(assignment.id);
-        setError("");
-        if (next !== "accepted" && next !== "declined") {
-          throw new Error("Fictional staging offers allow Accept/Decline only; live response tracking is disabled.");
-        }
-        const auth = getAuth();
-        const signedIn = auth.currentUser;
-        if (!signedIn || signedIn.uid !== user.uid) {
-          throw new Error("Sign in with the matching staging Volunteer test account.");
-        }
-        await respondToStagingBulkOffer(
-          assignment, next, user.uid, String(auth.app.options.projectId || ""), signedIn,
-        );
-        Alert.alert(
-          next === "accepted" ? "Fictional Offer Accepted" : "Fictional Offer Declined",
-          "Saved by isolated staging server; no real emergency response was started.",
-        );
-        if (next === "accepted") setFilter("active");
-      } catch (problem) {
-        const message = problem instanceof Error ? problem.message : "Staging offer response unavailable.";
-        setError(message);
-        Alert.alert("Staging Test", message);
-      } finally {
-        setBusyId("");
-      }
-      return;
-    }
-
     // Staging auto-offers are server-validated for expiry/ownership via
     // the dedicated staging portal, not the legacy direct Firestore write.
-    if (isStagingAutoMatchedTask(assignment) && !isStagingBulkAssignment(assignment) &&
+    if (isStagingAutoMatchedTask(assignment) &&
         (next === "accepted" || next === "declined")) {
       Alert.alert(
         "Staging Auto-Match Preview",
@@ -1469,15 +1432,12 @@ export default function VolunteerTasks() {
                     </View>
                   </View>
 
-                  {isStagingAutoMatchedTask(assignment) && !isStagingBulkAssignment(assignment) && (
+                  {isStagingAutoMatchedTask(assignment) && (
                     <Text style={{ color: "#0f766e", fontSize: 11, marginBottom: 9, fontWeight: "700" }}>
                       STAGING AUTO-MATCH PREVIEW ONLY — Respond through the verified staging Volunteer portal.
                     </Text>
                   )}
 
-                  {isStagingBulkAssignment(assignment) && (
-                    <Text style={styles.metaLabel}>FICTIONAL STAGING OFFER · Wave {assignment.wave || "?"} · Accept/Decline only</Text>
-                  )}
                   {status ===
                     "offered" && (
                     <View
@@ -1553,7 +1513,7 @@ export default function VolunteerTasks() {
                   )}
 
                   {status ===
-                    "accepted" && !isStagingBulkAssignment(assignment) && (
+                    "accepted" && (
                     <TouchableOpacity
                       style={[
                         styles.responseButton,
@@ -1585,7 +1545,7 @@ export default function VolunteerTasks() {
                   )}
 
                   {status ===
-                    "responding" && !isStagingBulkAssignment(assignment) && (
+                    "responding" && (
                     <TouchableOpacity
                       style={[
                         styles.arrivalButton,
@@ -1617,7 +1577,7 @@ export default function VolunteerTasks() {
                   )}
 
                   {status ===
-                    "on_site" && !isStagingBulkAssignment(assignment) && (
+                    "on_site" && (
                     <TouchableOpacity
                       style={
                         styles.completeButton
@@ -1657,7 +1617,7 @@ export default function VolunteerTasks() {
 
                   {ACTIVE_STATUSES.includes(
                     status
-                  ) && !isStagingBulkAssignment(assignment) && (
+                  ) && (
                     <TouchableOpacity
                       style={
                         styles.mapButton
