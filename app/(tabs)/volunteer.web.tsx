@@ -1130,6 +1130,7 @@ export default function VolunteerTasksWeb() {
                     <Text style={styles.metaLabel}>FICTIONAL STAGING OFFER · Wave {assignment.wave || "?"} · Accept/Decline only</Text>
                   )}
                   {offered && (
+                    <>
                       <TouchableOpacity
                         style={[styles.acceptButton, busy && styles.buttonDisabled]}
                         disabled={busy}
