@@ -17,7 +17,10 @@ const HOST="127.0.0.1:8080";
 const INACTIVE=new Set(["declined","cancelled","completed"]);
 const validId=x=>typeof x==="string"&&/^[A-Za-z0-9_-]{1,160}$/.test(x);
 function emulatorReady(env=process.env){
-  return env.FIRESTORE_EMULATOR_HOST===HOST &&
+  // A fabricated injected options object must never unlock real Firestore.
+  // Both runtime and caller must be the same actual demo-process environment.
+  return env===process.env &&
+    process.env.FIRESTORE_EMULATOR_HOST===HOST &&
     env.GCLOUD_PROJECT===PROJECT &&
     (!env.GOOGLE_CLOUD_PROJECT||env.GOOGLE_CLOUD_PROJECT===PROJECT) &&
     !env.FIREBASE_SERVICE_ACCOUNT_JSON &&
