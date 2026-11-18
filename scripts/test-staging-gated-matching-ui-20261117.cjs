@@ -26,7 +26,25 @@ const additions=new Set([
  ".github/workflows/validate-staging-gated-matching-ui-20261117.yml",
  "docs/STAGING_GATED_MATCHING_UI_REVIEW_20261117.md",
 ]);
-const original=(path)=>cp.execFileSync("git",["show",BASE+":"+path],{encoding:"utf8"});
+// Render checks out staging deploys with shallow history. Recover the exact
+// public review baseline from its named branch, rather than skipping checks.
+// Full GitHub CI already has this commit and never needs a network fetch.
+let baselineFetched=false;
+function original(path){
+  try{
+    return cp.execFileSync("git",["show",BASE+":"+path],{encoding:"utf8",stdio:["ignore","pipe","pipe"]});
+  }catch(firstError){
+    if(!baselineFetched){
+      cp.execFileSync("git",[
+        "fetch","--no-tags","origin",
+        "refs/heads/feat/live-derived-additive-volunteer-matching-20261117"
+      ],{encoding:"utf8",stdio:["ignore","pipe","pipe"]});
+      baselineFetched=true;
+    }
+    // Still fail closed if the pinned commit's tree cannot be verified.
+    return cp.execFileSync("git",["show",BASE+":"+path],{encoding:"utf8"});
+  }
+}
 function includesAllOriginalLines(path){
  const older=original(path).split("\n"),latest=fs.readFileSync(path,"utf8").split("\n");
  let j=0;
