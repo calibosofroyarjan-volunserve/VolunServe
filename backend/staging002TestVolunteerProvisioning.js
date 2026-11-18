@@ -68,7 +68,7 @@ async function fixtureSummary({db,authClient,env}) {
       authRecord?.email===f.email;
     const unused=!u.exists&&!a.exists&&!authRecord;
     slots.push({slot:f.slot,email:f.email,
-      state:owned&&authExists?"existing":unused?"available":"blocked"});
+      state:owned?"existing":unused?"available":"blocked"});
   }
   return {status:slots.some(s=>s.state==="blocked")?"blocked":"ready",
     reason:slots.some(s=>s.state==="blocked")?"fixture_slot_conflict":"none",
