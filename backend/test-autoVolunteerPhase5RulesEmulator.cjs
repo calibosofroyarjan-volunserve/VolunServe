@@ -12,7 +12,7 @@ const fs=require("node:fs");
 const path=require("node:path");
 const {initializeTestEnvironment,assertSucceeds,assertFails}
   =require("@firebase/rules-unit-testing");
-const {doc,setDoc,updateDoc,serverTimestamp}
+const {doc,setDoc,updateDoc,runTransaction,serverTimestamp}
   =require("firebase/firestore");
 const PROJECT="demo-volunserve-auto-phase4";
 if(process.env.FIRESTORE_EMULATOR_HOST!=="127.0.0.1:8080" ||
@@ -114,4 +114,73 @@ test("legacy Admin cannot forge an automatic accepted status but can cancel an a
    status:"cancelled",updatedAt:serverTimestamp()
  }));
 });
+
+test("outdated Admin client cannot overwrite the case pointer of an accepted automatic Volunteer",async()=>{
+ const {caseId,aid}=await seed("admin_winner_protection",{
+   automatic:true,status:"accepted",selected:true
+ });
+ const admin="phase5_rules_admin_pointer";
+ await env.withSecurityRulesDisabled(async context=>{
+   await setDoc(doc(context.firestore(),"users",admin),{
+     uid:admin,role:"admin",status:"approved",adminStatus:"active"
+   });
+ });
+ const context=env.authenticatedContext(admin);
+ const ref=doc(context.firestore(),"disasterCases",caseId);
+ await assertFails(updateDoc(ref,{
+   activeVolunteerSupportAssignmentId:"other_manual_offer",
+   activeVolunteerSupportUid:"other_manual_user",
+   updatedAt:serverTimestamp()
+ }));
+ // The *old* case pointer cannot be hijacked after a successful auto accept.
+ await assertSucceeds(updateDoc(ref,{adminNote:"Unrelated review note",
+   updatedAt:serverTimestamp()}));
+ assert.equal(typeof aid,"string");
+});
+test("outdated Admin client cannot forge auto winner marker on a manual case",async()=>{
+ const {caseId,aid}=await seed("forged_auto_winner",{
+   automatic:false,status:"offered",selected:true
+ });
+ const admin="phase5_rules_admin_forge";
+ await env.withSecurityRulesDisabled(async context=>{
+   await setDoc(doc(context.firestore(),"users",admin),{
+     uid:admin,role:"admin",status:"approved",adminStatus:"active"
+   });
+ });
+ const context=env.authenticatedContext(admin);
+ await assertFails(updateDoc(doc(context.firestore(),"disasterCases",caseId),{
+   autoVolunteerAcceptedAssignmentId:aid,
+   updatedAt:serverTimestamp()
+ }));
+});
+test("atomic Admin cancellation clears only its matching accepted automatic winner",async()=>{
+ const {caseId,aid}=await seed("auto_cancel",{
+   automatic:true,status:"accepted",selected:true
+ });
+ const admin="phase5_rules_admin_cancel";
+ await env.withSecurityRulesDisabled(async context=>{
+   await setDoc(doc(context.firestore(),"users",admin),{
+     uid:admin,role:"admin",status:"approved",adminStatus:"active"
+   });
+ });
+ const context=env.authenticatedContext(admin);
+ const db=context.firestore();
+ await assertSucceeds(runTransaction(db,async tx=>{
+   const assignment=doc(db,"responseAssignments",aid);
+   const incident=doc(db,"disasterCases",caseId);
+   const [assignmentDoc,incidentDoc]=await Promise.all([
+     tx.get(assignment),tx.get(incident)
+   ]);
+   assert.equal(assignmentDoc.exists(),true);
+   assert.equal(incidentDoc.exists(),true);
+   tx.update(assignment,{status:"cancelled",updatedAt:serverTimestamp()});
+   tx.update(incident,{
+     autoVolunteerAcceptedAssignmentId:"",
+     activeVolunteerSupportAssignmentId:"",
+     activeVolunteerSupportUid:"",
+     updatedAt:serverTimestamp()
+   });
+ }));
+});
+
 test.after(async()=>{if(env)await env.cleanup()});
