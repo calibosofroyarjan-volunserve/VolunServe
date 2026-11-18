@@ -7,7 +7,7 @@ const CASE_TITLE="TEST ONLY - Dummy Emergency";
 const E2E_CASE_ID="STAGING_E2E_002";
 const E2E_CASE_TITLE="TEST ONLY - Fresh Volunteer E2E 002";
 const TITLES=Object.freeze({[CASE_ID]:CASE_TITLE,[E2E_CASE_ID]:E2E_CASE_TITLE});
-const titleForCase=caseId=>TITLES[caseId] || null;
+const titleForCase=caseId=>Object.hasOwn(TITLES,caseId)?TITLES[caseId]:null;
 function recognizedStagingCase(data,caseId){
   return !!data && data.title===titleForCase(caseId) &&
     (caseId===CASE_ID ||
