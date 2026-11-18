@@ -51,6 +51,7 @@ a{color:#075c49}input:focus-visible,button:focus-visible{outline:3px solid #4db8
 <p>This is a NEW fictional report, separate from the accepted STAGING_TEST_001. It starts unvalidated and uses only the already-approved staging test Resident. Admin must explicitly create, validate, and offer. It cannot assign official responders or operate on production Firebase.</p>
 <div class="buttons">
 <button type="button" class="secondary" id="check-002" disabled>Check 002 readiness</button>
+<button type="button" class="secondary" id="eligibility-002" disabled>Why 0 eligible Volunteers? (read-only)</button>
 <button type="button" class="secondary" id="create-002" disabled>Create fictional 002</button>
 <button type="button" class="secondary" id="validate-002" disabled>Validate fictional 002</button>
 <button type="button" id="offer-002" disabled>Offer single task for 002 (legacy)</button>
@@ -93,7 +94,7 @@ const reissueTest=document.getElementById("reissue-test");
 const verifyTest=document.getElementById("verify-test");
 const fixtureCheck=document.getElementById("fixture-check");
 const prepareTest=document.getElementById("prepare-test");
-const ids002=["check-002","create-002","validate-002","offer-002","verify-002","reissue-002","bulk-offer-002","bulk-status-002"];
+const ids002=["check-002","create-002","validate-002","offer-002","verify-002","reissue-002","bulk-offer-002","bulk-status-002","eligibility-002"];
 const el002=id=>document.getElementById(id);
 const show002=message=>{el002("e2e-002-status").textContent=message;};
 function disable002(){ids002.forEach(id=>{el002(id).disabled=true;});}
@@ -112,6 +113,7 @@ async function refresh002(){
   const data=await api002("/api/admin/emergency-auto/e2e-002/preflight");
   const status=String(data.status||"unknown");
   el002("check-002").disabled=false;
+  el002("eligibility-002").disabled=false;
   el002("create-002").disabled=!(stagingActivationReady&&status==="not_created");
   el002("validate-002").disabled=!(stagingActivationReady&&status==="reported");
   el002("offer-002").disabled=!(stagingActivationReady&&status==="ready");
@@ -135,6 +137,24 @@ async function refresh002(){
     "No real dispatch. This readiness check is read-only.");
   return data;
 }
+el002("eligibility-002").addEventListener("click",async()=>{
+  try{
+    const d=await api002("/api/admin/emergency-auto/e2e-002/eligibility-summary");
+    const reasons=Object.entries(d.excludedByReason||{})
+      .sort((a,b)=>Number(b[1])-Number(a[1]))
+      .map(([reason,count])=>"  "+reason+": "+count)
+      .join("\n") || "  none";
+    show002("FICTIONAL 002 — READ-ONLY VOLUNTEER ELIGIBILITY\n"+
+      "Approved applications: "+d.approvedApplications+"\n"+
+      "Evaluated: "+d.evaluated+"\n"+
+      "Eligible free Volunteers: "+d.eligible+"\n"+
+      "Same barangay (Wave 1): "+d.eligibleByWave?.wave1+"\n"+
+      "Neighbor (Wave 2): "+d.eligibleByWave?.wave2+"\n"+
+      "SJDM-wide (Wave 3): "+d.eligibleByWave?.wave3+"\n"+
+      "Exclusion reasons:\n"+reasons+"\n"+
+      "No names, UIDs, assignments, or user data returned. No records changed.");
+  }catch(error){show002("Eligibility check blocked: "+String(error?.message||"unknown"));}
+});
 el002("check-002").addEventListener("click",async()=>{
   try{await refresh002();}catch(error){show002(String(error?.message||"Readiness unavailable"));}
 });

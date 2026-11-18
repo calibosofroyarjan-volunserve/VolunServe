@@ -27,6 +27,7 @@ const {chooseAllEligibleWave}=require("../functions/emergencyAllEligibleWavePlan
 const {startBatchOffers,getBatchOffer,respondBatchOffer,batchStatus}
   =require("./stagingBulkVolunteerOffers");
 const {advanceBatchWave}=require("./stagingBulkWaveAdvance");
+const {summarizeStaging002Eligibility}=require("./staging002EligibilitySummary");
 const knownSJDMBgy=require("../functions/sjdmBarangays.json");
 const {createFreshTestCase,validateFreshTestCase,inspectFreshTestCase,recognized}
   =require("./stagingFreshCase002");
@@ -525,6 +526,23 @@ function makeApp({authClient = auth, firestore = db, worker, env = process.env} 
       }catch(error){
         console.warn("Fresh staging test readiness unavailable",String(error?.code||"unknown").slice(0,65));
         response.status(503).json({ok:false,error:"e2e_002_preflight_unavailable"});
+      }
+    });
+  // Read-only eligibility diagnosis for ONE fictional staging case only.
+  // Authenticated approved staging Admin; never returns volunteer identities.
+  app.get("/api/admin/emergency-auto/e2e-002/eligibility-summary",
+    requireStagingAdmin,async(_request,response)=>{
+      if(!stagingServiceAccountMatches)
+        return response.status(503).json({ok:false,error:"isolated_staging_not_configured"});
+      try{
+        const result=await summarizeStaging002Eligibility(firestore);
+        response.set("Cache-Control","no-store");
+        response.status(result.status==="blocked"?409:200)
+          .json({ok:result.status!=="blocked",...result});
+      }catch(error){
+        console.warn("Fictional staging 002 aggregate diagnosis failed",
+          String(error?.code||"unknown").slice(0,60));
+        response.status(503).json({ok:false,error:"staging_eligibility_summary_unavailable"});
       }
     });
   function explicitFreshAction(action){
