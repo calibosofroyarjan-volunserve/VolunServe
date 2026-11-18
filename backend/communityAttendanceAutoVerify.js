@@ -6,6 +6,8 @@ const AUTOMATIC_VERIFIER = "system:auto_attendance_v1";
 const MIN_AUTO_ATTENDANCE_MS = 60 * 1000;
 const MAX_ATTENDANCE_MS = 24 * 60 * 60 * 1000;
 const MAX_EVENT_PARTICIPANTS = 500;
+// Never retroactively auto-verify attendance from before this feature rollout.
+const AUTO_ATTENDANCE_ROLLOUT_MS = Date.parse("2026-11-18T00:00:00+08:00");
 
 function timestampMs(value) {
   if (!value || typeof value.toMillis !== "function") return 0;
@@ -50,6 +52,9 @@ function automaticAttendanceDecision({eventId, participantId, event, attendance,
       checkOut - checkIn < MIN_AUTO_ATTENDANCE_MS ||
       checkOut - checkIn > MAX_ATTENDANCE_MS || checkOut > nowMs + 60 * 1000) {
     return "invalid_or_short_attendance";
+  }
+  if (checkIn < AUTO_ATTENDANCE_ROLLOUT_MS || checkOut < AUTO_ATTENDANCE_ROLLOUT_MS) {
+    return "historical_attendance_requires_admin";
   }
   const window = eventWindow(event);
   if (!window || checkIn < window.earliest || checkIn > window.latest ||
