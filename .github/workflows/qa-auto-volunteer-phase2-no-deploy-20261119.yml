@@ -1,0 +1,57 @@
+name: Auto Volunteer Phase 2 Admin read-only preview - NO DEPLOY
+on:
+  pull_request:
+    branches:
+      - feat/auto-volunteer-production-planner-review-20261119
+    paths:
+      - "backend/autoVolunteerProductionPreviewReader.js"
+      - "backend/autoVolunteerAdminPreviewRoute.js"
+      - "backend/test-autoVolunteerAdminReadOnlyPreview.cjs"
+      - "docs/emergency-volunteer/PHASE2_ADMIN_READONLY_PREVIEW_20261119.md"
+      - ".github/workflows/qa-auto-volunteer-phase2-no-deploy-20261119.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  authenticated-readonly-preview-no-deploy:
+    if: github.repository == 'calibosofroyarjan-volunserve/VolunServe'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - name: Restrict PR to five additive Phase 2 files only
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin feat/auto-volunteer-production-planner-review-20261119
+          git diff --name-only origin/feat/auto-volunteer-production-planner-review-20261119 HEAD > /tmp/phase2-file-changes.txt
+          OTHER="$(grep -Ev '^(backend/autoVolunteerProductionPreviewReader\.js|backend/autoVolunteerAdminPreviewRoute\.js|backend/test-autoVolunteerAdminReadOnlyPreview\.cjs|docs/emergency-volunteer/PHASE2_ADMIN_READONLY_PREVIEW_20261119\.md|\.github/workflows/qa-auto-volunteer-phase2-no-deploy-20261119\.yml)$' /tmp/phase2-file-changes.txt || true)"
+          test -z "$OTHER" || { echo "BLOCKED: unexpected Phase 2 changes"; printf '%s\n' "$OTHER"; exit 1; }
+          echo "PASS: only five additive Phase 2 files (not live backend code)."
+      - name: Test admin auth, zero writes, bounded reads, privacy, default OFF
+        run: |
+          node --check backend/autoVolunteerProductionPreviewReader.js
+          node --check backend/autoVolunteerAdminPreviewRoute.js
+          node --check backend/test-autoVolunteerAdminReadOnlyPreview.cjs
+          node --test backend/test-autoVolunteerAdminReadOnlyPreview.cjs
+      - name: Test Phase 1 wave planner regressions
+        run: node --test backend/test-emergencyAutoVolunteerReadOnlyPlanner.cjs
+      - name: Install locked backend dependencies without lifecycle scripts
+        run: npm ci --prefix backend --ignore-scripts --no-audit --no-fund
+      - name: Verify existing production signup and certificate backend regressions
+        run: npm run check --prefix backend
+      - name: Assert production server remains unwired and this workflow NEVER deploys
+        run: |
+          if grep -Fq 'autoVolunteerAdminPreviewRoute' backend/server.js; then
+            echo "BLOCKED: read-only preview cannot be mounted by this PR"
+            exit 1
+          fi
+          echo "NO Firebase deploy, Firestore writes, Render deploy, Hosting deploy, Auth changes or real Volunteer offers."
