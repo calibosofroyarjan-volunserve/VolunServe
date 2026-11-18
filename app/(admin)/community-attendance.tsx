@@ -67,6 +67,7 @@ type Participant = {
   checkedOutAt?: unknown;
   attendanceVerified?: boolean;
   attendanceVerifiedAt?: unknown;
+  attendanceVerifiedBy?: string;
   assignedRole?: string;
   preferredRole?: string;
   // Present on some legacy participant records; otherwise read the user profile.
@@ -94,6 +95,7 @@ type CertificateSyncResult = {
   eligibleCount?: number;
   failedCount?: number;
   skippedCount?: number;
+  autoAttendance?: {verified?: number; reviewRequired?: number; failed?: number};
   message?: string;
   reason?: string;
 };
@@ -136,9 +138,13 @@ async function reconcileCommunityCertificates(
 }
 
 function certificateSyncSummary(result: CertificateSyncResult): string {
-  return `Certificates: ${result.issuedCount ?? 0} issued, ` +
+  const certificates = `Certificates: ${result.issuedCount ?? 0} issued, ` +
     `${result.alreadyExistingCount ?? 0} already existing, ` +
     `${result.skippedCount ?? 0} skipped.`;
+  return result.autoAttendance
+    ? `${certificates} Attendance: ${result.autoAttendance.verified ?? 0} auto-verified, ` +
+      `${result.autoAttendance.reviewRequired ?? 0} needing Admin review.`
+    : certificates;
 }
 
 const GREEN = "#078F82";
@@ -270,8 +276,8 @@ function imageFor(event: EventItem): string {
 function verifiedServiceMeetsMinimum(person: Participant): boolean {
   const start = asDate(person.checkedInAt)?.getTime() ?? 0;
   const end = asDate(person.checkedOutAt)?.getTime() ?? 0;
-  return person.attendanceVerified === true &&
-    start > 0 && end >= start && end - start >= 30 * 60 * 1000;
+  // The server determines the actual minimum for each completed event.
+  return person.attendanceVerified === true && start > 0 && end >= start;
 }
 
 function safeProfileImage(value: unknown): string {
@@ -312,7 +318,7 @@ function participantStatus(person: Participant): {
   label: string;
   kind: "verified" | "pending" | "checked" | "idle";
 } {
-  if (person.attendanceVerified) return {label: "VERIFIED", kind: "verified"};
+  if (person.attendanceVerified) return {label: person.attendanceVerifiedBy === "system:auto_attendance_v1" ? "AUTO VERIFIED" : "VERIFIED", kind: "verified"};
   if (person.checkedOutAt) return {label: "FOR VERIFICATION", kind: "pending"};
   if (person.checkedInAt) return {label: "CHECKED IN", kind: "checked"};
   return {label: "NOT CHECKED IN", kind: "idle"};
@@ -551,7 +557,7 @@ export default function CommunityAttendanceAdmin() {
   const awaitingVerificationCount = joined.filter(
     (person) => !person.attendanceVerified && !!person.checkedInAt && !!person.checkedOutAt
   ).length;
-  const serviceMinimumCount = joined.filter(verifiedServiceMeetsMinimum).length;
+  const serviceMinimumCount = joined.filter(verifiedServiceMeetsMinimum).length; // Count verified sessions; backend checks actual threshold.
 
   // Cache profile images for the selected event; failures gracefully use initials.
   // This only reads profiles that Admin can already access through View Profile.
@@ -789,7 +795,7 @@ export default function CommunityAttendanceAdmin() {
   }
 
   // Volunteers record their own Time In / Time Out in Community Events.
-  // Admin can ONLY review these existing server timestamps and verify attendance.
+  // Admin reviews exceptions that do not qualify for backend automatic verification.
   async function verifyAttendance(person: Participant) {
     if (!user || !allowed || !selected || busy) {
       return;
@@ -1165,7 +1171,7 @@ export default function CommunityAttendanceAdmin() {
                       <Ionicons name="warning-outline" color="#A3610A" size={20} />
                       <Text style={styles.confirmText}>
                         Complete this event? Volunteers who are still checked in must record their own Time Out first.
-                        Only Admin-verified attendance is considered for certificate eligibility.
+                        Only automatically verified or Admin-verified attendance is considered for certificate eligibility.
                       </Text>
                     </View>
                     <View style={styles.buttonRow}>
@@ -1333,7 +1339,7 @@ export default function CommunityAttendanceAdmin() {
                             <Text style={styles.mobileTimeLabel}>DURATION</Text>
                             <Text style={styles.timeText}>{readableDuration(hoursFor(person))}</Text>
                             {verifiedServiceMeetsMinimum(person) &&
-                              <Text style={styles.mobileDurationEligible}>30m minimum met</Text>}
+                              <Text style={styles.mobileDurationEligible}>Attendance verified</Text>}
                           </View>
                         </View>
                         <View style={styles.mobileRosterActions}>
@@ -1456,12 +1462,12 @@ export default function CommunityAttendanceAdmin() {
             <View style={styles.certificateReadinessRow}>
               <View style={styles.readinessChip}>
                 <Ionicons name="clipboard-outline" color="#9B651C" size={15} />
-                <Text style={styles.readinessText}>{awaitingVerificationCount} waiting for Admin verification</Text>
+                <Text style={styles.readinessText}>{awaitingVerificationCount} waiting for automatic verification or Admin review</Text>
               </View>
               <View style={styles.readinessChip}>
                 <Ionicons name="ribbon-outline" color="#0A806C" size={15} />
                 <Text style={styles.readinessText}>
-                  {serviceMinimumCount} verified with 30+ minutes
+                  {serviceMinimumCount} verified attendance records
                   {selected.status === "completed" ? " · Eligible for certificate check" : " · Certificate check after completion"}
                 </Text>
               </View>
@@ -1471,7 +1477,7 @@ export default function CommunityAttendanceAdmin() {
                 <Ionicons name="information-circle-outline" size={24} color="#3874CF" />
               </View>
               <Text style={styles.eligibilityText}>
-                Volunteers record their own Time In and Time Out. Admin only reviews and verifies the recorded times; verification does not edit timestamps. Community Event certificates also require event completion and at least 30 minutes of verified service.
+                Volunteers record their own Time In and Time Out using server timestamps. The backend automatically verifies valid attendance; Admin reviews exceptions without editing timestamps. Admin still marks events completed manually. The server confirms certificate eligibility and minimum service time.
               </Text>
             </View>
           </View>
