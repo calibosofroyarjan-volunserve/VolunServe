@@ -1369,13 +1369,9 @@ export default function CommunityEventsScreen() {
       .map((field) => ({ field, issue: proposalWordError(field, form[field]) }))
       .filter(({issue}) => !!issue);
     if (wordIssues.length) {
+      // Keep the page at the Submit button so validation appears beneath it.
+      // Individual fields already display their own live word-limit errors.
       setNotice("Please correct the highlighted word limits before submitting.");
-      if (Platform.OS === "web") {
-        const d = (globalThis as any).document;
-        const fieldElement = d?.getElementById?.(`community-proposal-${wordIssues[0].field}`);
-        fieldElement?.scrollIntoView?.({behavior:"smooth",block:"center"});
-        fieldElement?.focus?.();
-      }
       return;
     }
 
