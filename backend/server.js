@@ -7696,6 +7696,20 @@ function communityEventText(value, label, min, max) {
   return text;
 }
 
+// Proposal-only word counts match the Resident form; existing published events are unaffected.
+function communityEventWordText(value, label, minWords, maxWords, minChars, maxChars) {
+  const text = communityEventText(value, label, minChars, maxChars);
+  const words = text ? text.split(/\s+/u).length : 0;
+  if (words < minWords || words > maxWords) {
+    throw makeHttpError(
+      400,
+      "invalid_proposal",
+      label + " must contain " + minWords + "–" + maxWords + " words.",
+    );
+  }
+  return text;
+}
+
 app.post(
   "/api/community-events/proposals",
   requireFirebaseUser,
@@ -7726,9 +7740,9 @@ app.post(
         throw makeHttpError(400, "invalid_proposal_id", "Invalid proposal ID.");
       }
 
-      const title = communityEventText(input.title, "Title", 5, 100);
-      const description = communityEventText(input.description, "Description", 20, 1500);
-      const volunteerTasks = communityEventText(input.volunteerTasks, "Volunteer tasks", 12, 1200);
+      const title = communityEventWordText(input.title, "Title", 2, 15, 5, 100);
+      const description = communityEventWordText(input.description, "Description", 20, 200, 20, 1500);
+      const volunteerTasks = communityEventWordText(input.volunteerTasks, "Volunteer tasks", 8, 150, 12, 1200);
       const barangay = communityEventText(input.barangay, "Barangay", 1, 90);
       const location = communityEventText(input.location, "Location", 1, 150);
       const category = communityEventText(input.category, "Category", 1, 80);
@@ -7774,7 +7788,7 @@ app.post(
         throw makeHttpError(400, "invalid_proposal", "Select 1–20 required volunteer roles.");
       }
       const requiredRoles = input.requiredRoles.map((role) =>
-        communityEventText(role, "Volunteer role", 1, 80),
+        communityEventWordText(role, "Volunteer role", 1, 12, 1, 80),
       );
       const lookingFor = requiredRoles.join(", ");
       if (lookingFor.length > 1600) {
@@ -7791,7 +7805,7 @@ app.post(
       const qualificationNotes = communityEventText(
         input.qualificationNotes || "", "Qualification notes", 0, 500,
       );
-      const whatToBring = communityEventText(input.whatToBring || "", "What to bring", 0, 500);
+      const whatToBring = communityEventWordText(input.whatToBring || "", "What to bring", 0, 60, 0, 500);
       const videoUrl = communityEventText(input.videoUrl || "", "Video URL", 0, 2048);
       if (videoUrl) {
         let videoHost = "";
