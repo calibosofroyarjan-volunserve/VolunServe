@@ -32,6 +32,7 @@ const {summarizeStaging002Eligibility}=require("./staging002EligibilitySummary")
 const {fixtureSummary,provisionFixtures}=require("./staging002TestVolunteerProvisioning");
 const {verifyStaging002BulkAcceptance}=require("./staging002BulkAcceptanceVerifier");
 const {verifyStaging002WaveStop}=require("./staging002WaveStopVerification");
+const {createStaging002SchedulerEvidence}=require("./staging002SchedulerEvidence");
 const knownSJDMBgy=require("../functions/sjdmBarangays.json");
 const {createFreshTestCase,validateFreshTestCase,inspectFreshTestCase,recognized}
   =require("./stagingFreshCase002");
@@ -54,15 +55,26 @@ function makeApp({authClient = auth, firestore = db, worker, env = process.env} 
   // Render Free may sleep: this is a staging QA timer, not 24/7 dispatch.
   const autoWaves002=stagingServiceAccountMatches&&bulk002OnValidation&&
     env.VOLUNSERVE_STAGING_E2E_002_AUTO_WAVES==="enabled";
+  const schedulerEvidence=createStaging002SchedulerEvidence(autoWaves002);
   if(autoWaves002){
+    let schedulerTickInFlight=false;
+    let lastLoggedStatus=null;
     const timer=setInterval(()=>{
+      // Avoid concurrent wave advances on a slow/sleeping Free staging worker.
+      if(schedulerTickInFlight)return;
+      schedulerTickInFlight=true;
       void advanceBatchWave(firestore).then(result=>{
-        if(["offered","exhausted"].includes(result.status))
-          console.info("[staging-002-waves] safe transition:",result.status,
-            "wave",result.wave||0);
-      }).catch(error=>
+        const status=schedulerEvidence.record(result);
+        // Only status codes: never log UIDs, assignments or account details.
+        if(["supported","offered","exhausted"].includes(status) &&
+          status!==lastLoggedStatus)
+          console.info("[staging-002-waves] automatic scheduler completed:",status);
+        lastLoggedStatus=status;
+      }).catch(error=>{
+        schedulerEvidence.record("error");
         console.warn("[staging-002-waves] retryable reconciliation failure",
-          String(error?.code||"unknown").slice(0,60)));
+          String(error?.code||"unknown").slice(0,60));
+      }).finally(()=>{schedulerTickInFlight=false;});
     },20000);
     timer.unref?.();
   }
@@ -468,9 +480,18 @@ function makeApp({authClient = auth, firestore = db, worker, env = process.env} 
       try{
         const result=await verifyStaging002WaveStop(firestore,
           {timerConfigured:autoWaves002});
+        // Heartbeat is ONLY actual completed scheduled calls in THIS process.
+        // Do not label a read-only snapshot as proof of an executed timer.
+        const heartbeat=schedulerEvidence.snapshot();
+        const guardObserved=heartbeat.schedulerLastResult==="supported" &&
+          result.waveStopGuardConfirmed===true &&
+          result.observedAfterOtherOffersExpired===true &&
+          result.noLaterWaveObserved===true &&
+          result.acceptanceEvidenceVerified===true;
         response.set("Cache-Control","no-store");
         response.status(result.status==="blocked"?409:200)
-          .json({ok:result.status!=="blocked",...result});
+          .json({ok:result.status!=="blocked",...result,...heartbeat,
+            schedulerStopObservedThisProcess:guardObserved});
       }catch(error){
         console.warn("[staging-002-waves] read-only stop check failed",
           String(error?.code||"unknown").slice(0,60));
