@@ -1829,12 +1829,47 @@ export default function CommunityEventsScreen() {
         }
       });
 
+      // Commit Time Out before requesting backend verification.
+      // A failed backend request never cancels Time Out or removes Admin review.
+      let savedMessage = "Time In recorded using server time. Remember to Time Out when your participation ends.";
+      if (action === "check-out") {
+        savedMessage = "Time Out recorded. Automatic verification is pending; Admin can review exceptions.";
+        try {
+          const token = await user.getIdToken();
+          const controller = new AbortController();
+          const timeout = setTimeout(() => controller.abort(), 15000);
+          try {
+            const response = await fetch(
+              `${COMMUNITY_EVENT_PHOTO_BACKEND_URL}/api/community-events/attendance/auto-verify`,
+              {
+                method: "POST",
+                headers: {
+                  Authorization: `Bearer ${token}`,
+                  "Content-Type": "application/json",
+                },
+                body: JSON.stringify({eventId: event.id}),
+                signal: controller.signal,
+              }
+            );
+            const result = await response.json().catch(() => null) as
+              | {ok?: boolean; status?: string}
+              | null;
+            if (response.ok && result?.ok === true) {
+              savedMessage = result.status === "verified" || result.status === "already_verified"
+                ? "Time Out saved. Attendance automatically verified. Certificate follows Admin event completion."
+                : "Time Out saved. Attendance needs Admin review because one or more automatic checks did not pass.";
+            }
+          } finally {
+            clearTimeout(timeout);
+          }
+        } catch {
+          // Recorded server timestamps are retained if Render is unavailable.
+        }
+      }
       setAttendanceFeedback({
         eventId: event.id,
         type: "success",
-        message: action === "check-in"
-          ? "Time In recorded using server time. Remember to Time Out when your participation ends."
-          : "Time Out recorded using server time. Your hours are pending Admin/LGU verification.",
+        message: savedMessage,
       });
     } catch (error) {
       setAttendanceFeedback({
@@ -2126,9 +2161,7 @@ export default function CommunityEventsScreen() {
 
         {joined && (
           <Text style={styles.helper}>
-            Attendance and certificates
-            are subject to Admin verification
-            after event completion.
+            Attendance is checked automatically after Time Out. Admin reviews exceptions and confirms event completion.
           </Text>
         )}
         {joined && isVolunteer && !isOwnProposal && (
@@ -2138,7 +2171,7 @@ export default function CommunityEventsScreen() {
               <Text style={styles.lockedSectionTitle}>My Attendance</Text>
             </View>
             <Text style={styles.lockedAttendanceHistoryDate}>Time In: {prettyAttendanceTime(participation?.checkedInAt)} · Time Out: {prettyAttendanceTime(participation?.checkedOutAt)}</Text>
-            <Text style={styles.lockedAttendanceHistoryDate}>{participation?.attendanceVerified ? `Verified · ${formatHours(durationMinutes(participation))} credited` : participation?.checkedOutAt ? "Pending Admin/LGU verification" : participation?.checkedInAt ? "Time In recorded" : "Waiting for Time In"}</Text>
+            <Text style={styles.lockedAttendanceHistoryDate}>{participation?.attendanceVerified ? `Verified · ${formatHours(durationMinutes(participation))} credited` : participation?.checkedOutAt ? "Awaiting automatic verification or Admin review" : participation?.checkedInAt ? "Time In recorded" : "Waiting for Time In"}</Text>
             {!participation?.attendanceVerified && event.status === "active" && !participation?.checkedOutAt && (
               attendanceConfirmation?.eventId === event.id ? (
                 <View style={styles.webAttendanceConfirmBox}>
@@ -2745,7 +2778,7 @@ export default function CommunityEventsScreen() {
                     <View style={styles.lockedAttendanceVerifier}>
                       <Ionicons name="shield-checkmark-outline" size={15} color="#08766F" />
                       <Text style={styles.lockedAttendanceVerifierText} numberOfLines={3}>
-                        {selectedParticipation?.attendanceVerified ? "Verified by Admin/LGU" : selectedParticipation?.checkedOutAt ? "Pending Admin/LGU verification" : selectedParticipation?.checkedInAt ? "Checked in · Not yet verified" : "Waiting for Time In"}
+                        {selectedParticipation?.attendanceVerified ? "Attendance verified" : selectedParticipation?.checkedOutAt ? "Awaiting automatic verification or Admin review" : selectedParticipation?.checkedInAt ? "Checked in · Not yet verified" : "Waiting for Time In"}
                       </Text>
                     </View>
 
@@ -2808,15 +2841,15 @@ export default function CommunityEventsScreen() {
                         <Text style={[styles.webAttendanceFeedbackText, attendanceFeedback.type === "error" && styles.webAttendanceFeedbackErrorText]}>{attendanceFeedback.message}</Text>
                       </View>
                     )}
-                    {selectedParticipation?.attendanceVerified && selectedEvent.status === "completed" && durationMinutes(selectedParticipation) >= 30 &&
+                    {selectedParticipation?.attendanceVerified && selectedEvent.status === "completed" &&
                       <View style={styles.lockedVerifiedSummary}>
                         <Ionicons name="ribbon-outline" size={17} color="#087B68" />
-                        <Text style={styles.lockedVerifiedSummaryText}>Meets the attendance and event-completion requirements. Certificate issuance is processed separately.</Text>
+                        <Text style={styles.lockedVerifiedSummaryText}>Attendance verified. The backend checks certificate eligibility after Admin event completion. Check My Certificates.</Text>
                       </View>}
-                    {selectedParticipation?.attendanceVerified && durationMinutes(selectedParticipation) < 30 &&
+                    {selectedParticipation?.attendanceVerified && selectedEvent.status !== "completed" &&
                       <View style={styles.lockedCertificateLine}>
                         <Ionicons name="ribbon-outline" size={15} color="#758A96" />
-                        <Text style={styles.lockedCertificateLineText}>Certificate: {durationMinutes(selectedParticipation)} / 30 min · Event completion required</Text>
+                        <Text style={styles.lockedCertificateLineText}>Certificate eligibility is checked after Admin marks the event completed.</Text>
                       </View>}
                     {!selectedParticipation?.attendanceVerified && <Text style={styles.webAttendanceNote}>Time In/Out uses server time. Admin/LGU verifies participation.</Text>}
                   </View>}
