@@ -6,6 +6,7 @@
  */
 const {FieldValue}=require("./firebaseAdmin");
 const {Timestamp}=require("firebase-admin/firestore");
+const {deadlineMs,toIso}=require("./staging002OfferDeadline");
 const {chooseAllEligibleWave}=require("../functions/emergencyAllEligibleWavePlanner");
 const {validateVolunteer}=require("../functions/emergencyVolunteerWavePlanner");
 const known=require("../functions/sjdmBarangays.json");
@@ -151,13 +152,13 @@ async function getBatchOffer(db,uid,now=Date.now()){
   if(assignment.volunteerId!==uid||
      assignment.offerMode!=="staging_bulk_all_eligible")
     return {status:"not_offered"};
-  const expiresAtMs=Number(assignment.expiresAtMs||0);
+  const expiresAtMs=deadlineMs(assignment.expiresAtMs);
   const active=assignment.status==="offered"&&session.data()?.status==="waiting"&&
-    expiresAtMs>now;
+    expiresAtMs!==null && expiresAtMs>now;
   return {status:active?"offered":
     assignment.status==="offered"?"expired":String(assignment.status||"unavailable"),
     caseId:CASE_ID,caseTitle:c.data().title,
-    expiresAt:expiresAtMs>0?new Date(expiresAtMs).toISOString():null,
+    expiresAt:toIso(expiresAtMs),
     canRespond:active};
 }
 async function respondBatchOffer(db,uid,decision,now=Date.now()){
@@ -223,10 +224,18 @@ async function batchStatus(db){
   ]);
   if(!session.exists)return {status:"not_started",offered:0,pending:0,accepted:0,declined:0};
   const rows=all.docs.map(d=>d.data()).filter(a=>a.offerMode==="staging_bulk_all_eligible");
+  const now=Date.now();
+  const pending=rows.filter(a=>a.status==="offered");
+  const deadlines=pending.map(a=>deadlineMs(a.expiresAtMs));
+  const known=deadlines.filter(d=>d!==null);
+  const expired=known.filter(d=>d<=now).length;
+  // Aggregate diagnostics contain ONLY timestamps and counts, never identities.
   return {status:session.data().status,wave:session.data().wave,
-    offered:rows.length,pending:rows.filter(a=>a.status==="offered").length,
-    expired:rows.filter(a=>a.status==="offered" &&
-      Number(a.expiresAtMs||0)<=Date.now()).length,
+    offered:rows.length,pending:pending.length,
+    expired,unreadableDeadlines:deadlines.length-known.length,
+    serverTimeUtc:new Date(now).toISOString(),
+    earliestOfferDeadlineUtc:known.length?toIso(Math.min(...known)):null,
+    latestOfferDeadlineUtc:known.length?toIso(Math.max(...known)):null,
     accepted:rows.filter(a=>["accepted","responding","on_site","completed"].includes(a.status)).length,
     declined:rows.filter(a=>a.status==="declined").length};
 }

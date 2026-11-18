@@ -188,3 +188,36 @@ test("API remains explicitly Admin-only, only fictional 002 and never legacy rou
   assert.equal(code.length,1);
   assert.doesNotThrow(()=>new Function(code[0][1].replace(/^\s*import .*?;\s*$/gm,"")));
 });
+
+
+test("Firestore Timestamp deadlines are reported as expired and safely reissued",async()=>{
+  const db=new Db(),now=Date.now();
+  const old001=start(db);
+  for(const f of FIXTURES){
+    const offer=db.docs.get("responseAssignments/"+E2E_CASE_ID+"_"+f.uid);
+    offer.expiresAtMs={seconds:Math.floor((now-10000)/1000),nanoseconds:0};
+    const read=await getBatchOffer(db,f.uid,now);
+    assert.equal(read.status,"expired");
+    assert.equal(read.canRespond,false);
+  }
+  const status=await batchStatus(db);
+  assert.equal(status.expired,3);
+  assert.equal(status.unreadableDeadlines,0);
+  assert.ok(status.earliestOfferDeadlineUtc);
+  assert.ok(status.latestOfferDeadlineUtc);
+  assert.ok(status.serverTimeUtc);
+  const result=await retryExpiredBatch002(db,"stagingApprovedAdmin",now);
+  assert.equal(result.status,"reissued");
+  assert.equal(result.offered,3);
+  assert.equal(start(db),old001,"old accepted 001 must remain unchanged");
+});
+test("invalid deadline format is never considered a safely reissuable expiry",async()=>{
+  const db=new Db(),now=Date.now();
+  const uid=FIXTURES[0].uid;
+  db.docs.get("responseAssignments/"+E2E_CASE_ID+"_"+uid).expiresAtMs={unknown:true};
+  const summary=await batchStatus(db);
+  assert.equal(summary.unreadableDeadlines,1);
+  const result=await retryExpiredBatch002(db,"stagingAdmin",now);
+  assert.equal(result.status,"blocked");
+  assert.equal(result.reason,"not_all_pending_fictional_test_offers");
+});

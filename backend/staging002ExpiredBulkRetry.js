@@ -8,6 +8,7 @@
  */
 const {FieldValue}=require("./firebaseAdmin");
 const {Timestamp}=require("firebase-admin/firestore");
+const {deadlineMs}=require("./staging002OfferDeadline");
 const {E2E_CASE_ID,recognizedStagingCase}=require("./stagingVolunteerTask");
 const {FIXTURES}=require("./staging002TestVolunteerProvisioning");
 const ID=E2E_CASE_ID;
@@ -53,9 +54,9 @@ async function retryExpiredBatch002(db,adminUid,now=Date.now()){
        x.data.offerMode!=="staging_bulk_all_eligible"||
        x.data.wave!==1||
        x.data.status!=="offered"||
-       !Number.isFinite(Number(x.data.expiresAtMs))))
+       deadlineMs(x.data.expiresAtMs)===null))
     return blocked("not_all_pending_fictional_test_offers");
-  if(offers.some(x=>Number(x.data.expiresAtMs)>now))
+  if(offers.some(x=>deadlineMs(x.data.expiresAtMs)>now))
     return blocked("some_fictional_offers_still_active");
   if(busy.docs.some(x=>x.data()?.caseId!==ID &&
       fixtureUids.includes(x.data()?.volunteerId)))
@@ -106,8 +107,8 @@ async function retryExpiredBatch002(db,adminUid,now=Date.now()){
       if(!x.a.exists||a.volunteerId!==x.uid||a.caseId!==ID||
         a.offerMode!=="staging_bulk_all_eligible"||
         a.wave!==1||a.status!=="offered"||
-        !Number.isFinite(Number(a.expiresAtMs))||
-        Number(a.expiresAtMs)>now||
+        deadlineMs(a.expiresAtMs)===null||
+        deadlineMs(a.expiresAtMs)>now||
         !x.r.exists||reservation.caseId!==ID||
         reservation.assignmentId!==ID+"_"+x.uid||
         x.lockSnap.exists||x.noteSnap.exists||
