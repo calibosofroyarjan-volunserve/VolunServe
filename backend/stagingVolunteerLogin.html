@@ -23,7 +23,7 @@ button:disabled{opacity:.5;cursor:not-allowed}.secondary{background:#edf5f0;colo
 <body><div class="wrap"><header><strong class="brand">VolunServe</strong><span class="tag">STAGING VOLUNTEER · FREE</span></header>
 <main><h1>Volunteer Task Acceptance</h1>
 <p>Sign in using <strong>Devin's staging Volunteer test account</strong>. This is separate from the Admin login.</p>
-<div class="notice"><strong>Fictional test only.</strong> The only supported report is STAGING_TEST_001. Never use this for a real emergency or on the production website.</div>
+<div class="notice"><strong>Fictional test only.</strong> Only the fixed fictional STAGING_TEST_001 and STAGING_E2E_002 reports are supported. Never use this for a real emergency or on production.</div>
 <form id="signin">
 <label for="email">Staging Volunteer email</label>
 <input id="email" type="email" required autocomplete="username" placeholder="Volunteer test email">
@@ -32,6 +32,11 @@ button:disabled{opacity:.5;cursor:not-allowed}.secondary{background:#edf5f0;colo
 <div class="controls"><button type="submit" id="login">Sign in &amp; view my offer</button>
 <button type="button" class="secondary" id="logout">Sign out</button></div>
 </form>
+<label for="case-select">Choose the fictional staging case</label>
+<select id="case-select" style="border:1px solid #c5ddd2;border-radius:9px;padding:11px 12px;font:inherit;width:100%;height:45px">
+<option value="STAGING_E2E_002" selected>Fresh E2E 002 — New test</option>
+<option value="STAGING_TEST_001">Previous test 001 — already accepted</option>
+</select>
 <section id="task" class="panel">
 <h2 style="margin-top:0">My dummy Emergency assignment</h2>
 <div id="taskDetails">Waiting for verification.</div>
@@ -85,14 +90,15 @@ async function request(endpoint,options={}){
 async function refresh(){
   if(!auth.currentUser)return;
   setOfferEnabled(false);
-  const data=await request("/api/staging/volunteer/task");
+  const caseId=el("case-select").value;
+  const data=await request("/api/staging/volunteer/task?caseId="+encodeURIComponent(caseId));
   el("task").style.display="block";
   const label=data.status==="offered"?"Offered — awaiting your response":
     data.status==="expired"?"Offer expired — ask Admin to reissue":
     data.status==="accepted"?"Accepted — confirmed in Firebase":
     data.status==="declined"?"Declined — confirmed in Firebase":
     data.status==="not_offered"?"No active test offer yet":"Status: "+data.status;
-  let detail="STAGING_TEST_001\n"+label;
+  let detail=caseId+"\n"+label;
   if(data.expiresAt) detail+="\nOffer deadline: "+new Date(data.expiresAt).toLocaleString();
   el("taskDetails").textContent=detail;
   setOfferEnabled(data.canRespond===true);
@@ -111,20 +117,25 @@ el("signin").addEventListener("submit",async(event)=>{
   }catch(error){el("password").value="";show("Not verified: "+safeMessage(error));}
   finally{el("login").disabled=false;}
 });
+el("case-select").addEventListener("change",async()=>{
+  setOfferEnabled(false);
+  try{await refresh();}catch(error){show(safeMessage(error));}
+});
 el("refresh").addEventListener("click",async()=>{
   try{await refresh();}catch(error){setOfferEnabled(false);show(safeMessage(error));}
 });
 async function respond(decision){
   if(!auth.currentUser)return;
-  if(!window.confirm("Confirm "+(decision==="accepted"?"ACCEPT":"DECLINE")+" for the FICTIONAL STAGING_TEST_001 task only?"))return;
+  const caseId=el("case-select").value;
+  if(!window.confirm("Confirm "+(decision==="accepted"?"ACCEPT":"DECLINE")+" for the FICTIONAL "+caseId+" task only?"))return;
   setOfferEnabled(false);show("Saving your "+decision+" decision in isolated staging...");
   try{
     const data=await request("/api/staging/volunteer/respond",{
       method:"POST",headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({decision})
+      body:JSON.stringify({decision,caseId})
     });
     show("Controlled staging decision: "+String(data.status).toUpperCase()+
-      "\nCase: STAGING_TEST_001\nNo production report or actual emergency responder involved.");
+      "\nCase: "+caseId+"\nNo production report or actual emergency responder involved.");
     await refresh();
   }catch(error){show("Decision not saved: "+safeMessage(error)+"\nRefresh to view current status.");}
 }
