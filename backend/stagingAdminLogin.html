@@ -43,7 +43,8 @@ a{color:#075c49}input:focus-visible,button:focus-visible{outline:3px solid #4db8
 <button type="button" id="start-test" disabled>Start synthetic Emergency Volunteer offer</button>
 <button type="button" class="secondary" id="reissue-test" disabled>Reissue expired dummy offer</button>
 <button type="button" class="secondary" id="verify-test" disabled>Verify acceptance, responder lock &amp; notifications</button>
-<p class="small">Use Reissue only after the prior test offer has expired or been declined. Accepted offers cannot be reset.</p>
+<button type="button" class="secondary" id="reconcile-test" disabled>Record missing acceptance evidence (late staging QA)</button>
+<p class="small">Use Reissue only after the prior test offer has expired or been declined. Accepted offers cannot be reset. Reconciliation is only for an already-accepted fictional task; it creates explicitly labelled late records and does not prove the original acceptance flow.</p>
 <p class="small">A case already assigned or in progress must not be manually reset to validated. Use the read-only verification and controlled reissue flow instead. The preparation control only works for the pre-existing, fictional status="reported" case with no matching assignments and already-validated verification.</p>
 <h2>Verification</h2>
 <div id="result" class="result" aria-live="polite">Not checked yet. Only the staging Firebase project will be contacted.</div>
@@ -76,6 +77,7 @@ const reissueTest=document.getElementById("reissue-test");
 const verifyTest=document.getElementById("verify-test");
 const fixtureCheck=document.getElementById("fixture-check");
 const prepareTest=document.getElementById("prepare-test");
+const reconcileTest=document.getElementById("reconcile-test");
 let stagingActivationReady=false;
 async function refreshFixturePreflight({silent=false}={}) {
   if(!auth.currentUser)throw new Error("Sign in as staging Admin first.");
@@ -86,6 +88,7 @@ async function refreshFixturePreflight({silent=false}={}) {
   const data=await r.json();
   if(!r.ok)throw new Error("Preflight unavailable: "+String(data.error||r.status));
   startTest.disabled=!(stagingActivationReady && data.status==="ready");
+  reconcileTest.disabled=!(stagingActivationReady && data.status==="existing_assignment");
   if(!silent)report("Read-only staging dummy report preflight\n"+
     "Eligibility: "+String(data.status||"unknown")+"\n"+
     "Reason: "+String(data.reason||"none")+"\n"+
@@ -116,6 +119,47 @@ fixtureCheck.addEventListener("click",async()=>{
   catch(error){report(String(error?.message||"Preflight unavailable").slice(0,200));}
   finally{fixtureCheck.disabled=false;}
 });
+reconcileTest.addEventListener("click",async()=>{
+  if(!auth.currentUser)return report("Sign in as approved staging Admin first.");
+  reconcileTest.disabled=true;
+  try{
+    const token=await auth.currentUser.getIdToken();
+    // Read-only consistency check before asking for a write confirmation.
+    const reviewResponse=await fetch("/api/admin/emergency-auto/verify-test",{
+      headers:{Authorization:"Bearer "+token},cache:"no-store"
+    });
+    const check=await reviewResponse.json();
+    if(!reviewResponse.ok || check.assignmentStatus!=="accepted" ||
+       check.sessionStatus!=="accepted" ||
+       !check.acceptedResponderLockCorrect ||
+       !check.acceptedCaseStatusCorrect ||
+       !check.initialOfferNotificationPresent || !check.reservationPresent)
+      throw new Error("Accepted test evidence is incomplete; read-only Admin review required.");
+    if(check.fullAcceptanceVerified || check.supportRecordsVerified)
+      return report("The fictional staging support records are already consistent; no write needed.");
+    if(!window.confirm(
+      "This will create MISSING resident notification and/or Admin QA audit for the previously ACCEPTED fictional STAGING_TEST_001 task. New records will be timestamped NOW and explicitly marked as LATE reconciliation, not as the original Volunteer acceptance. Continue?"
+    ))return report("Late staging reconciliation canceled; no records changed.");
+    const response=await fetch("/api/admin/emergency-auto/reconcile-accepted-test",{
+      method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+token},
+      body:JSON.stringify({caseId:"STAGING_TEST_001",confirmLateReconciliation:true}),
+      cache:"no-store"
+    });
+    const data=await response.json();
+    if(!response.ok)throw new Error("Reconciliation blocked: "+String(data.reason||data.error||response.status));
+    const statusResponse=await fetch("/api/admin/emergency-auto/verify-test",{
+      headers:{Authorization:"Bearer "+token},cache:"no-store"
+    });
+    const verified=await statusResponse.json();
+    report("Late staging QA: "+String(data.status)+"\n"+
+      "New Resident notification: "+(data.createdNotification?"YES":"not needed")+"\n"+
+      "New Admin reconciliation audit: "+(data.createdAudit?"YES":"not needed")+"\n"+
+      "Support records consistent: "+(verified.supportRecordsVerified?"YES":"NO")+"\n"+
+      "Original end-to-end acceptance fully proven: "+(verified.fullAcceptanceVerified?"YES":"NO")+"\n"+
+      "These records are explicitly timestamped at reconciliation, never backdated.");
+  }catch(error){report(String(error?.message||"Staging reconciliation unavailable").slice(0,250));}
+  finally{reconcileTest.disabled=false;}
+});
 verifyTest.addEventListener("click",async()=>{
   if(!auth.currentUser)return report("Sign in as staging Admin first.");
   verifyTest.disabled=true;
@@ -136,7 +180,9 @@ verifyTest.addEventListener("click",async()=>{
       "Initial Volunteer offer notification: "+yes(result.initialOfferNotificationPresent)+"\n"+
       "Resident acceptance notification: "+yes(result.acceptedResidentNotificationPresent)+"\n"+
       "Admin audit: "+yes(result.adminAuditPresent)+"\n"+
-      "All checks passing: "+yes(result.fullAcceptanceVerified)+"\n"+
+      "Support records consistent: "+yes(result.supportRecordsVerified)+"\n"+
+      "Late QA reconciliation recorded: "+yes(result.reconciliationRecorded)+"\n"+
+      "Original acceptance fully verified: "+yes(result.fullAcceptanceVerified)+"\n"+
       "Only isolated staging data was read. No database records changed."
     );
   }catch(error){report(String(error?.message||"Test review unavailable").slice(0,220));}
@@ -231,7 +277,7 @@ document.getElementById("login").addEventListener("submit",async(e)=>{
   }finally{submit.disabled=false;}
 });
 document.getElementById("logout").addEventListener("click",async()=>{
-  await signOut(auth);stagingActivationReady=false;fixtureCheck.disabled=true;prepareTest.disabled=true;startTest.disabled=true;reissueTest.disabled=true;verifyTest.disabled=true;passwordInput.value="";report("Signed out of staging.");
+  await signOut(auth);stagingActivationReady=false;fixtureCheck.disabled=true;prepareTest.disabled=true;reconcileTest.disabled=true;startTest.disabled=true;reissueTest.disabled=true;verifyTest.disabled=true;passwordInput.value="";report("Signed out of staging.");
 });
 </script>
 </body>
