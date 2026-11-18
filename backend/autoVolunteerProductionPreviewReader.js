@@ -46,12 +46,15 @@ async function loadProductionPreviewInputs(db,caseId){
   // completed and unknown statuses for conflict/attempt checks.
   // Bounded all-collection queries may refuse large production datasets.
   // This is intentional until index-scoped, fully paginated queries are reviewed.
-  const [approvedApps,allAssignments,allLocks]=await Promise.all([
-    db.collection("volunteerApplications").where("status","==","approved").limit(LIMIT).get(),
+  const [applicationSnapshots,allAssignments,allLocks]=await Promise.all([
+    db.collection("volunteerApplications").limit(LIMIT).get(),
     db.collection("responseAssignments").limit(LIMIT).get(),
     db.collection("responderLocks").limit(LIMIT).get()
   ]);
-  const apps=requireComplete(approvedApps,"volunteerApplications");
+  // Read all applications: the existing Admin UI treats status case-insensitively.
+  // A lower-case only Firestore query would silently miss old approved records.
+  const allApps=requireComplete(applicationSnapshots,"volunteerApplications");
+  const apps=allApps.filter(s=>String(s.data()?.status||"").trim().toLowerCase()==="approved");
   const assignments=requireComplete(allAssignments,"responseAssignments")
     .map(s=>({...s.data()}));
   const locks=requireComplete(allLocks,"responderLocks")
@@ -61,6 +64,7 @@ async function loadProductionPreviewInputs(db,caseId){
   // No fallback to fake "approved" profiles when Firestore is missing.
   const roster=await Promise.all(apps.map(async snap=>{
     const application={...(snap.data()||{})};
+    application.status=String(application.status||"").trim().toLowerCase();
     const uid=String(application.uid||application.userId||
       application.volunteerId||snap.id||"").trim();
     if(!validId(uid))return {uid:"",application,user:{}};
@@ -71,7 +75,7 @@ async function loadProductionPreviewInputs(db,caseId){
   return {
     caseData,roster,existingAssignments:assignments,activeLocks:locks,
     sourceScansComplete:true,
-    sourceLimits:{approvedApplications:apps.length,
+    sourceLimits:{allApplications:allApps.length,approvedApplications:apps.length,
       allAssignments:assignments.length,allResponderLocks:locks.length},
     snapshotConsistency:"non_transactional_read_only"
   };
