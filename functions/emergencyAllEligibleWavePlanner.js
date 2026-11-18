@@ -10,6 +10,7 @@ const {planVolunteerWaves}=require("./emergencyVolunteerWavePlanner");
 
 function chooseAllEligibleWave(caseData,roster,options={}) {
   const plan=planVolunteerWaves(caseData,roster,options);
+  if(!plan.caseReady)return {action:"stop",reason:"case_not_verified",wave:0,volunteers:[],counts:plan.counts};
   const attempted=new Set(Array.isArray(options.attemptedVolunteerIds)?
     options.attemptedVolunteerIds.filter(v=>typeof v==="string"):[]);
   const completed=new Set(Array.isArray(options.completedWaves)?
@@ -24,10 +25,9 @@ function chooseAllEligibleWave(caseData,roster,options={}) {
   }
   for(const wave of [1,2,3]){
     if(completed.has(wave))continue;
-    if(wave===2 && !plan.wave2Configured){
-      return {action:"requires_verified_neighbors",wave,volunteers:[],
-        counts:plan.counts};
-    }
+    // Unconfigured neighbors are NOT evidence of proximity; skip to
+    // independent SJDM-wide coverage instead of inventing a Wave 2.
+    if(wave===2 && !plan.wave2Configured)continue;
     const group=(plan.waves[wave]||[]).filter(person=>
       person.eligible && person.uid && !attempted.has(person.uid)
     );
