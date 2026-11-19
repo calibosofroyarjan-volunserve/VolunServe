@@ -1604,7 +1604,7 @@ This still does not automatically create a Donation Campaign.`,
 
   const saveResourceAssessment = () => {
     if (!selected || selected.verificationStatus !== "verified") {
-      Alert.alert(
+      showAssistanceActionError(
         "Verified Need Required",
         "Complete LGU verification before recording the support decision.",
       );
@@ -1612,7 +1612,7 @@ This still does not automatically create a Donation Campaign.`,
     }
 
     if (!["internal_support", "donation_support", "not_required"].includes(supportDecision)) {
-      Alert.alert("Support Decision Required", "Select how the verified need will be supported.");
+      showAssistanceActionError("Support Decision Required", "Select how the verified need will be supported.");
       return;
     }
 
@@ -1620,12 +1620,12 @@ This still does not automatically create a Donation Campaign.`,
     const verifiedCap = Number(verificationReview?.verifiedUncoveredAmount || 0);
 
     if (!Number.isFinite(amount) || amount < 0) {
-      Alert.alert("Invalid Remaining Amount", "Enter a valid remaining unmet amount, or 0 if none.");
+      showAssistanceActionError("Invalid Remaining Amount", "Enter a valid remaining unmet amount, or 0 if none.");
       return;
     }
 
     if (supportDecision === "donation_support" && amount > verifiedCap) {
-      Alert.alert(
+      showAssistanceActionError(
         "Amount Exceeds Verified Need",
         `Donation support cannot exceed the private LGU-verified uncovered amount of PHP ${verifiedCap.toLocaleString("en-PH")}.`,
       );
@@ -1633,7 +1633,7 @@ This still does not automatically create a Donation Campaign.`,
     }
 
     if (supportDecision === "donation_support" && amount <= 0) {
-      Alert.alert(
+      showAssistanceActionError(
         "Remaining Need Required",
         "Enter the verified remaining unmet amount before opening Donation Support.",
       );
@@ -1706,7 +1706,7 @@ This still does not automatically create a Donation Campaign.`,
         selected.verificationStatus !==
           "verified"
       ) {
-        Alert.alert(
+        showAssistanceActionError(
           "Verified Need Required",
           "Set the official public service location only after the request is verified.",
         );
@@ -1717,9 +1717,9 @@ This still does not automatically create a Donation Campaign.`,
         locationName.trim().length < 3 ||
         locationAddress.trim().length < 5
       ) {
-        Alert.alert(
+        showAssistanceActionError(
           "Official Location Required",
-          "Select a location type and enter the official public location name and address.",
+          "Enter the public LGU or barangay office name and address. No map search is required.",
         );
         return;
       }
