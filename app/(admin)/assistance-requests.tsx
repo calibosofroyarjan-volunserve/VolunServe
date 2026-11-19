@@ -2101,7 +2101,7 @@ This still does not automatically create a Donation Campaign.`,
         <View style={styles.referenceDetailTabs}>
           <ReviewTabButton label="Request Details" icon="document-text-outline"
             active={reviewTab==="case"} onPress={()=>setReviewTab("case")}/>
-          <ReviewTabButton label={\`Documents (\${selected.documents?.length||0})\`}
+          <ReviewTabButton label={`Documents (${selected.documents?.length||0})`}
             icon="documents-outline" active={reviewTab==="evidence"}
             onPress={()=>setReviewTab("evidence")}/>
           <ReviewTabButton label="Resident Info" icon="person-outline"
@@ -2250,7 +2250,8 @@ This still does not automatically create a Donation Campaign.`,
           <View style={styles.referenceDetailBody}>
             {renderReviewMain()}
           </View>
-        </ScrollView>}
+        </ScrollView>
+      )}
 
       <DocumentPreviewModal
         item={previewDocument}
