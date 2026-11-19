@@ -322,6 +322,15 @@ test("AUTOMATIC due worker stops offers after Volunteer Accept or Admin Cancel",
     assert.equal((await persistentBatchRef(db,acceptedCase).get()).data().status,"supported");
     assert.equal((await db.collection("responseAssignments")
       .doc(acceptedCase+"_"+uidVolunteerC).get()).exists,false);
+    assert.equal((await db.collection("responseAssignments")
+      .doc(acceptedCase+"_"+uidVolunteerB).get()).data().status,"cancelled",
+      "Pending sibling offer must be closed after first Accept");
+    assert.equal((await db.collection("autoVolunteerReservations")
+      .doc(uidVolunteerB).get()).exists,false,
+      "Unselected Volunteer must be available for new missions");
+    assert.equal((await db.collection("responderLocks")
+      .doc(uidVolunteerA).get()).exists,true,
+      "Accepted responder lock must remain intact");
 
     const cancelledCase=await seedCase("autodue_cancelled");
     now=NOW;
