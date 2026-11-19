@@ -3587,6 +3587,7 @@ function CompactVerifiedAssistance({
       request.supportDecision === "not_required" ? "none" : "donation",
   );
   const [submitting, setSubmitting] = useState(false);
+  const [showOtherSupportOption, setShowOtherSupportOption] = useState(false);
   const [locationAttempted, setLocationAttempted] = useState(false);
   const [budgetAttempted, setBudgetAttempted] = useState(false);
   const [budgetTotal, setBudgetTotal] = useState("");
@@ -3681,11 +3682,20 @@ function CompactVerifiedAssistance({
               <Ionicons name="chevron-forward" size={18} color="#04814A"/>
             </TouchableOpacity>
           </View>
-          <TouchableOpacity accessibilityRole="button" disabled={busy} onPress={() => setChoice("none")}
-            style={{flexDirection:"row",alignItems:"center",gap:7,alignSelf:"flex-start",paddingVertical:7}}>
-            <Ionicons name={choice==="none"?"radio-button-on":"radio-button-off"} size={16} color="#64748B"/>
-            <Text style={styles.referencePageSubtitle}>No Further Support (existing option)</Text>
+          <TouchableOpacity accessibilityRole="button"
+            onPress={() => setShowOtherSupportOption((current) => !current)}
+            style={{flexDirection:"row",alignItems:"center",gap:7,alignSelf:"flex-start",paddingVertical:4}}>
+            <Text style={styles.referencePageSubtitle}>Other support options</Text>
+            <Ionicons name={showOtherSupportOption || choice==="none" ? "chevron-up" : "chevron-down"} size={14} color="#64748B"/>
           </TouchableOpacity>
+          {(showOtherSupportOption || choice==="none") && (
+            <TouchableOpacity accessibilityRole="radio" accessibilityState={{checked:choice==="none"}}
+              disabled={busy} onPress={() => setChoice("none")}
+              style={{flexDirection:"row",alignItems:"center",gap:7,alignSelf:"flex-start",paddingVertical:6}}>
+              <Ionicons name={choice==="none"?"radio-button-on":"radio-button-off"} size={16} color="#64748B"/>
+              <Text style={styles.referencePageSubtitle}>No Further Support</Text>
+            </TouchableOpacity>
+          )}
 
           {choice === "donation" && (
             <View style={styles.referencePublishPanel}>
@@ -3698,15 +3708,15 @@ function CompactVerifiedAssistance({
               </View>
               <View style={styles.referencePublishColumns}>
                 <View style={{flex:2,minWidth:230,gap:9}}>
-                  <Text style={styles.referenceReviewChoiceTitle}>Campaign Title</Text>
-                  <View style={styles.referencePreviewField}>
-                    <Text style={styles.referencePreviewText}>{request.title || "Assistance Request"}</Text>
-                  </View>
-                  <Text style={styles.referenceReviewChoiceTitle}>Campaign Story</Text>
-                  <View style={[styles.referencePreviewField,{minHeight:88}]}>
-                    <Text style={styles.referencePreviewText}>{request.description || request.currentSituation || "No description provided by the resident."}</Text>
-                  </View>
-                  <Text style={styles.referencePageSubtitle}>Preview only. The existing campaign setup page lets the LGU review and edit public text before publishing.</Text>
+                  <Text style={styles.referenceReviewChoiceTitle}>Campaign Title <Text style={styles.assistanceRequiredAsterisk}>*</Text></Text>
+                  <TextInput editable={false} selectTextOnFocus={false}
+                    value={request.title || "Assistance Request"} style={styles.referencePreviewInput}
+                    accessibilityLabel="Request-derived campaign title preview" />
+                  <Text style={styles.referenceReviewChoiceTitle}>Campaign Story <Text style={styles.assistanceRequiredAsterisk}>*</Text></Text>
+                  <TextInput editable={false} multiline selectTextOnFocus={false}
+                    value={request.description || request.currentSituation || "No description provided by the resident."}
+                    style={[styles.referencePreviewInput,styles.referencePreviewStory]}
+                    accessibilityLabel="Request-derived campaign story preview" />
                 </View>
                 <View style={styles.referenceCampaignSummary}>
                   <Text style={styles.referenceReviewChoiceTitle}>Campaign Summary</Text>
@@ -5979,6 +5989,8 @@ function DocumentPreviewModal({
 }
 
 const styles = StyleSheet.create({
+  referencePreviewInput: { borderWidth:1, borderColor:"#DDE7E6", borderRadius:8, backgroundColor:"#FFFFFF", color:"#26384B", fontSize:12, fontFamily:vsType.family, minHeight:42, paddingHorizontal:12, paddingVertical:10 },
+  referencePreviewStory: { minHeight:90, textAlignVertical:"top", lineHeight:19 },
   referenceCampaignFormRow: { flexDirection:"row", flexWrap:"wrap", gap:13, alignItems:"flex-start", marginTop:6 },
   referenceCampaignFormCell: { flexGrow:1, flexBasis:170, minWidth:160, gap:8 },
   referenceCoverNotice: { minHeight:42, padding:10, borderWidth:1, borderColor:"#DCE7E2", borderRadius:8, flexDirection:"row", alignItems:"center", gap:7, backgroundColor:"#FFFFFF" },
