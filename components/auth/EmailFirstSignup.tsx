@@ -5,6 +5,8 @@
 import {Picker} from "@react-native-picker/picker";
 import {Feather} from "@expo/vector-icons";
 import GoogleBrandMark from "./GoogleBrandMark";
+import SignupOtpCodeInput from "./SignupOtpCodeInput";
+import SignupPasswordStrength from "./SignupPasswordStrength";
 import {useRouter} from "expo-router";
 import {
   getIdToken,
@@ -22,6 +24,10 @@ import {
 import {SJDM_BARANGAYS} from "../../constants/sjdmBarangays";
 import {OCCUPATION_OPTIONS, SPECIALIZATIONS} from "../../constants/occupationOptions";
 import {auth} from "../../lib/firebase";
+import {
+  SIGNUP_EMAIL_OTP_ENABLED, requestSignupVerificationCode,
+  verifySignupEmailCode, sanitizeSignupOtpInput,
+} from "../../lib/signupEmailOtp";
 import {
   signUpUser,
 } from "../../lib/firebaseAuth";
@@ -201,6 +207,8 @@ export default function EmailFirstSignup() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [emailOtpCode, setEmailOtpCode] = useState("");
+  const [otpResendSeconds, setOtpResendSeconds] = useState(0);
   const [consent, setConsent] = useState(false);
   const [resumeMode, setResumeMode] = useState(false);
   const [firstName, setFirstName] = useState("");
@@ -213,6 +221,13 @@ export default function EmailFirstSignup() {
   const [specialization, setSpecialization] = useState("");
   const [occupationOther, setOccupationOther] = useState("");
   const [reviewed, setReviewed] = useState(false);
+
+  // Convenience countdown; the callable backend enforces its own resend limit.
+  useEffect(() => {
+    if (!SIGNUP_EMAIL_OTP_ENABLED || otpResendSeconds <= 0) return;
+    const handle = setTimeout(() => setOtpResendSeconds(value => Math.max(0,value-1)),1000);
+    return () => clearTimeout(handle);
+  }, [otpResendSeconds]);
 
   const age = useMemo(() => dateAge(birth), [birth]);
   const emailErr = getRegistrationEmailError(email);
@@ -255,6 +270,7 @@ export default function EmailFirstSignup() {
         setBirth(""); setBarangay(""); setOccupation("");
         setSpecialization(""); setOccupationOther(""); setReviewed(false);
         setPassword(""); setConfirmPassword(""); setConsent(false);
+        setEmailOtpCode(""); setOtpResendSeconds(0);
         lastUid.current = user?.uid ?? null;
       }
       setCompletedProfile(false);
@@ -290,8 +306,14 @@ export default function EmailFirstSignup() {
         const state = await inspectSignupUser(current);
         showRegistrationState(state);
         if (!current.emailVerified) {
-          await sendEmailVerification(current);
-          setMessage(EMAIL_VERIFICATION_REQUESTED_MESSAGE);
+          if (SIGNUP_EMAIL_OTP_ENABLED) {
+            await requestSignupVerificationCode();
+            setEmailOtpCode(""); setOtpResendSeconds(60);
+            setMessage("A six-digit verification code was sent to your email.");
+          } else {
+            await sendEmailVerification(current);
+            setMessage(EMAIL_VERIFICATION_REQUESTED_MESSAGE);
+          }
         } else setMessage("Google email verified and VolunServe password linked.");
       } else {
         if (signedInUser && !resumeMode) {
@@ -304,10 +326,18 @@ export default function EmailFirstSignup() {
         if (!user.emailVerified) {
           if (!resumeMode) {
             try {
-              await sendEmailVerification(user);
-              setMessage(EMAIL_VERIFICATION_REQUESTED_MESSAGE);
+              if (SIGNUP_EMAIL_OTP_ENABLED) {
+                await requestSignupVerificationCode();
+                setEmailOtpCode(""); setOtpResendSeconds(60);
+                setMessage("A six-digit verification code was sent. Check your inbox and spam folder.");
+              } else {
+                await sendEmailVerification(user);
+                setMessage(EMAIL_VERIFICATION_REQUESTED_MESSAGE);
+              }
             } catch {
-              setError("Your registration is saved, but verification email could not be requested. Choose Resend Verification Email or use a different address.");
+              setError(SIGNUP_EMAIL_OTP_ENABLED
+                ? "Your signup is saved, but we could not send the code. Check the email service and use Resend Code."
+                : "Your registration is saved, but verification email could not be requested. Choose Resend Verification Email or use a different address.");
             }
           } else setMessage("Registration resumed. Please verify your email to continue.");
         } else setMessage(state.profileExists ? "This account is already registered. Continue to Login." : "Welcome back. Complete your registration.");
@@ -342,6 +372,11 @@ export default function EmailFirstSignup() {
     try {
       const user = auth.currentUser;
       if (!user) throw new Error("Your session expired. Choose Resume Registration.");
+      if (SIGNUP_EMAIL_OTP_ENABLED && !user.emailVerified) {
+        if (!/^\d{6}$/.test(emailOtpCode)) throw new Error("Enter the complete six-digit code.");
+        await verifySignupEmailCode(emailOtpCode);
+        setEmailOtpCode("");
+      }
       const state = await inspectSignupUser(user);
       if (!user.emailVerified) {
         setError(EMAIL_VERIFICATION_PENDING_MESSAGE);
@@ -365,8 +400,15 @@ export default function EmailFirstSignup() {
         setMessage("Your email is already verified.");
         return;
       }
-      await sendEmailVerification(user);
-      setMessage(EMAIL_VERIFICATION_REQUESTED_MESSAGE);
+      if (SIGNUP_EMAIL_OTP_ENABLED) {
+        if (otpResendSeconds > 0) throw new Error("Please wait before requesting another code.");
+        await requestSignupVerificationCode();
+        setEmailOtpCode(""); setOtpResendSeconds(60);
+        setMessage("New verification code sent to your inbox. The previous code is no longer valid.");
+      } else {
+        await sendEmailVerification(user);
+        setMessage(EMAIL_VERIFICATION_REQUESTED_MESSAGE);
+      }
     } catch (e) { setError(safeAuthError(e)); }
     finally { setBusy(false); }
   }
@@ -379,7 +421,7 @@ export default function EmailFirstSignup() {
       await signOut(auth);
       setCompletedProfile(false);
       setSignedInUser(null);
-      setEmail(""); setPassword(""); setConfirmPassword("");
+      setEmail(""); setPassword(""); setConfirmPassword(""); setEmailOtpCode(""); setOtpResendSeconds(0);
       setStep(1); setResumeMode(false); setConsent(false);
       setMessage(""); setError(""); setShowErrors(false);
     } catch (e) { setError(safeAuthError(e)); }
@@ -560,7 +602,9 @@ export default function EmailFirstSignup() {
                 {step === 1
                 ? "Verify your email first before completing your Basic Resident profile."
                 : step === 2
-                  ? "Open your verification link to continue registration."
+                  ? SIGNUP_EMAIL_OTP_ENABLED
+                    ? "Enter the six-digit code sent to your Gmail or Yahoo inbox."
+                    : "Open your verification link to continue registration."
                   : step === 3
                     ? "Tell us about yourself."
                     : "Confirm your San Jose del Monte address and profile."}
@@ -666,6 +710,7 @@ export default function EmailFirstSignup() {
                     : passwordErr}
                   showError={showErrors}
                 />
+                {!resumeMode && <SignupPasswordStrength password={password}/>}
                 {!resumeMode && (
                   <>
                     <Field
@@ -723,17 +768,37 @@ export default function EmailFirstSignup() {
               <View>
                 <Text style={styles.sectionTitle}>Step 2 — Verify Your Email</Text>
                 <Text style={styles.helper}>
-                  Open your email and click the verification link sent to:
+                  {SIGNUP_EMAIL_OTP_ENABLED
+                    ? "We sent a six-digit code to:"
+                    : "Open your email and click the verification link sent to:"}
                 </Text>
                 <View style={styles.highlight}>
                   <Text style={styles.highlightText}>{signedInUser?.email || email}</Text>
                 </View>
-                <Text style={styles.helper}>
-                  {EMAIL_VERIFICATION_INSTRUCTIONS} Check your Inbox and Spam folder.
-                  After clicking the verification link, return here and choose Check Verification.
-                </Text>
-                {checkButton("I've Verified — Check Status", () => {void checkVerified();})}
-                {checkButton("Resend Verification Email", () => {void resend();}, true)}
+                {SIGNUP_EMAIL_OTP_ENABLED ? (
+                  <View>
+                    <Text style={styles.helper}>Check your inbox and spam folder. Enter the code below to continue.</Text>
+                    <SignupOtpCodeInput
+                      value={emailOtpCode}
+                      onChange={value => {setEmailOtpCode(sanitizeSignupOtpInput(value)); setError("");}}
+                      disabled={busy}
+                      invalid={!!error}
+                    />
+                    {checkButton("Verify Email", () => {void checkVerified();})}
+                    {otpResendSeconds > 0
+                      ? <Text style={styles.otpCountdown}>Resend a new code in {otpResendSeconds}s</Text>
+                      : checkButton("Resend Code", () => {void resend();}, true)}
+                  </View>
+                ) : (
+                  <View>
+                    <Text style={styles.helper}>
+                      {EMAIL_VERIFICATION_INSTRUCTIONS} Check your Inbox and Spam folder.
+                      After clicking the verification link, return here and choose Check Verification.
+                    </Text>
+                    {checkButton("I've Verified — Check Status", () => {void checkVerified();})}
+                    {checkButton("Resend Verification Email", () => {void resend();}, true)}
+                  </View>
+                )}
                 <Pressable style={styles.inlineButton} onPress={() => {void changeEmail();}}>
                   <Text style={styles.link}>Use a different email / Start over</Text>
                 </Pressable>
@@ -1036,6 +1101,8 @@ const styles = StyleSheet.create({
   highlight: {borderRadius: 10, backgroundColor: "#f0fdf4", padding: 14, marginBottom: 15},
   highlightText: {color: DARK, fontSize: 15, fontWeight: "800"},
   tiny: {fontSize: 11, color: "#64748b", lineHeight: 18, marginTop: 15},
+  otpCountdown: {fontSize: 12.5, fontWeight: "700", color: "#475569",
+    textAlign: "center", paddingVertical: 18},
   pickerBox: {borderRadius: 10, borderWidth: 1, borderColor: "#cbd5e1", marginBottom: 13, overflow: "hidden"},
   footer: {fontSize: 11, textAlign: "center", color: "#94a3b8", marginTop: 35},
 });
