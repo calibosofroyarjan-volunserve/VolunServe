@@ -226,6 +226,17 @@ const sanitizeMoneyInput = (value: string) => {
 };
 
 const SECURE_DONATION_BACKEND = "https://volunserve.onrender.com";
+
+// React Native Web does not implement Alert.alert. Keep validation and
+// outcome feedback visible on web without changing native mobile behavior.
+const showDonationAlert = (title: string, message: string) => {
+  if (Platform.OS === "web" && typeof (globalThis as any).alert === "function") {
+    (globalThis as any).alert(`${title}\n\n${message}`);
+    return;
+  }
+  Alert.alert(title, message);
+};
+
 const CLOUDINARY_CLOUD_NAME = "netjawtz";
 const CLOUDINARY_UPLOAD_PRESET = "volunserve_evidence";
 const CLOUDINARY_UPLOAD_URL =
@@ -1068,7 +1079,7 @@ export default function DonationAdministration() {
     const cleanUrl = String(url || "").trim();
 
     if (!cleanUrl.startsWith("https://")) {
-      Alert.alert("Invalid Proof Link", "This proof link is not valid.");
+      showDonationAlert("Invalid Proof Link", "This proof link is not valid.");
       return;
     }
 
@@ -1080,7 +1091,7 @@ export default function DonationAdministration() {
 
       await Linking.openURL(cleanUrl);
     } catch (problem) {
-      Alert.alert(
+      showDonationAlert(
         "Unable to Open Proof",
         problem instanceof Error
           ? problem.message
@@ -1134,7 +1145,7 @@ export default function DonationAdministration() {
       }
 
       if (current.length >= 5) {
-        Alert.alert(
+        showDonationAlert(
           "Public Photo Limit",
           "Select up to 5 privacy-safe photos for the public campaign.",
         );
@@ -1192,7 +1203,7 @@ export default function DonationAdministration() {
   const chooseAndUploadPublicCampaignPhoto = async () => {
     if (publicPhotoUploading || selectedPublicPhotoUrls.length >= 5) {
       if (selectedPublicPhotoUrls.length >= 5) {
-        Alert.alert(
+        showDonationAlert(
           "Public Photo Limit",
           "A campaign may publish up to 5 LGU-approved public photos.",
         );
@@ -1203,7 +1214,7 @@ export default function DonationAdministration() {
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
 
     if (!permission.granted) {
-      Alert.alert(
+      showDonationAlert(
         "Gallery Permission",
         "Allow photo library access so the Admin can add a separate privacy-safe public campaign photo.",
       );
@@ -1223,7 +1234,7 @@ export default function DonationAdministration() {
       typeof asset.fileSize === "number" &&
       asset.fileSize > MAX_PUBLIC_CAMPAIGN_PHOTO_BYTES
     ) {
-      Alert.alert("Photo Too Large", "Use a public campaign photo smaller than 10 MB.");
+      showDonationAlert("Photo Too Large", "Use a public campaign photo smaller than 10 MB.");
       return;
     }
 
@@ -1244,7 +1255,7 @@ export default function DonationAdministration() {
           ? problem.message
           : "Unable to upload the public campaign photo.";
       setPublicPhotoUploadStatus("");
-      Alert.alert("Photo Upload Failed", message);
+      showDonationAlert("Photo Upload Failed", message);
     } finally {
       setPublicPhotoUploading(false);
     }
@@ -1275,7 +1286,7 @@ export default function DonationAdministration() {
       );
 
       setPublicPhotoUploadStatus("Public campaign photos saved.");
-      Alert.alert(
+      showDonationAlert(
         "Public Photos Saved",
         "The Resident Donation page will now use these LGU-approved campaign photos.",
       );
@@ -1285,7 +1296,7 @@ export default function DonationAdministration() {
           ? problem.message
           : "Unable to save the public campaign photos.";
       setError(message);
-      Alert.alert("Photo Save Failed", message);
+      showDonationAlert("Photo Save Failed", message);
     } finally {
       setBusyKey("");
     }
@@ -1326,7 +1337,7 @@ export default function DonationAdministration() {
     if (!user || !isAdmin || busyKey) return;
 
     if (!openedFromAssistance) {
-      Alert.alert(
+      showDonationAlert(
         "Verified Assistance Request Required",
         "New donation campaigns must begin from an LGU-verified Request Assistance with documented uncovered costs.",
       );
@@ -1335,7 +1346,7 @@ export default function DonationAdministration() {
 
     if (openedFromAssistance) {
       if (!assistanceSourceReady || !assistanceSource) {
-        Alert.alert(
+        showDonationAlert(
           "Verified Assistance Request Required",
           "The selected Assistance Request could not be loaded.",
         );
@@ -1343,7 +1354,7 @@ export default function DonationAdministration() {
       }
 
       if (!assistanceSourceIsEligible(assistanceSource)) {
-        Alert.alert(
+        showDonationAlert(
           "Donation Support Not Available",
           "This Assistance Request must be finally verified and have Donation Support Needed with a verified remaining shortage.",
         );
@@ -1354,7 +1365,7 @@ export default function DonationAdministration() {
         !String(assistanceSource.assignedLocationName || "").trim() ||
         !String(assistanceSource.assignedLocationAddress || "").trim()
       ) {
-        Alert.alert(
+        showDonationAlert(
           "Official Location Required",
           "Return to Assistance Requests and save the LGU-approved public service location first.",
         );
@@ -1362,7 +1373,7 @@ export default function DonationAdministration() {
       }
     } else {
       if (!selectedAssessment || selectedAssessment.id !== requestedAssessmentId) {
-        Alert.alert(
+        showDonationAlert(
           "Verified Relief Need Required",
           "Return to Relief Operations and open Donation Support from the exact relief need that has a confirmed shortage.",
         );
@@ -1370,7 +1381,7 @@ export default function DonationAdministration() {
       }
 
       if (!selectedAssessmentActive) {
-        Alert.alert(
+        showDonationAlert(
           "Relief Need No Longer Active",
           "This relief need is already fulfilled or closed, so a new donation campaign cannot be published.",
         );
@@ -1379,7 +1390,7 @@ export default function DonationAdministration() {
     }
 
     if (selectedPublishedCampaign) {
-      Alert.alert(
+      showDonationAlert(
         "Campaign Already Active",
         "Close the existing campaign for this verified source before publishing another one.",
       );
@@ -1389,7 +1400,7 @@ export default function DonationAdministration() {
     if (openedFromAssistance && !residentStoryPrivacyReviewed) {
       const message="Review the resident-derived title, story and campaign photo, then confirm that private information has been removed before publishing.";
       setError(message);
-      Alert.alert("Privacy Review Required",message);
+      showDonationAlert("Privacy Review Required",message);
       return;
     }
 
@@ -1404,12 +1415,12 @@ export default function DonationAdministration() {
     const severityLabel = publicSeverity.trim();
 
     if (title.length < 5) {
-      Alert.alert("Campaign Title", "Enter a clear campaign title.");
+      showDonationAlert("Campaign Title", "Enter a clear campaign title.");
       return;
     }
 
     if (description.length < 15) {
-      Alert.alert(
+      showDonationAlert(
         "Campaign Description",
         "Describe the verified need clearly without exposing private beneficiary details.",
       );
@@ -1417,7 +1428,7 @@ export default function DonationAdministration() {
     }
 
     if (story.length < 30) {
-      Alert.alert(
+      showDonationAlert(
         "Verified Situation Required",
         "Write a short privacy-safe public story explaining the verified situation and why support is needed.",
       );
@@ -1425,7 +1436,7 @@ export default function DonationAdministration() {
     }
 
     if (publicLocation.length < 3) {
-      Alert.alert(
+      showDonationAlert(
         "Public Location Required",
         "Use only an approximate public area. Never publish the beneficiary's exact home address.",
       );
@@ -1433,7 +1444,7 @@ export default function DonationAdministration() {
     }
 
     if (incidentType.length < 2 || severityLabel.length < 2) {
-      Alert.alert(
+      showDonationAlert(
         "Public Case Details",
         "Confirm the public category and LGU-assessed priority before publishing.",
       );
@@ -1444,7 +1455,7 @@ export default function DonationAdministration() {
       openedFromAssistance &&
       selectedPublicPhotoUrls.length < 1
     ) {
-      Alert.alert(
+      showDonationAlert(
         "Public Campaign Photo Required",
         "A Community Needs campaign needs at least one LGU-approved public photo before it can be published.",
       );
@@ -1452,7 +1463,7 @@ export default function DonationAdministration() {
     }
 
     if (!Number.isFinite(numericMonetaryGoal) || numericMonetaryGoal <= 0) {
-      Alert.alert(
+      showDonationAlert(
         "Funding Goal Required",
         "Enter the verified monetary amount still needed for this campaign.",
       );
@@ -1465,7 +1476,7 @@ export default function DonationAdministration() {
         numericMonetaryGoal - Number(assistanceSource?.remainingAmount || 0),
       ) > 0.009
     ) {
-      Alert.alert(
+      showDonationAlert(
         "Verified Funding Goal",
         `For a Community Assistance campaign, the funding goal must match the verified remaining unmet amount: ${money(
           Number(assistanceSource?.remainingAmount || 0),
@@ -1475,7 +1486,7 @@ export default function DonationAdministration() {
     }
 
     if (moneyLabel.length < 3 || moneyInstructions.length < 10) {
-      Alert.alert(
+      showDonationAlert(
         "Official LGU Channel Required",
         "Enter the official LGU monetary channel and clear payment or receipt instructions.",
       );
@@ -1486,7 +1497,7 @@ export default function DonationAdministration() {
       !openedFromAssistance &&
       (handoffLocationName.trim().length < 3 || handoffAddress.trim().length < 5)
     ) {
-      Alert.alert(
+      showDonationAlert(
         "Official Public Location Required",
         "Set the LGU-approved public service or coordination point before publishing this disaster campaign.",
       );
@@ -1528,7 +1539,7 @@ export default function DonationAdministration() {
         ? published.campaignId : "";
       if (!publishedCampaignId) {
         setError("Campaign published, but campaign ID was not returned. No public announcement was sent. Check the campaign register.");
-        Alert.alert("Campaign Published — Announcement Pending",
+        showDonationAlert("Campaign Published — Announcement Pending",
           "The campaign was created, but its announcement could not be verified. Check the campaign register before retrying.");
       } else {
         try {
@@ -1537,19 +1548,19 @@ export default function DonationAdministration() {
           });
           if (outcome === "published" || outcome === "already_published") {
             setFailedCampaignAnnouncementId("");
-            Alert.alert("Campaign Published and Announced",
+            showDonationAlert("Campaign Published and Announced",
               "The verified campaign is live. A generic notice was automatically posted in Community Updates without beneficiary or donor information.");
           } else {
             setFailedCampaignAnnouncementId(publishedCampaignId);
             setError("Campaign published, but its public announcement was not posted. Use Retry Announcement; no donation or campaign payment was changed.");
-            Alert.alert("Campaign Published — Announcement Pending",
+            showDonationAlert("Campaign Published — Announcement Pending",
               "The donation campaign is live, but its public announcement is still pending.");
           }
         } catch (noticeError) {
           console.error("Published Donation Campaign announcement failed:", noticeError);
           setFailedCampaignAnnouncementId(publishedCampaignId);
           setError("Campaign published successfully, but the public announcement failed. Use Retry Announcement below. Do not create another campaign.");
-          Alert.alert("Campaign Published — Announcement Failed",
+          showDonationAlert("Campaign Published — Announcement Failed",
             "The campaign is live. Its public announcement was not posted; payments and donor records are unchanged.");
         }
       }
@@ -1557,7 +1568,7 @@ export default function DonationAdministration() {
       const message =
         problem instanceof Error ? problem.message : "Unable to create the campaign.";
       setError(message);
-      Alert.alert("Campaign Failed", message);
+      showDonationAlert("Campaign Failed", message);
     } finally {
       setBusyKey("");
     }
@@ -1600,7 +1611,7 @@ export default function DonationAdministration() {
 
     const numericGoal = Number(draft.monetaryGoal);
     if (!Number.isFinite(numericGoal) || numericGoal <= 0) {
-      Alert.alert("Funding Goal Required", "Enter the verified monetary goal.");
+      showDonationAlert("Funding Goal Required", "Enter the verified monetary goal.");
       return;
     }
 
@@ -1608,7 +1619,7 @@ export default function DonationAdministration() {
       draft.handoffLocationName.trim().length < 3 ||
       draft.handoffAddress.trim().length < 5
     ) {
-      Alert.alert(
+      showDonationAlert(
         "Official Public Location Required",
         "Enter the LGU-approved public service location name and address.",
       );
@@ -1629,7 +1640,7 @@ export default function DonationAdministration() {
         },
       );
 
-      Alert.alert(
+      showDonationAlert(
         "Campaign Setup Updated",
         "The verified goal and LGU-approved public location are now available on the Resident Donation page.",
       );
@@ -1639,7 +1650,7 @@ export default function DonationAdministration() {
           ? problem.message
           : "Unable to update the campaign public setup.";
       setError(message);
-      Alert.alert("Update Failed", message);
+      showDonationAlert("Update Failed", message);
     } finally {
       setBusyKey("");
     }
@@ -1656,12 +1667,12 @@ export default function DonationAdministration() {
         `/api/admin/donations/campaigns/${encodeURIComponent(campaign.id)}/close`,
       );
 
-      Alert.alert("Campaign Closed", "New donor submissions are now disabled.");
+      showDonationAlert("Campaign Closed", "New donor submissions are now disabled.");
     } catch (problem) {
       const message =
         problem instanceof Error ? problem.message : "Unable to close the campaign.";
       setError(message);
-      Alert.alert("Close Failed", message);
+      showDonationAlert("Close Failed", message);
     } finally {
       setBusyKey("");
     }
@@ -1678,7 +1689,7 @@ export default function DonationAdministration() {
     const actual = Number(form.actualValue);
 
     if (!Number.isFinite(actual) || actual <= 0) {
-      Alert.alert(
+      showDonationAlert(
         "Actual Receipt Required",
         "Enter the actual monetary amount confirmed by the LGU.",
       );
@@ -1701,7 +1712,7 @@ export default function DonationAdministration() {
         return next;
       });
 
-      Alert.alert(
+      showDonationAlert(
         "Donation Verified",
         "The confirmed amount was added to the campaign funding progress.",
       );
@@ -1709,7 +1720,7 @@ export default function DonationAdministration() {
       const message =
         problem instanceof Error ? problem.message : "Unable to verify the donation.";
       setError(message);
-      Alert.alert("Verification Failed", message);
+      showDonationAlert("Verification Failed", message);
     } finally {
       setBusyKey("");
     }
@@ -1720,7 +1731,7 @@ export default function DonationAdministration() {
 
     const reason = (verificationForms[donation.id]?.rejectionReason || "").trim();
     if (reason.length < 5) {
-      Alert.alert("Reason Required", "Enter a clear rejection reason.");
+      showDonationAlert("Reason Required", "Enter a clear rejection reason.");
       return;
     }
 
@@ -1739,12 +1750,12 @@ export default function DonationAdministration() {
         return next;
       });
 
-      Alert.alert("Donation Rejected", "The submission was not counted as LGU resources.");
+      showDonationAlert("Donation Rejected", "The submission was not counted as LGU resources.");
     } catch (problem) {
       const message =
         problem instanceof Error ? problem.message : "Unable to reject this donation.";
       setError(message);
-      Alert.alert("Rejection Failed", message);
+      showDonationAlert("Rejection Failed", message);
     } finally {
       setBusyKey("");
     }
@@ -1832,7 +1843,7 @@ export default function DonationAdministration() {
               } else {
                 setFailedCampaignAnnouncementId("");
                 setError("");
-                Alert.alert("Announcement Published",
+                showDonationAlert("Announcement Published",
                   "Community Updates now contains the campaign notice. No duplicate was created.");
               }
             } catch (noticeError) {
