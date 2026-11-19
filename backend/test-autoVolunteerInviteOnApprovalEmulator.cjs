@@ -77,7 +77,8 @@ test("production gate is DISABLED by default and refuses mismatched project",()=
   assert.equal(releaseGate(GOOD,"volunserve-volunteer-staging").enabled,false);
   assert.equal(releaseGate(GOOD,PROJECT_ID).enabled,true);
   assert.equal(caseReady({...base,status:"reported"}),false);
-  assert.equal(candidateOK(base,person("v",{skills:{unsafe:true}}),{status:"approved",skills:["First Aid"]}),true);
+  assert.equal(candidateOK(base,person("v",{skills:{unsafe:true}}),{uid:"v",status:"approved",skills:["First Aid"]}),true);
+  assert.equal(candidateOK(base,person("v"),{uid:"different_volunteer",status:"approved",skills:["First Aid"]}),false);
 });
 test("blocked live gate causes zero writes",async()=>{
   const r=await call("dummy_disabled",{env:{}});
