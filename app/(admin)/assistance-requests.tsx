@@ -3659,7 +3659,7 @@ function DecisionTab({
                   onChangeText={v=>setRemainingAmount(v.replace(/[^0-9.]/g,""))}
                   keyboardType="decimal-pad" placeholder="Enter the verified remaining amount"
                   placeholderTextColor="#94A3B8" style={styles.input} />
-                {remainingAmount.trim() && !amountValid && (
+                {!amountValid && (
                   <Text style={{color:"#B45309",fontSize:11}}>
                     Enter a positive amount no higher than the verified uncovered need.
                   </Text>
@@ -3684,6 +3684,11 @@ function DecisionTab({
                   onChangeText={setLocationAddress} editable={!busy && !donationSubmitting}
                   style={styles.input} placeholder="Barangay, City of San Jose del Monte, Bulacan"
                   placeholderTextColor="#94A3B8"/>
+                {!officeValid && (
+                  <Text style={{color:"#B45309",fontSize:11}}>
+                    Enter the name and address of a public barangay or LGU coordination office.
+                  </Text>
+                )}
                 <Text style={styles.bodyText}>
                   This location is for public coordination only. Never publish the Resident's home address.
                 </Text>
@@ -3692,7 +3697,7 @@ function DecisionTab({
             <View style={{gap:7}}>
               <ActionButton label="Save & Continue to Campaign Setup"
                 icon="arrow-forward-circle-outline" variant="success"
-                loading={donationSubmitting || busy} disabled={!amountValid || !officeValid || busy || donationSubmitting}
+                loading={donationSubmitting || busy} disabled={busy || donationSubmitting}
                 onPress={onContinueDonation} />
               <Text style={{textAlign:"center",fontSize:11,color:"#64748B"}}>
                 Saves the support plan and public office, then opens the Donation Campaign editor. It does not publish.
