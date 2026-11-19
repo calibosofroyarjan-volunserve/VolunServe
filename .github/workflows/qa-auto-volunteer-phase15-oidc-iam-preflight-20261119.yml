@@ -1,0 +1,88 @@
+name: Auto Volunteer Phase 15 RENDER GCP OIDC IAM REVIEW - NO DEPLOY
+on:
+  pull_request:
+    branches:
+      - review/auto-volunteer-phase14-staging-readonly-entrypoint-20261119
+    paths:
+      - "backend/autoVolunteerPhase15RenderOidcIamPreflight.cjs"
+      - "backend/test-autoVolunteerPhase15RenderOidcIamPreflight.cjs"
+      - "docs/emergency-volunteer/PHASE15_RENDER_GCP_OIDC_IAM_READINESS_20261119.md"
+      - ".github/workflows/qa-auto-volunteer-phase15-oidc-iam-preflight-20261119.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  offline-exact-service-oidc-iam-review-only:
+    if: github.repository == 'calibosofroyarjan-volunserve/VolunServe'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      CI: "true"
+      VOLUNSERVE_AUTO_VOLUNTEER_DISPATCH: disabled
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - name: Strict four-file additions only — NO existing production, staging or runtime modifications
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin review/auto-volunteer-phase14-staging-readonly-entrypoint-20261119
+          git diff --name-status origin/review/auto-volunteer-phase14-staging-readonly-entrypoint-20261119 HEAD > /tmp/phase15-diff
+          while IFS="$(printf '\t')" read -r status path; do
+            test "$status" = A || { echo "BLOCKED existing file changed: $path"; exit 1; }
+            case "$path" in
+              "backend/autoVolunteerPhase15RenderOidcIamPreflight.cjs"|"backend/test-autoVolunteerPhase15RenderOidcIamPreflight.cjs"|"docs/emergency-volunteer/PHASE15_RENDER_GCP_OIDC_IAM_READINESS_20261119.md"|".github/workflows/qa-auto-volunteer-phase15-oidc-iam-preflight-20261119.yml") ;;
+              *) echo "BLOCKED unrelated file: $path"; exit 1 ;;
+            esac
+          done < /tmp/phase15-diff
+          echo "PASS: four NEW review-only files and NO deployment source patches."
+      - name: Production and prior accepted fictional staging server stay unwired
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(node -p 'require("./backend/package.json").scripts.start')" = "node server.js"
+          if grep -Fq 'autoVolunteerPhase15RenderOidcIamPreflight' backend/server.js; then
+            echo "BLOCKED: production server import"
+            exit 1
+          fi
+          git fetch --no-tags origin feat/emergency-auto-dispatch-server-staging-20261115
+          git show origin/feat/emergency-auto-dispatch-server-staging-20261115:backend/emergencyAutoDispatchStagingServer.js > /tmp/phase15-staging-server-readonly
+          test -s /tmp/phase15-staging-server-readonly
+          if grep -Fq 'autoVolunteerPhase15RenderOidcIamPreflight' /tmp/phase15-staging-server-readonly; then
+            echo "BLOCKED: historical staging import"
+            exit 1
+          fi
+          echo "PASS: production and historically accepted staging are not changed."
+      - name: Install backend locked dependencies, no lifecycle scripts or credentials
+        run: npm ci --prefix backend --ignore-scripts --no-audit --no-fund
+      - name: Offline exact Render subject / GCP STS / narrow IAM tests
+        run: |
+          node --check backend/autoVolunteerPhase15RenderOidcIamPreflight.cjs
+          node --check backend/test-autoVolunteerPhase15RenderOidcIamPreflight.cjs
+          node --test --test-concurrency=1 backend/test-autoVolunteerPhase15RenderOidcIamPreflight.cjs
+      - name: Preserve Phase 14-11 staging security and earlier preview/winner checks
+        run: |
+          node --test --test-concurrency=1 backend/test-autoVolunteerPhase14StagingServer.cjs
+          node --test --test-concurrency=1 backend/test-autoVolunteerPhase13ReadOnlyCloudBootstrap.cjs
+          node --test --test-concurrency=1 backend/test-autoVolunteerPhase12CloudPreviewAdapter.cjs
+          node --test backend/test-autoVolunteerPhase11CloudIsolationGate.cjs
+          node --test backend/test-autoVolunteerAdminReadOnlyPreview.cjs
+          node --test backend/test-emergencyAutoVolunteerReadOnlyPlanner.cjs
+          node --test backend/test-emergencyVolunteerWinnerGuard.cjs
+      - name: Preserve existing login, identity and certificate regressions
+        run: npm run check --prefix backend
+      - name: Absolute NO CLOUD CALL, IAM GRANT, PAID SERVICE OR DEPLOY
+        run: |
+          echo "Phase 15 checks only untrusted, fictitious IAM/OIDC proposal metadata."
+          echo "Render Pro OIDC entitlement not verified for this workspace."
+          echo "No real Firebase Auth/Firestore cloud access or effective IAM lookup."
+          echo "NO Render/Firebase/Hosting/GCP IAM/Cloud Tasks/Cloud Scheduler write."
+          echo "Phase 12/13 managed ADC incompatibility stays blocked until approved fix."
+          echo "Production and accepted prior staging unchanged, emergency dispatch OFF."
