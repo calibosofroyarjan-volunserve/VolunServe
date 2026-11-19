@@ -7,7 +7,7 @@ assert(s.includes('Platform.OS === "web"'),"Web branch missing");
 assert(s.includes('(globalThis as any).alert(`${title}\\n\\n${message}`)'),"Browser feedback missing");
 assert(s.includes('Alert.alert(title, message);'),"Native feedback removed");
 const uses=s.match(/showDonationAlert\(/g)||[];
-assert.equal(uses.length,45,"Not all existing Donation alerts wrapped");
+assert.equal(uses.length,46,"All 45 original Donation alerts plus mandatory Resident-consent preflight must use browser feedback");
 const raw=s.match(/Alert\.alert\(/g)||[];
 assert.equal(raw.length,1,"Unsupported direct Alert.alert calls remain on web");
 for(const key of [
