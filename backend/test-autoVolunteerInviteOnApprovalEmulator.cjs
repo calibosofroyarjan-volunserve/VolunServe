@@ -112,7 +112,10 @@ test("real Firestore transaction invites EVERY eligible fictional same-barangay 
       uid+" must not be automatically offered");
   }
   const second=await call(caseId);
-  assert.equal(second.ok,false);
+  assert.equal(second.ok,true);
+  assert.equal(second.status,"already_started");
+  assert.equal(second.offered,2);
+  assert.equal(second.offersWritten,false);
   const n=await db.collection("notifications").where("caseId","==",caseId).get();
   assert.equal(n.size,2,"Retries must not duplicate notifications");
 });
@@ -137,8 +140,8 @@ test("duplicate requests cannot generate duplicate batch invitations",async()=>{
   const caseId="fictional_duplicate_race";
   await seed(caseId);
   const settled=await Promise.allSettled([call(caseId),call(caseId)]);
-  const success=settled.filter(x=>x.status==="fulfilled"&&x.value.ok===true);
-  assert.equal(success.length,1);
+  const writes=settled.filter(x=>x.status==="fulfilled"&&x.value.status==="offered");
+  assert.equal(writes.length,1,"Only one transaction may create the initial wave");
   const n=await db.collection("notifications").where("caseId","==",caseId).get();
   assert.equal(n.size,2);
 });
