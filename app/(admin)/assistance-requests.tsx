@@ -2140,170 +2140,91 @@ This still does not automatically create a Donation Campaign.`,
         >
           <>
             <AdminReviewHero
-              eyebrow="LGU OPERATIONS / EMERGENCY & ASSISTANCE"
+              eyebrow="LGU ADMINISTRATION / ASSISTANCE"
               title="Assistance Requests"
-              subtitle="Review verified Resident requests for individual support, assess supporting evidence, and document the LGU decision. Incident emergencies belong under Emergency Reports; separate approved financial support is handled through Donations & Funds."
+              subtitle="Review resident requests and provide appropriate support."
               icon="hand-left-outline"
               tag="RESIDENT ASSISTANCE"
             />
-
-            <View style={styles.mockTopTabsRow}>
-              <MockStatusTab
-                label="Pending"
-                count={stats.pending}
-                active={filter === "pending"}
-                onPress={() => { setFilter("pending"); setRecordPage(1); }}
-              />
-              <MockStatusTab
-                label="Under Review"
-                count={stats.underReview}
-                active={filter === "under_review"}
-                onPress={() => { setFilter("under_review"); setRecordPage(1); }}
-              />
-              <MockStatusTab
-                label="Verified"
-                count={stats.verified}
-                active={filter === "verified"}
-                onPress={() => { setFilter("verified"); setRecordPage(1); }}
-              />
-              <MockStatusTab
-                label="Rejected"
-                count={stats.rejected}
-                active={filter === "rejected"}
-                onPress={() => { setFilter("rejected"); setRecordPage(1); }}
-              />
-
-              <View style={styles.mockTopTabsSpacer} />
-
-              <TouchableOpacity
-                style={[
-                  styles.mockHistoryButton,
-                  filter === "completed" &&
-                    styles.mockHistoryButtonActive,
-                ]}
-                onPress={() => { setFilter("completed"); setRecordPage(1); }}
-              >
-                <Ionicons
-                  name="archive-outline"
-                  size={15}
-                  color={
-                    filter === "completed"
-                      ? "#2563EB"
-                      : "#64748B"
-                  }
-                />
-                <Text
-                  style={[
-                    styles.mockHistoryButtonText,
-                    filter === "completed" &&
-                      styles.mockHistoryButtonTextActive,
-                  ]}
-                >
-                  Completed
-                </Text>
-              </TouchableOpacity>
-            </View>
-
-            <View style={styles.mockSearchRow}>
-              <View style={styles.searchBox}>
-                <Ionicons
-                  name="search-outline"
-                  size={18}
-                  color="#64748B"
-                />
-                <TextInput
-                  value={search}
-                  onChangeText={value => { setSearch(value); setRecordPage(1); }}
-                  placeholder="Search request ID, Resident, beneficiary, barangay, or title"
-                  placeholderTextColor="#94A3B8"
-                  style={styles.searchInput}
-                />
+            <View style={{ marginTop: 20, gap: 17 }}>
+              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 9, alignItems: "center" }}>
+                <MockStatusTab label="All Requests" count={requests.length} active={filter === "all"}
+                  onPress={() => { setFilter("all"); setRecordPage(1); }} />
+                <MockStatusTab label="For Review" count={stats.pending + stats.underReview}
+                  active={filter === "pending" || filter === "under_review"}
+                  onPress={() => { setFilter("pending"); setRecordPage(1); }} />
+                <MockStatusTab label="Approved" count={stats.verified} active={filter === "verified"}
+                  onPress={() => { setFilter("verified"); setRecordPage(1); }} />
+                <MockStatusTab label="Rejected" count={stats.rejected} active={filter === "rejected"}
+                  onPress={() => { setFilter("rejected"); setRecordPage(1); }} />
+                <MockStatusTab label="Completed" count={requests.filter(item =>
+                  ["assistance_provided", "campaign_created", "closed"].includes(String(item.status || ""))).length}
+                  active={filter === "completed"}
+                  onPress={() => { setFilter("completed"); setRecordPage(1); }} />
               </View>
-
-              <TouchableOpacity
-                style={[
-                  styles.mockAllButton,
-                  filter === "all" &&
-                    styles.mockAllButtonActive,
-                ]}
-                onPress={() => { setFilter("all"); setRecordPage(1); }}
-              >
-                <Text
-                  style={[
-                    styles.mockAllButtonText,
-                    filter === "all" &&
-                      styles.mockAllButtonTextActive,
-                  ]}
-                >
-                  All
-                </Text>
-              </TouchableOpacity>
-            </View>
-
-            {!!listenerError && (
-              <View style={styles.errorBox}>
-                <Ionicons
-                  name="alert-circle-outline"
-                  size={18}
-                  color="#B42318"
-                />
-                <Text style={styles.errorText}>
-                  {listenerError}
-                </Text>
-              </View>
-            )}
-
-            <ListPagination page={activeRequestPage} total={filteredRequests.length} pageSize={5} onChange={setRecordPage} />
-            <View style={styles.mockQueuePanel}>
-              <View style={styles.mockQueueHeader}>
-                <View>
-                  <Text style={styles.panelEyebrow}>
-                    REVIEW QUEUE
-                  </Text>
-                  <Text style={styles.panelTitle}>
-                    {filteredRequests.length} request
-                    {filteredRequests.length === 1
-                      ? ""
-                      : "s"}
-                  </Text>
+              <View style={{flexDirection:"row",flexWrap:"wrap",gap:12,alignItems:"center",justifyContent:"space-between"}}>
+                <View style={[styles.searchBox,{flex:1,minWidth:220,maxWidth:460}]}>
+                  <Ionicons name="search-outline" size={18} color="#64748B"/>
+                  <TextInput value={search}
+                    onChangeText={value=>{setSearch(value);setRecordPage(1);}}
+                    placeholder="Search request, resident, or category..."
+                    placeholderTextColor="#94A3B8" style={styles.searchInput}/>
                 </View>
-
-                {loadingRequests && (
-                  <ActivityIndicator
-                    color="#4F46E5"
-                  />
-                )}
+                <Text style={{fontSize:12,fontWeight:"700",color:"#64748B"}}>Newest requests first</Text>
               </View>
-
-              {!loadingRequests &&
-              filteredRequests.length === 0 ? (
-                <View style={styles.mockQueueEmpty}>
-                  <Ionicons
-                    name="file-tray-outline"
-                    size={38}
-                    color="#94A3B8"
-                  />
-                  <Text style={styles.emptyTitle}>
-                    No requests in this status
-                  </Text>
-                  <Text style={styles.emptyText}>
-                    Valid new Request Assistance
-                    submissions will appear here for
-                    LGU review.
-                  </Text>
+              {!!listenerError && (
+                <View style={styles.errorBox}>
+                  <Ionicons name="alert-circle-outline" size={18} color="#B42318"/>
+                  <Text style={styles.errorText}>{listenerError}</Text>
                 </View>
-              ) : (
-                pagedRequests.map((item) => (
-                  <MockQueueRow
-                    key={item.id}
-                    request={item}
-                    onPress={() =>
-                      selectRequest(item)
-                    }
-                  />
-                ))
               )}
+              <View style={{
+                borderRadius:16,backgroundColor:"#FFFFFF",borderWidth:1,
+                borderColor:"#DDE8E4",overflow:"hidden",
+              }}>
+                <View style={{paddingHorizontal:20,paddingTop:21,paddingBottom:17,gap:4}}>
+                  <Text style={{fontSize:19,fontWeight:"800",color:"#102822"}}>Assistance Request Queue</Text>
+                  <Text style={{fontSize:12,fontWeight:"700",color:"#047857"}}>
+                    {filteredRequests.length} {filteredRequests.length === 1 ? "request" : "requests"}
+                  </Text>
+                </View>
+                <View style={{
+                  flexDirection:"row",paddingHorizontal:20,paddingVertical:13,
+                  backgroundColor:"#F1F6F4",borderTopWidth:1,borderBottomWidth:1,
+                  borderColor:"#E4EBE7",gap:16,
+                }}>
+                  <Text style={{flex:3,minWidth:180,fontSize:10.5,fontWeight:"800",color:"#49665B"}}>REQUEST CASE</Text>
+                  <Text style={{flex:2,minWidth:110,fontSize:10.5,fontWeight:"800",color:"#49665B"}}>RESIDENT</Text>
+                  <Text style={{flex:1.6,minWidth:90,fontSize:10.5,fontWeight:"800",color:"#49665B"}}>CATEGORY</Text>
+                  <Text style={{flex:1.2,minWidth:85,fontSize:10.5,fontWeight:"800",color:"#49665B"}}>AMOUNT</Text>
+                  <Text style={{flex:1.2,minWidth:90,fontSize:10.5,fontWeight:"800",color:"#49665B"}}>STATUS</Text>
+                  <Text style={{width:16,fontSize:10.5,fontWeight:"800",color:"#49665B"}}> </Text>
+                </View>
+                {loadingRequests ? (
+                  <View style={{padding:35,alignItems:"center"}}><ActivityIndicator color="#047857"/></View>
+                ) : filteredRequests.length === 0 ? (
+                  <View style={{padding:42,alignItems:"center",gap:10}}>
+                    <Ionicons name="file-tray-outline" size={28} color="#94A3B8"/>
+                    <Text style={{color:"#475569",fontSize:13}}>No matching assistance requests.</Text>
+                  </View>
+                ) : pagedRequests.map(item => (
+                  <MockQueueRow key={item.id} request={item} onPress={()=>selectRequest(item)}/>
+                ))}
+                <View style={{
+                  paddingHorizontal:18,paddingVertical:15,borderTopWidth:1,borderColor:"#E6ECE9",
+                  flexDirection:"row",flexWrap:"wrap",alignItems:"center",
+                  justifyContent:"space-between",gap:12,
+                }}>
+                  <Text style={{color:"#64748B",fontSize:12}}>
+                    {filteredRequests.length ? ((activeRequestPage-1)*5+1) : 0}–{Math.min(activeRequestPage*5,filteredRequests.length)}
+                    {" of "}{filteredRequests.length} requests · 5 per page
+                  </Text>
+                  <ListPagination page={activeRequestPage} total={filteredRequests.length}
+                    pageSize={5} onChange={setRecordPage}/>
+                </View>
+              </View>
             </View>
+
           </>
         </ScrollView>
       ) : !selected ? (
@@ -2453,112 +2374,54 @@ function MockStatusTab({
   );
 }
 
-function MockQueueRow({
-  request,
-  onPress,
-}: {
+function MockQueueRow({request,onPress}:{
   request: AssistanceRequest;
-  onPress: () => void;
-}) {
-  const category = assistanceCategoryMeta(
-    request.category,
-  );
-  const status = statusMeta(request.status);
-
+  onPress:()=>void;
+}){
+  const category=assistanceCategoryMeta(request.category);
+  const meta=statusMeta(request.status);
   return (
-    <TouchableOpacity
-      style={styles.mockQueueRow}
-      onPress={onPress}
-      activeOpacity={0.82}
-    >
-      <View
-        style={[
-          styles.mockQueueIcon,
-          {
-            backgroundColor: category.soft,
-          },
-        ]}
-      >
-        <Ionicons
-          name={category.icon}
-          size={22}
-          color={category.color}
-        />
-      </View>
-
-      <View style={styles.mockQueueMain}>
-        <Text style={styles.mockQueueId}>
-          {request.requestId || request.id}
-        </Text>
-        <Text
-          style={styles.mockQueueTitle}
-          numberOfLines={1}
-        >
-          {request.title ||
-            "Assistance Request"}
-        </Text>
-
-        <View style={styles.mockQueueMetaLine}>
-          <Ionicons
-            name="person-outline"
-            size={13}
-            color="#64748B"
-          />
-          <Text style={styles.mockQueueMeta}>
-            {request.requesterName ||
-              "Resident"}
-          </Text>
+    <TouchableOpacity onPress={onPress} activeOpacity={0.82}
+      style={{
+        paddingHorizontal:20,paddingVertical:18,backgroundColor:"#FFFFFF",
+        borderBottomWidth:1,borderBottomColor:"#EAEFEB",
+        flexDirection:"row",alignItems:"center",gap:16,minHeight:91,
+      }}>
+      <View style={{flex:3,minWidth:180,flexDirection:"row",alignItems:"center",gap:12}}>
+        <View style={{width:44,height:44,borderRadius:12,backgroundColor:category.soft,
+          alignItems:"center",justifyContent:"center"}}>
+          <Ionicons name={category.icon} size={22} color={category.color}/>
         </View>
-
-        <View style={styles.mockQueueMetaLine}>
-          <View
-            style={[
-              styles.mockQueueDot,
-              {
-                backgroundColor:
-                  category.color,
-              },
-            ]}
-          />
-          <Text style={styles.mockQueueMeta}>
-            {request.categoryLabel ||
-              request.category ||
-              "Community Assistance"}
+        <View style={{flex:1,minWidth:0,gap:5}}>
+          <Text style={{fontSize:13,fontWeight:"800",color:"#102A26"}} numberOfLines={2}>
+            {request.title || "Assistance Request"}
+          </Text>
+          <Text style={{fontSize:11,color:"#73837E"}} numberOfLines={1}>
+            {request.requestId || request.id}
           </Text>
         </View>
       </View>
-
-      <View style={styles.mockQueueRight}>
-        <View
-          style={[
-            styles.mockQueueStatus,
-            {
-              backgroundColor: status.soft,
-            },
-          ]}
-        >
-          <Text
-            style={[
-              styles.mockQueueStatusText,
-              {
-                color: status.color,
-              },
-            ]}
-          >
-            {status.label}
-          </Text>
-        </View>
-
-        <Text style={styles.mockQueueDate}>
-          {readableDate(request.createdAt)}
+      <View style={{flex:2,minWidth:110,gap:5}}>
+        <Text numberOfLines={1} style={{fontSize:12,fontWeight:"700",color:"#172E27"}}>
+          {request.requesterName || "Resident"}
+        </Text>
+        <Text style={{fontSize:11,color:"#73837E"}}>Resident</Text>
+      </View>
+      <View style={{flex:1.6,minWidth:90}}>
+        <Text numberOfLines={2} style={{fontSize:12,color:"#334E45"}}>
+          {request.categoryLabel || String(request.category || "Assistance").replaceAll("_"," ")}
         </Text>
       </View>
-
-      <Ionicons
-        name="chevron-forward"
-        size={19}
-        color="#94A3B8"
-      />
+      <View style={{flex:1.2,minWidth:85}}>
+        <Text style={{fontSize:12,fontWeight:"800",color:"#132D24"}}>{money(request.estimatedAmount)}</Text>
+      </View>
+      <View style={{flex:1.2,minWidth:90}}>
+        <View style={{alignSelf:"flex-start",paddingVertical:7,paddingHorizontal:12,
+          borderRadius:99,backgroundColor:meta.soft}}>
+          <Text style={{fontSize:11,color:meta.color,fontWeight:"800"}}>{meta.label}</Text>
+        </View>
+      </View>
+      <Ionicons name="chevron-forward" size={18} color="#047857"/>
     </TouchableOpacity>
   );
 }
@@ -2851,137 +2714,54 @@ function ReviewTabButton({
   );
 }
 
-function CaseReviewTab({
-  request,
-  relatedRequestCount,
-  sameBeneficiaryCount,
-}: {
-  request: AssistanceRequest;
-  relatedRequestCount: number;
-  sameBeneficiaryCount: number;
-}) {
+function CaseReviewTab({request,relatedRequestCount,sameBeneficiaryCount}:{
+  request:AssistanceRequest; relatedRequestCount:number; sameBeneficiaryCount:number;
+}){
   return (
-    <View style={styles.tabContent}>
-      <SectionCard
-        title="Request Information"
-        subtitle="Resident-submitted non-emergency assistance details."
-        icon="document-text-outline"
-      >
-        <InfoGrid>
-          <InfoItem
-            label="Category"
-            value={
-              request.categoryLabel ||
-              request.category ||
-              "Not recorded"
-            }
-          />
-          <InfoItem
-            label="Current Situation"
-            value={
-              request.currentSituation ||
-              "Not recorded"
-            }
-          />
-          <InfoItem
-            label="Estimated Need"
-            value={money(
-              request.estimatedAmount,
-            )}
-          />
-          <InfoItem
-            label="Submitted"
-            value={readableDate(
-              request.createdAt,
-            )}
-          />
-        </InfoGrid>
-
-        <Divider />
-
-        <LabelText>
-          Description
-        </LabelText>
-        <BodyText>
-          {request.description ||
-            "No description was recorded."}
-        </BodyText>
-
-      </SectionCard>
-
-      <SectionCard
-        title="Beneficiary Information"
-        subtitle="Confirm who will receive the assistance and the requester's relationship to the beneficiary."
-        icon="people-outline"
-      >
-        <InfoGrid>
-          <InfoItem
-            label="Beneficiary"
-            value={
-              request.beneficiaryName ||
-              "Not recorded"
-            }
-          />
-          <InfoItem
-            label="Beneficiary Type"
-            value={
-              request.beneficiaryType ===
-              "self"
-                ? "Requester / Self"
-                : "Someone Else"
-            }
-          />
-          <InfoItem
-            label="Relationship"
-            value={
-              request.relationshipToBeneficiary ||
-              "Not recorded"
-            }
-          />
-          <InfoItem
-            label="Contact"
-            value={
-              request.contactNumber ||
-              "Not recorded"
-            }
-          />
-        </InfoGrid>
-      </SectionCard>
-
-      <SectionCard
-        title="Initial Risk & Consistency Signals"
-        subtitle="These are review prompts only. They do not automatically approve or reject a request."
-        icon="alert-circle-outline"
-      >
-        <SignalRow
-          label="Other requests from same Resident"
-          value={String(
-            relatedRequestCount,
-          )}
-          attention={
-            relatedRequestCount > 0
-          }
-        />
-        <SignalRow
-          label="Other requests for same beneficiary name"
-          value={String(
-            sameBeneficiaryCount,
-          )}
-          attention={
-            sameBeneficiaryCount > 0
-          }
-        />
-        <SignalRow
-          label="Supporting files submitted"
-          value={String(
-            request.documents?.length ||
-              0,
-          )}
-          attention={
-            !request.documents?.length
-          }
-        />
-      </SectionCard>
+    <View style={{padding:20,gap:20}}>
+      <View style={{flexDirection:"row",flexWrap:"wrap",gap:20,alignItems:"stretch"}}>
+        <View style={{flex:1.2,flexBasis:300,minWidth:0}}>
+          <SectionCard title="Request Information" subtitle="Details submitted by the Resident."
+            icon="information-circle-outline">
+            <View style={{gap:14}}>
+              <InfoItem label="Category" value={request.categoryLabel || String(request.category || "Assistance").replaceAll("_"," ")} />
+              <InfoItem label="Current Situation" value={request.currentSituation || "Not provided"} />
+              <InfoItem label="Requested Amount" value={money(request.estimatedAmount)} />
+              <Divider/>
+              <LabelText>Description</LabelText>
+              <BodyText>{request.description || "No description provided."}</BodyText>
+            </View>
+          </SectionCard>
+        </View>
+        <View style={{flex:1,flexBasis:290,minWidth:0}}>
+          <SectionCard title="Resident Information" subtitle="Private LGU review details."
+            icon="person-outline">
+            <View style={{gap:14}}>
+              <InfoItem label="Name" value={request.requesterName || "Resident"} />
+              <InfoItem label="Contact" value={request.contactNumber || "Not recorded"} />
+              <InfoItem label="Barangay" value={request.requesterBarangay || "Not recorded"} />
+              <InfoItem label="Address" value={request.requesterAddress || "Not recorded"} />
+              <View style={{flexDirection:"row",alignItems:"center",gap:7,
+                paddingVertical:10,paddingHorizontal:12,borderRadius:9,
+                backgroundColor:"#ECFDF5",alignSelf:"flex-start"}}>
+                <Ionicons name="shield-checkmark-outline" color="#047857" size={17}/>
+                <Text style={{fontSize:11,color:"#047857",fontWeight:"800"}}>
+                  Resident account — verify in Resident Info tab
+                </Text>
+              </View>
+            </View>
+          </SectionCard>
+        </View>
+      </View>
+      {(relatedRequestCount > 0 || sameBeneficiaryCount > 0) && (
+        <View style={{padding:14,backgroundColor:"#FFF9EC",borderRadius:11,borderWidth:1,
+          borderColor:"#F3E3B0",flexDirection:"row",gap:9,alignItems:"center"}}>
+          <Ionicons name="information-circle-outline" color="#B45309" size={18}/>
+          <Text style={{flex:1,fontSize:12,color:"#735116"}}>
+            Other related requests exist. Check request history in Resident Info before approving.
+          </Text>
+        </View>
+      )}
     </View>
   );
 }
