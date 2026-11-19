@@ -1,0 +1,49 @@
+name: Verify session profile isolation (NO DEPLOY)
+
+on:
+  push:
+    branches:
+      - fix/defense-session-profile-race-20261119
+  pull_request:
+    paths:
+      - lib/useUserSession.ts
+      - scripts/test-session-profile-isolation-20261119.cjs
+      - .github/workflows/verify-session-profile-isolation-20261119.yml
+
+permissions:
+  contents: read
+
+jobs:
+  session-isolation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci --no-audit --no-fund
+      - name: TypeScript typecheck
+        run: npx tsc --noEmit
+      - name: Stale Firebase profile session regression
+        run: node scripts/test-session-profile-isolation-20261119.cjs
+      - name: Existing unified login routing regression
+        run: node scripts/test-unified-login-routing.cjs
+      - name: Existing Guest session isolation regression
+        run: node scripts/test-guest-auth-route-isolation.cjs
+      - name: Community Event Volunteer Join regression
+        run: node scripts/test-volunteer-community-event-join-20261106.cjs
+      - name: Event Time In and Time Out regression
+        run: node scripts/test-volunteer-time-controls-20261106.cjs
+      - name: One-minute certificate eligibility regression
+        run: node scripts/test-live-derived-certificate-minimum-label-20261111.cjs
+      - name: Admin operational dashboard regression
+        run: node scripts/test-admin-clean-operational-analytics.cjs
+      - name: Backend certificate issuance and event roster regressions
+        run: |
+          node backend/test-communityCertificates.js
+          node backend/test-communityEventRoster.js
+      - name: Backend syntax and identity readiness regressions
+        run: npm run check --prefix backend
