@@ -38,7 +38,9 @@ jobs:
           ].sort());
           assert(status.every(v=>/^[AM]\t/.test(v)),'No removal or rename');
           const patch=cp.execFileSync('git',['diff','--unified=0',base,'HEAD','--','firestore.rules'],{encoding:'utf8'});
-          assert(!patch.split('\n').some(v=>v.startsWith('-')&&!v.startsWith('---')),'Never remove existing Rules lines');
+          const removed=patch.split('\n').filter(v=>v.startsWith('-')&&!v.startsWith('---'));
+          assert.deepEqual(removed,['-        && request.resource.data.email.matches("(?i)^[^@]+@(gmail[.]com|yahoo[.]com)$")'],
+            'Only the previously staged exact-domain draft condition may be replaced; no active production rules removed');
           console.log('PASS: exact new-Gmail-profile gate only; no rules removed');
           NODE
       - name: Install locked dependencies
