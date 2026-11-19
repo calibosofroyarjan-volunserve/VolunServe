@@ -4,6 +4,7 @@
  * and no real emergency data. All records are fictional.
  */
 const test=require("node:test");
+const {beforeEach}=require("node:test");
 const assert=require("node:assert/strict");
 const {db}=require("./firebaseAdmin");
 const {inviteAfterApproval,releaseGate,candidateOK,caseReady,MAX_ATOMIC_TARGETS}=
@@ -23,6 +24,11 @@ const GOOD={
 };
 const PROJECT_ID="volunserve-3aa5b";
 const coll=(name,id)=>db.collection(name).doc(id);
+beforeEach(async()=>{
+  // Every case sees a clean fictional roster and no stale reservations.
+  for(const collection of await db.listCollections())
+    await db.recursiveDelete(collection);
+});
 async function set(name,id,value){await coll(name,id).set(value)}
 const base={
   status:"validated",verificationStatus:"validated",
