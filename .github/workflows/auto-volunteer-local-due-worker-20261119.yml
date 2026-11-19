@@ -43,10 +43,10 @@ jobs:
           set -euo pipefail
           git fetch --no-tags origin fix/automatic-volunteer-on-admin-approval-20261119
           git diff --name-only origin/fix/automatic-volunteer-on-admin-approval-20261119 HEAD > /tmp/due-scope
-          test "$(wc -l < /tmp/due-scope)" -eq 5
+          test "$(wc -l < /tmp/due-scope)" -eq 6
           while IFS= read -r f; do
             case "$f" in
-              backend/autoVolunteerPhase18LocalDueWorker.js|backend/autoVolunteerPhase10LocalApp.js|backend/test-autoVolunteerPhase10LocalAppE2E.cjs|backend/phase10LocalAdmin.html|.github/workflows/auto-volunteer-local-due-worker-20261119.yml) ;;
+              backend/autoVolunteerPhase18LocalDueWorker.js|backend/autoVolunteerPhase7WaveWorkerEmulator.js|backend/autoVolunteerPhase10LocalApp.js|backend/test-autoVolunteerPhase10LocalAppE2E.cjs|backend/phase10LocalAdmin.html|.github/workflows/auto-volunteer-local-due-worker-20261119.yml) ;;
               *) echo "BLOCKED unrelated file: $f"; exit 1 ;;
             esac
           done < /tmp/due-scope
