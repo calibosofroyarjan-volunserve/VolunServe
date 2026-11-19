@@ -2441,7 +2441,7 @@ This still does not automatically create a Donation Campaign.`,
 
     return (
       <>
-        {<View style={styles.detailBreadcrumbRow}>
+        <View style={styles.detailBreadcrumbRow}>
           <TouchableOpacity
             style={styles.mockBackLink}
             onPress={backToQueue}
@@ -2466,7 +2466,7 @@ This still does not automatically create a Donation Campaign.`,
               Authorized LGU Review
             </Text>
           </View>
-        </View>}
+        </View>
 
         <View style={styles.detailHeaderCard}>
           <RequestReviewHeader request={selected} />
@@ -2652,7 +2652,9 @@ This still does not automatically create a Donation Campaign.`,
           onChange={(page) => { setRecordPage(page); setQuickAction(null); }}
         />
       </View>
-      <Text style={styles.assistanceListFootnote}>5 requests per page</Text>
+      <Text style={styles.assistanceListFootnote}>
+        {filteredRequests.length === 0 ? "0" : (activeRequestPage - 1) * 5 + 1}–{Math.min(activeRequestPage * 5, filteredRequests.length)} of {filteredRequests.length} requests  ·  5 per page
+      </Text>
     </View>
   );
 
@@ -6769,12 +6771,11 @@ const styles = StyleSheet.create({
   reviewHeader: {
     flexDirection: "row",
     flexWrap: "wrap",
-    alignItems: "flex-start",
+    alignItems: "center",
     justifyContent: "space-between",
     gap: 14,
-    padding: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: "#EDF1F5",
+    padding: 8,
+    borderBottomWidth: 0,
   },
 
   reviewHeaderCopy: {
@@ -6821,16 +6822,21 @@ const styles = StyleSheet.create({
   },
 
   tabButton: {
-    minHeight: 37,
+    minHeight: 42,
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
-    paddingHorizontal: 11,
-    borderRadius: 10,
+    justifyContent: "center",
+    gap: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 11,
+    borderRadius: 8,
+    borderBottomWidth: 3,
+    borderBottomColor: "transparent",
   },
 
   tabButtonActive: {
     backgroundColor: "#EAF7F0",
+    borderBottomColor: "#06834A",
   },
 
   tabButtonText: {
@@ -7892,12 +7898,13 @@ const styles = StyleSheet.create({
   },
 
   mockDetailTabs: {
-    marginTop: 12,
+    marginTop: 4,
+    marginBottom: 12,
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: 6,
+    gap: 7,
     padding: 7,
-    borderRadius: 10,
+    borderRadius: 8,
     borderWidth: 1,
     borderColor: "#E2E8F0",
     backgroundColor: "#FFFFFF",
@@ -7967,9 +7974,8 @@ const styles = StyleSheet.create({
 
   detailHeaderCard: {
     marginTop: 4,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderRadius: 10,
+    borderWidth: 0,
     backgroundColor: "#FFFFFF",
     overflow: "hidden",
   },
