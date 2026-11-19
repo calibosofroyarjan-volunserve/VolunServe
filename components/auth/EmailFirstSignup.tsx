@@ -216,6 +216,9 @@ export default function EmailFirstSignup() {
 
   const age = useMemo(() => dateAge(birth), [birth]);
   const emailErr = getRegistrationEmailError(email);
+  // Show a red message immediately for a complete disallowed address, instead
+  // of showing a neutral "valid format" hint or waiting for form submission.
+  const completedEmailInput = /^[^@\s]+@[^@\s]+\.[a-z]{2,}$/i.test(email.trim());
   const passwordErr = passwordError(password);
   const needsSpecialization = (SPECIALIZATIONS[occupation] || []).length > 0;
   const googleOnly = !!signedInUser &&
@@ -649,7 +652,7 @@ export default function EmailFirstSignup() {
                   placeholder="name@example.com" keyboardType="email-address"
                   disabled={!emailCanEdit}
                   error={resumeMode ? (!email.trim() ? "Enter your registration email." : null) : emailErr}
-                  showError={showErrors}
+                  showError={showErrors || (!resumeMode && completedEmailInput && !!emailErr)}
                   hint={email.trim() && !emailErr
                     ? "Valid email format. Email verification is required before Resident registration."
                     : undefined}

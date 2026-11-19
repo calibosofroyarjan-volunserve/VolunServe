@@ -13,15 +13,28 @@ import { GENERATED_DISPOSABLE_EMAIL_DOMAINS } from "./disposableEmailDomains.gen
 /** Exact registered domains for new Resident accounts. Existing logins are unchanged. */
 export const ALLOWED_NEW_SIGNUP_EMAIL_DOMAINS: ReadonlySet<string> = new Set(["gmail.com", "yahoo.com"]);
 
-/** Explicitly reported shared/temporary Gmail samples from signup QA.
- * Do not guess by name patterns: ordinary Gmail local parts are not reliable
- * indicators of disposable mail, and shared providers can rotate addresses.
- * These are narrow, confirmed-deny samples only, not universal detection.
+/** Gmail consumer inboxes ignore dot placement in the local part.
+ * A known disposable Gmail sample must be screened in ALL dotted spellings.
+ * This is not a general disposable-Gmail detector: unknown shared inboxes
+ * cannot be identified reliably from local-part patterns alone.
  */
+export function canonicalGmailMailbox(email: string): string | null {
+  const value = String(email || "").trim().toLowerCase();
+  const parts = value.split("@");
+  if (parts.length !== 2 || parts[1] !== "gmail.com" || !parts[0]) return null;
+  return parts[0].replace(/\./g, "") + "@gmail.com";
+}
+
+/** Exact inboxes observed in signup QA (not inferred from other Gmail names). */
 export const CONFIRMED_TEST_SHARED_GMAIL_ADDRESSES: ReadonlySet<string> = new Set([
   "les.terbigs.antos@gmail.com",
   "ra.gngjb.a.hmkn@gmail.com",
+  "po.p.ul.o.u.svm.b.xm.k@gmail.com",
 ]);
+
+const CONFIRMED_CANONICAL_SHARED_GMAIL_INBOXES: ReadonlySet<string> = new Set(
+  Array.from(CONFIRMED_TEST_SHARED_GMAIL_ADDRESSES, email => canonicalGmailMailbox(email)!)
+);
 
 /**
  * Additional temp-mail.org provider-associated delivery domains publicly
@@ -189,8 +202,19 @@ export function getRegistrationEmailError(email: string): string | null {
   if (suggestedProvider) {
     return `Check your email domain. Did you mean @${suggestedProvider}? Please correct it to continue.`;
   }
-  if (CONFIRMED_TEST_SHARED_GMAIL_ADDRESSES.has(value)) {
-    return "This email address was identified as a shared or temporary inbox and cannot be used for registration.";
+  const canonicalGmail = canonicalGmailMailbox(value);
+  if (canonicalGmail && CONFIRMED_CANONICAL_SHARED_GMAIL_INBOXES.has(canonicalGmail)) {
+    return "This Gmail inbox was identified in temporary-email testing. All dotted variants are blocked.";
+  }
+  // Gmail usernames normally use letters, digits and optional dots.
+  // Reject highly fragmented dot placements such as x.x.xx.x.x.xx.x.
+  // This is a stricter *registration-format policy*, NOT proof of fake mail.
+  // A legitimate Gmail owner can remove unnecessary dots: the inbox is the same.
+  if (domain === "gmail.com" && !/^[a-z0-9.]+$/.test(local)) {
+    return "Gmail addresses may contain only letters, numbers and dots. Use your main Gmail address.";
+  }
+  if (domain === "gmail.com" && (local.match(/\./g) || []).length >= 4) {
+    return "Too many dots in this Gmail address. Remove unnecessary dots and use your main Gmail address.";
   }
   if (isKnownDisposableEmail(value)) {
     return "Temporary email addresses are not accepted. Use a permanent email address.";
