@@ -1,13 +1,17 @@
 /**
  * VolunServe registration email policy.
  *
- * Built-in denylist + DNS-validated maintained list, checked before creation
- * of a new Firebase Auth UID. A subdomain of a blocked domain is blocked too.
+ * For new registrations, allow only exact @gmail.com and @yahoo.com.
+ * Keep the historical disposable-domain screening and mailbox verification.
+ * Client-side checks alone do not prevent direct Firebase SDK requests.
  * Firebase verified email ownership is a separate requirement.
  * Unknown/new throwaway providers cannot be guaranteed to be detected without
  * additional trusted pre-registration email-risk infrastructure.
  */
 import { GENERATED_DISPOSABLE_EMAIL_DOMAINS } from "./disposableEmailDomains.generated";
+
+/** Exact registered domains for new Resident accounts. Existing logins are unchanged. */
+export const ALLOWED_NEW_SIGNUP_EMAIL_DOMAINS: ReadonlySet<string> = new Set(["gmail.com", "yahoo.com"]);
 
 /**
  * Additional temp-mail.org provider-associated delivery domains publicly
@@ -84,8 +88,8 @@ export const KNOWN_DISPOSABLE_EMAIL_DOMAINS = new Set([
 
 /**
  * Suggest corrections for common misspellings of known consumer providers.
- * Exact-domain matching protects legitimate country-code and private domains,
- * for example business.co, yahoo.co.uk, and yahoo.com.ph.
+ * Domain typo hints remain separate from the exact Gmail/Yahoo signup allowlist.
+ * Other domains, including .co and other .com addresses, are rejected.
  * Rejected domains are hints/heuristics, not proof of mailbox validity.
  */
 export const KNOWN_PROVIDER_TYPO_CORRECTIONS: Readonly<Record<string, string>> = Object.freeze({
@@ -142,9 +146,8 @@ export function isKnownDisposableEmail(email: string): boolean {
 export function getRegistrationEmailError(email: string): string | null {
   const value = String(email || "").trim().toLowerCase();
   if (!value) return "Email address is required. Enter an email you can verify.";
-  // Validate complete domain labels instead of accepting malformed names
-  // such as name@gmail..com or name@-gmail.com. Valid country-code TLDs
-  // (including .co) remain allowed for independent providers.
+  // Reject malformed domains before applying the exact-provider allowlist.
+  // This intentionally rejects all .co and nonapproved .com registrations.
   const parts = value.split("@");
   const local = parts[0] || "";
   const domain = parts[1] || "";
@@ -178,6 +181,9 @@ export function getRegistrationEmailError(email: string): string | null {
   }
   if (isKnownDisposableEmail(value)) {
     return "Temporary email addresses are not accepted. Use a permanent email address.";
+  }
+  if (!ALLOWED_NEW_SIGNUP_EMAIL_DOMAINS.has(domain)) {
+    return "New VolunServe registration accepts only @gmail.com or @yahoo.com email addresses.";
   }
   return null;
 }
