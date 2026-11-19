@@ -1,0 +1,84 @@
+name: Auto Volunteer Phase 7 PERSISTENT WAVE - LOCAL EMULATOR ONLY
+on:
+  pull_request:
+    branches:
+      - qa/auto-volunteer-phase6-server-transaction-emulator-20261119
+    paths:
+      - "backend/autoVolunteerPhase7WaveWorkerEmulator.js"
+      - "backend/test-autoVolunteerPhase7WaveEmulator.cjs"
+      - "docs/emergency-volunteer/PHASE7_PERSISTENT_WAVE_RECONCILIATION_20261119.md"
+      - ".github/workflows/qa-auto-volunteer-phase7-wave-emulator-20261119.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  persisted-wave-and-stop-emulator-only:
+    if: github.repository == 'calibosofroyarjan-volunserve/VolunServe'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      GCLOUD_PROJECT: demo-volunserve-auto-phase4
+      GOOGLE_CLOUD_PROJECT: demo-volunserve-auto-phase4
+      VOLUNSERVE_AUTO_VOLUNTEER_PHASE6_EMULATOR_WRITE: enabled
+      VOLUNSERVE_AUTO_VOLUNTEER_DISPATCH: disabled
+      FIREBASE_CLI_DISABLE_TELEMETRY: "1"
+      CI: "true"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            backend/package-lock.json
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - name: Strict four-file diff allowlist (NO LIVE CODE)
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin qa/auto-volunteer-phase6-server-transaction-emulator-20261119
+          git diff --name-only origin/qa/auto-volunteer-phase6-server-transaction-emulator-20261119 HEAD > /tmp/phase7-only
+          while IFS= read -r f; do
+            case "$f" in
+              "backend/autoVolunteerPhase7WaveWorkerEmulator.js"|"backend/test-autoVolunteerPhase7WaveEmulator.cjs"|"docs/emergency-volunteer/PHASE7_PERSISTENT_WAVE_RECONCILIATION_20261119.md"|".github/workflows/qa-auto-volunteer-phase7-wave-emulator-20261119.yml") ;;
+              *) echo "BLOCKED: unrelated or production runtime changed: $f"; exit 1 ;;
+            esac
+          done < /tmp/phase7-only
+          echo "PASS: Phase 7 adds only 4 demo-emulator/review files."
+      - name: Install locked dependencies without lifecycle scripts
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          npm ci --prefix backend --ignore-scripts --no-audit --no-fund
+      - name: Check source syntax and unmounted production backend
+        run: |
+          node --check backend/autoVolunteerPhase7WaveWorkerEmulator.js
+          node --check backend/test-autoVolunteerPhase7WaveEmulator.cjs
+          if grep -Fq 'autoVolunteerPhase7WaveWorkerEmulator' backend/server.js; then
+            echo "BLOCKED: worker must not be loaded by live backend"
+            exit 1
+          fi
+      - name: Test REAL local Firestore transaction waves, expiration and server acceptance
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -z "${FIREBASE_SERVICE_ACCOUNT_JSON:-}" || { echo "BLOCKED: real credentials present"; exit 1; }
+          ./node_modules/.bin/firebase emulators:exec --project demo-volunserve-auto-phase4 --only firestore "node --test --test-concurrency=1 backend/test-autoVolunteerPhase7WaveEmulator.cjs backend/test-autoVolunteerPhase6DecisionEmulator.cjs backend/test-autoVolunteerFirestoreEmulator.cjs backend/test-autoVolunteerPhase5CompatEmulator.cjs backend/test-autoVolunteerPhase5RulesEmulator.cjs"
+      - name: Offline matching, privacy, winner and backend regression suite
+        run: |
+          node --test backend/test-emergencyVolunteerWinnerGuard.cjs
+          node --test backend/test-emergencyAutoVolunteerReadOnlyPlanner.cjs
+          node --test backend/test-autoVolunteerAdminReadOnlyPreview.cjs
+          node --test backend/test-autoVolunteerAtomicDecisionPolicy.cjs
+          npm run check --prefix backend
+      - name: Strict no deploy and NO durable production scheduler claim
+        run: |
+          echo "NO production Firebase/Render/Hosting/Cloud Functions writes or deployments."
+          echo "Persisted due timestamps ARE NOT an always-on scheduler."
+          echo "Automatic emergency dispatch production remains NO-GO."
