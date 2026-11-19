@@ -1,0 +1,33 @@
+name: QA Assistance UI TypeScript and Web Build (NO DEPLOY)
+on:
+  push:
+    branches:
+      - qa/assistance-tsc-web-check-20261120
+permissions:
+  contents: read
+jobs:
+  check-assistance-ui:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      CI: 'true'
+      EXPO_NO_TELEMETRY: '1'
+    steps:
+      - name: Checkout isolated QA branch
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          submodules: false
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci --no-audit --no-fund
+      - name: TypeScript typecheck
+        run: npx tsc --noEmit --incremental false
+      - name: Expo web export (no deployment)
+        run: npx expo export --platform web --clear
+      - name: Confirm no production mutation
+        run: echo 'QA branch only. No Firebase Hosting, Firestore, or Render deploy.'
