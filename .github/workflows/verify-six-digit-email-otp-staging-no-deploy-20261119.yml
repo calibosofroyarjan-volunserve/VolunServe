@@ -31,6 +31,7 @@ jobs:
           const list=cp.execFileSync('git',['diff','--name-status','--no-renames',base,'HEAD'],{encoding:'utf8'}).trim().split('\n').filter(Boolean);
           const expected=[
             '.github/workflows/verify-six-digit-email-otp-staging-no-deploy-20261119.yml',
+            '.github/workflows/smoke-resend-staging-delivery-manual-20261119.yml',
             'components/auth/EmailFirstSignup.tsx',
             'components/auth/SignupOtpCodeInput.tsx',
             'components/auth/SignupPasswordStrength.tsx',
@@ -38,6 +39,7 @@ jobs:
             'functions/index.js',
             'functions/signupEmailOtp.js',
             'functions/signupEmailOtpCore.js',
+            'functions/smoke-resend-staging-delivery.js',
             'functions/test-signup-email-otp.js',
             'lib/signupEmailOtp.ts',
           ].sort();
@@ -53,6 +55,7 @@ jobs:
         run: |
           node --check functions/signupEmailOtpCore.js
           node --check functions/signupEmailOtp.js
+          node --check functions/smoke-resend-staging-delivery.js
           node --check functions/index.js
           node --test functions/test-signup-email-otp.js
       - name: TypeScript and cross-role frontend regression tests
