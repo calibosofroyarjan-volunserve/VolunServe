@@ -18,7 +18,7 @@ function load(source, imports = {}, env = process.env) {
 const read = file => fs.readFileSync(file,"utf8");
 const current = read("lib/firebaseAuth.ts");
 const baseline = cp.execFileSync("git",["show","e7c2cc8:lib/firebaseAuth.ts"],{encoding:"utf8"});
-const data = {firstName:"Maria",lastName:"Santos",middleName:"",email:"resident@example.com",password:"Password1!",age:25,phoneNumber:"+639171234567",region:"Region III ? Central Luzon",province:"Bulacan",city:"City of San Jose del Monte",barangay:"Muzon Proper",occupationCategory:"Student",occupationSpecialization:"College",occupationOther:"",role:"volunteer"};
+const data = {firstName:"Maria",lastName:"Santos",middleName:"",email:"resident@yahoo.com",password:"Password1!",age:25,phoneNumber:"+639171234567",region:"Region III ? Central Luzon",province:"Bulacan",city:"City of San Jose del Monte",barangay:"Muzon Proper",occupationCategory:"Student",occupationSpecialization:"College",occupationOther:"",role:"volunteer"};
 function harness(source, enabled, options = {}) {
   const calls = [];
   const user = {uid:"signup-test",email:data.email,emailVerified:options.verified ?? true,providerData:(options.providers || ["password"]).map(providerId=>({providerId})),photoURL:"",reload:async()=>{calls.push("reload");}};
@@ -103,7 +103,7 @@ function harness(source, enabled, options = {}) {
     });
   }
   await check("verified signup requires matching authenticated email",async()=>{
-    const h=harness(current,true);await assert.rejects(h.api.signUpUser({...data,email:"other@example.com",authProvider:"verified_email"}),/does not match/);assert.equal(h.profile(),null);
+    const h=harness(current,true);await assert.rejects(h.api.signUpUser({...data,email:"other@yahoo.com",authProvider:"verified_email"}),/does not match/);assert.equal(h.profile(),null);
   });
   await check("verified signup atomically creates production Basic Resident schema on the same UID",async()=>{
     const h=harness(current,true);await h.api.signUpUser({...data,password:"",authProvider:"verified_email"});
@@ -170,12 +170,27 @@ function harness(source, enabled, options = {}) {
   await check("Resume Registration only signs in and inspects the existing UID",async()=>{
     const h=harness(current,true,{verified:false});const user=await h.registration.authenticateEmailSignup(data.email,data.password,true);const state=await h.registration.inspectSignupUser(user);assert.equal(user.uid,h.user.uid);assert.equal(state.profileExists,false);assert.equal(user.emailVerified,false);assert(!h.calls.includes("create"));assert(!h.calls.includes("transaction"));
   });
-  await check("signup email syntax, typo, country domain and disposable checks",()=>{
+  await check("signup email syntax, exact Gmail/Yahoo allowlist and disposable checks",()=>{
     const generated=load(read("lib/disposableEmailDomains.generated.ts"));
     const policy=load(read("lib/registrationEmailPolicy.ts"),{"./disposableEmailDomains.generated":generated});
-    for(const value of ["person@yahoo.com.ph","person@outlook.com","person@department.gov.ph","person@legitimate.co"]) assert.equal(policy.getRegistrationEmailError(value),null);
-    for(const value of ["","bad@gmail..com","bad@gmail.con","bad@sub.mailinator.com"]) assert.equal(typeof policy.getRegistrationEmailError(value),"string");
+    for(const value of ["person@gmail.com","person@yahoo.com","PERSON@GMAIL.COM"," PERSON@YAHOO.COM "]) assert.equal(policy.getRegistrationEmailError(value),null);
+    for(const value of ["person@yahoo.com.ph","person@outlook.com","person@department.gov.ph","person@legitimate.co","person@legitimate.com","person@googlemail.com","person@sub.gmail.com","person@sub.yahoo.com","person@gmail.co","person@yahoo.co","person@en2ch.co","person@ruutukf.co","person@tempmail.com","person@smailpro.com","person@gmail.com.evil.com","", "bad@gmail..com","bad@gmail.con","bad@sub.mailinator.com"]) assert.equal(typeof policy.getRegistrationEmailError(value),"string",value);
+    assert.deepEqual([...policy.ALLOWED_NEW_SIGNUP_EMAIL_DOMAINS].sort(),["gmail.com","yahoo.com"]);
+    assert.match(policy.getRegistrationEmailError("person@unlisted-example.com"),/only @gmail\.com or @yahoo\.com/);
     for(const [wrong,right] of Object.entries(policy.KNOWN_PROVIDER_TYPO_CORRECTIONS)) assert(policy.getRegistrationEmailError("person@"+wrong).includes(right));
+  });
+  await check("invalid email domains stop new email/password and Google resident signup BEFORE Firebase writes",async()=>{
+    for(const email of ["x@sample.co","x@unknown.com","x@outlook.com","x@yahoo.com.ph","x@en2ch.co","x@ruutukf.co","x@tempmail.com","x@gmail.com.attacker.test"]){
+      const h=harness(current,true,{noUser:true});
+      await assert.rejects(h.registration.authenticateEmailSignup(email,data.password,false,true));
+      assert(!h.calls.includes("create"),email);
+      const legacy=harness(current,false,{noUser:true});
+      await assert.rejects(legacy.api.signUpUser({...data,email,authProvider:"email"}));
+      assert(!legacy.calls.includes("create")&&!legacy.calls.includes("transaction"),email);
+      const google=harness(current,true,{providers:["google.com"]});
+      await assert.rejects(google.api.signUpUser({...data,email,authProvider:"google"}));
+      assert(!google.calls.includes("transaction"),email);
+    }
   });
   await check("native Google signup owns OAuth and never bounces pending users to Login",()=>{
     assert(read("lib/useSignupGoogle.ts").includes("signInWithCredential"));
