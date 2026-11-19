@@ -3211,7 +3211,7 @@ function DecisionTab({
   donationSubmitting: boolean;
 }) {
   const router = useRouter();
-  const [decision, setDecision] = useState<"more" | "reject" | null>(null);
+  const [decision, setDecision] = useState<"approve" | "more" | "reject" | null>(null);
   const [showMissing, setShowMissing] = useState(false);
   const verified = request.verificationStatus === "verified";
   const rejected = request.verificationStatus === "rejected";
@@ -3528,214 +3528,203 @@ function DecisionTab({
     );
   }
 
+  const approvedState = decision === "approve";
+  const requestMoreState = decision === "more";
+  const rejectionState = decision === "reject";
+  const chooseDecision = (value: "approve" | "more" | "reject") => {
+    setDecision(value);
+    setShowMissing(false);
+  };
+  const decisionButton = (
+    value: "approve" | "more" | "reject", title: string,
+    helper: string, icon: "checkmark-circle-outline" | "chatbubble-outline" | "close-circle-outline",
+  ) => (
+    <TouchableOpacity accessibilityRole="radio" accessibilityState={{selected:decision===value}}
+      disabled={busy} onPress={() => chooseDecision(value)}
+      style={{
+        flexDirection:"row",alignItems:"center",gap:12,
+        paddingVertical:15,paddingHorizontal:14,
+        borderWidth: decision===value ? 2 : 1,
+        borderColor: decision===value ? "#059669" : "#E1EAE5",
+        borderRadius:12,backgroundColor:decision===value ? "#ECFDF5":"#FFFFFF",
+      }}>
+      <Ionicons name={decision===value?"radio-button-on":"radio-button-off"}
+        size={20} color={decision===value?"#047857":"#94A3B8"}/>
+      <Ionicons name={icon} size={19} color="#245044"/>
+      <View style={{flex:1,gap:3}}>
+        <Text style={{fontSize:13,fontWeight:"800",color:"#112A21"}}>{title}</Text>
+        <Text style={{fontSize:11,color:"#667B71",lineHeight:16}}>{helper}</Text>
+      </View>
+    </TouchableOpacity>
+  );
+
   return (
-    <View style={{gap:15,paddingBottom:24}}>
-      <SectionCard title="Review Assistance Request"
-        subtitle="Three quick checks, supporting documents, and one decision."
-        icon="clipboard-outline">
-        <View style={{gap:10}}>
-          <Text style={{color:"#0F172A",fontWeight:"900",fontSize:15}}>
-            {request.title || "Assistance Request"}
-          </Text>
-          <Text style={styles.bodyText}>
-            {request.requesterName || "Resident"} · {request.categoryLabel || "Assistance"}
-          </Text>
-          <Text style={styles.bodyText}>
-            {request.description || request.currentSituation || "No description"}
-          </Text>
-          <InfoGrid>
-            <InfoItem label="Claimed Amount" value={money(request.estimatedAmount)} />
-            <InfoItem label="Evidence" value={String(request.documents?.length || 0) + " documents"} />
-          </InfoGrid>
-          <Text style={styles.bodyText}>
-            Open the Documents and Resident Info tabs above to inspect the evidence first.
-          </Text>
+    <View style={{padding:22,gap:22}}>
+      <View style={{flexDirection:"row",flexWrap:"wrap",gap:20,alignItems:"flex-start"}}>
+        <View style={{flex:1.15,flexBasis:330,minWidth:0}}>
+          <SectionCard title="Review Summary"
+            subtitle="Check the supporting evidence before selecting a decision."
+            icon="clipboard-outline">
+            <View style={{gap:5}}>
+              {confirmRow("Documents and beneficiary details match",
+                "Check the medical documents and beneficiary information.",
+                docsMatched,docsNotMatched,
+                ()=>{onReviewChange("documentConsistencyStatus","consistent");
+                  onReviewChange("beneficiaryCheckStatus","confirmed");},
+                ()=>{onReviewChange("documentConsistencyStatus","needs_more_information");
+                  onReviewChange("beneficiaryCheckStatus","needs_more_information");})}
+              {confirmRow("No duplicate assistance request",
+                "Check the Resident's existing request history.",
+                reviewDraft.duplicateCheckStatus==="clear",
+                ["potential_duplicate","confirmed_duplicate"].includes(reviewDraft.duplicateCheckStatus),
+                ()=>onReviewChange("duplicateCheckStatus","clear"),
+                ()=>onReviewChange("duplicateCheckStatus","potential_duplicate"))}
+              {confirmRow("Resident belongs to San Jose del Monte",
+                "Use verified documents, barangay contact, or in-person confirmation.",
+                reviewDraft.residencyVerificationStatus==="verified",
+                reviewDraft.residencyVerificationStatus==="unable_to_verify",
+                ()=>onReviewChange("residencyVerificationStatus","verified"),
+                ()=>onReviewChange("residencyVerificationStatus","unable_to_verify"))}
+              <Text style={styles.fieldLabel}>Residency confirmed through</Text>
+              <View style={{flexDirection:"row",flexWrap:"wrap",gap:9}}>
+                {choice("Document",reviewDraft.residencyVerificationMethod==="profile_address",
+                  ()=>onReviewChange("residencyVerificationMethod","profile_address"))}
+                {choice("Barangay Contact",reviewDraft.residencyVerificationMethod==="barangay_confirmation",
+                  ()=>onReviewChange("residencyVerificationMethod","barangay_confirmation"))}
+                {choice("In Person",reviewDraft.residencyVerificationMethod==="site_visit",
+                  ()=>onReviewChange("residencyVerificationMethod","site_visit"))}
+              </View>
+              {!reviewDraft.privateAddressSnapshot.trim() && (
+                <TextInput value={reviewDraft.privateAddressSnapshot}
+                  onChangeText={v=>onReviewChange("privateAddressSnapshot",v)}
+                  placeholder="Barangay / city from supporting proof"
+                  placeholderTextColor="#94A3B8" style={styles.input}/>
+              )}
+            </View>
+          </SectionCard>
         </View>
-      </SectionCard>
-      <SectionCard title="1. Confirm Basic Details"
-        subtitle="Only mark Confirmed after reviewing the evidence or contacting an authorized source."
-        icon="shield-checkmark-outline">
-        {confirmRow(
-          "Documents, requester and beneficiary match",
-          "Match the submitted documents and names with this request.",
-          docsMatched, docsNotMatched,
-          () => {
-            onReviewChange("documentConsistencyStatus","consistent");
-            onReviewChange("beneficiaryCheckStatus","confirmed");
-          },
-          () => {
-            onReviewChange("documentConsistencyStatus","needs_more_information");
-            onReviewChange("beneficiaryCheckStatus","needs_more_information");
-          },
-        )}
-        {confirmRow(
-          "No duplicate request found",
-          "Compare the Resident's existing request history.",
-          reviewDraft.duplicateCheckStatus === "clear",
-          ["potential_duplicate","confirmed_duplicate"].includes(reviewDraft.duplicateCheckStatus),
-          () => onReviewChange("duplicateCheckStatus","clear"),
-          () => onReviewChange("duplicateCheckStatus","potential_duplicate"),
-        )}
-        {confirmRow(
-          "Residency confirmed in San Jose del Monte",
-          "Check the declared barangay and address using documents, phone, or in-person confirmation.",
-          reviewDraft.residencyVerificationStatus === "verified",
-          reviewDraft.residencyVerificationStatus === "unable_to_verify",
-          () => onReviewChange("residencyVerificationStatus","verified"),
-          () => onReviewChange("residencyVerificationStatus","unable_to_verify"),
-        )}
-        <Text style={styles.fieldLabel}>How was residency checked?</Text>
-        <View style={{flexDirection:"row",flexWrap:"wrap",gap:9}}>
-          {choice("Documents",reviewDraft.residencyVerificationMethod === "profile_address",
-            () => onReviewChange("residencyVerificationMethod","profile_address"))}
-          {choice("Barangay contact",reviewDraft.residencyVerificationMethod === "barangay_confirmation",
-            () => onReviewChange("residencyVerificationMethod","barangay_confirmation"))}
-          {choice("In person",reviewDraft.residencyVerificationMethod === "site_visit",
-            () => onReviewChange("residencyVerificationMethod","site_visit"))}
+        <View style={{flex:1,flexBasis:310,minWidth:0}}>
+          <SectionCard title="Decision" subtitle="Choose an action for this assistance request."
+            icon="checkmark-circle-outline">
+            <View style={{gap:10}}>
+              {decisionButton("approve","Approve Request",
+                "The verified request may proceed to assistance.","checkmark-circle-outline")}
+              {decisionButton("more","Request More Information",
+                "Ask the Resident to clarify or submit additional evidence.","chatbubble-outline")}
+              {decisionButton("reject","Reject Request",
+                "Decline the request and provide a reason.","close-circle-outline")}
+              {(requestMoreState || rejectionState) && (
+                <View style={{gap:8,marginTop:5}}>
+                  <Text style={styles.fieldLabel}>{requestMoreState ?
+                    "Information requested from Resident" : "Reason for rejection"}</Text>
+                  <TextInput style={styles.textArea} multiline maxLength={1000}
+                    value={requestMoreState?adminNote:rejectionReason}
+                    onChangeText={requestMoreState?setAdminNote:setRejectionReason}
+                    placeholder="Enter a clear reason or instructions"
+                    placeholderTextColor="#94A3B8"/>
+                </View>
+              )}
+            </View>
+          </SectionCard>
         </View>
-        <Text style={styles.bodyText}>
-          Declared address: {reviewDraft.privateAddressSnapshot || request.requesterAddress || "Not recorded"}
-        </Text>
-        {!reviewDraft.privateAddressSnapshot.trim() && (
-          <TextInput value={reviewDraft.privateAddressSnapshot}
-            onChangeText={v=>onReviewChange("privateAddressSnapshot",v)}
-            editable={!locked} placeholder="Barangay and city from supporting proof"
-            placeholderTextColor="#94A3B8" style={styles.input} />
-        )}
-      </SectionCard>
+      </View>
+
       {(facilityRequired || costRequired) && (
-        <SectionCard title="2. Confirm Provider and Amount"
-          subtitle="A valid document, direct contact, or in-person confirmation can support this check."
-          icon="document-text-outline">
-          <View style={{gap:10}}>
+        <SectionCard title="Medical Bill Check"
+          subtitle="Confirm the provider and the amount using the supporting documents or direct contact."
+          icon="medical-outline">
+          <View style={{gap:13}}>
             {facilityRequired && <>
-              <Text style={styles.fieldLabel}>Hospital / clinic / assistance provider</Text>
+              <Text style={styles.fieldLabel}>Hospital / provider name</Text>
               <TextInput value={reviewDraft.facilityName}
                 onChangeText={v=>onReviewChange("facilityName",v)}
-                editable={!locked} placeholder="Provider name from evidence"
-                placeholderTextColor="#94A3B8" style={styles.input} />
-              <Text style={styles.fieldLabel}>How was the provider confirmed?</Text>
-              <View style={{flexDirection:"row",flexWrap:"wrap",gap:9}}>
-                {choice("Document",reviewDraft.facilityVerificationStatus==="confirmed" &&
-                    reviewDraft.facilityVerificationMethod==="official_record",
-                  () => {
-                    onReviewChange("facilityVerificationStatus","confirmed");
-                    onReviewChange("facilityVerificationMethod","official_record");
-                  })}
+                placeholder="Provider listed on the supporting bill"
+                placeholderTextColor="#94A3B8" style={styles.input}/>
+              <Text style={styles.fieldLabel}>Provider checked through</Text>
+              <View style={{flexDirection:"row",flexWrap:"wrap",gap:8}}>
+                {choice("Documents",reviewDraft.facilityVerificationStatus==="confirmed" &&
+                  reviewDraft.facilityVerificationMethod==="official_record",
+                  ()=>{onReviewChange("facilityVerificationMethod","official_record");
+                     onReviewChange("facilityVerificationStatus","confirmed");})}
                 {choice("Contact",reviewDraft.facilityVerificationStatus==="confirmed" &&
-                    reviewDraft.facilityVerificationMethod==="official_phone",
-                  () => {
-                    onReviewChange("facilityVerificationStatus","confirmed");
-                    onReviewChange("facilityVerificationMethod","official_phone");
-                  })}
-                {choice("In person",reviewDraft.facilityVerificationStatus==="confirmed" &&
-                    reviewDraft.facilityVerificationMethod==="in_person",
-                  () => {
-                    onReviewChange("facilityVerificationStatus","confirmed");
-                    onReviewChange("facilityVerificationMethod","in_person");
-                  })}
-                {choice("Needs information", reviewDraft.facilityVerificationStatus==="unable_to_confirm",
-                  () => onReviewChange("facilityVerificationStatus","unable_to_confirm"),true)}
+                  reviewDraft.facilityVerificationMethod==="official_phone",
+                  ()=>{onReviewChange("facilityVerificationMethod","official_phone");
+                     onReviewChange("facilityVerificationStatus","confirmed");})}
+                {choice("In Person",reviewDraft.facilityVerificationStatus==="confirmed" &&
+                  reviewDraft.facilityVerificationMethod==="in_person",
+                  ()=>{onReviewChange("facilityVerificationMethod","in_person");
+                     onReviewChange("facilityVerificationStatus","confirmed");})}
               </View>
             </>}
-            {costRequired && <>
-              <Text style={styles.fieldLabel}>Amount supported by the bill or quotation (PHP)</Text>
-              <TextInput style={styles.input} value={reviewDraft.verifiedGrossCost}
-                editable={!locked} keyboardType="decimal-pad"
-                placeholder="e.g. 5000" placeholderTextColor="#94A3B8"
-                onChangeText={v=>onReviewChange("verifiedGrossCost",v.replace(/[^0-9.]/g,""))} />
-              <Text style={styles.fieldLabel}>Other assistance already received (PHP)</Text>
-              <TextInput style={styles.input}
-                value={reviewDraft.confirmedExistingAssistanceAmount}
-                editable={!locked} keyboardType="decimal-pad"
-                placeholder="0 if none" placeholderTextColor="#94A3B8"
-                onChangeText={v=>onReviewChange("confirmedExistingAssistanceAmount",v.replace(/[^0-9.]/g,""))} />
-              {confirmRow(
-                "Amount matches supporting evidence",
-                "The approved amount cannot be based on an unsupported estimate alone.",
-                reviewDraft.costVerificationStatus==="confirmed",
-                reviewDraft.costVerificationStatus==="inconsistent",
-                () => onReviewChange("costVerificationStatus","confirmed"),
-                () => onReviewChange("costVerificationStatus","inconsistent"),
-              )}
-            </>}
+            {costRequired && (
+              <View style={{flexDirection:"row",flexWrap:"wrap",gap:18}}>
+                <View style={{flex:1,minWidth:220,gap:9}}>
+                  <Text style={styles.fieldLabel}>Amount shown in supporting bill (PHP)</Text>
+                  <TextInput value={reviewDraft.verifiedGrossCost}
+                    onChangeText={v=>onReviewChange("verifiedGrossCost",v.replace(/[^0-9.]/g,""))}
+                    keyboardType="decimal-pad" placeholder="e.g. 5000"
+                    placeholderTextColor="#94A3B8" style={styles.input}/>
+                </View>
+                <View style={{flex:1,minWidth:220,gap:9}}>
+                  <Text style={styles.fieldLabel}>Assistance already received (PHP)</Text>
+                  <TextInput value={reviewDraft.confirmedExistingAssistanceAmount}
+                    onChangeText={v=>onReviewChange("confirmedExistingAssistanceAmount",v.replace(/[^0-9.]/g,""))}
+                    keyboardType="decimal-pad" placeholder="0 if none"
+                    placeholderTextColor="#94A3B8" style={styles.input}/>
+                </View>
+              </View>
+            )}
+            {costRequired && confirmRow("The amount matches the supporting evidence",
+              "Only confirmed costs can be approved for possible donation support.",
+              reviewDraft.costVerificationStatus==="confirmed",
+              reviewDraft.costVerificationStatus==="inconsistent",
+              ()=>onReviewChange("costVerificationStatus","confirmed"),
+              ()=>onReviewChange("costVerificationStatus","inconsistent"))}
           </View>
         </SectionCard>
       )}
       {riskPresent && (
-        <View style={styles.warningCard}>
-          <Ionicons name="alert-circle-outline" color="#92400E" size={19} />
-          <View style={{flex:1,gap:4}}>
-            <Text style={styles.warningTitle}>Special-case review required</Text>
-            <Text style={styles.warningText}>
-              This request has an unresolved risk flag or an escalated visit/video requirement.
-              It cannot be approved until those details are resolved.
-            </Text>
-          </View>
-        </View>
-      )}
-      <SectionCard title="3. Record Decision"
-        subtitle="Admin decisions are saved to the protected LGU record automatically."
-        icon="checkmark-circle-outline">
-        <View style={{gap:12}}>
-          {showMissing && !verifyReady && (
-            <View style={styles.infoNotice}>
-              <Ionicons name="information-circle-outline" size={18} color="#92400E" />
-              <Text style={styles.infoNoticeText}>
-                Complete all Confirmed checks, provider name/method, and supported amounts before approving.
-              </Text>
-            </View>
-          )}
-          <View style={{flexDirection:"row",flexWrap:"wrap",gap:10}}>
-            <ActionButton label="Approve Request" icon="checkmark-circle-outline"
-              variant="success" loading={savingAction==="verify"} onPress={() => {
-                setShowMissing(true);
-                if (!verifyReady) {
-                  showAssistanceActionError("Review Incomplete",
-                    "Please confirm the required checks and supporting evidence before approval.");
-                  return;
-                }
-                onVerify();
-              }} />
-            <ActionButton label="Reject Request" icon="close-circle-outline"
-              variant="danger" loading={savingAction==="reject"}
-              onPress={()=>setDecision(decision==="reject"?null:"reject")} />
-          </View>
-          <TouchableOpacity accessibilityRole="button"
-            onPress={()=>setDecision(decision==="more"?null:"more")}>
-            <Text style={{color:"#2563EB",fontWeight:"700",fontSize:12}}>
-              Request more information instead
-            </Text>
-          </TouchableOpacity>
-          {decision && (
-            <View style={{gap:9}}>
-              <Text style={styles.fieldLabel}>
-                {decision==="reject" ? "Reason for rejection" : "Information the Resident needs to provide"}
-              </Text>
-              <TextInput style={styles.textArea} multiline maxLength={1000}
-                value={decision==="reject"?rejectionReason:adminNote}
-                onChangeText={decision==="reject"?setRejectionReason:setAdminNote}
-                placeholder="Write a brief and specific reason"
-                placeholderTextColor="#94A3B8" />
-              <View style={{flexDirection:"row",gap:9,flexWrap:"wrap"}}>
-                <ActionButton label="Cancel" icon="close-outline" variant="secondary"
-                  loading={false} onPress={()=>setDecision(null)} />
-                <ActionButton label={decision==="reject"?"Confirm Rejection":"Send Request"}
-                  icon={decision==="reject"?"close-circle-outline":"send-outline"}
-                  variant={decision==="reject"?"danger":"primary"}
-                  loading={savingAction===(decision==="reject"?"reject":"more_info")}
-                  onPress={decision==="reject"?onReject:onRequestMoreInfo} />
-              </View>
-            </View>
-          )}
-          <Text style={styles.bodyText}>
-            Approved requests proceed to Support Plan. Donation Campaign publishing is a separate step.
+        <View style={{padding:15,backgroundColor:"#FFF7ED",borderRadius:12,
+          borderWidth:1,borderColor:"#FDE68A",gap:5}}>
+          <Text style={{color:"#9A3412",fontSize:13,fontWeight:"800"}}>Additional review required</Text>
+          <Text style={{color:"#9A3412",fontSize:12}}>
+            Resolve existing risk flags or required in-person/video checks before approving.
           </Text>
         </View>
-      </SectionCard>
+      )}
+      {showMissing && !verifyReady && approvedState && (
+        <View style={{padding:15,backgroundColor:"#FFF7ED",borderRadius:12,gap:7}}>
+          <Text style={{color:"#92400E",fontSize:13,fontWeight:"800"}}>Some checks are incomplete</Text>
+          <Text style={{color:"#92400E",fontSize:12}}>
+            Confirm the required evidence, provider, residency, and billing details before approving.
+          </Text>
+        </View>
+      )}
+      <View style={{alignItems:"center",gap:9,paddingVertical:8}}>
+        <View style={{width:"100%",maxWidth:385}}>
+          <ActionButton label="Confirm Decision" icon="checkmark-outline" variant="success"
+            loading={busy} disabled={busy}
+            onPress={()=>{
+              if (!decision){showAssistanceActionError("Choose a Decision",
+                "Select Approve, Request More Information, or Reject.");return;}
+              if (approvedState){
+                setShowMissing(true);
+                if (!verifyReady){showAssistanceActionError("Review Incomplete",
+                  "Confirm the required checks and supporting evidence before approving.");return;}
+                onVerify();return;
+              }
+              if (requestMoreState){onRequestMoreInfo();return;}
+              onReject();
+            }}/>
+        </View>
+        <Text style={{fontSize:11,color:"#74867D",textAlign:"center"}}>
+          Your decision will be saved to the protected LGU review record.
+        </Text>
+      </View>
     </View>
   );
 }
+
 
 function EmbeddedGoogleMap({
   title,
