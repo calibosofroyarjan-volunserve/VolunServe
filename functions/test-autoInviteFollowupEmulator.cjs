@@ -159,6 +159,9 @@ test("cancelled fictional case expires offers and sends NO next-wave invitations
   const outcome=await scanner.scanCase(CASE2);
   assert.equal(outcome.status,"cancelled");
   assert.equal((await doc("emergencyAutoDispatchBatches",CASE2).get()).data().status,"cancelled");
+  assert.equal((await doc("disasterCases",CASE2).get()).data()
+    .autoVolunteerDispatch.state,"cancelled",
+    "Admin cancellation must also stop the case dashboard waiting state");
   assert.equal((await offers(CASE2)).length,2);
   assert.ok((await offers(CASE2)).every(x=>x.status==="expired"));
   assert.equal((await doc("autoVolunteerReservations",a).get()).exists,false);
