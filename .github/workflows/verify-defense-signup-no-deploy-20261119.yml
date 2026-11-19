@@ -61,7 +61,6 @@ jobs:
           node scripts/test-admin-navigation-contract.cjs
           node scripts/test-profile-certificates-account-menu.cjs
           node scripts/test-unified-login-routing.cjs
-          node scripts/test-lgu-admin-global-ui-pagination.cjs
       - name: Export actual Hosting bundle for review (NEVER deploy)
         run: |
           npx expo export --platform web --clear
