@@ -171,7 +171,7 @@ service cloud.firestore {
         // a Firebase-signed Google-linked identity claim. Password login and
         // all old profiles are unchanged.
         && (!request.resource.data.email.matches("(?i)^[^@]+@gmail[.]com$")
-          || request.auth.token.get('firebase', {}).get('identities', {}).get('google.com', []).size() > 0)
+          || 'google.com' in request.auth.token.firebase.identities)
         && !request.resource.data.email.matches(".*@([a-z0-9-]+[.])*en2ch[.](com|co)")
         && request.resource.data.keys().hasAll([
           "uid", "email", "fullName", "firstName", "lastName",
