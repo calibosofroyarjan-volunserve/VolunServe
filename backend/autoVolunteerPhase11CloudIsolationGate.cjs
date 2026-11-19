@@ -110,10 +110,17 @@ function assessPhase11SourceBaseline({
     "local_app_emulator_guard_not_proven");
   test(!/autoVolunteerPhase10LocalApp/.test(liveServer),
     "local_demo_app_wired_into_production");
-  test(!/autoVolunteerPhase10LocalApp/.test(stagingServer),
-    "local_demo_app_wired_into_accepted_staging");
-  test(/STAGING_E2E_002/.test(stagingServer),
-    "accepted_staging_fixture_protection_marker_missing");
+  // The accepted staging service is deployed from a DIFFERENT Git ref.
+  // The Phase 10 parent tree intentionally lacks that server file. Missing
+  // source is an explicit audit blocker, not an empty "safe" service.
+  test(stagingServer.length>0,
+    "independent_staging_branch_source_review_required");
+  if(stagingServer.length>0){
+    test(!/autoVolunteerPhase10LocalApp/.test(stagingServer),
+      "local_demo_app_wired_into_accepted_staging");
+    test(/STAGING_E2E_002|e2e-002|staging002/.test(stagingServer),
+      "accepted_staging_fixture_protection_marker_missing");
+  }
   test(/127\.0\.0\.1/.test(firebaseConfig)&&
     /9099/.test(firebaseConfig)&&/8080/.test(firebaseConfig),
     "local_test_emulator_config_missing");
