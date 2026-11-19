@@ -1,4 +1,6 @@
 import { authenticateEmailSignup } from "./signupRegistration";
+import { getRegistrationEmailError } from "./registrationEmailPolicy";
+import { requireCompleteResidentRegistration } from "./requireCompleteResidentRegistration";
 import { EMAIL_FIRST_SIGNUP_ENABLED } from "./signupFeature";
 import {
   getIdToken,
@@ -466,6 +468,8 @@ export const signUpUser = async (
   try {
     let user;
     const submittedEmail = data.email.trim().toLowerCase();
+    const emailError = getRegistrationEmailError(submittedEmail);
+    if (emailError) throw new Error(emailError);
     const usesGoogle = data.authProvider === "google";
     const usesVerifiedEmail = data.authProvider === "verified_email";
     if (usesVerifiedEmail && !EMAIL_FIRST_SIGNUP_ENABLED) {
@@ -525,6 +529,9 @@ export const signUpUser = async (
       }
       return user;
     }
+    // Firebase Auth verification alone is not a completed Resident registration.
+    // Validate all required data before writing any community profile.
+    requireCompleteResidentRegistration(data);
     await getIdToken(user, true);
     const birthDate = String(data.dateOfBirth || "").trim();
     if (birthDate) {
