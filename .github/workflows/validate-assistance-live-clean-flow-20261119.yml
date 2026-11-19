@@ -5,6 +5,7 @@ on:
       - baseline/verified-hosting-b208-20261119
     paths:
       - 'app/(admin)/assistance-requests.tsx'
+      - 'app/(admin)/donation-list.tsx'
       - 'scripts/test-assistance-live-clean-flow-20261119.cjs'
       - '.github/workflows/validate-assistance-live-clean-flow-20261119.yml'
 permissions:
