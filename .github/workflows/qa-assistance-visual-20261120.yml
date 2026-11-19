@@ -1,0 +1,61 @@
+# QA ONLY: local browser screenshot of real UI components with fictional data.
+# Does not deploy, use Hosting credentials, or write Firebase records.
+name: Assistance Four-Panel Browser Visual QA (NO DEPLOY)
+on:
+  push:
+    branches:
+      - qa/assistance-visual-fixture-20261120
+    paths:
+      - app/public/assistance-design-qa.tsx
+      - app/(admin)/assistance-requests.tsx
+      - scripts/qa-assistance-visual-screenshot-20261120.cjs
+      - .github/workflows/qa-assistance-visual-20261120.yml
+permissions:
+  contents: read
+jobs:
+  screenshot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      CI: 'true'
+      EXPO_NO_TELEMETRY: '1'
+    steps:
+      - name: Checkout visual fixture branch
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+      - name: Setup Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install app dependencies
+        run: npm ci --no-audit --no-fund
+      - name: TypeScript compile with isolated fixture route
+        run: npx tsc --noEmit --incremental false
+      - name: Export web app locally (never publish)
+        run: npx expo export --platform web --clear
+      - name: Install local headless browser tooling
+        run: |
+          npm install --no-save --no-audit --no-fund playwright@1.56.1
+          npx playwright install chromium --with-deps
+      - name: Render actual Assistance components in local headless browser
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m http.server 4173 --bind 127.0.0.1 --directory dist >/tmp/assistance_fixture_http.log 2>&1 &
+          for attempt in 1 2 3 4 5 6 7 8 9 10; do
+            if curl --fail --silent http://127.0.0.1:4173/public/assistance-design-qa.html >/dev/null; then break; fi
+            sleep 1
+          done
+          node scripts/qa-assistance-visual-screenshot-20261120.cjs
+      - name: Upload QA screenshots only, no deployment
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: assistance-four-panel-visual-qa
+          path: qa-artifacts/*.png
+          if-no-files-found: warn
+          retention-days: 7
+      - name: Verify no Hosting, Firestore or Render deployment occurred
+        run: echo 'QA only. No production or preview Hosting channel was written.'
