@@ -74,7 +74,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          npx firebase-tools emulators:exec --only auth,firestore,hosting --project demo-volunserve "NODE_PATH=/tmp/volunserve-demo-chromium/node_modules node scripts/test-assistance-demo-admin-browser-20261119.cjs"
+          npx firebase-tools emulators:exec --only auth,firestore,hosting --project demo-volunserve "NODE_PATH=/tmp/volunserve-demo-chromium/node_modules:$PWD/backend/node_modules node scripts/test-assistance-demo-admin-browser-20261119.cjs"
       - name: Save demo screenshots for layout and regression review
         if: always()
         uses: actions/upload-artifact@v4
