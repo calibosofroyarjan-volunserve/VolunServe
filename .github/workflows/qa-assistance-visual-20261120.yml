@@ -7,6 +7,7 @@ on:
       - qa/assistance-visual-fixture-20261120
     paths:
       - app/public/assistance-design-qa.tsx
+      - app/_layout.tsx
       - app/(admin)/assistance-requests.tsx
       - scripts/qa-assistance-visual-screenshot-20261120.cjs
       - .github/workflows/qa-assistance-visual-20261120.yml
