@@ -9,6 +9,13 @@ const logger = require("firebase-functions/logger");
 
 initializeApp();
 
+// OPT-IN ONLY. The existing live signup keeps Firebase verification links.
+// Do not enable until the sending domain, Secret Manager values and independent
+// staging email-delivery verification have been completed.
+if (process.env.VOLUNSERVE_ENABLE_EMAIL_OTP === "true") {
+  Object.assign(exports, require("./signupEmailOtp"));
+}
+
 setGlobalOptions({
   region: "us-central1",
   maxInstances: 5,
