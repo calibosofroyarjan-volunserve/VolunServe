@@ -149,15 +149,19 @@ function verify(target,response,body){
 async function runOne(target){
   const base=roots[target.root];
   const start=base+target.path;
-  let last;
-  for(let attempt=1;attempt<=2;attempt++){
+  let last, retriedAfter503=false;
+  // Render Free may send HTTP 503 during cold start; its app startup
+  // logs can arrive ~15 seconds AFTER the initial public HTTP attempt.
+  // Retry GET-only up to 4 times, never with credentials or writes.
+  for(let attempt=1;attempt<=4;attempt++){
     try{
       const {response,body}=await getPublicUrl(start,base);
       const validation=verify(target,response,body);
       const status=validation.passed?"PASS":
         response.status>=500?"INDETERMINATE":"FAIL";
-      if(status==="INDETERMINATE"&&attempt===1){
-        await pause(3500);
+      if(status==="INDETERMINATE"&&attempt<4){
+        if(response.status===503)retriedAfter503=true;
+        await pause(12000);
         continue;
       }
       return {id:target.id,label:target.label,
@@ -165,10 +169,11 @@ async function runOne(target){
           "PRODUCTION_PUBLIC_HTTP":"EXISTING_STAGING_PUBLIC_HTTP",
         request:"GET",status,httpStatus:response.status,
         observation:validation.observation,
+        retriedAfter503,attempts:attempt,
         browserE2E:false,authenticatedE2E:false};
     }catch(error){
       last=String(error?.message||"request_unavailable");
-      if(attempt===1)await pause(3500);
+      if(attempt<4)await pause(12000);
     }
   }
   return {id:target.id,label:target.label,
@@ -178,6 +183,7 @@ async function runOne(target){
     observation:"HTTP access could not be confirmed from the test runner",
     failureClass:last==="unsafe_redirect_or_unexpected_host"?
       "unsafe_redirect":"network_or_timeout",
+    retriedAfter503,attempts:4,
     browserE2E:false,authenticatedE2E:false};
 }
 async function main(){
