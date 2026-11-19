@@ -15,7 +15,7 @@ export const AUTOMATIC_VOLUNTEER_APPROVAL_BRIDGE_ENABLED =
 type FirebaseTokenUser={getIdToken:()=>Promise<string>};
 type InviteResult={
   enabled:boolean;
-  status:"offered"|"blocked"|"disabled"|"unavailable";
+  status:"offered"|"already_started"|"blocked"|"disabled"|"unavailable";
   offered:number;
   reason:string;
 };
@@ -48,9 +48,10 @@ export async function requestAutomaticVolunteersAfterApproval({
       }
     );
     const json=await response.json().catch(()=>null);
-    if(response.ok&&json?.ok===true&&json.status==="offered"&&
+    if(response.ok&&json?.ok===true&&
+       (json.status==="offered"||json.status==="already_started")&&
        Number.isSafeInteger(json.offered)&&json.offered>0)
-      return {enabled:true,status:"offered",
+      return {enabled:true,status:json.status,
         offered:json.offered,reason:"server_confirmed"};
     return blocked(
       String(json?.reason||json?.error||"server_did_not_confirm")
