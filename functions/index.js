@@ -2755,4 +2755,29 @@ if (process.env.FUNCTIONS_EMULATOR === "true" &&
         knownBarangays: ["Bagong Buhay I", "Citrus"],
       }),
   );
+
+  // Actual Firebase Callable Auth, not browser-supplied Volunteer UIDs.
+  // Exported ONLY inside the fictional Functions Emulator test gate.
+  const {createDemoVolunteerDecision} =
+      require("./emergencyAutoInviteVolunteerDecision");
+  const decideDemoOffer = createDemoVolunteerDecision({
+    db: getFirestore(),
+    FieldValue,
+  });
+  exports.emulatorAutoVolunteerDecision = onCall(async (request) => {
+    if (!request.auth?.uid) {
+      throw new HttpsError("unauthenticated",
+          "Sign in as a fictional Volunteer.");
+    }
+    const outcome = await decideDemoOffer({
+      uid: request.auth.uid,
+      caseId: request.data?.caseId,
+      decision: request.data?.decision,
+    });
+    if (outcome.status === "blocked") {
+      throw new HttpsError("failed-precondition",
+          outcome.reason || "Fictional invitation cannot be changed.");
+    }
+    return outcome;
+  });
 }
