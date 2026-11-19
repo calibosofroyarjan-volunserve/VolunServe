@@ -21,6 +21,7 @@ jobs:
       GCLOUD_PROJECT: demo-volunserve-auto-phase4
       GOOGLE_CLOUD_PROJECT: demo-volunserve-auto-phase4
       FIRESTORE_EMULATOR_HOST: 127.0.0.1:8080
+      FUNCTIONS_EMULATOR: "true"
       VOLUNSERVE_AUTO_VOLUNTEER_TEST_TRIGGER: enabled
       VOLUNSERVE_AUTO_VOLUNTEER_DISPATCH: disabled
       FIREBASE_CLI_DISABLE_TELEMETRY: "1"
@@ -71,6 +72,21 @@ jobs:
           node --check functions/index.js
           node --test backend/test-emergencyAutoInviteCompatibility.cjs
           npm run check --prefix backend
+      - name: Generate isolated Firebase Functions emulator overrides (not committed)
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > functions/.env.local <<'DEMO'
+          VOLUNSERVE_AUTO_VOLUNTEER_TEST_TRIGGER=enabled
+          VOLUNSERVE_AUTO_VOLUNTEER_DISPATCH=disabled
+          DEMO
+          node - <<'NODE'
+          const assert=require("node:assert/strict");
+          const loaded=require("./functions/index.js");
+          assert.ok(loaded.emulatorAutoVolunteerOnApproval,
+            "Demo approval trigger must register when FUNCTIONS_EMULATOR=true");
+          console.log("PASS isolated auto-invite function exported inside emulator");
+          NODE
       - name: Actual Admin approval event -> Firestore atomic notifications + tasks
         shell: bash
         run: |
