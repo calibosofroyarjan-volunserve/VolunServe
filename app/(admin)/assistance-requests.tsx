@@ -2118,7 +2118,7 @@ This still does not automatically create a Donation Campaign.`,
             <Ionicons
               name="arrow-back"
               size={17}
-              color="#2563EB"
+              color="#256B56"
             />
             <Text style={styles.mockBackLinkText}>
               Back to Assistance Requests
@@ -2300,42 +2300,16 @@ This still does not automatically create a Donation Campaign.`,
             </TouchableOpacity>
           </View>
         </ScrollView>
-      ) : wide ? (
-        <View style={styles.detailShell}>
-          <View style={styles.detailChrome}>
-            {renderDetailChrome()}
-          </View>
-
-          <View style={styles.detailWorkspace}>
-            <View style={[styles.detailMainPane, { flex: 1, width: "100%", minWidth: 0 }]}>
-
-
-              <ScrollView
-                style={styles.detailMainScroll}
-                contentContainerStyle={styles.detailMainContent}
-                showsVerticalScrollIndicator
-                nestedScrollEnabled
-              >
-                {renderReviewMain()}
-              </ScrollView>
-            </View>
-
-
-          </View>
-        </View>
       ) : (
         <ScrollView
           style={styles.pageScroll}
-          contentContainerStyle={styles.pageContent}
+          contentContainerStyle={styles.assistanceDetailPageContent}
           showsVerticalScrollIndicator
         >
           {renderDetailChrome()}
-
-          <View style={styles.mobileDetailSection}>
+          <View style={styles.assistanceReviewBody}>
             {renderReviewMain()}
           </View>
-
-
         </ScrollView>
       )}
 
@@ -2640,10 +2614,11 @@ function RequestReviewHeader({
 
   return (
     <View style={styles.reviewHeader}>
-      <View style={{width:54,height:54,borderRadius:10,backgroundColor:"#F1F7F4",alignItems:"center",justifyContent:"center"}}>
-        <Ionicons name="business-outline" size={27} color="#076344"/>
+      <View style={styles.assistanceHeaderIcon}>
+        <Ionicons name="document-text-outline" size={21} color="#28745C"/>
       </View>
       <View style={styles.reviewHeaderCopy}>
+        <Text style={styles.assistanceHeaderEyebrow}>ASSISTANCE CASE</Text>
         <Text style={styles.reviewTitle}>
           {request.title ||
             "Assistance Request"}
@@ -2713,10 +2688,10 @@ function ReviewTabButton({
     >
       <Ionicons
         name={icon}
-        size={16}
+        size={17}
         color={
           active
-            ? "#047857"
+            ? "#16684B"
             : "#64748B"
         }
       />
@@ -4665,6 +4640,30 @@ function DocumentPreviewModal({
 }
 
 const styles = StyleSheet.create({
+  // Consistent enterprise design for every Assistance Requests view.
+  assistanceDetailPageContent: {
+    paddingHorizontal: 20,
+    paddingTop: 17,
+    paddingBottom: 32,
+    gap: 0,
+    backgroundColor: "#FFFFFF",
+  },
+  assistanceReviewBody: {
+    marginTop: 14,
+    borderRadius: 11,
+    backgroundColor: "#FAFBFB",
+    borderWidth: 1,
+    borderColor: "#E3E9EB",
+    padding: 14,
+  },
+  assistanceHeaderIcon: {
+    width: 45,height:45,borderRadius:9,
+    backgroundColor:"#F1F6F4",borderWidth:1,borderColor:"#E3ECE8",
+    justifyContent:"center",alignItems:"center",
+  },
+  assistanceHeaderEyebrow: {
+    color:"#64748B",fontSize:10,fontWeight:"700",letterSpacing:1.0,
+  },
   assistanceReferenceDetailContent: {padding:12,gap:15},
   assistanceReferenceInfoCards: {flexDirection:"row",flexWrap:"wrap",gap:14,alignItems:"stretch"},
   assistanceReferenceInfoCard: {
