@@ -11874,6 +11874,12 @@ const { installPublicAssistanceAppeals } = require("./publicAssistanceAppeals");
 installPublicAssistanceAppeals({
   app, db, FieldValue, requireFirebaseUser, requireOperationalAdmin, cleanText, makeHttpError,
 });
+// Additive server-side Automatic Volunteer integration. This route remains
+// disabled by default until independently reviewed release flags + Firebase
+// credential project match are configured. No timer or background dispatch.
+require("./autoVolunteerInviteOnApproval").installAutoVolunteerInvitationRoute({
+  app,db,requireFirebaseUser,requireOperationalAdmin
+});
 // Automatic, idempotent recovery for eligible completed event certificates.
 // Does not change attendance, roles, certificates that already exist, or rules.
 startCommunityCertificateAutoSync({db,reconcile:reconcileCommunityEventCertificates});
