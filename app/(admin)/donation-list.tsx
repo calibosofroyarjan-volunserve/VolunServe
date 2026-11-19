@@ -1824,9 +1824,9 @@ export default function DonationAdministration() {
     >
       <AdminReviewHero eyebrow="LGU OPERATIONS / DONATIONS & FUNDS" title="Donation Management" subtitle="Review LGU-approved assistance campaigns, verified receipts, and donor transaction history. Only authorized Admin staff release funds." icon="heart-outline" tag="LGU FUND OVERSIGHT" />
       {openedFromAssistance && (
-        <TouchableOpacity style={styles.backButton} accessibilityLabel="Back to Assistance Requests" onPress={() => router.push(sourceBackPath as any)}>
+        <TouchableOpacity style={[styles.backButton, { width: "auto", minWidth: 184, height: 42, paddingHorizontal: 13, flexDirection: "row", gap: 8, alignSelf: "flex-start" }]} accessibilityLabel="Back to Assistance Requests" onPress={() => router.push(sourceBackPath as any)}>
           <Ionicons name="arrow-back" size={18} color="#334155" />
-          <Text style={styles.subtitle}>{sourceBackLabel}</Text>
+          <Text style={[styles.subtitle, { marginTop: 0 }]}>{sourceBackLabel}</Text>
         </TouchableOpacity>
       )}
 
