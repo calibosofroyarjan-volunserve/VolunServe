@@ -1,0 +1,53 @@
+name: Read-only LIVE Assistance and Donation browser smoke (NO DEPLOY)
+on:
+  push:
+    branches: [qa/assistance-donation-backend-e2e-demo-20261119]
+    paths:
+      - 'scripts/test-assistance-live-browser-public-20261119.cjs'
+      - '.github/workflows/validate-assistance-live-browser-public-20261119.yml'
+permissions:
+  contents: read
+jobs:
+  chromium-real-live-readonly:
+    runs-on: ubuntu-latest
+    timeout-minutes: 28
+    env:
+      CI: 'true'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify browser script is read-only, unauthenticated and pinned to live revision
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check scripts/test-assistance-live-browser-public-20261119.cjs
+          node - <<'NODE'
+          const s=require('node:fs').readFileSync('scripts/test-assistance-live-browser-public-20261119.cjs','utf8');
+          const assert=require('node:assert/strict');
+          for(const expected of ['https://volunserve.com','761c91ea5a65529c4f8086b035c91b2e476a13bd','serviceWorkers:"block"'])
+            assert(s.includes(expected),expected);
+          assert(!s.includes('process.env.FIREBASE_SERVICE_ACCOUNT_JSON'));
+          assert(!s.includes('email:test.admin'));
+          console.log('PASS: production browser test is read only, no privileged token/credentials or writes');
+          NODE
+      - name: Install isolated Chromium browser test runner
+        run: |
+          npm install --no-save --no-package-lock --ignore-scripts playwright@1.58.2
+          npx playwright install --with-deps chromium
+      - name: Run real Chromium against live domain (no login)
+        run: node scripts/test-assistance-live-browser-public-20261119.cjs
+      - name: Upload redacted screenshots for layout inspection
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: volunserve-readonly-live-login-browser-screenshots
+          path: browser-smoke-artifacts
+          retention-days: 3
+          if-no-files-found: ignore
+      - name: Explicit NO DEPLOY guarantee
+        if: always()
+        run: echo "No production Firebase/Render data, rules, backend, payments or Hosting writes"
