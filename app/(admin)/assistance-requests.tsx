@@ -614,7 +614,7 @@ export default function AssistanceRequestsAdmin() {
     useState("");
 
   const [filter, setFilter] =
-    useState<ReviewFilter>("pending");
+    useState<ReviewFilter>("all");
   const [search, setSearch] = useState("");
   const [recordPage, setRecordPage] = useState(1);
 
@@ -2188,6 +2188,9 @@ This still does not automatically create a Donation Campaign.`,
                     {filteredRequests.length} {filteredRequests.length === 1 ? "request" : "requests"}
                   </Text>
                 </View>
+                <ScrollView horizontal={!wide} showsHorizontalScrollIndicator={!wide}
+                  nestedScrollEnabled style={{width:"100%"}}>
+                <View style={wide ? {width:"100%"} : {width:760}}>
                 <View style={{
                   flexDirection:"row",paddingHorizontal:20,paddingVertical:13,
                   backgroundColor:"#F1F6F4",borderTopWidth:1,borderBottomWidth:1,
@@ -2210,6 +2213,8 @@ This still does not automatically create a Donation Campaign.`,
                 ) : pagedRequests.map(item => (
                   <MockQueueRow key={item.id} request={item} onPress={()=>selectRequest(item)}/>
                 ))}
+                </View>
+                </ScrollView>
                 <View style={{
                   paddingHorizontal:18,paddingVertical:15,borderTopWidth:1,borderColor:"#E6ECE9",
                   flexDirection:"row",flexWrap:"wrap",alignItems:"center",
