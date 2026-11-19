@@ -208,7 +208,6 @@ export default function EmailFirstSignup() {
   const [noMiddleName, setNoMiddleName] = useState(false);
   const [lastName, setLastName] = useState("");
   const [birth, setBirth] = useState("");
-  const [phone, setPhone] = useState("");
   const [barangay, setBarangay] = useState("");
   const [occupation, setOccupation] = useState("");
   const [specialization, setSpecialization] = useState("");
@@ -216,7 +215,6 @@ export default function EmailFirstSignup() {
   const [reviewed, setReviewed] = useState(false);
 
   const age = useMemo(() => dateAge(birth), [birth]);
-  const phoneClean = phone.replace(/\D/g, "");
   const emailErr = getRegistrationEmailError(email);
   const passwordErr = passwordError(password);
   const needsSpecialization = (SPECIALIZATIONS[occupation] || []).length > 0;
@@ -226,8 +224,7 @@ export default function EmailFirstSignup() {
   const emailCanEdit = !signedInUser;
   const personalOk = validName(firstName) && validName(lastName) &&
     (noMiddleName || middleName.trim() === "" || validName(middleName)) &&
-    age !== null && age >= 18 && age <= 100 &&
-    /^9\d{9}$/.test(phoneClean);
+    age !== null && age >= 18 && age <= 100;
   const addressOk = SJDM_BARANGAYS.includes(barangay) &&
     !!occupation &&
     (!needsSpecialization || !!specialization) &&
@@ -252,7 +249,7 @@ export default function EmailFirstSignup() {
       const isCurrent = () => active && authRevision.current === revision && auth.currentUser?.uid === user?.uid;
       if (lastUid.current !== (user?.uid ?? null)) {
         setFirstName(""); setMiddleName(""); setNoMiddleName(false); setLastName("");
-        setBirth(""); setPhone(""); setBarangay(""); setOccupation("");
+        setBirth(""); setBarangay(""); setOccupation("");
         setSpecialization(""); setOccupationOther(""); setReviewed(false);
         setPassword(""); setConfirmPassword(""); setConsent(false);
         lastUid.current = user?.uid ?? null;
@@ -391,7 +388,7 @@ export default function EmailFirstSignup() {
     setError(""); setMessage("");
     if (!personalOk) {
       setStep(3);
-      setError("Complete your name, date of birth, and Philippine mobile number.");
+      setError("Complete your name and date of birth.");
       return;
     }
     if (!addressOk) {
@@ -418,7 +415,7 @@ export default function EmailFirstSignup() {
         lastName: lastName.trim(),
         age: age as number,
         dateOfBirth: birth, // Already validated YYYY-MM-DD by dateAge().
-        phoneNumber: "+63" + phoneClean,
+        phoneNumber: "",
         region: "Region III – Central Luzon",
         province: "Bulacan",
         city: "City of San Jose del Monte",
@@ -786,13 +783,6 @@ export default function EmailFirstSignup() {
                   error={(showErrors || !!birth) && (age === null || age < 18 || age > 100)
                     ? "Use YYYY-MM-DD. Registration requires ages 18–100." : null}
                 />
-                <Field
-                  label="Mobile Number *" value={phone}
-                  onChange={v => setPhone(v.replace(/\D/g, "").slice(0, 10))}
-                  placeholder="9XXXXXXXXX" keyboardType="phone-pad"
-                  error={(showErrors || !!phone) && !/^9\d{9}$/.test(phoneClean)
-                    ? "Enter a valid 10-digit PH mobile number beginning with 9." : null}
-                />
                 {checkButton("Continue to Address & Profile", () => {
                   setShowErrors(true);
                   if (!personalOk) {
@@ -876,7 +866,7 @@ export default function EmailFirstSignup() {
                 >
                   <Text style={styles.checkBox}>{reviewed ? "☑" : "☐"}</Text>
                   <Text style={styles.checkText}>
-                    I confirm my name, birthday, contact, and address are accurate.
+                    I confirm my name, birthday, and address are accurate.
                   </Text>
                 </Pressable>
                 {showErrors && !reviewed &&
