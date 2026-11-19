@@ -21,7 +21,7 @@ const baseline = cp.execFileSync("git",["show","e7c2cc8:lib/firebaseAuth.ts"],{e
 const data = {firstName:"Maria",lastName:"Santos",middleName:"",email:"resident@yahoo.com",password:"Password1!",age:25,phoneNumber:"+639171234567",region:"Region III ? Central Luzon",province:"Bulacan",city:"City of San Jose del Monte",barangay:"Muzon Proper",occupationCategory:"Student",occupationSpecialization:"College",occupationOther:"",role:"volunteer"};
 function harness(source, enabled, options = {}) {
   const calls = [];
-  const user = {uid:"signup-test",email:data.email,emailVerified:options.verified ?? true,providerData:(options.providers || ["password"]).map(providerId=>({providerId})),photoURL:"",reload:async()=>{calls.push("reload");}};
+  const user = {uid:"signup-test",email:options.userEmail || data.email,emailVerified:options.verified ?? true,providerData:(options.providers || ["password"]).map(providerId=>({providerId})),photoURL:"",reload:async()=>{calls.push("reload");}};
   const auth = {currentUser:options.noUser ? null : user};
   let profile = options.existing || null;
   let saved;
@@ -191,6 +191,27 @@ function harness(source, enabled, options = {}) {
       await assert.rejects(google.api.signUpUser({...data,email,authProvider:"google"}));
       assert(!google.calls.includes("transaction"),email);
     }
+  });
+  await check("Emailnator-style Gmail inbox-only signup cannot create new Auth UID or Resident",async()=>{
+    const gmail="generated.alias@gmail.com";
+    const policy=load(read("lib/registrationEmailPolicy.ts"),{"./disposableEmailDomains.generated":load(read("lib/disposableEmailDomains.generated.ts"))});
+    assert.equal(policy.getRegistrationEmailError(gmail),null,"Gmail domain itself is allowed");
+    assert.equal(policy.requiresGoogleOAuthForNewRegistration(gmail),true);
+    assert.equal(policy.requiresGoogleOAuthForNewRegistration("test@yahoo.com"),false);
+    const newGmail=harness(current,true,{noUser:true});
+    await assert.rejects(newGmail.registration.authenticateEmailSignup(gmail,"Password1!",false,true),/Continue with Google/);
+    assert(!newGmail.calls.includes("create"),"Blocked Gmail must not create password Auth UID");
+    const oldGmail=harness(current,true,{userEmail:gmail});
+    await assert.rejects(oldGmail.api.signUpUser({...data,email:gmail,authProvider:"verified_email"}),/Continue with Google/);
+    assert(!oldGmail.calls.includes("transaction"),"Gmail verification link alone must not make Resident");
+    const google=harness(current,true,{providers:["google.com"],userEmail:gmail});
+    await google.api.signUpUser({...data,email:gmail,authProvider:"google"});
+    assert.equal(google.profile().role,"resident");
+    assert(google.calls.includes("transaction"),"Google-linked Gmail must be allowed");
+    const ui=read("components/auth/EmailFirstSignup.tsx");
+    assert(!ui.includes("Use any accessible email (Yahoo, Outlook, Gmail, school or work)"));
+    assert(ui.includes("Continue with Google to prove account ownership"));
+    assert(ui.includes("Gmail format accepted, but the inbox may be temporary"));
   });
   await check("native Google signup owns OAuth and never bounces pending users to Login",()=>{
     assert(read("lib/useSignupGoogle.ts").includes("signInWithCredential"));
