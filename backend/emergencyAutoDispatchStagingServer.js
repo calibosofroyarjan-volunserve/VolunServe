@@ -37,6 +37,21 @@ const knownSJDMBgy=require("../functions/sjdmBarangays.json");
 const {createFreshTestCase,validateFreshTestCase,inspectFreshTestCase,recognized}
   =require("./stagingFreshCase002");
 
+/**
+ * Fixed fictional STAGING_E2E_002 only. A successful validated case may be
+ * left without offers if its first fanout experienced a transient failure.
+ * Repeating the same authenticated Admin validation is a safe recovery path:
+ * startBatchOffers atomically refuses existing batches, real cases, busy
+ * Volunteers and duplicate notification IDs.
+ */
+function shouldStartFictionalBulkAfterValidation({
+  action,validationStatus,autoAfterValidationEnabled,isolatedStagingVerified
+}={}) {
+  return action==="validate" &&
+    (validationStatus==="validated"||validationStatus==="already_validated") &&
+    autoAfterValidationEnabled===true && isolatedStagingVerified===true;
+}
+
 function makeApp({authClient = auth, firestore = db, worker, env = process.env} = {}) {
   const app = express();
   // OFF unless specifically enabled for the fixed, fictional E2E 002.
@@ -675,13 +690,17 @@ function makeApp({authClient = auth, firestore = db, worker, env = process.env} 
         const result=await (action==="create"?
           createFreshTestCase(firestore,response.locals.stagingAdminUid):
           validateFreshTestCase(firestore,response.locals.stagingAdminUid));
-        // A successful approved Admin validation is the ONLY trigger.
-        // Retrying "already_validated" does not silently send new offers.
-        // Never hide a successful validation if offer creation fails: report
-        // the failed matching separately so the Admin knows it needs review.
+        // A successful approved Admin validation triggers the first wave.
+        // If the FIRST fanout failed transiently, repeating the SAME Admin
+        // validate action can recover; startBatchOffers is transactional and
+        // refuses an existing batch, accepted task or real emergency case.
+        // No separate bulk-send click is needed. Do not conceal a failure.
         let automaticOffers={status:"disabled"};
-        if(action==="validate" && result.status==="validated" &&
-          bulk002OnValidation && stagingServiceAccountMatches){
+        if(shouldStartFictionalBulkAfterValidation({
+          action,validationStatus:result.status,
+          autoAfterValidationEnabled:bulk002OnValidation,
+          isolatedStagingVerified:stagingServiceAccountMatches
+        })){
           try{
             automaticOffers=await startBatchOffers(
               firestore,response.locals.stagingAdminUid);
@@ -800,4 +819,4 @@ if (require.main === module) {
     console.info("Isolated Free staging Volunteer matching API listening");
   });
 }
-module.exports={makeApp};
+module.exports={makeApp,shouldStartFictionalBulkAfterValidation};
