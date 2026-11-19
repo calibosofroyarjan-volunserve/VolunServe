@@ -25,7 +25,7 @@ import {auth} from "../../lib/firebase";
 import {
   signUpUser,
 } from "../../lib/firebaseAuth";
-import {getRegistrationEmailError} from "../../lib/registrationEmailPolicy";
+import {getRegistrationEmailError, requiresGoogleOAuthForNewRegistration, GMAIL_GOOGLE_OAUTH_REQUIRED_MESSAGE} from "../../lib/registrationEmailPolicy";
 import { userFacingError } from "../../lib/userFacingError";
 import {
   REGISTRATION_EMAIL_CONFLICT_MESSAGE,
@@ -216,6 +216,7 @@ export default function EmailFirstSignup() {
 
   const age = useMemo(() => dateAge(birth), [birth]);
   const emailErr = getRegistrationEmailError(email);
+  const gmailNeedsGoogle = !resumeMode && requiresGoogleOAuthForNewRegistration(email);
   const passwordErr = passwordError(password);
   const needsSpecialization = (SPECIALIZATIONS[occupation] || []).length > 0;
   const googleOnly = !!signedInUser &&
@@ -274,6 +275,10 @@ export default function EmailFirstSignup() {
     setError("");
     setMessage("");
     if (resumeMode ? !email.trim() : !!emailErr) return;
+    if (gmailNeedsGoogle && !googleOnly) {
+      setError(GMAIL_GOOGLE_OAUTH_REQUIRED_MESSAGE);
+      return;
+    }
     // Existing accounts may have older passwords; only new credentials
     // must pass the current complexity policy.
     if (resumeMode ? !password.trim() : !!passwordErr) return;
@@ -641,7 +646,7 @@ export default function EmailFirstSignup() {
                 <Text style={styles.helper}>
                   {resumeMode
                     ? "Use the SAME email and VolunServe password you created earlier. We'll check whether you still need to verify your email or finish your profile."
-                    : "Use any accessible email (Yahoo, Outlook, Gmail, school or work). You must verify it before entering personal details."}
+                    : "Only @gmail.com and @yahoo.com are accepted for new Resident accounts. Gmail requires Continue with Google to prove account ownership; Yahoo uses an email verification link."}
                 </Text>
                 <Field
                   label="Email Address *" value={email}
@@ -651,7 +656,9 @@ export default function EmailFirstSignup() {
                   error={resumeMode ? (!email.trim() ? "Enter your registration email." : null) : emailErr}
                   showError={showErrors}
                   hint={email.trim() && !emailErr
-                    ? "Email format accepted. You must open the verification link to confirm access to this inbox."
+                    ? gmailNeedsGoogle
+                      ? "Gmail format accepted, but the inbox may be temporary. Choose Continue with Google to prove account ownership."
+                      : "Yahoo format accepted. Open the verification link to confirm access to this inbox."
                     : undefined}
                 />
                 <Field
