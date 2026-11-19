@@ -9,7 +9,7 @@ import React, { useState } from "react";
 import { ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { SJDM_BARANGAYS } from "../constants/sjdmBarangays";
 import { firebaseConfig } from "../lib/firebase";
-import {getRegistrationEmailError} from "../lib/registrationEmailPolicy";
+import {getRegistrationEmailError, requiresGoogleOAuthForRegistration} from "../lib/registrationEmailPolicy";
 
 /** Applicant registration creates NO Admin permissions. Only Super Admin can verify and grant Admin role. */
 export default function LguStaffApplication() {
@@ -29,6 +29,13 @@ export default function LguStaffApplication() {
     const emailPolicyError = getRegistrationEmailError(email);
     if (emailPolicyError) {
       setError(emailPolicyError);
+      return;
+    }
+    // The LGU applicant form cannot do Google OAuth. Reject receive-only
+    // Gmail signup here instead of allowing SmailPro inbox verification.
+    // Existing LGU Admin login and approved accounts remain unchanged.
+    if (requiresGoogleOAuthForRegistration(email)) {
+      setError("For now, use a Yahoo email for LGU staff applications. Gmail applications require Google authentication, which this form does not yet support.");
       return;
     }
     if(fullName.length<5||fullName.length>160||!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)||

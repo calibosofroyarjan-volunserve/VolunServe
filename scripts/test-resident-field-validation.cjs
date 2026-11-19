@@ -117,9 +117,12 @@ test("known temporary inboxes, malformed emails, Gmail +tag are blocked; real Gm
     "bad@gmail.con", "bad@-gmail.com"
   ]) assert(policy.getRegistrationEmailError(email),email+" must fail");
   for(const email of [
-    "person@gmail.com","first.last@gmail.com","person@yahoo.com",
-    "person@outlook.com","person@school.edu.ph"
+    "person@gmail.com","first.last@gmail.com","person@googlemail.com",
+    "person@yahoo.com","person@yahoo.com.ph","person@yahoo.co.uk"
   ]) assert.equal(policy.getRegistrationEmailError(email),null,email+" must remain usable");
+  for(const email of ["person@outlook.com","person@hotmail.com","person@school.edu.ph","person@random.co","person@sub.gmail.com"]) {
+    assert(policy.getRegistrationEmailError(email),email+" must be denied for new registration");
+  }
 });
 test("signup screen retains required validation, verified email and phone-free fields",()=>{
   const source=read("components/auth/EmailFirstSignup.tsx");

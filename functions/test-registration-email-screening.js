@@ -12,11 +12,16 @@ test("known temporary and subdomain emails blocked on trusted server", () => {
     "person@0-30-24.com",
   ]) assert.equal(classifyRegistrationEmail(value).allowed, false, value);
 });
-test("legitimate provider emails retain compatibility", () => {
+test("new registration accepts only exact Gmail and Yahoo domains", () => {
   for (const value of [
-    "person@gmail.com", "person@yahoo.com.ph", "person@outlook.com",
-    "person@icloud.com", "person@department.gov.ph",
+    "person@gmail.com", "person@googlemail.com", "person@yahoo.com",
+    "person@yahoo.com.ph", "person@yahoo.co.uk",
   ]) assert.equal(classifyRegistrationEmail(value).allowed, true, value);
+  for (const value of [
+    "person@outlook.com", "person@hotmail.com", "person@icloud.com",
+    "person@department.gov.ph", "person@company.co.uk",
+    "person@sub.gmail.com", "person@gmail.com.fake.example",
+  ]) assert.equal(classifyRegistrationEmail(value).allowed, false, value);
 });
 test("malformed emails rejected and no claims about disposable real Gmail", () => {
   for (const value of ["", "person@", "person@gmail..com", "person@-gmail.com"])
@@ -45,7 +50,11 @@ test("server rejects Gmail-looking fake provider domains and matches client corr
     assert.equal(v.allowed,false,"Fake provider @"+domain+" must not create Auth UID");
     assert.equal(v.reason,"provider_typo");
   }
-  for(const domain of ["gmail.com","googlemail.com","yahoo.com","outlook.com","hotmail.com","icloud.com"]) {
+  for(const domain of ["gmail.com","googlemail.com","yahoo.com","yahoo.com.ph","yahoo.co.uk"]) {
     assert.equal(classifyRegistrationEmail("candidate@"+domain).allowed,true,domain);
+  }
+  for(const domain of ["outlook.com","hotmail.com","icloud.com"]) {
+    assert.deepEqual(classifyRegistrationEmail("candidate@"+domain),
+      {allowed:false,reason:"provider_not_allowed"});
   }
 });
