@@ -89,6 +89,10 @@ function checkPhase15OidcReview(input={}){
     "long_lived_secret_or_key_not_allowed");
   const intendedEmail=p.impersonatedServiceAccountEmail||"";
   if(intendedEmail){
+    // This review supports DIRECT federated read-only access only.
+    // Service-account impersonation requires separate review of the exact
+    // iam.workloadIdentityUser binding and target service account roles.
+    requireProof(false,"service_account_impersonation_requires_separate_iam_review");
     const emailOk=valid(intendedEmail)&&
       intendedEmail.endsWith("@"+String(project||"")+
         ".iam.gserviceaccount.com")&&
