@@ -2584,7 +2584,6 @@ This still does not automatically create a Donation Campaign.`,
           </TouchableOpacity>
         )}
       </View>
-      </View>
       <TouchableOpacity style={styles.referenceFilterButton} onPress={() => setShowReferenceFilters(!showReferenceFilters)}
         accessibilityRole="button" accessibilityState={{ expanded: showReferenceFilters }}>
         <Ionicons name="filter-outline" color="#006F3B" size={17} />
