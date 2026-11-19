@@ -125,4 +125,32 @@ test("source baseline reports missing separate staging branch as evidence blocke
 });
 test("synthetic fixture of separately reviewed staging source can pass source-only audit",()=>{
   const f=script();
-  f.stagingServer=String.raw
+  f.stagingServer="// STAGING_E2E_002 accepted-responder protection; staging002";
+  const out=assessPhase11SourceBaseline(f);
+  assert.equal(out.status,"SOURCE_BASELINE_CHECK_PASSED");
+  assert.equal(out.cloudReady,false);
+  assert.equal(out.deployed,false);
+});
+test("old production or accepted staging server cannot import the local QA app",()=>{
+  const f=script();
+  f.stagingServer="STAGING_E2E_002";
+  const prod=assessPhase11SourceBaseline({...f,
+    liveServer:f.liveServer+"\nrequire(\"./autoVolunteerPhase10LocalApp\");"
+  });
+  assert.ok(prod.failures.includes("local_demo_app_wired_into_production"));
+  const staging=assessPhase11SourceBaseline({...f,
+    stagingServer:"STAGING_E2E_002 autoVolunteerPhase10LocalApp"
+  });
+  assert.ok(staging.failures.includes("local_demo_app_wired_into_accepted_staging"));
+  const disabled=assessPhase11SourceBaseline({...f,localApp:"module.exports={}"});
+  assert.ok(disabled.failures.includes("local_app_emulator_guard_not_proven"));
+});
+test("preflight source has no Firebase or Render write operations",()=>{
+  const text=fs.readFileSync(path.join(__dirname,
+    "autoVolunteerPhase11CloudIsolationGate.cjs"),"utf8");
+  for(const marker of [
+    "firebase-admin", "runTransaction(",
+    "setInterval(", "app.post(", "render deploy", "firebase deploy",
+    "GOOGLE_APPLICATION_CREDENTIALS", "FIREBASE_SERVICE_ACCOUNT_JSON"
+  ])assert.equal(text.includes(marker),false,marker);
+});
