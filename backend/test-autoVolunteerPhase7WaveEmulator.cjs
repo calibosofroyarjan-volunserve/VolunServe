@@ -25,6 +25,20 @@ if(process.env.FIRESTORE_EMULATOR_HOST!=="127.0.0.1:8080"||
   throw Error("REFUSE: local demo Firestore Emulator ONLY");
 const app=initializeApp({projectId:PROJECT},"phase7_wave_emulator");
 const db=getFirestore(app);
+test.beforeEach(async()=>{
+  // Every scenario needs a CLEAN global roster. Otherwise Volunteers
+  // seeded in a previous fictional incident can be wrongly counted as
+  // eligible for the next case and invalidate all-eligible assertions.
+  // The emulator REST cleanup is permitted ONLY for the fixed LOCAL demo.
+  assert.equal(process.env.FIRESTORE_EMULATOR_HOST,"127.0.0.1:8080");
+  assert.equal(process.env.GCLOUD_PROJECT,PROJECT);
+  const clear=await fetch(
+    "http://127.0.0.1:8080/emulator/v1/projects/"+
+    PROJECT+"/databases/(default)/documents",
+    {method:"DELETE"}
+  );
+  assert.equal(clear.ok,true,"test-only Firestore Emulator reset failed");
+});
 const ref=(col,id)=>db.collection(col).doc(id);
 const offer=(cid,uid)=>ref("responseAssignments",cid+"_"+uid);
 const reservation=uid=>ref("autoVolunteerReservations",uid);
