@@ -18,6 +18,7 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  useWindowDimensions,
   TextInput,
   TouchableOpacity,
   View
@@ -435,6 +436,7 @@ const normalizeReference = (value?: string) =>
 
 export default function DonationAdministration() {
   const router = useRouter();
+  const { width: windowWidth } = useWindowDimensions();
   const params = useLocalSearchParams<{
     assessmentId?: string | string[];
     assistanceRequestId?: string | string[];
@@ -456,7 +458,9 @@ export default function DonationAdministration() {
   const [activeView, setActiveView] = useState<AdminDonationView>("campaigns");
   const [showReviewedHistory, setShowReviewedHistory] = useState(false);
   const [campaignPage,setCampaignPage] = useState(1);
-  const [campaignListWidth,setCampaignListWidth] = useState(0);
+  const [campaignSearch,setCampaignSearch] = useState("");
+  const [campaignStatusFilter,setCampaignStatusFilter] = useState<"all"|"published"|"closed">("all");
+  const [showLegacyCampaigns,setShowLegacyCampaigns] = useState(false);
   const [pendingPage,setPendingPage] = useState(1);
   const [historyPage,setHistoryPage] = useState(1);
 
@@ -794,8 +798,25 @@ export default function DonationAdministration() {
     [donations],
   );
 
-  const campaignCurrent = Math.max(1, Math.min(campaignPage, Math.max(1,Math.ceil(campaigns.length / 5))));
-  const pagedCampaigns = campaigns.slice((campaignCurrent - 1) * 5,campaignCurrent * 5);
+  // Archived campaigns remain intact in Firestore, donation audit, and public campaign history.
+  const isLegacyCampaign = (campaign: DonationCampaign) =>
+    !String(campaign.sourceAssistanceRequestId || "").trim() &&
+    String(campaign.sourceType || "") !== "community_assistance_request";
+  const legacyCampaignCount = campaigns.filter(isLegacyCampaign).length;
+  const currentCampaignCount = campaigns.length - legacyCampaignCount;
+  const filteredCampaigns = campaigns.filter(campaign => {
+    if (!showLegacyCampaigns && isLegacyCampaign(campaign)) return false;
+    if (campaignStatusFilter !== "all" && campaign.status !== campaignStatusFilter) return false;
+    const haystack = [
+      campaign.title, campaign.generalArea, campaign.publicLocationLabel,
+      ...(campaign.barangays || []),
+    ].map(item => String(item || "").toLowerCase()).join(" ");
+    return haystack.includes(campaignSearch.trim().toLowerCase());
+  });
+  const campaignCurrent = Math.max(1, Math.min(campaignPage,
+    Math.max(1,Math.ceil(filteredCampaigns.length / 5))));
+  const pagedCampaigns = filteredCampaigns.slice(
+    (campaignCurrent - 1) * 5,campaignCurrent * 5);
   const pendingCurrent = Math.max(1, Math.min(pendingPage, Math.max(1,Math.ceil(pendingDonations.length / 5))));
   const pagedPending = pendingDonations.slice((pendingCurrent - 1) * 5,pendingCurrent * 5);
   const reviewedDonations = useMemo(
@@ -1886,7 +1907,7 @@ export default function DonationAdministration() {
             Campaigns
           </Text>
           <View style={styles.tabCountBadge}>
-            <Text style={styles.tabCountText}>{publishedCampaigns.length}</Text>
+            <Text style={styles.tabCountText}>{currentCampaignCount}</Text>
           </View>
         </TouchableOpacity>
 
@@ -3074,25 +3095,64 @@ export default function DonationAdministration() {
             </View>
           )}
 
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionEyebrow}>AUDIT & MONITORING</Text>
-            <Text style={styles.sectionTitle}>Campaign Records</Text>
-            <Text style={styles.helperText}>
-              Review campaign status, verified contributions, and fundraising progress.
+          <View style={styles.campaignRecordsHeader}>
+            <View style={{flex:1,minWidth:255}}>
+              <Text style={styles.sectionEyebrow}>AUDIT & MONITORING</Text>
+              <Text style={styles.sectionTitle}>Campaign Records</Text>
+              <Text style={styles.helperText}>Review funding progress and verified donations.</Text>
+            </View>
+            <View style={styles.campaignFilters}>
+              <View style={styles.campaignSearchBox}>
+                <Ionicons name="search-outline" size={17} color="#64748B"/>
+                <TextInput value={campaignSearch}
+                  onChangeText={value=>{setCampaignSearch(value);setCampaignPage(1);}}
+                  placeholder="Search campaign or location"
+                  placeholderTextColor="#94A3B8"
+                  style={styles.campaignSearchInput}/>
+              </View>
+              <View style={styles.campaignStatusActions}>
+                {(["all","published","closed"] as const).map(status=>(
+                  <TouchableOpacity key={status} accessibilityRole="button"
+                    onPress={()=>{setCampaignStatusFilter(status);setCampaignPage(1);}}
+                    style={[styles.campaignStatusChoice,
+                      campaignStatusFilter===status && styles.campaignStatusChoiceActive]}>
+                    <Text style={[styles.campaignStatusChoiceText,
+                      campaignStatusFilter===status && styles.campaignStatusChoiceTextActive]}>
+                      {status==="all"?"All":status==="published"?"Published":"Closed"}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+          </View>
+          <View style={styles.campaignRecordToolbar}>
+            <Text style={styles.campaignRecordCount}>
+              {filteredCampaigns.length} {filteredCampaigns.length===1?"campaign":"campaigns"} · 5 per page
             </Text>
+            {legacyCampaignCount>0 && (
+              <TouchableOpacity accessibilityRole="button"
+                onPress={()=>{setShowLegacyCampaigns(v=>!v);setCampaignPage(1);}}
+                style={styles.campaignArchiveToggle}>
+                <Ionicons name={showLegacyCampaigns?"eye-off-outline":"archive-outline"}
+                  size={15} color="#087C61"/>
+                <Text style={styles.campaignArchiveToggleText}>
+                  {showLegacyCampaigns?"Hide historical":"View historical"} ({legacyCampaignCount})
+                </Text>
+              </TouchableOpacity>
+            )}
           </View>
 
-          <ListPagination page={campaignCurrent} total={campaigns.length} pageSize={5} onChange={setCampaignPage} />
-          {campaigns.length === 0 ? (
+          <ListPagination page={campaignCurrent} total={filteredCampaigns.length} pageSize={5} onChange={setCampaignPage} />
+          {filteredCampaigns.length === 0 ? (
             <View style={styles.emptyCard}>
               <Ionicons name="megaphone-outline" size={30} color="#94A3B8" />
               <Text style={styles.emptyTitle}>No donation campaigns yet</Text>
               <Text style={styles.emptyText}>
-                A campaign will appear here only after the LGU opens Donation Support for a verified resource shortage.
+                No campaigns match this view. Try another filter or show historical records.
               </Text>
             </View>
           ) : (
-            <View style={styles.cardList} onLayout={(event)=>setCampaignListWidth(event.nativeEvent.layout.width)}>
+            <View style={styles.cardList}>
               {pagedCampaigns.map((campaign) => {
                 const campaignDonations = donations.filter((item) => item.campaignId === campaign.id);
                 const receivedCampaignDonations = campaignDonations.filter(
@@ -3103,7 +3163,7 @@ export default function DonationAdministration() {
                   .reduce((sum, item) => sum + Number(item.actualAmountReceived || 0), 0);
 
                 return (
-                  <View key={campaign.id} style={[styles.campaignCard,{width:campaignListWidth>=790?"49%":"100%"}]}>
+                  <View key={campaign.id} style={[styles.campaignCard,{width:windowWidth>=1250?"49%":"100%"}]}>
                     <View style={styles.cardHeaderRow}>
                       <View style={{ flex: 1 }}>
                         <Text style={styles.cardTitle}>{campaign.title || "Donation Campaign"}</Text>
@@ -3944,6 +4004,33 @@ const styles = StyleSheet.create({
   noticeText: { flex: 1, color: "#49646F", fontSize: 10, lineHeight: 15 },
   publishButton: { marginTop: 14, minHeight: 44, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 7, borderRadius: 10, backgroundColor: "#0F766E" },
   publishButtonText: { color: "#FFFFFF", fontSize: 11, fontWeight: "900" },
+  campaignRecordsHeader: {
+    marginTop:24,marginBottom:12,flexDirection:"row",alignItems:"flex-end",
+    justifyContent:"space-between",flexWrap:"wrap",gap:14,
+  },
+  campaignFilters: {flexDirection:"row",alignItems:"center",flexWrap:"wrap",gap:10},
+  campaignSearchBox: {minWidth:235,flexGrow:1,flexDirection:"row",
+    alignItems:"center",gap:8,backgroundColor:"#FFFFFF",borderWidth:1,
+    borderColor:"#DCE6E2",borderRadius:9,minHeight:43,paddingHorizontal:12},
+  campaignSearchInput: {flex:1,fontSize:12.5,color:"#233D33",paddingVertical:8,minWidth:150},
+  campaignStatusActions: {flexDirection:"row",gap:4,alignItems:"center",
+    borderWidth:1,borderColor:"#DCE6E2",borderRadius:9,padding:4,backgroundColor:"#FFFFFF"},
+  campaignStatusChoice: {paddingHorizontal:11,paddingVertical:8,borderRadius:7},
+  campaignStatusChoiceActive: {backgroundColor:"#E9F7EE"},
+  campaignStatusChoiceText: {color:"#64748B",fontSize:11,fontWeight:"700"},
+  campaignStatusChoiceTextActive: {color:"#006A42"},
+  campaignRecordToolbar: {borderTopWidth:1,borderTopColor:"#E4EBE7",
+    paddingTop:11,marginBottom:8,flexDirection:"row",
+    justifyContent:"space-between",flexWrap:"wrap",alignItems:"center",gap:9},
+  campaignRecordCount: {fontSize:11.5,color:"#49645B",fontWeight:"600"},
+  campaignArchiveToggle: {flexDirection:"row",alignItems:"center",
+    gap:5,paddingHorizontal:9,paddingVertical:7,borderRadius:8,backgroundColor:"#EBF7F1"},
+  campaignArchiveToggleText: {color:"#087C61",fontSize:11,fontWeight:"700"},
+  campaignRecordIcon: {height:42,width:42,borderRadius:11,backgroundColor:"#E9F7EF",
+    alignItems:"center",justifyContent:"center"},
+  campaignCardFooter: {marginTop:12,paddingTop:10,borderTopColor:"#E5ECE8",
+    borderTopWidth:1,flexDirection:"row",justifyContent:"space-between",
+    flexWrap:"wrap",alignItems:"center",gap:8},
   cardList: { flexDirection:"row",flexWrap:"wrap",justifyContent:"space-between",alignItems:"flex-start",rowGap:14,columnGap:10 },
   campaignCard: { padding: 18, borderWidth: 1, borderColor: "#DFE7EE", borderRadius: 12, backgroundColor: "#FFFFFF" },
   donationCard: { padding: 15, borderWidth: 1, borderColor: "#DFE7EE", borderRadius: 12, backgroundColor: "#FFFFFF" },
