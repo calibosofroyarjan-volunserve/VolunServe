@@ -166,6 +166,12 @@ service cloud.firestore {
         // New Resident profiles: only the two domains approved on live Signup.
         // Existing account login, other roles and profile updates are unchanged.
         && request.resource.data.email.matches("(?i)^[^@]+@(gmail[.]com|yahoo[.]com)$")
+        // Email verification alone is insufficient for receive-only Gmail
+        // proxy inboxes. Only freshly created Gmail Resident profiles require
+        // a Firebase-signed Google-linked identity claim. Password login and
+        // all old profiles are unchanged.
+        && (!request.resource.data.email.matches("(?i)^[^@]+@gmail[.]com$")
+          || request.auth.token.get('firebase', {}).get('identities', {}).get('google.com', []).size() > 0)
         && !request.resource.data.email.matches(".*@([a-z0-9-]+[.])*en2ch[.](com|co)")
         && request.resource.data.keys().hasAll([
           "uid", "email", "fullName", "firstName", "lastName",
