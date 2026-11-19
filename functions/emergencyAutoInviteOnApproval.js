@@ -62,6 +62,16 @@ function createDemoApprovedCaseInviteHandler({
        adminSnapshot.data()?.status!=="approved"||
        adminSnapshot.data()?.adminStatus==="suspended")
       return result("blocked","admin_approval_not_authorized");
+    // Cloud Functions are at-least-once. A duplicate Admin approval event
+    // must report the existing fictional wave and NEVER plan or resend it.
+    // The transaction still rechecks batch existence for concurrent races.
+    const existingBatch=await batchDoc.get();
+    if(existingBatch.exists)
+      return existingBatch.data()?.caseId===id &&
+        existingBatch.data()?.testOnly===true &&
+        existingBatch.data()?.origin==="fictional_emulator_auto_volunteer_only"
+        ?result("already_started","existing_fictional_batch")
+        :result("blocked","untrusted_existing_dispatch_batch");
     const appQuery=db.collection("volunteerApplications")
       .where("status","==","approved").limit(201);
     const caseQuery=db.collection("responseAssignments")
