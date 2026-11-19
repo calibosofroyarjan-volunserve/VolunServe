@@ -231,6 +231,41 @@ function harness(source, enabled, options = {}) {
       assert.equal(policy.getRegistrationEmailError(legitimate),null);
     }
   });
+  await check("fragmented Gmail formats and exact observed temporary Gmail dot-aliases are blocked",async()=>{
+    const generated=load(read("lib/disposableEmailDomains.generated.ts"));
+    const policy=load(read("lib/registrationEmailPolicy.ts"),{
+      "./disposableEmailDomains.generated":generated
+    });
+    const observed="po.p.ul.o.u.svm.b.xm.k@gmail.com";
+    const canonical=policy.canonicalGmailMailbox(observed);
+    assert.equal(canonical, "populousvmbxmk@gmail.com");
+    for(const email of [
+      observed, canonical, "p.o.p.ul.o.usv.m.bx.mk@gmail.com",
+      "les.terbigs.antos@gmail.com", "lesterbigsantos@gmail.com",
+      "ra.gngjb.a.hmkn@gmail.com", "r.a.gngjbahmkn@gmail.com",
+      "one.two.three.four.five@gmail.com", "a.b.c.d.e@gmail.com",
+      "person@mailticking.com", "person@emailnator.com",
+      "random.name@unknown.co", "random@outlook.com"
+    ]){
+      const problem=policy.getRegistrationEmailError(email);
+      assert.equal(typeof problem,"string",email);
+      const h=harness(current,true,{noUser:true,userEmail:email});
+      await assert.rejects(h.registration.authenticateEmailSignup(email,"Password1!",false,true));
+      assert(!h.calls.includes("create"),"Blocked input reached Firebase Auth: "+email);
+    }
+    for(const legitimate of [
+      "john.smith@gmail.com","student.2026@gmail.com",
+      "alice.b.smith@gmail.com","a.b.c@gmail.com",
+      "legitimateusername@gmail.com","resident@yahoo.com"
+    ]) assert.equal(policy.getRegistrationEmailError(legitimate),null,legitimate);
+    // These are rules for new Signup; never change existing login capabilities.
+    const ui=read("components/auth/EmailFirstSignup.tsx");
+    assert(ui.includes("completedEmailInput && !!emailErr"),
+      "Complete suspicious address must be shown red BEFORE form submission");
+    assert(ui.includes("Create Account & Verify Email"));
+    assert(ui.includes("Continue with Google"));
+    assert(!ui.includes("gmailNeedsGoogle"));
+  });
   await check("native Google signup owns OAuth and never bounces pending users to Login",()=>{
     assert(read("lib/useSignupGoogle.ts").includes("signInWithCredential"));
     assert(read("lib/useSignupGoogle.web.ts").includes("signInWithPopup"));
