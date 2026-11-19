@@ -44,9 +44,9 @@ jobs:
           const sha=s=>crypto.createHash('sha256').update(s).digest('hex');
           const PROJECT='volunserve-3aa5b';
           const HOST='https://firebaserules.googleapis.com/v1';
-          const extension='        && request.resource.data.email.matches("(?i)^[^@]+@(gmail[.]com|yahoo[.]com)$")\n'
-            +'        && (!request.resource.data.email.matches("(?i)^[^@]+@gmail[.]com$")\n'
-            +"          || 'google.com' in request.auth.token.firebase.identities)\n";
+          const extension='        && (request.resource.data.email.matches("(?i).*@yahoo[.]com")\n'
+            +'          || (request.resource.data.email.matches("(?i).*@gmail[.]com")\n'
+            +"            && 'google.com' in request.auth.token.firebase.identities))\n";
           async function audit(){
             const raw=process.env.VOLUNSERVE_PRODUCTION_HOSTING_SERVICE_ACCOUNT;
             assert(raw,'Protected production read-only credential absent');
