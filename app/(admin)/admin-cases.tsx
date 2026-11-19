@@ -1770,7 +1770,14 @@ export default function AdminCases() {
         }
 
         if (eligibilityA.skillMatches !== eligibilityB.skillMatches) {
-          return eligibilityB.skillMatches - eligi  const reviewVerification = async (
+          return eligibilityB.skillMatches - eligibilityA.skillMatches;
+        }
+
+        return a.fullName.localeCompare(b.fullName);
+      });
+  };
+
+  const reviewVerification = async (
     incident: DisasterCase,
     action: "validate" | "request_more_evidence" | "reject"
   ) => {
@@ -1844,8 +1851,8 @@ export default function AdminCases() {
             "This request is already validated. Do not reject it after dispatch preparation has started."
           );
         }
-        // Preserve validated, assigned and in-progress cases on retries.
-        // Do not create a second resident notice or audit record.
+        // Repeated approvals must never downgrade an active case or
+        // create duplicate Resident notices. Backend idempotence is separate.
         if (action === "validate" && currentVerification === "validated") {
           return { alreadyValidated: true };
         }
@@ -1922,8 +1929,8 @@ export default function AdminCases() {
           performedBy: adminUser.uid,
           reason: action === "validate" ? "" : reason,
           timestamp: serverTimestamp(),
-        });
-        return { alreadyValidated: false };
+          return { alreadyValidated: false };
+      });
       });
 
       if (action === "validate") {
@@ -1947,9 +1954,8 @@ export default function AdminCases() {
             advisoryMessage = "Case validated, but the public advisory was NOT published. Review Announcements permissions separately.";
           }
         }
-        // A single Admin validation is enough: guarded backend creates
-        // all approved Wave 1 offers automatically after Firestore commits.
-        // This is network-silent until separately authorized in the web build.
+        // Gated backend call happens AFTER the approved Firestore write.
+        // It never changes the public advisory, map or manual response paths.
         const invitation = await requestAutomaticVolunteersAfterApproval({
           caseId: incident.id, user: adminUser,
         });
@@ -1986,13 +1992,6 @@ export default function AdminCases() {
       Alert.alert(
         "Review Failed",
         error instanceof Error
-          ? error.message
-          : "Unable to update verification status."
-      );
-    }
-  };
-
-or
           ? error.message
           : "Unable to update verification status."
       );
