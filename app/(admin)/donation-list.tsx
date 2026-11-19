@@ -86,6 +86,9 @@ type AssistanceCampaignSource = {
   id: string;
   requestId?: string;
   requesterBarangay?: string;
+  requesterName?: string;
+  requesterAddress?: string;
+  contactNumber?: string;
   category?: string;
   categoryLabel?: string;
   title?: string;
@@ -246,22 +249,43 @@ const communityGeneralArea = (source?: AssistanceCampaignSource | null) => {
   return `${barangay}, City of San Jose del Monte, Bulacan`;
 };
 
+// The Resident's title and description are used for the Admin draft.
+// Known personal details are redacted, and publication requires human approval.
+const privacySafeResidentDraft = (
+  value: string | undefined, source?: AssistanceCampaignSource | null,
+) => {
+  let result = String(value || "").trim();
+  for (const detail of [source?.requesterName,source?.requesterAddress,source?.contactNumber]) {
+    const clean=String(detail || "").trim();
+    if (clean.length < 4) continue;
+    const escaped=clean.replace(/[-\/\\^$*+?.()|[\]{}]/g,"\\$&");
+    result=result.replace(new RegExp(escaped,"gi"),"[private information]");
+  }
+  return result
+    .replace(/\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi,"[private email]")
+    .replace(/(?:\+63|0)9\d{9}\b/g,"[private contact]")
+    .replace(/\b\d{3,4}[\s-]?\d{3}[\s-]?\d{4}\b/g,"[private contact]")
+    .replace(/\s{2,}/g," ")
+    .trim();
+};
 const defaultCommunityCampaignTitle = (source?: AssistanceCampaignSource | null) => {
-  const label = String(source?.categoryLabel || source?.category || "Community Assistance").trim();
-  return `${normalizeCategoryLabel(label)} Support`;
+  const residentTitle=privacySafeResidentDraft(source?.title,source).slice(0,160);
+  return residentTitle.length >= 5
+    ? residentTitle
+    : normalizeCategoryLabel(source?.categoryLabel || source?.category) + " Assistance";
 };
-
 const defaultCommunityCampaignDescription = (source?: AssistanceCampaignSource | null) => {
-  const label = normalizeCategoryLabel(source?.categoryLabel || source?.category);
-  const area = communityGeneralArea(source);
-  return `Support an LGU-verified ${label.toLowerCase()} need in ${area}. The beneficiary's identity, exact home address, contact details, and private supporting records are not published.`;
+  const residentDescription=privacySafeResidentDraft(source?.description,source).slice(0,1050);
+  const publicArea=communityGeneralArea(source);
+  if (residentDescription.length >= 30) return residentDescription;
+  if (residentDescription.length > 0) {
+    return residentDescription + " This assistance request was reviewed by the LGU in " + publicArea + ".";
+  }
+  return "Support an LGU-approved assistance request in " + publicArea +
+    ". Private beneficiary details and supporting records are not published.";
 };
-
-const defaultCommunityPublicStory = (source?: AssistanceCampaignSource | null) => {
-  const label = normalizeCategoryLabel(source?.categoryLabel || source?.category);
-  const area = communityGeneralArea(source);
-  return `The LGU verified a legitimate ${label.toLowerCase()} need in ${area} and confirmed that available LGU or partner resources cannot fully cover the remaining requirement. Public support is limited to the verified shortage, while beneficiary identity and private case information remain protected.`;
-};
+const defaultCommunityPublicStory = (source?: AssistanceCampaignSource | null) =>
+  defaultCommunityCampaignDescription(source);
 
 const campaignGroupLabel = (campaign?: DonationCampaign) =>
   String(campaign?.campaignGroup || "") === "community_needs_help"
@@ -454,6 +478,8 @@ export default function DonationAdministration() {
   const [sourceCase, setSourceCase] = useState<SourceCase | null>(null);
   const [sourceCaseLoading, setSourceCaseLoading] = useState(false);
   const [publicStory, setPublicStory] = useState("");
+  const [residentStoryPrivacyReviewed, setResidentStoryPrivacyReviewed] = useState(false);
+  const assistedDraftInitializedRef = useRef("");
   const [publicLocationLabel, setPublicLocationLabel] = useState("");
   const [publicIncidentType, setPublicIncidentType] = useState("");
   const [publicSeverity, setPublicSeverity] = useState("");
@@ -868,9 +894,8 @@ export default function DonationAdministration() {
       ).trim();
 
     if (
-      residentPhoto.startsWith(
-        "https://",
-      )
+      residentPhoto.startsWith("https://") &&
+      assistanceSource.publicCampaignPhotoConsent === true
     ) {
       setSelectedPublicPhotoUrls(
         (current) =>
@@ -978,7 +1003,10 @@ export default function DonationAdministration() {
     setAssessmentId(assistanceSource.id);
     setShowCampaignForm(false);
 
-    if (!existing && assistanceSourceIsEligible(assistanceSource)) {
+    if (!existing && assistanceSourceIsEligible(assistanceSource) &&
+        assistedDraftInitializedRef.current !== assistanceSource.id) {
+      assistedDraftInitializedRef.current = assistanceSource.id;
+      setResidentStoryPrivacyReviewed(false);
       setCampaignTitle(defaultCommunityCampaignTitle(assistanceSource));
       setCampaignDescription(defaultCommunityCampaignDescription(assistanceSource));
       setPublicStory(defaultCommunityPublicStory(assistanceSource));
@@ -1069,6 +1097,7 @@ export default function DonationAdministration() {
     setHandoffAddress("");
     setHandoffNotes("");
     setPublicStory("");
+    setResidentStoryPrivacyReviewed(false);
     setPublicLocationLabel("");
     setPublicIncidentType("");
     setPublicSeverity("");
@@ -1347,6 +1376,13 @@ export default function DonationAdministration() {
         "Campaign Already Active",
         "Close the existing campaign for this verified source before publishing another one.",
       );
+      return;
+    }
+
+    if (openedFromAssistance && !residentStoryPrivacyReviewed) {
+      const message="Review the resident-derived title, story and campaign photo, then confirm that private information has been removed before publishing.";
+      setError(message);
+      Alert.alert("Privacy Review Required",message);
       return;
     }
 
