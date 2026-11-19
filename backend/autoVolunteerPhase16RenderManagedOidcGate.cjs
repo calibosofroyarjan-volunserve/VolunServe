@@ -27,6 +27,7 @@ function ownedSafeFile(filename,maxBytes,needNonempty){
      filename.length>1024||filename.includes("\0")||
      !path.isAbsolute(filename))return null;
   let fd;
+  let transfer=false;
   try{
     const normalized=path.normalize(filename);
     if(normalized!==filename||
@@ -41,12 +42,15 @@ function ownedSafeFile(filename,maxBytes,needNonempty){
       return null;
     if(typeof process.getuid==="function"&&
       st.uid!==process.getuid()&&st.uid!==0)return null;
+    transfer=true;
     return {fd,bytes:st.size};
   }catch(_e){return null}
-  finally{if(fd!==undefined&&fd!==null){
-    // The descriptor must remain open for the caller only on success.
-    // Closed below if not explicitly transferred.
-  }}
+  finally{
+    // Never leak a descriptor on a failed stat/mode/owner check.
+    if(!transfer&&fd!==undefined){
+      try{fs.closeSync(fd)}catch(_e){}
+    }
+  }
 }
 function readSafeConfig(filename){
   const handle=ownedSafeFile(filename,MAX_CONFIG,true);
