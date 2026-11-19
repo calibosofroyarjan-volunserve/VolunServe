@@ -49,6 +49,11 @@ function caseReady(caseData){
 function candidateOK(caseData,person,application,{busy=new Set()}={}){
   const uid=String(person?.uid||"");
   if(!uidOK(uid)||uid===caseData.reporterUid||busy.has(uid))return false;
+  // An approved application must belong to exactly this authenticated
+  // Volunteer UID; never permit mismatched profile/application ownership.
+  const appOwner=String(application?.uid||application?.userId||
+    application?.volunteerId||"");
+  if(appOwner!==uid)return false;
   const role=String(person.role||"").toLowerCase();
   if(!["resident","volunteer"].includes(role)||person.status!=="approved"||
      person.volunteerAccess!==true||person.volunteerStatus!=="approved"||
@@ -131,7 +136,7 @@ async function inviteAfterApproval({
   const applications=await Promise.all(apps.docs.map(async d=>{
     const app=d.data()||{};
     const uid=String(app.uid||app.userId||app.volunteerId||d.id);
-    if(!uidOK(uid))return null;
+    if(!uidOK(uid)||d.id!==uid)return null;
     const user=await db.collection("users").doc(uid).get();
     return {uid,app,person:user.exists?{...user.data(),uid}:null};
   }));
