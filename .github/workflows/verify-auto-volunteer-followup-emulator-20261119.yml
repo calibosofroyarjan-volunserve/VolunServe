@@ -1,0 +1,92 @@
+name: Automatic Volunteer expired-offer follow-up — REAL EMULATOR ONLY
+on:
+  push:
+    branches:
+      - feat/auto-volunteer-expiry-followup-emulator-20261119
+  pull_request:
+    branches:
+      - feat/auto-volunteer-accept-decline-emulator-20261119
+
+permissions:
+  contents: read
+
+jobs:
+  fictional-followup:
+    if: github.repository == 'calibosofroyarjan-volunserve/VolunServe'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    env:
+      CI: "true"
+      GCLOUD_PROJECT: demo-volunserve-auto-phase4
+      GOOGLE_CLOUD_PROJECT: demo-volunserve-auto-phase4
+      FIRESTORE_EMULATOR_HOST: 127.0.0.1:8080
+      FIREBASE_AUTH_EMULATOR_HOST: 127.0.0.1:9099
+      FUNCTIONS_EMULATOR: "true"
+      VOLUNSERVE_AUTO_VOLUNTEER_TEST_TRIGGER: enabled
+      VOLUNSERVE_AUTO_VOLUNTEER_DISPATCH: disabled
+      FIREBASE_CLI_DISABLE_TELEMETRY: "1"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            backend/package-lock.json
+            functions/package-lock.json
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - name: Three-file strictly isolated emulator scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --name-status 09bddd469922dd9826f180f676f12d2ece6e9398 HEAD > /tmp/followup
+          test "$(wc -l </tmp/followup)" -eq 3
+          while IFS="$(printf '\t')" read -r status file; do
+            case "$status:$file" in
+              "A:functions/emergencyAutoInviteFollowupEmulator.js"|"A:functions/test-autoInviteFollowupEmulator.cjs"|"A:.github/workflows/verify-auto-volunteer-followup-emulator-20261119.yml") ;;
+              *) echo "BLOCKED unrelated file: $status $file"; exit 1 ;;
+            esac
+          done < /tmp/followup
+          ! grep -Fq 'emergencyAutoInviteFollowupEmulator' functions/index.js
+          ! grep -Fq 'emergencyAutoInviteFollowupEmulator' backend/server.js
+          test "${VOLUNSERVE_AUTO_VOLUNTEER_DISPATCH}" = disabled
+      - name: Install pinned local dependencies
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          npm ci --prefix functions --ignore-scripts --no-audit --no-fund
+          npm ci --prefix backend --ignore-scripts --no-audit --no-fund
+      - name: Source syntax and live backend regressions
+        run: |
+          node --check functions/emergencyAutoInviteFollowupEmulator.js
+          node --check functions/test-autoInviteFollowupEmulator.cjs
+          node --check functions/index.js
+          npm run check --prefix backend
+      - name: Enable fictional Firebase Functions only (not committed)
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > functions/.env.local <<'DEMO'
+          VOLUNSERVE_AUTO_VOLUNTEER_TEST_TRIGGER=enabled
+          VOLUNSERVE_AUTO_VOLUNTEER_DISPATCH=disabled
+          DEMO
+          node - <<'NODE'
+          const assert=require("node:assert/strict");
+          const mod=require("./functions/index.js");
+          assert.ok(mod.emulatorAutoVolunteerOnApproval);
+          assert.ok(mod.emulatorAutoVolunteerDecision);
+          console.log("PASS fictional approval and individual Auth decision functions");
+          NODE
+      - name: Automatic interval -> Wave 3 and cancelled/accepted/exhausted guards
+        shell: bash
+        run: |
+          set -euo pipefail
+          ./node_modules/.bin/firebase emulators:exec --project demo-volunserve-auto-phase4 --only auth,firestore,functions "node --test --test-concurrency=1 functions/test-autoInviteFollowupEmulator.cjs"
+      - name: No production deployment
+        run: |
+          echo "PASS only process-local fictional emulator worker; no live Firebase, Render, Android push, GPS or real Volunteer invitations touched."
