@@ -1,0 +1,73 @@
+name: Automatic Volunteer fictional browser launcher — NO DEPLOY
+on:
+  push:
+    branches:
+      - demo/automatic-volunteer-browser-ready-20261119
+  pull_request:
+    branches:
+      - fix/automatic-volunteer-emulator-due-worker-20261119
+
+permissions:
+  contents: read
+
+jobs:
+  local-demo:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      CI: "true"
+      FIREBASE_CLI_DISABLE_TELEMETRY: "1"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            backend/package-lock.json
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - name: Only four fictional demo files added
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin fix/automatic-volunteer-emulator-due-worker-20261119
+          git diff --name-status origin/fix/automatic-volunteer-emulator-due-worker-20261119 HEAD >/tmp/demo-diff
+          test "$(wc -l </tmp/demo-diff)" -eq 4
+          while IFS="$(printf '\t')" read -r status file; do
+            test "$status" = A || { echo "BLOCKED existing file changed: $file"; exit 1; }
+            case "$file" in
+              backend/autoVolunteerPhase18DemoLauncher.cjs|scripts/run-auto-volunteer-demo-local.cjs|docs/emergency-volunteer/AUTO_VOLUNTEER_BROWSER_DEMO_20261119.md|.github/workflows/auto-volunteer-browser-demo-no-deploy-20261119.yml) ;;
+              *) echo "BLOCKED unrelated file: $file"; exit 1 ;;
+            esac
+          done </tmp/demo-diff
+          ! grep -Fq 'autoVolunteerPhase18DemoLauncher' backend/server.js
+          ! grep -Fq 'autoVolunteerPhase10LocalApp' backend/server.js
+      - name: Install local emulator dependencies
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          npm ci --prefix backend --ignore-scripts --no-audit --no-fund
+      - name: Syntax and type checks
+        run: |
+          node --check backend/autoVolunteerPhase18DemoLauncher.cjs
+          node --check scripts/run-auto-volunteer-demo-local.cjs
+          npx tsc --noEmit
+      - name: Fail-closed check rejects production environment
+        shell: bash
+        run: |
+          set -euo pipefail
+          if GCLOUD_PROJECT=volunserve-3aa5b node scripts/run-auto-volunteer-demo-local.cjs --smoke; then
+            echo "ERROR: wrong project was accepted"; exit 1
+          fi
+          if VOLUNSERVE_AUTO_VOLUNTEER_DISPATCH=enabled node scripts/run-auto-volunteer-demo-local.cjs --smoke; then
+            echo "ERROR: production dispatch mode was accepted"; exit 1
+          fi
+      - name: Real Auth + Firestore Emulator one-command browser API smoke
+        run: node scripts/run-auto-volunteer-demo-local.cjs --smoke
+      - name: Confirm no production deployment
+        run: echo "LOCAL FICTIONAL DEMO PASSED. No Render, Hosting, Firebase production, or Volunteer changes."
