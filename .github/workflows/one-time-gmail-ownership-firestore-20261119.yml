@@ -131,7 +131,7 @@ jobs:
             assert.equal(beforePatch.rulesetName,original.rulesetName,'BLOCKED: active release moved during Rules review');
             try{
               const published=await patch(newName);
-              assert(published.response.ok,'Cannot update Firestore Rules release HTTP '+published.response.status);
+              assert(published.response.ok,'Cannot update Firestore Rules release HTTP '+published.response.status+': '+String(published.data?.error?.message||'Unknown response').slice(0,700));
               const newRelease=await readRelease();
               assert.equal(newRelease.rulesetName,newName,'Post-release Ruleset name mismatch');
               assert.equal(sha((await readSource(newName)).content),EXPECTED_NEW_RULES_SHA,
