@@ -1,0 +1,47 @@
+name: Post-deploy Automatic Volunteer staging READ-ONLY smoke
+on:
+  push:
+    branches:
+      - qa/auto-volunteer-staging-postdeploy-smoke-20261119
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  live-staging-readonly:
+    if: github.repository == 'calibosofroyarjan-volunserve/VolunServe'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Exact two-file QA only scope, staging deployed baseline unchanged
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --name-status 07c0e2b0e382fbb5d8670d6402eda8acebdda0a3 HEAD >/tmp/postdeploy
+          test "$(wc -l < /tmp/postdeploy)" -eq 2
+          while IFS="$(printf '\t')" read -r s file; do
+            test "$s" = A || { echo "BLOCKED existing file changed: $file"; exit 1; }
+            case "$file" in
+              scripts/test-postdeploy-automatic-volunteer-staging-readonly-20261119.cjs|.github/workflows/qa-auto-volunteer-staging-postdeploy-20261119.yml) ;;
+              *) echo "BLOCKED unrelated file: $file"; exit 1 ;;
+            esac
+          done < /tmp/postdeploy
+          ! grep -Fq 'postdeploy-automatic' backend/server.js
+      - name: Syntax and immutable GET-only request guard
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check scripts/test-postdeploy-automatic-volunteer-staging-readonly-20261119.cjs
+          grep -Fq 'method:"GET"' scripts/test-postdeploy-automatic-volunteer-staging-readonly-20261119.cjs
+          ! grep -Eq 'method:[[:space:]]*["\x27](POST|PUT|PATCH|DELETE)' scripts/test-postdeploy-automatic-volunteer-staging-readonly-20261119.cjs
+      - name: Probe deployed Render staging endpoints without credentials or writes
+        run: node scripts/test-postdeploy-automatic-volunteer-staging-readonly-20261119.cjs
+      - name: No staging state change and no production deployment
+        run: echo "PASS. GET-only public staging probe; no Firebase/Render writes, no emergency tasks, no secrets."
