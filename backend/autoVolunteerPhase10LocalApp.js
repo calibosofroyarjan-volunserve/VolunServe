@@ -148,7 +148,8 @@ function createPhase10LocalApp({db,authClient,env=process.env,
             !c.incidentBarangay||c.dispatchBlocked===true||
             c.resolvedAt||c.closedAt)
             return {status:"blocked",reason:"case_requires_admin_review"};
-          if(c.status==="validated"&&c.verificationStatus==="validated"&&
+          if(["validated","assigned","in_progress"].includes(c.status)&&
+            c.verificationStatus==="validated"&&
             typeof c.verifiedBy==="string"&&c.verifiedBy.length>0)
             return {status:"already_approved"};
           if(c.status!=="pending_review"||c.verificationStatus!=="pending")
