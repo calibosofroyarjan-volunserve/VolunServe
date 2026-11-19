@@ -2439,7 +2439,7 @@ This still does not automatically create a Donation Campaign.`,
 
     return (
       <>
-        {!wide && <View style={styles.detailBreadcrumbRow}>
+        {<View style={styles.detailBreadcrumbRow}>
           <TouchableOpacity
             style={styles.mockBackLink}
             onPress={backToQueue}
@@ -2472,25 +2472,25 @@ This still does not automatically create a Donation Campaign.`,
 
         <View style={styles.mockDetailTabs}>
           <ReviewTabButton
-            label="Overview"
+            label="Request Details"
             icon="document-text-outline"
             active={reviewTab === "case"}
             onPress={() => setReviewTab("case")}
           />
           <ReviewTabButton
-            label={`Evidence (${selected.documents?.length || 0})`}
+            label={`Documents (${selected.documents?.length || 0})`}
             icon="images-outline"
             active={reviewTab === "evidence"}
             onPress={() => setReviewTab("evidence")}
           />
           <ReviewTabButton
-            label="Resident"
+            label="Resident Info"
             icon="person-outline"
             active={reviewTab === "resident"}
             onPress={() => setReviewTab("resident")}
           />
           <ReviewTabButton
-            label="Decision"
+            label="Review & Decision"
             icon="shield-checkmark-outline"
             active={reviewTab === "decision"}
             onPress={() => setReviewTab("decision")}
@@ -2543,8 +2543,26 @@ This still does not automatically create a Donation Campaign.`,
   const renderCompactQueue = () => (
     <View style={styles.assistanceQueueCard}>
       <View style={styles.assistanceQueueHeading}>
-        <Text style={styles.assistanceQueueTitle}>Requests ({filteredRequests.length})</Text>
+        <Text style={styles.assistanceQueueTitle}>Assistance Requests</Text>
         {loadingRequests && <ActivityIndicator color="#047857" />}
+      </View>
+      <View style={styles.referenceFilterTabs}>
+        {([
+          ["all", "All Requests"],
+          ["pending", "For Review"],
+          ["under_review", "In Review"],
+          ["verified", "Approved"],
+          ["rejected", "Rejected"],
+          ["completed", "Completed"],
+        ] as const).map(([value, label]) => (
+          <TouchableOpacity key={value} onPress={() => changeStatusFilter(value)}
+            accessibilityRole="button" accessibilityState={{ selected: filter === value }}
+            style={[styles.referenceFilterPill, filter === value && styles.referenceFilterPillActive]}>
+            <Text style={[styles.referenceFilterPillText, filter === value && styles.referenceFilterPillTextActive]}>
+              {label} ({value === "all" ? requests.length : requests.filter((item) => value === "under_review" ? item.status === "under_review" : value === "verified" ? item.verificationStatus === "verified" || item.status === "verified" : item.status === value).length})
+            </Text>
+          </TouchableOpacity>
+        ))}
       </View>
       <View style={styles.assistanceSearchField}>
         <Ionicons name="search-outline" size={19} color="#64748B" />
@@ -2639,25 +2657,15 @@ This still does not automatically create a Donation Campaign.`,
     <View style={styles.page}>
       {wide ? (
         <View style={styles.assistanceDesktop}>
-          <AdminReviewHero
-            eyebrow="LGU WORKSPACE / RESIDENT ASSISTANCE"
-            title="Assistance Requests"
-            subtitle="Review requests, check supporting details, and plan assistance."
-            icon="hand-left-outline"
-            tag="REQUEST MANAGEMENT"
-          />
-          <View style={styles.assistanceSplitWorkspace}>
-            <ScrollView
-              style={styles.assistanceListPanel}
-              contentContainerStyle={styles.assistanceListContent}
-              showsVerticalScrollIndicator
-            >
+          {!selected ? (
+            <ScrollView style={styles.referenceFullPage} contentContainerStyle={styles.referenceFullContent}>
               {renderCompactQueue()}
             </ScrollView>
-            <View style={styles.assistanceSelectedPanel}>
+          ) : (
+            <View style={styles.referenceFullDetails}>
               {renderSelectedWorkspace()}
             </View>
-          </View>
+          )}
         </View>
       ) : screenMode === "queue" ? (
         <ScrollView style={styles.pageScroll} contentContainerStyle={styles.assistanceMobilePage}>
@@ -5731,6 +5739,14 @@ function DocumentPreviewModal({
 }
 
 const styles = StyleSheet.create({
+  referenceFullPage: { flex: 1, backgroundColor: "#FFFFFF", borderRadius: 14, borderWidth: 1, borderColor: "#D8E7DE" },
+  referenceFullContent: { padding: 10, paddingBottom: 26 },
+  referenceFullDetails: { flex: 1, minHeight: 0, backgroundColor: "#FFFFFF", borderRadius: 14, borderWidth: 1, borderColor: "#D8E7DE", padding: 14 },
+  referenceFilterTabs: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 8 },
+  referenceFilterPill: { backgroundColor: "#F4F6F8", borderColor: "#E1E7EC", borderWidth: 1, borderRadius: 22, paddingHorizontal: 13, paddingVertical: 9 },
+  referenceFilterPillActive: { backgroundColor: "#008447", borderColor: "#008447" },
+  referenceFilterPillText: { color: "#1B2938", fontFamily: vsType.family, fontSize: 12, fontWeight: "700" },
+  referenceFilterPillTextActive: { color: "#FFFFFF" },
   simpleVerifiedAmount: { fontSize: vsType.size.titleSmall, fontFamily: vsType.family, fontWeight: "800", color: "#047857", paddingVertical: 3 },
   assistanceBudgetFields: { gap: 10, padding: 15, borderWidth: 1, borderColor: "#D8E8DE", borderRadius: 12, backgroundColor: "#FAFCFA" },
   simpleReviewAmountNotice: { flexDirection: "row", alignItems: "flex-start", gap: 9, padding: 12, borderRadius: 9, borderColor: "#FDE68A", borderWidth: 1, backgroundColor: "#FFFBEB" },
