@@ -1,0 +1,203 @@
+# One-time, fail-closed Hosting-only Assistance UI release.
+# Controller runs from protected branch; build always uses immutable current-live-derived source.
+name: Guarded Exact-Live Assistance and Donation Hosting Release
+on:
+  push:
+    branches: [live-protected]
+    paths:
+      - '.github/workflows/one-time-assistance-hosting-20261119.yml'
+permissions:
+  contents: read
+concurrency:
+  group: volunserve-production-hosting-release
+  cancel-in-progress: false
+jobs:
+  exact-assistance-release:
+    if: github.repository == 'calibosofroyarjan-volunserve/VolunServe' && github.ref == 'refs/heads/live-protected'
+    environment: production
+    runs-on: ubuntu-latest
+    timeout-minutes: 65
+    env:
+      CI: 'true'
+      EXPO_NO_TELEMETRY: '1'
+      EXPO_PUBLIC_VOLUNSERVE_ENV: production
+      EXPO_PUBLIC_IDENTITY_VERIFICATION_API_URL: https://volunserve.onrender.com
+      PROJECT: 'volunserve-3aa5b'
+      EXPECTED_LIVE: 'b208d90667c783fba27bad97d1842f99d9f8b31c'
+      SOURCE_SHA: '2641cdc153c98c9ba12e59fdb4ec108a682433f0'
+      SOURCE_BRANCH: 'release/assistance-ui-only-exact-live-b208-20261119'
+      BACKUP_CHANNEL: 'assistance-before-20261119'
+    steps:
+      - name: Checkout exact protected controller
+        uses: actions/checkout@v4
+        with:
+          path: controller
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          submodules: false
+      - name: Checkout reviewed exact live-derived UI source (immutable)
+        uses: actions/checkout@v4
+        with:
+          path: site
+          ref: '2641cdc153c98c9ba12e59fdb4ec108a682433f0'
+          fetch-depth: 0
+          submodules: false
+      - name: Set up Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: site/package-lock.json
+      - name: Block unreviewed changes, outdated modules, branch drift and changed production
+        working-directory: site
+        shell: bash
+        run: |
+          node <<'NODE'
+          const assert=require('node:assert/strict');
+          const cp=require('node:child_process');
+          const git=(...args)=>cp.execFileSync('git',args,{encoding:'utf8'}).trim();
+          async function main(){
+            const src=process.env.SOURCE_SHA, base=process.env.EXPECTED_LIVE;
+            assert.equal(process.env.GITHUB_REF,'refs/heads/live-protected','Protected controller only');
+            assert.equal(git('rev-parse','HEAD'),src,'Wrong source SHA');
+            cp.execFileSync('git',['merge-base','--is-ancestor',base,src]);
+            const diffs=git('diff','--name-status','--no-renames',base,src).split('\n').filter(Boolean);
+            const allowed=[
+              '.github/workflows/release-assistance-exact-live-hosting-20261119.yml',
+              '.github/workflows/validate-assistance-live-clean-flow-20261119.yml',
+              'app/(admin)/assistance-requests.tsx',
+              'app/(admin)/donation-list.tsx',
+              'scripts/test-assistance-live-clean-flow-20261119.cjs',
+            ].sort();
+            assert.deepEqual(diffs.map(x=>x.split('\t')[1]).sort(),allowed,
+              'BLOCKED: source includes missing/extra (possibly outdated) files');
+            assert(diffs.every(x=>/^[AM]\t/.test(x)),'BLOCKED: deleted or renamed file');
+            const remote=git('ls-remote','--heads','origin',process.env.SOURCE_BRANCH).split(/\s+/)[0];
+            assert.equal(remote,src,'Reviewed assistance branch moved');
+            const protectedHead=git('ls-remote','--heads','origin','live-protected').split(/\s+/)[0];
+            assert.equal(protectedHead,process.env.GITHUB_SHA,'Protected controller branch moved');
+            const controllerDiff=cp.execFileSync('git',[
+              '-C','../controller','diff','--name-only','HEAD^','HEAD'
+            ],{encoding:'utf8'}).trim().split('\n').filter(Boolean);
+            assert.deepEqual(controllerDiff,['.github/workflows/one-time-assistance-hosting-20261119.yml'],
+              'BLOCKED: protected application backlog changed with release controller');
+            const res=await fetch('https://volunserve.com/volunserve-release.json?assistance_pre='+Date.now(),{
+              headers:{'Cache-Control':'no-cache'},signal:AbortSignal.timeout(15000)});
+            assert(res.ok,'Production Hosting marker unavailable');
+            const marker=await res.json();
+            assert.equal(marker.app,'VolunServe');
+            assert.equal(marker.firebaseProject,process.env.PROJECT);
+            assert.equal(marker.revision,base,'BLOCKED: production changed; do not overwrite');
+            console.log('PASS: current production, immutable UI candidate, protected controller and scope');
+          }
+          main().catch(e=>{console.error(e.stack||e);process.exitCode=1});
+          NODE
+      - name: Install exact locked production dependencies
+        working-directory: site
+        run: npm ci --no-audit --no-fund
+      - name: TypeScript, Assistance and other Admin module safeguards
+        working-directory: site
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx tsc --noEmit --incremental false
+          node scripts/test-assistance-live-clean-flow-20261119.cjs
+          node scripts/test-lgu-internal-review-ux.cjs
+          node scripts/test-admin-emergency-master-detail-20261118.cjs
+          node scripts/test-embedded-emergency-map-navigation.cjs
+          node scripts/test-profile-certificates-account-menu.cjs
+          node scripts/test-admin-navigation-contract.cjs
+          node scripts/test-module-announcements-publishing-20261115.cjs
+          node scripts/test-login-ui-release.cjs
+      - name: Build and verify only exact-reviewed Firebase Hosting web export
+        working-directory: site
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx expo export --platform web --clear
+          env -u GITHUB_SHA node scripts/verify-hosting-release.cjs
+          node - <<'NODE'
+          const assert=require('node:assert/strict'),fs=require('node:fs');
+          const marker=JSON.parse(fs.readFileSync('dist/volunserve-release.json','utf8'));
+          assert.equal(marker.revision,process.env.SOURCE_SHA,'Wrong built code; stop');
+          assert.equal(marker.firebaseProject,process.env.PROJECT,'Wrong Firebase project; stop');
+          for(const page of ['assistance-requests','donation-list','admin-cases']){
+            assert(fs.existsSync('dist/'+page+'.html')||
+              fs.existsSync('dist/'+page+'/index.html'),'Missing route: '+page);
+          }
+          console.log('PASS: exact source SHA + Hosting routes + Firebase project');
+          NODE
+      - name: Verify production still unchanged and validate existing protected environment secret
+        working-directory: site
+        shell: bash
+        env:
+          FIREBASE_SA: ${{ secrets.VOLUNSERVE_PRODUCTION_HOSTING_SERVICE_ACCOUNT }}
+        run: |
+          set -euo pipefail
+          test -n "$FIREBASE_SA" || { echo "::error::Missing production Hosting secret; no fallback"; exit 1; }
+          node <<'NODE'
+          const fs=require('node:fs'),assert=require('node:assert/strict');
+          const json=JSON.parse(process.env.FIREBASE_SA);
+          assert.equal(json.type,'service_account');
+          assert.equal(json.project_id,process.env.PROJECT,'Wrong Firebase credential project');
+          assert(json.client_email && json.private_key,'Invalid Firebase Hosting credential');
+          fs.writeFileSync(process.env.RUNNER_TEMP+'/assistance-production-sa.json',
+            process.env.FIREBASE_SA,{mode:0o600});
+          (async()=>{
+            const r=await fetch('https://volunserve.com/volunserve-release.json?assistance_final='+Date.now(),{
+              headers:{'Cache-Control':'no-cache'},signal:AbortSignal.timeout(15000)});
+            assert(r.ok);
+            const m=await r.json();
+            assert.equal(m.app,'VolunServe');
+            assert.equal(m.firebaseProject,process.env.PROJECT);
+            assert.equal(m.revision,process.env.EXPECTED_LIVE,'Production changed before release; abort');
+            console.log('PASS: live source unchanged, production credentials valid');
+          })().catch(e=>{console.error(e.stack||e);process.exitCode=1});
+          NODE
+          echo "GOOGLE_APPLICATION_CREDENTIALS=$RUNNER_TEMP/assistance-production-sa.json" >> "$GITHUB_ENV"
+      - name: Snapshot current production Hosting BEFORE release
+        id: backup
+        working-directory: site
+        run: |
+          npx firebase-tools hosting:clone "$PROJECT:live" "$PROJECT:$BACKUP_CHANNEL" --project "$PROJECT" --non-interactive
+      - name: Deploy immutable Assistance and Donation UI via Firebase Hosting ONLY
+        id: deploy
+        uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          firebaseServiceAccount: ${{ secrets.VOLUNSERVE_PRODUCTION_HOSTING_SERVICE_ACCOUNT }}
+          projectId: volunserve-3aa5b
+          channelId: live
+          entryPoint: ./site
+      - name: Verify exact source revision and all required public routes on production
+        working-directory: site
+        env:
+          VOLUNSERVE_HOSTING_URL: https://volunserve.com
+          VOLUNSERVE_EXPECTED_SHA: '2641cdc153c98c9ba12e59fdb4ec108a682433f0'
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in 1 2 3 4 5 6; do
+            if node scripts/check-live-hosting.cjs && node <<'NODE'
+          (async()=>{
+            for(const p of ['/assistance-requests','/donation-list','/admin-cases']){
+              const res=await fetch('https://volunserve.com'+p,{
+                headers:{'Cache-Control':'no-cache'},signal:AbortSignal.timeout(12000)});
+              const html=await res.text();
+              if(!res.ok || !html.includes('<html'))throw Error('Missing live route '+p);
+              console.log('PASS '+p+' HTTP '+res.status);
+            }
+          })().catch(e=>{console.error(e.message);process.exitCode=1});
+          NODE
+            then exit 0;fi
+            sleep 10
+          done
+          echo "::error::Post-release Hosting failed; automatic rollback required"
+          exit 1
+      - name: Restore Hosting backup if deploy or verification fails
+        if: failure() && steps.backup.outcome == 'success' && steps.deploy.outcome != 'skipped'
+        working-directory: site
+        shell: bash
+        run: |
+          npx firebase-tools hosting:clone "$PROJECT:$BACKUP_CHANNEL" "$PROJECT:live" --project "$PROJECT" --non-interactive
+          echo 'Hosting rollback requested; validate restored marker and routes'
+          VOLUNSERVE_EXPECTED_SHA="$EXPECTED_LIVE" node scripts/check-live-hosting.cjs
