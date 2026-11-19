@@ -49,7 +49,7 @@ jobs:
             assert.equal(initializer(a,name),initializer(b,name),'Changed handler '+name);
           }
           assert(!next.includes('style={styles.detailMainScroll}'),'Old nested detail scrollbar returned');
-          assert(next.includes('style={styles.assistanceDetailPageContent}'),'Natural page layout missing');
+          assert(next.includes('contentContainerStyle={styles.assistanceDetailPageContent}'),'Natural page layout missing');
           assert(next.includes('Existing LGU Assistance Record'),'Saved-case compatibility missing');
           console.log('PASS: 11 protected handlers identical; no stale functionality added; only Assistance Requests frontend edited');
           NODE
