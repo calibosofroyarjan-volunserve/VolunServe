@@ -1,0 +1,41 @@
+name: Staging fixed 002 Volunteer eligibility diagnosis - NO DEPLOY
+on:
+  pull_request:
+    branches:
+      - feat/emergency-auto-dispatch-server-staging-20261115
+    paths:
+      - "backend/staging002EligibilitySummary.js"
+      - "backend/emergencyAutoDispatchStagingServer.js"
+      - "backend/stagingAdminLogin.html"
+      - "backend/test-staging002EligibilitySummary.cjs"
+      - ".github/workflows/qa-staging-002-eligibility-why-zero-20261119.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  staging-diagnosis-no-deploy:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install isolated backend dependencies without lifecycle scripts
+        run: npm ci --prefix backend --ignore-scripts --no-audit --no-fund
+      - name: Check syntax
+        run: |
+          node --check backend/staging002EligibilitySummary.js
+          node --check backend/emergencyAutoDispatchStagingServer.js
+      - name: Test read-only eligibility diagnosis and existing fictional staging flows
+        run: |
+          node --test backend/test-staging002EligibilitySummary.cjs
+          node --test backend/test-stagingFreshEndToEnd.cjs
+          node --test backend/test-emergencyAutoDispatchStagingServer.cjs
+      - name: Verify script source carries no write path
+        run: |
+          if grep -E 'tx\\.|\\.set\\(|\\.update\\(|\\.delete\\(|\\.create\\(' backend/staging002EligibilitySummary.js; then
+            echo 'BLOCKED: eligibility module must remain read-only'
+            exit 1
+          fi
+          echo 'Only fictional staging 002, approved Admin, aggregate counts; no changes to production or credentials'

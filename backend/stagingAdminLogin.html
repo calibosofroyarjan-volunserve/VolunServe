@@ -1,0 +1,633 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>VolunServe · Staging Admin Login Check</title>
+<style>
+:root{font:15px/1.5 system-ui,-apple-system,Segoe UI,sans-serif;background:#f4f8f7;color:#16322c}
+*{box-sizing:border-box}body{margin:0}.shell{max-width:720px;margin:auto;padding:35px 18px}
+.header{display:flex;justify-content:space-between;align-items:center;gap:15px;flex-wrap:wrap}.brand{font-size:21px;font-weight:800;color:#066e54}
+.flag{border:1px solid #b9ddd0;border-radius:40px;background:#e8f7f0;color:#086246;font-weight:700;font-size:12px;padding:6px 11px}
+.panel{background:white;border:1px solid #dce9e4;border-radius:18px;padding:28px;margin-top:22px;box-shadow:0 6px 28px #0d3e310a}
+h1{font-size:26px;letter-spacing:-.5px;margin:0 0 11px}h2{font-size:17px;margin:18px 0 8px}p{color:#52665e}
+.notice{border:1px solid #ead8a8;background:#fff8e7;border-radius:9px;padding:12px;font-size:13px;color:#715318}
+label{display:block;font-size:13px;font-weight:700;margin:16px 0 5px}
+input{width:100%;height:45px;border:1px solid #cbdcd4;border-radius:9px;padding:10px 12px;font-size:15px}
+button{background:#0c775b;color:white;border:0;border-radius:9px;font:inherit;font-weight:700;font-size:14px;padding:12px 17px;cursor:pointer}
+button:disabled{opacity:.5;cursor:not-allowed}.secondary{background:#edf5f1;color:#1b5947}
+.buttons{display:flex;gap:9px;flex-wrap:wrap;margin-top:18px}
+.result{border:1px solid #dce9e4;background:#f5f9f7;border-radius:10px;padding:15px;margin-top:18px;white-space:pre-wrap;overflow-wrap:anywhere;min-height:72px;font-size:13px}
+ul{padding-left:19px;color:#475f57}li{margin:5px 0}.footer{color:#72847d;font-size:12px;margin-top:21px}
+a{color:#075c49}input:focus-visible,button:focus-visible{outline:3px solid #4db896;outline-offset:2px}
+</style>
+</head>
+<body><main class="shell">
+<div class="header"><div class="brand">VolunServe</div><span class="flag">ISOLATED STAGING · FREE</span></div>
+<section class="panel">
+<h1>Staging Admin Login Check</h1>
+<p>Sign in with your <strong>staging-only Admin test account</strong> to check whether the Free Render API accepts the Firebase login.</p>
+<div class="notice"><strong>Admin login verification is read-only.</strong> A separate confirmed test button can create one fictional staging Volunteer offer only after activation. It never dispatches official responders or touches live VolunServe. Never use real emergency information or production credentials.</div>
+<form id="login">
+<label for="email">Staging Admin email</label>
+<input id="email" autocomplete="username" type="email" required placeholder="test admin email">
+<label for="password">Password</label>
+<input id="password" autocomplete="current-password" type="password" required placeholder="Staging password">
+<div class="buttons"><button id="submit" type="submit">Sign in &amp; check authorization</button>
+<button type="button" class="secondary" id="logout">Sign out</button></div>
+</form>
+<h2>Controlled dummy matching test</h2>
+<p>After verification, send one test-only offer for <code>STAGING_TEST_001</code>. This writes exclusively to the isolated staging database. It does not alert official responders or production users.</p>
+<button type="button" class="secondary" id="fixture-check" disabled>Check dummy report fields (read-only)</button>
+<button type="button" class="secondary" id="prepare-test" disabled>Prepare fictional report status (staging only)</button>
+<button type="button" id="start-test" disabled>Start synthetic Emergency Volunteer offer</button>
+<button type="button" class="secondary" id="reissue-test" disabled>Reissue expired dummy offer</button>
+<button type="button" class="secondary" id="verify-test" disabled>Verify acceptance, responder lock &amp; notifications</button>
+<button type="button" class="secondary" id="reconcile-test" disabled>Record missing acceptance evidence (late staging QA)</button>
+<p class="small">Use Reissue only after the prior test offer has expired or been declined. Accepted offers cannot be reset. Reconciliation is only for an already-accepted fictional task; it creates explicitly labelled late records and does not prove the original acceptance flow.</p>
+<p class="small">A case already assigned or in progress must not be manually reset to validated. Use the read-only verification and controlled reissue flow instead. The preparation control only works for the pre-existing, fictional status="reported" case with no matching assignments and already-validated verification.</p>
+<section aria-labelledby="fresh-heading" style="border-top:1px solid #dce9e4;margin-top:24px;padding-top:12px">
+<h2 id="fresh-heading">Fresh isolated E2E test — STAGING_E2E_002</h2>
+<p>This is a NEW fictional report, separate from the accepted STAGING_TEST_001. It starts unvalidated and uses only the already-approved staging test Resident. Admin must explicitly create, validate, and offer. It cannot assign official responders or operate on production Firebase.</p>
+<div class="buttons">
+<button type="button" class="secondary" id="check-002" disabled>Check 002 readiness</button>
+<button type="button" class="secondary" id="eligibility-002" disabled>Why 0 eligible Volunteers? (read-only)</button>
+<button type="button" class="secondary" id="create-002" disabled>Create fictional 002</button>
+<button type="button" class="secondary" id="validate-002" disabled>Validate fictional 002</button>
+<button type="button" id="offer-002" disabled>Offer single task for 002 (legacy)</button>
+<button type="button" id="bulk-offer-002" disabled>Offer to ALL eligible Volunteers (isolated test)</button>
+<button type="button" class="secondary" id="bulk-status-002" disabled>Check ALL eligible offer statuses</button>
+<button type="button" class="secondary" id="bulk-verify-002" disabled>Verify BULK acceptance &amp; responder locks (read-only)</button>
+<button type="button" class="secondary" id="wave-stop-002" disabled>Verify automatic wave STOP (read-only)</button>
+<button type="button" class="secondary" id="bulk-reissue-002" disabled>Reissue expired ALL 3 (fictional bulk)</button>
+<button type="button" class="secondary" id="verify-002" disabled>Verify 002 acceptance</button>
+<button type="button" class="secondary" id="reissue-002" disabled>Reissue expired 002 only</button>
+</div>
+<div id="e2e-002-status" class="result" role="status" aria-live="polite">Sign in with an approved staging Admin account first.</div>
+<section aria-labelledby="qa-volunteers-title" style="border-top:1px solid #dce9e4;margin-top:22px;padding-top:10px">
+<h2 id="qa-volunteers-title">Create 3 FICTIONAL Volunteer test accounts — isolated staging ONLY</h2>
+<p class="small">Admin-only test setup. All 3 are marked FICTIONAL and belong to STAGING_E2E_002. They have First Aid and Bagong Buhay I so the same-wave bulk test can reach all 3. No real identity documents and no production accounts.</p>
+<p class="notice">Test credentials are shown only in this browser page. Copy the three email/password pairs somewhere private before refreshing. Do not share real passwords or screenshots containing these test passwords.</p>
+<div class="buttons">
+<button type="button" class="secondary" id="qa-prepare" disabled>Generate 3 temporary test passwords</button>
+<button type="button" class="secondary" id="qa-check" disabled>Check test account slots (read-only)</button>
+<button type="button" id="qa-create" disabled>Create these 3 fictional Volunteers</button>
+</div>
+<div style="margin-top:12px">
+<label for="qa-secret-1">Fictional Volunteer 1 — staging002.qa.volunteer1@example.com</label>
+<input id="qa-secret-1" type="text" autocomplete="off" spellcheck="false" placeholder="Generate a temporary staging-only password" readonly>
+<label for="qa-secret-2">Fictional Volunteer 2 — staging002.qa.volunteer2@example.com</label>
+<input id="qa-secret-2" type="text" autocomplete="off" spellcheck="false" placeholder="Generate a temporary staging-only password" readonly>
+<label for="qa-secret-3">Fictional Volunteer 3 — staging002.qa.volunteer3@example.com</label>
+<input id="qa-secret-3" type="text" autocomplete="off" spellcheck="false" placeholder="Generate a temporary staging-only password" readonly>
+</div>
+<div id="qa-result" class="result" role="status" aria-live="polite">Sign in as an approved staging Admin first. Nothing has been created yet.</div>
+<p class="small">After creation, open the <a href="/staging-volunteer" target="_blank" rel="noopener noreferrer">separate staging Volunteer login</a> for each test account, using its own password. Existing accounts are never reset. Do not use these QA credentials in production.</p>
+</section>
+<p class="small">If readiness says <code>no_free_approved_test_volunteer</code>, an additional approved and available staging Volunteer is required. Never reuse the accepted 001 assignment. Test offers expire after 3 minutes. No reissue for accepted tasks.</p>
+</section>
+<h2>Verification</h2>
+<div id="result" class="result" aria-live="polite">Not checked yet. Only the staging Firebase project will be contacted.</div>
+<h2>What a successful test proves</h2>
+<ul>
+<li>Staging Firebase Email/Password accepts your Admin test login.</li>
+<li>Render verifies a Firebase ID token and approved Admin profile.</li>
+<li>The separate staging Firestore test case is eligible for Wave 1.</li>
+</ul>
+<div class="footer">This is a private QA login page, not the production VolunServe application. Only the dedicated synthetic staging test is permitted; real emergency dispatch remains disabled. <a href="/health">Backend health</a> · <a href="/demo">Synthetic demo</a></div>
+</section>
+</main>
+<script type="module">
+import {initializeApp} from "https://www.gstatic.com/firebasejs/11.10.0/firebase-app.js";
+import {getAuth,signInWithEmailAndPassword,signOut,setPersistence,inMemoryPersistence} from "https://www.gstatic.com/firebasejs/11.10.0/firebase-auth.js";
+const config={
+  apiKey:"AIzaSyCGS-VySgPPEcqgKH0tBqQCZX_YYhJFuuM",
+  authDomain:"volunserve-volunteer-staging.firebaseapp.com",
+  projectId:"volunserve-volunteer-staging",
+  appId:"1:310291888299:web:de6c284904657b0bed9fee",
+  messagingSenderId:"310291888299"
+};
+const app=initializeApp(config,"volunserve-staging-login-only");
+const auth=getAuth(app);
+const result=document.getElementById("result");
+const submit=document.getElementById("submit");
+const passwordInput=document.getElementById("password");
+const startTest=document.getElementById("start-test");
+const reissueTest=document.getElementById("reissue-test");
+const verifyTest=document.getElementById("verify-test");
+const fixtureCheck=document.getElementById("fixture-check");
+const prepareTest=document.getElementById("prepare-test");
+
+const qaEl=id=>document.getElementById(id);
+const qaResult=message=>{qaEl("qa-result").textContent=message;};
+const qaSecrets=[1,2,3].map(n=>qaEl("qa-secret-"+n));
+let qaPrepared=false;
+const qaEmail=n=>"staging002.qa.volunteer"+n+"@example.com";
+function makeQaPassword(){
+  const chars="ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789";
+  const raw=window.crypto.getRandomValues(new Uint8Array(28));
+  return "Qa9"+Array.from(raw,b=>chars[b%chars.length]).join("");
+}
+qaEl("qa-prepare").addEventListener("click",()=>{
+  if(!stagingActivationReady || !auth.currentUser)
+    return qaResult("Approved isolated staging Admin login is required.");
+  qaSecrets.forEach(el=>{el.value=makeQaPassword();});
+  qaPrepared=true;
+  qaEl("qa-create").disabled=false;
+  qaResult("3 unique staging-only passwords generated. COPY each email/password now.\n"+
+    "No Firebase accounts have been created yet. Click the separate Create button to provision.");
+});
+qaEl("qa-check").addEventListener("click",async()=>{
+  try{
+    const d=await api002("/api/admin/emergency-auto/e2e-002/test-volunteers");
+    qaResult("FICTIONAL STAGING 002 ACCOUNT SLOTS — READ ONLY\n"+
+      d.slots.map(s=>"Volunteer "+s.slot+": "+s.state).join("\n")+
+      "\nOnly fixed synthetic test slots examined. No accounts changed.");
+  }catch(error){
+    qaResult("Staging QA account check blocked: "+String(error?.message||"unknown"));
+  }
+});
+qaEl("qa-create").addEventListener("click",async()=>{
+  if(!stagingActivationReady || !auth.currentUser || !qaPrepared)
+    return qaResult("Sign in as staging Admin and generate the 3 test passwords first.");
+  if(!window.confirm("CREATE EXACTLY 3 FICTIONAL staging Volunteer accounts? No existing Firebase account will be changed, and no real emergency task is sent."))return;
+  const passwords=qaSecrets.map(el=>el.value);
+  if(passwords.some(x=>!x))return qaResult("First generate the 3 temporary passwords.");
+  qaEl("qa-create").disabled=true;
+  try{
+    const d=await api002("/api/admin/emergency-auto/e2e-002/test-volunteers",{
+      method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({
+        caseId:"STAGING_E2E_002",
+        confirmFictionalTestUsers:true,
+        passwords
+      })
+    });
+    qaResult("FICTIONAL TEST USER SETUP: "+d.status+
+      "\nNew test accounts: "+d.created+
+      "\nAlready-existing fictional test accounts preserved: "+d.alreadyExisting+
+      "\n"+
+      [1,2,3].map(n=>qaEmail(n)).join("\n")+
+      "\nPasswords remain shown above ONLY in your browser. Copy them now."+
+      "\nNext: Check 002 readiness, then test all-eligible offers.");
+  }catch(error){
+    qaResult("Test account setup blocked: "+String(error?.message||"unknown")+
+      "\nNo existing account passwords were changed. Inspect test account slots before retry.");
+  }finally{
+    qaPrepared=false;
+  }
+});
+const ids002=["check-002","create-002","validate-002","offer-002","verify-002","reissue-002","bulk-offer-002","bulk-status-002","bulk-reissue-002","bulk-verify-002","wave-stop-002","eligibility-002"];
+const el002=id=>document.getElementById(id);
+const show002=message=>{el002("e2e-002-status").textContent=message;};
+function disable002(){ids002.forEach(id=>{el002(id).disabled=true;});}
+async function api002(endpoint,options={}){
+  if(!auth.currentUser)throw new Error("Sign in with the approved staging Admin first.");
+  const token=await auth.currentUser.getIdToken();
+  const response=await fetch(endpoint,{
+    ...options,headers:{...(options.headers||{}),Authorization:"Bearer "+token},
+    cache:"no-store"
+  });
+  const data=await response.json();
+  if(!response.ok)throw new Error(String(data.reason||data.error||response.status));
+  return data;
+}
+async function refresh002(){
+  const data=await api002("/api/admin/emergency-auto/e2e-002/preflight");
+  const status=String(data.status||"unknown");
+  qaEl("qa-prepare").disabled=!stagingActivationReady;
+  qaEl("qa-check").disabled=!stagingActivationReady;
+  el002("check-002").disabled=false;
+  el002("eligibility-002").disabled=false;
+  el002("create-002").disabled=!(stagingActivationReady&&status==="not_created");
+  el002("validate-002").disabled=!(stagingActivationReady&&status==="reported");
+  el002("offer-002").disabled=!(stagingActivationReady&&status==="ready");
+  el002("bulk-offer-002").disabled=true;
+  el002("bulk-status-002").disabled=true;
+  el002("bulk-verify-002").disabled=true;
+  el002("wave-stop-002").disabled=true;
+  el002("bulk-reissue-002").disabled=true;
+  try{
+    const bulk=await api002("/api/admin/emergency-auto/e2e-002/bulk-status");
+    el002("bulk-status-002").disabled=false;
+    el002("bulk-verify-002").disabled=bulk.status==="not_started";
+    el002("wave-stop-002").disabled=bulk.status==="not_started";
+    el002("bulk-reissue-002").disabled=!(stagingActivationReady &&
+      bulk.status==="waiting" && Number(bulk.offered)===3 &&
+      Number(bulk.expired)===3 && Number(bulk.pending)===3 &&
+      Number(bulk.accepted)===0 && Number(bulk.declined)===0);
+    el002("offer-002").disabled=true; // Never mix single-offer and batch paths.
+    el002("bulk-offer-002").disabled=!(stagingActivationReady&&status==="ready"&&bulk.status==="not_started");
+  }catch(error){
+    // Bulk flag stays disabled until explicitly enabled by isolated staging.
+  }
+  el002("verify-002").disabled=status!=="existing_assignment";
+  el002("reissue-002").disabled=!(stagingActivationReady&&status==="existing_assignment");
+  show002("FICTIONAL STAGING_E2E_002 ONLY\n"+
+    "Readiness: "+status+"\n"+
+    "Reason: "+String(data.reason||"none")+"\n"+
+    "Eligible free Volunteers: "+String(data.eligible||0)+"\n"+
+    "Next wave: "+String(data.wave||"not yet offered")+"\n"+
+    "No real dispatch. This readiness check is read-only.");
+  return data;
+}
+el002("eligibility-002").addEventListener("click",async()=>{
+  try{
+    const d=await api002("/api/admin/emergency-auto/e2e-002/eligibility-summary");
+    const reasons=Object.entries(d.excludedByReason||{})
+      .sort((a,b)=>Number(b[1])-Number(a[1]))
+      .map(([reason,count])=>"  "+reason+": "+count)
+      .join("\n") || "  none";
+    show002("FICTIONAL 002 — READ-ONLY VOLUNTEER ELIGIBILITY\n"+
+      "Approved applications: "+d.approvedApplications+"\n"+
+      "Evaluated: "+d.evaluated+"\n"+
+      "Eligible free Volunteers: "+d.eligible+"\n"+
+      "Same barangay (Wave 1): "+d.eligibleByWave?.wave1+"\n"+
+      "Neighbor (Wave 2): "+d.eligibleByWave?.wave2+"\n"+
+      "SJDM-wide (Wave 3): "+d.eligibleByWave?.wave3+"\n"+
+      "Exclusion reasons:\n"+reasons+"\n"+
+      "No names, UIDs, assignments, or user data returned. No records changed.");
+  }catch(error){show002("Eligibility check blocked: "+String(error?.message||"unknown"));}
+});
+el002("check-002").addEventListener("click",async()=>{
+  try{await refresh002();}catch(error){show002(String(error?.message||"Readiness unavailable"));}
+});
+async function do002(action,confirmation){
+  if(!auth.currentUser)return show002("Sign in to staging first.");
+  if(!window.confirm(confirmation))return;
+  disable002();
+  try{
+    const routes={
+      create:"/api/admin/emergency-auto/e2e-002/create",
+      validate:"/api/admin/emergency-auto/e2e-002/validate",
+      offer:"/api/admin/emergency-auto/start",
+      reissue:"/api/admin/emergency-auto/e2e-002/reissue",
+    };
+    const result=await api002(routes[action],{
+      method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({
+        caseId:"STAGING_E2E_002",
+        ...(action==="reissue"?{confirmReissue:true}:
+          {confirmFictionalTest:true})
+      })
+    });
+    await refresh002();
+    const batch=result.automaticOffers;
+    const autoInfo=action==="validate" ?
+      batch?.status==="offered" ?
+        "\nAUTO-MATCH SUCCESS: "+String(batch.offered)+" separate eligible Volunteer offers sent in Wave "+String(batch.wave)+
+        ". Every Volunteer must Accept or Decline independently." :
+      batch?.status==="blocked" ?
+        "\nVALIDATION SAVED, BUT AUTOMATIC MATCHING BLOCKED: "+
+        String(batch.reason||"review_needed")+". No automatic assignments claimed." :
+        "\nAutomatic offers are disabled in this isolated staging test. No offers sent." :
+      "";
+    show002("Staging E2E 002 "+action+": "+String(result.status||result.action||"completed")+
+      autoInfo+"\nNo production records changed. "+
+      (action==="offer"?"Open the staging Volunteer page and select E2E 002 within 3 minutes.":""));
+  }catch(error){show002("Action blocked: "+String(error?.message||"unknown").slice(0,160));
+    try{await refresh002();}catch{}}
+}
+el002("wave-stop-002").addEventListener("click",async()=>{
+  try{
+    const d=await api002("/api/admin/emergency-auto/e2e-002/bulk-wave-stop");
+    show002("FICTIONAL 002 AUTOMATIC WAVE-STOP CHECK (READ ONLY)\n"+
+      "Result: "+String(d.status)+"\n"+
+      "Wave: "+String(d.currentWave)+"\n"+
+      "Accepted: "+String(d.accepted)+"\n"+
+      "Accepted responder locks: "+String(d.correctResponderLocks)+"\n"+
+      "Other pending offers: "+String(d.otherPendingOffers)+"\n"+
+      "Expired other offers: "+String(d.expiredOtherOffers)+"\n"+
+      "Later-wave offers: "+String(d.laterWaveOffers)+"\n"+
+      "Acceptance evidence: "+(d.acceptanceEvidenceVerified?"VERIFIED":"NOT VERIFIED")+"\n"+
+      "Stop guard: "+(d.waveStopGuardConfirmed?"CONFIRMED":"NOT CONFIRMED")+"\n"+
+      "No later wave observed: "+(d.noLaterWaveObserved?"YES":"NO")+"\n"+
+      "After remaining offers expired: "+(d.observedAfterOtherOffersExpired?"YES":"NO")+"\n"+
+      "Automatic timer configured: "+(d.automaticWaveTimerConfigured?"YES":"NO")+"\n"+
+      "Scheduler executed in current process: "+(d.timerExecutionObserved?"YES":"NO")+"\n"+
+      "Scheduled runs recorded: "+String(d.schedulerRunCount||0)+"\n"+
+      "Last scheduled result: "+String(d.schedulerLastResult||"not_run")+"\n"+
+      "Last completed UTC: "+String(d.schedulerLastCompletedAtUtc||"not yet")+"\n"+
+      "Accepted wave-stop observed after a scheduler run: "+(d.schedulerStopObservedThisProcess?"YES":"NO")+"\n"+
+      "No resets, reissues or Firebase writes.");
+  }catch(error){show002("Wave-stop verification blocked: "+String(error?.message||"unknown"));}
+});
+el002("bulk-verify-002").addEventListener("click",async()=>{
+  try{
+    const d=await api002("/api/admin/emergency-auto/e2e-002/bulk-verify-acceptance");
+    show002("READ-ONLY FICTIONAL BULK ACCEPTANCE EVIDENCE\n"+
+      "Result: "+String(d.status)+"\n"+
+      "Offers: "+String(d.offerCount)+"\n"+
+      "Accepted: "+String(d.accepted)+"\n"+
+      "Pending: "+String(d.pending)+"\n"+
+      "Declined: "+String(d.declined)+"\n"+
+      "Correct responder locks: "+String(d.correctResponderLocks)+" / "+String(d.accepted)+"\n"+
+      "Correct reservations: "+String(d.correctReservations)+" / "+String(d.accepted)+"\n"+
+      "Original offer notifications: "+String(d.originalOfferNotifications)+" / "+String(d.accepted)+"\n"+
+      "Resident acceptance notifications: "+String(d.acceptanceResidentNotifications)+" / "+String(d.accepted)+"\n"+
+      "Admin acceptance audits: "+String(d.acceptanceAudits)+" / "+String(d.accepted)+"\n"+
+      "Unexpected pending responder locks: "+String(d.unexpectedPendingResponderLocks)+"\n"+
+      "Acceptance evidence complete: "+(d.fullAcceptanceEvidenceVerified?"YES":"NO")+"\n"+
+      "Batch session: "+String(d.batchSessionStatus)+"\n"+
+      "Further-wave stop: NOT YET VERIFIED (separate test)\n"+
+      "Read-only: no records changed, no identities returned.");
+  }catch(error){
+    show002("Fictional bulk acceptance verification unavailable: "+
+      String(error?.message||"unknown"));
+  }
+});
+el002("bulk-status-002").addEventListener("click",async()=>{
+  try{
+    const d=await api002("/api/admin/emergency-auto/e2e-002/bulk-status");
+    show002("REAL STAGING BATCH STATUS\n"+
+      "Status: "+String(d.status)+"\n"+
+      "Task offers: "+String(d.offered)+"\n"+
+      "Pending: "+String(d.pending)+"\n"+
+      "Expired: "+String(d.expired||0)+"\n"+
+      "Unknown deadline format: "+String(d.unreadableDeadlines||0)+"\n"+
+      "Server time (UTC): "+String(d.serverTimeUtc||"unavailable")+"\n"+
+      "Earliest deadline (UTC): "+String(d.earliestOfferDeadlineUtc||"unknown")+"\n"+
+      "Latest deadline (UTC): "+String(d.latestOfferDeadlineUtc||"unknown")+"\n"+
+      "Accepted: "+String(d.accepted)+"\n"+
+      "Declined: "+String(d.declined)+"\n"+
+      "Source: actual fixed fictional staging 002 assignment documents.");
+  }catch(error){show002("Bulk status unavailable: "+String(error?.message||"disabled"));}
+});
+el002("bulk-reissue-002").addEventListener("click",async()=>{
+  if(!stagingActivationReady)return show002("Approved isolated staging Admin required.");
+  try{
+    const before=await api002("/api/admin/emergency-auto/e2e-002/bulk-status");
+    if(before.status!=="waiting"||Number(before.offered)!==3||
+       Number(before.pending)!==3||Number(before.expired)!==3||
+       Number(before.accepted)!==0||Number(before.declined)!==0)
+      return show002("Bulk reissue is not permitted: all three fictional offers must be expired, without any acceptance or decline.");
+    if(!window.confirm(
+      "TEST ONLY: Reissue the three EXPIRED staging bulk offers to the SAME 3 fictional Volunteers? "+
+      "This does not reset accepted/declined tasks, touch test 001 or contact live responders."
+    ))return;
+    disable002();
+    const result=await api002("/api/admin/emergency-auto/e2e-002/bulk-reissue",{
+      method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({caseId:"STAGING_E2E_002",confirmExpiredBulkRetry:true})
+    });
+    await refresh002();
+    show002("FICTIONAL BULK OFFERS REISSUED\n"+
+      "Wave: "+String(result.wave)+"\n"+
+      "New task offers: "+String(result.offered)+"\n"+
+      "Retry: "+String(result.retryNumber)+"\n"+
+      "3-minute deadline refreshed. Open the staging Volunteer portal NOW and Accept.");
+  }catch(error){
+    show002("Fictional bulk reissue blocked: "+String(error?.message||"unknown"));
+    try{await refresh002();}catch{}
+  }
+});
+el002("bulk-offer-002").addEventListener("click",async()=>{
+  if(!stagingActivationReady)return show002("Approved isolated staging Admin required.");
+  try{
+    const preview=await api002("/api/admin/emergency-auto/e2e-002/bulk-preview");
+    if(preview.status!=="offer_all"||preview.eligibleInSelectedWave<1)
+      return show002("No safe eligible wave for batch: "+String(preview.status));
+    if(!window.confirm(
+      "TEST ONLY: Send an automatic Volunteer offer to ALL "+
+      preview.eligibleInSelectedWave+" eligible approved Volunteers in Wave "+
+      preview.wave+"? Every Volunteer must independently Accept/Decline. "+
+      "Existing 001 and production reports are unaffected."
+    ))return;
+    disable002();
+    const result=await api002("/api/admin/emergency-auto/e2e-002/bulk-send",{
+      method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({caseId:"STAGING_E2E_002",confirmAllEligibleTestOffers:true})
+    });
+    show002("Fictional wave "+result.wave+": "+
+      result.offered+" individual task offers written atomically. "+
+      "Open the separate staging Volunteer page and select bulk test 002.");
+  }catch(error){show002("Bulk send blocked: "+String(error?.message||"unknown"));}
+  finally{try{await refresh002();}catch{}}
+});
+el002("create-002").addEventListener("click",()=>do002("create",
+  "Create a NEW, explicitly fictional STAGING_E2E_002 report in isolated Firebase staging? It uses the already-approved staging test Resident, never real emergency data."));
+el002("validate-002").addEventListener("click",()=>do002("validate",
+  "Validate ONLY the fictional STAGING_E2E_002 report in staging? It does not validate a real emergency."));
+el002("offer-002").addEventListener("click",()=>do002("offer",
+  "Send ONE synthetic task offer for STAGING_E2E_002 only to an eligible, approved staging Volunteer? This does not contact official responders."));
+el002("reissue-002").addEventListener("click",()=>do002("reissue",
+  "Reissue ONLY an expired or declined FICTIONAL E2E 002 offer? Accepted tasks are protected and cannot be reset."));
+el002("verify-002").addEventListener("click",async()=>{
+  try{
+    const d=await api002("/api/admin/emergency-auto/verify-test?caseId=STAGING_E2E_002");
+    show002("Read-only 002 acceptance review\n"+
+      "Assignment: "+String(d.assignmentStatus||d.status||"unknown")+"\n"+
+      "Session: "+String(d.sessionStatus||"unknown")+"\n"+
+      "Responder lock: "+Boolean(d.acceptedResponderLockCorrect)+"\n"+
+      "Resident notification: "+Boolean(d.acceptedResidentNotificationPresent)+"\n"+
+      "Admin audit: "+Boolean(d.adminAuditCorrect)+"\n"+
+      "Original full acceptance verified: "+Boolean(d.fullAcceptanceVerified));
+  }catch(error){show002("002 verification unavailable: "+String(error?.message||"unknown").slice(0,150));}
+});
+
+const reconcileTest=document.getElementById("reconcile-test");
+let stagingActivationReady=false;
+async function refreshFixturePreflight({silent=false}={}) {
+  if(!auth.currentUser)throw new Error("Sign in as staging Admin first.");
+  const token=await auth.currentUser.getIdToken();
+  const r=await fetch("/api/admin/emergency-auto/preflight",{
+    headers:{Authorization:"Bearer "+token},cache:"no-store"
+  });
+  const data=await r.json();
+  if(!r.ok)throw new Error("Preflight unavailable: "+String(data.error||r.status));
+  startTest.disabled=!(stagingActivationReady && data.status==="ready");
+  reconcileTest.disabled=!(stagingActivationReady && data.status==="existing_assignment");
+  if(!silent)report("Read-only staging dummy report preflight\n"+
+    "Eligibility: "+String(data.status||"unknown")+"\n"+
+    "Reason: "+String(data.reason||"none")+"\n"+
+    "Invalid fields (names only): "+(data.invalidFields?.join(", ")||"none")+"\n"+
+    "Matching wave: "+String(data.wave||"not confirmed")+"\n"+
+    "Only the fictional staging case was read. No database changes.");
+  return data;
+}
+prepareTest.addEventListener("click",async()=>{
+  if(!auth.currentUser)return report("Sign in as approved staging Admin first.");
+  if(!window.confirm("Change ONLY the status of the fixed fictional STAGING_TEST_001 report from reported to validated, if no assignments exist? This affects isolated staging Firestore only."))return;
+  prepareTest.disabled=true;startTest.disabled=true;
+  try{
+    const token=await auth.currentUser.getIdToken();
+    const response=await fetch("/api/admin/emergency-auto/prepare-test-status",{
+      method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+token},
+      body:JSON.stringify({caseId:"STAGING_TEST_001"}),cache:"no-store"
+    });
+    const data=await response.json();
+    if(!response.ok)throw new Error("Preparation rejected: "+String(data.reason||data.error||response.status));
+    await refreshFixturePreflight();
+  }catch(error){report(String(error?.message||"Staging preparation unavailable").slice(0,220));}
+  finally{prepareTest.disabled=false;}
+});
+fixtureCheck.addEventListener("click",async()=>{
+  fixtureCheck.disabled=true;startTest.disabled=true;
+  try{await refreshFixturePreflight(); }
+  catch(error){report(String(error?.message||"Preflight unavailable").slice(0,200));}
+  finally{fixtureCheck.disabled=false;}
+});
+reconcileTest.addEventListener("click",async()=>{
+  if(!auth.currentUser)return report("Sign in as approved staging Admin first.");
+  reconcileTest.disabled=true;
+  try{
+    const token=await auth.currentUser.getIdToken();
+    // Read-only consistency check before asking for a write confirmation.
+    const reviewResponse=await fetch("/api/admin/emergency-auto/verify-test",{
+      headers:{Authorization:"Bearer "+token},cache:"no-store"
+    });
+    const check=await reviewResponse.json();
+    if(!reviewResponse.ok || check.assignmentStatus!=="accepted" ||
+       check.sessionStatus!=="accepted" ||
+       !check.acceptedResponderLockCorrect ||
+       !check.acceptedCaseStatusCorrect ||
+       !check.initialOfferNotificationPresent || !check.reservationPresent)
+      throw new Error("Accepted test evidence is incomplete; read-only Admin review required.");
+    if(check.fullAcceptanceVerified || check.supportRecordsVerified)
+      return report("The fictional staging support records are already consistent; no write needed.");
+    if(!window.confirm(
+      "This will create MISSING resident notification and/or Admin QA audit for the previously ACCEPTED fictional STAGING_TEST_001 task. New records will be timestamped NOW and explicitly marked as LATE reconciliation, not as the original Volunteer acceptance. Continue?"
+    ))return report("Late staging reconciliation canceled; no records changed.");
+    const response=await fetch("/api/admin/emergency-auto/reconcile-accepted-test",{
+      method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+token},
+      body:JSON.stringify({caseId:"STAGING_TEST_001",confirmLateReconciliation:true}),
+      cache:"no-store"
+    });
+    const data=await response.json();
+    if(!response.ok)throw new Error("Reconciliation blocked: "+String(data.reason||data.error||response.status));
+    const statusResponse=await fetch("/api/admin/emergency-auto/verify-test",{
+      headers:{Authorization:"Bearer "+token},cache:"no-store"
+    });
+    const verified=await statusResponse.json();
+    report("Late staging QA: "+String(data.status)+"\n"+
+      "New Resident notification: "+(data.createdNotification?"YES":"not needed")+"\n"+
+      "New Admin reconciliation audit: "+(data.createdAudit?"YES":"not needed")+"\n"+
+      "Support records consistent: "+(verified.supportRecordsVerified?"YES":"NO")+"\n"+
+      "Original end-to-end acceptance fully proven: "+(verified.fullAcceptanceVerified?"YES":"NO")+"\n"+
+      "These records are explicitly timestamped at reconciliation, never backdated.");
+  }catch(error){report(String(error?.message||"Staging reconciliation unavailable").slice(0,250));}
+  finally{reconcileTest.disabled=false;}
+});
+verifyTest.addEventListener("click",async()=>{
+  if(!auth.currentUser)return report("Sign in as staging Admin first.");
+  verifyTest.disabled=true;
+  try {
+    const token=await auth.currentUser.getIdToken();
+    const response=await fetch("/api/admin/emergency-auto/verify-test",{
+      headers:{Authorization:"Bearer "+token},cache:"no-store"
+    });
+    const result=await response.json();
+    if(!response.ok)throw new Error("Verification unavailable: "+String(result.error||response.status));
+    const yes=v=>v?"OK":"MISSING";
+    report(
+      "Read-only staging consistency check — STAGING_TEST_001\n"+
+      "Assignment: "+String(result.assignmentStatus||result.status)+"\n"+
+      "Session: "+String(result.sessionStatus||"unknown")+"\n"+
+      "Responder lock: "+yes(result.acceptedResponderLockCorrect)+"\n"+
+      "Case accepted status: "+yes(result.acceptedCaseStatusCorrect)+"\n"+
+      "Initial Volunteer offer notification: "+yes(result.initialOfferNotificationPresent)+"\n"+
+      "Resident acceptance notification: "+yes(result.acceptedResidentNotificationPresent)+"\n"+
+      "Admin audit: "+yes(result.adminAuditPresent)+"\n"+
+      "Support records consistent: "+yes(result.supportRecordsVerified)+"\n"+
+      "Late QA reconciliation recorded: "+yes(result.reconciliationRecorded)+"\n"+
+      "Original acceptance fully verified: "+yes(result.fullAcceptanceVerified)+"\n"+
+      "Only isolated staging data was read. No database records changed."
+    );
+  }catch(error){report(String(error?.message||"Test review unavailable").slice(0,220));}
+  finally{verifyTest.disabled=false;}
+});
+reissueTest.addEventListener("click",async()=>{
+  if(!auth.currentUser)return report("Sign in as the staging Admin first.");
+  if(!window.confirm("Reissue the expired or declined FICTIONAL STAGING_TEST_001 offer in staging only? Accepted tasks cannot be reset."))return;
+  reissueTest.disabled=true;startTest.disabled=true;
+  report("Checking the expired test case and creating a fresh offer...");
+  try{
+    const token=await auth.currentUser.getIdToken();
+    const response=await fetch("/api/admin/emergency-auto/reissue-test",{
+      method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+token},
+      body:JSON.stringify({caseId:"STAGING_TEST_001"}),cache:"no-store"
+    });
+    const data=await response.json();
+    if(!response.ok)throw new Error("Reissue rejected: "+String(data.error||response.status));
+    report("Fresh staging offer: "+String(data.action||"unknown")+
+      "\nTest case: STAGING_TEST_001\nOpen /staging-volunteer and sign in as the Volunteer within 3 minutes.");
+  }catch(error){report(String(error?.message||"Test reissue unavailable").slice(0,200));}
+  finally{reissueTest.disabled=false;startTest.disabled=false;}
+});
+startTest.addEventListener("click",async()=>{
+  if(!auth.currentUser)return report("Sign in as the staging Admin first.");
+  if(!window.confirm("Send ONE test-only Volunteer task offer for STAGING_TEST_001 in the isolated staging database?"))return;
+  startTest.disabled=true;
+  report("Requesting the single staged test offer…");
+  try {
+    const token=await auth.currentUser.getIdToken();
+    const response=await fetch("/api/admin/emergency-auto/start",{
+      method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+token},
+      body:JSON.stringify({caseId:"STAGING_TEST_001"}),
+      cache:"no-store"
+    });
+    const data=await response.json();
+    if(!response.ok)throw new Error("Test request rejected: "+(data.error||response.status));
+    report("Controlled staging task offer result: "+String(data.action||"unknown")+"\n"+
+      "Test case: STAGING_TEST_001\n"+
+      "Matching wave: "+String(data.wave||"previously active / none")+"\n"+
+      "No production case or official emergency responder contacted.");
+  } catch(err){
+    report("Test offer not completed: "+String(err?.message||"unknown").slice(0,180));
+  } finally {startTest.disabled=true; /* Re-check fixture before another test offer. */}
+});
+const report=x=>{result.textContent=x;};
+document.getElementById("login").addEventListener("submit",async(e)=>{
+  e.preventDefault();submit.disabled=true;report("Checking staging credentials...");
+  try{
+    await setPersistence(auth,inMemoryPersistence);
+    const session=await signInWithEmailAndPassword(auth,document.getElementById("email").value.trim(),passwordInput.value);
+    passwordInput.value="";
+    if(auth.app?.options?.projectId!=="volunserve-volunteer-staging")
+      throw new Error("Wrong Firebase project. Stopping.");
+    const token=await session.user.getIdToken();
+    const r=await fetch("/api/admin/emergency-auto/status",{
+      headers:{Authorization:"Bearer "+token},cache:"no-store"
+    });
+    const data=await r.json();
+    if(!r.ok)throw new Error(r.status===403?
+      "Staging account is not an approved Admin in Firestore.":
+      r.status===401?"Staging session could not be validated by Render.":
+      "Authorization check returned HTTP "+r.status);
+    const health=await (await fetch("/health",{cache:"no-store"})).json();
+    stagingActivationReady=data.activationReady===true &&
+      health.stagingServiceAccountMatches===true &&
+      health.stagingFirestoreReadStatus==="verified";
+    fixtureCheck.disabled=health.stagingServiceAccountMatches!==true;
+    prepareTest.disabled=!stagingActivationReady;
+    // Fresh authenticated preflight, not the one-time startup /health cache.
+    const preflight=await refreshFixturePreflight({silent:true});
+    // Reissue remains available after the existing 3-minute test offer expires.
+    // Startup preflight is not re-run whenever an offer changes case status.
+    reissueTest.disabled=!(data.activationReady===true &&
+      health.stagingServiceAccountMatches===true &&
+      health.stagingFirestoreReadStatus==="verified");
+    verifyTest.disabled=health.stagingServiceAccountMatches!==true;
+    await refresh002();
+    report("Admin authentication: VERIFIED\n"+
+      "Staging backend: "+(health.ok?"ONLINE":"UNAVAILABLE")+"\n"+
+      "Firestore read: "+String(health.stagingFirestoreReadStatus||"unknown")+"\n"+
+      "Test report eligibility: "+String(preflight.status||"unknown")+"\n"+
+      "Preflight reason: "+String(preflight.reason||"none")+"\n"+
+      "Invalid test fields: "+(preflight.invalidFields?.join(", ")||"none")+"\n"+
+      "First matching wave: "+String(preflight.wave||"not confirmed")+"\n"+
+      "Actual Volunteer task offers: "+(data.activationReady?"staging gate enabled":"DISABLED (safe)"));
+  }catch(error){
+    passwordInput.value="";
+    const code=String(error?.code||"");
+    const safeMessage=code.includes("auth/")?"Firebase login failed. Check the staging email/password.":
+      String(error?.message||"Unexpected error");
+    report("Not verified: "+safeMessage);
+  }finally{submit.disabled=false;}
+});
+document.getElementById("logout").addEventListener("click",async()=>{
+  await signOut(auth);stagingActivationReady=false;disable002();fixtureCheck.disabled=true;prepareTest.disabled=true;reconcileTest.disabled=true;startTest.disabled=true;reissueTest.disabled=true;verifyTest.disabled=true;passwordInput.value="";report("Signed out of staging.");
+});
+</script>
+</body>
+</html>

@@ -1,5 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { Redirect, useRouter } from "expo-router";
+import { getAuth } from "firebase/auth";
 import {
   collection,
   doc,
@@ -27,6 +28,7 @@ import {
 } from "react-native";
 
 import { db } from "../../lib/firebase";
+import { isStagingBulkAssignment, respondToStagingBulkOffer } from "../../lib/stagingBulkVolunteerClient";
 import {
   activeModeForProfile,
   hasVolunteerAccess,
@@ -52,6 +54,9 @@ type ResponseAssignment = {
   volunteerName?: string;
   status?: AssignmentStatus;
   createdBy?: string;
+  offerMode?: string;
+  wave?: number;
+  expiresAtMs?: number;
   createdAt?: any;
   updatedAt?: any;
   responseStartedAt?: any;
@@ -526,6 +531,38 @@ export default function VolunteerTasks() {
       return;
     }
 
+    // Bulk staging offers require server-owned reservation, response lock
+    // and audit writes. Never fall through to a client Firestore transaction.
+    if (isStagingBulkAssignment(assignment)) {
+      try {
+        setBusyId(assignment.id);
+        setError("");
+        if (next !== "accepted" && next !== "declined") {
+          throw new Error("Fictional staging tasks only support Accept/Decline. Live response tracking remains disabled.");
+        }
+        const auth = getAuth();
+        const signedIn = auth.currentUser;
+        if (!signedIn || signedIn.uid !== user.uid) {
+          throw new Error("Sign in with your staging Volunteer test account.");
+        }
+        await respondToStagingBulkOffer(
+          assignment, next, user.uid, String(auth.app.options.projectId || ""), signedIn,
+        );
+        Alert.alert(
+          next === "accepted" ? "Fictional Offer Accepted" : "Fictional Offer Declined",
+          "Saved by the isolated staging server. No real emergency response was started.",
+        );
+        if (next === "accepted") setFilter("active");
+      } catch (problem) {
+        const message = problem instanceof Error ? problem.message : "Staging response unavailable.";
+        setError(message);
+        Alert.alert("Staging Test", message);
+      } finally {
+        setBusyId("");
+      }
+      return;
+    }
+
     const allowedPrevious:
       Record<string, string> = {
         accepted: "offered",
@@ -700,6 +737,23 @@ export default function VolunteerTasks() {
             }
           }
 
+          // A single responder lock is shared by web and Android. Firebase rules
+          // verify that the lock targets the accepted assignment atomically.
+          const responderLockRef = doc(db, "responderLocks", user.uid);
+          const responderLockSnapshot = await transaction.get(responderLockRef);
+          const recordedLock = responderLockSnapshot.exists()
+            ? (responderLockSnapshot.data() as { assignmentId?: string })
+            : null;
+          if (next === "accepted" && recordedLock) {
+            throw new Error(
+              "You already have an active emergency task. Complete or cancel it before accepting another."
+            );
+          }
+          if (["responding", "on_site", "completed"].includes(next) &&
+              recordedLock && recordedLock.assignmentId !== assignment.id) {
+            throw new Error("Another emergency has an active responder lock on this account.");
+          }
+
           if (next === "completed") {
             if (!caseId || !caseData) {
               throw new Error(
@@ -767,6 +821,23 @@ export default function VolunteerTasks() {
             assignmentRef,
             patch
           );
+
+          if (next === "accepted") {
+            transaction.set(responderLockRef, {
+              responderUid: user.uid,
+              assignmentId: assignment.id,
+              caseId,
+              status: "accepted",
+              updatedAt: serverTimestamp(),
+            });
+          } else if ((next === "responding" || next === "on_site") && recordedLock) {
+            transaction.update(responderLockRef, {
+              status: next,
+              updatedAt: serverTimestamp(),
+            });
+          } else if (next === "completed" && recordedLock) {
+            transaction.delete(responderLockRef);
+          }
 
           if (
             next === "completed" &&
@@ -1420,6 +1491,12 @@ export default function VolunteerTasks() {
                     </View>
                   </View>
 
+                  {isStagingBulkAssignment(assignment) && (
+                    <Text style={styles.metaLabel}>
+                      FICTIONAL STAGING OFFER · Wave {assignment.wave || "?"} · Accept/Decline only
+                    </Text>
+                  )}
+
                   {status ===
                     "offered" && (
                     <View
@@ -1495,7 +1572,7 @@ export default function VolunteerTasks() {
                   )}
 
                   {status ===
-                    "accepted" && (
+                    "accepted" && !isStagingBulkAssignment(assignment) && (
                     <TouchableOpacity
                       style={[
                         styles.responseButton,
@@ -1527,7 +1604,7 @@ export default function VolunteerTasks() {
                   )}
 
                   {status ===
-                    "responding" && (
+                    "responding" && !isStagingBulkAssignment(assignment) && (
                     <TouchableOpacity
                       style={[
                         styles.arrivalButton,
@@ -1559,7 +1636,7 @@ export default function VolunteerTasks() {
                   )}
 
                   {status ===
-                    "on_site" && (
+                    "on_site" && !isStagingBulkAssignment(assignment) && (
                     <TouchableOpacity
                       style={
                         styles.completeButton
@@ -1599,7 +1676,7 @@ export default function VolunteerTasks() {
 
                   {ACTIVE_STATUSES.includes(
                     status
-                  ) && (
+                  ) && !isStagingBulkAssignment(assignment) && (
                     <TouchableOpacity
                       style={
                         styles.mapButton

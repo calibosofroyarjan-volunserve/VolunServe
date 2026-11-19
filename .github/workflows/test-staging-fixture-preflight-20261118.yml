@@ -1,0 +1,50 @@
+name: Isolated staging fixture preflight diagnostics — NO DEPLOY
+
+on:
+  pull_request:
+    branches:
+      - feat/emergency-auto-dispatch-server-staging-20261115
+    paths:
+      - "backend/emergencyStagingReadiness.js"
+      - "backend/emergencyAutoDispatchStagingServer.js"
+      - "backend/stagingAdminLogin.html"
+      - "backend/test-emergencyAutoDispatchStagingServer.cjs"
+      - "backend/test-stagingFreshEndToEnd.cjs"
+      - "backend/stagingFreshCase002.js"
+      - "backend/stagingVolunteerTask.js"
+      - "backend/stagingVolunteerLogin.html"
+      - ".github/workflows/test-staging-fixture-preflight-20261118.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  isolated-staging-tests:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      CI: "true"
+    steps:
+      - name: Checkout PR source without production credentials
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+      - name: Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install backend-only locked dependencies
+        run: npm ci --prefix backend --no-audit --no-fund
+      - name: Syntax-check staging-only service and preflight
+        run: |
+          node --check backend/emergencyAutoDispatchStagingServer.js
+          node --check backend/emergencyStagingReadiness.js
+      - name: Run isolated backend tests and new Admin preflight checks
+        run: node --test backend/test-emergencyAutoDispatchWorker.cjs backend/test-emergencyAutoDispatchStagingServer.cjs
+      - name: Preserve existing matching and responder-lock regressions
+        run: |
+          node scripts/test-automatic-emergency-dispatch-20261115.cjs
+          node scripts/test-automatic-volunteer-responder-lock-20261115.cjs
+      - name: Ensure no deploy or Firestore credentials
+        run: echo "NO DEPLOY, NO FIRESTORE WRITES, NO PRODUCTION ENVIRONMENT"

@@ -4,6 +4,7 @@ const {getFirestore, FieldValue} = require("firebase-admin/firestore");
 const {setGlobalOptions} = require("firebase-functions");
 const {onCall, HttpsError} = require("firebase-functions/https");
 const {onDocumentCreated, onDocumentUpdated} = require("firebase-functions/v2/firestore");
+const {onSchedule} = require("firebase-functions/v2/scheduler");
 const {defineSecret} = require("firebase-functions/params");
 const logger = require("firebase-functions/logger");
 
@@ -2732,3 +2733,92 @@ exports.deliverAndroidPushForNotification = onDocumentCreated(
       }
     },
 );
+
+
+// Emergency Volunteer dispatch is opt-in and disabled unless a reviewed,
+// reliable Cloud Functions deployment explicitly enables the feature. This
+// never dispatches police, ambulances, fire departments or official responders.
+if (process.env.VOLUNSERVE_AUTO_VOLUNTEER_DISPATCH_ENABLED === "true") {
+  const {createEngine} = require("./emergencyAutoDispatchCore");
+  const getEngine = () => createEngine({db: getFirestore(), log: logger});
+
+  exports.autoVolunteerOfferAfterValidation = onDocumentUpdated({
+    document: "disasterCases/{caseId}", retry: true, maxInstances: 2,
+    timeoutSeconds: 120,
+  }, async (event) => {
+    const before = event.data?.before.data() || {};
+    const after = event.data?.after.data() || {};
+    // Only a new, explicit Admin validation initiates automatic Volunteer
+    // coordination. Existing historical cases cannot be auto-dispatched.
+    if (before.verificationStatus === "validated" ||
+        after.verificationStatus !== "validated" ||
+        after.status !== "validated" || after.dispatchBlocked === true) return;
+    const result = await getEngine().advanceCase(event.params.caseId);
+    logger.info("Automatic Volunteer matching after validation", {
+      caseId: event.params.caseId, action: result.action,
+    });
+  });
+
+  exports.autoVolunteerMatchAfterResponse = onDocumentUpdated({
+    document: "responseAssignments/{assignmentId}", retry: true,
+    maxInstances: 2, timeoutSeconds: 120,
+  }, async (event) => {
+    const before = event.data?.before.data() || {};
+    const after = event.data?.after.data() || {};
+    if (before.status === after.status || !after.caseId) return;
+    await getEngine().onAssignmentChanged(event.params.assignmentId, before, after);
+  });
+
+  async function requireMatchingAdmin(request) {
+    const uid = request.auth?.uid;
+    if (!uid) throw new HttpsError("unauthenticated", "Sign in as an approved Admin");
+    const snap = await getFirestore().collection("users").doc(uid).get();
+    const profile = snap.data() || {};
+    if (!snap.exists || profile.role !== "admin" ||
+        profile.status !== "approved" ||
+        profile.adminStatus === "suspended") {
+      throw new HttpsError("permission-denied", "An approved operational Admin is required");
+    }
+    return uid;
+  }
+  exports.startAutomaticEmergencyVolunteerMatching = onCall({
+    maxInstances: 2, timeoutSeconds: 120, enforceAppCheck: false,
+  }, async (request) => {
+    await requireMatchingAdmin(request);
+    const caseId = String(request.data?.caseId || "").trim();
+    if (!/^[A-Za-z0-9_-]{1,160}$/.test(caseId)) {
+      throw new HttpsError("invalid-argument", "A valid emergency case ID is required");
+    }
+    try {
+      return await getEngine().requestAdminStart(caseId);
+    } catch (error) {
+      logger.warn("Admin-started matching was blocked", {caseId, reason:String(error.message)});
+      throw new HttpsError("failed-precondition", String(error.message || "Matching cannot start"));
+    }
+  });
+  exports.disableAutomaticEmergencyVolunteerMatching = onCall({
+    maxInstances: 2, timeoutSeconds: 120, enforceAppCheck: false,
+  }, async (request) => {
+    await requireMatchingAdmin(request);
+    const caseId = String(request.data?.caseId || "").trim();
+    if (!/^[A-Za-z0-9_-]{1,160}$/.test(caseId)) {
+      throw new HttpsError("invalid-argument", "A valid emergency case ID is required");
+    }
+    try {
+      return await getEngine().disableCase(caseId);
+    } catch (error) {
+      logger.warn("Admin disable matching was blocked", {caseId, reason:String(error.message)});
+      throw new HttpsError("failed-precondition", String(error.message || "Matching cannot be disabled"));
+    }
+  });
+
+  // Durable Firestore state is the source of truth. No in-memory timers or
+  // browser polling are relied on for response deadlines or retry decisions.
+  exports.autoVolunteerOfferTimeoutSweep = onSchedule({
+    schedule: "every 1 minutes", retryCount: 1,
+    timeoutSeconds: 540, maxInstances: 1,
+  }, async () => {
+    const result = await getEngine().sweep();
+    if (result.due) logger.info("Emergency Volunteer deadline sweep", result);
+  });
+}

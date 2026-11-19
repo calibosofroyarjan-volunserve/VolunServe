@@ -1,6 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { Redirect, useRouter } from "expo-router";
+import { getAuth } from "firebase/auth";
 import {
   collection,
   doc,
@@ -24,6 +25,7 @@ import {
 } from "react-native";
 
 import { db } from "../../lib/firebase";
+import { isStagingBulkAssignment, respondToStagingBulkOffer } from "../../lib/stagingBulkVolunteerClient";
 import {
   activeModeForProfile,
   hasVolunteerAccess,
@@ -49,6 +51,9 @@ type ResponseAssignment = {
   volunteerName?: string;
   status?: AssignmentStatus;
   createdBy?: string;
+  offerMode?: string;
+  wave?: number;
+  expiresAtMs?: number;
   createdAt?: any;
   updatedAt?: any;
   responseStartedAt?: any;
@@ -481,6 +486,37 @@ export default function VolunteerTasksWeb() {
   ) => {
     if (!user || !profile || busyId) return;
 
+    // Staging batch offers are server-owned. NEVER use the legacy Firestore
+    // client transaction for them: the server owns reservations, responder
+    // locks, acceptance audit and geographic wave advancement.
+    if (isStagingBulkAssignment(assignment)) {
+      try {
+        setBusyId(assignment.id);
+        setError("");
+        if (next !== "accepted" && next !== "declined") {
+          throw new Error("Fictional staging tasks only support Accept/Decline. Live response tracking remains disabled.");
+        }
+        const auth = getAuth();
+        const signedIn = auth.currentUser;
+        if (!signedIn || signedIn.uid !== user.uid) {
+          throw new Error("Sign in with your staging Volunteer test account.");
+        }
+        await respondToStagingBulkOffer(
+          assignment, next, user.uid, String(auth.app.options.projectId || ""), signedIn,
+        );
+        showMessage(
+          next === "accepted" ? "Fictional offer accepted" : "Fictional offer declined",
+          "Saved by the isolated staging server. No real emergency response was started.",
+        );
+        if (next === "accepted") setFilter("active");
+      } catch (problem) {
+        setError(problem instanceof Error ? problem.message : "Staging response unavailable.");
+      } finally {
+        setBusyId("");
+      }
+      return;
+    }
+
     const allowedPrevious: Record<string, string> = {
       accepted: "offered",
       declined: "offered",
@@ -574,7 +610,24 @@ export default function VolunteerTasksWeb() {
           }
         }
 
-        if (next === "completed") {
+        // A single responder lock is shared by web and Android. Firebase rules
+          // verify that the lock targets the accepted assignment atomically.
+          const responderLockRef = doc(db, "responderLocks", user.uid);
+          const responderLockSnapshot = await transaction.get(responderLockRef);
+          const recordedLock = responderLockSnapshot.exists()
+            ? (responderLockSnapshot.data() as { assignmentId?: string })
+            : null;
+          if (next === "accepted" && recordedLock) {
+            throw new Error(
+              "You already have an active emergency task. Complete or cancel it before accepting another."
+            );
+          }
+          if (["responding", "on_site", "completed"].includes(next) &&
+              recordedLock && recordedLock.assignmentId !== assignment.id) {
+            throw new Error("Another emergency has an active responder lock on this account.");
+          }
+
+          if (next === "completed") {
           if (!caseId || !caseData) {
             throw new Error(
               "The linked emergency case could not be loaded. The field report cannot be submitted.",
@@ -613,6 +666,23 @@ export default function VolunteerTasksWeb() {
         }
 
         transaction.update(assignmentRef, patch);
+
+          if (next === "accepted") {
+            transaction.set(responderLockRef, {
+              responderUid: user.uid,
+              assignmentId: assignment.id,
+              caseId,
+              status: "accepted",
+              updatedAt: serverTimestamp(),
+            });
+          } else if ((next === "responding" || next === "on_site") && recordedLock) {
+            transaction.update(responderLockRef, {
+              status: next,
+              updatedAt: serverTimestamp(),
+            });
+          } else if (next === "completed" && recordedLock) {
+            transaction.delete(responderLockRef);
+          }
 
         if (next === "completed" && caseId && caseData) {
           const volunteerName =
@@ -1056,6 +1126,9 @@ export default function VolunteerTasksWeb() {
                 </View>
 
                 <View style={[styles.actionsColumn, compact && styles.actionsColumnCompact, mobile && styles.actionsColumnMobile]}>
+                  {isStagingBulkAssignment(assignment) && (
+                    <Text style={styles.metaLabel}>FICTIONAL STAGING OFFER · Wave {assignment.wave || "?"} · Accept/Decline only</Text>
+                  )}
                   {offered && (
                     <>
                       <TouchableOpacity
@@ -1086,7 +1159,7 @@ export default function VolunteerTasksWeb() {
                     </>
                   )}
 
-                  {status === "accepted" && (
+                  {status === "accepted" && !isStagingBulkAssignment(assignment) && (
                     <TouchableOpacity
                       style={[styles.responseButton, busy && styles.buttonDisabled]}
                       disabled={busy}
@@ -1098,7 +1171,7 @@ export default function VolunteerTasksWeb() {
                     </TouchableOpacity>
                   )}
 
-                  {status === "responding" && (
+                  {status === "responding" && !isStagingBulkAssignment(assignment) && (
                     <TouchableOpacity
                       style={[styles.arrivalButton, busy && styles.buttonDisabled]}
                       disabled={busy}
@@ -1110,7 +1183,7 @@ export default function VolunteerTasksWeb() {
                     </TouchableOpacity>
                   )}
 
-                  {status === "on_site" && (
+                  {status === "on_site" && !isStagingBulkAssignment(assignment) && (
                     <TouchableOpacity
                       style={styles.completeButton}
                       onPress={() => {
@@ -1132,7 +1205,7 @@ export default function VolunteerTasksWeb() {
                     </TouchableOpacity>
                   )}
 
-                  {active && (
+                  {active && !isStagingBulkAssignment(assignment) && (
                     <TouchableOpacity
                       style={styles.openMissionButton}
                       onPress={() => openLiveMap(assignment)}

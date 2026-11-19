@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>VolunServe · Staging Volunteer Tasks</title>
+<style>
+:root{font:15px/1.55 system-ui,-apple-system,Segoe UI,sans-serif;background:#f4f8f7;color:#123b32}
+*{box-sizing:border-box}body{margin:0}.wrap{max-width:710px;margin:36px auto;padding:0 18px}
+header{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.brand{font-size:22px;font-weight:800;color:#087254}.tag{border:1px solid #c3e7d9;background:#e9f8f0;color:#075c45;padding:6px 12px;border-radius:99px;font-size:12px;font-weight:750}
+main{background:#fff;border-radius:18px;border:1px solid #d7e8e0;padding:27px;margin-top:22px;box-shadow:0 5px 23px #193b2c09}
+h1{font-size:25px;margin:0 0 8px}h2{font-size:18px;margin:25px 0 10px}p{color:#526962;margin:8px 0 15px}
+.notice{border:1px solid #efd6a5;background:#fff9e9;color:#6a541f;padding:11px 13px;border-radius:9px;font-size:13px}
+label{display:block;font-weight:700;font-size:13px;margin:14px 0 5px}
+input{border:1px solid #c5ddd2;border-radius:9px;padding:11px 12px;font:inherit;width:100%;height:45px}
+input:focus-visible,button:focus-visible,a:focus-visible{outline:3px solid #4ab995;outline-offset:2px}
+button{border:0;border-radius:9px;padding:11px 15px;font:inherit;font-size:14px;font-weight:750;background:#087654;color:white;cursor:pointer}
+button:disabled{opacity:.5;cursor:not-allowed}.secondary{background:#edf5f0;color:#1a5947}.danger{background:#9b473f}
+.controls{display:flex;gap:9px;margin-top:17px;flex-wrap:wrap}.status{background:#f3f8f5;border:1px solid #dbece4;border-radius:10px;margin-top:15px;padding:15px;white-space:pre-line;overflow-wrap:anywhere;min-height:80px}
+.panel{border:1px solid #dae8e1;border-radius:12px;padding:17px;margin-top:17px}
+.small{color:#667a71;font-size:12px}a{color:#08654a}#task{display:none}
+</style></head>
+<body><div class="wrap"><header><strong class="brand">VolunServe</strong><span class="tag">STAGING VOLUNTEER · FREE</span></header>
+<main><h1>Volunteer Task Acceptance</h1>
+<p>Sign in using <strong>Devin's staging Volunteer test account</strong>. This is separate from the Admin login.</p>
+<div class="notice"><strong>Fictional test only.</strong> Only the fixed fictional STAGING_TEST_001 and STAGING_E2E_002 reports are supported. Never use this for a real emergency or on production.</div>
+<form id="signin">
+<label for="email">Staging Volunteer email</label>
+<input id="email" type="email" required autocomplete="username" placeholder="Volunteer test email">
+<label for="password">Password</label>
+<input id="password" type="password" required autocomplete="current-password" placeholder="Staging password">
+<div class="controls"><button type="submit" id="login">Sign in &amp; view my offer</button>
+<button type="button" class="secondary" id="logout">Sign out</button></div>
+</form>
+<label for="case-select">Choose the fictional staging case</label>
+<select id="case-select" style="border:1px solid #c5ddd2;border-radius:9px;padding:11px 12px;font:inherit;width:100%;height:45px">
+<option value="STAGING_E2E_002_BULK" selected>Fresh E2E 002 — ALL eligible Volunteer offers</option>
+<option value="STAGING_E2E_002">Fresh E2E 002 — legacy single-offer test</option>
+<option value="STAGING_TEST_001">Previous test 001 — already accepted</option>
+</select>
+<section id="task" class="panel">
+<h2 style="margin-top:0">My dummy Emergency assignment</h2>
+<div id="taskDetails">Waiting for verification.</div>
+<div class="controls">
+<button type="button" id="accept" disabled>Accept Test Offer</button>
+<button type="button" class="danger" id="decline" disabled>Decline Test Offer</button>
+<button type="button" class="secondary" id="refresh">Refresh Status</button>
+</div>
+<p class="small">Offers expire after 3 minutes. If it expires, your staging Admin can safely reissue a new fictional offer. Do not change Firestore manually.</p>
+</section>
+<h2>Verification result</h2>
+<div id="result" class="status" role="status" aria-live="polite">Not signed in.</div>
+<p class="small">Powered by isolated Firebase Authentication and Render staging only. <a href="/staging-login">Admin test and reissue</a> · <a href="/health">Backend health</a></p>
+</main></div>
+<script type="module">
+import {initializeApp} from "https://www.gstatic.com/firebasejs/11.10.0/firebase-app.js";
+import {getAuth,signInWithEmailAndPassword,signOut,setPersistence,inMemoryPersistence} from "https://www.gstatic.com/firebasejs/11.10.0/firebase-auth.js";
+const config={
+  apiKey:"AIzaSyCGS-VySgPPEcqgKH0tBqQCZX_YYhJFuuM",
+  authDomain:"volunserve-volunteer-staging.firebaseapp.com",
+  projectId:"volunserve-volunteer-staging",
+  appId:"1:310291888299:web:de6c284904657b0bed9fee",
+  messagingSenderId:"310291888299"
+};
+const auth=getAuth(initializeApp(config,"staging-volunteer-only"));
+const el=(id)=>document.getElementById(id);
+const show=text=>{el("result").textContent=text;};
+const setOfferEnabled=(enabled)=>{
+  el("accept").disabled=!enabled;el("decline").disabled=!enabled;
+};
+const safeMessage=(error)=>{
+  if(String(error?.code||"").startsWith("auth/"))return "Volunteer login failed. Check the staging account email/password.";
+  return String(error?.message||"Unexpected staging error").slice(0,180);
+};
+async function request(endpoint,options={}){
+  const user=auth.currentUser;
+  if(!user)throw new Error("Sign in with the staging Volunteer account first.");
+  const token=await user.getIdToken();
+  const response=await fetch(endpoint,{
+    ...options,headers:{...(options.headers||{}),Authorization:"Bearer "+token},
+    cache:"no-store"
+  });
+  const data=await response.json();
+  if(!response.ok){
+    if(response.status===403)throw new Error("This is not an approved staging Volunteer account.");
+    if(response.status===401)throw new Error("Volunteer session expired; please sign in again.");
+    throw new Error("Staging request: "+String(data.error||data.status||response.status));
+  }
+  return data;
+}
+async function refresh(){
+  if(!auth.currentUser)return;
+  setOfferEnabled(false);
+  const caseId=el("case-select").value;
+  const isBulk=caseId==="STAGING_E2E_002_BULK";
+  const data=await request(isBulk?
+    "/api/staging/volunteer/e2e-002/bulk-task":
+    "/api/staging/volunteer/task?caseId="+encodeURIComponent(caseId));
+  el("task").style.display="block";
+  const label=data.status==="offered"?"Offered — awaiting your response":
+    data.status==="expired"?"Offer expired — ask Admin to reissue":
+    data.status==="accepted"?"Accepted — confirmed in Firebase":
+    data.status==="declined"?"Declined — confirmed in Firebase":
+    data.status==="not_offered"?"No active test offer yet":"Status: "+data.status;
+  let detail=caseId+"\n"+label;
+  if(data.expiresAt) detail+="\nOffer deadline: "+new Date(data.expiresAt).toLocaleString();
+  el("taskDetails").textContent=detail;
+  setOfferEnabled(data.canRespond===true);
+  show("Volunteer Firebase authentication: VERIFIED\nDummy assignment: "+label+
+    "\nProduction VolunServe: NOT CONNECTED");
+}
+el("signin").addEventListener("submit",async(event)=>{
+  event.preventDefault();el("login").disabled=true;setOfferEnabled(false);
+  show("Signing in to isolated Firebase staging...");
+  try{
+    await setPersistence(auth,inMemoryPersistence);
+    if(auth.app.options.projectId!=="volunserve-volunteer-staging")throw new Error("Wrong Firebase project");
+    await signInWithEmailAndPassword(auth,el("email").value.trim(),el("password").value);
+    el("password").value="";
+    await refresh();
+  }catch(error){el("password").value="";show("Not verified: "+safeMessage(error));}
+  finally{el("login").disabled=false;}
+});
+el("case-select").addEventListener("change",async()=>{
+  setOfferEnabled(false);
+  try{await refresh();}catch(error){show(safeMessage(error));}
+});
+el("refresh").addEventListener("click",async()=>{
+  try{await refresh();}catch(error){setOfferEnabled(false);show(safeMessage(error));}
+});
+async function respond(decision){
+  if(!auth.currentUser)return;
+  const caseId=el("case-select").value;
+  if(!window.confirm("Confirm "+(decision==="accepted"?"ACCEPT":"DECLINE")+" for the FICTIONAL "+caseId+" task only?"))return;
+  setOfferEnabled(false);show("Saving your "+decision+" decision in isolated staging...");
+  try{
+    const data=await request(caseId==="STAGING_E2E_002_BULK"?
+      "/api/staging/volunteer/e2e-002/bulk-respond":
+      "/api/staging/volunteer/respond",{
+      method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({decision,caseId})
+    });
+    show("Controlled staging decision: "+String(data.status).toUpperCase()+
+      "\nCase: "+caseId+"\nNo production report or actual emergency responder involved.");
+    await refresh();
+  }catch(error){show("Decision not saved: "+safeMessage(error)+"\nRefresh to view current status.");}
+}
+el("accept").addEventListener("click",()=>respond("accepted"));
+el("decline").addEventListener("click",()=>respond("declined"));
+el("logout").addEventListener("click",async()=>{
+  await signOut(auth);el("password").value="";el("task").style.display="none";
+  setOfferEnabled(false);show("Signed out of staging Volunteer account.");
+});
+</script></body></html>

@@ -1,0 +1,41 @@
+name: Staging E2E 002 expired 3-offer retry - NO DEPLOY
+on:
+  pull_request:
+    branches:
+      - feat/emergency-auto-dispatch-server-staging-20261115
+    paths:
+      - "backend/staging002ExpiredBulkRetry.js"
+      - "backend/stagingBulkVolunteerOffers.js"
+      - "backend/emergencyAutoDispatchStagingServer.js"
+      - "backend/stagingAdminLogin.html"
+      - "backend/test-staging002ExpiredBulkRetry.cjs"
+      - ".github/workflows/qa-staging-002-expired-bulk-retry-20261119.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  test-isolated-expired-bulk-retry:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install locked backend dependencies without lifecycle scripts
+        run: npm ci --prefix backend --ignore-scripts --no-audit --no-fund
+      - name: Check isolated recovery code syntax
+        run: |
+          node --check backend/staging002ExpiredBulkRetry.js
+          node --check backend/emergencyAutoDispatchStagingServer.js
+          node --check backend/stagingBulkVolunteerOffers.js
+      - name: Test expired-offer recovery, privacy, and no accepted-case reset
+        run: node --test backend/test-staging002ExpiredBulkRetry.cjs
+      - name: Check prior 001, 002 matching, responder locking and admin authentication
+        run: |
+          node --test backend/test-stagingFreshEndToEnd.cjs
+          node --test backend/test-staging002EligibilitySummary.cjs
+          node --test backend/test-staging002TestVolunteerProvisioning.cjs
+          node --test backend/test-staging002VolunteerAdminUI.cjs
+      - name: Confirm CI has no Firebase credentials and does not deploy
+        run: echo "Synthetic mocks only. No production or staging deployment."
