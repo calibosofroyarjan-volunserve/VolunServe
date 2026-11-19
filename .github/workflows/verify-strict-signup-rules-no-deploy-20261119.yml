@@ -49,19 +49,7 @@ jobs:
           assert(diff.every(x=>/^[AM]\t/.test(x)),'No deletes or renames allowed');
           const orig=cp.execFileSync('git',['show',base+':firestore.rules'],{encoding:'utf8'});
           const curr=require('node:fs').readFileSync('firestore.rules','utf8');
-          const additions=[
-            `        // New Resident profiles: exact Gmail/Yahoo only. Gmail requires a
-        // Google-linked identity rather than receive-only email verification.
-        && request.resource.data.email.matches('(?i)^[^@ ]+@(gmail|yahoo)[.]com$')
-        && (
-          request.resource.data.email.matches('(?i)^[^@ ]+@yahoo[.]com$')
-          || request.auth.token.get('firebase', {}).get('identities', {}).get('google.com', []).size() > 0
-        )
-`,
-            `        // New applicant profiles only; existing staff logins are untouched.
-        && request.resource.data.email.matches('(?i)^[^@ ]+@(gmail|yahoo)[.]com$')
-`,
-          ];
+          const additions=["        // New Resident profiles: exact Gmail/Yahoo only. Gmail requires a\n        // Google-linked identity rather than receive-only email verification.\n        && request.resource.data.email.matches('(?i)^[^@ ]+@(gmail|yahoo)[.]com$')\n        && (\n          request.resource.data.email.matches('(?i)^[^@ ]+@yahoo[.]com$')\n          || request.auth.token.get('firebase', {}).get('identities', {}).get('google.com', []).size() > 0\n        )\n","        // New applicant profiles only; existing staff logins are untouched.\n        && request.resource.data.email.matches('(?i)^[^@ ]+@(gmail|yahoo)[.]com$')\n"];
           let reconstructed=curr;
           for(const x of additions){
             assert(reconstructed.includes(x),'Missing reviewed additive rules predicate');
