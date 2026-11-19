@@ -12,15 +12,18 @@ const asyncMain=async()=>{
     const response=await page.goto(url,{waitUntil:"domcontentloaded",timeout:20000});
     assert(response && response.ok(),"QA fixture route not available: HTTP "+response?.status());
     await page.getByText("QA VISUAL FIXTURE", {exact:false}).first().waitFor({timeout:18000});
-    await page.waitForTimeout(1800);
+    await page.waitForTimeout(1300);
+    fs.mkdirSync("qa-artifacts",{recursive:true});
+    await page.screenshot({path:"qa-artifacts/assistance-four-panel-fixture.png",fullPage:true});
     const body=await page.locator("body").innerText();
+    console.log("QA_BROWSER_URL:",page.url());
+    console.log("QA_BROWSER_VISIBLE_TEXT:",body.slice(0,1500));
+    console.log("QA_BROWSER_ERRORS:",JSON.stringify(problems));
     for(const text of ["QA VISUAL FIXTURE","Assistance Requests","Request Information","Review Summary",
       "Choose Assistance","Publish Donation Campaign"]){
       assert(body.includes(text),"Missing actual UI component on preview: "+text);
     }
     assert.equal(problems.length,0,"Client-side render errors: "+problems.join(" | "));
-    fs.mkdirSync("qa-artifacts",{recursive:true});
-    await page.screenshot({path:"qa-artifacts/assistance-four-panel-fixture.png",fullPage:true});
     console.log("PASS: all four actual Assistance Requests UI component states rendered with fictional QA data");
     console.log("PASS: no browser page errors. No Firebase user or private request data loaded.");
   } finally {
