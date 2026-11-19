@@ -1996,6 +1996,7 @@ This still does not automatically create a Donation Campaign.`,
         {reviewTab === "case" && (
           <CaseReviewTab
             request={selected}
+            profile={residentProfile}
             relatedRequestCount={relatedRequests.length}
             sameBeneficiaryCount={sameBeneficiaryRequests.length}
           />
@@ -2653,16 +2654,34 @@ function ReviewTabButton({
   );
 }
 
-function ReferenceCaseField({label,value,last=false}:{
-  label:string; value:string; last?:boolean;
+function ReferenceCaseField({label,value,icon,last=false}:{
+  label:string; value:string; icon:React.ComponentProps<typeof Ionicons>["name"];
+  last?:boolean;
 }) {
   return (
-    <View style={{flexDirection:"row",alignItems:"flex-start",gap:14,
-      paddingVertical:15,borderBottomWidth:last?0:1,borderBottomColor:"#E7EEEA"}}>
-      <Text style={{fontSize:12,color:"#5E7068",fontWeight:"700",width:132,
-        lineHeight:19,flexShrink:0}}>{label}</Text>
-      <Text selectable style={{fontSize:13,color:"#22352C",lineHeight:20,flex:1,
+    <View style={{flexDirection:"row",alignItems:"flex-start",gap:11,
+      paddingVertical:14,borderBottomWidth:last?0:1,borderBottomColor:"#E7EEEA"}}>
+      <Ionicons name={icon} color="#55756B" size={15} style={{marginTop:2}}/>
+      <Text style={{fontSize:12,color:"#526C5F",fontWeight:"700",
+        width:120,lineHeight:19,flexShrink:0}}>{label}</Text>
+      <Text selectable style={{fontSize:13,color:"#20362A",lineHeight:20,flex:1,
         fontWeight:"600"}}>{value}</Text>
+    </View>
+  );
+}
+
+function ReferenceSummaryRow({label,value,last=false}:{
+  label:string;value:string;last?:boolean;
+}) {
+  return (
+    <View style={{flexDirection:"row",gap:12,alignItems:"flex-start",
+      paddingVertical:12,borderBottomWidth:last?0:1,borderBottomColor:"#E2ECE5"}}>
+      <Text style={{fontSize:11,color:"#586D60",fontWeight:"700",width:112,lineHeight:17}}>
+        {label}
+      </Text>
+      <Text selectable style={{fontSize:12,color:"#22372C",fontWeight:"700",flex:1,lineHeight:18}}>
+        {value}
+      </Text>
     </View>
   );
 }
@@ -2685,24 +2704,32 @@ function ReferenceCaseCard({title,icon,children}:{
   );
 }
 
-function CaseReviewTab({request,relatedRequestCount,sameBeneficiaryCount}:{
-  request:AssistanceRequest; relatedRequestCount:number; sameBeneficiaryCount:number;
+function CaseReviewTab({request,profile,relatedRequestCount,sameBeneficiaryCount}:{
+  request:AssistanceRequest; profile:ResidentProfile | null;
+  relatedRequestCount:number; sameBeneficiaryCount:number;
 }){
+  const residentVerified = !!profile?.identityVerified ||
+    ["verified","approved","passed"].includes(String(profile?.identityStatus||"").toLowerCase());
   return (
     <View style={{gap:20}}>
       <View style={{flexDirection:"row",flexWrap:"wrap",gap:22,alignItems:"flex-start"}}>
         <ReferenceCaseCard title="Request Information" icon="information-circle-outline">
-          <ReferenceCaseField label="Category"
+          <ReferenceCaseField label="Category" icon="pricetag-outline"
             value={request.categoryLabel || String(request.category||"Assistance").replaceAll("_"," ")}/>
-          <ReferenceCaseField label="Current Situation"
+          <ReferenceCaseField label="Current Situation" icon="heart-outline"
             value={request.currentSituation || "Not provided"}/>
-          <ReferenceCaseField label="Requested Amount" value={money(request.estimatedAmount)}/>
-          <ReferenceCaseField label="Description" value={request.description || "No description provided."} last/>
+          <ReferenceCaseField label="Requested Amount" icon="wallet-outline"
+            value={money(request.estimatedAmount)}/>
+          <ReferenceCaseField label="Description" icon="document-text-outline"
+            value={request.description || "No description provided."} last/>
         </ReferenceCaseCard>
         <ReferenceCaseCard title="Resident Information" icon="person-outline">
-          <ReferenceCaseField label="Name" value={request.requesterName||"Resident"}/>
-          <ReferenceCaseField label="Contact" value={request.contactNumber||"Not recorded"}/>
-          <ReferenceCaseField label="Address" value={request.requesterAddress||
+          <ReferenceCaseField label="Name" icon="people-outline"
+            value={request.requesterName||"Resident"}/>
+          <ReferenceCaseField label="Contact" icon="call-outline"
+            value={request.contactNumber||"Not recorded"}/>
+          <ReferenceCaseField label="Address" icon="home-outline"
+            value={request.requesterAddress||
             request.requesterBarangay||"Not recorded"} last/>
           <View style={{paddingTop:17,paddingBottom:6}}>
             <View style={{alignSelf:"flex-start",flexDirection:"row",alignItems:"center",
@@ -2710,7 +2737,7 @@ function CaseReviewTab({request,relatedRequestCount,sameBeneficiaryCount}:{
               borderRadius:8,backgroundColor:"#E9F9EE"}}>
               <Ionicons name="shield-checkmark-outline" color="#087747" size={17}/>
               <Text style={{fontSize:11,color:"#087747",fontWeight:"800"}}>
-                Verify Resident status in Resident Info
+                {residentVerified ? "Verified Resident" : "Review Resident status in Resident Info"}
               </Text>
             </View>
           </View>
@@ -3254,10 +3281,6 @@ function DecisionTab({
     </View>;
   }
 
-  const docsMatched = reviewDraft.documentConsistencyStatus === "consistent" &&
-    reviewDraft.beneficiaryCheckStatus === "confirmed";
-  const docsNotMatched = ["needs_more_information","inconsistent"].includes(
-    reviewDraft.documentConsistencyStatus);
   const previousRiskFlags = Array.isArray(reviewRecord?.riskFlags)
     ? reviewRecord.riskFlags.filter((value: unknown) => String(value || "").trim().length > 0)
     : [];
@@ -3497,15 +3520,18 @@ function DecisionTab({
                   )}
                 </View>
                 <View style={{flex:1,minWidth:235,gap:14}}>
-                  <View style={{backgroundColor:"#F3F8F5",borderRadius:12,
-                    borderWidth:1,borderColor:"#E0ECE5",padding:17,gap:14}}>
-                    <Text style={{fontSize:14,fontWeight:"800",color:"#173B2D"}}>Campaign Summary</Text>
-                    <InfoItem label="Request ID" value={request.requestId || request.id}/>
-                    <InfoItem label="Resident" value={request.requesterName || "Resident"}/>
-                    <InfoItem label="Category" value={request.categoryLabel || "Assistance"}/>
-                    <InfoItem label="Amount for Donation" value={money(Number(remainingAmount || 0))}/>
-                    <Text style={{fontSize:11,color:"#6B7D74",lineHeight:17}}>
-                      Resident information is shown privately to the Admin only.
+                  <View style={{backgroundColor:"#F8FBF9",borderRadius:12,
+                    borderWidth:1,borderColor:"#DDEAE0",paddingHorizontal:17,
+                    paddingTop:17,paddingBottom:14}}>
+                    <Text style={{fontSize:14,fontWeight:"800",color:"#173B2D",
+                      paddingBottom:10}}>Campaign Summary</Text>
+                    <ReferenceSummaryRow label="Request ID" value={request.requestId || request.id}/>
+                    <ReferenceSummaryRow label="Resident" value={request.requesterName || "Resident"}/>
+                    <ReferenceSummaryRow label="Category" value={request.categoryLabel || "Assistance"}/>
+                    <ReferenceSummaryRow label="Donation Target"
+                      value={money(Number(remainingAmount || 0))} last/>
+                    <Text style={{fontSize:10.5,color:"#6B7D74",lineHeight:16,marginTop:9}}>
+                      Resident details are private to the Admin; the public campaign is checked before publication.
                     </Text>
                   </View>
                   <ActionButton label="Continue to Publish Campaign"
@@ -3589,21 +3615,26 @@ function DecisionTab({
             subtitle="Check the supporting evidence before selecting a decision."
             icon="clipboard-outline">
             <View style={{gap:5}}>
-              {confirmRow("Documents and beneficiary details match",
-                "Check the medical documents and beneficiary information.",
-                docsMatched,docsNotMatched,
-                ()=>{onReviewChange("documentConsistencyStatus","consistent");
-                  onReviewChange("beneficiaryCheckStatus","confirmed");},
-                ()=>{onReviewChange("documentConsistencyStatus","needs_more_information");
-                  onReviewChange("beneficiaryCheckStatus","needs_more_information");})}
-              {confirmRow("No duplicate assistance request",
-                "Check the Resident's existing request history.",
+              {confirmRow("Resident identity verified",
+                "Confirm the beneficiary is the correct Resident.",
+                reviewDraft.beneficiaryCheckStatus==="confirmed",
+                reviewDraft.beneficiaryCheckStatus==="needs_more_information",
+                ()=>onReviewChange("beneficiaryCheckStatus","confirmed"),
+                ()=>onReviewChange("beneficiaryCheckStatus","needs_more_information"))}
+              {confirmRow("Supporting documents complete",
+                "Review all submitted evidence before approval.",
+                reviewDraft.documentConsistencyStatus==="consistent",
+                ["needs_more_information","inconsistent"].includes(reviewDraft.documentConsistencyStatus),
+                ()=>onReviewChange("documentConsistencyStatus","consistent"),
+                ()=>onReviewChange("documentConsistencyStatus","needs_more_information"))}
+              {confirmRow("Request details valid",
+                "Check for conflicting or duplicate requests.",
                 reviewDraft.duplicateCheckStatus==="clear",
                 ["potential_duplicate","confirmed_duplicate"].includes(reviewDraft.duplicateCheckStatus),
                 ()=>onReviewChange("duplicateCheckStatus","clear"),
                 ()=>onReviewChange("duplicateCheckStatus","potential_duplicate"))}
-              {confirmRow("Resident belongs to San Jose del Monte",
-                "Use verified documents, barangay contact, or in-person confirmation.",
+              {confirmRow("Resident belongs to service area",
+                "Verify San Jose del Monte residency through reliable evidence.",
                 reviewDraft.residencyVerificationStatus==="verified",
                 reviewDraft.residencyVerificationStatus==="unable_to_verify",
                 ()=>onReviewChange("residencyVerificationStatus","verified"),
