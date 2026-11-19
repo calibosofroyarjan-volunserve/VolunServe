@@ -18,7 +18,7 @@ function load(source, imports = {}, env = process.env) {
 const read = file => fs.readFileSync(file,"utf8");
 const current = read("lib/firebaseAuth.ts");
 const baseline = cp.execFileSync("git",["show","e7c2cc8:lib/firebaseAuth.ts"],{encoding:"utf8"});
-const data = {firstName:"Maria",lastName:"Santos",middleName:"",email:"resident@example.com",password:"Password1!",age:25,phoneNumber:"+639171234567",region:"Region III ? Central Luzon",province:"Bulacan",city:"City of San Jose del Monte",barangay:"Muzon",occupationCategory:"Student",occupationSpecialization:"College",occupationOther:"",role:"volunteer"};
+const data = {firstName:"Maria",lastName:"Santos",middleName:"",email:"resident@example.com",password:"Password1!",age:25,phoneNumber:"+639171234567",region:"Region III ? Central Luzon",province:"Bulacan",city:"City of San Jose del Monte",barangay:"Muzon Proper",occupationCategory:"Student",occupationSpecialization:"College",occupationOther:"",role:"volunteer"};
 function harness(source, enabled, options = {}) {
   const calls = [];
   const user = {uid:"signup-test",email:data.email,emailVerified:options.verified ?? true,providerData:(options.providers || ["password"]).map(providerId=>({providerId})),photoURL:"",reload:async()=>{calls.push("reload");}};
@@ -39,7 +39,12 @@ function harness(source, enabled, options = {}) {
     linkWithCredential:async()=>{calls.push("link");if(options.sdkLinkError)throw Object.assign(new Error("Link rejected"),{code:options.sdkLinkError});user.providerData.push({providerId:"password"});return {user};},
   };
   const store = {doc:(_,collection,uid)=>({collection,uid}),getDoc:async()=>{calls.push("read");return snapshot();},serverTimestamp:()=>"timestamp",writeBatch:()=>({set:(_,value)=>{saved=value;},commit:async()=>{calls.push("commit");profile=saved;}}),runTransaction:async(_,fn)=>{calls.push("transaction");await fn({get:async()=>options.raceExisting ? {exists:()=>true} : snapshot(),set:(_,value)=>{saved=value;profile=value;}});}};
-  const imports = {"./firebase":{auth,db:{}},"./signupFeature":{EMAIL_FIRST_SIGNUP_ENABLED:enabled},"firebase/auth":authSdk,"firebase/firestore":store,"react-native":{Platform:{OS:"web"}},"./androidNativePush":{disableAndroidPhoneAlerts:async()=>{}}};
+  const policy=load(read("lib/registrationEmailPolicy.ts"),{"./disposableEmailDomains.generated":load(read("lib/disposableEmailDomains.generated.ts"))});
+  const registrationFields=load(read("lib/requireCompleteResidentRegistration.ts"),{
+    "../constants/sjdmBarangays":load(read("constants/sjdmBarangays.ts")),
+    "../constants/occupationOptions":load(read("constants/occupationOptions.ts"))
+  });
+  const imports = {"./registrationEmailPolicy":policy,"./requireCompleteResidentRegistration":registrationFields,"./firebase":{auth,db:{}},"./signupFeature":{EMAIL_FIRST_SIGNUP_ENABLED:enabled},"firebase/auth":authSdk,"firebase/firestore":store,"react-native":{Platform:{OS:"web"}},"./androidNativePush":{disableAndroidPhoneAlerts:async()=>{}}};
   imports["./signupRegistration"]=load(read("lib/signupRegistration.ts"),imports);
   return {registration:imports["./signupRegistration"],api:load(source,imports),link:load(read("lib/emailFirstSignupAuth.ts"),imports),calls,user,auth,profile:()=>profile};
 }
@@ -136,6 +141,17 @@ function harness(source, enabled, options = {}) {
   });
   await check("unverified legacy profile can request verification without being replaced",async()=>{
     const original={role:"resident",status:"approved",fullName:"Existing Resident"};const h=harness(current,false,{verified:false,existing:original,createError:"auth/email-already-in-use"});await h.api.signUpUser({...data,authProvider:"email"});assert.deepEqual(h.profile(),original);assert(h.calls.includes("verification"));
+  });
+  await check("verified Resident Signup accepts blank optional phone",async()=>{
+    const h=harness(current,true);
+    await h.api.signUpUser({...data,phoneNumber:"",authProvider:"verified_email"});
+    assert.equal(h.profile().phoneNumber,"");
+    assert.equal(h.profile().role,"resident");
+  });
+  await check("incomplete verified Resident profile is rejected before Firestore write",async()=>{
+    const h=harness(current,true);
+    await assert.rejects(h.api.signUpUser({...data,firstName:"",authProvider:"verified_email"}),/First name is required/);
+    assert(!h.calls.includes("transaction"));
   });
   await check("email-first Create Account rejects a registered email without auto login",async()=>{
     const h=harness(current,true,{createError:"auth/email-already-in-use",noUser:true});
