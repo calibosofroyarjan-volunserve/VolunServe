@@ -60,12 +60,28 @@ jobs:
           node scripts/test-portal-resident-volunteer-ui-flow.cjs
           node scripts/test-admin-navigation-contract.cjs
           node scripts/test-profile-certificates-account-menu.cjs
-          node scripts/test-volunteer-time-controls-20261106.cjs
-          node scripts/test-volunteer-community-event-join-20261106.cjs
+          node scripts/test-unified-login-routing.cjs
+          node scripts/test-lgu-admin-global-ui-pagination.cjs
       - name: Export actual Hosting bundle for review (NEVER deploy)
         run: |
           npx expo export --platform web --clear
           node scripts/verify-hosting-release.cjs
+      - name: Check current public live revision matches exact release baseline (READ ONLY)
+        run: |
+          node <<'NODE'
+          const assert=require('node:assert/strict');
+          const expected='f6139fdae5bce940356a62efc28f8e50935978d6';
+          (async()=>{
+            const response=await fetch('https://volunserve.com/volunserve-release.json?preflight='+Date.now(),{
+              headers:{'Cache-Control':'no-cache'},signal:AbortSignal.timeout(15000)});
+            assert(response.ok,'Live release marker unavailable; stop');
+            const live=await response.json();
+            assert.equal(live.app,'VolunServe');
+            assert.equal(live.firebaseProject,'volunserve-3aa5b');
+            console.log('Actual production revision:',live.revision);
+            assert.equal(live.revision,expected,'Production changed; do not deploy stale candidate');
+          })().catch(e=>{console.error(e.message);process.exitCode=1});
+          NODE
       - name: Prove Firebase policies and backend remain untouched
         run: |
           git diff --exit-code f6139fdae5bce940356a62efc28f8e50935978d6 HEAD -- firebase.json .firebaserc firestore.rules storage.rules firestore.indexes.json functions backend identity-ai package.json package-lock.json
