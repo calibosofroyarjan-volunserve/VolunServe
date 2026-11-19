@@ -46,7 +46,7 @@ jobs:
           const HOST='https://firebaserules.googleapis.com/v1';
           const extension='        && request.resource.data.email.matches("(?i)^[^@]+@(gmail[.]com|yahoo[.]com)$")\n'
             +'        && (!request.resource.data.email.matches("(?i)^[^@]+@gmail[.]com$")\n'
-            +"          || request.auth.token.get('firebase', {}).get('identities', {}).get('google.com', []).size() > 0)\n";
+            +"          || 'google.com' in request.auth.token.firebase.identities)\n";
           async function audit(){
             const raw=process.env.VOLUNSERVE_PRODUCTION_HOSTING_SERVICE_ACCOUNT;
             assert(raw,'Protected production read-only credential absent');
