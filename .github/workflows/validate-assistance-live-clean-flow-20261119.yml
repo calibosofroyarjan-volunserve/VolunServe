@@ -27,7 +27,8 @@ jobs:
         run: npx tsc --noEmit --incremental false
       - name: Validate Assistance Requests redesign
         run: node scripts/test-assistance-live-clean-flow-20261119.cjs
-      - name: Existing donation and LGU regression checks
-        run: |
-          node scripts/test-donation-lgu-role-isolation.cjs
-          node scripts/test-lgu-internal-review-ux.cjs
+      - name: Existing LGU static regression checks
+        run: node scripts/test-lgu-internal-review-ux.cjs
+      # The donation role-isolation integration test must only run with
+      # FIRESTORE_EMULATOR_HOST configured in a separate emulator job.
+      # It intentionally refuses to run against production Firestore.
