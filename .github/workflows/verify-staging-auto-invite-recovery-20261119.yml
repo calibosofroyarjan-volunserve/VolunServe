@@ -1,0 +1,58 @@
+name: Automatic all-eligible Volunteer invite regression — STAGING ONLY
+
+on:
+  push:
+    branches:
+      - fix/staging-auto-invite-idempotent-approval-retry-20261119
+  pull_request:
+    branches:
+      - feat/emergency-auto-dispatch-server-staging-20261115
+
+permissions:
+  contents: read
+
+jobs:
+  verify-auto-invites:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      VOLUNSERVE_AUTO_VOLUNTEER_DISPATCH: disabled
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - name: Strict three-file safety gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --name-status ea9056afa1154e17478b73b3214b2bb8ddd548cc HEAD >/tmp/auto-invite-scope
+          test "$(wc -l </tmp/auto-invite-scope)" -eq 3
+          while IFS="$(printf '\t')" read -r state file; do
+            case "$state:$file" in
+              "M:backend/emergencyAutoDispatchStagingServer.js"|"A:backend/test-stagingAutoInviteAfterValidation.cjs"|"A:.github/workflows/verify-staging-auto-invite-recovery-20261119.yml") ;;
+              *) echo "BLOCKED unexpected code or file change: $state $file"; exit 1 ;;
+            esac
+          done </tmp/auto-invite-scope
+          ! grep -Fq 'stagingAutoInvite' backend/server.js
+          test "${VOLUNSERVE_AUTO_VOLUNTEER_DISPATCH}" = disabled
+          echo "PASS: only isolated fixed-fictional staging handler and tests edited."
+      - name: Install backend locked dependencies
+        run: npm ci --prefix backend --ignore-scripts --no-audit --no-fund
+      - name: Node syntax and pure automatic-invite policy
+        run: |
+          node --check backend/emergencyAutoDispatchStagingServer.js
+          node --check backend/test-stagingAutoInviteAfterValidation.cjs
+          node --test backend/test-stagingAutoInviteAfterValidation.cjs
+      - name: Existing staging authenticated route regressions
+        run: node --test backend/test-emergencyAutoDispatchStagingServer.cjs
+      - name: Accepted offer and no-later-wave verification regressions
+        run: node --test backend/test-staging002BulkAcceptanceVerifier.cjs backend/test-staging002WaveStopVerification.cjs
+      - name: Backend syntax and core checks
+        run: npm run check --prefix backend
+      - name: No cloud writes or deployment
+        run: echo "No Firebase/Render production credentials, deployments, emergency invitations, or real Volunteer data changed."
