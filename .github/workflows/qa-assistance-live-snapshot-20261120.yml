@@ -32,4 +32,5 @@ jobs:
       - name: Expo web export (NO DEPLOY)
         run: npx expo export --platform web --clear
       - name: Confirm QA did not deploy
-        run: echo 'NO DEPLOY: Firebase, Render, Hosting and Firestore untouched.'
+        run: |
+          echo "NO DEPLOY: Firebase, Render, Hosting and Firestore untouched."
