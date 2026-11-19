@@ -1,0 +1,89 @@
+name: Auto Volunteer Phase 16 Render managed OIDC ADC compatibility - STRICT NO DEPLOY
+on:
+  pull_request:
+    branches:
+      - review/auto-volunteer-phase15-render-oidc-iam-preflight-20261119
+    paths:
+      - "backend/autoVolunteerPhase12IsolatedCloudPreviewAdapter.js"
+      - "backend/autoVolunteerPhase13ReadOnlyCloudBootstrap.cjs"
+      - "backend/autoVolunteerPhase16RenderManagedOidcGate.cjs"
+      - "backend/test-autoVolunteerPhase16RenderManagedOidcGate.cjs"
+      - "docs/emergency-volunteer/PHASE16_RENDER_MANAGED_OIDC_ADC_COMPAT_20261119.md"
+      - ".github/workflows/qa-auto-volunteer-phase16-managed-oidc-20261119.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  managed-oidc-external-account-local-contract-only:
+    if: github.repository == 'calibosofroyarjan-volunserve/VolunServe'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      CI: "true"
+      VOLUNSERVE_AUTO_VOLUNTEER_DISPATCH: disabled
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - name: Exact six-file diff guard — NO deploy or protected runtime changes
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin review/auto-volunteer-phase15-render-oidc-iam-preflight-20261119
+          git diff --name-status origin/review/auto-volunteer-phase15-render-oidc-iam-preflight-20261119 HEAD > /tmp/phase16-diff
+          while IFS="$(printf '\t')" read -r status file; do
+            case "$file:$status" in
+              "backend/autoVolunteerPhase12IsolatedCloudPreviewAdapter.js:M"|"backend/autoVolunteerPhase13ReadOnlyCloudBootstrap.cjs:M"|"backend/autoVolunteerPhase16RenderManagedOidcGate.cjs:A"|"backend/test-autoVolunteerPhase16RenderManagedOidcGate.cjs:A"|"docs/emergency-volunteer/PHASE16_RENDER_MANAGED_OIDC_ADC_COMPAT_20261119.md:A"|".github/workflows/qa-auto-volunteer-phase16-managed-oidc-20261119.yml:A") ;;
+              *) echo "BLOCKED: unapproved file/status $file:$status"; exit 1 ;;
+            esac
+          done < /tmp/phase16-diff
+          test "$(wc -l < /tmp/phase16-diff)" -eq 6
+          echo "PASS: only two review-only existing modules modified and four new review files."
+      - name: Existing production and accepted staging servers MUST stay unwired
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(node -p 'require("./backend/package.json").scripts.start')" = "node server.js"
+          if grep -Fq 'autoVolunteerPhase16RenderManagedOidcGate' backend/server.js; then
+            echo "BLOCKED: Production imports OIDC review module"; exit 1
+          fi
+          git fetch --no-tags origin feat/emergency-auto-dispatch-server-staging-20261115
+          git show origin/feat/emergency-auto-dispatch-server-staging-20261115:backend/emergencyAutoDispatchStagingServer.js > /tmp/phase16-staging-original.js
+          test -s /tmp/phase16-staging-original.js
+          if grep -Fq 'autoVolunteerPhase16RenderManagedOidcGate' /tmp/phase16-staging-original.js; then
+            echo "BLOCKED: existing accepted staging imports OIDC review module"; exit 1
+          fi
+          echo "PASS: live and historically accepted staging server source remain unchanged."
+      - name: Install only locked backend dependencies, no credential downloads
+        run: npm ci --prefix backend --ignore-scripts --no-audit --no-fund
+      - name: Phase 16 bounded external_account + direct federation compatibility tests
+        run: |
+          node --check backend/autoVolunteerPhase16RenderManagedOidcGate.cjs
+          node --check backend/test-autoVolunteerPhase16RenderManagedOidcGate.cjs
+          node --check backend/autoVolunteerPhase12IsolatedCloudPreviewAdapter.js
+          node --check backend/autoVolunteerPhase13ReadOnlyCloudBootstrap.cjs
+          node --test --test-concurrency=1 backend/test-autoVolunteerPhase16RenderManagedOidcGate.cjs
+      - name: Prior Phase 15-11 security, read-only preview and Admin guard regressions
+        run: |
+          node --test --test-concurrency=1 backend/test-autoVolunteerPhase15RenderOidcIamPreflight.cjs
+          node --test --test-concurrency=1 backend/test-autoVolunteerPhase14StagingServer.cjs
+          node --test --test-concurrency=1 backend/test-autoVolunteerPhase13ReadOnlyCloudBootstrap.cjs
+          node --test --test-concurrency=1 backend/test-autoVolunteerPhase12CloudPreviewAdapter.cjs
+          node --test backend/test-autoVolunteerPhase11CloudIsolationGate.cjs
+          node --test backend/test-autoVolunteerAdminReadOnlyPreview.cjs
+          node --test backend/test-emergencyAutoVolunteerReadOnlyPlanner.cjs
+          node --test backend/test-emergencyVolunteerWinnerGuard.cjs
+      - name: Existing production certificate, identity and signup regression checks
+        run: npm run check --prefix backend
+      - name: No external cloud identity verification, service creation or deploy
+        run: |
+          echo "LOCAL SYNTHETIC FILES ONLY. NO valid real Render OIDC token is read or used."
+          echo "No actual GCP IAM, Render plan, ADC provenance or Firebase cloud permissions attested."
+          echo "NO Firebase, Render, Hosting, Cloud Tasks, IAM or Cloud Scheduler writes/deploy."
+          echo "Live and accepted historical staging deployments untouched; emergency dispatch OFF."
