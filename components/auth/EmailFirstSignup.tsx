@@ -25,7 +25,11 @@ import {auth} from "../../lib/firebase";
 import {
   signUpUser,
 } from "../../lib/firebaseAuth";
-import {getRegistrationEmailError} from "../../lib/registrationEmailPolicy";
+import {
+  getRegistrationEmailError,
+  GMAIL_GOOGLE_SIGNIN_REQUIRED_MESSAGE,
+  requiresGoogleForNewGmailRegistration,
+} from "../../lib/registrationEmailPolicy";
 import { userFacingError } from "../../lib/userFacingError";
 import {
   REGISTRATION_EMAIL_CONFLICT_MESSAGE,
@@ -216,6 +220,7 @@ export default function EmailFirstSignup() {
 
   const age = useMemo(() => dateAge(birth), [birth]);
   const emailErr = getRegistrationEmailError(email);
+  const gmailNeedsGoogle = !resumeMode && !signedInUser && requiresGoogleForNewGmailRegistration(email);
   const passwordErr = passwordError(password);
   const needsSpecialization = (SPECIALIZATIONS[occupation] || []).length > 0;
   const googleOnly = !!signedInUser &&
@@ -260,8 +265,10 @@ export default function EmailFirstSignup() {
       try {
         const state = await inspectSignupUser(user);
         if (isCurrent()) showRegistrationState(state);
-      } catch {
-        if (isCurrent()) setError("Unable to load your registration. Check your connection and try again.");
+      } catch (error) {
+        if (isCurrent()) setError((error as Error)?.message === GMAIL_GOOGLE_SIGNIN_REQUIRED_MESSAGE
+          ? GMAIL_GOOGLE_SIGNIN_REQUIRED_MESSAGE
+          : "Unable to load your registration. Check your connection and try again.");
       } finally {
         if (isCurrent()) setChecking(false);
       }
@@ -610,7 +617,7 @@ export default function EmailFirstSignup() {
                 <Text style={styles.legacyInfoText}>
                   {resumeMode
                     ? "Already created an account but did not finish? Enter the same email and VolunServe password to continue where you left off. No new account will be created."
-                    : "Enter an accessible email and a VolunServe password. We'll send a verification link before collecting your personal details."}
+                    : "New accounts accept only Gmail or Yahoo. Choose Continue with Google for Gmail; Yahoo uses email verification."}
                 </Text>
               </View>
             )}
@@ -641,17 +648,19 @@ export default function EmailFirstSignup() {
                 <Text style={styles.helper}>
                   {resumeMode
                     ? "Use the SAME email and VolunServe password you created earlier. We'll check whether you still need to verify your email or finish your profile."
-                    : "Use any accessible email (Yahoo, Outlook, Gmail, school or work). You must verify it before entering personal details."}
+                    : "Only @gmail.com and @yahoo.com are accepted. For Gmail, choose Continue with Google; for Yahoo, verify the emailed link."}
                 </Text>
                 <Field
                   label="Email Address *" value={email}
                   onChange={v => {setEmail(v.trim().toLowerCase()); setError("");}}
-                  placeholder="name@example.com" keyboardType="email-address"
+                  placeholder="name@gmail.com or name@yahoo.com" keyboardType="email-address"
                   disabled={!emailCanEdit}
                   error={resumeMode ? (!email.trim() ? "Enter your registration email." : null) : emailErr}
                   showError={showErrors}
                   hint={email.trim() && !emailErr
-                    ? "Email format accepted. You must open the verification link to confirm access to this inbox."
+                    ? requiresGoogleForNewGmailRegistration(email)
+                      ? GMAIL_GOOGLE_SIGNIN_REQUIRED_MESSAGE
+                      : "Yahoo email format accepted. Verify the email link to confirm access."
                     : undefined}
                 />
                 <Field
@@ -689,7 +698,7 @@ export default function EmailFirstSignup() {
                       <Text style={styles.error}>Agree to the Terms and Privacy Notice to continue.</Text>}
                   </>
                 )}
-                {checkButton(
+                {!gmailNeedsGoogle && checkButton(
                   googleOnly ? "Link Password & Continue" :
                     resumeMode ? "Resume Registration" : "Create Account & Verify Email",
                   () => {void startEmail();}
