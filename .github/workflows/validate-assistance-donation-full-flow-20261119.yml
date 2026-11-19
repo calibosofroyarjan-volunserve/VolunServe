@@ -73,7 +73,14 @@ jobs:
           node scripts/test-profile-certificates-account-menu.cjs
           node scripts/test-admin-navigation-contract.cjs
           node scripts/test-module-announcements-publishing-20261115.cjs
-          node scripts/test-donation-lgu-role-isolation.cjs
+      - name: Set up Java for isolated Firestore emulator
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Verify donation role isolation with DEMO Firestore emulator only
+        run: |
+          npx firebase-tools emulators:exec --only firestore --project demo-volunserve "node scripts/test-donation-lgu-role-isolation.cjs"
       - name: Backend isolated assistance budget and public appeal tests
         run: |
           node --check backend/server.js
