@@ -1,0 +1,92 @@
+name: Authenticated Automatic Volunteer Accept Decline — EMULATOR ONLY
+on:
+  push:
+    branches:
+      - feat/auto-volunteer-accept-decline-emulator-20261119
+  pull_request:
+    branches:
+      - feat/auto-volunteer-firebase-approval-trigger-emulator-20261119
+
+permissions:
+  contents: read
+
+jobs:
+  firebase-callable-decision:
+    if: github.repository == 'calibosofroyarjan-volunserve/VolunServe'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    env:
+      CI: "true"
+      GCLOUD_PROJECT: demo-volunserve-auto-phase4
+      GOOGLE_CLOUD_PROJECT: demo-volunserve-auto-phase4
+      FIRESTORE_EMULATOR_HOST: 127.0.0.1:8080
+      FIREBASE_AUTH_EMULATOR_HOST: 127.0.0.1:9099
+      FUNCTIONS_EMULATOR: "true"
+      VOLUNSERVE_AUTO_VOLUNTEER_TEST_TRIGGER: enabled
+      VOLUNSERVE_AUTO_VOLUNTEER_DISPATCH: disabled
+      FIREBASE_CLI_DISABLE_TELEMETRY: "1"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            backend/package-lock.json
+            functions/package-lock.json
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - name: Exact 4-file isolated emulator scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --name-status 36b91c700fbbb0ebf9327a42fc6b7ebb34201f6f HEAD >/tmp/decision-scope
+          test "$(wc -l </tmp/decision-scope)" -eq 4
+          while IFS="$(printf '\t')" read -r state file; do
+            case "$state:$file" in
+              "M:functions/index.js"|"A:functions/emergencyAutoInviteVolunteerDecision.js"|"A:functions/test-autoInviteDecisionEmulator.cjs"|"A:.github/workflows/verify-auto-volunteer-decision-emulator-20261119.yml") ;;
+              *) echo "BLOCKED unrelated change: $state $file"; exit 1 ;;
+            esac
+          done </tmp/decision-scope
+          ! grep -Fq 'emergencyAutoInviteVolunteerDecision' backend/server.js
+          ! grep -Fq 'emulatorAutoVolunteerDecision' backend/server.js
+          test "${VOLUNSERVE_AUTO_VOLUNTEER_DISPATCH}" = disabled
+      - name: Install locked Firebase/Functions dependencies
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          npm ci --prefix functions --ignore-scripts --no-audit --no-fund
+          npm ci --prefix backend --ignore-scripts --no-audit --no-fund
+      - name: Static checks + production backend regression
+        run: |
+          node --check functions/index.js
+          node --check functions/emergencyAutoInviteVolunteerDecision.js
+          node --check functions/test-autoInviteDecisionEmulator.cjs
+          npm run check --prefix backend
+      - name: Enable ONLY fictional Firebase Functions emulator export
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > functions/.env.local <<'DEMO'
+          VOLUNSERVE_AUTO_VOLUNTEER_TEST_TRIGGER=enabled
+          VOLUNSERVE_AUTO_VOLUNTEER_DISPATCH=disabled
+          DEMO
+          node - <<'NODE'
+          const assert=require("node:assert/strict");
+          const m=require("./functions/index.js");
+          assert.ok(m.emulatorAutoVolunteerOnApproval);
+          assert.ok(m.emulatorAutoVolunteerDecision);
+          console.log("PASS: both Emulator Functions callable and approval event exported");
+          NODE
+      - name: Real Firestore + Firebase Auth + Callable emulator end-to-end
+        shell: bash
+        run: |
+          set -euo pipefail
+          ./node_modules/.bin/firebase emulators:exec --project demo-volunserve-auto-phase4 --only auth,firestore,functions "node --test --test-concurrency=1 functions/test-autoInviteApprovalEmulator.cjs functions/test-autoInviteDecisionEmulator.cjs"
+      - name: No production or staging writes/deployment
+        run: |
+          echo "NO DEPLOY. No real Firestore, Firebase Rules, Render, Cloud Functions or Volunteer assignments touched."
