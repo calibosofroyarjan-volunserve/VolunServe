@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>VolunServe — Phase 10 Local Volunteer QA</title>
+  <style>
+    :root{font:15px system-ui,-apple-system,Segoe UI,Arial,sans-serif;color:#193044;background:#f6f8fa}
+    *{box-sizing:border-box}body{margin:0}main{max-width:740px;margin:32px auto;padding:0 20px}
+    header{border-bottom:1px solid #cdd7df;padding-bottom:14px;margin-bottom:20px}
+    h1{font-size:1.45rem;margin:6px 0}h2{font-size:1.06rem;margin:0 0 12px}
+    p{line-height:1.5;color:#526270}section{background:white;border:1px solid #dbe3ea;border-radius:10px;padding:19px;margin-bottom:16px}
+    .grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+    label{display:block;margin-bottom:5px;font-weight:600;font-size:.88rem}
+    input{width:100%;padding:10px;font:inherit;border:1px solid #aab9c7;border-radius:6px}
+    button{padding:10px 13px;font:inherit;border:0;border-radius:6px;background:#185c91;color:white;cursor:pointer}
+    button.secondary{background:#edf2f5;color:#253c52;border:1px solid #cdd7df}
+    button:disabled{opacity:.5;cursor:not-allowed}
+    .actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
+    pre{background:#f6f8fa;border:1px solid #d9e0e6;padding:13px;border-radius:6px;overflow-wrap:anywhere;white-space:pre-wrap}
+    .note{font-size:.85rem;color:#596b79}.local{font-weight:700;color:#265f4e}
+    a{color:#175b8d}@media(max-width:620px){.grid{grid-template-columns:1fr}main{margin:16px auto}}
+  </style>
+</head>
+<body><main>
+  <header>
+    <p class="local">LOCAL FIREBASE EMULATOR ONLY · FICTIONAL VOLUNTEERS</p>
+    <h1>Emergency Response — Volunteer QA</h1>
+    <p>Review your own fictional offer, then Accept or Decline. This page is not connected to real emergency operations.</p>
+  </header>
+  <section>
+    <h2>Approved Volunteer sign-in</h2>
+    <form id="login" autocomplete="off">
+      <div class="grid">
+        <div><label for="email">Fictional Volunteer email</label><input id="email" type="email" required autocomplete="username"></div>
+        <div><label for="password">Demo-only password</label><input id="password" type="password" required autocomplete="current-password"></div>
+      </div>
+      <div class="actions"><button type="submit">Sign in</button>
+      <button id="signout" type="button" class="secondary">Sign out</button></div>
+    </form>
+    <p id="session" class="note" role="status">Not signed in.</p>
+  </section>
+  <section>
+    <h2>Your fictional task</h2>
+    <label for="caseId">Fictional incident ID</label>
+    <input id="caseId" value="phase10_case_smoke" pattern="phase10_[a-zA-Z0-9_-]+" autocomplete="off">
+    <div class="actions">
+      <button id="inspect" type="button" disabled>Check my offer</button>
+      <button id="accept" type="button" disabled>Accept</button>
+      <button id="decline" type="button" class="secondary" disabled>Decline</button>
+    </div>
+    <p class="note">The decision uses your verified Firebase login, not a typed Volunteer UID. Once accepted, another Volunteer cannot become the winner of the same incident.</p>
+    <pre id="result" aria-live="polite">Sign in and check your fictional offer.</pre>
+  </section>
+  <p class="note"><a href="/phase10-admin">Back to local Admin QA</a>. These routes run only with the local demo Firebase Auth + Firestore Emulators.</p>
+</main>
+<script type="module">
+  import {initializeApp} from "https://www.gstatic.com/firebasejs/11.10.0/firebase-app.js";
+  import {getAuth,connectAuthEmulator,signInWithEmailAndPassword,signOut,onAuthStateChanged} from "https://www.gstatic.com/firebasejs/11.10.0/firebase-auth.js";
+  const firebase=initializeApp({apiKey:"demo-not-a-real-key",authDomain:"localhost",projectId:"demo-volunserve-auto-phase4"});
+  const auth=getAuth(firebase);
+  connectAuthEmulator(auth,"http://127.0.0.1:9099",{disableWarnings:true});
+  const el=id=>document.getElementById(id),actions=["inspect","accept","decline"];
+  const output=x=>{el("result").textContent=typeof x==="string"?x:JSON.stringify(x,null,2)};
+  onAuthStateChanged(auth,user=>{
+    el("session").textContent=user?"Signed in to LOCAL Auth Emulator.":"Not signed in.";
+    actions.forEach(id=>el(id).disabled=!user);
+  });
+  el("login").addEventListener("submit",async e=>{
+    e.preventDefault();
+    try{
+      await signInWithEmailAndPassword(auth,el("email").value.trim(),el("password").value);
+      el("password").value="";
+      output("Local sign-in successful. Check your offer.");
+    }catch(e){output("Local sign-in failed: "+String(e.code||"unknown"))}
+  });
+  el("signout").addEventListener("click",async()=>{await signOut(auth);output("Signed out.")});
+  const cid=()=>{
+    const id=el("caseId").value.trim();
+    if(!/^phase10_[a-zA-Z0-9_-]{1,86}$/.test(id))throw Error("Use a Phase 10 fictional case ID.");
+    return encodeURIComponent(id);
+  };
+  async function api(url,body){
+    if(!auth.currentUser)throw Error("Sign in to the local emulator first.");
+    const opts={headers:{Authorization:"Bearer "+await auth.currentUser.getIdToken(true)}};
+    if(body!==undefined){
+      opts.method="POST";opts.headers["Content-Type"]="application/json";opts.body=JSON.stringify(body);
+    }
+    const response=await fetch(url,opts);
+    const result=await response.json();
+    if(!response.ok)throw Error(String(result.reason||result.status||response.status));
+    return result;
+  }
+  const run=fn=>async()=>{
+    actions.forEach(id=>el(id).disabled=true);
+    try{output(await fn())}
+    catch(e){output("Operation blocked: "+String(e.message||"unavailable"))}
+    finally{actions.forEach(id=>el(id).disabled=!auth.currentUser)}
+  };
+  const url=()=>"/api/phase10/volunteer/cases/"+cid();
+  el("inspect").addEventListener("click",run(()=>api(url()+"/offer")));
+  el("accept").addEventListener("click",run(()=>api(url()+"/decision",{decision:"accepted"})));
+  el("decline").addEventListener("click",run(()=>api(url()+"/decision",{decision:"declined"})));
+</script>
+</body></html>
