@@ -1,0 +1,52 @@
+name: Authenticated Assistance-to-Donation Integration (DEMO EMULATORS ONLY)
+on:
+  push:
+    branches: [qa/assistance-donation-backend-e2e-demo-20261119]
+    paths:
+      - 'backend/tests/assistanceDonationEmulator.e2e.cjs'
+      - '.github/workflows/validate-assistance-donation-emulator-e2e-20261119.yml'
+permissions:
+  contents: read
+jobs:
+  demo-auth-firestore-real-backend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      CI: 'true'
+      GCLOUD_PROJECT: demo-volunserve
+      GOOGLE_CLOUD_PROJECT: demo-volunserve
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Validate strict test isolation and unchanged application source
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check backend/tests/assistanceDonationEmulator.e2e.cjs
+          node - <<'NODE'
+          const fs=require('node:fs'),assert=require('node:assert/strict');
+          const s=fs.readFileSync('backend/tests/assistanceDonationEmulator.e2e.cjs','utf8');
+          assert(s.includes('project="demo-volunserve"'));
+          assert(s.includes('FIREBASE_AUTH_EMULATOR_HOST')&&s.includes('FIRESTORE_EMULATOR_HOST'));
+          assert(s.includes('SAFETY STOP'));
+          assert(!s.includes('volunserve-3aa5b')&&!s.includes('volunserve.com'));
+          console.log('PASS: demo-only Auth/Firestore and no production credentials');
+          NODE
+      - name: Install exact backend dependencies
+        run: npm ci --prefix backend --no-audit --no-fund
+      - name: Run real Express API with Admin/Resident Firebase Auth and Firestore emulators
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx firebase-tools emulators:exec --only auth,firestore --project demo-volunserve "node backend/tests/assistanceDonationEmulator.e2e.cjs"
+      - name: Explicit NO DEPLOY guard
+        run: echo "PASS: Test was restricted to demo-volunserve; no Hosting, Firestore production, Render, PayMongo or Firebase Rules deploy"
