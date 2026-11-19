@@ -34,3 +34,17 @@ OTP docs are kept server-side in `residentEmailOtpChallenges/{uid}` and `residen
 - A user must have signed into the exact pending Firebase Auth UID; there is no unauthenticated endpoint that accepts arbitrary recipient addresses. Keep verified Auth UID and profile UID the same.
 - The existing email verification link path remains in place as the fallback until production OTP acceptance tests pass.
 - More robust deployment should also enable Firebase App Check and provider-specific abuse monitoring; these controls are separate from the functional OTP change.
+
+
+## Sender-domain setup: how to run the no-deploy smoke check
+1. In your own [Resend account](https://resend.com/domains), add a dedicated domain you control, preferably `notify.volunserve.com` so website DNS remains independent of email. **Do not claim the DNS is verified until the Resend dashboard confirms it.**
+2. In the domain DNS manager, copy **the exact DNS records displayed by Resend** (typically SPF/DKIM and an MX record). Do not invent DNS values or replace your website's existing A/CNAME or inbound MX records. Wait for status **Verified**.
+3. In [Resend API keys](https://resend.com/api-keys), create a **sending-only** key (prefer restricting it to the verified sender domain). Never paste this key into ChatGPT, the Git repository, screenshots, GitHub Actions inputs, or a public `EXPO_PUBLIC_` variable.
+4. In the GitHub repository, visit Settings → Environments → `staging` → Environment secrets. Create `RESEND_API_KEY_STAGING` and paste the private key only in that secure input. Do not put it in production Hosting secrets.
+5. Run [Check Resend Verified Domain and Staging Gmail Yahoo Delivery (NO DEPLOY)](https://github.com/calibosofroyarjan-volunserve/VolunServe/actions/workflows/smoke-resend-staging-delivery-manual-20261119.yml) against branch `feature/secure-six-digit-email-otp-staging-20261119`. Enter your verified `sender_email`, a personally controlled `test_recipient` ending in `@gmail.com` or `@yahoo.com`, and enter `YES_SEND_ONE_TEST_EMAIL`. This sends **one non-OTP email** only after checking that Resend reports the sender domain Verified.
+6. Open the test inbox and confirm arrival and sender reputation. A successful API response means **accepted by Resend**, not necessarily delivered to the Gmail/Yahoo inbox. Run one smoke test per provider when needed.
+
+This manual check does not create an Auth user, update any Firebase data, deploy any Function, replace the live signup or send a real user-verification code. A genuine OTP must also be tested end-to-end with the **separate staging Firebase Auth & Firestore emulator/staging project**, the two callable Functions, and server-side secrets. Firebase Secret Manager secrets for that environment are `VOLUNSERVE_RESEND_API_KEY` and `VOLUNSERVE_EMAIL_OTP_PEPPER`. To set them interactively on the correct *staging project*, use `firebase functions:secrets:set SECRET_NAME --project STAGING_PROJECT_ID`. No value should be written into git files.
+
+## Never deploy early
+If there is no verified sender domain, API key, and real Gmail/Yahoo inbox delivery proof, **leave both OTP feature flags unset** and keep the working Firebase email-verification link on production. The no-deploy smoke-test key is separate from the actual deployed Firebase Functions secret.
