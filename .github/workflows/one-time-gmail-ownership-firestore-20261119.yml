@@ -1,0 +1,154 @@
+# One-time, ACTIVE-source-derived Firestore policy ONLY. No app/data/Function changes.
+# Guarded Gmail OAuth ownership enforcement after the related Hosting release.
+name: Guarded Gmail Ownership Firestore Rules-Only Release
+on:
+  push:
+    branches: [live-protected]
+    paths:
+      - '.github/workflows/one-time-gmail-ownership-firestore-20261119.yml'
+permissions:
+  contents: read
+concurrency:
+  group: volunserve-production-firestore-rules-release
+  cancel-in-progress: false
+jobs:
+  exact-active-rules:
+    if: github.repository == 'calibosofroyarjan-volunserve/VolunServe' && github.ref == 'refs/heads/live-protected'
+    runs-on: ubuntu-latest
+    environment: production
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 2
+          submodules: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Fail closed unless one protected Rules-only release controller was added
+        run: |
+          test "$(git diff --name-only HEAD^ HEAD)" = ".github/workflows/one-time-gmail-ownership-firestore-20261119.yml"
+          test "$(git ls-remote --heads origin live-protected | cut -f1)" = "$GITHUB_SHA"
+      - name: Install matching pinned Firebase Admin credential dependencies
+        run: npm ci --prefix functions --no-audit --no-fund
+      - name: Verify latest Hosting and exact ACTIVE source; compile then publish only restrictive Firestore Rules with rollback
+        shell: bash
+        env:
+          VOLUNSERVE_PRODUCTION_HOSTING_SERVICE_ACCOUNT: ${{ secrets.VOLUNSERVE_PRODUCTION_HOSTING_SERVICE_ACCOUNT }}
+        run: |
+          node <<'NODE'
+          const assert=require('node:assert/strict');
+          const crypto=require('node:crypto');
+          const path=require('node:path');
+          const {createRequire}=require('node:module');
+          const req=createRequire(path.resolve('./functions/package.json'));
+          const {cert}=req('firebase-admin/app');
+          const sha=s=>crypto.createHash('sha256').update(s).digest('hex');
+          const PROJECT='volunserve-3aa5b';
+          const BASE='https://firebaserules.googleapis.com/v1';
+          const RELEASE='projects/'+PROJECT+'/releases/cloud.firestore';
+          const EXPECTED_OLD_RULES_SHA='bbe6d3c1184ea6e7dcae253e56c34271acfb8260fd853614810aafcc550b8ed7';
+          const EXPECTED_NEW_RULES_SHA='87aee5b73170b36a5317edcefddae22e697b3d6e56065b7b6b84d3c8aced00e5';
+          const EXPECTED_SITE='fac43aa803a07a7c92c22059e7aa5988186d5baf';
+          const needle='        && validInitialResidentInputs()\n';
+          const extension='        && request.resource.data.email.matches("(?i)^[^@]+@(gmail[.]com|yahoo[.]com)$")\n'
+            +'        && (!request.resource.data.email.matches("(?i)^[^@]+@gmail[.]com$")\n'
+            +"          || request.auth.token.get('firebase', {}).get('identities', {}).get('google.com', []).size() > 0)\n";
+          async function main(){
+            const site=await fetch('https://volunserve.com/volunserve-release.json?rules_preflight='+Date.now(),{
+              headers:{'Cache-Control':'no-cache'},signal:AbortSignal.timeout(15000)});
+            assert(site.ok,'BLOCKED: live Hosting marker unavailable');
+            const marker=await site.json();
+            assert.equal(marker.app,'VolunServe');
+            assert.equal(marker.firebaseProject,PROJECT);
+            assert.equal(marker.revision,EXPECTED_SITE,'BLOCKED: reviewed Signup Hosting update not yet live');
+            const raw=process.env.VOLUNSERVE_PRODUCTION_HOSTING_SERVICE_ACCOUNT;
+            assert(raw,'BLOCKED: no protected production service account');
+            const credential=JSON.parse(raw);
+            assert.equal(credential.project_id,PROJECT,'BLOCKED: wrong Firebase credential project');
+            const {access_token}=await cert(credential).getAccessToken();
+            assert(access_token);
+            const call=async(relative,options={})=>{
+              const response=await fetch(BASE+'/'+relative,{
+                ...options,
+                headers:{Authorization:'Bearer '+access_token,...options.headers},
+                signal:AbortSignal.timeout(45000),
+              });
+              const data=await response.json().catch(()=>({}));
+              return {response,data};
+            };
+            const readRelease=async()=>{
+              const {response,data}=await call(RELEASE);
+              assert(response.ok,'BLOCKED: cannot GET active Firestore release HTTP '+response.status);
+              assert(data.rulesetName&&data.name===RELEASE,'BLOCKED: unexpected default database release');
+              return data;
+            };
+            const readSource=async(name)=>{
+              const {response,data}=await call(name);
+              assert(response.ok,'BLOCKED: cannot GET active Rules source');
+              const files=data.source?.files||[];
+              assert(files.length===1&&typeof files[0].content==='string','BLOCKED: unexpected active source bundle');
+              return files[0];
+            };
+            const original=await readRelease();
+            const activeFile=await readSource(original.rulesetName);
+            const active=activeFile.content;
+            assert.equal(sha(active),EXPECTED_OLD_RULES_SHA,
+              'BLOCKED: production Rules changed; cannot patch unreviewed live security policy');
+            assert.equal(active.split(needle).length,2,'BLOCKED: non-unique Resident create anchor');
+            const candidate=active.replace(needle,needle+extension);
+            assert.equal(sha(candidate),EXPECTED_NEW_RULES_SHA,
+              'BLOCKED: source differs from independently compiled exact candidate');
+            assert.equal(candidate.slice(0,candidate.indexOf(needle)),active.slice(0,active.indexOf(needle)));
+            const filename=activeFile.name||'firestore.rules';
+            const tested=await call('projects/'+PROJECT+':test',{
+              method:'POST',
+              headers:{'Content-Type':'application/json'},
+              body:JSON.stringify({source:{files:[{name:filename,content:candidate}]}}),
+            });
+            assert(tested.response.ok,'BLOCKED: Google production compiler rejected Rules HTTP '+tested.response.status+' '+String(tested.data.error?.message||'').slice(0,300));
+            assert(!(tested.data.issues||[]).some(issue=>issue.severity==='ERROR'),
+              'BLOCKED: production Rules compilation returned ERROR');
+            console.log('PASS: exact active source, pinned production compiler, site marker; no rule lines removed');
+            // Recheck for Rules drift before creating the new inactive ruleset.
+            const immediatelyBefore=await readRelease();
+            assert.equal(immediatelyBefore.rulesetName,original.rulesetName,'BLOCKED: live Firestore Rules changed');
+            const created=await call('projects/'+PROJECT+'/rulesets',{
+              method:'POST',
+              headers:{'Content-Type':'application/json'},
+              body:JSON.stringify({source:{files:[{name:filename,content:candidate}]}}),
+            });
+            assert(created.response.ok&&created.data.name?.startsWith('projects/'+PROJECT+'/rulesets/'),
+              'Ruleset creation failed HTTP '+created.response.status+'; original release unchanged');
+            const newName=created.data.name;
+            const patch=async(name)=>call(RELEASE,{
+              method:'PATCH',
+              headers:{'Content-Type':'application/json'},
+              body:JSON.stringify({release:{name:RELEASE,rulesetName:name}}),
+            });
+            const beforePatch=await readRelease();
+            assert.equal(beforePatch.rulesetName,original.rulesetName,'BLOCKED: active release moved during Rules review');
+            try{
+              const published=await patch(newName);
+              assert(published.response.ok,'Cannot update Firestore Rules release HTTP '+published.response.status);
+              const newRelease=await readRelease();
+              assert.equal(newRelease.rulesetName,newName,'Post-release Ruleset name mismatch');
+              assert.equal(sha((await readSource(newName)).content),EXPECTED_NEW_RULES_SHA,
+                'Live release source does not match exact restrictive candidate');
+              console.log('SUCCESS: ACTIVE Firestore new-Resident Gmail Google-linked identity + Yahoo restriction; old login/roles preserved');
+            }catch(error){
+              console.error('WARNING: postpublish failed; checking whether Rules rollback is required');
+              const now=await readRelease();
+              if(now.rulesetName!==original.rulesetName){
+                assert.equal(now.rulesetName,newName,'URGENT: another Rules release intervened; no automatic overwriting');
+                const reverted=await patch(original.rulesetName);
+                assert(reverted.response.ok,'URGENT: automatic Firestore Rules rollback FAILED HTTP '+reverted.response.status);
+                assert.equal((await readRelease()).rulesetName,original.rulesetName,'URGENT: rollback verification failed');
+                console.log('ROLLBACK: exact original production Ruleset restored');
+              }
+              throw error;
+            }
+          }
+          main().catch(e=>{console.error(String(e.message||e).slice(0,800));process.exitCode=1;});
+          NODE
