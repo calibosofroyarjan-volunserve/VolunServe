@@ -73,14 +73,16 @@ async function cancelEmulatedPendingWave({
       const assignments=assigns.docs.map(s=>({id:s.id,...s.data()}));
       const own=assignments.filter(x=>x.caseId===caseId);
       if(!own.length)return blocked("missing_pending_offers");
-      if(own.some(x=>x.offerMode!=="automatic_wave_proposed"||
-         !KNOWN.has(String(x.status||"").toLowerCase())))
-        return blocked("unknown_or_manual_case_assignment");
+      // Protect accepted/ongoing missions FIRST, even if their status is
+      // outside the set of cancellable pending offer statuses.
       if(own.some(x=>ACCEPTED.has(String(x.status||"").toLowerCase()))||
          caseData.autoVolunteerAcceptedAssignmentId||
          caseData.activeVolunteerSupportAssignmentId||
          caseData.activeVolunteerSupportUid)
         return blocked("accepted_or_manually_selected_responder");
+      if(own.some(x=>x.offerMode!=="automatic_wave_proposed"||
+         !KNOWN.has(String(x.status||"").toLowerCase())))
+        return blocked("unknown_or_manual_case_assignment");
       const caseLocks=locks.docs.map(s=>({id:s.id,...s.data()}))
         .filter(x=>x.caseId===caseId);
       if(caseLocks.length)return blocked("existing_responder_lock");
