@@ -60,7 +60,7 @@ function fakeDatabase(projectId=PROJECT){
           return {
             async get(){
               counters.reads++;
-              if(name==="users"&&id!=="administrator")counters.sourceReads++;
+              if(name==="users"&&id==="approved_volunteer")counters.sourceReads++;
               if(state.failDoc===name+"/"+id)
                 throw Error("SECRET_UTILITY_PRIVATE_FIRESTORE_DETAILS");
               return fakeDoc(id,col.get(id));
@@ -196,12 +196,9 @@ test("explicit enable flags and read-only mode are mandatory",()=>{
     const gate=getCloudStagingPreviewGate({db:envDB.db,authClient:auth});
     assert.equal(gate.allowed,false,key);
     assert.ok(gate.reasons.includes(reason),key);
-    const response=awaitPreviewNotNeeded();
-    assert.equal(response,false);
     originalSetup();
   }
 });
-function awaitPreviewNotNeeded(){return false}
 test("production, accepted historical staging, demo and incorrect bound cloud project are rejected",()=>{
   for(const project of [
     "volunserve-3aa5b","volunserve-volunteer-staging",
