@@ -3165,7 +3165,13 @@ export default function DonationAdministration() {
                 return (
                   <View key={campaign.id} style={[styles.campaignCard,{width:windowWidth>=1250?"49%":"100%"}]}>
                     <View style={styles.cardHeaderRow}>
-                      <View style={{ flex: 1 }}>
+                      <View style={styles.campaignRecordIcon}>
+                        <Ionicons name={String(campaign.campaignGroup || "") === "disaster_affected"
+                            ? "home-outline" : /animal|pet/i.test(campaignCategoryLabel(campaign))
+                              ? "paw-outline" : "medkit-outline"}
+                          size={22} color="#047857"/>
+                      </View>
+                      <View style={{ flex: 1,minWidth:0 }}>
                         <Text style={styles.cardTitle}>{campaign.title || "Donation Campaign"}</Text>
                         <View style={styles.recordBadgeRow}>
                           <View
@@ -3363,17 +3369,21 @@ export default function DonationAdministration() {
                       )}
 
 
-                    <Text style={styles.cardMeta}>Created: {formatDate(campaign.createdAt)}</Text>
-
-                    {campaign.status === "published" && (
-                      <TouchableOpacity
-                        style={styles.closeCampaignButton}
-                        disabled={busyKey === `close_${campaign.id}`}
-                        onPress={() => void closeCampaign(campaign)}
-                      >
-                        <Text style={styles.closeCampaignText}>Close Campaign</Text>
-                      </TouchableOpacity>
-                    )}
+                    <View style={styles.campaignCardFooter}>
+                      <View style={{flexDirection:"row",alignItems:"center",gap:6}}>
+                        <Ionicons name="calendar-outline" size={14} color="#64748B"/>
+                        <Text style={styles.cardMeta}>Created: {formatDate(campaign.createdAt)}</Text>
+                      </View>
+                      {campaign.status === "published" && (
+                        <TouchableOpacity
+                          style={[styles.closeCampaignButton,{marginTop:0}]}
+                          disabled={busyKey === `close_${campaign.id}`}
+                          onPress={() => void closeCampaign(campaign)}
+                        >
+                          <Text style={styles.closeCampaignText}>Close Campaign</Text>
+                        </TouchableOpacity>
+                      )}
+                    </View>
                   </View>
                 );
               })}
