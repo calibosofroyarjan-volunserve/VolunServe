@@ -2805,7 +2805,7 @@ function EvidenceTab({
     <View style={styles.tabContent}>
       <SectionCard
         title="Public Campaign Photo"
-        subtitle="Required transparency photo submitted separately from private evidence. It may appear publicly only if the LGU verifies the request and later publishes Donation Support."
+        subtitle="Resident-submitted image for possible use in an approved public donation campaign."
         icon="image-outline"
       >
         {publicPhotoUrl.startsWith("https://") ? (
@@ -2845,8 +2845,8 @@ function EvidenceTab({
                   }
                 >
                   {request.publicCampaignPhotoConsent === true
-                    ? "RESIDENT CONSENT RECORDED"
-                    : "CONSENT NOT CONFIRMED"}
+                    ? "Resident consent recorded"
+                    : "Consent not confirmed"}
                 </Text>
               </View>
 
@@ -2880,14 +2880,14 @@ function EvidenceTab({
                 <Ionicons
                   name="open-outline"
                   size={15}
-                  color="#4338CA"
+                  color="#116A4B"
                 />
                 <Text
                   style={
                     styles.publicCampaignPhotoOpenButtonText
                   }
                 >
-                  Open Full Photo
+                  View full image
                 </Text>
               </TouchableOpacity>
             </View>
@@ -2916,7 +2916,7 @@ function EvidenceTab({
 
       <SectionCard
         title="Private Supporting Evidence"
-        subtitle="Private LGU verification files. Review names, dates, facility details, estimates, and other relevant information."
+        subtitle="Restricted verification records. Only authorized administrators can open these files."
         icon="images-outline"
       >
         {documents.length === 0 ? (
@@ -2983,7 +2983,7 @@ function EvidenceTab({
                   >
                     {item.fileName ||
                       item.documentType ||
-                      "Uploaded evidence"}
+                      "Uploaded document"}
                   </Text>
                 </View>
 
@@ -3006,7 +3006,7 @@ function EvidenceTab({
         />
         <View style={styles.noteCopy}>
           <Text style={styles.warningTitle}>
-            Manual authenticity check required
+            Manual evidence verification
           </Text>
           <Text style={styles.warningText}>
             A photo or screenshot alone does not
@@ -3361,19 +3361,19 @@ function DecisionTab({
             paddingHorizontal:16, paddingVertical:16,
             borderWidth: active ? 2 : 1,
             borderColor: active ? "#059669" : "#DDE6E3",
-            borderRadius:14,
-            backgroundColor: active ? "#F0FDF4" : disabled ? "#F8FAFC" : "#FFFFFF",
+            borderRadius:9,
+            backgroundColor: active ? "#F3FAF6" : disabled ? "#F8FAFC" : "#FFFFFF",
             opacity: disabled ? 0.65 : 1,
           }}>
           <View style={{
-            width:40,height:40,borderRadius:11,alignItems:"center",justifyContent:"center",
-            backgroundColor: active ? "#D1FAE5" : "#F1F5F9",
+            width:36,height:36,borderRadius:7,alignItems:"center",justifyContent:"center",
+            backgroundColor: active ? "#E7F4EC" : "#F1F5F9",
           }}>
             <Ionicons name={iconName} size={21} color={active ? "#047857" : "#475569"} />
           </View>
           <View style={{flex:1,gap:4}}>
-            <Text style={{fontSize:14,fontWeight:"800",color:"#102A26"}}>{title}</Text>
-            <Text style={{fontSize:11.5,lineHeight:17,color:"#5B706B"}}>{description}</Text>
+            <Text style={{fontSize:14,fontWeight:"700",color:"#203040"}}>{title}</Text>
+            <Text style={{fontSize:12.5,lineHeight:19,color:"#637587"}}>{description}</Text>
           </View>
           <Ionicons name={active?"radio-button-on":"radio-button-off"}
             size={21} color={active ? "#047857" : "#94A3B8"}/>
@@ -3422,38 +3422,33 @@ function DecisionTab({
       </View>
     );
     return (
-      <View style={{padding:22,gap:23}}>
+      <View style={{padding:5,gap:18}}>
         <View style={{flexDirection:"row",alignItems:"center",justifyContent:"space-between",
           flexWrap:"wrap",gap:14,paddingBottom:13,borderBottomWidth:1,borderColor:"#E6EEEA"}}>
           <View style={{gap:5}}>
-            <Text style={{fontSize:21,color:"#103528",fontWeight:"800"}}>Choose Assistance</Text>
+            <Text style={{fontSize:20,color:"#182C3B",fontWeight:"700"}}>Choose Assistance</Text>
             <Text style={{fontSize:12,color:"#63796F",lineHeight:19}}>
-              This request is approved. Choose how support will be provided.
+              Set up a donation campaign for this approved assistance request.
             </Text>
           </View>
-          <View style={{backgroundColor:"#DDF7E6",paddingVertical:9,paddingHorizontal:16,
-            borderRadius:99,flexDirection:"row",alignItems:"center",gap:7}}>
-            <Ionicons name="checkmark-circle" size={17} color="#087544"/>
-            <Text style={{fontSize:12,fontWeight:"800",color:"#087544"}}>Approved</Text>
+          <View style={{backgroundColor:"#EFF7F2",paddingVertical:8,paddingHorizontal:12,
+            borderRadius:7,flexDirection:"row",alignItems:"center",gap:7}}>
+            <Ionicons name="checkmark-circle-outline" size={17} color="#14724F"/>
+            <Text style={{fontSize:12,fontWeight:"700",color:"#14724F"}}>Approved</Text>
           </View>
         </View>
-        <View style={{flexDirection:"row",flexWrap:"wrap",gap:18}}>
-          <View style={{flex:1,minWidth:270}}>
+        <View style={{flexDirection:"row",flexWrap:"wrap",gap:14}}>
+          <View style={{flex:1,minWidth:260}}>
             {supportCard("donation_support","Create Donation Campaign",
-              "Gather community support for the approved amount.",
+              "Prepare the public campaign using verified request details.",
               "heart-outline")}
-          </View>
-          <View style={{flex:1,minWidth:270}}>
-            {supportCard("internal_support","Record LGU Assistance",
-              "Record assistance given by the LGU or an authorized partner.",
-              "business-outline")}
           </View>
         </View>
         {supportDecision==="not_required" && (
           <View style={{padding:13,backgroundColor:"#F1F5F9",borderRadius:10}}>
             <Text style={{fontSize:12,color:"#475569"}}>
               This request is currently marked No Further Support.
-              Select LGU Assistance to record direct support, or continue with the saved decision.
+              The existing assistance decision remains on record. You can complete the saved case below.
             </Text>
           </View>
         )}
@@ -3473,7 +3468,7 @@ function DecisionTab({
                     <Text style={styles.fieldLabel}>Campaign Title <Text style={{color:"#B42318"}}>*</Text></Text>
                     <View style={{borderWidth:1,borderColor:"#DDE7E1",backgroundColor:"#FFFFFF",
                       borderRadius:8,minHeight:41,paddingHorizontal:12,paddingVertical:10}}>
-                      <Text style={{fontSize:12,fontWeight:"700",color:"#1D332A"}}>
+                      <Text style={{fontSize:13,fontWeight:"600",color:"#263747"}}>
                         {request.title || "Assistance Request"}
                       </Text>
                     </View>
@@ -3482,17 +3477,17 @@ function DecisionTab({
                     <Text style={styles.fieldLabel}>Campaign Story <Text style={{color:"#B42318"}}>*</Text></Text>
                     <View style={{borderWidth:1,borderColor:"#DDE7E1",backgroundColor:"#FFFFFF",
                       borderRadius:8,minHeight:90,padding:11}}>
-                      <Text style={{fontSize:12,color:"#344B42",lineHeight:19}}>
+                      <Text style={{fontSize:13,color:"#33485A",lineHeight:20}}>
                         {request.description || "No description provided by the Resident."}
                       </Text>
                     </View>
                   </View>
                 </View>
-                <View style={{flex:1,minWidth:210,padding:12,gap:10,backgroundColor:"#F7FAF8",
-                  borderRadius:10,borderWidth:1,borderColor:"#DFEAE3"}}>
+                <View style={{flex:1,minWidth:210,padding:14,gap:8,backgroundColor:"#F9FBFA",
+                  borderRadius:9,borderWidth:1,borderColor:"#DFE8E6"}}>
                   <View style={{flexDirection:"row",alignItems:"center",gap:7}}>
                     <Ionicons name="document-text-outline" size={17} color="#047857"/>
-                    <Text style={{fontSize:13,fontWeight:"800",color:"#173B2D"}}>Campaign Summary</Text>
+                    <Text style={{fontSize:14,fontWeight:"700",color:"#243646"}}>Campaign Summary</Text>
                   </View>
                   <InfoItem label="Request ID" value={request.requestId || request.id}/>
                   <InfoItem label="Resident" value={request.requesterName || "Resident"}/>
@@ -3515,7 +3510,7 @@ function DecisionTab({
                   <View style={{minHeight:43,paddingHorizontal:10,paddingVertical:9,backgroundColor:"#FFFFFF",
                     borderRadius:8,borderWidth:1,borderColor:"#DDE7E1",flexDirection:"row",gap:7,alignItems:"center"}}>
                     <Ionicons name="image-outline" size={17} color="#047857"/>
-                    <Text style={{fontSize:11,color:"#047857",flex:1,fontWeight:"700"}}>
+                    <Text style={{fontSize:12,color:"#246D53",flex:1,fontWeight:"600"}}>
                       {request.publicCampaignPhotoUrl ? "Resident photo available" : "Upload in Campaign Setup"}
                     </Text>
                   </View>
@@ -3535,7 +3530,7 @@ function DecisionTab({
                   </Text>}
                 </View>
                 <View style={{flex:1.35,minWidth:180,gap:7,justifyContent:"flex-end"}}>
-                  <Text style={{fontSize:10.5,color:"#64748B",lineHeight:16}}>
+                  <Text style={{fontSize:12,color:"#657587",lineHeight:18}}>
                     The Admin reviews public details in the campaign editor before publishing.
                   </Text>
                   <ActionButton label="Continue to Publish Campaign"
@@ -3547,8 +3542,9 @@ function DecisionTab({
             </View>
           </SectionCard>
         )}
-        {["internal_support","not_required"].includes(supportDecision) && (
-          <SectionCard title="Record LGU Assistance"
+        {["internal_support","not_required"].includes(supportDecision) &&
+          ["internal_support","not_required"].includes(String(request.supportDecision || "")) && (
+          <SectionCard title="Existing LGU Assistance Record"
             subtitle="Save the assistance plan and confirm when support has been provided."
             icon="business-outline">
             <View style={{gap:15}}>
