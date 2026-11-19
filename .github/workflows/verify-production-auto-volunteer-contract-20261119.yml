@@ -1,0 +1,54 @@
+name: Production-schema automatic Volunteer invite contract (NO DEPLOY)
+
+on:
+  push:
+    branches:
+      - feat/production-auto-volunteer-contract-no-deploy-20261119
+  pull_request:
+    branches:
+      - backend-live-protected
+
+permissions:
+  contents: read
+
+jobs:
+  production-compatibility:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - name: Strict additive three-file scope (no live source changes)
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --name-status 61baa71355f155bb7f66301be0e5f367d407cf0f HEAD > /tmp/invite-files
+          test "$(wc -l </tmp/invite-files)" -eq 3
+          while IFS="$(printf '\t')" read -r state file; do
+            test "$state" = A || { echo "BLOCKED existing production file changed"; exit 1; }
+            case "$file" in
+              backend/emergencyAutoInviteCompatibility.js|backend/test-emergencyAutoInviteCompatibility.cjs|.github/workflows/verify-production-auto-volunteer-contract-20261119.yml) ;;
+              *) echo "BLOCKED unexpected file: $file"; exit 1 ;;
+            esac
+          done < /tmp/invite-files
+          ! grep -Fq 'emergencyAutoInviteCompatibility' backend/server.js
+          ! grep -Fq 'emergencyAutoInviteCompatibility' functions/index.js
+          echo "PASS no production activation or files overwritten"
+      - name: Install locked backend dependencies
+        run: npm ci --prefix backend --ignore-scripts --no-audit --no-fund
+      - name: Production-schema invitation tests and syntax
+        run: |
+          node --check backend/emergencyAutoInviteCompatibility.js
+          node --check backend/test-emergencyAutoInviteCompatibility.cjs
+          node --test backend/test-emergencyAutoInviteCompatibility.cjs
+      - name: Existing production backend regression suite
+        run: npm run check --prefix backend
+      - name: Verify no live deployment
+        run: |
+          echo "Contract only: NO Firebase writes, trigger registration, Render deploy, real invitations or production enablement."
