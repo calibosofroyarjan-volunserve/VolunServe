@@ -72,6 +72,8 @@ assert(donations.includes("setResidentStoryPrivacyReviewed(false)") &&
   "Require manual privacy approval before publishing resident-derived content");
 assert(donations.includes("assistanceSource.publicCampaignPhotoConsent === true"),
   "Only consented resident campaign photos may be preselected");
+assert(donations.includes("setShowCampaignForm(!existing && assistanceSourceIsEligible(assistanceSource))"),
+  "Approved request handoff must open publishing editor without a second setup click");
 assert(donations.includes("openedFromAssistance && showCampaignForm") &&
   donations.includes("Publish Donation Campaign") &&
   donations.includes("Official Donation Channel") &&
