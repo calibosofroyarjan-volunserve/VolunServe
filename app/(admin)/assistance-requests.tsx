@@ -652,6 +652,7 @@ export default function AssistanceRequestsAdmin() {
 
   const [savingAction, setSavingAction] =
     useState("");
+  const [donationSubmitting, setDonationSubmitting] = useState(false);
 
   const [previewDocument, setPreviewDocument] =
     useState<StoredDocument | null>(null);
@@ -1016,12 +1017,17 @@ export default function AssistanceRequestsAdmin() {
   const selectRequest = (
     item: AssistanceRequest,
   ) => {
+    if (savingAction || donationSubmitting) {
+      showAssistanceActionError("Save in Progress", "Finish saving before opening another request.");
+      return;
+    }
     setSelected(item);
     setReviewTab("case");
     setScreenMode("detail");
   };
 
   const backToQueue = () => {
+    if (savingAction || donationSubmitting) return;
     setSelected(null);
     setReviewTab("case");
     setScreenMode("queue");
@@ -1336,14 +1342,15 @@ export default function AssistanceRequestsAdmin() {
   const updateRequest = async (
     actionKey: string,
     values: Record<string, any>,
-  ) => {
+    silent = false,
+  ): Promise<boolean> => {
     if (
       !selected ||
       !user ||
       !isOperationalAdmin ||
       savingAction
     ) {
-      return;
+      return false;
     }
 
     try {
@@ -1429,16 +1436,17 @@ export default function AssistanceRequestsAdmin() {
         successMessages[actionKey] ||
         "Assistance Request update has been saved.";
 
-      if (Platform.OS === "web") {
+      if (!silent && Platform.OS === "web") {
         const browserAlert = (globalThis as any).alert;
         if (typeof browserAlert === "function") {
           browserAlert(message);
         } else {
           Alert.alert("Saved", message);
         }
-      } else {
+      } else if (!silent) {
         Alert.alert("Saved", message);
       }
+      return true;
     } catch (error: any) {
       console.error(
         "assistance request operation error",
@@ -1461,6 +1469,7 @@ export default function AssistanceRequestsAdmin() {
       } else {
         Alert.alert("Update Failed", message);
       }
+      return false;
     } finally {
       setSavingAction("");
     }
@@ -1654,17 +1663,13 @@ This still does not automatically create a Donation Campaign.`,
       if (!selected) return;
 
       if (
-        ![
-          "internal_support",
-          "not_required",
-        ].includes(
-          selected.supportDecision ||
-            supportDecision,
-        )
+        !["internal_support", "not_required"].includes(selected.supportDecision || "") ||
+        selected.supportDecision !== supportDecision ||
+        selected.status === "assistance_provided"
       ) {
         Alert.alert(
           "Support Decision",
-          "Mark Assistance Provided only when LGU/partner support has been provided or no additional external support is required.",
+          "Save the selected support plan first. Confirm completion only after the LGU or partner has provided assistance, or the case is ready to close.",
         );
         return;
       }
@@ -1682,8 +1687,7 @@ This still does not automatically create a Donation Campaign.`,
               verificationStatus:
                 "verified",
               supportDecision:
-                selected.supportDecision ||
-                supportDecision,
+                selected.supportDecision,
               remainingAmount:
                 Number(
                   selected.remainingAmount ||
@@ -1698,6 +1702,66 @@ This still does not automatically create a Donation Campaign.`,
           ),
       );
     };
+
+  // One Admin action, two existing authorized backend writes, then campaign
+  // setup. Never publish, change donation records, or bypass private review.
+  const saveAndContinueDonation = async () => {
+    if (!selected || !user || !isOperationalAdmin || savingAction || donationSubmitting) return;
+    if (selected.donationCampaignId) {
+      router.push({pathname: "/donation-list", params: {assistanceRequestId: selected.id}} as any);
+      return;
+    }
+    if (selected.verificationStatus !== "verified" ||
+        supportDecision !== "donation_support") {
+      showAssistanceActionError("Choose Donation Support", "Select Donation Campaign for a verified assistance request.");
+      return;
+    }
+    const cap = Number(verificationReview?.verifiedUncoveredAmount || 0);
+    const amountRaw = remainingAmount.trim();
+    const amount = Number(amountRaw);
+    const validAmount = /^\d+(?:\.\d{1,2})?$/.test(amountRaw) &&
+      Number.isFinite(amount) && amount > 0 && amount <= cap && cap > 0;
+    if (!validAmount) {
+      showAssistanceActionError("Verified Amount Required",
+        "Enter the supported amount greater than zero and no higher than the LGU-verified uncovered amount.");
+      return;
+    }
+    const officeName = locationName.trim();
+    const officeAddress = locationAddress.trim();
+    if (officeName.length < 3 || officeAddress.length < 5) {
+      showAssistanceActionError("Public Office Required",
+        "Enter the public coordination office name and address. The Resident's private address must not be used.");
+      return;
+    }
+    setDonationSubmitting(true);
+    try {
+      const planUpToDate = selected.supportDecision === "donation_support" &&
+        Math.abs(Number(selected.remainingAmount || 0) - amount) < 0.009;
+      if (!planUpToDate) {
+        const savedPlan = await updateRequest("resource_assessment", {
+          supportDecision: "donation_support", remainingAmount: amount,
+          adminNote: adminNote.trim().slice(0, 2000),
+        }, true);
+        if (!savedPlan) return;
+      }
+      const locationUpToDate = String(selected.assignedLocationName || "").trim() === officeName &&
+        String(selected.assignedLocationAddress || "").trim() === officeAddress;
+      if (!locationUpToDate) {
+        const savedOffice = await updateRequest("save_location", {
+          assignedLocationType: selected.assignedLocationType || "lgu_office",
+          assignedLocationName: officeName,
+          assignedLocationAddress: officeAddress,
+          assignedLocationNotes: locationNotes.trim().slice(0, 1000),
+          adminNote: adminNote.trim().slice(0, 2000),
+        }, true);
+        if (!savedOffice) return;
+      }
+      router.push({pathname: "/donation-list",
+        params: {assistanceRequestId: selected.id}} as any);
+    } finally {
+      setDonationSubmitting(false);
+    }
+  };
 
   const saveOfficialLocation =
     () => {
@@ -1991,6 +2055,8 @@ This still does not automatically create a Donation Campaign.`,
         onSaveResourceAssessment={saveResourceAssessment}
         onMarkAssistanceProvided={markAssistanceProvided}
         onSaveLocation={saveOfficialLocation}
+        onContinueDonation={saveAndContinueDonation}
+        donationSubmitting={donationSubmitting}
         onClearLocation={clearOfficialLocation}
       />
     );
