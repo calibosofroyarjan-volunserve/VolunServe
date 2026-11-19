@@ -1,0 +1,87 @@
+name: Auto Volunteer Phase 11 CLOUD READINESS AUDIT - STRICT NO DEPLOY
+on:
+  pull_request:
+    branches:
+      - qa/auto-volunteer-phase10-isolated-app-e2e-20261119
+    paths:
+      - "backend/autoVolunteerPhase11CloudIsolationGate.cjs"
+      - "backend/test-autoVolunteerPhase11CloudIsolationGate.cjs"
+      - "scripts/check-auto-volunteer-phase11-cloud-readiness-20261119.cjs"
+      - "docs/emergency-volunteer/PHASE11_ISOLATED_CLOUD_STAGING_READINESS_20261119.md"
+      - ".github/workflows/qa-auto-volunteer-phase11-cloud-readiness-20261119.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify-cloud-isolation-and-static-existing-staging-source-no-deploy:
+    if: github.repository == 'calibosofroyarjan-volunserve/VolunServe'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            backend/package-lock.json
+      - name: Strict five-file Phase 11 allowlist — NO live or staging runtime update
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin qa/auto-volunteer-phase10-isolated-app-e2e-20261119
+          git diff --name-only origin/qa/auto-volunteer-phase10-isolated-app-e2e-20261119 HEAD > /tmp/phase11-changed
+          while IFS= read -r f; do
+            case "$f" in
+              "backend/autoVolunteerPhase11CloudIsolationGate.cjs"|"backend/test-autoVolunteerPhase11CloudIsolationGate.cjs"|"scripts/check-auto-volunteer-phase11-cloud-readiness-20261119.cjs"|"docs/emergency-volunteer/PHASE11_ISOLATED_CLOUD_STAGING_READINESS_20261119.md"|".github/workflows/qa-auto-volunteer-phase11-cloud-readiness-20261119.yml") ;;
+              *) echo "BLOCKED: unapproved runtime/infra file: $f"; exit 1 ;;
+            esac
+          done < /tmp/phase11-changed
+          echo "PASS: only five review/test/read-only audit files changed."
+      - name: Pure no-write Phase 11 preflight and source gate tests
+        run: |
+          node --check backend/autoVolunteerPhase11CloudIsolationGate.cjs
+          node --check backend/test-autoVolunteerPhase11CloudIsolationGate.cjs
+          node --check scripts/check-auto-volunteer-phase11-cloud-readiness-20261119.cjs
+          node --test backend/test-autoVolunteerPhase11CloudIsolationGate.cjs
+      - name: Retrieve separate existing staging branch SOURCE ONLY — no remote Firebase access
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin feat/emergency-auto-dispatch-server-staging-20261115
+          git show origin/feat/emergency-auto-dispatch-server-staging-20261115:backend/emergencyAutoDispatchStagingServer.js > /tmp/phase11-existing-staging-server.js
+          test -s /tmp/phase11-existing-staging-server.js
+          echo "PASS: read-only extracted existing staging server source from separate branch."
+      - name: Verify staging/source isolation; force Cloud NO-GO until independent approval
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/check-auto-volunteer-phase11-cloud-readiness-20261119.cjs --staging-source /tmp/phase11-existing-staging-server.js > /tmp/phase11-audit.json
+          node - <<'NODE'
+          const fs=require("node:fs"),assert=require("node:assert/strict");
+          const r=JSON.parse(fs.readFileSync("/tmp/phase11-audit.json","utf8"));
+          assert.equal(r.sourceBaseline,"SOURCE_BASELINE_CHECK_PASSED",r.sourceFailures.join(","));
+          assert.equal(r.cloudDeploymentReadiness,"NO_GO");
+          assert.equal(r.stagingDeploymentAuthorized,false);
+          assert.equal(r.productionDispatchAllowed,false);
+          assert.equal(r.externalCloudCallsMade,false);
+          assert.equal(r.existingAcceptedStagingNotModified,true);
+          console.log("PASS: separate staging source checked; cloud deployment remains NO-GO.");
+          NODE
+      - name: Install backend locked dependencies and preserve signup/certificate regressions
+        run: |
+          npm ci --prefix backend --ignore-scripts --no-audit --no-fund
+          npm run check --prefix backend
+      - name: Prove local Phase 10 HTTP test is still NOT a production server route
+        run: |
+          if grep -Fq 'autoVolunteerPhase10LocalApp' backend/server.js; then
+            echo "BLOCKED: local Auth/Firestore emulator app imported by production backend"
+            exit 1
+          fi
+          echo "NO Firebase, Render, Hosting, new service, Cloud Tasks, or Cloud Scheduler deploy."
+          echo "Existing accepted staging fictional tasks are not touched."
+          echo "Phase 11 is a READINESS AUDIT ONLY — production and cloud deployment NO-GO."
