@@ -1,0 +1,55 @@
+name: Validate Donation Back-to-Assistance Link Layout (NO DEPLOY)
+on:
+  push:
+    branches: [fix/donation-assistance-back-link-layout-20261119]
+    paths:
+      - 'app/(admin)/donation-list.tsx'
+      - '.github/workflows/validate-donation-back-link-layout-20261119.yml'
+permissions:
+  contents: read
+jobs:
+  ui-only:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      CI: 'true'
+      EXPO_NO_TELEMETRY: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Assert only Donation UI and QA workflow changed from exact live source
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --check 761c91ea5a65529c4f8086b035c91b2e476a13bd HEAD
+          node - <<'NODE'
+          const fs=require('node:fs'),cp=require('node:child_process'),assert=require('node:assert/strict');
+          const files=cp.execFileSync('git',['diff','--name-only','761c91ea5a65529c4f8086b035c91b2e476a13bd','HEAD'],{encoding:'utf8'}).trim().split('\n').sort();
+          assert.deepEqual(files,['.github/workflows/validate-donation-back-link-layout-20261119.yml','app/(admin)/donation-list.tsx'].sort());
+          const s=fs.readFileSync('app/(admin)/donation-list.tsx','utf8');
+          assert(s.includes('minWidth: 184, height: 42, paddingHorizontal: 13, flexDirection: "row"'));
+          assert(s.includes('accessibilityLabel="Back to Assistance Requests"'));
+          assert(s.includes('style={[styles.subtitle, { marginTop: 0 }]}'));
+          assert(s.includes('residentStoryPrivacyReviewed')&&s.includes('privacySafeResidentDraft'));
+          console.log('PASS: one isolated accessible back-link UI layout fix; protected campaign behavior unchanged');
+          NODE
+      - name: Install locked dependencies
+        run: npm ci --no-audit --no-fund
+      - name: TypeScript and Assistance / Donation UI regressions
+        run: |
+          npx tsc --noEmit --incremental false
+          node scripts/test-assistance-live-clean-flow-20261119.cjs
+          node scripts/test-donation-browser-alerts-20261119.cjs
+          node scripts/test-assistance-donation-flow-audit-20261119.cjs
+      - name: Full Expo web build (never deploy)
+        run: |
+          npx expo export --platform web --clear
+          node scripts/verify-hosting-release.cjs
+      - name: Explicit no-deploy guarantee
+        run: echo "No production Hosting, Firebase, backend, payments or other modules modified"
