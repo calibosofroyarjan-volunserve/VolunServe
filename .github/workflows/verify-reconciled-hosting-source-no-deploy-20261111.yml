@@ -82,6 +82,50 @@ jobs:
               return;
             }
 
+            // Exact one-time Donation Management Hosting-only controller PR:
+            // live-protected contains release controllers while deployed Hosting
+            // retains the immutable application source SHA. No other PR is exempt.
+            const donationControllerPath=".github/workflows/one-time-donation-management-ui-20261120.yml";
+            const donationChanges=git("diff","--name-status","--no-renames",liveBase,commit)
+              .split("\n").filter(Boolean);
+            const donationRelease=donationChanges.length===2
+              && donationChanges[0]==="A\t"+donationControllerPath
+              && donationChanges[1]==="M\t"+verifierPath;
+            if(donationRelease){
+              const deployedSource="8fbb8ba9eaa5ad127add03f1772509af2aa12c5b";
+              const candidateSource="df20f9b73abcc071cda5b72861d2f154b36ea398";
+              assert.equal(liveBase,"340d0172a7b832e3db2c1e73248453e523e26eb7",
+                "BLOCKED: protected release controller moved");
+              assert.equal(marker.revision,deployedSource,
+                "BLOCKED: live Hosting changed, do not deploy stale source");
+              assert.equal(blob(liveBase,verifierPath),"f00c20c40a43fae45ba63732b73bc819fe07bc58",
+                "BLOCKED: previously approved PR verifier changed");
+              assert.equal(blob(commit,donationControllerPath),"7dd650d51d40c0d205b4554f2dca1f8be1f9d7cc",
+                "BLOCKED: Donation release controller not the exact reviewed file");
+              assert.equal(git("rev-parse","origin/ui/donation-management-clean-layout-20261120"),
+                candidateSource,"BLOCKED: reviewed Donation UI branch moved");
+              const ancestry=git("rev-list","--parents","-n","1",candidateSource).split(" ");
+              assert.deepEqual(ancestry,[candidateSource,deployedSource],
+                "BLOCKED: candidate not derived exclusively from live");
+              assert.equal(git("diff","--name-status","--no-renames",deployedSource,candidateSource),
+                "M\tapp/(admin)/donation-list.tsx",
+                "BLOCKED: candidate includes other code or old modules");
+              for(const protectedPath of [
+                "package.json","package-lock.json","app.json","firebase.json",
+                ".firebaserc","tsconfig.json","firestore.rules","storage.rules",
+                "functions/index.js","functions/package.json",
+                "scripts/guard-live-protected-release.cjs",
+                ".github/workflows/auto-publish-protected-live-hosting.yml",
+                ".github/workflows/release-live-protected-hosting.yml","lib/firebase.ts"
+              ]) {
+                assert.equal(blob(commit,protectedPath),blob(liveBase,protectedPath),
+                  "BLOCKED: security, backend or protected config changed: "+protectedPath);
+              }
+              console.log("PASS exact pinned Donation-only UI release controller and live-derived source");
+              console.log("NO DEPLOY: PR validation only");
+              return;
+            }
+
             assert.equal(marker.revision,liveBase,
               "BLOCKED: protected base and production differ; reconcile FIRST");
             const text=git("diff","--name-status","--no-renames",liveBase,commit);
