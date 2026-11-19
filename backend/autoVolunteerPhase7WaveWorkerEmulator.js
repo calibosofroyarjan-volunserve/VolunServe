@@ -107,10 +107,32 @@ async function reconcileEmulatedAutomaticWave({
           cData.activeVolunteerSupportAssignmentId===winner &&
           cData.activeVolunteerSupportUid===responded[0].volunteerId;
         if(!matched)return blocked("conflicting_or_unverified_accepted_responder");
-        // Persist terminal stop state just once. Never change the accepted
-        // assignment, responder lock, or accepted mission's notification.
-        tx.update(bRef,{status:"supported",updatedAt:FieldValue.serverTimestamp()});
-        return {status:"supported",emulatorOnly:true,changed:true};
+        // Once one Volunteer accepts, every sibling OFFER must be closed and
+        // their reservations released. Otherwise old pending offers keep
+        // approved Volunteers unavailable for future fictional incidents.
+        // The accepted winner, responder lock, history and notices stay intact.
+        const siblings=currentOffers.filter(x=>statusOf(x)==="offered");
+        const reserved=reservations.docs.map(record);
+        for(const sibling of siblings){
+          if(!validId(sibling.volunteerId)||
+             sibling.id!==caseId+"_"+sibling.volunteerId)
+            return blocked("untrusted_sibling_offer_identity");
+          const match=reserved.find(x=>x.id===sibling.volunteerId);
+          if(match&&(match.caseId!==caseId||
+             match.assignmentId!==sibling.id||
+             (match.uid&&match.uid!==sibling.volunteerId)))
+            return blocked("foreign_sibling_reservation");
+        }
+        const stamp=FieldValue.serverTimestamp();
+        for(const sibling of siblings){
+          tx.update(offerRef(db,caseId,sibling.volunteerId),
+            {status:"cancelled",updatedAt:stamp});
+          if(reserved.some(x=>x.id===sibling.volunteerId))
+            tx.delete(reserveRef(db,sibling.volunteerId));
+        }
+        tx.update(bRef,{status:"supported",updatedAt:stamp});
+        return {status:"supported",emulatorOnly:true,changed:true,
+          cancelledPendingOffers:siblings.length};
       }
       // If a manual Admin offer races with the demo batch, the case pointer
       // protects the worker from adding more offers. Phase 5 UI rules still

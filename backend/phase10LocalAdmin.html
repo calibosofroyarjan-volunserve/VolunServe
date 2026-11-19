@@ -48,9 +48,9 @@
       <button id="inspect" type="button" disabled>Read case status</button>
       <button id="approve" type="button" disabled>Approve & auto-offer to Volunteers</button>
       <button id="start" type="button" disabled hidden>Legacy manual test only</button>
-      <button id="tick" type="button" disabled>Run due-scan (manual demo)</button>
+      <button id="tick" type="button" disabled hidden>Legacy manual due-scan test</button>
     </div>
-    <p class="note">Approving a fictional pending report immediately sends its first matching offers. Later offer expiries still require the manual due-scan demo, NOT a production 24/7 scheduler.</p>
+    <p class="note">Approving a fictional report immediately sends matching offers. The local emulator automatically checks for expired offers and advances eligible waves while this QA process is running. This is not a durable 24/7 production scheduler.</p>
     <label for="reason">Cancellation reason</label>
     <select id="reason">
       <option value="safety_pause">Safety pause</option>

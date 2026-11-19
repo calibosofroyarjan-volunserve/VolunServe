@@ -20,6 +20,7 @@ const {runPhase9DemoDueScan}
   =require("./autoVolunteerPhase9DueScanEmulator");
 const {isOperationalAdminProfile}=require("./adminAccess");
 const {FieldValue}=require("firebase-admin/firestore");
+const {createLocalEmulatorDueWorker}=require("./autoVolunteerPhase18LocalDueWorker");
 const PROJECT="demo-volunserve-auto-phase4",MAX=200;
 const validCase=x=>typeof x==="string"&&
   /^phase10_[a-zA-Z0-9_-]{1,86}$/.test(x);
@@ -33,10 +34,21 @@ function ready(db,auth,env){
     typeof auth?.verifyIdToken==="function";
 }
 function createPhase10LocalApp({db,authClient,env=process.env,
-  clock=()=>Date.now()}={}){
+  clock=()=>Date.now(),autoDueWorkerEnabled=true,autoDuePollMs=5000,
+  autoDueSchedule=setInterval,autoDueUnschedule=clearInterval}={}){
   if(!ready(db,authClient,env))
     throw Error("Phase 10 refuses non-demo Auth/Firestore environment");
   const app=express();
+  // Isolated QA process only. There is no durable 24/7 cloud schedule.
+  // The clock and timer are injectable so CI can prove expiry behavior
+  // without waiting 3 minutes or touching any real Firebase project.
+  const autoDueWorker=autoDueWorkerEnabled
+    ?createLocalEmulatorDueWorker({
+      db,env,clock,intervalMs:autoDuePollMs,
+      schedule:autoDueSchedule,unschedule:autoDueUnschedule
+    }):null;
+  if(autoDueWorker)autoDueWorker.start();
+  app.locals.stopAutoDueWorker=()=>autoDueWorker?.stop();
   app.disable("x-powered-by");
   app.use(express.json({limit:"4kb"}));
   app.use((_req,res,next)=>{
@@ -50,7 +62,10 @@ function createPhase10LocalApp({db,authClient,env=process.env,
     res.sendFile(path.join(__dirname,"phase10LocalVolunteer.html")));
   app.get("/api/phase10/health",(_req,res)=>res.json({
     ok:true,localDemoOnly:true,dispatchEnabled:false,
-    workerMode:"explicit_admin_demo_tick",schedulerAlwaysOn:false
+    workerMode:autoDueWorkerEnabled?"process_local_auto_due_scan":
+      "explicit_admin_demo_tick",schedulerAlwaysOn:false,
+    schedulerProcessLocal:!!autoDueWorker,
+    autoDueIntervalMs:autoDueWorker?autoDuePollMs:null
   }));
   async function requireVerifiedDemoUser(req,res,next){
     const match=/^Bearer ([^\s]+)$/.exec(

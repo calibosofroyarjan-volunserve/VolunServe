@@ -135,7 +135,11 @@ test.before(async()=>{
   tokens.c=tokens[uidVolunteerC];
   tokens.resident=tokens[uidResident];
   tokens.unverified=tokens[uidUnverified];
-  const app=createPhase10LocalApp({db,authClient:auth,clock:()=>now});
+  // Preserve legacy explicit-tick regression scenarios; the new automatic
+  // scheduled path is tested separately below with an injected fake timer.
+  const app=createPhase10LocalApp({
+    db,authClient:auth,clock:()=>now,autoDueWorkerEnabled:false
+  });
   server=await new Promise(resolve=>{
     const instance=app.listen(0,"127.0.0.1",()=>resolve(instance));
   });
@@ -249,6 +253,96 @@ test("approved Admin verifies a pending report and AUTOMATICALLY sends Volunteer
   assert.equal(other.code,409);
   const state=await caseDoc(cid).get();
   assert.equal(state.data().activeVolunteerSupportUid,uidVolunteerA);
+});
+test("AUTOMATIC scheduled follow-up after approval: no manual Start or Due Scan",async()=>{
+  const cid=await seedCase("automatic_due_followup");
+  await caseDoc(cid).update({status:"pending_review",verificationStatus:"pending"});
+  const approved=await request({
+    token:tokens.admin,method:"POST",path:adminCase(cid)+"/approve",body:{}
+  });
+  assert.equal(approved.code,200,JSON.stringify(approved.data));
+  assert.equal(approved.data.status,"offered");
+  assert.equal(approved.data.offered,2);
+  assert.equal((await persistentBatchRef(db,cid).get()).data().wave,1);
+
+  // Isolated scheduler has its own automatic interval. No HTTP /due-scan or
+  // /start request drives the follow-up wave.
+  let onInterval,clearCount=0,scheduledMs=0;
+  const processLocal=createPhase10LocalApp({
+    db,authClient:auth,clock:()=>now,
+    autoDueWorkerEnabled:true,autoDuePollMs:1000,
+    autoDueSchedule:(fn,ms)=>{
+      onInterval=fn;scheduledMs=ms;return {unref(){}};
+    },
+    autoDueUnschedule:()=>{clearCount++;}
+  });
+  try{
+    assert.equal(scheduledMs,1000);
+    assert.equal(typeof onInterval,"function");
+    now=NOW+OFFER_MS+15;
+    const advanced=await onInterval();
+    assert.equal(advanced.status,"scanned",JSON.stringify(advanced));
+    assert.equal(advanced.executed,1);
+    const state=await view(cid);
+    assert.equal(state.data.wave,3);
+    assert.equal(state.data.counts.expired,2);
+    assert.equal(state.data.counts.offered,1);
+    const distant=await request({
+      token:tokens.c,path:volunteerCase(cid)+"/offer"
+    });
+    assert.equal(distant.data.status,"offered");
+    assert.equal(distant.data.wave,3);
+    const repeat=await onInterval();
+    assert.equal(repeat.status,"scanned");
+    const offers=await db.collection("responseAssignments")
+      .where("caseId","==",cid).get();
+    assert.equal(offers.size,3,"Never duplicate offered Volunteer tasks");
+  }finally{
+    processLocal.locals.stopAutoDueWorker();
+  }
+  assert.equal(clearCount,1,"Scheduler must clean up its timer");
+  const stopped=await onInterval();
+  assert.equal(stopped.status,"stopped");
+});
+test("AUTOMATIC due worker stops offers after Volunteer Accept or Admin Cancel",async()=>{
+  let onInterval;
+  const processLocal=createPhase10LocalApp({
+    db,authClient:auth,clock:()=>now,
+    autoDueWorkerEnabled:true,autoDuePollMs:1000,
+    autoDueSchedule:(fn)=>{onInterval=fn;return {unref(){}};},
+    autoDueUnschedule:()=>{}
+  });
+  try{
+    const acceptedCase=await seedCase("autodue_accepted");
+    await start(acceptedCase);
+    assert.equal((await decide(acceptedCase,"a","accepted")).code,200);
+    now=NOW+OFFER_MS+15;
+    const acceptedScan=await onInterval();
+    assert.equal(acceptedScan.status,"scanned");
+    assert.equal((await persistentBatchRef(db,acceptedCase).get()).data().status,"supported");
+    assert.equal((await db.collection("responseAssignments")
+      .doc(acceptedCase+"_"+uidVolunteerC).get()).exists,false);
+    assert.equal((await db.collection("responseAssignments")
+      .doc(acceptedCase+"_"+uidVolunteerB).get()).data().status,"cancelled",
+      "Pending sibling offer must be closed after first Accept");
+    assert.equal((await db.collection("autoVolunteerReservations")
+      .doc(uidVolunteerB).get()).exists,false,
+      "Unselected Volunteer must be available for new missions");
+    assert.equal((await db.collection("responderLocks")
+      .doc(uidVolunteerA).get()).exists,true,
+      "Accepted responder lock must remain intact");
+
+    const cancelledCase=await seedCase("autodue_cancelled");
+    now=NOW;
+    await start(cancelledCase);
+    assert.equal((await cancel(cancelledCase)).code,200);
+    now=NOW+OFFER_MS+15;
+    const cancelledScan=await onInterval();
+    assert.equal(cancelledScan.status,"scanned");
+    assert.equal((await persistentBatchRef(db,cancelledCase).get()).data().status,"cancelled");
+    assert.equal((await db.collection("responseAssignments")
+      .doc(cancelledCase+"_"+uidVolunteerC).get()).exists,false);
+  }finally{processLocal.locals.stopAutoDueWorker()}
 });
 test("blocked or unapproved incident never auto-offers Volunteers",async()=>{
   const cid=await seedCase("approval_blocked");
