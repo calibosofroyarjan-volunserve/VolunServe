@@ -1,5 +1,5 @@
 import { authenticateEmailSignup } from "./signupRegistration";
-import { getRegistrationEmailError, requiresGoogleOAuthForNewRegistration, GMAIL_GOOGLE_OAUTH_REQUIRED_MESSAGE } from "./registrationEmailPolicy";
+import { getRegistrationEmailError } from "./registrationEmailPolicy";
 import { requireCompleteResidentRegistration } from "./requireCompleteResidentRegistration";
 import { EMAIL_FIRST_SIGNUP_ENABLED } from "./signupFeature";
 import {
@@ -472,13 +472,6 @@ export const signUpUser = async (
     if (emailError) throw new Error(emailError);
     const usesGoogle = data.authProvider === "google";
     const usesVerifiedEmail = data.authProvider === "verified_email";
-    // New Gmail Resident profiles require a linked Google identity even if
-    // the email password or verification link came from a temporary inbox.
-    // Does not alter existing login/profile access.
-    if (requiresGoogleOAuthForNewRegistration(submittedEmail) &&
-        !auth.currentUser?.providerData.some(provider => provider.providerId === "google.com")) {
-      throw new Error(GMAIL_GOOGLE_OAUTH_REQUIRED_MESSAGE);
-    }
     if (usesVerifiedEmail && !EMAIL_FIRST_SIGNUP_ENABLED) {
       throw new Error("Email-first signup is not enabled.");
     }
