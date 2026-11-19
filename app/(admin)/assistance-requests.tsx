@@ -421,6 +421,25 @@ const money = (value?: number) => {
   })}`;
 };
 
+// Reference-design formatting only; existing money() and statusMeta() remain intact.
+const referenceAmount = (value?: number) => {
+  const n = Number(value || 0);
+  return Number.isFinite(n) && n > 0 ? `₱${n.toLocaleString("en-PH",{maximumFractionDigits:2})}` : "—";
+};
+const referenceSubmitted = (value: any) => {
+  let date: Date | null = null;
+  try {
+    if (typeof value?.toDate === "function") date = value.toDate();
+    else if (typeof value?.seconds === "number") date = new Date(value.seconds*1000);
+    else if (value instanceof Date) date = value;
+  } catch { /* Display only: invalid timestamps are allowed */ }
+  if (!date || !Number.isFinite(date.getTime())) return {date:"Not recorded",time:""};
+  return {
+    date:date.toLocaleDateString("en-PH",{month:"short",day:"numeric",year:"numeric"}),
+    time:date.toLocaleTimeString("en-PH",{hour:"numeric",minute:"2-digit"}),
+  };
+};
+
 const statusMeta = (value?: string) => {
   const status = String(value || "pending").toLowerCase();
 
@@ -478,6 +497,24 @@ const statusMeta = (value?: string) => {
     soft: "#FFF8D8",
     icon: "time-outline" as const,
   };
+};
+
+// Screenshot-specific table presentation; never change the stored request status.
+const referenceStatusMeta = (request: AssistanceRequest) => {
+  const meta = statusMeta(request.status);
+  const status = String(request.status || "pending").toLowerCase();
+  if (status === "pending" || status === "under_review") {
+    return {...meta,label:"For Review",color:"#956200",soft:"#FFF1BC"};
+  }
+  if (status === "assistance_provided" || status === "closed") {
+    return {...meta,label:"Completed",color:"#334155",soft:"#E8EEF1"};
+  }
+  if (status === "campaign_created" ||
+    (status === "verified" && request.supportDecision &&
+    !["pending","not_required"].includes(request.supportDecision))) {
+    return {...meta,label:"Approved",color:"#087C43",soft:"#DDF8E8"};
+  }
+  return meta;
 };
 
 const documentName = (
@@ -2393,33 +2430,34 @@ function MockQueueRow({request,onPress}:{
   onPress:()=>void;
 }){
   const category=assistanceCategoryMeta(request.category);
-  const meta=statusMeta(request.status);
+  const meta=referenceStatusMeta(request);
+  const submitted=referenceSubmitted(request.createdAt);
   return (
     <TouchableOpacity onPress={onPress} activeOpacity={0.82}
       style={{
-        paddingHorizontal:20,paddingVertical:18,backgroundColor:"#FFFFFF",
+        paddingHorizontal:15,paddingVertical:11,backgroundColor:"#FFFFFF",
         borderBottomWidth:1,borderBottomColor:"#EAEFEB",
-        flexDirection:"row",alignItems:"center",gap:16,minHeight:91,
+        flexDirection:"row",alignItems:"center",gap:11,minHeight:70,
       }}>
-      <View style={{flex:3,minWidth:180,flexDirection:"row",alignItems:"center",gap:12}}>
-        <View style={{width:44,height:44,borderRadius:12,backgroundColor:category.soft,
+      <View style={{flex:3,minWidth:165,flexDirection:"row",alignItems:"center",gap:10}}>
+        <View style={{width:38,height:38,borderRadius:9,backgroundColor:category.soft,
           alignItems:"center",justifyContent:"center"}}>
           <Ionicons name={category.icon} size={22} color={category.color}/>
         </View>
-        <View style={{flex:1,minWidth:0,gap:5}}>
-          <Text style={{fontSize:13,fontWeight:"800",color:"#102A26"}} numberOfLines={2}>
+        <View style={{flex:1,minWidth:0,gap:3}}>
+          <Text style={{fontSize:12,fontWeight:"800",color:"#102A26"}} numberOfLines={2}>
             {request.title || "Assistance Request"}
           </Text>
-          <Text style={{fontSize:11,color:"#73837E"}} numberOfLines={1}>
+          <Text style={{fontSize:10,color:"#73837E"}} numberOfLines={1}>
             {request.requestId || request.id}
           </Text>
         </View>
       </View>
-      <View style={{flex:2,minWidth:110,gap:5}}>
-        <Text numberOfLines={1} style={{fontSize:12,fontWeight:"700",color:"#172E27"}}>
+      <View style={{flex:2,minWidth:105,gap:3}}>
+        <Text numberOfLines={2} style={{fontSize:11.5,fontWeight:"700",color:"#172E27"}}>
           {request.requesterName || "Resident"}
         </Text>
-        <Text style={{fontSize:11,color:"#73837E"}}>Resident</Text>
+        <Text style={{fontSize:10,color:"#73837E"}}>Resident</Text>
       </View>
       <View style={{flex:1.6,minWidth:90}}>
         <Text numberOfLines={2} style={{fontSize:12,color:"#334E45"}}>
@@ -2427,7 +2465,7 @@ function MockQueueRow({request,onPress}:{
         </Text>
       </View>
       <View style={{flex:1.2,minWidth:85}}>
-        <Text style={{fontSize:12,fontWeight:"800",color:"#132D24"}}>{money(request.estimatedAmount)}</Text>
+        <Text style={{fontSize:12,fontWeight:"800",color:"#132D24"}}>{referenceAmount(request.estimatedAmount)}</Text>
       </View>
       <View style={{flex:1.2,minWidth:90}}>
         <View style={{alignSelf:"flex-start",paddingVertical:7,paddingHorizontal:12,
@@ -2436,8 +2474,11 @@ function MockQueueRow({request,onPress}:{
         </View>
       </View>
       <View style={{flex:1.2,minWidth:115,flexDirection:"row",alignItems:"center",gap:7}}>
-        <Text style={{flex:1,fontSize:11,color:"#536C61"}} numberOfLines={2}>{readableDate(request.createdAt)}</Text>
-        <Ionicons name="chevron-forward" size={18} color="#047857"/>
+        <View style={{flex:1,minWidth:0,gap:2}}>
+          <Text numberOfLines={1} style={{fontSize:10.5,color:"#334155",fontWeight:"700"}}>{submitted.date}</Text>
+          <Text numberOfLines={1} style={{fontSize:10,color:"#64748B"}}>{submitted.time}</Text>
+        </View>
+        <Ionicons name="chevron-forward" size={17} color="#047857"/>
       </View>
     </TouchableOpacity>
   );
