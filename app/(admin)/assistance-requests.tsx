@@ -3508,96 +3508,82 @@ function DecisionTab({
           <SectionCard title="Publish Donation Campaign"
             subtitle="Prepare a public donation campaign using the approved assistance request."
             icon="megaphone-outline">
-            <View style={{gap:22}}>
-              <View style={{flexDirection:"row",flexWrap:"wrap",gap:24,alignItems:"flex-start"}}>
-                <View style={{flex:1.65,minWidth:270,gap:12}}>
+            <View style={{gap:15}}>
+              <View style={{flexDirection:"row",flexWrap:"wrap",gap:15,alignItems:"flex-start"}}>
+                <View style={{flex:1.65,minWidth:255,gap:11}}>
                   <View style={{gap:6}}>
-                    <Text style={styles.fieldLabel}>Campaign Title</Text>
-                    <View style={{flexDirection:"row",alignItems:"center",gap:8}}>
-                      <Text style={{color:"#047857",fontSize:11,fontWeight:"700"}}>From Resident's Request</Text>
-                      <Ionicons name="checkmark-circle-outline" size={14} color="#047857"/>
-                    </View>
-                    <View style={{padding:13,borderWidth:1,borderColor:"#DDE7E1",borderRadius:10,
-                      backgroundColor:"#F8FAF9"}}>
-                      <Text style={{fontSize:13,fontWeight:"700",color:"#1D332A"}}>
+                    <Text style={styles.fieldLabel}>Campaign Title <Text style={{color:"#B42318"}}>*</Text></Text>
+                    <View style={{borderWidth:1,borderColor:"#DDE7E1",backgroundColor:"#FFFFFF",
+                      borderRadius:8,minHeight:41,paddingHorizontal:12,paddingVertical:10}}>
+                      <Text style={{fontSize:12,fontWeight:"700",color:"#1D332A"}}>
                         {request.title || "Assistance Request"}
                       </Text>
                     </View>
                   </View>
                   <View style={{gap:6}}>
-                    <Text style={styles.fieldLabel}>Campaign Story</Text>
-                    <Text style={{color:"#047857",fontSize:11,fontWeight:"700"}}>From Resident's Description</Text>
-                    <View style={{padding:14,borderWidth:1,borderColor:"#DDE7E1",borderRadius:10,
-                      backgroundColor:"#F8FAF9",minHeight:77}}>
+                    <Text style={styles.fieldLabel}>Campaign Story <Text style={{color:"#B42318"}}>*</Text></Text>
+                    <View style={{borderWidth:1,borderColor:"#DDE7E1",backgroundColor:"#FFFFFF",
+                      borderRadius:8,minHeight:90,padding:11}}>
                       <Text style={{fontSize:12,color:"#344B42",lineHeight:19}}>
                         {request.description || "No description provided by the Resident."}
                       </Text>
                     </View>
-                    <Text style={{fontSize:11,color:"#64748B"}}>
-                      The Campaign editor checks and lets the Admin remove private details before publishing.
-                    </Text>
                   </View>
-                  <View style={{flexDirection:"row",flexWrap:"wrap",gap:16}}>
-                    <View style={{flex:1,minWidth:160,gap:6}}>
-                      <Text style={styles.fieldLabel}>Donation Target (PHP)</Text>
-                      <TextInput value={remainingAmount}
-                        editable={!busy && !donationSubmitting}
-                        onChangeText={v=>setRemainingAmount(v.replace(/[^0-9.]/g,""))}
-                        keyboardType="decimal-pad" placeholder="Enter amount"
-                        placeholderTextColor="#94A3B8" style={styles.input}/>
-                      {!amountValid && (
-                        <Text style={{fontSize:11,color:"#B45309"}}>Enter an amount up to {money(monetaryCap)}.</Text>
-                      )}
-                    </View>
-                    <View style={{flex:1,minWidth:160,gap:6}}>
-                      <Text style={styles.fieldLabel}>Campaign Cover</Text>
-                      <View style={{padding:13,backgroundColor:"#F8FAF9",borderRadius:10,
-                        borderWidth:1,borderColor:"#DDE7E1",flexDirection:"row",gap:8,alignItems:"center"}}>
-                        <Ionicons name="image-outline" size={17} color="#047857"/>
-                        <Text style={{fontSize:12,color:"#40574D",flex:1}}>
-                          {request.publicCampaignPhotoUrl ? "Resident photo provided" : "Upload in Campaign Setup"}
-                        </Text>
-                      </View>
-                    </View>
-                  </View>
-                  <Text style={styles.fieldLabel}>Assistance Office (Public Only)</Text>
-                  <View style={{flexDirection:"row",flexWrap:"wrap",gap:14}}>
-                    <TextInput value={locationName} onChangeText={setLocationName}
-                      editable={!busy && !donationSubmitting}
-                      placeholder="e.g. City Social Welfare Office"
-                      placeholderTextColor="#94A3B8"
-                      style={[styles.input,{flex:1,minWidth:180}]}/>
-                    <TextInput value={locationAddress} onChangeText={setLocationAddress}
-                      editable={!busy && !donationSubmitting}
-                      placeholder="Public office address"
-                      placeholderTextColor="#94A3B8"
-                      style={[styles.input,{flex:1,minWidth:180}]}/>
-                  </View>
-                  {!officeValid && (
-                    <Text style={{fontSize:11,color:"#B45309"}}>
-                      Enter a public LGU office name and address. Never use a Resident's private home address.
-                    </Text>
-                  )}
                 </View>
-                <View style={{flex:1,minWidth:235,gap:14}}>
-                  <View style={{backgroundColor:"#F3F8F5",borderRadius:12,
-                    borderWidth:1,borderColor:"#E0ECE5",padding:17,gap:14}}>
-                    <Text style={{fontSize:14,fontWeight:"800",color:"#173B2D"}}>Campaign Summary</Text>
-                    <InfoItem label="Request ID" value={request.requestId || request.id}/>
-                    <InfoItem label="Resident" value={request.requesterName || "Resident"}/>
-                    <InfoItem label="Category" value={request.categoryLabel || "Assistance"}/>
-                    <InfoItem label="Amount for Donation" value={money(Number(remainingAmount || 0))}/>
-                    <Text style={{fontSize:11,color:"#6B7D74",lineHeight:17}}>
-                      Resident information is shown privately to the Admin only.
+                <View style={{flex:1,minWidth:210,padding:12,gap:10,backgroundColor:"#F7FAF8",
+                  borderRadius:10,borderWidth:1,borderColor:"#DFEAE3"}}>
+                  <View style={{flexDirection:"row",alignItems:"center",gap:7}}>
+                    <Ionicons name="document-text-outline" size={17} color="#047857"/>
+                    <Text style={{fontSize:13,fontWeight:"800",color:"#173B2D"}}>Campaign Summary</Text>
+                  </View>
+                  <InfoItem label="Request ID" value={request.requestId || request.id}/>
+                  <InfoItem label="Resident" value={request.requesterName || "Resident"}/>
+                  <InfoItem label="Category" value={request.categoryLabel || "Assistance"}/>
+                  <InfoItem label="Amount (Target)" value={referenceAmount(Number(remainingAmount || 0))}/>
+                </View>
+              </View>
+              <View style={{flexDirection:"row",flexWrap:"wrap",gap:12,alignItems:"flex-start"}}>
+                <View style={{flex:0.8,minWidth:125,gap:6}}>
+                  <Text style={styles.fieldLabel}>Donation Target <Text style={{color:"#B42318"}}>*</Text></Text>
+                  <TextInput value={remainingAmount}
+                    editable={!busy && !donationSubmitting}
+                    onChangeText={v=>setRemainingAmount(v.replace(/[^0-9.]/g,""))}
+                    keyboardType="decimal-pad" placeholder="Amount in PHP"
+                    placeholderTextColor="#94A3B8" style={[styles.input,{minHeight:43}]}/>
+                  {!amountValid && <Text style={{fontSize:10.5,color:"#B45309"}}>Up to {money(monetaryCap)}.</Text>}
+                </View>
+                <View style={{flex:1,minWidth:145,gap:6}}>
+                  <Text style={styles.fieldLabel}>Campaign Cover <Text style={{color:"#B42318"}}>*</Text></Text>
+                  <View style={{minHeight:43,paddingHorizontal:10,paddingVertical:9,backgroundColor:"#FFFFFF",
+                    borderRadius:8,borderWidth:1,borderColor:"#DDE7E1",flexDirection:"row",gap:7,alignItems:"center"}}>
+                    <Ionicons name="image-outline" size={17} color="#047857"/>
+                    <Text style={{fontSize:11,color:"#047857",flex:1,fontWeight:"700"}}>
+                      {request.publicCampaignPhotoUrl ? "Resident photo available" : "Upload in Campaign Setup"}
                     </Text>
                   </View>
+                </View>
+                <View style={{flex:1.7,minWidth:200,gap:6}}>
+                  <Text style={styles.fieldLabel}>Assistance Office <Text style={{color:"#B42318"}}>*</Text></Text>
+                  <TextInput value={locationName} onChangeText={setLocationName}
+                    editable={!busy && !donationSubmitting}
+                    placeholder="Public LGU office name"
+                    placeholderTextColor="#94A3B8" style={[styles.input,{minHeight:43}]}/>
+                  <TextInput value={locationAddress} onChangeText={setLocationAddress}
+                    editable={!busy && !donationSubmitting}
+                    placeholder="Public office address (not resident home)"
+                    placeholderTextColor="#94A3B8" style={[styles.input,{minHeight:43}]}/>
+                  {!officeValid && <Text style={{fontSize:10.5,color:"#B45309"}}>
+                    Enter the public coordination office name and address.
+                  </Text>}
+                </View>
+                <View style={{flex:1.35,minWidth:180,gap:7,justifyContent:"flex-end"}}>
+                  <Text style={{fontSize:10.5,color:"#64748B",lineHeight:16}}>
+                    The Admin reviews public details in the campaign editor before publishing.
+                  </Text>
                   <ActionButton label="Continue to Publish Campaign"
                     icon="megaphone-outline" variant="success"
                     loading={donationSubmitting || busy} disabled={busy || donationSubmitting}
                     onPress={onContinueDonation}/>
-                  <Text style={{fontSize:11,color:"#64748B",lineHeight:17,textAlign:"center"}}>
-                    Saves the approved amount and public office, then opens the final publishing screen.
-                  </Text>
                 </View>
               </View>
             </View>
