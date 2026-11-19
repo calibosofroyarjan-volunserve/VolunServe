@@ -79,6 +79,18 @@ test("after Admin validation: one signed backend POST, confirms all eligible inv
   assert.deepEqual(JSON.parse(requests[0].options.body),
     {caseId:"fictional_approved_report"});
 });
+test("existing verified batch is reported without falsely claiming a new dispatch",async()=>{
+  const bridge=load(enabled,"volunserve-3aa5b",async()=>
+    ok({ok:true,status:"already_started",wave:1,offered:2})
+  );
+  const r=await bridge.requestAutomaticVolunteersAfterApproval({
+    caseId:"fictional_case",user:adminToken
+  });
+  assert.equal(r.enabled,true);
+  assert.equal(r.status,"already_started");
+  assert.equal(r.offered,2);
+  assert.ok(admin.includes("No duplicate invitations sent."));
+});
 test("backend 503, malformed reply and network error never claim invitations sent",async()=>{
   for(const response of [
     ok({ok:false,status:"blocked",reason:"automatic_volunteer_release_not_authorized"},503),
