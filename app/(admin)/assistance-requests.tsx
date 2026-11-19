@@ -3225,8 +3225,10 @@ function DecisionTab({
   const rejected = request.verificationStatus === "rejected";
   const busy = !!savingAction;
   const locked = busy || rejected;
-  const facilityRequired = needsFacilityVerification(request.category);
-  const costRequired = Number(request.estimatedAmount || 0) > 0;
+  const facilityRequired = needsFacilityVerification(request.category) ||
+    !!reviewDraft?.facilityVerificationRequired;
+  const costRequired = Number(request.estimatedAmount || 0) > 0 ||
+    !!reviewDraft?.costVerificationRequired;
   const monetaryCap = Math.max(0, Number(reviewRecord?.verifiedUncoveredAmount || 0));
   const donationCampaignReady = verified &&
     request.supportDecision === "donation_support" &&
@@ -3285,7 +3287,14 @@ function DecisionTab({
     : [];
   const riskResolutionNoteMissing = previousRiskFlags.length > 0 &&
     !reviewDraft.riskFlags.trim() && reviewDraft.internalNotes.trim().length < 10;
-  const verifyReady = reviewReadyForVerification(reviewDraft) && !riskResolutionNoteMissing;
+  const grossCost = Number(reviewDraft.verifiedGrossCost);
+  const recordedAid = Number(reviewDraft.confirmedExistingAssistanceAmount);
+  const billingValid = !costRequired || (
+    Number.isFinite(grossCost) && grossCost > 0 &&
+    Number.isFinite(recordedAid) && recordedAid >= 0 && recordedAid <= grossCost
+  );
+  const verifyReady = reviewReadyForVerification(reviewDraft) &&
+    !riskResolutionNoteMissing && billingValid;
   const riskPresent = !!reviewDraft.riskFlags.trim() || previousRiskFlags.length > 0 ||
     !!reviewDraft.videoVerificationRequired || !!reviewDraft.siteVisitRequired;
 
@@ -3713,6 +3722,11 @@ function DecisionTab({
                     placeholderTextColor="#94A3B8" style={styles.input}/>
                 </View>
               </View>
+            )}
+            {costRequired && !billingValid && (
+              <Text style={{fontSize:11,color:"#B45309"}}>
+                Enter a confirmed cost greater than zero. Assistance already received cannot exceed the confirmed cost.
+              </Text>
             )}
             {costRequired && confirmRow("The amount matches the supporting evidence",
               "Only confirmed costs can be approved for possible donation support.",
