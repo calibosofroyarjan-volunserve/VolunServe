@@ -25,7 +25,7 @@ import {auth} from "../../lib/firebase";
 import {
   signUpUser,
 } from "../../lib/firebaseAuth";
-import {getRegistrationEmailError, requiresGoogleOAuthForNewRegistration, GMAIL_GOOGLE_OAUTH_REQUIRED_MESSAGE} from "../../lib/registrationEmailPolicy";
+import {getRegistrationEmailError} from "../../lib/registrationEmailPolicy";
 import { userFacingError } from "../../lib/userFacingError";
 import {
   REGISTRATION_EMAIL_CONFLICT_MESSAGE,
@@ -216,11 +216,6 @@ export default function EmailFirstSignup() {
 
   const age = useMemo(() => dateAge(birth), [birth]);
   const emailErr = getRegistrationEmailError(email);
-  const gmailNeedsGoogle = !resumeMode &&
-    requiresGoogleOAuthForNewRegistration(email) &&
-    !signedInUser?.providerData.some(provider => provider.providerId === "google.com");
-  const gmailPasswordBlockedMessage =
-    "Gmail password signup is blocked. Choose Continue with Google below to verify account ownership.";
   const passwordErr = passwordError(password);
   const needsSpecialization = (SPECIALIZATIONS[occupation] || []).length > 0;
   const googleOnly = !!signedInUser &&
@@ -279,10 +274,6 @@ export default function EmailFirstSignup() {
     setError("");
     setMessage("");
     if (resumeMode ? !email.trim() : !!emailErr) return;
-    if (gmailNeedsGoogle && !googleOnly) {
-      setError(GMAIL_GOOGLE_OAUTH_REQUIRED_MESSAGE);
-      return;
-    }
     // Existing accounts may have older passwords; only new credentials
     // must pass the current complexity policy.
     if (resumeMode ? !password.trim() : !!passwordErr) return;
@@ -558,7 +549,7 @@ export default function EmailFirstSignup() {
           <View style={styles.legacyMainCard}>
             <View style={styles.legacySignupHeading}>
               <Text style={styles.legacySignupTitle}>
-                {step === 1 ? (gmailNeedsGoogle ? "Google Account Verification" : "Email & Password") :
+                {step === 1 ? "Email & Password" :
               step === 2 ? "Verify Your Email" :
               step === 3 ? "Personal Details" : "Address & Profile"}
               </Text>
@@ -619,7 +610,7 @@ export default function EmailFirstSignup() {
                 <Text style={styles.legacyInfoText}>
                   {resumeMode
                     ? "Already created an account but did not finish? Enter the same email and VolunServe password to continue where you left off. No new account will be created."
-                    : "New accounts accept only Gmail or Yahoo. Gmail requires Continue with Google; Yahoo uses an email password and verification link."}
+                    : "Create an account with @gmail.com or @yahoo.com and a password. Verify your inbox before completing your Basic Resident profile. Google sign-in is optional."}
                 </Text>
               </View>
             )}
@@ -646,25 +637,24 @@ export default function EmailFirstSignup() {
             )}
             {step === 1 && (
               <View>
-                <Text style={styles.sectionTitle}>{gmailNeedsGoogle ? "Step 1 — Verify Your Gmail Account" : "Step 1 — Email & Password"}</Text>
+                <Text style={styles.sectionTitle}>Step 1 — Email & Password</Text>
                 <Text style={styles.helper}>
                   {resumeMode
                     ? "Use the SAME email and VolunServe password you created earlier. We'll check whether you still need to verify your email or finish your profile."
-                    : "Only @gmail.com and @yahoo.com are accepted for new Resident accounts. Gmail requires Continue with Google to prove account ownership; Yahoo uses an email verification link."}
+                    : "Only @gmail.com and @yahoo.com are accepted for new Resident accounts. Both support email and password with email verification. Continue with Google is optional."}
                 </Text>
                 <Field
                   label="Email Address *" value={email}
                   onChange={v => {setEmail(v.trim().toLowerCase()); setError("");}}
                   placeholder="name@example.com" keyboardType="email-address"
                   disabled={!emailCanEdit}
-                  error={resumeMode ? (!email.trim() ? "Enter your registration email." : null)
-                    : emailErr || (gmailNeedsGoogle ? gmailPasswordBlockedMessage : null)}
-                  showError={showErrors || gmailNeedsGoogle}
-                  hint={email.trim() && !emailErr && !gmailNeedsGoogle
-                    ? "Yahoo format accepted. Open the verification link to confirm access to this inbox."
+                  error={resumeMode ? (!email.trim() ? "Enter your registration email." : null) : emailErr}
+                  showError={showErrors}
+                  hint={email.trim() && !emailErr
+                    ? "Valid email format. Email verification is required before Resident registration."
                     : undefined}
                 />
-                {(!gmailNeedsGoogle || googleOnly || resumeMode) && <Field
+                <Field
                   label={resumeMode ? "Your VolunServe Password *" : "Create VolunServe Password *"}
                   value={password} onChange={setPassword} secret
                   placeholder={resumeMode ? "Enter your existing VolunServe password" : "At least 8 characters"}
@@ -672,8 +662,8 @@ export default function EmailFirstSignup() {
                     ? !password.trim() ? "Enter the VolunServe password you created earlier." : null
                     : passwordErr}
                   showError={showErrors}
-                />}
-                {!resumeMode && !gmailNeedsGoogle && (
+                />
+                {!resumeMode && (
                   <>
                     <Field
                       label="Confirm Password *" value={confirmPassword}
@@ -699,21 +689,14 @@ export default function EmailFirstSignup() {
                       <Text style={styles.error}>Agree to the Terms and Privacy Notice to continue.</Text>}
                   </>
                 )}
-                {(!gmailNeedsGoogle || googleOnly || resumeMode) && checkButton(
+                {checkButton(
                   googleOnly ? "Link Password & Continue" :
                     resumeMode ? "Resume Registration" : "Create Account & Verify Email",
                   () => {void startEmail();}
                 )}
-                {gmailNeedsGoogle && (
-                  <View style={styles.errorBox}>
-                    <Text accessibilityRole="alert" style={styles.errorBoxText}>
-                      Gmail email/password registration is not allowed. Use Continue with Google below to verify Google account ownership.
-                    </Text>
-                  </View>
-                )}
                 {!signedInUser && !resumeMode && (
                   <>
-                    {!gmailNeedsGoogle && <Text style={styles.orText}>OR</Text>}
+                    <Text style={styles.orText}>OR</Text>
                     {checkButton("Continue with Google", () => {void continueWithGoogle();}, true)}
                   </>
                 )}

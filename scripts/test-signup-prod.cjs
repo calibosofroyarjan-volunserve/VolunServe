@@ -174,13 +174,13 @@ function harness(source, enabled, options = {}) {
     const generated=load(read("lib/disposableEmailDomains.generated.ts"));
     const policy=load(read("lib/registrationEmailPolicy.ts"),{"./disposableEmailDomains.generated":generated});
     for(const value of ["person@gmail.com","person@yahoo.com","PERSON@GMAIL.COM"," PERSON@YAHOO.COM "]) assert.equal(policy.getRegistrationEmailError(value),null);
-    for(const value of ["person@yahoo.com.ph","person@outlook.com","person@department.gov.ph","person@legitimate.co","person@legitimate.com","person@googlemail.com","person@sub.gmail.com","person@sub.yahoo.com","person@gmail.co","person@yahoo.co","person@en2ch.co","person@ruutukf.co","person@tempmail.com","person@smailpro.com","person@gmail.com.evil.com","", "bad@gmail..com","bad@gmail.con","bad@sub.mailinator.com"]) assert.equal(typeof policy.getRegistrationEmailError(value),"string",value);
+    for(const value of ["person@yahoo.com.ph","person@outlook.com","person@department.gov.ph","person@legitimate.co","person@legitimate.com","person@googlemail.com","person@sub.gmail.com","person@sub.yahoo.com","person@gmail.co","person@yahoo.co","person@en2ch.co","person@ruutukf.co","person@tempmail.com","person@smailpro.com","person@mailticking.com","person@emailnator.com","person@agogmail.com","les.terbigs.antos@gmail.com","ra.gngjb.a.hmkn@gmail.com","person@gmail.com.evil.com","", "bad@gmail..com","bad@gmail.con","bad@sub.mailinator.com"]) assert.equal(typeof policy.getRegistrationEmailError(value),"string",value);
     assert.deepEqual([...policy.ALLOWED_NEW_SIGNUP_EMAIL_DOMAINS].sort(),["gmail.com","yahoo.com"]);
     assert.match(policy.getRegistrationEmailError("person@unlisted-example.com"),/only @gmail\.com or @yahoo\.com/);
     for(const [wrong,right] of Object.entries(policy.KNOWN_PROVIDER_TYPO_CORRECTIONS)) assert(policy.getRegistrationEmailError("person@"+wrong).includes(right));
   });
   await check("invalid email domains stop new email/password and Google resident signup BEFORE Firebase writes",async()=>{
-    for(const email of ["x@sample.co","x@unknown.com","x@outlook.com","x@yahoo.com.ph","x@en2ch.co","x@ruutukf.co","x@tempmail.com","x@gmail.com.attacker.test"]){
+    for(const email of ["x@sample.co","x@unknown.com","x@outlook.com","x@yahoo.com.ph","x@en2ch.co","x@ruutukf.co","x@tempmail.com","x@mailticking.com","x@emailnator.com","les.terbigs.antos@gmail.com","ra.gngjb.a.hmkn@gmail.com","x@gmail.com.attacker.test"]){
       const h=harness(current,true,{noUser:true});
       await assert.rejects(h.registration.authenticateEmailSignup(email,data.password,false,true));
       assert(!h.calls.includes("create"),email);
@@ -192,36 +192,44 @@ function harness(source, enabled, options = {}) {
       assert(!google.calls.includes("transaction"),email);
     }
   });
-  await check("Emailnator-style Gmail inbox-only signup cannot create new Auth UID or Resident",async()=>{
-    const gmail="generated.alias@gmail.com";
-    const policy=load(read("lib/registrationEmailPolicy.ts"),{"./disposableEmailDomains.generated":load(read("lib/disposableEmailDomains.generated.ts"))});
-    assert.equal(policy.getRegistrationEmailError(gmail),null,"Gmail domain itself is allowed");
-    assert.equal(policy.requiresGoogleOAuthForNewRegistration(gmail),true);
-    assert.equal(policy.requiresGoogleOAuthForNewRegistration("test@yahoo.com"),false);
-    const newGmail=harness(current,true,{noUser:true});
-    await assert.rejects(newGmail.registration.authenticateEmailSignup(gmail,"Password1!",false,true),/Continue with Google/);
-    assert(!newGmail.calls.includes("create"),"Blocked Gmail must not create password Auth UID");
-    const oldGmail=harness(current,true,{userEmail:gmail});
-    await assert.rejects(oldGmail.api.signUpUser({...data,email:gmail,authProvider:"verified_email"}),/Continue with Google/);
-    assert(!oldGmail.calls.includes("transaction"),"Gmail verification link alone must not make Resident");
-    const google=harness(current,true,{providers:["google.com"],userEmail:gmail});
-    await google.api.signUpUser({...data,email:gmail,authProvider:"google"});
-    assert.equal(google.profile().role,"resident");
-    assert(google.calls.includes("transaction"),"Google-linked Gmail must be allowed");
+  await check("legitimate Gmail/Yahoo email+password creates Auth UID and verified Basic Resident profile",async()=>{
+    for (const email of ["genuine.ordinary@gmail.com","newresident@yahoo.com"]) {
+      const h=harness(current,true,{noUser:true,userEmail:email});
+      const user=await h.registration.authenticateEmailSignup(email,"Password1!",false,true);
+      assert.equal(user.uid,h.user.uid);
+      assert(h.calls.includes("create"),"Email/password signup must create Firebase Auth UID for "+email);
+      const resume=harness(current,true,{userEmail:email});
+      await resume.api.signUpUser({...data,email,authProvider:"verified_email"});
+      assert(resume.calls.includes("transaction"),"Verified email/password signup must write Resident profile "+email);
+      assert.equal(resume.profile().role,"resident");
+      assert.equal(resume.profile().uid,resume.user.uid);
+    }
     const ui=read("components/auth/EmailFirstSignup.tsx");
-    assert(!ui.includes("Use any accessible email (Yahoo, Outlook, Gmail, school or work)"));
-    assert(ui.includes("Continue with Google to prove account ownership"));
-    assert(ui.includes("Gmail password signup is blocked."));
-    assert(ui.includes("error={resumeMode ? (!email.trim()"));
-    assert(ui.includes("emailErr || (gmailNeedsGoogle ? gmailPasswordBlockedMessage : null)"));
-    assert(ui.includes("showError={showErrors || gmailNeedsGoogle}"));
-    assert(ui.includes("!signedInUser?.providerData.some(provider => provider.providerId === \"google.com\")"));
-    assert(ui.includes("{(!gmailNeedsGoogle || googleOnly || resumeMode) && <Field"));
-    assert(ui.includes("{!resumeMode && !gmailNeedsGoogle && ("));
-    assert(ui.includes("Gmail email/password registration is not allowed."));
-    assert(ui.includes("(!gmailNeedsGoogle || googleOnly || resumeMode) && checkButton("));
-    assert(ui.includes("{!gmailNeedsGoogle && <Text style={styles.orText}>OR</Text>}"));
-    assert(ui.includes('styles.legacyInputInvalid'));
+    assert(ui.includes("Both support email and password with email verification."));
+    assert(ui.includes('Create Account & Verify Email'));
+    assert(ui.includes('Continue with Google'),"Google remains optional");
+    assert(!ui.includes("Gmail email/password registration is not allowed."));
+    assert(!ui.includes("gmailNeedsGoogle"));
+    assert(!read("lib/signupRegistration.ts").includes("requiresGoogleOAuthForNewRegistration"));
+    assert(!read("lib/firebaseAuth.ts").includes("GMAIL_GOOGLE_OAUTH_REQUIRED_MESSAGE"));
+    assert(ui.includes('styles.legacyInputInvalid'),"Invalid temporary domains show red validation");
+  });
+  await check("observed shared Gmail examples and MailTicking domains are rejected before Firebase writes",async()=>{
+    const policy=load(read("lib/registrationEmailPolicy.ts"),{
+      "./disposableEmailDomains.generated":load(read("lib/disposableEmailDomains.generated.ts"))
+    });
+    const examples=["les.terbigs.antos@gmail.com","ra.gngjb.a.hmkn@gmail.com",
+      "random@mailticking.com","random@emailnator.com","random@agogmail.com"];
+    for(const email of examples) {
+      assert.equal(typeof policy.getRegistrationEmailError(email),"string",email);
+      const h=harness(current,true,{noUser:true,userEmail:email});
+      await assert.rejects(h.registration.authenticateEmailSignup(email,"Password1!",false,true));
+      assert(!h.calls.includes("create"),"Known temporary inbox must be rejected before Auth create");
+    }
+    // Ordinary Gmail local parts must not be treated as disposable just because they contain dots.
+    for(const legitimate of ["john.smith@gmail.com","student.2026@gmail.com","a.b.c@gmail.com"]) {
+      assert.equal(policy.getRegistrationEmailError(legitimate),null);
+    }
   });
   await check("native Google signup owns OAuth and never bounces pending users to Login",()=>{
     assert(read("lib/useSignupGoogle.ts").includes("signInWithCredential"));

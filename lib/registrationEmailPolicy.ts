@@ -13,16 +13,15 @@ import { GENERATED_DISPOSABLE_EMAIL_DOMAINS } from "./disposableEmailDomains.gen
 /** Exact registered domains for new Resident accounts. Existing logins are unchanged. */
 export const ALLOWED_NEW_SIGNUP_EMAIL_DOMAINS: ReadonlySet<string> = new Set(["gmail.com", "yahoo.com"]);
 
-/** A verification link may be read by a shared Gmail proxy inbox.
- * New Gmail registrations require the underlying Google OAuth identity.
- * Existing account login is unaffected.
+/** Explicitly reported shared/temporary Gmail samples from signup QA.
+ * Do not guess by name patterns: ordinary Gmail local parts are not reliable
+ * indicators of disposable mail, and shared providers can rotate addresses.
+ * These are narrow, confirmed-deny samples only, not universal detection.
  */
-export const GMAIL_GOOGLE_OAUTH_REQUIRED_MESSAGE =
-  "New Gmail accounts must use Continue with Google before creating a Basic Resident profile. Email verification alone does not prove Google Account control.";
-export function requiresGoogleOAuthForNewRegistration(email: string): boolean {
-  const parts = String(email || "").trim().toLowerCase().split("@");
-  return parts.length === 2 && parts[1] === "gmail.com";
-}
+export const CONFIRMED_TEST_SHARED_GMAIL_ADDRESSES: ReadonlySet<string> = new Set([
+  "les.terbigs.antos@gmail.com",
+  "ra.gngjb.a.hmkn@gmail.com",
+]);
 
 /**
  * Additional temp-mail.org provider-associated delivery domains publicly
@@ -88,7 +87,7 @@ export const TEMP_MAIL_ORG_PUBLIC_ALIASES = [
 export const KNOWN_DISPOSABLE_EMAIL_DOMAINS = new Set([
   // User-observed temporary-mail domain on the public Signup page (2026-11-11).
   // Block this exact .co domain; do NOT categorically block legitimate .co domains.
-  "en2ch.com", "en2ch.co", "ruutukf.co", "emailkeep.com", "mailinator.com", "yopmail.com", "guerrillamail.com", "guerrillamailblock.com",
+  "en2ch.com", "en2ch.co", "ruutukf.co", "emailkeep.com", "mailticking.com", "emailnator.com", "agogmail.com", "mailinator.com", "yopmail.com", "guerrillamail.com", "guerrillamailblock.com",
   "sharklasers.com", "10minutemail.com", "temp-mail.org", "tempmail.com",
   "tempmail.net", "trashmail.com", "dispostable.com", "getnada.com",
   "maildrop.cc", "minuteinbox.com", "mohmal.com", "emailondeck.com",
@@ -189,6 +188,9 @@ export function getRegistrationEmailError(email: string): string | null {
   const suggestedProvider = KNOWN_PROVIDER_TYPO_CORRECTIONS[domain];
   if (suggestedProvider) {
     return `Check your email domain. Did you mean @${suggestedProvider}? Please correct it to continue.`;
+  }
+  if (CONFIRMED_TEST_SHARED_GMAIL_ADDRESSES.has(value)) {
+    return "This email address was identified as a shared or temporary inbox and cannot be used for registration.";
   }
   if (isKnownDisposableEmail(value)) {
     return "Temporary email addresses are not accepted. Use a permanent email address.";
