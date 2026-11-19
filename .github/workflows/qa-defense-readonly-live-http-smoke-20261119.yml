@@ -1,0 +1,74 @@
+name: Defense READ-ONLY LIVE HTTP smoke — NO LOGIN, NO DEPLOY, NO WRITES
+on:
+  pull_request:
+    branches:
+      - qa/auto-volunteer-phase17-defense-release-evidence-20261119
+    paths:
+      - "scripts/defense-live-readonly-public-smoke.cjs"
+      - "docs/emergency-volunteer/FINAL_DEFENSE_FUNCTIONAL_VERIFICATION_20261119.md"
+      - ".github/workflows/qa-defense-readonly-live-http-smoke-20261119.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  publicly-accessible-http-only-no-cloud-credentials:
+    if: github.repository == 'calibosofroyarjan-volunserve/VolunServe'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Strict exactly-three-additive-file guard — production and staging untouched
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin qa/auto-volunteer-phase17-defense-release-evidence-20261119
+          git diff --name-status origin/qa/auto-volunteer-phase17-defense-release-evidence-20261119 HEAD > /tmp/defense-readonly-changes
+          while IFS="$(printf '\t')" read -r status filename; do
+            test "$status" = A || { echo "BLOCKED: existing app file modified: $filename"; exit 1; }
+            case "$filename" in
+              "scripts/defense-live-readonly-public-smoke.cjs"|"docs/emergency-volunteer/FINAL_DEFENSE_FUNCTIONAL_VERIFICATION_20261119.md"|".github/workflows/qa-defense-readonly-live-http-smoke-20261119.yml") ;;
+              *) echo "BLOCKED: unexpected code file: $filename"; exit 1 ;;
+            esac
+          done < /tmp/defense-readonly-changes
+          test "$(wc -l < /tmp/defense-readonly-changes)" -eq 3
+          echo "PASS: only three read-only QA evidence files."
+      - name: Lint smoke source and ensure no credentials or mutation methods
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check scripts/defense-live-readonly-public-smoke.cjs
+          node - <<'NODE'
+          const assert=require("node:assert/strict"),fs=require("node:fs");
+          const source=fs.readFileSync("scripts/defense-live-readonly-public-smoke.cjs","utf8");
+          assert.ok(source.includes('method:"GET"'));
+          assert.equal(source.includes('method:"POST"'),false);
+          assert.equal(source.includes('Authorization:"Bearer'),false);
+          assert.equal(source.includes("firebase-admin"),false);
+          assert.equal(source.includes("firebase deploy"),false);
+          assert.equal(source.includes("Render API"),false);
+          console.log("PASS: fixed URLs only; GET; no auth, Firebase SDK, or deploy.");
+          NODE
+      - name: Actual production and staging PUBLIC GET-only HTTP smoke
+        id: public_smoke
+        run: node scripts/defense-live-readonly-public-smoke.cjs
+      - name: Preserve sanitized public HTTP evidence as artifact even on failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: defense-readonly-public-http-20261119
+          path: defense-live-http-smoke-report.json
+          if-no-files-found: warn
+          retention-days: 14
+      - name: Explicit NO DATA CHANGES / NO AUTHENTICATED FUNCTIONAL CLAIMS
+        if: always()
+        run: |
+          echo "NO production Firebase writes or real user logins."
+          echo "NO website login, email-verification, certificate issue or payment flow was executed."
+          echo "NO Emergency Report / accepted Volunteer / Community Event / donation record modified."
+          echo "HTTP smoke PASS = public GET reachability ONLY; production automatic dispatch remains NO-GO."
