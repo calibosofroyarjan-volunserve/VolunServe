@@ -1929,8 +1929,8 @@ export default function AdminCases() {
           performedBy: adminUser.uid,
           reason: action === "validate" ? "" : reason,
           timestamp: serverTimestamp(),
-          return { alreadyValidated: false };
-      });
+        });
+        return { alreadyValidated: false };
       });
 
       if (action === "validate") {
