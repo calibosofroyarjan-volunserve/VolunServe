@@ -2220,10 +2220,6 @@ This still does not automatically create a Donation Campaign.`,
                   flexDirection:"row",flexWrap:"wrap",alignItems:"center",
                   justifyContent:"space-between",gap:12,
                 }}>
-                  <Text style={{color:"#64748B",fontSize:12}}>
-                    {filteredRequests.length ? ((activeRequestPage-1)*5+1) : 0}–{Math.min(activeRequestPage*5,filteredRequests.length)}
-                    {" of "}{filteredRequests.length} requests · 5 per page
-                  </Text>
                   <ListPagination page={activeRequestPage} total={filteredRequests.length}
                     pageSize={5} onChange={setRecordPage}/>
                 </View>
