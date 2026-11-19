@@ -651,6 +651,9 @@ export default function AssistanceRequestsAdmin() {
   const [search, setSearch] = useState("");
   // View-only control: the existing category/status/sort filters are unchanged.
   const [showReferenceFilters, setShowReferenceFilters] = useState(false);
+  // The reference's "For Review" tab includes pending and under-review cases.
+  // The original Status picker still supports filtering Pending separately.
+  const [showCombinedForReview, setShowCombinedForReview] = useState(false);
   const [recordPage, setRecordPage] = useState(1);
   const [reviewFocusStage, setReviewFocusStage] = useState<ReviewStageFocus | null>(null);
   const [quickAction, setQuickAction] = useState<"more_info" | "reject" | null>(null);
@@ -960,19 +963,17 @@ export default function AssistanceRequestsAdmin() {
     };
   }, [requests]);
 
-  const filteredRequests = useMemo(
-    () => filterAndSortAssistanceQueue(
-      requests,
-      {
-        status: filter,
-        category: categoryFilter,
-        sort: sortOrder,
-        search,
-      },
-      timestampMillis,
-    ),
-    [requests, filter, categoryFilter, sortOrder, search],
-  );
+  const filteredRequests = useMemo(() => {
+    const options = { status: filter, category: categoryFilter, sort: sortOrder, search };
+    if (showCombinedForReview && filter === "pending") {
+      return filterAndSortAssistanceQueue(
+        requests,
+        { ...options, status: "all" },
+        timestampMillis,
+      ).filter((item) => ["pending", "under_review"].includes(String(item.status || "pending")));
+    }
+    return filterAndSortAssistanceQueue(requests, options, timestampMillis);
+  }, [requests, filter, categoryFilter, sortOrder, search, showCombinedForReview]);
   const requestPages = Math.max(1, Math.ceil(filteredRequests.length / 5));
   const activeRequestPage = Math.max(1, Math.min(recordPage, requestPages));
   const pagedRequests = filteredRequests.slice((activeRequestPage - 1) * 5, activeRequestPage * 5);
@@ -2572,11 +2573,16 @@ This still does not automatically create a Donation Campaign.`,
         ] as const).map(([status, label]) => (
           <TouchableOpacity key={status} accessibilityRole="button"
             accessibilityState={{ selected: filter === status }}
-            onPress={() => changeStatusFilter(status)}
+            onPress={() => {
+              setShowCombinedForReview(status === "pending");
+              changeStatusFilter(status);
+            }}
             style={[styles.referenceStatusPill, filter === status && styles.referenceStatusPillActive]}>
             <Text style={[styles.referenceStatusText, filter === status && styles.referenceStatusTextActive]}>
-              {label} ({filterAndSortAssistanceQueue(requests,
-                {status, category:"all",sort:"newest",search:""},timestampMillis).length})
+              {label} ({status === "pending"
+                ? requests.filter((item) => ["pending","under_review"].includes(String(item.status || "pending"))).length
+                : filterAndSortAssistanceQueue(requests,
+                  {status, category:"all",sort:"newest",search:""},timestampMillis).length})
             </Text>
           </TouchableOpacity>
         ))}
@@ -2616,7 +2622,10 @@ This still does not automatically create a Donation Campaign.`,
           label="Status"
           value={filter}
           options={statusOptions}
-          onChange={(value) => changeStatusFilter(value as ReviewFilter)}
+          onChange={(value) => {
+            setShowCombinedForReview(false);
+            changeStatusFilter(value as ReviewFilter);
+          }}
         />
       </View>
       <ReviewPicker
