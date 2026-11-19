@@ -1,0 +1,66 @@
+name: Exact Assistance Reference UI Validation (NO DEPLOY)
+on:
+  push:
+    branches: [ui/assistance-exact-reference-20261120]
+    paths:
+      - 'app/(admin)/assistance-requests.tsx'
+      - 'scripts/test-assistance-exact-reference-ui-20261120.cjs'
+      - '.github/workflows/validate-assistance-exact-reference-ui-20261120.yml'
+permissions:
+  contents: read
+jobs:
+  exact-reference:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      CI: 'true'
+      EXPO_NO_TELEMETRY: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Verify only Assistance UI and QA files were added relative to current live source
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --check d89b225b98500e7b4fbffd8424ce9296aea4d2cc HEAD
+          node - <<'NODE'
+          const assert=require('node:assert/strict'),cp=require('node:child_process');
+          const lines=cp.execFileSync('git',['diff','--name-status','--no-renames',
+            'd89b225b98500e7b4fbffd8424ce9296aea4d2cc','HEAD'],{encoding:'utf8'}).trim().split('\n');
+          assert.deepEqual(lines.map(x=>x.split('\t')[1]).sort(),[
+            'app/(admin)/assistance-requests.tsx',
+            'scripts/test-assistance-exact-reference-ui-20261120.cjs',
+            '.github/workflows/validate-assistance-exact-reference-ui-20261120.yml'
+          ].sort());
+          assert(lines.every(x=>/^[AM]\t/.test(x)));
+          console.log('PASS: no backend, donation payments, Auth, rules, or unrelated modules changed');
+          NODE
+      - name: Install frozen dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Validate TypeScript, reference visual structure and protected Assistance backend guards
+        run: |
+          npx tsc --noEmit --incremental false
+          node scripts/test-assistance-exact-reference-ui-20261120.cjs
+          node scripts/test-assistance-live-clean-flow-20261119.cjs
+          node scripts/test-assistance-donation-flow-audit-20261119.cjs
+          node scripts/test-donation-browser-alerts-20261119.cjs
+      - name: Existing Admin and other module regressions
+        run: |
+          node scripts/test-lgu-internal-review-ux.cjs
+          node scripts/test-admin-emergency-master-detail-20261118.cjs
+          node scripts/test-embedded-emergency-map-navigation.cjs
+          node scripts/test-profile-certificates-account-menu.cjs
+          node scripts/test-admin-navigation-contract.cjs
+          node scripts/test-module-announcements-publishing-20261115.cjs
+      - name: Full Expo web build without deployment
+        run: |
+          npx expo export --platform web --clear
+          env -u GITHUB_SHA node scripts/verify-hosting-release.cjs
+      - name: Read-only completion
+        run: echo "No production Hosting, Firestore, Auth, Render, Functions, payments or records modified"
