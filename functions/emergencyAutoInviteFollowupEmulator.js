@@ -123,6 +123,11 @@ function createDemoFollowupScanner({
       if(terminal){
         closeOld();
         tx.update(batchRef,{status:"cancelled",updatedAt:stamp});
+        tx.update(caseRef,{
+          "autoVolunteerDispatch.state":"cancelled",
+          "autoVolunteerDispatch.updatedAt":stamp,
+          updatedAt:stamp
+        });
         return result("cancelled","fictional_case_closed",
           {expired:pending.length});
       }
