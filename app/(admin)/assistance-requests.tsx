@@ -3632,8 +3632,8 @@ function CompactVerifiedAssistance({
           <Ionicons name="checkmark-circle" size={21} color="#047857" />
         </View>
         <View style={{ flex: 1, gap: 4 }}>
-          <Text style={styles.simpleTitle}>Request Verified</Text>
-          <Text style={styles.simpleCopy}>Choose the next support action. A campaign is not published automatically.</Text>
+          <Text style={styles.referenceCardTitle}>Choose Assistance</Text>
+          <Text style={styles.referencePageSubtitle}>This request has been approved. Choose how to provide the support.</Text>
         </View>
       </View>
 
@@ -3645,30 +3645,66 @@ function CompactVerifiedAssistance({
         </View>
       ) : (
         <>
-          <Text style={styles.simpleSection}>Choose a support plan</Text>
-          <View style={styles.simpleOptions}>
-            {([
-              ["donation", "Create Donation Campaign"],
-              ["lgu", "LGU or Partner Support"],
-              ["none", "No Further Support"],
-            ] as const).map(([key,label]) => (
-              <TouchableOpacity
-                key={key}
-                accessibilityRole="button"
-                accessibilityState={{ selected: choice === key }}
-                disabled={busy}
-                onPress={() => setChoice(key)}
-                style={[styles.simpleOption, choice === key && styles.simpleOptionYes]}
-              >
-                <Ionicons name={choice === key ? "radio-button-on" : "radio-button-off"}
-                  size={16} color={choice === key ? "#047857" : "#64748B"} />
-                <Text style={styles.simpleOptionLabel}>{label}</Text>
-              </TouchableOpacity>
-            ))}
+          <View style={styles.referenceSupportOptions}>
+            <TouchableOpacity style={[styles.referenceSupportCard, choice === "donation" && styles.referenceSupportCardActive]}
+              accessibilityRole="button" accessibilityState={{ selected: choice === "donation" }}
+              disabled={busy} onPress={() => setChoice("donation")}>
+              <Ionicons name="heart-outline" color="#007E45" size={31} />
+              <View style={{ flex: 1, gap: 4 }}>
+                <Text style={styles.referenceChoiceTitle}>Create Donation Campaign</Text>
+                <Text style={styles.referenceChoiceHelp}>Publish a community donation campaign to raise support for the approved need.</Text>
+              </View>
+              <Ionicons name="chevron-forward" color="#087F4A" size={19} />
+            </TouchableOpacity>
+            <TouchableOpacity style={[styles.referenceSupportCard, choice === "lgu" && styles.referenceSupportCardActive]}
+              accessibilityRole="button" accessibilityState={{ selected: choice === "lgu" }}
+              disabled={busy} onPress={() => setChoice("lgu")}>
+              <Ionicons name="business-outline" color="#007E45" size={31} />
+              <View style={{ flex: 1, gap: 4 }}>
+                <Text style={styles.referenceChoiceTitle}>Record LGU Assistance</Text>
+                <Text style={styles.referenceChoiceHelp}>Record the approved support to be provided directly by the LGU.</Text>
+              </View>
+              <Ionicons name="chevron-forward" color="#087F4A" size={19} />
+            </TouchableOpacity>
           </View>
+          <TouchableOpacity accessibilityRole="button" disabled={busy} onPress={() => setChoice("none")}
+            style={{ paddingVertical: 5, alignSelf: "flex-start", flexDirection: "row", alignItems: "center", gap: 8 }}>
+            <Ionicons name={choice === "none" ? "radio-button-on" : "radio-button-off"} size={16} color="#64748B" />
+            <Text style={styles.referencePageSubtitle}>No further support (existing option)</Text>
+          </TouchableOpacity>
 
           {choice === "donation" && (
-            <View style={styles.simpleField}>
+            <View style={styles.referencePublishPanel}>
+              <View style={styles.referencePublishHeading}>
+                <Ionicons name="megaphone-outline" color="#008547" size={24}/>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.referenceCardTitle}>Publish Donation Campaign</Text>
+                  <Text style={styles.referencePageSubtitle}>Set up and publish a donation campaign for this approved request.</Text>
+                </View>
+              </View>
+              <View style={styles.referencePublishTwoColumns}>
+                <View style={{ flex: 2, minWidth: 230, gap: 9 }}>
+                  <Text style={styles.referenceChoiceTitle}>Campaign Title</Text>
+                  <View style={styles.referencePreviewField}><Text style={styles.referencePreviewValue}>
+                    {request.title ? "Help with " + request.title : "Community Assistance Campaign"}
+                  </Text></View>
+                  <Text style={styles.referenceChoiceTitle}>Campaign Story</Text>
+                  <View style={[styles.referencePreviewField, { minHeight: 85 }]}>
+                    <Text style={styles.referencePreviewValue} numberOfLines={6}>
+                      {request.description || request.currentSituation || "Campaign details will be prepared from the verified assistance request."}
+                    </Text>
+                  </View>
+                  <Text style={styles.referencePageSubtitle}>Preview based on this resident request. The actual public title and story are reviewed and edited on the campaign setup page before publishing.</Text>
+                </View>
+                <View style={styles.referenceCampaignSummary}>
+                  <Text style={styles.referenceChoiceTitle}>Campaign Summary</Text>
+                  <ReferenceInfoRow icon="document-text-outline" label="Request ID" value={request.requestId || request.id} />
+                  <ReferenceInfoRow icon="person-outline" label="Resident" value={request.requesterName || "Resident"} />
+                  <ReferenceInfoRow icon="pricetag-outline" label="Category" value={request.categoryLabel || request.category || "Assistance"} />
+                  <ReferenceInfoRow icon="cash-outline" label="Amount (Target)" value={money(cap > 0 ? cap : Math.max(0,numericTotal - numericAlreadyReceived))} />
+                </View>
+              </View>
+              <Text style={styles.simpleSection}>Donation Target</Text>
               <Text style={styles.simpleSection}>Approved donation amount</Text>
               {cap > 0 ? (
                 <Text style={styles.simpleVerifiedAmount}>{money(cap)}</Text>
@@ -3775,7 +3811,7 @@ function CompactVerifiedAssistance({
 
           <View style={styles.simpleDecision}>
             <ActionButton
-              label={choice === "donation" ? "Set Up Donation Campaign" : "Save Support Plan"}
+              label={choice === "donation" ? "Continue to Campaign Setup" : "Save Support Plan"}
               icon={choice === "donation" ? "heart-outline" : "checkmark-circle-outline"}
               variant="success"
               disabled={busy}
@@ -5911,6 +5947,15 @@ function DocumentPreviewModal({
 }
 
 const styles = StyleSheet.create({
+  referenceSupportOptions: { flexDirection: "row", flexWrap: "wrap", gap: 14 },
+  referenceSupportCard: { flexGrow: 1, flexBasis: 280, minWidth: 230, minHeight: 85, flexDirection: "row", alignItems: "center", gap: 12, borderWidth: 1, borderColor: "#DDE7E8", borderRadius: 10, backgroundColor: "#FFFFFF", padding: 14 },
+  referenceSupportCardActive: { borderColor: "#5FC58E", backgroundColor: "#E9FAEF" },
+  referencePublishPanel: { borderWidth: 1, borderColor: "#DBE6E7", borderRadius: 12, padding: 16, gap: 13, backgroundColor: "#FFFFFF" },
+  referencePublishHeading: { flexDirection: "row", alignItems: "center", gap: 10, paddingBottom: 10, borderBottomWidth: 1, borderBottomColor: "#EBEFF1" },
+  referencePublishTwoColumns: { flexDirection: "row", flexWrap: "wrap", gap: 14, alignItems: "flex-start" },
+  referencePreviewField: { borderWidth: 1, borderColor: "#D6E0E4", borderRadius: 8, padding: 11, minHeight: 40, backgroundColor: "#FFFFFF" },
+  referencePreviewValue: { color: "#283647", fontFamily: vsType.family, fontSize: 12, lineHeight: 18 },
+  referenceCampaignSummary: { flex: 1, minWidth: 190, borderWidth: 1, borderColor: "#D7E5DF", borderRadius: 9, backgroundColor: "#F7FAF8", padding: 10, gap: 5 },
   referenceDecisionPage: { flex: 1, gap: 22, paddingVertical: 4, paddingHorizontal: 3 },
   referenceDecisionColumns: { flexDirection: "row", flexWrap: "wrap", alignItems: "stretch", gap: 15 },
   referenceDecisionCard: { flexGrow: 1, flexBasis: 280, minWidth: 240, borderWidth: 1, borderColor: "#DBE4E6", borderRadius: 12, backgroundColor: "#FFFFFF", padding: 16, gap: 9, minHeight: 300 },
