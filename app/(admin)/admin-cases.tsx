@@ -43,6 +43,7 @@ import { safePublicAdvisoryBarangay } from "../../lib/emergencyPublicAdvisory";
 import { SJDM_BARANGAYS } from "../../constants/sjdmBarangays";
 import { VolunteerEligibilityValidation } from "../../components/admin/VolunteerEligibilityValidation";
 import { publishVerifiedCommunityAdvisory } from "../../lib/publishVerifiedCommunityAdvisory";
+import { requestAutomaticVolunteersAfterApproval } from "../../lib/automaticVolunteerApprovalBridge";
 
 const BACKEND_URL = "https://volunserve.onrender.com";
 
@@ -1830,7 +1831,7 @@ export default function AdminCases() {
     const activityLogRef = doc(collection(db, "adminActivityLogs"));
 
     try {
-      await runTransaction(db, async (transaction) => {
+      const validationOutcome = await runTransaction(db, async (transaction) => {
         const caseSnapshot = await transaction.get(caseRef);
 
         if (!caseSnapshot.exists()) {
@@ -1849,6 +1850,11 @@ export default function AdminCases() {
           throw new Error(
             "This request is already validated. Do not reject it after dispatch preparation has started."
           );
+        }
+        // Repeated approvals must never downgrade an active case or
+        // create duplicate Resident notices. Backend idempotence is separate.
+        if (action === "validate" && currentVerification === "validated") {
+          return { alreadyValidated: true };
         }
 
         const basePatch: any = {
@@ -1924,6 +1930,7 @@ export default function AdminCases() {
           reason: action === "validate" ? "" : reason,
           timestamp: serverTimestamp(),
         });
+        return { alreadyValidated: false };
       });
 
       if (action === "validate") {
@@ -1947,8 +1954,23 @@ export default function AdminCases() {
             advisoryMessage = "Case validated, but the public advisory was NOT published. Review Announcements permissions separately.";
           }
         }
-        Alert.alert("Request Validated",
-          "The case is now eligible for Volunteer offers. " + advisoryMessage);
+        // Gated backend call happens AFTER the approved Firestore write.
+        // It never changes the public advisory, map or manual response paths.
+        const invitation = await requestAutomaticVolunteersAfterApproval({
+          caseId: incident.id, user: adminUser,
+        });
+        const invitationMessage = invitation.enabled
+          ? invitation.status === "offered"
+            ? ` Automatic invitations confirmed for ${invitation.offered} eligible Volunteers.`
+            : invitation.status === "already_started"
+              ? ` Existing invitations confirmed for ${invitation.offered} Volunteers. No duplicate invitations sent.`
+              : " Automatic invitations NOT confirmed; review the backend before claiming they were sent."
+          : "";
+        Alert.alert(validationOutcome.alreadyValidated ? "Already Validated" : "Request Validated",
+          (validationOutcome.alreadyValidated
+            ? "This case was already approved; its response status was preserved. "
+            : "The case is now eligible for Volunteer offers. ") +
+          advisoryMessage + invitationMessage);
       } else if (action === "request_more_evidence") {
         Alert.alert(
           "Resident Notified",
