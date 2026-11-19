@@ -33,7 +33,8 @@ jobs:
           assert.deepEqual(list.map(x=>x.split('\t')[1]).sort(),[
             '.github/workflows/verify-gmail-yahoo-resident-rules-no-deploy-20261119.yml',
             'firestore.rules',
-            'scripts/test-verified-community-registration-rules.cjs'
+            'scripts/test-verified-community-registration-rules.cjs',
+            'scripts/test-emulated-resident-signup-login-e2e.cjs'
           ].sort());
           assert(list.every(x=>/^[AM]\t/.test(x)));
           const patch=cp.execFileSync('git',['diff','--unified=0',base,'HEAD','--','firestore.rules'],{encoding:'utf8'});
@@ -45,6 +46,9 @@ jobs:
       - name: Compile Rules and verify new-Resident restrictions with emulator
         run: |
           npx firebase-tools emulators:exec --only firestore --project demo-volunserve-verified-signup "node scripts/test-verified-community-registration-rules.cjs"
+      - name: Full synthetic Auth verification + Firestore Resident login journey
+        run: |
+          npx firebase-tools emulators:exec --only auth,firestore --project demo-volunserve-resident-signup-e2e "node scripts/test-emulated-resident-signup-login-e2e.cjs"
       - name: Existing roles and volunteer invitation emulator regressions
         run: |
           # Do not run the historical exact-source hash-pinned refactor reconstruction
