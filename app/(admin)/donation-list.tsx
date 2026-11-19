@@ -1336,6 +1336,18 @@ export default function DonationAdministration() {
   const createCampaign = async () => {
     if (!user || !isAdmin || busyKey) return;
 
+    // The current protected backend requires a photo originally submitted
+    // with the Resident's explicit public-campaign consent. An Admin-uploaded
+    // cover is supplementary; it cannot replace Resident consent.
+    if (openedFromAssistance && assistanceSourceReady && assistanceSource &&
+        (assistanceSource.publicCampaignPhotoConsent !== true ||
+         !String(assistanceSource.publicCampaignPhotoUrl || "").startsWith("https://"))) {
+      const message = "The verified request has no Resident-consented public photo. An Admin-uploaded image cannot replace that consent. Ask the Resident to submit a new request with a public campaign photo and consent.";
+      setError(message);
+      showDonationAlert("Resident Photo Consent Required", message);
+      return;
+    }
+
     if (!openedFromAssistance) {
       showDonationAlert(
         "Verified Assistance Request Required",
@@ -2248,6 +2260,31 @@ export default function DonationAdministration() {
                       </TouchableOpacity>
                     </View>
                   </View>
+                  {assistanceSource && (
+                    <View style={{
+                      flexDirection:"row",gap:9,alignItems:"flex-start",padding:13,
+                      borderRadius:10,borderWidth:1,
+                      borderColor:assistanceSource.publicCampaignPhotoConsent === true &&
+                        String(assistanceSource.publicCampaignPhotoUrl || "").startsWith("https://")
+                        ? "#CDE9D7" : "#FDE68A",
+                      backgroundColor:assistanceSource.publicCampaignPhotoConsent === true &&
+                        String(assistanceSource.publicCampaignPhotoUrl || "").startsWith("https://")
+                        ? "#F0FDF4" : "#FFFBEB",
+                    }}>
+                      <Ionicons name="shield-checkmark-outline" size={17}
+                        color={assistanceSource.publicCampaignPhotoConsent === true &&
+                          String(assistanceSource.publicCampaignPhotoUrl || "").startsWith("https://")
+                          ? "#047857" : "#B45309"}/>
+                      <Text style={{
+                        flex:1,fontSize:11.5,lineHeight:18,color:"#365345",
+                      }}>
+                        {assistanceSource.publicCampaignPhotoConsent === true &&
+                         String(assistanceSource.publicCampaignPhotoUrl || "").startsWith("https://")
+                          ? "Resident-consented public campaign photo confirmed. You may add other privacy-safe LGU-approved images."
+                          : "Resident photo consent is missing on this request. The backend cannot publish this campaign. An Admin-uploaded photo alone is insufficient; request a new Resident submission with consent."}
+                      </Text>
+                    </View>
+                  )}
                   {selectedPublicPhotoUrls.length>0 && (
                     <View style={{gap:9}}>
                       <Text style={{fontSize:12,fontWeight:"700",color:"#25493A"}}>
