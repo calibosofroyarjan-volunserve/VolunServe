@@ -1,0 +1,57 @@
+# MANUAL, staging sender-only. No Firebase, Hosting, Functions or Render deployment.
+name: Send One VolunServe Staging Email (NO DEPLOY)
+on:
+  workflow_dispatch:
+    inputs:
+      sender_email:
+        description: "Verified sender (for example no-reply@notify.volunserve.com)"
+        required: true
+        type: string
+      test_recipient:
+        description: "One Gmail or Yahoo test inbox you control"
+        required: true
+        type: string
+      confirm:
+        description: "Type YES_SEND_ONE_TEST_EMAIL to authorize the test message"
+        required: true
+        type: string
+permissions:
+  contents: read
+concurrency:
+  group: volunserve-staging-sender-readiness
+  cancel-in-progress: false
+jobs:
+  send-one-test:
+    if: github.repository == 'calibosofroyarjan-volunserve/VolunServe' && github.ref == 'refs/heads/live-protected'
+    runs-on: ubuntu-latest
+    environment: staging
+    timeout-minutes: 8
+    env:
+      VOLUNSERVE_OTP_TEST_FROM: ${{ inputs.sender_email }}
+      VOLUNSERVE_OTP_TEST_TO: ${{ inputs.test_recipient }}
+      VOLUNSERVE_STAGING_CONFIRM_SEND: ${{ inputs.confirm }}
+      RESEND_API_KEY_STAGING: ${{ secrets.RESEND_API_KEY_STAGING }}
+    steps:
+      - name: Strict manual intent check
+        run: |
+          test "$VOLUNSERVE_STAGING_CONFIRM_SEND" = "YES_SEND_ONE_TEST_EMAIL"
+          test "$GITHUB_REF" = "refs/heads/live-protected"
+      - uses: actions/checkout@v4
+        with:
+          # EXACT immutable, reviewed staging code. Protected app backlog is
+          # never built or deployed, nor are user accounts/data accessed.
+          ref: 166f627ded879915bdbbdf7c8a1f63d11ceb9c59
+          fetch-depth: 1
+          persist-credentials: false
+          submodules: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Pin exact staging source and syntax
+        run: |
+          test "$(git rev-parse HEAD)" = "166f627ded879915bdbbdf7c8a1f63d11ceb9c59"
+          node --check functions/smoke-resend-staging-delivery.js
+      - name: Verify sender domain and send exactly one non-OTP test email
+        run: node functions/smoke-resend-staging-delivery.js
+      - name: Explicitly confirm no production changes
+        run: echo "PASS: no Firebase, Auth, Firestore, Functions, Render, or Hosting deployment"
