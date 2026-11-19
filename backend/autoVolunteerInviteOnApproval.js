@@ -98,9 +98,30 @@ async function inviteAfterApproval({
     db.collection("responseAssignments").where("caseId","==",caseId)
       .limit(MAX_SCAN+1).get()
   ]);
-  if(!caseSnap.exists||!caseReady(caseSnap.data()))
+  if(!caseSnap.exists)
+    return blocked("case_not_found");
+  // A previous atomic wave may already exist. Verify its case linkage and
+  // complete assignment count before reporting "already invited": never
+  // re-send, never claim success for an orphaned/partial/cancelled batch.
+  if(existingBatch.exists){
+    const b=existingBatch.data()||{};
+    const rows=existing.docs.map(d=>d.data()||{}).filter(x=>
+      x.caseId===caseId&&x.offerMode==="automatic_all_eligible_wave1");
+    const complete=uidOK(b.caseId)&&b.caseId===caseId &&
+      b.origin==="server_auto_volunteer_wave1" &&
+      Number.isInteger(b.volunteerCount)&&b.volunteerCount>0 &&
+      rows.length===b.volunteerCount &&
+      new Set(rows.map(x=>x.volunteerId)).size===rows.length &&
+      rows.every(x=>uidOK(x.volunteerId)) &&
+      !["cancelled","rejected","resolved","closed"].includes(
+        caseSnap.data().status);
+    if(complete)return {ok:true,status:"already_started",wave:1,
+      offered:b.volunteerCount,offersWritten:false,partial:false};
+    return blocked("existing_batch_requires_review");
+  }
+  if(!caseReady(caseSnap.data()))
     return blocked("case_not_validated_or_manual_response_active");
-  if(existingBatch.exists||legacy.exists||!existing.empty)
+  if(legacy.exists||!existing.empty)
     return blocked("existing_dispatch_or_offer_records");
   if(apps.size>MAX_SCAN||active.size>MAX_SCAN)
     return blocked("volunteer_pool_requires_batched_release");
