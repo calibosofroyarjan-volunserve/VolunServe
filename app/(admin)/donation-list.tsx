@@ -1,4 +1,3 @@
-import AdminReviewHero from "../../components/admin/AdminReviewHero";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import * as ImagePicker from "expo-image-picker";
 import { Redirect, useLocalSearchParams, useRouter } from "expo-router";
@@ -1844,7 +1843,10 @@ export default function DonationAdministration() {
       contentContainerStyle={styles.container}
       showsVerticalScrollIndicator
     >
-      <AdminReviewHero eyebrow="DONATIONS & FUNDS / CAMPAIGN MANAGEMENT" title="Donation Management" subtitle="Manage approved fundraising campaigns, verified receipts, and donor transactions. Only authorized Admin staff release funds." icon="heart-outline" tag="LGU FUND OVERSIGHT" />
+      <View style={styles.donationPageHeader}>
+        <Text style={styles.donationPageTitle}>Donation Management</Text>
+        <Text style={styles.donationPageSubtitle}>Campaigns, verified donations, and funding records.</Text>
+      </View>
       {openedFromAssistance && (
         <TouchableOpacity style={[styles.backButton, { width: "auto", minWidth: 184, height: 42, paddingHorizontal: 13, flexDirection: "row", gap: 8, alignSelf: "flex-start" }]} accessibilityLabel="Back to Assistance Requests" onPress={() => router.push(sourceBackPath as any)}>
           <Ionicons name="arrow-back" size={18} color="#334155" />
@@ -1931,38 +1933,23 @@ export default function DonationAdministration() {
 
       {activeView === "campaigns" ? (
         <>
-          <View style={styles.sectionTopRow}>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.sectionEyebrow}>DONATION SUPPORT</Text>
-              <Text style={styles.sectionTitle}>Campaign Operations</Text>
-              <Text style={styles.helperText}>
-                New campaigns start from approved Assistance Requests. Review published and historical campaigns below.
-              </Text>
-            </View>
-          </View>
-
           {sourceLoading ? (
             <View style={styles.emptyCard}>
               <ActivityIndicator color="#0F766E" />
               <Text style={styles.emptyText}>Loading donation campaign records...</Text>
             </View>
           ) : !openedFromVerifiedSource ? (
-            <View style={styles.gateCard}>
-              <View style={styles.gateIcon}>
-                <Ionicons name="shield-checkmark-outline" size={24} color="#0F766E" />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.gateTitle}>Start with an approved Assistance Request</Text>
-                <Text style={styles.gateText}>
-                  Open Request Assistance, review the resident identity, supporting evidence and actual costs, then approve Donation Support Needed. This protects donors and residents from unverified campaigns.
-                </Text>
+            <View style={styles.campaignStartRow}>
+              <View style={{flex:1,minWidth:210,gap:3}}>
+                <Text style={styles.campaignStartTitle}>New donation campaign</Text>
+                <Text style={styles.campaignStartHint}>Start from an approved assistance request.</Text>
               </View>
               <TouchableOpacity
-                style={styles.gateButton}
+                style={styles.campaignStartButton}
                 onPress={() => router.push(sourceBackPath as any)}
               >
-                <Text style={styles.gateButtonText}>Open Assistance Requests</Text>
-                <Ionicons name="arrow-forward" size={15} color="#FFFFFF" />
+                <Text style={styles.campaignStartButtonText}>Open Assistance Requests</Text>
+                <Ionicons name="arrow-forward-outline" size={15} color="#FFFFFF" />
               </TouchableOpacity>
             </View>
           ) : openedFromRelief && !openedFromAssistance && !selectedPublishedCampaign ? (
@@ -1971,11 +1958,8 @@ export default function DonationAdministration() {
                 <Ionicons name="shield-checkmark-outline" size={23} color="#0F766E"/>
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={styles.gateTitle}>Use verified Assistance Requests for new campaigns</Text>
-                <Text style={styles.gateText}>
-                  This older relief-source path remains accessible for historical records.
-                  New fundraising campaigns now start in the strict Request Assistance review workflow.
-                </Text>
+                <Text style={styles.gateTitle}>Use an approved assistance request</Text>
+                <Text style={styles.gateText}>Older relief records are available in Historical.</Text>
               </View>
               <TouchableOpacity style={styles.gateButton}
                 onPress={() => router.push("/assistance-requests" as any)}>
@@ -3097,16 +3081,14 @@ export default function DonationAdministration() {
 
           <View style={styles.campaignRecordsHeader}>
             <View style={{flex:1,minWidth:255}}>
-              <Text style={styles.sectionEyebrow}>AUDIT & MONITORING</Text>
-              <Text style={styles.sectionTitle}>Campaign Records</Text>
-              <Text style={styles.helperText}>Review funding progress and verified donations.</Text>
+              <Text style={styles.recordSectionTitle}>Campaign Records</Text>
             </View>
             <View style={styles.campaignFilters}>
               <View style={styles.campaignSearchBox}>
                 <Ionicons name="search-outline" size={17} color="#64748B"/>
                 <TextInput value={campaignSearch}
                   onChangeText={value=>{setCampaignSearch(value);setCampaignPage(1);}}
-                  placeholder="Search campaign or location"
+                  placeholder="Search campaigns"
                   placeholderTextColor="#94A3B8"
                   style={styles.campaignSearchInput}/>
               </View>
@@ -3126,9 +3108,6 @@ export default function DonationAdministration() {
             </View>
           </View>
           <View style={styles.campaignRecordToolbar}>
-            <Text style={styles.campaignRecordCount}>
-              {filteredCampaigns.length} {filteredCampaigns.length===1?"campaign":"campaigns"} · 5 per page
-            </Text>
             {legacyCampaignCount>0 && (
               <TouchableOpacity accessibilityRole="button"
                 onPress={()=>{setShowLegacyCampaigns(v=>!v);setCampaignPage(1);}}
@@ -3136,7 +3115,7 @@ export default function DonationAdministration() {
                 <Ionicons name={showLegacyCampaigns?"eye-off-outline":"archive-outline"}
                   size={15} color="#087C61"/>
                 <Text style={styles.campaignArchiveToggleText}>
-                  {showLegacyCampaigns?"Hide historical":"View historical"} ({legacyCampaignCount})
+                  {showLegacyCampaigns?"Hide historical":"Historical"} ({legacyCampaignCount})
                 </Text>
               </TouchableOpacity>
             )}
@@ -3145,11 +3124,9 @@ export default function DonationAdministration() {
           <ListPagination page={campaignCurrent} total={filteredCampaigns.length} pageSize={5} onChange={setCampaignPage} />
           {filteredCampaigns.length === 0 ? (
             <View style={styles.emptyCard}>
-              <Ionicons name="megaphone-outline" size={30} color="#94A3B8" />
-              <Text style={styles.emptyTitle}>No donation campaigns yet</Text>
-              <Text style={styles.emptyText}>
-                No campaigns match this view. Try another filter or show historical records.
-              </Text>
+              <Ionicons name="search-outline" size={24} color="#94A3B8" />
+              <Text style={styles.emptyTitle}>No matching campaigns</Text>
+              <Text style={styles.emptyText}>Adjust filters or open Historical.</Text>
             </View>
           ) : (
             <View style={styles.cardList}>
@@ -3164,66 +3141,28 @@ export default function DonationAdministration() {
 
                 return (
                   <View key={campaign.id} style={[styles.campaignCard,{width:windowWidth>=1250?"49%":"100%"}]}>
-                    <View style={styles.cardHeaderRow}>
-                      <View style={styles.campaignRecordIcon}>
-                        <Ionicons name={String(campaign.campaignGroup || "") === "disaster_affected"
-                            ? "home-outline" : /animal|pet/i.test(campaignCategoryLabel(campaign))
-                              ? "paw-outline" : "medkit-outline"}
-                          size={22} color="#047857"/>
+                    <View style={styles.recordHeader}>
+                      <View style={{flex:1,minWidth:0,gap:5}}>
+                        <Text style={styles.recordTitle}>{campaign.title || "Donation Campaign"}</Text>
+                        <Text style={styles.recordCategory}>{campaignCategoryLabel(campaign)}</Text>
                       </View>
-                      <View style={{ flex: 1,minWidth:0 }}>
-                        <Text style={styles.cardTitle}>{campaign.title || "Donation Campaign"}</Text>
-                        <View style={styles.recordBadgeRow}>
-                          <View
-                            style={[
-                              styles.recordGroupBadge,
-                              String(campaign.campaignGroup || "") === "community_needs_help"
-                                ? styles.recordGroupBadgeCommunity
-                                : styles.recordGroupBadgeDisaster,
-                            ]}
-                          >
-                            <Text
-                              style={[
-                                styles.recordGroupBadgeText,
-                                String(campaign.campaignGroup || "") === "community_needs_help"
-                                  ? styles.recordGroupBadgeTextCommunity
-                                  : styles.recordGroupBadgeTextDisaster,
-                              ]}
-                            >
-                              {campaignGroupLabel(campaign).toUpperCase()}
-                            </Text>
-                          </View>
-                          <View style={styles.recordCategoryBadge}>
-                            <Text style={styles.recordCategoryBadgeText}>
-                              {campaignCategoryLabel(campaign).toUpperCase()}
-                            </Text>
-                          </View>
-                        </View>
-                        <Text style={styles.cardMeta}>
-                          {campaign.generalArea ||
-                            campaign.publicLocationLabel ||
-                            (campaign.barangays || []).join(" · ") ||
-                            "Verified support area"}
+                      <View style={[styles.recordStatus,
+                        campaign.status === "published" && styles.recordStatusPublished]}>
+                        <Text style={[styles.recordStatusText,
+                          campaign.status === "published" && styles.recordStatusPublishedText]}>
+                          {campaign.status === "published" ? "Published" : statusLabel(campaign.status)}
                         </Text>
                       </View>
-                      <View
-                        style={[
-                          styles.statusBadge,
-                          campaign.status === "published" ? styles.statusPublished : styles.statusClosed,
-                        ]}
-                      >
-                        <Text style={styles.statusText}>{statusLabel(campaign.status)}</Text>
-                      </View>
+                    </View>
+                    <View style={styles.recordLocation}>
+                      <Ionicons name="location-outline" size={14} color="#6B7A86"/>
+                      <Text style={styles.recordLocationText} numberOfLines={2}>
+                        {campaign.publicLocationLabel || campaign.generalArea ||
+                          (campaign.barangays || []).join(" · ") || "San Jose del Monte"}
+                      </Text>
                     </View>
 
-                    {!!campaign.publicLocationLabel && (
-                      <View style={styles.recordPublicLine}>
-                        <Ionicons name="location-outline" size={14} color="#0F766E" />
-                        <Text style={styles.recordPublicText}>{campaign.publicLocationLabel}</Text>
-                      </View>
-                    )}
-
-                    <View style={styles.campaignMetrics}>
+                    <View style={styles.recordMetricRow}>
                       <CompactMetric label="Submissions" value={String(campaignDonations.length)} />
                       <CompactMetric label="Verified" value={String(receivedCampaignDonations.length)} />
                       <CompactMetric label="Monetary" value={money(verifiedMoney)} />
@@ -3233,9 +3172,9 @@ export default function DonationAdministration() {
                     </View>
 
                     {Number(campaign.monetaryGoal || 0) > 0 && (
-                      <View style={styles.recordProgressBox}>
+                      <View style={styles.recordProgressPlain}>
                         <View style={styles.recordProgressTop}>
-                          <Text style={styles.recordProgressLabel}>Verified funding progress</Text>
+                          <Text style={styles.recordProgressLabel}>Funding progress</Text>
                           <Text style={styles.recordProgressValue}>
                             {Math.min(
                               100,
@@ -3372,7 +3311,7 @@ export default function DonationAdministration() {
                     <View style={styles.campaignCardFooter}>
                       <View style={{flexDirection:"row",alignItems:"center",gap:6}}>
                         <Ionicons name="calendar-outline" size={14} color="#64748B"/>
-                        <Text style={styles.cardMeta}>Created: {formatDate(campaign.createdAt)}</Text>
+                        <Text style={styles.recordDate}>{formatDate(campaign.createdAt)}</Text>
                       </View>
                       {campaign.status === "published" && (
                         <TouchableOpacity
