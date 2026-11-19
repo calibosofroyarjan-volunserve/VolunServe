@@ -1714,7 +1714,6 @@ This still does not automatically create a Donation Campaign.`,
       }
 
       if (
-        !locationType ||
         locationName.trim().length < 3 ||
         locationAddress.trim().length < 5
       ) {
@@ -1742,7 +1741,7 @@ This still does not automatically create a Donation Campaign.`,
                 0,
             ),
           assignedLocationType:
-            locationType,
+            locationType || "lgu_office",
           assignedLocationName:
             locationName
               .trim()
@@ -1951,15 +1950,7 @@ This still does not automatically create a Donation Campaign.`,
           />
         )}
 
-        {reviewTab === "decision" && (
-          <PrivateVerificationOverview
-            request={selected}
-            reviewDraft={reviewDraft}
-            loading={verificationReviewLoading}
-            ready={allChecksComplete}
-            reviewRecord={verificationReview}
-          />
-        )}
+        {reviewTab === "decision" && renderDecisionRail()}
       </>
     );
   };
@@ -2285,7 +2276,7 @@ This still does not automatically create a Donation Campaign.`,
           </View>
 
           <View style={styles.detailWorkspace}>
-            <View style={styles.detailMainPane}>
+            <View style={[styles.detailMainPane, { flex: 1, width: "100%", minWidth: 0 }]}>
               <View style={styles.detailPaneHeader}>
                 <View style={styles.detailPaneHeaderIcon}>
                   <Ionicons
@@ -2330,37 +2321,7 @@ This still does not automatically create a Donation Campaign.`,
               </ScrollView>
             </View>
 
-            <View style={styles.detailEvaluationPanel}>
-              <View style={styles.evaluationRailHeader}>
-                <View style={styles.evaluationRailHeaderIcon}>
-                  <Ionicons
-                    name="shield-checkmark-outline"
-                    size={18}
-                    color="#4338CA"
-                  />
-                </View>
-                <View style={styles.evaluationRailHeaderCopy}>
-                  <Text style={styles.evaluationRailEyebrow}>
-                    LGU EVALUATION
-                  </Text>
-                  <Text style={styles.evaluationRailTitle}>
-                    Verification & Decision
-                  </Text>
-                  <Text style={styles.evaluationRailSubtitle}>
-                    Review, verify, assess resources, and assign only an authorized public service point.
-                  </Text>
-                </View>
-              </View>
 
-              <ScrollView
-                style={styles.detailEvaluationScroll}
-                contentContainerStyle={styles.detailEvaluationContent}
-                showsVerticalScrollIndicator
-                nestedScrollEnabled
-              >
-                {renderDecisionRail()}
-              </ScrollView>
-            </View>
           </View>
         </View>
       ) : (
@@ -2375,26 +2336,7 @@ This still does not automatically create a Donation Campaign.`,
             {renderReviewMain()}
           </View>
 
-          <View style={styles.mobileEvaluationSection}>
-            <View style={styles.evaluationRailHeader}>
-              <View style={styles.evaluationRailHeaderIcon}>
-                <Ionicons
-                  name="shield-checkmark-outline"
-                  size={18}
-                  color="#4338CA"
-                />
-              </View>
-              <View style={styles.evaluationRailHeaderCopy}>
-                <Text style={styles.evaluationRailEyebrow}>
-                  LGU EVALUATION
-                </Text>
-                <Text style={styles.evaluationRailTitle}>
-                  Verification & Decision
-                </Text>
-              </View>
-            </View>
-            {renderDecisionRail()}
-          </View>
+
         </ScrollView>
       )}
 
@@ -3423,8 +3365,7 @@ function DecisionTab({
   const verified = request.verificationStatus === "verified";
   const rejected = request.verificationStatus === "rejected";
   const busy = !!savingAction;
-  const locked = busy || verified || rejected ||
-    ["verified","rejected"].includes(String(reviewRecord?.finalDecision || ""));
+  const locked = busy || rejected;
   const facilityRequired = needsFacilityVerification(request.category);
   const costRequired = Number(request.estimatedAmount || 0) > 0;
   const monetaryCap = Math.max(0, Number(reviewRecord?.verifiedUncoveredAmount || 0));
@@ -3552,7 +3493,7 @@ function DecisionTab({
                   placeholderTextColor="#94A3B8" />
                 <ActionButton label="Save Coordination Location" icon="save-outline"
                   variant="secondary" loading={savingAction === "save_location"}
-                  onPress={() => {setLocationType("lgu_office"); onSaveLocation();}} />
+                  onPress={onSaveLocation} />
                 <Text style={styles.bodyText}>
                   After saving the support plan and public coordination details,
                   the Donation Campaign action becomes available.
