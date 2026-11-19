@@ -3376,47 +3376,19 @@ function ResidentReviewTab({
 }
 
 function DecisionTab({
-  request,
-  reviewDraft,
-  reviewRecord,
-  reviewLoading,
-  onReviewChange,
-  allChecksComplete,
-  onSaveVerificationDraft,
-  adminNote,
-  setAdminNote,
-  rejectionReason,
-  setRejectionReason,
-  supportDecision,
-  setSupportDecision,
-  remainingAmount,
-  setRemainingAmount,
-  locationType,
-  setLocationType,
-  locationName,
-  setLocationName,
-  locationAddress,
-  setLocationAddress,
-  locationNotes,
-  setLocationNotes,
-  savingAction,
-  onStartReview,
-  onRequestMoreInfo,
-  onVerify,
-  onReject,
-  onSaveResourceAssessment,
-  onMarkAssistanceProvided,
-  onSaveLocation,
-  onClearLocation,
+  request, reviewDraft, reviewRecord, reviewLoading, onReviewChange,
+  adminNote, setAdminNote, rejectionReason, setRejectionReason,
+  supportDecision, setSupportDecision, remainingAmount, setRemainingAmount,
+  locationType, setLocationType, locationName, setLocationName,
+  locationAddress, setLocationAddress, locationNotes, setLocationNotes,
+  savingAction, onRequestMoreInfo, onVerify, onReject,
+  onSaveResourceAssessment, onMarkAssistanceProvided, onSaveLocation,
 }: {
   request: AssistanceRequest;
   reviewDraft: PrivateReviewDraft | null;
   reviewRecord: Record<string, any> | null;
   reviewLoading: boolean;
-  onReviewChange: <K extends keyof PrivateReviewDraft>(
-    key: K,
-    value: PrivateReviewDraft[K],
-  ) => void;
+  onReviewChange: <K extends keyof PrivateReviewDraft>(key: K, value: PrivateReviewDraft[K]) => void;
   allChecksComplete: boolean;
   onSaveVerificationDraft: () => void;
   adminNote: string;
@@ -3446,932 +3418,372 @@ function DecisionTab({
   onClearLocation: () => void;
 }) {
   const router = useRouter();
+  const [decision, setDecision] = useState<"more" | "reject" | null>(null);
+  const [showMissing, setShowMissing] = useState(false);
   const verified = request.verificationStatus === "verified";
   const rejected = request.verificationStatus === "rejected";
-  const reviewLocked = ["verified", "rejected"].includes(
-    String(reviewRecord?.finalDecision || ""),
-  );
-  const donationCampaignReady =
-    verified &&
+  const busy = !!savingAction;
+  const locked = busy || verified || rejected ||
+    ["verified","rejected"].includes(String(reviewRecord?.finalDecision || ""));
+  const facilityRequired = needsFacilityVerification(request.category);
+  const costRequired = Number(request.estimatedAmount || 0) > 0;
+  const monetaryCap = Math.max(0, Number(reviewRecord?.verifiedUncoveredAmount || 0));
+  const donationCampaignReady = verified &&
     request.supportDecision === "donation_support" &&
     Number(request.remainingAmount || 0) > 0 &&
     String(request.assignedLocationName || "").trim().length >= 3 &&
     String(request.assignedLocationAddress || "").trim().length >= 5;
 
-  const openDonationCampaign = () => {
-    router.push({
-      pathname: "/donation-list",
-      params: { assistanceRequestId: request.id },
-    } as any);
-  };
+  const choice = (
+    label: string,
+    selected: boolean,
+    onPress: () => void,
+    danger = false,
+  ) => (
+    <TouchableOpacity accessibilityRole="button" accessibilityState={{ selected }}
+      disabled={locked} onPress={onPress}
+      style={{
+        flexDirection: "row", alignItems: "center", gap: 7,
+        borderWidth: 1, borderColor: selected ? (danger ? "#FCA5A5" : "#86C9AE") : "#CBD5E1",
+        backgroundColor: selected ? (danger ? "#FEF2F2" : "#ECFDF5") : "#FFFFFF",
+        paddingVertical: 10, paddingHorizontal: 13, borderRadius: 10, minHeight: 42,
+      }}>
+      <Ionicons name={selected ? "checkmark-circle" : "ellipse-outline"} size={16}
+        color={selected ? (danger ? "#B91C1C" : "#047857") : "#64748B"} />
+      <Text style={{ color: selected ? (danger ? "#991B1B" : "#065F46") : "#334155",
+        fontWeight: "700", fontSize: 12 }}>{label}</Text>
+    </TouchableOpacity>
+  );
 
-  const [privateAddressSearch, setPrivateAddressSearch] = useState("");
-  const [privateMapSearchQuery, setPrivateMapSearchQuery] = useState("");
-  const [privateMapSearchTouched, setPrivateMapSearchTouched] = useState(false);
-
-  useEffect(() => {
-    const savedAddress = String(
-      reviewRecord?.privateAddressSnapshot || request.requesterAddress || "",
-    ).trim();
-
-    const fallbackAddress = [
-      request.requesterBarangay
-        ? `Barangay ${String(request.requesterBarangay).trim()}`
-        : "",
-      "City of San Jose del Monte",
-      "Bulacan",
-      "Philippines",
-    ]
-      .filter(Boolean)
-      .join(", ");
-
-    const seed = savedAddress || fallbackAddress;
-
-    setPrivateAddressSearch(seed);
-    setPrivateMapSearchQuery(reviewLocked ? seed : "");
-    setPrivateMapSearchTouched(reviewLocked && seed.length > 0);
-  }, [
-    request.id,
-    request.requesterAddress,
-    request.requesterBarangay,
-    reviewRecord?.privateAddressSnapshot,
-    reviewLocked,
-  ]);
+  const confirmRow = (
+    title: string, hint: string, yes: boolean, no: boolean,
+    onYes: () => void, onNo: () => void,
+  ) => (
+    <View style={{gap: 9, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: "#EEF2F6"}}>
+      <Text style={{color:"#0F172A",fontSize:13,fontWeight:"800"}}>{title}</Text>
+      <Text style={styles.bodyText}>{hint}</Text>
+      <View style={{flexDirection:"row", flexWrap:"wrap",gap:9}}>
+        {choice("Confirmed", yes, onYes)}
+        {choice("Needs information", no, onNo, true)}
+      </View>
+    </View>
+  );
 
   if (reviewLoading || !reviewDraft) {
-    return (
-      <View style={styles.tabContent}>
-        <SectionCard
-          title="LGU Verification"
-          subtitle="Loading the protected verification record."
-          icon="shield-checkmark-outline"
-        >
-          <ActivityIndicator color="#4F46E5" />
-        </SectionCard>
-      </View>
-    );
+    return <View style={{padding:28, alignItems:"center",gap:12}}>
+      <ActivityIndicator color="#047857" />
+      <Text style={styles.bodyText}>Loading Assistance Request...</Text>
+    </View>;
   }
 
-  const grossCost = safeNumber(reviewDraft.verifiedGrossCost);
-  const existingAssistance = safeNumber(reviewDraft.confirmedExistingAssistanceAmount);
-  const verifiedUncoveredAmount = Math.max(0, grossCost - existingAssistance);
+  const docsMatched = reviewDraft.documentConsistencyStatus === "consistent" &&
+    reviewDraft.beneficiaryCheckStatus === "confirmed";
+  const docsNotMatched = ["needs_more_information","inconsistent"].includes(
+    reviewDraft.documentConsistencyStatus);
+  const verifyReady = reviewReadyForVerification(reviewDraft);
+  const riskPresent = !!reviewDraft.riskFlags.trim() ||
+    !!reviewDraft.videoVerificationRequired || !!reviewDraft.siteVisitRequired;
 
-  const normalizePrivateAddressQuery = (value: string) => {
-    const raw = value.trim();
-    if (!raw) return "";
+  if (rejected) return (
+    <SectionCard title="Request Rejected" subtitle="This decision was recorded in the case history."
+      icon="close-circle-outline">
+      <Text style={styles.bodyText}>{request.rejectionReason || "No reason recorded."}</Text>
+    </SectionCard>
+  );
 
-    const parts = [raw];
-
-    if (!/san\s+jose\s+del\s+monte/i.test(raw)) {
-      parts.push("City of San Jose del Monte");
-    }
-
-    if (!/bulacan/i.test(raw)) {
-      parts.push("Bulacan");
-    }
-
-    if (!/philippines/i.test(raw)) {
-      parts.push("Philippines");
-    }
-
-    return parts.join(", ");
-  };
-
-  const runPrivateAddressSearch = () => {
-    if (reviewLocked) return;
-
-    const raw = privateAddressSearch.trim();
-
-    if (raw.length < 3) {
-      Alert.alert(
-        "Address Required",
-        "Enter the Resident's Block/Lot, street, subdivision or purok, barangay, and other available address details before searching.",
-      );
-      return;
-    }
-
-    const query = normalizePrivateAddressQuery(raw);
-
-    setPrivateMapSearchQuery(query);
-    setPrivateMapSearchTouched(true);
-
-    onReviewChange("privateAddressSnapshot", raw.slice(0, 300));
-
-    // Address search is only a geographic consistency check.
-    // Clear any old experimental exact-pin coordinates so they are not
-    // mistaken for proof of the Resident's household location.
-    onReviewChange("privateLatitude", "");
-    onReviewChange("privateLongitude", "");
-  };
-
-  const confirmResidencyAtAddress = () => {
-    if (reviewLocked) return;
-
-    if (
-      !privateMapSearchTouched ||
-      !privateMapSearchQuery.trim() ||
-      !reviewDraft.privateAddressSnapshot.trim()
-    ) {
-      Alert.alert(
-        "Search Address First",
-        "Search and review the Resident's declared address on the map before marking residency as verified.",
-      );
-      return;
-    }
-
-    if (
-      !reviewDraft.residencyVerificationMethod ||
-      reviewDraft.residencyVerificationMethod === "not_applicable"
-    ) {
-      Alert.alert(
-        "Verification Method Required",
-        "Select how the LGU confirmed that the Resident is associated with this address.",
-      );
-      return;
-    }
-
-    onReviewChange("residencyVerificationStatus", "verified");
-  };
-
-  const publicMapQuery = [
-    locationName.trim(),
-    locationAddress.trim(),
-  ]
-    .filter(Boolean)
-    .join(", ");
-
-  return (
-    <View style={styles.tabContent}>
-      <SectionCard
-        title="Private Verification"
-        subtitle="Check the evidence, duplicate history, beneficiary, residency, and any required facility or cost details before making a decision."
-        icon="shield-checkmark-outline"
-      >
-        {!reviewRecord && !verified && !rejected && (
-          <View style={styles.infoNotice}>
-            <Ionicons name="information-circle-outline" size={18} color="#0369A1" />
-            <Text style={styles.infoNoticeText}>
-              Start Review opens the protected verification record. Complete the required checks before Verify Need becomes available.
-            </Text>
-          </View>
-        )}
-
-        <LabelText>Document consistency</LabelText>
-        <StatusChoiceRow
-          value={reviewDraft.documentConsistencyStatus}
-          options={[
-            ["pending", "Pending"],
-            ["consistent", "Consistent"],
-            ["inconsistent", "Inconsistent"],
-            ["needs_more_information", "Needs More Info"],
-          ]}
-          disabled={reviewLocked}
-          onChange={(value) => onReviewChange("documentConsistencyStatus", value)}
-        />
-        <TextInput
-          value={reviewDraft.documentConsistencyNotes}
-          onChangeText={(value) => onReviewChange("documentConsistencyNotes", value)}
-          placeholder="Names, dates, facility details, document reference numbers, inconsistencies..."
-          placeholderTextColor="#94A3B8"
-          multiline
-          maxLength={2000}
-          editable={!reviewLocked}
-          style={styles.textArea}
-        />
-
-        <Divider />
-
-        <LabelText>Duplicate / history check</LabelText>
-        <StatusChoiceRow
-          value={reviewDraft.duplicateCheckStatus}
-          options={[
-            ["pending", "Pending"],
-            ["clear", "Clear"],
-            ["potential_duplicate", "Potential Duplicate"],
-            ["confirmed_duplicate", "Confirmed Duplicate"],
-          ]}
-          disabled={reviewLocked}
-          onChange={(value) => onReviewChange("duplicateCheckStatus", value)}
-        />
-        <TextInput
-          value={reviewDraft.duplicateRequestIds}
-          onChangeText={(value) => onReviewChange("duplicateRequestIds", value)}
-          placeholder="Related request IDs, comma separated — optional"
-          placeholderTextColor="#94A3B8"
-          editable={!reviewLocked}
-          style={styles.input}
-        />
-        <TextInput
-          value={reviewDraft.duplicateCheckNotes}
-          onChangeText={(value) => onReviewChange("duplicateCheckNotes", value)}
-          placeholder="Explain how prior requests and beneficiary history were checked."
-          placeholderTextColor="#94A3B8"
-          multiline
-          maxLength={2000}
-          editable={!reviewLocked}
-          style={styles.textArea}
-        />
-
-        <Divider />
-
-        <LabelText>Beneficiary verification</LabelText>
-        <StatusChoiceRow
-          value={reviewDraft.beneficiaryCheckStatus}
-          options={[
-            ["pending", "Pending"],
-            ["confirmed", "Confirmed"],
-            ["needs_more_information", "Needs More Info"],
-            ["inconsistent", "Inconsistent"],
-          ]}
-          disabled={reviewLocked}
-          onChange={(value) => onReviewChange("beneficiaryCheckStatus", value)}
-        />
-        <TextInput
-          value={reviewDraft.beneficiaryCheckNotes}
-          onChangeText={(value) => onReviewChange("beneficiaryCheckNotes", value)}
-          placeholder="Confirm requester/beneficiary identity or relationship and relevant supporting basis."
-          placeholderTextColor="#94A3B8"
-          multiline
-          maxLength={2000}
-          editable={!reviewLocked}
-          style={styles.textArea}
-        />
-      </SectionCard>
-
-      <SectionCard
-        title="Facility / Hospital / Clinic Verification"
-        subtitle={
-          reviewDraft.facilityVerificationRequired
-            ? "Required for this case. Confirm using an official facility contact or record — not only the Resident's uploaded image."
-            : "Not automatically required for this category. Enable only when a facility must be independently confirmed."
-        }
-        icon="business-outline"
-      >
-        {!needsFacilityVerification(request.category) && !reviewLocked && (
-          <ToggleChoice
-            label="Require facility verification for this case"
-            value={reviewDraft.facilityVerificationRequired}
-            onChange={(value) => {
-              onReviewChange("facilityVerificationRequired", value);
-              onReviewChange(
-                "facilityVerificationStatus",
-                value ? "pending" : "not_required",
-              );
-              if (!value) onReviewChange("facilityVerificationMethod", "not_applicable");
-            }}
-          />
-        )}
-
-        {reviewDraft.facilityVerificationRequired && (
-          <>
-            <StatusChoiceRow
-              value={reviewDraft.facilityVerificationStatus}
-              options={[
-                ["pending", "Pending"],
-                ["confirmed", "Confirmed"],
-                ["unable_to_confirm", "Unable to Confirm"],
-                ["inconsistent", "Inconsistent"],
-              ]}
-              disabled={reviewLocked}
-              onChange={(value) => onReviewChange("facilityVerificationStatus", value)}
-            />
-
-            <TextInput
-              value={reviewDraft.facilityName}
-              onChangeText={(value) => onReviewChange("facilityName", value)}
-              placeholder="Official hospital / clinic / vet facility name"
-              placeholderTextColor="#94A3B8"
-              editable={!reviewLocked}
-              style={styles.input}
-            />
-            <LabelText>Facility type</LabelText>
-            <PresetOrOtherReviewField
-              value={reviewDraft.facilityType}
-              onChange={(value) => onReviewChange("facilityType", value)}
-              disabled={reviewLocked}
-              options={["Hospital", "Medical Clinic", "Veterinary Clinic", "Diagnostic Center", "Rehabilitation Facility"]}
-              customPlaceholder="Specify the official facility type"
-            />
-            <TextInput
-              value={reviewDraft.facilityDepartment}
-              onChangeText={(value) => onReviewChange("facilityDepartment", value)}
-              placeholder="Department / social service / billing office"
-              placeholderTextColor="#94A3B8"
-              editable={!reviewLocked}
-              style={styles.input}
-            />
-            <TextInput
-              value={reviewDraft.professionalName}
-              onChangeText={(value) => onReviewChange("professionalName", value)}
-              placeholder="Doctor / veterinarian / authorized professional — if relevant"
-              placeholderTextColor="#94A3B8"
-              editable={!reviewLocked}
-              style={styles.input}
-            />
-            <TextInput
-              value={reviewDraft.facilityReferenceNumber}
-              onChangeText={(value) => onReviewChange("facilityReferenceNumber", value)}
-              placeholder="Official case / billing / record reference number"
-              placeholderTextColor="#94A3B8"
-              editable={!reviewLocked}
-              style={styles.input}
-            />
-
-            <LabelText>Independent verification method</LabelText>
-            <StatusChoiceRow
-              value={reviewDraft.facilityVerificationMethod}
-              options={[
-                ["official_phone", "Official Phone"],
-                ["official_email", "Official Email"],
-                ["official_record", "Official Record"],
-                ["in_person", "In Person"],
-                ["other", "Other"],
-              ]}
-              disabled={reviewLocked}
-              onChange={(value) => onReviewChange("facilityVerificationMethod", value)}
-            />
-            <TextInput
-              value={reviewDraft.facilityVerifiedWith}
-              onChangeText={(value) => onReviewChange("facilityVerifiedWith", value)}
-              placeholder="Name / office / official contact verified with"
-              placeholderTextColor="#94A3B8"
-              editable={!reviewLocked}
-              style={styles.input}
-            />
-            <TextInput
-              value={reviewDraft.facilityNotes}
-              onChangeText={(value) => onReviewChange("facilityNotes", value)}
-              placeholder="What exactly did the facility confirm?"
-              placeholderTextColor="#94A3B8"
-              multiline
-              maxLength={2000}
-              editable={!reviewLocked}
-              style={styles.textArea}
-            />
-          </>
-        )}
-      </SectionCard>
-
-      <SectionCard
-        title="Verified Cost / Remaining Need"
-        subtitle="The Resident's entered amount is only a claim. Use an official bill, quotation, facility confirmation, or other verifiable basis before confirming a monetary shortage."
-        icon="calculator-outline"
-      >
+  if (verified) return (
+    <View style={{gap:16, paddingBottom:22}}>
+      <SectionCard title="Request Approved" subtitle="Choose the type of support to continue."
+        icon="checkmark-circle-outline">
         <InfoGrid>
-          <InfoItem label="Resident Estimate" value={money(request.estimatedAmount)} />
-          <InfoItem label="LGU Verified Gross Cost" value={money(grossCost)} />
-          <InfoItem label="Confirmed Existing Assistance" value={money(existingAssistance)} />
-          <InfoItem label="Verified Uncovered Amount" value={money(verifiedUncoveredAmount)} />
+          <InfoItem label="Approved Uncovered Need" value={money(monetaryCap)} />
+          <InfoItem label="Support Status" value={request.supportDecision || "Not selected"} />
         </InfoGrid>
-
-        {reviewDraft.costVerificationRequired && (
-          <>
-            <StatusChoiceRow
-              value={reviewDraft.costVerificationStatus}
-              options={[
-                ["pending", "Pending"],
-                ["confirmed", "Confirmed"],
-                ["inconsistent", "Inconsistent"],
-              ]}
-              disabled={reviewLocked}
-              onChange={(value) => onReviewChange("costVerificationStatus", value)}
-            />
-            <TextInput
-              value={reviewDraft.verifiedGrossCost}
-              onChangeText={(value) => onReviewChange("verifiedGrossCost", value.replace(/[^0-9.]/g, ""))}
-              placeholder="Verified gross cost (PHP)"
-              keyboardType="decimal-pad"
-              placeholderTextColor="#94A3B8"
-              editable={!reviewLocked}
-              style={styles.input}
-            />
-            <TextInput
-              value={reviewDraft.confirmedExistingAssistanceAmount}
-              onChangeText={(value) => onReviewChange("confirmedExistingAssistanceAmount", value.replace(/[^0-9.]/g, ""))}
-              placeholder="Confirmed existing LGU / DSWD / NGO / other assistance (PHP)"
-              keyboardType="decimal-pad"
-              placeholderTextColor="#94A3B8"
-              editable={!reviewLocked}
-              style={styles.input}
-            />
-            <TextInput
-              value={reviewDraft.costReferenceNumber}
-              onChangeText={(value) => onReviewChange("costReferenceNumber", value)}
-              placeholder="Official billing / quotation / case reference"
-              placeholderTextColor="#94A3B8"
-              editable={!reviewLocked}
-              style={styles.input}
-            />
-            <TextInput
-              value={reviewDraft.costNotes}
-              onChangeText={(value) => onReviewChange("costNotes", value)}
-              placeholder="Explain how the cost and existing assistance were independently confirmed."
-              placeholderTextColor="#94A3B8"
-              multiline
-              maxLength={2000}
-              editable={!reviewLocked}
-              style={styles.textArea}
-            />
-          </>
-        )}
       </SectionCard>
-
-      <SectionCard
-        title="Residency / Address Verification"
-        subtitle="Use Google Maps only to check whether the Resident-declared address is geographically consistent. A map match does not prove residency."
-        icon="location-outline"
-      >
-        <View style={styles.addressVerificationFlow}>
-          <View style={styles.declaredAddressCard}>
-            <View style={styles.declaredAddressIcon}>
-              <Ionicons name="home-outline" size={18} color="#2563EB" />
-            </View>
-            <View style={styles.declaredAddressCopy}>
-              <Text style={styles.declaredAddressLabel}>RESIDENT ADDRESS ON RECORD</Text>
-              <Text style={styles.declaredAddressValue}>
-                {String(request.requesterAddress || "").trim() ||
-                  (request.requesterBarangay
-                    ? `Barangay ${request.requesterBarangay}, City of San Jose del Monte, Bulacan`
-                    : "No detailed Resident address was stored with this request.")}
+      <SectionCard title="Support Plan" subtitle="Donations are not published automatically."
+        icon="heart-outline">
+        <View style={{gap:12}}>
+          <Text style={styles.fieldLabel}>Choose how assistance will be handled</Text>
+          <View style={{flexDirection:"row",flexWrap:"wrap",gap:8}}>
+            {choice("Donation Campaign", supportDecision === "donation_support", () => {
+              setSupportDecision("donation_support");
+              if (!remainingAmount && monetaryCap > 0) setRemainingAmount(String(monetaryCap));
+            })}
+            {choice("LGU / Partner", supportDecision === "internal_support",
+              () => setSupportDecision("internal_support"))}
+            {choice("No Further Support", supportDecision === "not_required",
+              () => setSupportDecision("not_required"))}
+          </View>
+          {supportDecision === "donation_support" && (
+            <View style={{gap:8}}>
+              <Text style={styles.fieldLabel}>Donation target (PHP)</Text>
+              <Text style={styles.bodyText}>
+                Use the verified uncovered amount, not the Resident's unverified estimate.
               </Text>
-            </View>
-          </View>
-
-          <View style={styles.addressSearchPanel}>
-            <Text style={styles.addressSearchLabel}>ADDRESS TO CHECK</Text>
-            <View style={styles.addressSearchRow}>
-              <TextInput
-                value={privateAddressSearch}
-                onChangeText={(value) => {
-                  setPrivateAddressSearch(value);
-                  setPrivateMapSearchTouched(false);
-                }}
-                placeholder="Block/Lot, street, phase, subdivision/purok, barangay"
-                placeholderTextColor="#94A3B8"
-                editable={!reviewLocked}
-                maxLength={300}
-                onSubmitEditing={runPrivateAddressSearch}
-                style={[styles.input, styles.addressSearchInput]}
-              />
-              <TouchableOpacity
-                style={[
-                  styles.addressSearchButton,
-                  reviewLocked && styles.addressSearchButtonDisabled,
-                ]}
-                onPress={runPrivateAddressSearch}
-                disabled={reviewLocked}
-                activeOpacity={0.82}
-              >
-                <Ionicons name="search-outline" size={17} color="#FFFFFF" />
-                <Text style={styles.addressSearchButtonText}>Search Address</Text>
-              </TouchableOpacity>
-            </View>
-
-            {privateMapSearchTouched && (
-              <View style={styles.mapSearchStatus}>
-                <Ionicons name="checkmark-circle-outline" size={17} color="#0369A1" />
-                <Text style={styles.mapSearchStatusText}>
-                  Address loaded on the private map. Check whether the result is consistent with the declared barangay/city and available evidence.
-                </Text>
-              </View>
-            )}
-          </View>
-
-          <EmbeddedGoogleMap
-            title="Resident Address Check"
-            query={privateMapSearchQuery}
-            badge="LGU PRIVATE"
-            emptyText="Press Search Address to check the Resident-declared address inside VolunServe."
-            privacyText="This map is only an address consistency check. It does not prove that the Resident lives at the mapped point, and it is never shown on the public Donation page."
-          />
-
-          <Divider />
-
-          <LabelText>Residency verification method</LabelText>
-          <StatusChoiceRow
-            value={reviewDraft.residencyVerificationMethod}
-            options={[
-              ["profile_address", "Profile + Evidence"],
-              ["resident_confirmation", "Resident Confirmation"],
-              ["barangay_confirmation", "Barangay Confirmation"],
-              ["site_visit", "Site Visit"],
-              ["other", "Other"],
-            ]}
-            disabled={reviewLocked}
-            onChange={(value) =>
-              onReviewChange("residencyVerificationMethod", value)
-            }
-          />
-
-          <LabelText>Residency status</LabelText>
-          <StatusChoiceRow
-            value={reviewDraft.residencyVerificationStatus}
-            options={[
-              ["pending", "Pending"],
-              ["verified", "Verified"],
-              ["unable_to_verify", "Unable to Verify"],
-              ["inconsistent", "Inconsistent"],
-            ]}
-            disabled={reviewLocked}
-            onChange={(value) => {
-              if (value === "verified") {
-                confirmResidencyAtAddress();
-                return;
-              }
-
-              onReviewChange("residencyVerificationStatus", value);
-            }}
-          />
-
-          {reviewDraft.residencyVerificationStatus === "verified" && (
-            <View style={styles.residencyVerifiedCard}>
-              <Ionicons name="checkmark-circle" size={20} color="#15803D" />
-              <View style={{ flex: 1 }}>
-                <Text style={styles.residencyVerifiedTitle}>Residency marked verified</Text>
-                <Text style={styles.residencyVerifiedText}>
-                  Save the verification progress to record the address snapshot, verification method, reviewer, and verification timestamp.
-                </Text>
-              </View>
+              <TextInput style={styles.input} keyboardType="decimal-pad"
+                value={remainingAmount}
+                onChangeText={v=>setRemainingAmount(v.replace(/[^0-9.]/g,""))}
+                placeholder={monetaryCap > 0 ? String(monetaryCap) : "Verified budget not available"}
+                placeholderTextColor="#94A3B8" />
             </View>
           )}
-
-          <TextInput
-            value={reviewDraft.residencyNotes}
-            onChangeText={(value) => onReviewChange("residencyNotes", value)}
-            placeholder="Evidence checked, clarification requested, barangay confirmation if escalated, site visit findings, or address discrepancies."
-            placeholderTextColor="#94A3B8"
-            multiline
-            maxLength={2000}
-            editable={!reviewLocked}
-            style={styles.textArea}
-          />
-
-          <View style={styles.addressPrivacyNotice}>
-            <Ionicons name="lock-closed-outline" size={17} color="#0F766E" />
-            <Text style={styles.addressPrivacyNoticeText}>
-              The Resident's exact home address stays inside authorized LGU review. Donation campaigns may display only a separate LGU-approved public service location.
-            </Text>
-          </View>
+          <ActionButton label="Save Support Plan" icon="checkmark-outline"
+            variant="primary" loading={savingAction === "resource_assessment"}
+            onPress={onSaveResourceAssessment} />
         </View>
       </SectionCard>
-
-      <SectionCard
-        title="Escalated Verification"
-        subtitle="Use video verification or a site visit only when reasonably necessary for the case."
-        icon="videocam-outline"
-      >
-        <ToggleChoice
-          label="Require video verification"
-          value={reviewDraft.videoVerificationRequired}
-          disabled={reviewLocked}
-          onChange={(value) => {
-            onReviewChange("videoVerificationRequired", value);
-            onReviewChange("videoVerificationStatus", value ? "pending" : "not_required");
-          }}
-        />
-        {reviewDraft.videoVerificationRequired && (
-          <>
-            <StatusChoiceRow
-              value={reviewDraft.videoVerificationStatus}
-              options={[
-                ["pending", "Pending"],
-                ["requested", "Requested"],
-                ["completed", "Completed"],
-                ["unable_to_complete", "Unable to Complete"],
-              ]}
-              disabled={reviewLocked}
-              onChange={(value) => onReviewChange("videoVerificationStatus", value)}
-            />
-            <TextInput
-              value={reviewDraft.videoVerificationNotes}
-              onChangeText={(value) => onReviewChange("videoVerificationNotes", value)}
-              placeholder="Document what was verified during the call. Do not record unnecessary sensitive content."
-              placeholderTextColor="#94A3B8"
-              multiline
-              maxLength={2000}
-              editable={!reviewLocked}
-              style={styles.textArea}
-            />
-          </>
-        )}
-
-        <Divider />
-
-        <ToggleChoice
-          label="Require LGU / barangay site visit"
-          value={reviewDraft.siteVisitRequired}
-          disabled={reviewLocked}
-          onChange={(value) => {
-            onReviewChange("siteVisitRequired", value);
-            onReviewChange("siteVisitStatus", value ? "pending" : "not_required");
-          }}
-        />
-        {reviewDraft.siteVisitRequired && (
-          <>
-            <StatusChoiceRow
-              value={reviewDraft.siteVisitStatus}
-              options={[
-                ["pending", "Pending"],
-                ["scheduled", "Scheduled"],
-                ["completed", "Completed"],
-                ["unable_to_complete", "Unable to Complete"],
-              ]}
-              disabled={reviewLocked}
-              onChange={(value) => onReviewChange("siteVisitStatus", value)}
-            />
-            <TextInput
-              value={reviewDraft.siteVisitNotes}
-              onChangeText={(value) => onReviewChange("siteVisitNotes", value)}
-              placeholder="Site visit findings relevant to verifying this case."
-              placeholderTextColor="#94A3B8"
-              multiline
-              maxLength={2000}
-              editable={!reviewLocked}
-              style={styles.textArea}
-            />
-          </>
-        )}
-      </SectionCard>
-
-      <SectionCard
-        title="Risk Flags & Internal LGU Notes"
-        subtitle="Flags must describe concrete inconsistencies or unresolved verification issues. They are not a personality score and they block final verification until resolved."
-        icon="warning-outline"
-      >
-        <TextInput
-          value={reviewDraft.riskFlags}
-          onChangeText={(value) => onReviewChange("riskFlags", value)}
-          placeholder={'One flag per line, e.g. "Hospital reference number could not be confirmed"'}
-          placeholderTextColor="#94A3B8"
-          multiline
-          maxLength={2500}
-          editable={!reviewLocked}
-          style={styles.textArea}
-        />
-        <TextInput
-          value={reviewDraft.internalNotes}
-          onChangeText={(value) => onReviewChange("internalNotes", value)}
-          placeholder="Private LGU notes relevant to this case only."
-          placeholderTextColor="#94A3B8"
-          multiline
-          maxLength={3000}
-          editable={!reviewLocked}
-          style={styles.textArea}
-        />
-
-        {!reviewLocked && (
-          <ActionButton
-            label="Save Verification Progress"
-            icon="save-outline"
-            variant="secondary"
-            loading={savingAction === "save_private_review"}
-            onPress={onSaveVerificationDraft}
-          />
-        )}
-      </SectionCard>
-
-      <SectionCard
-        title="Case Notes"
-        subtitle="Add a short LGU note or resident-facing clarification. Keep unnecessary sensitive information out of this field."
-        icon="create-outline"
-      >
-        <TextInput
-          value={adminNote}
-          onChangeText={setAdminNote}
-          placeholder="Short case note or resident-facing clarification"
-          placeholderTextColor="#94A3B8"
-          multiline
-          maxLength={1800}
-          style={styles.textArea}
-        />
-        <Text style={styles.counterText}>{adminNote.length}/1800</Text>
-      </SectionCard>
-
-      {!verified && !rejected && (
-        <SectionCard
-          title="Review Decision"
-          subtitle="Complete the required checks, then request more information, verify the need, or reject the request. Verification does not automatically create a Donation Campaign."
-          icon="shield-checkmark-outline"
-        >
-          {request.status === "pending" && (
-            <ActionButton
-              label="Start Review"
-              icon="search-outline"
-              variant="secondary"
-              loading={savingAction === "start_review"}
-              onPress={onStartReview}
-            />
-          )}
-
-          <View style={styles.actionButtons}>
-            <ActionButton
-              label="Request More Information"
-              icon="chatbox-ellipses-outline"
-              variant="secondary"
-              loading={savingAction === "more_info"}
-              onPress={onRequestMoreInfo}
-            />
-            <ActionButton
-              label="Verify Need"
-              icon="shield-checkmark-outline"
-              variant="success"
-              disabled={!allChecksComplete}
-              loading={savingAction === "verify"}
-              onPress={onVerify}
-            />
-          </View>
-
-          {!allChecksComplete && (
-            <View style={styles.warningCard}>
-              <Ionicons name="lock-closed-outline" size={19} color="#9A6700" />
-              <View style={styles.noteCopy}>
-                <Text style={styles.warningTitle}>Verify Need is locked</Text>
-                <Text style={styles.warningText}>
-                  Complete all required verification checks and clear unresolved risk flags first.
-                </Text>
-              </View>
-            </View>
-          )}
-
-          <LabelText>Rejection reason</LabelText>
-          <TextInput
-            value={rejectionReason}
-            onChangeText={setRejectionReason}
-            placeholder="Evidence-based reason for rejection"
-            placeholderTextColor="#94A3B8"
-            multiline
-            maxLength={1000}
-            style={[styles.textArea, styles.rejectArea]}
-          />
-          <ActionButton
-            label="Reject Request"
-            icon="close-circle-outline"
-            variant="danger"
-            loading={savingAction === "reject"}
-            onPress={onReject}
-          />
-        </SectionCard>
-      )}
-
-      {verified && (
-        <>
-          <SectionCard
-            title="Choose Support"
-            subtitle={`Choose LGU/partner support, Donation Support, or no additional support. Donation Support cannot exceed the verified uncovered amount: ${money(Number(reviewRecord?.verifiedUncoveredAmount || 0))}.`}
-            icon="layers-outline"
-          >
-            <LabelText>How will this need be handled?</LabelText>
-            <StatusChoiceRow
-              value={supportDecision}
-              options={SUPPORT_OPTIONS.map(
-                (option) => [option.value, option.label] as [string, string],
-              )}
-              onChange={setSupportDecision}
-            />
-
-            {supportDecision === "donation_support" && (
+      {supportDecision === "donation_support" && (
+        <SectionCard title="Public Coordination Point"
+          subtitle="Use an LGU or barangay public office only; never disclose the Resident's home address."
+          icon="business-outline">
+          <View style={{gap:9}}>
+            {(request.assignedLocationName && request.assignedLocationAddress) ? (
+              <Text style={styles.bodyText}>
+                {request.assignedLocationName} — {request.assignedLocationAddress}
+              </Text>
+            ) : (
               <>
-                <LabelText>Verified remaining unmet amount</LabelText>
-                <TextInput
-                  value={remainingAmount}
-                  onChangeText={(value) => setRemainingAmount(value.replace(/[^0-9.]/g, ""))}
-                  keyboardType="decimal-pad"
-                  placeholder="Cannot exceed private verified uncovered amount"
-                  placeholderTextColor="#94A3B8"
-                  style={styles.input}
-                />
+                <Text style={styles.fieldLabel}>Public office or partner name</Text>
+                <TextInput value={locationName} onChangeText={setLocationName}
+                  style={styles.input} placeholder="e.g. Barangay Hall" placeholderTextColor="#94A3B8" />
+                <Text style={styles.fieldLabel}>Public office address</Text>
+                <TextInput value={locationAddress} onChangeText={setLocationAddress}
+                  style={styles.input} placeholder="Barangay, City of San Jose del Monte"
+                  placeholderTextColor="#94A3B8" />
+                <ActionButton label="Save Coordination Location" icon="save-outline"
+                  variant="secondary" loading={savingAction === "save_location"}
+                  onPress={() => {setLocationType("lgu_office"); onSaveLocation();}} />
+                <Text style={styles.bodyText}>
+                  After saving the support plan and public coordination details,
+                  the Donation Campaign action becomes available.
+                </Text>
               </>
             )}
-
-            <ActionButton
-              label="Save Support Decision"
-              icon="save-outline"
-              variant="primary"
-              loading={savingAction === "resource_assessment"}
-              onPress={onSaveResourceAssessment}
-            />
-
-            {supportDecision === "donation_support" && (
-              <View style={styles.donationNotice}>
-                <Ionicons
-                  name={donationCampaignReady ? "heart-circle-outline" : "lock-closed-outline"}
-                  size={18}
-                  color="#6D28D9"
-                />
-                <View style={{ flex: 1, gap: 10 }}>
-                  <Text style={styles.donationNoticeText}>
-                    {request.donationCampaignId
-                      ? "A Donation Campaign is already linked to this verified Assistance Request."
-                      : donationCampaignReady
-                        ? "The verified shortage and public service location are ready. You may now create the Donation Campaign."
-                        : "Save the Donation Support decision and the public service location first. A campaign is never created automatically."}
-                  </Text>
-
-                  {(donationCampaignReady || request.donationCampaignId) && (
-                    <ActionButton
-                      label={request.donationCampaignId ? "Open Donation Campaign" : "Create Donation Campaign"}
-                      icon="heart-outline"
-                      variant="primary"
-                      loading={false}
-                      onPress={openDonationCampaign}
-                    />
-                  )}
-                </View>
-              </View>
+            {(donationCampaignReady || !!request.donationCampaignId) && (
+              <ActionButton label={request.donationCampaignId ?
+                "Open Donation Campaign" : "Create Donation Campaign"}
+                icon="heart-outline" variant="success" loading={false}
+                onPress={() => router.push({
+                  pathname: "/donation-list",
+                  params: { assistanceRequestId: request.id },
+                } as any)} />
             )}
-
-            {["internal_support", "not_required"].includes(supportDecision) && (
-              <ActionButton
-                label="Mark Assistance Provided"
-                icon="checkmark-done-outline"
-                variant="success"
-                loading={savingAction === "assistance_provided"}
-                onPress={onMarkAssistanceProvided}
-              />
-            )}
-          </SectionCard>
-
-          <SectionCard
-            title="Service / Coordination Location"
-            subtitle="Set a public LGU-approved place only when assistance or donation coordination needs one. The Resident's home address stays private."
-            icon="location-outline"
-          >
-            <LabelText>Location type</LabelText>
-            <StatusChoiceRow
-              value={locationType}
-              options={LOCATION_TYPES.map(
-                (option) => [option.value, option.label] as [string, string],
-              )}
-              onChange={setLocationType}
-            />
-
-            <LabelText>Official location name</LabelText>
-            <TextInput
-              value={locationName}
-              onChangeText={setLocationName}
-              placeholder="e.g. Barangay Hall Assistance Desk"
-              placeholderTextColor="#94A3B8"
-              style={styles.input}
-            />
-            <LabelText>Public address</LabelText>
-            <TextInput
-              value={locationAddress}
-              onChangeText={setLocationAddress}
-              placeholder="Public service location address"
-              placeholderTextColor="#94A3B8"
-              style={styles.input}
-            />
-
-            <EmbeddedGoogleMap
-              title="LGU-Approved Coordination Point"
-              query={publicMapQuery}
-              badge="PUBLIC COORDINATION POINT"
-              emptyText="Enter the public coordination location and address to preview it inside VolunServe."
-              privacyText="Only this LGU-approved public coordination point may be shown to Residents or donors. The beneficiary home address remains private."
-            />
-
-            <LabelText>Instructions / schedule</LabelText>
-            <TextInput
-              value={locationNotes}
-              onChangeText={setLocationNotes}
-              placeholder="Public office hours or coordination instructions..."
-              placeholderTextColor="#94A3B8"
-              multiline
-              maxLength={1000}
-              style={styles.textArea}
-            />
-
-            <View style={styles.actionButtons}>
-              <ActionButton
-                label="Save Official Location"
-                icon="location-outline"
-                variant="primary"
-                loading={savingAction === "save_location"}
-                onPress={onSaveLocation}
-              />
-              {(request.assignedLocationName || request.assignedLocationAddress) && (
-                <ActionButton
-                  label="Clear Location"
-                  icon="trash-outline"
-                  variant="secondary"
-                  loading={savingAction === "clear_location"}
-                  onPress={onClearLocation}
-                />
-              )}
-            </View>
-          </SectionCard>
-        </>
+          </View>
+        </SectionCard>
       )}
+      {supportDecision === "internal_support" && (
+        <ActionButton label="Mark Assistance Provided" icon="checkmark-done-outline"
+          variant="success" loading={savingAction === "assistance_provided"}
+          onPress={onMarkAssistanceProvided} />
+      )}
+    </View>
+  );
 
-      {rejected && (
-        <View style={styles.rejectedCard}>
-          <Ionicons name="close-circle-outline" size={22} color="#B42318" />
-          <View style={styles.noteCopy}>
-            <Text style={styles.rejectedTitle}>Request Rejected</Text>
-            <Text style={styles.rejectedText}>{request.rejectionReason || "No reason recorded."}</Text>
+  return (
+    <View style={{gap:15,paddingBottom:24}}>
+      <SectionCard title="Review Assistance Request"
+        subtitle="Three quick checks, supporting documents, and one decision."
+        icon="clipboard-outline">
+        <View style={{gap:10}}>
+          <Text style={{color:"#0F172A",fontWeight:"900",fontSize:15}}>
+            {request.title || "Assistance Request"}
+          </Text>
+          <Text style={styles.bodyText}>
+            {request.requesterName || "Resident"} · {request.categoryLabel || "Assistance"}
+          </Text>
+          <Text style={styles.bodyText}>
+            {request.description || request.currentSituation || "No description"}
+          </Text>
+          <InfoGrid>
+            <InfoItem label="Claimed Amount" value={money(request.estimatedAmount)} />
+            <InfoItem label="Evidence" value={String(request.documents?.length || 0) + " documents"} />
+          </InfoGrid>
+          <Text style={styles.bodyText}>
+            Open the Documents and Resident Info tabs above to inspect the evidence first.
+          </Text>
+        </View>
+      </SectionCard>
+      <SectionCard title="1. Confirm Basic Details"
+        subtitle="Only mark Confirmed after reviewing the evidence or contacting an authorized source."
+        icon="shield-checkmark-outline">
+        {confirmRow(
+          "Documents, requester and beneficiary match",
+          "Match the submitted documents and names with this request.",
+          docsMatched, docsNotMatched,
+          () => {
+            onReviewChange("documentConsistencyStatus","consistent");
+            onReviewChange("beneficiaryCheckStatus","confirmed");
+          },
+          () => {
+            onReviewChange("documentConsistencyStatus","needs_more_information");
+            onReviewChange("beneficiaryCheckStatus","needs_more_information");
+          },
+        )}
+        {confirmRow(
+          "No duplicate request found",
+          "Compare the Resident's existing request history.",
+          reviewDraft.duplicateCheckStatus === "clear",
+          ["potential_duplicate","confirmed_duplicate"].includes(reviewDraft.duplicateCheckStatus),
+          () => onReviewChange("duplicateCheckStatus","clear"),
+          () => onReviewChange("duplicateCheckStatus","potential_duplicate"),
+        )}
+        {confirmRow(
+          "Residency confirmed in San Jose del Monte",
+          "Check the declared barangay and address using documents, phone, or in-person confirmation.",
+          reviewDraft.residencyVerificationStatus === "verified",
+          reviewDraft.residencyVerificationStatus === "unable_to_verify",
+          () => onReviewChange("residencyVerificationStatus","verified"),
+          () => onReviewChange("residencyVerificationStatus","unable_to_verify"),
+        )}
+        <Text style={styles.fieldLabel}>How was residency checked?</Text>
+        <View style={{flexDirection:"row",flexWrap:"wrap",gap:9}}>
+          {choice("Documents",reviewDraft.residencyVerificationMethod === "profile_address",
+            () => onReviewChange("residencyVerificationMethod","profile_address"))}
+          {choice("Barangay contact",reviewDraft.residencyVerificationMethod === "barangay_confirmation",
+            () => onReviewChange("residencyVerificationMethod","barangay_confirmation"))}
+          {choice("In person",reviewDraft.residencyVerificationMethod === "site_visit",
+            () => onReviewChange("residencyVerificationMethod","site_visit"))}
+        </View>
+        <Text style={styles.bodyText}>
+          Declared address: {reviewDraft.privateAddressSnapshot || request.requesterAddress || "Not recorded"}
+        </Text>
+        {!reviewDraft.privateAddressSnapshot.trim() && (
+          <TextInput value={reviewDraft.privateAddressSnapshot}
+            onChangeText={v=>onReviewChange("privateAddressSnapshot",v)}
+            editable={!locked} placeholder="Barangay and city from supporting proof"
+            placeholderTextColor="#94A3B8" style={styles.input} />
+        )}
+      </SectionCard>
+      {(facilityRequired || costRequired) && (
+        <SectionCard title="2. Confirm Provider and Amount"
+          subtitle="A valid document, direct contact, or in-person confirmation can support this check."
+          icon="document-text-outline">
+          <View style={{gap:10}}>
+            {facilityRequired && <>
+              <Text style={styles.fieldLabel}>Hospital / clinic / assistance provider</Text>
+              <TextInput value={reviewDraft.facilityName}
+                onChangeText={v=>onReviewChange("facilityName",v)}
+                editable={!locked} placeholder="Provider name from evidence"
+                placeholderTextColor="#94A3B8" style={styles.input} />
+              <Text style={styles.fieldLabel}>How was the provider confirmed?</Text>
+              <View style={{flexDirection:"row",flexWrap:"wrap",gap:9}}>
+                {choice("Document",reviewDraft.facilityVerificationStatus==="confirmed" &&
+                    reviewDraft.facilityVerificationMethod==="official_record",
+                  () => {
+                    onReviewChange("facilityVerificationStatus","confirmed");
+                    onReviewChange("facilityVerificationMethod","official_record");
+                  })}
+                {choice("Contact",reviewDraft.facilityVerificationStatus==="confirmed" &&
+                    reviewDraft.facilityVerificationMethod==="official_phone",
+                  () => {
+                    onReviewChange("facilityVerificationStatus","confirmed");
+                    onReviewChange("facilityVerificationMethod","official_phone");
+                  })}
+                {choice("In person",reviewDraft.facilityVerificationStatus==="confirmed" &&
+                    reviewDraft.facilityVerificationMethod==="in_person",
+                  () => {
+                    onReviewChange("facilityVerificationStatus","confirmed");
+                    onReviewChange("facilityVerificationMethod","in_person");
+                  })}
+                {choice("Needs information", reviewDraft.facilityVerificationStatus==="unable_to_confirm",
+                  () => onReviewChange("facilityVerificationStatus","unable_to_confirm"),true)}
+              </View>
+            </>}
+            {costRequired && <>
+              <Text style={styles.fieldLabel}>Amount supported by the bill or quotation (PHP)</Text>
+              <TextInput style={styles.input} value={reviewDraft.verifiedGrossCost}
+                editable={!locked} keyboardType="decimal-pad"
+                placeholder="e.g. 5000" placeholderTextColor="#94A3B8"
+                onChangeText={v=>onReviewChange("verifiedGrossCost",v.replace(/[^0-9.]/g,""))} />
+              <Text style={styles.fieldLabel}>Other assistance already received (PHP)</Text>
+              <TextInput style={styles.input}
+                value={reviewDraft.confirmedExistingAssistanceAmount}
+                editable={!locked} keyboardType="decimal-pad"
+                placeholder="0 if none" placeholderTextColor="#94A3B8"
+                onChangeText={v=>onReviewChange("confirmedExistingAssistanceAmount",v.replace(/[^0-9.]/g,""))} />
+              {confirmRow(
+                "Amount matches supporting evidence",
+                "The approved amount cannot be based on an unsupported estimate alone.",
+                reviewDraft.costVerificationStatus==="confirmed",
+                reviewDraft.costVerificationStatus==="inconsistent",
+                () => onReviewChange("costVerificationStatus","confirmed"),
+                () => onReviewChange("costVerificationStatus","inconsistent"),
+              )}
+            </>}
+          </View>
+        </SectionCard>
+      )}
+      {riskPresent && (
+        <View style={styles.warningCard}>
+          <Ionicons name="alert-circle-outline" color="#92400E" size={19} />
+          <View style={{flex:1,gap:4}}>
+            <Text style={styles.warningTitle}>Special-case review required</Text>
+            <Text style={styles.warningText}>
+              This request has an unresolved risk flag or an escalated visit/video requirement.
+              It cannot be approved until those details are resolved.
+            </Text>
           </View>
         </View>
       )}
+      <SectionCard title="3. Record Decision"
+        subtitle="Admin decisions are saved to the protected LGU record automatically."
+        icon="checkmark-circle-outline">
+        <View style={{gap:12}}>
+          {showMissing && !verifyReady && (
+            <View style={styles.infoNotice}>
+              <Ionicons name="information-circle-outline" size={18} color="#92400E" />
+              <Text style={styles.infoNoticeText}>
+                Complete all Confirmed checks, provider name/method, and supported amounts before approving.
+              </Text>
+            </View>
+          )}
+          <View style={{flexDirection:"row",flexWrap:"wrap",gap:10}}>
+            <ActionButton label="Approve Request" icon="checkmark-circle-outline"
+              variant="success" loading={savingAction==="verify"} onPress={() => {
+                setShowMissing(true);
+                if (!verifyReady) {
+                  showAssistanceActionError("Review Incomplete",
+                    "Please confirm the required checks and supporting evidence before approval.");
+                  return;
+                }
+                onVerify();
+              }} />
+            <ActionButton label="Reject Request" icon="close-circle-outline"
+              variant="danger" loading={savingAction==="reject"}
+              onPress={()=>setDecision(decision==="reject"?null:"reject")} />
+          </View>
+          <TouchableOpacity accessibilityRole="button"
+            onPress={()=>setDecision(decision==="more"?null:"more")}>
+            <Text style={{color:"#2563EB",fontWeight:"700",fontSize:12}}>
+              Request more information instead
+            </Text>
+          </TouchableOpacity>
+          {decision && (
+            <View style={{gap:9}}>
+              <Text style={styles.fieldLabel}>
+                {decision==="reject" ? "Reason for rejection" : "Information the Resident needs to provide"}
+              </Text>
+              <TextInput style={styles.textArea} multiline maxLength={1000}
+                value={decision==="reject"?rejectionReason:adminNote}
+                onChangeText={decision==="reject"?setRejectionReason:setAdminNote}
+                placeholder="Write a brief and specific reason"
+                placeholderTextColor="#94A3B8" />
+              <View style={{flexDirection:"row",gap:9,flexWrap:"wrap"}}>
+                <ActionButton label="Cancel" icon="close-outline" variant="secondary"
+                  loading={false} onPress={()=>setDecision(null)} />
+                <ActionButton label={decision==="reject"?"Confirm Rejection":"Send Request"}
+                  icon={decision==="reject"?"close-circle-outline":"send-outline"}
+                  variant={decision==="reject"?"danger":"primary"}
+                  loading={savingAction===(decision==="reject"?"reject":"more_info")}
+                  onPress={decision==="reject"?onReject:onRequestMoreInfo} />
+              </View>
+            </View>
+          )}
+          <Text style={styles.bodyText}>
+            Approved requests proceed to Support Plan. Donation Campaign publishing is a separate step.
+          </Text>
+        </View>
+      </SectionCard>
     </View>
   );
 }
