@@ -2125,16 +2125,7 @@ This still does not automatically create a Donation Campaign.`,
             </Text>
           </TouchableOpacity>
 
-          <View style={{display:"none"}}>
-            <Ionicons
-              name="lock-closed-outline"
-              size={14}
-              color="#475569"
-            />
-            <Text style={styles.detailSecurityBadgeText}>
-              Authorized LGU Review
-            </Text>
-          </View>
+
         </View>
 
         <View style={styles.detailHeaderCard}>
@@ -2317,39 +2308,7 @@ This still does not automatically create a Donation Campaign.`,
 
           <View style={styles.detailWorkspace}>
             <View style={[styles.detailMainPane, { flex: 1, width: "100%", minWidth: 0 }]}>
-              <View style={{display:"none"}}>
-                <View style={styles.detailPaneHeaderIcon}>
-                  <Ionicons
-                    name={
-                      reviewTab === "case"
-                        ? "document-text-outline"
-                        : reviewTab === "evidence"
-                          ? "images-outline"
-                          : reviewTab === "resident"
-                            ? "person-outline"
-                            : "shield-checkmark-outline"
-                    }
-                    size={17}
-                    color="#4338CA"
-                  />
-                </View>
-                <View style={styles.detailPaneHeaderCopy}>
-                  <Text style={styles.detailPaneEyebrow}>
-                    REQUEST WORKSPACE
-                  </Text>
-                  <Text style={styles.detailPaneTitle}>
-                    {
-                      reviewTab === "case"
-                        ? "Case Details"
-                        : reviewTab === "evidence"
-                          ? "Supporting Documents"
-                          : reviewTab === "resident"
-                            ? "Resident Information"
-                            : "Review & Decision"
-                    }
-                  </Text>
-                </View>
-              </View>
+
 
               <ScrollView
                 style={styles.detailMainScroll}
@@ -2774,49 +2733,71 @@ function ReviewTabButton({
   );
 }
 
+// Reference screenshot: information is shown as two clean side-by-side cards.
+// Display-only component. Data and protected verification behavior are unchanged.
+function AssistanceReferenceInfoRow({
+  icon, label, value,
+}: {
+  icon: React.ComponentProps<typeof Ionicons>["name"];
+  label: string;
+  value: string;
+}) {
+  return (
+    <View style={styles.assistanceReferenceInfoRow}>
+      <Ionicons name={icon} size={17} color="#376D58" />
+      <Text style={styles.assistanceReferenceInfoLabel}>{label}</Text>
+      <Text style={styles.assistanceReferenceInfoValue}>{value}</Text>
+    </View>
+  );
+}
+
 function CaseReviewTab({request,relatedRequestCount,sameBeneficiaryCount,residentIdentityVerified}:{
   request:AssistanceRequest; relatedRequestCount:number; sameBeneficiaryCount:number;
   residentIdentityVerified:boolean;
 }){
   return (
-    <View style={{padding:14,gap:14}}>
-      <View style={{flexDirection:"row",flexWrap:"wrap",gap:14,alignItems:"stretch"}}>
-        <View style={{flex:1.2,flexBasis:300,minWidth:0}}>
-          <SectionCard title="Request Information" subtitle="Details submitted by the Resident."
-            icon="information-circle-outline">
-            <View style={{gap:14}}>
-              <InfoItem label="Category" value={request.categoryLabel || String(request.category || "Assistance").replaceAll("_"," ")} />
-              <InfoItem label="Current Situation" value={request.currentSituation || "Not provided"} />
-              <InfoItem label="Requested Amount" value={money(request.estimatedAmount)} />
-              <Divider/>
-              <LabelText>Description</LabelText>
-              <BodyText>{request.description || "No description provided."}</BodyText>
-            </View>
-          </SectionCard>
+    <View style={styles.assistanceReferenceDetailContent}>
+      <View style={styles.assistanceReferenceInfoCards}>
+        <View style={styles.assistanceReferenceInfoCard}>
+          <View style={styles.assistanceReferenceInfoHeading}>
+            <Ionicons name="information-circle-outline" size={24} color="#008249"/>
+            <Text style={styles.assistanceReferenceInfoHeadingText}>Request Information</Text>
+          </View>
+          <AssistanceReferenceInfoRow icon="pricetag-outline" label="Category"
+            value={request.categoryLabel || String(request.category || "Assistance").replaceAll("_"," ")}/>
+          <AssistanceReferenceInfoRow icon="heart-outline" label="Current Situation"
+            value={request.currentSituation || "Not provided"}/>
+          <AssistanceReferenceInfoRow icon="document-text-outline" label="Description"
+            value={request.description || "No description provided."}/>
+          {Number(request.estimatedAmount || 0)>0 && (
+            <AssistanceReferenceInfoRow icon="cash-outline" label="Requested Amount"
+              value={referenceAmount(request.estimatedAmount)}/>
+          )}
         </View>
-        <View style={{flex:1,flexBasis:290,minWidth:0}}>
-          <SectionCard title="Resident Information" subtitle="Private LGU review details."
-            icon="person-outline">
-            <View style={{gap:14}}>
-              <InfoItem label="Name" value={request.requesterName || "Resident"} />
-              <InfoItem label="Contact" value={request.contactNumber || "Not recorded"} />
-              <InfoItem label="Barangay" value={request.requesterBarangay || "Not recorded"} />
-              <InfoItem label="Address" value={request.requesterAddress || "Not recorded"} />
-              <View style={{flexDirection:"row",alignItems:"center",gap:7,
-                paddingVertical:10,paddingHorizontal:12,borderRadius:9,
-                backgroundColor:"#ECFDF5",alignSelf:"flex-start"}}>
-                <Ionicons name="shield-checkmark-outline" color="#047857" size={17}/>
-                <Text style={{fontSize:11,color:"#047857",fontWeight:"800"}}>
-                  {residentIdentityVerified ? "Verified Resident" : "Verify identity in Resident Info tab"}
-                </Text>
-              </View>
-            </View>
-          </SectionCard>
+        <View style={styles.assistanceReferenceInfoCard}>
+          <View style={styles.assistanceReferenceInfoHeading}>
+            <Ionicons name="person-outline" size={24} color="#008249"/>
+            <Text style={styles.assistanceReferenceInfoHeadingText}>Resident Information</Text>
+          </View>
+          <AssistanceReferenceInfoRow icon="people-outline" label="Name"
+            value={request.requesterName || "Resident"}/>
+          <AssistanceReferenceInfoRow icon="call-outline" label="Contact"
+            value={request.contactNumber || "Not recorded"}/>
+          <AssistanceReferenceInfoRow icon="location-outline" label="Address"
+            value={request.requesterAddress || request.requesterBarangay || "Not recorded"}/>
+          <View style={[styles.assistanceReferenceIdentityBadge,
+            !residentIdentityVerified && styles.assistanceReferenceIdentityBadgePending]}>
+            <Ionicons name={residentIdentityVerified ? "shield-checkmark-outline" : "information-circle-outline"}
+              color={residentIdentityVerified ? "#057342" : "#64748B"} size={17}/>
+            <Text style={[styles.assistanceReferenceIdentityBadgeText,
+              !residentIdentityVerified && {color:"#475569"}]}>
+              {residentIdentityVerified ? "Verified Resident" : "Verification pending — see Resident Info"}
+            </Text>
+          </View>
         </View>
       </View>
-      {(relatedRequestCount > 0 || sameBeneficiaryCount > 0) && (
-        <View style={{padding:14,backgroundColor:"#FFF9EC",borderRadius:11,borderWidth:1,
-          borderColor:"#F3E3B0",flexDirection:"row",gap:9,alignItems:"center"}}>
+      {(relatedRequestCount>0 || sameBeneficiaryCount>0) && (
+        <View style={styles.assistanceReferenceRelatedNotice}>
           <Ionicons name="information-circle-outline" color="#B45309" size={18}/>
           <Text style={{flex:1,fontSize:12,color:"#735116"}}>
             Other related requests exist. Check request history in Resident Info before approving.
@@ -4684,6 +4665,34 @@ function DocumentPreviewModal({
 }
 
 const styles = StyleSheet.create({
+  assistanceReferenceDetailContent: {padding:12,gap:15},
+  assistanceReferenceInfoCards: {flexDirection:"row",flexWrap:"wrap",gap:14,alignItems:"stretch"},
+  assistanceReferenceInfoCard: {
+    flex:1,flexBasis:280,minWidth:240,minHeight:246,
+    backgroundColor:"#FFFFFF",borderWidth:1,borderColor:"#DBE6E5",
+    borderRadius:12,paddingHorizontal:15,paddingVertical:14,
+  },
+  assistanceReferenceInfoHeading: {
+    flexDirection:"row",alignItems:"center",gap:10,
+    paddingBottom:14,marginBottom:4,borderBottomWidth:1,borderBottomColor:"#E9EFF0",
+  },
+  assistanceReferenceInfoHeadingText: {fontSize:17,fontWeight:"800",color:"#15212D"},
+  assistanceReferenceInfoRow: {
+    flexDirection:"row",alignItems:"flex-start",gap:9,
+    paddingVertical:12,borderBottomWidth:1,borderBottomColor:"#EDF1F2",
+  },
+  assistanceReferenceInfoLabel: {width:102,flexShrink:0,fontSize:12,fontWeight:"700",color:"#344257"},
+  assistanceReferenceInfoValue: {flex:1,minWidth:0,fontSize:12,lineHeight:18,color:"#1F2937",fontWeight:"600"},
+  assistanceReferenceIdentityBadge: {
+    alignSelf:"flex-start",flexDirection:"row",alignItems:"center",gap:7,
+    backgroundColor:"#E0F8E8",borderRadius:8,paddingVertical:9,paddingHorizontal:13,marginTop:13,
+  },
+  assistanceReferenceIdentityBadgePending: {backgroundColor:"#F0F3F6"},
+  assistanceReferenceIdentityBadgeText: {fontSize:11,fontWeight:"800",color:"#087443"},
+  assistanceReferenceRelatedNotice: {
+    flexDirection:"row",alignItems:"center",gap:9,
+    padding:14,borderRadius:10,borderWidth:1,borderColor:"#F3E3B0",backgroundColor:"#FFF9EC",
+  },
   page: {
     flex: 1,
     backgroundColor: "#F6F8F7",
