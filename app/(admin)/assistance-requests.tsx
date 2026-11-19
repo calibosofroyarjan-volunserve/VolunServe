@@ -436,7 +436,7 @@ const statusMeta = (value?: string) => {
 
   if (status === "verified") {
     return {
-      label: "Verified Need",
+      label: "Approved",
       color: "#15803D",
       soft: "#EAF8EF",
       icon: "shield-checkmark-outline" as const,
@@ -1996,6 +1996,7 @@ This still does not automatically create a Donation Campaign.`,
         {reviewTab === "case" && (
           <CaseReviewTab
             request={selected}
+            profile={residentProfile}
             relatedRequestCount={relatedRequests.length}
             sameBeneficiaryCount={sameBeneficiaryRequests.length}
           />
@@ -2068,67 +2069,48 @@ This still does not automatically create a Donation Campaign.`,
 
   const renderDetailChrome = () => {
     if (!selected) return null;
-
+    const meta = statusMeta(selected.status);
     return (
-      <>
-        <View style={styles.detailBreadcrumbRow}>
-          <TouchableOpacity
-            style={styles.mockBackLink}
-            onPress={backToQueue}
-          >
-            <Ionicons
-              name="arrow-back"
-              size={17}
-              color="#2563EB"
-            />
-            <Text style={styles.mockBackLinkText}>
-              Assistance Requests
+      <View style={{gap:16}}>
+        <TouchableOpacity onPress={backToQueue}
+          accessibilityRole="button" accessibilityLabel="Back to Assistance Requests"
+          style={{alignSelf:"flex-start",flexDirection:"row",alignItems:"center",gap:7,paddingVertical:5}}>
+          <Ionicons name="chevron-back" size={17} color="#166534"/>
+          <Text style={{fontSize:12,fontWeight:"700",color:"#31594B"}}>Back to Assistance Requests</Text>
+        </TouchableOpacity>
+        <View style={{flexDirection:"row",alignItems:"center",gap:15,
+          flexWrap:"wrap",paddingVertical:7}}>
+          <View style={{height:44,width:44,borderRadius:12,backgroundColor:"#F0F7F3",
+            justifyContent:"center",alignItems:"center"}}>
+            <Ionicons name={assistanceCategoryMeta(selected.category).icon}
+              size={24} color="#146C4C"/>
+          </View>
+          <View style={{flex:1,minWidth:230,gap:5}}>
+            <Text style={{fontSize:22,fontWeight:"800",color:"#15251F"}} numberOfLines={2}>
+              {selected.title || "Assistance Request"}
             </Text>
-          </TouchableOpacity>
-
-          <View style={styles.detailSecurityBadge}>
-            <Ionicons
-              name="lock-closed-outline"
-              size={14}
-              color="#475569"
-            />
-            <Text style={styles.detailSecurityBadgeText}>
-              Authorized LGU Review
+            <Text style={{fontSize:12,color:"#73847C"}}>
+              Case {selected.requestId || selected.id}
             </Text>
           </View>
+          <View style={{paddingHorizontal:14,paddingVertical:9,borderRadius:9,
+            flexDirection:"row",alignItems:"center",gap:7,backgroundColor:meta.soft}}>
+            <Ionicons name={meta.icon} size={16} color={meta.color}/>
+            <Text style={{fontSize:12,color:meta.color,fontWeight:"800"}}>{meta.label}</Text>
+          </View>
         </View>
-
-        <View style={styles.detailHeaderCard}>
-          <RequestReviewHeader request={selected} />
+        <View style={styles.referenceDetailTabs}>
+          <ReviewTabButton label="Request Details" icon="document-text-outline"
+            active={reviewTab==="case"} onPress={()=>setReviewTab("case")}/>
+          <ReviewTabButton label={`Documents (${selected.documents?.length||0})`}
+            icon="documents-outline" active={reviewTab==="evidence"}
+            onPress={()=>setReviewTab("evidence")}/>
+          <ReviewTabButton label="Resident Info" icon="person-outline"
+            active={reviewTab==="resident"} onPress={()=>setReviewTab("resident")}/>
+          <ReviewTabButton label="Review & Decision" icon="checkbox-outline"
+            active={reviewTab==="decision"} onPress={()=>setReviewTab("decision")}/>
         </View>
-
-        <View style={styles.mockDetailTabs}>
-          <ReviewTabButton
-            label="Request Details"
-            icon="document-text-outline"
-            active={reviewTab === "case"}
-            onPress={() => setReviewTab("case")}
-          />
-          <ReviewTabButton
-            label={`Documents (${selected.documents?.length || 0})`}
-            icon="images-outline"
-            active={reviewTab === "evidence"}
-            onPress={() => setReviewTab("evidence")}
-          />
-          <ReviewTabButton
-            label="Resident Info"
-            icon="person-outline"
-            active={reviewTab === "resident"}
-            onPress={() => setReviewTab("resident")}
-          />
-          <ReviewTabButton
-            label="Review & Decision"
-            icon="shield-checkmark-outline"
-            active={reviewTab === "decision"}
-            onPress={() => setReviewTab("decision")}
-          />
-        </View>
-      </>
+      </View>
     );
   };
 
@@ -2192,7 +2174,7 @@ This still does not automatically create a Donation Campaign.`,
                 </View>
                 <ScrollView horizontal={!wide} showsHorizontalScrollIndicator={!wide}
                   nestedScrollEnabled style={{width:"100%"}}>
-                <View style={wide ? {width:"100%"} : {width:760}}>
+                <View style={wide ? {width:"100%"} : {width:890}}>
                 <View style={{
                   flexDirection:"row",paddingHorizontal:20,paddingVertical:13,
                   backgroundColor:"#F1F6F4",borderTopWidth:1,borderBottomWidth:1,
@@ -2203,6 +2185,7 @@ This still does not automatically create a Donation Campaign.`,
                   <Text style={{flex:1.6,minWidth:90,fontSize:10.5,fontWeight:"800",color:"#49665B"}}>CATEGORY</Text>
                   <Text style={{flex:1.2,minWidth:85,fontSize:10.5,fontWeight:"800",color:"#49665B"}}>AMOUNT</Text>
                   <Text style={{flex:1.2,minWidth:90,fontSize:10.5,fontWeight:"800",color:"#49665B"}}>STATUS</Text>
+                  <Text style={{flex:1.2,minWidth:100,fontSize:10.5,fontWeight:"800",color:"#49665B"}}>SUBMITTED</Text>
                   <Text style={{width:16,fontSize:10.5,fontWeight:"800",color:"#49665B"}}> </Text>
                 </View>
                 {loadingRequests ? (
@@ -2261,74 +2244,14 @@ This still does not automatically create a Donation Campaign.`,
             </TouchableOpacity>
           </View>
         </ScrollView>
-      ) : wide ? (
-        <View style={styles.detailShell}>
-          <View style={styles.detailChrome}>
-            {renderDetailChrome()}
-          </View>
-
-          <View style={styles.detailWorkspace}>
-            <View style={[styles.detailMainPane, { flex: 1, width: "100%", minWidth: 0 }]}>
-              <View style={styles.detailPaneHeader}>
-                <View style={styles.detailPaneHeaderIcon}>
-                  <Ionicons
-                    name={
-                      reviewTab === "case"
-                        ? "document-text-outline"
-                        : reviewTab === "evidence"
-                          ? "images-outline"
-                          : reviewTab === "resident"
-                            ? "person-outline"
-                            : "shield-checkmark-outline"
-                    }
-                    size={17}
-                    color="#4338CA"
-                  />
-                </View>
-                <View style={styles.detailPaneHeaderCopy}>
-                  <Text style={styles.detailPaneEyebrow}>
-                    REQUEST WORKSPACE
-                  </Text>
-                  <Text style={styles.detailPaneTitle}>
-                    {
-                      reviewTab === "case"
-                        ? "Case Details"
-                        : reviewTab === "evidence"
-                          ? "Supporting Documents"
-                          : reviewTab === "resident"
-                            ? "Resident Information"
-                            : "Review & Decision"
-                    }
-                  </Text>
-                </View>
-              </View>
-
-              <ScrollView
-                style={styles.detailMainScroll}
-                contentContainerStyle={styles.detailMainContent}
-                showsVerticalScrollIndicator
-                nestedScrollEnabled
-              >
-                {renderReviewMain()}
-              </ScrollView>
-            </View>
-
-
-          </View>
-        </View>
       ) : (
-        <ScrollView
-          style={styles.pageScroll}
-          contentContainerStyle={styles.pageContent}
-          showsVerticalScrollIndicator
-        >
+        <ScrollView style={styles.pageScroll}
+          contentContainerStyle={styles.referencePageContent}
+          showsVerticalScrollIndicator={false}>
           {renderDetailChrome()}
-
-          <View style={styles.mobileDetailSection}>
+          <View style={styles.referenceDetailBody}>
             {renderReviewMain()}
           </View>
-
-
         </ScrollView>
       )}
 
@@ -2377,6 +2300,15 @@ function MockStatusTab({
   );
 }
 
+const submissionDateLabel = (value: any) => {
+  if (!value) return "—";
+  const date = typeof value?.toDate === "function"
+    ? value.toDate()
+    : value?.seconds ? new Date(Number(value.seconds)*1000) : new Date(value);
+  if (!Number.isFinite(date.getTime())) return "—";
+  return date.toLocaleDateString("en-PH",{month:"short",day:"numeric",year:"numeric"});
+};
+
 function MockQueueRow({request,onPress}:{
   request: AssistanceRequest;
   onPress:()=>void;
@@ -2423,6 +2355,11 @@ function MockQueueRow({request,onPress}:{
           borderRadius:99,backgroundColor:meta.soft}}>
           <Text style={{fontSize:11,color:meta.color,fontWeight:"800"}}>{meta.label}</Text>
         </View>
+      </View>
+      <View style={{flex:1.2,minWidth:100}}>
+        <Text style={{fontSize:11,color:"#597266",lineHeight:16}}>
+          {submissionDateLabel(request.createdAt)}
+        </Text>
       </View>
       <Ionicons name="chevron-forward" size={18} color="#047857"/>
     </TouchableOpacity>
@@ -2717,51 +2654,102 @@ function ReviewTabButton({
   );
 }
 
-function CaseReviewTab({request,relatedRequestCount,sameBeneficiaryCount}:{
-  request:AssistanceRequest; relatedRequestCount:number; sameBeneficiaryCount:number;
-}){
+function ReferenceCaseField({label,value,icon,last=false}:{
+  label:string; value:string; icon:React.ComponentProps<typeof Ionicons>["name"];
+  last?:boolean;
+}) {
   return (
-    <View style={{padding:20,gap:20}}>
-      <View style={{flexDirection:"row",flexWrap:"wrap",gap:20,alignItems:"stretch"}}>
-        <View style={{flex:1.2,flexBasis:300,minWidth:0}}>
-          <SectionCard title="Request Information" subtitle="Details submitted by the Resident."
-            icon="information-circle-outline">
-            <View style={{gap:14}}>
-              <InfoItem label="Category" value={request.categoryLabel || String(request.category || "Assistance").replaceAll("_"," ")} />
-              <InfoItem label="Current Situation" value={request.currentSituation || "Not provided"} />
-              <InfoItem label="Requested Amount" value={money(request.estimatedAmount)} />
-              <Divider/>
-              <LabelText>Description</LabelText>
-              <BodyText>{request.description || "No description provided."}</BodyText>
-            </View>
-          </SectionCard>
-        </View>
-        <View style={{flex:1,flexBasis:290,minWidth:0}}>
-          <SectionCard title="Resident Information" subtitle="Private LGU review details."
-            icon="person-outline">
-            <View style={{gap:14}}>
-              <InfoItem label="Name" value={request.requesterName || "Resident"} />
-              <InfoItem label="Contact" value={request.contactNumber || "Not recorded"} />
-              <InfoItem label="Barangay" value={request.requesterBarangay || "Not recorded"} />
-              <InfoItem label="Address" value={request.requesterAddress || "Not recorded"} />
-              <View style={{flexDirection:"row",alignItems:"center",gap:7,
-                paddingVertical:10,paddingHorizontal:12,borderRadius:9,
-                backgroundColor:"#ECFDF5",alignSelf:"flex-start"}}>
-                <Ionicons name="shield-checkmark-outline" color="#047857" size={17}/>
-                <Text style={{fontSize:11,color:"#047857",fontWeight:"800"}}>
-                  Resident account — verify in Resident Info tab
-                </Text>
-              </View>
-            </View>
-          </SectionCard>
-        </View>
+    <View style={{flexDirection:"row",alignItems:"flex-start",gap:11,
+      paddingVertical:14,borderBottomWidth:last?0:1,borderBottomColor:"#E7EEEA"}}>
+      <Ionicons name={icon} color="#55756B" size={15} style={{marginTop:2}}/>
+      <Text style={{fontSize:12,color:"#526C5F",fontWeight:"700",
+        width:120,lineHeight:19,flexShrink:0}}>{label}</Text>
+      <Text selectable style={{fontSize:13,color:"#20362A",lineHeight:20,flex:1,
+        fontWeight:"600"}}>{value}</Text>
+    </View>
+  );
+}
+
+function ReferenceSummaryRow({label,value,last=false}:{
+  label:string;value:string;last?:boolean;
+}) {
+  return (
+    <View style={{flexDirection:"row",gap:12,alignItems:"flex-start",
+      paddingVertical:12,borderBottomWidth:last?0:1,borderBottomColor:"#E2ECE5"}}>
+      <Text style={{fontSize:11,color:"#586D60",fontWeight:"700",width:112,lineHeight:17}}>
+        {label}
+      </Text>
+      <Text selectable style={{fontSize:12,color:"#22372C",fontWeight:"700",flex:1,lineHeight:18}}>
+        {value}
+      </Text>
+    </View>
+  );
+}
+
+function ReferenceCaseCard({title,icon,children}:{
+  title:string;icon:React.ComponentProps<typeof Ionicons>["name"];
+  children:React.ReactNode;
+}) {
+  return (
+    <View style={{flex:1,minWidth:315,borderRadius:13,borderWidth:1,
+      borderColor:"#E0E9E3",backgroundColor:"#FFFFFF",
+      paddingHorizontal:20,paddingTop:19,paddingBottom:13}}>
+      <View style={{flexDirection:"row",alignItems:"center",gap:11,
+        paddingBottom:14,borderBottomWidth:1,borderBottomColor:"#E9EFEB"}}>
+        <Ionicons name={icon} size={22} color="#0F774C"/>
+        <Text style={{fontSize:16,color:"#142C22",fontWeight:"800"}}>{title}</Text>
       </View>
-      {(relatedRequestCount > 0 || sameBeneficiaryCount > 0) && (
-        <View style={{padding:14,backgroundColor:"#FFF9EC",borderRadius:11,borderWidth:1,
-          borderColor:"#F3E3B0",flexDirection:"row",gap:9,alignItems:"center"}}>
-          <Ionicons name="information-circle-outline" color="#B45309" size={18}/>
-          <Text style={{flex:1,fontSize:12,color:"#735116"}}>
-            Other related requests exist. Check request history in Resident Info before approving.
+      {children}
+    </View>
+  );
+}
+
+function CaseReviewTab({request,profile,relatedRequestCount,sameBeneficiaryCount}:{
+  request:AssistanceRequest; profile:ResidentProfile | null;
+  relatedRequestCount:number; sameBeneficiaryCount:number;
+}){
+  const residentVerified = !!profile?.identityVerified ||
+    ["verified","approved","passed"].includes(String(profile?.identityStatus||"").toLowerCase());
+  return (
+    <View style={{gap:20}}>
+      <View style={{flexDirection:"row",flexWrap:"wrap",gap:22,alignItems:"flex-start"}}>
+        <ReferenceCaseCard title="Request Information" icon="information-circle-outline">
+          <ReferenceCaseField label="Category" icon="pricetag-outline"
+            value={request.categoryLabel || String(request.category||"Assistance").replaceAll("_"," ")}/>
+          <ReferenceCaseField label="Current Situation" icon="heart-outline"
+            value={request.currentSituation || "Not provided"}/>
+          <ReferenceCaseField label="Requested Amount" icon="wallet-outline"
+            value={money(request.estimatedAmount)}/>
+          <ReferenceCaseField label="Description" icon="document-text-outline"
+            value={request.description || "No description provided."} last/>
+        </ReferenceCaseCard>
+        <ReferenceCaseCard title="Resident Information" icon="person-outline">
+          <ReferenceCaseField label="Name" icon="people-outline"
+            value={request.requesterName||"Resident"}/>
+          <ReferenceCaseField label="Contact" icon="call-outline"
+            value={request.contactNumber||"Not recorded"}/>
+          <ReferenceCaseField label="Address" icon="home-outline"
+            value={request.requesterAddress||
+            request.requesterBarangay||"Not recorded"} last/>
+          <View style={{paddingTop:17,paddingBottom:6}}>
+            <View style={{alignSelf:"flex-start",flexDirection:"row",alignItems:"center",
+              gap:7,paddingHorizontal:12,paddingVertical:9,
+              borderRadius:8,backgroundColor:"#E9F9EE"}}>
+              <Ionicons name="shield-checkmark-outline" color="#087747" size={17}/>
+              <Text style={{fontSize:11,color:"#087747",fontWeight:"800"}}>
+                {residentVerified ? "Verified Resident" : "Review Resident status in Resident Info"}
+              </Text>
+            </View>
+          </View>
+        </ReferenceCaseCard>
+      </View>
+      {(relatedRequestCount>0||sameBeneficiaryCount>0)&&(
+        <View style={{flexDirection:"row",alignItems:"center",gap:9,
+          borderWidth:1,borderColor:"#F1DFAC",borderRadius:10,
+          backgroundColor:"#FFFCF1",padding:13}}>
+          <Ionicons name="information-circle-outline" size={18} color="#A96D18"/>
+          <Text style={{color:"#765522",fontSize:12,lineHeight:18,flex:1}}>
+            Related requests exist. Check Resident Info history before approval.
           </Text>
         </View>
       )}
@@ -3261,13 +3249,28 @@ function DecisionTab({
     title: string, hint: string, yes: boolean, no: boolean,
     onYes: () => void, onNo: () => void,
   ) => (
-    <View style={{gap: 9, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: "#EEF2F6"}}>
-      <Text style={{color:"#0F172A",fontSize:13,fontWeight:"800"}}>{title}</Text>
-      <Text style={styles.bodyText}>{hint}</Text>
-      <View style={{flexDirection:"row", flexWrap:"wrap",gap:9}}>
-        {choice("Confirmed", yes, onYes)}
-        {choice("Needs information", no, onNo, true)}
+    <View style={{paddingVertical:13,borderBottomWidth:1,borderBottomColor:"#E7EEEA",
+      flexDirection:"row",alignItems:"center",gap:11}}>
+      <TouchableOpacity accessibilityRole="checkbox" accessibilityLabel={title}
+        accessibilityState={{checked:yes}} disabled={locked} onPress={onYes}
+        style={{width:23,height:23,borderRadius:5,alignItems:"center",
+          justifyContent:"center",backgroundColor:yes?"#0D8050":"#FFFFFF",
+          borderWidth:1,borderColor:yes?"#0D8050":"#B8CCC1"}}>
+        {yes&&<Ionicons name="checkmark" size={16} color="#FFFFFF"/>}
+      </TouchableOpacity>
+      <View style={{flex:1,gap:4}}>
+        <Text style={{fontSize:12.5,color:"#19362B",fontWeight:"800"}}>{title}</Text>
+        <Text style={{fontSize:10.5,lineHeight:16,color:"#78887F"}}>{hint}</Text>
       </View>
+      <TouchableOpacity accessibilityRole="button" disabled={locked}
+        accessibilityState={{selected:no}} onPress={onNo}
+        style={{paddingHorizontal:10,paddingVertical:8,borderRadius:8,
+          borderWidth:1,borderColor:no?"#ECA39A":"#E0E8E3",
+          backgroundColor:no?"#FFF3F0":"#FFFFFF"}}>
+        <Text style={{fontSize:10.5,fontWeight:"700",color:no?"#BA3B33":"#697C70"}}>
+          Needs info
+        </Text>
+      </TouchableOpacity>
     </View>
   );
 
@@ -3278,10 +3281,6 @@ function DecisionTab({
     </View>;
   }
 
-  const docsMatched = reviewDraft.documentConsistencyStatus === "consistent" &&
-    reviewDraft.beneficiaryCheckStatus === "confirmed";
-  const docsNotMatched = ["needs_more_information","inconsistent"].includes(
-    reviewDraft.documentConsistencyStatus);
   const previousRiskFlags = Array.isArray(reviewRecord?.riskFlags)
     ? reviewRecord.riskFlags.filter((value: unknown) => String(value || "").trim().length > 0)
     : [];
@@ -3521,15 +3520,18 @@ function DecisionTab({
                   )}
                 </View>
                 <View style={{flex:1,minWidth:235,gap:14}}>
-                  <View style={{backgroundColor:"#F3F8F5",borderRadius:12,
-                    borderWidth:1,borderColor:"#E0ECE5",padding:17,gap:14}}>
-                    <Text style={{fontSize:14,fontWeight:"800",color:"#173B2D"}}>Campaign Summary</Text>
-                    <InfoItem label="Request ID" value={request.requestId || request.id}/>
-                    <InfoItem label="Resident" value={request.requesterName || "Resident"}/>
-                    <InfoItem label="Category" value={request.categoryLabel || "Assistance"}/>
-                    <InfoItem label="Amount for Donation" value={money(Number(remainingAmount || 0))}/>
-                    <Text style={{fontSize:11,color:"#6B7D74",lineHeight:17}}>
-                      Resident information is shown privately to the Admin only.
+                  <View style={{backgroundColor:"#F8FBF9",borderRadius:12,
+                    borderWidth:1,borderColor:"#DDEAE0",paddingHorizontal:17,
+                    paddingTop:17,paddingBottom:14}}>
+                    <Text style={{fontSize:14,fontWeight:"800",color:"#173B2D",
+                      paddingBottom:10}}>Campaign Summary</Text>
+                    <ReferenceSummaryRow label="Request ID" value={request.requestId || request.id}/>
+                    <ReferenceSummaryRow label="Resident" value={request.requesterName || "Resident"}/>
+                    <ReferenceSummaryRow label="Category" value={request.categoryLabel || "Assistance"}/>
+                    <ReferenceSummaryRow label="Donation Target"
+                      value={money(Number(remainingAmount || 0))} last/>
+                    <Text style={{fontSize:10.5,color:"#6B7D74",lineHeight:16,marginTop:9}}>
+                      Resident details are private to the Admin; the public campaign is checked before publication.
                     </Text>
                   </View>
                   <ActionButton label="Continue to Publish Campaign"
@@ -3613,21 +3615,26 @@ function DecisionTab({
             subtitle="Check the supporting evidence before selecting a decision."
             icon="clipboard-outline">
             <View style={{gap:5}}>
-              {confirmRow("Documents and beneficiary details match",
-                "Check the medical documents and beneficiary information.",
-                docsMatched,docsNotMatched,
-                ()=>{onReviewChange("documentConsistencyStatus","consistent");
-                  onReviewChange("beneficiaryCheckStatus","confirmed");},
-                ()=>{onReviewChange("documentConsistencyStatus","needs_more_information");
-                  onReviewChange("beneficiaryCheckStatus","needs_more_information");})}
-              {confirmRow("No duplicate assistance request",
-                "Check the Resident's existing request history.",
+              {confirmRow("Resident identity verified",
+                "Confirm the beneficiary is the correct Resident.",
+                reviewDraft.beneficiaryCheckStatus==="confirmed",
+                reviewDraft.beneficiaryCheckStatus==="needs_more_information",
+                ()=>onReviewChange("beneficiaryCheckStatus","confirmed"),
+                ()=>onReviewChange("beneficiaryCheckStatus","needs_more_information"))}
+              {confirmRow("Supporting documents complete",
+                "Review all submitted evidence before approval.",
+                reviewDraft.documentConsistencyStatus==="consistent",
+                ["needs_more_information","inconsistent"].includes(reviewDraft.documentConsistencyStatus),
+                ()=>onReviewChange("documentConsistencyStatus","consistent"),
+                ()=>onReviewChange("documentConsistencyStatus","needs_more_information"))}
+              {confirmRow("Request details valid",
+                "Check for conflicting or duplicate requests.",
                 reviewDraft.duplicateCheckStatus==="clear",
                 ["potential_duplicate","confirmed_duplicate"].includes(reviewDraft.duplicateCheckStatus),
                 ()=>onReviewChange("duplicateCheckStatus","clear"),
                 ()=>onReviewChange("duplicateCheckStatus","potential_duplicate"))}
-              {confirmRow("Resident belongs to San Jose del Monte",
-                "Use verified documents, barangay contact, or in-person confirmation.",
+              {confirmRow("Resident belongs to service area",
+                "Verify San Jose del Monte residency through reliable evidence.",
                 reviewDraft.residencyVerificationStatus==="verified",
                 reviewDraft.residencyVerificationStatus==="unable_to_verify",
                 ()=>onReviewChange("residencyVerificationStatus","verified"),
@@ -5069,16 +5076,22 @@ const styles = StyleSheet.create({
   },
 
   tabButton: {
-    minHeight: 37,
+    minHeight: 43,
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
-    paddingHorizontal: 11,
-    borderRadius: 10,
+    gap: 7,
+    paddingHorizontal: 16,
+    paddingVertical: 11,
+    borderTopLeftRadius: 9,
+    borderTopRightRadius: 9,
+    borderBottomWidth: 3,
+    borderBottomColor: "transparent",
+    backgroundColor: "#FFFFFF",
   },
 
   tabButtonActive: {
-    backgroundColor: "#E5F7EC",
+    borderBottomColor: "#087747",
+    backgroundColor: "#ECF8F0",
   },
 
   tabButtonText: {
@@ -6078,6 +6091,28 @@ const styles = StyleSheet.create({
   },
 
 
+  referencePageContent: {
+    paddingHorizontal:24,
+    paddingTop:24,
+    paddingBottom:65,
+    backgroundColor:"#FFFFFF",
+    flexGrow:1,
+  },
+  referenceDetailTabs: {
+    flexDirection:"row",
+    alignItems:"center",
+    flexWrap:"wrap",
+    gap:7,
+    paddingBottom:0,
+    borderBottomWidth:1,
+    borderBottomColor:"#DCE7E0",
+    marginTop:8,
+  },
+  referenceDetailBody: {
+    paddingTop:19,
+    paddingBottom:30,
+    backgroundColor:"#FFFFFF",
+  },
   detailShell: {
     flex: 1,
     minHeight: 0,
