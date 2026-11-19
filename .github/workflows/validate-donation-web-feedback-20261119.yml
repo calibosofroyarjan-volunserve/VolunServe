@@ -1,0 +1,42 @@
+name: Validate Donation Browser Feedback Fix (NO DEPLOY)
+on:
+  pull_request:
+    branches: [baseline/live-assistance-2641-20261119]
+    paths:
+      - 'app/(admin)/donation-list.tsx'
+      - 'scripts/test-donation-browser-alerts-20261119.cjs'
+      - '.github/workflows/validate-donation-web-feedback-20261119.yml'
+permissions:
+  contents: read
+jobs:
+  no-deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      CI: 'true'
+      EXPO_NO_TELEMETRY: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Check TypeScript
+        run: npx tsc --noEmit --incremental false
+      - name: Check browser Donation feedback and preserved guards
+        run: node scripts/test-donation-browser-alerts-20261119.cjs
+      - name: Check existing Assistance, Donation and Admin scope
+        run: |
+          node scripts/test-assistance-live-clean-flow-20261119.cjs
+          node scripts/test-lgu-internal-review-ux.cjs
+          node scripts/test-admin-emergency-master-detail-20261118.cjs
+          node scripts/test-profile-certificates-account-menu.cjs
+          node scripts/test-admin-navigation-contract.cjs
+      - name: Build Expo web (no deploy)
+        run: |
+          npx expo export --platform web --clear
+          node scripts/verify-hosting-release.cjs
