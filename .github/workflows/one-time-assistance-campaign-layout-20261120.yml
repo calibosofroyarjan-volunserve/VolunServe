@@ -73,7 +73,8 @@ jobs:
             const controllerDiff=cp.execFileSync('git',[
               '-C','../controller','diff','--name-only','HEAD^','HEAD'
             ],{encoding:'utf8'}).trim().split('\n').filter(Boolean);
-            assert.deepEqual(controllerDiff,['.github/workflows/one-time-assistance-campaign-layout-20261120.yml'],
+            assert.deepEqual(controllerDiff,['.github/workflows/one-time-assistance-campaign-layout-20261120.yml',
+              '.github/workflows/verify-reconciled-hosting-source-no-deploy-20261111.yml'],
               'BLOCKED: protected application backlog changed with release controller');
             const res=await fetch('https://volunserve.com/volunserve-release.json?assistance_pre='+Date.now(),{
               headers:{'Cache-Control':'no-cache'},signal:AbortSignal.timeout(15000)});
