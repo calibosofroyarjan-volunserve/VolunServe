@@ -416,6 +416,28 @@ const readableDate = (value: any) => {
   return "Not recorded";
 };
 
+// Display helpers scoped to the screenshot-matched Assistance Requests UI.
+// Original money() and readableDate() remain unchanged for existing workflows.
+const referenceAmount = (value?: number) => {
+  const amount = Number(value || 0);
+  return Number.isFinite(amount) && amount > 0
+    ? `₱${amount.toLocaleString("en-PH", { maximumFractionDigits: 2 })}`
+    : "—";
+};
+
+const referenceSubmittedAt = (value: any) => {
+  const date = typeof value?.toDate === "function" ? value.toDate() :
+    value?.seconds ? new Date(value.seconds * 1000) :
+    value instanceof Date ? value : null;
+  if (!date || !Number.isFinite(date.getTime())) {
+    return { date: "Not recorded", time: "" };
+  }
+  return {
+    date: date.toLocaleDateString("en-PH", { month: "short", day: "numeric", year: "numeric" }),
+    time: date.toLocaleTimeString("en-PH", { hour: "numeric", minute: "2-digit" }),
+  };
+};
+
 const money = (value?: number) => {
   const amount = Number(value || 0);
 
@@ -2816,14 +2838,17 @@ function MockQueueRow({
       </View>
       <Text style={[styles.referenceTableText,{flex:1.2}]} numberOfLines={2}>{request.requesterName || "Resident"}</Text>
       <Text style={[styles.referenceTableText,{flex:1.2}]} numberOfLines={2}>{request.categoryLabel || request.category || "Community Assistance"}</Text>
-      <Text style={[styles.referenceTableText,{flex:1}]}>{request.estimatedAmount ? money(request.estimatedAmount) : "—"}</Text>
+      <Text style={[styles.referenceTableText,{flex:1}]}>{referenceAmount(request.estimatedAmount)}</Text>
       <View style={[styles.referenceTableCell,{flex:1}]}>
         <View style={[styles.mockQueueStatus,{backgroundColor:status.soft,alignSelf:"flex-start"}]}>
           <Text style={[styles.mockQueueStatusText,{color:status.color}]}>{status.label}</Text>
         </View>
       </View>
       <View style={[styles.referenceTableCell,{flex:1,flexDirection:"row",alignItems:"center",gap:6}]}>
-        <Text style={[styles.referenceTableText,{flex:1}]} numberOfLines={2}>{readableDate(request.createdAt)}</Text>
+        <View style={{flex:1,gap:3}}>
+          <Text style={styles.referenceSubmittedDateText} numberOfLines={1}>{referenceSubmittedAt(request.createdAt).date}</Text>
+          <Text style={styles.referenceSubmittedTimeText} numberOfLines={1}>{referenceSubmittedAt(request.createdAt).time}</Text>
+        </View>
         <Ionicons name="chevron-forward" size={17} color="#058348"/>
       </View>
     </TouchableOpacity>
@@ -3710,7 +3735,7 @@ function CompactVerifiedAssistance({
                   <ReferenceDataRow icon="document-text-outline" label="Request ID" value={request.requestId || request.id}/>
                   <ReferenceDataRow icon="person-outline" label="Resident" value={request.requesterName || "Resident"}/>
                   <ReferenceDataRow icon="pricetag-outline" label="Category" value={request.categoryLabel || request.category || "Assistance"}/>
-                  <ReferenceDataRow icon="cash-outline" label="Amount (Target)" value={money(cap > 0 ? cap : Math.max(0,numericTotal - numericAlreadyReceived))}/>
+                  <ReferenceDataRow icon="cash-outline" label="Amount (Target)" value={referenceAmount(cap > 0 ? cap : Math.max(0,numericTotal - numericAlreadyReceived))}/>
                 </View>
               </View>
               <View style={styles.referenceCampaignFormRow}>
@@ -6035,6 +6060,8 @@ const styles = StyleSheet.create({
   referenceTableHeadText: { fontFamily:vsType.family, fontWeight:"800", fontSize:10, color:"#405B51" },
   referenceTableRow: { minHeight:70, flexDirection:"row", alignItems:"center", gap:12, paddingVertical:11, paddingHorizontal:13, borderBottomWidth:1, borderBottomColor:"#E8EFEA" },
   referenceTableCell: { minWidth:0 },
+  referenceSubmittedDateText: { fontFamily:vsType.family, fontSize:11, fontWeight:"700", color:"#334155" },
+  referenceSubmittedTimeText: { fontFamily:vsType.family, fontSize:10, color:"#64748B" },
   referenceTableText: { fontFamily:vsType.family, fontSize:12, color:"#22372D", fontWeight:"600" },
   simpleVerifiedAmount: { fontSize: vsType.size.titleSmall, fontFamily: vsType.family, fontWeight: "800", color: "#047857", paddingVertical: 3 },
   assistanceBudgetFields: { gap: 10, padding: 15, borderWidth: 1, borderColor: "#D8E8DE", borderRadius: 12, backgroundColor: "#FAFCFA" },
