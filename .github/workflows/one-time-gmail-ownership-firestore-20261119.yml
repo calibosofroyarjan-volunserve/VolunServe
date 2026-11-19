@@ -49,12 +49,12 @@ jobs:
           const BASE='https://firebaserules.googleapis.com/v1';
           const RELEASE='projects/'+PROJECT+'/releases/cloud.firestore';
           const EXPECTED_OLD_RULES_SHA='bbe6d3c1184ea6e7dcae253e56c34271acfb8260fd853614810aafcc550b8ed7';
-          const EXPECTED_NEW_RULES_SHA='87aee5b73170b36a5317edcefddae22e697b3d6e56065b7b6b84d3c8aced00e5';
+          const EXPECTED_NEW_RULES_SHA='ee87069e04df800300afe698f1cbcf7ef40d7aac3287390b7c787644ef6fc7df';
           const EXPECTED_SITE='fac43aa803a07a7c92c22059e7aa5988186d5baf';
           const needle='        && validInitialResidentInputs()\n';
           const extension='        && request.resource.data.email.matches("(?i)^[^@]+@(gmail[.]com|yahoo[.]com)$")\n'
             +'        && (!request.resource.data.email.matches("(?i)^[^@]+@gmail[.]com$")\n'
-            +"          || request.auth.token.get('firebase', {}).get('identities', {}).get('google.com', []).size() > 0)\n";
+            +"          || 'google.com' in request.auth.token.firebase.identities)\n";
           async function main(){
             const site=await fetch('https://volunserve.com/volunserve-release.json?rules_preflight='+Date.now(),{
               headers:{'Cache-Control':'no-cache'},signal:AbortSignal.timeout(15000)});
