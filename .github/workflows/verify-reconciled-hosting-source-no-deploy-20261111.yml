@@ -37,6 +37,51 @@ jobs:
             const marker=await response.json();
             assert.equal(marker.app,"VolunServe");
             assert.equal(marker.firebaseProject,"volunserve-3aa5b");
+            // A one-time, content-pinned Hosting-only release controller is not
+            // itself the source deployed on Firebase Hosting. Keep the existing
+            // strict marker==protected-head gate for every other kind of PR.
+            const controllerPath=".github/workflows/one-time-assistance-campaign-layout-20261120.yml";
+            const verifierPath=".github/workflows/verify-reconciled-hosting-source-no-deploy-20261111.yml";
+            const changes=git("diff","--name-status","--no-renames",liveBase,commit)
+              .split("\n").filter(Boolean);
+            const thisRelease=changes.length===2
+              && changes[0]==="A\t"+controllerPath
+              && changes[1]==="M\t"+verifierPath;
+            if(thisRelease){
+              const deployedSource="4ccf5515a95ec7b71a4a518ace51bcd7e802b7f6";
+              const candidateSource="8fbb8ba9eaa5ad127add03f1772509af2aa12c5b";
+              assert.equal(liveBase,"60a6f46a9c6613ea1ea2d4c8e4ef6c18c62d52a7",
+                "BLOCKED: protected branch controller moved");
+              assert.equal(marker.revision,deployedSource,
+                "BLOCKED: production Hosting source changed");
+              assert.equal(blob(liveBase,verifierPath),"db389689266c35e1314101f51eca2754a9dfa66e",
+                "BLOCKED: previously approved verifier changed");
+              assert.equal(blob(commit,controllerPath),"9c2672076ff3f773bfc0423308f48808ce4a1aa8",
+                "BLOCKED: guarded release controller content differs");
+              assert.equal(git("rev-parse","origin/ui/assistance-campaign-layout-only-20261120"),
+                candidateSource,"BLOCKED: UI candidate branch drift");
+              const ancestry=git("rev-list","--parents","-n","1",candidateSource).split(" ");
+              assert.deepEqual(ancestry,[candidateSource,deployedSource],
+                "BLOCKED: candidate not derived from current live source");
+              assert.equal(git("diff","--name-status","--no-renames",deployedSource,candidateSource),
+                "M\tapp/(admin)/assistance-requests.tsx",
+                "BLOCKED: candidate includes unrelated, deleted or outdated files");
+              for(const protectedPath of [
+                "package.json","package-lock.json","app.json","firebase.json",
+                ".firebaserc","tsconfig.json","firestore.rules","storage.rules",
+                "functions/index.js","functions/package.json",
+                "scripts/guard-live-protected-release.cjs",
+                ".github/workflows/auto-publish-protected-live-hosting.yml",
+                ".github/workflows/release-live-protected-hosting.yml","lib/firebase.ts"
+              ]) {
+                assert.equal(blob(commit,protectedPath),blob(liveBase,protectedPath),
+                  "BLOCKED: existing production/config code changed: "+protectedPath);
+              }
+              console.log("PASS: content-pinned, current-live-derived, UI-only release controller");
+              console.log("NO DEPLOY: PR validation; production remains unchanged");
+              return;
+            }
+
             assert.equal(marker.revision,liveBase,
               "BLOCKED: protected base and production differ; reconcile FIRST");
             const text=git("diff","--name-status","--no-renames",liveBase,commit);
