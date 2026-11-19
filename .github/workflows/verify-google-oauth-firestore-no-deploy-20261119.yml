@@ -1,0 +1,58 @@
+# Review-only Gmail provider identity gate. NO production secrets or deployment.
+name: Verify Google Linked Gmail Resident Firestore (NO DEPLOY)
+on:
+  push:
+    branches: [security/draft-google-oauth-firestore-20261119]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  emulated-safety:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Fail closed unless only stricter new-Gmail profile policies changed
+        run: |
+          node <<'NODE'
+          const assert=require('node:assert/strict');
+          const cp=require('node:child_process');
+          const base='a16615363cb8dc0856959332ee318e9f74f6b88c';
+          cp.execFileSync('git',['merge-base','--is-ancestor',base,'HEAD']);
+          const status=cp.execFileSync('git',['diff','--name-status','--no-renames',base,'HEAD'],{encoding:'utf8'}).trim().split('\n').filter(Boolean);
+          assert.deepEqual(status.map(v=>v.split('\t')[1]).sort(),[
+            '.github/workflows/verify-google-oauth-firestore-no-deploy-20261119.yml',
+            'firestore.rules',
+            'scripts/test-verified-community-registration-rules.cjs',
+            'scripts/test-emulated-resident-signup-login-e2e.cjs',
+          ].sort());
+          assert(status.every(v=>/^[AM]\t/.test(v)),'No removal or rename');
+          const patch=cp.execFileSync('git',['diff','--unified=0',base,'HEAD','--','firestore.rules'],{encoding:'utf8'});
+          assert(!patch.split('\n').some(v=>v.startsWith('-')&&!v.startsWith('---')),'Never remove existing Rules lines');
+          console.log('PASS: exact new-Gmail-profile gate only; no rules removed');
+          NODE
+      - name: Install locked dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Compile Rules; test Gmail inbox-only DENIAL and Google-linked acceptance
+        run: |
+          npx firebase-tools emulators:exec --only firestore --project demo-volunserve-verified-signup "node scripts/test-verified-community-registration-rules.cjs"
+      - name: Actual Auth email-link and Firestore emulator end-to-end negative cases
+        run: |
+          npx firebase-tools emulators:exec --only auth,firestore --project demo-volunserve-resident-signup-e2e "node scripts/test-emulated-resident-signup-login-e2e.cjs"
+      - name: Historic account/role and invitation compatibility
+        run: |
+          npx firebase-tools emulators:exec --only firestore --project demo-volunserve-account-compatibility "node scripts/test-existing-account-compatibility.cjs"
+          npx firebase-tools emulators:exec --only firestore --project demo-volunserve-invitation-preserve "node scripts/test-preserved-volunteer-invitation-rules.cjs"
+      - name: Confirm untouched infrastructure and frontend
+        run: |
+          git diff --exit-code a16615363cb8dc0856959332ee318e9f74f6b88c HEAD -- firebase.json .firebaserc storage.rules functions backend components lib package.json package-lock.json
