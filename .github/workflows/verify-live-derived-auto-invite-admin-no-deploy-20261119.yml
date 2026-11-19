@@ -44,7 +44,7 @@ jobs:
             'assignLguPersonnelToCase',
             'reviewVerification',
             'caseSearch',
-            'detailTab === "map"',
+            'EmergencyMapButton',
             'cancelAssignment'
           ]){
             assert.ok(before.includes(preserved),'Actual Hosting source missing '+preserved);
