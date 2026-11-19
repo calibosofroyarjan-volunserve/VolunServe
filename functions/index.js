@@ -2737,11 +2737,12 @@ exports.deliverAndroidPushForNotification = onDocumentCreated(
 // fictional Firebase Emulator run. No Cloud Function is registered when
 // deployed to a real Firebase project. In particular, this never activates
 // production volunserve-3aa5b or any live emergency invitations.
-// Firebase Functions discovery can start before FIRESTORE_EMULATOR_HOST is
-// injected. Only registration uses the explicit demo-project + test gate;
-// the handler itself STILL requires the live Firestore Emulator connection
-// on EVERY event and refuses all production writes.
-if (process.env.GCLOUD_PROJECT === "demo-volunserve-auto-phase4" &&
+// Firebase Functions discovery has its own environment, before the runtime
+// has Firestore emulator host or the demo GCLOUD_PROJECT injected.
+// Register ONLY when Firebase confirms this is its Functions Emulator;
+// the handler itself ALSO enforces the exact demo project + Firestore host
+// on EVERY event, regardless of the registration feature gate.
+if (process.env.FUNCTIONS_EMULATOR === "true" &&
     process.env.VOLUNSERVE_AUTO_VOLUNTEER_TEST_TRIGGER === "enabled" &&
     process.env.VOLUNSERVE_AUTO_VOLUNTEER_DISPATCH !== "enabled") {
   const {createDemoApprovedCaseInviteHandler} =
