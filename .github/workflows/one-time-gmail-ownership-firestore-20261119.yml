@@ -49,12 +49,12 @@ jobs:
           const BASE='https://firebaserules.googleapis.com/v1';
           const RELEASE='projects/'+PROJECT+'/releases/cloud.firestore';
           const EXPECTED_OLD_RULES_SHA='bbe6d3c1184ea6e7dcae253e56c34271acfb8260fd853614810aafcc550b8ed7';
-          const EXPECTED_NEW_RULES_SHA='ee87069e04df800300afe698f1cbcf7ef40d7aac3287390b7c787644ef6fc7df';
+          const EXPECTED_NEW_RULES_SHA='bf9e4ba3ad8a02b4ee1140956e729254595f60c0dc10f5fddbf088f00ba98834';
           const EXPECTED_SITE='fac43aa803a07a7c92c22059e7aa5988186d5baf';
           const needle='        && validInitialResidentInputs()\n';
-          const extension='        && request.resource.data.email.matches("(?i)^[^@]+@(gmail[.]com|yahoo[.]com)$")\n'
-            +'        && (!request.resource.data.email.matches("(?i)^[^@]+@gmail[.]com$")\n'
-            +"          || 'google.com' in request.auth.token.firebase.identities)\n";
+          const extension='        && (request.resource.data.email.matches("(?i).*@yahoo[.]com")\n'
+            +'          || (request.resource.data.email.matches("(?i).*@gmail[.]com")\n'
+            +"            && 'google.com' in request.auth.token.firebase.identities))\n";
           async function main(){
             const site=await fetch('https://volunserve.com/volunserve-release.json?rules_preflight='+Date.now(),{
               headers:{'Cache-Control':'no-cache'},signal:AbortSignal.timeout(15000)});
