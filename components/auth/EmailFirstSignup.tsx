@@ -110,6 +110,11 @@ function safeAuthError(error: unknown): string {
   if (code === "auth/requires-recent-login") return "Sign in with Google again to securely link your VolunServe password.";
   if (code === "auth/weak-password") return "Please choose a stronger VolunServe password.";
   if (code === "auth/invalid-email") return "Enter a valid email address.";
+  if (code === "functions/resource-exhausted") return "Too many code requests or incorrect attempts. Try again after the cooldown.";
+  if (code === "functions/failed-precondition") return "The code expired or was already used. Request a new code.";
+  if (code === "functions/permission-denied") return "Incorrect code or registration email. Please check and try again.";
+  if (code === "functions/unavailable") return "Email service is currently unavailable. Please try later.";
+  if (code === "functions/unauthenticated") return "Your session expired. Use Resume Registration to sign in again.";
   if (code === "auth/invalid-credential" || code === "auth/wrong-password" || code === "auth/user-not-found") {
     return "Incorrect email or password. If you started registration, check your details and try Resume Registration.";
   }
