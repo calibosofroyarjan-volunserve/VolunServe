@@ -2316,7 +2316,7 @@ This still does not automatically create a Donation Campaign.`,
       <>
         {reviewTab === "case" && (
           <>
-            <CaseReviewTab request={selected} />
+            <CaseReviewTab request={selected} profile={residentProfile} />
             {!["verified","rejected"].includes(String(selected.verificationStatus || "")) && (
               <View style={styles.simpleSummaryAction}>
                 <Text style={styles.simpleCopy}>Review the documents and resident details, then record your decision in one short form.</Text>
@@ -2440,7 +2440,7 @@ This still does not automatically create a Donation Campaign.`,
 
     return (
       <>
-        {!wide && <View style={styles.detailBreadcrumbRow}>
+        <View style={styles.detailBreadcrumbRow}>
           <TouchableOpacity
             style={styles.mockBackLink}
             onPress={backToQueue}
@@ -2451,11 +2451,11 @@ This still does not automatically create a Donation Campaign.`,
               color="#2563EB"
             />
             <Text style={styles.mockBackLinkText}>
-              Assistance Requests
+              Back to Assistance Requests
             </Text>
           </TouchableOpacity>
 
-          <View style={styles.detailSecurityBadge}>
+          <View style={{ display: "none" }}>
             <Ionicons
               name="lock-closed-outline"
               size={14}
@@ -2465,7 +2465,7 @@ This still does not automatically create a Donation Campaign.`,
               Authorized LGU Review
             </Text>
           </View>
-        </View>}
+        </View>
 
         <View style={styles.detailHeaderCard}>
           <RequestReviewHeader request={selected} />
@@ -2473,25 +2473,25 @@ This still does not automatically create a Donation Campaign.`,
 
         <View style={styles.mockDetailTabs}>
           <ReviewTabButton
-            label="Overview"
+            label="Request Details"
             icon="document-text-outline"
             active={reviewTab === "case"}
             onPress={() => setReviewTab("case")}
           />
           <ReviewTabButton
-            label={`Evidence (${selected.documents?.length || 0})`}
+            label={`Documents (${selected.documents?.length || 0})`}
             icon="images-outline"
             active={reviewTab === "evidence"}
             onPress={() => setReviewTab("evidence")}
           />
           <ReviewTabButton
-            label="Resident"
+            label="Resident Info"
             icon="person-outline"
             active={reviewTab === "resident"}
             onPress={() => setReviewTab("resident")}
           />
           <ReviewTabButton
-            label="Decision"
+            label="Review & Decision"
             icon="shield-checkmark-outline"
             active={reviewTab === "decision"}
             onPress={() => setReviewTab("decision")}
@@ -3012,11 +3012,10 @@ function RequestReviewHeader({
 
   return (
     <View style={styles.reviewHeader}>
+      <View style={styles.referenceHeaderIcon}>
+        <Ionicons name="business-outline" size={27} color="#076246"/>
+      </View>
       <View style={styles.reviewHeaderCopy}>
-        <Text style={styles.panelEyebrow}>
-          REQUEST REVIEW
-        </Text>
-
         <Text style={styles.reviewTitle}>
           {request.title ||
             "Assistance Request"}
@@ -3089,7 +3088,7 @@ function ReviewTabButton({
         size={16}
         color={
           active
-            ? "#4338CA"
+            ? "#047857"
             : "#64748B"
         }
       />
@@ -3106,21 +3105,59 @@ function ReviewTabButton({
   );
 }
 
-function CaseReviewTab({ request }: { request: AssistanceRequest }) {
+function CaseReviewTab({ request, profile }: { request: AssistanceRequest; profile: ResidentProfile | null }) {
+  const [showOtherDetails,setShowOtherDetails] = useState(false);
+  const residentName = profile?.fullName || request.requesterName || "Not recorded";
+  const address = profile?.address || request.requesterAddress || request.requesterBarangay || "Not recorded";
+  const verifiedResident = profile?.identityVerified === true || profile?.identityStatus === "verified";
   return (
-    <View style={styles.tabContent}>
-      <SectionCard title="Request Overview" subtitle="Information provided by the resident." icon="document-text-outline">
-        <InfoGrid>
-          <InfoItem label="Description" value={request.description || "No description provided"} />
-          <InfoItem label="Resident Cost Estimate" value={money(request.estimatedAmount)} />
-          <InfoItem label="Assistance Type" value={request.categoryLabel || request.category || "Not recorded"} />
-          <InfoItem label="Date Requested" value={readableDate(request.createdAt)} />
-          <InfoItem label="Beneficiary" value={request.beneficiaryName || "Not recorded"} />
-          <InfoItem label="Current Situation" value={request.currentSituation || "Not recorded"} />
-        </InfoGrid>
-      </SectionCard>
+    <View style={[styles.tabContent,styles.referenceTwoCards]}>
+      <View style={styles.referenceDetailsCard}>
+        <View style={styles.referenceCardHeading}>
+          <Ionicons name="information-circle-outline" size={23} color="#048447"/>
+          <Text style={styles.referenceCardTitle}>Request Information</Text>
+        </View>
+        <ReferenceDataRow icon="pricetag-outline" label="Category" value={request.categoryLabel || request.category || "Not recorded"} />
+        <ReferenceDataRow icon="heart-outline" label="Current Situation" value={request.currentSituation || "Not recorded"} />
+        <ReferenceDataRow icon="document-text-outline" label="Description" value={request.description || "No description provided"} />
+        {!!request.estimatedAmount && <ReferenceDataRow icon="cash-outline" label="Requested Amount" value={money(request.estimatedAmount)} />}
+        <TouchableOpacity accessibilityRole="button" style={styles.referenceOtherDetails}
+          onPress={() => setShowOtherDetails((value) => !value)}>
+          <Text style={styles.simpleLinkText}>{showOtherDetails ? "Hide other details" : "More request details"}</Text>
+          <Ionicons name={showOtherDetails ? "chevron-up" : "chevron-down"} size={15} color="#047857"/>
+        </TouchableOpacity>
+        {showOtherDetails && <>
+          <ReferenceDataRow icon="calendar-outline" label="Date Requested" value={readableDate(request.createdAt)} />
+          <ReferenceDataRow icon="people-outline" label="Beneficiary" value={request.beneficiaryName || "Not recorded"} />
+        </>}
+      </View>
+      <View style={styles.referenceDetailsCard}>
+        <View style={styles.referenceCardHeading}>
+          <Ionicons name="person-outline" size={23} color="#048447"/>
+          <Text style={styles.referenceCardTitle}>Resident Information</Text>
+        </View>
+        <ReferenceDataRow icon="people-outline" label="Name" value={residentName} />
+        <ReferenceDataRow icon="call-outline" label="Contact" value={request.contactNumber || profile?.phoneNumber || "Not recorded"} />
+        <ReferenceDataRow icon="location-outline" label="Address" value={address} />
+        {verifiedResident && <View style={styles.referenceResidentBadge}>
+          <Ionicons name="shield-checkmark-outline" color="#05713D" size={17}/>
+          <Text style={styles.referenceResidentBadgeText}>Verified Resident</Text>
+        </View>}
+      </View>
     </View>
   );
+}
+
+function ReferenceDataRow({ icon, label, value }: {
+  icon: React.ComponentProps<typeof Ionicons>["name"];
+  label:string;
+  value:string;
+}) {
+  return <View style={styles.referenceDataRow}>
+    <Ionicons name={icon} size={17} color="#3E6270"/>
+    <Text style={styles.referenceDataLabel}>{label}</Text>
+    <Text style={styles.referenceDataValue}>{value}</Text>
+  </View>;
 }
 
 function EvidenceTab({
@@ -5790,6 +5827,17 @@ function DocumentPreviewModal({
 }
 
 const styles = StyleSheet.create({
+  referenceHeaderIcon: { width:53, height:53, borderRadius:10, backgroundColor:"#F1F7F4", alignItems:"center", justifyContent:"center" },
+  referenceTwoCards: { flexDirection:"row", flexWrap:"wrap", gap:14 },
+  referenceDetailsCard: { flexGrow:1, flexBasis:280, minWidth:240, minHeight:235, gap:1, padding:16, borderWidth:1, borderColor:"#E0E8EA", borderRadius:12, backgroundColor:"#FFFFFF" },
+  referenceCardHeading: { flexDirection:"row", alignItems:"center", gap:10, paddingBottom:13, marginBottom:5, borderBottomWidth:1, borderBottomColor:"#EBF0F2" },
+  referenceCardTitle: { fontSize:17, fontWeight:"800", color:"#151F2C", fontFamily:vsType.family },
+  referenceDataRow: { flexDirection:"row", alignItems:"flex-start", gap:8, paddingVertical:12, borderBottomWidth:1, borderBottomColor:"#EEF1F3" },
+  referenceDataLabel: { width:108, flexShrink:0, fontSize:12, fontWeight:"700", color:"#334155", fontFamily:vsType.family },
+  referenceDataValue: { flex:1, minWidth:0, fontSize:12, lineHeight:19, fontWeight:"600", color:"#1F2A37", fontFamily:vsType.family },
+  referenceOtherDetails: { flexDirection:"row", alignItems:"center", gap:8, alignSelf:"flex-start", paddingTop:12 },
+  referenceResidentBadge: { alignSelf:"flex-start", marginTop:16, paddingHorizontal:12, paddingVertical:8, flexDirection:"row", alignItems:"center", gap:8, borderRadius:8, backgroundColor:"#E2F9EA" },
+  referenceResidentBadgeText: { fontFamily:vsType.family, fontWeight:"800", fontSize:12, color:"#05713D" },
   referenceFullPage: { flex:1, backgroundColor:"#FFFFFF", borderRadius:13, borderWidth:1, borderColor:"#DDE8E3" },
   referenceFullPageContent: { padding:10, paddingBottom:24 },
   referenceFullDetails: { flex:1, minHeight:0, backgroundColor:"#FFFFFF", borderWidth:1, borderColor:"#DFE9E3", borderRadius:13, padding:14 },
