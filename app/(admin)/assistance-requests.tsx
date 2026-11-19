@@ -10,7 +10,6 @@ import {
   serverTimestamp,
 } from "firebase/firestore";
 import ListPagination from "../../components/ui/ListPagination";
-import AdminReviewHero from "../../components/admin/AdminReviewHero";
 import {
   validateAssistanceReview,
   validateAssistanceReason,
@@ -2696,13 +2695,6 @@ This still does not automatically create a Donation Campaign.`,
         </View>
       ) : screenMode === "queue" ? (
         <ScrollView style={styles.pageScroll} contentContainerStyle={styles.assistanceMobilePage}>
-          <AdminReviewHero
-            eyebrow="LGU WORKSPACE / RESIDENT ASSISTANCE"
-            title="Assistance Requests"
-            subtitle="Review requests, check supporting details, and plan assistance."
-            icon="hand-left-outline"
-            tag="REQUEST MANAGEMENT"
-          />
           {renderCompactQueue()}
         </ScrollView>
       ) : (
