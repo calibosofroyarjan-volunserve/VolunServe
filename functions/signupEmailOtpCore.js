@@ -68,7 +68,10 @@ function createSignupEmailOtpService({
   }
 
   const currentAccount = async (requester) => {
-    const user = await adminAuth.getUser(requester?.uid || "");
+    if (!requester || typeof requester.uid !== "string" || !requester.uid) {
+      throw new OtpError("unauthenticated", "Sign in with your new email and password first.");
+    }
+    const user = await adminAuth.getUser(requester.uid);
     const email = normalizeAccount(user, requester);
     return {user, email};
   };
