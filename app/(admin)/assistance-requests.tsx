@@ -3391,6 +3391,7 @@ function DecisionTab({
   locationAddress, setLocationAddress, locationNotes, setLocationNotes,
   savingAction, onRequestMoreInfo, onVerify, onReject,
   onSaveResourceAssessment, onMarkAssistanceProvided, onSaveLocation,
+  onContinueDonation, donationSubmitting,
 }: {
   request: AssistanceRequest;
   reviewDraft: PrivateReviewDraft | null;
@@ -3424,6 +3425,8 @@ function DecisionTab({
   onMarkAssistanceProvided: () => void;
   onSaveLocation: () => void;
   onClearLocation: () => void;
+  onContinueDonation: () => void;
+  donationSubmitting: boolean;
 }) {
   const router = useRouter();
   const [decision, setDecision] = useState<"more" | "reject" | null>(null);
@@ -3498,93 +3501,245 @@ function DecisionTab({
     </SectionCard>
   );
 
-  if (verified) return (
-    <View style={{gap:16, paddingBottom:22}}>
-      <SectionCard title="Request Approved" subtitle="Choose the type of support to continue."
-        icon="checkmark-circle-outline">
-        <InfoGrid>
-          <InfoItem label="Approved Uncovered Need" value={money(monetaryCap)} />
-          <InfoItem label="Support Status" value={request.supportDecision || "Not selected"} />
-        </InfoGrid>
-      </SectionCard>
-      <SectionCard title="Support Plan" subtitle="Donations are not published automatically."
-        icon="heart-outline">
-        <View style={{gap:12}}>
-          <Text style={styles.fieldLabel}>Choose how assistance will be handled</Text>
-          <View style={{flexDirection:"row",flexWrap:"wrap",gap:8}}>
-            {choice("Donation Campaign", supportDecision === "donation_support", () => {
-              setSupportDecision("donation_support");
-              if (!remainingAmount && monetaryCap > 0) setRemainingAmount(String(monetaryCap));
-            })}
-            {choice("LGU / Partner", supportDecision === "internal_support",
-              () => setSupportDecision("internal_support"))}
-            {choice("No Further Support", supportDecision === "not_required",
-              () => setSupportDecision("not_required"))}
+  if (verified) {
+    const completed = ["assistance_provided", "closed"].includes(
+      String(request.status || "").toLowerCase(),
+    );
+    const linkedCampaign = !!request.donationCampaignId;
+    const donationChosen = supportDecision === "donation_support";
+    const savedPlan = !!supportDecision && supportDecision === request.supportDecision;
+    const savedAmount = Number(request.remainingAmount || 0);
+    const enteredAmount = Number(remainingAmount);
+    const amountValid = !!remainingAmount.trim() &&
+      /^\d+(?:\.\d{1,2})?$/.test(remainingAmount.trim()) &&
+      Number.isFinite(enteredAmount) && enteredAmount > 0 &&
+      enteredAmount <= monetaryCap && monetaryCap > 0;
+    const officeValid = locationName.trim().length >= 3 &&
+      locationAddress.trim().length >= 5;
+    const supportCard = (
+      value: "donation_support" | "internal_support" | "not_required",
+      title: string, description: string, iconName: "heart-outline" | "business-outline" | "checkmark-done-outline",
+    ) => {
+      const active = supportDecision === value;
+      const disabled = busy || donationSubmitting ||
+        (value === "donation_support" && monetaryCap <= 0);
+      return (
+        <TouchableOpacity
+          key={value}
+          accessibilityRole="radio"
+          accessibilityState={{selected: active, disabled}}
+          disabled={disabled}
+          onPress={() => {
+            setSupportDecision(value);
+            if (value === "donation_support" && !remainingAmount.trim() && monetaryCap > 0) {
+              setRemainingAmount(String(monetaryCap));
+            }
+          }}
+          style={{
+            flexDirection:"row", alignItems:"center", gap:13,
+            paddingHorizontal:16, paddingVertical:16,
+            borderWidth: active ? 2 : 1,
+            borderColor: active ? "#059669" : "#DDE6E3",
+            borderRadius:14,
+            backgroundColor: active ? "#F0FDF4" : disabled ? "#F8FAFC" : "#FFFFFF",
+            opacity: disabled ? 0.65 : 1,
+          }}>
+          <View style={{
+            width:40,height:40,borderRadius:11,alignItems:"center",justifyContent:"center",
+            backgroundColor: active ? "#D1FAE5" : "#F1F5F9",
+          }}>
+            <Ionicons name={iconName} size={21} color={active ? "#047857" : "#475569"} />
           </View>
-          {supportDecision === "donation_support" && (
-            <View style={{gap:8}}>
-              <Text style={styles.fieldLabel}>Donation target (PHP)</Text>
+          <View style={{flex:1,gap:4}}>
+            <Text style={{fontSize:14,fontWeight:"800",color:"#102A26"}}>{title}</Text>
+            <Text style={{fontSize:11.5,lineHeight:17,color:"#5B706B"}}>{description}</Text>
+          </View>
+          <Ionicons name={active?"radio-button-on":"radio-button-off"}
+            size={21} color={active ? "#047857" : "#94A3B8"}/>
+        </TouchableOpacity>
+      );
+    };
+    if (completed) return (
+      <View style={{gap:15,paddingBottom:24}}>
+        <SectionCard title="Assistance Completed"
+          subtitle="This verified assistance case has been marked completed."
+          icon="checkmark-done-outline">
+          <InfoGrid>
+            <InfoItem label="Resident" value={request.requesterName || "Resident"} />
+            <InfoItem label="Support Method" value={
+              request.supportDecision === "internal_support"
+                ? "LGU / Partner Support"
+                : "No Further Support Required"
+            } />
+          </InfoGrid>
+          <Text style={styles.bodyText}>
+            The completion record has been saved. No donation campaign will be created automatically.
+          </Text>
+        </SectionCard>
+      </View>
+    );
+    if (linkedCampaign) return (
+      <View style={{gap:15,paddingBottom:24}}>
+        <SectionCard title="Assistance Approved"
+          subtitle="This request is already linked to a Donation Campaign."
+          icon="checkmark-circle-outline">
+          <InfoGrid>
+            <InfoItem label="Resident" value={request.requesterName || "Resident"} />
+            <InfoItem label="Verified Uncovered Need" value={money(monetaryCap)} />
+          </InfoGrid>
+        </SectionCard>
+        <SectionCard title="Donation Campaign"
+          subtitle="Open the existing campaign to view its status and donation records."
+          icon="heart-outline">
+          <ActionButton label="Open Linked Donation Campaign"
+            variant="success" icon="heart-outline" loading={false}
+            onPress={() => router.push({
+              pathname: "/donation-list",
+              params: {assistanceRequestId: request.id},
+            } as any)} />
+        </SectionCard>
+      </View>
+    );
+    return (
+      <View style={{gap:16,paddingBottom:28}}>
+        <SectionCard title="Assistance Approved"
+          subtitle="The Admin review is complete. Choose how this verified need will be supported."
+          icon="checkmark-circle-outline">
+          <InfoGrid>
+            <InfoItem label="Resident" value={request.requesterName || "Resident"} />
+            <InfoItem label="Verified Uncovered Need" value={money(monetaryCap)} />
+            <InfoItem label="Current Plan" value={
+              request.supportDecision === "donation_support" ? "Donation Support" :
+              request.supportDecision === "internal_support" ? "LGU / Partner" :
+              request.supportDecision === "not_required" ? "No Further Support" :
+              "Choose Support"
+            } />
+          </InfoGrid>
+          <Text style={styles.bodyText}>
+            Approval does not automatically release assistance or publish a donation campaign.
+          </Text>
+        </SectionCard>
+
+        <SectionCard title="Step 1 — Choose Support"
+          subtitle="Select one support option for this approved request."
+          icon="layers-outline">
+          <View style={{gap:10}}>
+            {supportCard("donation_support","Create Donation Campaign",
+              "Raise the verified remaining amount. Campaign publishing is a separate Admin action.",
+              "heart-outline")}
+            {supportCard("internal_support","LGU / Partner Assistance",
+              "Record support from the LGU or an authorized partner.",
+              "business-outline")}
+            {supportCard("not_required","No Further Assistance Needed",
+              "Close the case once the Admin confirms there is no remaining support to arrange.",
+              "checkmark-done-outline")}
+            {monetaryCap <= 0 && (
               <Text style={styles.bodyText}>
-                Use the verified uncovered amount, not the Resident's unverified estimate.
+                Donation Campaign is unavailable because this case has no verified uncovered monetary amount.
               </Text>
-              <TextInput style={styles.input} keyboardType="decimal-pad"
-                value={remainingAmount}
-                onChangeText={v=>setRemainingAmount(v.replace(/[^0-9.]/g,""))}
-                placeholder={monetaryCap > 0 ? String(monetaryCap) : "Verified budget not available"}
-                placeholderTextColor="#94A3B8" />
-            </View>
-          )}
-          <ActionButton label="Save Support Plan" icon="checkmark-outline"
-            variant="primary" loading={savingAction === "resource_assessment"}
-            onPress={onSaveResourceAssessment} />
-        </View>
-      </SectionCard>
-      {supportDecision === "donation_support" && (
-        <SectionCard title="Public Coordination Point"
-          subtitle="Use an LGU or barangay public office only; never disclose the Resident's home address."
-          icon="business-outline">
-          <View style={{gap:9}}>
-            {(request.assignedLocationName && request.assignedLocationAddress) ? (
-              <Text style={styles.bodyText}>
-                {request.assignedLocationName} — {request.assignedLocationAddress}
-              </Text>
-            ) : (
-              <>
-                <Text style={styles.fieldLabel}>Public office or partner name</Text>
-                <TextInput value={locationName} onChangeText={setLocationName}
-                  style={styles.input} placeholder="e.g. Barangay Hall" placeholderTextColor="#94A3B8" />
-                <Text style={styles.fieldLabel}>Public office address</Text>
-                <TextInput value={locationAddress} onChangeText={setLocationAddress}
-                  style={styles.input} placeholder="Barangay, City of San Jose del Monte"
-                  placeholderTextColor="#94A3B8" />
-                <ActionButton label="Save Coordination Location" icon="save-outline"
-                  variant="secondary" loading={savingAction === "save_location"}
-                  onPress={onSaveLocation} />
-                <Text style={styles.bodyText}>
-                  After saving the support plan and public coordination details,
-                  the Donation Campaign action becomes available.
-                </Text>
-              </>
-            )}
-            {(donationCampaignReady || !!request.donationCampaignId) && (
-              <ActionButton label={request.donationCampaignId ?
-                "Open Donation Campaign" : "Create Donation Campaign"}
-                icon="heart-outline" variant="success" loading={false}
-                onPress={() => router.push({
-                  pathname: "/donation-list",
-                  params: { assistanceRequestId: request.id },
-                } as any)} />
             )}
           </View>
         </SectionCard>
-      )}
-      {supportDecision === "internal_support" && (
-        <ActionButton label="Mark Assistance Provided" icon="checkmark-done-outline"
-          variant="success" loading={savingAction === "assistance_provided"}
-          onPress={onMarkAssistanceProvided} />
-      )}
-    </View>
-  );
+
+        {donationChosen && (
+          <>
+            <SectionCard title="Step 2 — Donation Details"
+              subtitle="Only the approved monetary need can be used as the fundraising goal."
+              icon="calculator-outline">
+              <View style={{gap:10}}>
+                <InfoGrid>
+                  <InfoItem label="Maximum Verified Goal" value={money(monetaryCap)} />
+                  <InfoItem label="Already Saved" value={money(savedAmount)} />
+                </InfoGrid>
+                <Text style={styles.fieldLabel}>Amount to raise (PHP)</Text>
+                <TextInput value={remainingAmount}
+                  editable={!busy && !donationSubmitting}
+                  onChangeText={v=>setRemainingAmount(v.replace(/[^0-9.]/g,""))}
+                  keyboardType="decimal-pad" placeholder="Enter the verified remaining amount"
+                  placeholderTextColor="#94A3B8" style={styles.input} />
+                {remainingAmount.trim() && !amountValid && (
+                  <Text style={{color:"#B45309",fontSize:11}}>
+                    Enter a positive amount no higher than the verified uncovered need.
+                  </Text>
+                )}
+                <Text style={styles.bodyText}>
+                  No extra funding is added here. The amount must match the supporting evidence already reviewed.
+                </Text>
+              </View>
+            </SectionCard>
+
+            <SectionCard title="Step 3 — Public Coordination"
+              subtitle="Enter a public LGU or partner office. Google Maps and GPS are not needed."
+              icon="business-outline">
+              <View style={{gap:10}}>
+                <Text style={styles.fieldLabel}>Public office or partner name</Text>
+                <TextInput value={locationName}
+                  onChangeText={setLocationName} editable={!busy && !donationSubmitting}
+                  style={styles.input} placeholder="e.g. Barangay Hall Assistance Desk"
+                  placeholderTextColor="#94A3B8"/>
+                <Text style={styles.fieldLabel}>Public office address</Text>
+                <TextInput value={locationAddress}
+                  onChangeText={setLocationAddress} editable={!busy && !donationSubmitting}
+                  style={styles.input} placeholder="Barangay, City of San Jose del Monte, Bulacan"
+                  placeholderTextColor="#94A3B8"/>
+                <Text style={styles.bodyText}>
+                  This location is for public coordination only. Never publish the Resident's home address.
+                </Text>
+              </View>
+            </SectionCard>
+            <View style={{gap:7}}>
+              <ActionButton label="Save & Continue to Campaign Setup"
+                icon="arrow-forward-circle-outline" variant="success"
+                loading={donationSubmitting || busy} disabled={!amountValid || !officeValid || busy || donationSubmitting}
+                onPress={onContinueDonation} />
+              <Text style={{textAlign:"center",fontSize:11,color:"#64748B"}}>
+                Saves the support plan and public office, then opens the Donation Campaign editor. It does not publish.
+              </Text>
+            </View>
+          </>
+        )}
+
+        {["internal_support","not_required"].includes(supportDecision) && (
+          <SectionCard title="Step 2 — Save & Complete"
+            subtitle="Save this support decision before closing or marking the case completed."
+            icon="clipboard-checkmark-outline">
+            <View style={{gap:12}}>
+              <Text style={styles.bodyText}>
+                {supportDecision === "internal_support"
+                  ? "Save the LGU or partner support plan. Mark completed only when the assistance has actually been provided."
+                  : "Save the no-further-support decision, then close the case only after confirmation."}
+              </Text>
+              {!savedPlan && (
+                <ActionButton label="Save Support Plan"
+                  icon="save-outline" variant="primary"
+                  loading={savingAction === "resource_assessment"} disabled={busy}
+                  onPress={onSaveResourceAssessment} />
+              )}
+              {savedPlan && (
+                <>
+                  <View style={{
+                    flexDirection:"row",alignItems:"center",gap:8,
+                    borderRadius:11,backgroundColor:"#F0FDF4",padding:12,
+                  }}>
+                    <Ionicons name="checkmark-circle-outline" size={18} color="#047857" />
+                    <Text style={{color:"#065F46",fontSize:12,fontWeight:"700"}}>
+                      Support plan saved
+                    </Text>
+                  </View>
+                  <ActionButton
+                    label={supportDecision === "not_required" ?
+                      "Close Assistance Case" : "Mark Assistance Provided"}
+                    icon="checkmark-done-outline" variant="success"
+                    loading={savingAction === "assistance_provided"}
+                    disabled={busy} onPress={onMarkAssistanceProvided} />
+                </>
+              )}
+            </View>
+          </SectionCard>
+        )}
+      </View>
+    );
+  }
 
   return (
     <View style={{gap:15,paddingBottom:24}}>
