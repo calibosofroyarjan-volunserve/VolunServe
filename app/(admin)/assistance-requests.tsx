@@ -3716,7 +3716,9 @@ function CompactVerifiedAssistance({
                   <ReferenceDataRow icon="cash-outline" label="Amount (Target)" value={money(cap > 0 ? cap : Math.max(0,numericTotal - numericAlreadyReceived))}/>
                 </View>
               </View>
-              <Text style={styles.simpleSection}>Donation Target</Text>
+              <View style={styles.referenceCampaignFormRow}>
+              <View style={styles.referenceCampaignFormCell}>
+              <Text style={styles.referenceReviewChoiceTitle}>Donation Target *</Text>
               {cap > 0 ? (
                 <Text style={styles.simpleVerifiedAmount}>{money(cap)}</Text>
               ) : (
@@ -3780,6 +3782,18 @@ function CompactVerifiedAssistance({
                 </Text>
               )}
 
+              </View>
+              <View style={styles.referenceCampaignFormCell}>
+                <Text style={styles.referenceReviewChoiceTitle}>Campaign Cover *</Text>
+                <View style={styles.referenceCoverNotice}>
+                  <Ionicons name="image-outline" size={18} color="#068247"/>
+                  <Text style={styles.referenceCoverNoticeText}>
+                    {request.publicCampaignPhotoUrl ? "Resident photo available" : "Upload in Campaign Setup"}
+                  </Text>
+                </View>
+              </View>
+              <View style={styles.referenceCampaignFormCell}>
+              <Text style={styles.referenceReviewChoiceTitle}>Assistance Office *</Text>
               {hasOffice ? (
                 <View style={styles.simpleReviewOfficeCard}>
                   <Ionicons name="business-outline" size={17} color="#047857" />
@@ -3792,9 +3806,8 @@ function CompactVerifiedAssistance({
                 </View>
               ) : (
                 <View style={styles.simpleField}>
-                  <Text style={styles.simpleSection}>Public coordination location</Text>
                   <Text style={styles.simpleCopy}>
-                    Enter the public office or partner location where donors can coordinate. Do not use the resident’s home address.
+                    Public office for donation coordination, never the resident’s private address.
                   </Text>
                   <Text style={styles.simpleCheckTitle}>Office or partner name</Text>
                   <TextInput
@@ -3817,10 +3830,12 @@ function CompactVerifiedAssistance({
                   {locationError && <ReviewValidationHint message="Enter the actual public office name and address before continuing." />}
                 </View>
               )}
+              </View>
+              </View>
             </View>
           )}
 
-          <View style={styles.simpleDecision}>
+          <View style={[styles.simpleDecision,choice==="donation"&&styles.referencePublishActionRow]}>
             <ActionButton
               label={choice === "donation" ? "Continue to Campaign Setup" : "Save Support Plan"}
               icon={choice === "donation" ? "heart-outline" : "checkmark-circle-outline"}
@@ -5964,6 +5979,11 @@ function DocumentPreviewModal({
 }
 
 const styles = StyleSheet.create({
+  referenceCampaignFormRow: { flexDirection:"row", flexWrap:"wrap", gap:13, alignItems:"flex-start", marginTop:6 },
+  referenceCampaignFormCell: { flexGrow:1, flexBasis:170, minWidth:160, gap:8 },
+  referenceCoverNotice: { minHeight:42, padding:10, borderWidth:1, borderColor:"#DCE7E2", borderRadius:8, flexDirection:"row", alignItems:"center", gap:7, backgroundColor:"#FFFFFF" },
+  referenceCoverNoticeText: { flex:1, fontSize:11, color:"#057443", fontWeight:"700", fontFamily:vsType.family },
+  referencePublishActionRow: { alignSelf:"flex-end", minWidth:240, maxWidth:330, width:"40%", borderTopWidth:0, paddingTop:0 },
   referenceSupportOptions: { flexDirection:"row", flexWrap:"wrap", gap:14 },
   referenceSupportCard: { flexGrow:1, flexBasis:280, minWidth:230, minHeight:86, padding:14, flexDirection:"row", alignItems:"center", gap:12, borderWidth:1, borderColor:"#DFE7E7", borderRadius:10, backgroundColor:"#FFFFFF" },
   referenceSupportCardActive: { borderColor:"#66CA98", backgroundColor:"#E7FAEF" },
