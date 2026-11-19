@@ -973,7 +973,8 @@ export default function AssistanceRequestsAdmin() {
   };
 
   useEffect(() => {
-    if (!wide || loadingRequests || sessionLoading || !isOperationalAdmin || !!savingAction) return;
+    // The reference layout opens on its full-width list; never auto-open a case from the old split-pane workspace.
+    if (!wide || screenMode !== "detail" || loadingRequests || sessionLoading || !isOperationalAdmin || !!savingAction) return;
     const visibleSelected = pagedRequests.some((item) => item.id === selected?.id);
     if (!visibleSelected) {
       resetProtectedReviewView();
@@ -982,7 +983,7 @@ export default function AssistanceRequestsAdmin() {
       setReviewFocusStage(null);
       setQuickAction(null);
     }
-  }, [wide, loadingRequests, sessionLoading, isOperationalAdmin, filteredRequests, activeRequestPage, selected?.id, savingAction]);
+  }, [wide, screenMode, loadingRequests, sessionLoading, isOperationalAdmin, filteredRequests, activeRequestPage, selected?.id, savingAction]);
 
   const relatedRequests = useMemo(() => {
     if (!selected) return [];
@@ -2495,7 +2496,7 @@ This still does not automatically create a Donation Campaign.`,
             label="Review & Decision"
             icon="shield-checkmark-outline"
             active={reviewTab === "decision"}
-            onPress={() => setReviewTab("decision")}
+            onPress={() => { setReviewTab("decision"); setSimpleReviewMode(true); }}
           />
         </View>
       </>
@@ -3054,7 +3055,8 @@ function RequestReviewHeader({
             },
           ]}
         >
-          {meta.label}
+          {request.verificationStatus === "verified" && !!request.supportDecision
+            && request.supportDecision !== "pending" ? "Approved" : meta.label}
         </Text>
       </View>
     </View>
