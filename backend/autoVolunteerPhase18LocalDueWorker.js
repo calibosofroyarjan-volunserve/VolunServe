@@ -57,7 +57,8 @@ function createLocalEmulatorDueWorker({
     try{
       timer=schedule(()=>{
         // Timers must never leak errors or create unhandled rejections.
-        void tick().catch(()=>undefined);
+        // Returning this promise also lets local CI drive the fake clock.
+        return tick().catch(()=>undefined);
       },intervalMs);
       timer?.unref?.();
     }catch(error){
