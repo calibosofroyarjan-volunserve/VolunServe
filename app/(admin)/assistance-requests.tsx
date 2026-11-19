@@ -509,6 +509,25 @@ const statusMeta = (value?: string) => {
   };
 };
 
+// Display mapping only for the reference-table status labels.
+// Underlying Firestore statuses and the original statusMeta() remain untouched.
+const referenceTableStatus = (request: AssistanceRequest) => {
+  const original = statusMeta(request.status);
+  const status = String(request.status || "pending").toLowerCase();
+  if (status === "pending" || status === "under_review") {
+    return { ...original, label: "For Review", color: "#945C00", soft: "#FFF0BD" };
+  }
+  if (status === "assistance_provided" || status === "closed") {
+    return { ...original, label: "Completed", color: "#243746", soft: "#E7EDF0" };
+  }
+  if (status === "campaign_created" ||
+      (status === "verified" && request.supportDecision &&
+        !["pending","not_required"].includes(request.supportDecision))) {
+    return { ...original, label: "Approved", color: "#087942", soft: "#DCF8E7" };
+  }
+  return original;
+};
+
 const documentName = (
   item: StoredDocument,
   index: number,
@@ -2831,6 +2850,7 @@ function MockQueueRow({
     request.category,
   );
   const status = statusMeta(request.status);
+  const referenceStatus = referenceTableStatus(request);
 
   // Desktop-only reference table. Mobile retains the existing working queue row.
   if (wide) return (
@@ -2849,8 +2869,8 @@ function MockQueueRow({
       <Text style={[styles.referenceTableText,{flex:1.2}]} numberOfLines={2}>{request.categoryLabel || request.category || "Community Assistance"}</Text>
       <Text style={[styles.referenceTableText,{flex:1}]}>{referenceAmount(request.estimatedAmount)}</Text>
       <View style={[styles.referenceTableCell,{flex:1}]}>
-        <View style={[styles.mockQueueStatus,{backgroundColor:status.soft,alignSelf:"flex-start"}]}>
-          <Text style={[styles.mockQueueStatusText,{color:status.color}]}>{status.label}</Text>
+        <View style={[styles.mockQueueStatus,{backgroundColor:referenceStatus.soft,alignSelf:"flex-start"}]}>
+          <Text style={[styles.mockQueueStatusText,{color:referenceStatus.color}]}>{referenceStatus.label}</Text>
         </View>
       </View>
       <View style={[styles.referenceTableCell,{flex:1,flexDirection:"row",alignItems:"center",gap:6}]}>
