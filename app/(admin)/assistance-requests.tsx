@@ -2611,8 +2611,19 @@ This still does not automatically create a Donation Campaign.`,
           <Text style={styles.assistanceSubtext}>No requests match these filters.</Text>
         </View>
       )}
+      {wide && pagedRequests.length > 0 && (
+        <View style={styles.referenceTableHeader}>
+          <Text style={[styles.referenceTableHeading, { flex: 2.2 }]}>REQUEST CASE</Text>
+          <Text style={[styles.referenceTableHeading, { flex: 1.1 }]}>RESIDENT</Text>
+          <Text style={[styles.referenceTableHeading, { flex: 1.1 }]}>CATEGORY</Text>
+          <Text style={[styles.referenceTableHeading, { flex: 1 }]}>REQUESTED AMOUNT</Text>
+          <Text style={[styles.referenceTableHeading, { flex: 1 }]}>STATUS</Text>
+          <Text style={[styles.referenceTableHeading, { flex: 1 }]}>SUBMITTED</Text>
+        </View>
+      )}
       {pagedRequests.map((item) => (
         <MockQueueRow
+          wide={wide}
           key={item.id}
           request={item}
           active={selected?.id === item.id}
@@ -2777,10 +2788,12 @@ function MockStatusTab({
 
 function MockQueueRow({
   request,
+  wide = false,
   active = false,
   onPress,
 }: {
   request: AssistanceRequest;
+  wide?: boolean;
   active?: boolean;
   onPress: () => void;
 }) {
@@ -2788,6 +2801,33 @@ function MockQueueRow({
     request.category,
   );
   const status = statusMeta(request.status);
+
+  if (wide) return (
+    <TouchableOpacity style={[styles.referenceTableRow, active && styles.mockQueueRowSelected]}
+      onPress={onPress} accessibilityRole="button" activeOpacity={0.82}>
+      <View style={[styles.referenceTableCell, { flex: 2.2, flexDirection: "row", alignItems: "center", gap: 10 }]}>
+        <View style={[styles.mockQueueIcon, { backgroundColor: category.soft }]}>
+          <Ionicons name={category.icon} size={21} color={category.color} />
+        </View>
+        <View style={{ flex: 1, minWidth: 0 }}>
+          <Text style={styles.mockQueueTitle} numberOfLines={1}>{request.title || "Assistance Request"}</Text>
+          <Text style={styles.mockQueueId} numberOfLines={1}>{request.requestId || request.id}</Text>
+        </View>
+      </View>
+      <Text style={[styles.referenceTableText, { flex: 1.1 }]} numberOfLines={2}>{request.requesterName || "Resident"}</Text>
+      <Text style={[styles.referenceTableText, { flex: 1.1 }]} numberOfLines={2}>{request.categoryLabel || category.label || request.category || "Assistance"}</Text>
+      <Text style={[styles.referenceTableText, { flex: 1 }]}>{typeof request.estimatedAmount === "number" && request.estimatedAmount > 0 ? money(request.estimatedAmount) : "—"}</Text>
+      <View style={[styles.referenceTableCell, { flex: 1 }]}>
+        <View style={[styles.mockQueueStatus, { backgroundColor: status.soft, alignSelf: "flex-start" }]}>
+          <Text style={[styles.mockQueueStatusText, { color: status.color }]}>{status.label}</Text>
+        </View>
+      </View>
+      <View style={[styles.referenceTableCell, { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "space-between" }]}>
+        <Text style={styles.referenceTableText} numberOfLines={2}>{readableDate(request.createdAt)}</Text>
+        <Ionicons name="chevron-forward" size={17} color="#078349" />
+      </View>
+    </TouchableOpacity>
+  );
 
   return (
     <TouchableOpacity
@@ -5739,6 +5779,11 @@ function DocumentPreviewModal({
 }
 
 const styles = StyleSheet.create({
+  referenceTableHeader: { flexDirection: "row", alignItems: "center", backgroundColor: "#F1F7F3", paddingHorizontal: 12, paddingVertical: 13, gap: 10, borderTopLeftRadius: 9, borderTopRightRadius: 9 },
+  referenceTableHeading: { color: "#3D5B51", fontFamily: vsType.family, fontWeight: "800", fontSize: 10 },
+  referenceTableRow: { flexDirection: "row", alignItems: "center", paddingHorizontal: 12, paddingVertical: 13, gap: 10, minHeight: 70, borderBottomColor: "#E6EDE9", borderBottomWidth: 1, backgroundColor: "#FFFFFF" },
+  referenceTableCell: { minWidth: 0 },
+  referenceTableText: { color: "#243A31", fontFamily: vsType.family, fontSize: 12, fontWeight: "600", minWidth: 0 },
   referenceFullPage: { flex: 1, backgroundColor: "#FFFFFF", borderRadius: 14, borderWidth: 1, borderColor: "#D8E7DE" },
   referenceFullContent: { padding: 10, paddingBottom: 26 },
   referenceFullDetails: { flex: 1, minHeight: 0, backgroundColor: "#FFFFFF", borderRadius: 14, borderWidth: 1, borderColor: "#D8E7DE", padding: 14 },
