@@ -2564,7 +2564,7 @@ This still does not automatically create a Donation Campaign.`,
             accessibilityRole="button" accessibilityState={{ selected: filter === value }}
             style={[styles.referenceFilterPill, filter === value && styles.referenceFilterPillActive]}>
             <Text style={[styles.referenceFilterPillText, filter === value && styles.referenceFilterPillTextActive]}>
-              {label} ({value === "all" ? requests.length : requests.filter((item) => value === "under_review" ? item.status === "under_review" : value === "verified" ? item.verificationStatus === "verified" || item.status === "verified" : item.status === value).length})
+              {label} ({filterAndSortAssistanceQueue(requests, { status: value, category: "all", sort: "newest", search: "" }, timestampMillis).length})
             </Text>
           </TouchableOpacity>
         ))}
