@@ -1,0 +1,52 @@
+name: Deployed Automatic Volunteer staging READ ONLY (no deploy)
+
+on:
+  push:
+    branches:
+      - qa/automatic-volunteer-deployed-staging-readonly-20261119
+  pull_request:
+    branches:
+      - feat/staging-gated-admin-volunteer-preview-ui-20261117
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  staging-readonly:
+    if: github.repository == 'calibosofroyarjan-volunserve/VolunServe'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Enforce exactly two new QA-only files
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin feat/staging-gated-admin-volunteer-preview-ui-20261117
+          git diff --name-status 72cc792d8c4bb9f59623d7743878194950d44c3d HEAD > /tmp/read-only
+          test "$(wc -l < /tmp/read-only)" -eq 2
+          while IFS="$(printf '\t')" read -r state file; do
+            test "$state" = "A" || { echo "BLOCKED existing file edited: $file"; exit 1; }
+            case "$file" in
+              scripts/test-deployed-auto-volunteer-staging-readonly-20261119.cjs|.github/workflows/qa-deployed-auto-volunteer-staging-readonly-20261119.yml) ;;
+              *) echo "BLOCKED unexpected file: $file"; exit 1 ;;
+            esac
+          done < /tmp/read-only
+          echo "PASS: no UI, backend, Firebase Rules, or production changes."
+      - name: Source and syntax checks
+        run: |
+          node --check scripts/test-deployed-auto-volunteer-staging-readonly-20261119.cjs
+          grep -Fq 'STAGING_BULK_CASE_ID = "STAGING_E2E_002"' lib/stagingBulkVolunteerClient.ts
+          grep -Fq 'ensureStagingBulkOffersAfterAdminValidation(' app/'(admin)'/admin-cases.tsx
+          grep -Fq 'respondToStagingBulkOffer(' app/'(tabs)'/volunteer.web.tsx
+      - name: Test deployed staging endpoints — GET only, anonymous, isolated
+        run: node scripts/test-deployed-auto-volunteer-staging-readonly-20261119.cjs
+      - name: No deployment or emergency-dispatch side effects
+        run: |
+          echo "Only fixed public GETs. No login tokens, POST, Render deployment, Firebase writes, or emergency task assignment."
