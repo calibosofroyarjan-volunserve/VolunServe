@@ -1,0 +1,164 @@
+# One-time, live-derived, fail-closed Signup web release for Nov 21 defense.
+# Trigger is a one-file protected-branch PR merge. Never builds protected backlog.
+name: Guarded Defense Signup Hosting-Only Release
+on:
+  push:
+    branches: [live-protected]
+    paths:
+      - '.github/workflows/one-time-defensive-signup-hosting-20261119.yml'
+permissions:
+  contents: read
+concurrency:
+  group: volunserve-production-hosting-release
+  cancel-in-progress: false
+jobs:
+  signup-only:
+    if: github.repository == 'calibosofroyarjan-volunserve/VolunServe' && github.ref == 'refs/heads/live-protected'
+    runs-on: ubuntu-latest
+    environment: production
+    timeout-minutes: 65
+    env:
+      CI: 'true'
+      EXPO_NO_TELEMETRY: '1'
+      PROJECT: 'volunserve-3aa5b'
+      EXPECTED_LIVE: '4bc0893a6c678ea7738be8f9176fea9721bbc6af'
+      SOURCE_SHA: '3efdc7edd85d5464242f6937d6ed9679365ec1b9'
+      SOURCE_BRANCH: 'release/signup-defense-current-live-20261119'
+      BACKUP_CHANNEL: 'signup-defense-backup-20261119'
+    steps:
+      - name: Checkout protected controller only
+        uses: actions/checkout@v4
+        with:
+          path: controller
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          submodules: false
+      - name: Checkout immutable, last-published-derived Signup candidate (NOT protected backlog)
+        uses: actions/checkout@v4
+        with:
+          path: site
+          ref: '3efdc7edd85d5464242f6937d6ed9679365ec1b9'
+          fetch-depth: 0
+          submodules: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: site/package-lock.json
+      - name: Fail closed unless protected controller, latest staging SHA, exact allowed files and live marker match
+        working-directory: site
+        shell: bash
+        run: |
+          node <<'NODE'
+          const assert=require('node:assert/strict');
+          const cp=require('node:child_process');
+          const git=(...args)=>cp.execFileSync('git',args,{encoding:'utf8'}).trim();
+          const source=process.env.SOURCE_SHA, base=process.env.EXPECTED_LIVE;
+          const exact=[
+            '.github/workflows/verify-defense-signup-no-deploy-20261119.yml',
+            'components/auth/EmailFirstSignup.tsx',
+            'lib/firebaseAuth.ts',
+            'lib/registrationEmailPolicy.ts',
+            'lib/requireCompleteResidentRegistration.ts',
+            'lib/signupRegistration.ts',
+            'scripts/test-signup-prod.cjs'
+          ].sort();
+          async function run(){
+            assert.equal(git('rev-parse','HEAD'),source,'Unexpected source candidate');
+            cp.execFileSync('git',['merge-base','--is-ancestor',base,source]);
+            const stage=git('ls-remote','--heads','origin',process.env.SOURCE_BRANCH).split(/\s+/)[0];
+            assert.equal(stage,source,'Candidate branch moved after review');
+            const changed=git('diff','--name-status','--no-renames',base,source).split('\n').filter(Boolean);
+            assert.deepEqual(changed.map(x=>x.split('\t')[1]).sort(),exact,'Unapproved change in source');
+            assert(changed.every(x=>/^[AM]\t/.test(x)),'Removal or rename is forbidden');
+            const ctrl=cp.execFileSync('git',['-C','../controller','diff','--name-only','HEAD^','HEAD'],{encoding:'utf8'}).trim().split('\n').filter(Boolean);
+            assert.deepEqual(ctrl,['.github/workflows/one-time-defensive-signup-hosting-20261119.yml'],
+              'Protected branch push also changed application or policy; STOP');
+            const currentProtected=git('ls-remote','--heads','origin','live-protected').split(/\s+/)[0];
+            assert.equal(currentProtected,process.env.GITHUB_SHA,'Newer protected controller exists; STOP');
+            const response=await fetch('https://volunserve.com/volunserve-release.json?sg='+Date.now(),{
+              headers:{'Cache-Control':'no-cache'},signal:AbortSignal.timeout(15000)});
+            assert(response.ok,'Public live release marker unavailable');
+            const live=await response.json();
+            assert.equal(live.app,'VolunServe');
+            assert.equal(live.firebaseProject,process.env.PROJECT);
+            assert.equal(live.revision,base,'Live site changed since validated source; STOP');
+            console.log('PASS: exact current live revision, one-file controller, reviewed seven-file Signup-only candidate');
+          }
+          run().catch(e=>{console.error(e.message);process.exitCode=1});
+          NODE
+      - name: Install locked released-source dependencies
+        working-directory: site
+        run: npm ci --no-audit --no-fund
+      - name: TypeScript compile and complete Signup/cross-role regression suite
+        working-directory: site
+        run: |
+          npx tsc --noEmit --incremental false
+          node scripts/test-signup-prod.cjs
+          node scripts/test-signup-email-first-middle-optional.cjs
+          node scripts/test-login-field-validation.cjs
+          node scripts/test-login-ui-release.cjs
+          node scripts/test-route-entrypoints.cjs
+          node scripts/test-portal-resident-volunteer-ui-flow.cjs
+          node scripts/test-admin-navigation-contract.cjs
+          node scripts/test-profile-certificates-account-menu.cjs
+          node scripts/test-unified-login-routing.cjs
+      - name: Build and validate immutable Expo web Hosting artifact
+        working-directory: site
+        run: |
+          npx expo export --platform web --clear
+          env -u GITHUB_SHA node scripts/verify-hosting-release.cjs
+          node -e "const m=require('./dist/volunserve-release.json');if(m.revision!==process.env.SOURCE_SHA||m.firebaseProject!==process.env.PROJECT)process.exit(1);console.log('PASS: Hosting artifact pinned to reviewed Signup source')"
+      - name: Reverify live marker and require protected environment Hosting credential
+        working-directory: site
+        shell: bash
+        env:
+          FIREBASE_SA: ${{ secrets.VOLUNSERVE_PRODUCTION_HOSTING_SERVICE_ACCOUNT }}
+        run: |
+          test -n "$FIREBASE_SA" || { echo 'STOP: production Hosting secret unavailable'; exit 1; }
+          printf '%s' "$FIREBASE_SA" > "$RUNNER_TEMP/volunserve-signup-def-sa.json"
+          chmod 600 "$RUNNER_TEMP/volunserve-signup-def-sa.json"
+          echo "GOOGLE_APPLICATION_CREDENTIALS=$RUNNER_TEMP/volunserve-signup-def-sa.json" >> "$GITHUB_ENV"
+          node <<'NODE'
+          const assert=require('node:assert/strict');
+          (async()=>{
+            const r=await fetch('https://volunserve.com/volunserve-release.json?final='+Date.now(),{
+              headers:{'Cache-Control':'no-cache'},signal:AbortSignal.timeout(15000)});
+            assert(r.ok,'Production marker unavailable');
+            const j=await r.json();
+            assert.equal(j.revision,process.env.EXPECTED_LIVE,'Production changed; stop release');
+            assert.equal(j.firebaseProject,process.env.PROJECT);
+            console.log('PASS: no production drift immediately before backup/publish');
+          })().catch(e=>{console.error(e.message);process.exitCode=1});
+          NODE
+      - name: Back up current live Hosting revision (no database, Rules or Functions)
+        id: backup
+        working-directory: site
+        run: |
+          npx firebase-tools hosting:clone "$PROJECT:live" "$PROJECT:$BACKUP_CHANNEL" --project "$PROJECT" --non-interactive
+      - name: Publish reviewed Signup Hosting assets ONLY
+        id: deploy
+        uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          firebaseServiceAccount: ${{ secrets.VOLUNSERVE_PRODUCTION_HOSTING_SERVICE_ACCOUNT }}
+          projectId: volunserve-3aa5b
+          channelId: live
+          entryPoint: ./site
+      - name: Verify exact Signup build on production domain
+        working-directory: site
+        env:
+          VOLUNSERVE_HOSTING_URL: https://volunserve.com
+          VOLUNSERVE_EXPECTED_SHA: '3efdc7edd85d5464242f6937d6ed9679365ec1b9'
+        run: |
+          for attempt in 1 2 3 4 5 6; do
+            if node scripts/check-live-hosting.cjs; then exit 0; fi
+            sleep 10
+          done
+          echo 'ERROR: production is not serving exact Signup source'
+          exit 1
+      - name: Roll back Hosting if deployment or post-release verification fails
+        if: failure() && steps.backup.outcome == 'success' && steps.deploy.outcome != 'skipped'
+        working-directory: site
+        run: |
+          echo 'Attempting restore from frozen pre-release Hosting channel'
+          npx firebase-tools hosting:clone "$PROJECT:$BACKUP_CHANNEL" "$PROJECT:live" --project "$PROJECT" --non-interactive
