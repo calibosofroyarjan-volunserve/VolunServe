@@ -56,9 +56,11 @@ function readSafeConfig(filename){
   const handle=ownedSafeFile(filename,MAX_CONFIG,true);
   if(!handle)return null;
   try{
-    const raw=fs.readFileSync(handle.fd,{encoding:"utf8"});
-    if(Buffer.byteLength(raw,"utf8")!==handle.bytes)return null;
-    const parsed=JSON.parse(raw);
+    // Bounded read, even if an untrusted local file grows after fstat().
+    const buf=Buffer.alloc(MAX_CONFIG+1);
+    const len=fs.readSync(handle.fd,buf,0,MAX_CONFIG+1,0);
+    if(len!==handle.bytes||len>MAX_CONFIG)return null;
+    const parsed=JSON.parse(buf.subarray(0,len).toString("utf8"));
     return parsed&&typeof parsed==="object"&&!Array.isArray(parsed)?
       parsed:null;
   }catch(_e){return null}
