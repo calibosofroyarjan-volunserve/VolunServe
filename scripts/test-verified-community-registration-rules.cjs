@@ -68,6 +68,25 @@ async function main() {
         ...validProfile,uid,email,
       }));
     }
+    // Exact-domain allowlist must be enforced by Firestore even if bypassing Signup UI.
+    // Existing resident/staff access tests above remain unchanged.
+    for (const domain of [
+      "legitimate.co", "outlook.com", "hotmail.com", "yahoo.com.ph",
+      "googlemail.com", "temp-mail.org", "mailinator.com",
+      "sub.gmail.com", "sub.yahoo.com", "gmail.com.attacker.test",
+      "example.com", "example.co", "ruutukf.co"
+    ]) {
+      const uid = "blocked-domain-" + domain.replace(/[^a-z0-9]/g, "-");
+      const email = "person@" + domain;
+      await assertFails(setDoc(doc(as(uid,email,true),"users",uid),{
+        ...validProfile, uid, email,
+      }));
+    }
+    const yahooUid="verified-yahoo-resident";
+    const yahooEmail="resident@yahoo.com";
+    await assertSucceeds(setDoc(doc(as(yahooUid,yahooEmail,true),"users",yahooUid),{
+      ...validProfile,uid:yahooUid,email:yahooEmail,
+    }));
     // Every invalid registration has its own UID to test CREATE permission
     // (rather than accidentally testing UPDATE on an existing profile).
     let n = 0;
