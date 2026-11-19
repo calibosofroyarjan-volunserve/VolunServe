@@ -436,7 +436,7 @@ const statusMeta = (value?: string) => {
 
   if (status === "verified") {
     return {
-      label: "Verified Need",
+      label: "Approved",
       color: "#15803D",
       soft: "#EAF8EF",
       icon: "shield-checkmark-outline" as const,
@@ -2173,7 +2173,7 @@ This still does not automatically create a Donation Campaign.`,
                 </View>
                 <ScrollView horizontal={!wide} showsHorizontalScrollIndicator={!wide}
                   nestedScrollEnabled style={{width:"100%"}}>
-                <View style={wide ? {width:"100%"} : {width:760}}>
+                <View style={wide ? {width:"100%"} : {width:890}}>
                 <View style={{
                   flexDirection:"row",paddingHorizontal:20,paddingVertical:13,
                   backgroundColor:"#F1F6F4",borderTopWidth:1,borderBottomWidth:1,
@@ -2184,6 +2184,7 @@ This still does not automatically create a Donation Campaign.`,
                   <Text style={{flex:1.6,minWidth:90,fontSize:10.5,fontWeight:"800",color:"#49665B"}}>CATEGORY</Text>
                   <Text style={{flex:1.2,minWidth:85,fontSize:10.5,fontWeight:"800",color:"#49665B"}}>AMOUNT</Text>
                   <Text style={{flex:1.2,minWidth:90,fontSize:10.5,fontWeight:"800",color:"#49665B"}}>STATUS</Text>
+                  <Text style={{flex:1.2,minWidth:100,fontSize:10.5,fontWeight:"800",color:"#49665B"}}>SUBMITTED</Text>
                   <Text style={{width:16,fontSize:10.5,fontWeight:"800",color:"#49665B"}}> </Text>
                 </View>
                 {loadingRequests ? (
@@ -2298,6 +2299,15 @@ function MockStatusTab({
   );
 }
 
+const submissionDateLabel = (value: any) => {
+  if (!value) return "—";
+  const date = typeof value?.toDate === "function"
+    ? value.toDate()
+    : value?.seconds ? new Date(Number(value.seconds)*1000) : new Date(value);
+  if (!Number.isFinite(date.getTime())) return "—";
+  return date.toLocaleDateString("en-PH",{month:"short",day:"numeric",year:"numeric"});
+};
+
 function MockQueueRow({request,onPress}:{
   request: AssistanceRequest;
   onPress:()=>void;
@@ -2344,6 +2354,11 @@ function MockQueueRow({request,onPress}:{
           borderRadius:99,backgroundColor:meta.soft}}>
           <Text style={{fontSize:11,color:meta.color,fontWeight:"800"}}>{meta.label}</Text>
         </View>
+      </View>
+      <View style={{flex:1.2,minWidth:100}}>
+        <Text style={{fontSize:11,color:"#597266",lineHeight:16}}>
+          {submissionDateLabel(request.createdAt)}
+        </Text>
       </View>
       <Ionicons name="chevron-forward" size={18} color="#047857"/>
     </TouchableOpacity>
@@ -3207,13 +3222,28 @@ function DecisionTab({
     title: string, hint: string, yes: boolean, no: boolean,
     onYes: () => void, onNo: () => void,
   ) => (
-    <View style={{gap: 9, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: "#EEF2F6"}}>
-      <Text style={{color:"#0F172A",fontSize:13,fontWeight:"800"}}>{title}</Text>
-      <Text style={styles.bodyText}>{hint}</Text>
-      <View style={{flexDirection:"row", flexWrap:"wrap",gap:9}}>
-        {choice("Confirmed", yes, onYes)}
-        {choice("Needs information", no, onNo, true)}
+    <View style={{paddingVertical:13,borderBottomWidth:1,borderBottomColor:"#E7EEEA",
+      flexDirection:"row",alignItems:"center",gap:11}}>
+      <TouchableOpacity accessibilityRole="checkbox" accessibilityLabel={title}
+        accessibilityState={{checked:yes}} disabled={locked} onPress={onYes}
+        style={{width:23,height:23,borderRadius:5,alignItems:"center",
+          justifyContent:"center",backgroundColor:yes?"#0D8050":"#FFFFFF",
+          borderWidth:1,borderColor:yes?"#0D8050":"#B8CCC1"}}>
+        {yes&&<Ionicons name="checkmark" size={16} color="#FFFFFF"/>}
+      </TouchableOpacity>
+      <View style={{flex:1,gap:4}}>
+        <Text style={{fontSize:12.5,color:"#19362B",fontWeight:"800"}}>{title}</Text>
+        <Text style={{fontSize:10.5,lineHeight:16,color:"#78887F"}}>{hint}</Text>
       </View>
+      <TouchableOpacity accessibilityRole="button" disabled={locked}
+        accessibilityState={{selected:no}} onPress={onNo}
+        style={{paddingHorizontal:10,paddingVertical:8,borderRadius:8,
+          borderWidth:1,borderColor:no?"#ECA39A":"#E0E8E3",
+          backgroundColor:no?"#FFF3F0":"#FFFFFF"}}>
+        <Text style={{fontSize:10.5,fontWeight:"700",color:no?"#BA3B33":"#697C70"}}>
+          Needs info
+        </Text>
+      </TouchableOpacity>
     </View>
   );
 
