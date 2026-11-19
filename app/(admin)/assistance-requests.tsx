@@ -10,7 +10,6 @@ import {
   serverTimestamp,
 } from "firebase/firestore";
 import ListPagination from "../../components/ui/ListPagination";
-import AdminReviewHero from "../../components/admin/AdminReviewHero";
 import {
   validateAssistanceReview,
   validateAssistanceReason,
@@ -628,6 +627,8 @@ export default function AssistanceRequestsAdmin() {
   const [sortOrder, setSortOrder] =
     useState<AssistanceQueueSort>("newest");
   const [search, setSearch] = useState("");
+  // View-only control: the existing category/status/sort filters are unchanged.
+  const [showReferenceFilters, setShowReferenceFilters] = useState(false);
   const [recordPage, setRecordPage] = useState(1);
   const [reviewFocusStage, setReviewFocusStage] = useState<ReviewStageFocus | null>(null);
   const [quickAction, setQuickAction] = useState<"more_info" | "reject" | null>(null);
@@ -2542,10 +2543,34 @@ This still does not automatically create a Donation Campaign.`,
 
   const renderCompactQueue = () => (
     <View style={styles.assistanceQueueCard}>
-      <View style={styles.assistanceQueueHeading}>
-        <Text style={styles.assistanceQueueTitle}>Requests ({filteredRequests.length})</Text>
+      <View style={styles.referencePageHeading}>
+        <Ionicons name="clipboard-outline" size={29} color="#058348"/>
+        <View style={{ flex: 1, gap: 3 }}>
+          <Text style={styles.referencePageTitle}>Assistance Requests</Text>
+          <Text style={styles.referencePageSubtitle}>Review resident requests for support.</Text>
+        </View>
         {loadingRequests && <ActivityIndicator color="#047857" />}
       </View>
+      <View style={styles.referenceStatusTabs}>
+        {([
+          ["all", "All Requests"],
+          ["pending", "For Review"],
+          ["verified", "Approved"],
+          ["rejected", "Rejected"],
+          ["completed", "Completed"],
+        ] as const).map(([status, label]) => (
+          <TouchableOpacity key={status} accessibilityRole="button"
+            accessibilityState={{ selected: filter === status }}
+            onPress={() => changeStatusFilter(status)}
+            style={[styles.referenceStatusPill, filter === status && styles.referenceStatusPillActive]}>
+            <Text style={[styles.referenceStatusText, filter === status && styles.referenceStatusTextActive]}>
+              {label} ({filterAndSortAssistanceQueue(requests,
+                {status, category:"all",sort:"newest",search:""},timestampMillis).length})
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+      <View style={styles.referenceSearchRow}>
       <View style={styles.assistanceSearchField}>
         <Ionicons name="search-outline" size={19} color="#64748B" />
         <TextInput
@@ -2561,6 +2586,14 @@ This still does not automatically create a Donation Campaign.`,
           </TouchableOpacity>
         )}
       </View>
+      <TouchableOpacity style={styles.referenceFilterButton} accessibilityRole="button"
+        accessibilityState={{ expanded: showReferenceFilters }}
+        onPress={() => setShowReferenceFilters((current) => !current)}>
+        <Ionicons name="filter-outline" size={18} color="#057447"/>
+        <Text style={styles.referenceFilterButtonText}>Filter</Text>
+      </TouchableOpacity>
+      </View>
+      {showReferenceFilters && <>
       <View style={styles.assistanceFilterRow}>
         <ReviewPicker
           label="Category"
@@ -2581,6 +2614,7 @@ This still does not automatically create a Donation Campaign.`,
         options={sortingOptions}
         onChange={(value) => { setSortOrder(value as typeof sortOrder); setRecordPage(1); }}
       />
+      </>}
       {!!listenerError && (
         <View style={styles.errorBox}>
           <Ionicons name="alert-circle-outline" size={17} color="#B42318" />
@@ -2593,8 +2627,19 @@ This still does not automatically create a Donation Campaign.`,
           <Text style={styles.assistanceSubtext}>No requests match these filters.</Text>
         </View>
       )}
+      {wide && pagedRequests.length > 0 && (
+        <View style={styles.referenceTableHeader}>
+          <Text style={[styles.referenceTableHeadText,{flex:2.3}]}>REQUEST CASE</Text>
+          <Text style={[styles.referenceTableHeadText,{flex:1.2}]}>RESIDENT</Text>
+          <Text style={[styles.referenceTableHeadText,{flex:1.2}]}>CATEGORY</Text>
+          <Text style={[styles.referenceTableHeadText,{flex:1}]}>REQUESTED AMOUNT</Text>
+          <Text style={[styles.referenceTableHeadText,{flex:1}]}>STATUS</Text>
+          <Text style={[styles.referenceTableHeadText,{flex:1}]}>SUBMITTED</Text>
+        </View>
+      )}
       {pagedRequests.map((item) => (
         <MockQueueRow
+          wide={wide}
           key={item.id}
           request={item}
           active={selected?.id === item.id}
@@ -2609,7 +2654,10 @@ This still does not automatically create a Donation Campaign.`,
           onChange={(page) => { setRecordPage(page); setQuickAction(null); }}
         />
       </View>
-      <Text style={styles.assistanceListFootnote}>5 requests per page</Text>
+      <Text style={styles.assistanceListFootnote}>
+        {filteredRequests.length === 0 ? 0 : (activeRequestPage - 1) * 5 + 1}–{Math.min(activeRequestPage * 5, filteredRequests.length)}
+        {" of "}{filteredRequests.length} requests  ·  5 per page
+      </Text>
     </View>
   );
 
@@ -2639,35 +2687,16 @@ This still does not automatically create a Donation Campaign.`,
     <View style={styles.page}>
       {wide ? (
         <View style={styles.assistanceDesktop}>
-          <AdminReviewHero
-            eyebrow="LGU WORKSPACE / RESIDENT ASSISTANCE"
-            title="Assistance Requests"
-            subtitle="Review requests, check supporting details, and plan assistance."
-            icon="hand-left-outline"
-            tag="REQUEST MANAGEMENT"
-          />
-          <View style={styles.assistanceSplitWorkspace}>
-            <ScrollView
-              style={styles.assistanceListPanel}
-              contentContainerStyle={styles.assistanceListContent}
-              showsVerticalScrollIndicator
-            >
+          {!selected ? (
+            <ScrollView style={styles.referenceFullPage} contentContainerStyle={styles.referenceFullPageContent}>
               {renderCompactQueue()}
             </ScrollView>
-            <View style={styles.assistanceSelectedPanel}>
-              {renderSelectedWorkspace()}
-            </View>
-          </View>
+          ) : (
+            <View style={styles.referenceFullDetails}>{renderSelectedWorkspace()}</View>
+          )}
         </View>
       ) : screenMode === "queue" ? (
         <ScrollView style={styles.pageScroll} contentContainerStyle={styles.assistanceMobilePage}>
-          <AdminReviewHero
-            eyebrow="LGU WORKSPACE / RESIDENT ASSISTANCE"
-            title="Assistance Requests"
-            subtitle="Review requests, check supporting details, and plan assistance."
-            icon="hand-left-outline"
-            tag="REQUEST MANAGEMENT"
-          />
           {renderCompactQueue()}
         </ScrollView>
       ) : (
@@ -5731,6 +5760,25 @@ function DocumentPreviewModal({
 }
 
 const styles = StyleSheet.create({
+  referenceFullPage: { flex:1, backgroundColor:"#FFFFFF", borderRadius:13, borderWidth:1, borderColor:"#DDE8E3" },
+  referenceFullPageContent: { padding:10, paddingBottom:24 },
+  referenceFullDetails: { flex:1, minHeight:0, backgroundColor:"#FFFFFF", borderWidth:1, borderColor:"#DFE9E3", borderRadius:13, padding:14 },
+  referencePageHeading: { flexDirection:"row", alignItems:"center", gap:14, paddingVertical:8 },
+  referencePageTitle: { fontSize:24, fontWeight:"800", color:"#101827", fontFamily:vsType.family },
+  referencePageSubtitle: { fontSize:12, color:"#677486", fontFamily:vsType.family },
+  referenceStatusTabs: { flexDirection:"row", flexWrap:"wrap", gap:9, marginBottom:3 },
+  referenceStatusPill: { borderWidth:1, borderColor:"#E0E8E5", backgroundColor:"#F5F7F8", borderRadius:22, paddingHorizontal:15, paddingVertical:9 },
+  referenceStatusPillActive: { backgroundColor:"#008448", borderColor:"#008448" },
+  referenceStatusText: { color:"#243240", fontFamily:vsType.family, fontSize:12, fontWeight:"700" },
+  referenceStatusTextActive: { color:"#FFFFFF" },
+  referenceSearchRow: { flexDirection:"row", alignItems:"center", gap:12 },
+  referenceFilterButton: { flexDirection:"row", alignItems:"center", gap:7, borderWidth:1, borderColor:"#DEE8E2", borderRadius:9, backgroundColor:"#FFFFFF", paddingVertical:12, paddingHorizontal:15 },
+  referenceFilterButtonText: { color:"#057447", fontWeight:"800", fontSize:13, fontFamily:vsType.family },
+  referenceTableHeader: { flexDirection:"row", gap:12, alignItems:"center", backgroundColor:"#F0F7F3", paddingHorizontal:13, paddingVertical:14, borderRadius:7 },
+  referenceTableHeadText: { fontFamily:vsType.family, fontWeight:"800", fontSize:10, color:"#405B51" },
+  referenceTableRow: { minHeight:70, flexDirection:"row", alignItems:"center", gap:12, paddingVertical:11, paddingHorizontal:13, borderBottomWidth:1, borderBottomColor:"#E8EFEA" },
+  referenceTableCell: { minWidth:0 },
+  referenceTableText: { fontFamily:vsType.family, fontSize:12, color:"#22372D", fontWeight:"600" },
   simpleVerifiedAmount: { fontSize: vsType.size.titleSmall, fontFamily: vsType.family, fontWeight: "800", color: "#047857", paddingVertical: 3 },
   assistanceBudgetFields: { gap: 10, padding: 15, borderWidth: 1, borderColor: "#D8E8DE", borderRadius: 12, backgroundColor: "#FAFCFA" },
   simpleReviewAmountNotice: { flexDirection: "row", alignItems: "flex-start", gap: 9, padding: 12, borderRadius: 9, borderColor: "#FDE68A", borderWidth: 1, backgroundColor: "#FFFBEB" },
