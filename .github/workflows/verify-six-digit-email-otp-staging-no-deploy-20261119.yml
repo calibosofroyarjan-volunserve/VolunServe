@@ -1,0 +1,84 @@
+# Staging-only validation. Absolutely no Firebase, Hosting, Render or mail deploy.
+name: Verify Six Digit Email OTP Staging (NO DEPLOY)
+on:
+  push:
+    branches: [feature/secure-six-digit-email-otp-staging-20261119]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  security-and-web:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      CI: 'true'
+      EXPO_NO_TELEMETRY: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Guarantee immutable current-live source and allowlisted staging files
+        run: |
+          node <<'NODE'
+          const assert = require('node:assert/strict');
+          const cp = require('node:child_process');
+          const base='b208d90667c783fba27bad97d1842f99d9f8b31c';
+          cp.execFileSync('git',['merge-base','--is-ancestor',base,'HEAD']);
+          const list=cp.execFileSync('git',['diff','--name-status','--no-renames',base,'HEAD'],{encoding:'utf8'}).trim().split('\n').filter(Boolean);
+          const expected=[
+            '.github/workflows/verify-six-digit-email-otp-staging-no-deploy-20261119.yml',
+            '.github/workflows/smoke-resend-staging-delivery-manual-20261119.yml',
+            'components/auth/EmailFirstSignup.tsx',
+            'components/auth/SignupOtpCodeInput.tsx',
+            'components/auth/SignupPasswordStrength.tsx',
+            'docs/secure-email-otp-staging-20261119.md',
+            'functions/index.js',
+            'functions/signupEmailOtp.js',
+            'functions/signupEmailOtpCore.js',
+            'functions/smoke-resend-staging-delivery.js',
+            'functions/test-signup-email-otp.js',
+            'lib/signupEmailOtp.ts',
+          ].sort();
+          assert.deepEqual(list.map(line=>line.split('\t')[1]).sort(),expected);
+          assert(list.every(line=>/^[AM]\t/.test(line)),'Deletion and renaming are forbidden');
+          console.log('PASS: current-live-derived, isolated OTP-only source and docs');
+          NODE
+      - name: Install locked frontend and Cloud Functions dependencies
+        run: |
+          npm ci --no-audit --no-fund
+          npm ci --prefix functions --no-audit --no-fund
+      - name: OTP syntax and secret-free backend behavioral security tests
+        run: |
+          node --check functions/signupEmailOtpCore.js
+          node --check functions/signupEmailOtp.js
+          node --check functions/smoke-resend-staging-delivery.js
+          node --check functions/index.js
+          node --test functions/test-signup-email-otp.js
+      - name: TypeScript and cross-role frontend regression tests
+        run: |
+          npx tsc --noEmit --incremental false
+          node scripts/test-signup-prod.cjs
+          node scripts/test-signup-email-first-middle-optional.cjs
+          node scripts/test-login-field-validation.cjs
+          node scripts/test-login-ui-release.cjs
+          node scripts/test-route-entrypoints.cjs
+          node scripts/test-portal-resident-volunteer-ui-flow.cjs
+          node scripts/test-admin-navigation-contract.cjs
+          node scripts/test-profile-certificates-account-menu.cjs
+          node scripts/test-unified-login-routing.cjs
+      - name: Export original link verification build with OTP OFF (no publish)
+        env:
+          EXPO_PUBLIC_VOLUNSERVE_EMAIL_OTP: 'false'
+        run: npx expo export --platform web --clear
+      - name: Export code-verification staging build with OTP ON (no publish)
+        env:
+          EXPO_PUBLIC_VOLUNSERVE_EMAIL_OTP: 'true'
+        run: npx expo export --platform web --clear
+      - name: Confirm production infrastructure, Rules, dependencies and data untouched
+        run: |
+          git diff --exit-code b208d90667c783fba27bad97d1842f99d9f8b31c HEAD -- firebase.json .firebaserc firestore.rules storage.rules firestore.indexes.json functions/package.json functions/package-lock.json backend identity-ai package.json package-lock.json
+          echo 'PASS: no server, Firestore rules or Hosting changes deployed'

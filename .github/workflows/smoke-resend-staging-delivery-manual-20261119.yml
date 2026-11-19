@@ -1,0 +1,50 @@
+# Manual email-only check; never deploys code, Firebase Functions or Hosting.
+name: Check Resend Verified Domain and Staging Gmail Yahoo Delivery (NO DEPLOY)
+on:
+  workflow_dispatch:
+    inputs:
+      sender_email:
+        description: "Verified VolunServe sender, e.g. no-reply@notify.volunserve.com"
+        required: true
+        type: string
+      test_recipient:
+        description: "A Gmail/Yahoo inbox YOU own, used to confirm real delivery"
+        required: true
+        type: string
+      confirm:
+        description: "Type YES_SEND_ONE_TEST_EMAIL to authorize one non-OTP test email"
+        required: true
+        type: string
+permissions:
+  contents: read
+concurrency:
+  group: volunserve-staging-resend-domain-delivery
+  cancel-in-progress: false
+jobs:
+  only-delivery:
+    if: github.repository == 'calibosofroyarjan-volunserve/VolunServe' && github.ref == 'refs/heads/feature/secure-six-digit-email-otp-staging-20261119'
+    runs-on: ubuntu-latest
+    environment: staging
+    timeout-minutes: 8
+    env:
+      VOLUNSERVE_OTP_TEST_FROM: ${{ inputs.sender_email }}
+      VOLUNSERVE_OTP_TEST_TO: ${{ inputs.test_recipient }}
+      VOLUNSERVE_STAGING_CONFIRM_SEND: ${{ inputs.confirm }}
+      RESEND_API_KEY_STAGING: ${{ secrets.RESEND_API_KEY_STAGING }}
+    steps:
+      - name: Fail unless explicitly requested from staging branch
+        run: |
+          test "$VOLUNSERVE_STAGING_CONFIRM_SEND" = "YES_SEND_ONE_TEST_EMAIL"
+          test "$GITHUB_REF" = "refs/heads/feature/secure-six-digit-email-otp-staging-20261119"
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+          submodules: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Validate sender and domain; request exactly one staging test email
+        run: node functions/smoke-resend-staging-delivery.js
+      - name: Confirm zero deployment
+        run: echo "No Firebase, Render, database or Hosting deploy was performed"
