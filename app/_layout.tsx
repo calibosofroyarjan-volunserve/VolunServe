@@ -412,11 +412,15 @@ export default function RootLayout() {
 
   useAndroidPushNavigation(authChecked, authUser?.uid ?? null, profile, router);
 
+  // QA-ONLY route: display synthetic preview without waiting for Firebase Auth.
+  // This change is isolated to the disposable QA branch, never production.
+  const visualFixture =
+    (segments as readonly string[])[0] === "public" &&
+    (segments as readonly string[])[1] === "assistance-design-qa";
+
   if (
     (!fontsLoaded && !fontError) ||
-    !authChecked ||
-    profileLoading ||
-    guardLoading
+    (!visualFixture && (!authChecked || profileLoading || guardLoading))
   ) {
     return (
       <View style={styles.loadingScreen}>
