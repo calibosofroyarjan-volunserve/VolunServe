@@ -103,7 +103,9 @@ function assessPhase11SourceBaseline({
 }={}){
   const failures=[];
   const test=(v,code)=>{if(!v)failures.push(code)};
-  test(/FIRESTORE_EMULATOR_HOST/.test(localApp)&&
+  // Phase 10 delegates the Firestore host check to Phase 6's strict
+  // emulatorReady(env) dependency; it does not contain the env var literal.
+  test(/emulatorReady\(env\)/.test(localApp)&&
     /FIREBASE_AUTH_EMULATOR_HOST/.test(localApp)&&
     /env===process\.env/.test(localApp)&&
     /demo-volunserve-auto-phase4/.test(localApp),
