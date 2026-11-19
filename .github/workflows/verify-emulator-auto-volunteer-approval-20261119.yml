@@ -1,0 +1,97 @@
+name: Automatic Volunteer Firestore approval trigger - REAL EMULATOR ONLY
+
+on:
+  push:
+    branches:
+      - feat/auto-volunteer-firebase-approval-trigger-emulator-20261119
+  pull_request:
+    branches:
+      - feat/production-auto-volunteer-contract-no-deploy-20261119
+
+permissions:
+  contents: read
+
+jobs:
+  approval-to-invite:
+    if: github.repository == 'calibosofroyarjan-volunserve/VolunServe'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    env:
+      CI: "true"
+      GCLOUD_PROJECT: demo-volunserve-auto-phase4
+      GOOGLE_CLOUD_PROJECT: demo-volunserve-auto-phase4
+      FIRESTORE_EMULATOR_HOST: 127.0.0.1:8080
+      FUNCTIONS_EMULATOR: "true"
+      VOLUNSERVE_AUTO_VOLUNTEER_TEST_TRIGGER: enabled
+      VOLUNSERVE_AUTO_VOLUNTEER_DISPATCH: disabled
+      FIREBASE_CLI_DISABLE_TELEMETRY: "1"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            backend/package-lock.json
+            functions/package-lock.json
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - name: Strict five-file scope and production deploy off
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --name-status 6c6ee02194032a0d5fec5ea6fdcdf347ffc1ba01 HEAD > /tmp/invite-scope
+          test "$(wc -l </tmp/invite-scope)" -eq 5
+          while IFS="$(printf '\t')" read -r status file; do
+            case "$status:$file" in
+              "A:functions/emergencyAutoInviteCompatibility.js"|"A:functions/emergencyAutoInviteOnApproval.js"|"A:functions/test-autoInviteApprovalEmulator.cjs"|"M:functions/index.js"|"A:.github/workflows/verify-emulator-auto-volunteer-approval-20261119.yml") ;;
+              *) echo "BLOCKED unexpected production change: $status $file"; exit 1 ;;
+            esac
+          done < /tmp/invite-scope
+          test "${VOLUNSERVE_AUTO_VOLUNTEER_DISPATCH}" = disabled
+          ! grep -Fq 'emergencyAutoInviteOnApproval' backend/server.js
+          ! grep -Fq 'emergencyAutoInviteOnApproval' 'app/(admin)/admin-cases.tsx'
+          echo "PASS: no production Render start, no app UI changes, local-only export."
+      - name: Install pinned local dependencies
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          npm ci --prefix functions --ignore-scripts --no-audit --no-fund
+          npm ci --prefix backend --ignore-scripts --no-audit --no-fund
+      - name: Static validation and synced pure planning contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          cmp backend/emergencyAutoInviteCompatibility.js functions/emergencyAutoInviteCompatibility.js
+          node --check functions/emergencyAutoInviteOnApproval.js
+          node --check functions/test-autoInviteApprovalEmulator.cjs
+          node --check functions/index.js
+          node --test backend/test-emergencyAutoInviteCompatibility.cjs
+          npm run check --prefix backend
+      - name: Generate isolated Firebase Functions emulator overrides (not committed)
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > functions/.env.local <<'DEMO'
+          VOLUNSERVE_AUTO_VOLUNTEER_TEST_TRIGGER=enabled
+          VOLUNSERVE_AUTO_VOLUNTEER_DISPATCH=disabled
+          DEMO
+          node - <<'NODE'
+          const assert=require("node:assert/strict");
+          const loaded=require("./functions/index.js");
+          assert.ok(loaded.emulatorAutoVolunteerOnApproval,
+            "Demo approval trigger must register when FUNCTIONS_EMULATOR=true");
+          console.log("PASS isolated auto-invite function exported inside emulator");
+          NODE
+      - name: Actual Admin approval event -> Firestore atomic notifications + tasks
+        shell: bash
+        run: |
+          set -euo pipefail
+          ./node_modules/.bin/firebase emulators:exec --project demo-volunserve-auto-phase4 --only firestore,functions "node --test --test-concurrency=1 functions/test-autoInviteApprovalEmulator.cjs"
+      - name: Production remains disabled
+        run: |
+          echo "PASS emulator case only. Nothing deployed to volunserve.com, Firebase production, Render or real Volunteers."
