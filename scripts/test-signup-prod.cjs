@@ -211,8 +211,17 @@ function harness(source, enabled, options = {}) {
     const ui=read("components/auth/EmailFirstSignup.tsx");
     assert(!ui.includes("Use any accessible email (Yahoo, Outlook, Gmail, school or work)"));
     assert(ui.includes("Continue with Google to prove account ownership"));
-    assert(ui.includes("Gmail registration requires Continue with Google."));
+    assert(ui.includes("Gmail password signup is blocked."));
+    assert(ui.includes("error={resumeMode ? (!email.trim()"));
+    assert(ui.includes("emailErr || (gmailNeedsGoogle ? gmailPasswordBlockedMessage : null)"));
+    assert(ui.includes("showError={showErrors || gmailNeedsGoogle}"));
+    assert(ui.includes("!signedInUser?.providerData.some(provider => provider.providerId === \"google.com\")"));
+    assert(ui.includes("{(!gmailNeedsGoogle || googleOnly || resumeMode) && <Field"));
+    assert(ui.includes("{!resumeMode && !gmailNeedsGoogle && ("));
+    assert(ui.includes("Gmail email/password registration is not allowed."));
     assert(ui.includes("(!gmailNeedsGoogle || googleOnly || resumeMode) && checkButton("));
+    assert(ui.includes("{!gmailNeedsGoogle && <Text style={styles.orText}>OR</Text>}"));
+    assert(ui.includes('styles.legacyInputInvalid'));
   });
   await check("native Google signup owns OAuth and never bounces pending users to Login",()=>{
     assert(read("lib/useSignupGoogle.ts").includes("signInWithCredential"));
