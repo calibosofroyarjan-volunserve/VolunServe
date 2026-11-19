@@ -2032,6 +2032,7 @@ This still does not automatically create a Donation Campaign.`,
         reviewDraft={reviewDraft}
         reviewRecord={verificationReview}
         reviewLoading={verificationReviewLoading}
+        residentIdentityVerified={residentProfile?.identityVerified === true || residentProfile?.identityStatus === "verified"}
         onReviewChange={updateReviewDraft}
         allChecksComplete={allChecksComplete}
         onSaveVerificationDraft={saveVerificationDraft}
@@ -3181,7 +3182,7 @@ function ResidentReviewTab({
 }
 
 function DecisionTab({
-  request, reviewDraft, reviewRecord, reviewLoading, onReviewChange,
+  request, reviewDraft, reviewRecord, reviewLoading, onReviewChange, residentIdentityVerified,
   adminNote, setAdminNote, rejectionReason, setRejectionReason,
   supportDecision, setSupportDecision, remainingAmount, setRemainingAmount,
   locationType, setLocationType, locationName, setLocationName,
@@ -3194,6 +3195,7 @@ function DecisionTab({
   reviewDraft: PrivateReviewDraft | null;
   reviewRecord: Record<string, any> | null;
   reviewLoading: boolean;
+  residentIdentityVerified: boolean;
   onReviewChange: <K extends keyof PrivateReviewDraft>(key: K, value: PrivateReviewDraft[K]) => void;
   allChecksComplete: boolean;
   onSaveVerificationDraft: () => void;
@@ -3627,7 +3629,7 @@ function DecisionTab({
             icon="clipboard-outline">
             <View style={{gap:5}}>
               {([
-                ["Resident identity verified", reviewDraft.beneficiaryCheckStatus==="confirmed"],
+                ["Resident identity verified", residentIdentityVerified && reviewDraft.beneficiaryCheckStatus==="confirmed"],
                 ["Supporting documents complete", reviewDraft.documentConsistencyStatus==="consistent" && (request.documents?.length||0)>0],
                 ["Request details valid", docsMatched && reviewDraft.duplicateCheckStatus==="clear"],
                 ["Resident belongs to service area", reviewDraft.residencyVerificationStatus==="verified"],
