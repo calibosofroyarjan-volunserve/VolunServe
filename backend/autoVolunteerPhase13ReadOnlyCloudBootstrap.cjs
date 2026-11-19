@@ -20,6 +20,8 @@ const {
   getCloudStagingPreviewGate,
   createPhase12IsolatedCloudReadOnlyApp
 }=require("./autoVolunteerPhase12IsolatedCloudPreviewAdapter");
+const {inspectPhase16RenderManagedOidc}
+  =require("./autoVolunteerPhase16RenderManagedOidcGate.cjs");
 
 const FORBIDDEN=new Set(FORBIDDEN_FIREBASE_PROJECTS);
 const EXISTING_SERVICES=new Set(PROTECTED_RENDER_SERVICES);
@@ -67,8 +69,14 @@ function inspectPhase13StagingRuntime({env=process.env}={}){
     return fail("cloud_project_binding_mismatch");
   if(env?.FIREBASE_AUTH_EMULATOR_HOST||env?.FIRESTORE_EMULATOR_HOST)
     return fail("emulator_runtime_forbidden");
-  if(env?.FIREBASE_SERVICE_ACCOUNT_JSON||env?.GOOGLE_APPLICATION_CREDENTIALS||
+  // Direct private service-account material is NEVER supported. For a
+  // Render-generated ADC path, an explicit Phase 16 external_account schema
+  // check can permit shape compatibility only (not Render/IAM attestation).
+  if(env?.FIREBASE_SERVICE_ACCOUNT_JSON||
      env?.GOOGLE_CLOUD_KEYFILE_JSON||env?.GOOGLE_CLOUD_CREDENTIALS)
+    return fail("standalone_credentials_forbidden");
+  if(env?.GOOGLE_APPLICATION_CREDENTIALS&&
+     !inspectPhase16RenderManagedOidc({env}).allowed)
     return fail("standalone_credentials_forbidden");
   if(!safeService(env?.RENDER_SERVICE_ID)||
      env?.VOLUNSERVE_PHASE13_SERVICE_ID!==env.RENDER_SERVICE_ID)
