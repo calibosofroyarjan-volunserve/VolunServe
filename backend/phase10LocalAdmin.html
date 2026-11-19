@@ -46,10 +46,11 @@
     <input id="caseId" value="phase10_case_smoke" pattern="phase10_[a-zA-Z0-9_-]+" autocomplete="off">
     <div class="actions">
       <button id="inspect" type="button" disabled>Read case status</button>
-      <button id="start" type="button" disabled>Start fictional Wave 1</button>
+      <button id="approve" type="button" disabled>Approve & auto-offer to Volunteers</button>
+      <button id="start" type="button" disabled hidden>Legacy manual test only</button>
       <button id="tick" type="button" disabled>Run due-scan (manual demo)</button>
     </div>
-    <p class="note">The due-scan runs only when clicked. It is not a 24/7 production scheduler.</p>
+    <p class="note">Approving a fictional pending report immediately sends its first matching offers. Later offer expiries still require the manual due-scan demo, NOT a production 24/7 scheduler.</p>
     <label for="reason">Cancellation reason</label>
     <select id="reason">
       <option value="safety_pause">Safety pause</option>
@@ -71,7 +72,7 @@
   const auth=getAuth(firebase);
   connectAuthEmulator(auth,"http://127.0.0.1:9099",{disableWarnings:true});
   const el=id=>document.getElementById(id);
-  const actions=["inspect","start","tick","cancel"];
+  const actions=["inspect","approve","start","tick","cancel"];
   const output=x=>{el("result").textContent=typeof x==="string"?x:JSON.stringify(x,null,2)};
   onAuthStateChanged(auth,user=>{
     el("session").textContent=user?"Signed in to LOCAL Auth Emulator.":"Not signed in.";
@@ -110,6 +111,7 @@
     finally{actions.forEach(id=>el(id).disabled=!auth.currentUser)}
   };
   el("inspect").addEventListener("click",run(()=>api("/api/phase10/admin/cases/"+cid())));
+  el("approve").addEventListener("click",run(()=>api("/api/phase10/admin/cases/"+cid()+"/approve",{})));
   el("start").addEventListener("click",run(()=>api("/api/phase10/admin/cases/"+cid()+"/start",{})));
   el("tick").addEventListener("click",run(()=>api("/api/phase10/admin/due-scan",{})));
   el("cancel").addEventListener("click",run(async()=>{

@@ -195,6 +195,75 @@ test("signed-in approved Admin starts ALL eligible local Wave 1 offers once",asy
     "assignmentId","email","fullName"])
     assert.equal(resultText.includes(secret),false,secret);
 });
+test("approved Admin verifies a pending report and AUTOMATICALLY sends Volunteer offers",async()=>{
+  const cid=await seedCase("approval_auto_dispatch");
+  await caseDoc(cid).update({status:"pending_review",verificationStatus:"pending"});
+  const approvalPath=adminCase(cid)+"/approve";
+  const noPermission=await request({
+    token:tokens.resident,method:"POST",path:approvalPath,body:{}
+  });
+  assert.equal(noPermission.code,403);
+  const unauthenticated=await request({
+    token:"",method:"POST",path:approvalPath,body:{}
+  });
+  assert.equal(unauthenticated.code,401);
+  const forged=await request({
+    token:tokens.admin,method:"POST",path:approvalPath,
+    body:{volunteerUid:uidVolunteerA}
+  });
+  assert.equal(forged.code,400);
+  assert.equal((await caseDoc(cid).get()).data().status,"pending_review");
+  assert.equal((await persistentBatchRef(db,cid).get()).exists,false);
+
+  // No separate /start request: approving the report writes the wave.
+  const approved=await request({
+    token:tokens.admin,method:"POST",path:approvalPath,body:{}
+  });
+  assert.equal(approved.code,200,JSON.stringify(approved.data));
+  assert.equal(approved.data.approvalStatus,"approved");
+  assert.equal(approved.data.status,"offered");
+  assert.equal(approved.data.offered,2);
+  assert.equal(approved.data.wave,1);
+  assert.equal((await caseDoc(cid).get()).data().verificationStatus,"validated");
+  const offer=await request({token:tokens.a,path:volunteerCase(cid)+"/offer"});
+  assert.equal(offer.data.status,"offered");
+
+  // Duplicate requests preserve original offers and notices; no extra dispatch.
+  const again=await request({
+    token:tokens.admin,method:"POST",path:approvalPath,body:{}
+  });
+  assert.equal(again.code,200,JSON.stringify(again.data));
+  assert.equal(again.data.approvalStatus,"already_approved");
+  assert.equal(again.data.status,"waiting");
+  const a=await db.collection("responseAssignments")
+    .where("caseId","==",cid).get();
+  assert.equal(a.size,2);
+  const notifications=await db.collection("notifications")
+    .where("caseId","==",cid).get();
+  assert.equal(notifications.size,2);
+
+  const accepted=await decide(cid,"a","accepted");
+  assert.equal(accepted.code,200);
+  assert.equal(accepted.data.status,"committed_accepted");
+  const other=await decide(cid,"b","accepted");
+  assert.equal(other.code,409);
+  const state=await caseDoc(cid).get();
+  assert.equal(state.data().activeVolunteerSupportUid,uidVolunteerA);
+});
+test("blocked or unapproved incident never auto-offers Volunteers",async()=>{
+  const cid=await seedCase("approval_blocked");
+  await caseDoc(cid).update({
+    status:"pending_review",verificationStatus:"pending",dispatchBlocked:true
+  });
+  const response=await request({
+    token:tokens.admin,method:"POST",path:adminCase(cid)+"/approve",body:{}
+  });
+  assert.equal(response.code,409);
+  assert.equal((await caseDoc(cid).get()).data().status,"pending_review");
+  assert.equal((await persistentBatchRef(db,cid).get()).exists,false);
+  assert.equal((await db.collection("responseAssignments")
+    .where("caseId","==",cid).get()).size,0);
+});
 test("real Auth token Volunteer Accept picks ONE winner; later due-scan stops waves",async()=>{
   const cid=await seedCase("accept_and_stop");
   await start(cid);

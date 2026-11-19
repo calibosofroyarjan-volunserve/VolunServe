@@ -1,0 +1,89 @@
+name: Automatic Volunteer on Admin approval — LOCAL E2E ONLY
+
+on:
+  push:
+    branches:
+      - fix/automatic-volunteer-on-admin-approval-20261119
+  pull_request:
+    branches:
+      - qa/auto-volunteer-phase17-defense-release-evidence-20261119
+
+permissions:
+  contents: read
+
+jobs:
+  auto-on-approval:
+    if: github.repository == 'calibosofroyarjan-volunserve/VolunServe'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      CI: "true"
+      GCLOUD_PROJECT: demo-volunserve-auto-phase4
+      GOOGLE_CLOUD_PROJECT: demo-volunserve-auto-phase4
+      VOLUNSERVE_AUTO_VOLUNTEER_PHASE6_EMULATOR_WRITE: enabled
+      VOLUNSERVE_AUTO_VOLUNTEER_DISPATCH: disabled
+      FIREBASE_CLI_DISABLE_TELEMETRY: "1"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            backend/package-lock.json
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - name: Strict four-file change scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin qa/auto-volunteer-phase17-defense-release-evidence-20261119
+          git diff --name-only origin/qa/auto-volunteer-phase17-defense-release-evidence-20261119 HEAD > /tmp/auto-files
+          test "$(wc -l < /tmp/auto-files)" -eq 4
+          while IFS= read -r f; do
+            case "$f" in
+              backend/autoVolunteerPhase10LocalApp.js|backend/test-autoVolunteerPhase10LocalAppE2E.cjs|backend/phase10LocalAdmin.html|.github/workflows/auto-volunteer-on-approval-emulator-20261119.yml) ;;
+              *) echo "BLOCKED unexpected changed source: $f"; exit 1 ;;
+            esac
+          done < /tmp/auto-files
+          ! grep -Fq 'autoVolunteerPhase10LocalApp' backend/server.js
+          echo "PASS: unchanged production server, Firebase Rules and existing staging"
+      - name: No cloud keys and no production dispatch
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -z "${FIREBASE_SERVICE_ACCOUNT_JSON:-}"
+          test -z "${GOOGLE_APPLICATION_CREDENTIALS:-}"
+          test "${VOLUNSERVE_AUTO_VOLUNTEER_DISPATCH}" = "disabled"
+      - name: Install pinned local-only test dependencies
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          npm ci --prefix backend --ignore-scripts --no-audit --no-fund
+      - name: Syntax and TypeScript regression
+        run: |
+          node --check backend/autoVolunteerPhase10LocalApp.js
+          node --check backend/test-autoVolunteerPhase10LocalAppE2E.cjs
+          npx tsc --noEmit
+      - name: REAL Auth and Firestore Emulator HTTP E2E (approval starts matching)
+        shell: bash
+        run: |
+          set -euo pipefail
+          ./node_modules/.bin/firebase emulators:exec --project demo-volunserve-auto-phase4 --only auth,firestore "node --test --test-concurrency=1 backend/test-autoVolunteerPhase10LocalAppE2E.cjs"
+      - name: Accepted responder and cancellation safety
+        shell: bash
+        run: |
+          set -euo pipefail
+          ./node_modules/.bin/firebase emulators:exec --project demo-volunserve-auto-phase4 --only auth,firestore "node --test --test-concurrency=1 backend/test-autoVolunteerPhase9AuthCancelEmulator.cjs"
+      - name: Offline Volunteer planner and winner guard
+        run: |
+          node --test backend/test-emergencyAutoVolunteerReadOnlyPlanner.cjs
+          node --test backend/test-emergencyVolunteerWinnerGuard.cjs
+      - name: Confirm no live/staging changes
+        run: |
+          echo "This local Auth/Firestore emulator workflow does NOT deploy."
+          echo "No real emergency report or Volunteer was modified or notified."

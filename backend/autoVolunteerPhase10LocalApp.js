@@ -19,6 +19,7 @@ const {cancelEmulatedPendingWave}
 const {runPhase9DemoDueScan}
   =require("./autoVolunteerPhase9DueScanEmulator");
 const {isOperationalAdminProfile}=require("./adminAccess");
+const {FieldValue}=require("firebase-admin/firestore");
 const PROJECT="demo-volunserve-auto-phase4",MAX=200;
 const validCase=x=>typeof x==="string"&&
   /^phase10_[a-zA-Z0-9_-]{1,86}$/.test(x);
@@ -128,6 +129,54 @@ function createPhase10LocalApp({db,authClient,env=process.env,
             typeof c.data()?.autoVolunteerAcceptedAssignmentId==="string"&&
             c.data().autoVolunteerAcceptedAssignmentId.length>0});
       }catch(_e){return block(res,503,"preview_unavailable")}
+    });
+  // One Admin APPROVAL automatically launches the first eligible Volunteer
+  // wave. A separate "Start" click is NOT required for the approval path.
+  // This route is restricted to the fictional Auth/Firestore Emulators.
+  app.post(adminPath+"/approve",requireVerifiedDemoUser,requireAdmin,
+    requireCase,async(req,res)=>{
+      if(!expectFields(req,res,[]))return;
+      const cid=req.params.caseId;
+      try{
+        const approval=await db.runTransaction(async tx=>{
+          const ref=db.collection("disasterCases").doc(cid);
+          const snap=await tx.get(ref);
+          if(!snap.exists)return {status:"blocked",reason:"fictional_case_not_found"};
+          const c=snap.data()||{};
+          if(c.id!==cid||!validCase(cid)||
+            typeof c.reporterUid!=="string"||
+            !c.incidentBarangay||c.dispatchBlocked===true||
+            c.resolvedAt||c.closedAt)
+            return {status:"blocked",reason:"case_requires_admin_review"};
+          if(["validated","assigned","in_progress"].includes(c.status)&&
+            c.verificationStatus==="validated"&&
+            typeof c.verifiedBy==="string"&&c.verifiedBy.length>0)
+            return {status:"already_approved"};
+          if(c.status!=="pending_review"||c.verificationStatus!=="pending")
+            return {status:"blocked",reason:"case_not_pending_approval"};
+          tx.update(ref,{
+            status:"validated",verificationStatus:"validated",
+            verifiedBy:req.demoUser.uid,
+            verifiedAt:FieldValue.serverTimestamp()
+          });
+          return {status:"approved"};
+        },{maxAttempts:7});
+        if(approval.status==="blocked")
+          return block(res,409,approval.reason);
+        // Reconciliation is idempotent. Repeating approval cannot create
+        // duplicate offers/notifications, and a failed first attempt is
+        // recoverable without editing an already-verified incident.
+        const result=await reconcileEmulatedAutomaticWave({
+          db,env,caseId:cid,now:clock()
+        });
+        const ok=["offered","waiting","supported","exhausted"].includes(result.status);
+        return res.status(ok?200:409).json({
+          ok,approvalStatus:approval.status,
+          status:result.status,reason:result.reason||null,
+          wave:result.wave||0,offered:result.offered||0,
+          emulatorOnly:true,dispatchEnabled:false
+        });
+      }catch(_e){return block(res,503,"approval_and_match_unavailable")}
     });
   app.post(adminPath+"/start",requireVerifiedDemoUser,requireAdmin,
     requireCase,async(req,res)=>{
