@@ -9,8 +9,10 @@ for(const word of ["Review Assistance Request","Confirm Basic Details",
   "Documents, requester and beneficiary match","No duplicate request found",
   "Residency confirmed in San Jose del Monte","Confirm Provider and Amount",
   "Record Decision","Approve Request","Reject Request",
-  "Request more information instead","Support Plan","Public Coordination Point",
-  "Create Donation Campaign"]){
+  "Request more information instead","Choose Support","Public Coordination",
+  "Create Donation Campaign","Step 2 — Donation Details",
+  "Step 3 — Public Coordination","Save & Continue to Campaign Setup",
+  "Mark Assistance Provided","Close Assistance Case","Open Linked Donation Campaign"]){
   assert(review.includes(word),"Missing required review flow: "+word);
 }
 assert(!review.includes("StatusChoiceRow"),"No Pending dropdowns in simple LGU decision");
@@ -36,4 +38,25 @@ assert(backend.includes("private_verification_incomplete") &&
 assert(page.includes('pathname: "/donation-list"') &&
   page.includes('onSaveResourceAssessment') &&
   page.includes('onSaveLocation'),"Preserve donation handoff");
-console.log("PASS: UI simplified, no map/dropdowns, protected backend and donation handoff retained");
+assert(page.includes("const saveAndContinueDonation = async () =>"),
+  "Donation setup should have a single continuous Admin action");
+const continueFunction=page.slice(page.indexOf("const saveAndContinueDonation = async () =>"),
+  page.indexOf("const saveOfficialLocation",page.indexOf("const saveAndContinueDonation = async () =>")));
+assert(continueFunction.includes('await updateRequest("resource_assessment"') &&
+  continueFunction.includes('await updateRequest("save_location"') &&
+  continueFunction.includes('router.push({pathname: "/donation-list"'),
+  "Campaign editor must open only after both authorized backend saves succeed");
+assert(continueFunction.indexOf('await updateRequest("resource_assessment"') <
+  continueFunction.indexOf('await updateRequest("save_location"') &&
+  continueFunction.indexOf('await updateRequest("save_location"') <
+  continueFunction.lastIndexOf('router.push({pathname: "/donation-list"'),
+  "Preserve support -> coordination -> campaign ordering");
+assert(continueFunction.includes("if (!savedPlan) return") &&
+  continueFunction.includes("if (!savedOffice) return"),
+  "Never navigate to campaign editor after failed backend operation");
+assert(review.includes('linkedCampaign') && review.includes('completed'),
+  "Completed cases and linked campaigns need non-editable final screens");
+assert(!continueFunction.includes("publishModuleAnnouncement") &&
+  !continueFunction.includes("create_campaign"),
+  "Opening campaign setup must never publish a campaign");
+console.log("PASS: simplified Assistance review plus approved -> support -> campaign setup and completed-case UI");
