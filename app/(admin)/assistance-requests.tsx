@@ -2082,11 +2082,11 @@ This still does not automatically create a Donation Campaign.`,
               color="#2563EB"
             />
             <Text style={styles.mockBackLinkText}>
-              Assistance Requests
+              Back to Assistance Requests
             </Text>
           </TouchableOpacity>
 
-          <View style={styles.detailSecurityBadge}>
+          <View style={{display:"none"}}>
             <Ionicons
               name="lock-closed-outline"
               size={14}
@@ -2635,11 +2635,10 @@ function RequestReviewHeader({
 
   return (
     <View style={styles.reviewHeader}>
+      <View style={{width:54,height:54,borderRadius:10,backgroundColor:"#F1F7F4",alignItems:"center",justifyContent:"center"}}>
+        <Ionicons name="business-outline" size={27} color="#076344"/>
+      </View>
       <View style={styles.reviewHeaderCopy}>
-        <Text style={styles.panelEyebrow}>
-          REQUEST REVIEW
-        </Text>
-
         <Text style={styles.reviewTitle}>
           {request.title ||
             "Assistance Request"}
@@ -2677,7 +2676,8 @@ function RequestReviewHeader({
             },
           ]}
         >
-          {meta.label}
+          {request.verificationStatus === "verified" && !!request.supportDecision &&
+            request.supportDecision !== "pending" ? "Approved" : meta.label}
         </Text>
       </View>
     </View>
@@ -4638,8 +4638,8 @@ const styles = StyleSheet.create({
   },
 
   pageContent: {
-    padding: 24,
-    paddingBottom: 48,
+    padding: 18,
+    paddingBottom: 36,
   },
 
   center: {
@@ -5081,16 +5081,21 @@ const styles = StyleSheet.create({
   },
 
   tabButton: {
-    minHeight: 37,
+    minHeight: 41,
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
-    paddingHorizontal: 11,
-    borderRadius: 10,
+    justifyContent: "center",
+    gap: 7,
+    paddingHorizontal: 13,
+    paddingVertical: 9,
+    borderRadius: 8,
+    borderBottomWidth: 3,
+    borderBottomColor: "transparent",
   },
 
   tabButtonActive: {
     backgroundColor: "#E5F7EC",
+    borderBottomColor: "#047857",
   },
 
   tabButtonText: {
