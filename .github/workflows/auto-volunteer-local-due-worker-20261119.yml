@@ -1,0 +1,86 @@
+name: Automatic Volunteer local expiry scheduler — NO DEPLOY
+on:
+  push:
+    branches:
+      - fix/automatic-volunteer-emulator-due-worker-20261119
+  pull_request:
+    branches:
+      - fix/automatic-volunteer-on-admin-approval-20261119
+
+permissions:
+  contents: read
+
+jobs:
+  automatic-followup:
+    if: github.repository == 'calibosofroyarjan-volunserve/VolunServe'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    env:
+      CI: "true"
+      GCLOUD_PROJECT: demo-volunserve-auto-phase4
+      GOOGLE_CLOUD_PROJECT: demo-volunserve-auto-phase4
+      VOLUNSERVE_AUTO_VOLUNTEER_PHASE6_EMULATOR_WRITE: enabled
+      VOLUNSERVE_AUTO_VOLUNTEER_DISPATCH: disabled
+      FIREBASE_CLI_DISABLE_TELEMETRY: "1"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            backend/package-lock.json
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - name: Reject unexpected changes and live server imports
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin fix/automatic-volunteer-on-admin-approval-20261119
+          git diff --name-only origin/fix/automatic-volunteer-on-admin-approval-20261119 HEAD > /tmp/due-scope
+          test "$(wc -l < /tmp/due-scope)" -eq 5
+          while IFS= read -r f; do
+            case "$f" in
+              backend/autoVolunteerPhase18LocalDueWorker.js|backend/autoVolunteerPhase10LocalApp.js|backend/test-autoVolunteerPhase10LocalAppE2E.cjs|backend/phase10LocalAdmin.html|.github/workflows/auto-volunteer-local-due-worker-20261119.yml) ;;
+              *) echo "BLOCKED unrelated file: $f"; exit 1 ;;
+            esac
+          done < /tmp/due-scope
+          ! grep -Fq 'autoVolunteerPhase18LocalDueWorker' backend/server.js
+          ! grep -Fq 'autoVolunteerPhase10LocalApp' backend/server.js
+          echo "PASS scoped emulator-only change"
+      - name: Refuse cloud credentials and production flag
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -z "${FIREBASE_SERVICE_ACCOUNT_JSON:-}"
+          test -z "${GOOGLE_APPLICATION_CREDENTIALS:-}"
+          test "${VOLUNSERVE_AUTO_VOLUNTEER_DISPATCH}" = disabled
+      - name: Install locked dependencies
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          npm ci --prefix backend --ignore-scripts --no-audit --no-fund
+      - name: Syntax and TypeScript checks
+        run: |
+          node --check backend/autoVolunteerPhase18LocalDueWorker.js
+          node --check backend/autoVolunteerPhase10LocalApp.js
+          node --check backend/test-autoVolunteerPhase10LocalAppE2E.cjs
+          npx tsc --noEmit
+      - name: Local Auth Firestore E2E - approval and automatic expiry
+        shell: bash
+        run: |
+          set -euo pipefail
+          ./node_modules/.bin/firebase emulators:exec --project demo-volunserve-auto-phase4 --only auth,firestore "node --test --test-concurrency=1 backend/test-autoVolunteerPhase10LocalAppE2E.cjs"
+      - name: Local Auth Firestore E2E - cancel and winner race
+        shell: bash
+        run: |
+          set -euo pipefail
+          ./node_modules/.bin/firebase emulators:exec --project demo-volunserve-auto-phase4 --only auth,firestore "node --test --test-concurrency=1 backend/test-autoVolunteerPhase9AuthCancelEmulator.cjs"
+      - name: Existing production backend syntax and identity regression
+        run: npm run check --prefix backend
+      - name: No Firebase, Render, or real Volunteer deployment
+        run: echo "All changes and tests are local demo only; production automatic dispatch remains disabled."
