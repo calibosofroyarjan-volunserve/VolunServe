@@ -333,8 +333,10 @@ const reviewReadyForVerification = (draft: PrivateReviewDraft | null) => {
     draft.residencyVerificationStatus === "verified" &&
     (!draft.facilityVerificationRequired || draft.facilityVerificationStatus === "confirmed") &&
     (!draft.costVerificationRequired || draft.costVerificationStatus === "confirmed") &&
-    ["not_required", "completed"].includes(draft.videoVerificationStatus) &&
-    ["not_required", "completed"].includes(draft.siteVisitStatus) &&
+    (!draft.videoVerificationRequired ||
+      draft.videoVerificationStatus === "completed") &&
+    (!draft.siteVisitRequired ||
+      draft.siteVisitStatus === "completed") &&
     riskFlags.length === 0
   );
 };
@@ -3172,7 +3174,7 @@ function DecisionTab({
   supportDecision, setSupportDecision, remainingAmount, setRemainingAmount,
   locationType, setLocationType, locationName, setLocationName,
   locationAddress, setLocationAddress, locationNotes, setLocationNotes,
-  savingAction, onRequestMoreInfo, onVerify, onReject,
+  savingAction, onSaveVerificationDraft, onRequestMoreInfo, onVerify, onReject,
   onSaveResourceAssessment, onMarkAssistanceProvided, onSaveLocation,
   onContinueDonation, donationSubmitting,
 }: {
@@ -3278,8 +3280,13 @@ function DecisionTab({
     reviewDraft.beneficiaryCheckStatus === "confirmed";
   const docsNotMatched = ["needs_more_information","inconsistent"].includes(
     reviewDraft.documentConsistencyStatus);
-  const verifyReady = reviewReadyForVerification(reviewDraft);
-  const riskPresent = !!reviewDraft.riskFlags.trim() ||
+  const previousRiskFlags = Array.isArray(reviewRecord?.riskFlags)
+    ? reviewRecord.riskFlags.filter((value: unknown) => String(value || "").trim().length > 0)
+    : [];
+  const riskResolutionNoteMissing = previousRiskFlags.length > 0 &&
+    !reviewDraft.riskFlags.trim() && reviewDraft.internalNotes.trim().length < 10;
+  const verifyReady = reviewReadyForVerification(reviewDraft) && !riskResolutionNoteMissing;
+  const riskPresent = !!reviewDraft.riskFlags.trim() || previousRiskFlags.length > 0 ||
     !!reviewDraft.videoVerificationRequired || !!reviewDraft.siteVisitRequired;
 
   if (rejected) return (
@@ -3661,8 +3668,10 @@ function DecisionTab({
       </View>
 
       {(facilityRequired || costRequired) && (
-        <SectionCard title="Medical Bill Check"
-          subtitle="Confirm the provider and the amount using the supporting documents or direct contact."
+        <SectionCard title={facilityRequired ? "Provider & Cost Verification" : "Cost Verification"}
+          subtitle={facilityRequired
+            ? "Confirm the provider and costs using supporting evidence or direct contact."
+            : "Confirm the requested cost using supporting bills or reliable supporting evidence."}
           icon="medical-outline">
           <View style={{gap:13}}>
             {facilityRequired && <>
@@ -3715,13 +3724,73 @@ function DecisionTab({
         </SectionCard>
       )}
       {riskPresent && (
-        <View style={{padding:15,backgroundColor:"#FFF7ED",borderRadius:12,
-          borderWidth:1,borderColor:"#FDE68A",gap:5}}>
-          <Text style={{color:"#9A3412",fontSize:13,fontWeight:"800"}}>Additional review required</Text>
-          <Text style={{color:"#9A3412",fontSize:12}}>
-            Resolve existing risk flags or required in-person/video checks before approving.
-          </Text>
-        </View>
+        <SectionCard title="Additional Verification"
+          subtitle="Only complete checks that the LGU has actually performed. Pending checks block approval."
+          icon="shield-checkmark-outline">
+          <View style={{gap:18}}>
+            {reviewDraft.videoVerificationRequired && (
+              <View style={{gap:9}}>
+                <Text style={styles.fieldLabel}>Required Video Verification</Text>
+                <View style={{flexDirection:"row",gap:10,flexWrap:"wrap"}}>
+                  {choice("Completed",reviewDraft.videoVerificationStatus==="completed",
+                    ()=>onReviewChange("videoVerificationStatus","completed"))}
+                  {choice("Pending",reviewDraft.videoVerificationStatus!=="completed",
+                    ()=>onReviewChange("videoVerificationStatus","pending"))}
+                </View>
+                <TextInput style={styles.input} editable={!busy}
+                  value={reviewDraft.videoVerificationNotes}
+                  onChangeText={value=>onReviewChange("videoVerificationNotes",value)}
+                  placeholder="Record who performed the verification and supporting findings"
+                  placeholderTextColor="#94A3B8"/>
+              </View>
+            )}
+            {reviewDraft.siteVisitRequired && (
+              <View style={{gap:9}}>
+                <Text style={styles.fieldLabel}>Required Site Visit</Text>
+                <View style={{flexDirection:"row",gap:10,flexWrap:"wrap"}}>
+                  {choice("Completed",reviewDraft.siteVisitStatus==="completed",
+                    ()=>onReviewChange("siteVisitStatus","completed"))}
+                  {choice("Pending",reviewDraft.siteVisitStatus!=="completed",
+                    ()=>onReviewChange("siteVisitStatus","pending"))}
+                </View>
+                <TextInput style={styles.input} editable={!busy}
+                  value={reviewDraft.siteVisitNotes}
+                  onChangeText={value=>onReviewChange("siteVisitNotes",value)}
+                  placeholder="Record the site visit findings"
+                  placeholderTextColor="#94A3B8"/>
+              </View>
+            )}
+            {(!!reviewDraft.riskFlags.trim() || previousRiskFlags.length>0) && (
+              <View style={{gap:9}}>
+                <Text style={styles.fieldLabel}>Unresolved Risk Flags</Text>
+                <Text style={{fontSize:11,color:"#64748B",lineHeight:18}}>
+                  Review each flagged issue. Remove it only after it has been resolved and document why.
+                  Unresolved flags block approval.
+                </Text>
+                <TextInput style={[styles.textArea,{minHeight:74}]} multiline editable={!busy}
+                  value={reviewDraft.riskFlags}
+                  onChangeText={value=>onReviewChange("riskFlags",value)}
+                  placeholder="One unresolved issue per line; leave blank only after resolution"
+                  placeholderTextColor="#94A3B8"/>
+                <Text style={styles.fieldLabel}>Resolution Notes</Text>
+                <TextInput style={[styles.textArea,{minHeight:74}]} multiline editable={!busy}
+                  value={reviewDraft.internalNotes}
+                  onChangeText={value=>onReviewChange("internalNotes",value)}
+                  placeholder="Explain verification findings and how each risk was resolved"
+                  placeholderTextColor="#94A3B8"/>
+                {riskResolutionNoteMissing && (
+                  <Text style={{fontSize:11,color:"#B45309"}}>
+                    Explain how the flagged concerns were resolved (at least 10 characters) before approval.
+                  </Text>
+                )}
+              </View>
+            )}
+            <View style={{alignSelf:"flex-start",width:220}}>
+              <ActionButton label="Save Review Progress" icon="save-outline" variant="primary"
+                loading={busy} disabled={busy} onPress={onSaveVerificationDraft}/>
+            </View>
+          </View>
+        </SectionCard>
       )}
       {showMissing && !verifyReady && approvedState && (
         <View style={{padding:15,backgroundColor:"#FFF7ED",borderRadius:12,gap:7}}>
