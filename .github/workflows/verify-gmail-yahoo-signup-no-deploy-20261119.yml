@@ -1,0 +1,65 @@
+# Isolated read-only verification. No Firebase credentials and NO deployment.
+name: Verify Gmail Yahoo Only Signup (NO DEPLOY)
+on:
+  push:
+    branches: [fix/defense-gmail-yahoo-only-20261119]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  source-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      CI: 'true'
+      EXPO_NO_TELEMETRY: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Verify EXACT live Signup descendant and allowed source changes
+        shell: bash
+        run: |
+          node <<'NODE'
+          const assert=require('node:assert/strict');
+          const cp=require('node:child_process');
+          const git=(...args)=>cp.execFileSync('git',args,{encoding:'utf8'}).trim();
+          const base='3efdc7edd85d5464242f6937d6ed9679365ec1b9';
+          cp.execFileSync('git',['merge-base','--is-ancestor',base,'HEAD']);
+          const modified=git('diff','--name-status','--no-renames',base,'HEAD').split('\n').filter(Boolean);
+          const expected=[
+            '.github/workflows/verify-gmail-yahoo-signup-no-deploy-20261119.yml',
+            'lib/registrationEmailPolicy.ts',
+            'scripts/test-signup-prod.cjs'
+          ].sort();
+          assert.deepEqual(modified.map(s=>s.split('\t')[1]).sort(),expected);
+          assert(modified.every(s=>/^[AM]\t/.test(s)),'No deletes or renames');
+          console.log('PASS: only registration domain policy, its tests and no-deploy workflow were changed');
+          NODE
+      - name: Install locked dependencies
+        run: npm ci --no-audit --no-fund
+      - name: TypeScript compile
+        run: npx tsc --noEmit --incremental false
+      - name: Complete Signup, login, and cross-role regression checks
+        run: |
+          node scripts/test-signup-prod.cjs
+          node scripts/test-signup-email-first-middle-optional.cjs
+          node scripts/test-login-field-validation.cjs
+          node scripts/test-login-ui-release.cjs
+          node scripts/test-route-entrypoints.cjs
+          node scripts/test-portal-resident-volunteer-ui-flow.cjs
+          node scripts/test-admin-navigation-contract.cjs
+          node scripts/test-profile-certificates-account-menu.cjs
+          node scripts/test-unified-login-routing.cjs
+      - name: Build full Expo web bundle and validate artifact without publishing
+        run: |
+          npx expo export --platform web --clear
+          node scripts/verify-hosting-release.cjs
+      - name: Verify backend and Firebase Rules untouched
+        run: |
+          git diff --exit-code 3efdc7edd85d5464242f6937d6ed9679365ec1b9 HEAD -- firebase.json .firebaserc firestore.rules storage.rules firestore.indexes.json backend functions identity-ai package.json package-lock.json
+          echo 'PASS: no backend, Rules, Functions, Render, project-config or dependency change'
