@@ -456,6 +456,7 @@ export default function DonationAdministration() {
   const [activeView, setActiveView] = useState<AdminDonationView>("campaigns");
   const [showReviewedHistory, setShowReviewedHistory] = useState(false);
   const [campaignPage,setCampaignPage] = useState(1);
+  const [campaignListWidth,setCampaignListWidth] = useState(0);
   const [pendingPage,setPendingPage] = useState(1);
   const [historyPage,setHistoryPage] = useState(1);
 
@@ -1822,7 +1823,7 @@ export default function DonationAdministration() {
       contentContainerStyle={styles.container}
       showsVerticalScrollIndicator
     >
-      <AdminReviewHero eyebrow="LGU OPERATIONS / DONATIONS & FUNDS" title="Donation Management" subtitle="Review LGU-approved assistance campaigns, verified receipts, and donor transaction history. Only authorized Admin staff release funds." icon="heart-outline" tag="LGU FUND OVERSIGHT" />
+      <AdminReviewHero eyebrow="DONATIONS & FUNDS / CAMPAIGN MANAGEMENT" title="Donation Management" subtitle="Manage approved fundraising campaigns, verified receipts, and donor transactions. Only authorized Admin staff release funds." icon="heart-outline" tag="LGU FUND OVERSIGHT" />
       {openedFromAssistance && (
         <TouchableOpacity style={[styles.backButton, { width: "auto", minWidth: 184, height: 42, paddingHorizontal: 13, flexDirection: "row", gap: 8, alignSelf: "flex-start" }]} accessibilityLabel="Back to Assistance Requests" onPress={() => router.push(sourceBackPath as any)}>
           <Ionicons name="arrow-back" size={18} color="#334155" />
@@ -1914,7 +1915,7 @@ export default function DonationAdministration() {
               <Text style={styles.sectionEyebrow}>DONATION SUPPORT</Text>
               <Text style={styles.sectionTitle}>Campaign Operations</Text>
               <Text style={styles.helperText}>
-                New fundraising campaigns begin in Request Assistance, after a strict LGU review and confirmation of actual unmet expenses. Existing historical campaigns remain available.
+                New campaigns start from approved Assistance Requests. Review published and historical campaigns below.
               </Text>
             </View>
           </View>
@@ -2184,7 +2185,7 @@ export default function DonationAdministration() {
               </TouchableOpacity>
             </View>
           ) : openedFromAssistance && showCampaignForm ? (
-            <View style={[styles.formCard,{gap:20,padding:24}]}
+            <View style={[styles.formCard,{gap:20,padding:22}]}
               onLayout={(event)=>setCampaignFormY(event.nativeEvent.layout.y)}>
               <View style={{flexDirection:"row",justifyContent:"space-between",
                 flexWrap:"wrap",alignItems:"center",gap:12,paddingBottom:15,
@@ -2210,13 +2211,13 @@ export default function DonationAdministration() {
                 </View>
               </View>
               <View style={{flexDirection:"row",flexWrap:"wrap",gap:22,alignItems:"flex-start"}}>
-                <View style={{flex:1.6,minWidth:275,gap:16}}>
+                <View style={{flex:1.6,minWidth:300,gap:18}}>
                   <View style={{gap:8}}>
                     <View style={{flexDirection:"row",alignItems:"center",gap:9}}>
                       <Text style={{color:"#25493A",fontSize:12,fontWeight:"800"}}>Campaign Title *</Text>
                       <Text style={{fontSize:10,fontWeight:"800",color:"#047857"}}>FROM RESIDENT</Text>
                     </View>
-                    <TextInput style={styles.input} value={campaignTitle}
+                    <TextInput style={[styles.input,styles.campaignEditorInput]} value={campaignTitle}
                       onChangeText={v=>{setCampaignTitle(v);setResidentStoryPrivacyReviewed(false);}}
                       placeholder="Title from the Resident's request"
                       placeholderTextColor="#94A3B8" maxLength={160}/>
@@ -2226,7 +2227,7 @@ export default function DonationAdministration() {
                       <Text style={{color:"#25493A",fontSize:12,fontWeight:"800"}}>Campaign Story *</Text>
                       <Text style={{fontSize:10,fontWeight:"800",color:"#047857"}}>FROM RESIDENT</Text>
                     </View>
-                    <TextInput style={[styles.input,styles.multiline,{minHeight:102}]}
+                    <TextInput style={[styles.input,styles.multiline,styles.campaignEditorInput,{minHeight:126}]}
                       multiline maxLength={1200} value={publicStory}
                       onChangeText={v=>{setPublicStory(v);setCampaignDescription(v);
                         setResidentStoryPrivacyReviewed(false);}}
@@ -2319,10 +2320,13 @@ export default function DonationAdministration() {
                     </View>
                   </View>
                 </View>
-                <View style={{flex:1,minWidth:235,gap:17}}>
+                <View style={{flex:1,minWidth:290,gap:16}}>
                   <View style={{backgroundColor:"#F4F9F6",borderWidth:1,
-                    borderColor:"#E0ECE5",borderRadius:13,padding:17,gap:14}}>
-                    <Text style={{fontSize:14,fontWeight:"800",color:"#123B29"}}>Campaign Summary</Text>
+                    borderColor:"#E0ECE5",borderRadius:11,padding:16,gap:12}}>
+                    <View style={{flexDirection:"row",alignItems:"center",gap:8}}>
+                      <Ionicons name="document-text-outline" size={18} color="#047857"/>
+                      <Text style={{fontSize:15,fontWeight:"800",color:"#123B29"}}>Campaign Summary</Text>
+                    </View>
                     {[
                       ["Request ID",assistanceSource?.requestId || assistanceSource?.id || "—"],
                       ["Category",normalizeCategoryLabel(assistanceSource?.categoryLabel || assistanceSource?.category)],
@@ -2330,21 +2334,23 @@ export default function DonationAdministration() {
                     ].map(([label,value])=>(
                       <View key={label} style={{gap:4,borderBottomWidth:1,
                         borderBottomColor:"#E4EEE7",paddingBottom:10}}>
-                        <Text style={{color:"#71857A",fontSize:10,fontWeight:"800"}}>{label}</Text>
-                        <Text style={{fontSize:12,fontWeight:"700",color:"#234436"}}>{value}</Text>
+                        <Text style={{color:"#71857A",fontSize:11,fontWeight:"700"}}>{label}</Text>
+                        <Text style={{fontSize:13,fontWeight:"700",color:"#234436"}}>{value}</Text>
                       </View>
                     ))}
                   </View>
                   <View style={{gap:11}}>
                     <Text style={{fontWeight:"800",color:"#25493A",fontSize:13}}>Official Donation Channel</Text>
+                    <Text style={styles.campaignEditorLabel}>Collection Channel</Text>
                     <TextInput value={officialChannelLabel} onChangeText={setOfficialChannelLabel}
                       placeholder="Official collection channel"
-                      placeholderTextColor="#94A3B8" style={styles.input} maxLength={160}/>
+                      placeholderTextColor="#94A3B8" style={[styles.input,styles.campaignEditorInput]} maxLength={160}/>
+                    <Text style={styles.campaignEditorLabel}>Payment and Receipt Instructions</Text>
                     <TextInput value={officialChannelInstructions}
                       onChangeText={setOfficialChannelInstructions}
                       placeholder="How donors pay and receive a receipt"
                       placeholderTextColor="#94A3B8"
-                      style={[styles.input,styles.multilineSmall]} multiline maxLength={1000}/>
+                      style={[styles.input,styles.multilineSmall,styles.campaignEditorInput]} multiline maxLength={1000}/>
                     <Text style={{fontSize:11,color:"#64748B",lineHeight:17}}>
                       Enter your authorized LGU payment details. Never use a personal account.
                     </Text>
@@ -3072,7 +3078,7 @@ export default function DonationAdministration() {
             <Text style={styles.sectionEyebrow}>AUDIT & MONITORING</Text>
             <Text style={styles.sectionTitle}>Campaign Records</Text>
             <Text style={styles.helperText}>
-              Active and past campaigns remain visible for LGU monitoring. Each campaign keeps its verified source, category, funding goal, handoff location, and receipt history.
+              Review campaign status, verified contributions, and fundraising progress.
             </Text>
           </View>
 
@@ -3086,7 +3092,7 @@ export default function DonationAdministration() {
               </Text>
             </View>
           ) : (
-            <View style={styles.cardList}>
+            <View style={styles.cardList} onLayout={(event)=>setCampaignListWidth(event.nativeEvent.layout.width)}>
               {pagedCampaigns.map((campaign) => {
                 const campaignDonations = donations.filter((item) => item.campaignId === campaign.id);
                 const receivedCampaignDonations = campaignDonations.filter(
@@ -3097,7 +3103,7 @@ export default function DonationAdministration() {
                   .reduce((sum, item) => sum + Number(item.actualAmountReceived || 0), 0);
 
                 return (
-                  <View key={campaign.id} style={styles.campaignCard}>
+                  <View key={campaign.id} style={[styles.campaignCard,{width:campaignListWidth>=790?"49%":"100%"}]}>
                     <View style={styles.cardHeaderRow}>
                       <View style={{ flex: 1 }}>
                         <Text style={styles.cardTitle}>{campaign.title || "Donation Campaign"}</Text>
@@ -3921,6 +3927,8 @@ const styles = StyleSheet.create({
   warningNotice: { flexDirection: "row", gap: 8, marginTop: 14, padding: 11, borderWidth: 1, borderColor: "#F3D58A", borderRadius: 10, backgroundColor: "#FFF9E8" },
   warningNoticeText: { flex: 1, color: "#7A5A00", fontSize: 9.5, lineHeight: 15 },
   label: { marginTop: 12, marginBottom: 5, color: "#334155", fontSize: 10.5, fontWeight: "900" },
+  campaignEditorInput: { minHeight:44,fontSize:13,lineHeight:19,paddingHorizontal:12,paddingVertical:11 },
+  campaignEditorLabel: { color:"#25493A",fontSize:11,fontWeight:"700",marginBottom:-4 },
   input: { minHeight: 42, paddingHorizontal: 11, paddingVertical: 9, borderWidth: 1, borderColor: "#D9E1E8", borderRadius: 9, backgroundColor: "#FFFFFF", color: "#0F172A", fontSize: 11.5 },
   multiline: { minHeight: 92, textAlignVertical: "top" },
   multilineSmall: { minHeight: 70, textAlignVertical: "top" },
@@ -3936,13 +3944,13 @@ const styles = StyleSheet.create({
   noticeText: { flex: 1, color: "#49646F", fontSize: 10, lineHeight: 15 },
   publishButton: { marginTop: 14, minHeight: 44, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 7, borderRadius: 10, backgroundColor: "#0F766E" },
   publishButtonText: { color: "#FFFFFF", fontSize: 11, fontWeight: "900" },
-  cardList: { gap: 9 },
-  campaignCard: { padding: 15, borderWidth: 1, borderColor: "#DFE7EE", borderRadius: 12, backgroundColor: "#FFFFFF" },
+  cardList: { flexDirection:"row",flexWrap:"wrap",justifyContent:"space-between",alignItems:"flex-start",rowGap:14,columnGap:10 },
+  campaignCard: { padding: 18, borderWidth: 1, borderColor: "#DFE7EE", borderRadius: 12, backgroundColor: "#FFFFFF" },
   donationCard: { padding: 15, borderWidth: 1, borderColor: "#DFE7EE", borderRadius: 12, backgroundColor: "#FFFFFF" },
   historyCard: { padding: 13, borderWidth: 1, borderColor: "#E2E8F0", borderRadius: 11, backgroundColor: "#FFFFFF" },
   cardHeaderRow: { flexDirection: "row", alignItems: "flex-start", gap: 10 },
-  cardTitle: { color: "#0F172A", fontSize: 13.5, fontWeight: "900" },
-  cardMeta: { marginTop: 3, color: "#64748B", fontSize: 9.5, lineHeight: 14 },
+  cardTitle: { color: "#0F172A", fontSize: 15, fontWeight: "800", lineHeight: 21 },
+  cardMeta: { marginTop: 4, color: "#64748B", fontSize: 11, lineHeight: 16 },
   cardDescription: { marginTop: 9, color: "#475569", fontSize: 10.5, lineHeight: 16 },
   statusBadge: { paddingHorizontal: 8, paddingVertical: 5, borderRadius: 999 },
   statusPublished: { backgroundColor: "#15803D" },
@@ -3950,13 +3958,13 @@ const styles = StyleSheet.create({
   statusPending: { backgroundColor: "#B7791F" },
   statusReceived: { backgroundColor: "#15803D" },
   statusRejected: { backgroundColor: "#B42318" },
-  statusText: { color: "#FFFFFF", fontSize: 8, fontWeight: "900" },
+  statusText: { color: "#FFFFFF", fontSize: 10, fontWeight: "800" },
   campaignMetrics: { flexDirection: "row", flexWrap: "wrap", gap: 7, marginTop: 10 },
-  compactMetric: { minWidth: 120, padding: 8, borderRadius: 8, backgroundColor: "#F8FAFC" },
-  compactMetricLabel: { color: "#94A3B8", fontSize: 7.5, fontWeight: "900", textTransform: "uppercase" },
-  compactMetricValue: { marginTop: 2, color: "#334155", fontSize: 10, fontWeight: "900" },
+  compactMetric: { flexGrow:1,flexBasis:100,minWidth:95,padding:11,borderRadius:8,backgroundColor:"#F6F9F7" },
+  compactMetricLabel: { color: "#6B7F74", fontSize: 10, fontWeight: "700", textTransform: "uppercase" },
+  compactMetricValue: { marginTop: 4, color: "#233D33", fontSize: 13, fontWeight: "800" },
   closeCampaignButton: { alignSelf: "flex-start", marginTop: 10, paddingHorizontal: 11, paddingVertical: 7, borderWidth: 1, borderColor: "#CBD5E1", borderRadius: 8, backgroundColor: "#F8FAFC" },
-  closeCampaignText: { color: "#475569", fontSize: 9.5, fontWeight: "900" },
+  closeCampaignText: { color: "#475569", fontSize: 11, fontWeight: "800" },
   summaryRow: { flexDirection: "row", flexWrap: "wrap", gap: 9, marginBottom: 16 },
   summaryCard: { flexGrow: 1, flexBasis: 180, minWidth: 160, padding: 12, borderWidth: 1, borderColor: "#DFE7EE", borderRadius: 11, backgroundColor: "#FFFFFF" },
   summaryValue: { color: "#0F172A", fontSize: 20, fontWeight: "900" },
@@ -4423,7 +4431,7 @@ const styles = StyleSheet.create({
   publicPreviewStory: { marginTop: 9, color: "#475569", fontSize: 10, lineHeight: 15 },
   publicPreviewMeta: { marginTop: 8, color: "#64748B", fontSize: 8.8, fontWeight: "800" },
   recordPublicLine: { flexDirection: "row", alignItems: "center", gap: 5, marginTop: 8 },
-  recordPublicText: { color: "#0F766E", fontSize: 9.2, fontWeight: "800" },
+  recordPublicText: { color: "#0F766E", fontSize: 11, fontWeight: "700" },
   recordPublicStory: { marginTop: 5, color: "#64748B", fontSize: 9.2, lineHeight: 14 },
 
   handoffSetupCard: {
@@ -4861,9 +4869,9 @@ const styles = StyleSheet.create({
     backgroundColor: "#EFF6FF",
   },
   recordGroupBadgeText: {
-    fontSize: 7.2,
-    fontWeight: "900",
-    letterSpacing: 0.3,
+    fontSize: 9.5,
+    fontWeight: "800",
+    letterSpacing: 0.15,
   },
   recordGroupBadgeTextDisaster: {
     color: "#B45309",
@@ -4879,9 +4887,9 @@ const styles = StyleSheet.create({
   },
   recordCategoryBadgeText: {
     color: "#475569",
-    fontSize: 7.2,
-    fontWeight: "900",
-    letterSpacing: 0.3,
+    fontSize: 9.5,
+    fontWeight: "800",
+    letterSpacing: 0.15,
   },
   recordProgressBox: {
     marginTop: 10,
@@ -4899,13 +4907,13 @@ const styles = StyleSheet.create({
   },
   recordProgressLabel: {
     color: "#475569",
-    fontSize: 8.8,
-    fontWeight: "800",
+    fontSize: 11,
+    fontWeight: "700",
   },
   recordProgressValue: {
     color: "#0F766E",
-    fontSize: 9,
-    fontWeight: "900",
+    fontSize: 11,
+    fontWeight: "800",
   },
   recordProgressTrack: {
     height: 7,
