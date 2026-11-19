@@ -1003,7 +1003,9 @@ export default function DonationAdministration() {
     setActiveView("campaigns");
     setAssessmentId(assistanceSource.id);
     if (assistedDraftInitializedRef.current !== assistanceSource.id) {
-      setShowCampaignForm(false);
+      // The approved Assistance action opens the final campaign editor directly.
+      // This never publishes until the LGU Admin explicitly confirms.
+      setShowCampaignForm(!existing && assistanceSourceIsEligible(assistanceSource));
     }
 
     if (!existing && assistanceSourceIsEligible(assistanceSource) &&
