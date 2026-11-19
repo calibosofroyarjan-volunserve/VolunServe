@@ -126,6 +126,22 @@ async function registeredResident(email) {
   await signOut(auth);
   console.log("PASS: synthetic "+email.split("@")[1]+" signup → inbox verification → Basic Resident profile → password login");
 }
+async function unownedGmailDenied(email) {
+  const password="MockOnly!P455w0rd";
+  const {user}=await createUserWithEmailAndPassword(auth,email,password);
+  await sendEmailVerification(user);
+  await activateEmulatorVerification(email);
+  await reload(user);
+  assert.equal(user.emailVerified,true);
+  await getIdToken(user,true);
+  await assert.rejects(
+    setDoc(doc(db,"users",user.uid),validProfile(user.uid,email)),
+    /permission|denied/i,
+    "Inbox-verified Gmail without Google-linked identity cannot create Resident"
+  );
+  await signOut(auth);
+  console.log("PASS: inbox-only Gmail UID denied Basic Resident profile");
+}
 async function directSdkBypass(email) {
   assert(emailPolicy.getRegistrationEmailError(email),
     "Live frontend must reject the disallowed email");
@@ -154,7 +170,9 @@ async function directSdkBypass(email) {
       assert(emailPolicy.getRegistrationEmailError(email),email+" must be blocked at browser signup");
     }
     assert.equal(emailPolicy.getRegistrationEmailError("resident+tag@gmail.com")!==null,true);
-    await registeredResident("synthetic.basic.resident@gmail.com");
+    // A password-only Gmail account can still exist in Firebase Auth, but
+    // must not gain a Basic Resident profile, even after inbox verification.
+    await unownedGmailDenied("synthetic.basic.resident@gmail.com");
     await registeredResident("synthetic.basic.resident@yahoo.com");
     await directSdkBypass("synthetic.invalid@outlook.com");
     console.log("PASS: Firebase Auth/Firestore emulator contract completed. NOT a live-browser acceptance test.");
