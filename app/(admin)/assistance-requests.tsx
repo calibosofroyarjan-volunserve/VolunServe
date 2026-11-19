@@ -3213,6 +3213,11 @@ function DecisionTab({
   const router = useRouter();
   const [decision, setDecision] = useState<"approve" | "more" | "reject" | null>(null);
   const [showMissing, setShowMissing] = useState(false);
+  useEffect(() => {
+    setDecision(null);
+    setShowMissing(false);
+  }, [request.id]);
+
   const verified = request.verificationStatus === "verified";
   const rejected = request.verificationStatus === "rejected";
   const busy = !!savingAction;
