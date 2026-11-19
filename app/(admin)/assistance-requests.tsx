@@ -2138,7 +2138,7 @@ This still does not automatically create a Donation Campaign.`,
         </View>
 
         <View style={styles.detailHeaderCard}>
-          <RequestReviewHeader request={selected} />
+          <RequestReviewHeader request={selected} showApprovedBadge={reviewTab === "decision" && selected.verificationStatus === "verified"} />
         </View>
 
         <View style={styles.mockDetailTabs}>
@@ -2670,11 +2670,14 @@ function FilterChip({
 
 function RequestReviewHeader({
   request,
+  showApprovedBadge = false,
 }: {
   request: AssistanceRequest;
+  showApprovedBadge?: boolean;
 }) {
-  const meta =
-    statusMeta(request.status);
+  const meta = statusMeta(request.status);
+  const badgeColor = showApprovedBadge ? "#FFFFFF" : meta.color;
+  const badgeBackground = showApprovedBadge ? "#008448" : meta.soft;
 
   return (
     <View style={styles.reviewHeader}>
@@ -2702,25 +2705,24 @@ function RequestReviewHeader({
           styles.largeStatusPill,
           {
             backgroundColor:
-              meta.soft,
+              badgeBackground,
           },
         ]}
       >
         <Ionicons
-          name={meta.icon}
+          name={showApprovedBadge ? "checkmark" : meta.icon}
           size={16}
-          color={meta.color}
+          color={badgeColor}
         />
         <Text
           style={[
             styles.largeStatusText,
             {
-              color: meta.color,
+              color: badgeColor,
             },
           ]}
         >
-          {request.verificationStatus === "verified" && !!request.supportDecision &&
-            request.supportDecision !== "pending" ? "Approved" : meta.label}
+          {showApprovedBadge ? "Approved" : meta.label}
         </Text>
       </View>
     </View>
