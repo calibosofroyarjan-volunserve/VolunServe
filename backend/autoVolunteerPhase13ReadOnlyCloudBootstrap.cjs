@@ -28,9 +28,15 @@ const safeId=x=>typeof x==="string"&&/^[a-z][a-z0-9-]{5,28}[a-z0-9]$/.test(x)&&
   !x.startsWith("demo-")&&!FORBIDDEN.has(x);
 const safeService=x=>typeof x==="string"&&/^srv-[a-z0-9]{12,40}$/.test(x)&&
   !EXISTING_SERVICES.has(x);
-const safeBranch=x=>typeof x==="string"&&
-  x.startsWith("candidate/auto-volunteer-cloud-")&&x.length<130&&
-  /^[a-z0-9][a-z0-9_/-]+$/.test(x)&&!KNOWN_BRANCHES.has(x);
+const safeBranch=x=>{
+  const prefix="candidate/auto-volunteer-cloud-";
+  if(typeof x!=="string"||!x.startsWith(prefix)||x.length>=130||
+    KNOWN_BRANCHES.has(x))return false;
+  const suffix=x.slice(prefix.length);
+  return suffix.length>=3&&
+    /^[a-z0-9](?:[a-z0-9_/-]*[a-z0-9])?$/.test(suffix)&&
+    !suffix.includes("//");
+};
 const fail=reason=>Object.freeze({
   allowed:false,reason,readOnly:true,dispatchEnabled:false,
   cloudProjectIndependentlyVerified:false,deployAuthorized:false
