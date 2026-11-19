@@ -1996,6 +1996,7 @@ This still does not automatically create a Donation Campaign.`,
         {reviewTab === "case" && (
           <CaseReviewTab
             request={selected}
+            residentIdentityVerified={residentProfile?.identityVerified === true || residentProfile?.identityStatus === "verified"}
             relatedRequestCount={relatedRequests.length}
             sameBeneficiaryCount={sameBeneficiaryRequests.length}
           />
@@ -2730,12 +2731,13 @@ function ReviewTabButton({
   );
 }
 
-function CaseReviewTab({request,relatedRequestCount,sameBeneficiaryCount}:{
+function CaseReviewTab({request,relatedRequestCount,sameBeneficiaryCount,residentIdentityVerified}:{
   request:AssistanceRequest; relatedRequestCount:number; sameBeneficiaryCount:number;
+  residentIdentityVerified:boolean;
 }){
   return (
-    <View style={{padding:20,gap:20}}>
-      <View style={{flexDirection:"row",flexWrap:"wrap",gap:20,alignItems:"stretch"}}>
+    <View style={{padding:14,gap:14}}>
+      <View style={{flexDirection:"row",flexWrap:"wrap",gap:14,alignItems:"stretch"}}>
         <View style={{flex:1.2,flexBasis:300,minWidth:0}}>
           <SectionCard title="Request Information" subtitle="Details submitted by the Resident."
             icon="information-circle-outline">
@@ -2762,7 +2764,7 @@ function CaseReviewTab({request,relatedRequestCount,sameBeneficiaryCount}:{
                 backgroundColor:"#ECFDF5",alignSelf:"flex-start"}}>
                 <Ionicons name="shield-checkmark-outline" color="#047857" size={17}/>
                 <Text style={{fontSize:11,color:"#047857",fontWeight:"800"}}>
-                  Resident account — verify in Resident Info tab
+                  {residentIdentityVerified ? "Verified Resident" : "Verify identity in Resident Info tab"}
                 </Text>
               </View>
             </View>
