@@ -44,6 +44,7 @@ jobs:
             'scripts/test-signup-prod.cjs',
             'scripts/test-gmail-yahoo-oauth-profile-rules-emulator-20261119.cjs',
             'scripts/test-existing-account-compatibility.cjs',
+            'scripts/test-email-verify-resident-login-emulators-20261119.cjs',
           ].sort();
           assert.deepEqual(diff.map(x=>x.split('\t')[1]).sort(),allowed);
           assert(diff.every(x=>/^[AM]\t/.test(x)),'No deletes or renames allowed');
@@ -78,6 +79,9 @@ jobs:
       - name: Firestore emulator historic accounts compatibility
         run: |
           npx firebase-tools emulators:exec --only firestore --project demo-volunserve-account-compatibility-20261119 "node scripts/test-existing-account-compatibility.cjs"
+      - name: Auth and Firestore E2E simulation (no real inbox or production data)
+        run: |
+          npx firebase-tools emulators:exec --only auth,firestore --project demo-volunserve-e2e-provider-20261119 "node scripts/test-email-verify-resident-login-emulators-20261119.cjs"
       - name: Compile web build without production publish
         run: |
           npx expo export --platform web --clear
