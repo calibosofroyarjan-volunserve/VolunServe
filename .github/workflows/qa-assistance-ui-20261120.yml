@@ -26,6 +26,14 @@ jobs:
         run: npm ci --no-audit --no-fund
       - name: TypeScript typecheck
         run: npx tsc --noEmit --incremental false
+      - name: Existing Admin navigation contract (read-only)
+        run: node scripts/test-admin-navigation-contract.cjs
+      - name: Existing LGU review contract (read-only)
+        run: node scripts/test-lgu-internal-review-ux.cjs
+      - name: Existing route entrypoint contract (read-only)
+        run: node scripts/test-route-entrypoints.cjs
+      - name: Legacy LGU header contract diagnostic (read-only)
+        run: node scripts/test-lgu-admin-global-ui-pagination.cjs
       - name: Expo web export (no deployment)
         run: npx expo export --platform web --clear
       - name: Confirm no production mutation
