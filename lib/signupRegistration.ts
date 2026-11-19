@@ -4,7 +4,11 @@ import {
 } from "firebase/auth";
 import {doc, getDoc} from "firebase/firestore";
 import {auth, db} from "./firebase";
-import {getRegistrationEmailError} from "./registrationEmailPolicy";
+import {
+  getRegistrationEmailError,
+  GMAIL_GOOGLE_SIGNIN_REQUIRED_MESSAGE,
+  requiresGoogleForNewGmailRegistration,
+} from "./registrationEmailPolicy";
 
 /** No profile writes, credential linking, password changes, or local PII storage. */
 export async function authenticateEmailSignup(email: string, password: string, resumeOnly = false, rejectExisting = false): Promise<User> {
@@ -12,6 +16,11 @@ export async function authenticateEmailSignup(email: string, password: string, r
   if (!normalized || !password) throw new Error("Enter your registration email and password.");
   const emailError = getRegistrationEmailError(normalized);
   if (emailError) throw new Error(emailError);
+  // Existing account login stays unchanged. A NEW Gmail password-only UID
+  // must not be used to bypass the Google-linked Resident registration gate.
+  if (!resumeOnly && requiresGoogleForNewGmailRegistration(normalized)) {
+    throw new Error(GMAIL_GOOGLE_SIGNIN_REQUIRED_MESSAGE);
+  }
   let user: User;
   if (resumeOnly) {
     user = (await signInWithEmailAndPassword(auth, normalized, password)).user;
@@ -42,6 +51,13 @@ export async function inspectSignupUser(user: User): Promise<{user: User; profil
   }
   if (user.emailVerified) await getIdToken(user, true);
   const profile = await getDoc(doc(db, "users", user.uid));
+  // Keep finished historic profiles intact. For pending Gmail signups, a
+  // verified inbox without Google OAuth is not sufficient for a new profile.
+  if (!profile.exists() &&
+      requiresGoogleForNewGmailRegistration(user.email || "") &&
+      !user.providerData.some(provider => provider.providerId === "google.com")) {
+    throw new Error(GMAIL_GOOGLE_SIGNIN_REQUIRED_MESSAGE);
+  }
   if (profile.exists() && profile.data()?.role === "guest") {
     // Preserve legacy data for administrator review but never treat a Guest
     // preview record as a finished Resident account or signup session.

@@ -1,5 +1,9 @@
 import { authenticateEmailSignup } from "./signupRegistration";
-import { getRegistrationEmailError } from "./registrationEmailPolicy";
+import {
+  getRegistrationEmailError,
+  GMAIL_GOOGLE_SIGNIN_REQUIRED_MESSAGE,
+  requiresGoogleForNewGmailRegistration,
+} from "./registrationEmailPolicy";
 import { requireCompleteResidentRegistration } from "./requireCompleteResidentRegistration";
 import { EMAIL_FIRST_SIGNUP_ENABLED } from "./signupFeature";
 import {
@@ -512,6 +516,11 @@ export const signUpUser = async (
       throw new Error("Your registration session changed. Please resume registration.");
     }
     const existing = await getDoc(profileRef);
+    if (!existing.exists() &&
+        requiresGoogleForNewGmailRegistration(submittedEmail) &&
+        !user.providerData.some(provider => provider.providerId === "google.com")) {
+      throw new Error(GMAIL_GOOGLE_SIGNIN_REQUIRED_MESSAGE);
+    }
     if (existing.exists() && user.emailVerified) {
       throw new Error("This account already has a VolunServe profile. Please sign in.");
     }

@@ -192,6 +192,42 @@ function harness(source, enabled, options = {}) {
       assert(!google.calls.includes("transaction"),email);
     }
   });
+  await check("Gmail email/password signup cannot create new Firebase Auth UID",async()=>{
+    const h=harness(current,true,{noUser:true});
+    await assert.rejects(h.registration.authenticateEmailSignup("resident@gmail.com",data.password,false,true),/Continue with Google/);
+    assert(!h.calls.includes("create")&&!h.calls.includes("transaction"));
+  });
+  await check("Verified password-only Gmail cannot bypass the new Resident profile gate",async()=>{
+    const h=harness(current,true,{providers:["password"]});
+    h.user.email="resident@gmail.com";
+    await assert.rejects(
+      h.api.signUpUser({...data,email:"resident@gmail.com",authProvider:"verified_email"}),
+      /Continue with Google/
+    );
+    assert(!h.calls.includes("transaction")&&!h.calls.includes("commit"));
+  });
+  await check("Verified Google-linked Gmail still completes Basic Resident signup",async()=>{
+    const h=harness(current,true,{providers:["google.com","password"]});
+    h.user.email="resident@gmail.com";
+    await h.api.signUpUser({...data,email:"resident@gmail.com",authProvider:"verified_email"});
+    assert.equal(h.profile().role,"resident");
+    assert(h.calls.includes("transaction"));
+  });
+  await check("Existing Gmail profile remains accessible to historic password-only owner during signup inspection",async()=>{
+    const h=harness(current,true,{providers:["password"],existing:{role:"resident",status:"approved"}});
+    h.user.email="resident@gmail.com";
+    assert.equal((await h.registration.inspectSignupUser(h.user)).profileExists,true);
+    const pending=harness(current,true,{providers:["password"]});
+    pending.user.email="resident@gmail.com";
+    await assert.rejects(pending.registration.inspectSignupUser(pending.user),/Continue with Google/);
+  });
+  await check("Gmail Signup UI guides OAuth without removing Yahoo verification",()=>{
+    const ui=read("components/auth/EmailFirstSignup.tsx");
+    assert(ui.includes("const gmailNeedsGoogle ="));
+    assert(ui.includes("!gmailNeedsGoogle && checkButton("));
+    assert(ui.includes("Continue with Google"));
+    assert(ui.includes("Yahoo uses email verification"));
+  });
   await check("native Google signup owns OAuth and never bounces pending users to Login",()=>{
     assert(read("lib/useSignupGoogle.ts").includes("signInWithCredential"));
     assert(read("lib/useSignupGoogle.web.ts").includes("signInWithPopup"));
