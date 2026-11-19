@@ -1,0 +1,86 @@
+name: Validate Assistance and Donation Full-Flow Safeguards (NO DEPLOY)
+on:
+  push:
+    branches: [fix/assistance-risk-and-donation-handoff-live-c908-20261119]
+    paths:
+      - 'app/(admin)/assistance-requests.tsx'
+      - 'app/(admin)/donation-list.tsx'
+      - 'scripts/test-assistance-donation-flow-audit-20261119.cjs'
+      - '.github/workflows/validate-assistance-donation-full-flow-20261119.yml'
+  pull_request:
+    branches: [baseline/live-assistance-c908-20261119]
+    paths:
+      - 'app/(admin)/assistance-requests.tsx'
+      - 'app/(admin)/donation-list.tsx'
+      - 'scripts/test-assistance-donation-flow-audit-20261119.cjs'
+      - '.github/workflows/validate-assistance-donation-full-flow-20261119.yml'
+permissions:
+  contents: read
+jobs:
+  verify-without-production-writes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      CI: 'true'
+      EXPO_NO_TELEMETRY: '1'
+      EXPO_PUBLIC_VOLUNSERVE_ENV: production
+      EXPO_PUBLIC_IDENTITY_VERIFICATION_API_URL: https://volunserve.onrender.com
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Verify only 2 existing Admin UI files changed
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --check c9083f52713952f7a6e07db548c4eb497ee2f312 HEAD
+          node - <<'NODE'
+          const assert=require('node:assert/strict'),cp=require('node:child_process');
+          const names=cp.execFileSync('git',['diff','--name-status','--no-renames',
+            'c9083f52713952f7a6e07db548c4eb497ee2f312','HEAD'],{encoding:'utf8'}).trim().split('\n');
+          const allowed=[
+            '.github/workflows/validate-assistance-donation-full-flow-20261119.yml',
+            'app/(admin)/assistance-requests.tsx',
+            'app/(admin)/donation-list.tsx',
+            'scripts/test-assistance-donation-flow-audit-20261119.cjs',
+          ].sort();
+          assert.deepEqual(names.map(n=>n.split('\t')[1]).sort(),allowed);
+          assert(names.every(n=>/^[AM]\t/.test(n)));
+          console.log('PASS: exactly 2 UI files; no backend, Firebase, payment, emergency, certificate, identity or auth source edited');
+          NODE
+      - name: Install frozen dependencies
+        run: npm ci --no-audit --no-fund
+      - name: TypeScript typecheck
+        run: npx tsc --noEmit --incremental false
+      - name: Complete Assistance and Donation flow contract
+        run: |
+          node scripts/test-assistance-live-clean-flow-20261119.cjs
+          node scripts/test-donation-browser-alerts-20261119.cjs
+          node scripts/test-assistance-donation-flow-audit-20261119.cjs
+      - name: Existing LGU, Emergency, certificates, announcements and donor scope tests
+        run: |
+          node scripts/test-lgu-internal-review-ux.cjs
+          node scripts/test-admin-emergency-master-detail-20261118.cjs
+          node scripts/test-embedded-emergency-map-navigation.cjs
+          node scripts/test-profile-certificates-account-menu.cjs
+          node scripts/test-admin-navigation-contract.cjs
+          node scripts/test-module-announcements-publishing-20261115.cjs
+          node scripts/test-donation-lgu-role-isolation.cjs
+      - name: Backend isolated assistance budget and public appeal tests
+        run: |
+          node --check backend/server.js
+          node --test backend/tests/assistanceDonationBudget.test.js
+          node --test backend/tests/publicAssistanceAppeals.test.js
+      - name: Expo production web export and route verification — NO DEPLOY
+        run: |
+          npx expo export --platform web --clear
+          env -u GITHUB_SHA node scripts/verify-hosting-release.cjs
+          test -f dist/assistance-requests.html || test -f dist/assistance-requests/index.html
+          test -f dist/donation-list.html || test -f dist/donation-list/index.html
+      - name: No changes to Firebase/Render
+        run: echo 'NO DEPLOY — No Firestore, Auth, payments, donations, live campaign publication or production source mutation'
