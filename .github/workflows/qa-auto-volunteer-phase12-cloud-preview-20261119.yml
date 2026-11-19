@@ -1,0 +1,84 @@
+name: Auto Volunteer Phase 12 isolated cloud READ ONLY adapter - NO DEPLOY
+on:
+  pull_request:
+    branches:
+      - review/auto-volunteer-phase11-cloud-isolation-gate-20261119
+    paths:
+      - "backend/autoVolunteerPhase12IsolatedCloudPreviewAdapter.js"
+      - "backend/test-autoVolunteerPhase12CloudPreviewAdapter.cjs"
+      - "docs/emergency-volunteer/PHASE12_ISOLATED_CLOUD_READ_ONLY_ADAPTER_20261119.md"
+      - ".github/workflows/qa-auto-volunteer-phase12-cloud-preview-20261119.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  cloud-contract-only-no-deploy:
+    if: github.repository == 'calibosofroyarjan-volunserve/VolunServe'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      CI: "true"
+      VOLUNSERVE_AUTO_VOLUNTEER_DISPATCH: disabled
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - name: Strict Phase 12 NEW-file-only scope; no existing modules changed
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin review/auto-volunteer-phase11-cloud-isolation-gate-20261119
+          git diff --name-status origin/review/auto-volunteer-phase11-cloud-isolation-gate-20261119 HEAD > /tmp/phase12-changes
+          while IFS="$(printf '\t')" read -r status filename; do
+            test "$status" = A || { echo "BLOCKED: original file modified: $filename"; exit 1; }
+            case "$filename" in
+              "backend/autoVolunteerPhase12IsolatedCloudPreviewAdapter.js"|"backend/test-autoVolunteerPhase12CloudPreviewAdapter.cjs"|"docs/emergency-volunteer/PHASE12_ISOLATED_CLOUD_READ_ONLY_ADAPTER_20261119.md"|".github/workflows/qa-auto-volunteer-phase12-cloud-preview-20261119.yml") ;;
+              *) echo "BLOCKED: unrelated new file: $filename"; exit 1 ;;
+            esac
+          done < /tmp/phase12-changes
+          echo "PASS: only four new read-only review/test files."
+      - name: Verify neither production nor accepted staging imports Phase 12 adapter
+        shell: bash
+        run: |
+          set -euo pipefail
+          if grep -Fq 'autoVolunteerPhase12IsolatedCloudPreviewAdapter' backend/server.js; then
+            echo "BLOCKED: production server must never import Phase 12 preview"
+            exit 1
+          fi
+          git fetch --no-tags origin feat/emergency-auto-dispatch-server-staging-20261115
+          git show origin/feat/emergency-auto-dispatch-server-staging-20261115:backend/emergencyAutoDispatchStagingServer.js > /tmp/staging-server-readonly-phase12
+          test -s /tmp/staging-server-readonly-phase12
+          if grep -Fq 'autoVolunteerPhase12IsolatedCloudPreviewAdapter' /tmp/staging-server-readonly-phase12; then
+            echo "BLOCKED: accepted staging service must remain unchanged"
+            exit 1
+          fi
+          echo "PASS: existing live and previously accepted staging server source are unchanged."
+      - name: Install locked backend deps only — NO cloud credentials or service access
+        run: npm ci --prefix backend --ignore-scripts --no-audit --no-fund
+      - name: Check syntax of new cloud-shaped read-only adapter
+        run: |
+          node --check backend/autoVolunteerPhase12IsolatedCloudPreviewAdapter.js
+          node --check backend/test-autoVolunteerPhase12CloudPreviewAdapter.cjs
+      - name: Offline fake-cloud HTTP auth/Firestore contract tests (NO Firebase network)
+        run: node --test --test-concurrency=1 backend/test-autoVolunteerPhase12CloudPreviewAdapter.cjs
+      - name: Preserve prior read-only preview, matching planner and Phase 11 cloud isolation
+        run: |
+          node --test backend/test-autoVolunteerPhase11CloudIsolationGate.cjs
+          node --test backend/test-emergencyAutoVolunteerReadOnlyPlanner.cjs
+          node --test backend/test-autoVolunteerAdminReadOnlyPreview.cjs
+          node --test backend/test-emergencyVolunteerWinnerGuard.cjs
+      - name: Preserve production backend identity/signup/certificate regressions
+        run: npm run check --prefix backend
+      - name: Explicitly reject claims of cloud deployment or accepted staging changes
+        run: |
+          echo "PHASE 12 IS A READ-ONLY CLOUD INTERFACE REVIEW, NOT A CLOUD TEST."
+          echo "NO real Firebase Auth tokens were verified. NO Firestore cloud reads/writes."
+          echo "NO Render/Firebase/Hosting/Cloud Tasks/Cloud Scheduler deploy."
+          echo "NO previously accepted staging Volunteer reset, no real dispatch."
+          echo "Cloud staging and production rollout remain NO-GO."
