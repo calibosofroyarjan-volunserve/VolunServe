@@ -1002,7 +1002,9 @@ export default function DonationAdministration() {
 
     setActiveView("campaigns");
     setAssessmentId(assistanceSource.id);
-    setShowCampaignForm(false);
+    if (assistedDraftInitializedRef.current !== assistanceSource.id) {
+      setShowCampaignForm(false);
+    }
 
     if (!existing && assistanceSourceIsEligible(assistanceSource) &&
         assistedDraftInitializedRef.current !== assistanceSource.id) {
@@ -1099,6 +1101,7 @@ export default function DonationAdministration() {
     setHandoffNotes("");
     setPublicStory("");
     setResidentStoryPrivacyReviewed(false);
+    assistedDraftInitializedRef.current = "";
     setPublicLocationLabel("");
     setPublicIncidentType("");
     setPublicSeverity("");
@@ -1232,6 +1235,7 @@ export default function DonationAdministration() {
         Array.from(new Set([...current, publicUrl])).slice(0, 5),
       );
       setPublicPhotoUploadStatus("Public campaign photo uploaded.");
+      setResidentStoryPrivacyReviewed(false);
     } catch (problem) {
       const message =
         problem instanceof Error
