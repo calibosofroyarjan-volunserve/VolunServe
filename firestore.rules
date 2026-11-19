@@ -169,6 +169,13 @@ service cloud.firestore {
         && request.auth.token.get("email_verified", false) == true
         && request.auth.token.get("email", "") == request.resource.data.email
         && validInitialResidentInputs()
+        // New Resident profiles: exact Gmail/Yahoo only. Gmail requires a
+        // Google-linked identity rather than receive-only email verification.
+        && request.resource.data.email.matches('(?i)^[^@ ]+@(gmail|yahoo)[.]com$')
+        && (
+          request.resource.data.email.matches('(?i)^[^@ ]+@yahoo[.]com$')
+          || request.auth.token.get('firebase', {}).get('identities', {}).get('google.com', []).size() > 0
+        )
         && !request.resource.data.email.matches("(?i).*@(?:[a-z0-9-]+[.])*en2ch[.](?:com|co)")
         && !blockedTempMailOrgAlias(request.resource.data.email)
         && request.resource.data.keys().hasAll([
@@ -251,6 +258,8 @@ service cloud.firestore {
       allow create: if signedIn()
         && request.auth.uid == uid
         && request.auth.token.get('email', '') == request.resource.data.email
+        // New applicant profiles only; existing staff logins are untouched.
+        && request.resource.data.email.matches('(?i)^[^@ ]+@(gmail|yahoo)[.]com$')
         && request.resource.data.keys().hasOnly([
           'uid','email','fullName','age','phoneNumber','role','status',
           'residentAccess','volunteerAccess','region','province','city',
