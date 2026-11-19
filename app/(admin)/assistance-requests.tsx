@@ -2815,7 +2815,7 @@ function MockQueueRow({
         </View>
       </View>
       <Text style={[styles.referenceTableText, { flex: 1.1 }]} numberOfLines={2}>{request.requesterName || "Resident"}</Text>
-      <Text style={[styles.referenceTableText, { flex: 1.1 }]} numberOfLines={2}>{request.categoryLabel || category.label || request.category || "Assistance"}</Text>
+      <Text style={[styles.referenceTableText, { flex: 1.1 }]} numberOfLines={2}>{request.categoryLabel || request.category || "Assistance"}</Text>
       <Text style={[styles.referenceTableText, { flex: 1 }]}>{typeof request.estimatedAmount === "number" && request.estimatedAmount > 0 ? money(request.estimatedAmount) : "—"}</Text>
       <View style={[styles.referenceTableCell, { flex: 1 }]}>
         <View style={[styles.mockQueueStatus, { backgroundColor: status.soft, alignSelf: "flex-start" }]}>
