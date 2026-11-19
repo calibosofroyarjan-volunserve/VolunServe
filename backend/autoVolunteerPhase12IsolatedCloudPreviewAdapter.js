@@ -21,6 +21,8 @@ const {loadProductionPreviewInputs,PreviewSourceError}
   =require("./autoVolunteerProductionPreviewReader");
 const {previewAllEligibleWave}
   =require("./emergencyAutoVolunteerReadOnlyPlanner");
+const {inspectPhase16RenderManagedOidc}
+  =require("./autoVolunteerPhase16RenderManagedOidcGate.cjs");
 
 const CASE=/^[A-Za-z0-9_-]{1,160}$/;
 const forbidden=new Set(FORBIDDEN_FIREBASE_PROJECTS);
@@ -51,8 +53,13 @@ function getCloudStagingPreviewGate({
     "new_isolated_read_only_mode_required");
   requireGate(!env?.FIRESTORE_EMULATOR_HOST&&!env?.FIREBASE_AUTH_EMULATOR_HOST,
     "cloud_emulators_not_supported");
-  requireGate(!env?.FIREBASE_SERVICE_ACCOUNT_JSON &&
-    !env?.GOOGLE_APPLICATION_CREDENTIALS,
+  // Render-managed Google OIDC sets GOOGLE_APPLICATION_CREDENTIALS to a
+  // generated external_account config. Only the audited Phase 16 bounded
+  // local file-shape guard can permit that path; arbitrary service-account
+  // JSON, invalid paths, impersonation or injected env remain blocked.
+  const oidcPathAccepted=env?.GOOGLE_APPLICATION_CREDENTIALS?
+    inspectPhase16RenderManagedOidc({env}).allowed:true;
+  requireGate(!env?.FIREBASE_SERVICE_ACCOUNT_JSON&&oidcPathAccepted,
     "standalone_service_account_files_not_approved");
   requireGate(validProjectId(project)&&!forbidden.has(project),
     "new_dedicated_project_required");
