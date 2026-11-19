@@ -2380,6 +2380,7 @@ This still does not automatically create a Donation Campaign.`,
         savingAction={savingAction} onReviewChange={updateReviewDraft}
         onStartReview={startReview} onVerify={verifyNeed}
         onMoreInfo={requestMoreInformation} onReject={rejectRequest}
+        residentIdentityVerified={residentProfile?.identityVerified === true || residentProfile?.identityStatus === "verified"}
         onDocuments={() => setReviewTab("evidence")} onResident={() => setReviewTab("resident")}
         onAdditional={() => {setSimpleReviewMode(false);setReviewFocusStage({stage:"checks",ticket:1});}}
       />;
@@ -3842,9 +3843,10 @@ function CompactAssistanceReview({
   request, reviewDraft, reviewRecord, reviewLoading, validationIntent, reasonAttempt,
   adminNote, setAdminNote, rejectionReason, setRejectionReason, savingAction,
   onReviewChange, onStartReview, onVerify, onMoreInfo, onReject,
-  onDocuments, onResident, onAdditional,
+  onDocuments, onResident, onAdditional, residentIdentityVerified,
 }: {
   request: AssistanceRequest;
+  residentIdentityVerified: boolean;
   reviewDraft: PrivateReviewDraft | null;
   reviewRecord: Record<string, any> | null;
   reviewLoading: boolean;
@@ -3865,6 +3867,8 @@ function CompactAssistanceReview({
   onAdditional: () => void;
 }) {
   const [action, setAction] = useState<"more_info" | "reject" | null>(null);
+  const [referenceDecision, setReferenceDecision] = useState<"approve" | "more_info" | "reject">("approve");
+  const [showFullReview, setShowFullReview] = useState(false);
   const locked = !!savingAction || ["verified", "rejected"].includes(String(reviewRecord?.finalDecision || ""));
   const facilityRequired = needsFacilityVerification(request.category) || !!reviewDraft?.facilityVerificationRequired;
   const costRequired = !!reviewDraft?.costVerificationRequired;
@@ -3894,8 +3898,100 @@ function CompactAssistanceReview({
   const note = action === "reject" ? rejectionReason : adminNote;
   const noteIssue = reasonAttempt === actionType ? validateAssistanceReason(actionType, note) : "";
 
+  if (!showFullReview) {
+    const summary = [
+      { label: "Resident identity verified", done: residentIdentityVerified && reviewDraft.beneficiaryCheckStatus === "confirmed" },
+      { label: "Supporting documents complete", done: (request.documents?.length || 0) > 0 && reviewDraft.documentConsistencyStatus === "consistent" },
+      { label: "Request details valid", done: reviewDraft.documentConsistencyStatus === "consistent" && reviewDraft.duplicateCheckStatus === "clear" },
+      { label: "Resident belongs to service area", done: reviewDraft.residencyVerificationStatus === "verified" },
+    ];
+    const approvalIssues = validateAssistanceReview(reviewDraft, "verify", request.category);
+    const actionNote = referenceDecision === "reject" ? rejectionReason : adminNote;
+    const actionIssue = reasonAttempt === (referenceDecision === "reject" ? "reject" : "more_information")
+      ? validateAssistanceReason(referenceDecision === "reject" ? "reject" : "more_information", actionNote) : "";
+    return <View style={styles.referenceDecisionPage}>
+      <View style={styles.referenceDecisionColumns}>
+        <View style={styles.referenceDecisionCard}>
+          <View style={styles.referenceDecisionHeading}>
+            <Ionicons name="clipboard-outline" size={26} color="#008447" />
+            <View style={{ flex: 1, gap: 4 }}>
+              <Text style={styles.referenceCardTitle}>Review Summary</Text>
+              <Text style={styles.referencePageSubtitle}>Check and confirm the key items before making a decision.</Text>
+            </View>
+          </View>
+          {summary.map(({label,done}) => (
+            <TouchableOpacity key={label} style={styles.referenceCheckRow} onPress={() => setShowFullReview(true)} accessibilityRole="button"
+              accessibilityLabel={label + (done ? ", verified" : ", needs verification")}>
+              <Ionicons name={done ? "checkbox" : "square-outline"} size={23} color={done ? "#008246" : "#94A3B8"} />
+              <Text style={styles.referenceCheckText}>{label}</Text>
+            </TouchableOpacity>
+          ))}
+          {(!summary.every((item) => item.done) || approvalIssues.length > 0) && <TouchableOpacity
+            onPress={() => setShowFullReview(true)} style={styles.referenceFullCheckLink}>
+            <Text style={styles.simpleLinkText}>Complete required verification checks</Text>
+            <Ionicons name="arrow-forward" color="#047857" size={15}/>
+          </TouchableOpacity>}
+        </View>
+        <View style={styles.referenceDecisionCard}>
+          <View style={styles.referenceDecisionHeading}>
+            <Ionicons name="hammer-outline" size={26} color="#008447" />
+            <View style={{ flex: 1, gap: 4 }}>
+              <Text style={styles.referenceCardTitle}>Decision</Text>
+              <Text style={styles.referencePageSubtitle}>Choose an action for this assistance request.</Text>
+            </View>
+          </View>
+          {([
+            ["approve", "Approve Request", "Grant support for this request."],
+            ["more_info", "Request More Information", "Ask the resident to provide additional details or documents."],
+            ["reject", "Reject Request", "Do not grant support for this request."],
+          ] as const).map(([value,label,description]) => (
+            <TouchableOpacity key={value} style={[styles.referenceChoice, referenceDecision === value && styles.referenceChoiceActive]}
+              disabled={locked} onPress={() => setReferenceDecision(value)}
+              accessibilityRole="radio" accessibilityState={{checked:referenceDecision===value}}>
+              <Ionicons name={referenceDecision === value ? "radio-button-on" : "radio-button-off"} size={21}
+                color={referenceDecision === value ? "#048448" : "#9BA9B8"} />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.referenceChoiceTitle}>{label}</Text>
+                <Text style={styles.referenceChoiceHelp}>{description}</Text>
+              </View>
+            </TouchableOpacity>
+          ))}
+          {referenceDecision !== "approve" && (
+            <View style={{ marginTop: 12, gap: 7 }}>
+              <Text style={styles.simpleCheckTitle}>{referenceDecision === "reject" ? "Reason for rejection *" : "Information requested *"}</Text>
+              <TextInput multiline maxLength={1000} value={actionNote}
+                onChangeText={referenceDecision === "reject" ? setRejectionReason : setAdminNote}
+                placeholder="Enter clear information for the resident" placeholderTextColor="#94A3B8"
+                editable={!locked} style={[styles.textArea, !!actionIssue && styles.assistanceFieldInvalid]} />
+              <ReviewValidationHint message={actionIssue} />
+            </View>
+          )}
+        </View>
+      </View>
+      {!reviewRecord && <View style={styles.referencePreAction}>
+        <Text style={styles.simpleCopy}>Start the protected LGU review before confirming a decision.</Text>
+        <ActionButton label="Start Review" icon="play-circle-outline" variant="primary"
+          loading={savingAction === "start_review"} disabled={!!savingAction} onPress={onStartReview} />
+      </View>}
+      {attempted && approvalIssues.length > 0 && <View style={styles.simpleNotice}>
+        <Ionicons name="alert-circle-outline" size={19} color="#A16207" />
+        <Text style={[styles.simpleCopy, { flex: 1 }]}>Some required checks are incomplete. Open the verification details above to complete them before approval.</Text>
+      </View>}
+      <TouchableOpacity style={[styles.referenceConfirmButton, (!reviewRecord || locked) && { opacity: 0.55 }]}
+        disabled={!reviewRecord || locked} accessibilityRole="button"
+        onPress={referenceDecision === "approve" ? onVerify : referenceDecision === "reject" ? onReject : onMoreInfo}>
+        {savingAction ? <ActivityIndicator color="#FFFFFF" /> : <Ionicons name="checkmark" size={23} color="#FFFFFF" />}
+        <Text style={styles.referenceConfirmText}>Confirm Decision</Text>
+      </TouchableOpacity>
+    </View>;
+  }
+
   return (
     <View style={styles.simplePanel}>
+      <TouchableOpacity style={styles.simpleReturnButton} onPress={() => setShowFullReview(false)} accessibilityRole="button">
+        <Ionicons name="arrow-back" color="#047857" size={17} />
+        <Text style={styles.simpleReturnText}>Back to Review & Decision</Text>
+      </TouchableOpacity>
       <View style={styles.simpleHead}>
         <View style={styles.simpleIcon}><Ionicons name="shield-checkmark-outline" size={20} color="#047857" /></View>
         <View style={{ flex: 1 }}>
@@ -5815,6 +5911,20 @@ function DocumentPreviewModal({
 }
 
 const styles = StyleSheet.create({
+  referenceDecisionPage: { flex: 1, gap: 22, paddingVertical: 4, paddingHorizontal: 3 },
+  referenceDecisionColumns: { flexDirection: "row", flexWrap: "wrap", alignItems: "stretch", gap: 15 },
+  referenceDecisionCard: { flexGrow: 1, flexBasis: 280, minWidth: 240, borderWidth: 1, borderColor: "#DBE4E6", borderRadius: 12, backgroundColor: "#FFFFFF", padding: 16, gap: 9, minHeight: 300 },
+  referenceDecisionHeading: { flexDirection: "row", alignItems: "flex-start", gap: 12, paddingBottom: 12, borderBottomColor: "#E7ECEF", borderBottomWidth: 1 },
+  referenceCheckRow: { flexDirection: "row", alignItems: "center", gap: 11, paddingVertical: 13, borderBottomWidth: 1, borderBottomColor: "#EDF1F3" },
+  referenceCheckText: { flex: 1, color: "#17212F", fontFamily: vsType.family, fontSize: 13, fontWeight: "700" },
+  referenceFullCheckLink: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 9 },
+  referenceChoice: { flexDirection: "row", alignItems: "center", gap: 11, paddingVertical: 10, paddingHorizontal: 11, backgroundColor: "#FFFFFF", borderWidth: 1, borderColor: "#DCE5EA", borderRadius: 9 },
+  referenceChoiceActive: { borderColor: "#66C995", backgroundColor: "#E5F9EC" },
+  referenceChoiceTitle: { color: "#152333", fontFamily: vsType.family, fontSize: 13, fontWeight: "800" },
+  referenceChoiceHelp: { color: "#475569", fontFamily: vsType.family, fontSize: 11, lineHeight: 16 },
+  referencePreAction: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 12, justifyContent: "center", paddingVertical: 8 },
+  referenceConfirmButton: { minHeight: 50, alignItems: "center", justifyContent: "center", flexDirection: "row", gap: 10, alignSelf: "center", width: "65%", minWidth: 240, maxWidth: 540, marginTop: 12, borderRadius: 8, backgroundColor: "#008547", paddingHorizontal: 20 },
+  referenceConfirmText: { color: "#FFFFFF", fontFamily: vsType.family, fontWeight: "800", fontSize: 16 },
   referencePageHeading: { flexDirection: "row", alignItems: "center", gap: 14, paddingVertical: 7, marginBottom: 6 }, 
   referencePageIcon: { width: 37, height: 42, alignItems: "center", justifyContent: "center" },
   referencePageTitle: { fontFamily: vsType.family, fontSize: 24, fontWeight: "800", color: "#111827" },
