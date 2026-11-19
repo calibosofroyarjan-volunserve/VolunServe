@@ -189,7 +189,7 @@ test("no flags, synthetic injected env, or missing dedicated runtime fails witho
 test("fake new project or old production, accepted staging and demo are rejected",()=>{
   for(const bad of [
     "volunserve-3aa5b","volunserve-volunteer-staging",
-    "demo-volunserve-auto-phase4","DEMO-PROJECT","invalid"
+    "demo-volunserve-auto-phase4","DEMO-PROJECT","bad"
   ]){
     process.env.VOLUNSERVE_PHASE12_NEW_FIREBASE_PROJECT=bad;
     process.env.GCLOUD_PROJECT=bad;
