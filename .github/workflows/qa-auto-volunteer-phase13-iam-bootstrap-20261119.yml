@@ -1,0 +1,83 @@
+name: Auto Volunteer Phase 13 DEDICATED CLOUD READONLY BOOTSTRAP - NO DEPLOY
+on:
+  pull_request:
+    branches:
+      - review/auto-volunteer-phase12-isolated-cloud-preview-adapter-20261119
+    paths:
+      - "backend/autoVolunteerPhase13ReadOnlyCloudBootstrap.cjs"
+      - "backend/test-autoVolunteerPhase13ReadOnlyCloudBootstrap.cjs"
+      - "docs/emergency-volunteer/PHASE13_DEDICATED_STAGING_READONLY_IDENTITY_BOOTSTRAP_20261119.md"
+      - ".github/workflows/qa-auto-volunteer-phase13-iam-bootstrap-20261119.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  offline-staging-identity-binding-no-deploy:
+    if: github.repository == 'calibosofroyarjan-volunserve/VolunServe'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      CI: "true"
+      VOLUNSERVE_AUTO_VOLUNTEER_DISPATCH: disabled
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - name: Strict Phase 13 additive only - no production/backend source changes
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin review/auto-volunteer-phase12-isolated-cloud-preview-adapter-20261119
+          git diff --name-status origin/review/auto-volunteer-phase12-isolated-cloud-preview-adapter-20261119 HEAD > /tmp/phase13-review-changes
+          while IFS="$(printf '\t')" read -r status file; do
+            test "$status" = A || { echo "BLOCKED: modified existing file: $file"; exit 1; }
+            case "$file" in
+              "backend/autoVolunteerPhase13ReadOnlyCloudBootstrap.cjs"|"backend/test-autoVolunteerPhase13ReadOnlyCloudBootstrap.cjs"|"docs/emergency-volunteer/PHASE13_DEDICATED_STAGING_READONLY_IDENTITY_BOOTSTRAP_20261119.md"|".github/workflows/qa-auto-volunteer-phase13-iam-bootstrap-20261119.yml") ;;
+              *) echo "BLOCKED: unreviewed addition: $file"; exit 1 ;;
+            esac
+          done < /tmp/phase13-review-changes
+          echo "PASS: exactly scoped Phase 13 additions, no existing runtime updated."
+      - name: Confirm current production and historically accepted staging remain unwired
+        shell: bash
+        run: |
+          set -euo pipefail
+          if grep -Fq 'autoVolunteerPhase13ReadOnlyCloudBootstrap' backend/server.js; then
+            echo "BLOCKED: production backend imports Phase 13 candidate"
+            exit 1
+          fi
+          git fetch --no-tags origin feat/emergency-auto-dispatch-server-staging-20261115
+          git show origin/feat/emergency-auto-dispatch-server-staging-20261115:backend/emergencyAutoDispatchStagingServer.js > /tmp/phase13-accepted-staging-source
+          test -s /tmp/phase13-accepted-staging-source
+          if grep -Fq 'autoVolunteerPhase13ReadOnlyCloudBootstrap' /tmp/phase13-accepted-staging-source; then
+            echo "BLOCKED: accepted Volunteer staging imports Phase 13 candidate"
+            exit 1
+          fi
+          echo "PASS: separate production and accepted staging server source untouched."
+      - name: Install only locked backend dependencies without lifecycle scripts or cloud secrets
+        run: npm ci --prefix backend --ignore-scripts --no-audit --no-fund
+      - name: Syntax check and isolated mock Firebase Admin bootstrap tests
+        run: |
+          node --check backend/autoVolunteerPhase13ReadOnlyCloudBootstrap.cjs
+          node --check backend/test-autoVolunteerPhase13ReadOnlyCloudBootstrap.cjs
+          node --test --test-concurrency=1 backend/test-autoVolunteerPhase13ReadOnlyCloudBootstrap.cjs
+      - name: Preserve Phase 12 cloud interface, Phase 11 isolation, Phase 1-2 preview and manual winner guards
+        run: |
+          node --test --test-concurrency=1 backend/test-autoVolunteerPhase12CloudPreviewAdapter.cjs
+          node --test backend/test-autoVolunteerPhase11CloudIsolationGate.cjs
+          node --test backend/test-autoVolunteerAdminReadOnlyPreview.cjs
+          node --test backend/test-emergencyAutoVolunteerReadOnlyPlanner.cjs
+          node --test backend/test-emergencyVolunteerWinnerGuard.cjs
+      - name: Preserve existing production backend certificate, signup and identity verification tests
+        run: npm run check --prefix backend
+      - name: Strictly no new service, Firebase access, IAM grant or cloud deployment
+        run: |
+          echo "NO deployment, Firebase cloud reads or writes, credential downloads, or service account creation."
+          echo "NO real IAM grants or Firebase Auth verification performed by these mock tests."
+          echo "Phase 13 bootstrap NOT mounted. Dispatch and scheduler remain disabled."
+          echo "Cloud staging and production activation remain NO-GO."
