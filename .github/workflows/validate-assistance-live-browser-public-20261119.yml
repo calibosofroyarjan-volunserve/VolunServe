@@ -9,7 +9,7 @@ permissions:
   contents: read
 jobs:
   chromium-real-live-readonly:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 28
     env:
       CI: 'true'
@@ -36,10 +36,10 @@ jobs:
           NODE
       - name: Install isolated Chromium browser test runner
         run: |
-          npm install --no-save --no-package-lock --ignore-scripts playwright@1.58.2
-          npx playwright install --with-deps chromium
+          npm install --prefix /tmp/volunserve-readonly-chromium --no-save --no-package-lock --no-audit --no-fund playwright@1.58.2
+          /tmp/volunserve-readonly-chromium/node_modules/.bin/playwright install --with-deps chromium
       - name: Run real Chromium against live domain (no login)
-        run: node scripts/test-assistance-live-browser-public-20261119.cjs
+        run: NODE_PATH=/tmp/volunserve-readonly-chromium/node_modules node scripts/test-assistance-live-browser-public-20261119.cjs
       - name: Upload redacted screenshots for layout inspection
         if: always()
         uses: actions/upload-artifact@v4
