@@ -125,6 +125,8 @@ export default function RootLayout() {
   }, []);
 
   useEffect(() => {
+    // QA ONLY: the synthetic screenshot route never authorizes Firebase actions.
+    if ((segments as readonly string[]).includes("assistance-design-qa")) return;
     if (
       (!fontsLoaded && !fontError) ||
       !authChecked ||
@@ -415,8 +417,7 @@ export default function RootLayout() {
   // QA-ONLY route: display synthetic preview without waiting for Firebase Auth.
   // This change is isolated to the disposable QA branch, never production.
   const visualFixture =
-    (segments as readonly string[])[0] === "public" &&
-    (segments as readonly string[])[1] === "assistance-design-qa";
+    (segments as readonly string[]).includes("assistance-design-qa");
 
   if (
     (!fontsLoaded && !fontError) ||
