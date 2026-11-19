@@ -37,6 +37,7 @@ import {
 import EmergencyIncidentMap from "../../components/admin/EmergencyIncidentMap";
 import { db } from "../../lib/firebase";
 import { emergencyTaskStatusLabel } from "../../lib/emergencyTaskStatus";
+import { requestAutomaticVolunteersAfterApproval } from "../../lib/automaticVolunteerApprovalBridge";
 
 const BACKEND_URL = "https://volunserve.onrender.com";
 
@@ -1490,7 +1491,7 @@ export default function AdminCases() {
     const activityLogRef = doc(collection(db, "adminActivityLogs"));
 
     try {
-      await runTransaction(db, async (transaction) => {
+      const validationOutcome = await runTransaction(db, async (transaction) => {
         const caseSnapshot = await transaction.get(caseRef);
 
         if (!caseSnapshot.exists()) {
@@ -1509,6 +1510,12 @@ export default function AdminCases() {
           throw new Error(
             "This request is already validated. Do not reject it after dispatch preparation has started."
           );
+        }
+        // Do not downgrade an assigned case to validated or resend the
+        // Resident's approval notice when Admin retries validation.
+        // The backend auto-offer call below is itself idempotent.
+        if (action === "validate" && currentVerification === "validated") {
+          return { alreadyValidated: true };
         }
 
         const basePatch: any = {
@@ -1584,12 +1591,26 @@ export default function AdminCases() {
           reason: action === "validate" ? "" : reason,
           timestamp: serverTimestamp(),
         });
+        return { alreadyValidated: false };
       });
 
       if (action === "validate") {
+        // No separate "Invite Volunteers" click. The call occurs only
+        // AFTER the existing Firestore approval transaction commits.
+        // It is network-silent until the explicit web release flag is set.
+        const invitation = await requestAutomaticVolunteersAfterApproval({
+          caseId: incident.id, user: adminUser,
+        });
+        const message = invitation.enabled
+          ? invitation.status === "offered"
+            ? `Automatic invitations confirmed for ${invitation.offered} eligible Volunteers.`
+            : "Report validation saved, but automatic invitations were NOT confirmed. Review the backend status before claiming they were sent."
+          : validationOutcome.alreadyValidated
+            ? "Already validated. Existing Volunteer response state was preserved."
+            : "The case is now eligible for responder assignment.";
         Alert.alert(
-          "Request Validated",
-          "The case is now eligible for responder assignment."
+          validationOutcome.alreadyValidated ? "Already Validated" : "Request Validated",
+          message
         );
       } else if (action === "request_more_evidence") {
         Alert.alert(
