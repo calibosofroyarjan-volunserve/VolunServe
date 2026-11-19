@@ -1,0 +1,103 @@
+# Read-only production source + zero-test compilation probe. No deploy or data writes.
+name: Audit ACTIVE Rules Gmail Ownership Gate Compile (NO DEPLOY)
+on:
+  push:
+    branches: [live-protected]
+    paths:
+      - '.github/workflows/audit-active-gmail-ownership-compiler-20261119.yml'
+permissions:
+  contents: read
+jobs:
+  production-readonly:
+    if: github.repository == 'calibosofroyarjan-volunserve/VolunServe' && github.ref == 'refs/heads/live-protected'
+    runs-on: ubuntu-latest
+    environment: production
+    timeout-minutes: 18
+    env:
+      PROJECT: volunserve-3aa5b
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 2
+          submodules: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Fail unless only this read-only workflow changed protected branch
+        run: |
+          test "$(git diff --name-only HEAD^ HEAD)" = ".github/workflows/audit-active-gmail-ownership-compiler-20261119.yml"
+          test "$(git ls-remote --heads origin live-protected | cut -f1)" = "$GITHUB_SHA"
+      - run: npm ci --prefix functions --no-audit --no-fund
+      - name: Read exact ACTIVE Rules, build insertion-only candidate and run no-test remote compiler
+        env:
+          VOLUNSERVE_PRODUCTION_HOSTING_SERVICE_ACCOUNT: ${{ secrets.VOLUNSERVE_PRODUCTION_HOSTING_SERVICE_ACCOUNT }}
+        shell: bash
+        run: |
+          node <<'NODE'
+          const assert=require('node:assert/strict');
+          const crypto=require('node:crypto');
+          const path=require('node:path');
+          const {createRequire}=require('node:module');
+          const req=createRequire(path.resolve('./functions/package.json'));
+          const {cert}=req('firebase-admin/app');
+          const sha=s=>crypto.createHash('sha256').update(s).digest('hex');
+          const PROJECT='volunserve-3aa5b';
+          const HOST='https://firebaserules.googleapis.com/v1';
+          const extension='        && request.resource.data.email.matches("(?i)^[^@]+@(gmail[.]com|yahoo[.]com)$")\n'
+            +'        && (!request.resource.data.email.matches("(?i)^[^@]+@gmail[.]com$")\n'
+            +"          || request.auth.token.get('firebase', {}).get('identities', {}).get('google.com', []).size() > 0)\n";
+          async function audit(){
+            const raw=process.env.VOLUNSERVE_PRODUCTION_HOSTING_SERVICE_ACCOUNT;
+            assert(raw,'Protected production read-only credential absent');
+            const credential=JSON.parse(raw);
+            assert.equal(credential.project_id,PROJECT);
+            const {access_token}=await cert(credential).getAccessToken();
+            assert(access_token);
+            const request=async(url,opts={})=>fetch(url,{
+              ...opts,
+              headers:{'Authorization':'Bearer '+access_token,...(opts.headers||{})},
+              signal:AbortSignal.timeout(45000),
+            });
+            const rel=await request(HOST+'/projects/'+PROJECT+'/releases/cloud.firestore');
+            assert(rel.ok,'BLOCKED: active Firestore release GET '+rel.status);
+            const release=await rel.json();
+            assert(typeof release.rulesetName==='string','Active ruleset missing');
+            const ruleset=await request(HOST+'/'+release.rulesetName);
+            assert(ruleset.ok,'BLOCKED: active Rules GET '+ruleset.status);
+            const original=(await ruleset.json()).source?.files||[];
+            assert(original.length===1,'BLOCKED: multiple active source files; no guessing');
+            const active=original[0].content;
+            assert(active && active.startsWith("rules_version"),'BLOCKED: nonstandard active Rules');
+            const needle='        && validInitialResidentInputs()\n';
+            assert(active.split(needle).length===2,'BLOCKED: Resident CREATE anchor not unique');
+            const candidate=active.replace(needle,needle+extension);
+            assert(candidate.length>active.length,'Candidate must only add restrictive conditions');
+            console.log(JSON.stringify({
+              audit:'READ_ONLY',project:PROJECT,
+              activeRulesSha256:sha(active),activeSourceBytes:Buffer.byteLength(active),
+              candidateSha256:sha(candidate),candidateSourceBytes:Buffer.byteLength(candidate),
+              changedLines:3,activeRelease:release.name,
+              note:'No existing Rules text deleted/replaced; production unchanged',
+            }));
+            // projects.test with no testSuite is a compiler/semantic check ONLY.
+            // It creates no ruleset or release and executes no data access cases.
+            const tested=await request(HOST+'/projects/'+PROJECT+':test',{
+              method:'POST',
+              headers:{'Content-Type':'application/json'},
+              body:JSON.stringify({source:{files:[{name:original[0].name||'firestore.rules',content:candidate}]}}),
+            });
+            const payload=await tested.json().catch(()=>({}));
+            const issues=payload.issues||[];
+            console.log(JSON.stringify({
+              compilerHttpStatus:tested.status,
+              issues:issues.map(x=>({severity:x.severity,message:String(x.description||'').slice(0,350)})).slice(0,12),
+              compilerMessage:String(payload.error?.message||'').slice(0,550),
+              noDeployment:true,noProductionUserAccess:true,
+            }));
+            assert(tested.ok,'BLOCKED: production compiler returned error; no publishing');
+            assert(!issues.some(x=>x.severity==='ERROR'),'BLOCKED: compiler source error');
+            console.log('PASS: active-source-derived restrictive Gmail + Yahoo policy accepted by production Rules test endpoint; NOT DEPLOYED');
+          }
+          audit().catch(error=>{console.error(String(error.message||error).slice(0,700));process.exitCode=1;});
+          NODE
