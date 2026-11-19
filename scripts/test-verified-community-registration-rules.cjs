@@ -45,8 +45,13 @@ async function main() {
         title: "Public safety update", publishAt: Timestamp.fromMillis(1000),
       });
     });
-    const as = (uid, email, verified) =>
-      env.authenticatedContext(uid, {email, email_verified: verified}).firestore();
+    const as = (uid, email, verified, google = false) =>
+      env.authenticatedContext(uid, {
+        email, email_verified: verified,
+        firebase: google
+          ? {sign_in_provider:"google.com", identities:{"google.com":["verified-google-account"]}}
+          : {sign_in_provider:"password", identities:{email:[email]}},
+      }).firestore();
     await assertFails(getDoc(doc(as("existing-resident","existing@gmail.com",false),"announcements","published")));
     await assertFails(getDoc(doc(as("existing-resident","other@gmail.com",true),"announcements","published")));
     await assertSucceeds(getDoc(doc(as("existing-resident","existing@gmail.com",true),"announcements","published")));
@@ -101,7 +106,7 @@ async function main() {
     // the schema but allow empty string; reject malformed supplied numbers.
     const noPhoneUid="valid-optional-phone";
     const noPhoneEmail="optional-phone@gmail.com";
-    await assertSucceeds(setDoc(doc(as(noPhoneUid,noPhoneEmail,true),"users",noPhoneUid),{
+    await assertSucceeds(setDoc(doc(as(noPhoneUid,noPhoneEmail,true,true),"users",noPhoneUid),{
       ...validProfile,uid:noPhoneUid,email:noPhoneEmail,phoneNumber:"",
     }));
     await invalidCreate({phoneNumber:"+639171234567999"});
@@ -118,7 +123,11 @@ async function main() {
     await invalidCreate({age:17});
     await invalidCreate({age:101});
     await invalidCreate({region:""});
-    await assertSucceeds(setDoc(doc(as("new-resident","real@gmail.com",true),"users","new-resident"),validProfile));
+    // A genuine Gmail address with password-only inbox access must NEVER
+    // create a new Resident, even if Firebase email_verified is true.
+    await assertFails(setDoc(doc(as("new-resident","real@gmail.com",true,false),"users","new-resident"),validProfile));
+    // Firebase-signed Google-linked claim permits actual Google Account holders.
+    await assertSucceeds(setDoc(doc(as("new-resident","real@gmail.com",true,true),"users","new-resident"),validProfile));
     assert.ok(true);
     console.log("PASS Firestore: unverified community/staff emails denied; verified complete Resident and staff access permitted.");
   } finally {
