@@ -253,7 +253,7 @@ const showAssistanceActionError = (title: string, message: string) => {
   Alert.alert(title, message);
 };
 
-const createPrivateReviewDraft = (
+export const createPrivateReviewDraft = (
   request: AssistanceRequest,
   data?: Record<string, any> | null,
 ): PrivateReviewDraft => {
@@ -2392,7 +2392,7 @@ This still does not automatically create a Donation Campaign.`,
   );
 }
 
-function MockStatusTab({
+export function MockStatusTab({
   label,
   count,
   active,
@@ -2425,7 +2425,7 @@ function MockStatusTab({
   );
 }
 
-function MockQueueRow({request,onPress}:{
+export function MockQueueRow({request,onPress}:{
   request: AssistanceRequest;
   onPress:()=>void;
 }){
@@ -2668,7 +2668,7 @@ function FilterChip({
   );
 }
 
-function RequestReviewHeader({
+export function RequestReviewHeader({
   request,
   showApprovedBadge = false,
 }: {
@@ -2729,7 +2729,7 @@ function RequestReviewHeader({
   );
 }
 
-function ReviewTabButton({
+export function ReviewTabButton({
   label,
   icon,
   active,
@@ -2774,7 +2774,7 @@ function ReviewTabButton({
   );
 }
 
-function CaseReviewTab({request,relatedRequestCount,sameBeneficiaryCount,residentIdentityVerified}:{
+export function CaseReviewTab({request,relatedRequestCount,sameBeneficiaryCount,residentIdentityVerified}:{
   request:AssistanceRequest; relatedRequestCount:number; sameBeneficiaryCount:number;
   residentIdentityVerified:boolean;
 }){
@@ -3226,7 +3226,7 @@ function ResidentReviewTab({
   );
 }
 
-function DecisionTab({
+export function DecisionTab({
   request, reviewDraft, reviewRecord, reviewLoading, onReviewChange, residentIdentityVerified,
   adminNote, setAdminNote, rejectionReason, setRejectionReason,
   supportDecision, setSupportDecision, remainingAmount, setRemainingAmount,
