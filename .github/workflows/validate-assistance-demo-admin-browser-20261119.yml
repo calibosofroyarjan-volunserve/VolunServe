@@ -1,0 +1,88 @@
+name: Browser QA - Authenticated Admin Assistance to Donation (DEMO ONLY)
+on:
+  push:
+    branches: [qa/assistance-donation-backend-e2e-demo-20261119]
+    paths:
+      - 'scripts/test-assistance-demo-admin-browser-20261119.cjs'
+      - '.github/workflows/validate-assistance-demo-admin-browser-20261119.yml'
+permissions:
+  contents: read
+jobs:
+  authenticated-chromium-demo:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      CI: 'true'
+      EXPO_NO_TELEMETRY: '1'
+      GCLOUD_PROJECT: demo-volunserve
+      GOOGLE_CLOUD_PROJECT: demo-volunserve
+      EXPO_PUBLIC_VOLUNSERVE_ENV: production
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Safety check unchanged repository and browser script isolation
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check scripts/test-assistance-demo-admin-browser-20261119.cjs
+          node - <<'NODE'
+          const fs=require('node:fs'),assert=require('node:assert/strict');
+          const s=fs.readFileSync('scripts/test-assistance-demo-admin-browser-20261119.cjs','utf8');
+          assert(s.includes('project="demo-volunserve"'));
+          assert(s.includes('FIREBASE_AUTH_EMULATOR_HOST')&&s.includes('FIRESTORE_EMULATOR_HOST'));
+          assert(s.includes('SAFETY STOP'));
+          assert(!s.includes('https://volunserve.com'));
+          assert(!s.includes('volunserve-3aa5b'));
+          console.log('PASS: Demo-only browser test cannot read or write live Firebase');
+          NODE
+      - name: Install locked web and backend dependencies
+        run: |
+          npm ci --no-audit --no-fund
+          npm ci --prefix backend --no-audit --no-fund
+      - name: Install isolated Playwright Chromium 24.04 test runner
+        run: |
+          npm install --prefix /tmp/volunserve-demo-chromium --no-save --no-package-lock --no-audit --no-fund playwright@1.58.2
+          /tmp/volunserve-demo-chromium/node_modules/.bin/playwright install --with-deps chromium
+      - name: Create test-only local Firebase and localhost API build (never commit/deploy)
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('lib/firebase.ts');s=p.read_text()
+          assert s.count('const ENABLE_LOCAL_TESTING = false;')==1
+          p.write_text(s.replace('const ENABLE_LOCAL_TESTING = false;','const ENABLE_LOCAL_TESTING = true;'))
+          for fn in ('app/(admin)/assistance-requests.tsx','app/(admin)/donation-list.tsx'):
+            p=Path(fn);s=p.read_text()
+            assert s.count('"https://volunserve.onrender.com"')==1, fn
+            p.write_text(s.replace('"https://volunserve.onrender.com"','"http://127.0.0.1:10000"'))
+          print('PASS: Localhost-only temporary patches in disposable CI checkout')
+          PY
+          npx expo export --platform web --clear
+          test -f dist/login.html || test -f dist/login/index.html
+          test -f dist/assistance-requests.html || test -f dist/assistance-requests/index.html
+          test -f dist/donation-list.html || test -f dist/donation-list/index.html
+      - name: Exercise real Admin browser + localhost Express + demo Auth/Firestore/Hosting
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx firebase-tools emulators:exec --only auth,firestore,hosting --project demo-volunserve "NODE_PATH=/tmp/volunserve-demo-chromium/node_modules:$PWD/backend/node_modules node scripts/test-assistance-demo-admin-browser-20261119.cjs"
+      - name: Save demo screenshots for layout and regression review
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: volunserve-authenticated-demo-browser-qa
+          path: demo-browser-artifacts
+          retention-days: 3
+          if-no-files-found: ignore
+      - name: Explicit safety check
+        if: always()
+        run: echo "DEMO-only browser build; NO live Hosting/Firestore/Render/auth/payment changes"
