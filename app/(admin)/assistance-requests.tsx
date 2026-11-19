@@ -8,7 +8,6 @@ import {
   serverTimestamp,
 } from "firebase/firestore";
 import ListPagination from "../../components/ui/ListPagination";
-import AdminReviewHero from "../../components/admin/AdminReviewHero";
 import React, {
   useEffect,
   useMemo,
@@ -619,6 +618,7 @@ export default function AssistanceRequestsAdmin() {
     useState<ReviewFilter>("all");
   const [search, setSearch] = useState("");
   const [recordPage, setRecordPage] = useState(1);
+  const [showReferenceFilter, setShowReferenceFilter] = useState(false);
 
   const [selected, setSelected] =
     useState<AssistanceRequest | null>(null);
@@ -2141,14 +2141,14 @@ This still does not automatically create a Donation Campaign.`,
           showsVerticalScrollIndicator={false}
         >
           <>
-            <AdminReviewHero
-              eyebrow="LGU WORKSPACE / ASSISTANCE"
-              title="Assistance Requests"
-              subtitle="Review resident requests and provide appropriate support."
-              icon="hand-left-outline"
-              tag="RESIDENT ASSISTANCE"
-            />
-            <View style={{ marginTop: 20, gap: 17 }}>
+            <View style={{gap:13}}>
+              <View style={{flexDirection:"row",alignItems:"center",gap:13,paddingBottom:1}}>
+                <Ionicons name="clipboard-outline" size={29} color="#07854A"/>
+                <View style={{gap:3}}>
+                  <Text style={{fontSize:24,fontWeight:"800",color:"#111827"}}>Assistance Requests</Text>
+                  <Text style={{fontSize:12,color:"#61737D"}}>Review resident requests for support.</Text>
+                </View>
+              </View>
               <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 9, alignItems: "center" }}>
                 <MockStatusTab label="All Requests" count={requests.length} active={filter === "all"}
                   onPress={() => { setFilter("all"); setRecordPage(1); }} />
@@ -2172,8 +2172,19 @@ This still does not automatically create a Donation Campaign.`,
                     placeholder="Search request, resident, or category..."
                     placeholderTextColor="#94A3B8" style={styles.searchInput}/>
                 </View>
-                <Text style={{fontSize:12,fontWeight:"700",color:"#64748B"}}>Newest requests first</Text>
+                <TouchableOpacity accessibilityRole="button" accessibilityState={{expanded:showReferenceFilter}}
+                  onPress={()=>setShowReferenceFilter(current=>!current)}
+                  style={{flexDirection:"row",alignItems:"center",gap:8,paddingHorizontal:15,paddingVertical:11,
+                    backgroundColor:"#FFFFFF",borderWidth:1,borderColor:"#DDE7E5",borderRadius:8}}>
+                  <Ionicons name="filter-outline" size={17} color="#03733F"/>
+                  <Text style={{fontSize:12,fontWeight:"800",color:"#03733F"}}>Filter</Text>
+                </TouchableOpacity>
               </View>
+              {showReferenceFilter && <View style={{flexDirection:"row",flexWrap:"wrap",gap:8,alignItems:"center"}}>
+                <MockStatusTab label="Under Review" count={stats.underReview} active={filter === "under_review"}
+                  onPress={() => {setFilter("under_review");setRecordPage(1);}} />
+                <Text style={{fontSize:11,color:"#64748B"}}>Showing newest requests first</Text>
+              </View>}
               {!!listenerError && (
                 <View style={styles.errorBox}>
                   <Ionicons name="alert-circle-outline" size={18} color="#B42318"/>
@@ -2184,15 +2195,10 @@ This still does not automatically create a Donation Campaign.`,
                 borderRadius:16,backgroundColor:"#FFFFFF",borderWidth:1,
                 borderColor:"#DDE8E4",overflow:"hidden",
               }}>
-                <View style={{paddingHorizontal:20,paddingTop:21,paddingBottom:17,gap:4}}>
-                  <Text style={{fontSize:19,fontWeight:"800",color:"#102822"}}>Assistance Request Queue</Text>
-                  <Text style={{fontSize:12,fontWeight:"700",color:"#047857"}}>
-                    {filteredRequests.length} {filteredRequests.length === 1 ? "request" : "requests"}
-                  </Text>
-                </View>
+                <View style={{height:6}} />
                 <ScrollView horizontal={!wide} showsHorizontalScrollIndicator={!wide}
                   nestedScrollEnabled style={{width:"100%"}}>
-                <View style={wide ? {width:"100%"} : {width:760}}>
+                <View style={wide ? {width:"100%"} : {width:890}}>
                 <View style={{
                   flexDirection:"row",paddingHorizontal:20,paddingVertical:13,
                   backgroundColor:"#F1F6F4",borderTopWidth:1,borderBottomWidth:1,
@@ -2201,9 +2207,9 @@ This still does not automatically create a Donation Campaign.`,
                   <Text style={{flex:3,minWidth:180,fontSize:10.5,fontWeight:"800",color:"#49665B"}}>REQUEST CASE</Text>
                   <Text style={{flex:2,minWidth:110,fontSize:10.5,fontWeight:"800",color:"#49665B"}}>RESIDENT</Text>
                   <Text style={{flex:1.6,minWidth:90,fontSize:10.5,fontWeight:"800",color:"#49665B"}}>CATEGORY</Text>
-                  <Text style={{flex:1.2,minWidth:85,fontSize:10.5,fontWeight:"800",color:"#49665B"}}>AMOUNT</Text>
+                  <Text style={{flex:1.2,minWidth:85,fontSize:10.5,fontWeight:"800",color:"#49665B"}}>REQUESTED AMOUNT</Text>
                   <Text style={{flex:1.2,minWidth:90,fontSize:10.5,fontWeight:"800",color:"#49665B"}}>STATUS</Text>
-                  <Text style={{width:16,fontSize:10.5,fontWeight:"800",color:"#49665B"}}> </Text>
+                  <Text style={{flex:1.2,minWidth:115,fontSize:10.5,fontWeight:"800",color:"#49665B"}}>SUBMITTED</Text>
                 </View>
                 {loadingRequests ? (
                   <View style={{padding:35,alignItems:"center"}}><ActivityIndicator color="#047857"/></View>
@@ -2222,6 +2228,9 @@ This still does not automatically create a Donation Campaign.`,
                   flexDirection:"row",flexWrap:"wrap",alignItems:"center",
                   justifyContent:"space-between",gap:12,
                 }}>
+                  <Text style={{fontSize:11,color:"#64748B"}}>
+                    {filteredRequests.length===0?0:(activeRequestPage-1)*5+1}–{Math.min(activeRequestPage*5,filteredRequests.length)} of {filteredRequests.length} requests  ·  5 per page
+                  </Text>
                   <ListPagination page={activeRequestPage} total={filteredRequests.length}
                     pageSize={5} onChange={setRecordPage}/>
                 </View>
@@ -2424,7 +2433,10 @@ function MockQueueRow({request,onPress}:{
           <Text style={{fontSize:11,color:meta.color,fontWeight:"800"}}>{meta.label}</Text>
         </View>
       </View>
-      <Ionicons name="chevron-forward" size={18} color="#047857"/>
+      <View style={{flex:1.2,minWidth:115,flexDirection:"row",alignItems:"center",gap:7}}>
+        <Text style={{flex:1,fontSize:11,color:"#536C61"}} numberOfLines={2}>{readableDate(request.createdAt)}</Text>
+        <Ionicons name="chevron-forward" size={18} color="#047857"/>
+      </View>
     </TouchableOpacity>
   );
 }
