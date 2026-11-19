@@ -54,6 +54,14 @@ function createDemoApprovedCaseInviteHandler({
     const adminDoc=ref(db,"users",after.validatedBy);
     const batchDoc=ref(db,"emergencyAutoDispatchBatches",id);
     const legacyDoc=ref(db,"emergencyAutoDispatch",id);
+    // Fail closed immediately on spoofed or revoked Admin validation.
+    // Re-read again within the transaction to close the approval race.
+    const adminSnapshot=await adminDoc.get();
+    if(!adminSnapshot.exists||
+       adminSnapshot.data()?.role!=="admin"||
+       adminSnapshot.data()?.status!=="approved"||
+       adminSnapshot.data()?.adminStatus==="suspended")
+      return result("blocked","admin_approval_not_authorized");
     const appQuery=db.collection("volunteerApplications")
       .where("status","==","approved").limit(201);
     const caseQuery=db.collection("responseAssignments")
