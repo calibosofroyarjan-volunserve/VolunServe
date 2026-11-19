@@ -1,0 +1,100 @@
+# Isolated staging verification only: no Firebase credentials and no deployments.
+name: Verify Strict Signup Provider + Firestore Gates (NO DEPLOY)
+on:
+  push:
+    branches: [security/strict-gmail-yahoo-oauth-rules-review-20261119]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  source-and-emulator-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    env:
+      CI: 'true'
+      EXPO_NO_TELEMETRY: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Enforce exact last-released Hosting source and narrow changes
+        run: |
+          node <<'NODE'
+          const assert=require('node:assert/strict');
+          const cp=require('node:child_process');
+          const base='6b30cbd7fe72abb247b6b32233411048d6e42b84';
+          cp.execFileSync('git',['merge-base','--is-ancestor',base,'HEAD']);
+          const diff=cp.execFileSync('git',['diff','--name-status','--no-renames',base,'HEAD'],{encoding:'utf8'})
+            .trim().split('\n').filter(Boolean);
+          const allowed=[
+            '.github/workflows/verify-strict-signup-rules-no-deploy-20261119.yml',
+            'components/auth/EmailFirstSignup.tsx',
+            'firestore.rules',
+            'lib/firebaseAuth.ts',
+            'lib/registrationEmailPolicy.ts',
+            'lib/signupRegistration.ts',
+            'scripts/test-signup-prod.cjs',
+            'scripts/test-gmail-yahoo-oauth-profile-rules-emulator-20261119.cjs',
+            'scripts/test-existing-account-compatibility.cjs',
+          ].sort();
+          assert.deepEqual(diff.map(x=>x.split('\t')[1]).sort(),allowed);
+          assert(diff.every(x=>/^[AM]\t/.test(x)),'No deletes or renames allowed');
+          const orig=cp.execFileSync('git',['show',base+':firestore.rules'],{encoding:'utf8'});
+          const curr=require('node:fs').readFileSync('firestore.rules','utf8');
+          const additions=[
+            `        // New Resident profiles: exact Gmail/Yahoo only. Gmail requires a
+        // Google-linked identity rather than receive-only email verification.
+        && request.resource.data.email.matches('(?i)^[^@ ]+@(gmail|yahoo)[.]com$')
+        && (
+          request.resource.data.email.matches('(?i)^[^@ ]+@yahoo[.]com$')
+          || request.auth.token.get('firebase', {}).get('identities', {}).get('google.com', []).size() > 0
+        )
+`,
+            `        // New applicant profiles only; existing staff logins are untouched.
+        && request.resource.data.email.matches('(?i)^[^@ ]+@(gmail|yahoo)[.]com$')
+`,
+          ];
+          let reconstructed=curr;
+          for(const x of additions){
+            assert(reconstructed.includes(x),'Missing reviewed additive rules predicate');
+            reconstructed=reconstructed.replace(x,'');
+          }
+          assert.equal(reconstructed,orig,'Rules contain additional unreviewed changes');
+          console.log('PASS: exact original rules recovered by removing only two additions');
+          NODE
+      - name: Install pinned dependencies
+        run: npm ci --no-audit --no-fund
+      - name: TypeScript / client Signup and role regression checks
+        run: |
+          npx tsc --noEmit --incremental false
+          node scripts/test-signup-prod.cjs
+          node scripts/test-signup-email-first-middle-optional.cjs
+          node scripts/test-login-field-validation.cjs
+          node scripts/test-login-ui-release.cjs
+          node scripts/test-route-entrypoints.cjs
+          node scripts/test-portal-resident-volunteer-ui-flow.cjs
+          node scripts/test-admin-navigation-contract.cjs
+          node scripts/test-profile-certificates-account-menu.cjs
+          node scripts/test-unified-login-routing.cjs
+      - name: Firestore emulator direct signup/profile-denial tests
+        run: |
+          npx firebase-tools emulators:exec --only firestore --project demo-volunserve-strict-provider-20261119 "node scripts/test-gmail-yahoo-oauth-profile-rules-emulator-20261119.cjs"
+      - name: Firestore emulator historic accounts compatibility
+        run: |
+          npx firebase-tools emulators:exec --only firestore --project demo-volunserve-account-compatibility-20261119 "node scripts/test-existing-account-compatibility.cjs"
+      - name: Compile web build without production publish
+        run: |
+          npx expo export --platform web --clear
+          env -u GITHUB_SHA node scripts/verify-hosting-release.cjs
+      - name: Verify infrastructure unchanged (no Hosting, Render or Firebase mutations)
+        run: |
+          git diff --exit-code 6b30cbd7fe72abb247b6b32233411048d6e42b84 HEAD -- firebase.json .firebaserc storage.rules firestore.indexes.json backend functions identity-ai package.json package-lock.json
+          echo 'PASS: no privileged production infrastructure changed'
