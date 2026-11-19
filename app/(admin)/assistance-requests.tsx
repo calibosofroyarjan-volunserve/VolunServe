@@ -2572,7 +2572,7 @@ This still does not automatically create a Donation Campaign.`,
         ))}
       </View>
       <View style={styles.referenceSearchRow}>
-      <View style={styles.assistanceSearchField}>
+      <View style={[styles.assistanceSearchField,{flex:1}]}>
         <Ionicons name="search-outline" size={19} color="#64748B" />
         <TextInput
           value={search}
@@ -6784,12 +6784,11 @@ const styles = StyleSheet.create({
   reviewHeader: {
     flexDirection: "row",
     flexWrap: "wrap",
-    alignItems: "flex-start",
+    alignItems: "center",
     justifyContent: "space-between",
     gap: 14,
-    padding: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: "#EDF1F5",
+    padding: 10,
+    borderBottomWidth: 0,
   },
 
   reviewHeaderCopy: {
@@ -6836,16 +6835,21 @@ const styles = StyleSheet.create({
   },
 
   tabButton: {
-    minHeight: 37,
+    minHeight: 42,
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
-    paddingHorizontal: 11,
-    borderRadius: 10,
+    justifyContent: "center",
+    gap: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 8,
+    borderBottomWidth: 3,
+    borderBottomColor: "transparent",
   },
 
   tabButtonActive: {
     backgroundColor: "#EAF7F0",
+    borderBottomColor: "#07834A",
   },
 
   tabButtonText: {
@@ -7907,14 +7911,15 @@ const styles = StyleSheet.create({
   },
 
   mockDetailTabs: {
-    marginTop: 12,
+    marginTop: 5,
+    marginBottom: 11,
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: 6,
+    gap: 7,
     padding: 7,
-    borderRadius: 10,
+    borderRadius: 8,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: "#E2E8EA",
     backgroundColor: "#FFFFFF",
   },
 
@@ -7981,10 +7986,9 @@ const styles = StyleSheet.create({
   },
 
   detailHeaderCard: {
-    marginTop: 4,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: "#E2E8F0",
+    marginTop: 3,
+    borderRadius: 10,
+    borderWidth: 0,
     backgroundColor: "#FFFFFF",
     overflow: "hidden",
   },
