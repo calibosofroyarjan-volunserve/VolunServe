@@ -6,6 +6,7 @@ on:
       - 'app/(admin)/assistance-requests.tsx'
       - 'app/(admin)/donation-list.tsx'
       - 'scripts/test-assistance-donation-flow-audit-20261119.cjs'
+      - 'scripts/test-donation-browser-alerts-20261119.cjs'
       - '.github/workflows/validate-assistance-donation-full-flow-20261119.yml'
   pull_request:
     branches: [baseline/live-assistance-c908-20261119]
@@ -13,6 +14,7 @@ on:
       - 'app/(admin)/assistance-requests.tsx'
       - 'app/(admin)/donation-list.tsx'
       - 'scripts/test-assistance-donation-flow-audit-20261119.cjs'
+      - 'scripts/test-donation-browser-alerts-20261119.cjs'
       - '.github/workflows/validate-assistance-donation-full-flow-20261119.yml'
 permissions:
   contents: read
@@ -48,6 +50,7 @@ jobs:
             'app/(admin)/assistance-requests.tsx',
             'app/(admin)/donation-list.tsx',
             'scripts/test-assistance-donation-flow-audit-20261119.cjs',
+            'scripts/test-donation-browser-alerts-20261119.cjs',
           ].sort();
           assert.deepEqual(names.map(n=>n.split('\t')[1]).sort(),allowed);
           assert(names.every(n=>/^[AM]\t/.test(n)));
