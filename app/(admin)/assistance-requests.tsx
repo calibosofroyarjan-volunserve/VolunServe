@@ -3383,149 +3383,174 @@ function DecisionTab({
       </View>
     );
     return (
-      <View style={{gap:16,paddingBottom:28}}>
-        <SectionCard title="Assistance Approved"
-          subtitle="The Admin review is complete. Choose how this verified need will be supported."
-          icon="checkmark-circle-outline">
-          <InfoGrid>
-            <InfoItem label="Resident" value={request.requesterName || "Resident"} />
-            <InfoItem label="Verified Uncovered Need" value={money(monetaryCap)} />
-            <InfoItem label="Current Plan" value={
-              request.supportDecision === "donation_support" ? "Donation Support" :
-              request.supportDecision === "internal_support" ? "LGU / Partner" :
-              request.supportDecision === "not_required" ? "No Further Support" :
-              "Choose Support"
-            } />
-          </InfoGrid>
-          <Text style={styles.bodyText}>
-            Approval does not automatically release assistance or publish a donation campaign.
-          </Text>
-        </SectionCard>
-
-        <SectionCard title="Step 1 — Choose Support"
-          subtitle="Select one support option for this approved request."
-          icon="layers-outline">
-          <View style={{gap:10}}>
-            {supportCard("donation_support","Create Donation Campaign",
-              "Raise the verified remaining amount. Campaign publishing is a separate Admin action.",
-              "heart-outline")}
-            {supportCard("internal_support","LGU / Partner Assistance",
-              "Record support from the LGU or an authorized partner.",
-              "business-outline")}
-            {supportCard("not_required","No Further Assistance Needed",
-              "Close the case once the Admin confirms there is no remaining support to arrange.",
-              "checkmark-done-outline")}
-            {monetaryCap <= 0 && (
-              <Text style={styles.bodyText}>
-                Donation Campaign is unavailable because this case has no verified uncovered monetary amount.
-              </Text>
-            )}
+      <View style={{padding:22,gap:23}}>
+        <View style={{flexDirection:"row",alignItems:"center",justifyContent:"space-between",
+          flexWrap:"wrap",gap:14,paddingBottom:13,borderBottomWidth:1,borderColor:"#E6EEEA"}}>
+          <View style={{gap:5}}>
+            <Text style={{fontSize:21,color:"#103528",fontWeight:"800"}}>Choose Assistance</Text>
+            <Text style={{fontSize:12,color:"#63796F",lineHeight:19}}>
+              This request is approved. Choose how support will be provided.
+            </Text>
           </View>
-        </SectionCard>
-
-        {donationChosen && (
-          <>
-            <SectionCard title="Step 2 — Donation Details"
-              subtitle="Only the approved monetary need can be used as the fundraising goal."
-              icon="calculator-outline">
-              <View style={{gap:10}}>
-                <InfoGrid>
-                  <InfoItem label="Maximum Verified Goal" value={money(monetaryCap)} />
-                  <InfoItem label="Already Saved" value={money(savedAmount)} />
-                </InfoGrid>
-                <Text style={styles.fieldLabel}>Amount to raise (PHP)</Text>
-                <TextInput value={remainingAmount}
-                  editable={!busy && !donationSubmitting}
-                  onChangeText={v=>setRemainingAmount(v.replace(/[^0-9.]/g,""))}
-                  keyboardType="decimal-pad" placeholder="Enter the verified remaining amount"
-                  placeholderTextColor="#94A3B8" style={styles.input} />
-                {!amountValid && (
-                  <Text style={{color:"#B45309",fontSize:11}}>
-                    Enter a positive amount no higher than the verified uncovered need.
-                  </Text>
-                )}
-                <Text style={styles.bodyText}>
-                  No extra funding is added here. The amount must match the supporting evidence already reviewed.
-                </Text>
-              </View>
-            </SectionCard>
-
-            <SectionCard title="Step 3 — Public Coordination"
-              subtitle="Enter a public LGU or partner office. Google Maps and GPS are not needed."
-              icon="business-outline">
-              <View style={{gap:10}}>
-                <Text style={styles.fieldLabel}>Public office or partner name</Text>
-                <TextInput value={locationName}
-                  onChangeText={setLocationName} editable={!busy && !donationSubmitting}
-                  style={styles.input} placeholder="e.g. Barangay Hall Assistance Desk"
-                  placeholderTextColor="#94A3B8"/>
-                <Text style={styles.fieldLabel}>Public office address</Text>
-                <TextInput value={locationAddress}
-                  onChangeText={setLocationAddress} editable={!busy && !donationSubmitting}
-                  style={styles.input} placeholder="Barangay, City of San Jose del Monte, Bulacan"
-                  placeholderTextColor="#94A3B8"/>
-                {!officeValid && (
-                  <Text style={{color:"#B45309",fontSize:11}}>
-                    Enter the name and address of a public barangay or LGU coordination office.
-                  </Text>
-                )}
-                <Text style={styles.bodyText}>
-                  This location is for public coordination only. Never publish the Resident's home address.
-                </Text>
-              </View>
-            </SectionCard>
-            <View style={{gap:7}}>
-              <ActionButton label="Save & Continue to Campaign Setup"
-                icon="arrow-forward-circle-outline" variant="success"
-                loading={donationSubmitting || busy} disabled={busy || donationSubmitting}
-                onPress={onContinueDonation} />
-              <Text style={{textAlign:"center",fontSize:11,color:"#64748B"}}>
-                Saves the support plan and public office, then opens the Donation Campaign editor. It does not publish.
-              </Text>
-            </View>
-          </>
+          <View style={{backgroundColor:"#DDF7E6",paddingVertical:9,paddingHorizontal:16,
+            borderRadius:99,flexDirection:"row",alignItems:"center",gap:7}}>
+            <Ionicons name="checkmark-circle" size={17} color="#087544"/>
+            <Text style={{fontSize:12,fontWeight:"800",color:"#087544"}}>Approved</Text>
+          </View>
+        </View>
+        <View style={{flexDirection:"row",flexWrap:"wrap",gap:18}}>
+          <View style={{flex:1,minWidth:270}}>
+            {supportCard("donation_support","Create Donation Campaign",
+              "Gather community support for the approved amount.",
+              "heart-outline")}
+          </View>
+          <View style={{flex:1,minWidth:270}}>
+            {supportCard("internal_support","Record LGU Assistance",
+              "Record assistance given by the LGU or an authorized partner.",
+              "business-outline")}
+          </View>
+        </View>
+        {supportDecision==="not_required" && (
+          <View style={{padding:13,backgroundColor:"#F1F5F9",borderRadius:10}}>
+            <Text style={{fontSize:12,color:"#475569"}}>
+              This request is currently marked No Further Support.
+              Select LGU Assistance to record direct support, or continue with the saved decision.
+            </Text>
+          </View>
         )}
-
-        {["internal_support","not_required"].includes(supportDecision) && (
-          <SectionCard title="Step 2 — Save & Complete"
-            subtitle="Save this support decision before closing or marking the case completed."
-            icon="clipboard-outline">
-            <View style={{gap:12}}>
-              <Text style={styles.bodyText}>
-                {supportDecision === "internal_support"
-                  ? "Save the LGU or partner support plan. Mark completed only when the assistance has actually been provided."
-                  : "Save the no-further-support decision, then close the case only after confirmation."}
-              </Text>
-              {!savedPlan && (
-                <ActionButton label="Save Support Plan"
-                  icon="save-outline" variant="primary"
-                  loading={savingAction === "resource_assessment"} disabled={busy}
-                  onPress={onSaveResourceAssessment} />
-              )}
-              {savedPlan && (
-                <>
-                  <View style={{
-                    flexDirection:"row",alignItems:"center",gap:8,
-                    borderRadius:11,backgroundColor:"#F0FDF4",padding:12,
-                  }}>
-                    <Ionicons name="checkmark-circle-outline" size={18} color="#047857" />
-                    <Text style={{color:"#065F46",fontSize:12,fontWeight:"700"}}>
-                      Support plan saved
+        {monetaryCap <= 0 && (
+          <Text style={{fontSize:12,color:"#92400E"}}>
+            Donation Campaign needs a confirmed amount greater than zero. Review the supported costs first.
+          </Text>
+        )}
+        {donationChosen && (
+          <SectionCard title="Publish Donation Campaign"
+            subtitle="Prepare a public donation campaign using the approved assistance request."
+            icon="megaphone-outline">
+            <View style={{gap:22}}>
+              <View style={{flexDirection:"row",flexWrap:"wrap",gap:24,alignItems:"flex-start"}}>
+                <View style={{flex:1.65,minWidth:270,gap:12}}>
+                  <View style={{gap:6}}>
+                    <Text style={styles.fieldLabel}>Campaign Title</Text>
+                    <View style={{flexDirection:"row",alignItems:"center",gap:8}}>
+                      <Text style={{color:"#047857",fontSize:11,fontWeight:"700"}}>From Resident's Request</Text>
+                      <Ionicons name="checkmark-circle-outline" size={14} color="#047857"/>
+                    </View>
+                    <View style={{padding:13,borderWidth:1,borderColor:"#DDE7E1",borderRadius:10,
+                      backgroundColor:"#F8FAF9"}}>
+                      <Text style={{fontSize:13,fontWeight:"700",color:"#1D332A"}}>
+                        {request.title || "Assistance Request"}
+                      </Text>
+                    </View>
+                  </View>
+                  <View style={{gap:6}}>
+                    <Text style={styles.fieldLabel}>Campaign Story</Text>
+                    <Text style={{color:"#047857",fontSize:11,fontWeight:"700"}}>From Resident's Description</Text>
+                    <View style={{padding:14,borderWidth:1,borderColor:"#DDE7E1",borderRadius:10,
+                      backgroundColor:"#F8FAF9",minHeight:77}}>
+                      <Text style={{fontSize:12,color:"#344B42",lineHeight:19}}>
+                        {request.description || "No description provided by the Resident."}
+                      </Text>
+                    </View>
+                    <Text style={{fontSize:11,color:"#64748B"}}>
+                      The Campaign editor checks and lets the Admin remove private details before publishing.
                     </Text>
                   </View>
-                  <ActionButton
-                    label={supportDecision === "not_required" ?
-                      "Close Assistance Case" : "Mark Assistance Provided"}
+                  <View style={{flexDirection:"row",flexWrap:"wrap",gap:16}}>
+                    <View style={{flex:1,minWidth:160,gap:6}}>
+                      <Text style={styles.fieldLabel}>Donation Target (PHP)</Text>
+                      <TextInput value={remainingAmount}
+                        editable={!busy && !donationSubmitting}
+                        onChangeText={v=>setRemainingAmount(v.replace(/[^0-9.]/g,""))}
+                        keyboardType="decimal-pad" placeholder="Enter amount"
+                        placeholderTextColor="#94A3B8" style={styles.input}/>
+                      {!amountValid && (
+                        <Text style={{fontSize:11,color:"#B45309"}}>Enter an amount up to {money(monetaryCap)}.</Text>
+                      )}
+                    </View>
+                    <View style={{flex:1,minWidth:160,gap:6}}>
+                      <Text style={styles.fieldLabel}>Campaign Cover</Text>
+                      <View style={{padding:13,backgroundColor:"#F8FAF9",borderRadius:10,
+                        borderWidth:1,borderColor:"#DDE7E1",flexDirection:"row",gap:8,alignItems:"center"}}>
+                        <Ionicons name="image-outline" size={17} color="#047857"/>
+                        <Text style={{fontSize:12,color:"#40574D",flex:1}}>
+                          {request.publicCampaignPhotoUrl ? "Resident photo provided" : "Upload in Campaign Setup"}
+                        </Text>
+                      </View>
+                    </View>
+                  </View>
+                  <Text style={styles.fieldLabel}>Assistance Office (Public Only)</Text>
+                  <View style={{flexDirection:"row",flexWrap:"wrap",gap:14}}>
+                    <TextInput value={locationName} onChangeText={setLocationName}
+                      editable={!busy && !donationSubmitting}
+                      placeholder="e.g. City Social Welfare Office"
+                      placeholderTextColor="#94A3B8"
+                      style={[styles.input,{flex:1,minWidth:180}]}/>
+                    <TextInput value={locationAddress} onChangeText={setLocationAddress}
+                      editable={!busy && !donationSubmitting}
+                      placeholder="Public office address"
+                      placeholderTextColor="#94A3B8"
+                      style={[styles.input,{flex:1,minWidth:180}]}/>
+                  </View>
+                  {!officeValid && (
+                    <Text style={{fontSize:11,color:"#B45309"}}>
+                      Enter a public LGU office name and address. Never use a Resident's private home address.
+                    </Text>
+                  )}
+                </View>
+                <View style={{flex:1,minWidth:235,gap:14}}>
+                  <View style={{backgroundColor:"#F3F8F5",borderRadius:12,
+                    borderWidth:1,borderColor:"#E0ECE5",padding:17,gap:14}}>
+                    <Text style={{fontSize:14,fontWeight:"800",color:"#173B2D"}}>Campaign Summary</Text>
+                    <InfoItem label="Request ID" value={request.requestId || request.id}/>
+                    <InfoItem label="Resident" value={request.requesterName || "Resident"}/>
+                    <InfoItem label="Category" value={request.categoryLabel || "Assistance"}/>
+                    <InfoItem label="Amount for Donation" value={money(Number(remainingAmount || 0))}/>
+                    <Text style={{fontSize:11,color:"#6B7D74",lineHeight:17}}>
+                      Resident information is shown privately to the Admin only.
+                    </Text>
+                  </View>
+                  <ActionButton label="Continue to Publish Campaign"
+                    icon="megaphone-outline" variant="success"
+                    loading={donationSubmitting || busy} disabled={busy || donationSubmitting}
+                    onPress={onContinueDonation}/>
+                  <Text style={{fontSize:11,color:"#64748B",lineHeight:17,textAlign:"center"}}>
+                    Saves the approved amount and public office, then opens the final publishing screen.
+                  </Text>
+                </View>
+              </View>
+            </View>
+          </SectionCard>
+        )}
+        {["internal_support","not_required"].includes(supportDecision) && (
+          <SectionCard title="Record LGU Assistance"
+            subtitle="Save the assistance plan and confirm when support has been provided."
+            icon="business-outline">
+            <View style={{gap:15}}>
+              {!savedPlan ? (
+                <ActionButton label="Save Assistance Plan" icon="save-outline" variant="primary"
+                  loading={savingAction==="resource_assessment"} disabled={busy}
+                  onPress={onSaveResourceAssessment}/>
+              ) : (
+                <View style={{gap:14}}>
+                  <View style={{backgroundColor:"#F0FDF4",padding:14,borderRadius:12,
+                    flexDirection:"row",gap:9,alignItems:"center"}}>
+                    <Ionicons name="checkmark-circle" color="#047857" size={19}/>
+                    <Text style={{fontSize:12,color:"#047857",fontWeight:"800"}}>Assistance plan saved</Text>
+                  </View>
+                  <ActionButton label={supportDecision==="not_required" ?
+                    "Close Assistance Case" : "Mark Assistance Provided"}
                     icon="checkmark-done-outline" variant="success"
-                    loading={savingAction === "assistance_provided"}
-                    disabled={busy} onPress={onMarkAssistanceProvided} />
-                </>
+                    loading={savingAction==="assistance_provided"} disabled={busy}
+                    onPress={onMarkAssistanceProvided}/>
+                </View>
               )}
             </View>
           </SectionCard>
         )}
       </View>
     );
+
   }
 
   const approvedState = decision === "approve";
