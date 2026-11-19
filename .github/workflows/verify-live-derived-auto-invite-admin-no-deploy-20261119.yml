@@ -1,0 +1,66 @@
+name: Verify live-Hosting-derived Automatic Volunteer UI bridge — NO DEPLOY
+on:
+  push:
+    branches:
+      - feat/live-derived-auto-volunteer-admin-bridge-no-deploy-20261119
+  pull_request:
+    branches:
+      - baseline/current-hosting-e0e839-auto-invite-20261119
+permissions:
+  contents: read
+jobs:
+  hosting-derived:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - name: Strict exact Hosting base and four scoped changes
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE=e0e839ea84f4407bacf62b99d2d92e7f63b76a6e
+          git diff --name-status "$BASE" HEAD >/tmp/scope
+          test "$(wc -l </tmp/scope)" -eq 4
+          while IFS="$(printf '\t')" read -r status path; do
+            case "$status:$path" in
+              "M:app/(admin)/admin-cases.tsx"|"A:lib/automaticVolunteerApprovalBridge.ts"|"A:scripts/test-automatic-volunteer-approval-bridge-20261119.cjs"|"A:.github/workflows/verify-live-derived-auto-invite-admin-no-deploy-20261119.yml") ;;
+              *) echo "BLOCKED unexpected file: $status $path"; exit 1 ;;
+            esac
+          done </tmp/scope
+          node <<'NODE'
+          const fs=require('fs'),cp=require('child_process'),assert=require('node:assert/strict');
+          const before=cp.execFileSync('git',['show','e0e839ea84f4407bacf62b99d2d92e7f63b76a6e:app/(admin)/admin-cases.tsx'],{encoding:'utf8'});
+          const after=fs.readFileSync('app/(admin)/admin-cases.tsx','utf8');
+          for(const preserved of [
+            'publishVerifiedCommunityAdvisory({',
+            'safePublicAdvisoryBarangay(',
+            'assignVolunteerToCase',
+            'assignLguPersonnelToCase',
+            'reviewVerification',
+            'caseSearch',
+            'detailTab === "map"',
+            'cancelAssignment'
+          ]){
+            assert.ok(before.includes(preserved),'Actual Hosting source missing '+preserved);
+            assert.ok(after.includes(preserved),'BLOCKED removed working functionality: '+preserved);
+          }
+          const module=fs.readFileSync('lib/automaticVolunteerApprovalBridge.ts','utf8');
+          assert.ok(module.includes('firebaseConfig.projectId === "volunserve-3aa5b"'));
+          assert.ok(module.includes('EXPO_PUBLIC_VOLUNSERVE_ENV !== "staging"'));
+          assert.ok(!module.includes('runTransaction('));
+          console.log('PASS: actual Hosting Emergency Admin & Advisory features retained.');
+          NODE
+      - name: Install locked web dependencies
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: TypeScript
+        run: npx tsc --noEmit
+      - name: Automatic approval and duplicate invite regression
+        run: node --test scripts/test-automatic-volunteer-approval-bridge-20261119.cjs
+      - name: No live deployment
+        run: echo "No Firebase Hosting, Render, Firebase Functions, Firestore data, or Volunteer tasks changed."
