@@ -211,7 +211,8 @@ function harness(source, enabled, options = {}) {
     const ui=read("components/auth/EmailFirstSignup.tsx");
     assert(!ui.includes("Use any accessible email (Yahoo, Outlook, Gmail, school or work)"));
     assert(ui.includes("Continue with Google to prove account ownership"));
-    assert(ui.includes("Gmail format accepted, but the inbox may be temporary"));
+    assert(ui.includes("Gmail registration requires Continue with Google."));
+    assert(ui.includes("(!gmailNeedsGoogle || googleOnly || resumeMode) && checkButton("));
   });
   await check("native Google signup owns OAuth and never bounces pending users to Login",()=>{
     assert(read("lib/useSignupGoogle.ts").includes("signInWithCredential"));
