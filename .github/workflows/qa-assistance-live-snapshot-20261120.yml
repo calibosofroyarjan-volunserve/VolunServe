@@ -1,0 +1,35 @@
+name: QA actual hosted Assistance Requests candidate (NO DEPLOY)
+on:
+  push:
+    branches:
+      - qa/assistance-actual-hosting-build-20261120
+permissions:
+  contents: read
+jobs:
+  validate-current-live-snapshot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      CI: 'true'
+      EXPO_NO_TELEMETRY: '1'
+    steps:
+      - name: Checkout deployed-source candidate with history
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: false
+      - name: Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci --no-audit --no-fund
+      - name: TypeScript check
+        run: npx tsc --noEmit --incremental false
+      - name: Verify deployed handler parity
+        run: node scripts/test-assistance-live-snapshot-qa-20261120.cjs
+      - name: Expo web export (NO DEPLOY)
+        run: npx expo export --platform web --clear
+      - name: Confirm QA did not deploy
+        run: echo 'NO DEPLOY: Firebase, Render, Hosting and Firestore untouched.'
