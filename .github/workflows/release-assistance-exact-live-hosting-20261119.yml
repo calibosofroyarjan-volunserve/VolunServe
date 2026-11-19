@@ -1,0 +1,158 @@
+name: Deploy ONLY Assistance & Donation UI from Exact Live Baseline 20261119
+on:
+  push:
+    branches: [release/assistance-ui-only-exact-live-b208-20261119]
+    paths:
+      - '.github/workflows/release-assistance-exact-live-hosting-20261119.yml'
+permissions:
+  contents: read
+concurrency:
+  group: volunserve-production-hosting-release
+  cancel-in-progress: false
+jobs:
+  validate-backup-publish:
+    if: github.repository == 'calibosofroyarjan-volunserve/VolunServe' && github.ref == 'refs/heads/release/assistance-ui-only-exact-live-b208-20261119'
+    environment: production
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    env:
+      CI: 'true'
+      EXPO_NO_TELEMETRY: '1'
+      EXPO_PUBLIC_VOLUNSERVE_ENV: production
+      EXPO_PUBLIC_IDENTITY_VERIFICATION_API_URL: https://volunserve.onrender.com
+      BASE_SHA: b208d90667c783fba27bad97d1842f99d9f8b31c
+      SITE: volunserve-3aa5b
+      BACKUP_CHANNEL: assistance-before-20261119
+      VOLUNSERVE_HOSTING_URL: https://volunserve.com
+    steps:
+      - name: Checkout exact release candidate without submodules
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: false
+      - name: Set up Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: FAIL CLOSED unless source is derived from current live revision and ONLY scoped files changed
+        shell: bash
+        run: |
+          set -euo pipefail
+          git merge-base --is-ancestor "$BASE_SHA" HEAD
+          git diff --check "$BASE_SHA" HEAD
+          git diff --name-status --no-renames "$BASE_SHA" HEAD | tee /tmp/assistance-allowed-files.txt
+          node <<'NODE'
+          const fs=require('node:fs'),assert=require('node:assert/strict');
+          const lines=fs.readFileSync('/tmp/assistance-allowed-files.txt','utf8').trim().split('\n');
+          const whitelist=new Set([
+            'app/(admin)/assistance-requests.tsx',
+            'app/(admin)/donation-list.tsx',
+            'scripts/test-assistance-live-clean-flow-20261119.cjs',
+            '.github/workflows/validate-assistance-live-clean-flow-20261119.yml',
+            '.github/workflows/release-assistance-exact-live-hosting-20261119.yml',
+          ]);
+          const touched=new Set();
+          for(const line of lines){
+            const [status,path]=line.split('\t');
+            assert(['A','M'].includes(status),'BLOCKED: deletion or rename '+line);
+            assert(whitelist.has(path),'BLOCKED: unrelated or outdated module '+path);
+            touched.add(path);
+          }
+          assert(touched.has('app/(admin)/assistance-requests.tsx'));
+          assert(touched.has('app/(admin)/donation-list.tsx'));
+          assert.equal(touched.size,5,'BLOCKED: unexpected file count');
+          console.log('PASS: Only 2 Admin UIs, QA script, no-deploy CI and release workflow changed');
+          NODE
+          git diff --quiet "$BASE_SHA" HEAD -- backend functions firestore.rules firestore.indexes.json storage.rules lib package.json package-lock.json firebase.json app.json .firebaserc
+          echo "PASS: Firebase policies, functions, backend, shared services and dependencies unchanged"
+      - name: Verify currently published production revision BEFORE building
+        shell: bash
+        run: |
+          export VOLUNSERVE_EXPECTED_SHA="$BASE_SHA"
+          node scripts/check-live-hosting.cjs
+      - name: Install locked dependencies
+        run: npm ci --no-audit --no-fund
+      - name: TypeScript check
+        run: npx tsc --noEmit --incremental false
+      - name: Assistance and Donation design contract
+        run: node scripts/test-assistance-live-clean-flow-20261119.cjs
+      - name: Existing LGU and nearby-module regression tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/test-lgu-internal-review-ux.cjs
+          node scripts/test-admin-emergency-master-detail-20261118.cjs
+          node scripts/test-embedded-emergency-map-navigation.cjs
+          node scripts/test-profile-certificates-account-menu.cjs
+          node scripts/test-module-announcements-publishing-20261115.cjs
+      - name: Export exact Expo web build and verify required routes
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx expo export --platform web --clear
+          node scripts/verify-hosting-release.cjs
+          test -f dist/assistance-requests.html || test -f dist/assistance-requests/index.html
+          test -f dist/donation-list.html || test -f dist/donation-list/index.html
+          node - <<'NODE'
+          const fs=require('node:fs'),assert=require('node:assert/strict');
+          const d=JSON.parse(fs.readFileSync('dist/volunserve-release.json','utf8'));
+          assert.equal(d.revision,process.env.GITHUB_SHA,'BLOCKED: built artifact is not exact release commit');
+          assert.equal(d.firebaseProject,'volunserve-3aa5b','BLOCKED: wrong Firebase project');
+          NODE
+      - name: Recheck production has not changed while tests were running
+        shell: bash
+        run: |
+          export VOLUNSERVE_EXPECTED_SHA="$BASE_SHA"
+          node scripts/check-live-hosting.cjs
+      - name: Verify existing production Hosting credential for correct Firebase project
+        shell: bash
+        env:
+          FIREBASE_SA: ${{ secrets.VOLUNSERVE_PRODUCTION_HOSTING_SERVICE_ACCOUNT }}
+        run: |
+          set -euo pipefail
+          test -n "$FIREBASE_SA" || { echo "::error::No production Hosting credential; aborted"; exit 1; }
+          node <<'NODE'
+          const fs=require('node:fs');
+          const obj=JSON.parse(process.env.FIREBASE_SA);
+          if(obj.type!=='service_account'||obj.project_id!=='volunserve-3aa5b'||
+             !obj.client_email||!obj.private_key) throw Error('Wrong Firebase project/credential, aborted');
+          fs.writeFileSync(process.env.RUNNER_TEMP+'/assistance-hosting-key.json',
+            process.env.FIREBASE_SA,{mode:0o600});
+          console.log('PASS: correct Firebase Hosting project credential, no other permissions used');
+          NODE
+          echo "GOOGLE_APPLICATION_CREDENTIALS=$RUNNER_TEMP/assistance-hosting-key.json" >> "$GITHUB_ENV"
+      - name: Production race check, BACKUP current Hosting, deploy ONLY Hosting and verify
+        shell: bash
+        run: |
+          set -euo pipefail
+          export VOLUNSERVE_EXPECTED_SHA="$BASE_SHA"
+          node scripts/check-live-hosting.cjs
+          npx firebase-tools hosting:clone "$SITE:live" "$SITE:$BACKUP_CHANNEL" --project "$SITE" --non-interactive
+          echo "PASS: prior live Hosting cloned to backup channel; deploying web Hosting ONLY"
+          npx firebase-tools deploy --only hosting --project "$SITE" --non-interactive
+          export VOLUNSERVE_EXPECTED_SHA="$GITHUB_SHA"
+          SUCCESS=0
+          for attempt in 1 2 3 4 5 6; do
+            if node scripts/check-live-hosting.cjs && node <<'NODE'
+          (async()=>{
+            for(const route of ['/assistance-requests','/donation-list','/admin-cases']){
+              const r=await fetch('https://volunserve.com'+route,
+                {headers:{'Cache-Control':'no-cache'},signal:AbortSignal.timeout(12000)});
+              const body=await r.text();
+              if(!r.ok||!body.includes('<html')) throw Error('Missing live route '+route+' / HTTP '+r.status);
+              console.log('PASS live Hosting route '+route);
+            }
+          })().catch(e=>{console.error(e.message);process.exitCode=1});
+          NODE
+            then SUCCESS=1;break;fi
+            sleep 12
+          done
+          if [ "$SUCCESS" != 1 ]; then
+            echo "::error::Post-deploy verification failed; rolling back Hosting-only to the backup"
+            npx firebase-tools hosting:clone "$SITE:$BACKUP_CHANNEL" "$SITE:live" --project "$SITE" --non-interactive || echo "::error::Hosting rollback failed; manual restoration required"
+            export VOLUNSERVE_EXPECTED_SHA="$BASE_SHA"
+            node scripts/check-live-hosting.cjs || true
+            exit 1
+          fi
+          echo "PASS: only Firebase Hosting updated; no Functions, Firestore rules, backend, identity or payments deployed"
