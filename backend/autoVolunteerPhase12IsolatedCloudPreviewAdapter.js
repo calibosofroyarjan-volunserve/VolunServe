@@ -12,7 +12,7 @@
  * CI tests use entirely local fakes and make ZERO external cloud calls.
  */
 const express=require("express");
-const {validProjectId,FORBIDDEN_FIREBASE_PROJECTS}
+const {FORBIDDEN_FIREBASE_PROJECTS}
   =require("./autoVolunteerPhase11CloudIsolationGate.cjs");
 const {isVerifiedFirebaseToken,isCompletedVolunServeProfile}
   =require("./verifiedFirebaseToken");
@@ -24,6 +24,13 @@ const {previewAllEligibleWave}
 
 const CASE=/^[A-Za-z0-9_-]{1,160}$/;
 const forbidden=new Set(FORBIDDEN_FIREBASE_PROJECTS);
+// Mirror the Phase 11 format gate locally: Phase 11 intentionally exports
+// only review outputs, not an authorization-granting validation function.
+function validProjectId(value){
+  return typeof value==="string"&&
+    /^[a-z][a-z0-9-]{5,28}[a-z0-9]$/.test(value)&&
+    !value.startsWith("demo-")&&!forbidden.has(value);
+}
 const disabled=reason=>({
   ok:false,status:"blocked",reason,readOnly:true,dispatchEnabled:false
 });
