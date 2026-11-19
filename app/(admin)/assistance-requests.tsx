@@ -595,6 +595,7 @@ const assistanceCategoryMeta = (
 };
 
 export default function AssistanceRequestsAdmin() {
+  const router = useRouter();
   const {
     loading: sessionLoading,
     user,
@@ -1678,8 +1679,8 @@ This still does not automatically create a Donation Campaign.`,
         "Mark Assistance Provided",
         "Confirm that the verified assistance has been provided or otherwise completed without opening a public Donation Campaign.",
         "Confirm",
-        () =>
-          updateRequest(
+        async () => {
+          await updateRequest(
             "assistance_provided",
             {
               status:
@@ -1699,7 +1700,8 @@ This still does not automatically create a Donation Campaign.`,
                   .trim()
                   .slice(0, 2000),
             },
-          ),
+          );
+        },
       );
     };
 
@@ -3702,7 +3704,7 @@ function DecisionTab({
         {["internal_support","not_required"].includes(supportDecision) && (
           <SectionCard title="Step 2 — Save & Complete"
             subtitle="Save this support decision before closing or marking the case completed."
-            icon="clipboard-checkmark-outline">
+            icon="clipboard-outline">
             <View style={{gap:12}}>
               <Text style={styles.bodyText}>
                 {supportDecision === "internal_support"
