@@ -2732,3 +2732,23 @@ exports.deliverAndroidPushForNotification = onDocumentCreated(
       }
     },
 );
+
+// Automatic Volunteer matching is available ONLY for an explicit local,
+// fictional Firebase Emulator run. No Cloud Function is registered when
+// deployed to a real Firebase project. In particular, this never activates
+// production volunserve-3aa5b or any live emergency invitations.
+if (process.env.GCLOUD_PROJECT === "demo-volunserve-auto-phase4" &&
+    process.env.FIRESTORE_EMULATOR_HOST === "127.0.0.1:8080" &&
+    process.env.VOLUNSERVE_AUTO_VOLUNTEER_TEST_TRIGGER === "enabled" &&
+    process.env.VOLUNSERVE_AUTO_VOLUNTEER_DISPATCH !== "enabled") {
+  const {createDemoApprovedCaseInviteHandler} =
+      require("./emergencyAutoInviteOnApproval");
+  exports.emulatorAutoVolunteerOnApproval = onDocumentUpdated(
+      {document: "disasterCases/{caseId}", retry: false},
+      createDemoApprovedCaseInviteHandler({
+        db: getFirestore(),
+        FieldValue,
+        knownBarangays: ["Bagong Buhay I", "Citrus"],
+      }),
+  );
+}
