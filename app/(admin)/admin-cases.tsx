@@ -1604,7 +1604,9 @@ export default function AdminCases() {
         const message = invitation.enabled
           ? invitation.status === "offered"
             ? `Automatic invitations confirmed for ${invitation.offered} eligible Volunteers.`
-            : "Report validation saved, but automatic invitations were NOT confirmed. Review the backend status before claiming they were sent."
+            : invitation.status === "already_started"
+              ? `Existing invitations confirmed for ${invitation.offered} Volunteers. No duplicate invitations sent.`
+              : "Report validation saved, but automatic invitations were NOT confirmed. Review the backend status before claiming they were sent."
           : validationOutcome.alreadyValidated
             ? "Already validated. Existing Volunteer response state was preserved."
             : "The case is now eligible for responder assignment.";
