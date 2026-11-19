@@ -972,19 +972,6 @@ export default function AssistanceRequestsAdmin() {
     setSimpleReviewMode(true);
   };
 
-  useEffect(() => {
-    // The reference layout opens on its full-width list; never auto-open a case from the old split-pane workspace.
-    if (!wide || screenMode !== "detail" || loadingRequests || sessionLoading || !isOperationalAdmin || !!savingAction) return;
-    const visibleSelected = pagedRequests.some((item) => item.id === selected?.id);
-    if (!visibleSelected) {
-      resetProtectedReviewView();
-      setSelected(pagedRequests[0] || null);
-      setReviewTab("case");
-      setReviewFocusStage(null);
-      setQuickAction(null);
-    }
-  }, [wide, screenMode, loadingRequests, sessionLoading, isOperationalAdmin, filteredRequests, activeRequestPage, selected?.id, savingAction]);
-
   const relatedRequests = useMemo(() => {
     if (!selected) return [];
 
@@ -2689,7 +2676,7 @@ This still does not automatically create a Donation Campaign.`,
     <View style={styles.page}>
       {wide ? (
         <View style={styles.assistanceDesktop}>
-          {!selected ? (
+          {(screenMode === "queue" || !selected) ? (
             <ScrollView style={styles.referenceFullPage} contentContainerStyle={styles.referenceFullPageContent}>
               {renderCompactQueue()}
             </ScrollView>
