@@ -2175,8 +2175,8 @@ This still does not automatically create a Donation Campaign.`,
               <View style={{flexDirection:"row",alignItems:"center",gap:13,paddingBottom:1}}>
                 <Ionicons name="clipboard-outline" size={29} color="#07854A"/>
                 <View style={{gap:3}}>
-                  <Text style={{fontSize:24,fontWeight:"800",color:"#111827"}}>Assistance Requests</Text>
-                  <Text style={{fontSize:12,color:"#61737D"}}>Review resident requests for support.</Text>
+                  <Text style={{fontSize:23,fontWeight:"700",color:"#1E293B",letterSpacing:-0.3}}>Assistance Requests</Text>
+                  <Text style={{fontSize:13,color:"#64748B"}}>Review and manage resident assistance requests.</Text>
                 </View>
               </View>
               <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 9, alignItems: "center" }}>
@@ -2850,13 +2850,11 @@ function EvidenceTab({
                 </Text>
               </View>
 
-              <Text
-                style={
-                  styles.publicCampaignPhotoTitle
-                }
-              >
-                {request.publicCampaignPhotoFileName ||
-                  "Resident public campaign photo"}
+              <Text style={styles.publicCampaignPhotoTitle}>
+                Resident-uploaded campaign photo
+              </Text>
+              <Text style={styles.documentMeta} numberOfLines={2}>
+                {request.publicCampaignPhotoFileName || "Image file"}
               </Text>
 
               <Text
@@ -2952,9 +2950,9 @@ function EvidenceTab({
                   }
                 >
                   <Ionicons
-                    name="image-outline"
-                    size={20}
-                    color="#4338CA"
+                    name="document-attach-outline"
+                    size={19}
+                    color="#396E5C"
                   />
                 </View>
 
