@@ -35,14 +35,18 @@ export function useUserSession(): SessionState {
     });
 
   useEffect(() => {
+    let active = true;
+    let authRevision = 0;
     let unsubscribeProfile:
       | (() => void)
       | undefined;
 
     const unsubscribeAuth =
       onAuthChange((user) => {
+        const revision = ++authRevision;
         unsubscribeProfile?.();
         unsubscribeProfile = undefined;
+        if (!active) return;
 
         if (!user) {
           setState({
@@ -50,43 +54,35 @@ export function useUserSession(): SessionState {
             user: null,
             profile: null,
           });
-
           return;
         }
 
-        setState((current) => ({
-          ...current,
-          loading: true,
-          user,
-        }));
+        // Never carry the previous account's data into a new session.
+        setState({ loading: true, user, profile: null });
+        const isCurrentSession = () =>
+          active &&
+          authRevision === revision &&
+          auth.currentUser?.uid === user.uid;
 
         unsubscribeProfile = onSnapshot(
           doc(db, "users", user.uid),
-
           (snapshot) => {
-            const profileData =
-              snapshot.exists()
-                ? (snapshot.data() as UserProfile)
-                : null;
-
-            setState({
-              loading: false,
-              user,
-              profile: profileData,
-            });
+            if (!isCurrentSession()) return;
+            const profileData = snapshot.exists()
+              ? (snapshot.data() as UserProfile)
+              : null;
+            setState({ loading: false, user, profile: profileData });
           },
-
           () => {
-            setState({
-              loading: false,
-              user,
-              profile: null,
-            });
+            if (!isCurrentSession()) return;
+            setState({ loading: false, user, profile: null });
           }
         );
       });
 
     return () => {
+      active = false;
+      ++authRevision;
       unsubscribeProfile?.();
       unsubscribeAuth();
     };
