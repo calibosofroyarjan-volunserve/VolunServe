@@ -1,0 +1,56 @@
+# Review-only Firestore policy. Never use production Firebase credentials.
+name: Verify Gmail Yahoo Resident Firestore Policy (NO DEPLOY)
+on:
+  push:
+    branches: [security/review-gmail-yahoo-resident-rules-20261119]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  emulator-review:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Reject unrelated source/policy changes
+        run: |
+          node <<'NODE'
+          const assert=require('node:assert/strict');
+          const cp=require('node:child_process');
+          const base='9f7078fdbd9b5e1d8b8951408467a960e297ccfd';
+          cp.execFileSync('git',['merge-base','--is-ancestor',base,'HEAD']);
+          const list=cp.execFileSync('git',['diff','--name-status','--no-renames',base,'HEAD'],{encoding:'utf8'}).trim().split('\n').filter(Boolean);
+          assert.deepEqual(list.map(x=>x.split('\t')[1]).sort(),[
+            '.github/workflows/verify-gmail-yahoo-resident-rules-no-deploy-20261119.yml',
+            'firestore.rules',
+            'scripts/test-verified-community-registration-rules.cjs'
+          ].sort());
+          assert(list.every(x=>/^[AM]\t/.test(x)));
+          const patch=cp.execFileSync('git',['diff','--unified=0',base,'HEAD','--','firestore.rules'],{encoding:'utf8'});
+          assert(!patch.split('\n').some(l=>l.startsWith('-')&&!l.startsWith('---')),'Existing rule line deletion prohibited');
+          console.log('PASS: one new Resident create predicate; no old Rules removed');
+          NODE
+      - name: Install locked dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Compile Rules and verify new-Resident restrictions with emulator
+        run: |
+          npx firebase-tools emulators:exec --only firestore --project demo-volunserve-verified-signup "node scripts/test-verified-community-registration-rules.cjs"
+      - name: Existing account, staff, volunteer and other rule regressions
+        run: |
+          node scripts/test-localized-staff-rule-helpers.cjs
+          node scripts/test-resident-field-validation.cjs
+          npx firebase-tools emulators:exec --only firestore --project demo-volunserve-account-compatibility "node scripts/test-existing-account-compatibility.cjs"
+          npx firebase-tools emulators:exec --only firestore --project demo-volunserve-invitation-preserve "node scripts/test-preserved-volunteer-invitation-rules.cjs"
+      - name: Verify no Firebase/Hosting backend mutation
+        run: |
+          git diff --exit-code 9f7078fdbd9b5e1d8b8951408467a960e297ccfd HEAD -- firebase.json .firebaserc storage.rules backend functions identity-ai package.json package-lock.json
