@@ -87,6 +87,7 @@ type AssistanceCampaignSource = {
   requestId?: string;
   requesterBarangay?: string;
   requesterName?: string;
+  beneficiaryName?: string;
   requesterAddress?: string;
   contactNumber?: string;
   category?: string;
@@ -255,7 +256,7 @@ const privacySafeResidentDraft = (
   value: string | undefined, source?: AssistanceCampaignSource | null,
 ) => {
   let result = String(value || "").trim();
-  for (const detail of [source?.requesterName,source?.requesterAddress,source?.contactNumber]) {
+  for (const detail of [source?.requesterName,source?.beneficiaryName,source?.requesterAddress,source?.contactNumber]) {
     const clean=String(detail || "").trim();
     if (clean.length < 4) continue;
     const escaped=clean.replace(/[-\/\\^$*+?.()|[\]{}]/g,"\\$&");
@@ -2152,6 +2153,182 @@ export default function DonationAdministration() {
               >
                 <Text style={styles.gateButtonText}>{sourceBackLabel}</Text>
               </TouchableOpacity>
+            </View>
+          ) : openedFromAssistance && showCampaignForm ? (
+            <View style={[styles.formCard,{gap:20,padding:24}]}
+              onLayout={(event)=>setCampaignFormY(event.nativeEvent.layout.y)}>
+              <View style={{flexDirection:"row",justifyContent:"space-between",
+                flexWrap:"wrap",alignItems:"center",gap:12,paddingBottom:15,
+                borderBottomWidth:1,borderBottomColor:"#E2EBE7"}}>
+                <View style={{flexDirection:"row",alignItems:"center",gap:12}}>
+                  <View style={{width:42,height:42,borderRadius:12,backgroundColor:"#E1F5E9",
+                    alignItems:"center",justifyContent:"center"}}>
+                    <Ionicons name="megaphone-outline" size={23} color="#047857"/>
+                  </View>
+                  <View style={{gap:5}}>
+                    <Text style={{fontSize:21,fontWeight:"800",color:"#133328"}}>
+                      Publish Donation Campaign
+                    </Text>
+                    <Text style={{fontSize:12,color:"#65796E",lineHeight:18}}>
+                      Review the Resident's story, confirm the campaign details, then publish.
+                    </Text>
+                  </View>
+                </View>
+                <View style={{flexDirection:"row",alignItems:"center",gap:7,
+                  borderRadius:99,backgroundColor:"#DCFCE7",paddingHorizontal:13,paddingVertical:9}}>
+                  <Ionicons name="checkmark-circle" size={15} color="#047857"/>
+                  <Text style={{fontSize:12,fontWeight:"800",color:"#047857"}}>Approved Request</Text>
+                </View>
+              </View>
+              <View style={{flexDirection:"row",flexWrap:"wrap",gap:22,alignItems:"flex-start"}}>
+                <View style={{flex:1.6,minWidth:275,gap:16}}>
+                  <View style={{gap:8}}>
+                    <View style={{flexDirection:"row",alignItems:"center",gap:9}}>
+                      <Text style={{color:"#25493A",fontSize:12,fontWeight:"800"}}>Campaign Title *</Text>
+                      <Text style={{fontSize:10,fontWeight:"800",color:"#047857"}}>FROM RESIDENT</Text>
+                    </View>
+                    <TextInput style={styles.input} value={campaignTitle}
+                      onChangeText={v=>{setCampaignTitle(v);setResidentStoryPrivacyReviewed(false);}}
+                      placeholder="Title from the Resident's request"
+                      placeholderTextColor="#94A3B8" maxLength={160}/>
+                  </View>
+                  <View style={{gap:8}}>
+                    <View style={{flexDirection:"row",alignItems:"center",gap:9}}>
+                      <Text style={{color:"#25493A",fontSize:12,fontWeight:"800"}}>Campaign Story *</Text>
+                      <Text style={{fontSize:10,fontWeight:"800",color:"#047857"}}>FROM RESIDENT</Text>
+                    </View>
+                    <TextInput style={[styles.input,styles.multiline,{minHeight:102}]}
+                      multiline maxLength={1200} value={publicStory}
+                      onChangeText={v=>{setPublicStory(v);setCampaignDescription(v);
+                        setResidentStoryPrivacyReviewed(false);}}
+                      placeholder="Story from the Resident's description"
+                      placeholderTextColor="#94A3B8"/>
+                    <Text style={{fontSize:11,color:"#64748B",lineHeight:17}}>
+                      Automatically based on the submitted request. Edit before publishing if it contains a name, private medical details, contact, or home address.
+                    </Text>
+                  </View>
+                  <View style={{flexDirection:"row",flexWrap:"wrap",gap:14}}>
+                    <View style={{flex:1,minWidth:150,gap:8}}>
+                      <Text style={{color:"#25493A",fontSize:12,fontWeight:"800"}}>Donation Target (PHP)</Text>
+                      <View style={{backgroundColor:"#F7FAF8",borderWidth:1,borderColor:"#DCE8E1",
+                        borderRadius:10,paddingVertical:14,paddingHorizontal:13}}>
+                        <Text style={{fontWeight:"800",fontSize:14,color:"#123B29"}}>
+                          {money(Number(assistanceSource?.remainingAmount || 0))}
+                        </Text>
+                      </View>
+                    </View>
+                    <View style={{flex:1,minWidth:150,gap:8}}>
+                      <Text style={{color:"#25493A",fontSize:12,fontWeight:"800"}}>Campaign Cover</Text>
+                      <TouchableOpacity onPress={()=>void chooseAndUploadPublicCampaignPhoto()}
+                        disabled={publicPhotoUploading || selectedPublicPhotoUrls.length>=5}
+                        style={{flexDirection:"row",gap:8,alignItems:"center",
+                          borderWidth:1,borderColor:"#D4E6DB",backgroundColor:"#F7FAF8",
+                          borderRadius:10,paddingHorizontal:13,paddingVertical:14}}>
+                        <Ionicons name="image-outline" color="#047857" size={17}/>
+                        <Text style={{fontSize:12,fontWeight:"700",color:"#047857"}}>
+                          {publicPhotoUploading?"Uploading...":"Upload Image"}
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                  {selectedPublicPhotoUrls.length>0 && (
+                    <View style={{gap:9}}>
+                      <Text style={{fontSize:12,fontWeight:"700",color:"#25493A"}}>
+                        Public campaign photo ({selectedPublicPhotoUrls.length})
+                      </Text>
+                      <View style={{flexDirection:"row",flexWrap:"wrap",gap:11}}>
+                        {selectedPublicPhotoUrls.map(url=>(
+                          <View key={url} style={{gap:6}}>
+                            <Image source={{uri:url}} style={{width:100,height:70,borderRadius:9}}/>
+                            <TouchableOpacity onPress={()=>{removePublicCampaignPhoto(url);
+                              setResidentStoryPrivacyReviewed(false);}}>
+                              <Text style={{fontSize:11,color:"#B91C1C",fontWeight:"700"}}>Remove</Text>
+                            </TouchableOpacity>
+                          </View>
+                        ))}
+                      </View>
+                    </View>
+                  )}
+                  {!!publicPhotoUploadStatus && (
+                    <Text style={{fontSize:11,color:"#047857"}}>{publicPhotoUploadStatus}</Text>
+                  )}
+                  <View style={{gap:8}}>
+                    <Text style={{color:"#25493A",fontSize:12,fontWeight:"800"}}>Assistance Office</Text>
+                    <View style={{borderWidth:1,borderColor:"#DCE8E1",backgroundColor:"#F8FAF9",
+                      padding:14,borderRadius:10,gap:4}}>
+                      <Text style={{fontSize:13,color:"#244438",fontWeight:"700"}}>
+                        {handoffLocationName || "Public office not set"}
+                      </Text>
+                      <Text style={{fontSize:12,color:"#64748B"}}>
+                        {handoffAddress || "Return to Assistance Requests to set the public office."}
+                      </Text>
+                    </View>
+                  </View>
+                </View>
+                <View style={{flex:1,minWidth:235,gap:17}}>
+                  <View style={{backgroundColor:"#F4F9F6",borderWidth:1,
+                    borderColor:"#E0ECE5",borderRadius:13,padding:17,gap:14}}>
+                    <Text style={{fontSize:14,fontWeight:"800",color:"#123B29"}}>Campaign Summary</Text>
+                    {[
+                      ["Request ID",assistanceSource?.requestId || assistanceSource?.id || "—"],
+                      ["Category",normalizeCategoryLabel(assistanceSource?.categoryLabel || assistanceSource?.category)],
+                      ["Donation Target",money(Number(assistanceSource?.remainingAmount || 0))],
+                    ].map(([label,value])=>(
+                      <View key={label} style={{gap:4,borderBottomWidth:1,
+                        borderBottomColor:"#E4EEE7",paddingBottom:10}}>
+                        <Text style={{color:"#71857A",fontSize:10,fontWeight:"800"}}>{label}</Text>
+                        <Text style={{fontSize:12,fontWeight:"700",color:"#234436"}}>{value}</Text>
+                      </View>
+                    ))}
+                  </View>
+                  <View style={{gap:11}}>
+                    <Text style={{fontWeight:"800",color:"#25493A",fontSize:13}}>Official Donation Channel</Text>
+                    <TextInput value={officialChannelLabel} onChangeText={setOfficialChannelLabel}
+                      placeholder="Official collection channel"
+                      placeholderTextColor="#94A3B8" style={styles.input} maxLength={160}/>
+                    <TextInput value={officialChannelInstructions}
+                      onChangeText={setOfficialChannelInstructions}
+                      placeholder="How donors pay and receive a receipt"
+                      placeholderTextColor="#94A3B8"
+                      style={[styles.input,styles.multilineSmall]} multiline maxLength={1000}/>
+                    <Text style={{fontSize:11,color:"#64748B",lineHeight:17}}>
+                      Enter your authorized LGU payment details. Never use a personal account.
+                    </Text>
+                  </View>
+                </View>
+              </View>
+              <TouchableOpacity accessibilityRole="checkbox"
+                accessibilityState={{checked:residentStoryPrivacyReviewed}}
+                onPress={()=>setResidentStoryPrivacyReviewed(value=>!value)}
+                style={{flexDirection:"row",alignItems:"flex-start",gap:11,
+                  padding:15,borderRadius:12,borderWidth:1,borderColor:"#CCE6D6",
+                  backgroundColor:"#F3FBF6"}}>
+                <Ionicons name={residentStoryPrivacyReviewed?"checkbox":"square-outline"}
+                  color="#047857" size={21}/>
+                <Text style={{flex:1,color:"#25503D",fontSize:12,lineHeight:18}}>
+                  I reviewed the public title, story and photo and confirmed that they do not expose private resident information or medical documents.
+                </Text>
+              </TouchableOpacity>
+              {!!error && (
+                <Text style={{color:"#B42318",fontSize:12}}>{error}</Text>
+              )}
+              <View style={{flexDirection:"row",justifyContent:"flex-end",flexWrap:"wrap",gap:12,
+                borderTopWidth:1,borderColor:"#E6ECE8",paddingTop:17}}>
+                <TouchableOpacity onPress={()=>setShowCampaignForm(false)}
+                  style={{borderRadius:10,borderWidth:1,borderColor:"#CBD5D1",paddingHorizontal:25,
+                    paddingVertical:14,justifyContent:"center"}}>
+                  <Text style={{fontSize:12,fontWeight:"800",color:"#42584F"}}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity onPress={()=>void createCampaign()}
+                  disabled={busyKey==="create_campaign"}
+                  style={{borderRadius:10,backgroundColor:"#006A42",minHeight:46,
+                    paddingHorizontal:25,flexDirection:"row",justifyContent:"center",
+                    alignItems:"center",gap:8,opacity:busyKey==="create_campaign"?0.5:1}}>
+                  {busyKey==="create_campaign" ? <ActivityIndicator color="#FFFFFF"/> :
+                    <Ionicons name="megaphone-outline" size={18} color="#FFFFFF"/>}
+                  <Text style={{fontSize:13,fontWeight:"800",color:"#FFFFFF"}}>Publish Campaign</Text>
+                </TouchableOpacity>
+              </View>
             </View>
           ) : showCampaignForm ? (
             <View
