@@ -2280,7 +2280,7 @@ This still does not automatically create a Donation Campaign.`,
 
           <View style={styles.detailWorkspace}>
             <View style={[styles.detailMainPane, { flex: 1, width: "100%", minWidth: 0 }]}>
-              <View style={styles.detailPaneHeader}>
+              <View style={{display:"none"}}>
                 <View style={styles.detailPaneHeaderIcon}>
                   <Ionicons
                     name={
@@ -6125,10 +6125,13 @@ const styles = StyleSheet.create({
   detailShell: {
     flex: 1,
     minHeight: 0,
-    paddingHorizontal: 22,
-    paddingTop: 18,
+    paddingHorizontal: 18,
+    paddingTop: 14,
     paddingBottom: 18,
-    backgroundColor: "#F6F8F7",
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: "#DCE8E1",
+    borderRadius: 13,
   },
 
   detailChrome: {
