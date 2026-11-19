@@ -49,4 +49,5 @@ jobs:
           set -euo pipefail
           npx firebase-tools emulators:exec --only auth,firestore --project demo-volunserve "node backend/tests/assistanceDonationEmulator.e2e.cjs"
       - name: Explicit NO DEPLOY guard
-        run: echo "PASS: Test was restricted to demo-volunserve; no Hosting, Firestore production, Render, PayMongo or Firebase Rules deploy"
+        run: |
+          echo "PASS: Test was restricted to demo-volunserve; no Hosting, production Firestore, Render, PayMongo or Firebase Rules deploy"
