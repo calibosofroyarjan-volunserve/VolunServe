@@ -190,9 +190,9 @@ test("listener host, cloud ingress review and port parsing fail closed",()=>{
     setup();
   }
   process.env.VOLUNSERVE_PHASE14_BIND_HOST="0.0.0.0";
+  process.env.PORT="10000"; // production-like port must be valid before ingress gate
   assert.equal(inspectPhase14Listener().reason,"cloud_ingress_review_required");
   process.env.VOLUNSERVE_PHASE14_CLOUD_INGRESS="read_only_reviewed";
-  process.env.PORT="10000";
   assert.equal(inspectPhase14Listener().allowed,true);
   setup();
   process.env.NODE_ENV="production";
