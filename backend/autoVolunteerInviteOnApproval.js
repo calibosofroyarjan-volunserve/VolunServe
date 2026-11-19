@@ -9,7 +9,7 @@
  * and an audited always-on scheduler; neither is guessed or enabled here.
  */
 const barangays=require("./autoVolunteerSJDMBarangays.json");
-const {FieldValue,auth}=require("./firebaseAdmin");
+const {FieldValue}=require("./firebaseAdmin");
 const ACTIVE=new Set(["offered","accepted","responding","on_site"]);
 const MAX_SCAN=200,MAX_ATOMIC_TARGETS=25,OFFER_MS=180000;
 const uidOK=x=>typeof x==="string"&&/^[A-Za-z0-9_-]{1,160}$/.test(x);
@@ -59,10 +59,10 @@ function candidateOK(caseData,person,application,{busy=new Set()}={}){
   const volunteerBarangay=normalize(person.barangay||person.addressBarangay);
   if(!known.has(volunteerBarangay)||volunteerBarangay!==incidentBarangay)return false;
   const required=safeSkills(caseData.requiredSkills).filter(x=>!x.includes("general volunteer"));
-  const offered=safeSkills([
-    ...(person.skills||[]),...(person.volunteerSkills||[]),
-    ...(application.skills||[]),...(application.volunteerSkills||[])
-  ]);
+  const offered=[
+    ...safeSkills(person.skills),...safeSkills(person.volunteerSkills),
+    ...safeSkills(application.skills),...safeSkills(application.volunteerSkills)
+  ];
   return !required.length||required.some(r=>offered.some(s=>
     s===r||s.includes(r)||r.includes(s)));
 }
