@@ -20,8 +20,22 @@ for (const name of [
   "admin-certificates", "community-certificates", "donation-list",
 ]) {
   const code = app(name);
-  assert(code.includes("AdminReviewHero") && code.includes("<AdminReviewHero"),
-    name + " must use the shared premium LGU Admin workspace header");
+  if (name === "assistance-requests") {
+    // Screenshot-approved Assistance Requests intentionally uses a full-width
+    // reference layout rather than the legacy shared hero. Other Admin pages
+    // continue using the shared header, and all lists retain pagination.
+    assert(code.includes("referencePageHeading") &&
+      code.includes("referenceStatusTabs") &&
+      code.includes("referenceFullPage") &&
+      code.includes("referenceTableHeader") &&
+      code.includes("referenceTwoCards") &&
+      code.includes("referenceReviewColumns") &&
+      code.includes("referenceSupportOptions"),
+      "Assistance Requests must retain all four screenshot-matched layouts");
+  } else {
+    assert(code.includes("AdminReviewHero") && code.includes("<AdminReviewHero"),
+      name + " must use the shared premium LGU Admin workspace header");
+  }
   assert(code.includes("ListPagination") && code.includes("pageSize={5}") ||
     (["identity-reviews"].includes(name) &&
       code.includes("pageSize={PAGE_SIZE}")),
