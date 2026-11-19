@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>VolunServe — Phase 10 Local Admin QA</title>
+  <style>
+    :root{font:15px system-ui,-apple-system,Segoe UI,Arial,sans-serif;color:#193044;background:#f6f8fa}
+    *{box-sizing:border-box}body{margin:0}main{max-width:850px;margin:32px auto;padding:0 20px}
+    header{border-bottom:1px solid #cdd7df;padding-bottom:14px;margin-bottom:20px}
+    h1{font-size:1.45rem;margin:6px 0}h2{font-size:1.06rem;margin:0 0 12px}
+    p{line-height:1.5;color:#526270}section{background:white;border:1px solid #dbe3ea;border-radius:10px;padding:19px;margin-bottom:16px}
+    .grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+    label{display:block;margin-bottom:5px;font-weight:600;font-size:.88rem}
+    input,select{width:100%;padding:10px;font:inherit;border:1px solid #aab9c7;border-radius:6px;background:white}
+    button{padding:10px 13px;font:inherit;border:0;border-radius:6px;background:#185c91;color:white;cursor:pointer}
+    button.secondary{background:#edf2f5;color:#253c52;border:1px solid #cdd7df}
+    button:disabled{opacity:.5;cursor:not-allowed}
+    .actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
+    pre{background:#f6f8fa;border:1px solid #d9e0e6;padding:13px;border-radius:6px;overflow:auto;min-height:75px;white-space:pre-wrap;overflow-wrap:anywhere}
+    .note{font-size:.85rem;color:#596b79}.local{font-weight:700;color:#265f4e}
+    a{color:#175b8d}@media(max-width:620px){.grid{grid-template-columns:1fr}main{margin:16px auto}}
+  </style>
+</head>
+<body><main>
+  <header>
+    <p class="local">LOCAL AUTH + FIRESTORE EMULATORS ONLY · NO PRODUCTION</p>
+    <h1>Emergency Volunteer — Admin QA</h1>
+    <p>Phase 10 integration preview. The case and fictional accounts must already exist in the local test emulator. Nothing here connects to live VolunServe.</p>
+  </header>
+  <section>
+    <h2>Approved Admin sign-in</h2>
+    <form id="login" autocomplete="off">
+      <div class="grid"><div><label for="email">Fictional Admin email</label>
+      <input id="email" type="email" required autocomplete="username" placeholder="admin@local.test"></div>
+      <div><label for="password">Demo-only password</label>
+      <input id="password" type="password" required autocomplete="current-password"></div></div>
+      <div class="actions"><button type="submit">Sign in to local emulator</button>
+      <button id="signout" class="secondary" type="button">Sign out</button></div>
+    </form>
+    <p id="session" class="note" role="status">Not signed in.</p>
+  </section>
+  <section>
+    <h2>Fictional case actions</h2>
+    <label for="caseId">Fictional incident ID</label>
+    <input id="caseId" value="phase10_case_smoke" pattern="phase10_[a-zA-Z0-9_-]+" autocomplete="off">
+    <div class="actions">
+      <button id="inspect" type="button" disabled>Read case status</button>
+      <button id="start" type="button" disabled>Start fictional Wave 1</button>
+      <button id="tick" type="button" disabled>Run due-scan (manual demo)</button>
+    </div>
+    <p class="note">The due-scan runs only when clicked. It is not a 24/7 production scheduler.</p>
+    <label for="reason">Cancellation reason</label>
+    <select id="reason">
+      <option value="safety_pause">Safety pause</option>
+      <option value="admin_manual_takeover">Manual Admin takeover</option>
+      <option value="incorrect_report">Incorrect report</option>
+      <option value="case_closed">Case closed</option>
+      <option value="other">Other</option>
+    </select>
+    <div class="actions"><button id="cancel" class="secondary" type="button" disabled>Cancel pending offers only</button></div>
+    <p class="note">Cancellation will be refused if any Volunteer already accepted. It cannot reset an active responder.</p>
+    <pre id="result" aria-live="polite">Sign in first. Output shows aggregate status only.</pre>
+  </section>
+  <p class="note">Open the <a href="/phase10-volunteer">local Volunteer QA page</a> in another tab. All API writes are restricted to the demo Firebase Emulators and cannot be run on a production database.</p>
+</main>
+<script type="module">
+  import {initializeApp} from "https://www.gstatic.com/firebasejs/11.10.0/firebase-app.js";
+  import {getAuth,connectAuthEmulator,signInWithEmailAndPassword,signOut,onAuthStateChanged} from "https://www.gstatic.com/firebasejs/11.10.0/firebase-auth.js";
+  const firebase=initializeApp({apiKey:"demo-not-a-real-key",authDomain:"localhost",projectId:"demo-volunserve-auto-phase4"});
+  const auth=getAuth(firebase);
+  connectAuthEmulator(auth,"http://127.0.0.1:9099",{disableWarnings:true});
+  const el=id=>document.getElementById(id);
+  const actions=["inspect","start","tick","cancel"];
+  const output=x=>{el("result").textContent=typeof x==="string"?x:JSON.stringify(x,null,2)};
+  onAuthStateChanged(auth,user=>{
+    el("session").textContent=user?"Signed in to LOCAL Auth Emulator.":"Not signed in.";
+    actions.forEach(id=>el(id).disabled=!user);
+  });
+  el("login").addEventListener("submit",async e=>{
+    e.preventDefault();
+    try{
+      await signInWithEmailAndPassword(auth,el("email").value.trim(),el("password").value);
+      el("password").value="";
+      output("Local Auth Emulator sign-in completed. Use read-only inspection first.");
+    }catch(e){output("Local sign-in failed: "+String(e.code||"unknown"))}
+  });
+  el("signout").addEventListener("click",async()=>{await signOut(auth);output("Signed out.")});
+  const cid=()=>{
+    const id=el("caseId").value.trim();
+    if(!/^phase10_[a-zA-Z0-9_-]{1,86}$/.test(id))throw Error("Use a Phase 10 fictional case ID.");
+    return encodeURIComponent(id);
+  };
+  async function api(url,body){
+    if(!auth.currentUser)throw Error("Sign in to the local emulator first.");
+    const opts={headers:{Authorization:"Bearer "+await auth.currentUser.getIdToken(true)}};
+    if(body!==undefined){
+      opts.method="POST";opts.headers["Content-Type"]="application/json";
+      opts.body=JSON.stringify(body);
+    }
+    const response=await fetch(url,opts);
+    const json=await response.json();
+    if(!response.ok)throw Error(String(json.reason||json.status||response.status));
+    return json;
+  }
+  const run=fn=>async()=>{
+    actions.forEach(id=>el(id).disabled=true);
+    try{output(await fn())}
+    catch(e){output("Operation blocked: "+String(e.message||"unavailable"))}
+    finally{actions.forEach(id=>el(id).disabled=!auth.currentUser)}
+  };
+  el("inspect").addEventListener("click",run(()=>api("/api/phase10/admin/cases/"+cid())));
+  el("start").addEventListener("click",run(()=>api("/api/phase10/admin/cases/"+cid()+"/start",{})));
+  el("tick").addEventListener("click",run(()=>api("/api/phase10/admin/due-scan",{})));
+  el("cancel").addEventListener("click",run(async()=>{
+    if(!window.confirm("Cancel only PENDING offers for this FICTIONAL local case? Accepted responders will be preserved."))return "Cancellation not requested.";
+    return api("/api/phase10/admin/cases/"+cid()+"/cancel",{reason:el("reason").value});
+  }));
+</script>
+</body></html>
