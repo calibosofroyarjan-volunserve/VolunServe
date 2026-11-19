@@ -4321,7 +4321,7 @@ function SectionCard({
           <Ionicons
             name={icon}
             size={19}
-            color="#4338CA"
+            color="#047857"
           />
         </View>
 
@@ -5097,12 +5097,11 @@ const styles = StyleSheet.create({
   reviewHeader: {
     flexDirection: "row",
     flexWrap: "wrap",
-    alignItems: "flex-start",
+    alignItems: "center",
     justifyContent: "space-between",
-    gap: 14,
-    padding: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: "#EDF1F5",
+    gap: 13,
+    padding: 8,
+    borderBottomWidth: 0,
   },
 
   reviewHeaderCopy: {
@@ -5182,10 +5181,10 @@ const styles = StyleSheet.create({
   },
 
   sectionCard: {
-    padding: 16,
-    borderRadius: 15,
+    padding: 15,
+    borderRadius: 12,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: "#DFE8E8",
     backgroundColor: "#FFFFFF",
   },
 
@@ -5202,7 +5201,7 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#EEF2FF",
+    backgroundColor: "#ECF9F1",
   },
 
   sectionCopy: {
@@ -5905,11 +5904,11 @@ const styles = StyleSheet.create({
   },
 
   mockStatusTab: {
-    minHeight: 38,
+    minHeight: 35,
     alignItems: "center",
     justifyContent: "center",
-    paddingHorizontal: 14,
-    borderRadius: 8,
+    paddingHorizontal: 16,
+    borderRadius: 99,
     borderWidth: 1,
     borderColor: "#D6DEE8",
     backgroundColor: "#FFFFFF",
@@ -6207,10 +6206,9 @@ const styles = StyleSheet.create({
   },
 
   detailHeaderCard: {
-    marginTop: 4,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: "#E2E8F0",
+    marginTop: 3,
+    borderRadius: 10,
+    borderWidth: 0,
     backgroundColor: "#FFFFFF",
     overflow: "hidden",
   },
