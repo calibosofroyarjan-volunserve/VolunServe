@@ -246,6 +246,14 @@ const confirmAdminAction = (
   ]);
 };
 
+const showAssistanceActionError = (title: string, message: string) => {
+  if (Platform.OS === "web" && typeof (globalThis as any).alert === "function") {
+    (globalThis as any).alert(title + "\n\n" + message);
+    return;
+  }
+  Alert.alert(title, message);
+};
+
 const createPrivateReviewDraft = (
   request: AssistanceRequest,
   data?: Record<string, any> | null,
@@ -283,7 +291,7 @@ const createPrivateReviewDraft = (
         ? data.costVerificationRequired
         : costRequired,
     verifiedGrossCost: String(data?.verifiedGrossCost ?? ""),
-    confirmedExistingAssistanceAmount: String(data?.confirmedExistingAssistanceAmount ?? ""),
+    confirmedExistingAssistanceAmount: String(data?.confirmedExistingAssistanceAmount ?? "0"),
     costVerificationStatus: String(
       data?.costVerificationStatus || (costRequired ? "pending" : "not_required"),
     ),
@@ -1458,95 +1466,43 @@ export default function AssistanceRequestsAdmin() {
     }
   };
 
-  const startReview = () => {
-    if (!selected || !reviewDraft || savingAction) return;
+  // The secure review starts as part of the Admin's chosen decision.
+  // No extra visible Start Review step or database permission changes.
+  const ensurePrivateReviewStarted = async () => {
+    if (verificationReview) return;
+    if (!selected || !user) throw new Error("The Admin session or request is unavailable.");
+    const token = await user.getIdToken(true);
+    const response = await fetch(
+      SECURE_ASSISTANCE_BACKEND + "/api/admin/assistance/requests/" +
+        encodeURIComponent(selected.id) + "/start-review",
+      {
+        method: "POST",
+        headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      },
+    );
+    const result = await response.json().catch(() => null);
+    if (!response.ok || !result?.ok) {
+      throw new Error(result?.message || result?.error ||
+        "Could not start the protected review (HTTP " + response.status + ").");
+    }
+    const snapshot = await getDoc(doc(db, PRIVATE_REVIEW_COLLECTION, selected.id));
+    if (!snapshot.exists()) throw new Error("The protected review record was not available.");
+    setVerificationReview(snapshot.data() as Record<string, any>);
+    // Preserve selections already made in the current Admin review form.
+  };
 
+  const startReview = () => {
+    if (savingAction) return;
     confirmAdminAction(
-      "Start LGU Review",
-      "Move this request to Under Review and create its private verification record?",
-      "Start Review",
+      "Start LGU Review", "Open the protected review record?", "Start Review",
       async () => {
         try {
           setSavingAction("start_review");
-
-          if (!user) {
-            throw new Error("Admin session is not available.");
-          }
-
-          const token = await user.getIdToken(true);
-          const response = await fetch(
-            `${SECURE_ASSISTANCE_BACKEND}/api/admin/assistance/requests/${encodeURIComponent(
-              selected.id,
-            )}/start-review`,
-            {
-              method: "POST",
-              headers: {
-                Authorization: `Bearer ${token}`,
-                "Content-Type": "application/json",
-              },
-              body: JSON.stringify({}),
-            },
-          );
-
-          const result = await response.json().catch(() => null);
-
-          if (!response.ok || !result?.ok) {
-            const backendError: any = new Error(
-              result?.message ||
-                result?.error ||
-                `Start Review failed with HTTP ${response.status}.`,
-            );
-
-            backendError.code =
-              result?.error ||
-              `http_${response.status}`;
-
-            throw backendError;
-          }
-
-          const refreshed = await getDoc(
-            doc(db, PRIVATE_REVIEW_COLLECTION, selected.id),
-          );
-
-          const data = refreshed.exists()
-            ? (refreshed.data() as Record<string, any>)
-            : null;
-
-          setVerificationReview(data);
-
-          if (data) {
-            setReviewDraft(
-              createPrivateReviewDraft(
-                selected,
-                data,
-              ),
-            );
-          }
+          await ensurePrivateReviewStarted();
         } catch (error: any) {
-          console.error("Start LGU Review failed", error);
-
-          const errorCode = String(error?.code || "unknown_error");
-          const errorMessage = String(
-            error?.message ||
-              "The private verification record could not be created.",
-          );
-          const diagnosticMessage =
-            `Start Review failed.\n\nCode: ${errorCode}\nMessage: ${errorMessage}\n\n` +
-            `The request was not moved to Under Review.`;
-
-          if (Platform.OS === "web") {
-            const browserAlert = (globalThis as any).alert;
-            if (typeof browserAlert === "function") {
-              browserAlert(diagnosticMessage);
-            } else {
-              Alert.alert("Unable to Start Review", diagnosticMessage);
-            }
-          } else {
-            Alert.alert("Unable to Start Review", diagnosticMessage);
-          }
-        } finally {
-          setSavingAction("");
-        }
+          showAssistanceActionError("Start Review Failed", error?.message || "Unable to start the review.");
+        } finally { setSavingAction(""); }
       },
     );
   };
@@ -1557,24 +1513,19 @@ export default function AssistanceRequestsAdmin() {
     const note = adminNote.trim();
 
     if (note.length < 10) {
-      Alert.alert(
-        "Verification Note Required",
-        "Explain exactly what information or evidence the resident must clarify or provide.",
-      );
+      showAssistanceActionError("Review Note Required", "Explain what information or evidence the resident must provide (at least 10 characters).");
       return;
     }
 
     try {
       setSavingAction("more_info");
+      await ensurePrivateReviewStarted();
       await persistPrivateReview(
         "more_information",
         note,
       );
     } catch (error: any) {
-      Alert.alert(
-        "Request More Information Failed",
-        error?.message || "The review could not be updated.",
-      );
+      showAssistanceActionError("Request More Information Failed", error?.message || "The review could not be updated.");
     } finally {
       setSavingAction("");
     }
@@ -1584,10 +1535,7 @@ export default function AssistanceRequestsAdmin() {
     if (!selected || !reviewDraft) return;
 
     if (!reviewReadyForVerification(reviewDraft)) {
-      Alert.alert(
-        "Private Verification Incomplete",
-        "Complete document consistency, duplicate, beneficiary, residency, required facility/cost checks, and any required video/site visit. Resolve every risk flag before verifying the need.",
-      );
+      showAssistanceActionError("Complete Verification", "Confirm the evidence, resident, provider, and budget details in the short review form before approving.");
       return;
     }
 
@@ -1608,15 +1556,13 @@ This still does not automatically create a Donation Campaign.`,
       async () => {
         try {
           setSavingAction("verify");
+          await ensurePrivateReviewStarted();
           await persistPrivateReview(
             "verify",
             adminNote.trim() || "LGU verification completed.",
           );
         } catch (error: any) {
-          Alert.alert(
-            "Verification Failed",
-            error?.message || "The private verification could not be finalized.",
-          );
+          showAssistanceActionError("Approval Failed", error?.message || "The review could not be finalized.");
         } finally {
           setSavingAction("");
         }
@@ -1630,10 +1576,7 @@ This still does not automatically create a Donation Campaign.`,
     const reason = rejectionReason.trim();
 
     if (reason.length < 3) {
-      Alert.alert(
-        "Rejection Reason Required",
-        "Enter a clear evidence-based reason for rejecting the assistance request.",
-      );
+      showAssistanceActionError("Rejection Reason Required", "Enter a clear reason (at least 3 characters).");
       return;
     }
 
@@ -1644,15 +1587,13 @@ This still does not automatically create a Donation Campaign.`,
       async () => {
         try {
           setSavingAction("reject");
+          await ensurePrivateReviewStarted();
           await persistPrivateReview(
             "reject",
             reason,
           );
         } catch (error: any) {
-          Alert.alert(
-            "Rejection Failed",
-            error?.message || "The review could not be rejected.",
-          );
+          showAssistanceActionError("Rejection Failed", error?.message || "The review could not be rejected.");
         } finally {
           setSavingAction("");
         }
