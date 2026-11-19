@@ -3108,6 +3108,7 @@ function ReviewTabButton({
 }
 
 function CaseReviewTab({ request, profile }: { request: AssistanceRequest; profile: ResidentProfile | null }) {
+  const [showMore, setShowMore] = useState(false);
   const residentName = profile?.fullName || request.requesterName || "Not recorded";
   const residentAddress = profile?.address || request.requesterAddress || request.requesterBarangay || "Not recorded";
   return (
@@ -3121,6 +3122,15 @@ function CaseReviewTab({ request, profile }: { request: AssistanceRequest; profi
         <ReferenceInfoRow icon="heart-outline" label="Current Situation" value={request.currentSituation || "Not recorded"} />
         <ReferenceInfoRow icon="document-text-outline" label="Description" value={request.description || "No description provided"} />
         {!!request.estimatedAmount && <ReferenceInfoRow icon="cash-outline" label="Requested Amount" value={money(request.estimatedAmount)} />}
+        <TouchableOpacity accessibilityRole="button" onPress={() => setShowMore((current) => !current)}
+          style={styles.referenceInfoMore}>
+          <Text style={styles.simpleLinkText}>{showMore ? "Hide other request details" : "More request details"}</Text>
+          <Ionicons name={showMore ? "chevron-up" : "chevron-down"} size={15} color="#047857" />
+        </TouchableOpacity>
+        {showMore && <>
+          <ReferenceInfoRow icon="calendar-outline" label="Date Requested" value={readableDate(request.createdAt)} />
+          <ReferenceInfoRow icon="people-outline" label="Beneficiary" value={request.beneficiaryName || "Not recorded"} />
+        </>}
       </View>
       <View style={styles.referenceDetailsCard}>
         <View style={styles.referenceCardHeading}>
@@ -3707,7 +3717,6 @@ function CompactVerifiedAssistance({
                 </View>
               </View>
               <Text style={styles.simpleSection}>Donation Target</Text>
-              <Text style={styles.simpleSection}>Approved donation amount</Text>
               {cap > 0 ? (
                 <Text style={styles.simpleVerifiedAmount}>{money(cap)}</Text>
               ) : (
@@ -5987,6 +5996,7 @@ const styles = StyleSheet.create({
   referenceInfoRow: { flexDirection: "row", alignItems: "flex-start", gap: 7, paddingVertical: 13, borderBottomWidth: 1, borderBottomColor: "#EEF2F4" },
   referenceInfoLabel: { width: 98, flexShrink: 0, fontFamily: vsType.family, color: "#334155", fontSize: 12, fontWeight: "700" },
   referenceInfoValue: { flex: 1, minWidth: 0, fontFamily: vsType.family, color: "#1C2733", fontSize: 12, fontWeight: "600", lineHeight: 19 },
+  referenceInfoMore: { flexDirection: "row", alignItems: "center", gap: 7, alignSelf: "flex-start", paddingVertical: 9 },
   referenceResidentBadge: { flexDirection: "row", gap: 7, alignItems: "center", alignSelf: "flex-start", marginTop: 15, paddingHorizontal: 13, paddingVertical: 7, backgroundColor: "#DDF8E7", borderRadius: 8 },
   referenceResidentBadgeText: { color: "#05703A", fontFamily: vsType.family, fontSize: 12, fontWeight: "800" },
   referenceTableHeader: { flexDirection: "row", alignItems: "center", backgroundColor: "#F1F7F3", paddingHorizontal: 12, paddingVertical: 13, gap: 10, borderTopLeftRadius: 9, borderTopRightRadius: 9 },
