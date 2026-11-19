@@ -1,0 +1,87 @@
+name: Verify production-compatible Automatic Volunteer invitations — NO DEPLOY
+
+on:
+  push:
+    branches:
+      - feat/production-compatible-auto-volunteer-invites-no-deploy-20261119
+  pull_request:
+    branches:
+      - backend-live-protected
+
+permissions:
+  contents: read
+
+jobs:
+  emulator-invites:
+    if: github.repository == 'calibosofroyarjan-volunserve/VolunServe'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      CI: "true"
+      GCLOUD_PROJECT: demo-volunserve-auto-invites-20261119
+      GOOGLE_CLOUD_PROJECT: demo-volunserve-auto-invites-20261119
+      VOLUNSERVE_AUTO_VOLUNTEER_INVITES_MODE: disabled
+      FIREBASE_CLI_DISABLE_TELEMETRY: "1"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            backend/package-lock.json
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - name: Strict five-file scope and no deploy guard
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --name-status 61baa71355f155bb7f66301be0e5f367d407cf0f HEAD >/tmp/auto-invite-scope
+          test "$(wc -l </tmp/auto-invite-scope)" -eq 5
+          while IFS="$(printf '\t')" read -r change file; do
+            case "$change:$file" in
+              "A:backend/autoVolunteerSJDMBarangays.json"|"A:backend/autoVolunteerInviteOnApproval.js"|"A:backend/test-autoVolunteerInviteOnApprovalEmulator.cjs"|"M:backend/server.js"|"A:.github/workflows/verify-production-compatible-auto-invites-20261119.yml") ;;
+              *) echo "BLOCKED unrelated file edit: $change $file"; exit 1 ;;
+            esac
+          done </tmp/auto-invite-scope
+          node - <<'NODE'
+          const fs=require('fs'),assert=require('node:assert/strict');
+          const before=require('child_process').execFileSync('git',['show','61baa71355f155bb7f66301be0e5f367d407cf0f:backend/server.js'],{encoding:'utf8'});
+          const after=fs.readFileSync('backend/server.js','utf8');
+          const insertion='// Additive server-side Automatic Volunteer integration.';
+          assert.equal(after.split(insertion).length,2,'only one new route registration');
+          const remove=after.slice(after.indexOf(insertion),after.indexOf('// Automatic, idempotent recovery'));
+          assert.ok(remove.includes('installAutoVolunteerInvitationRoute'));
+          assert.equal(after.replace(remove,''),before,'Production backend must be strictly additive');
+          assert.ok(!fs.readFileSync('backend/autoVolunteerInviteOnApproval.js','utf8')
+            .includes('setInterval('),'Never start a production scheduler');
+          console.log('PASS: no existing production backend code altered.');
+          NODE
+          test "${VOLUNSERVE_AUTO_VOLUNTEER_INVITES_MODE}" = "disabled"
+          test -z "${FIREBASE_SERVICE_ACCOUNT_JSON:-}"
+          test -z "${GOOGLE_APPLICATION_CREDENTIALS:-}"
+      - name: Install locked dependencies
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          npm ci --prefix backend --ignore-scripts --no-audit --no-fund
+      - name: Node syntax checks
+        run: |
+          node --check backend/server.js
+          node --check backend/autoVolunteerInviteOnApproval.js
+          node --check backend/test-autoVolunteerInviteOnApprovalEmulator.cjs
+      - name: Real Firestore Emulator ALL-eligible automatic invite transaction
+        shell: bash
+        run: |
+          set -euo pipefail
+          ./node_modules/.bin/firebase emulators:exec --project demo-volunserve-auto-invites-20261119 --only firestore "node --test backend/test-autoVolunteerInviteOnApprovalEmulator.cjs"
+      - name: Existing backend checks (certificates, identity and attendance)
+        run: npm run check --prefix backend
+      - name: No production deployment or emergency task dispatch
+        run: |
+          echo "PASS: only fictional Firestore Emulator records were used."
+          echo "No Render, Firebase production, Hosting, Certificates, Donations, or real Volunteer tasks changed."
