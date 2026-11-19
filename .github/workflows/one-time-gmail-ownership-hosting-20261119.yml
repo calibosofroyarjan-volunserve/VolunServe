@@ -1,0 +1,158 @@
+# Guarded one-time Hosting-only release for exact Gmail/Yahoo new-signup policy.
+# This controller does NOT publish live-protected's unpublished application backlog.
+name: Guarded Gmail Ownership Signup Hosting Release (ONE TIME)
+on:
+  push:
+    branches: [live-protected]
+    paths:
+      - '.github/workflows/one-time-gmail-ownership-hosting-20261119.yml'
+permissions:
+  contents: read
+concurrency:
+  group: volunserve-production-hosting-release
+  cancel-in-progress: false
+jobs:
+  exact-signup-release:
+    if: github.repository == 'calibosofroyarjan-volunserve/VolunServe' && github.ref == 'refs/heads/live-protected'
+    environment: production
+    runs-on: ubuntu-latest
+    timeout-minutes: 65
+    env:
+      CI: 'true'
+      EXPO_NO_TELEMETRY: '1'
+      PROJECT: 'volunserve-3aa5b'
+      EXPECTED_LIVE: '6b30cbd7fe72abb247b6b32233411048d6e42b84'
+      SOURCE_SHA: 'fac43aa803a07a7c92c22059e7aa5988186d5baf'
+      SOURCE_BRANCH: 'fix/signup-google-ownership-emailnator-20261119'
+      BACKUP_CHANNEL: 'signup-ownership-backup-20261119'
+    steps:
+      - name: Checkout exact protected controller
+        uses: actions/checkout@v4
+        with:
+          path: controller
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+      - name: Checkout immutable reviewed last-live-derived Signup source
+        uses: actions/checkout@v4
+        with:
+          path: site
+          ref: 'fac43aa803a07a7c92c22059e7aa5988186d5baf'
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: site/package-lock.json
+      - name: Fail closed on branch drift, non-Signup changes or production marker mismatch
+        working-directory: site
+        shell: bash
+        run: |
+          node <<'NODE'
+          const assert=require('node:assert/strict');
+          const cp=require('node:child_process');
+          const git=(...args)=>cp.execFileSync('git',args,{encoding:'utf8'}).trim();
+          const source=process.env.SOURCE_SHA;
+          const base=process.env.EXPECTED_LIVE;
+          async function verify(){
+            assert.equal(git('rev-parse','HEAD'),source,'Wrong candidate SHA');
+            cp.execFileSync('git',['merge-base','--is-ancestor',base,source]);
+            const changed=git('diff','--name-status','--no-renames',base,source).split('\n').filter(Boolean);
+            assert.deepEqual(changed.map(s=>s.split('\t')[1]).sort(),[
+              '.github/workflows/review-gmail-google-ownership-signup-no-deploy-20261119.yml',
+              'components/auth/EmailFirstSignup.tsx',
+              'lib/firebaseAuth.ts',
+              'lib/registrationEmailPolicy.ts',
+              'lib/signupRegistration.ts',
+              'scripts/test-signup-prod.cjs',
+            ].sort(),'Unreviewed source changes');
+            assert(changed.every(x=>/^[AM]\t/.test(x)),'Deletes and renames forbidden');
+            const stagingHead=git('ls-remote','--heads','origin',process.env.SOURCE_BRANCH).split(/\s+/)[0];
+            assert.equal(stagingHead,source,'Reviewed Signup staging branch moved');
+            const currentProtected=git('ls-remote','--heads','origin','live-protected').split(/\s+/)[0];
+            assert.equal(currentProtected,process.env.GITHUB_SHA,'Protected branch advanced; stop');
+            const controllerDiff=cp.execFileSync('git',['-C','../controller','diff','--name-only','HEAD^','HEAD'],{encoding:'utf8'}).trim().split('\n').filter(Boolean);
+            assert.deepEqual(controllerDiff,['.github/workflows/one-time-gmail-ownership-hosting-20261119.yml'],'Protected branch application changed; STOP');
+            const response=await fetch('https://volunserve.com/volunserve-release.json?signup_domain='+Date.now(),{
+              headers:{'Cache-Control':'no-cache'},signal:AbortSignal.timeout(15000)});
+            assert(response.ok,'Live revision marker unavailable');
+            const marker=await response.json();
+            assert.equal(marker.app,'VolunServe');
+            assert.equal(marker.firebaseProject,process.env.PROJECT);
+            assert.equal(marker.revision,base,'Live Hosting changed; stop, do not overwrite');
+            console.log('PASS: exact currently published source and only reviewed Signup/Auth files changed');
+          }
+          verify().catch(e=>{console.error(e.message);process.exitCode=1});
+          NODE
+      - name: Install exact locked dependencies
+        working-directory: site
+        run: npm ci --no-audit --no-fund
+      - name: Verify TypeScript, Gmail/Yahoo-only signup and cross-role regressions
+        working-directory: site
+        run: |
+          npx tsc --noEmit --incremental false
+          node scripts/test-signup-prod.cjs
+          node scripts/test-signup-email-first-middle-optional.cjs
+          node scripts/test-login-field-validation.cjs
+          node scripts/test-login-ui-release.cjs
+          node scripts/test-route-entrypoints.cjs
+          node scripts/test-portal-resident-volunteer-ui-flow.cjs
+          node scripts/test-admin-navigation-contract.cjs
+          node scripts/test-profile-certificates-account-menu.cjs
+          node scripts/test-unified-login-routing.cjs
+      - name: Build and verify exact Hosting-only Expo export
+        working-directory: site
+        run: |
+          npx expo export --platform web --clear
+          env -u GITHUB_SHA node scripts/verify-hosting-release.cjs
+          node -e "const m=require('./dist/volunserve-release.json');if(m.revision!==process.env.SOURCE_SHA||m.firebaseProject!==process.env.PROJECT)process.exit(1);console.log('PASS: reviewed exact Signup release marker')"
+      - name: Recheck live marker and require existing protected environment-only credential
+        working-directory: site
+        shell: bash
+        env:
+          FIREBASE_SA: ${{ secrets.VOLUNSERVE_PRODUCTION_HOSTING_SERVICE_ACCOUNT }}
+        run: |
+          test -n "$FIREBASE_SA" || { echo 'BLOCKED: protected Firebase Hosting secret unavailable'; exit 1; }
+          printf '%s' "$FIREBASE_SA" > "$RUNNER_TEMP/volunserve-gmail-yahoo-sa.json"
+          chmod 600 "$RUNNER_TEMP/volunserve-gmail-yahoo-sa.json"
+          echo "GOOGLE_APPLICATION_CREDENTIALS=$RUNNER_TEMP/volunserve-gmail-yahoo-sa.json" >> "$GITHUB_ENV"
+          node <<'NODE'
+          const assert=require('node:assert/strict');
+          (async()=>{
+            const response=await fetch('https://volunserve.com/volunserve-release.json?final='+Date.now(),{
+              headers:{'Cache-Control':'no-cache'},signal:AbortSignal.timeout(15000)});
+            assert(response.ok,'Live marker missing');
+            const marker=await response.json();
+            assert.equal(marker.revision,process.env.EXPECTED_LIVE,'Live changed before release; stop');
+            assert.equal(marker.firebaseProject,process.env.PROJECT,'Wrong Firebase project');
+          })().catch(e=>{console.error(e.message);process.exitCode=1});
+          NODE
+      - name: Snapshot production Hosting before publishing
+        id: backup
+        working-directory: site
+        run: |
+          npx firebase-tools hosting:clone "$PROJECT:live" "$PROJECT:$BACKUP_CHANNEL" --project "$PROJECT" --non-interactive
+      - name: Publish exact reviewed Signup frontend via Firebase Hosting ONLY
+        id: deploy
+        uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          firebaseServiceAccount: ${{ secrets.VOLUNSERVE_PRODUCTION_HOSTING_SERVICE_ACCOUNT }}
+          projectId: volunserve-3aa5b
+          channelId: live
+          entryPoint: ./site
+      - name: Verify the exact released revision is served on volunserve.com
+        working-directory: site
+        env:
+          VOLUNSERVE_HOSTING_URL: https://volunserve.com
+          VOLUNSERVE_EXPECTED_SHA: 'fac43aa803a07a7c92c22059e7aa5988186d5baf'
+        run: |
+          for attempt in 1 2 3 4 5 6; do
+            if node scripts/check-live-hosting.cjs; then exit 0; fi
+            sleep 10
+          done
+          echo 'FAIL: exact new Signup marker not served'
+          exit 1
+      - name: Rollback Hosting snapshot on failed release/post-release check
+        if: failure() && steps.backup.outcome == 'success' && steps.deploy.outcome != 'skipped'
+        working-directory: site
+        run: |
+          npx firebase-tools hosting:clone "$PROJECT:$BACKUP_CHANNEL" "$PROJECT:live" --project "$PROJECT" --non-interactive
