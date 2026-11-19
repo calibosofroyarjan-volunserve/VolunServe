@@ -3228,9 +3228,11 @@ function DecisionTab({
   const router = useRouter();
   const [decision, setDecision] = useState<"approve" | "more" | "reject" | null>(null);
   const [showMissing, setShowMissing] = useState(false);
+  const [showDetailedVerification, setShowDetailedVerification] = useState(false);
   useEffect(() => {
     setDecision(null);
     setShowMissing(false);
+    setShowDetailedVerification(false);
   }, [request.id]);
 
   const verified = request.verificationStatus === "verified";
@@ -3602,14 +3604,13 @@ function DecisionTab({
       disabled={busy} onPress={() => chooseDecision(value)}
       style={{
         flexDirection:"row",alignItems:"center",gap:12,
-        paddingVertical:15,paddingHorizontal:14,
-        borderWidth: decision===value ? 2 : 1,
+        paddingVertical:12,paddingHorizontal:13,
+        borderWidth:1,
         borderColor: decision===value ? "#059669" : "#E1EAE5",
         borderRadius:12,backgroundColor:decision===value ? "#ECFDF5":"#FFFFFF",
       }}>
       <Ionicons name={decision===value?"radio-button-on":"radio-button-off"}
         size={20} color={decision===value?"#047857":"#94A3B8"}/>
-      <Ionicons name={icon} size={19} color="#245044"/>
       <View style={{flex:1,gap:3}}>
         <Text style={{fontSize:13,fontWeight:"800",color:"#112A21"}}>{title}</Text>
         <Text style={{fontSize:11,color:"#667B71",lineHeight:16}}>{helper}</Text>
@@ -3618,13 +3619,34 @@ function DecisionTab({
   );
 
   return (
-    <View style={{padding:22,gap:22}}>
-      <View style={{flexDirection:"row",flexWrap:"wrap",gap:20,alignItems:"flex-start"}}>
-        <View style={{flex:1.15,flexBasis:330,minWidth:0}}>
+    <View style={{padding:16,gap:18}}>
+      <View style={{flexDirection:"row",flexWrap:"wrap",gap:15,alignItems:"flex-start"}}>
+        <View style={{flex:1.15,flexBasis:280,minWidth:0}}>
           <SectionCard title="Review Summary"
-            subtitle="Check the supporting evidence before selecting a decision."
+            subtitle="Check and confirm the key items before making a decision."
             icon="clipboard-outline">
             <View style={{gap:5}}>
+              {([
+                ["Resident identity verified", reviewDraft.beneficiaryCheckStatus==="confirmed"],
+                ["Supporting documents complete", reviewDraft.documentConsistencyStatus==="consistent" && (request.documents?.length||0)>0],
+                ["Request details valid", docsMatched && reviewDraft.duplicateCheckStatus==="clear"],
+                ["Resident belongs to service area", reviewDraft.residencyVerificationStatus==="verified"],
+              ] as Array<[string, boolean]>).map(([label, done]) => (
+                <TouchableOpacity accessibilityRole="button" key={label} onPress={()=>setShowDetailedVerification(true)}
+                  style={{flexDirection:"row",alignItems:"center",gap:11,paddingVertical:13,
+                    borderBottomWidth:1,borderBottomColor:"#EAEFEB"}}>
+                  <Ionicons name={done?"checkbox":"square-outline"} size={22} color={done?"#07854A":"#94A3B8"}/>
+                  <Text style={{fontSize:12,fontWeight:"700",color:"#182D25",flex:1}}>{label}</Text>
+                </TouchableOpacity>
+              ))}
+              <TouchableOpacity accessibilityRole="button" onPress={()=>setShowDetailedVerification(current=>!current)}
+                style={{flexDirection:"row",alignItems:"center",gap:7,paddingVertical:10}}>
+                <Text style={{fontSize:12,fontWeight:"800",color:"#047857"}}>
+                  {showDetailedVerification?"Hide detailed verification":"Complete or edit verification checks"}
+                </Text>
+                <Ionicons name={showDetailedVerification?"chevron-up":"chevron-down"} size={16} color="#047857"/>
+              </TouchableOpacity>
+              {showDetailedVerification && <>
               {confirmRow("Documents and beneficiary details match",
                 "Check the medical documents and beneficiary information.",
                 docsMatched,docsNotMatched,
@@ -3659,10 +3681,11 @@ function DecisionTab({
                   placeholder="Barangay / city from supporting proof"
                   placeholderTextColor="#94A3B8" style={styles.input}/>
               )}
+              </>}
             </View>
           </SectionCard>
         </View>
-        <View style={{flex:1,flexBasis:310,minWidth:0}}>
+        <View style={{flex:1,flexBasis:280,minWidth:0}}>
           <SectionCard title="Decision" subtitle="Choose an action for this assistance request."
             icon="checkmark-circle-outline">
             <View style={{gap:10}}>
@@ -3688,7 +3711,7 @@ function DecisionTab({
         </View>
       </View>
 
-      {(facilityRequired || costRequired) && (
+      {showDetailedVerification && (facilityRequired || costRequired) && (
         <SectionCard title={facilityRequired ? "Medical Bill Check" : "Cost Verification"}
           subtitle={facilityRequired
             ? "Confirm the provider and costs using supporting evidence or direct contact."
@@ -3749,7 +3772,7 @@ function DecisionTab({
           </View>
         </SectionCard>
       )}
-      {riskPresent && (
+      {showDetailedVerification && riskPresent && (
         <SectionCard title="Additional Verification"
           subtitle="Only complete checks that the LGU has actually performed. Pending checks block approval."
           icon="shield-checkmark-outline">
