@@ -139,7 +139,7 @@ async function main(){
   await page.screenshot({path:"demo-browser-artifacts/admin-approved-donation-setup.png",fullPage:true});
   await page.getByText("Continue to Publish Campaign",{exact:true}).click();
   await page.waitForURL(url=>url.pathname.includes("donation-list"),{timeout:35000});
-  await page.getByText("Publish Donation Campaign",{exact:true}).first().waitFor({state:"visible",timeout:35000});
+  await page.getByText("Publish Donation Campaign",{exact:true}).filter({visible:true}).first().waitFor({state:"visible",timeout:35000});
   await page.screenshot({path:"demo-browser-artifacts/admin-donation-publish-form.png",fullPage:true});
   console.log("PASS approved Assistance navigates to auto-filled Donation publishing UI");
   const updated=(await db.doc("assistanceRequests/"+approvedId).get()).data();
