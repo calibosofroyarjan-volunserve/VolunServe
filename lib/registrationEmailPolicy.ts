@@ -13,6 +13,17 @@ import { GENERATED_DISPOSABLE_EMAIL_DOMAINS } from "./disposableEmailDomains.gen
 /** Exact registered domains for new Resident accounts. Existing logins are unchanged. */
 export const ALLOWED_NEW_SIGNUP_EMAIL_DOMAINS: ReadonlySet<string> = new Set(["gmail.com", "yahoo.com"]);
 
+/** A verification link may be read by a shared Gmail proxy inbox.
+ * New Gmail registrations require the underlying Google OAuth identity.
+ * Existing account login is unaffected.
+ */
+export const GMAIL_GOOGLE_OAUTH_REQUIRED_MESSAGE =
+  "New Gmail accounts must use Continue with Google before creating a Basic Resident profile. Email verification alone does not prove Google Account control.";
+export function requiresGoogleOAuthForNewRegistration(email: string): boolean {
+  const parts = String(email || "").trim().toLowerCase().split("@");
+  return parts.length === 2 && parts[1] === "gmail.com";
+}
+
 /**
  * Additional temp-mail.org provider-associated delivery domains publicly
  * reported by Check-Mail (reviewed 2026-11-10). These are domains after @,
