@@ -628,6 +628,7 @@ export default function AssistanceRequestsAdmin() {
   const [sortOrder, setSortOrder] =
     useState<AssistanceQueueSort>("newest");
   const [search, setSearch] = useState("");
+  const [showReferenceFilters, setShowReferenceFilters] = useState(false);
   const [recordPage, setRecordPage] = useState(1);
   const [reviewFocusStage, setReviewFocusStage] = useState<ReviewStageFocus | null>(null);
   const [quickAction, setQuickAction] = useState<"more_info" | "reject" | null>(null);
@@ -2315,7 +2316,7 @@ This still does not automatically create a Donation Campaign.`,
       <>
         {reviewTab === "case" && (
           <>
-            <CaseReviewTab request={selected} />
+            <CaseReviewTab request={selected} profile={residentProfile} />
             {!["verified","rejected"].includes(String(selected.verificationStatus || "")) && (
               <View style={styles.simpleSummaryAction}>
                 <Text style={styles.simpleCopy}>Review the documents and resident details, then record your decision in one short form.</Text>
@@ -2450,11 +2451,11 @@ This still does not automatically create a Donation Campaign.`,
               color="#2563EB"
             />
             <Text style={styles.mockBackLinkText}>
-              Assistance Requests
+              Back to Assistance Requests
             </Text>
           </TouchableOpacity>
 
-          <View style={styles.detailSecurityBadge}>
+          <View style={{ display: "none" }}>
             <Ionicons
               name="lock-closed-outline"
               size={14}
@@ -2542,15 +2543,18 @@ This still does not automatically create a Donation Campaign.`,
 
   const renderCompactQueue = () => (
     <View style={styles.assistanceQueueCard}>
-      <View style={styles.assistanceQueueHeading}>
-        <Text style={styles.assistanceQueueTitle}>Assistance Requests</Text>
+      <View style={styles.referencePageHeading}>
+        <View style={styles.referencePageIcon}><Ionicons name="clipboard-outline" size={25} color="#007D43" /></View>
+        <View style={{ flex: 1, gap: 3 }}>
+          <Text style={styles.referencePageTitle}>Assistance Requests</Text>
+          <Text style={styles.referencePageSubtitle}>Review resident requests for support.</Text>
+        </View>
         {loadingRequests && <ActivityIndicator color="#047857" />}
       </View>
       <View style={styles.referenceFilterTabs}>
         {([
           ["all", "All Requests"],
           ["pending", "For Review"],
-          ["under_review", "In Review"],
           ["verified", "Approved"],
           ["rejected", "Rejected"],
           ["completed", "Completed"],
@@ -2564,7 +2568,8 @@ This still does not automatically create a Donation Campaign.`,
           </TouchableOpacity>
         ))}
       </View>
-      <View style={styles.assistanceSearchField}>
+      <View style={styles.referenceSearchRow}>
+      <View style={[styles.assistanceSearchField, { flex: 1, marginBottom: 0 }]}>
         <Ionicons name="search-outline" size={19} color="#64748B" />
         <TextInput
           value={search}
@@ -2579,6 +2584,14 @@ This still does not automatically create a Donation Campaign.`,
           </TouchableOpacity>
         )}
       </View>
+      </View>
+      <TouchableOpacity style={styles.referenceFilterButton} onPress={() => setShowReferenceFilters(!showReferenceFilters)}
+        accessibilityRole="button" accessibilityState={{ expanded: showReferenceFilters }}>
+        <Ionicons name="filter-outline" color="#006F3B" size={17} />
+        <Text style={styles.referenceFilterButtonText}>Filter</Text>
+      </TouchableOpacity>
+      </View>
+      {showReferenceFilters && <>
       <View style={styles.assistanceFilterRow}>
         <ReviewPicker
           label="Category"
@@ -2599,6 +2612,7 @@ This still does not automatically create a Donation Campaign.`,
         options={sortingOptions}
         onChange={(value) => { setSortOrder(value as typeof sortOrder); setRecordPage(1); }}
       />
+      </>}
       {!!listenerError && (
         <View style={styles.errorBox}>
           <Ionicons name="alert-circle-outline" size={17} color="#B42318" />
@@ -2996,16 +3010,12 @@ function RequestReviewHeader({
 }: {
   request: AssistanceRequest;
 }) {
-  const meta =
-    statusMeta(request.status);
-
+  const meta = statusMeta(request.status);
+  const approved = request.verificationStatus === "verified" && !!request.supportDecision && request.supportDecision !== "pending";
   return (
-    <View style={styles.reviewHeader}>
+    <View style={[styles.reviewHeader, { alignItems: "center" }]}>
+      <View style={styles.referenceRequestIcon}><Ionicons name="business-outline" color="#065B3B" size={27} /></View>
       <View style={styles.reviewHeaderCopy}>
-        <Text style={styles.panelEyebrow}>
-          REQUEST REVIEW
-        </Text>
-
         <Text style={styles.reviewTitle}>
           {request.title ||
             "Assistance Request"}
@@ -3043,7 +3053,7 @@ function RequestReviewHeader({
             },
           ]}
         >
-          {meta.label}
+          {approved ? "Approved" : request.verificationStatus === "verified" ? "Verified Need" : meta.label}
         </Text>
       </View>
     </View>
@@ -3078,7 +3088,7 @@ function ReviewTabButton({
         size={16}
         color={
           active
-            ? "#4338CA"
+            ? "#047857"
             : "#64748B"
         }
       />
@@ -3095,21 +3105,48 @@ function ReviewTabButton({
   );
 }
 
-function CaseReviewTab({ request }: { request: AssistanceRequest }) {
+function CaseReviewTab({ request, profile }: { request: AssistanceRequest; profile: ResidentProfile | null }) {
+  const residentName = profile?.fullName || request.requesterName || "Not recorded";
+  const residentAddress = profile?.address || request.requesterAddress || request.requesterBarangay || "Not recorded";
   return (
-    <View style={styles.tabContent}>
-      <SectionCard title="Request Overview" subtitle="Information provided by the resident." icon="document-text-outline">
-        <InfoGrid>
-          <InfoItem label="Description" value={request.description || "No description provided"} />
-          <InfoItem label="Resident Cost Estimate" value={money(request.estimatedAmount)} />
-          <InfoItem label="Assistance Type" value={request.categoryLabel || request.category || "Not recorded"} />
-          <InfoItem label="Date Requested" value={readableDate(request.createdAt)} />
-          <InfoItem label="Beneficiary" value={request.beneficiaryName || "Not recorded"} />
-          <InfoItem label="Current Situation" value={request.currentSituation || "Not recorded"} />
-        </InfoGrid>
-      </SectionCard>
+    <View style={[styles.tabContent, styles.referenceTwoCards]}>
+      <View style={styles.referenceDetailsCard}>
+        <View style={styles.referenceCardHeading}>
+          <Ionicons name="information-circle-outline" size={23} color="#008447" />
+          <Text style={styles.referenceCardTitle}>Request Information</Text>
+        </View>
+        <ReferenceInfoRow icon="pricetag-outline" label="Category" value={request.categoryLabel || request.category || "Not recorded"} />
+        <ReferenceInfoRow icon="heart-outline" label="Current Situation" value={request.currentSituation || "Not recorded"} />
+        <ReferenceInfoRow icon="document-text-outline" label="Description" value={request.description || "No description provided"} />
+        {!!request.estimatedAmount && <ReferenceInfoRow icon="cash-outline" label="Requested Amount" value={money(request.estimatedAmount)} />}
+      </View>
+      <View style={styles.referenceDetailsCard}>
+        <View style={styles.referenceCardHeading}>
+          <Ionicons name="person-outline" size={23} color="#008447" />
+          <Text style={styles.referenceCardTitle}>Resident Information</Text>
+        </View>
+        <ReferenceInfoRow icon="people-outline" label="Name" value={residentName} />
+        <ReferenceInfoRow icon="call-outline" label="Contact" value={request.contactNumber || profile?.phoneNumber || "Not recorded"} />
+        <ReferenceInfoRow icon="location-outline" label="Address" value={residentAddress} />
+        {(profile?.identityVerified === true || profile?.identityStatus === "verified") && (
+          <View style={styles.referenceResidentBadge}>
+            <Ionicons name="shield-checkmark-outline" color="#007B40" size={17} />
+            <Text style={styles.referenceResidentBadgeText}>Verified Resident</Text>
+          </View>
+        )}
+      </View>
     </View>
   );
+}
+
+function ReferenceInfoRow({icon,label,value}:{
+  icon: React.ComponentProps<typeof Ionicons>["name"]; label: string; value: string;
+}) {
+  return <View style={styles.referenceInfoRow}>
+    <Ionicons name={icon} size={17} color="#446579" />
+    <Text style={styles.referenceInfoLabel}>{label}</Text>
+    <Text style={styles.referenceInfoValue}>{value}</Text>
+  </View>;
 }
 
 function EvidenceTab({
@@ -5779,6 +5816,23 @@ function DocumentPreviewModal({
 }
 
 const styles = StyleSheet.create({
+  referencePageHeading: { flexDirection: "row", alignItems: "center", gap: 14, paddingVertical: 7, marginBottom: 6 }, 
+  referencePageIcon: { width: 37, height: 42, alignItems: "center", justifyContent: "center" },
+  referencePageTitle: { fontFamily: vsType.family, fontSize: 24, fontWeight: "800", color: "#111827" },
+  referencePageSubtitle: { fontFamily: vsType.family, fontSize: 12, color: "#627084" },
+  referenceSearchRow: { flexDirection: "row", alignItems: "center", gap: 12, marginTop: 2, marginBottom: 6 },
+  referenceFilterButton: { flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: "#FFFFFF", borderColor: "#D9E4E5", borderWidth: 1, borderRadius: 9, paddingHorizontal: 17, paddingVertical: 12 },
+  referenceFilterButtonText: { fontFamily: vsType.family, color: "#036A39", fontWeight: "700", fontSize: 13 },
+  referenceRequestIcon: { backgroundColor: "#F2F7F6", width: 54, height: 54, borderRadius: 9, alignItems: "center", justifyContent: "center" },
+  referenceTwoCards: { flexDirection: "row", flexWrap: "wrap", gap: 14, alignItems: "stretch" },
+  referenceDetailsCard: { flexGrow: 1, flexBasis: 280, minWidth: 240, borderWidth: 1, borderColor: "#DCE6E6", borderRadius: 12, backgroundColor: "#FFFFFF", padding: 16, minHeight: 230 },
+  referenceCardHeading: { flexDirection: "row", alignItems: "center", gap: 10, paddingBottom: 11, borderBottomWidth: 1, borderBottomColor: "#E5EBEF" },
+  referenceCardTitle: { color: "#111827", fontFamily: vsType.family, fontSize: 17, fontWeight: "800" },
+  referenceInfoRow: { flexDirection: "row", alignItems: "flex-start", gap: 7, paddingVertical: 13, borderBottomWidth: 1, borderBottomColor: "#EEF2F4" },
+  referenceInfoLabel: { width: 98, flexShrink: 0, fontFamily: vsType.family, color: "#334155", fontSize: 12, fontWeight: "700" },
+  referenceInfoValue: { flex: 1, minWidth: 0, fontFamily: vsType.family, color: "#1C2733", fontSize: 12, fontWeight: "600", lineHeight: 19 },
+  referenceResidentBadge: { flexDirection: "row", gap: 7, alignItems: "center", alignSelf: "flex-start", marginTop: 15, paddingHorizontal: 13, paddingVertical: 7, backgroundColor: "#DDF8E7", borderRadius: 8 },
+  referenceResidentBadgeText: { color: "#05703A", fontFamily: vsType.family, fontSize: 12, fontWeight: "800" },
   referenceTableHeader: { flexDirection: "row", alignItems: "center", backgroundColor: "#F1F7F3", paddingHorizontal: 12, paddingVertical: 13, gap: 10, borderTopLeftRadius: 9, borderTopRightRadius: 9 },
   referenceTableHeading: { color: "#3D5B51", fontFamily: vsType.family, fontWeight: "800", fontSize: 10 },
   referenceTableRow: { flexDirection: "row", alignItems: "center", paddingHorizontal: 12, paddingVertical: 13, gap: 10, minHeight: 70, borderBottomColor: "#E6EDE9", borderBottomWidth: 1, backgroundColor: "#FFFFFF" },
