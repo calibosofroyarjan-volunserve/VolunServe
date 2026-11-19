@@ -1,0 +1,66 @@
+name: QA Assistance Professional UI Build (NO DEPLOY)
+on:
+  push:
+    branches: [qa/assistance-clean-compile-20261120]
+    paths:
+      - '.github/workflows/qa-assistance-professional-ui-20261120.yml'
+permissions:
+  contents: read
+jobs:
+  compile-and-preserve:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      CI: 'true'
+      EXPO_NO_TELEMETRY: '1'
+      BASE_LIVE: 'af525f35901ca84a38715d3ba640800493643c43'
+    steps:
+      - name: Checkout isolated candidate
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: false
+      - name: Setup Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install locked app dependencies
+        run: npm ci --no-audit --no-fund
+      - name: TypeScript compile check
+        run: npx tsc --noEmit --incremental false
+      - name: Ensure only UI file changed and existing 11 handlers remain identical
+        run: |
+          node <<'NODE'
+          const assert=require('node:assert/strict'),cp=require('node:child_process'),fs=require('node:fs'),ts=require('typescript');
+          const file='app/(admin)/assistance-requests.tsx',base=process.env.BASE_LIVE;
+          const list=cp.execFileSync('git',['diff','--name-only',base,'HEAD','--','app','components','lib','services','functions','backend','firebase.json','firestore.rules'],{encoding:'utf8'}).trim().split('\n').filter(Boolean);
+          assert.deepEqual(list,[file]);
+          const prev=cp.execFileSync('git',['show',base+':'+file],{encoding:'utf8'});
+          const next=fs.readFileSync(file,'utf8');
+          function parse(text){const sf=ts.createSourceFile(file,text,ts.ScriptTarget.Latest,true,ts.ScriptKind.TSX);assert.equal(sf.parseDiagnostics.length,0);return sf}
+          const a=parse(prev),b=parse(next);
+          const initializer=(root,name)=>{
+            const results=[];
+            function walk(node){if(ts.isVariableDeclaration(node)&&ts.isIdentifier(node.name)&&node.name.text===name&&node.initializer)results.push(node.initializer.getText(root));ts.forEachChild(node,walk)}
+            walk(root);assert.equal(results.length,1,'Expected protected handler '+name);return results[0]
+          };
+          for(const name of ['updateRequest','startReview','saveVerificationDraft','verifyNeed','rejectRequest','requestMoreInformation','saveResourceAssessment','markAssistanceProvided','saveOfficialLocation','clearOfficialLocation','saveAndContinueDonation']){
+            assert.equal(initializer(a,name),initializer(b,name),'Changed handler '+name);
+          }
+          assert(!next.includes('style={styles.detailMainScroll}'),'Old nested detail scrollbar returned');
+          assert(next.includes('style={styles.assistanceDetailPageContent}'),'Natural page layout missing');
+          assert(next.includes('Existing LGU Assistance Record'),'Saved-case compatibility missing');
+          console.log('PASS: 11 protected handlers identical; no stale functionality added; only Assistance Requests frontend edited');
+          NODE
+      - name: Existing Admin navigation and LGU review regression tests
+        run: |
+          node scripts/test-admin-navigation-contract.cjs
+          node scripts/test-lgu-internal-review-ux.cjs
+          node scripts/test-route-entrypoints.cjs
+      - name: Export web app without deployment
+        run: |
+          npx expo export --platform web --clear
+          node scripts/verify-hosting-release.cjs
+      - name: Never deploy QA branch
+        run: echo 'NO DEPLOY. Firebase Hosting, rules, Functions, and live data unchanged.'
