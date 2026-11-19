@@ -21,9 +21,9 @@ jobs:
       CI: 'true'
       EXPO_NO_TELEMETRY: '1'
       PROJECT: 'volunserve-3aa5b'
-      EXPECTED_LIVE: 'f6139fdae5bce940356a62efc28f8e50935978d6'
-      SOURCE_SHA: '2e57d7cc5dcfdbed0b060f0a07ae9aa3179fdab7'
-      SOURCE_BRANCH: 'release/signup-defense-safe-20261119'
+      EXPECTED_LIVE: '4bc0893a6c678ea7738be8f9176fea9721bbc6af'
+      SOURCE_SHA: '3efdc7edd85d5464242f6937d6ed9679365ec1b9'
+      SOURCE_BRANCH: 'release/signup-defense-current-live-20261119'
       BACKUP_CHANNEL: 'signup-defense-backup-20261119'
     steps:
       - name: Checkout protected controller only
@@ -37,7 +37,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           path: site
-          ref: '2e57d7cc5dcfdbed0b060f0a07ae9aa3179fdab7'
+          ref: '3efdc7edd85d5464242f6937d6ed9679365ec1b9'
           fetch-depth: 0
           submodules: false
       - uses: actions/setup-node@v4
@@ -148,7 +148,7 @@ jobs:
         working-directory: site
         env:
           VOLUNSERVE_HOSTING_URL: https://volunserve.com
-          VOLUNSERVE_EXPECTED_SHA: '2e57d7cc5dcfdbed0b060f0a07ae9aa3179fdab7'
+          VOLUNSERVE_EXPECTED_SHA: '3efdc7edd85d5464242f6937d6ed9679365ec1b9'
         run: |
           for attempt in 1 2 3 4 5 6; do
             if node scripts/check-live-hosting.cjs; then exit 0; fi
