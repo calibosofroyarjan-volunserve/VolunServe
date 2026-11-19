@@ -2155,6 +2155,24 @@ service cloud.firestore {
         );
       }
 
+      // Phase 8 DRAFT: prevent manual assignment while automatic offers
+      // remain pending, even though there is no accepted winner pointer.
+      // Client may edit unrelated case notes, but cannot spoof a wave cancel.
+      function preservePendingAutoWave() {
+        let oldDispatch = resource.data.get('autoVolunteerDispatch', {});
+        let newDispatch = request.resource.data.get('autoVolunteerDispatch', {});
+        return oldDispatch.get('state', '') != 'waiting'
+          || (
+            newDispatch == oldDispatch
+            && request.resource.data.get('activeVolunteerSupportAssignmentId', '')
+              == resource.data.get('activeVolunteerSupportAssignmentId', '')
+            && request.resource.data.get('activeVolunteerSupportUid', '')
+              == resource.data.get('activeVolunteerSupportUid', '')
+            && request.resource.data.get('autoVolunteerAcceptedAssignmentId', '')
+              == resource.data.get('autoVolunteerAcceptedAssignmentId', '')
+          );
+      }
+
       function isLguPersonnel() {
         return approved()
           && profile().role == 'lgu_personnel'
@@ -2392,6 +2410,7 @@ service cloud.firestore {
       allow update: if isAdmin()
         && validStatusTransition()
         && preserveAcceptedAutoWinner()
+        && preservePendingAutoWave()
         && (
           !('responseVehicleType' in request.resource.data)
           || request.resource.data.responseVehicleType in [

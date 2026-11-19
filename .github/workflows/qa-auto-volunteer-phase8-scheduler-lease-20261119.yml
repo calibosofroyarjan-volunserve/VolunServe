@@ -1,0 +1,92 @@
+name: Auto Volunteer Phase 8 pending guard + durable lease - EMULATOR ONLY
+on:
+  pull_request:
+    branches:
+      - qa/auto-volunteer-phase7-durable-wave-emulator-20261119
+    paths:
+      - "lib/emergencyVolunteerWinnerGuard.js"
+      - "firestore.rules"
+      - "backend/autoVolunteerPhase8LeaseSchedulerEmulator.js"
+      - "backend/test-autoVolunteerPhase8PendingSchedulerEmulator.cjs"
+      - "docs/emergency-volunteer/PHASE8_PENDING_WAVE_AND_SCHEDULER_LEASE_20261119.md"
+      - ".github/workflows/qa-auto-volunteer-phase8-scheduler-lease-20261119.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  pending-manual-arbitration-and-crash-recovery-no-deploy:
+    if: github.repository == 'calibosofroyarjan-volunserve/VolunServe'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      GCLOUD_PROJECT: demo-volunserve-auto-phase4
+      GOOGLE_CLOUD_PROJECT: demo-volunserve-auto-phase4
+      VOLUNSERVE_AUTO_VOLUNTEER_PHASE6_EMULATOR_WRITE: enabled
+      VOLUNSERVE_AUTO_VOLUNTEER_DISPATCH: disabled
+      FIREBASE_CLI_DISABLE_TELEMETRY: "1"
+      CI: "true"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            backend/package-lock.json
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - name: Strict Phase 8 six-file scope guard
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin qa/auto-volunteer-phase7-durable-wave-emulator-20261119
+          git diff --name-only origin/qa/auto-volunteer-phase7-durable-wave-emulator-20261119 HEAD > /tmp/phase8-files
+          while IFS= read -r f; do
+            case "$f" in
+              "lib/emergencyVolunteerWinnerGuard.js"|"firestore.rules"|"backend/autoVolunteerPhase8LeaseSchedulerEmulator.js"|"backend/test-autoVolunteerPhase8PendingSchedulerEmulator.cjs"|"docs/emergency-volunteer/PHASE8_PENDING_WAVE_AND_SCHEDULER_LEASE_20261119.md"|".github/workflows/qa-auto-volunteer-phase8-scheduler-lease-20261119.yml") ;;
+              *) echo "BLOCKED: unrelated file in Phase 8: $f"; exit 1 ;;
+            esac
+          done < /tmp/phase8-files
+          echo "PASS: 6 scoped review/test changes, no live server or UI modifications."
+      - name: Install repository locked dependencies without package scripts
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          npm ci --prefix backend --ignore-scripts --no-audit --no-fund
+      - name: Local preview module syntax and no production server import
+        run: |
+          node --check lib/emergencyVolunteerWinnerGuard.js
+          node --check backend/autoVolunteerPhase8LeaseSchedulerEmulator.js
+          node --check backend/test-autoVolunteerPhase8PendingSchedulerEmulator.cjs
+          if grep -Fq 'autoVolunteerPhase8LeaseSchedulerEmulator' backend/server.js; then
+            echo "BLOCKED: demo scheduler is not a production worker"
+            exit 1
+          fi
+      - name: Firestore emulator pending case + rules + leases (local DEMO ONLY)
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -z "${FIREBASE_SERVICE_ACCOUNT_JSON:-}" || { echo "BLOCKED: production credentials are present"; exit 1; }
+          ./node_modules/.bin/firebase emulators:exec --project demo-volunserve-auto-phase4 --only firestore "node --test --test-concurrency=1 backend/test-autoVolunteerPhase8PendingSchedulerEmulator.cjs"
+      - name: Full prior Firestore Emulator regression including accepted STOP
+        shell: bash
+        run: |
+          set -euo pipefail
+          ./node_modules/.bin/firebase emulators:exec --project demo-volunserve-auto-phase4 --only firestore "node --test --test-concurrency=1 backend/test-autoVolunteerPhase7WaveEmulator.cjs backend/test-autoVolunteerPhase6DecisionEmulator.cjs backend/test-autoVolunteerFirestoreEmulator.cjs backend/test-autoVolunteerPhase5CompatEmulator.cjs backend/test-autoVolunteerPhase5RulesEmulator.cjs"
+      - name: Prior planner, Auth preview, shared guard and backend regressions
+        run: |
+          node --test backend/test-emergencyVolunteerWinnerGuard.cjs
+          node --test backend/test-emergencyAutoVolunteerReadOnlyPlanner.cjs
+          node --test backend/test-autoVolunteerAdminReadOnlyPreview.cjs
+          node --test backend/test-autoVolunteerAtomicDecisionPolicy.cjs
+          npm run check --prefix backend
+      - name: Never claim or deploy real 24-hour scheduling from this PR
+        run: |
+          echo "NO production Firebase, Cloud Tasks, Cloud Scheduler, Render or Hosting deploy."
+          echo "PERSISTED LEASE IS NOT A DURABLE 24-HOUR WAKE-UP SERVICE."
+          echo "Real emergency automatic dispatch: NO-GO."
