@@ -150,11 +150,11 @@ test("local app pages are served, contain all controls and NEVER point to produc
   assert.equal(vol.code,200);
   for(const fragment of [
     'id="inspect"','id="start"','id="tick"','id="cancel"',
-    'connectAuthEmulator','phase10-admin','Phase 10'
+    'connectAuthEmulator','/phase10-volunteer','Phase 10'
   ])assert.ok(admin.data.includes(fragment),"Admin missing "+fragment);
   for(const fragment of [
     'id="inspect"','id="accept"','id="decline"',
-    'connectAuthEmulator','phase10-volunteer'
+    'connectAuthEmulator','/phase10-admin'
   ])assert.ok(vol.data.includes(fragment),"Volunteer missing "+fragment);
   for(const source of [admin.data,vol.data]){
     assert.ok(!source.includes("volunserve.com"));
