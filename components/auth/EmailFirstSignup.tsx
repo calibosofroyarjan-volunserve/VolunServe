@@ -657,7 +657,7 @@ export default function EmailFirstSignup() {
                   showError={showErrors}
                   hint={email.trim() && !emailErr
                     ? gmailNeedsGoogle
-                      ? "Gmail format accepted, but the inbox may be temporary. Choose Continue with Google to prove account ownership."
+                      ? "Gmail registration requires Continue with Google. Email/password verification alone is not accepted."
                       : "Yahoo format accepted. Open the verification link to confirm access to this inbox."
                     : undefined}
                 />
@@ -696,10 +696,15 @@ export default function EmailFirstSignup() {
                       <Text style={styles.error}>Agree to the Terms and Privacy Notice to continue.</Text>}
                   </>
                 )}
-                {checkButton(
+                {(!gmailNeedsGoogle || googleOnly || resumeMode) && checkButton(
                   googleOnly ? "Link Password & Continue" :
                     resumeMode ? "Resume Registration" : "Create Account & Verify Email",
                   () => {void startEmail();}
+                )}
+                {gmailNeedsGoogle && !googleOnly && (
+                  <Text style={styles.helper}>
+                    New Gmail registration: Continue with Google below. A verification email alone does not prove Google Account ownership.
+                  </Text>
                 )}
                 {!signedInUser && !resumeMode && (
                   <>
