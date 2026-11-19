@@ -1,0 +1,72 @@
+# Isolated, read-only validation of the exact last-published web source plus signup fixes.
+name: Verify Defense Signup Candidate (NO DEPLOY)
+on:
+  push:
+    branches:
+      - release/signup-defense-safe-20261119
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify-no-deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      CI: 'true'
+      EXPO_NO_TELEMETRY: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Enforce only approved signup paths and untouched production infrastructure
+        run: |
+          node <<'NODE'
+          const assert=require('node:assert/strict');
+          const cp=require('node:child_process');
+          const base='f6139fdae5bce940356a62efc28f8e50935978d6';
+          const diff=cp.execFileSync('git',['diff','--name-status','--no-renames',base,'HEAD'],{encoding:'utf8'}).trim().split('\n').filter(Boolean);
+          const allowed=new Set([
+            '.github/workflows/verify-defense-signup-no-deploy-20261119.yml',
+            'components/auth/EmailFirstSignup.tsx',
+            'lib/registrationEmailPolicy.ts',
+            'lib/signupRegistration.ts',
+            'lib/requireCompleteResidentRegistration.ts',
+            'lib/firebaseAuth.ts',
+            'scripts/test-signup-prod.cjs',
+          ]);
+          for(const line of diff) {
+            const [status,path]=line.split('\t');
+            assert(['A','M'].includes(status),'No deletion or rename: '+line);
+            assert(allowed.has(path),'Unapproved change: '+path);
+          }
+          assert.equal(diff.length,allowed.size,'All seven approved changes must be present');
+          console.log('PASS: only Signup source, its test, and no-deploy workflow changed');
+          NODE
+      - name: Install locked dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Compile TypeScript
+        run: npx tsc --noEmit --incremental false
+      - name: Signup, Auth and cross-role regression checks
+        run: |
+          node scripts/test-signup-prod.cjs
+          node scripts/test-signup-email-first-middle-optional.cjs
+          node scripts/test-login-field-validation.cjs
+          node scripts/test-login-ui-release.cjs
+          node scripts/test-route-entrypoints.cjs
+          node scripts/test-portal-resident-volunteer-ui-flow.cjs
+          node scripts/test-admin-navigation-contract.cjs
+          node scripts/test-profile-certificates-account-menu.cjs
+          node scripts/test-volunteer-time-controls-20261106.cjs
+          node scripts/test-volunteer-community-event-join-20261106.cjs
+      - name: Export actual Hosting bundle for review (NEVER deploy)
+        run: |
+          npx expo export --platform web --clear
+          node scripts/verify-hosting-release.cjs
+      - name: Prove Firebase policies and backend remain untouched
+        run: |
+          git diff --exit-code f6139fdae5bce940356a62efc28f8e50935978d6 HEAD -- firebase.json .firebaserc firestore.rules storage.rules firestore.indexes.json functions backend identity-ai package.json package-lock.json
+          echo 'PASS: database, Rules, Functions, Render backend and dependency locks unchanged'
