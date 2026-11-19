@@ -16,6 +16,7 @@ jobs:
       - name: Checkout isolated QA branch
         uses: actions/checkout@v4
         with:
+          fetch-depth: 0
           submodules: false
       - name: Set up Node.js 22
         uses: actions/setup-node@v4
@@ -26,6 +27,8 @@ jobs:
         run: npm ci --no-audit --no-fund
       - name: TypeScript typecheck
         run: npx tsc --noEmit --incremental false
+      - name: Verify original assistance action handlers unchanged (read-only)
+        run: node scripts/test-assistance-ui-preserve-handlers-qa-20261120.cjs
       - name: Existing Admin navigation contract (read-only)
         run: node scripts/test-admin-navigation-contract.cjs
       - name: Existing LGU review contract (read-only)
