@@ -930,7 +930,7 @@ export default function AssistanceRequestsAdmin() {
 
       const matchesFilter =
         filter === "all" ||
-        (filter === "completed"
+        (filter === "pending" ? ["pending","under_review"].includes(status) : filter === "completed"
           ? [
               "assistance_provided",
               "campaign_created",
@@ -2102,7 +2102,7 @@ This still does not automatically create a Donation Campaign.`,
 
         <View style={styles.mockDetailTabs}>
           <ReviewTabButton
-            label="Details"
+            label="Request Details"
             icon="document-text-outline"
             active={reviewTab === "case"}
             onPress={() => setReviewTab("case")}
@@ -2140,7 +2140,7 @@ This still does not automatically create a Donation Campaign.`,
         >
           <>
             <AdminReviewHero
-              eyebrow="LGU ADMINISTRATION / ASSISTANCE"
+              eyebrow="LGU WORKSPACE / ASSISTANCE"
               title="Assistance Requests"
               subtitle="Review resident requests and provide appropriate support."
               icon="hand-left-outline"
@@ -2697,7 +2697,7 @@ function ReviewTabButton({
         size={16}
         color={
           active
-            ? "#4338CA"
+            ? "#047857"
             : "#64748B"
         }
       />
@@ -4989,7 +4989,7 @@ const styles = StyleSheet.create({
   },
 
   tabButtonActive: {
-    backgroundColor: "#EEF2FF",
+    backgroundColor: "#E5F7EC",
   },
 
   tabButtonText: {
@@ -4999,7 +4999,7 @@ const styles = StyleSheet.create({
   },
 
   tabButtonTextActive: {
-    color: "#4338CA",
+    color: "#047857",
   },
 
   tabContent: {
@@ -5742,8 +5742,8 @@ const styles = StyleSheet.create({
   },
 
   mockStatusTabActive: {
-    borderColor: "#2563EB",
-    backgroundColor: "#2563EB",
+    borderColor: "#006A42",
+    backgroundColor: "#006A42",
   },
 
   mockStatusTabText: {
@@ -6105,8 +6105,8 @@ const styles = StyleSheet.create({
   },
 
   detailMainContent: {
-    padding: 2,
-    paddingBottom: 28,
+    padding: 4,
+    paddingBottom: 36,
   },
 
   detailEvaluationPanel: {
