@@ -11,7 +11,7 @@ const queue=page.slice(page.indexOf('screenMode === "queue"'),page.indexOf(') : 
 const review=page.slice(start,end);
 for(const label of ["Assistance Request Queue","REQUEST CASE","RESIDENT","CATEGORY","AMOUNT",
    "STATUS","All Requests","For Review","Approved","Rejected","Completed",
-   "5 per page","<ListPagination","<MockQueueRow"]){
+   "pageSize={5}","<ListPagination","<MockQueueRow"]){
   assert(queue.includes(label),"Queue design is missing: "+label);
 }
 assert(page.includes('filter === "pending" ? ["pending","under_review"].includes(status)'),
