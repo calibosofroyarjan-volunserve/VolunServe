@@ -2798,10 +2798,12 @@ function MockStatusTab({
 
 function MockQueueRow({
   request,
+  wide = false,
   active = false,
   onPress,
 }: {
   request: AssistanceRequest;
+  wide?: boolean;
   active?: boolean;
   onPress: () => void;
 }) {
@@ -2809,6 +2811,34 @@ function MockQueueRow({
     request.category,
   );
   const status = statusMeta(request.status);
+
+  // Desktop-only reference table. Mobile retains the existing working queue row.
+  if (wide) return (
+    <TouchableOpacity onPress={onPress} accessibilityRole="button"
+      activeOpacity={0.82} style={[styles.referenceTableRow, active && styles.mockQueueRowSelected]}>
+      <View style={[styles.referenceTableCell,{flex:2.3,flexDirection:"row",alignItems:"center",gap:9}]}>
+        <View style={[styles.mockQueueIcon,{backgroundColor:category.soft}]}>
+          <Ionicons name={category.icon} size={22} color={category.color}/>
+        </View>
+        <View style={{flex:1,minWidth:0,gap:3}}>
+          <Text style={styles.mockQueueTitle} numberOfLines={1}>{request.title || "Assistance Request"}</Text>
+          <Text style={styles.mockQueueId} numberOfLines={1}>{request.requestId || request.id}</Text>
+        </View>
+      </View>
+      <Text style={[styles.referenceTableText,{flex:1.2}]} numberOfLines={2}>{request.requesterName || "Resident"}</Text>
+      <Text style={[styles.referenceTableText,{flex:1.2}]} numberOfLines={2}>{request.categoryLabel || request.category || "Community Assistance"}</Text>
+      <Text style={[styles.referenceTableText,{flex:1}]}>{request.estimatedAmount ? money(request.estimatedAmount) : "—"}</Text>
+      <View style={[styles.referenceTableCell,{flex:1}]}>
+        <View style={[styles.mockQueueStatus,{backgroundColor:status.soft,alignSelf:"flex-start"}]}>
+          <Text style={[styles.mockQueueStatusText,{color:status.color}]}>{status.label}</Text>
+        </View>
+      </View>
+      <View style={[styles.referenceTableCell,{flex:1,flexDirection:"row",alignItems:"center",gap:6}]}>
+        <Text style={[styles.referenceTableText,{flex:1}]} numberOfLines={2}>{readableDate(request.createdAt)}</Text>
+        <Ionicons name="chevron-forward" size={17} color="#058348"/>
+      </View>
+    </TouchableOpacity>
+  );
 
   return (
     <TouchableOpacity
