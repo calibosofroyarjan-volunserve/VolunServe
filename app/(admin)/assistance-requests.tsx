@@ -4666,22 +4666,18 @@ const styles = StyleSheet.create({
   },
   assistanceReferenceDetailContent: {padding:12,gap:15},
   assistanceReferenceInfoCards: {flexDirection:"row",flexWrap:"wrap",gap:14,alignItems:"stretch"},
-  assistanceReferenceInfoCard: {
-    flex:1,flexBasis:280,minWidth:240,minHeight:246,
-    backgroundColor:"#FFFFFF",borderWidth:1,borderColor:"#DBE6E5",
-    borderRadius:12,paddingHorizontal:15,paddingVertical:14,
-  },
+  assistanceReferenceInfoCard: {flex:1,flexBasis:280,minWidth:240,minHeight:0,backgroundColor:"#FFFFFF",borderWidth:1,borderColor:"#DEE7E9",borderRadius:10,paddingHorizontal:18,paddingVertical:18},
   assistanceReferenceInfoHeading: {
     flexDirection:"row",alignItems:"center",gap:10,
     paddingBottom:14,marginBottom:4,borderBottomWidth:1,borderBottomColor:"#E9EFF0",
   },
-  assistanceReferenceInfoHeadingText: {fontSize:17,fontWeight:"800",color:"#15212D"},
+  assistanceReferenceInfoHeadingText: {fontSize:16,fontWeight:"700",color:"#1D2C3D"},
   assistanceReferenceInfoRow: {
     flexDirection:"row",alignItems:"flex-start",gap:9,
     paddingVertical:12,borderBottomWidth:1,borderBottomColor:"#EDF1F2",
   },
-  assistanceReferenceInfoLabel: {width:102,flexShrink:0,fontSize:12,fontWeight:"700",color:"#344257"},
-  assistanceReferenceInfoValue: {flex:1,minWidth:0,fontSize:12,lineHeight:18,color:"#1F2937",fontWeight:"600"},
+  assistanceReferenceInfoLabel: {width:110,flexShrink:0,fontSize:12,fontWeight:"600",color:"#5A6B7D"},
+  assistanceReferenceInfoValue: {flex:1,minWidth:0,fontSize:13,lineHeight:19,color:"#243547",fontWeight:"500"},
   assistanceReferenceIdentityBadge: {
     alignSelf:"flex-start",flexDirection:"row",alignItems:"center",gap:7,
     backgroundColor:"#E0F8E8",borderRadius:8,paddingVertical:9,paddingHorizontal:13,marginTop:13,
@@ -4692,19 +4688,13 @@ const styles = StyleSheet.create({
     flexDirection:"row",alignItems:"center",gap:9,
     padding:14,borderRadius:10,borderWidth:1,borderColor:"#F3E3B0",backgroundColor:"#FFF9EC",
   },
-  page: {
-    flex: 1,
-    backgroundColor: "#F6F8F7",
-  },
+  page: {flex:1,backgroundColor:"#FFFFFF"},
 
   pageScroll: {
     flex: 1,
   },
 
-  pageContent: {
-    padding: 18,
-    paddingBottom: 36,
-  },
+  pageContent: {padding:18,paddingBottom:34,backgroundColor:"#FFFFFF"},
 
   center: {
     flex: 1,
@@ -5090,48 +5080,17 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
 
-  reviewHeader: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: 13,
-    padding: 8,
-    borderBottomWidth: 0,
-  },
+  reviewHeader: {flexDirection:"row",flexWrap:"wrap",alignItems:"center",gap:14,paddingHorizontal:0,paddingVertical:13},
 
-  reviewHeaderCopy: {
-    flex: 1,
-    minWidth: 250,
-  },
+  reviewHeaderCopy: {flex:1,minWidth:235,gap:3},
 
-  reviewTitle: {
-    marginTop: 5,
-    color: "#0F172A",
-    fontSize: 20,
-    fontWeight: "900",
-  },
+  reviewTitle: {color:"#122235",fontSize:22,fontWeight:"700",letterSpacing:-0.3},
 
-  reviewSubtitle: {
-    marginTop: 5,
-    color: "#64748B",
-    fontSize: 11.5,
-    lineHeight: 17,
-  },
+  reviewSubtitle: {color:"#677789",fontSize:12.5,lineHeight:19},
 
-  largeStatusPill: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    paddingHorizontal: 11,
-    paddingVertical: 7,
-    borderRadius: 999,
-  },
+  largeStatusPill: {flexDirection:"row",alignItems:"center",gap:7,paddingHorizontal:13,paddingVertical:8,borderRadius:8},
 
-  largeStatusText: {
-    fontSize: 10.5,
-    fontWeight: "900",
-  },
+  largeStatusText: {fontSize:12,fontWeight:"700"},
 
   tabs: {
     flexDirection: "row",
@@ -5143,111 +5102,38 @@ const styles = StyleSheet.create({
     backgroundColor: "#FBFCFE",
   },
 
-  tabButton: {
-    minHeight: 41,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 7,
-    paddingHorizontal: 13,
-    paddingVertical: 9,
-    borderRadius: 8,
-    borderBottomWidth: 3,
-    borderBottomColor: "transparent",
-  },
+  tabButton: {minHeight:44,flexDirection:"row",alignItems:"center",justifyContent:"center",gap:8,paddingHorizontal:16,paddingVertical:10,borderRadius:7,borderBottomWidth:2,borderBottomColor:"transparent"},
 
-  tabButtonActive: {
-    backgroundColor: "#E5F7EC",
-    borderBottomColor: "#047857",
-  },
+  tabButtonActive: {backgroundColor:"#F0F8F4",borderBottomColor:"#117650"},
 
-  tabButtonText: {
-    color: "#64748B",
-    fontSize: 10.5,
-    fontWeight: "800",
-  },
+  tabButtonText: {color:"#596B7E",fontSize:12.5,fontWeight:"600"},
 
-  tabButtonTextActive: {
-    color: "#047857",
-  },
+  tabButtonTextActive: {color:"#136547"},
 
-  tabContent: {
-    padding: 16,
-    gap: 13,
-  },
+  tabContent: {padding:0,gap:15},
 
-  sectionCard: {
-    padding: 15,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: "#DFE8E8",
-    backgroundColor: "#FFFFFF",
-  },
+  sectionCard: {padding:20,borderRadius:10,borderWidth:1,borderColor:"#DEE7E9",backgroundColor:"#FFFFFF"},
 
-  sectionHeader: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    gap: 10,
-    marginBottom: 15,
-  },
+  sectionHeader: {flexDirection:"row",alignItems:"flex-start",gap:11,marginBottom:17},
 
-  sectionIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "#ECF9F1",
-  },
+  sectionIcon: {width:30,height:30,borderRadius:7,alignItems:"center",justifyContent:"center",backgroundColor:"#F0F5F3"},
 
   sectionCopy: {
     flex: 1,
     minWidth: 0,
   },
 
-  sectionTitle: {
-    color: "#0F172A",
-    fontSize: 14,
-    fontWeight: "900",
-  },
+  sectionTitle: {color:"#1D2C3D",fontSize:16,fontWeight:"700",lineHeight:22},
 
-  sectionSubtitle: {
-    marginTop: 3,
-    color: "#64748B",
-    fontSize: 10.5,
-    lineHeight: 16,
-  },
+  sectionSubtitle: {marginTop:4,color:"#69798A",fontSize:12.5,lineHeight:19},
 
-  infoGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 10,
-  },
+  infoGrid: {flexDirection:"row",flexWrap:"wrap",columnGap:16,rowGap:0},
 
-  infoItem: {
-    flexGrow: 1,
-    flexBasis: 180,
-    minWidth: 170,
-    padding: 12,
-    borderRadius: 11,
-    backgroundColor: "#F8FAFC",
-  },
+  infoItem: {minWidth:170,paddingVertical:10,paddingHorizontal:4,borderBottomWidth:1,borderBottomColor:"#EDF1F2"},
 
-  infoLabel: {
-    color: "#64748B",
-    fontSize: 9.5,
-    fontWeight: "800",
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
-  },
+  infoLabel: {color:"#657589",fontSize:11,fontWeight:"600",textTransform:"uppercase",letterSpacing:0.4},
 
-  infoValue: {
-    marginTop: 5,
-    color: "#0F172A",
-    fontSize: 12,
-    lineHeight: 17,
-    fontWeight: "700",
-  },
+  infoValue: {marginTop:5,color:"#1F2937",fontSize:13,lineHeight:19,fontWeight:"600"},
 
   innerDivider: {
     height: 1,
@@ -5255,19 +5141,9 @@ const styles = StyleSheet.create({
     backgroundColor: "#E5E7EB",
   },
 
-  fieldLabel: {
-    marginTop: 9,
-    marginBottom: 7,
-    color: "#334155",
-    fontSize: 11,
-    fontWeight: "900",
-  },
+  fieldLabel: {marginTop:3,marginBottom:6,color:"#2E4050",fontSize:12.5,fontWeight:"700"},
 
-  bodyText: {
-    color: "#475569",
-    fontSize: 12,
-    lineHeight: 19,
-  },
+  bodyText: {color:"#455667",fontSize:13,lineHeight:20},
 
   inlineBadges: {
     marginTop: 13,
@@ -5329,41 +5205,18 @@ const styles = StyleSheet.create({
     color: "#C2410C",
   },
 
-  documentRow: {
-    minHeight: 58,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    paddingVertical: 9,
-    borderBottomWidth: 1,
-    borderBottomColor: "#F1F5F9",
-  },
+  documentRow: {minHeight:65,flexDirection:"row",alignItems:"center",gap:12,paddingVertical:11,borderBottomWidth:1,borderBottomColor:"#E9EEF0"},
 
-  documentIcon: {
-    width: 38,
-    height: 38,
-    borderRadius: 10,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "#EEF2FF",
-  },
+  documentIcon: {width:38,height:38,borderRadius:8,alignItems:"center",justifyContent:"center",backgroundColor:"#F0F5F3"},
 
   documentCopy: {
     flex: 1,
     minWidth: 0,
   },
 
-  documentTitle: {
-    color: "#0F172A",
-    fontSize: 11.5,
-    fontWeight: "900",
-  },
+  documentTitle: {color:"#1E293B",fontSize:13,fontWeight:"700",lineHeight:19},
 
-  documentMeta: {
-    marginTop: 3,
-    color: "#64748B",
-    fontSize: 9.5,
-  },
+  documentMeta: {marginTop:3,color:"#718093",fontSize:11.5,lineHeight:16},
 
   emptyInner: {
     minHeight: 130,
@@ -5371,94 +5224,29 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
 
-  publicCampaignPhotoCard: {
-    flexDirection: "row",
-    gap: 14,
-    alignItems: "flex-start",
-  },
+  publicCampaignPhotoCard: {flexDirection:"row",flexWrap:"wrap",gap:17,alignItems:"flex-start"},
 
-  publicCampaignPhotoImage: {
-    width: 180,
-    height: 130,
-    borderRadius: 12,
-    backgroundColor: "#E2E8F0",
-  },
+  publicCampaignPhotoImage: {width:164,height:118,borderRadius:8,backgroundColor:"#E7ECEF"},
 
-  publicCampaignPhotoCopy: {
-    flex: 1,
-  },
+  publicCampaignPhotoCopy: {flex:1,minWidth:210,gap:6},
 
-  publicCampaignPhotoBadge: {
-    alignSelf: "flex-start",
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 5,
-    paddingHorizontal: 8,
-    paddingVertical: 5,
-    borderRadius: 999,
-    backgroundColor: "#ECFDF3",
-  },
+  publicCampaignPhotoBadge: {alignSelf:"flex-start",flexDirection:"row",alignItems:"center",gap:6,paddingHorizontal:10,paddingVertical:6,borderRadius:6,backgroundColor:"#EBF6F0"},
 
-  publicCampaignPhotoBadgeText: {
-    color: "#15803D",
-    fontSize: 9.5,
-    fontWeight: "900",
-  },
+  publicCampaignPhotoBadgeText: {color:"#126445",fontSize:11,fontWeight:"700"},
 
-  publicCampaignPhotoTitle: {
-    marginTop: 10,
-    color: "#172033",
-    fontSize: 13,
-    fontWeight: "900",
-  },
+  publicCampaignPhotoTitle: {marginTop:2,color:"#263747",fontSize:12.5,lineHeight:18,fontWeight:"600"},
 
-  publicCampaignPhotoText: {
-    marginTop: 5,
-    color: "#64748B",
-    fontSize: 11,
-    lineHeight: 17,
-  },
+  publicCampaignPhotoText: {marginTop:0,color:"#68788B",fontSize:12.5,lineHeight:19},
 
-  publicCampaignPhotoOpenButton: {
-    marginTop: 10,
-    alignSelf: "flex-start",
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    paddingHorizontal: 10,
-    paddingVertical: 7,
-    borderRadius: 8,
-    backgroundColor: "#EEF2FF",
-  },
+  publicCampaignPhotoOpenButton: {marginTop:6,alignSelf:"flex-start",flexDirection:"row",alignItems:"center",gap:8,paddingHorizontal:12,paddingVertical:9,borderRadius:7,borderWidth:1,borderColor:"#D8E8E0",backgroundColor:"#F7FBF9"},
 
-  publicCampaignPhotoOpenButtonText: {
-    color: "#4338CA",
-    fontSize: 10.5,
-    fontWeight: "900",
-  },
+  publicCampaignPhotoOpenButtonText: {color:"#116A4B",fontSize:12,fontWeight:"700"},
 
-  warningCard: {
-    flexDirection: "row",
-    gap: 10,
-    padding: 14,
-    borderRadius: 13,
-    borderWidth: 1,
-    borderColor: "#FDE68A",
-    backgroundColor: "#FFFBEB",
-  },
+  warningCard: {flexDirection:"row",alignItems:"flex-start",gap:12,padding:15,borderRadius:9,borderWidth:1,borderColor:"#F3D9A5",backgroundColor:"#FFFCF4"},
 
-  warningTitle: {
-    color: "#78350F",
-    fontSize: 11,
-    fontWeight: "900",
-  },
+  warningTitle: {color:"#784A0E",fontSize:12.5,fontWeight:"700"},
 
-  warningText: {
-    marginTop: 4,
-    color: "#92400E",
-    fontSize: 10.5,
-    lineHeight: 16,
-  },
+  warningText: {marginTop:5,color:"#815D24",fontSize:12,lineHeight:19},
 
   infoNotice: {
     marginTop: 13,
@@ -5603,18 +5391,7 @@ const styles = StyleSheet.create({
     color: "#166534",
   },
 
-  textArea: {
-    minHeight: 112,
-    padding: 12,
-    borderRadius: 11,
-    borderWidth: 1,
-    borderColor: "#CBD5E1",
-    color: "#0F172A",
-    fontSize: 11.5,
-    lineHeight: 18,
-    textAlignVertical: "top",
-    outlineStyle: "none" as any,
-  },
+  textArea: {minHeight:90,padding:12,borderRadius:8,borderWidth:1,borderColor:"#CFD9DF",color:"#233243",fontSize:13,lineHeight:20,textAlignVertical:"top",outlineStyle:"none" as any},
 
   rejectArea: {
     minHeight: 85,
@@ -5685,17 +5462,7 @@ const styles = StyleSheet.create({
     color: "#3730A3",
   },
 
-  input: {
-    minHeight: 44,
-    paddingHorizontal: 12,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: "#CBD5E1",
-    color: "#0F172A",
-    fontSize: 11.5,
-    backgroundColor: "#FFFFFF",
-    outlineStyle: "none" as any,
-  },
+  input: {minHeight:44,paddingHorizontal:13,borderRadius:8,borderWidth:1,borderColor:"#D0DBDE",color:"#233243",fontSize:13,backgroundColor:"#FFFFFF",outlineStyle:"none" as any},
 
   donationNotice: {
     marginTop: 10,
@@ -5899,31 +5666,13 @@ const styles = StyleSheet.create({
     gap: 8,
   },
 
-  mockStatusTab: {
-    minHeight: 35,
-    alignItems: "center",
-    justifyContent: "center",
-    paddingHorizontal: 16,
-    borderRadius: 99,
-    borderWidth: 1,
-    borderColor: "#D6DEE8",
-    backgroundColor: "#FFFFFF",
-  },
+  mockStatusTab: {minHeight:38,alignItems:"center",justifyContent:"center",paddingHorizontal:16,borderRadius:8,borderWidth:1,borderColor:"#DCE5E8",backgroundColor:"#FFFFFF"},
 
-  mockStatusTabActive: {
-    borderColor: "#006A42",
-    backgroundColor: "#006A42",
-  },
+  mockStatusTabActive: {borderColor:"#14724F",backgroundColor:"#EAF6EF"},
 
-  mockStatusTabText: {
-    color: "#475569",
-    fontSize: 10.5,
-    fontWeight: "800",
-  },
+  mockStatusTabText: {color:"#576979",fontSize:12,fontWeight:"600"},
 
-  mockStatusTabTextActive: {
-    color: "#FFFFFF",
-  },
+  mockStatusTabTextActive: {color:"#126C4D"},
 
   mockTopTabsSpacer: {
     flex: 1,
@@ -6102,11 +5851,7 @@ const styles = StyleSheet.create({
     gap: 6,
   },
 
-  mockBackLinkText: {
-    color: "#2563EB",
-    fontSize: 11,
-    fontWeight: "800",
-  },
+  mockBackLinkText: {color:"#286D55",fontSize:12.5,fontWeight:"600"},
 
   mockBackPrimary: {
     marginTop: 16,
@@ -6124,17 +5869,7 @@ const styles = StyleSheet.create({
     fontWeight: "900",
   },
 
-  mockDetailTabs: {
-    marginTop: 12,
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 6,
-    padding: 7,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: "#E2E8F0",
-    backgroundColor: "#FFFFFF",
-  },
+  mockDetailTabs: {marginTop:8,flexDirection:"row",flexWrap:"wrap",gap:6,paddingHorizontal:2,paddingBottom:2,borderBottomWidth:1,borderBottomColor:"#DEE7E9",backgroundColor:"#FFFFFF"},
 
   mockReviewGrid: {
     marginTop: 14,
@@ -6174,13 +5909,7 @@ const styles = StyleSheet.create({
     flexShrink: 0,
   },
 
-  detailBreadcrumbRow: {
-    minHeight: 30,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: 12,
-  },
+  detailBreadcrumbRow: {minHeight:32,flexDirection:"row",alignItems:"center",justifyContent:"space-between",gap:12},
 
   detailSecurityBadge: {
     flexDirection: "row",
@@ -6201,13 +5930,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0.2,
   },
 
-  detailHeaderCard: {
-    marginTop: 3,
-    borderRadius: 10,
-    borderWidth: 0,
-    backgroundColor: "#FFFFFF",
-    overflow: "hidden",
-  },
+  detailHeaderCard: {marginTop:9,backgroundColor:"#FFFFFF"},
 
   detailWorkspace: {
     flex: 1,
