@@ -3677,7 +3677,7 @@ function DecisionTab({
       </View>
 
       {(facilityRequired || costRequired) && (
-        <SectionCard title={facilityRequired ? "Provider & Cost Verification" : "Cost Verification"}
+        <SectionCard title={facilityRequired ? "Medical Bill Check" : "Cost Verification"}
           subtitle={facilityRequired
             ? "Confirm the provider and costs using supporting evidence or direct contact."
             : "Confirm the requested cost using supporting bills or reliable supporting evidence."}
