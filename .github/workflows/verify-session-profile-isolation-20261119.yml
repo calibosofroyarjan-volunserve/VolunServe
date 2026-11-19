@@ -33,3 +33,17 @@ jobs:
         run: node scripts/test-unified-login-routing.cjs
       - name: Existing Guest session isolation regression
         run: node scripts/test-guest-auth-route-isolation.cjs
+      - name: Community Event Volunteer Join regression
+        run: node scripts/test-volunteer-community-event-join-20261106.cjs
+      - name: Event Time In and Time Out regression
+        run: node scripts/test-volunteer-time-controls-20261106.cjs
+      - name: One-minute certificate eligibility regression
+        run: node scripts/test-live-derived-certificate-minimum-label-20261111.cjs
+      - name: Admin operational dashboard regression
+        run: node scripts/test-admin-clean-operational-analytics.cjs
+      - name: Backend certificate issuance and event roster regressions
+        run: |
+          node backend/test-communityCertificates.js
+          node backend/test-communityEventRoster.js
+      - name: Backend syntax and identity readiness regressions
+        run: npm run check --prefix backend
