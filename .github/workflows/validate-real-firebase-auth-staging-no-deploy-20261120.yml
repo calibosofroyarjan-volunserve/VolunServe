@@ -1,8 +1,6 @@
 name: Real Firebase Auth Staging Gate - NO DEPLOY
 on:
-  push:
-    branches:
-      - integration/auth-linking-safe-20261120
+  # Manual-only: never consume future staging test secrets just because code was pushed.
   workflow_dispatch:
 permissions:
   contents: read
