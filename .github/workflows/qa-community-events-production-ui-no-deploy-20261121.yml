@@ -1,0 +1,65 @@
+# QA only. Never grants production credentials or deploys.
+name: QA Production-Derived Community Events (NO DEPLOY)
+on:
+  push:
+    branches: [qa/community-events-production-readiness-20261121]
+    paths:
+      - 'app/(tabs)/community-events.tsx'
+      - 'components/volunteers/CommunityEventRoster.tsx'
+      - 'scripts/test-community-events-production-ui-qa.cjs'
+      - '.github/workflows/qa-community-events-production-ui-no-deploy-20261121.yml'
+  pull_request:
+    branches: [review/community-events-production-derived-20261121]
+    paths:
+      - 'scripts/test-community-events-production-ui-qa.cjs'
+      - '.github/workflows/qa-community-events-production-ui-no-deploy-20261121.yml'
+permissions:
+  contents: read
+concurrency:
+  group: qa-community-events-production-source-20261121
+  cancel-in-progress: false
+jobs:
+  verify:
+    if: github.repository == 'calibosofroyarjan-volunserve/VolunServe'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    env:
+      CI: 'true'
+      EXPO_NO_TELEMETRY: '1'
+      EXPO_PUBLIC_VOLUNSERVE_ENV: production
+      EXPO_PUBLIC_IDENTITY_VERIFICATION_API_URL: https://volunserve.onrender.com
+    steps:
+      - name: Checkout QA source (no submodule initialization)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: false
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Confirm exact production ancestry, scoped files, and unchanged RSVP/attendance
+        run: node --test scripts/test-community-events-production-ui-qa.cjs
+      - name: Install locked dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Check Firestore Community Events permissions with local synthetic emulator users
+        run: npx firebase-tools emulators:exec --only firestore --project demo-volunserve "node scripts/test-community-events-rules.cjs"
+      - name: Protect Admin and Volunteer authorization (no production writes)
+        run: |
+          node --test scripts/test-admin-volunteer-authorization.cjs
+          npx firebase-tools emulators:exec --only firestore --project demo-volunserve-authorization-tests "node scripts/test-admin-volunteer-firestore.cjs"
+      - name: Verify TypeScript and existing map navigation
+        run: |
+          npx tsc --noEmit --incremental false
+          node --test scripts/test-embedded-emergency-map-navigation.cjs
+      - name: Export website (NO Hosting deployment)
+        run: npx expo export --platform web --clear
+      - name: Verify static web route and revision marker (local export only)
+        run: env -u GITHUB_SHA node scripts/verify-hosting-release.cjs
+      - name: Confirm no deployment was requested
+        run: echo 'QA complete — no production Hosting, rules, Auth, Functions, Render or Firestore changes.'
