@@ -336,9 +336,11 @@ export default function TabLayout() {
   return (
     <Tabs
       screenOptions={({ route }) => ({
-        // Home already renders these actions. Other Resident pages need a
-        // header outside their scroll/map content so it cannot be covered.
-        headerShown: currentMode === "resident" && route.name !== "index",
+        // Resident and Volunteer Home already render this header themselves.
+        // Other tabs need account actions above maps, forms, and scroll content.
+        headerShown:
+          (currentMode === "resident" || currentMode === "volunteer") &&
+          route.name !== "index",
         header: () => <ResidentDesktopActions />,
         tabBarPosition: "left",
       })}
