@@ -110,6 +110,7 @@ export default function AdminLayout() {
     usePathname();
 
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   const [expandedSection, setExpandedSection] = useState<NavSectionId | "none" | null>(null);
   const currentSection = NAV_SECTIONS.find((section) =>
     NAV_ITEMS.some((item) => section.labels.includes(item.label) && navActive(item, pathname))
@@ -118,6 +119,7 @@ export default function AdminLayout() {
   useEffect(() => {
     // Open the relevant group after navigation from an overview shortcut.
     setExpandedSection(null);
+    setProfileMenuOpen(false);
   }, [pathname]);
 
   const desktop =
@@ -149,9 +151,8 @@ export default function AdminLayout() {
   const openRoute = (
     route: string,
   ) => {
-    setMobileMenuOpen(
-      false,
-    );
+    setMobileMenuOpen(false);
+    setProfileMenuOpen(false);
 
     router.push(
       route as Href,
@@ -161,9 +162,8 @@ export default function AdminLayout() {
   const signOut =
     async () => {
       try {
-        setMobileMenuOpen(
-          false,
-        );
+        setMobileMenuOpen(false);
+        setProfileMenuOpen(false);
 
         await logoutUser();
 
@@ -410,29 +410,6 @@ export default function AdminLayout() {
           </View>;
         })}
       </ScrollView>
-      <View style={styles.sidebarUtility}>
-        <TouchableOpacity
-          style={[styles.profileLink, pathname.endsWith("/admin-profile") && styles.profileLinkActive]}
-          accessibilityRole="button"
-          accessibilityLabel="View LGU Admin profile"
-          activeOpacity={0.82}
-          onPress={() => openRoute("/(admin)/admin-profile")}
-        >
-          <Ionicons name="person-circle-outline" size={19} color="#D4E9DF" />
-          <Text style={styles.profileLinkText}>My Profile</Text>
-          <Ionicons name="chevron-forward" color="#AACBBC" size={15} />
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={styles.logoutButton}
-          accessibilityRole="button"
-          accessibilityLabel="Log out of Admin account"
-          activeOpacity={0.82}
-          onPress={() => void signOut()}
-        >
-          <Ionicons name="log-out-outline" size={20} color="#D03647" />
-          <Text style={styles.signOutLabel}>Log Out</Text>
-        </TouchableOpacity>
-      </View>
     </View>
   );
 
@@ -460,10 +437,9 @@ export default function AdminLayout() {
               style={
                 styles.mobileMenuButton
               }
-              onPress={() =>
-                setMobileMenuOpen(
-                  true,
-                )
+              onPress={() => {
+                setProfileMenuOpen(false);
+                setMobileMenuOpen(true);
               }
             >
               <Ionicons
@@ -482,20 +458,20 @@ export default function AdminLayout() {
 
           <TouchableOpacity
             accessibilityRole="button"
-            accessibilityLabel="Open my LGU Admin profile"
-            accessibilityState={{ selected: pathname.endsWith("/admin-profile") }}
-            style={[styles.profileArea, pathname.endsWith("/admin-profile") && styles.profileAreaSelected]}
+            accessibilityLabel={profileMenuOpen ? "Close LGU Admin account menu" : "Open LGU Admin account menu"}
+            accessibilityState={{ expanded: profileMenuOpen }}
+            style={[styles.profileArea, profileMenuOpen && styles.profileAreaSelected]}
             activeOpacity={0.78}
-            onPress={() => openRoute("/(admin)/admin-profile")}
+            onPress={() => setProfileMenuOpen(value => !value)}
           >
             <View style={styles.profileAvatar}>
               <Text style={styles.profileAvatarText}>{initials}</Text>
             </View>
             <View style={styles.profileText}>
               <Text style={styles.profileName} numberOfLines={1}>{fullName}</Text>
-              <Text style={styles.profileRole}>LGU Admin · My Profile</Text>
+              <Text style={styles.profileRole}>LGU Admin</Text>
             </View>
-            <Ionicons name="chevron-forward-outline" size={16} color="#7F9788" />
+            <Ionicons name={profileMenuOpen ? "chevron-up" : "chevron-down"} size={16} color="#7F9788" />
           </TouchableOpacity>
         </View>
 
@@ -515,6 +491,52 @@ export default function AdminLayout() {
             }}
           />
         </View>
+        {profileMenuOpen && (
+          <View style={styles.accountMenuLayer}>
+            <Pressable
+              style={styles.accountMenuBackdrop}
+              accessibilityRole="button"
+              accessibilityLabel="Close account menu"
+              onPress={() => setProfileMenuOpen(false)}
+            />
+            <View
+              style={[styles.accountMenu, {
+                right: desktop ? 24 : 12,
+                width: Math.min(310, Math.max(220, width - (desktop ? SIDEBAR_WIDTH : 0) - 28)),
+              }]}
+            >
+              <View style={styles.accountMenuHeader}>
+                <View style={styles.accountMenuAvatar}>
+                  <Text style={styles.accountMenuAvatarText}>{initials}</Text>
+                </View>
+                <View style={{flex:1,minWidth:0}}>
+                  <Text style={styles.accountMenuName} numberOfLines={1}>{fullName}</Text>
+                  <Text style={styles.accountMenuRole}>LGU Admin Account</Text>
+                </View>
+              </View>
+              <TouchableOpacity
+                accessibilityRole="button"
+                accessibilityLabel="View Admin profile"
+                onPress={() => openRoute("/(admin)/admin-profile")}
+                style={styles.accountMenuAction}
+              >
+                <Ionicons name="person-outline" size={19} color="#274357" />
+                <Text style={styles.accountMenuActionText}>My Profile</Text>
+                <Ionicons name="chevron-forward" size={15} color="#94A3B8" />
+              </TouchableOpacity>
+              <View style={styles.accountMenuDivider} />
+              <TouchableOpacity
+                accessibilityRole="button"
+                accessibilityLabel="Log out of Admin account"
+                onPress={() => void signOut()}
+                style={styles.accountMenuAction}
+              >
+                <Ionicons name="log-out-outline" size={19} color="#C62E3E" />
+                <Text style={[styles.accountMenuActionText,{color:"#C62E3E"}]}>Log Out</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
       </View>
 
       <Modal
@@ -565,6 +587,36 @@ const styles =
     profileLinkActive: { backgroundColor: "#257C61" },
     profileLinkText: { flex: 1, fontSize: 12.5, color: "#DDEEE7", fontWeight: "600" },
     profileAreaSelected: { backgroundColor: "#F0F6F2" },
+    accountMenuLayer: {
+      ...StyleSheet.absoluteFillObject, zIndex:40, elevation:30,
+    },
+    accountMenuBackdrop: {
+      ...StyleSheet.absoluteFillObject,
+    },
+    accountMenu: {
+      position:"absolute", top:78, backgroundColor:"#FFFFFF",
+      borderRadius:12,borderWidth:1,borderColor:"#DFE7E5",
+      padding:10,shadowColor:"#10291F",
+      shadowOffset:{width:0,height:8},shadowOpacity:0.13,shadowRadius:18,elevation:12,
+    },
+    accountMenuHeader: {
+      flexDirection:"row",alignItems:"center",gap:11,
+      paddingHorizontal:11,paddingVertical:13,marginBottom:4,
+      borderBottomWidth:1,borderBottomColor:"#E6ECE8",
+    },
+    accountMenuAvatar: {
+      width:39,height:39,borderRadius:20,backgroundColor:"#078F82",
+      alignItems:"center",justifyContent:"center",
+    },
+    accountMenuAvatarText: {fontSize:12,fontWeight:"700",color:"#FFFFFF"},
+    accountMenuName: {fontSize:13,fontWeight:"700",color:"#1D3440"},
+    accountMenuRole: {marginTop:3,fontSize:11,color:"#6F8190"},
+    accountMenuAction: {
+      minHeight:45,paddingHorizontal:11,flexDirection:"row",
+      alignItems:"center",gap:12,borderRadius:8,
+    },
+    accountMenuActionText: {flex:1,fontSize:13,color:"#23364C",fontWeight:"600"},
+    accountMenuDivider: {height:1,backgroundColor:"#E6ECE8",marginVertical:5,marginHorizontal:10},
 
     navSection: { marginBottom: 6 },
     overviewNavItem: { marginHorizontal: 17, marginBottom: 10 },
