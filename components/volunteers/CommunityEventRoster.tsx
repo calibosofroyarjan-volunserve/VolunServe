@@ -132,7 +132,57 @@ export default function CommunityEventRoster({
   );
 }
 
+/** Small avatar group shown on event cards; only real roster images are rendered. */
+export function CommunityEventAvatarPreview({
+  eventId, viewer, participantsCount, onPress,
+}: {eventId:string;viewer:AuthUser;participantsCount:number;onPress:()=>void}) {
+  const [volunteers, setVolunteers] = useState<Entry[]>([]);
+  const [count, setCount] = useState(participantsCount);
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        const token = await viewer.getIdToken();
+        const response = await fetch(`${API_URL}/api/community-events/${encodeURIComponent(eventId)}/volunteers?page=1`, {
+          headers: {Authorization:`Bearer ${token}`},
+        });
+        if (!response.ok) return;
+        const result: Response = await response.json();
+        if (mounted && result.ok) {
+          setVolunteers((result.volunteers || []).slice(0, 3));
+          setCount(result.total ?? participantsCount);
+        }
+      } catch {
+        // The event card keeps its public count and View Participants action.
+      }
+    })();
+    return () => { mounted = false; };
+  }, [eventId, viewer, participantsCount]);
+
+  return <Pressable accessibilityRole="button" accessibilityLabel={`View ${count} joined volunteers`}
+    style={s.avatarPreviewButton} onPress={onPress}>
+    <View style={s.avatarPreviewGroup}>
+      {volunteers.length ? volunteers.map(person => person.avatarUrl ?
+        <Image key={person.key} source={{uri:person.avatarUrl}} style={s.avatarPreviewPhoto}/> :
+        <View key={person.key} style={s.avatarPreviewFallback}>
+          <Text style={s.avatarPreviewInitial}>{person.name.trim().slice(0,1).toUpperCase()}</Text>
+        </View>) : <Ionicons name="people-circle-outline" size={24} color="#087C69"/>}
+      {count > 3 && <View style={s.avatarPreviewMore}><Text style={s.avatarPreviewMoreText}>+{count-3}</Text></View>}
+    </View>
+    <Text style={s.avatarPreviewText}>View Participants</Text>
+  </Pressable>;
+}
+
 const s = StyleSheet.create({
+  avatarPreviewButton: { flexDirection:"row",gap:7,alignItems:"center",backgroundColor:"#F2FAF7",borderWidth:1,borderColor:"#B8DACE",borderRadius:8,paddingHorizontal:9,paddingVertical:6 },
+  avatarPreviewGroup: { flexDirection:"row",alignItems:"center",gap:2 },
+  avatarPreviewPhoto: { width:26,height:26,borderRadius:13 },
+  avatarPreviewFallback: { width:26,height:26,borderRadius:13,backgroundColor:"#D8F1E6",alignItems:"center",justifyContent:"center" },
+  avatarPreviewInitial: { fontSize:11,fontWeight:"700",color:"#087C69" },
+  avatarPreviewMore: { paddingHorizontal:5,minHeight:26,borderRadius:13,backgroundColor:"#E1EAF0",alignItems:"center",justifyContent:"center" },
+  avatarPreviewMoreText: { color:"#476370",fontSize:10,fontWeight:"700" },
+  avatarPreviewText: { fontFamily:vsType.family,fontSize:11,fontWeight:"700",color:"#087C69" },
+
   card: { padding: 16, borderWidth: 1, borderColor: "#D6E9E1", borderRadius: 13, backgroundColor: "#FFFFFF", gap: 11, marginTop: 12 },
   cardCompact: { padding: 12, marginTop: 12, gap: 8 },
   header: { flexDirection: "row", alignItems: "center", gap: 9, minHeight: 31 },
