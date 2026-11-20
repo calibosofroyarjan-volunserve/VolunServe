@@ -105,9 +105,9 @@ async function run(name,fn){
    const email=page.getByPlaceholder("name@example.com");
    await email.waitFor();
    await email.fill("sample@legitimatebusiness.co");
-   await page.getByText(/only @gmail\.com or @yahoo\.com/i).first().waitFor();
+   await page.getByText("New VolunServe registration accepts only @gmail.com or @yahoo.com email addresses.",{exact:true}).waitFor();
    await email.fill("sample@mailticking.com");
-   await page.getByText(/Temporary email addresses are not accepted|only @gmail\.com or @yahoo\.com/i).first().waitFor();
+   await page.getByText("Temporary email addresses are not accepted. Use a permanent email address.",{exact:true}).waitFor();
    await page.screenshot({path:path.join(shots,"signup-co-rejection-stage.png")});
  });
  await run("signup-gmail-yahoo-validation-and-refresh",async(page)=>{
