@@ -2320,7 +2320,7 @@ export default function CommunityEventsScreen() {
                  ? "This event's date has passed. Ask Admin for a new schedule."
                  : "This event is closed for new volunteers."}</Text>
             </View>}
-            {isVolunteer && user && (
+            {isVolunteer && user && !webSideBySide && (
               <CommunityEventRoster
                 eventId={event.id}
                 viewer={user}
@@ -2801,7 +2801,7 @@ export default function CommunityEventsScreen() {
                     {!selectedParticipation?.attendanceVerified && <Text style={styles.webAttendanceNote}>Time In/Out uses server time. Admin/LGU verifies participation.</Text>}
                   </View>}
                   </>}
-                {selectedEvent && user && (
+                {webSideBySide && selectedEvent && user && (
                   <CommunityEventRoster eventId={selectedEvent.id} viewer={user}
                     participantsCount={Number(selectedEvent.participantsCount || 0)} compact />
                 )}
@@ -2927,7 +2927,7 @@ export default function CommunityEventsScreen() {
           <View style={styles.ruiFormFooter}><Pressable style={styles.ruiCancelButton} onPress={()=>setSection("explore")}><Text style={styles.ruiCancelText}>Cancel</Text></Pressable><Pressable disabled={busy} style={[styles.ruiPrimary,styles.ruiSubmitButton,busy&&styles.disabledButton]} onPress={()=>void submitProposal()}>{busy?<ActivityIndicator color="white" size="small"/>:<Text style={styles.ruiPrimaryText}>Submit Proposal</Text>}<Ionicons name="arrow-forward" color="white" size={16}/></Pressable></View>
         </View>}
 
-        {isVolunteer && (
+        {isVolunteer && Platform.OS !== "web" && (
           <Pressable
             style={
               styles.certificateLink
