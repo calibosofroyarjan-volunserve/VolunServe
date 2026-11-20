@@ -1116,7 +1116,9 @@ export default function CommunityEventsScreen() {
           matchesSearch &&
           (residentBarangayFilter === "All Barangays" || event.barangay === residentBarangayFilter) &&
           (!canPropose || residentStatusFilter === "All Status" || event.status === residentStatusFilter) &&
-          (eventListFilter === "all" || (eventListFilter === "new" ? isRecentlyPublished(event) : event.status === eventListFilter))
+          (eventListFilter === "all" || (eventListFilter === "new" ? isRecentlyPublished(event)
+            : eventListFilter === "upcoming" ? event.status === "upcoming" && !eventScheduleHasPassed(event)
+            : event.status === eventListFilter))
         );
       });
   }, [events, category, search, canPropose, residentBarangayFilter, residentStatusFilter, eventListFilter]);
@@ -1160,11 +1162,13 @@ export default function CommunityEventsScreen() {
     (event) => event.status === "completed"
   ).length;
   const totalPublishedCount = events.filter(event => event.status !== "cancelled").length;
-  const upcomingCount = events.filter(event => event.status === "upcoming").length;
+  // Keep expired "upcoming" schedules out of the volunteer Upcoming tab.
+  // Do not change Admin-set status, records, or the joined-events attendance history.
+  const upcomingCount = events.filter(event => event.status === "upcoming" && !eventScheduleHasPassed(event)).length;
   const ongoingCount = events.filter(event => event.status === "active").length;
 
   const eventStatusFilters: { key: EventListFilter; label: string; count: number }[] = [
-    { key: "upcoming", label: "Upcoming", count: events.filter((event) => event.status === "upcoming").length },
+    { key: "upcoming", label: "Upcoming", count: upcomingCount },
     { key: "active", label: "Ongoing", count: events.filter((event) => event.status === "active").length },
     { key: "completed", label: "Finished", count: completedCount },
   ];
@@ -2707,7 +2711,7 @@ export default function CommunityEventsScreen() {
               </View>}
               {eventsLoading ? <View style={styles.webLoading}><ActivityIndicator color={colors.green}/></View> :
                 eventError ? <View style={styles.webError}><Text style={styles.webErrorText}>{eventError}</Text></View> :
-                !displayEvents.length ? <View style={styles.webEmptyCard}><Ionicons name="calendar-outline" size={35} color="#91A6AC"/><Text style={styles.webEmptyTitle}>{section === "mine" ? "No joined events yet" : "No matching community events"}</Text><Text style={styles.webEmptySubtitle}>Browse approved events to see the available activities.</Text></View> :
+                !displayEvents.length ? <View style={styles.webEmptyCard}><Ionicons name="calendar-outline" size={35} color="#91A6AC"/><Text style={styles.webEmptyTitle}>{section === "mine" ? "No joined events yet" : eventListFilter === "upcoming" ? "No scheduled upcoming events" : "No matching community events"}</Text><Text style={styles.webEmptySubtitle}>{section === "explore" && eventListFilter === "upcoming" ? "Only future-dated upcoming activities appear here. Contact Admin if an event needs a new schedule." : "Browse approved events to see the available activities."}</Text></View> :
                 <View style={styles.lockedEventListRows}>
                   {canPropose ? (residentDetailEvent ? renderResidentEventDetail(residentDetailEvent) : <View style={styles.ruiCardGrid}>{visibleEvents.map(renderResidentEventCard)}</View>) : visibleEvents.map(renderEvent)}
                   {!residentDetailEvent && displayEvents.length > pageSize && (
