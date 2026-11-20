@@ -178,7 +178,7 @@ jobs:
         working-directory: site
         env:
           VOLUNSERVE_HOSTING_URL: https://volunserve.com
-          VOLUNSERVE_EXPECTED_SHA: '1a9e206bdfea2167b205ce6eec168757323a8e9f'
+          VOLUNSERVE_EXPECTED_SHA: '9e5ebb46d741c2bedb75d16c470cefba7141b345'
         shell: bash
         run: |
           set -euo pipefail
