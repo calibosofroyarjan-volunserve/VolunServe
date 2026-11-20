@@ -728,11 +728,11 @@ export default function CommunityEventsScreen() {
     useState<Category | "All">("All");
 
   const [search, setSearch] = useState("");
-  const [eventListFilter, setEventListFilter] = useState<EventListFilter>("all");
-  const [dateSort, setDateSort] = useState<"soonest" | "latest">("latest");
+  const [eventListFilter, setEventListFilter] = useState<EventListFilter>("upcoming");
+  const [dateSort, setDateSort] = useState<"soonest" | "latest">("soonest");
   const [attendanceSort, setAttendanceSort] = useState<"latest" | "oldest">("latest");
   const [showAllAttendance, setShowAllAttendance] = useState(false);
-  const [visibleEventCount, setVisibleEventCount] = useState(6);
+  const [eventPage, setEventPage] = useState(1);
 
   const [events, setEvents] =
     useState<CommunityEvent[]>([]);
@@ -1106,10 +1106,11 @@ export default function CommunityEventsScreen() {
   const completedCount = events.filter(
     (event) => event.status === "completed"
   ).length;
+  const totalPublishedCount = events.filter(event => event.status !== "cancelled").length;
+  const upcomingCount = events.filter(event => event.status === "upcoming").length;
+  const ongoingCount = events.filter(event => event.status === "active").length;
 
   const eventStatusFilters: { key: EventListFilter; label: string; count: number }[] = [
-    { key: "all", label: "All Events", count: events.filter((event) => event.status !== "cancelled").length },
-    { key: "new", label: "New", count: events.filter((event) => event.status !== "cancelled" && isRecentlyPublished(event)).length },
     { key: "upcoming", label: "Upcoming", count: events.filter((event) => event.status === "upcoming").length },
     { key: "active", label: "Ongoing", count: events.filter((event) => event.status === "active").length },
     { key: "completed", label: "Finished", count: completedCount },
@@ -1136,11 +1137,16 @@ export default function CommunityEventsScreen() {
       return (dateSort === "soonest" ? byDate : -byDate) || a.title.localeCompare(b.title);
     });
   }, [section, isVolunteer, myEvents, filteredEvents, dateSort, eventListFilter]);
+  const pageSize = 5;
+  const totalEventPages = Math.max(1, Math.ceil(displayEvents.length / pageSize));
   useEffect(() => {
-    setVisibleEventCount(6);
+    setEventPage(1);
     setExpandedEvent(null);
   }, [section, category, search, dateSort, eventListFilter, residentBarangayFilter, residentStatusFilter]);
-  const visibleEvents = displayEvents.slice(0, visibleEventCount);
+  useEffect(() => {
+    setEventPage(current => Math.min(current, totalEventPages));
+  }, [totalEventPages]);
+  const visibleEvents = displayEvents.slice((eventPage - 1) * pageSize, eventPage * pageSize);
   const selectedEvent = events.find((event) => event.id === expandedEvent) ||
     (isVolunteer ? myAttendanceEvents[0] : undefined) || displayEvents[0] || null;
   const selectedParticipation = selectedEvent ? participationMap.get(selectedEvent.id) : undefined;
@@ -2535,9 +2541,10 @@ export default function CommunityEventsScreen() {
               </View>
               <View style={styles.eventsHeaderStats}>
                 {([
-                  {icon:"calendar-outline" as const,value:availableCount,label:"Open & Ongoing"},
-                  {icon:"people-outline" as const,value:isVolunteer?myEvents.length:proposals.length,label:isVolunteer?"My Joined Events":"My Proposals"},
-                  {icon:"checkmark-circle-outline" as const,value:completedCount,label:"Finished Events"},
+                  {icon:"calendar-outline" as const,value:totalPublishedCount,label:"Total Events"},
+                  {icon:"calendar-clear-outline" as const,value:upcomingCount,label:"Upcoming"},
+                  {icon:"play-circle-outline" as const,value:ongoingCount,label:"Ongoing"},
+                  {icon:"checkmark-circle-outline" as const,value:completedCount,label:"Finished"},
                 ]).map((metric)=>(
                   <View key={metric.label} style={styles.eventsHeaderStat}>
                     <View style={styles.eventsHeaderStatIcon}><Ionicons name={metric.icon} size={19} color="#0B7E73"/></View>
@@ -2564,19 +2571,20 @@ export default function CommunityEventsScreen() {
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.eventStatusTabs}>
                   {eventStatusFilters.map((item) => (
                     <Pressable key={item.key} accessibilityRole="button" accessibilityState={{ selected: eventListFilter === item.key }}
-                      onPress={() => setEventListFilter(item.key)}
+                      onPress={() => { setEventListFilter(item.key); setDateSort(item.key === "upcoming" ? "soonest" : "latest"); }}
                       style={[styles.eventStatusTab, eventListFilter === item.key && styles.eventStatusTabActive]}>
-                      <Text style={[styles.eventStatusTabText, eventListFilter === item.key && styles.eventStatusTabTextActive]}>{item.label}</Text>
-                      <Text style={[styles.eventStatusCount, eventListFilter === item.key && styles.eventStatusCountActive]}>{item.count}</Text>
+                      <Ionicons name={item.key === "upcoming" ? "calendar-outline" : item.key === "active" ? "play-circle-outline" : "checkmark-circle-outline"}
+                        size={18} color={eventListFilter === item.key ? "#FFFFFF" : "#326174"}/>
+                      <Text style={[styles.eventStatusTabText, eventListFilter === item.key && styles.eventStatusTabTextActive]}>{item.label} ({item.count})</Text>
                     </Pressable>
                   ))}
                 </ScrollView>
                 <View style={styles.eventFilterToolbar}>
-                  <View style={styles.eventFilterCaption}><Ionicons name="options-outline" size={17} color="#607785"/><Text style={styles.eventFilterCaptionText}>Filter by</Text></View>
+                  <View style={styles.eventFilterCaption}><Ionicons name="search-outline" size={17} color="#607785"/><Text style={styles.eventFilterCaptionText}>Filter events</Text></View>
                   <Pressable accessibilityRole="button" accessibilityLabel="Filter by event category" style={styles.eventFilterSelect} onPress={()=>setResidentFilterPicker("category")}><Text style={styles.eventFilterSelectText} numberOfLines={1}>{category === "All" ? "All categories" : category}</Text><Ionicons name="chevron-down-outline" size={17} color="#587782"/></Pressable>
                   <Pressable accessibilityRole="button" accessibilityLabel="Filter by barangay" style={styles.eventFilterSelect} onPress={()=>setResidentFilterPicker("barangay")}><Text style={styles.eventFilterSelectText} numberOfLines={1}>{residentBarangayFilter}</Text><Ionicons name="chevron-down-outline" size={17} color="#587782"/></Pressable>
-                  {(category !== "All" || residentBarangayFilter !== "All Barangays" || eventListFilter !== "all" || !!search.trim()) &&
-                    <Pressable accessibilityRole="button" onPress={()=>{setCategory("All");setResidentBarangayFilter("All Barangays");setEventListFilter("all");setSearch("");setResidentStatusFilter("All Status");}} style={styles.eventClearFilter}>
+                  {(category !== "All" || residentBarangayFilter !== "All Barangays" || !!search.trim()) &&
+                    <Pressable accessibilityRole="button" onPress={()=>{setCategory("All");setResidentBarangayFilter("All Barangays");setEventListFilter("upcoming");setDateSort("soonest");setSearch("");setResidentStatusFilter("All Status");}} style={styles.eventClearFilter}>
                       <Ionicons name="close-circle-outline" size={16} color="#477383"/><Text style={styles.eventClearFilterText}>Clear filters</Text>
                     </Pressable>}
                 </View>
@@ -2585,8 +2593,8 @@ export default function CommunityEventsScreen() {
             {(section === "explore" || (section === "mine" && isVolunteer)) && <View style={styles.lockedEventList}>
               {!residentDetailEvent && <View style={[styles.webListHeading, styles.lockedListHeading]}>
                 <View style={{ flex: 1, minWidth: 0 }}>
-                  <Text style={styles.webHeadingTitle}>{section === "mine" ? "My Joined Events" : eventListFilter === "new" ? "Recently Published" : eventListFilter === "all" ? "Discover Community Events" : `${eventStatusFilters.find((item) => item.key === eventListFilter)?.label || "Community"} Events`}</Text>
-                  <Text style={styles.webHeadingHint}>{section === "explore" ? (eventListFilter === "new" ? "Published within the last 14 days." : "Approved activities in San Jose del Monte, Bulacan.") : "Your joined activities, attendance and event details."}</Text>
+                  <Text style={styles.webHeadingTitle}>{section === "mine" ? "My Joined Events" : eventListFilter === "all" ? "All Events" : `${eventStatusFilters.find(item => item.key === eventListFilter)?.label || "Community"} Events`}</Text>
+                  <Text style={styles.webHeadingHint}>{section === "mine" ? "Review the events you joined." : "Browse approved community events in San Jose del Monte."}</Text>
                 </View>
                 <View style={styles.lockedListControls}>
                   <Text style={styles.webEventCount}>{displayEvents.length} event{displayEvents.length === 1 ? "" : "s"}</Text>
@@ -2595,7 +2603,7 @@ export default function CommunityEventsScreen() {
                     style={styles.lockedSortButton}>
                     <Ionicons name="calendar-outline" size={15} color="#087E74" />
                     <View><Text style={styles.lockedSortCaption}>Scheduled date</Text>
-                      <Text style={styles.lockedSortValue}>{dateSort === "soonest" ? "Soonest First" : "Latest First"}</Text></View>
+                      <Text style={styles.lockedSortValue}>{dateSort === "soonest" ? "Nearest Date" : "Newest First"}</Text></View>
                     <Ionicons name="swap-vertical-outline" size={15} color="#087E74" />
                   </Pressable>
                 </View>
@@ -2605,19 +2613,28 @@ export default function CommunityEventsScreen() {
                 !displayEvents.length ? <View style={styles.webEmptyCard}><Ionicons name="calendar-outline" size={35} color="#91A6AC"/><Text style={styles.webEmptyTitle}>{section === "mine" ? "No joined events yet" : "No matching community events"}</Text><Text style={styles.webEmptySubtitle}>Browse approved events to see the available activities.</Text></View> :
                 <View style={styles.lockedEventListRows}>
                   {canPropose ? (residentDetailEvent ? renderResidentEventDetail(residentDetailEvent) : <View style={styles.ruiCardGrid}>{visibleEvents.map(renderResidentEventCard)}</View>) : visibleEvents.map(renderEvent)}
-                  {!residentDetailEvent && displayEvents.length > 6 && (
-                    <View style={styles.lockedLoadMoreRow}>
-                      {visibleEventCount < displayEvents.length ? (
-                        <Pressable accessibilityRole="button" onPress={() => setVisibleEventCount((count) => count + 6)} style={styles.lockedLoadMoreButton}>
-                          <Text style={styles.lockedLoadMoreText}>Show More Events ({displayEvents.length - visibleEventCount} remaining)</Text>
-                          <Ionicons name="chevron-down-outline" size={16} color="#087B71" />
+                  {!residentDetailEvent && displayEvents.length > pageSize && (
+                    <View style={styles.eventsPager}>
+                      <Text style={styles.eventsPagerCount}>Showing {(eventPage - 1) * pageSize + 1}–{Math.min(eventPage * pageSize, displayEvents.length)} of {displayEvents.length} events</Text>
+                      <View style={styles.eventsPagerButtons}>
+                        <Pressable accessibilityRole="button" disabled={eventPage === 1}
+                          style={[styles.eventsPageButton, eventPage === 1 && styles.webButtonDisabled]}
+                          onPress={() => setEventPage(page => Math.max(1, page - 1))}>
+                          <Ionicons name="chevron-back-outline" size={16} color="#365D63"/><Text style={styles.eventsPageText}>Previous</Text>
                         </Pressable>
-                      ) : (
-                        <Pressable accessibilityRole="button" onPress={() => { setVisibleEventCount(6); setExpandedEvent(null); }} style={styles.lockedLoadMoreButton}>
-                          <Text style={styles.lockedLoadMoreText}>Show Fewer Events</Text>
-                          <Ionicons name="chevron-up-outline" size={16} color="#087B71" />
+                        {Array.from({ length: totalEventPages }, (_, index) => index + 1).map(page => (
+                          <Pressable key={page} accessibilityRole="button" accessibilityState={{ selected: eventPage === page }}
+                            style={[styles.eventsPageNumber, eventPage === page && styles.eventsPageNumberActive]}
+                            onPress={() => setEventPage(page)}>
+                            <Text style={[styles.eventsPageNumberText, eventPage === page && styles.eventsPageNumberTextActive]}>{page}</Text>
+                          </Pressable>
+                        ))}
+                        <Pressable accessibilityRole="button" disabled={eventPage === totalEventPages}
+                          style={[styles.eventsPageButton, eventPage === totalEventPages && styles.webButtonDisabled]}
+                          onPress={() => setEventPage(page => Math.min(totalEventPages, page + 1))}>
+                          <Text style={styles.eventsPageText}>Next</Text><Ionicons name="chevron-forward-outline" size={16} color="#365D63"/>
                         </Pressable>
-                      )}
+                      </View>
                     </View>
                   )}
                 </View>}
@@ -5630,21 +5647,30 @@ const styles = StyleSheet.create({
   ruiHeroHeight: { minHeight: 170 },
   ruiHeroImage: { position: "absolute", top: 0, right: 0, width: "55%", height: "100%" },
   ruiHeroOverlay: { position: "absolute", left: 0, right: 0, top: 0, bottom: 0 },
-  eventsHeader: { backgroundColor: "#FFFFFF", borderRadius: 14, borderWidth: 1, borderColor: "#DEE9E6", overflow: "hidden" },
+  eventsHeader: { backgroundColor: "#E8F9F2", borderRadius: 14, borderWidth: 1, borderColor: "#D6EEE4", overflow: "hidden" },
   eventsHeaderTop: { flexDirection: "row", alignItems: "flex-start", gap: 17, paddingHorizontal: 24, paddingTop: 23, paddingBottom: 20 },
   eventsHeaderIcon: { height: 47, width: 47, borderRadius: 12, backgroundColor: "#E8F5F1", alignItems: "center", justifyContent: "center", flexShrink: 0 },
   eventsHeaderCopy: { flex: 1, minWidth: 0 },
   eventsHeaderEyebrow: { fontFamily: vsType.family, fontSize: 11, color: "#237C70", letterSpacing: 0.7, fontWeight: "800", marginBottom: 5 },
   eventsHeaderTitle: { fontFamily: vsType.family, fontSize: 27, lineHeight: 35, fontWeight: "800", color: "#15393E" },
   eventsHeaderDescription: { fontFamily: vsType.family, fontSize: 14, lineHeight: 21, fontWeight: "400", color: "#667B84", marginTop: 4 },
-  eventsHeaderStats: { flexDirection: "row", alignItems: "stretch", flexWrap: "wrap", backgroundColor: "#F7FAF9", borderTopWidth: 1, borderTopColor: "#E4ECE8", paddingHorizontal: 12, paddingVertical: 11, gap: 9 },
-  eventsHeaderStat: { flex: 1, minWidth: 160, flexBasis: 160, flexDirection: "row", alignItems: "center", gap: 11, paddingHorizontal: 11, paddingVertical: 9 },
+  eventsHeaderStats: { flexDirection: "row", alignItems: "stretch", flexWrap: "wrap", backgroundColor: "#DFF5EC", borderTopWidth: 1, borderTopColor: "#D3EAE1", paddingHorizontal: 12, paddingVertical: 11, gap: 9 },
+  eventsHeaderStat: { flex: 1, minWidth: 150, flexBasis: 140, flexDirection: "row", alignItems: "center", gap: 11, paddingHorizontal: 12, paddingVertical: 12, borderRadius: 10, backgroundColor: "#FFFFFF" },
   eventsHeaderStatIcon: { width: 37, height: 37, borderRadius: 10, backgroundColor: "#E7F3EE", alignItems: "center", justifyContent: "center" },
   eventsHeaderStatValue: { fontFamily: vsType.family, color: "#153A3E", fontWeight: "800", fontSize: 22, lineHeight: 26 },
   eventsHeaderStatLabel: { fontFamily: vsType.family, color: "#6B8189", fontWeight: "600", fontSize: 12, lineHeight: 17 },
+  eventsPager: { marginTop: 12, paddingTop: 12, flexDirection: "row", flexWrap: "wrap", gap: 12, alignItems: "center", justifyContent: "space-between" },
+  eventsPagerCount: { fontFamily: vsType.family, fontSize: 12, color: "#667E86" },
+  eventsPagerButtons: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 6 },
+  eventsPageButton: { borderWidth: 1, borderColor: "#D9E6E3", borderRadius: 8, backgroundColor: "#FFFFFF", paddingHorizontal: 10, minHeight: 38, alignItems: "center", justifyContent: "center", flexDirection: "row", gap: 3 },
+  eventsPageText: { color: "#315B64", fontWeight: "700", fontSize: 12, fontFamily: vsType.family },
+  eventsPageNumber: { borderWidth: 1, borderColor: "#D9E6E3", borderRadius: 8, backgroundColor: "#FFFFFF", width: 38, minHeight: 38, justifyContent: "center", alignItems: "center" },
+  eventsPageNumberActive: { backgroundColor: "#00785C", borderColor: "#00785C" },
+  eventsPageNumberText: { fontWeight: "700", fontSize: 13, color: "#3B6266" },
+  eventsPageNumberTextActive: { color: "#FFFFFF" },
   eventBrowseControls: { marginTop: 16, gap: 13 },
   eventStatusTabs: { flexDirection: "row", alignItems: "center", gap: 8, paddingVertical: 2, paddingRight: 4 },
-  eventStatusTab: { flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: "#FFFFFF", borderWidth: 1, borderColor: "#DAE6E3", borderRadius: 9, paddingHorizontal: 14, minHeight: 43 },
+  eventStatusTab: { flexGrow: 1, flexBasis: 175, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 9, backgroundColor: "#FFFFFF", borderWidth: 1, borderColor: "#DAE6E3", borderRadius: 9, paddingHorizontal: 14, minHeight: 44 },
   eventStatusTabActive: { backgroundColor: "#087D70", borderColor: "#087D70" },
   eventStatusTabText: { fontFamily: vsType.family, fontSize: 14, fontWeight: "700", color: "#3C5C63" },
   eventStatusTabTextActive: { color: "#FFFFFF" },
