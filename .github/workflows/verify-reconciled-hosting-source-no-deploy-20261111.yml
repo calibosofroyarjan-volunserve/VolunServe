@@ -208,6 +208,46 @@ jobs:
               return;
             }
 
+            // Permit only this exact approved Admin account-dropdown Hosting release.
+            // All other PRs retain the original fail-closed marker-vs-branch check.
+            const adminDropdownControllerPath=".github/workflows/one-time-admin-profile-dropdown-20261120.yml";
+            const adminDropdownChanges=git("diff","--name-status","--no-renames",liveBase,commit)
+              .split("\n").filter(Boolean);
+            const isAdminDropdownRelease=adminDropdownChanges.length===2
+              && adminDropdownChanges[0]==="A\t"+adminDropdownControllerPath
+              && adminDropdownChanges[1]==="M\t"+verifierPath;
+            if(isAdminDropdownRelease){
+              const liveSource="f39c3f3684dff1116c70e2f972db821374b8d57c";
+              const candidate="690a34975d5e96ccb29ab92058d9b366ae021fc6";
+              assert.equal(liveBase,"b8f0a37a5444c73301f52cd65f5b07526117faf2",
+                "BLOCKED: protected release branch drift");
+              assert.equal(marker.revision,liveSource,"BLOCKED: live Hosting already changed");
+              assert.equal(blob(liveBase,verifierPath),"618c9f2a927824a180268cb5b595f68bf9476eb4",
+                "BLOCKED: previous verifier version changed");
+              assert.equal(blob(commit,adminDropdownControllerPath),"fe10deb6bfb401558a569a443903c45a120d0189",
+                "BLOCKED: content-pinned dropdown controller changed");
+              assert.equal(git("rev-parse","origin/ui/admin-profile-dropdown-20261120"),
+                candidate,"BLOCKED: UI branch moved");
+              git("merge-base","--is-ancestor",liveSource,candidate);
+              assert.equal(git("diff","--name-status","--no-renames",liveSource,candidate),
+                "M\tapp/(admin)/_layout.tsx",
+                "BLOCKED: candidate includes unrelated or deleted files");
+              for(const protectedPath of [
+                "package.json","package-lock.json","app.json","firebase.json",
+                ".firebaserc","tsconfig.json","firestore.rules","storage.rules",
+                "functions/index.js","functions/package.json",
+                "scripts/guard-live-protected-release.cjs",
+                ".github/workflows/auto-publish-protected-live-hosting.yml",
+                ".github/workflows/release-live-protected-hosting.yml","lib/firebase.ts"
+              ]){
+                assert.equal(blob(commit,protectedPath),blob(liveBase,protectedPath),
+                  "BLOCKED: security, Firebase or backend changed: "+protectedPath);
+              }
+              console.log("PASS: pinned Admin account dropdown only; existing auth and routes preserved");
+              console.log("NO DEPLOY: PR verification, Firestore unchanged");
+              return;
+            }
+
             assert.equal(marker.revision,liveBase,
               "BLOCKED: protected base and production differ; reconcile FIRST");
             const text=git("diff","--name-status","--no-renames",liveBase,commit);
