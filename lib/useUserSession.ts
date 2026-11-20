@@ -35,59 +35,70 @@ export function useUserSession(): SessionState {
     });
 
   useEffect(() => {
-    let unsubscribeProfile:
-      | (() => void)
-      | undefined;
+    let active = true;
+    let authRevision = 0;
+    let unsubscribeProfile: (() => void) | undefined;
+    let retryTimer: ReturnType<typeof setTimeout> | undefined;
 
-    const unsubscribeAuth =
-      onAuthChange((user) => {
+    const cancelProfileWatch = () => {
+      unsubscribeProfile?.();
+      unsubscribeProfile = undefined;
+      if (retryTimer !== undefined) clearTimeout(retryTimer);
+      retryTimer = undefined;
+    };
+
+    const unsubscribeAuth = onAuthChange((user) => {
+      const revision = ++authRevision;
+      cancelProfileWatch();
+
+      if (!user) {
+        setState({ loading: false, user: null, profile: null });
+        return;
+      }
+
+      // A signed-in Auth UID is not enough to grant access. An absent profile
+      // or a Firestore listener failure must not become "signed out" or
+      // authorize protected screens using stale account permissions.
+      setState({ loading: true, user, profile: null });
+      let failedAttempts = 0;
+      const stillCurrent = () =>
+        active && authRevision === revision && auth.currentUser?.uid === user.uid;
+
+      const subscribeProfile = () => {
+        if (!stillCurrent()) return;
         unsubscribeProfile?.();
-        unsubscribeProfile = undefined;
-
-        if (!user) {
-          setState({
-            loading: false,
-            user: null,
-            profile: null,
-          });
-
-          return;
-        }
-
-        setState((current) => ({
-          ...current,
-          loading: true,
-          user,
-        }));
-
         unsubscribeProfile = onSnapshot(
           doc(db, "users", user.uid),
-
           (snapshot) => {
-            const profileData =
-              snapshot.exists()
-                ? (snapshot.data() as UserProfile)
-                : null;
-
+            if (!stillCurrent()) return;
+            failedAttempts = 0;
+            const exists = snapshot.exists();
             setState({
-              loading: false,
+              // Auth-only accounts are resolved by the root registration guard.
+              // Do not redirect them to Login before that guard runs.
+              loading: !exists,
               user,
-              profile: profileData,
+              profile: exists ? (snapshot.data() as UserProfile) : null,
             });
           },
-
           () => {
-            setState({
-              loading: false,
-              user,
-              profile: null,
-            });
+            if (!stillCurrent()) return;
+            // onSnapshot error callbacks end the listener. Retry the read
+            // without dropping Firebase Auth or presenting stale privileges.
+            setState({ loading: true, user, profile: null });
+            failedAttempts += 1;
+            const delay = Math.min(30000, 1500 * 2 ** Math.min(failedAttempts - 1, 4));
+            retryTimer = setTimeout(subscribeProfile, delay);
           }
         );
-      });
+      };
+      subscribeProfile();
+    });
 
     return () => {
-      unsubscribeProfile?.();
+      active = false;
+      authRevision += 1;
+      cancelProfileWatch();
       unsubscribeAuth();
     };
   }, []);
