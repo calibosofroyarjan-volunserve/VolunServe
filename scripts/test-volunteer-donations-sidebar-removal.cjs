@@ -13,9 +13,15 @@ function names(menu) {
   assert.ok(start>=0&&end>start,"Menu not found: "+menu);
   return [...tabs.slice(start,end).matchAll(/name:\s*"([^"]+)"/g)].map(x=>x[1]);
 }
-test("Volunteer desktop and mobile menus contain only three scope-focused modules",()=>{
+test("Volunteer desktop keeps My Certificates while mobile remains focused",()=>{
+  // Production desktop intentionally exposes My Certificates as a separate
+  // service module. The mobile shortcuts keep just three navigation items.
+  assert.deepEqual(names("volunteerDesktopTabs"),["index","volunteer","community-events","certificate"]);
+  assert.deepEqual(names("volunteerMobileTabs"),["index","volunteer","community-events"]);
   for(const menu of ["volunteerDesktopTabs","volunteerMobileTabs"]) {
-    assert.deepEqual(names(menu),["index","volunteer","community-events"]);
+    for(const removed of ["donation","volunteer-impact","notifications","profile","announcements"]) {
+      assert.ok(!names(menu).includes(removed),removed+" leaked into "+menu);
+    }
   }
 });
 test("Resident donations remain accessible through Resident mode",()=>{
