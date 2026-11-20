@@ -1,0 +1,30 @@
+name: Check Resident/Volunteer Header vs CURRENT Production (READ ONLY)
+on:
+  pull_request:
+    branches: [ui/admin-profile-dropdown-20261120]
+    paths:
+      - '.github/workflows/check-header-current-production-revision-20261120.yml'
+permissions:
+  contents: read
+jobs:
+  verify-production-source:
+    if: github.repository == 'calibosofroyarjan-volunserve/VolunServe' && github.event.pull_request.head.repo.full_name == github.repository && github.head_ref == 'fix/resident-actions-current-live-20261120'
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    env:
+      VOLUNSERVE_HOSTING_URL: https://volunserve.com
+      VOLUNSERVE_EXPECTED_SHA: 1a9e206bdfea2167b205ce6eec168757323a8e9f
+    steps:
+      - name: Checkout without submodules
+        uses: actions/checkout@v4
+        with:
+          submodules: false
+      - name: Confirm the real LIVE Hosting source is still our exact base
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/check-live-hosting.cjs
+          echo "PASS: production source marker still exactly matches our candidate base"
+      - name: Absolutely NO deploy, backups, writes or credentials
+        if: always()
+        run: echo "READ-ONLY status check. No production data or Hosting was changed."
