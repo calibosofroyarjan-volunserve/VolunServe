@@ -1,3 +1,4 @@
+import ResidentDesktopActions from "../../components/layout/ResidentDesktopActions";
 import { AppAlert } from "../../lib/appDialog";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { Redirect, router, Tabs, useSegments, type Href } from "expo-router";
@@ -334,7 +335,13 @@ export default function TabLayout() {
 
   return (
     <Tabs
-      screenOptions={{ headerShown: false, tabBarPosition: "left" }}
+      screenOptions={({ route }) => ({
+        // Home already renders these actions. Other Resident pages need a
+        // header outside their scroll/map content so it cannot be covered.
+        headerShown: currentMode === "resident" && route.name !== "index",
+        header: () => <ResidentDesktopActions />,
+        tabBarPosition: "left",
+      })}
       tabBar={(props) => <DesktopTabBar {...props} profile={profile} />}
     />
   );
