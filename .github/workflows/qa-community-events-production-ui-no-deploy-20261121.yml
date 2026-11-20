@@ -119,13 +119,13 @@ jobs:
           npx playwright install --with-deps chromium
       - name: Test synthetic Community Events UI at desktop and mobile viewports
         run: node scripts/qa-community-events-browser.cjs
-      - name: Upload MOCK-ONLY browser QA screenshots (NO deploy)
-        if: success()
+      - name: Upload MOCK-ONLY browser QA screenshots for inspection (NO deploy)
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: community-events-mock-browser-screenshots
           path: qa-screenshots/
-          if-no-files-found: error
+          if-no-files-found: warn
           retention-days: 3
       - name: Confirm no deployment was requested
         run: echo 'QA complete — original real artifact plus separately mocked screenshots; no production Hosting, rules, Auth, Functions, Render or Firestore changes.'
