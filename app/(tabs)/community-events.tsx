@@ -8,7 +8,6 @@ import * as ImagePicker from "expo-image-picker";
 import CommunityEventPinPicker from "../../components/CommunityEventPinPicker";
 import CommunityEventLiveLocation from "../../components/CommunityEventLiveLocation";
 import CommunityEventRoadMap from "../../components/CommunityEventRoadMap";
-import CommunityEventHeroArt from "../../components/CommunityEventHeroArt";
 import CommunityEventRoster from "../../components/volunteers/CommunityEventRoster";
 import { router } from "expo-router";
 import {
@@ -2519,34 +2518,35 @@ export default function CommunityEventsScreen() {
         <View style={[styles.lockedColumns, !webSideBySide && styles.lockedColumnsStack]}>
           <View style={[styles.lockedMain, !webSideBySide && styles.lockedMainStack]}>
             {/* Premium Community Events calendar banner; counts use the existing live state. */}
-            <View style={styles.webHero}>
-              <CommunityEventHeroArt compact={isCompact || webSideBySide}/>
-              <View style={[styles.communityHeroLayout,(isCompact || webSideBySide)&&styles.communityHeroLayoutCompact]}>
-                <View style={[styles.communityHeroCopy,(isCompact || webSideBySide)&&styles.communityHeroCopyCompact]}>
-                  <Text style={styles.communityHeroEyebrow}>VOLUNSERVE  ·  COMMUNITY ENGAGEMENT</Text>
-                  <Text style={[styles.communityHeroTitle,(isCompact || webSideBySide)&&styles.communityHeroTitleCompact]}>Community Events</Text>
-                  <Text style={styles.communityHeroTagline}>Connect. Participate. Make a difference.</Text>
-                  <Text style={styles.communityHeroDescription}>
+            <View style={styles.eventsHeader}>
+              <View style={styles.eventsHeaderTop}>
+                <View style={styles.eventsHeaderIcon}>
+                  <Ionicons name="calendar-outline" size={25} color="#087D70"/>
+                </View>
+                <View style={styles.eventsHeaderCopy}>
+                  <Text style={styles.eventsHeaderEyebrow}>VOLUNSERVE / COMMUNITY ENGAGEMENT</Text>
+                  <Text style={styles.eventsHeaderTitle}>Community Events</Text>
+                  <Text style={styles.eventsHeaderDescription}>
                     {isVolunteer
-                      ? "Explore local activities, join events, and support your community."
-                      : "Discover community activities or propose an event for your barangay."}
+                      ? "Find approved activities, join local initiatives, and track your volunteer participation."
+                      : "Browse approved community activities and propose a meaningful event for your barangay."}
                   </Text>
                 </View>
-                <View style={[styles.communityHeroStats,(isCompact || webSideBySide)&&styles.communityHeroStatsCompact]}>
-                  {([
-                    {icon:"calendar-outline" as const,value:availableCount,label:"Available Events"},
-                    {icon:"people-outline" as const,value:isVolunteer?myEvents.length:proposals.length,label:isVolunteer?"My Joined Events":"My Proposals"},
-                    {icon:"ribbon-outline" as const,value:completedCount,label:"Completed Events"},
-                  ]).map((metric)=>(
-                    <View key={metric.label} style={styles.communityHeroStatCard}>
-                      <Ionicons name={metric.icon} size={21} color="#078B6B"/>
-                      <View style={styles.communityHeroStatCopy}>
-                        <Text style={styles.communityHeroStatNumber} numberOfLines={1}>{metric.value}</Text>
-                        <Text style={styles.communityHeroStatLabel} numberOfLines={2}>{metric.label}</Text>
-                      </View>
+              </View>
+              <View style={styles.eventsHeaderStats}>
+                {([
+                  {icon:"calendar-outline" as const,value:availableCount,label:"Open & Ongoing"},
+                  {icon:"people-outline" as const,value:isVolunteer?myEvents.length:proposals.length,label:isVolunteer?"My Joined Events":"My Proposals"},
+                  {icon:"checkmark-circle-outline" as const,value:completedCount,label:"Finished Events"},
+                ]).map((metric)=>(
+                  <View key={metric.label} style={styles.eventsHeaderStat}>
+                    <View style={styles.eventsHeaderStatIcon}><Ionicons name={metric.icon} size={19} color="#0B7E73"/></View>
+                    <View>
+                      <Text style={styles.eventsHeaderStatValue}>{metric.value}</Text>
+                      <Text style={styles.eventsHeaderStatLabel}>{metric.label}</Text>
                     </View>
-                  ))}
-                </View>
+                  </View>
+                ))}
               </View>
             </View>
             <View style={styles.lockedToolbar}>
@@ -5630,6 +5630,18 @@ const styles = StyleSheet.create({
   ruiHeroHeight: { minHeight: 170 },
   ruiHeroImage: { position: "absolute", top: 0, right: 0, width: "55%", height: "100%" },
   ruiHeroOverlay: { position: "absolute", left: 0, right: 0, top: 0, bottom: 0 },
+  eventsHeader: { backgroundColor: "#FFFFFF", borderRadius: 14, borderWidth: 1, borderColor: "#DEE9E6", overflow: "hidden" },
+  eventsHeaderTop: { flexDirection: "row", alignItems: "flex-start", gap: 17, paddingHorizontal: 24, paddingTop: 23, paddingBottom: 20 },
+  eventsHeaderIcon: { height: 47, width: 47, borderRadius: 12, backgroundColor: "#E8F5F1", alignItems: "center", justifyContent: "center", flexShrink: 0 },
+  eventsHeaderCopy: { flex: 1, minWidth: 0 },
+  eventsHeaderEyebrow: { fontFamily: vsType.family, fontSize: 11, color: "#237C70", letterSpacing: 0.7, fontWeight: "800", marginBottom: 5 },
+  eventsHeaderTitle: { fontFamily: vsType.family, fontSize: 27, lineHeight: 35, fontWeight: "800", color: "#15393E" },
+  eventsHeaderDescription: { fontFamily: vsType.family, fontSize: 14, lineHeight: 21, fontWeight: "400", color: "#667B84", marginTop: 4 },
+  eventsHeaderStats: { flexDirection: "row", alignItems: "stretch", flexWrap: "wrap", backgroundColor: "#F7FAF9", borderTopWidth: 1, borderTopColor: "#E4ECE8", paddingHorizontal: 12, paddingVertical: 11, gap: 9 },
+  eventsHeaderStat: { flex: 1, minWidth: 160, flexBasis: 160, flexDirection: "row", alignItems: "center", gap: 11, paddingHorizontal: 11, paddingVertical: 9 },
+  eventsHeaderStatIcon: { width: 37, height: 37, borderRadius: 10, backgroundColor: "#E7F3EE", alignItems: "center", justifyContent: "center" },
+  eventsHeaderStatValue: { fontFamily: vsType.family, color: "#153A3E", fontWeight: "800", fontSize: 22, lineHeight: 26 },
+  eventsHeaderStatLabel: { fontFamily: vsType.family, color: "#6B8189", fontWeight: "600", fontSize: 12, lineHeight: 17 },
   eventBrowseControls: { marginTop: 16, gap: 13 },
   eventStatusTabs: { flexDirection: "row", alignItems: "center", gap: 8, paddingVertical: 2, paddingRight: 4 },
   eventStatusTab: { flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: "#FFFFFF", borderWidth: 1, borderColor: "#DAE6E3", borderRadius: 9, paddingHorizontal: 14, minHeight: 43 },
