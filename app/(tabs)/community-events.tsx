@@ -1216,7 +1216,7 @@ export default function CommunityEventsScreen() {
   const selectedParticipation = selectedEvent ? participationMap.get(selectedEvent.id) : undefined;
   const selectedJoined = selectedParticipation?.status === "joined";
   const selectedOwned = !!selectedEvent && selectedEvent.proposedBy === user?.uid;
-  const selectedRosterEvent = events.find(event => event.id === rosterFocusId) || displayEvents[0] || selectedEvent;
+  const selectedRosterEvent = events.find(event => event.id === rosterFocusId) || selectedEvent || displayEvents[0] || null;
   const participantsModalEvent = events.find(event => event.id === participantsModalEventId);
 
   const setValue = <K extends keyof ProposalForm>(
@@ -2879,7 +2879,8 @@ export default function CommunityEventsScreen() {
                   </>}
                 {webSideBySide && selectedRosterEvent && user && (
                   <CommunityEventRoster eventId={selectedRosterEvent.id} viewer={user}
-                    participantsCount={Number(selectedRosterEvent.participantsCount || 0)} compact />
+                    participantsCount={Number(selectedRosterEvent.participantsCount || 0)}
+                    eventTitle={selectedRosterEvent.title} compact />
                 )}
                 {isVolunteer && <View style={styles.lockedAttendanceOverview}>
                   <View style={styles.lockedAttendanceOverviewHeading}>
@@ -2900,7 +2901,7 @@ export default function CommunityEventsScreen() {
                       const isCurrent = selectedEvent?.id === item.id;
                       const attendanceState = participation?.attendanceVerified ? "Verified" : participation?.checkedOutAt ? "Timed Out" : participation?.checkedInAt ? "Timed In" : "Joined";
                       return <Pressable key={item.id} accessibilityRole="button" accessibilityLabel={`View attendance for ${item.title}`}
-                        onPress={() => { setExpandedEvent(item.id); setAttendanceConfirmation(null); }}
+                        onPress={() => { setExpandedEvent(item.id); setRosterFocusId(item.id); setAttendanceConfirmation(null); }}
                         style={[styles.lockedAttendanceHistoryItem, isCurrent && styles.lockedAttendanceHistoryActive]}>
                         <View style={{ flex: 1, minWidth: 0 }}>
                           <Text style={styles.lockedAttendanceHistoryTitle} numberOfLines={2}>{item.title}</Text>
