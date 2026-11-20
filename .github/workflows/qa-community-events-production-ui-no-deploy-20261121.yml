@@ -67,7 +67,16 @@ jobs:
           node --test scripts/test-embedded-emergency-map-navigation.cjs
       - name: Export website (NO Hosting deployment)
         run: npx expo export --platform web --clear
-      - name: Verify static web route and revision marker (local export only)
-        run: env -u GITHUB_SHA node scripts/verify-hosting-release.cjs
+      - name: Verify static web route and exact QA revision marker (local export only)
+        run: |
+          node scripts/verify-hosting-release.cjs
+          node - <<'NODE'
+          const assert = require('node:assert/strict');
+          const fs = require('node:fs');
+          const marker = JSON.parse(fs.readFileSync('dist/volunserve-release.json', 'utf8'));
+          assert.equal(marker.revision, process.env.GITHUB_SHA);
+          assert.equal(marker.firebaseProject, 'volunserve-3aa5b');
+          console.log('PASS local Expo export revision; NOT DEPLOYED');
+          NODE
       - name: Confirm no deployment was requested
         run: echo 'QA complete — no production Hosting, rules, Auth, Functions, Render or Firestore changes.'
