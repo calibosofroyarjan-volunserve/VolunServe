@@ -1,3 +1,4 @@
+import ResidentDesktopActions from "../../components/layout/ResidentDesktopActions";
 import { volunserveTypography as vsType } from "../../constants/volunserveLiveUi";
 import { liveUi as designUi } from "../../constants/volunserveLiveUi";
 import { AppAlert } from "../../lib/appDialog";
@@ -336,7 +337,13 @@ export default function TabLayout() {
 
   return (
     <Tabs
-      screenOptions={{ headerShown: false, tabBarPosition: "left" }}
+      screenOptions={({ route }) => ({
+        // Home already renders the same actions. Keep it unchanged and avoid
+        // adding a second toolbar; other Resident screens need a fixed header.
+        headerShown: currentMode === "resident" && route.name !== "index",
+        header: () => <ResidentDesktopActions />,
+        tabBarPosition: "left",
+      })}
       tabBar={(props) => <DesktopTabBar {...props} profile={profile} />}
     />
   );
