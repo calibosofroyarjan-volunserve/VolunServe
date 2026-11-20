@@ -3163,11 +3163,11 @@ export default function DonationAdministration() {
                     </View>
 
                     <View style={styles.recordMetricRow}>
-                      <CompactMetric label="Submissions" value={String(campaignDonations.length)} />
-                      <CompactMetric label="Verified" value={String(receivedCampaignDonations.length)} />
-                      <CompactMetric label="Monetary" value={money(verifiedMoney)} />
+                      <RecordMetric label="Submissions" value={String(campaignDonations.length)} />
+                      <RecordMetric label="Verified" value={String(receivedCampaignDonations.length)} />
+                      <RecordMetric label="Received" value={money(verifiedMoney)} />
                       {Number(campaign.monetaryGoal || 0) > 0 && (
-                        <CompactMetric label="Goal" value={money(Number(campaign.monetaryGoal || 0))} />
+                        <RecordMetric label="Goal" value={money(Number(campaign.monetaryGoal || 0))} />
                       )}
                     </View>
 
@@ -3649,6 +3649,16 @@ function CompactMetric({ label, value }: { label: string; value: string }) {
   );
 }
 
+// Donation Records only: plain metrics, not four individual colored boxes.
+function RecordMetric({ label, value }: { label: string; value: string }) {
+  return (
+    <View style={styles.recordMetricItem}>
+      <Text style={styles.recordMetricLabel}>{label}</Text>
+      <Text style={styles.recordMetricValue}>{value}</Text>
+    </View>
+  );
+}
+
 function EmbeddedGoogleMapPreview({
   url,
   locationName,
@@ -3794,38 +3804,21 @@ const styles = StyleSheet.create({
   },
   errorText: { flex: 1, color: "#B42318", fontSize: 11, fontWeight: "700" },
   viewTabs: {
-    flexDirection: "row",
-    gap: 8,
-    padding: 5,
-    marginBottom: 18,
-    borderWidth: 1,
-    borderColor: "#DFE7EE",
-    borderRadius: 12,
-    backgroundColor: "#FFFFFF",
+    flexDirection:"row",gap:20,marginBottom:18,
+    borderBottomWidth:1,borderBottomColor:"#DDE4E1",
+    backgroundColor:"#FFFFFF",
   },
   viewTab: {
-    flex: 1,
-    minHeight: 42,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 7,
-    borderRadius: 9,
+    minHeight:46,paddingHorizontal:4,
+    flexDirection:"row",alignItems:"center",justifyContent:"center",
+    gap:7,borderBottomWidth:2,borderBottomColor:"transparent",
   },
-  viewTabActive: { backgroundColor: "#ECFDF5" },
-  viewTabText: { color: "#64748B", fontSize: 10.5, fontWeight: "900" },
-  viewTabTextActive: { color: "#0F766E" },
-  tabCountBadge: {
-    minWidth: 22,
-    height: 22,
-    alignItems: "center",
-    justifyContent: "center",
-    paddingHorizontal: 6,
-    borderRadius: 999,
-    backgroundColor: "#E2E8F0",
-  },
-  pendingCountBadge: { backgroundColor: "#FDE68A" },
-  tabCountText: { color: "#334155", fontSize: 9, fontWeight: "900" },
+  viewTabActive: {borderBottomColor:"#006647"},
+  viewTabText: {color:"#64748B",fontSize:13,fontWeight:"500"},
+  viewTabTextActive: {color:"#064E3B",fontWeight:"700"},
+  tabCountBadge: {minWidth:20,alignItems:"center",justifyContent:"center"},
+  pendingCountBadge: {},
+  tabCountText: {color:"#64748B",fontSize:12,fontWeight:"600"},
   sectionTopRow: {
     flexDirection: "row",
     alignItems: "flex-start",
@@ -3953,35 +3946,53 @@ const styles = StyleSheet.create({
   noticeText: { flex: 1, color: "#49646F", fontSize: 10, lineHeight: 15 },
   publishButton: { marginTop: 14, minHeight: 44, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 7, borderRadius: 10, backgroundColor: "#0F766E" },
   publishButtonText: { color: "#FFFFFF", fontSize: 11, fontWeight: "900" },
+  donationPageHeader: {
+    paddingTop:4,paddingBottom:16,marginBottom:6,
+    borderBottomWidth:1,borderBottomColor:"#E5EBE8",
+  },
+  donationPageTitle: {fontSize:25,fontWeight:"700",lineHeight:33,color:"#152520"},
+  donationPageSubtitle: {fontSize:13,fontWeight:"400",lineHeight:20,color:"#64748B",marginTop:3},
+  campaignStartRow: {
+    flexDirection:"row",flexWrap:"wrap",alignItems:"center",gap:14,
+    marginBottom:20,paddingHorizontal:16,paddingVertical:14,
+    borderWidth:1,borderColor:"#DBE5DF",borderRadius:9,backgroundColor:"#FFFFFF",
+  },
+  campaignStartTitle: {fontSize:14,fontWeight:"600",color:"#24332D"},
+  campaignStartHint: {fontSize:12,fontWeight:"400",color:"#64748B",lineHeight:18},
+  campaignStartButton: {
+    flexDirection:"row",alignItems:"center",justifyContent:"center",gap:7,
+    minHeight:40,paddingHorizontal:14,borderRadius:7,backgroundColor:"#065F46",
+  },
+  campaignStartButtonText: {fontSize:12,fontWeight:"600",color:"#FFFFFF"},
+  recordSectionTitle: {fontSize:18,fontWeight:"600",color:"#1F2937",lineHeight:24},
   campaignRecordsHeader: {
-    marginTop:24,marginBottom:12,flexDirection:"row",alignItems:"flex-end",
-    justifyContent:"space-between",flexWrap:"wrap",gap:14,
+    marginTop:18,marginBottom:12,flexDirection:"row",alignItems:"center",
+    justifyContent:"space-between",flexWrap:"wrap",gap:16,
   },
   campaignFilters: {flexDirection:"row",alignItems:"center",flexWrap:"wrap",gap:10},
-  campaignSearchBox: {minWidth:235,flexGrow:1,flexDirection:"row",
+  campaignSearchBox: {minWidth:240,flexGrow:1,flexDirection:"row",
     alignItems:"center",gap:8,backgroundColor:"#FFFFFF",borderWidth:1,
-    borderColor:"#DCE6E2",borderRadius:9,minHeight:43,paddingHorizontal:12},
+    borderColor:"#DBE3DF",borderRadius:8,minHeight:40,paddingHorizontal:12},
   campaignSearchInput: {flex:1,fontSize:12.5,color:"#233D33",paddingVertical:8,minWidth:150},
   campaignStatusActions: {flexDirection:"row",gap:4,alignItems:"center",
     borderWidth:1,borderColor:"#DCE6E2",borderRadius:9,padding:4,backgroundColor:"#FFFFFF"},
   campaignStatusChoice: {paddingHorizontal:11,paddingVertical:8,borderRadius:7},
-  campaignStatusChoiceActive: {backgroundColor:"#E9F7EE"},
-  campaignStatusChoiceText: {color:"#64748B",fontSize:11,fontWeight:"700"},
+  campaignStatusChoiceActive: {backgroundColor:"#F1F5F3"},
+  campaignStatusChoiceText: {color:"#64748B",fontSize:12,fontWeight:"500"},
   campaignStatusChoiceTextActive: {color:"#006A42"},
-  campaignRecordToolbar: {borderTopWidth:1,borderTopColor:"#E4EBE7",
-    paddingTop:11,marginBottom:8,flexDirection:"row",
-    justifyContent:"space-between",flexWrap:"wrap",alignItems:"center",gap:9},
+  campaignRecordToolbar: {marginBottom:4,flexDirection:"row",
+    justifyContent:"flex-end",flexWrap:"wrap",alignItems:"center",gap:9},
   campaignRecordCount: {fontSize:11.5,color:"#49645B",fontWeight:"600"},
   campaignArchiveToggle: {flexDirection:"row",alignItems:"center",
-    gap:5,paddingHorizontal:9,paddingVertical:7,borderRadius:8,backgroundColor:"#EBF7F1"},
+    gap:5,paddingHorizontal:8,paddingVertical:6,borderRadius:7},
   campaignArchiveToggleText: {color:"#087C61",fontSize:11,fontWeight:"700"},
   campaignRecordIcon: {height:42,width:42,borderRadius:11,backgroundColor:"#E9F7EF",
     alignItems:"center",justifyContent:"center"},
-  campaignCardFooter: {marginTop:12,paddingTop:10,borderTopColor:"#E5ECE8",
+  campaignCardFooter: {marginTop:14,paddingTop:12,borderTopColor:"#E8ECEA",
     borderTopWidth:1,flexDirection:"row",justifyContent:"space-between",
     flexWrap:"wrap",alignItems:"center",gap:8},
-  cardList: { flexDirection:"row",flexWrap:"wrap",justifyContent:"space-between",alignItems:"flex-start",rowGap:14,columnGap:10 },
-  campaignCard: { padding: 18, borderWidth: 1, borderColor: "#DFE7EE", borderRadius: 12, backgroundColor: "#FFFFFF" },
+  cardList: {flexDirection:"row",flexWrap:"wrap",justifyContent:"space-between",alignItems:"flex-start",rowGap:16,columnGap:12},
+  campaignCard: { padding: 20, borderWidth: 1, borderColor: "#DFE6E2", borderRadius: 10, backgroundColor: "#FFFFFF" },
   donationCard: { padding: 15, borderWidth: 1, borderColor: "#DFE7EE", borderRadius: 12, backgroundColor: "#FFFFFF" },
   historyCard: { padding: 13, borderWidth: 1, borderColor: "#E2E8F0", borderRadius: 11, backgroundColor: "#FFFFFF" },
   cardHeaderRow: { flexDirection: "row", alignItems: "flex-start", gap: 10 },
@@ -4000,7 +4011,7 @@ const styles = StyleSheet.create({
   compactMetricLabel: { color: "#6B7F74", fontSize: 10, fontWeight: "700", textTransform: "uppercase" },
   compactMetricValue: { marginTop: 4, color: "#233D33", fontSize: 13, fontWeight: "800" },
   closeCampaignButton: { alignSelf: "flex-start", marginTop: 10, paddingHorizontal: 11, paddingVertical: 7, borderWidth: 1, borderColor: "#CBD5E1", borderRadius: 8, backgroundColor: "#F8FAFC" },
-  closeCampaignText: { color: "#475569", fontSize: 11, fontWeight: "800" },
+  closeCampaignText: {color:"#334155",fontSize:12,fontWeight:"600"},
   summaryRow: { flexDirection: "row", flexWrap: "wrap", gap: 9, marginBottom: 16 },
   summaryCard: { flexGrow: 1, flexBasis: 180, minWidth: 160, padding: 12, borderWidth: 1, borderColor: "#DFE7EE", borderRadius: 11, backgroundColor: "#FFFFFF" },
   summaryValue: { color: "#0F172A", fontSize: 20, fontWeight: "900" },
@@ -4927,37 +4938,32 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     letterSpacing: 0.15,
   },
-  recordProgressBox: {
-    marginTop: 10,
-    padding: 10,
-    borderWidth: 1,
-    borderColor: "#DCE8E5",
-    borderRadius: 9,
-    backgroundColor: "#F8FCFB",
-  },
+  recordHeader: {flexDirection:"row",gap:12,alignItems:"flex-start",justifyContent:"space-between"},
+  recordTitle: {fontSize:16,fontWeight:"700",lineHeight:22,color:"#1F2937"},
+  recordCategory: {fontSize:12,fontWeight:"400",lineHeight:17,color:"#6B7280"},
+  recordStatus: {borderRadius:6,paddingHorizontal:8,paddingVertical:5,backgroundColor:"#F1F3F5"},
+  recordStatusPublished: {backgroundColor:"#EAF5EF"},
+  recordStatusText: {fontSize:11,fontWeight:"600",color:"#64748B"},
+  recordStatusPublishedText: {color:"#166534"},
+  recordLocation: {flexDirection:"row",gap:6,alignItems:"flex-start",marginTop:11},
+  recordLocationText: {fontSize:12,fontWeight:"400",lineHeight:17,color:"#64748B",flex:1},
+  recordMetricRow: {flexDirection:"row",flexWrap:"wrap",gap:8,marginTop:16,
+    paddingVertical:12,borderTopWidth:1,borderBottomWidth:1,borderColor:"#EDF0EE"},
+  recordMetricItem: {flexGrow:1,flexBasis:100,minWidth:94,gap:5},
+  recordMetricLabel: {fontSize:11,fontWeight:"400",color:"#6B7280"},
+  recordMetricValue: {fontSize:13,fontWeight:"600",color:"#172B22"},
+  recordProgressPlain: {marginTop:13},
+  recordDate: {fontSize:11,fontWeight:"400",color:"#6B7280"},
   recordProgressTop: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
     gap: 10,
   },
-  recordProgressLabel: {
-    color: "#475569",
-    fontSize: 11,
-    fontWeight: "700",
-  },
-  recordProgressValue: {
-    color: "#0F766E",
-    fontSize: 11,
-    fontWeight: "800",
-  },
-  recordProgressTrack: {
-    height: 7,
-    overflow: "hidden",
-    marginTop: 7,
-    borderRadius: 999,
-    backgroundColor: "#E2E8F0",
-  },
+  recordProgressLabel: {color:"#64748B",fontSize:11,fontWeight:"500"},
+  recordProgressValue: {color:"#166534",fontSize:12,fontWeight:"600"},
+  recordProgressTrack: {height:5,overflow:"hidden",marginTop:8,
+    borderRadius:999,backgroundColor:"#E7ECEA"},
   recordProgressFill: {
     height: "100%",
     borderRadius: 999,
