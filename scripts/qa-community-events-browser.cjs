@@ -94,9 +94,14 @@ async function main(){
       await page.waitForTimeout(550);
       assert((await page.locator("body").innerText()).includes("QA Participant One"),"Roster modal did not show synthetic participants");
       report.passed.push("Event-specific participant modal from existing read-only component");
-      await page.getByText("View Profile",{exact:true}).first().click();
-      await page.waitForTimeout(250);
+      // The background My Attendance rail has its own View Profile links.
+      // When the participants modal is open, choose the LAST matching button
+      // (inside the foreground modal) so the overlay does not intercept clicks.
+      const foregroundProfileButton=page.getByText("View Profile",{exact:true}).last();
+      await foregroundProfileButton.click({timeout:8000});
+      await page.waitForTimeout(350);
       assert((await page.locator("body").innerText()).includes("Public participant profile preview"),"Profile preview did not open");
+      await page.screenshot({path:path.join(screens,"community-events-profile-preview-1536.png"),fullPage:true});
       report.passed.push("Volunteer View Profile safe preview");
     }
     await context.close();
