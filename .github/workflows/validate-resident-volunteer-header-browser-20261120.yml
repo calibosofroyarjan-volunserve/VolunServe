@@ -1,0 +1,117 @@
+name: Resident and Volunteer Header Chromium QA (NO DEPLOY)
+on:
+  pull_request:
+    branches: [ui/admin-profile-dropdown-20261120]
+    paths:
+      - '.github/workflows/validate-resident-volunteer-header-browser-20261120.yml'
+      - 'scripts/test-resident-volunteer-header-browser.cjs'
+permissions:
+  contents: read
+jobs:
+  browser-qa:
+    if: github.repository == 'calibosofroyarjan-volunserve/VolunServe' && github.event.pull_request.head.repo.full_name == github.repository && github.head_ref == 'fix/resident-actions-current-live-20261120'
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    env:
+      CI: 'true'
+      EXPO_NO_TELEMETRY: '1'
+    steps:
+      - name: Checkout same-repository PR without submodules
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: false
+      - name: Verify exact production-derived source and narrow scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE_SHA=1a9e206bdfea2167b205ce6eec168757323a8e9f
+          git merge-base --is-ancestor "$BASE_SHA" HEAD
+          git diff --check "$BASE_SHA" HEAD
+          git diff --name-status --no-renames "$BASE_SHA" HEAD > /tmp/header-qa-paths.txt
+          node <<'NODE'
+          const assert=require('node:assert/strict'),fs=require('node:fs');
+          const allowed=new Set([
+            'app/(tabs)/_layout.tsx',
+            'components/layout/ResidentDesktopActions.tsx',
+            'scripts/test-resident-volunteer-sidebar.cjs',
+            'scripts/test-volunteer-donations-sidebar-removal.cjs',
+            'scripts/test-resident-volunteer-header-browser.cjs',
+            '.github/workflows/validate-resident-volunteer-header-browser-20261120.yml',
+          ]);
+          const entries=fs.readFileSync('/tmp/header-qa-paths.txt','utf8').trim().split('\n');
+          const changed=new Set();
+          for(const entry of entries){
+            const [kind,path]=entry.split('\t');
+            assert.ok(kind==='A'||kind==='M','BLOCKED destructive change '+entry);
+            assert.ok(allowed.has(path),'BLOCKED unrelated or outdated file '+path);
+            changed.add(path);
+          }
+          assert.equal(changed.size,allowed.size,'BLOCKED missing/extra change');
+          console.log('PASS exact shared header + tests only');
+          NODE
+          git diff --quiet "$BASE_SHA" HEAD -- \
+            app/login.tsx app/signup.tsx app/_layout.tsx \
+            lib/firebase.ts lib/firebaseAuth.ts backend functions \
+            firebase.json firestore.rules storage.rules package.json package-lock.json
+      - name: Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install unchanged dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Validate TypeScript and current sidebar contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx tsc --noEmit --incremental false
+          node --test scripts/test-resident-volunteer-sidebar.cjs
+          node --test scripts/test-volunteer-donations-sidebar-removal.cjs
+          node --test scripts/test-profile-certificates-account-menu.cjs
+          node --test scripts/test-embedded-emergency-map-navigation.cjs
+      - name: Install isolated browser QA dependencies (not saved to repository)
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install --no-save --package-lock=false --no-audit --no-fund playwright@1.56.0 firebase-admin@13
+          npx playwright install chromium --with-deps
+      - name: Enable local Firebase emulator in runner checkout ONLY
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const fs=require('node:fs');
+          const p='lib/firebase.ts',source=fs.readFileSync(p,'utf8');
+          const target='const ENABLE_LOCAL_TESTING = false;';
+          if(!source.includes(target))throw Error('Emulator test mode guard changed, abort');
+          fs.writeFileSync(p,source.replace(target,'const ENABLE_LOCAL_TESTING = true;'));
+          console.log('LOCAL ONLY: localhost uses demo-volunserve Firebase emulators');
+          NODE
+          git diff --name-only | grep -x 'lib/firebase.ts'
+      - name: Build browser test candidate for localhost ONLY
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx expo export --platform web --clear
+          node scripts/verify-hosting-release.cjs
+          echo "NO production Hosting upload; build uses LOCAL emulator only on localhost."
+      - name: Real Chromium click and overlay tests with local Firebase Auth and Firestore
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx firebase-tools emulators:exec \
+            --project demo-volunserve \
+            --only auth,firestore \
+            "node scripts/test-resident-volunteer-header-browser.cjs"
+      - name: Save QA screenshots (test accounts only)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: resident-volunteer-header-qa-screenshots
+          path: test-artifacts/*.png
+          if-no-files-found: ignore
+          retention-days: 1
+      - name: Never deploy production
+        if: always()
+        run: echo "NO LIVE DEPLOY; no production keys or Firebase writes used."
