@@ -1,4 +1,3 @@
-import { volunserveTypography as vsType } from "../../constants/volunserveLiveUi";
 import * as ImagePicker from "expo-image-picker";
 import { useRouter } from "expo-router";
 import {
@@ -3181,7 +3180,7 @@ const styles =
 
     statusBadgeText: {
       color: "#08786F",
-      fontSize: vsType.size.meta, fontFamily: vsType.family,
+      fontSize: 12,
       fontWeight: "800",
     },
 
@@ -3215,7 +3214,7 @@ const styles =
     metaValue: {
       marginTop: 4,
       color: "#183D35",
-      fontSize: vsType.size.body, fontFamily: vsType.family,
+      fontSize: 14,
       lineHeight: 20,
       fontWeight: "700",
     },
@@ -3236,7 +3235,7 @@ const styles =
     infoText: {
       marginTop: 5,
       color: "#36515F",
-      fontSize: vsType.size.body, fontFamily: vsType.family,
+      fontSize: 14,
       lineHeight: 22,
     },
 
@@ -3254,7 +3253,7 @@ const styles =
     needsText: {
       marginTop: 7,
       color: "#36515F",
-      fontSize: vsType.size.body, fontFamily: vsType.family,
+      fontSize: 14,
       lineHeight: 23,
     },
 
@@ -3601,7 +3600,7 @@ const styles =
 
     volunteerName: {
       color: "#153646",
-      fontSize: vsType.size.body, fontFamily: vsType.family,
+      fontSize: 14,
       fontWeight: "800",
     },
 
@@ -3892,9 +3891,9 @@ const styles =
       flexWrap: "wrap", gap: 8,
     },
     reportToolbarTitle: {
-      color: "#183C34", fontSize: 16, fontFamily: vsType.family, fontWeight: "700",
+      color: "#183C34", fontSize: 16, fontWeight: "700",
     },
-    reportToolbarCount: { color: "#536B69", fontSize: 13, fontFamily: vsType.family },
+    reportToolbarCount: { color: "#536B69", fontSize: 13 },
     reportControls: {
       flexDirection: "row", alignItems: "center", justifyContent: "space-between",
       flexWrap: "wrap", gap: 12,
@@ -3906,16 +3905,16 @@ const styles =
     },
     reportFilterChipActive: { borderColor: "#176B52", backgroundColor: "#176B52" },
     reportFilterText: {
-      color: "#526B67", fontSize: 13, fontFamily: vsType.family, fontWeight: "600",
+      color: "#526B67", fontSize: 13, fontWeight: "600",
     },
     reportFilterTextActive: { color: "#FFFFFF" },
     reportSearchInput: {
       minHeight: 42, minWidth: 205, maxWidth: 340, flexGrow: 1,
       paddingHorizontal: 13, borderWidth: 1, borderColor: "#D8E3DF",
       borderRadius: 9, color: "#183C34", backgroundColor: "#FAFCFB",
-      fontSize: 14, fontFamily: vsType.family,
+      fontSize: 14,
     },
-    reportShowingCount: { color: "#687E79", fontSize: 12, fontFamily: vsType.family },
+    reportShowingCount: { color: "#687E79", fontSize: 12 },
     statusBadgeClosed: { backgroundColor: "#EDF1F4", borderColor: "#D8E0E6" },
     statusBadgeActive: { backgroundColor: "#E9F3FD", borderColor: "#CDE2F5" },
     statusBadgeAttention: { backgroundColor: "#FFF3E6", borderColor: "#F4D5B3" },
@@ -3926,13 +3925,12 @@ const styles =
     },
     nextUpdateAttention: { borderLeftColor: "#B86C1C", backgroundColor: "#FFF7EB" },
     nextUpdateLabel: {
-      color: "#216F56", fontSize: 11, fontFamily: vsType.family,
+      color: "#216F56", fontSize: 11,
       fontWeight: "700", letterSpacing: 0.6,
     },
     nextUpdateLabelAttention: { color: "#97540C" },
     nextUpdateText: {
-      marginTop: 4, color: "#304C44", fontSize: 14,
-      fontFamily: vsType.family, lineHeight: 21,
+      marginTop: 4, color: "#304C44", fontSize: 14, lineHeight: 21,
     },
     detailsToggle: {
       minHeight: 44, marginTop: 12, paddingHorizontal: 13,
@@ -3942,12 +3940,12 @@ const styles =
     },
     detailsToggleAttention: { borderColor: "#D7AD79" },
     detailsToggleText: {
-      flexShrink: 1, color: "#176B52", fontFamily: vsType.family,
+      flexShrink: 1, color: "#176B52",
       fontSize: 13, fontWeight: "700",
     },
     detailsToggleSymbol: {
-      color: "#176B52", fontSize: 20, fontFamily: vsType.family, fontWeight: "500",
+      color: "#176B52", fontSize: 20, fontWeight: "500",
     },
     detailsBody: { marginTop: 6 },
-    fullReference: { marginTop: 10, color: "#647985", fontSize: 11, fontFamily: vsType.family },
+    fullReference: { marginTop: 10, color: "#647985", fontSize: 11 },
   });
