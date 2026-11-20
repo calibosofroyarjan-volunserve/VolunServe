@@ -49,7 +49,7 @@ jobs:
           const assert=require('node:assert/strict'),cp=require('node:child_process');
           const source='1a9e206bdfea2167b205ce6eec168757323a8e9f';
           const changes=cp.execFileSync('git',['diff','--name-status','--no-renames',source,'HEAD'],{encoding:'utf8'}).trim().split('\n').filter(Boolean);
-          const allowed=['app/_layout.tsx','app/login.web.tsx','lib/useUserSession.ts',
+          const allowed=['app/_layout.tsx','app/login.web.tsx','lib/useUserSession.ts','lib/firebaseAuth.ts',
             'scripts/test-auth-link-session-recovery.cjs',
             '.github/workflows/validate-auth-redirect-recovery-no-deploy-20261120.yml'];
           assert.deepEqual(changes.map(v=>v.split('\t')[1]).sort(),allowed.sort());
