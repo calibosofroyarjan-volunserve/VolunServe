@@ -434,6 +434,23 @@ export default function MyCases() {
     setError,
   ] =
     useState("");
+  // UI state only: the Firestore queries and workflows are not modified.
+  const [expandedCaseIds, setExpandedCaseIds] = useState<string[]>([]);
+  const [reportFilter, setReportFilter] = useState<"all" | "open" | "closed">("all");
+  const [reportSearch, setReportSearch] = useState("");
+  const closedStatuses = ["resolved", "closed"];
+  const openCaseCount = cases.filter(
+    (incident) => !closedStatuses.includes(String(incident.status || "")),
+  ).length;
+  const visibleCases = cases.filter((incident) => {
+    const closed = closedStatuses.includes(String(incident.status || ""));
+    if (reportFilter === "open" && closed) return false;
+    if (reportFilter === "closed" && !closed) return false;
+    const term = reportSearch.trim().toLowerCase();
+    return !term || [incident.title, incident.category, incident.location, incident.id]
+      .some((value) => String(value || "").toLowerCase().includes(term));
+  });
+
 
   const [
     busyAssignmentId,
@@ -1845,11 +1862,49 @@ export default function MyCases() {
               styles.subtitle
             }
           >
-            Track Admin verification, responder
-            progress, and confirm the actual
-            assistance you received.
+            Check each report's progress, follow responder updates,
+            and confirm the assistance you actually received.
           </Text>
         </View>
+      </View>
+
+      <View style={styles.reportToolbar}>
+        <View style={styles.reportToolbarHeading}>
+          <Text style={styles.reportToolbarTitle}>Your reports</Text>
+          <Text style={styles.reportToolbarCount}>
+            {cases.length} total · {openCaseCount} open · {cases.length - openCaseCount} closed
+          </Text>
+        </View>
+        <View style={styles.reportControls}>
+          <View style={styles.reportFilters}>
+            {([
+              ["all", "All reports"], ["open", "Open"], ["closed", "Closed"],
+            ] as const).map(([value, label]) => (
+              <TouchableOpacity
+                key={value}
+                accessibilityRole="button"
+                accessibilityState={{ selected: reportFilter === value }}
+                onPress={() => setReportFilter(value)}
+                style={[styles.reportFilterChip, reportFilter === value && styles.reportFilterChipActive]}
+              >
+                <Text style={[styles.reportFilterText, reportFilter === value && styles.reportFilterTextActive]}>
+                  {label}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+          <TextInput
+            accessibilityLabel="Search my reports"
+            placeholder="Search report or location"
+            placeholderTextColor="#82949C"
+            value={reportSearch}
+            onChangeText={setReportSearch}
+            style={styles.reportSearchInput}
+          />
+        </View>
+        <Text style={styles.reportShowingCount}>
+          Showing {visibleCases.length} of {cases.length} reports
+        </Text>
       </View>
 
       {!!error && (
@@ -1892,8 +1947,13 @@ export default function MyCases() {
             Assistance will appear here.
           </Text>
         </View>
+      ) : visibleCases.length === 0 ? (
+        <View style={styles.emptyCard}>
+          <Text style={styles.emptyTitle}>No matching reports</Text>
+          <Text style={styles.emptyText}>Try another search or select All reports.</Text>
+        </View>
       ) : (
-        cases.map(
+        visibleCases.map(
           (
             incident,
           ) => {
@@ -1901,6 +1961,35 @@ export default function MyCases() {
               assignmentsByCase[
                 incident.id
               ] || [];
+            const detailsExpanded = expandedCaseIds.includes(incident.id);
+            const evidenceRequested = incident.verificationStatus === "needs_more_evidence" &&
+              incident.evidenceReviewStatus !== "resubmitted";
+            const confirmationRequired = assignments.some(
+              (assignment) => assignment.status === "completed" && !confirmations[assignment.id],
+            );
+            const actionRequired = evidenceRequested || confirmationRequired;
+            const closed = closedStatuses.includes(String(incident.status || ""));
+            const responseStarted = assignments.some((assignment) =>
+              ["accepted", "responding", "on_site"].includes(String(assignment.status || "")),
+            );
+            const nextUpdate = evidenceRequested
+              ? "Additional evidence is needed. Open this report to upload the requested photo."
+              : confirmationRequired
+                ? "A responder has completed their mission. Open this report to confirm the assistance you received."
+                : incident.verificationStatus === "needs_more_evidence"
+                  ? "Your additional evidence was sent and is waiting for Admin review."
+                  : closed
+                    ? "This case is closed. Open it to review the details and response history."
+                    : responseStarted
+                      ? "A responder accepted this task. Open the report to see their latest updates."
+                      : incident.status === "assigned"
+                        ? "Volunteer invitations have been sent. Waiting for someone to accept."
+                        : incident.status === "validated"
+                          ? "Your report is verified. Responder activity will appear when available."
+                          : incident.status === "in_progress"
+                            ? "This report is in progress. Open details to check responder information."
+                            : "Your report has been submitted. Verification updates will appear here.";
+
 
             return (
               <View
@@ -1935,17 +2024,17 @@ export default function MyCases() {
                         styles.reference
                       }
                     >
-                      Case ID:{" "}
-                      {
-                        incident.id
-                      }
+                      Report #{incident.id.slice(0, 8).toUpperCase()}
                     </Text>
                   </View>
 
                   <View
-                    style={
-                      styles.statusBadge
-                    }
+                    style={[
+                      styles.statusBadge,
+                      closed && styles.statusBadgeClosed,
+                      actionRequired && styles.statusBadgeAttention,
+                      incident.status === "in_progress" && styles.statusBadgeActive,
+                    ]}
                   >
                     <Text
                       style={
@@ -1974,7 +2063,7 @@ export default function MyCases() {
                         styles.metaLabel
                       }
                     >
-                      INCIDENT
+                      REPORT TYPE
                     </Text>
 
                     <Text
@@ -1997,7 +2086,7 @@ export default function MyCases() {
                         styles.metaLabel
                       }
                     >
-                      URGENCY
+                      PRIORITY
                     </Text>
 
                     <Text
@@ -2060,6 +2149,32 @@ export default function MyCases() {
                   </View>
                 </View>
 
+                <View style={[styles.nextUpdateBox, actionRequired && styles.nextUpdateAttention]}>
+                  <Text style={[styles.nextUpdateLabel, actionRequired && styles.nextUpdateLabelAttention]}>
+                    {actionRequired ? "ACTION NEEDED" : "CURRENT UPDATE"}
+                  </Text>
+                  <Text style={styles.nextUpdateText}>{nextUpdate}</Text>
+                </View>
+                <TouchableOpacity
+                  accessibilityRole="button"
+                  accessibilityState={{ expanded: detailsExpanded }}
+                  onPress={() => setExpandedCaseIds((previous) =>
+                    previous.includes(incident.id)
+                      ? previous.filter((id) => id !== incident.id)
+                      : [...previous, incident.id]
+                  )}
+                  style={[styles.detailsToggle, actionRequired && styles.detailsToggleAttention]}
+                >
+                  <Text style={styles.detailsToggleText}>
+                    {detailsExpanded ? "Hide report details"
+                      : actionRequired ? "Open report · Action required"
+                      : "View report details and responder updates"}
+                  </Text>
+                  <Text style={styles.detailsToggleSymbol}>{detailsExpanded ? "−" : "+"}</Text>
+                </TouchableOpacity>
+                {detailsExpanded && (
+                  <View style={styles.detailsBody}>
+                    <Text style={styles.fullReference}>Full report ID: {incident.id}</Text>
                 <View
                   style={
                     styles.infoBlock
@@ -2094,7 +2209,7 @@ export default function MyCases() {
                         styles.infoLabel
                       }
                     >
-                      Situation details
+                      Situation reported
                     </Text>
 
                     <Text
@@ -2120,7 +2235,7 @@ export default function MyCases() {
                         styles.infoLabel
                       }
                     >
-                      Requested assistance
+                      Assistance requested
                     </Text>
 
                     <Text
@@ -2128,9 +2243,7 @@ export default function MyCases() {
                         styles.needsText
                       }
                     >
-                      {
-                        incident.needs
-                      }
+                      {incident.needs.replace(/\s*\|\s*/g, "\n")}
                     </Text>
                   </View>
                 )}
@@ -2372,7 +2485,7 @@ export default function MyCases() {
                       styles.sectionTitle
                     }
                   >
-                    Responder activity
+                    Responder updates
                   </Text>
 
                   {assignments.length ===
@@ -2387,7 +2500,7 @@ export default function MyCases() {
                           styles.waitingTitle
                         }
                       >
-                        No responder assigned yet
+                        No responder has accepted yet
                       </Text>
 
                       <Text
@@ -2395,9 +2508,8 @@ export default function MyCases() {
                           styles.waitingText
                         }
                       >
-                        Admin verification and
-                        assignment will appear here
-                        once available.
+                        Responder updates will appear here after
+                        a volunteer accepts the assignment.
                       </Text>
                     </View>
                   ) : (
@@ -2885,6 +2997,8 @@ export default function MyCases() {
                     )
                   )}
                 </View>
+                  </View>
+                )}
               </View>
             );
           },
@@ -3016,9 +3130,9 @@ const styles =
       lineHeight: designUi.type.body.lineHeight, fontSize: designUi.type.body.fontSize, fontWeight: designUi.type.body.fontWeight,},
 
     caseCard: {
-      marginBottom: 18,
-      padding: 20,
-      borderRadius: 16,
+      marginBottom: 14,
+      padding: 21,
+      borderRadius: 14,
       borderWidth: 1,
       borderColor:
         "#DCE5EA",
@@ -3065,7 +3179,7 @@ const styles =
 
     statusBadgeText: {
       color: "#08786F",
-      fontSize: vsType.size.micro, fontFamily: vsType.family,
+      fontSize: vsType.size.meta, fontFamily: vsType.family,
       fontWeight: "800",
     },
 
@@ -3096,10 +3210,11 @@ const styles =
       letterSpacing: 0.8, lineHeight: designUi.type.meta.lineHeight,},
 
     metaValue: {
-      marginTop: 3,
-      color: "#173748",
-      fontSize: vsType.size.caption, fontFamily: vsType.family,
-      fontWeight: "800",
+      marginTop: 4,
+      color: "#183D35",
+      fontSize: vsType.size.body, fontFamily: vsType.family,
+      lineHeight: 20,
+      fontWeight: "700",
     },
 
     infoBlock: {
@@ -3115,10 +3230,10 @@ const styles =
       letterSpacing: 0.5, lineHeight: designUi.type.label.lineHeight,},
 
     infoText: {
-      marginTop: 4,
+      marginTop: 5,
       color: "#36515F",
-      fontSize: vsType.size.meta, fontFamily: vsType.family,
-      lineHeight: 18,
+      fontSize: vsType.size.body, fontFamily: vsType.family,
+      lineHeight: 22,
     },
 
     needsBox: {
@@ -3133,10 +3248,10 @@ const styles =
     },
 
     needsText: {
-      marginTop: 5,
+      marginTop: 7,
       color: "#36515F",
-      fontSize: vsType.size.caption, fontFamily: vsType.family,
-      lineHeight: 17,
+      fontSize: vsType.size.body, fontFamily: vsType.family,
+      lineHeight: 23,
     },
 
     evidenceRequestCard: {
@@ -3481,7 +3596,7 @@ const styles =
 
     volunteerName: {
       color: "#153646",
-      fontSize: vsType.size.label, fontFamily: vsType.family,
+      fontSize: vsType.size.body, fontFamily: vsType.family,
       fontWeight: "800",
     },
 
@@ -3762,4 +3877,73 @@ const styles =
       fontStyle: "italic",
       lineHeight: 16,
     },
+
+    // Scoped presentation styles for the resident report tracker.
+    reportToolbar: {
+      marginBottom: 16, padding: 18, borderWidth: 1, borderColor: "#DCE6E2",
+      borderRadius: 14, backgroundColor: "#FFFFFF", gap: 12,
+    },
+    reportToolbarHeading: {
+      flexDirection: "row", alignItems: "center", justifyContent: "space-between",
+      flexWrap: "wrap", gap: 8,
+    },
+    reportToolbarTitle: {
+      color: "#183C34", fontSize: 16, fontFamily: vsType.family, fontWeight: "700",
+    },
+    reportToolbarCount: { color: "#536B69", fontSize: 13, fontFamily: vsType.family },
+    reportControls: {
+      flexDirection: "row", alignItems: "center", justifyContent: "space-between",
+      flexWrap: "wrap", gap: 12,
+    },
+    reportFilters: { flexDirection: "row", flexWrap: "wrap", gap: 7 },
+    reportFilterChip: {
+      minHeight: 40, paddingHorizontal: 13, justifyContent: "center",
+      borderWidth: 1, borderColor: "#D8E3DF", borderRadius: 9, backgroundColor: "#FFFFFF",
+    },
+    reportFilterChipActive: { borderColor: "#176B52", backgroundColor: "#176B52" },
+    reportFilterText: {
+      color: "#526B67", fontSize: 13, fontFamily: vsType.family, fontWeight: "600",
+    },
+    reportFilterTextActive: { color: "#FFFFFF" },
+    reportSearchInput: {
+      minHeight: 42, minWidth: 205, maxWidth: 340, flexGrow: 1,
+      paddingHorizontal: 13, borderWidth: 1, borderColor: "#D8E3DF",
+      borderRadius: 9, color: "#183C34", backgroundColor: "#FAFCFB",
+      fontSize: 14, fontFamily: vsType.family,
+    },
+    reportShowingCount: { color: "#687E79", fontSize: 12, fontFamily: vsType.family },
+    statusBadgeClosed: { backgroundColor: "#EDF1F4", borderColor: "#D8E0E6" },
+    statusBadgeActive: { backgroundColor: "#E9F3FD", borderColor: "#CDE2F5" },
+    statusBadgeAttention: { backgroundColor: "#FFF3E6", borderColor: "#F4D5B3" },
+    nextUpdateBox: {
+      marginTop: 14, paddingHorizontal: 13, paddingVertical: 11,
+      borderLeftWidth: 3, borderLeftColor: "#176B52", borderRadius: 8,
+      backgroundColor: "#F1F7F4",
+    },
+    nextUpdateAttention: { borderLeftColor: "#B86C1C", backgroundColor: "#FFF7EB" },
+    nextUpdateLabel: {
+      color: "#216F56", fontSize: 11, fontFamily: vsType.family,
+      fontWeight: "700", letterSpacing: 0.6,
+    },
+    nextUpdateLabelAttention: { color: "#97540C" },
+    nextUpdateText: {
+      marginTop: 4, color: "#304C44", fontSize: 14,
+      fontFamily: vsType.family, lineHeight: 21,
+    },
+    detailsToggle: {
+      minHeight: 44, marginTop: 12, paddingHorizontal: 13,
+      borderWidth: 1, borderColor: "#C9DBD3", borderRadius: 9,
+      backgroundColor: "#FFFFFF", flexDirection: "row", alignItems: "center",
+      justifyContent: "space-between", gap: 12,
+    },
+    detailsToggleAttention: { borderColor: "#D7AD79" },
+    detailsToggleText: {
+      flexShrink: 1, color: "#176B52", fontFamily: vsType.family,
+      fontSize: 13, fontWeight: "700",
+    },
+    detailsToggleSymbol: {
+      color: "#176B52", fontSize: 20, fontFamily: vsType.family, fontWeight: "500",
+    },
+    detailsBody: { marginTop: 6 },
+    fullReference: { marginTop: 10, color: "#647985", fontSize: 11, fontFamily: vsType.family },
   });
