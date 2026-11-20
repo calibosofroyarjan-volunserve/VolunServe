@@ -1,0 +1,58 @@
+name: Validate Auth Redirect Recovery - NO DEPLOY
+on:
+  push:
+    branches:
+      - fix/auth-link-redirect-session-recovery-20261120
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  test-auth-session:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      CI: 'true'
+      EXPO_NO_TELEMETRY: '1'
+      EXPO_PUBLIC_VOLUNSERVE_ENV: staging
+      EXPO_PUBLIC_FIREBASE_API_KEY: test-staging-only
+      EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN: staging-auth-tests.firebaseapp.com
+      EXPO_PUBLIC_FIREBASE_PROJECT_ID: staging-auth-tests
+      EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET: staging-auth-tests.firebasestorage.app
+      EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID: '0000000000'
+      EXPO_PUBLIC_FIREBASE_APP_ID: test-staging-only
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Lockfile dependencies
+        run: npm ci --no-audit --no-fund
+      - name: TypeScript compile
+        run: npx tsc --noEmit --incremental false
+      - name: Auth recovery and existing login/signup guards
+        run: |
+          set -euo pipefail
+          node scripts/test-auth-link-session-recovery.cjs
+          node scripts/test-unified-login-routing.cjs
+          node scripts/test-login-ui-release.cjs
+          node scripts/test-signup-email-first-middle-optional.cjs
+          node scripts/test-route-entrypoints.cjs
+          node scripts/test-profile-certificates-account-menu.cjs
+      - name: Confirm no auth role or backend edits
+        run: |
+          set -euo pipefail
+          node - <<'NODE'
+          const assert=require('node:assert/strict'),cp=require('node:child_process');
+          const source='1a9e206bdfea2167b205ce6eec168757323a8e9f';
+          const changes=cp.execFileSync('git',['diff','--name-status','--no-renames',source,'HEAD'],{encoding:'utf8'}).trim().split('\n').filter(Boolean);
+          const allowed=['app/_layout.tsx','app/login.web.tsx','lib/useUserSession.ts',
+            'scripts/test-auth-link-session-recovery.cjs',
+            '.github/workflows/validate-auth-redirect-recovery-no-deploy-20261120.yml'];
+          assert.deepEqual(changes.map(v=>v.split('\t')[1]).sort(),allowed.sort());
+          assert(changes.every(v=>/^[AM]\t/.test(v)));
+          console.log('PASS: no email templates, signup, Firebase, Firestore, Functions or permission modules modified');
+          NODE
