@@ -15,7 +15,11 @@ const server=http.createServer((request,response)=>{
  if (!rel) rel="index.html";
  const dest=path.resolve(root,rel);
  if(!dest.startsWith(root+path.sep)){response.writeHead(403);response.end();return;}
- const file=fs.existsSync(dest)&&fs.statSync(dest).isFile()?dest:path.join(root,"index.html");
+ // Expo Router static export writes community-events.html, while client routes
+ // must remain extensionless (/community-events) to match route definitions.
+ const candidate=fs.existsSync(dest)&&fs.statSync(dest).isFile()?dest:
+   (!path.extname(dest)&&fs.existsSync(dest+".html")?dest+".html":path.join(root,"index.html"));
+ const file=candidate;
  response.setHeader("content-type",mimetypes[path.extname(file)]||"application/octet-stream");
  fs.createReadStream(file).pipe(response);
 });
@@ -44,7 +48,7 @@ async function main(){
       // Absolutely no live Firestore, Auth, Google or other external requests.
       route.abort();
     });
-    await page.goto("http://127.0.0.1:4177/community-events.html",{waitUntil:"domcontentloaded",timeout:30000});
+    await page.goto("http://127.0.0.1:4177/community-events",{waitUntil:"domcontentloaded",timeout:30000});
     await page.waitForTimeout(4000);
     const body=await page.locator("body").innerText();
     // Always save a diagnostic before assertions, including blank or login pages.
