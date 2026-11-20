@@ -48,8 +48,12 @@ async function main(){
       // Absolutely no live Firestore, Auth, Google or other external requests.
       route.abort();
     });
-    await page.goto("http://127.0.0.1:4177/community-events",{waitUntil:"domcontentloaded",timeout:30000});
-    await page.waitForTimeout(4000);
+    // Navigate like a real approved volunteer. This project has overlapping
+    // route-group exports; a direct anonymous deep link can resolve to Home.
+    await page.goto("http://127.0.0.1:4177/",{waitUntil:"domcontentloaded",timeout:30000});
+    await page.getByText("Community Events",{exact:true}).first().waitFor({state:"visible",timeout:12000});
+    await page.getByText("Community Events",{exact:true}).first().click();
+    await page.waitForTimeout(2500);
     const body=await page.locator("body").innerText();
     // Always save a diagnostic before assertions, including blank or login pages.
     const diagnosticPath=path.join(screens,`diagnostic-community-events-${width}.png`);
