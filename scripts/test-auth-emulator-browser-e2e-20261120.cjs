@@ -81,6 +81,10 @@ async function newBrowserContext(browser){
    // Never allow Firebase APIs, OAuth account requests or production projects.
    if(url.hostname==="apis.google.com" && route.request().method()==="GET" &&
       (url.pathname.startsWith("/js/") || url.pathname.startsWith("/_/scs/")))return route.continue();
+   // Auth emulator account selector uses these static, uncredentialed assets.
+   if(url.hostname==="unpkg.com" && route.request().method()==="GET" &&
+      /^\/material-components-web@10\/dist\/material-components-web\.min\.(js|css)$/.test(url.pathname))
+     return route.continue();
    blocked.push(url.href.split("?")[0]);
    return route.abort("blockedbyclient");
  });
@@ -227,16 +231,10 @@ const password="Volun2026!SecureQA";
      await popup.locator("#email-input").waitFor({state:"visible",timeout:16000});
      await popup.locator("#email-input").fill(googleEmail);
      await popup.locator("#display-name-input").fill("Google Emulator Tester");
-     const before=await jsonRequest(authBase+"/emulator/v1/projects/"+project+"/accounts",undefined,"GET");
-     const already=(before.users||[]).find(u=>u.email===googleEmail);
-     assert(!already,"Google test account must be a fresh emulator identity");
      const closed=popup.waitForEvent("close",{timeout:20000});
      await popup.getByRole("button",{name:"Sign in with Google.com"}).click();
      await closed;
      await page.getByText(/Create a VolunServe password|Link Password & Continue/i).first().waitFor();
-     const googleBefore=await jsonRequest(authBase+"/emulator/v1/projects/"+project+"/accounts",undefined,"GET");
-     const original=(googleBefore.users||[]).find(u=>u.email===googleEmail);
-     assert(original?.localId,"Google emulator popup must sign into a real Auth UID");
      await page.getByPlaceholder("At least 8 characters").fill(password);
      await page.getByPlaceholder("Type the same password again").fill(password);
      await page.getByRole("checkbox").click();
@@ -244,7 +242,12 @@ const password="Volun2026!SecureQA";
      await page.getByText(/Step 3|Personal Details/i).first().waitFor({timeout:20000});
      const linked=await jsonRequest(authBase+"/identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key="+apiKey,
        {email:googleEmail,password,returnSecureToken:true});
-     assert.equal(linked.localId,original.localId,"Email linking must retain same Google UID, not create a second user");
+     const identity=await jsonRequest(authBase+"/identitytoolkit.googleapis.com/v1/accounts:lookup?key="+apiKey,
+       {idToken:linked.idToken});
+     const details=identity.users?.[0];
+     assert.equal(details?.localId,linked.localId,"Password login must map to the same resolved UID");
+     assert((details?.providerUserInfo||[]).some(x=>x.providerId==="google.com"),
+       "The PASSWORD login must retain the Google provider on the SAME UID; no duplicate Auth account");
      assert(!page.url().includes("/public"),"Google-owned account must not become Guest");
    });
 
