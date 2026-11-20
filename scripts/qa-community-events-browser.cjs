@@ -65,6 +65,23 @@ async function main(){
       bodyExcerpt:body.slice(0,1600),pageErrors:errors,
       htmlExcerpt:(await page.locator("body").innerHTML()).slice(0,850)};
     console.log("QA_BROWSER_DIAGNOSTICS",JSON.stringify(debug));
+    // Expo's ScrollView can retain the previous screen's scroll offset when
+    // navigating from Home. Record the initial state and reset scroll position
+    // for a comparable top-of-page screenshot at every viewport. The app
+    // source is not modified by this QA-only screenshot normalization.
+    const scrollInfo=await page.evaluate(()=>{
+      const active=Array.from(document.querySelectorAll("*")).filter((el)=>el.scrollTop>1)
+        .map((el)=>({tag:el.tagName,top:Math.round(el.scrollTop),
+          client:el.clientHeight,total:el.scrollHeight})).slice(0,12);
+      for(const el of Array.from(document.querySelectorAll("*"))) {
+        if(el.scrollTop>0)el.scrollTop=0;
+        if(el.scrollLeft>0)el.scrollLeft=0;
+      }
+      window.scrollTo(0,0);
+      return active;
+    });
+    console.log("QA_BROWSER_SCROLL_AT_ENTRY",JSON.stringify({width,scrollInfo}));
+    await page.waitForTimeout(300);
     assert(body.includes("QA MOCK PREVIEW"),"Mock preview label missing; inspect diagnostics screenshot and logs");
     assert(body.includes("Community Events"),"Community Events page not visible");
     assert(body.includes("Upcoming"),"Upcoming tab missing");
