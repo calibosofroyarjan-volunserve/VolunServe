@@ -1,0 +1,37 @@
+name: QA My Emergency Reports UI (NO DEPLOY)
+on:
+  push:
+    branches: [qa/my-reports-live-20261120]
+    paths:
+      - '.github/workflows/qa-my-reports-live-20261120.yml'
+      - 'app/(tabs)/my-cases.tsx'
+permissions:
+  contents: read
+jobs:
+  resident-my-reports:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      CI: 'true'
+      EXPO_NO_TELEMETRY: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install exact locked dependencies
+        run: npm ci --no-audit --no-fund
+      - name: TypeScript check
+        run: npx tsc --noEmit --incremental false
+      - name: Existing report and cross-role UI safeguards
+        run: |
+          node scripts/test-embedded-emergency-map-navigation.cjs
+          node scripts/test-portal-resident-volunteer-ui-flow.cjs
+          node scripts/test-login-ui-release.cjs
+      - name: Export Expo web without deploying
+        run: npx expo export --platform web --clear
+      - name: Explicitly no production changes
+        run: echo "PASS - no Firebase Hosting, Firestore, Render or database modifications"
