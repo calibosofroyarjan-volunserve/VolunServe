@@ -8,7 +8,7 @@ import * as ImagePicker from "expo-image-picker";
 import CommunityEventPinPicker from "../../components/CommunityEventPinPicker";
 import CommunityEventLiveLocation from "../../components/CommunityEventLiveLocation";
 import CommunityEventRoadMap from "../../components/CommunityEventRoadMap";
-import CommunityEventRoster from "../../components/volunteers/CommunityEventRoster";
+import CommunityEventRoster, { CommunityEventAvatarPreview } from "../../components/volunteers/CommunityEventRoster";
 import { router } from "expo-router";
 import {
   collection,
@@ -2234,13 +2234,10 @@ export default function CommunityEventsScreen() {
                   <Text style={styles.lockedPrimaryActionText}>{busyEvent === event.id ? "Joining..." : "Join Event"}</Text>
                 </Pressable>
               )}
-              {isVolunteer && (
-                <Pressable accessibilityRole="button" accessibilityLabel={`View joined volunteers for ${event.title}`}
-                  onPress={() => { setRosterFocusId(event.id); setParticipantsModalEventId(event.id); }}
-                  style={styles.eventParticipantsButton}>
-                  <Ionicons name="people-outline" size={14} color="#087C69"/>
-                  <Text style={styles.eventParticipantsButtonText}>View Participants</Text>
-                </Pressable>
+              {isVolunteer && user && (
+                <CommunityEventAvatarPreview eventId={event.id} viewer={user}
+                  participantsCount={Number(event.participantsCount || 0)}
+                  onPress={() => { setRosterFocusId(event.id); setParticipantsModalEventId(event.id); }}/>
               )}
               {joined && <View style={styles.lockedJoined}>
                 <Ionicons name="checkmark-circle" color="#078877" size={14} />
