@@ -53,11 +53,13 @@ test("QA branch is a direct descendant of observed Hosting source", async () => 
   assert.equal(result.commits.at(-1)?.sha, HEAD, "Comparison head differs from QA commit");
 });
 
-test("Only two frontend files and two QA-only files differ from production", async () => {
+test("Only two frontend files and QA-only fixtures/workflow differ from production", async () => {
   const result = await comparison();
   const allowed = new Map([
     [SCREEN, "modified"], [ROSTER, "modified"],
     [QA_SCRIPT, "added"], [QA_WORKFLOW, "added"],
+    ["scripts/test-community-events-rules-production-qa.cjs", "added"],
+    ["scripts/test-admin-volunteer-firestore-production-qa.cjs", "added"],
   ]);
   assert.equal(result.files?.length, allowed.size, "Unexpected source file count");
   for (const item of result.files) {
