@@ -2319,6 +2319,12 @@ export default function CommunityEventsScreen() {
             </View>
           </View>
         </View>
+        {isVolunteer && event.status === "active" && eventScheduleHasPassed(event) && (
+          <View style={styles.eventStaleScheduleNotice}>
+            <Ionicons name="information-circle-outline" size={16} color="#9D712D"/>
+            <Text style={styles.eventStaleScheduleText}>The scheduled time has passed, but this event is still marked Ongoing by Admin. Confirm the current schedule before attending.</Text>
+          </View>
+        )}
         {isVolunteer && expiredUpcoming && !joined && (
           <View style={[styles.webAttendanceFeedbackBox, styles.webAttendanceFeedbackError]}>
             <Ionicons name="calendar-outline" color="#B42318" size={18}/>
@@ -2711,7 +2717,7 @@ export default function CommunityEventsScreen() {
                     style={styles.lockedSortButton}>
                     <Ionicons name="calendar-outline" size={15} color="#087E74" />
                     <View><Text style={styles.lockedSortCaption}>Scheduled date</Text>
-                      <Text style={styles.lockedSortValue}>{dateSort === "soonest" ? "Nearest Date" : "Newest First"}</Text></View>
+                      <Text style={styles.lockedSortValue}>{dateSort === "soonest" ? "Earliest Schedule" : "Latest Schedule"}</Text></View>
                     <Ionicons name="swap-vertical-outline" size={15} color="#087E74" />
                   </Pressable>}
                 </View>
@@ -5661,6 +5667,8 @@ const styles = StyleSheet.create({
   lockedEventMetaText: { flex: 1, minWidth: 0, color: "#617987", fontSize: 13, lineHeight: 19 },
   eventParticipantsButton: { paddingVertical: 8, paddingHorizontal: 10, flexDirection: "row", alignItems: "center", gap: 5, backgroundColor: "#F2FAF7", borderRadius: 8, borderColor: "#B8DACE", borderWidth: 1 },
   eventParticipantsButtonText: { fontSize: 12, fontWeight: "700", color: "#087C69", fontFamily: vsType.family },
+  eventStaleScheduleNotice: { flexDirection: "row", alignItems: "flex-start", gap: 8, backgroundColor: "#FFFAEC", borderTopWidth: 1, borderTopColor: "#F3E9D0", paddingHorizontal: 13, paddingVertical: 9 },
+  eventStaleScheduleText: { flex: 1, fontFamily: vsType.family, fontSize: 12, lineHeight: 18, color: "#80632C" },
   eventNewPill: { backgroundColor: "#DCF4E6", paddingHorizontal: 7, paddingVertical: 4, borderRadius: 6 },
   eventNewPillText: { fontSize: 10, color: "#07674B", fontWeight: "800" },
   eventCertificateButton: { marginTop: 12, backgroundColor: "#007B61", padding: 13, borderRadius: 10, flexDirection: "row", justifyContent: "center", alignItems: "center", gap: 9 },
