@@ -440,7 +440,7 @@ export default function AdminLayout() {
               onPress={() => {
                 setProfileMenuOpen(false);
                 setMobileMenuOpen(true);
-              }
+              }}
             >
               <Ionicons
                 name="menu"
