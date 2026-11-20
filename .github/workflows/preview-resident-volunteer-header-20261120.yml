@@ -1,0 +1,130 @@
+name: Resident Volunteer Header Temporary Preview (NO LIVE DEPLOY)
+on:
+  push:
+    branches: [fix/resident-actions-current-live-20261120]
+    paths: ['.github/workflows/preview-resident-volunteer-header-20261120.yml']
+permissions:
+  contents: read
+concurrency:
+  group: resident-volunteer-header-preview-20261120
+  cancel-in-progress: false
+jobs:
+  preview-only:
+    if: github.repository == 'calibosofroyarjan-volunserve/VolunServe' && github.ref == 'refs/heads/fix/resident-actions-current-live-20261120'
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    environment: production
+    env:
+      CI: 'true'
+      EXPO_NO_TELEMETRY: '1'
+      EXPO_PUBLIC_VOLUNSERVE_ENV: production
+      EXPO_PUBLIC_IDENTITY_VERIFICATION_API_URL: https://volunserve.onrender.com
+      BASE_SHA: 1a9e206bdfea2167b205ce6eec168757323a8e9f
+      SITE: volunserve-3aa5b
+      VOLUNSERVE_HOSTING_URL: https://volunserve.com
+    steps:
+      - name: Checkout isolated candidate without submodules
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: false
+      - name: Fail closed unless candidate changes only shared header and tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          git merge-base --is-ancestor "$BASE_SHA" HEAD
+          git diff --check "$BASE_SHA" HEAD
+          git diff --name-status --no-renames "$BASE_SHA" HEAD > /tmp/header-preview-paths.txt
+          node <<'NODE'
+          const assert=require('node:assert/strict');
+          const fs=require('node:fs');
+          const allowed=new Set([
+            'app/(tabs)/_layout.tsx',
+            'components/layout/ResidentDesktopActions.tsx',
+            'scripts/test-resident-volunteer-sidebar.cjs',
+            'scripts/test-volunteer-donations-sidebar-removal.cjs',
+            '.github/workflows/preview-resident-volunteer-header-20261120.yml',
+          ]);
+          const entries=fs.readFileSync('/tmp/header-preview-paths.txt','utf8').trim().split('\n');
+          const paths=new Set();
+          for(const entry of entries){
+            const [kind,file]=entry.split('\t');
+            assert.ok(kind==='A'||kind==='M','BLOCKED destructive change '+entry);
+            assert.ok(allowed.has(file),'BLOCKED unrelated/outdated file '+file);
+            paths.add(file);
+          }
+          assert.equal(paths.size,allowed.size,'BLOCKED unexpected diff scope');
+          for(const file of allowed)assert.ok(paths.has(file),'BLOCKED missing '+file);
+          console.log('PASS exact 2 UI files, 2 QA scripts and preview workflow only');
+          NODE
+          git diff --quiet "$BASE_SHA" HEAD -- backend functions firestore.rules storage.rules lib/firebase.ts lib/firebaseAuth.ts \
+            app/login.tsx app/signup.tsx app/_layout.tsx firebase.json app.json package.json package-lock.json
+      - name: Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Check live Hosting has not moved (READ ONLY)
+        shell: bash
+        run: |
+          export VOLUNSERVE_EXPECTED_SHA="$BASE_SHA"
+          node scripts/check-live-hosting.cjs
+      - name: Install locked dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Resident + Volunteer sidebar, profile and map regressions
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --test scripts/test-resident-volunteer-sidebar.cjs
+          node --test scripts/test-volunteer-donations-sidebar-removal.cjs
+          node --test scripts/test-profile-certificates-account-menu.cjs
+          node --test scripts/test-embedded-emergency-map-navigation.cjs
+      - name: TypeScript
+        run: npx tsc --noEmit --incremental false
+      - name: Export browser candidate without production deployment
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx expo export --platform web --clear
+          node scripts/verify-hosting-release.cjs
+          node - <<'NODE'
+          const fs=require('node:fs'),assert=require('node:assert/strict');
+          const marker=JSON.parse(fs.readFileSync('dist/volunserve-release.json','utf8'));
+          assert.equal(marker.revision,process.env.GITHUB_SHA);
+          assert.equal(marker.firebaseProject,process.env.SITE);
+          console.log('PASS static web candidate matches current PR revision');
+          NODE
+      - name: Verify live has not changed during build (READ ONLY)
+        shell: bash
+        run: |
+          export VOLUNSERVE_EXPECTED_SHA="$BASE_SHA"
+          node scripts/check-live-hosting.cjs
+      - name: Configure credential for preview channel only
+        shell: bash
+        env:
+          FIREBASE_SA: ${{ secrets.VOLUNSERVE_PRODUCTION_HOSTING_SERVICE_ACCOUNT }}
+        run: |
+          set -euo pipefail
+          test -n "$FIREBASE_SA" || { echo "::error::Missing Hosting key: abort preview"; exit 1; }
+          node <<'NODE'
+          const fs=require('node:fs');
+          const credential=JSON.parse(process.env.FIREBASE_SA);
+          if(credential.type!=='service_account'||credential.project_id!==process.env.SITE||
+             !credential.client_email||!credential.private_key)throw Error('BLOCKED wrong Hosting credential');
+          fs.writeFileSync(process.env.RUNNER_TEMP+'/resident-header-preview-key.json',process.env.FIREBASE_SA,{mode:0o600});
+          console.log('PASS project id verified, no credentials logged');
+          NODE
+          echo "GOOGLE_APPLICATION_CREDENTIALS=$RUNNER_TEMP/resident-header-preview-key.json" >> "$GITHUB_ENV"
+      - name: Publish preview channel ONLY, expiring in 1 day
+        shell: bash
+        run: |
+          set -euo pipefail
+          export VOLUNSERVE_EXPECTED_SHA="$BASE_SHA"
+          node scripts/check-live-hosting.cjs
+          npx firebase-tools hosting:channel:deploy resident-header-qa-20261120 \
+            --expires 1d --project "$SITE" --non-interactive
+          echo "Temporary preview created. No production Hosting release."
+          node scripts/check-live-hosting.cjs
+      - name: Status
+        if: always()
+        run: echo "NO LIVE DEPLOYMENT. No backend, Firestore, Auth, Functions or Render writes."
