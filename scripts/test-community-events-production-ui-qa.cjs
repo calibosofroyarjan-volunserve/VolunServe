@@ -60,6 +60,8 @@ test("Only two frontend files and QA-only fixtures/workflow differ from producti
     [QA_SCRIPT, "added"], [QA_WORKFLOW, "added"],
     ["scripts/test-community-events-rules-production-qa.cjs", "added"],
     ["scripts/test-admin-volunteer-firestore-production-qa.cjs", "added"],
+    ["scripts/qa-community-events-preview-fixture.cjs", "added"],
+    ["scripts/qa-community-events-browser.cjs", "added"],
   ]);
   assert.equal(result.files?.length, allowed.size, "Unexpected source file count");
   for (const item of result.files) {
