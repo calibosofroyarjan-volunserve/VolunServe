@@ -1142,6 +1142,9 @@ export default function CommunityEventsScreen() {
   }, [section, isVolunteer, myEvents, filteredEvents, dateSort, eventListFilter]);
   const pageSize = 5;
   const totalEventPages = Math.max(1, Math.ceil(displayEvents.length / pageSize));
+  // Display a short window of page numbers, never hundreds of buttons.
+  const firstVisiblePage = Math.max(1, Math.min(eventPage - 2, totalEventPages - 4));
+  const visiblePageCount = Math.min(totalEventPages, 5);
   useEffect(() => {
     setEventPage(1);
     setExpandedEvent(null);
@@ -2657,7 +2660,7 @@ export default function CommunityEventsScreen() {
                           onPress={() => setEventPage(page => Math.max(1, page - 1))}>
                           <Ionicons name="chevron-back-outline" size={16} color="#365D63"/><Text style={styles.eventsPageText}>Previous</Text>
                         </Pressable>
-                        {Array.from({ length: totalEventPages }, (_, index) => index + 1).map(page => (
+                        {Array.from({ length: visiblePageCount }, (_, index) => firstVisiblePage + index).map(page => (
                           <Pressable key={page} accessibilityRole="button" accessibilityState={{ selected: eventPage === page }}
                             style={[styles.eventsPageNumber, eventPage === page && styles.eventsPageNumberActive]}
                             onPress={() => setEventPage(page)}>
@@ -5504,7 +5507,7 @@ const styles = StyleSheet.create({
   lockedColumns: { flexDirection: "row", alignItems: "flex-start", width: "100%", gap: 18 },
   lockedColumnsStack: { flexDirection: "column" },
   lockedMain: { flex: 1, minWidth: 0 },
-  lockedRail: { width: 440, maxWidth: "100%", flexShrink: 0, gap: 14 },
+  lockedRail: { width: 410, maxWidth: "100%", flexShrink: 0, gap: 14 },
   lockedRailStack: { width: "100%" },
   lockedHeroGradient: { minHeight: 196, flexDirection: "row", paddingHorizontal: 26, paddingVertical: 24, alignItems: "center" },
   lockedHeroWords: { flex: 1, minWidth: 0, paddingRight: 12, zIndex: 3 },
@@ -5585,7 +5588,7 @@ const styles = StyleSheet.create({
   lockedJoinedText: { color: "#077C69", fontSize: vsType.size.micro, fontWeight: "800" },
   lockedAboutCard: { backgroundColor: "white", borderColor: "#E1EBE8", borderWidth: 1, borderRadius: 13, padding: 16, marginTop: 14, gap: 9 },
   lockedAboutText: { color: "#567183", fontSize: vsType.size.meta, lineHeight: 20 },
-  lockedRailCard: { width: "100%", minWidth: 0, backgroundColor: "white", borderRadius: 14, padding: 19, borderWidth: 1, borderColor: "#E1EBE9", overflow: "hidden" },
+  lockedRailCard: { width: "100%", minWidth: 0, backgroundColor: "white", borderRadius: 14, padding: 15, borderWidth: 1, borderColor: "#E1EBE9", overflow: "hidden" },
   lockedAttendanceRail: { backgroundColor: "#FFFFFF", borderColor: "#D7E6E1", borderWidth: 1 },
   lockedEventMapCard: { backgroundColor: "#F5FAF9", borderRadius: 12, borderWidth: 1, borderColor: "#D6EAE2", padding: 16, marginTop: 4, gap: 4 },
   lockedAttendanceOverview: { backgroundColor: "#F8FBFA", borderRadius: 11, padding: 12, gap: 9, marginTop: 12, marginBottom: 5 },
