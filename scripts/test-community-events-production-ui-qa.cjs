@@ -1,12 +1,11 @@
 "use strict";
 /**
  * Read-only production-source contract checks.
- * No Firebase credentials, Hosting deployments, login, data writes, or network.
+ * Read-only GitHub API comparisons only. No Firebase credentials, Hosting deployments, login, or data writes.
  * Run on the candidate descended from the observed Hosting release marker.
  */
 const { test } = require("node:test");
 const assert = require("node:assert/strict");
-const { execFileSync } = require("node:child_process");
 const fs = require("node:fs");
 
 const BASE = "eef240c29940cc2772c4467a5f7649ae8938b141";
@@ -14,11 +13,29 @@ const SCREEN = "app/(tabs)/community-events.tsx";
 const ROSTER = "components/volunteers/CommunityEventRoster.tsx";
 const QA_SCRIPT = "scripts/test-community-events-production-ui-qa.cjs";
 const QA_WORKFLOW = ".github/workflows/qa-community-events-production-ui-no-deploy-20261121.yml";
-const git = (...args) => execFileSync("git", args, { encoding: "utf8" }).trim();
 const read = path => fs.readFileSync(path, "utf8");
 const current = read(SCREEN);
 const roster = read(ROSTER);
-const baseline = git("show", `${BASE}:${SCREEN}`);
+const GH_TOKEN = process.env.GH_TOKEN || process.env.GITHUB_TOKEN;
+const HEAD = process.env.GITHUB_SHA || process.env.SOURCE_SHA;
+const REPO = "calibosofroyarjan-volunserve/VolunServe";
+assert.ok(GH_TOKEN && /^[0-9a-f]{40}$/.test(HEAD || ""), "Pinned SHA and read-only GitHub token are required.");
+async function githubApi(route) {
+  const response = await fetch(`https://api.github.com/repos/${REPO}/${route}`, {
+    headers: { Authorization: `Bearer ${GH_TOKEN}`, Accept: "application/vnd.github+json",
+      "User-Agent": "VolunServe-Read-Only-QA" },
+    signal: AbortSignal.timeout(25000),
+  });
+  assert.ok(response.ok, `GitHub read-only source verification failed: ${route}, HTTP ${response.status}`);
+  return response.json();
+}
+let comparisonPromise = null, baselinePromise = null;
+const comparison = () => comparisonPromise ||= githubApi(`compare/${BASE}...${HEAD}`);
+const baselineSource = () => baselinePromise ||= githubApi(`contents/${SCREEN}?ref=${BASE}`)
+  .then(file => {
+    assert.equal(file.encoding, "base64");
+    return Buffer.from(file.content.replaceAll("\\n", ""), "base64").toString("utf8");
+  });
 const assertHas = (body, text) => assert.ok(body.includes(text), `Missing expected source feature: ${text}`);
 function functionBody(body, marker) {
   const begin = body.indexOf(marker);
@@ -28,31 +45,39 @@ function functionBody(body, marker) {
   return body.slice(begin, end + 5);
 }
 
-test("QA branch is a direct descendant of observed Hosting source", () => {
-  git("merge-base", "--is-ancestor", BASE, "HEAD");
-  assert.equal(git("merge-base", BASE, "HEAD"), BASE);
+test("QA branch is a direct descendant of observed Hosting source", async () => {
+  const result = await comparison();
+  assert.equal(result.status, "ahead", "Candidate must descend from production marker");
+  assert.equal(result.behind_by, 0);
+  assert.equal(result.base_commit.sha, BASE);
+  assert.equal(result.commits.at(-1)?.sha, HEAD, "Comparison head differs from QA commit");
 });
 
-test("Only the two event frontend files and QA-only files differ", () => {
-  const touched = git("diff", "--name-status", "--no-renames", BASE, "HEAD").split("\n")
-    .filter(Boolean)
-    .map(line => line.split("\t"));
-  const expected = new Map([
-    [SCREEN, "M"], [ROSTER, "M"], [QA_SCRIPT, "A"], [QA_WORKFLOW, "A"],
+test("Only two frontend files and two QA-only files differ from production", async () => {
+  const result = await comparison();
+  const allowed = new Map([
+    [SCREEN, "modified"], [ROSTER, "modified"],
+    [QA_SCRIPT, "added"], [QA_WORKFLOW, "added"],
   ]);
-  assert.equal(touched.length, expected.size, "Unexpected file count; fail closed");
-  for (const [status, path] of touched) {
-    assert.equal(expected.get(path), status, `Unreviewed file/status: ${status} ${path}`);
+  assert.equal(result.files?.length, allowed.size, "Unexpected source file count");
+  for (const item of result.files) {
+    assert.equal(allowed.get(item.filename), item.status,
+      `Blocked unreviewed file/status: ${item.status} ${item.filename}`);
   }
-  for (const critical of ["backend/", "functions/", "identity-ai/", "firestore.rules", "storage.rules", "firebase.json", "app.json", "package.json", "package-lock.json", "lib/firebaseAuth.ts"]) {
-    assert.ok(!touched.some(([,path]) => path === critical || (critical.endsWith("/") && path.startsWith(critical))), `Protected dependency changed: ${critical}`);
+  for (const critical of ["backend/", "functions/", "identity-ai/", "firestore.rules",
+    "storage.rules", "firebase.json", "app.json", "package.json", "package-lock.json",
+    "lib/firebaseAuth.ts"]) {
+    assert.ok(!result.files.some(({ filename }) =>
+      filename === critical || (critical.endsWith("/") && filename.startsWith(critical))),
+      `Protected dependency changed: ${critical}`);
   }
 });
 
-test("Production RSVP and self attendance transaction function bodies remain identical", () => {
+test("Production RSVP and self attendance transaction bodies remain unchanged", async () => {
+  const baseline = await baselineSource();
   for (const marker of ["  const respondToEvent =", "  const recordSelfAttendance ="]) {
     assert.equal(functionBody(current, marker), functionBody(baseline, marker),
-      `Blocked change to live transaction function ${marker}`);
+      `Production core transaction changed: ${marker}`);
   }
 });
 
@@ -100,7 +125,7 @@ test("Joined volunteers remain read-only, scoped to chosen event, with public pr
 });
 
 test("Existing backend read-only roster route and auth guard are untouched", () => {
-  assert.equal(git("diff", "--name-only", BASE, "HEAD", "--", "backend/communityEventRoster.js"), "");
+  // The strict source comparison above prohibits backend changes.
   const backend = read("backend/communityEventRoster.js");
   for (const marker of ["requireFirebaseUser", 'volunteerStatus !== "approved"',
     'viewer?.activeMode !== "volunteer"', "isApprovedAccount(viewer)",
