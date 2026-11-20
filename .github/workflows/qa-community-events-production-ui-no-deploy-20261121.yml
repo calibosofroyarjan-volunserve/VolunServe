@@ -107,5 +107,25 @@ jobs:
           if-no-files-found: error
           retention-days: 3
           compression-level: 6
+      - name: Generate SYNTHETIC preview only AFTER real web artifact is archived
+        run: node scripts/qa-community-events-preview-fixture.cjs
+      - name: Compile isolated mocked Community Events UI (NO deploy)
+        run: |
+          npx tsc --noEmit --incremental false
+          npx expo export --platform web --clear
+      - name: Install local Chromium for mock-only UI screenshot and interaction checks
+        run: |
+          npm install --no-save --no-package-lock playwright
+          npx playwright install --with-deps chromium
+      - name: Test synthetic Community Events UI at desktop and mobile viewports
+        run: node scripts/qa-community-events-browser.cjs
+      - name: Upload MOCK-ONLY browser QA screenshots (NO deploy)
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: community-events-mock-browser-screenshots
+          path: qa-screenshots/
+          if-no-files-found: error
+          retention-days: 3
       - name: Confirm no deployment was requested
-        run: echo 'QA complete — local artifact only; no production Hosting, rules, Auth, Functions, Render or Firestore changes.'
+        run: echo 'QA complete — original real artifact plus separately mocked screenshots; no production Hosting, rules, Auth, Functions, Render or Firestore changes.'
