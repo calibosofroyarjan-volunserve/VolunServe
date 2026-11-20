@@ -889,6 +889,9 @@ export default function CommunityEventsScreen() {
 
   const [expandedEvent, setExpandedEvent] =
     useState<string | null>(null);
+  // Participant selection is independent of Event Details and My Attendance.
+  const [rosterFocusId, setRosterFocusId] = useState<string | null>(null);
+  const [participantsModalEventId, setParticipantsModalEventId] = useState<string | null>(null);
 
   // GPS is requested only when the volunteer clicks the route preview button.
   // Never written to Firestore or saved to local storage.
@@ -1142,6 +1145,8 @@ export default function CommunityEventsScreen() {
   useEffect(() => {
     setEventPage(1);
     setExpandedEvent(null);
+    setRosterFocusId(null);
+    setParticipantsModalEventId(null);
   }, [section, category, search, dateSort, eventListFilter, residentBarangayFilter, residentStatusFilter]);
   useEffect(() => {
     setEventPage(current => Math.min(current, totalEventPages));
@@ -1152,6 +1157,8 @@ export default function CommunityEventsScreen() {
   const selectedParticipation = selectedEvent ? participationMap.get(selectedEvent.id) : undefined;
   const selectedJoined = selectedParticipation?.status === "joined";
   const selectedOwned = !!selectedEvent && selectedEvent.proposedBy === user?.uid;
+  const selectedRosterEvent = events.find(event => event.id === rosterFocusId) || displayEvents[0] || selectedEvent;
+  const participantsModalEvent = events.find(event => event.id === participantsModalEventId);
 
   const setValue = <K extends keyof ProposalForm>(
     field: K,
@@ -2150,6 +2157,7 @@ export default function CommunityEventsScreen() {
     const selected = detailsOpen;
     const cover = eventCover(event);
     const toggleDetails = () => {
+      setRosterFocusId(event.id);
       setExpandedEvent(detailsOpen ? null : event.id);
       setRouteEventId(null);
       setRouteOrigin(null);
@@ -2223,7 +2231,7 @@ export default function CommunityEventsScreen() {
               )}
               {isVolunteer && (
                 <Pressable accessibilityRole="button" accessibilityLabel={`View joined volunteers for ${event.title}`}
-                  onPress={() => { setExpandedEvent(event.id); setAttendanceConfirmation(null); }}
+                  onPress={() => { setRosterFocusId(event.id); setParticipantsModalEventId(event.id); }}
                   style={styles.eventParticipantsButton}>
                   <Ionicons name="people-outline" size={14} color="#087C69"/>
                   <Text style={styles.eventParticipantsButtonText}>View Participants</Text>
@@ -2801,9 +2809,9 @@ export default function CommunityEventsScreen() {
                     {!selectedParticipation?.attendanceVerified && <Text style={styles.webAttendanceNote}>Time In/Out uses server time. Admin/LGU verifies participation.</Text>}
                   </View>}
                   </>}
-                {webSideBySide && selectedEvent && user && (
-                  <CommunityEventRoster eventId={selectedEvent.id} viewer={user}
-                    participantsCount={Number(selectedEvent.participantsCount || 0)} compact />
+                {webSideBySide && selectedRosterEvent && user && (
+                  <CommunityEventRoster eventId={selectedRosterEvent.id} viewer={user}
+                    participantsCount={Number(selectedRosterEvent.participantsCount || 0)} compact />
                 )}
                 {isVolunteer && <View style={styles.lockedAttendanceOverview}>
                   <View style={styles.lockedAttendanceOverviewHeading}>
@@ -2958,6 +2966,28 @@ export default function CommunityEventsScreen() {
           </Pressable>
         )}
       </ScrollView>
+      )}
+      {Platform.OS === "web" && participantsModalEvent && user && (
+        <Modal visible transparent animationType="fade" onRequestClose={() => setParticipantsModalEventId(null)}>
+          <View style={styles.eventRosterBackdrop}>
+            <View style={styles.eventRosterModal}>
+              <View style={styles.eventRosterModalHeading}>
+                <View style={{flex:1,minWidth:0}}>
+                  <Text style={styles.eventRosterModalTitle}>Joined Volunteers</Text>
+                  <Text style={styles.eventRosterModalSubtitle} numberOfLines={2}>{participantsModalEvent.title}</Text>
+                </View>
+                <Pressable accessibilityRole="button" accessibilityLabel="Close joined volunteers"
+                  onPress={() => setParticipantsModalEventId(null)}>
+                  <Ionicons name="close-circle-outline" size={25} color="#607C85"/>
+                </Pressable>
+              </View>
+              <ScrollView style={{maxHeight:520}}>
+                <CommunityEventRoster eventId={participantsModalEvent.id} viewer={user}
+                  participantsCount={Number(participantsModalEvent.participantsCount || 0)}/>
+              </ScrollView>
+            </View>
+          </View>
+        </Modal>
       )}
       <Modal visible={Platform.OS === "web" && residentFilterPicker !== null} transparent animationType="fade" onRequestClose={()=>setResidentFilterPicker(null)}>
         <View style={styles.ruiFilterBackdrop}><View style={styles.ruiFilterModal}>
@@ -5684,6 +5714,11 @@ const styles = StyleSheet.create({
   eventsHeaderStatIcon: { width: 37, height: 37, borderRadius: 10, backgroundColor: "#E7F3EE", alignItems: "center", justifyContent: "center" },
   eventsHeaderStatValue: { fontFamily: vsType.family, color: "#153A3E", fontWeight: "800", fontSize: 22, lineHeight: 26 },
   eventsHeaderStatLabel: { fontFamily: vsType.family, color: "#6B8189", fontWeight: "600", fontSize: 12, lineHeight: 17 },
+  eventRosterBackdrop: { flex:1,backgroundColor:"rgba(7,34,40,0.55)",alignItems:"center",justifyContent:"center",padding:16 },
+  eventRosterModal: { width:"100%",maxWidth:570,maxHeight:"92%",borderRadius:16,backgroundColor:"#FFFFFF",padding:19 },
+  eventRosterModalHeading: { flexDirection:"row",alignItems:"center",gap:12,marginBottom:8 },
+  eventRosterModalTitle: { fontFamily:vsType.family,fontSize:20,fontWeight:"800",color:"#173E3B" },
+  eventRosterModalSubtitle: { fontFamily:vsType.family,fontSize:13,color:"#607982",marginTop:3 },
   eventsPager: { marginTop: 12, paddingTop: 12, flexDirection: "row", flexWrap: "wrap", gap: 12, alignItems: "center", justifyContent: "space-between" },
   eventsPagerCount: { fontFamily: vsType.family, fontSize: 12, color: "#667E86" },
   eventsPagerButtons: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 6 },
