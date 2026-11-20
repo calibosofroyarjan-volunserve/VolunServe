@@ -246,7 +246,9 @@ export interface SignupData {
 export const isApprovedProfile = (
   profile: UserProfile | null | undefined
 ) => {
-  if (!profile) {
+  // Legacy Guest Preview documents are not authenticated Resident accounts,
+  // regardless of an old status field or missing status.
+  if (!profile || String(profile.role || "").toLowerCase() === "guest") {
     return false;
   }
   return (
@@ -646,7 +648,8 @@ export const signUpUser = async (
 
 export const loginUser = async (
   email: string,
-  password: string
+  password: string,
+  options: { resumeIncompleteSignup?: boolean } = {}
 ) => {
   try {
     const userCredential =
@@ -666,13 +669,22 @@ export const loginUser = async (
     const profileSnapshot =
       await getDoc(profileRef);
     if (!profileSnapshot.exists()) {
-      await signOut(auth);
+      // Web email-first signup can resume this verified Auth UID in the wizard.
+      // Keep all protected pages blocked until a complete profile is written.
+      // Native/legacy callers retain their previous sign-out behavior.
+      if (!options.resumeIncompleteSignup) await signOut(auth);
       throw new Error(
         "No VolunServe profile was found for this account. Please register first."
       );
     }
     const profile =
       profileSnapshot.data() as UserProfile;
+    if (String(profile.role || "").toLowerCase() === "guest") {
+      await signOut(auth);
+      throw new Error(
+        "Guest Preview is read-only and cannot be used as a Resident account. Please contact an administrator about this legacy record."
+      );
+    }
     const status = profile.status;
     /**
      * Basic Accounts are valid active accounts because their status is
