@@ -2188,9 +2188,12 @@ export default function CommunityEventsScreen() {
                 <Text style={styles.lockedSlotsText}>{Math.max(0, Number(event.capacity || 0) - Number(event.participantsCount || 0))} slots left</Text>
               </View>
             </View>
-            <View style={styles.lockedSmallTag}>
-              <Ionicons name={categoryIcon(event.category)} color="#078477" size={13} />
-              <Text style={styles.lockedSmallTagText}>{event.category}</Text>
+            <View style={{flexDirection:"row",flexWrap:"wrap",alignItems:"center",gap:7}}>
+              <View style={styles.lockedSmallTag}>
+                <Ionicons name={categoryIcon(event.category)} color="#078477" size={13} />
+                <Text style={styles.lockedSmallTagText}>{event.category}</Text>
+              </View>
+              {isRecentlyPublished(event) && <View style={styles.eventNewPill}><Text style={styles.eventNewPillText}>NEW</Text></View>}
             </View>
             <View style={styles.lockedEventMeta}>
               <Ionicons name="calendar-outline" size={14} color="#6B7F93" />
@@ -2204,10 +2207,7 @@ export default function CommunityEventsScreen() {
               <Ionicons name="people-outline" size={14} color="#6B7F93" />
               <Text style={styles.lockedEventMetaText}>{Number(event.participantsCount || 0)} / {Number(event.capacity || 0)} volunteers</Text>
             </View>
-            <View style={styles.lockedEventTapHint}>
-              <Ionicons name={detailsOpen ? "chevron-up-circle-outline" : "chevron-down-circle-outline"} size={15} color="#087F75" />
-              <Text style={styles.lockedEventTapHintText}>{detailsOpen ? "Tap to close" : "Tap to see event details and Google Maps"}</Text>
-            </View>
+            <Text style={styles.lockedEventExcerpt} numberOfLines={2}>{event.description?.trim() || "Join this community activity and help make a difference."}</Text>
             </Pressable>
             <View style={styles.lockedRowActions}>
               <Pressable accessibilityRole="button" onPress={toggleDetails} style={styles.lockedSecondaryAction}>
@@ -2219,6 +2219,14 @@ export default function CommunityEventsScreen() {
                   onPress={() => void respondToEvent(event, "joined")}
                   style={[styles.lockedPrimaryAction, !!busyEvent && styles.webButtonDisabled]}>
                   <Text style={styles.lockedPrimaryActionText}>{busyEvent === event.id ? "Joining..." : "Join Event"}</Text>
+                </Pressable>
+              )}
+              {isVolunteer && (
+                <Pressable accessibilityRole="button" accessibilityLabel={`View joined volunteers for ${event.title}`}
+                  onPress={() => { setExpandedEvent(event.id); setAttendanceConfirmation(null); }}
+                  style={styles.eventParticipantsButton}>
+                  <Ionicons name="people-outline" size={14} color="#087C69"/>
+                  <Text style={styles.eventParticipantsButtonText}>View Participants</Text>
                 </Pressable>
               )}
               {joined && <View style={styles.lockedJoined}>
@@ -2646,47 +2654,11 @@ export default function CommunityEventsScreen() {
                 <View style={styles.lockedSectionHeading}>
                   <View style={styles.lockedSectionIcon}><Ionicons name="time-outline" size={22} color="#078C80" /></View>
                   <View style={{ flex: 1, minWidth: 0 }}>
-                    <Text style={styles.lockedSectionTitle}>Attendance & Hours</Text>
-                    <Text style={styles.lockedSectionSub}>Select a joined event to view your Time In, Time Out and verified hours</Text>
+                    <Text style={styles.lockedSectionTitle}>My Attendance</Text>
+                    <Text style={styles.lockedSectionSub}>Your joined events · {myAttendanceEvents.length} total</Text>
                   </View>
                   {selectedParticipation?.attendanceVerified && <View style={styles.lockedAttendanceVerified}><Ionicons name="checkmark-circle" size={14} color="#06856D"/><Text style={styles.lockedAttendanceVerifiedText}>Verified</Text></View>}
                 </View>
-                {isVolunteer && <View style={styles.lockedAttendanceOverview}>
-                  <View style={styles.lockedAttendanceOverviewHeading}>
-                    <Text style={styles.lockedAttendanceOverviewTitle}>Joined Events</Text>
-                    <Pressable accessibilityRole="button" accessibilityLabel="Change attendance sort by date"
-                      onPress={() => setAttendanceSort((previous) => previous === "latest" ? "oldest" : "latest")}
-                      style={styles.lockedAttendanceSort}>
-                      <Ionicons name="calendar-outline" size={14} color="#087668" />
-                      <Text style={styles.lockedAttendanceSortText}>{attendanceSort === "latest" ? "Newest First" : "Oldest First"}</Text>
-                      <Ionicons name="swap-vertical-outline" size={13} color="#087668" />
-                    </Pressable>
-                  </View>
-                  {myAttendanceEvents.length === 0 ? (
-                    <Text style={styles.lockedAttendanceEmptyText}>No joined events yet. Explore published community events to participate.</Text>
-                  ) : <View style={styles.lockedAttendanceHistory}>
-                    {(showAllAttendance ? myAttendanceEvents : myAttendanceEvents.slice(0, 4)).map((item) => {
-                      const participation = participationMap.get(item.id);
-                      const isCurrent = selectedEvent?.id === item.id;
-                      const attendanceState = participation?.attendanceVerified ? "Verified" : participation?.checkedOutAt ? "Timed Out" : participation?.checkedInAt ? "Timed In" : "Joined";
-                      return <Pressable key={item.id} accessibilityRole="button" accessibilityLabel={`View attendance for ${item.title}`}
-                        onPress={() => { setExpandedEvent(item.id); setAttendanceConfirmation(null); }}
-                        style={[styles.lockedAttendanceHistoryItem, isCurrent && styles.lockedAttendanceHistoryActive]}>
-                        <View style={{ flex: 1, minWidth: 0 }}>
-                          <Text style={styles.lockedAttendanceHistoryTitle} numberOfLines={2}>{item.title}</Text>
-                          <Text style={styles.lockedAttendanceHistoryDate}>{eventScheduleLabel(item)}</Text>
-                        </View>
-                        <View style={[styles.lockedAttendanceHistoryBadge, participation?.attendanceVerified && styles.lockedAttendanceHistoryBadgeVerified]}>
-                          <Text style={styles.lockedAttendanceHistoryBadgeText}>{attendanceState}</Text>
-                        </View>
-                      </Pressable>;
-                    })}
-                    {myAttendanceEvents.length > 4 && <Pressable accessibilityRole="button" onPress={() => setShowAllAttendance((previous) => !previous)} style={styles.lockedAttendanceMore}>
-                      <Text style={styles.lockedAttendanceMoreText}>{showAllAttendance ? "Show fewer" : `Show all ${myAttendanceEvents.length} events`}</Text>
-                      <Ionicons name={showAllAttendance ? "chevron-up-outline" : "chevron-down-outline"} size={15} color="#087567" />
-                    </Pressable>}
-                  </View>}
-                </View>}
                 {!selectedEvent ? <Text style={styles.webEmptySubtitle}>Select an event to view attendance.</Text> :
                   !isVolunteer ? <Text style={styles.webEmptySubtitle}>Attendance is available for approved volunteers.</Text> :
                   selectedOwned ? <Text style={styles.webEmptySubtitle}>Your proposed event cannot be joined as a volunteer.</Text> :
@@ -2829,6 +2801,53 @@ export default function CommunityEventsScreen() {
                     {!selectedParticipation?.attendanceVerified && <Text style={styles.webAttendanceNote}>Time In/Out uses server time. Admin/LGU verifies participation.</Text>}
                   </View>}
                   </>}
+                {selectedEvent && user && (
+                  <CommunityEventRoster eventId={selectedEvent.id} viewer={user}
+                    participantsCount={Number(selectedEvent.participantsCount || 0)} compact />
+                )}
+                {isVolunteer && <View style={styles.lockedAttendanceOverview}>
+                  <View style={styles.lockedAttendanceOverviewHeading}>
+                    <Text style={styles.lockedAttendanceOverviewTitle}>My Event Attendance History</Text>
+                    <Pressable accessibilityRole="button" accessibilityLabel="Change attendance sort by date"
+                      onPress={() => setAttendanceSort((previous) => previous === "latest" ? "oldest" : "latest")}
+                      style={styles.lockedAttendanceSort}>
+                      <Ionicons name="calendar-outline" size={14} color="#087668" />
+                      <Text style={styles.lockedAttendanceSortText}>{attendanceSort === "latest" ? "Newest First" : "Oldest First"}</Text>
+                      <Ionicons name="swap-vertical-outline" size={13} color="#087668" />
+                    </Pressable>
+                  </View>
+                  {myAttendanceEvents.length === 0 ? (
+                    <Text style={styles.lockedAttendanceEmptyText}>No joined events yet. Explore published community events to participate.</Text>
+                  ) : <View style={styles.lockedAttendanceHistory}>
+                    {(showAllAttendance ? myAttendanceEvents : myAttendanceEvents.slice(0, 3)).map((item) => {
+                      const participation = participationMap.get(item.id);
+                      const isCurrent = selectedEvent?.id === item.id;
+                      const attendanceState = participation?.attendanceVerified ? "Verified" : participation?.checkedOutAt ? "Timed Out" : participation?.checkedInAt ? "Timed In" : "Joined";
+                      return <Pressable key={item.id} accessibilityRole="button" accessibilityLabel={`View attendance for ${item.title}`}
+                        onPress={() => { setExpandedEvent(item.id); setAttendanceConfirmation(null); }}
+                        style={[styles.lockedAttendanceHistoryItem, isCurrent && styles.lockedAttendanceHistoryActive]}>
+                        <View style={{ flex: 1, minWidth: 0 }}>
+                          <Text style={styles.lockedAttendanceHistoryTitle} numberOfLines={2}>{item.title}</Text>
+                          <Text style={styles.lockedAttendanceHistoryDate}>{eventScheduleLabel(item)}</Text>
+                        </View>
+                        <View style={[styles.lockedAttendanceHistoryBadge, participation?.attendanceVerified && styles.lockedAttendanceHistoryBadgeVerified]}>
+                          <Text style={styles.lockedAttendanceHistoryBadgeText}>{attendanceState}</Text>
+                        </View>
+                      </Pressable>;
+                    })}
+                    {myAttendanceEvents.length > 3 && <Pressable accessibilityRole="button" onPress={() => setShowAllAttendance((previous) => !previous)} style={styles.lockedAttendanceMore}>
+                      <Text style={styles.lockedAttendanceMoreText}>{showAllAttendance ? "Show fewer" : `Show all ${myAttendanceEvents.length} events`}</Text>
+                      <Ionicons name={showAllAttendance ? "chevron-up-outline" : "chevron-down-outline"} size={15} color="#087567" />
+                    </Pressable>}
+                  </View>}
+                </View>}
+
+                <Pressable accessibilityRole="button" style={styles.eventCertificateButton}
+                  onPress={() => router.push("/(tabs)/certificate")}>
+                  <Ionicons name="ribbon-outline" size={20} color="#FFFFFF"/>
+                  <Text style={styles.eventCertificateButtonText}>View My Certificates</Text>
+                  <Ionicons name="arrow-forward-outline" size={17} color="#FFFFFF"/>
+                </Pressable>
               </View>
             </View>
           )}
@@ -5499,9 +5518,15 @@ const styles = StyleSheet.create({
   lockedSlotsText: { color: "#07836E", fontSize: vsType.size.micro, fontWeight: "800" },
   lockedSmallTag: { backgroundColor: "#E8F7F0", paddingHorizontal: 8, paddingVertical: 5, borderRadius: 6, gap: 5, flexDirection: "row", alignItems: "center", alignSelf: "flex-start" },
   lockedSmallTagText: { color: "#06786E", fontSize: vsType.size.micro, fontWeight: "800" },
-  lockedEventExcerpt: { fontSize: vsType.size.caption, lineHeight: 15, color: "#56748A" },
+  lockedEventExcerpt: { fontFamily: vsType.family, fontSize: 13, lineHeight: 19, color: "#57707C", marginTop: 4 },
   lockedEventMeta: { flexDirection: "row", alignItems: "flex-start", gap: 6 },
   lockedEventMetaText: { flex: 1, minWidth: 0, color: "#617987", fontSize: 13, lineHeight: 19 },
+  eventParticipantsButton: { paddingVertical: 8, paddingHorizontal: 10, flexDirection: "row", alignItems: "center", gap: 5, backgroundColor: "#F2FAF7", borderRadius: 8, borderColor: "#B8DACE", borderWidth: 1 },
+  eventParticipantsButtonText: { fontSize: 12, fontWeight: "700", color: "#087C69", fontFamily: vsType.family },
+  eventNewPill: { backgroundColor: "#DCF4E6", paddingHorizontal: 7, paddingVertical: 4, borderRadius: 6 },
+  eventNewPillText: { fontSize: 10, color: "#07674B", fontWeight: "800" },
+  eventCertificateButton: { marginTop: 12, backgroundColor: "#007B61", padding: 13, borderRadius: 10, flexDirection: "row", justifyContent: "center", alignItems: "center", gap: 9 },
+  eventCertificateButtonText: { fontSize: 14, fontWeight: "800", color: "#FFFFFF", fontFamily: vsType.family },
   lockedRowActions: { flexDirection: "row", alignItems: "center", justifyContent: "flex-end", gap: 7, flexWrap: "wrap", marginTop: 2 },
   lockedSecondaryAction: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, backgroundColor: "#E8F7F4", borderRadius: 8, paddingHorizontal: 11, minHeight: 33 },
   lockedSecondaryActionText: { fontFamily: vsType.family, color: "#076E69", fontSize: vsType.size.micro, fontWeight: "800" },
@@ -5514,13 +5539,13 @@ const styles = StyleSheet.create({
   lockedRailCard: { width: "100%", minWidth: 0, backgroundColor: "white", borderRadius: 14, padding: 19, borderWidth: 1, borderColor: "#E1EBE9", overflow: "hidden" },
   lockedAttendanceRail: { backgroundColor: "#FFFFFF", borderColor: "#D7E6E1", borderWidth: 1 },
   lockedEventMapCard: { backgroundColor: "#F5FAF9", borderRadius: 12, borderWidth: 1, borderColor: "#D6EAE2", padding: 16, marginTop: 4, gap: 4 },
-  lockedAttendanceOverview: { backgroundColor: "#F4F8F7", borderRadius: 11, padding: 14, gap: 11, marginBottom: 16 },
+  lockedAttendanceOverview: { backgroundColor: "#F8FBFA", borderRadius: 11, padding: 12, gap: 9, marginTop: 12, marginBottom: 5 },
   lockedAttendanceOverviewHeading: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 7 },
   lockedAttendanceOverviewTitle: { fontFamily: vsType.family, color: "#0D6A55", fontSize: vsType.size.meta, fontWeight: "800" },
   lockedAttendanceSort: { flexDirection: "row", alignItems: "center", gap: 5, paddingVertical: 7, paddingHorizontal: 8, backgroundColor: "white", borderRadius: 8, borderWidth: 1, borderColor: "#B9DECD" },
   lockedAttendanceSortText: { color: "#0B7666", fontSize: vsType.size.micro, fontWeight: "800" },
   lockedAttendanceHistory: { gap: 6 },
-  lockedAttendanceHistoryItem: { flexDirection: "row", alignItems: "center", gap: 10, borderRadius: 9, borderWidth: 1, borderColor: "#D5E4DF", padding: 13, backgroundColor: "#FFFFFF", minHeight: 64 },
+  lockedAttendanceHistoryItem: { flexDirection: "row", alignItems: "center", gap: 9, borderRadius: 9, borderWidth: 1, borderColor: "#D5E4DF", padding: 10, backgroundColor: "#FFFFFF", minHeight: 56 },
   lockedAttendanceHistoryActive: { borderColor: "#078F82", borderWidth: 1.5, backgroundColor: "#F4FFFA" },
   lockedAttendanceHistoryTitle: { fontFamily: vsType.family, fontSize: 14, lineHeight: 20, fontWeight: "700", color: "#173C3B" },
   lockedAttendanceHistoryDate: { fontSize: 12, color: "#607C79", marginTop: 5, lineHeight: 17 },
@@ -5570,11 +5595,11 @@ const styles = StyleSheet.create({
   lockedAttendanceEventDate: { flexDirection: "row", alignItems: "center", gap: 4 },
   lockedAttendanceEventDateText: { fontSize: vsType.size.micro, color: "#627F96", flexShrink: 1 },
   lockedAttendanceGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8, width: "100%", marginBottom: 9 },
-  lockedAttendanceTile: { flexGrow: 1, flexBasis: "47%", minWidth: 0, minHeight: 98, flexDirection: "row", alignItems: "center", paddingHorizontal: 13, paddingVertical: 14, gap: 11, backgroundColor: "#F8FBFA", borderWidth: 1, borderColor: "#DBE9E4", borderRadius: 11 },
-  lockedAttendanceTileIcon: { width: 36, height: 36, borderRadius: 11, alignItems: "center", justifyContent: "center", flexShrink: 0 },
+  lockedAttendanceTile: { flexGrow: 1, flexBasis: "47%", minWidth: 0, minHeight: 79, flexDirection: "row", alignItems: "center", paddingHorizontal: 10, paddingVertical: 11, gap: 8, backgroundColor: "#F8FBFA", borderWidth: 1, borderColor: "#DBE9E4", borderRadius: 10 },
+  lockedAttendanceTileIcon: { width: 32, height: 32, borderRadius: 10, alignItems: "center", justifyContent: "center", flexShrink: 0 },
   lockedAttendanceTileBody: { flex: 1, minWidth: 0 },
   lockedAttendanceTileLabel: { color: "#627785", fontSize: 12, lineHeight: 17, fontWeight: "600" },
-  lockedAttendanceTileValue: { fontFamily: vsType.family, color: "#123E46", fontWeight: "800", fontSize: 19, lineHeight: 25, marginTop: 3 },
+  lockedAttendanceTileValue: { fontFamily: vsType.family, color: "#123E46", fontWeight: "800", fontSize: 17, lineHeight: 22, marginTop: 2 },
   lockedAttendanceTileSmall: { color: "#708490", fontSize: 12, lineHeight: 17, marginTop: 2 },
   lockedAttendanceVerifier: { flexDirection: "row", alignItems: "center", gap: 7, padding: 9, backgroundColor: "#F1F9F7", borderRadius: 8, marginBottom: 9 },
   lockedAttendanceVerifierText: { fontSize: vsType.size.caption, fontWeight: "800", color: "#08766B", flex: 1 },
