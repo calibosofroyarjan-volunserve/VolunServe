@@ -17,7 +17,8 @@ permissions:
   contents: read
 concurrency:
   group: qa-community-events-production-source-20261121
-  cancel-in-progress: false
+  # QA previews are superseded by newer test-only commits; never cancel release jobs.
+  cancel-in-progress: true
 jobs:
   verify:
     if: github.repository == 'calibosofroyarjan-volunserve/VolunServe'
