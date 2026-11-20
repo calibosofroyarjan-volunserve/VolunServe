@@ -10,8 +10,8 @@ const API_URL = "https://volunserve.onrender.com";
 
 /** Read-only event roster; the backend already limits this response to safe display fields. */
 export default function CommunityEventRoster({
-  eventId, viewer, participantsCount, compact = false,
-}: { eventId: string; viewer: AuthUser; participantsCount: number; compact?: boolean }) {
+  eventId, viewer, participantsCount, compact = false, eventTitle,
+}: { eventId: string; viewer: AuthUser; participantsCount: number; compact?: boolean; eventTitle?: string }) {
   const [page, setPage] = useState(1);
   const [refresh, setRefresh] = useState(0);
   const [showAll, setShowAll] = useState(false);
@@ -59,6 +59,7 @@ export default function CommunityEventRoster({
       <View style={s.header}>
         <View style={{ flex: 1, minWidth: 0 }}>
           <Text style={s.title}>{compact ? "Event Participants" : "Joined Volunteers"} ({total})</Text>
+          {compact && !!eventTitle && <Text style={s.desc} numberOfLines={2}>{eventTitle}</Text>}
           {!compact && <Text style={s.desc}>Approved volunteers participating in this event</Text>}
         </View>
         <Pressable accessibilityRole="button" style={s.headerButton}
