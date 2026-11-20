@@ -110,7 +110,8 @@ export default function WebLogin() {
       await applySessionPersistence();
       const { profile } = await loginUser(
         email.trim().toLowerCase(),
-        password
+        password,
+        { resumeIncompleteSignup: true }
       );
       let destination;
       try {
@@ -121,6 +122,16 @@ export default function WebLogin() {
       }
       router.replace(destination as any);
     } catch (error: any) {
+      if (error instanceof Error &&
+          error.message === "No VolunServe profile was found for this account. Please register first." &&
+          auth.currentUser?.email?.trim().toLowerCase() === email.trim().toLowerCase() &&
+          auth.currentUser.emailVerified) {
+        // Firebase has verified the identity but this UID has no completed
+        // Resident profile. Continue existing email-first signup instead of
+        // discarding the session or routing to Guest Preview.
+        router.replace("/signup");
+        return;
+      }
       showError(userFacingError(error, "Unable to sign in. Check your details and try again."));
     } finally {
       setLoading(false);
@@ -156,6 +167,11 @@ export default function WebLogin() {
           return;
         }
         throw new Error(userFacingError(profileError, "We could not check your VolunServe registration. Check your connection and try again."));
+      }
+
+      if (String(profile.role || "").toLowerCase() === "guest") {
+        authorizationDenied = true;
+        throw new Error("Guest Preview records are not registered accounts. Contact an administrator for account migration.");
       }
 
       // Staff access must remain password-only, regardless of approval status.
