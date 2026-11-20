@@ -51,6 +51,9 @@ async function main(){
     // Navigate like a real approved volunteer. This project has overlapping
     // route-group exports; a direct anonymous deep link can resolve to Home.
     await page.goto("http://127.0.0.1:4177/",{waitUntil:"domcontentloaded",timeout:30000});
+    if (width < 1040) {
+      await page.getByRole("button",{name:"Open sidebar"}).click();
+    }
     await page.getByText("Community Events",{exact:true}).first().waitFor({state:"visible",timeout:12000});
     await page.getByText("Community Events",{exact:true}).first().click();
     await page.waitForTimeout(2500);
