@@ -55,6 +55,7 @@ type Category =
   | "Other";
 
 type Section = "explore" | "mine" | "propose";
+type EventListFilter = "all" | "new" | "upcoming" | "active" | "completed";
 type SelfAttendanceAction = "check-in" | "check-out";
 type AttendanceFeedback = {
   eventId: string;
@@ -351,6 +352,12 @@ const getTime = (value: unknown): number => {
   }
 
   return 0;
+};
+
+// "New" means published within 14 days; absent Firestore timestamps are never guessed.
+const isRecentlyPublished = (event: CommunityEvent): boolean => {
+  const created = getTime(event.createdAt);
+  return created > 0 && created <= Date.now() && Date.now() - created <= 14 * 24 * 60 * 60 * 1000;
 };
 
 const prettyDate = (date?: string, time?: string) => {
@@ -722,7 +729,8 @@ export default function CommunityEventsScreen() {
     useState<Category | "All">("All");
 
   const [search, setSearch] = useState("");
-  const [dateSort, setDateSort] = useState<"soonest" | "latest">("soonest");
+  const [eventListFilter, setEventListFilter] = useState<EventListFilter>("all");
+  const [dateSort, setDateSort] = useState<"soonest" | "latest">("latest");
   const [attendanceSort, setAttendanceSort] = useState<"latest" | "oldest">("latest");
   const [showAllAttendance, setShowAllAttendance] = useState(false);
   const [visibleEventCount, setVisibleEventCount] = useState(6);
@@ -1054,14 +1062,12 @@ export default function CommunityEventsScreen() {
           event.status !== "cancelled" &&
           matchesCategory &&
           matchesSearch &&
-          (!canPropose || residentBarangayFilter === "All Barangays" || event.barangay === residentBarangayFilter) &&
-          (!canPropose || residentStatusFilter === "All Status" || event.status === residentStatusFilter)
+          (residentBarangayFilter === "All Barangays" || event.barangay === residentBarangayFilter) &&
+          (!canPropose || residentStatusFilter === "All Status" || event.status === residentStatusFilter) &&
+          (eventListFilter === "all" || (eventListFilter === "new" ? isRecentlyPublished(event) : event.status === eventListFilter))
         );
-      })
-      .sort((a, b) =>
-        a.date.localeCompare(b.date)
-      );
-  }, [events, category, search, canPropose, residentBarangayFilter, residentStatusFilter]);
+      });
+  }, [events, category, search, canPropose, residentBarangayFilter, residentStatusFilter, eventListFilter]);
 
   const participationMap = useMemo(
     () =>
@@ -1102,19 +1108,39 @@ export default function CommunityEventsScreen() {
     (event) => event.status === "completed"
   ).length;
 
+  const eventStatusFilters: { key: EventListFilter; label: string; count: number }[] = [
+    { key: "all", label: "All Events", count: events.filter((event) => event.status !== "cancelled").length },
+    { key: "new", label: "New", count: events.filter((event) => event.status !== "cancelled" && isRecentlyPublished(event)).length },
+    { key: "upcoming", label: "Upcoming", count: events.filter((event) => event.status === "upcoming").length },
+    { key: "active", label: "Ongoing", count: events.filter((event) => event.status === "active").length },
+    { key: "completed", label: "Finished", count: completedCount },
+  ];
+
   // A copy is sorted to avoid mutating the Firestore-backed event arrays.
   const displayEvents = useMemo(() => {
     const source = section === "mine" && isVolunteer ? myEvents : filteredEvents;
     return [...source].sort((a, b) => {
+      // In All Events, ongoing/upcoming activities appear ahead of completed history.
+      // "New" uses publication timestamps, never the scheduled event date.
+      if (section === "explore" && eventListFilter === "all") {
+        const rank: Record<EventStatus, number> = { active: 0, upcoming: 1, completed: 2, cancelled: 3 };
+        const priority = rank[a.status] - rank[b.status];
+        if (priority) return priority;
+      }
+      if (section === "explore" && eventListFilter === "new") {
+        const publishedDifference = getTime(b.createdAt) - getTime(a.createdAt);
+        if (publishedDifference) return publishedDifference;
+      }
       const aDate = `${a.date || ""}T${a.time || "00:00"}`;
       const bDate = `${b.date || ""}T${b.time || "00:00"}`;
       const byDate = aDate.localeCompare(bDate);
       return (dateSort === "soonest" ? byDate : -byDate) || a.title.localeCompare(b.title);
     });
-  }, [section, isVolunteer, myEvents, filteredEvents, dateSort]);
+  }, [section, isVolunteer, myEvents, filteredEvents, dateSort, eventListFilter]);
   useEffect(() => {
     setVisibleEventCount(6);
-  }, [section, category, search, dateSort]);
+    setExpandedEvent(null);
+  }, [section, category, search, dateSort, eventListFilter, residentBarangayFilter, residentStatusFilter]);
   const visibleEvents = displayEvents.slice(0, visibleEventCount);
   const selectedEvent = events.find((event) => event.id === expandedEvent) ||
     (isVolunteer ? myAttendanceEvents[0] : undefined) || displayEvents[0] || null;
@@ -2533,25 +2559,34 @@ export default function CommunityEventsScreen() {
             </View>
             {!!notice && <View style={styles.webNotice}><Ionicons name="information-circle-outline" size={18} color="#0D8273" /><Text style={styles.webNoticeText}>{notice}</Text></View>}
             {section === "mine" && !!recordError && <View style={styles.webError}><Ionicons name="alert-circle-outline" size={17} color="#B42318" /><Text style={styles.webErrorText}>{recordError}</Text></View>}
-            {section === "explore" && canPropose && !residentDetailsId && (
-              <View style={styles.ruiFilterBar}>
-                <Pressable style={styles.ruiFilterSelect} onPress={()=>setResidentFilterPicker("category")}><Text style={styles.ruiFilterLabel}>{category === "All" ? "All Categories" : category}</Text><Ionicons name="chevron-down-outline" size={15} color="#668198"/></Pressable>
-                <Pressable style={styles.ruiFilterSelect} onPress={()=>setResidentFilterPicker("barangay")}><Text style={styles.ruiFilterLabel}>{residentBarangayFilter}</Text><Ionicons name="chevron-down-outline" size={15} color="#668198"/></Pressable>
-                <Pressable style={styles.ruiFilterSelect} onPress={()=>setResidentFilterPicker("status")}><Text style={styles.ruiFilterLabel}>{residentStatusFilter === "All Status" ? "All Status" : residentStatusFilter.toUpperCase()}</Text><Ionicons name="chevron-down-outline" size={15} color="#668198"/></Pressable>
-                <Pressable style={styles.ruiFilterSelect} onPress={()=>setDateSort((v)=>v==="soonest"?"latest":"soonest")}><Ionicons name="swap-vertical" size={15} color="#07907C"/><Text style={styles.ruiFilterLabel}>Date ({dateSort==="soonest"?"Soonest":"Latest"})</Text></Pressable>
+            {section === "explore" && !residentDetailsId && (
+              <View style={styles.eventBrowseControls}>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.eventStatusTabs}>
+                  {eventStatusFilters.map((item) => (
+                    <Pressable key={item.key} accessibilityRole="button" accessibilityState={{ selected: eventListFilter === item.key }}
+                      onPress={() => setEventListFilter(item.key)}
+                      style={[styles.eventStatusTab, eventListFilter === item.key && styles.eventStatusTabActive]}>
+                      <Text style={[styles.eventStatusTabText, eventListFilter === item.key && styles.eventStatusTabTextActive]}>{item.label}</Text>
+                      <Text style={[styles.eventStatusCount, eventListFilter === item.key && styles.eventStatusCountActive]}>{item.count}</Text>
+                    </Pressable>
+                  ))}
+                </ScrollView>
+                <View style={styles.eventFilterToolbar}>
+                  <View style={styles.eventFilterCaption}><Ionicons name="options-outline" size={17} color="#607785"/><Text style={styles.eventFilterCaptionText}>Filter by</Text></View>
+                  <Pressable accessibilityRole="button" accessibilityLabel="Filter by event category" style={styles.eventFilterSelect} onPress={()=>setResidentFilterPicker("category")}><Text style={styles.eventFilterSelectText} numberOfLines={1}>{category === "All" ? "All categories" : category}</Text><Ionicons name="chevron-down-outline" size={17} color="#587782"/></Pressable>
+                  <Pressable accessibilityRole="button" accessibilityLabel="Filter by barangay" style={styles.eventFilterSelect} onPress={()=>setResidentFilterPicker("barangay")}><Text style={styles.eventFilterSelectText} numberOfLines={1}>{residentBarangayFilter}</Text><Ionicons name="chevron-down-outline" size={17} color="#587782"/></Pressable>
+                  {(category !== "All" || residentBarangayFilter !== "All Barangays" || eventListFilter !== "all" || !!search.trim()) &&
+                    <Pressable accessibilityRole="button" onPress={()=>{setCategory("All");setResidentBarangayFilter("All Barangays");setEventListFilter("all");setSearch("");setResidentStatusFilter("All Status");}} style={styles.eventClearFilter}>
+                      <Ionicons name="close-circle-outline" size={16} color="#477383"/><Text style={styles.eventClearFilterText}>Clear filters</Text>
+                    </Pressable>}
+                </View>
               </View>
             )}
-            {section === "explore" && !canPropose && <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.webFilters}>
-              {(["All", ...categories] as const).map((item) => <Pressable key={item} onPress={() => setCategory(item)} style={[styles.webFilterChip, category === item && styles.webFilterChipActive]}>
-                {item !== "All" && <Ionicons name={categoryIcon(item)} size={15} color={category === item ? "white" : "#067A70"}/>}
-                <Text style={[styles.webFilterText, category === item && styles.webFilterTextActive]}>{item}</Text>
-              </Pressable>)}
-            </ScrollView>}
             {(section === "explore" || (section === "mine" && isVolunteer)) && <View style={styles.lockedEventList}>
               {!residentDetailEvent && <View style={[styles.webListHeading, styles.lockedListHeading]}>
                 <View style={{ flex: 1, minWidth: 0 }}>
-                  <Text style={styles.webHeadingTitle}>Community Events</Text>
-                  <Text style={styles.webHeadingHint}>{section === "explore" ? "Explore activities and make a difference in San Jose del Monte." : "Your community event participation."}</Text>
+                  <Text style={styles.webHeadingTitle}>{section === "mine" ? "My Joined Events" : eventListFilter === "new" ? "Recently Published" : eventListFilter === "all" ? "Discover Community Events" : `${eventStatusFilters.find((item) => item.key === eventListFilter)?.label || "Community"} Events`}</Text>
+                  <Text style={styles.webHeadingHint}>{section === "explore" ? (eventListFilter === "new" ? "Published within the last 14 days." : "Approved activities in San Jose del Monte, Bulacan.") : "Your joined activities, attendance and event details."}</Text>
                 </View>
                 <View style={styles.lockedListControls}>
                   <Text style={styles.webEventCount}>{displayEvents.length} event{displayEvents.length === 1 ? "" : "s"}</Text>
@@ -2559,7 +2594,7 @@ export default function CommunityEventsScreen() {
                     onPress={() => setDateSort((current) => current === "soonest" ? "latest" : "soonest")}
                     style={styles.lockedSortButton}>
                     <Ionicons name="calendar-outline" size={15} color="#087E74" />
-                    <View><Text style={styles.lockedSortCaption}>Sort by Date</Text>
+                    <View><Text style={styles.lockedSortCaption}>Scheduled date</Text>
                       <Text style={styles.lockedSortValue}>{dateSort === "soonest" ? "Soonest First" : "Latest First"}</Text></View>
                     <Ionicons name="swap-vertical-outline" size={15} color="#087E74" />
                   </Pressable>
@@ -2594,8 +2629,8 @@ export default function CommunityEventsScreen() {
                 <View style={styles.lockedSectionHeading}>
                   <View style={styles.lockedSectionIcon}><Ionicons name="time-outline" size={22} color="#078C80" /></View>
                   <View style={{ flex: 1, minWidth: 0 }}>
-                    <Text style={styles.lockedSectionTitle}>My Attendance</Text>
-                    <Text style={styles.lockedSectionSub}>Your joined events · {myAttendanceEvents.length} total</Text>
+                    <Text style={styles.lockedSectionTitle}>Attendance & Hours</Text>
+                    <Text style={styles.lockedSectionSub}>Select a joined event to view your Time In, Time Out and verified hours</Text>
                   </View>
                   {selectedParticipation?.attendanceVerified && <View style={styles.lockedAttendanceVerified}><Ionicons name="checkmark-circle" size={14} color="#06856D"/><Text style={styles.lockedAttendanceVerifiedText}>Verified</Text></View>}
                 </View>
@@ -5280,8 +5315,8 @@ const styles = StyleSheet.create({
   webDetailColumn: { flex: 1, minWidth: 0 },
   webFullWidth: { width: "100%", flex: 0 },
   webListHeading: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingVertical: 8, gap: 8 },
-  webHeadingTitle: { fontFamily: vsType.family, color: "#17453B", fontWeight: "800", fontSize: vsType.size.card },
-  webHeadingHint: { color: "#778DA0", fontSize: vsType.size.caption, marginTop: 3 },
+  webHeadingTitle: { fontFamily: vsType.family, color: "#153A3D", fontWeight: "800", fontSize: 20, lineHeight: 27 },
+  webHeadingHint: { color: "#697E88", fontSize: 13, marginTop: 5, lineHeight: 19 },
   webEventCount: { color: "#718697", fontSize: vsType.size.caption, fontWeight: "700" },
   webCardGrid: { flexDirection: "row", flexWrap: "wrap", gap: 12, alignItems: "flex-start", marginTop: 5 },
   webEventCard: { width: "48.9%", minWidth: 230, backgroundColor: "#FFFFFF", borderRadius: 17, borderWidth: 1, borderColor: "#E0ECE9", overflow: "hidden" },
@@ -5351,8 +5386,8 @@ const styles = StyleSheet.create({
   webAttendanceStatusText: { fontSize: vsType.size.micro, fontWeight: "800", color: "#06796D" },
   webAttendanceActionArea: { marginTop: 14, gap: 9 },
   webAttendanceActionHelp: { fontSize: vsType.size.caption, lineHeight: 17, color: "#456C7E" },
-  webAttendanceActionButton: { backgroundColor: "#078F82", borderRadius: 9, minHeight: 42, paddingHorizontal: 14, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, flex: 1 },
-  webAttendanceActionButtonText: { color: "white", fontWeight: "800", fontSize: vsType.size.meta },
+  webAttendanceActionButton: { backgroundColor: "#087D70", borderRadius: 10, minHeight: 52, paddingHorizontal: 18, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10, flex: 1 },
+  webAttendanceActionButtonText: { color: "white", fontWeight: "700", fontSize: 15 },
   webAttendanceConfirmBox: { padding: 12, borderRadius: 9, borderWidth: 1, borderColor: "#BCE4D9", backgroundColor: "#EAF8F4", gap: 10 },
   webAttendanceConfirmText: { color: "#225569", fontSize: vsType.size.caption, lineHeight: 17 },
   webAttendanceConfirmButtons: { flexDirection: "row", alignItems: "center", gap: 8 },
@@ -5384,7 +5419,7 @@ const styles = StyleSheet.create({
   lockedColumns: { flexDirection: "row", alignItems: "flex-start", width: "100%", gap: 18 },
   lockedColumnsStack: { flexDirection: "column" },
   lockedMain: { flex: 1, minWidth: 0 },
-  lockedRail: { width: 338, maxWidth: "100%", flexShrink: 0, gap: 14 },
+  lockedRail: { width: 440, maxWidth: "100%", flexShrink: 0, gap: 14 },
   lockedRailStack: { width: "100%" },
   lockedHeroGradient: { minHeight: 196, flexDirection: "row", paddingHorizontal: 26, paddingVertical: 24, alignItems: "center" },
   lockedHeroWords: { flex: 1, minWidth: 0, paddingRight: 12, zIndex: 3 },
@@ -5430,10 +5465,10 @@ const styles = StyleSheet.create({
   lockedLoadMoreRow: { flexDirection: "row", justifyContent: "center", marginTop: 5 },
   lockedLoadMoreButton: { flexDirection: "row", alignItems: "center", gap: 8, paddingVertical: 11, paddingHorizontal: 18, borderRadius: 11, backgroundColor: "#E7F7F2", borderWidth: 1, borderColor: "#CBE8E0" },
   lockedLoadMoreText: { fontSize: vsType.size.meta, fontWeight: "800", color: "#087B71" },
-  lockedEventRow: { backgroundColor: "white", borderRadius: 13, padding: 10, flexDirection: "row", gap: 13, width: "100%" },
+  lockedEventRow: { backgroundColor: "white", borderRadius: 13, padding: 13, flexDirection: "row", gap: 16, width: "100%" },
   lockedEventSelected: { borderColor: "#0A9E8D", borderWidth: 1.5 },
   lockedEventVertical: { flexDirection: "column" },
-  lockedEventPicture: { width: 177, minHeight: 170, borderRadius: 10, overflow: "hidden", backgroundColor: "#CFEDE4", flexShrink: 0 },
+  lockedEventPicture: { width: 170, minHeight: 174, borderRadius: 10, overflow: "hidden", backgroundColor: "#CFEDE4", flexShrink: 0 },
   lockedPictureNarrow: { width: "100%", minHeight: 160 },
   lockedImageFill: { position: "absolute", width: "100%", height: "100%" },
   lockedImageFallback: { width: "100%", height: "100%", alignItems: "center", justifyContent: "center" },
@@ -5442,14 +5477,14 @@ const styles = StyleSheet.create({
   lockedImageStatusText: { color: "#067C60", fontSize: vsType.size.micro, fontWeight: "800" },
   lockedEventInfo: { flex: 1, minWidth: 0, justifyContent: "center", gap: 5 },
   lockedEventTop: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", gap: 5 },
-  lockedEventName: { fontFamily: vsType.family, flex: 1, minWidth: 0, color: "#0F3047", fontSize: vsType.size.bodyStrong, fontWeight: "800" },
+  lockedEventName: { fontFamily: vsType.family, flex: 1, minWidth: 0, color: "#173A42", fontSize: 17, lineHeight: 24, fontWeight: "700" },
   lockedSlotsPill: { flexDirection: "row", flexShrink: 0, alignItems: "center", gap: 4, backgroundColor: "#E8F8F0", paddingHorizontal: 7, paddingVertical: 5, borderRadius: 7 },
   lockedSlotsText: { color: "#07836E", fontSize: vsType.size.micro, fontWeight: "800" },
   lockedSmallTag: { backgroundColor: "#E8F7F0", paddingHorizontal: 8, paddingVertical: 5, borderRadius: 6, gap: 5, flexDirection: "row", alignItems: "center", alignSelf: "flex-start" },
   lockedSmallTagText: { color: "#06786E", fontSize: vsType.size.micro, fontWeight: "800" },
   lockedEventExcerpt: { fontSize: vsType.size.caption, lineHeight: 15, color: "#56748A" },
   lockedEventMeta: { flexDirection: "row", alignItems: "flex-start", gap: 6 },
-  lockedEventMetaText: { flex: 1, minWidth: 0, color: "#60768A", fontSize: vsType.size.caption, lineHeight: 16 },
+  lockedEventMetaText: { flex: 1, minWidth: 0, color: "#617987", fontSize: 13, lineHeight: 19 },
   lockedRowActions: { flexDirection: "row", alignItems: "center", justifyContent: "flex-end", gap: 7, flexWrap: "wrap", marginTop: 2 },
   lockedSecondaryAction: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, backgroundColor: "#E8F7F4", borderRadius: 8, paddingHorizontal: 11, minHeight: 33 },
   lockedSecondaryActionText: { fontFamily: vsType.family, color: "#076E69", fontSize: vsType.size.micro, fontWeight: "800" },
@@ -5459,19 +5494,19 @@ const styles = StyleSheet.create({
   lockedJoinedText: { color: "#077C69", fontSize: vsType.size.micro, fontWeight: "800" },
   lockedAboutCard: { backgroundColor: "white", borderColor: "#E1EBE8", borderWidth: 1, borderRadius: 13, padding: 16, marginTop: 14, gap: 9 },
   lockedAboutText: { color: "#567183", fontSize: vsType.size.meta, lineHeight: 20 },
-  lockedRailCard: { width: "100%", minWidth: 0, backgroundColor: "white", borderRadius: 15, padding: 14, borderWidth: 1, borderColor: "#E1EBE9", overflow: "hidden" },
-  lockedAttendanceRail: { backgroundColor: "#F2FBF6", borderColor: "#B4DDCB", borderWidth: 1.5 },
+  lockedRailCard: { width: "100%", minWidth: 0, backgroundColor: "white", borderRadius: 14, padding: 19, borderWidth: 1, borderColor: "#E1EBE9", overflow: "hidden" },
+  lockedAttendanceRail: { backgroundColor: "#FFFFFF", borderColor: "#D7E6E1", borderWidth: 1 },
   lockedEventMapCard: { backgroundColor: "#F5FAF9", borderRadius: 12, borderWidth: 1, borderColor: "#D6EAE2", padding: 16, marginTop: 4, gap: 4 },
-  lockedAttendanceOverview: { backgroundColor: "#E6F6ED", borderRadius: 11, padding: 10, gap: 9, marginBottom: 12 },
+  lockedAttendanceOverview: { backgroundColor: "#F4F8F7", borderRadius: 11, padding: 14, gap: 11, marginBottom: 16 },
   lockedAttendanceOverviewHeading: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 7 },
   lockedAttendanceOverviewTitle: { fontFamily: vsType.family, color: "#0D6A55", fontSize: vsType.size.meta, fontWeight: "800" },
   lockedAttendanceSort: { flexDirection: "row", alignItems: "center", gap: 5, paddingVertical: 7, paddingHorizontal: 8, backgroundColor: "white", borderRadius: 8, borderWidth: 1, borderColor: "#B9DECD" },
   lockedAttendanceSortText: { color: "#0B7666", fontSize: vsType.size.micro, fontWeight: "800" },
   lockedAttendanceHistory: { gap: 6 },
-  lockedAttendanceHistoryItem: { flexDirection: "row", alignItems: "center", gap: 7, borderRadius: 9, borderWidth: 1, borderColor: "#C9E5D7", padding: 9, backgroundColor: "#FFFFFF" },
+  lockedAttendanceHistoryItem: { flexDirection: "row", alignItems: "center", gap: 10, borderRadius: 9, borderWidth: 1, borderColor: "#D5E4DF", padding: 13, backgroundColor: "#FFFFFF", minHeight: 64 },
   lockedAttendanceHistoryActive: { borderColor: "#078F82", borderWidth: 1.5, backgroundColor: "#F4FFFA" },
-  lockedAttendanceHistoryTitle: { fontFamily: vsType.family, fontSize: vsType.size.caption, fontWeight: "800", color: "#133D3D" },
-  lockedAttendanceHistoryDate: { fontSize: vsType.size.micro, color: "#567F75", marginTop: 4, lineHeight: 15 },
+  lockedAttendanceHistoryTitle: { fontFamily: vsType.family, fontSize: 14, lineHeight: 20, fontWeight: "700", color: "#173C3B" },
+  lockedAttendanceHistoryDate: { fontSize: 12, color: "#607C79", marginTop: 5, lineHeight: 17 },
   lockedAttendanceHistoryBadge: { backgroundColor: "#E3EDF1", borderRadius: 7, paddingHorizontal: 7, paddingVertical: 5, flexShrink: 0 },
   lockedAttendanceHistoryBadgeVerified: { backgroundColor: "#D8F4E4" },
   lockedAttendanceHistoryBadgeText: { fontFamily: vsType.family, fontSize: vsType.size.micro, fontWeight: "800", color: "#087666" },
@@ -5497,7 +5532,7 @@ const styles = StyleSheet.create({
   lockedAttendanceVerified: { flexDirection: "row", gap: 4, alignItems: "center", backgroundColor: "#E3F8ED", paddingHorizontal: 7, paddingVertical: 5, borderRadius: 7 },
   lockedAttendanceVerifiedText: { color: "#067D68", fontSize: vsType.size.micro, fontWeight: "800" },
   lockedAttendanceEmpty: { backgroundColor: "#F4F9F9", borderRadius: 11, padding: 22, alignItems: "center", gap: 10 },
-  lockedAttendancePanel: { backgroundColor: "#F0FAF5", borderWidth: 1, borderColor: "#C7E5D4", borderRadius: 12, padding: 10, marginTop: 3 },
+  lockedAttendancePanel: { backgroundColor: "#FFFFFF", borderWidth: 1, borderColor: "#DEEAE5", borderRadius: 12, padding: 15, marginTop: 3 },
   lockedParticipationMeta: { backgroundColor: "#ECF8F5", borderRadius: 8, padding: 9, marginBottom: 7 },
   lockedParticipationText: { fontSize: vsType.size.caption, fontWeight: "800", color: "#087567" },
   lockedCertificateLine: { marginTop: 8, paddingTop: 8, borderTopWidth: 1, borderTopColor: "#E5EFED", flexDirection: "row", alignItems: "center", gap: 7 },
@@ -5518,12 +5553,12 @@ const styles = StyleSheet.create({
   lockedAttendanceEventDate: { flexDirection: "row", alignItems: "center", gap: 4 },
   lockedAttendanceEventDateText: { fontSize: vsType.size.micro, color: "#627F96", flexShrink: 1 },
   lockedAttendanceGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8, width: "100%", marginBottom: 9 },
-  lockedAttendanceTile: { flexGrow: 1, flexBasis: "47%", minWidth: 0, minHeight: 65, flexDirection: "row", alignItems: "center", paddingHorizontal: 7, paddingVertical: 8, gap: 6, backgroundColor: "#FCFEFD", borderWidth: 1, borderColor: "#E2ECEA", borderRadius: 10 },
-  lockedAttendanceTileIcon: { width: 29, height: 29, borderRadius: 12, alignItems: "center", justifyContent: "center", flexShrink: 0 },
+  lockedAttendanceTile: { flexGrow: 1, flexBasis: "47%", minWidth: 0, minHeight: 98, flexDirection: "row", alignItems: "center", paddingHorizontal: 13, paddingVertical: 14, gap: 11, backgroundColor: "#F8FBFA", borderWidth: 1, borderColor: "#DBE9E4", borderRadius: 11 },
+  lockedAttendanceTileIcon: { width: 36, height: 36, borderRadius: 11, alignItems: "center", justifyContent: "center", flexShrink: 0 },
   lockedAttendanceTileBody: { flex: 1, minWidth: 0 },
-  lockedAttendanceTileLabel: { color: "#6C8595", fontSize: vsType.size.micro, lineHeight: 14 },
-  lockedAttendanceTileValue: { fontFamily: vsType.family, color: "#12344A", fontWeight: "800", fontSize: vsType.size.meta, marginTop: 2 },
-  lockedAttendanceTileSmall: { color: "#728897", fontSize: vsType.size.micro, marginTop: 2 },
+  lockedAttendanceTileLabel: { color: "#627785", fontSize: 12, lineHeight: 17, fontWeight: "600" },
+  lockedAttendanceTileValue: { fontFamily: vsType.family, color: "#123E46", fontWeight: "800", fontSize: 19, lineHeight: 25, marginTop: 3 },
+  lockedAttendanceTileSmall: { color: "#708490", fontSize: 12, lineHeight: 17, marginTop: 2 },
   lockedAttendanceVerifier: { flexDirection: "row", alignItems: "center", gap: 7, padding: 9, backgroundColor: "#F1F9F7", borderRadius: 8, marginBottom: 9 },
   lockedAttendanceVerifierText: { fontSize: vsType.size.caption, fontWeight: "800", color: "#08766B", flex: 1 },
   // Resident Community Proposal: clear section hierarchy, touch-friendly selections and safe media links.
@@ -5595,6 +5630,21 @@ const styles = StyleSheet.create({
   ruiHeroHeight: { minHeight: 170 },
   ruiHeroImage: { position: "absolute", top: 0, right: 0, width: "55%", height: "100%" },
   ruiHeroOverlay: { position: "absolute", left: 0, right: 0, top: 0, bottom: 0 },
+  eventBrowseControls: { marginTop: 16, gap: 13 },
+  eventStatusTabs: { flexDirection: "row", alignItems: "center", gap: 8, paddingVertical: 2, paddingRight: 4 },
+  eventStatusTab: { flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: "#FFFFFF", borderWidth: 1, borderColor: "#DAE6E3", borderRadius: 9, paddingHorizontal: 14, minHeight: 43 },
+  eventStatusTabActive: { backgroundColor: "#087D70", borderColor: "#087D70" },
+  eventStatusTabText: { fontFamily: vsType.family, fontSize: 14, fontWeight: "700", color: "#3C5C63" },
+  eventStatusTabTextActive: { color: "#FFFFFF" },
+  eventStatusCount: { fontSize: 12, fontWeight: "800", color: "#688384", backgroundColor: "#EFF5F4", paddingHorizontal: 6, paddingVertical: 3, borderRadius: 6, overflow: "hidden" },
+  eventStatusCountActive: { color: "#076D62", backgroundColor: "#FFFFFF" },
+  eventFilterToolbar: { flexDirection: "row", flexWrap: "wrap", gap: 10, alignItems: "center", paddingVertical: 11, paddingHorizontal: 13, backgroundColor: "#F8FAFA", borderWidth: 1, borderColor: "#E2EBE9", borderRadius: 10 },
+  eventFilterCaption: { flexDirection: "row", gap: 7, alignItems: "center" },
+  eventFilterCaptionText: { fontSize: 13, fontWeight: "700", color: "#607785" },
+  eventFilterSelect: { minWidth: 150, maxWidth: 220, flexGrow: 1, flexBasis: 155, minHeight: 41, paddingHorizontal: 13, borderRadius: 8, borderWidth: 1, borderColor: "#D6E4E0", backgroundColor: "#FFFFFF", flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 9 },
+  eventFilterSelectText: { fontSize: 13, fontWeight: "600", color: "#264E56", flexShrink: 1 },
+  eventClearFilter: { minHeight: 41, paddingHorizontal: 9, alignItems: "center", flexDirection: "row", gap: 5 },
+  eventClearFilterText: { fontSize: 13, fontWeight: "700", color: "#477383" },
   ruiFilterBar: { flexDirection: "row", flexWrap: "wrap", gap: 9, marginTop: 15, marginBottom: 11 },
   ruiFilterSelect: { flex: 1, minWidth: 160, borderWidth: 1, borderColor: "#DCE7E9", backgroundColor: "white", borderRadius: 9, paddingHorizontal: 12, minHeight: 39, flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 },
   ruiFilterLabel: { color: "#3D5B73", fontSize: vsType.size.meta, fontWeight: "700", flexShrink: 1 },
