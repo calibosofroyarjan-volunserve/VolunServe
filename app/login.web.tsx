@@ -135,6 +135,7 @@ export default function WebLogin() {
     // Clear an older attempt's notice without creating a new error.
     consumeGoogleLoginNotice();
     let selectedUid: string | null = null;
+    let authorizationDenied = false;
     try {
       setLoading(true);
       setPendingAction("google");
@@ -159,9 +160,11 @@ export default function WebLogin() {
 
       // Staff access must remain password-only, regardless of approval status.
       if (profile.role === "admin" || profile.role === "superadmin") {
+        authorizationDenied = true;
         throw new Error("Staff accounts must use email and password. This Google account belongs to an Admin or Super Admin; use the sign-in fields above.");
       }
       if (!isApprovedProfile(profile)) {
+        authorizationDenied = true;
         if (profile.status === "rejected") {
           throw new Error("Your registration was rejected. Contact the VolunServe administrator for details.");
         }
@@ -178,9 +181,10 @@ export default function WebLogin() {
       // Preserve every Google failure (including a cancelled or blocked popup)
       // across any auth-driven remount, not only a successfully selected UID.
       rememberGoogleLoginNotice(message);
-      if (selectedUid && auth.currentUser?.uid === selectedUid) {
-        // Authentication succeeded but VolunServe authorization failed.
-        // Save feedback BEFORE sign-out: the global auth guard may remount Login.
+      if (authorizationDenied && selectedUid && auth.currentUser?.uid === selectedUid) {
+        // Only confirmed staff/denied profiles require sign-out here.
+        // A network error during profile lookup is NOT authorization denial:
+        // preserve the Firebase session so retry does not create a login loop.
         try {
           await logoutUser();
         } catch {
