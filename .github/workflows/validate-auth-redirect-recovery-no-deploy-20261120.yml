@@ -37,6 +37,7 @@ jobs:
         run: |
           set -euo pipefail
           node scripts/test-auth-link-session-recovery.cjs
+          node scripts/test-signup-email-policy-preservation.cjs
           node scripts/test-unified-login-routing.cjs
           node scripts/test-login-ui-release.cjs
           node scripts/test-signup-email-first-middle-optional.cjs
@@ -51,6 +52,7 @@ jobs:
           const changes=cp.execFileSync('git',['diff','--name-status','--no-renames',source,'HEAD'],{encoding:'utf8'}).trim().split('\n').filter(Boolean);
           const allowed=['app/_layout.tsx','app/login.web.tsx','lib/useUserSession.ts','lib/firebaseAuth.ts',
             'scripts/test-auth-link-session-recovery.cjs',
+            'scripts/test-signup-email-policy-preservation.cjs',
             '.github/workflows/validate-auth-redirect-recovery-no-deploy-20261120.yml'];
           assert.deepEqual(changes.map(v=>v.split('\t')[1]).sort(),allowed.sort());
           assert(changes.every(v=>/^[AM]\t/.test(v)));
