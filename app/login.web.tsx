@@ -41,6 +41,35 @@ import {
  * No email addresses, tokens, UIDs or technical error payloads are stored.
  */
 const GOOGLE_LOGIN_NOTICE_KEY = "volunserve.google-login-notice";
+const PASSWORD_LOGIN_NOTICE_KEY = "volunserve.password-login-notice";
+
+// Keep only a short-lived, non-sensitive message through a Firebase Auth
+// sign-out/remount. This avoids the Login form silently clearing errors.
+function rememberPasswordLoginNotice(message: string) {
+  if (typeof window === "undefined") return;
+  try {
+    window.sessionStorage.setItem(PASSWORD_LOGIN_NOTICE_KEY,
+      JSON.stringify({ message, savedAt: Date.now() }));
+  } catch { /* private mode/storage disabled */ }
+}
+function readPasswordLoginNotice(): string {
+  if (typeof window === "undefined") return "";
+  try {
+    const raw = window.sessionStorage.getItem(PASSWORD_LOGIN_NOTICE_KEY);
+    if (!raw) return "";
+    const record = JSON.parse(raw) as { message?: unknown; savedAt?: unknown };
+    if (typeof record.message !== "string" || typeof record.savedAt !== "number" ||
+        Date.now() - record.savedAt > 30000) {
+      window.sessionStorage.removeItem(PASSWORD_LOGIN_NOTICE_KEY);
+      return "";
+    }
+    return record.message;
+  } catch { return ""; }
+}
+function clearPasswordLoginNotice() {
+  if (typeof window === "undefined") return;
+  try { window.sessionStorage.removeItem(PASSWORD_LOGIN_NOTICE_KEY); } catch { /* disabled */ }
+}
 
 function rememberGoogleLoginNotice(message: string) {
   if (typeof window === "undefined") return;
@@ -74,10 +103,25 @@ export default function WebLogin() {
   useEffect(() => {
     const pending = consumeGoogleLoginNotice();
     if (pending) setGoogleFeedback(pending);
+    const passwordNotice = readPasswordLoginNotice();
+    if (passwordNotice) setFeedback({ type: "error", message: passwordNotice });
+    // An auth sign-out can remount Login before the async catch finishes.
+    // Refresh the visible notice without any credential/token storage.
+    const refreshPasswordNotice = () => {
+      const message = readPasswordLoginNotice();
+      if (message) setFeedback({ type: "error", message });
+    };
+    if (typeof window !== "undefined") {
+      window.addEventListener("volunserve-password-login-feedback", refreshPasswordNotice);
+      return () => window.removeEventListener("volunserve-password-login-feedback", refreshPasswordNotice);
+    }
   }, []);
   const [feedback, setFeedback] = useState<{ type: "error" | "success"; message: string }>({ type: "error", message: "" });
   const showError = (message: string) => setFeedback({ type: "error", message });
-  const clearFeedback = () => setFeedback({ type: "error", message: "" });
+  const clearFeedback = () => {
+    clearPasswordLoginNotice();
+    setFeedback({ type: "error", message: "" });
+  };
   const [attemptedLogin, setAttemptedLogin] = useState(false);
   const [emailTouched, setEmailTouched] = useState(false);
   const [passwordTouched, setPasswordTouched] = useState(false);
@@ -110,7 +154,8 @@ export default function WebLogin() {
       await applySessionPersistence();
       const { profile } = await loginUser(
         email.trim().toLowerCase(),
-        password
+        password,
+        { resumeIncompleteSignup: true }
       );
       let destination;
       try {
@@ -119,9 +164,25 @@ export default function WebLogin() {
         await logoutUser();
         throw accessError;
       }
+      clearPasswordLoginNotice();
       router.replace(destination as any);
     } catch (error: any) {
-      showError(userFacingError(error, "Unable to sign in. Check your details and try again."));
+      if (error instanceof Error &&
+          error.message === "No VolunServe profile was found for this account. Please register first." &&
+          auth.currentUser?.email?.trim().toLowerCase() === email.trim().toLowerCase() &&
+          auth.currentUser.emailVerified) {
+        // Firebase has verified the identity but this UID has no completed
+        // Resident profile. Continue existing email-first signup instead of
+        // discarding the session or routing to Guest Preview.
+        router.replace("/signup");
+        return;
+      }
+      const message = userFacingError(error, "Unable to sign in. Check your details and try again.");
+      rememberPasswordLoginNotice(message);
+      showError(message);
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new Event("volunserve-password-login-feedback"));
+      }
     } finally {
       setLoading(false);
       setPendingAction(null);
@@ -135,6 +196,7 @@ export default function WebLogin() {
     // Clear an older attempt's notice without creating a new error.
     consumeGoogleLoginNotice();
     let selectedUid: string | null = null;
+    let authorizationDenied = false;
     try {
       setLoading(true);
       setPendingAction("google");
@@ -157,11 +219,18 @@ export default function WebLogin() {
         throw new Error(userFacingError(profileError, "We could not check your VolunServe registration. Check your connection and try again."));
       }
 
+      if (String(profile.role || "").toLowerCase() === "guest") {
+        authorizationDenied = true;
+        throw new Error("Guest Preview records are not registered accounts. Contact an administrator for account migration.");
+      }
+
       // Staff access must remain password-only, regardless of approval status.
       if (profile.role === "admin" || profile.role === "superadmin") {
+        authorizationDenied = true;
         throw new Error("Staff accounts must use email and password. This Google account belongs to an Admin or Super Admin; use the sign-in fields above.");
       }
       if (!isApprovedProfile(profile)) {
+        authorizationDenied = true;
         if (profile.status === "rejected") {
           throw new Error("Your registration was rejected. Contact the VolunServe administrator for details.");
         }
@@ -178,9 +247,10 @@ export default function WebLogin() {
       // Preserve every Google failure (including a cancelled or blocked popup)
       // across any auth-driven remount, not only a successfully selected UID.
       rememberGoogleLoginNotice(message);
-      if (selectedUid && auth.currentUser?.uid === selectedUid) {
-        // Authentication succeeded but VolunServe authorization failed.
-        // Save feedback BEFORE sign-out: the global auth guard may remount Login.
+      if (authorizationDenied && selectedUid && auth.currentUser?.uid === selectedUid) {
+        // Only confirmed staff/denied profiles require sign-out here.
+        // A network error during profile lookup is NOT authorization denial:
+        // preserve the Firebase session so retry does not create a login loop.
         try {
           await logoutUser();
         } catch {

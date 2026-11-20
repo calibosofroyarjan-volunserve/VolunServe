@@ -15,6 +15,7 @@ import React, {
 } from "react";
 import {
   ActivityIndicator,
+  Pressable,
   StyleSheet,
   Text,
   View,
@@ -47,6 +48,7 @@ export default function RootLayout() {
   const [authChecked, setAuthChecked] = useState(false);
   const [profileLoading, setProfileLoading] = useState(false);
   const [guardLoading, setGuardLoading] = useState(false);
+  const [profileReadError, setProfileReadError] = useState<string | null>(null);
   const [authUser, setAuthUser] =
     useState<User | null>(null);
   const [profile, setProfile] =
@@ -73,6 +75,7 @@ export default function RootLayout() {
           user?.uid ?? null;
         profileRetryInFlightRef.current = false;
         setAuthUser(user);
+        setProfileReadError(null);
         if (!user) {
           setProfile(null);
           setProfileLoading(false);
@@ -91,7 +94,8 @@ export default function RootLayout() {
             return;
           }
           setProfile(userProfile);
-        } catch {
+          setProfileReadError(null);
+        } catch (error) {
           if (
             !active ||
             currentAuthUidRef.current !== user.uid
@@ -107,6 +111,11 @@ export default function RootLayout() {
            * protected route.
            */
           setProfile(null);
+          // A temporary Firestore outage must NEVER sign out a valid
+          // Firebase Auth session. Keep protected routes blocked and allow retry.
+          if (!(error instanceof Error && error.message === "Profile not found.")) {
+            setProfileReadError("We could not check your account. Check your connection and try again.");
+          }
         } finally {
           if (
             active &&
@@ -123,6 +132,37 @@ export default function RootLayout() {
       unsubscribe();
     };
   }, []);
+
+  const retryProfileAccess = async () => {
+    if (!authUser || profileRetryInFlightRef.current) return;
+    const uid = authUser.uid;
+    profileRetryInFlightRef.current = true;
+    setGuardLoading(true);
+    try {
+      const refreshed = await getUserProfile(uid);
+      if (currentAuthUidRef.current !== uid) return;
+      setProfile(refreshed);
+      setProfileReadError(null);
+    } catch (error) {
+      if (currentAuthUidRef.current !== uid) return;
+      if (error instanceof Error && error.message === "Profile not found." &&
+          canResumeEmailFirstSignup(authUser)) {
+        // Auth-only registration belongs in the existing signup wizard,
+        // not in a newly created Guest profile or a forced logout loop.
+        setProfileReadError(null);
+        router.replace("/signup");
+      } else {
+        setProfileReadError(
+          error instanceof Error && error.message === "Profile not found."
+            ? "No VolunServe profile was found. Sign out and complete your registration."
+            : "We could not check your account. Check your connection and try again."
+        );
+      }
+    } finally {
+      if (currentAuthUidRef.current === uid) setGuardLoading(false);
+      profileRetryInFlightRef.current = false;
+    }
+  };
 
   useEffect(() => {
     if (
@@ -201,6 +241,12 @@ export default function RootLayout() {
      * immediately re-run/clean up this same effect and could cancel the
      * retry before the Firestore profile is returned.
      */
+    if (profileReadError) {
+      // No protected content is mounted while the profile cannot be checked.
+      // Do not retry automatically on every render or turn this into a redirect loop.
+      return;
+    }
+
     if (!profile) {
       if (isLoginRoute || isSignupRoute || isAdministrativeLoginRoute) {
         return;
@@ -231,13 +277,17 @@ export default function RootLayout() {
           const hasGoogleIdentity = authUser.providerData.some(
             (provider) => provider.providerId === GoogleAuthProvider.PROVIDER_ID
           );
-          if (
-            (hasGoogleIdentity || canResumeEmailFirstSignup(authUser)) &&
-            error instanceof Error &&
-            error.message === "Profile not found."
-          ) {
+          const profileMissing = error instanceof Error &&
+            error.message === "Profile not found.";
+          if (!profileMissing) {
+            // Transient network/Firestore failure is not invalid credentials.
+            // Preserve Firebase Auth and display a retryable blocking screen.
+            setProfileReadError("We could not check your account. Check your connection and try again.");
+          } else if (hasGoogleIdentity || canResumeEmailFirstSignup(authUser)) {
             router.replace("/signup");
           } else {
+            // Only a confirmed missing profile without a registration flow
+            // keeps the old fail-closed logout behavior.
             try {
               await logoutUser();
             } finally {
@@ -406,6 +456,7 @@ export default function RootLayout() {
     fontsLoaded,
     profile,
     profileLoading,
+    profileReadError,
     router,
     segments,
   ]);
@@ -431,6 +482,29 @@ export default function RootLayout() {
             ? "Checking your account..."
             : "Loading VolunServe..."}
         </Text>
+      </View>
+    );
+  }
+
+  const route: string = segments[0] ?? "";
+  const publicAuthRoute = ["login","signup","admin-login","admin-request","public"].includes(route) ||
+    route === "verify-certificate" ||
+    (route === "(tabs)" && (segments as readonly string[])[1] === "verify-certificate");
+
+  if (authUser && profileReadError && !publicAuthRoute) {
+    return (
+      <View style={styles.recoveryScreen}>
+        <Text style={styles.recoveryTitle}>Account connection interrupted</Text>
+        <Text style={styles.recoveryText}>{profileReadError}</Text>
+        <Pressable accessibilityRole="button" accessibilityLabel="Retry checking account"
+          style={styles.recoveryButton} onPress={() => void retryProfileAccess()}>
+          <Text style={styles.recoveryButtonText}>Try Again</Text>
+        </Pressable>
+        <Pressable accessibilityRole="button" accessibilityLabel="Sign out"
+          style={styles.recoverySecondary}
+          onPress={() => void logoutUser().finally(() => router.replace("/login"))}>
+          <Text style={styles.recoverySecondaryText}>Sign Out</Text>
+        </Pressable>
       </View>
     );
   }
@@ -474,4 +548,16 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: "600",
   },
+  recoveryScreen: {
+    flex:1,alignItems:"center",justifyContent:"center",
+    padding:24,backgroundColor:"#F8FAFC",
+  },
+  recoveryTitle: {fontSize:19,fontWeight:"700",color:"#173D32",textAlign:"center"},
+  recoveryText: {fontSize:13,lineHeight:20,color:"#64748B",marginTop:10,
+    maxWidth:390,textAlign:"center"},
+  recoveryButton: {minHeight:44,backgroundColor:"#075F47",borderRadius:8,
+    alignItems:"center",justifyContent:"center",paddingHorizontal:26,marginTop:22},
+  recoveryButtonText: {fontSize:13,fontWeight:"700",color:"#FFFFFF"},
+  recoverySecondary: {paddingHorizontal:22,paddingVertical:14,marginTop:6},
+  recoverySecondaryText: {fontSize:12,fontWeight:"600",color:"#64748B"},
 });

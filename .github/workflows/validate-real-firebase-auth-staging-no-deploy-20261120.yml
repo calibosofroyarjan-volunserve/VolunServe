@@ -1,0 +1,99 @@
+name: Real Firebase Auth Staging Gate - NO DEPLOY
+on:
+  # Exact opt-in commit marker only. Ordinary code pushes cannot consume secrets.
+  # This works while the workflow lives in this review branch (not the default).
+  push:
+    branches:
+      - integration/auth-linking-current-live-20261120
+  # Becomes manually runnable if this workflow is later registered on default.
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  real-staging:
+    name: Separate Firebase staging auth gate (requires staging secrets)
+    if: ${{ github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && contains(github.event.head_commit.message, '[RUN_STAGING_AUTH_ONCE]')) }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    environment: staging
+    env:
+      CI: 'true'
+      EXPO_NO_TELEMETRY: '1'
+      EXPO_PUBLIC_VOLUNSERVE_ENV: staging
+      EXPO_PUBLIC_FIREBASE_API_KEY: ${{ secrets.VOLUNSERVE_STAGING_FIREBASE_API_KEY }}
+      EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN: ${{ secrets.VOLUNSERVE_STAGING_FIREBASE_AUTH_DOMAIN }}
+      EXPO_PUBLIC_FIREBASE_PROJECT_ID: ${{ secrets.VOLUNSERVE_STAGING_FIREBASE_PROJECT_ID }}
+      EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET: ${{ secrets.VOLUNSERVE_STAGING_FIREBASE_STORAGE_BUCKET }}
+      EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.VOLUNSERVE_STAGING_FIREBASE_MESSAGING_SENDER_ID }}
+      EXPO_PUBLIC_FIREBASE_APP_ID: ${{ secrets.VOLUNSERVE_STAGING_FIREBASE_APP_ID }}
+      VOLUNSERVE_STAGING_TEST_EMAIL: ${{ secrets.VOLUNSERVE_STAGING_TEST_EMAIL }}
+      VOLUNSERVE_STAGING_TEST_PASSWORD: ${{ secrets.VOLUNSERVE_STAGING_TEST_PASSWORD }}
+    steps:
+      - name: Strict staging project validation; never fall back to production
+        run: |
+          set -euo pipefail
+          test "$EXPO_PUBLIC_VOLUNSERVE_ENV" = staging
+          test -n "$EXPO_PUBLIC_FIREBASE_API_KEY"
+          test -n "$EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN"
+          test -n "$EXPO_PUBLIC_FIREBASE_PROJECT_ID"
+          test -n "$EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET"
+          test -n "$EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID"
+          test -n "$EXPO_PUBLIC_FIREBASE_APP_ID"
+          test -n "$VOLUNSERVE_STAGING_TEST_EMAIL"
+          test -n "$VOLUNSERVE_STAGING_TEST_PASSWORD"
+          test "$EXPO_PUBLIC_FIREBASE_PROJECT_ID" != "volunserve-3aa5b"
+          test "$EXPO_PUBLIC_FIREBASE_PROJECT_ID" != "demo-volunserve"
+          test "$EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN" = "$EXPO_PUBLIC_FIREBASE_PROJECT_ID.firebaseapp.com"
+          case "$EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET" in "$EXPO_PUBLIC_FIREBASE_PROJECT_ID".*) ;; *) exit 1 ;; esac
+          echo "PASS complete, separate nonproduction staging project and a dedicated existing test identity"
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Assert latest live-derived code and unchanged sensitive modules
+        run: |
+          set -euo pipefail
+          node - <<'NODE'
+          const cp=require('node:child_process'),assert=require('node:assert/strict');
+          const base='9e5ebb46d741c2bedb75d16c470cefba7141b345';
+          for(const f of [
+            'lib/firebase.ts','lib/registrationEmailPolicy.ts',
+            'lib/disposableEmailDomains.generated.ts','lib/loginInputValidation.ts',
+            'components/auth/EmailFirstSignup.tsx','lib/emailFirstSignupAuth.ts',
+            'app/signup.web.tsx','app/signup.tsx','firestore.rules','storage.rules',
+            'functions/index.js','firebase.json','.firebaserc','package-lock.json'
+          ]) {
+            assert.equal(cp.execFileSync('git',['rev-parse',base+':'+f],{encoding:'utf8'}).trim(),
+              cp.execFileSync('git',['rev-parse','HEAD:'+f],{encoding:'utf8'}).trim(),
+              'BLOCKED original signup/backend/security was changed: '+f);
+          }
+          console.log('PASS protected live source and all signup restrictions unchanged');
+          NODE
+      - name: Install frozen dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Run auth and signup security regressions
+        run: |
+          node scripts/test-auth-link-session-recovery.cjs
+          node scripts/test-signup-email-policy-preservation.cjs
+          npx tsc --noEmit --incremental false
+      - name: Generate real separate-staging web build, NO DEPLOY
+        run: |
+          set -euo pipefail
+          npx expo export --platform web --clear
+          test -s dist/index.html
+      - name: Prepare Chromium
+        run: |
+          npm install --no-save --package-lock=false --no-audit --no-fund playwright@1.56.1
+          npx playwright install --with-deps chromium
+      - name: Staging approved test account login + protected routing + refresh
+        run: node scripts/test-auth-real-staging-login-no-deploy-20261120.cjs
+      - name: Release gate requirements - manual Google and inbox delivery verification
+        run: |
+          echo "Automated real staging email/password smoke passed."
+          echo "Still REQUIRED: manually verify Google OAuth consent/link popup with test identity."
+          echo "Still REQUIRED: verify Gmail/Yahoo verification delivery and a separate-browser email link."
+          echo "NO live release, data writes, account creation, Hosting or Functions deployment."
