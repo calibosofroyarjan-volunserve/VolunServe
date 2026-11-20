@@ -1,3 +1,4 @@
+import ResidentDesktopActions from "../../components/layout/ResidentDesktopActions";
 import { AppAlert } from "../../lib/appDialog";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { Redirect, router, Tabs, useSegments, type Href } from "expo-router";
@@ -334,7 +335,15 @@ export default function TabLayout() {
 
   return (
     <Tabs
-      screenOptions={{ headerShown: false, tabBarPosition: "left" }}
+      screenOptions={({ route }) => ({
+        // Resident and Volunteer Home already render this header themselves.
+        // Other tabs need account actions above maps, forms, and scroll content.
+        headerShown:
+          (currentMode === "resident" || currentMode === "volunteer") &&
+          route.name !== "index",
+        header: () => <ResidentDesktopActions />,
+        tabBarPosition: "left",
+      })}
       tabBar={(props) => <DesktopTabBar {...props} profile={profile} />}
     />
   );
