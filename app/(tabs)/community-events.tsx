@@ -1184,9 +1184,16 @@ export default function CommunityEventsScreen() {
         const priority = rank[a.status] - rank[b.status];
         if (priority) return priority;
       }
-      if (section === "explore" && eventListFilter === "new") {
-        const publishedDifference = getTime(b.createdAt) - getTime(a.createdAt);
-        if (publishedDifference) return publishedDifference;
+      if (section === "explore" && (eventListFilter === "new" || dateSort === "latest")) {
+        // Newest First means most recently published, not the latest calendar date.
+        // Records without publication timestamps appear after dated records.
+        const aPublished = getTime(a.createdAt);
+        const bPublished = getTime(b.createdAt);
+        if (aPublished !== bPublished) {
+          if (!aPublished) return 1;
+          if (!bPublished) return -1;
+          return bPublished - aPublished;
+        }
       }
       const aDate = `${a.date || ""}T${a.time || "00:00"}`;
       const bDate = `${b.date || ""}T${b.time || "00:00"}`;
