@@ -1,12 +1,18 @@
 name: Real Firebase Auth Staging Gate - NO DEPLOY
 on:
-  # Manual-only: never consume future staging test secrets just because code was pushed.
+  # Exact opt-in commit marker only. Ordinary code pushes cannot consume secrets.
+  # This works while the workflow lives in this review branch (not the default).
+  push:
+    branches:
+      - integration/auth-linking-current-live-20261120
+  # Becomes manually runnable if this workflow is later registered on default.
   workflow_dispatch:
 permissions:
   contents: read
 jobs:
   real-staging:
     name: Separate Firebase staging auth gate (requires staging secrets)
+    if: ${{ github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && contains(github.event.head_commit.message, '[RUN_STAGING_AUTH_ONCE]')) }}
     runs-on: ubuntu-24.04
     timeout-minutes: 35
     environment: staging
