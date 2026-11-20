@@ -74,8 +74,12 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          npm install --no-save --package-lock=false --no-audit --no-fund playwright@1.56.0 firebase-admin@13
-          npx playwright install chromium --with-deps
+          # Keep browser-only packages isolated from the Expo app lockfile.
+          mkdir -p .qa-deps
+          npm install --prefix .qa-deps --no-save --package-lock=false --no-audit --no-fund playwright@latest firebase-admin@13
+          # Ubuntu 26.04 is not supported by older Playwright install-deps;
+          # use its bundled Chromium fallback without changing runner OS packages.
+          .qa-deps/node_modules/.bin/playwright install chromium
       - name: Enable local Firebase emulator in runner checkout ONLY
         shell: bash
         run: |
@@ -100,6 +104,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          export NODE_PATH="$PWD/.qa-deps/node_modules"
           npx firebase-tools emulators:exec \
             --project demo-volunserve \
             --only auth,firestore \
