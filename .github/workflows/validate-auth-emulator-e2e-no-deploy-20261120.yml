@@ -1,0 +1,111 @@
+name: Authenticated Login E2E - Firebase Emulators Only (NO DEPLOY)
+on:
+  push:
+    branches:
+      - qa/auth-emulator-e2e-20261120
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  browser-authenticated:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      CI: 'true'
+      EXPO_NO_TELEMETRY: '1'
+      EXPO_PUBLIC_VOLUNSERVE_ENV: staging
+      EXPO_PUBLIC_FIREBASE_API_KEY: local-emulator-only
+      EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN: demo-volunserve.firebaseapp.com
+      EXPO_PUBLIC_FIREBASE_PROJECT_ID: demo-volunserve
+      EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET: demo-volunserve.appspot.com
+      EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID: '000000000000'
+      EXPO_PUBLIC_FIREBASE_APP_ID: demo-volunserve-local-web
+      GCLOUD_PROJECT: demo-volunserve
+      FIREBASE_AUTH_EMULATOR_HOST: 127.0.0.1:9099
+      FIRESTORE_EMULATOR_HOST: 127.0.0.1:8080
+      JAVA_TOOL_OPTIONS: -Xmx2g
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Assert exact source, closed staging project, no production changes
+        run: |
+          set -euo pipefail
+          test "$GCLOUD_PROJECT" = demo-volunserve
+          test "$EXPO_PUBLIC_VOLUNSERVE_ENV" = staging
+          test "$EXPO_PUBLIC_FIREBASE_PROJECT_ID" = demo-volunserve
+          node - <<'NODE'
+          const assert=require('node:assert/strict'),cp=require('node:child_process');
+          const source='47d92c8687364de5bd1b758f0a2732fbeb16c8e8';
+          const changes=cp.execFileSync('git',['diff','--name-status','--no-renames',source,'HEAD'],{encoding:'utf8'}).trim().split('\n').filter(Boolean);
+          assert.deepEqual(changes.map(t=>t.split('\t')[1]).sort(),[
+            'scripts/test-auth-emulator-browser-e2e-20261120.cjs',
+            '.github/workflows/validate-auth-emulator-e2e-no-deploy-20261120.yml'
+          ].sort());
+          assert(changes.every(t=>t.startsWith('A\t')),"Only new QA-only files are allowed");
+          const paths=['lib/firebase.ts','lib/firebaseAuth.ts','lib/registrationEmailPolicy.ts',
+            'lib/disposableEmailDomains.generated.ts','components/auth/EmailFirstSignup.tsx',
+            'app/signup.web.tsx','app/login.web.tsx','firestore.rules','firebase.json',
+            'functions/index.js','.firebaserc','package-lock.json'];
+          for(const file of paths){
+            const before=cp.execFileSync('git',['rev-parse',source+':'+file],{encoding:'utf8'}).trim();
+            const after=cp.execFileSync('git',['rev-parse','HEAD:'+file],{encoding:'utf8'}).trim();
+            assert.equal(before,after,'BLOCKED protected file drift: '+file);
+          }
+          console.log('PASS QA files only; production/login/signup and rules untouched');
+          NODE
+      - name: Install locked dependencies
+        run: npm ci --no-audit --no-fund
+      - name: TypeScript and original authentication regression tests
+        run: |
+          set -euo pipefail
+          npx tsc --noEmit --incremental false
+          node scripts/test-auth-link-session-recovery.cjs
+          node scripts/test-signup-email-policy-preservation.cjs
+          node scripts/test-staging-firebase-release-isolation.cjs
+      - name: Prepare transient local emulator build (never commit or deploy)
+        run: |
+          set -euo pipefail
+          node - <<'NODE'
+          const fs=require('node:fs'),assert=require('node:assert/strict');
+          const p='lib/firebase.ts',raw=fs.readFileSync(p,'utf8');
+          const marker='const ENABLE_LOCAL_TESTING = false;';
+          assert.equal(raw.split(marker).length,2,'BLOCKED unexpected emulator switch');
+          assert(raw.includes('const isLocalBrowser =') && raw.includes('if (usingFirebaseEmulators)'));
+          assert(raw.includes('projectId: "demo-volunserve"'));
+          fs.writeFileSync(p,raw.replace(marker,'const ENABLE_LOCAL_TESTING = true;'));
+          console.log('PASS temporary in-run local-only emulator switch (source remains unchanged in GitHub)');
+          NODE
+          npx expo export --platform web --clear
+          test -f dist/index.html
+          git restore -- lib/firebase.ts
+          git diff --exit-code
+      - name: Install Chromium
+        run: |
+          set -euo pipefail
+          npm install --no-save --package-lock=false --no-audit --no-fund playwright@1.56.1
+          npx playwright install --with-deps chromium
+      - name: Exercise actual Firebase Auth and Firestore emulator login in Chromium
+        run: |
+          set -euo pipefail
+          npx firebase emulators:exec --project demo-volunserve --only auth,firestore --non-interactive "node scripts/test-auth-emulator-browser-e2e-20261120.cjs"
+      - name: Archive browser QA results and failure screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: authenticated-auth-emulator-browser-evidence
+          path: artifacts/auth-emulator-e2e/
+          if-no-files-found: ignore
+          retention-days: 5
+      - name: Confirm no publication or production access
+        if: always()
+        run: |
+          echo "NO DEPLOY. NO production credentials. Emulator project: demo-volunserve."
