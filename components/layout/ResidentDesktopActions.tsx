@@ -11,7 +11,12 @@ import {
   View,
 } from "react-native";
 
-import { volunserveTypography as vsType } from "../../constants/volunserveLiveUi";
+// Local header typography: current deployed source does not include the
+// separate volunserveLiveUi constants file used by some development branches.
+const vsType = {
+  family: "System",
+  size: { micro: 10, caption: 12, meta: 13, label: 14, bodyStrong: 16, section: 18 },
+} as const;
 import { db } from "../../lib/firebase";
 import {
   activeModeForProfile,
