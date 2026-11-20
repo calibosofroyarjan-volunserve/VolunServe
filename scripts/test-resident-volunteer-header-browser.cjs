@@ -92,12 +92,42 @@ async function clickAndCheck(page, label) {
   await button.waitFor({ state: "visible", timeout: 15000 });
   await button.click({ timeout: 15000 });
 }
+async function navigateThroughApp(page, mode, route) {
+  // Use the real Expo Router/React Navigation controls, not a direct page
+  // reload. Firebase Hosting clean URLs and Expo static export use different
+  // server fallbacks; direct URL reloads can accidentally render Home.
+  const sidebar = {
+    "disaster-response": "Emergency Reports",
+    "resident": "Request Assistance",
+    "community-events": "Community Events",
+    "donation": "Donations",
+    "volunteer": "Emergency Tasks",
+    "certificate": "My Certificates",
+  };
+  if (sidebar[route]) {
+    await page.getByText(sidebar[route], { exact: true }).first().click({ timeout: 15000 });
+  } else if (route === "my-cases") {
+    await clickAndCheck(page, "Open account menu");
+    await clickAndCheck(page, "My Reports");
+  } else if (route === "profile") {
+    await clickAndCheck(page, "Open account menu");
+    await clickAndCheck(page, "My Profile");
+  } else if (route === "notifications") {
+    await clickAndCheck(page, "Open notifications");
+    await clickAndCheck(page, "View all notifications");
+  } else {
+    throw Error("Unsupported navigation route " + route);
+  }
+  await page.waitForURL(u => u.pathname.endsWith("/" + route), { timeout: 20000 });
+  console.log("PASS in-app navigation " + mode + " /" + route);
+}
+
 async function accountAndBell(page, mode, route) {
   const show = async p => {
     await page.screenshot({path: path.join(root, "test-artifacts", mode + "-" + route + "-" + p + ".png")}).catch(() => {});
   };
   try {
-    await page.goto(baseUrl + "/" + route, { waitUntil: "domcontentloaded", timeout: 25000 });
+    await navigateThroughApp(page, mode, route);
     const bell = page.getByRole("button", { name: "Open notifications" });
     await bell.waitFor({ state: "visible", timeout: 25000 });
     await bell.click({ timeout: 15000 });
