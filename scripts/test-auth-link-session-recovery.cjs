@@ -37,7 +37,7 @@ check("Google login signs out only after confirmed denial, not profile lookup er
   assert(login.includes('authorizationDenied = true;'));
   assert(login.includes('if (authorizationDenied && selectedUid && auth.currentUser?.uid === selectedUid)'));
   const transient = login.slice(login.indexOf('catch (profileError: unknown)'),
-    login.indexOf('// Staff access must remain password-only'));
+    login.indexOf('if (String(profile.role || "").toLowerCase() === "guest")'));
   assert(!transient.includes('authorizationDenied = true'));
   assert(login.includes('profile.role === "admin" || profile.role === "superadmin"'));
   assert(login.includes('!isApprovedProfile(profile)'));
