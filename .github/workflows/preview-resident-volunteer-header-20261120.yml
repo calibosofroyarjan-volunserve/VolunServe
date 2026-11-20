@@ -1,7 +1,7 @@
 name: Resident Volunteer Header Temporary Preview (NO LIVE DEPLOY)
 on:
-  push:
-    branches: [fix/resident-actions-current-live-20261120]
+  pull_request:
+    branches: [ui/admin-profile-dropdown-20261120]
     paths: ['.github/workflows/preview-resident-volunteer-header-20261120.yml']
 permissions:
   contents: read
@@ -10,7 +10,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   preview-only:
-    if: github.repository == 'calibosofroyarjan-volunserve/VolunServe' && github.ref == 'refs/heads/fix/resident-actions-current-live-20261120'
+    if: github.repository == 'calibosofroyarjan-volunserve/VolunServe' && github.head_ref == 'fix/resident-actions-current-live-20261120' && github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     timeout-minutes: 55
     environment: production
