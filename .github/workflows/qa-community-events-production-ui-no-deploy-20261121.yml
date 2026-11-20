@@ -78,5 +78,34 @@ jobs:
           assert.equal(marker.firebaseProject, 'volunserve-3aa5b');
           console.log('PASS local Expo export revision; NOT DEPLOYED');
           NODE
+      - name: Check current public Hosting routes and revision (READ ONLY)
+        env:
+          VOLUNSERVE_HOSTING_URL: https://volunserve.com
+        run: |
+          node scripts/check-live-hosting.cjs
+          node - <<'NODE'
+          const assert=require('node:assert/strict');
+          const EXPECTED='eef240c29940cc2772c4467a5f7649ae8938b141';
+          (async()=>{
+            const r=await fetch('https://volunserve.com/volunserve-release.json?qa_readonly='+Date.now(),{
+              headers:{'cache-control':'no-cache'},signal:AbortSignal.timeout(15000)
+            });
+            assert(r.ok,'Live Hosting marker unavailable; block preview acceptance');
+            const marker=await r.json();
+            assert.equal(marker.app,'VolunServe');
+            assert.equal(marker.firebaseProject,'volunserve-3aa5b');
+            assert.equal(marker.revision,EXPECTED,'Production changed since QA baseline; block release');
+            console.log('PASS: production Hosting marker matches reviewed source baseline; READ ONLY');
+          })().catch(e=>{console.error(e.message||e);process.exitCode=1});
+          NODE
+      - name: Upload locally built Expo web preview bundle for review (NO DEPLOY)
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: community-events-production-derived-web-preview
+          path: dist/
+          if-no-files-found: error
+          retention-days: 3
+          compression-level: 6
       - name: Confirm no deployment was requested
-        run: echo 'QA complete — no production Hosting, rules, Auth, Functions, Render or Firestore changes.'
+        run: echo 'QA complete — local artifact only; no production Hosting, rules, Auth, Functions, Render or Firestore changes.'
