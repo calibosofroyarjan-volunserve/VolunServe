@@ -1,0 +1,93 @@
+name: Auth Browser Staging Smoke (NO DEPLOY)
+on:
+  push:
+    branches:
+      - fix/auth-link-redirect-session-recovery-20261120
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  staging-browser:
+    name: Isolated staging browser QA
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      CI: 'true'
+      EXPO_NO_TELEMETRY: '1'
+      EXPO_PUBLIC_VOLUNSERVE_ENV: staging
+      EXPO_PUBLIC_FIREBASE_API_KEY: test-staging-only
+      EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN: browser-ci-staging.firebaseapp.com
+      EXPO_PUBLIC_FIREBASE_PROJECT_ID: browser-ci-staging
+      EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET: browser-ci-staging.appspot.com
+      EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID: '000000000000'
+      EXPO_PUBLIC_FIREBASE_APP_ID: test-browser-ci-staging-only
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Verify exact staging and production isolation
+        run: |
+          set -euo pipefail
+          test "$EXPO_PUBLIC_VOLUNSERVE_ENV" = staging
+          test "$EXPO_PUBLIC_FIREBASE_PROJECT_ID" != volunserve-3aa5b
+          test "$EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN" = "$EXPO_PUBLIC_FIREBASE_PROJECT_ID.firebaseapp.com"
+          node - <<'NODE'
+          const assert=require('node:assert/strict'),cp=require('node:child_process');
+          const base='1a9e206bdfea2167b205ce6eec168757323a8e9f';
+          const changed=cp.execFileSync('git',['diff','--name-only',base,'HEAD'],{encoding:'utf8'}).trim().split('\n');
+          const allowed=new Set([
+            'app/_layout.tsx','app/login.web.tsx','lib/useUserSession.ts','lib/firebaseAuth.ts',
+            'scripts/test-auth-link-session-recovery.cjs',
+            'scripts/test-signup-email-policy-preservation.cjs',
+            'scripts/test-auth-browser-staging-smoke-20261120.cjs',
+            '.github/workflows/validate-auth-redirect-recovery-no-deploy-20261120.yml',
+            '.github/workflows/validate-auth-browser-staging-no-deploy-20261120.yml'
+          ]);
+          for(const f of changed)assert(allowed.has(f),'BLOCKED unexpected file in staging QA: '+f);
+          for(const f of ['firebase.json','.firebaserc','firestore.rules','storage.rules',
+            'functions/index.js','lib/registrationEmailPolicy.ts',
+            'lib/disposableEmailDomains.generated.ts','components/auth/EmailFirstSignup.tsx',
+            'app/signup.web.tsx','lib/signupRegistration.ts']){
+            const a=cp.execFileSync('git',['rev-parse',base+':'+f],{encoding:'utf8'}).trim();
+            const b=cp.execFileSync('git',['rev-parse','HEAD:'+f],{encoding:'utf8'}).trim();
+            assert.equal(a,b,'BLOCKED production or signup security drift: '+f);
+          }
+          console.log('PASS production signup/backend untouched; staging-only placeholder Firebase config');
+          NODE
+      - name: Install application dependencies
+        run: npm ci --no-audit --no-fund
+      - name: TypeScript and isolated Firebase validation
+        run: |
+          set -euo pipefail
+          npx tsc --noEmit --incremental false
+          node scripts/test-staging-firebase-release-isolation.cjs
+          node scripts/test-auth-link-session-recovery.cjs
+          node scripts/test-signup-email-policy-preservation.cjs
+      - name: Build staging web bundle (never publish)
+        run: |
+          set -euo pipefail
+          npx expo export --platform web --clear
+          test -f dist/index.html
+      - name: Install headless Chromium for real browser QA
+        run: |
+          set -euo pipefail
+          npm install --no-save --package-lock=false --no-audit --no-fund playwright@1.56.1
+          npx playwright install --with-deps chromium
+      - name: Real Chromium route and signup-validation smoke tests
+        run: node scripts/test-auth-browser-staging-smoke-20261120.cjs
+      - name: Save staging browser QA evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: auth-browser-staging-smoke
+          path: artifacts/auth-browser-staging/
+          if-no-files-found: ignore
+          retention-days: 5
+      - name: Verify no deploy executed
+        if: always()
+        run: |
+          echo "NO FIREBASE DEPLOY. NO account creation. NO live database writes."
