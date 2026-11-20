@@ -1,4 +1,3 @@
-import { volunserveTypography as vsType } from "../../constants/volunserveLiveUi";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { LinearGradient } from "expo-linear-gradient";
 import {useFonts} from "expo-font";
@@ -43,6 +42,13 @@ import {
 } from "../../lib/firebaseAuth";
 import { useUserSession } from "../../lib/useUserSession";
 import { canVolunteerJoinEvent, eventScheduleHasPassed } from "../../lib/communityEventJoinWindow";
+
+// Matches the screen's already loaded EventInter font; no new modules or font assets.
+const vsType = {
+  family: "EventInter",
+  size: { micro: 10, caption: 11, meta: 12, label: 13, body: 14, bodyStrong: 15, card: 16, section: 18, subheading: 20 },
+} as const;
+
 
 type Category =
   | "Clean-up Drive"
