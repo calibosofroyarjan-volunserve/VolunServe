@@ -77,7 +77,11 @@ async function newBrowserContext(browser){
  await context.route("**/*",route=>{
    const url=new URL(route.request().url());
    if(["127.0.0.1","localhost"].includes(url.hostname))return route.continue();
-   blocked.push(url.origin);
+   // The emulator OAuth relay needs public read-only Google iframe JS.
+   // Never allow Firebase APIs, OAuth account requests or production projects.
+   if(url.hostname==="apis.google.com" && route.request().method()==="GET" &&
+      (url.pathname.startsWith("/js/") || url.pathname.startsWith("/_/scs/")))return route.continue();
+   blocked.push(url.href.split("?")[0]);
    return route.abort("blockedbyclient");
  });
  const page=await context.newPage();
@@ -87,7 +91,7 @@ async function newBrowserContext(browser){
 async function run(browser,name,test){
  const x=await newBrowserContext(browser);
  try{
-   await test(x.page);
+   await test(x.page,x.blocked);
    const sensitiveExternal=x.blocked.filter(origin =>
      /firebase|identitytoolkit|securetoken|firestore[.]googleapis|volunserve[.]com/i.test(origin));
    assert.deepEqual(sensitiveExternal,[],"Real production Firebase/VolunServe was contacted");
@@ -97,6 +101,9 @@ async function run(browser,name,test){
    console.log("PASS browser auth emulator "+name);
  }catch(e){
    results.push({name,status:"FAIL",detail:String(e.message).slice(0,350)});
+   console.log("QA network blocked:",JSON.stringify(x.blocked.slice(-16)));
+   console.log("QA current route:",x.page.url());
+   console.log("QA visible state:",(await x.page.locator("body").innerText().catch(()=>"" )).slice(-1000));
    await x.page.screenshot({path:path.join(artifacts,name+".png"),fullPage:true}).catch(()=>{});
    throw e;
  }finally{
@@ -201,11 +208,17 @@ const password="Volun2026!SecureQA";
    });
 
    const googleEmail="qagooglelink2026@gmail.com";
-   await run(browser,"google-emulator-popup-link-password-same-uid",async(page)=>{
+   await run(browser,"google-emulator-popup-link-password-same-uid",async(page,blocked)=>{
      await page.goto(base+"/signup",{waitUntil:"domcontentloaded"});
-     const popupPromise=page.waitForEvent("popup",{timeout:20000});
+     const popupPromise=page.waitForEvent("popup",{timeout:12000});
      await page.getByRole("button",{name:"Continue with Google"}).click();
-     const popup=await popupPromise;
+     let popup;
+     try{popup=await popupPromise;}
+     catch(error){
+       console.log("QA Google popup failure; blocked URLs:",JSON.stringify(blocked.slice(-20)));
+       console.log("QA Google popup error state:",(await page.locator("body").innerText()).slice(-1300));
+       throw error;
+     }
      await popup.waitForLoadState("domcontentloaded");
      await popup.bringToFront();
      await popup.setViewportSize({width:480,height:900});
@@ -226,7 +239,7 @@ const password="Volun2026!SecureQA";
      assert(original?.localId,"Google emulator popup must sign into a real Auth UID");
      await page.getByPlaceholder("At least 8 characters").fill(password);
      await page.getByPlaceholder("Type the same password again").fill(password);
-     await page.getByRole("checkbox").check();
+     await page.getByRole("checkbox").click();
      await page.getByRole("button",{name:"Link Password & Continue"}).click();
      await page.getByText(/Step 3|Personal Details/i).first().waitFor({timeout:20000});
      const linked=await jsonRequest(authBase+"/identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key="+apiKey,
