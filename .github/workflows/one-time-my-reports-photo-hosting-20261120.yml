@@ -1,0 +1,175 @@
+# Fail-closed Hosting-only release from exact deployed SHA.
+# No database/rules/backend deploys. Protected default branch only, PR-gated.
+name: Guarded My Emergency Reports Photo UI Hosting Only
+on:
+  push:
+    branches: [live-protected]
+    paths: ['.github/workflows/one-time-my-reports-photo-hosting-20261120.yml']
+permissions:
+  contents: read
+concurrency:
+  group: volunserve-production-hosting-release
+  cancel-in-progress: false
+jobs:
+  guarded-photo-release:
+    if: github.repository == 'calibosofroyarjan-volunserve/VolunServe' && github.ref == 'refs/heads/live-protected'
+    runs-on: ubuntu-24.04
+    environment: production
+    timeout-minutes: 65
+    env:
+      CI: 'true'
+      EXPO_NO_TELEMETRY: '1'
+      EXPO_PUBLIC_VOLUNSERVE_ENV: production
+      EXPO_PUBLIC_IDENTITY_VERIFICATION_API_URL: https://volunserve.onrender.com
+      PROJECT: 'volunserve-3aa5b'
+      EXPECTED_LIVE: '9e5ebb46d741c2bedb75d16c470cefba7141b345'
+      SOURCE_SHA: '015e5d50c39bed0be99fcb679a8a835c05ef3e51'
+      SOURCE_BRANCH: 'ui/live-derived-my-reports-20261120'
+      EXPECTED_UI_BLOB: '91e0a7142e9713c6d57ed32ff3a07b0ddea572d8'
+      BACKUP_CHANNEL: 'myreports-photo-before-20261120'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: controller
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          submodules: false
+      - uses: actions/checkout@v4
+        with:
+          path: site
+          ref: '015e5d50c39bed0be99fcb679a8a835c05ef3e51'
+          fetch-depth: 0
+          submodules: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: site/package-lock.json
+      - name: Verify only exact QA-reviewed report UI change and unchanged live
+        working-directory: site
+        shell: bash
+        run: |
+          node <<'NODE'
+          const a=require('node:assert/strict'),cp=require('node:child_process');
+          const git=(...v)=>cp.execFileSync('git',v,{encoding:'utf8'}).trim();
+          (async()=>{
+            const base=process.env.EXPECTED_LIVE,src=process.env.SOURCE_SHA;
+            a.equal(process.env.GITHUB_REF,'refs/heads/live-protected');
+            a.equal(git('rev-parse','HEAD'),src);
+            cp.execFileSync('git',['merge-base','--is-ancestor',base,src]);
+            a.equal(git('diff','--name-status','--no-renames',base,src),
+              'M\tapp/(tabs)/my-cases.tsx','BLOCKED: unexpected source changes');
+            a.equal(git('rev-parse','HEAD:app/(tabs)/my-cases.tsx'),
+              process.env.EXPECTED_UI_BLOB,'BLOCKED: unreviewed photo UI');
+            a.equal(git('ls-remote','--heads','origin',process.env.SOURCE_BRANCH).split(/\s+/)[0],
+              src,'BLOCKED: candidate drift');
+            a.equal(git('ls-remote','--heads','origin','live-protected').split(/\s+/)[0],
+              process.env.GITHUB_SHA,'BLOCKED: controller drift');
+            const c=cp.execFileSync('git',['-C','../controller','diff','--name-only','HEAD^','HEAD'],
+              {encoding:'utf8'}).trim();
+            a.equal(c,'.github/workflows/one-time-my-reports-photo-hosting-20261120.yml','BLOCKED: unrelated files in protected release');
+            const qa=await fetch('https://api.github.com/repos/calibosofroyarjan-volunserve/VolunServe/actions/runs/44696877026',{
+              headers:{'User-Agent':'VolunServe-Release-Guard','Accept':'application/vnd.github+json'},
+              signal:AbortSignal.timeout(15000)});
+            a(qa.ok,'BLOCKED: QA run unavailable');
+            const q=await qa.json();
+            a.equal(q.conclusion,'success','BLOCKED: QA not successful');
+            a.equal(q.head_sha,'8687e4885cfa3c3ad0957d2597678fdb17923e59','BLOCKED: QA run revision drift');
+            const r=await fetch('https://volunserve.com/volunserve-release.json?photo_pre='+Date.now(),{
+              headers:{'Cache-Control':'no-cache'},signal:AbortSignal.timeout(15000)});
+            a(r.ok,'BLOCKED: Hosting marker unavailable');
+            const m=await r.json();
+            a.equal(m.app,'VolunServe');
+            a.equal(m.firebaseProject,process.env.PROJECT);
+            a.equal(m.revision,base,'BLOCKED: published production changed');
+            console.log('PASS: exact QA-reviewed UI only; original live source unchanged');
+          })().catch(e=>{console.error(e.stack||e);process.exitCode=1});
+          NODE
+      - name: Install exact live-derived dependencies
+        working-directory: site
+        run: npm ci --no-audit --no-fund
+      - name: TypeScript and critical role regression checks
+        working-directory: site
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx tsc --noEmit --incremental false
+          node scripts/test-embedded-emergency-map-navigation.cjs
+          node scripts/test-portal-resident-volunteer-ui-flow.cjs
+          node scripts/test-login-ui-release.cjs
+          node scripts/test-profile-certificates-account-menu.cjs
+      - name: Build and verify exact web artifact before any deploy
+        working-directory: site
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx expo export --platform web --clear
+          env -u GITHUB_SHA node scripts/verify-hosting-release.cjs
+          node - <<'NODE'
+          const a=require('node:assert/strict'),fs=require('node:fs');
+          const m=JSON.parse(fs.readFileSync('dist/volunserve-release.json','utf8'));
+          a.equal(m.revision,process.env.SOURCE_SHA);
+          a.equal(m.firebaseProject,process.env.PROJECT);
+          for(const p of ['my-cases','disaster-response','resident','volunteer','login']){
+            a(fs.existsSync('dist/'+p+'.html')||fs.existsSync('dist/'+p+'/index.html'),'Missing '+p);
+          }
+          console.log('PASS: exact web release source and routes');
+          NODE
+      - name: Final production revision and Hosting credential checks
+        working-directory: site
+        shell: bash
+        env:
+          FIREBASE_SA: ${{ secrets.VOLUNSERVE_PRODUCTION_HOSTING_SERVICE_ACCOUNT }}
+        run: |
+          set -euo pipefail
+          test -n "$FIREBASE_SA" || { echo "::error::Production Hosting secret absent"; exit 1; }
+          node <<'NODE'
+          const a=require('node:assert/strict'),fs=require('node:fs');
+          (async()=>{
+            const sa=JSON.parse(process.env.FIREBASE_SA);
+            a.equal(sa.type,'service_account');
+            a.equal(sa.project_id,process.env.PROJECT);
+            a(sa.client_email&&sa.private_key,'Invalid Hosting credential');
+            fs.writeFileSync(process.env.RUNNER_TEMP+'/myreports-photo-prod.json',process.env.FIREBASE_SA,{mode:0o600});
+            const r=await fetch('https://volunserve.com/volunserve-release.json?photo_final='+Date.now(),{
+              headers:{'Cache-Control':'no-cache'},signal:AbortSignal.timeout(15000)});
+            a(r.ok);
+            const m=await r.json();
+            a.equal(m.app,'VolunServe');
+            a.equal(m.firebaseProject,process.env.PROJECT);
+            a.equal(m.revision,process.env.EXPECTED_LIVE,'BLOCKED: production changed before deploy');
+          })().catch(e=>{console.error(e.stack||e);process.exitCode=1});
+          NODE
+          echo "GOOGLE_APPLICATION_CREDENTIALS=$RUNNER_TEMP/myreports-photo-prod.json" >> "$GITHUB_ENV"
+      - name: Back up production Hosting
+        id: backup
+        working-directory: site
+        run: |
+          npx firebase-tools hosting:clone "$PROJECT:live" "$PROJECT:$BACKUP_CHANNEL" --project "$PROJECT" --non-interactive
+      - name: Deploy Hosting only (NO database, rules, functions or Render)
+        id: deploy
+        uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          firebaseServiceAccount: ${{ secrets.VOLUNSERVE_PRODUCTION_HOSTING_SERVICE_ACCOUNT }}
+          projectId: volunserve-3aa5b
+          channelId: live
+          entryPoint: ./site
+      - name: Verify exact production Hosting revision
+        working-directory: site
+        env:
+          VOLUNSERVE_HOSTING_URL: https://volunserve.com
+          VOLUNSERVE_EXPECTED_SHA: '015e5d50c39bed0be99fcb679a8a835c05ef3e51'
+        shell: bash
+        run: |
+          for attempt in 1 2 3 4 5 6; do
+            if node scripts/check-live-hosting.cjs; then exit 0; fi
+            sleep 10
+          done
+          echo "::error::Unexpected deployed revision; rollback required"
+          exit 1
+      - name: Restore previous Hosting if deploy or postdeploy validation fails
+        if: failure() && steps.backup.outcome == 'success' && steps.deploy.outcome != 'skipped'
+        working-directory: site
+        run: |
+          npx firebase-tools hosting:clone "$PROJECT:$BACKUP_CHANNEL" "$PROJECT:live" --project "$PROJECT" --non-interactive
+          VOLUNSERVE_EXPECTED_SHA="$EXPECTED_LIVE" node scripts/check-live-hosting.cjs
