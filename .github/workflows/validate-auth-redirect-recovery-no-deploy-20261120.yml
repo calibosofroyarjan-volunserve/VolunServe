@@ -43,6 +43,12 @@ jobs:
           node scripts/test-signup-email-first-middle-optional.cjs
           node scripts/test-route-entrypoints.cjs
           node scripts/test-profile-certificates-account-menu.cjs
+      - name: Build complete web application without publishing
+        run: |
+          set -euo pipefail
+          npx expo export --platform web --clear
+          test -f dist/index.html
+          echo 'PASS complete VolunServe web bundle; no deploy, no Firebase writes'
       - name: Confirm no auth role or backend edits
         run: |
           set -euo pipefail
