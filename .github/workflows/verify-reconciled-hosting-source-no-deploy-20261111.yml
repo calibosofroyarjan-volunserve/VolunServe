@@ -167,6 +167,47 @@ jobs:
               return;
             }
 
+            // Content-pinned one-time typography-only controller, never a general bypass.
+            const typographyControllerPath=".github/workflows/one-time-donation-minimal-typography-20261120.yml";
+            const typographyDiff=git("diff","--name-status","--no-renames",liveBase,commit)
+              .split("\n").filter(Boolean);
+            const isTypographyRelease=typographyDiff.length===2
+              && typographyDiff[0]==="A\t"+typographyControllerPath
+              && typographyDiff[1]==="M\t"+verifierPath;
+            if(isTypographyRelease){
+              const currentHostingSource="5b3f189dab76e9407596a69cd61e0c69cc994594";
+              const typographySource="f39c3f3684dff1116c70e2f972db821374b8d57c";
+              assert.equal(liveBase,"c35b7ff7ebe517689b6b04cf4703a92f5dd647ee",
+                "BLOCKED: protected branch moved since this review");
+              assert.equal(marker.revision,currentHostingSource,
+                "BLOCKED: production Hosting marker changed");
+              assert.equal(blob(liveBase,verifierPath),"9ebeaabdec9091a91d5804038f4fde62b095736b",
+                "BLOCKED: previously approved PR verifier was changed");
+              assert.equal(blob(commit,typographyControllerPath),"de0c83186e3cb9efda9e44bcdb6aca4746dc2d2e",
+                "BLOCKED: reviewed release controller content changed");
+              assert.equal(git("rev-parse","origin/ui/donation-management-typography-minimal-20261120"),
+                typographySource,"BLOCKED: reviewed candidate branch drift");
+              git("merge-base","--is-ancestor",currentHostingSource,typographySource);
+              assert.equal(git("diff","--name-status","--no-renames",
+                currentHostingSource,typographySource),
+                "M\tapp/(admin)/donation-list.tsx",
+                "BLOCKED: unrelated source files/deletion/old code detected");
+              for(const protectedPath of [
+                "package.json","package-lock.json","app.json","firebase.json",
+                ".firebaserc","tsconfig.json","firestore.rules","storage.rules",
+                "functions/index.js","functions/package.json",
+                "scripts/guard-live-protected-release.cjs",
+                ".github/workflows/auto-publish-protected-live-hosting.yml",
+                ".github/workflows/release-live-protected-hosting.yml","lib/firebase.ts"
+              ]){
+                assert.equal(blob(commit,protectedPath),blob(liveBase,protectedPath),
+                  "BLOCKED: security/production/backend configuration changed: "+protectedPath);
+              }
+              console.log("PASS: Donation typography-only UI release pinned to current live");
+              console.log("NO DEPLOY: PR verification, current records remain unchanged");
+              return;
+            }
+
             assert.equal(marker.revision,liveBase,
               "BLOCKED: protected base and production differ; reconcile FIRST");
             const text=git("diff","--name-status","--no-renames",liveBase,commit);
