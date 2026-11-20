@@ -52,6 +52,26 @@ check("Email-first verification and account linking remain unchanged",()=>{
   }
 });
 
+check("Verified auth-only email login resumes signup rather than forcing Login or Guest",()=>{
+  const authSource=source("lib/firebaseAuth.ts");
+  assert(authSource.includes("resumeIncompleteSignup?: boolean"));
+  assert(authSource.includes("if (!options.resumeIncompleteSignup) await signOut(auth);"));
+  assert(authSource.includes('String(profile.role || "").toLowerCase() === "guest"'));
+  assert(authSource.includes('!profile || String(profile.role || "").toLowerCase() === "guest"'));
+  const web=source("app/login.web.tsx");
+  assert(web.includes("{ resumeIncompleteSignup: true }"));
+  assert(web.includes("auth.currentUser.emailVerified"));
+  assert(web.includes('router.replace("/signup")'));
+  assert(!web.includes('router.replace("/public");'));
+  assert(web.includes('onPress={() => router.replace("/public")}'),
+    "Guest mode must require the explicit user click");
+  assert(web.includes('authorizationDenied = true;'));
+  const native=source("app/login.tsx");
+  assert(native.includes("loginUser("));
+  assert(!native.includes("resumeIncompleteSignup: true"),
+    "Do not silently change native registration behavior");
+});
+
 check("Firestore session hook retains signed-in UID but blocks access on snapshot failures",()=>{
   const compiled=ts.transpileModule(source("lib/useUserSession.ts"),{
     compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS}
