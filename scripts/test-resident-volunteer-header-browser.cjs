@@ -109,7 +109,8 @@ async function accountAndBell(page, mode, route) {
     if (route === "disaster-response" || route === "volunteer" || route === "community-events") {
       await show("notifications");
     }
-    await clickAndCheck(page, "Close notifications");
+    // The close icon is a labelled Pressable, not always exposed with role=button.
+    await page.getByLabel("Close notifications").click({ timeout: 15000 });
     await clickAndCheck(page, "Open account menu");
     const profile = page.getByRole("button", { name: "My Profile", exact: true });
     await profile.waitFor({ state: "visible", timeout: 12000 });
