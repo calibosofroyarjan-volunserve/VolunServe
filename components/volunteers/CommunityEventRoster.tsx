@@ -1,4 +1,3 @@
-import { volunserveTypography as vsType } from "../../constants/volunserveLiveUi";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import React, { useEffect, useState } from "react";
 import { ActivityIndicator, Image, Modal, Pressable, StyleSheet, Text, View } from "react-native";
@@ -6,6 +5,12 @@ import { ActivityIndicator, Image, Modal, Pressable, StyleSheet, Text, View } fr
 type Entry = { key: string; name: string; avatarUrl?: string; status: "Joined" };
 type Response = { ok?: boolean; total?: number; totalPages?: number; volunteers?: Entry[]; message?: string };
 type AuthUser = { getIdToken: () => Promise<string> };
+// Matches the screen's already loaded EventInter font; no new modules or font assets.
+const vsType = {
+  family: "EventInter",
+  size: { micro: 10, caption: 11, meta: 12, label: 13, body: 14, bodyStrong: 15, card: 16, section: 18, subheading: 20 },
+} as const;
+
 const API_URL = "https://volunserve.onrender.com";
 
 /** Read-only event roster; the backend already limits this response to safe display fields. */
