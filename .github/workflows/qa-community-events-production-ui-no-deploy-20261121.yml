@@ -56,11 +56,11 @@ jobs:
       - name: Install locked dependencies
         run: npm ci --no-audit --no-fund
       - name: Check Firestore Community Events permissions with local synthetic emulator users
-        run: npx firebase-tools emulators:exec --only firestore --project demo-volunserve "node scripts/test-community-events-rules.cjs"
+        run: npx firebase-tools emulators:exec --only firestore --project demo-volunserve "node scripts/test-community-events-rules-production-qa.cjs"
       - name: Protect Admin and Volunteer authorization (no production writes)
         run: |
           node --test scripts/test-admin-volunteer-authorization.cjs
-          npx firebase-tools emulators:exec --only firestore --project demo-volunserve-authorization-tests "node scripts/test-admin-volunteer-firestore.cjs"
+          npx firebase-tools emulators:exec --only firestore --project demo-volunserve-authorization-tests "node scripts/test-admin-volunteer-firestore-production-qa.cjs"
       - name: Verify TypeScript and existing map navigation
         run: |
           npx tsc --noEmit --incremental false
