@@ -1152,8 +1152,10 @@ export default function CommunityEventsScreen() {
     setEventPage(current => Math.min(current, totalEventPages));
   }, [totalEventPages]);
   const visibleEvents = displayEvents.slice((eventPage - 1) * pageSize, eventPage * pageSize);
-  const selectedEvent = events.find((event) => event.id === expandedEvent) ||
-    (isVolunteer ? myAttendanceEvents[0] : undefined) || displayEvents[0] || null;
+  // Attendance always points to an event the signed-in volunteer actually joined.
+  // Browsing an unjoined event must not replace the user's attendance summary.
+  const selectedEvent = (expandedEvent ? myEvents.find(event => event.id === expandedEvent) : undefined) ||
+    (isVolunteer ? myAttendanceEvents[0] : undefined) || null;
   const selectedParticipation = selectedEvent ? participationMap.get(selectedEvent.id) : undefined;
   const selectedJoined = selectedParticipation?.status === "joined";
   const selectedOwned = !!selectedEvent && selectedEvent.proposedBy === user?.uid;
