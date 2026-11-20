@@ -47,7 +47,14 @@ async function main(){
     await page.goto("http://127.0.0.1:4177/community-events.html",{waitUntil:"domcontentloaded",timeout:30000});
     await page.waitForTimeout(4000);
     const body=await page.locator("body").innerText();
-    assert(body.includes("QA MOCK PREVIEW"),"Mock preview label missing");
+    // Always save a diagnostic before assertions, including blank or login pages.
+    const diagnosticPath=path.join(screens,`diagnostic-community-events-${width}.png`);
+    await page.screenshot({path:diagnosticPath,fullPage:true}).catch(()=>{});
+    const debug = {url:page.url(),title:await page.title(),width,
+      bodyExcerpt:body.slice(0,1600),pageErrors:errors,
+      htmlExcerpt:(await page.locator("body").innerHTML()).slice(0,850)};
+    console.log("QA_BROWSER_DIAGNOSTICS",JSON.stringify(debug));
+    assert(body.includes("QA MOCK PREVIEW"),"Mock preview label missing; inspect diagnostics screenshot and logs");
     assert(body.includes("Community Events"),"Community Events page not visible");
     assert(body.includes("Upcoming"),"Upcoming tab missing");
     const overflow=await page.evaluate(()=>document.documentElement.scrollWidth-innerWidth);
