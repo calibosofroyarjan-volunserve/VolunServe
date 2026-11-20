@@ -74,7 +74,7 @@ const joined=[{id:"qa-ongoing-1_qa-volunteer-preview",eventId:active.id,uid:"qa-
   {id:"qa-upcoming-1_qa-volunteer-preview",eventId:upcoming[0].id,uid:"qa-volunteer-preview",
   status:"joined",joinedAt:created(1),checkedInAt:null,checkedOutAt:null,attendanceVerified:false}
 ];
-export function qaOnSnapshot(query:any,onData:(snapshot:any)=>void){
+type QASnapshot={docs:{id:string;data:()=>any}[]};\nexport function qaOnSnapshot(query:any,onData:(snapshot:QASnapshot)=>void,_onError?:(error:any)=>void){
  const pieces=query?._query?.path?.segments||[];
  const path=pieces.join("/");
  const items=path.includes("communityEventParticipants")?joined:
