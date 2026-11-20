@@ -1,5 +1,3 @@
-import { volunserveTypography as vsType } from "../../constants/volunserveLiveUi";
-import { liveUi as designUi } from "../../constants/volunserveLiveUi";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { LinearGradient } from "expo-linear-gradient";
 import {useFonts} from "expo-font";
@@ -247,6 +245,41 @@ const capacityChoices = [
   "50",
   "100",
 ] as const;
+
+// Shared client-side word ranges (also enforced by /api/community-events/proposals).
+type ProposalWordField = "title" | "description" | "volunteerTasks" | "otherRole" | "whatToBring";
+const PROPOSAL_WORD_LIMITS: Record<ProposalWordField, { label: string; min: number; max: number; minChars: number; maxChars: number }> = {
+  title: { label: "Event title", min: 2, max: 15, minChars: 5, maxChars: 100 },
+  description: { label: "Description", min: 20, max: 200, minChars: 20, maxChars: 1500 },
+  volunteerTasks: { label: "Volunteer tasks", min: 8, max: 150, minChars: 12, maxChars: 1200 },
+  otherRole: { label: "Other role / occupation", min: 0, max: 12, minChars: 0, maxChars: 80 },
+  whatToBring: { label: "What to bring", min: 0, max: 60, minChars: 0, maxChars: 500 },
+};
+const countProposalWords = (value: string): number =>
+  value.trim() ? value.trim().split(/\s+/u).length : 0;
+
+const proposalWordError = (field: ProposalWordField, value: string): string => {
+  const rule = PROPOSAL_WORD_LIMITS[field];
+  const words = countProposalWords(value);
+  if (words < rule.min || words > rule.max) {
+    return `${rule.label} must contain ${rule.min}–${rule.max} words (currently ${words}).`;
+  }
+  if (value.trim().length < rule.minChars || value.trim().length > rule.maxChars) {
+    return `${rule.label} must contain ${rule.minChars}–${rule.maxChars} characters.`;
+  }
+  return "";
+};
+
+function ProposalWordFeedback({field,value,showError}: {field: ProposalWordField;value:string;showError:boolean}) {
+  const limit = PROPOSAL_WORD_LIMITS[field];
+  const issue = showError ? proposalWordError(field, value) : "";
+  return <View style={styles.ruiWordFeedback}>
+    <Text style={[styles.ruiWordCounter, !!issue && styles.ruiWordCounterError]}>
+      {countProposalWords(value)} words · {limit.min}–{limit.max} allowed · max {limit.maxChars} characters
+    </Text>
+    {!!issue && <Text style={styles.ruiFieldError}>{issue}</Text>}
+  </View>;
+}
 
 const initialForm: ProposalForm = {
   title: "",
@@ -548,11 +581,11 @@ function CredentialPhotoField({preview,onPick,error}: {preview:string;onPick:()=
     <Text style={styles.fieldLabel}>Credentials / professional certificate photo (optional)</Text>
     <Pressable onPress={onPick} accessibilityRole="button" style={{borderWidth:1,borderColor:"#C7DEDA",backgroundColor:"#F5FBF9",borderRadius:10,minHeight:64,padding:12,flexDirection:"row",alignItems:"center",gap:12}}>
       <Ionicons name="camera-outline" size={24} color="#087F75"/>
-      <Text style={{flex:1,color:"#0A7468",fontSize: vsType.size.meta,fontWeight:"800"}}>{preview?"Photo selected — change credential":"Upload a photo of license or relevant certificate"}</Text>
+      <Text style={{flex:1,color:"#0A7468",fontSize:12,fontWeight:"800"}}>{preview?"Photo selected — change credential":"Upload a photo of license or relevant certificate"}</Text>
     </Pressable>
     {preview?<Image source={{uri:preview}} resizeMode="contain" style={{width:"100%",height:145,marginTop:8,borderRadius:9,backgroundColor:"#EDF2F2"}}/>:null}
-    <Text style={{fontSize: vsType.size.micro,color:"#617A85",marginTop:5}}>Private Admin-only review. Do not upload credentials as public event evidence. JPG/PNG/WebP, max 5 MB.</Text>
-    {!!error&&<Text style={{fontSize: vsType.size.caption,color:"#B91C1C",marginTop:5}}>{error}</Text>}
+    <Text style={{fontSize:10,color:"#617A85",marginTop:5}}>Private Admin-only review. Do not upload credentials as public event evidence. JPG/PNG/WebP, max 5 MB.</Text>
+    {!!error&&<Text style={{fontSize:11,color:"#B91C1C",marginTop:5}}>{error}</Text>}
   </View>;
 }
 
@@ -564,6 +597,7 @@ function ProposalNeedsAndMedia({
   onCredentialPick,
   credentialPreview,
   credentialError,
+  showWordErrors = false,
 }: {
   form: ProposalForm;
   update: <K extends keyof ProposalForm>(field: K, value: ProposalForm[K]) => void;
@@ -571,6 +605,7 @@ function ProposalNeedsAndMedia({
   onCredentialPick: () => void;
   credentialPreview: string;
   credentialError: string;
+  showWordErrors?: boolean;
 }) {
   const roles = [...new Set([...suggestedRoles[form.category], ...form.requiredRoles])];
   const skills = [...new Set([...suggestedSkills[form.category], ...form.requiredSkills])];
@@ -590,13 +625,15 @@ function ProposalNeedsAndMedia({
       </View>
       <Text style={styles.fieldLabel}>What will volunteers actually do? *</Text>
       <TextInput
-        style={[styles.input, styles.residentMultiline]}
+        nativeID="community-proposal-volunteerTasks"
+        style={[styles.input, styles.residentMultiline, (showWordErrors || !!form.volunteerTasks.trim()) && !!proposalWordError("volunteerTasks",form.volunteerTasks) && styles.ruiWordInputError]}
         placeholder="e.g. Plant seedlings, prepare soil, distribute water and monitor planting areas..."
         placeholderTextColor="#91A2AF"
         multiline textAlignVertical="top" maxLength={1200}
         value={form.volunteerTasks}
         onChangeText={(value) => update("volunteerTasks", value)}
       />
+      <ProposalWordFeedback field="volunteerTasks" value={form.volunteerTasks} showError={showWordErrors || !!form.volunteerTasks.trim()}/>
       <Text style={styles.fieldLabel}>Needed volunteer roles / occupations *</Text>
       <Text style={styles.residentHelp}>Choose one or more. Suggestions change with the event category.</Text>
       <View style={styles.residentChipRow}>
@@ -615,14 +652,19 @@ function ProposalNeedsAndMedia({
           );
         })}
       </View>
+      {showWordErrors && form.requiredRoles.length === 0 && !form.otherRole.trim() && (
+        <Text style={styles.ruiFieldError}>Select at least one needed volunteer role or specify another role.</Text>
+      )}
       <TextInput
-        style={[styles.input, styles.residentSmallInput]}
+        nativeID="community-proposal-otherRole"
+        style={[styles.input, styles.residentSmallInput, (showWordErrors || !!form.otherRole.trim()) && !!proposalWordError("otherRole",form.otherRole) && styles.ruiWordInputError]}
         placeholder="Another role or occupation? (optional)"
         placeholderTextColor="#91A2AF"
         value={form.otherRole}
         onChangeText={(value) => update("otherRole", value)}
         maxLength={80}
       />
+      <ProposalWordFeedback field="otherRole" value={form.otherRole} showError={showWordErrors || !!form.otherRole.trim()}/>
       <Text style={styles.fieldLabel}>Helpful skills (optional)</Text>
       <View style={styles.residentChipRow}>
         {skills.map((skill) => {
@@ -651,10 +693,11 @@ function ProposalNeedsAndMedia({
       )}
       <CredentialPhotoField preview={credentialPreview} onPick={onCredentialPick} error={credentialError}/>
       <Text style={styles.fieldLabel}>What volunteers should bring (optional)</Text>
-      <TextInput style={[styles.input, styles.residentSmallInput]}
+      <TextInput nativeID="community-proposal-whatToBring" style={[styles.input, styles.residentSmallInput, (showWordErrors || !!form.whatToBring.trim()) && !!proposalWordError("whatToBring",form.whatToBring) && styles.ruiWordInputError]}
         placeholder="e.g. Gloves, reusable water bottle, closed shoes"
         placeholderTextColor="#91A2AF" value={form.whatToBring}
         onChangeText={(value) => update("whatToBring", value)} maxLength={500} />
+      <ProposalWordFeedback field="whatToBring" value={form.whatToBring} showError={showWordErrors || !!form.whatToBring.trim()}/>
 
       <View style={styles.residentSectionHeading}>
         <View style={styles.residentSectionIcon}><Ionicons name="images-outline" size={20} color="#047E73" /></View>
@@ -669,6 +712,9 @@ function ProposalNeedsAndMedia({
           At least one JPG/PNG/WebP event venue or activity photo is required. Add up to 3 photos using the site upload or valid HTTPS photo links. A YouTube/Vimeo link is optional.
         </Text>
       </View>
+      {showWordErrors && !form.photoUrls.some(url => !!url.trim()) && (
+        <Text style={styles.ruiFieldError}>Provide at least one valid HTTPS event site photo link.</Text>
+      )}
       {form.photoUrls.map((url, index) => (
         <View key={index} style={styles.residentMediaField}>
           <Text style={styles.fieldLabel}>{index === 0 ? "Main site photo *" : `Additional site photo ${index + 1} (optional)`}</Text>
@@ -677,6 +723,7 @@ function ProposalNeedsAndMedia({
             placeholder="https://example.com/location-photo.jpg"
             placeholderTextColor="#91A2AF" value={url} maxLength={2048}
             onChangeText={(value) => onPhotoChange(index, value)} />
+          {!!url.trim() && !validPublicMediaUrl(url.trim()) && <Text style={styles.ruiFieldError}>Use a valid public HTTPS image link.</Text>}
           {!!url.trim() && validPublicMediaUrl(url.trim()) && (
             <Image source={{ uri: url.trim() }} resizeMode="cover" style={styles.residentMediaPreview} />
           )}
@@ -688,6 +735,7 @@ function ProposalNeedsAndMedia({
         placeholder="https://youtu.be/... or https://vimeo.com/..."
         placeholderTextColor="#91A2AF" value={form.videoUrl} maxLength={2048}
         onChangeText={(value) => update("videoUrl", value)} />
+      {!!form.videoUrl.trim() && !videoLinkSupported(form.videoUrl.trim()) && <Text style={styles.ruiFieldError}>Video must be an HTTPS YouTube or Vimeo link.</Text>}
       {form.videoUrl.trim().length > 0 && videoLinkSupported(form.videoUrl.trim()) && (
         <Pressable style={styles.residentMediaLink} onPress={() => void Linking.openURL(form.videoUrl.trim())}>
           <Ionicons name="play-circle-outline" size={18} color="#067F75" />
@@ -752,6 +800,7 @@ export default function CommunityEventsScreen() {
 
   const [form, setForm] =
     useState<ProposalForm>(initialForm);
+  const [proposalAttempted, setProposalAttempted] = useState(false);
 
   const [selectPicker, setSelectPicker] =
     useState<SelectPicker | null>(null);
@@ -1169,6 +1218,7 @@ export default function CommunityEventsScreen() {
     field: K,
     value: ProposalForm[K]
   ) => {
+    if (section === "propose") setNotice("");
     setForm((previous) => ({
       ...previous,
       [field]: value,
@@ -1357,6 +1407,16 @@ export default function CommunityEventsScreen() {
     }
 
     setNotice("");
+    setProposalAttempted(true);
+    const wordIssues = (Object.keys(PROPOSAL_WORD_LIMITS) as ProposalWordField[])
+      .map((field) => ({ field, issue: proposalWordError(field, form[field]) }))
+      .filter(({issue}) => !!issue);
+    if (wordIssues.length) {
+      // Keep the page at the Submit button so validation appears beneath it.
+      // Individual fields already display their own live word-limit errors.
+      setNotice("Please correct the highlighted word limits before submitting.");
+      return;
+    }
 
     const title = form.title.trim();
     const location = form.location.trim();
@@ -1506,6 +1566,7 @@ export default function CommunityEventsScreen() {
       }
 
       setForm(initialForm);
+      setProposalAttempted(false);
       setLocalPhotoFiles([null, null, null]);
       setLocalPhotoPreviews(["", "", ""]);
       setCredentialFile(null);
@@ -1908,7 +1969,7 @@ export default function CommunityEventsScreen() {
 
             <Pressable accessibilityRole="button" accessibilityLabel={"Open " + event.title + " event details"} onPress={() => setExpandedEvent(expanded ? null : event.id)}>
               <Text style={styles.eventTitle}>{event.title}</Text>
-              <Text style={{fontSize: vsType.size.caption,color:"#087F75",marginTop:4,fontWeight:"700"}}>{expanded ? "Tap to close details" : "Tap title for details and directions"}</Text>
+              <Text style={{fontSize:11,color:"#087F75",marginTop:4,fontWeight:"700"}}>{expanded ? "Tap to close details" : "Tap title for details and directions"}</Text>
             </Pressable>
           </View>
 
@@ -1985,15 +2046,15 @@ export default function CommunityEventsScreen() {
 
         {expanded && (
           <View style={styles.descriptionBox}>
-            <Text style={{fontSize: vsType.size.caption,fontWeight: "800",color:"#087F75",marginBottom:7}}>ABOUT THIS EVENT</Text>
+            <Text style={{fontSize:11,fontWeight:"900",color:"#087F75",marginBottom:7}}>ABOUT THIS EVENT</Text>
             <Text style={styles.description}>
               {event.description || "No additional details provided."}
             </Text>
             <View style={{marginTop:12,backgroundColor:"#F2FAF8",padding:12,borderRadius:10,gap:9}}>
-              <Text style={{fontSize: vsType.size.label,color:"#153E49",fontWeight: "800"}}>Event Location &amp; Directions</Text>
-              <Text style={{fontSize: vsType.size.meta,color:"#577987"}}>{eventScheduleLabel(event)}</Text>
-              <Text style={{fontSize: vsType.size.meta,color:"#577987"}}>{event.location}{event.barangay ? ", " + event.barangay : ""}, San Jose del Monte, Bulacan</Text>
-              {!eventHasCoordinates(event) && <Text style={{fontSize: vsType.size.caption,color:"#956619"}}>Approximate address — confirm the exact meeting point with Admin/LGU.</Text>}
+              <Text style={{fontSize:13,color:"#153E49",fontWeight:"900"}}>Event Location &amp; Directions</Text>
+              <Text style={{fontSize:12,color:"#577987"}}>{eventScheduleLabel(event)}</Text>
+              <Text style={{fontSize:12,color:"#577987"}}>{event.location}{event.barangay ? ", " + event.barangay : ""}, San Jose del Monte, Bulacan</Text>
+              {!eventHasCoordinates(event) && <Text style={{fontSize:11,color:"#956619"}}>Approximate address — confirm the exact meeting point with Admin/LGU.</Text>}
               {eventHasCoordinates(event) && (
                 <CommunityEventRoadMap eventId={event.id} title={event.title} category={event.category}
                   destination={{
@@ -2005,7 +2066,7 @@ export default function CommunityEventsScreen() {
                 onPress={() => void Linking.openURL(googleMapsNavigationUrl(event))}
                 style={{backgroundColor:"#087F75",padding:13,borderRadius:9,flexDirection:"row",alignItems:"center",justifyContent:"center",gap:8}}>
                 <Ionicons name="navigate-outline" size={17} color="#FFFFFF"/>
-                <Text style={{color:"#FFFFFF",fontWeight:"800",fontSize: vsType.size.meta}}>Open Directions in Google Maps</Text>
+                <Text style={{color:"#FFFFFF",fontWeight:"800",fontSize:12}}>Open Directions in Google Maps</Text>
               </Pressable>
             </View>
           </View>
@@ -2589,7 +2650,7 @@ export default function CommunityEventsScreen() {
               </View>
               {section === "explore" && <View style={[styles.webSearchWrap, styles.lockedSearch]}><Ionicons name="search-outline" size={17} color="#6B8392" /><TextInput style={styles.webSearchInput} value={search} onChangeText={setSearch} placeholder="Search community events..." placeholderTextColor="#91A4B1" autoCorrect={false}/></View>}
             </View>}
-            {!!notice && <View style={styles.webNotice}><Ionicons name="information-circle-outline" size={18} color="#0D8273" /><Text style={styles.webNoticeText}>{notice}</Text></View>}
+            {section !== "propose" && !!notice && <View style={styles.webNotice}><Ionicons name="information-circle-outline" size={18} color="#0D8273" /><Text style={styles.webNoticeText}>{notice}</Text></View>}
             {section === "mine" && !!recordError && <View style={styles.webError}><Ionicons name="alert-circle-outline" size={17} color="#B42318" /><Text style={styles.webErrorText}>{recordError}</Text></View>}
             {section === "explore" && !residentDetailsId && (
               <View style={styles.eventBrowseControls}>
@@ -2735,55 +2796,25 @@ export default function CommunityEventsScreen() {
                     <View style={styles.lockedAttendanceVerifier}>
                       <Ionicons name="shield-checkmark-outline" size={15} color="#08766F" />
                       <Text style={styles.lockedAttendanceVerifierText} numberOfLines={3}>
-                        {selectedParticipation?.attendanceVerified ? "Verified by Admin/LGU" : selectedParticipation?.checkedOutAt ? "Pending Admin/LGU verification" : selectedParticipation?.checkedInAt ? "Checked in · Not yet verified" : selectedEvent.status === "upcoming" ? "Waiting for Admin Start Event" : selectedEvent.status === "completed" ? "Event completed" : "Ready for Time In"}
+                        {selectedParticipation?.attendanceVerified ? "Verified by Admin/LGU" : selectedParticipation?.checkedOutAt ? "Pending Admin/LGU verification" : selectedParticipation?.checkedInAt ? "Checked in · Not yet verified" : "Waiting for Time In"}
                       </Text>
                     </View>
 
-                    {!selectedParticipation?.attendanceVerified && (
+                    {!selectedParticipation?.attendanceVerified && selectedEvent.status === "active" &&
+                      (!selectedParticipation?.checkedInAt ||
+                        (selectedParticipation?.checkedInAt && !selectedParticipation?.checkedOutAt)) && (
                       <View style={styles.webAttendanceActionArea}>
                         <Text style={styles.webAttendanceActionHelp}>
-                          {selectedEvent.status === "upcoming"
-                            ? eventScheduleHasPassed(selectedEvent)
-                              ? "The scheduled date has passed. Contact Admin to arrange a current event; Time In/Out cannot be backdated."
-                              : "Waiting for Admin to select Start Event in Admin > Event Attendance. Both buttons unlock when the event is ongoing."
-                            : selectedEvent.status === "completed" || selectedEvent.status === "cancelled"
-                              ? "This event is closed. Contact Admin if your attendance needs review."
-                              : !selectedParticipation?.checkedInAt
-                                ? "At the event venue? Record your actual arrival with Time In."
-                                : !selectedParticipation?.checkedOutAt
-                                  ? "Time In saved. Record your departure with Time Out when finished."
-                                  : "Time In and Time Out are recorded. Admin will verify your volunteer hours."}
+                          {!selectedParticipation?.checkedInAt ?
+                            "At the event venue? Record your arrival to begin attendance." :
+                            "Finished your participation? Record your departure."}
                         </Text>
-                        <View style={styles.webAttendanceConfirmButtons}>
-                          <Pressable
-                            accessibilityRole="button"
-                            accessibilityLabel={"Time In for " + selectedEvent.title}
-                            accessibilityState={{ disabled: selectedEvent.status !== "active" || !!selectedParticipation?.checkedInAt || !!selectedParticipation?.checkedOutAt || !!attendanceBusy || !!busyEvent }}
-                            disabled={selectedEvent.status !== "active" || !!selectedParticipation?.checkedInAt || !!selectedParticipation?.checkedOutAt || !!attendanceBusy || !!busyEvent}
-                            onPress={() => setAttendanceConfirmation({ eventId: selectedEvent.id, action: "check-in" })}
-                            style={[styles.webAttendanceActionButton, { flex: 1 }, (selectedEvent.status !== "active" || !!selectedParticipation?.checkedInAt || !!selectedParticipation?.checkedOutAt || !!attendanceBusy || !!busyEvent) && styles.webButtonDisabled]}
-                          >
-                            <Ionicons name="log-in-outline" size={18} color="white" />
-                            <Text style={styles.webAttendanceActionButtonText}>Time In</Text>
-                          </Pressable>
-                          <Pressable
-                            accessibilityRole="button"
-                            accessibilityLabel={"Time Out from " + selectedEvent.title}
-                            accessibilityState={{ disabled: selectedEvent.status !== "active" || !selectedParticipation?.checkedInAt || !!selectedParticipation?.checkedOutAt || !!attendanceBusy || !!busyEvent }}
-                            disabled={selectedEvent.status !== "active" || !selectedParticipation?.checkedInAt || !!selectedParticipation?.checkedOutAt || !!attendanceBusy || !!busyEvent}
-                            onPress={() => setAttendanceConfirmation({ eventId: selectedEvent.id, action: "check-out" })}
-                            style={[styles.webAttendanceActionButton, { flex: 1 }, (selectedEvent.status !== "active" || !selectedParticipation?.checkedInAt || !!selectedParticipation?.checkedOutAt || !!attendanceBusy || !!busyEvent) && styles.webButtonDisabled]}
-                          >
-                            <Ionicons name="log-out-outline" size={18} color="white" />
-                            <Text style={styles.webAttendanceActionButtonText}>Time Out</Text>
-                          </Pressable>
-                        </View>
-                        {selectedEvent.status === "active" && attendanceConfirmation?.eventId === selectedEvent.id && (
+                        {attendanceConfirmation?.eventId === selectedEvent.id ? (
                           <View style={styles.webAttendanceConfirmBox}>
                             <Text style={styles.webAttendanceConfirmText}>
                               {attendanceConfirmation.action === "check-in"
-                                ? "Confirm Time In now? Firebase will record the current server time."
-                                : "Confirm Time Out now? Firebase will record the current server time."}
+                                ? "Confirm Time In now? Your arrival time will be saved to Firestore."
+                                : "Confirm Time Out now? Your departure time will be saved to Firestore."}
                             </Text>
                             <View style={styles.webAttendanceConfirmButtons}>
                               <Pressable accessibilityRole="button" onPress={() => setAttendanceConfirmation(null)} style={styles.webAttendanceCancelButton}>
@@ -2791,19 +2822,32 @@ export default function CommunityEventsScreen() {
                               </Pressable>
                               <Pressable
                                 accessibilityRole="button"
-                                disabled={!!attendanceBusy || !!busyEvent}
-                                onPress={() => void recordSelfAttendance(selectedEvent, attendanceConfirmation.action)}
-                                style={[styles.webAttendanceActionButton, (!!attendanceBusy || !!busyEvent) && styles.webButtonDisabled]}
+                                disabled={!!attendanceBusy}
+                                onPress={() => void recordSelfAttendance(selectedEvent, attendanceConfirmation?.action === "check-out" ? "check-out" : "check-in")}
+                                style={[styles.webAttendanceActionButton, !!attendanceBusy && styles.webButtonDisabled]}
                               >
-                                {attendanceBusy ? <ActivityIndicator size="small" color="white" /> : <Ionicons name="checkmark-circle-outline" size={17} color="white" />}
-                                <Text style={styles.webAttendanceActionButtonText}>{attendanceBusy ? "Saving..." : "Confirm " + (attendanceConfirmation.action === "check-in" ? "Time In" : "Time Out")}</Text>
+                                <Ionicons name="checkmark-circle-outline" size={17} color="white" />
+                                <Text style={styles.webAttendanceActionButtonText}>Confirm {attendanceConfirmation.action === "check-in" ? "Time In" : "Time Out"}</Text>
                               </Pressable>
                             </View>
                           </View>
+                        ) : (
+                          <Pressable
+                            accessibilityRole="button"
+                            accessibilityLabel={!selectedParticipation?.checkedInAt ? "Time In to event" : "Time Out from event"}
+                            disabled={!!attendanceBusy || !!busyEvent}
+                            onPress={() => setAttendanceConfirmation({eventId: selectedEvent.id, action: selectedParticipation?.checkedInAt ? "check-out" : "check-in"})}
+                            style={[styles.webAttendanceActionButton, (!!attendanceBusy || !!busyEvent) && styles.webButtonDisabled]}
+                          >
+                            {attendanceBusy ? <ActivityIndicator color="white" size="small" /> : <Ionicons name={selectedParticipation?.checkedInAt ? "log-out-outline" : "log-in-outline"} size={19} color="white" />}
+                            <Text style={styles.webAttendanceActionButtonText}>
+                              {attendanceBusy ? "Saving..." : selectedParticipation?.checkedInAt ? "Time Out" : "Time In"}
+                            </Text>
+                          </Pressable>
                         )}
                       </View>
                     )}
-                    {selectedEvent.status === "upcoming" && <Text style={styles.webAttendanceHint}>{eventScheduleHasPassed(selectedEvent) ? "This event date is past. Contact Admin to arrange a new event before recording attendance." : "Admin must press Start Event in Event Attendance. Then Time In / Time Out becomes available."}</Text>}
+                    {selectedEvent.status === "upcoming" && <Text style={styles.webAttendanceHint}>Time In opens once Admin/LGU starts the event.</Text>}
                     {selectedEvent.status === "completed" && !selectedParticipation?.attendanceVerified && <Text style={styles.webAttendanceHint}>Event completed. Contact Admin/LGU if attendance needs correction or verification.</Text>}
                     {selectedParticipation?.attendanceVerified && <View style={styles.lockedVerifiedSummary}>
                       <Ionicons name="checkmark-circle" size={17} color="#078269" />
@@ -2902,28 +2946,33 @@ export default function CommunityEventsScreen() {
           <View style={styles.ruiFormSection}>
             <View style={styles.ruiStepRow}><Text style={styles.ruiStepNumber}>1</Text><Text style={styles.ruiStepHeading}>Basic Information</Text></View>
             <View style={[styles.ruiFormRow, isCompact && styles.ruiFormRowStack]}>
-              <View style={styles.ruiFormCell}><Text style={styles.fieldLabel}>Event title *</Text><TextInput style={styles.input} value={form.title} placeholder="e.g. Barangay Clean-up Drive" placeholderTextColor="#99ACBA" maxLength={100} onChangeText={v=>setValue("title",v)}/></View>
+              <View style={styles.ruiFormCell}><Text style={styles.fieldLabel}>Event title *</Text>
+                <TextInput nativeID="community-proposal-title" style={[styles.input,(proposalAttempted || !!form.title.trim()) && !!proposalWordError("title",form.title) && styles.ruiWordInputError]} value={form.title} placeholder="e.g. Barangay Clean-up Drive" placeholderTextColor="#99ACBA" maxLength={100} onChangeText={v=>setValue("title",v)}/>
+                <ProposalWordFeedback field="title" value={form.title} showError={proposalAttempted || !!form.title.trim()}/>
+              </View>
               <View style={styles.ruiFormCell}><Text style={styles.fieldLabel}>Category *</Text><Pressable style={styles.pickerField} onPress={()=>openSelect("category")}><Ionicons name="apps-outline" size={18} color={colors.green}/><Text style={styles.pickerFieldText}>{form.category}</Text><Ionicons name="chevron-down" size={16} color={colors.muted}/></Pressable></View>
             </View>
             <View style={[styles.ruiFormRow, isCompact && styles.ruiFormRowStack]}>
-              <View style={styles.ruiFormCell}><Text style={styles.fieldLabel}>Barangay *</Text><Pressable style={styles.pickerField} onPress={()=>openSelect("barangay")}><Ionicons name="location-outline" size={18} color={colors.green}/><Text style={[styles.pickerFieldText,!form.barangay&&styles.pickerPlaceholder]}>{form.barangay||"Select barangay"}</Text><Ionicons name="chevron-down" size={16} color={colors.muted}/></Pressable></View>
-              <View style={styles.ruiFormCell}><Text style={styles.fieldLabel}>Venue / Location *</Text><Pressable style={styles.pickerField} onPress={()=>openSelect("venue")}><Ionicons name="business-outline" size={18} color={colors.green}/><Text style={[styles.pickerFieldText,!form.location&&styles.pickerPlaceholder]}>{customVenue?"Specify exact location":form.location||"Select venue or type location"}</Text><Ionicons name="chevron-down" size={16} color={colors.muted}/></Pressable>{customVenue&&<TextInput style={[styles.input,{marginTop:6}]} value={form.location} placeholder="Street / landmark / meeting point" maxLength={150} onChangeText={v=>setValue("location",v)}/>}</View>
+              <View style={styles.ruiFormCell}><Text style={styles.fieldLabel}>Barangay *</Text><Pressable style={styles.pickerField} onPress={()=>openSelect("barangay")}><Ionicons name="location-outline" size={18} color={colors.green}/><Text style={[styles.pickerFieldText,!form.barangay&&styles.pickerPlaceholder]}>{form.barangay||"Select barangay"}</Text><Ionicons name="chevron-down" size={16} color={colors.muted}/></Pressable>{proposalAttempted && !form.barangay.trim() && <Text style={styles.ruiFieldError}>Select the event barangay.</Text>}</View>
+              <View style={styles.ruiFormCell}><Text style={styles.fieldLabel}>Venue / Location *</Text><Pressable style={styles.pickerField} onPress={()=>openSelect("venue")}><Ionicons name="business-outline" size={18} color={colors.green}/><Text style={[styles.pickerFieldText,!form.location&&styles.pickerPlaceholder]}>{customVenue?"Specify exact location":form.location||"Select venue or type location"}</Text><Ionicons name="chevron-down" size={16} color={colors.muted}/></Pressable>{customVenue&&<TextInput style={[styles.input,{marginTop:6}]} value={form.location} placeholder="Street / landmark / meeting point" maxLength={150} onChangeText={v=>setValue("location",v)}/>} {proposalAttempted && !form.location.trim() && <Text style={styles.ruiFieldError}>Select or enter a venue.</Text>}</View>
             </View>
             <View style={[styles.ruiFormRow, isCompact && styles.ruiFormRowStack]}>
-              <View style={styles.ruiFormCell}><Text style={styles.fieldLabel}>Event date *</Text><Pressable style={styles.pickerField} onPress={openDatePicker}><Ionicons name="calendar-outline" size={18} color={colors.green}/><Text style={[styles.pickerFieldText,!form.date&&styles.pickerPlaceholder]}>{form.date||"Choose date"}</Text><Ionicons name="chevron-down" size={16} color={colors.muted}/></Pressable></View>
-              <View style={styles.ruiFormCell}><Text style={styles.fieldLabel}>Event time *</Text><Pressable style={styles.pickerField} onPress={() => openTimePicker("start")}><Ionicons name="time-outline" size={18} color={colors.green}/><Text style={styles.pickerFieldText}>{formatChosenTime(form.time)}</Text><Ionicons name="chevron-down" size={16} color={colors.muted}/></Pressable></View>
-              <View style={styles.ruiFormCell}><Text style={styles.fieldLabel}>End time *</Text><Pressable style={styles.pickerField} onPress={()=>openTimePicker("end")}><Ionicons name="time-outline" size={18} color={colors.green}/><Text style={[styles.pickerFieldText,!form.endTime&&styles.pickerPlaceholder]}>{formatChosenTime(form.endTime)}</Text><Ionicons name="chevron-down" size={16} color={colors.muted}/></Pressable></View>
-              <View style={styles.ruiFormCell}><Text style={styles.fieldLabel}>Volunteer capacity *</Text><Pressable style={styles.pickerField} onPress={()=>openSelect("capacity")}><Ionicons name="people-outline" size={18} color={colors.green}/><Text style={styles.pickerFieldText}>{form.capacity?`${form.capacity} volunteers`:"Select capacity"}</Text><Ionicons name="chevron-down" size={16} color={colors.muted}/></Pressable>{customCapacity&&<TextInput style={[styles.input,{marginTop:6}]} value={form.capacity} keyboardType="number-pad" maxLength={3} onChangeText={v=>setValue("capacity",v.replace(/[^0-9]/g,""))}/>}</View>
+              <View style={styles.ruiFormCell}><Text style={styles.fieldLabel}>Event date *</Text><Pressable style={styles.pickerField} onPress={openDatePicker}><Ionicons name="calendar-outline" size={18} color={colors.green}/><Text style={[styles.pickerFieldText,!form.date&&styles.pickerPlaceholder]}>{form.date||"Choose date"}</Text><Ionicons name="chevron-down" size={16} color={colors.muted}/></Pressable>{proposalAttempted && !form.date && <Text style={styles.ruiFieldError}>Choose a future event date.</Text>}</View>
+              <View style={styles.ruiFormCell}><Text style={styles.fieldLabel}>Event time *</Text><Pressable style={styles.pickerField} onPress={() => openTimePicker("start")}><Ionicons name="time-outline" size={18} color={colors.green}/><Text style={styles.pickerFieldText}>{formatChosenTime(form.time)}</Text><Ionicons name="chevron-down" size={16} color={colors.muted}/></Pressable>{proposalAttempted && !form.time && <Text style={styles.ruiFieldError}>Choose a start time.</Text>}</View>
+              <View style={styles.ruiFormCell}><Text style={styles.fieldLabel}>End time *</Text><Pressable style={styles.pickerField} onPress={()=>openTimePicker("end")}><Ionicons name="time-outline" size={18} color={colors.green}/><Text style={[styles.pickerFieldText,!form.endTime&&styles.pickerPlaceholder]}>{formatChosenTime(form.endTime)}</Text><Ionicons name="chevron-down" size={16} color={colors.muted}/></Pressable>{proposalAttempted && (!form.endTime || (!!form.time && form.endTime<=form.time)) && <Text style={styles.ruiFieldError}>End time must be later than the start time.</Text>}</View>
+              <View style={styles.ruiFormCell}><Text style={styles.fieldLabel}>Volunteer capacity *</Text><Pressable style={styles.pickerField} onPress={()=>openSelect("capacity")}><Ionicons name="people-outline" size={18} color={colors.green}/><Text style={styles.pickerFieldText}>{form.capacity?`${form.capacity} volunteers`:"Select capacity"}</Text><Ionicons name="chevron-down" size={16} color={colors.muted}/></Pressable>{customCapacity&&<TextInput style={[styles.input,{marginTop:6}]} value={form.capacity} keyboardType="number-pad" maxLength={3} onChangeText={v=>setValue("capacity",v.replace(/[^0-9]/g,""))}/>}{proposalAttempted && (!Number.isInteger(Number(form.capacity)) || Number(form.capacity)<1 || Number(form.capacity)>500) && <Text style={styles.ruiFieldError}>Choose a capacity between 1 and 500 volunteers.</Text>}</View>
             </View>
             <CommunityEventPinPicker key={`${form.barangay}:${form.location}`} barangay={form.barangay} venue={form.location} latitude={form.latitude} longitude={form.longitude}
               onChange={(latitude,longitude)=>setForm(previous=>({...previous,latitude,longitude}))}/>
+            {proposalAttempted && (form.latitude === null || form.longitude === null) && <Text style={styles.ruiFieldError}>Tap the map to select the exact event meeting point.</Text>}
           </View>
 
           <View style={styles.ruiFormSection}>
             <View style={styles.ruiStepRow}><Text style={styles.ruiStepNumber}>2</Text><Text style={styles.ruiStepHeading}>Event Details</Text></View>
-            <Text style={styles.fieldLabel}>Description *</Text><TextInput multiline textAlignVertical="top" style={[styles.input,styles.ruiTextarea]} value={form.description} onChangeText={v=>setValue("description",v)} placeholder="Describe the activity, purpose, location conditions, and what the community needs..." placeholderTextColor="#94A8B8" maxLength={1500}/>
-            <Text style={styles.ruiCharCount}>{form.description.length}/1500</Text>
-            <Text style={styles.fieldLabel}>What volunteers will actually do *</Text><TextInput multiline textAlignVertical="top" style={[styles.input,styles.ruiSmallTextarea]} value={form.volunteerTasks} onChangeText={v=>setValue("volunteerTasks",v)} placeholder="e.g. Segregate waste, clean pathways, carry supplies and document the activity" placeholderTextColor="#94A8B8" maxLength={1200}/>
+            <Text style={styles.fieldLabel}>Description *</Text><TextInput nativeID="community-proposal-description" multiline textAlignVertical="top" style={[styles.input,styles.ruiTextarea,(proposalAttempted || !!form.description.trim()) && !!proposalWordError("description",form.description) && styles.ruiWordInputError]} value={form.description} onChangeText={v=>setValue("description",v)} placeholder="Describe the activity, purpose, location conditions, and what the community needs..." placeholderTextColor="#94A8B8" maxLength={1500}/>
+            <ProposalWordFeedback field="description" value={form.description} showError={proposalAttempted || !!form.description.trim()}/>
+            <Text style={styles.fieldLabel}>What volunteers will actually do *</Text><TextInput nativeID="community-proposal-volunteerTasks" multiline textAlignVertical="top" style={[styles.input,styles.ruiSmallTextarea,(proposalAttempted || !!form.volunteerTasks.trim()) && !!proposalWordError("volunteerTasks",form.volunteerTasks) && styles.ruiWordInputError]} value={form.volunteerTasks} onChangeText={v=>setValue("volunteerTasks",v)} placeholder="e.g. Segregate waste, clean pathways, carry supplies and document the activity" placeholderTextColor="#94A8B8" maxLength={1200}/>
+            <ProposalWordFeedback field="volunteerTasks" value={form.volunteerTasks} showError={proposalAttempted || !!form.volunteerTasks.trim()}/>
             <View style={[styles.ruiFormRow, isCompact&&styles.ruiFormRowStack]}>
               <View style={[styles.ruiFormCell,styles.ruiChecklistColumn]}>
                 <Text style={styles.ruiChecklistTitle}>Type of Help / Event *</Text>
@@ -2934,24 +2983,27 @@ export default function CommunityEventsScreen() {
                 <Text style={styles.ruiChecklistTitle}>Required Skills / Occupation *</Text>
                 <Text style={styles.ruiChecklistSubtitle}>Multiple selections allowed. Licenses checked by Admin/LGU.</Text>
                 {[...new Set([...suggestedRoles[form.category],...form.requiredRoles])].map((role)=><Pressable key={role} style={styles.ruiChecklistItem} onPress={()=>setValue("requiredRoles",form.requiredRoles.includes(role)?form.requiredRoles.filter(v=>v!==role):[...form.requiredRoles,role])}><Ionicons name={form.requiredRoles.includes(role)?"checkbox":"square-outline"} size={17} color={form.requiredRoles.includes(role)?"#038B7C":"#92AAC0"}/><Text style={styles.ruiChecklistText}>{role}</Text></Pressable>)}
-                <TextInput style={[styles.input,styles.ruiMiniInput]} value={form.otherRole} maxLength={80} onChangeText={v=>setValue("otherRole",v)} placeholder="Other occupation / role (optional)" placeholderTextColor="#94A8B8"/>
+                {proposalAttempted && form.requiredRoles.length === 0 && !form.otherRole.trim() && <Text style={styles.ruiFieldError}>Select at least one volunteer role.</Text>}
+                <TextInput nativeID="community-proposal-otherRole" style={[styles.input,styles.ruiMiniInput,(proposalAttempted || !!form.otherRole.trim()) && !!proposalWordError("otherRole",form.otherRole) && styles.ruiWordInputError]} value={form.otherRole} maxLength={80} onChangeText={v=>setValue("otherRole",v)} placeholder="Other occupation / role (optional)" placeholderTextColor="#94A8B8"/>
+                <ProposalWordFeedback field="otherRole" value={form.otherRole} showError={proposalAttempted || !!form.otherRole.trim()}/>
               </View>
             </View>
             <Text style={styles.fieldLabel}>Other helpful skills (optional)</Text>
             <View style={styles.ruiSkillsChips}>{suggestedSkills[form.category].map(name=><Pressable key={name} onPress={()=>setValue("requiredSkills",form.requiredSkills.includes(name)?form.requiredSkills.filter(v=>v!==name):[...form.requiredSkills,name])} style={[styles.ruiSkillChip,form.requiredSkills.includes(name)&&styles.ruiSkillChipSelected]}><Text style={[styles.ruiSkillChipText,form.requiredSkills.includes(name)&&styles.ruiSkillChipTextSelected]}>{form.requiredSkills.includes(name)?"✓ ":"+ "}{name}</Text></Pressable>)}</View>
             {needsProfessionalCheck([...form.requiredRoles,form.otherRole])&&<View style={styles.residentSafeguard}><Ionicons name="shield-checkmark-outline" size={19} color="#8A5B13"/><Text style={styles.residentSafeguardText}>Clinical and veterinary work requires verified professional qualifications. General volunteers may assist with non-clinical duties.</Text></View>}
-            <View style={[styles.ruiFormRow,isCompact&&styles.ruiFormRowStack]}><View style={styles.ruiFormCell}><CredentialPhotoField preview={credentialPreview} onPick={()=>void pickCredentialPhoto()} error={credentialError}/></View><View style={styles.ruiFormCell}><Text style={styles.fieldLabel}>What to bring (optional)</Text><TextInput style={styles.input} value={form.whatToBring} maxLength={500} onChangeText={v=>setValue("whatToBring",v)} placeholder="e.g. Gloves, water, closed shoes"/></View></View>
+            <View style={[styles.ruiFormRow,isCompact&&styles.ruiFormRowStack]}><View style={styles.ruiFormCell}><CredentialPhotoField preview={credentialPreview} onPick={()=>void pickCredentialPhoto()} error={credentialError}/></View><View style={styles.ruiFormCell}><Text style={styles.fieldLabel}>What to bring (optional)</Text><TextInput nativeID="community-proposal-whatToBring" style={[styles.input,(proposalAttempted || !!form.whatToBring.trim()) && !!proposalWordError("whatToBring",form.whatToBring) && styles.ruiWordInputError]} value={form.whatToBring} maxLength={500} onChangeText={v=>setValue("whatToBring",v)} placeholder="e.g. Gloves, water, closed shoes"/><ProposalWordFeedback field="whatToBring" value={form.whatToBring} showError={proposalAttempted || !!form.whatToBring.trim()}/></View></View>
           </View>
 
           <View style={styles.ruiFormSection}>
             <View style={styles.ruiStepRow}><Text style={styles.ruiStepNumber}>3</Text><Text style={styles.ruiStepHeading}>Media (Required)</Text></View>
             <Text style={styles.ruiChecklistSubtitle}>Upload at least one real venue/activity evidence photo (Main Photo required). Up to 3 JPG, PNG or WebP images, 5 MB each. Video optional. Never upload private IDs here.</Text>
             <View style={[styles.ruiFormRow,isCompact&&styles.ruiFormRowStack]}>
-              <View style={[styles.ruiFormCell,{flex:1.25}]}><Text style={styles.fieldLabel}>Event photos</Text><View style={styles.ruiUploadRow}>{[0,1,2].map(index=><Pressable key={index} onPress={()=>pickResidentPhoto(index)} style={styles.ruiUploadTile}>{localPhotoPreviews[index]?<Image source={{uri:localPhotoPreviews[index]}} resizeMode="cover" style={styles.ruiTilePreview}/>:<Ionicons name="camera-outline" size={24} color="#41718B"/>}<Text style={styles.ruiUploadText}>{index===0?"Main Photo":`Photo ${index+1}`}</Text><Text style={styles.ruiUploadHint}>{localPhotoFiles[index]?"Selected":index===0?"Required":"Optional"}</Text></Pressable>)}</View><Pressable style={styles.ruiBack} onPress={()=>setShowPhotoLinkFallback((v)=>!v)}><Ionicons name="link-outline" size={15} color="#0B786F"/><Text style={styles.ruiBackText}>{showPhotoLinkFallback?"Hide photo links":"Use HTTPS photo links instead"}</Text></Pressable>{showPhotoLinkFallback&&form.photoUrls.map((url,index)=><TextInput key={index} style={[styles.input,{marginBottom:6}]} placeholder={`Photo ${index+1} HTTPS image URL (optional)`} autoCapitalize="none" keyboardType="url" value={url} maxLength={2048} onChangeText={value=>updateProposalPhoto(index,value)}/>)}<Text style={styles.ruiChecklistSubtitle}>At least one photo is required. Files upload on submission; HTTPS photo URLs are an alternative.</Text>{!!photoPickerError&&<Text style={styles.webErrorText}>{photoPickerError}</Text>}</View>
-              <View style={styles.ruiFormCell}><Text style={styles.fieldLabel}>Video (Optional)</Text><Text style={styles.ruiChecklistSubtitle}>Add a link to a short YouTube or Vimeo video showing the venue or sample activity.</Text><TextInput style={styles.input} value={form.videoUrl} onChangeText={v=>setValue("videoUrl",v)} maxLength={2048} autoCapitalize="none" keyboardType="url" placeholder="https://youtu.be/..." placeholderTextColor="#94A8B8" />{!!form.videoUrl&&videoLinkSupported(form.videoUrl)&&<Pressable onPress={()=>void Linking.openURL(form.videoUrl)} style={styles.ruiBack}><Ionicons name="play-circle-outline" color="#048D7B" size={17}/><Text style={styles.ruiBackText}>Preview Video</Text></Pressable>}</View>
+              <View style={[styles.ruiFormCell,{flex:1.25}]}><Text style={styles.fieldLabel}>Event photos</Text><View style={styles.ruiUploadRow}>{[0,1,2].map(index=><Pressable key={index} onPress={()=>pickResidentPhoto(index)} style={styles.ruiUploadTile}>{localPhotoPreviews[index]?<Image source={{uri:localPhotoPreviews[index]}} resizeMode="cover" style={styles.ruiTilePreview}/>:<Ionicons name="camera-outline" size={24} color="#41718B"/>}<Text style={styles.ruiUploadText}>{index===0?"Main Photo":`Photo ${index+1}`}</Text><Text style={styles.ruiUploadHint}>{localPhotoFiles[index]?"Selected":index===0?"Required":"Optional"}</Text></Pressable>)}</View><Pressable style={styles.ruiBack} onPress={()=>setShowPhotoLinkFallback((v)=>!v)}><Ionicons name="link-outline" size={15} color="#0B786F"/><Text style={styles.ruiBackText}>{showPhotoLinkFallback?"Hide photo links":"Use HTTPS photo links instead"}</Text></Pressable>{showPhotoLinkFallback&&form.photoUrls.map((url,index)=><TextInput key={index} style={[styles.input,{marginBottom:6}]} placeholder={`Photo ${index+1} HTTPS image URL (optional)`} autoCapitalize="none" keyboardType="url" value={url} maxLength={2048} onChangeText={value=>updateProposalPhoto(index,value)}/>)}<Text style={styles.ruiChecklistSubtitle}>At least one photo is required. Files upload on submission; HTTPS photo URLs are an alternative.</Text>{proposalAttempted && !localPhotoFiles.some(Boolean) && !form.photoUrls.some(url=>!!url.trim()) && <Text style={styles.ruiFieldError}>Add at least one event site/activity photo.</Text>}{!!photoPickerError&&<Text style={styles.webErrorText}>{photoPickerError}</Text>}</View>
+              <View style={styles.ruiFormCell}><Text style={styles.fieldLabel}>Video (Optional)</Text><Text style={styles.ruiChecklistSubtitle}>Add a link to a short YouTube or Vimeo video showing the venue or sample activity.</Text><TextInput style={styles.input} value={form.videoUrl} onChangeText={v=>setValue("videoUrl",v)} maxLength={2048} autoCapitalize="none" keyboardType="url" placeholder="https://youtu.be/..." placeholderTextColor="#94A8B8" />{proposalAttempted && !videoLinkSupported(form.videoUrl.trim()) && <Text style={styles.ruiFieldError}>Use a valid HTTPS YouTube or Vimeo link.</Text>}{!!form.videoUrl&&videoLinkSupported(form.videoUrl)&&<Pressable onPress={()=>void Linking.openURL(form.videoUrl)} style={styles.ruiBack}><Ionicons name="play-circle-outline" color="#048D7B" size={17}/><Text style={styles.ruiBackText}>Preview Video</Text></Pressable>}</View>
             </View>
           </View>
           <View style={styles.ruiFormFooter}><Pressable style={styles.ruiCancelButton} onPress={()=>setSection("explore")}><Text style={styles.ruiCancelText}>Cancel</Text></Pressable><Pressable disabled={busy} style={[styles.ruiPrimary,styles.ruiSubmitButton,busy&&styles.disabledButton]} onPress={()=>void submitProposal()}>{busy?<ActivityIndicator color="white" size="small"/>:<Text style={styles.ruiPrimaryText}>Submit Proposal</Text>}<Ionicons name="arrow-forward" color="white" size={16}/></Pressable></View>
+          {!!notice && <View style={busy ? styles.webNotice : styles.webError}><Ionicons name={busy ? "information-circle-outline" : "alert-circle-outline"} size={17} color={busy ? "#0D8273" : "#B42318"}/><Text style={busy ? styles.webNoticeText : styles.webErrorText}>{notice}</Text></View>}
         </View>}
 
         {isVolunteer && Platform.OS !== "web" && (
@@ -3219,7 +3271,7 @@ export default function CommunityEventsScreen() {
           )}
         </View>
 
-        {!!notice && (
+        {section !== "propose" && !!notice && (
           <View style={styles.notice}>
             <Ionicons
               name="information-circle-outline"
@@ -3497,7 +3549,8 @@ export default function CommunityEventsScreen() {
               <Text style={styles.fieldLabel}>Event title *</Text>
 
               <TextInput
-                style={styles.input}
+                nativeID="community-proposal-title"
+                style={[styles.input,(proposalAttempted || !!form.title.trim()) && !!proposalWordError("title",form.title) && styles.ruiWordInputError]}
                 placeholder="e.g. Barangay Clean-up Drive"
                 placeholderTextColor="#9AABB4"
                 value={form.title}
@@ -3509,6 +3562,7 @@ export default function CommunityEventsScreen() {
                 }
                 maxLength={100}
               />
+              <ProposalWordFeedback field="title" value={form.title} showError={proposalAttempted || !!form.title.trim()}/>
 
               {/* Category */}
               <Text
@@ -3608,6 +3662,7 @@ export default function CommunityEventsScreen() {
                       color={colors.muted}
                     />
                   </Pressable>
+                  {proposalAttempted && !form.barangay.trim() && <Text style={styles.ruiFieldError}>Select a barangay.</Text>}
                 </View>
 
                 {/* Venue */}
@@ -3683,6 +3738,7 @@ export default function CommunityEventsScreen() {
                       maxLength={150}
                     />
                   )}
+                  {proposalAttempted && !form.location.trim() && <Text style={styles.ruiFieldError}>Choose or enter the event venue.</Text>}
                 </View>
               </View>
 
@@ -3736,6 +3792,7 @@ export default function CommunityEventsScreen() {
                       color={colors.muted}
                     />
                   </Pressable>
+                  {proposalAttempted && !form.date && <Text style={styles.ruiFieldError}>Choose the event date.</Text>}
                 </View>
 
                 {/* Time */}
@@ -3784,6 +3841,7 @@ export default function CommunityEventsScreen() {
                       color={colors.muted}
                     />
                   </Pressable>
+                  {proposalAttempted && !form.time && <Text style={styles.ruiFieldError}>Choose the event start time.</Text>}
                 </View>
 
                 {/* End Time */}
@@ -3794,6 +3852,8 @@ export default function CommunityEventsScreen() {
                     <Text style={styles.pickerFieldText}>{formatChosenTime(form.endTime)}</Text>
                     <Ionicons name="chevron-down" size={17} color={colors.muted}/>
                   </Pressable>
+                  {proposalAttempted && (!form.endTime || (!!form.time && form.endTime <= form.time)) &&
+                    <Text style={styles.ruiFieldError}>End time must be later than start time.</Text>}
                 </View>
 
                 {/* Capacity */}
@@ -3876,11 +3936,15 @@ export default function CommunityEventsScreen() {
                       maxLength={3}
                     />
                   )}
+                  {proposalAttempted && (!Number.isInteger(Number(form.capacity)) || Number(form.capacity) < 1 || Number(form.capacity) > 500) &&
+                    <Text style={styles.ruiFieldError}>Capacity must be between 1 and 500 volunteers.</Text>}
                 </View>
               </View>
 
               <CommunityEventPinPicker key={`${form.barangay}:${form.location}`} barangay={form.barangay} venue={form.location} latitude={form.latitude} longitude={form.longitude}
                 onChange={(latitude,longitude)=>setForm(previous=>({...previous,latitude,longitude}))} />
+              {proposalAttempted && (form.latitude === null || form.longitude === null) &&
+                <Text style={styles.ruiFieldError}>Tap the map to select the exact event meeting point.</Text>}
 
               {/* Description */}
               <Text
@@ -3890,9 +3954,11 @@ export default function CommunityEventsScreen() {
               </Text>
 
               <TextInput
+                nativeID="community-proposal-description"
                 style={[
                   styles.input,
                   styles.textarea,
+                  (proposalAttempted || !!form.description.trim()) && !!proposalWordError("description",form.description) && styles.ruiWordInputError,
                 ]}
                 placeholder="Describe the activity, purpose, and what volunteers will do..."
                 placeholderTextColor="#9AABB4"
@@ -3909,9 +3975,10 @@ export default function CommunityEventsScreen() {
                 }
                 maxLength={1500}
               />
+              <ProposalWordFeedback field="description" value={form.description} showError={proposalAttempted || !!form.description.trim()}/>
 
               <ProposalNeedsAndMedia form={form} update={setValue} onPhotoChange={updateProposalPhoto}
-                onCredentialPick={()=>void pickCredentialPhoto()} credentialPreview={credentialPreview} credentialError={credentialError}/>
+                onCredentialPick={()=>void pickCredentialPhoto()} credentialPreview={credentialPreview} credentialError={credentialError} showWordErrors={proposalAttempted}/>
 
               <View style={styles.residentSubmissionFooter}>
                 <View style={styles.residentSectionIcon}><Ionicons name="shield-checkmark-outline" size={20} color="#047E73" /></View>
@@ -3958,6 +4025,7 @@ export default function CommunityEventsScreen() {
                   color="white"
                 />
               </Pressable>
+              {!!notice && <View style={busy ? styles.webNotice : styles.webError}><Ionicons name={busy ? "information-circle-outline" : "alert-circle-outline"} size={17} color={busy ? "#0D8273" : "#B42318"}/><Text style={busy ? styles.webNoticeText : styles.webErrorText}>{notice}</Text></View>}
             </View>
           )}
 
@@ -4703,13 +4771,15 @@ const styles = StyleSheet.create({
     marginBottom: 14,
   },
   pageTitle: {
-    fontSize: designUi.type.page.fontSize,
-    fontWeight: designUi.type.page.fontWeight,
-    color: colors.ink, lineHeight: designUi.type.page.lineHeight,},
+    fontSize: 23,
+    fontWeight: "700",
+    color: colors.ink,
+  },
   pageSubtitle: {
     color: colors.muted,
-    fontSize: designUi.type.body.fontSize,
-    marginTop: 3, lineHeight: designUi.type.body.lineHeight, fontWeight: designUi.type.body.fontWeight,},
+    fontSize: 12,
+    marginTop: 3,
+  },
   modeTag: {
     flexDirection: "row",
     alignItems: "center",
@@ -4720,7 +4790,7 @@ const styles = StyleSheet.create({
     borderRadius: 10,
   },
   modeTagText: {
-    fontSize: vsType.size.micro,
+    fontSize: 10,
     color: "#08756B",
     fontWeight: "800",
   },
@@ -4733,19 +4803,19 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   heroKicker: {
-    fontSize: vsType.size.micro,
+    fontSize: 10,
     color: "#CBFFF4",
     fontWeight: "800",
     letterSpacing: 1,
   },
   heroTitle: {
-    fontSize: vsType.size.titleSmall,
+    fontSize: 21,
     color: "#FFFFFF",
     fontWeight: "700",
     marginTop: 5,
   },
   heroSubtitle: {
-    fontSize: vsType.size.meta,
+    fontSize: 12,
     color: "#E4FFF7",
     marginTop: 5,
     lineHeight: 17,
@@ -4767,13 +4837,13 @@ const styles = StyleSheet.create({
   },
   statValue: {
     color: colors.ink,
-    fontWeight: "800",
-    fontSize: vsType.size.subheading,
+    fontWeight: "900",
+    fontSize: 20,
     marginTop: 3,
   },
   statLabel: {
     color: colors.muted,
-    fontSize: vsType.size.micro,
+    fontSize: 10,
     marginTop: 1,
   },
   sectionTabs: {
@@ -4794,7 +4864,7 @@ const styles = StyleSheet.create({
     borderColor: colors.green,
   },
   sectionTabText: {
-    fontSize: vsType.size.meta,
+    fontSize: 12,
     fontWeight: "700",
     color: colors.muted,
   },
@@ -4811,11 +4881,13 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     color: colors.ink,
-    fontSize: designUi.type.section.fontSize,
-    fontWeight: designUi.type.section.fontWeight, lineHeight: designUi.type.section.lineHeight,},
+    fontSize: 16,
+    fontWeight: "700",
+  },
   sectionHint: {
     color: colors.muted,
-    fontSize: designUi.type.body.fontSize, lineHeight: designUi.type.body.lineHeight, fontWeight: designUi.type.body.fontWeight,},
+    fontSize: 11,
+  },
   searchInput: {
     backgroundColor: "white",
     borderWidth: 1,
@@ -4823,7 +4895,7 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     minHeight: 43,
     paddingHorizontal: 13,
-    fontSize: vsType.size.label,
+    fontSize: 13,
     color: colors.ink,
   },
   filterRow: {
@@ -4845,7 +4917,7 @@ const styles = StyleSheet.create({
   },
   filterText: {
     color: colors.muted,
-    fontSize: vsType.size.caption,
+    fontSize: 11,
     fontWeight: "700",
   },
   filterTextActive: {
@@ -4865,8 +4937,8 @@ const styles = StyleSheet.create({
     backgroundColor: "white",
     borderWidth: 1,
     borderColor: colors.border,
-    borderRadius: 17,
-    padding: 17,
+    borderRadius: 14,
+    padding: 14,
     marginBottom: 2,
   },
   eventTop: {
@@ -4885,15 +4957,16 @@ const styles = StyleSheet.create({
   },
   categoryText: {
     color: colors.green,
-    fontSize: vsType.size.micro,
+    fontSize: 10,
     fontWeight: "800",
     marginBottom: 3,
   },
   eventTitle: {
     color: colors.ink,
-    fontSize: designUi.type.card.fontSize,
-    fontWeight: designUi.type.card.fontWeight,
-    flexShrink: 1, lineHeight: designUi.type.card.lineHeight,},
+    fontSize: 14,
+    fontWeight: "900",
+    flexShrink: 1,
+  },
   tag: {
     backgroundColor: "#DDF4EA",
     borderRadius: 7,
@@ -4905,8 +4978,8 @@ const styles = StyleSheet.create({
   },
   tagText: {
     color: "#087662",
-    fontSize: vsType.size.micro,
-    fontWeight: "800",
+    fontSize: 9,
+    fontWeight: "900",
   },
   metaRow: {
     flexDirection: "row",
@@ -4916,8 +4989,9 @@ const styles = StyleSheet.create({
   },
   metaText: {
     color: colors.muted,
-    fontSize: designUi.type.meta.fontSize,
-    lineHeight: designUi.type.meta.lineHeight, fontWeight: designUi.type.meta.fontWeight,},
+    fontSize: 11,
+    lineHeight: 16,
+  },
   cardFooter: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -4926,7 +5000,7 @@ const styles = StyleSheet.create({
   },
   slots: {
     color: colors.ink,
-    fontSize: vsType.size.caption,
+    fontSize: 11,
     fontWeight: "700",
   },
   linkButton: {
@@ -4934,7 +5008,7 @@ const styles = StyleSheet.create({
   },
   linkText: {
     color: colors.green,
-    fontSize: vsType.size.caption,
+    fontSize: 11,
     fontWeight: "800",
   },
   descriptionBox: {
@@ -4945,7 +5019,7 @@ const styles = StyleSheet.create({
   },
   description: {
     color: "#4C6770",
-    fontSize: vsType.size.meta,
+    fontSize: 12,
     lineHeight: 18,
   },
   ownerNotice: {
@@ -4959,7 +5033,7 @@ const styles = StyleSheet.create({
   },
   ownerNoticeText: {
     color: "#0B7065",
-    fontSize: vsType.size.caption,
+    fontSize: 11,
     lineHeight: 16,
     flex: 1,
   },
@@ -4982,7 +5056,7 @@ const styles = StyleSheet.create({
   primaryButtonText: {
     color: "white",
     fontWeight: "800",
-    fontSize: vsType.size.meta,
+    fontSize: 12,
   },
   disabledButton: {
     backgroundColor: "#9AACA8",
@@ -4998,10 +5072,10 @@ const styles = StyleSheet.create({
   secondaryButtonText: {
     color: colors.muted,
     fontWeight: "700",
-    fontSize: vsType.size.meta,
+    fontSize: 12,
   },
   helper: {
-    fontSize: vsType.size.caption,
+    fontSize: 11,
     lineHeight: 16,
     color: colors.muted,
     marginTop: 9,
@@ -5017,12 +5091,12 @@ const styles = StyleSheet.create({
   },
   noticeText: {
     color: "#0B7065",
-    fontSize: vsType.size.meta,
+    fontSize: 12,
     flex: 1,
   },
   errorText: {
     color: "#B42318",
-    fontSize: vsType.size.meta,
+    fontSize: 12,
     marginVertical: 10,
   },
   emptyPanel: {
@@ -5039,7 +5113,7 @@ const styles = StyleSheet.create({
   empty: {
     color: colors.muted,
     textAlign: "center",
-    fontSize: vsType.size.meta,
+    fontSize: 12,
   },
   proposalCard: {
     backgroundColor: "white",
@@ -5058,25 +5132,26 @@ const styles = StyleSheet.create({
   },
   formCard: {
     backgroundColor: "white",
-    borderRadius: 17,
-    padding: 18,
+    borderRadius: 14,
+    padding: 15,
     borderWidth: 1,
     borderColor: colors.border,
   },
   fieldLabel: {
     color: colors.ink,
-    fontSize: designUi.type.label.fontSize,
-    fontWeight: designUi.type.label.fontWeight,
+    fontSize: 11,
+    fontWeight: "800",
     marginTop: 11,
-    marginBottom: 5, lineHeight: designUi.type.label.lineHeight,},
+    marginBottom: 5,
+  },
   input: {
     borderWidth: 1,
     borderColor: colors.border,
     borderRadius: 8,
-    minHeight: 46,
+    minHeight: 41,
     paddingHorizontal: 11,
     paddingVertical: 8,
-    fontSize: vsType.size.meta,
+    fontSize: 12,
     color: colors.ink,
     backgroundColor: "#FFFFFF",
   },
@@ -5095,7 +5170,7 @@ const styles = StyleSheet.create({
   pickerFieldText: {
     flex: 1,
     color: colors.ink,
-    fontSize: vsType.size.meta,
+    fontSize: 12,
   },
   pickerPlaceholder: {
     color: "#9AABB4",
@@ -5124,8 +5199,8 @@ const styles = StyleSheet.create({
     marginBottom: 15,
   },
   pickerTitle: {
-    fontSize: vsType.size.card,
-    fontWeight: "800",
+    fontSize: 17,
+    fontWeight: "900",
     color: colors.ink,
   },
   pickerClose: {
@@ -5151,7 +5226,7 @@ const styles = StyleSheet.create({
   },
   monthTitle: {
     color: colors.ink,
-    fontSize: vsType.size.body,
+    fontSize: 14,
     fontWeight: "800",
   },
   calendarGrid: {
@@ -5167,7 +5242,7 @@ const styles = StyleSheet.create({
   weekdayText: {
     color: colors.muted,
     fontWeight: "700",
-    fontSize: vsType.size.micro,
+    fontSize: 10,
   },
   dayButton: {
     width: 36,
@@ -5181,7 +5256,7 @@ const styles = StyleSheet.create({
   },
   dayText: {
     color: colors.ink,
-    fontSize: vsType.size.meta,
+    fontSize: 12,
     fontWeight: "700",
   },
   dayTextDisabled: {
@@ -5192,14 +5267,14 @@ const styles = StyleSheet.create({
   },
   pickerHelp: {
     color: colors.muted,
-    fontSize: vsType.size.caption,
+    fontSize: 11,
     marginTop: 13,
     textAlign: "center",
   },
   clockPreview: {
     color: colors.green,
-    fontSize: vsType.size.page,
-    fontWeight: "800",
+    fontSize: 27,
+    fontWeight: "900",
     textAlign: "center",
     marginBottom: 14,
   },
@@ -5216,7 +5291,7 @@ const styles = StyleSheet.create({
   },
   clockUnitLabel: {
     color: colors.muted,
-    fontSize: vsType.size.caption,
+    fontSize: 11,
     fontWeight: "700",
   },
   clockStep: {
@@ -5230,13 +5305,13 @@ const styles = StyleSheet.create({
   },
   clockNumber: {
     color: colors.ink,
-    fontSize: vsType.size.title,
-    fontWeight: "800",
+    fontSize: 24,
+    fontWeight: "900",
   },
   clockColon: {
     color: colors.ink,
-    fontSize: vsType.size.title,
-    fontWeight: "800",
+    fontSize: 24,
+    fontWeight: "900",
     marginTop: 8,
   },
   periodButton: {
@@ -5253,7 +5328,7 @@ const styles = StyleSheet.create({
   periodText: {
     color: colors.ink,
     fontWeight: "800",
-    fontSize: vsType.size.meta,
+    fontSize: 12,
   },
   periodTextActive: {
     color: "#FFFFFF",
@@ -5267,7 +5342,7 @@ const styles = StyleSheet.create({
   },
   pickerConfirmText: {
     color: "#FFFFFF",
-    fontSize: vsType.size.label,
+    fontSize: 13,
     fontWeight: "800",
   },
   customInput: {
@@ -5287,7 +5362,7 @@ const styles = StyleSheet.create({
   },
   dropdownSearchInput: {
     flex: 1,
-    fontSize: vsType.size.label,
+    fontSize: 13,
     color: colors.ink,
     paddingVertical: 9,
   },
@@ -5309,7 +5384,7 @@ const styles = StyleSheet.create({
   },
   dropdownOptionText: {
     flex: 1,
-    fontSize: vsType.size.label,
+    fontSize: 13,
     color: colors.ink,
   },
   dropdownOptionTextSelected: {
@@ -5318,7 +5393,7 @@ const styles = StyleSheet.create({
   },
   dropdownEmpty: {
     color: colors.muted,
-    fontSize: vsType.size.meta,
+    fontSize: 12,
     padding: 14,
     textAlign: "center",
   },
@@ -5352,7 +5427,8 @@ const styles = StyleSheet.create({
   },
   submitButton: {
     alignSelf: "flex-start",
-    marginTop: 12, minHeight: 46,},
+    marginTop: 12,
+  },
   certificateLink: {
     alignSelf: "flex-start",
     marginTop: 17,
@@ -5367,10 +5443,10 @@ const styles = StyleSheet.create({
   webHero: { borderRadius: 19, overflow: "hidden", borderWidth: 1, borderColor: "#CEE9E4" },
   webHeroGradient: { minHeight: 153, paddingHorizontal: 28, paddingVertical: 23, flexDirection: "row", alignItems: "center", overflow: "hidden" },
   webHeroKickerRow: { flexDirection: "row", alignItems: "center", gap: 7 },
-  webHeroKicker: { fontSize: vsType.size.micro, fontWeight: "800", color: "#007B71", letterSpacing: 1.1 },
-  webHeroTitle: { fontFamily: vsType.family, fontSize: vsType.size.title, lineHeight: 32, fontWeight: "800", color: "#0B2740", marginTop: 10, maxWidth: 690, flexShrink: 1 },
-  webHeroTitleSmall: { fontSize: vsType.size.titleSmall },
-  webHeroDescription: { fontFamily: vsType.family, fontSize: vsType.size.label, lineHeight: 19, color: "#49677D", marginTop: 8, maxWidth: 690 },
+  webHeroKicker: { fontSize: 10, fontWeight: "900", color: "#007B71", letterSpacing: 1.1 },
+  webHeroTitle: { fontFamily:"EventInterExtraBold", fontSize: 25, lineHeight: 32, fontWeight: "900", color: "#0B2740", marginTop: 10, maxWidth: 690, flexShrink: 1 },
+  webHeroTitleSmall: { fontSize: 22 },
+  webHeroDescription: { fontFamily:"EventInter", fontSize: 12.5, lineHeight: 19, color: "#49677D", marginTop: 8, maxWidth: 690 },
   webHeroIllustration: { alignItems: "center", justifyContent: "center", width: 250, height: 120 },
   webHeroCircleLarge: { position: "absolute", width: 215, height: 215, borderRadius: 110, backgroundColor: "#BEE8D9", opacity: 0.52, right: -10, top: -51 },
   webHeroLeaf: { position: "absolute", top: 8, right: 45, transform: [{ rotate: "-22deg" }] },
@@ -5378,21 +5454,21 @@ const styles = StyleSheet.create({
   webStatsNarrow: { gap: 8 },
   webStatCard: { flexGrow: 1, flexBasis: 240, minWidth: 0, minHeight: 94, backgroundColor: "white", borderColor: "#DDE9E8", borderWidth: 1, borderRadius: 13, flexDirection: "row", gap: 12, alignItems: "center", paddingHorizontal: 14, paddingVertical: 13 },
   webStatIcon: { width: 46, height: 46, borderRadius: 14, alignItems: "center", justifyContent: "center" },
-  webStatNumber: { fontFamily: vsType.family, fontSize: vsType.size.title, fontWeight: "800", color: "#092B45" },
-  webStatTitle: { fontSize: vsType.size.meta, fontWeight: "800", color: "#11334B", marginTop: 1 },
-  webStatHint: { fontSize: vsType.size.caption, color: "#7B8B9B", marginTop: 3 },
+  webStatNumber: { fontFamily:"EventInterBold", fontSize: 23, fontWeight: "900", color: "#092B45" },
+  webStatTitle: { fontSize: 12, fontWeight: "800", color: "#11334B", marginTop: 1 },
+  webStatHint: { fontSize: 10.5, color: "#7B8B9B", marginTop: 3 },
   webToolbar: { flexDirection: "row", gap: 13, justifyContent: "space-between", alignItems: "center", marginTop: 15, flexWrap: "wrap" },
   webSectionTabs: { flexDirection: "row", gap: 5, alignItems: "center", borderBottomWidth: 1, borderBottomColor: "#DDE8E9" },
   webSectionTab: { paddingHorizontal: 15, paddingVertical: 12, borderBottomWidth: 3, borderBottomColor: "transparent" },
   webSectionTabActive: { borderBottomColor: "#008F82" },
-  webSectionTabText: { fontSize: vsType.size.label, fontWeight: "800", color: "#698095" },
+  webSectionTabText: { fontSize: 13, fontWeight: "800", color: "#698095" },
   webSectionTabTextActive: { color: "#008F82" },
   webSearchWrap: { width: 350, minWidth: 235, minHeight: 43, borderWidth: 1, borderColor: "#DCE7EB", borderRadius: 11, backgroundColor: "white", flexDirection: "row", alignItems: "center", gap: 9, paddingHorizontal: 13 },
-  webSearchInput: { flex: 1, fontSize: vsType.size.label, color: "#1A3E52", paddingVertical: 8, minWidth: 0 },
+  webSearchInput: { flex: 1, fontSize: 12.5, color: "#1A3E52", paddingVertical: 8, minWidth: 0 },
   webFilters: { gap: 8, paddingTop: 15, paddingBottom: 14, alignItems: "center" },
   webFilterChip: { borderRadius: 25, borderWidth: 1, borderColor: "#DFE8EA", backgroundColor: "white", paddingHorizontal: 12, minHeight: 36, flexDirection: "row", gap: 5, alignItems: "center" },
   webFilterChipActive: { backgroundColor: "#068F82", borderColor: "#068F82" },
-  webFilterText: { fontSize: vsType.size.meta, fontWeight: "800", color: "#47667B" },
+  webFilterText: { fontSize: 11.5, fontWeight: "800", color: "#47667B" },
   webFilterTextActive: { color: "white" },
   webMainColumns: { flexDirection: "row", gap: 15, alignItems: "flex-start" },
   webMainColumnsStack: { flexDirection: "column" },
@@ -5404,102 +5480,102 @@ const styles = StyleSheet.create({
   webHeadingHint: { color: "#697E88", fontSize: 13, marginTop: 5, lineHeight: 19 },
   webEventCount: { color: "#718697", fontSize: vsType.size.caption, fontWeight: "700" },
   webCardGrid: { flexDirection: "row", flexWrap: "wrap", gap: 12, alignItems: "flex-start", marginTop: 5 },
-  webEventCard: { width: "48.9%", minWidth: 230, backgroundColor: "#FFFFFF", borderRadius: 17, borderWidth: 1, borderColor: "#E0ECE9", overflow: "hidden" },
+  webEventCard: { width: "48.9%", minWidth: 230, backgroundColor: "#FFFFFF", borderRadius: 14, borderWidth: 1, borderColor: "#E0ECE9", overflow: "hidden" },
   webEventCompact: { width: "100%" },
   webEventSelected: { borderColor: "#0A9C8D", borderWidth: 1.5 },
   webCover: { height: 146, overflow: "hidden", backgroundColor: "#DAF3ED" },
   webCoverImage: { width: "100%", height: "100%" },
   webCoverArtwork: { flex: 1, alignItems: "center", justifyContent: "center" },
   webCoverRing: { width: 235, height: 235, position: "absolute", top: -115, right: -40, backgroundColor: "#FFFFFF", opacity: 0.26, borderRadius: 120 },
-  webArtNote: { color: "#087468", fontSize: vsType.size.caption, fontWeight: "800", marginTop: 4 },
+  webArtNote: { color: "#087468", fontSize: 11, fontWeight: "900", marginTop: 4 },
   webStatusPill: { position: "absolute", right: 9, top: 9, borderRadius: 6, backgroundColor: "#E0F8EE", paddingHorizontal: 9, paddingVertical: 6 },
   webStatusDone: { backgroundColor: "#EEF0FF" },
-  webStatusText: { color: "#047A70", fontSize: vsType.size.micro, fontWeight: "800" },
+  webStatusText: { color: "#047A70", fontSize: 9.5, fontWeight: "900" },
   webCardBody: { padding: 13, gap: 8 },
-  webCardTitle: { fontFamily: vsType.family, fontSize: designUi.type.card.fontSize, fontWeight: designUi.type.card.fontWeight, color: "#17483C", lineHeight: designUi.type.card.lineHeight,},
+  webCardTitle: { fontFamily:"EventInterBold", fontSize: 16, fontWeight: "900", color: "#17483C" },
   webCategoryRow: { flexDirection: "row", gap: 6, alignItems: "center", flexWrap: "wrap" },
   webCategoryTag: { backgroundColor: "#E3F6F0", paddingHorizontal: 9, paddingVertical: 5, borderRadius: 6 },
-  webCategoryTagText: { color: "#087A6C", fontWeight: "800", fontSize: vsType.size.micro },
+  webCategoryTagText: { color: "#087A6C", fontWeight: "800", fontSize: 10 },
   webJoinedTag: { flexDirection: "row", alignItems: "center", gap: 3, backgroundColor: "#F0F9F4", borderRadius: 6, paddingHorizontal: 7, paddingVertical: 5 },
-  webJoinedText: { color: "#087965", fontSize: vsType.size.micro, fontWeight: "800" },
+  webJoinedText: { color: "#087965", fontSize: 10, fontWeight: "800" },
   webMetaLine: { flexDirection: "row", alignItems: "flex-start", gap: 7 },
-  webMetaText: { fontSize: vsType.size.caption, color: "#597285", flex: 1, lineHeight: 16 },
-  webCardOwnership: { color: "#AB7750", fontSize: vsType.size.caption, fontWeight: "700" },
+  webMetaText: { fontSize: 11, color: "#597285", flex: 1, lineHeight: 16 },
+  webCardOwnership: { color: "#AB7750", fontSize: 10.5, fontWeight: "700" },
   webCardAction: { marginTop: 5, minHeight: 37, borderRadius: 8, backgroundColor: "#F0F6FA", flexDirection: "row", gap: 8, alignItems: "center", justifyContent: "center" },
   webCardActionActive: { backgroundColor: "#068F83" },
-  webCardActionText: { fontSize: vsType.size.meta, fontWeight: "800", color: "#076E69" },
+  webCardActionText: { fontSize: 11.5, fontWeight: "900", color: "#076E69" },
   webCardActionTextActive: { color: "white" },
-  webDetailCard: { backgroundColor: "white", borderRadius: 17, overflow: "hidden", borderWidth: 1, borderColor: "#E0EAE8", marginTop: 5 },
+  webDetailCard: { backgroundColor: "white", borderRadius: 14, overflow: "hidden", borderWidth: 1, borderColor: "#E0EAE8", marginTop: 5 },
   webDetailCover: { height: 178, backgroundColor: "#D0EFE9" },
   webDetailCoverImage: { width: "100%", height: "100%" },
   webDetailArtwork: { width: "100%", height: "100%", alignItems: "center", justifyContent: "center" },
-  webDetailArtLabel: { fontSize: vsType.size.label, fontWeight: "800", color: "#057769", marginTop: 8 },
+  webDetailArtLabel: { fontSize: 13, fontWeight: "900", color: "#057769", marginTop: 8 },
   webDetailStatus: { position: "absolute", left: 14, top: 14, borderRadius: 7, paddingHorizontal: 10, paddingVertical: 7, backgroundColor: "#DAF8EA", flexDirection: "row", alignItems: "center", gap: 5 },
-  webDetailStatusText: { fontSize: vsType.size.micro, fontWeight: "800", color: "#046F63" },
+  webDetailStatusText: { fontSize: 10, fontWeight: "900", color: "#046F63" },
   webDetailBody: { paddingHorizontal: 15, paddingVertical: 16 },
-  webDetailTitle: { color: "#0C2D46", fontSize: vsType.size.section, fontWeight: "800" },
+  webDetailTitle: { color: "#0C2D46", fontSize: 19, fontWeight: "900" },
   webDetailCategory: { flexDirection: "row", backgroundColor: "#E8F7F2", borderRadius: 7, paddingHorizontal: 8, paddingVertical: 6, alignItems: "center", gap: 5, alignSelf: "flex-start", marginTop: 9, marginBottom: 10 },
-  webDetailCategoryText: { fontSize: vsType.size.micro, fontWeight: "800", color: "#007B6C" },
+  webDetailCategoryText: { fontSize: 10, fontWeight: "800", color: "#007B6C" },
   webDetailRow: { flexDirection: "row", alignItems: "flex-start", gap: 9, marginBottom: 10 },
-  webDetailText: { fontSize: vsType.size.meta, color: "#546E80", lineHeight: 18, flex: 1 },
+  webDetailText: { fontSize: 12, color: "#546E80", lineHeight: 18, flex: 1 },
   webDivider: { height: 1, backgroundColor: "#E7EEEC", marginTop: 6, marginBottom: 13 },
-  webDetailSectionTitle: { color: "#0F3048", fontSize: designUi.type.section.fontSize, fontWeight: designUi.type.section.fontWeight, marginBottom: 7, lineHeight: designUi.type.section.lineHeight,},
-  webDetailDescription: { color: "#536E80", fontSize: vsType.size.meta, lineHeight: 18 },
+  webDetailSectionTitle: { color: "#0F3048", fontSize: 13, fontWeight: "900", marginBottom: 7 },
+  webDetailDescription: { color: "#536E80", fontSize: 11.5, lineHeight: 18 },
   webDetailActions: { flexDirection: "row", gap: 8, marginTop: 18 },
   webJoinButton: { flex: 1, backgroundColor: "#068E81", minHeight: 42, borderRadius: 9, alignItems: "center", justifyContent: "center", flexDirection: "row", gap: 7 },
-  webJoinButtonText: { fontSize: vsType.size.meta, fontWeight: "800", color: "white" },
+  webJoinButtonText: { fontSize: 12, fontWeight: "900", color: "white" },
   webButtonDisabled: { opacity: 0.55 },
   webDeclineButton: { borderColor: "#D7A7AD", borderWidth: 1, borderRadius: 9, minHeight: 42, paddingHorizontal: 16, alignItems: "center", justifyContent: "center" },
-  webDeclineButtonText: { color: "#B3424A", fontSize: vsType.size.meta, fontWeight: "800" },
+  webDeclineButtonText: { color: "#B3424A", fontSize: 11.5, fontWeight: "900" },
   webOwnershipNotice: { flexDirection: "row", gap: 9, backgroundColor: "#E6F6F2", borderRadius: 10, padding: 11, marginTop: 15 },
-  webOwnershipText: { color: "#0A796D", fontSize: vsType.size.caption, lineHeight: 17, flex: 1 },
+  webOwnershipText: { color: "#0A796D", fontSize: 11, lineHeight: 17, flex: 1 },
   webJoinedBanner: { flexDirection: "row", gap: 8, backgroundColor: "#E8F7F1", borderRadius: 9, padding: 12, marginTop: 16 },
-  webJoinedBannerText: { color: "#136F64", fontSize: vsType.size.caption, lineHeight: 17, flex: 1 },
+  webJoinedBannerText: { color: "#136F64", fontSize: 11, lineHeight: 17, flex: 1 },
   webClosedBanner: { flexDirection: "row", gap: 8, backgroundColor: "#F3F6F7", borderRadius: 9, padding: 12, marginTop: 16 },
-  webClosedText: { color: "#546B7B", fontSize: vsType.size.caption, flex: 1 },
+  webClosedText: { color: "#546B7B", fontSize: 11, flex: 1 },
   webDetailResidentNote: { flexDirection: "row", backgroundColor: "#F0F5F7", padding: 11, borderRadius: 9, gap: 8, marginTop: 14 },
-  webResidentText: { flex: 1, fontSize: vsType.size.caption, lineHeight: 16, color: "#536D7E" },
+  webResidentText: { flex: 1, fontSize: 11, lineHeight: 16, color: "#536D7E" },
   webParticipationBox: { marginTop: 15, backgroundColor: "#F4F9F8", borderColor: "#DCEBE7", borderWidth: 1, borderRadius: 11, padding: 12 },
   webParticipationHeading: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 8 },
-  webParticipationTitle: { color: "#0D726D", fontSize: vsType.size.label, fontWeight: "800" },
+  webParticipationTitle: { color: "#0D726D", fontSize: 13, fontWeight: "900" },
   webPartLine: { flexDirection: "row", justifyContent: "space-between", gap: 10, paddingVertical: 7, borderBottomWidth: 1, borderBottomColor: "#E0EAE8" },
-  webPartLabel: { color: "#657987", fontSize: vsType.size.caption },
-  webPartValue: { color: "#183C50", fontSize: vsType.size.caption, fontWeight: "800", textAlign: "right", flexShrink: 1 },
+  webPartLabel: { color: "#657987", fontSize: 11 },
+  webPartValue: { color: "#183C50", fontSize: 11, fontWeight: "800", textAlign: "right", flexShrink: 1 },
   webVerified: { color: "#08856F" },
-  webAttendanceNote: { color: "#6A8690", fontSize: vsType.size.micro, lineHeight: 15, marginTop: 9 },
+  webAttendanceNote: { color: "#6A8690", fontSize: 10, lineHeight: 15, marginTop: 9 },
   webAttendanceStatusPill: { marginLeft: "auto", paddingHorizontal: 8, paddingVertical: 5, borderRadius: 7, backgroundColor: "#E1F3EF" },
-  webAttendanceStatusText: { fontSize: vsType.size.micro, fontWeight: "800", color: "#06796D" },
+  webAttendanceStatusText: { fontSize: 9, fontWeight: "900", color: "#06796D" },
   webAttendanceActionArea: { marginTop: 14, gap: 9 },
-  webAttendanceActionHelp: { fontSize: vsType.size.caption, lineHeight: 17, color: "#456C7E" },
+  webAttendanceActionHelp: { fontSize: 11, lineHeight: 17, color: "#456C7E" },
   webAttendanceActionButton: { backgroundColor: "#087D70", borderRadius: 10, minHeight: 52, paddingHorizontal: 18, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10, flex: 1 },
   webAttendanceActionButtonText: { color: "white", fontWeight: "700", fontSize: 15 },
   webAttendanceConfirmBox: { padding: 12, borderRadius: 9, borderWidth: 1, borderColor: "#BCE4D9", backgroundColor: "#EAF8F4", gap: 10 },
-  webAttendanceConfirmText: { color: "#225569", fontSize: vsType.size.caption, lineHeight: 17 },
+  webAttendanceConfirmText: { color: "#225569", fontSize: 11, lineHeight: 17 },
   webAttendanceConfirmButtons: { flexDirection: "row", alignItems: "center", gap: 8 },
   webAttendanceCancelButton: { borderRadius: 9, minHeight: 42, justifyContent: "center", alignItems: "center", borderWidth: 1, borderColor: "#BCD5D1", paddingHorizontal: 13 },
-  webAttendanceCancelText: { color: "#466B76", fontWeight: "800", fontSize: vsType.size.caption },
-  webAttendanceHint: { color: "#688092", backgroundColor: "#EAF1F5", padding: 11, borderRadius: 8, fontSize: vsType.size.caption, lineHeight: 17, marginTop: 12 },
-  webAttendanceVerifiedHint: { color: "#076C59", backgroundColor: "#E1F5EB", padding: 11, borderRadius: 8, fontSize: vsType.size.caption, lineHeight: 17, marginTop: 12 },
+  webAttendanceCancelText: { color: "#466B76", fontWeight: "800", fontSize: 11 },
+  webAttendanceHint: { color: "#688092", backgroundColor: "#EAF1F5", padding: 11, borderRadius: 8, fontSize: 11, lineHeight: 17, marginTop: 12 },
+  webAttendanceVerifiedHint: { color: "#076C59", backgroundColor: "#E1F5EB", padding: 11, borderRadius: 8, fontSize: 11, lineHeight: 17, marginTop: 12 },
   webAttendanceFeedbackBox: { flexDirection: "row", alignItems: "flex-start", gap: 8, backgroundColor: "#E1F6EC", padding: 10, borderRadius: 8, marginTop: 10 },
-  webAttendanceFeedbackText: { flex: 1, color: "#08765D", fontSize: vsType.size.caption, lineHeight: 16 },
+  webAttendanceFeedbackText: { flex: 1, color: "#08765D", fontSize: 11, lineHeight: 16 },
   webAttendanceFeedbackError: { backgroundColor: "#FFF0EF" },
   webAttendanceFeedbackErrorText: { color: "#B42318" },
   webNotice: { flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: "#E8F8F1", borderRadius: 10, padding: 12, marginTop: 12 },
-  webNoticeText: { color: "#0D7268", fontSize: vsType.size.meta, flex: 1 },
+  webNoticeText: { color: "#0D7268", fontSize: 12, flex: 1 },
   webError: { flexDirection: "row", alignItems: "center", gap: 7, padding: 12, backgroundColor: "#FFF0EF", borderRadius: 10, marginTop: 10 },
-  webErrorText: { flex: 1, color: "#B42318", fontSize: vsType.size.meta },
+  webErrorText: { flex: 1, color: "#B42318", fontSize: 12 },
   webLoading: { minHeight: 150, alignItems: "center", justifyContent: "center" },
   webEmptyCard: { backgroundColor: "#FFFFFF", borderRadius: 14, minHeight: 200, padding: 25, alignItems: "center", justifyContent: "center", gap: 10, borderWidth: 1, borderColor: "#DFEBE8", marginTop: 5 },
-  webEmptyTitle: { fontFamily: vsType.family, fontWeight: designUi.type.section.fontWeight, color: "#214051", fontSize: designUi.type.section.fontSize, textAlign: "center", lineHeight: designUi.type.section.lineHeight,},
-  webEmptySubtitle: { fontSize: vsType.size.meta, color: "#6B8290", textAlign: "center" },
+  webEmptyTitle: { fontFamily:"EventInterBold", fontWeight: "900", color: "#214051", fontSize: 15, textAlign: "center" },
+  webEmptySubtitle: { fontSize: 12, color: "#6B8290", textAlign: "center" },
   webEmptyAction: { backgroundColor: "#048E81", borderRadius: 8, paddingHorizontal: 15, paddingVertical: 10 },
-  webEmptyActionText: { color: "white", fontWeight: "800", fontSize: vsType.size.meta },
+  webEmptyActionText: { color: "white", fontWeight: "900", fontSize: 12 },
   webProposalWrap: { maxWidth: 1160, width: "100%", alignSelf: "center", marginTop: 18 },
   webProposalCard: { flexDirection: "row", gap: 15, backgroundColor: "white", padding: 15, borderRadius: 12, borderWidth: 1, borderColor: "#E1EBEA", marginBottom: 8 },
-  webProposalTitle: { fontFamily: vsType.family, color: "#12344A", fontSize: vsType.size.body, fontWeight: "800", marginBottom: 4 },
-  webProposalNote: { fontSize: vsType.size.caption, color: "#9C6F39", marginTop: 6 },
+  webProposalTitle: { fontFamily:"EventInterBold", color: "#12344A", fontSize: 14, fontWeight: "900", marginBottom: 4 },
+  webProposalNote: { fontSize: 11, color: "#9C6F39", marginTop: 6 },
   webProposalBadge: { alignSelf: "flex-start", borderRadius: 7, paddingHorizontal: 8, paddingVertical: 6, backgroundColor: "#E7F5EE" },
-  webProposalBadgeText: { color: "#007B6C", fontSize: vsType.size.micro, fontWeight: "800" },
+  webProposalBadgeText: { color: "#007B6C", fontSize: 10, fontWeight: "900" },
   // Locked Community Events UI — responsive left dashboard and compact right rail.
   lockedColumns: { flexDirection: "row", alignItems: "flex-start", width: "100%", gap: 18 },
   lockedColumnsStack: { flexDirection: "column" },
@@ -5513,13 +5589,13 @@ const styles = StyleSheet.create({
   lockedHeroHillBack: { position: "absolute", bottom: -104, right: -29, width: 255, height: 172, borderRadius: 130, backgroundColor: "#B8E5D8" },
   lockedHeroHillFront: { position: "absolute", bottom: -110, right: -38, width: 208, height: 156, borderRadius: 106, backgroundColor: "#80CBB9" },
   lockedHeroQuote: { width: "100%", paddingHorizontal: 13, paddingTop: 9, alignItems: "center", justifyContent: "center", zIndex: 2 },
-  lockedHeroMotto: { color: "#086C65", fontSize: vsType.size.meta, lineHeight: 17, fontWeight: "800", fontStyle: "italic", textAlign: "center", marginTop: 5, flexShrink: 1 },
+  lockedHeroMotto: { color: "#086C65", fontSize: 11.5, lineHeight: 17, fontWeight: "900", fontStyle: "italic", textAlign: "center", marginTop: 5, flexShrink: 1 },
   lockedStats: { flexDirection: "row", gap: 10, marginTop: 13, flexWrap: "wrap" },
   lockedStatCard: { flexGrow: 1, flexBasis: 145, minWidth: 0, backgroundColor: "white", borderRadius: 13, borderWidth: 1, borderColor: "#DFEBE9", minHeight: 94, padding: 12, alignItems: "center", flexDirection: "row", gap: 11 },
   lockedIconCircle: { width: 48, height: 48, borderRadius: 13, backgroundColor: "#E5F6F1", alignItems: "center", justifyContent: "center" },
   lockedStatWords: { flex: 1, minWidth: 0 },
-  lockedStatValue: { fontFamily: vsType.family, fontSize: vsType.size.titleSmall, fontWeight: "800", color: "#0C2C49" },
-  lockedStatLabel: { fontSize: vsType.size.caption, lineHeight: 16, fontWeight: "800", color: "#173652" },
+  lockedStatValue: { fontFamily:"EventInterExtraBold", fontSize: 22, fontWeight: "900", color: "#0C2C49" },
+  lockedStatLabel: { fontSize: 11, lineHeight: 16, fontWeight: "800", color: "#173652" },
   lockedToolbar: { marginTop: 13, gap: 8, flexDirection: "row", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap" },
   lockedSearch: { width: 250, minWidth: 190, flexShrink: 1 },
   lockedEventList: { marginTop: 8 },
@@ -5528,28 +5604,28 @@ const styles = StyleSheet.create({
   lockedEventShell: { backgroundColor: "white", borderColor: "#E1EBE8", borderWidth: 1, borderRadius: 13, overflow: "hidden", width: "100%" },
   lockedEventSummaryClick: { gap: 7, paddingVertical: 6, borderRadius: 8, minWidth: 0 },
   lockedEventTapHint: { flexDirection: "row", alignItems: "center", gap: 7, marginTop: 4 },
-  lockedEventTapHintText: { fontSize: vsType.size.caption, color: "#087F75", fontWeight: "700", flexShrink: 1 },
+  lockedEventTapHintText: { fontSize: 11, color: "#087F75", fontWeight: "700", flexShrink: 1 },
   lockedListHeading: { flexWrap: "wrap" },
   lockedListControls: { flexDirection: "row", alignItems: "center", gap: 12, flexWrap: "wrap" },
   lockedSortButton: { flexDirection: "row", alignItems: "center", backgroundColor: "white", borderWidth: 1, borderColor: "#DCE9E6", borderRadius: 10, paddingVertical: 7, paddingHorizontal: 11, gap: 8, minWidth: 155 },
-  lockedSortCaption: { fontSize: vsType.size.micro, color: "#84939F", fontWeight: "700" },
-  lockedSortValue: { fontSize: vsType.size.caption, color: "#113A4B", fontWeight: "800" },
+  lockedSortCaption: { fontSize: 9, color: "#84939F", fontWeight: "700" },
+  lockedSortValue: { fontSize: 11, color: "#113A4B", fontWeight: "900" },
   lockedInlineDetails: { marginHorizontal: 11, marginBottom: 11, borderTopWidth: 1, borderColor: "#E2ECEA", paddingTop: 12, gap: 9 },
-  lockedInlineTitle: { fontFamily: vsType.family, color: "#123248", fontSize: vsType.size.label, fontWeight: "800", flexShrink: 1 },
+  lockedInlineTitle: { fontFamily:"EventInterBold", color: "#123248", fontSize: 13, fontWeight: "900", flexShrink: 1 },
   volunteerDetailHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 10, marginBottom: 5 },
   volunteerDetailClose: { flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: "#EDF5F3", borderRadius: 8, paddingVertical: 8, paddingHorizontal: 12 },
-  volunteerDetailCloseText: { color: "#58757C", fontSize: vsType.size.caption, fontWeight: "800" },
+  volunteerDetailCloseText: { color: "#58757C", fontSize: 11, fontWeight: "800" },
   volunteerOverviewBox: { backgroundColor: "#FFFFFF", borderColor: "#E0ECE8", borderWidth: 1, borderRadius: 12, padding: 14, gap: 11 },
-  volunteerOverviewLabel: { color: "#0A8478", fontSize: vsType.size.micro, letterSpacing: 0.5, fontWeight: "800" },
+  volunteerOverviewLabel: { color: "#0A8478", fontSize: 10, letterSpacing: 0.5, fontWeight: "900" },
   volunteerEventFacts: { flexDirection: "row", flexWrap: "wrap", gap: 10, marginTop: 3 },
   volunteerEventFact: { flexGrow: 1, flexBasis: 205, flexDirection: "row", gap: 9, alignItems: "flex-start", minWidth: 0, borderRadius: 10, padding: 12, backgroundColor: "#F1F9F6" },
   volunteerEventFactText: { flex: 1, minWidth: 0, gap: 4 },
-  volunteerEventFactCaption: { fontSize: vsType.size.micro, fontWeight: "800", color: "#788C99", letterSpacing: 0.4 },
-  volunteerEventFactValue: { fontSize: vsType.size.meta, fontWeight: "700", lineHeight: 18, color: "#264655" },
+  volunteerEventFactCaption: { fontSize: 9, fontWeight: "900", color: "#788C99", letterSpacing: 0.4 },
+  volunteerEventFactValue: { fontSize: 12, fontWeight: "700", lineHeight: 18, color: "#264655" },
 
   lockedLoadMoreRow: { flexDirection: "row", justifyContent: "center", marginTop: 5 },
   lockedLoadMoreButton: { flexDirection: "row", alignItems: "center", gap: 8, paddingVertical: 11, paddingHorizontal: 18, borderRadius: 11, backgroundColor: "#E7F7F2", borderWidth: 1, borderColor: "#CBE8E0" },
-  lockedLoadMoreText: { fontSize: vsType.size.meta, fontWeight: "800", color: "#087B71" },
+  lockedLoadMoreText: { fontSize: 12, fontWeight: "800", color: "#087B71" },
   lockedEventRow: { backgroundColor: "white", borderRadius: 13, padding: 13, flexDirection: "row", gap: 16, width: "100%" },
   lockedEventSelected: { borderColor: "#0A9E8D", borderWidth: 1.5 },
   lockedEventVertical: { flexDirection: "column" },
@@ -5557,14 +5633,14 @@ const styles = StyleSheet.create({
   lockedPictureNarrow: { width: "100%", minHeight: 160 },
   lockedImageFill: { position: "absolute", width: "100%", height: "100%" },
   lockedImageFallback: { width: "100%", height: "100%", alignItems: "center", justifyContent: "center" },
-  lockedFallbackLabel: { fontFamily: vsType.family, color: "#08776C", fontWeight: "800", fontSize: vsType.size.caption, marginTop: 10 },
+  lockedFallbackLabel: { fontFamily:"EventInterSemiBold", color: "#08776C", fontWeight: "900", fontSize: 11, marginTop: 10 },
   lockedImageStatus: { position: "absolute", top: 8, left: 8, backgroundColor: "#E6FAEC", borderRadius: 7, paddingVertical: 5, paddingHorizontal: 8, flexDirection: "row", gap: 4, alignItems: "center" },
-  lockedImageStatusText: { color: "#067C60", fontSize: vsType.size.micro, fontWeight: "800" },
+  lockedImageStatusText: { color: "#067C60", fontSize: 9, fontWeight: "900" },
   lockedEventInfo: { flex: 1, minWidth: 0, justifyContent: "center", gap: 5 },
   lockedEventTop: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", gap: 5 },
   lockedEventName: { fontFamily: vsType.family, flex: 1, minWidth: 0, color: "#173A42", fontSize: 17, lineHeight: 24, fontWeight: "700" },
   lockedSlotsPill: { flexDirection: "row", flexShrink: 0, alignItems: "center", gap: 4, backgroundColor: "#E8F8F0", paddingHorizontal: 7, paddingVertical: 5, borderRadius: 7 },
-  lockedSlotsText: { color: "#07836E", fontSize: vsType.size.micro, fontWeight: "800" },
+  lockedSlotsText: { color: "#07836E", fontSize: 9, fontWeight: "800" },
   lockedSmallTag: { backgroundColor: "#E8F7F0", paddingHorizontal: 8, paddingVertical: 5, borderRadius: 6, gap: 5, flexDirection: "row", alignItems: "center", alignSelf: "flex-start" },
   lockedSmallTagText: { color: "#06786E", fontSize: vsType.size.micro, fontWeight: "800" },
   lockedEventExcerpt: { fontFamily: vsType.family, fontSize: 13, lineHeight: 19, color: "#57707C", marginTop: 4 },
@@ -5578,21 +5654,21 @@ const styles = StyleSheet.create({
   eventCertificateButtonText: { fontSize: 14, fontWeight: "800", color: "#FFFFFF", fontFamily: vsType.family },
   lockedRowActions: { flexDirection: "row", alignItems: "center", justifyContent: "flex-end", gap: 7, flexWrap: "wrap", marginTop: 2 },
   lockedSecondaryAction: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, backgroundColor: "#E8F7F4", borderRadius: 8, paddingHorizontal: 11, minHeight: 33 },
-  lockedSecondaryActionText: { fontFamily: vsType.family, color: "#076E69", fontSize: vsType.size.micro, fontWeight: "800" },
+  lockedSecondaryActionText: { fontFamily:"EventInterSemiBold", color: "#076E69", fontSize: 10, fontWeight: "900" },
   lockedPrimaryAction: { backgroundColor: "#087D77", borderRadius: 8, paddingHorizontal: 14, minHeight: 33, alignItems: "center", justifyContent: "center" },
-  lockedPrimaryActionText: { fontFamily: vsType.family, color: "white", fontWeight: "800", fontSize: vsType.size.micro },
+  lockedPrimaryActionText: { fontFamily:"EventInterBold", color: "white", fontWeight: "900", fontSize: 10 },
   lockedJoined: { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 8 },
-  lockedJoinedText: { color: "#077C69", fontSize: vsType.size.micro, fontWeight: "800" },
+  lockedJoinedText: { color: "#077C69", fontSize: 10, fontWeight: "800" },
   lockedAboutCard: { backgroundColor: "white", borderColor: "#E1EBE8", borderWidth: 1, borderRadius: 13, padding: 16, marginTop: 14, gap: 9 },
-  lockedAboutText: { color: "#567183", fontSize: vsType.size.meta, lineHeight: 20 },
+  lockedAboutText: { color: "#567183", fontSize: 12, lineHeight: 20 },
   lockedRailCard: { width: "100%", minWidth: 0, backgroundColor: "white", borderRadius: 14, padding: 15, borderWidth: 1, borderColor: "#E1EBE9", overflow: "hidden" },
   lockedAttendanceRail: { backgroundColor: "#FFFFFF", borderColor: "#D7E6E1", borderWidth: 1 },
   lockedEventMapCard: { backgroundColor: "#F5FAF9", borderRadius: 12, borderWidth: 1, borderColor: "#D6EAE2", padding: 16, marginTop: 4, gap: 4 },
   lockedAttendanceOverview: { backgroundColor: "#F8FBFA", borderRadius: 11, padding: 12, gap: 9, marginTop: 12, marginBottom: 5 },
   lockedAttendanceOverviewHeading: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 7 },
-  lockedAttendanceOverviewTitle: { fontFamily: vsType.family, color: "#0D6A55", fontSize: vsType.size.meta, fontWeight: "800" },
+  lockedAttendanceOverviewTitle: { fontFamily:"EventInterBold", color: "#0D6A55", fontSize: 12, fontWeight: "900" },
   lockedAttendanceSort: { flexDirection: "row", alignItems: "center", gap: 5, paddingVertical: 7, paddingHorizontal: 8, backgroundColor: "white", borderRadius: 8, borderWidth: 1, borderColor: "#B9DECD" },
-  lockedAttendanceSortText: { color: "#0B7666", fontSize: vsType.size.micro, fontWeight: "800" },
+  lockedAttendanceSortText: { color: "#0B7666", fontSize: 10, fontWeight: "800" },
   lockedAttendanceHistory: { gap: 6 },
   lockedAttendanceHistoryItem: { flexDirection: "row", alignItems: "center", gap: 9, borderRadius: 9, borderWidth: 1, borderColor: "#D5E4DF", padding: 10, backgroundColor: "#FFFFFF", minHeight: 56 },
   lockedAttendanceHistoryActive: { borderColor: "#078F82", borderWidth: 1.5, backgroundColor: "#F4FFFA" },
@@ -5600,49 +5676,49 @@ const styles = StyleSheet.create({
   lockedAttendanceHistoryDate: { fontSize: 12, color: "#607C79", marginTop: 5, lineHeight: 17 },
   lockedAttendanceHistoryBadge: { backgroundColor: "#E3EDF1", borderRadius: 7, paddingHorizontal: 7, paddingVertical: 5, flexShrink: 0 },
   lockedAttendanceHistoryBadgeVerified: { backgroundColor: "#D8F4E4" },
-  lockedAttendanceHistoryBadgeText: { fontFamily: vsType.family, fontSize: vsType.size.micro, fontWeight: "800", color: "#087666" },
+  lockedAttendanceHistoryBadgeText: { fontFamily:"EventInterBold", fontSize: 9, fontWeight: "900", color: "#087666" },
   lockedAttendanceMore: { flexDirection: "row", alignSelf: "center", alignItems: "center", padding: 8, gap: 5 },
-  lockedAttendanceMoreText: { fontSize: vsType.size.caption, fontWeight: "800", color: "#087567" },
-  lockedAttendanceEmptyText: { fontSize: vsType.size.caption, color: "#527D72", lineHeight: 17 },
+  lockedAttendanceMoreText: { fontSize: 11, fontWeight: "800", color: "#087567" },
+  lockedAttendanceEmptyText: { fontSize: 11, color: "#527D72", lineHeight: 17 },
   nativeAttendancePanel: { marginTop: 12, padding: 12, borderRadius: 12, backgroundColor: "#F0FAF5", borderWidth: 1, borderColor: "#C0E5D2", gap: 9 },
   lockedSectionHeading: { flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 8 },
   lockedSectionIcon: { width: 40, height: 40, backgroundColor: "#E5F8F2", borderRadius: 10, justifyContent: "center", alignItems: "center" },
-  lockedSectionTitle: { fontFamily: vsType.family, color: "#17483E", fontSize: vsType.size.card, fontWeight: "800", flexShrink: 1 },
-  lockedSectionSub: { color: "#6E8494", fontSize: vsType.size.caption, marginTop: 3 },
-  lockedMapAddress: { fontSize: vsType.size.caption, color: "#486980", lineHeight: 17, marginBottom: 9 },
+  lockedSectionTitle: { fontFamily:"EventInterBold", color: "#17483E", fontSize: 16, fontWeight: "900", flexShrink: 1 },
+  lockedSectionSub: { color: "#6E8494", fontSize: 10.5, marginTop: 3 },
+  lockedMapAddress: { fontSize: 11, color: "#486980", lineHeight: 17, marginBottom: 9 },
   lockedMapFrame: { width: "100%", minHeight: 270, borderRadius: 11, backgroundColor: "#E5F3EF" },
   lockedMapPlaceholder: { backgroundColor: "#F1F7F6", minHeight: 160, borderRadius: 11, justifyContent: "center", alignItems: "center", padding: 18, gap: 12 },
   lockedMapHintRow: { flexDirection: "row", alignItems: "flex-start", gap: 5, marginTop: 8 },
-  lockedMapWarning: { flex: 1, color: "#718793", fontSize: vsType.size.micro, lineHeight: 15 },
-  lockedMapFootnote: { color: "#788E9B", fontSize: vsType.size.micro, lineHeight: 15, marginTop: 9 },
+  lockedMapWarning: { flex: 1, color: "#718793", fontSize: 9.5, lineHeight: 15 },
+  lockedMapFootnote: { color: "#788E9B", fontSize: 9.5, lineHeight: 15, marginTop: 9 },
   lockedMapActions: { flexDirection: "row", flexWrap: "wrap", marginTop: 11, gap: 8 },
   lockedMapOutline: { flexGrow: 1, flexBasis: 190, minWidth: 0, borderWidth: 1, borderColor: "#BFD7D8", backgroundColor: "white", borderRadius: 9, paddingHorizontal: 11, minHeight: 45, justifyContent: "center", alignItems: "center", flexDirection: "row", gap: 7 },
-  lockedMapOutlineText: { color: "#0A5663", fontSize: vsType.size.caption, fontWeight: "800", flexShrink: 1, textAlign: "center" },
+  lockedMapOutlineText: { color: "#0A5663", fontSize: 11, fontWeight: "800", flexShrink: 1, textAlign: "center" },
   lockedMapSolid: { flexGrow: 1, flexBasis: 190, minWidth: 0, backgroundColor: "#007B75", borderRadius: 9, paddingHorizontal: 11, minHeight: 45, justifyContent: "center", alignItems: "center", flexDirection: "row", gap: 7 },
-  lockedMapSolidText: { color: "white", fontSize: vsType.size.caption, fontWeight: "800", flexShrink: 1, textAlign: "center" },
+  lockedMapSolidText: { color: "white", fontSize: 11, fontWeight: "900", flexShrink: 1, textAlign: "center" },
   lockedAttendanceVerified: { flexDirection: "row", gap: 4, alignItems: "center", backgroundColor: "#E3F8ED", paddingHorizontal: 7, paddingVertical: 5, borderRadius: 7 },
-  lockedAttendanceVerifiedText: { color: "#067D68", fontSize: vsType.size.micro, fontWeight: "800" },
+  lockedAttendanceVerifiedText: { color: "#067D68", fontSize: 9, fontWeight: "900" },
   lockedAttendanceEmpty: { backgroundColor: "#F4F9F9", borderRadius: 11, padding: 22, alignItems: "center", gap: 10 },
   lockedAttendancePanel: { backgroundColor: "#FFFFFF", borderWidth: 1, borderColor: "#DEEAE5", borderRadius: 12, padding: 15, marginTop: 3 },
   lockedParticipationMeta: { backgroundColor: "#ECF8F5", borderRadius: 8, padding: 9, marginBottom: 7 },
-  lockedParticipationText: { fontSize: vsType.size.caption, fontWeight: "800", color: "#087567" },
+  lockedParticipationText: { fontSize: 11, fontWeight: "800", color: "#087567" },
   lockedCertificateLine: { marginTop: 8, paddingTop: 8, borderTopWidth: 1, borderTopColor: "#E5EFED", flexDirection: "row", alignItems: "center", gap: 7 },
-  lockedCertificateLineText: { flex: 1, color: "#687F8E", fontSize: vsType.size.micro, lineHeight: 15 },
+  lockedCertificateLineText: { flex: 1, color: "#687F8E", fontSize: 10, lineHeight: 15 },
   lockedVerifiedSummary: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 6, paddingHorizontal: 10, paddingVertical: 11, backgroundColor: "#E6F7EF", borderRadius: 9 },
-  lockedVerifiedSummaryText: { flex: 1, color: "#08705F", fontWeight: "700", fontSize: vsType.size.caption, lineHeight: 15 },
+  lockedVerifiedSummaryText: { flex: 1, color: "#08705F", fontWeight: "700", fontSize: 10.5, lineHeight: 15 },
   lockedRouteReady: { marginTop: 9, flexDirection: "row", alignItems: "center", gap: 7, backgroundColor: "#E7F7F0", paddingHorizontal: 9, paddingVertical: 8, borderRadius: 8 },
-  lockedRouteReadyText: { color: "#166D61", flex: 1, fontSize: vsType.size.micro, lineHeight: 15 },
-  lockedRouteReset: { color: "#075F66", fontSize: vsType.size.caption, fontWeight: "800", textDecorationLine: "underline" },
+  lockedRouteReadyText: { color: "#166D61", flex: 1, fontSize: 10, lineHeight: 15 },
+  lockedRouteReset: { color: "#075F66", fontSize: 11, fontWeight: "800", textDecorationLine: "underline" },
   lockedRouteHintRow: { flexDirection: "row", gap: 7, marginTop: 8, alignItems: "flex-start" },
-  lockedRouteNotice: { color: "#607A89", flex: 1, fontSize: vsType.size.micro, lineHeight: 16 },
+  lockedRouteNotice: { color: "#607A89", flex: 1, fontSize: 10, lineHeight: 16 },
   lockedAttendanceEventCard: { backgroundColor: "#FFFFFF", borderColor: "#E1EBED", borderWidth: 1, borderRadius: 10, padding: 7, flexDirection: "row", alignItems: "center", gap: 9, marginBottom: 9 },
   lockedAttendanceThumb: { width: 80, height: 65, borderRadius: 8 },
   lockedAttendanceThumbFallback: { width: 80, height: 65, borderRadius: 8, justifyContent: "center", alignItems: "center" },
   lockedAttendanceEventInfo: { flex: 1, minWidth: 0, gap: 3 },
-  lockedAttendanceEventTitle: { fontSize: vsType.size.label, fontWeight: "800", color: "#13334B" },
-  lockedAttendanceEventPlace: { fontSize: vsType.size.caption, color: "#667F91", lineHeight: 14.5 },
+  lockedAttendanceEventTitle: { fontSize: 12.5, fontWeight: "900", color: "#13334B" },
+  lockedAttendanceEventPlace: { fontSize: 10.5, color: "#667F91", lineHeight: 14.5 },
   lockedAttendanceEventDate: { flexDirection: "row", alignItems: "center", gap: 4 },
-  lockedAttendanceEventDateText: { fontSize: vsType.size.micro, color: "#627F96", flexShrink: 1 },
+  lockedAttendanceEventDateText: { fontSize: 9.5, color: "#627F96", flexShrink: 1 },
   lockedAttendanceGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8, width: "100%", marginBottom: 9 },
   lockedAttendanceTile: { flexGrow: 1, flexBasis: "47%", minWidth: 0, minHeight: 79, flexDirection: "row", alignItems: "center", paddingHorizontal: 10, paddingVertical: 11, gap: 8, backgroundColor: "#F8FBFA", borderWidth: 1, borderColor: "#DBE9E4", borderRadius: 10 },
   lockedAttendanceTileIcon: { width: 32, height: 32, borderRadius: 10, alignItems: "center", justifyContent: "center", flexShrink: 0 },
@@ -5651,40 +5727,40 @@ const styles = StyleSheet.create({
   lockedAttendanceTileValue: { fontFamily: vsType.family, color: "#123E46", fontWeight: "800", fontSize: 17, lineHeight: 22, marginTop: 2 },
   lockedAttendanceTileSmall: { color: "#708490", fontSize: 12, lineHeight: 17, marginTop: 2 },
   lockedAttendanceVerifier: { flexDirection: "row", alignItems: "center", gap: 7, padding: 9, backgroundColor: "#F1F9F7", borderRadius: 8, marginBottom: 9 },
-  lockedAttendanceVerifierText: { fontSize: vsType.size.caption, fontWeight: "800", color: "#08766B", flex: 1 },
+  lockedAttendanceVerifierText: { fontSize: 10.5, fontWeight: "800", color: "#08766B", flex: 1 },
   // Resident Community Proposal: clear section hierarchy, touch-friendly selections and safe media links.
   residentFormCard: { borderRadius: 19, padding: 20, borderColor: "#DCEAE5", backgroundColor: "#FFFFFF", overflow: "hidden" },
   residentFormHero: { flexDirection: "row", gap: 15, padding: 20, borderRadius: 15, marginBottom: 19, alignItems: "center" },
   residentFormHeroIcon: { width: 52, height: 52, borderRadius: 15, backgroundColor: "#D0F0E5", alignItems: "center", justifyContent: "center" },
-  residentFormKicker: { fontFamily: vsType.family, fontSize: vsType.size.micro, fontWeight: "800", letterSpacing: 1.15, color: "#078578" },
-  residentFormHeroTitle: { fontFamily: vsType.family, fontSize: vsType.size.titleSmall, lineHeight: 29, fontWeight: "800", color: "#174438", marginTop: 5 },
-  residentFormHeroSub: { fontSize: vsType.size.meta, lineHeight: 19, color: "#536D7C", marginTop: 5 },
+  residentFormKicker: { fontFamily:"EventInterBold", fontSize: 10, fontWeight: "900", letterSpacing: 1.15, color: "#078578" },
+  residentFormHeroTitle: { fontFamily:"EventInterExtraBold", fontSize: 22, lineHeight: 29, fontWeight: "900", color: "#174438", marginTop: 5 },
+  residentFormHeroSub: { fontSize: 12, lineHeight: 19, color: "#536D7C", marginTop: 5 },
   residentSectionHeading: { flexDirection: "row", alignItems: "center", gap: 10, borderTopWidth: 1, borderTopColor: "#E6EFEB", paddingTop: 20, marginTop: 17, marginBottom: 13 },
   residentSectionIcon: { width: 38, height: 38, borderRadius: 11, backgroundColor: "#E3F7EF", alignItems: "center", justifyContent: "center" },
-  residentSectionTitle: { fontFamily: vsType.family, fontSize: vsType.size.card, lineHeight: 21, fontWeight: "800", color: "#13334B" },
-  residentSectionSub: { fontSize: vsType.size.caption, color: "#728597", lineHeight: 16, marginTop: 3 },
-  residentHelp: { fontSize: vsType.size.caption, color: "#6A8291", lineHeight: 17, marginBottom: 7 },
+  residentSectionTitle: { fontFamily:"EventInterBold", fontSize: 16, lineHeight: 21, fontWeight: "900", color: "#13334B" },
+  residentSectionSub: { fontSize: 11, color: "#728597", lineHeight: 16, marginTop: 3 },
+  residentHelp: { fontSize: 11, color: "#6A8291", lineHeight: 17, marginBottom: 7 },
   residentChipRow: { flexDirection: "row", gap: 8, flexWrap: "wrap", marginBottom: 8, marginTop: 4 },
   residentChoiceChip: { flexDirection: "row", alignItems: "center", gap: 6, borderWidth: 1, borderColor: "#BEDCD4", backgroundColor: "#F4FBF8", paddingHorizontal: 12, minHeight: 38, borderRadius: 10 },
   residentChoiceChipSelected: { backgroundColor: "#078F82", borderColor: "#078F82" },
-  residentChoiceText: { fontSize: vsType.size.meta, fontWeight: "800", color: "#286B65" },
+  residentChoiceText: { fontSize: 11.5, fontWeight: "800", color: "#286B65" },
   residentChoiceTextSelected: { color: "#FFFFFF" },
   residentSkillChip: { backgroundColor: "#F8FBFC" },
   residentMultiline: { minHeight: 108, textAlignVertical: "top", paddingVertical: 12 },
   residentSmallInput: { marginTop: 8, marginBottom: 8 },
   residentSafeguard: { flexDirection: "row", alignItems: "flex-start", gap: 8, borderWidth: 1, borderColor: "#F2DEA8", backgroundColor: "#FFF9EA", padding: 12, borderRadius: 10, marginTop: 8, marginBottom: 9 },
-  residentSafeguardText: { flex: 1, fontSize: vsType.size.caption, lineHeight: 17, color: "#795B24" },
+  residentSafeguardText: { flex: 1, fontSize: 11, lineHeight: 17, color: "#795B24" },
   residentMediaNotice: { flexDirection: "row", gap: 9, alignItems: "flex-start", backgroundColor: "#ECF7FA", borderRadius: 10, padding: 13, marginBottom: 10 },
-  residentMediaNoticeText: { flex: 1, fontSize: vsType.size.caption, lineHeight: 17, color: "#4C7181" },
+  residentMediaNoticeText: { flex: 1, fontSize: 11, lineHeight: 17, color: "#4C7181" },
   residentMediaField: { marginBottom: 6 },
   residentMediaPreview: { width: "100%", maxWidth: 360, height: 150, borderRadius: 11, backgroundColor: "#E7EFF0", marginTop: 4, marginBottom: 9 },
   residentMediaLink: { flexDirection: "row", gap: 7, alignItems: "center", padding: 8, alignSelf: "flex-start" },
-  residentMediaLinkText: { color: "#067E73", fontSize: vsType.size.meta, fontWeight: "800" },
+  residentMediaLinkText: { color: "#067E73", fontSize: 11.5, fontWeight: "800" },
   residentSubmissionFooter: { flexDirection: "row", gap: 10, alignItems: "center", borderTopWidth: 1, borderTopColor: "#E6EFEB", marginTop: 21, paddingTop: 17, marginBottom: 12 },
   residentMiniChipRow: { flexDirection: "row", flexWrap: "wrap", gap: 5, marginTop: 7 },
   residentMiniChip: { backgroundColor: "#E8F7F2", paddingHorizontal: 9, paddingVertical: 5, borderRadius: 7 },
-  residentMiniChipText: { color: "#08796B", fontSize: vsType.size.micro, fontWeight: "800" },
-  residentProposalExcerpt: { color: "#5A7789", fontSize: vsType.size.caption, lineHeight: 17, marginTop: 6 },
+  residentMiniChipText: { color: "#08796B", fontSize: 10, fontWeight: "800" },
+  residentProposalExcerpt: { color: "#5A7789", fontSize: 11, lineHeight: 17, marginTop: 6 },
   residentProposalPhoto: { height: 120, maxWidth: 280, width: "100%", borderRadius: 8, marginTop: 9 },
 
   // Donations-style premium banner: calendar emblem, actual counters, safe responsiveness.
@@ -5695,13 +5771,13 @@ const styles = StyleSheet.create({
   communityHeroCopy:{flex:1,minWidth:0,paddingRight:2},
   communityHeroCopyCompact:{width:"100%",paddingLeft:101,paddingRight:0,
     minHeight:107,justifyContent:"center",flex:0},
-  communityHeroEyebrow:{ fontFamily: vsType.family,fontSize: vsType.size.micro,fontWeight: "800",letterSpacing:1,
+  communityHeroEyebrow:{ fontFamily:"EventInterBold",fontSize:10,fontWeight:"900",letterSpacing:1,
     color:"#167B60",marginBottom:4},
-  communityHeroTitle:{ fontFamily: vsType.family,fontSize: vsType.size.display,lineHeight:40,fontWeight: "800",
+  communityHeroTitle:{ fontFamily:"EventInterExtraBold",fontSize:34,lineHeight:40,fontWeight:"900",
     letterSpacing:-0.8,color:"#074A3C"},
-  communityHeroTitleCompact:{fontSize: vsType.size.title,lineHeight:30},
-  communityHeroTagline:{ fontFamily: vsType.family,fontSize: vsType.size.label,fontWeight:"800",color:"#0F6E52",marginTop:5},
-  communityHeroDescription:{ fontFamily: vsType.family,fontSize: vsType.size.meta,lineHeight:18,color:"#46786D",
+  communityHeroTitleCompact:{fontSize:25,lineHeight:30},
+  communityHeroTagline:{ fontFamily:"EventInterBold",fontSize:13,fontWeight:"800",color:"#0F6E52",marginTop:5},
+  communityHeroDescription:{ fontFamily:"EventInter",fontSize:11.5,lineHeight:18,color:"#46786D",
     marginTop:7,maxWidth:460},
   communityHeroStats:{flexDirection:"row",alignItems:"stretch",gap:9,
     width:"46%",maxWidth:480,minWidth:350},
@@ -5714,8 +5790,8 @@ const styles = StyleSheet.create({
     shadowColor:"#05774F",shadowOpacity:0.05,shadowRadius:6,
     shadowOffset:{width:0,height:3}},
   communityHeroStatCopy:{alignItems:"center",gap:3,minWidth:0},
-  communityHeroStatNumber:{ fontFamily: vsType.family,fontSize: vsType.size.section,fontWeight: "800",color:"#0C493E"},
-  communityHeroStatLabel:{ fontFamily: vsType.family,fontSize: vsType.size.micro,lineHeight:13,textAlign:"center",
+  communityHeroStatNumber:{ fontFamily:"EventInterExtraBold",fontSize:18,fontWeight:"900",color:"#0C493E"},
+  communityHeroStatLabel:{ fontFamily:"EventInterSemiBold",fontSize:9.5,lineHeight:13,textAlign:"center",
     fontWeight:"700",color:"#4D786C"},
   // Final Resident Community Events UI (matches the approved mockup).
   ruiHeroHeight: { minHeight: 170 },
@@ -5768,87 +5844,92 @@ const styles = StyleSheet.create({
   eventClearFilterText: { fontSize: 13, fontWeight: "700", color: "#477383" },
   ruiFilterBar: { flexDirection: "row", flexWrap: "wrap", gap: 9, marginTop: 15, marginBottom: 11 },
   ruiFilterSelect: { flex: 1, minWidth: 160, borderWidth: 1, borderColor: "#DCE7E9", backgroundColor: "white", borderRadius: 9, paddingHorizontal: 12, minHeight: 39, flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 },
-  ruiFilterLabel: { color: "#3D5B73", fontSize: vsType.size.meta, fontWeight: "700", flexShrink: 1 },
+  ruiFilterLabel: { color: "#3D5B73", fontSize: 11.5, fontWeight: "700", flexShrink: 1 },
   ruiCardGrid: { flexDirection: "row", flexWrap: "wrap", alignItems: "stretch", justifyContent: "flex-start", gap: 12 },
   ruiCard: { borderRadius: 12, borderWidth: 1, borderColor: "#DAE9E7", backgroundColor: "#FFFFFF", overflow: "hidden", marginBottom: 5 },
   ruiCardCover: { width: "100%", height: 155, backgroundColor: "#BDEADB" },
   ruiCoverImage: { width: "100%", height: "100%" },
   ruiCoverFallback: { flex: 1, alignItems: "center", justifyContent: "center", gap: 6 },
-  ruiCoverFallbackText: { fontSize: vsType.size.caption, fontWeight: "800", color: "#EFFFFA" },
+  ruiCoverFallbackText: { fontSize: 11, fontWeight: "800", color: "#EFFFFA" },
   ruiImageStatus: { position: "absolute", top: 10, left: 11, backgroundColor: "#D5F5E6", borderRadius: 7, paddingVertical: 5, paddingHorizontal: 8 },
-  ruiImageStatusText: { fontFamily: vsType.family, fontSize: vsType.size.micro, fontWeight: "800", color: "#087F70" },
+  ruiImageStatusText: { fontFamily:"EventInterSemiBold", fontSize: 10, fontWeight: "900", color: "#087F70" },
   ruiCardBody: { padding: 12, gap: 7, flex: 1 },
-  ruiCardTitle: { fontFamily: vsType.family, fontSize: vsType.size.body, fontWeight: "800", color: "#154438", lineHeight: 19 },
+  ruiCardTitle: { fontFamily:"EventInterBold", fontSize: 14.5, fontWeight: "900", color: "#154438", lineHeight: 19 },
   ruiTagRow: { flexDirection: "row", flexWrap: "wrap", gap: 5, marginVertical: 4 },
-  ruiCategoryTag: { backgroundColor: "#E3F8EC", color: "#058377", borderRadius: 7, paddingHorizontal: 7, paddingVertical: 4, fontSize: vsType.size.micro, fontWeight: "800", overflow: "hidden" },
-  ruiBarangayTag: { backgroundColor: "#E9F4FF", color: "#2376BB", borderRadius: 7, paddingHorizontal: 7, paddingVertical: 4, fontSize: vsType.size.micro, fontWeight: "800", overflow: "hidden" },
+  ruiCategoryTag: { backgroundColor: "#E3F8EC", color: "#058377", borderRadius: 7, paddingHorizontal: 7, paddingVertical: 4, fontSize: 10, fontWeight: "800", overflow: "hidden" },
+  ruiBarangayTag: { backgroundColor: "#E9F4FF", color: "#2376BB", borderRadius: 7, paddingHorizontal: 7, paddingVertical: 4, fontSize: 10, fontWeight: "800", overflow: "hidden" },
   ruiInfoLine: { flexDirection: "row", alignItems: "center", gap: 6 },
-  ruiMeta: { color: "#586F85", fontSize: vsType.size.caption, lineHeight: 16, flexShrink: 1 },
+  ruiMeta: { color: "#586F85", fontSize: 11, lineHeight: 16, flexShrink: 1 },
   ruiPrimary: { backgroundColor: "#008E7B", minHeight: 37, paddingHorizontal: 14, borderRadius: 8, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, marginTop: 5 },
-  ruiPrimaryText: { fontFamily: vsType.family, color: "#FFFFFF", fontSize: vsType.size.meta, fontWeight: "800" },
+  ruiPrimaryText: { fontFamily:"EventInterBold", color: "#FFFFFF", fontSize: 11.5, fontWeight: "900" },
   ruiDetailsCard: { backgroundColor: "white", padding: 17, borderWidth: 1, borderColor: "#DCE9E8", borderRadius: 13, width: "100%" },
   ruiBack: { flexDirection: "row", alignItems: "center", gap: 7, marginBottom: 7, alignSelf: "flex-start" },
-  ruiBackText: { color: "#0A786D", fontWeight: "800", fontSize: vsType.size.caption },
+  ruiBackText: { color: "#0A786D", fontWeight: "800", fontSize: 11 },
   ruiDetailIntro: { flexDirection: "row", gap: 18 },
   ruiDetailPhoto: { width: 240, height: 190, borderRadius: 11, alignItems: "center", justifyContent: "center" },
   ruiDetailOverview: { flex: 1, minWidth: 0, gap: 7 },
-  ruiDetailTitle: { fontFamily: vsType.family, fontSize: vsType.size.titleSmall, color: "#133448", fontWeight: "800", marginBottom: 5 },
+  ruiDetailTitle: { fontFamily:"EventInterExtraBold", fontSize: 22, color: "#133448", fontWeight: "900", marginBottom: 5 },
   ruiDetailTabs: { flexDirection: "row", flexWrap: "wrap", borderBottomWidth: 1, borderBottomColor: "#DDECE7", gap: 7, marginTop: 13 },
   ruiDetailTab: { paddingVertical: 10, paddingHorizontal: 9 },
   ruiDetailTabActive: { borderBottomWidth: 3, borderBottomColor: "#009987" },
-  ruiDetailTabText: { color: "#52728D", fontSize: vsType.size.caption, fontWeight: "700" },
-  ruiDetailTabTextActive: { fontFamily: vsType.family, color: "#058678", fontWeight: "800" },
+  ruiDetailTabText: { color: "#52728D", fontSize: 11, fontWeight: "700" },
+  ruiDetailTabTextActive: { fontFamily:"EventInterBold", color: "#058678", fontWeight: "900" },
   ruiDetailContent: { gap: 9, paddingVertical: 15 },
-  ruiSectionTitle: { fontFamily: vsType.family, fontSize: vsType.size.label, color: "#173549", fontWeight: "800" },
-  ruiParagraph: { color: "#617789", fontSize: vsType.size.meta, lineHeight: 18 },
-  ruiRequirementTag: { color: "#08776E", backgroundColor: "#E3F7F2", borderRadius: 6, paddingHorizontal: 9, paddingVertical: 6, fontSize: vsType.size.micro, overflow: "hidden" },
+  ruiSectionTitle: { fontFamily:"EventInterBold", fontSize: 12.5, color: "#173549", fontWeight: "900" },
+  ruiParagraph: { color: "#617789", fontSize: 11.5, lineHeight: 18 },
+  ruiRequirementTag: { color: "#08776E", backgroundColor: "#E3F7F2", borderRadius: 6, paddingHorizontal: 9, paddingVertical: 6, fontSize: 10, overflow: "hidden" },
   ruiMediaGallery: { flexDirection: "row", flexWrap: "wrap", gap: 7 },
   ruiGalleryPhoto: { width: 170, height: 120, borderRadius: 8 },
   ruiProposalWrap: { width: "100%", maxWidth: 1160, alignSelf: "center", marginTop: 13 },
-  ruiSectionHeading: { fontFamily: vsType.family, color: "#14364D", fontSize: vsType.size.section, fontWeight: "800" },
+  ruiSectionHeading: { fontFamily:"EventInterBold", color: "#14364D", fontSize: 19, fontWeight: "900" },
   ruiProposalRow: { marginTop: 8, backgroundColor: "white", borderWidth: 1, borderColor: "#DBE9E8", borderRadius: 10, flexDirection: "row", alignItems: "center", padding: 12, gap: 12 },
   ruiProposalThumbnail: { width: 86, height: 68, backgroundColor: "#C3ECDA", borderRadius: 8, alignItems: "center", justifyContent: "center" },
   ruiProposalDescription: { flex: 1, minWidth: 0, gap: 4 },
-  ruiProposalTitle: { fontFamily: vsType.family, fontSize: vsType.size.label, fontWeight: "800", color: "#12354C" },
-  ruiProposalNote: { color: "#0C8B72", fontSize: vsType.size.caption },
+  ruiProposalTitle: { fontFamily:"EventInterBold", fontSize: 13, fontWeight: "900", color: "#12354C" },
+  ruiProposalNote: { color: "#0C8B72", fontSize: 10.5 },
   ruiProposalStatus: { borderRadius: 7, backgroundColor: "#E6F6ED", paddingHorizontal: 9, paddingVertical: 6 },
   ruiProposalStatusPending: { backgroundColor: "#FFF2D9" },
   ruiProposalStatusRejected: { backgroundColor: "#FFE8E8" },
-  ruiProposalStatusText: { fontFamily: vsType.family, color: "#067965", fontWeight: "800", fontSize: vsType.size.micro },
+  ruiProposalStatusText: { fontFamily:"EventInterBold", color: "#067965", fontWeight: "900", fontSize: 9 },
   ruiFormRoot: { marginTop: 13, backgroundColor: "white", borderWidth: 1, borderColor: "#E0EAEA", padding: 19, borderRadius: 17, width: "100%" },
   ruiFormCompact: { paddingHorizontal: 12 },
   ruiFormTop: { flexDirection: "row", justifyContent: "space-between", flexWrap: "wrap", alignItems: "center", gap: 10 },
-  ruiFormApproval: { fontSize: vsType.size.caption, color: "#6C8297" },
-  ruiFormTitle: { fontFamily: vsType.family, color: "#17483C", fontSize: vsType.size.title, fontWeight: "800", marginTop: 13, marginBottom: 13 },
+  ruiFormApproval: { fontSize: 10.5, color: "#6C8297" },
+  ruiFormTitle: { fontFamily:"EventInterExtraBold", color: "#17483C", fontSize: 23, fontWeight: "900", marginTop: 13, marginBottom: 13 },
   ruiFormSection: { borderWidth: 1, borderColor: "#E6EFED", borderRadius: 13, padding: 16, marginBottom: 12, backgroundColor: "#FFFFFF" },
   ruiStepRow: { flexDirection: "row", alignItems: "center", gap: 9, marginBottom: 10 },
-  ruiStepNumber: { fontFamily: vsType.family, backgroundColor: "#04927B", borderRadius: 20, overflow: "hidden", paddingVertical: 6, paddingHorizontal: 11, color: "white", fontSize: vsType.size.meta, fontWeight: "800" },
-  ruiStepHeading: { fontFamily: vsType.family, fontWeight: "800", fontSize: vsType.size.body, color: "#16483C" },
+  ruiStepNumber: { fontFamily:"EventInterBold", backgroundColor: "#04927B", borderRadius: 20, overflow: "hidden", paddingVertical: 6, paddingHorizontal: 11, color: "white", fontSize: 12, fontWeight: "900" },
+  ruiStepHeading: { fontFamily:"EventInterBold", fontWeight: "900", fontSize: 14, color: "#16483C" },
   ruiFormRow: { flexDirection: "row", gap: 11, marginBottom: 6, alignItems: "flex-start" },
   ruiFormRowStack: { flexDirection: "column" },
   ruiFormCell: { flex: 1, minWidth: 0 },
   ruiTextarea: { minHeight: 85, paddingTop: 12, marginBottom: 2 },
   ruiSmallTextarea: { minHeight: 69, paddingTop: 10, marginBottom: 11 },
-  ruiCharCount: { fontSize: vsType.size.micro, color: "#8B9EA9", textAlign: "right", marginBottom: 11 },
+  ruiCharCount: { fontSize: 10, color: "#8B9EA9", textAlign: "right", marginBottom: 11 },
+  ruiWordFeedback: { marginTop: 4, marginBottom: 8, gap: 3 },
+  ruiWordCounter: { color: "#607C8C", fontSize: 10, textAlign: "right" },
+  ruiWordCounterError: { color: "#B42318" },
+  ruiFieldError: { color: "#B42318", fontSize: 10.5, marginTop: 3, marginBottom: 5 },
+  ruiWordInputError: { borderColor: "#C52B27", borderWidth: 1.5 },
   ruiChecklistColumn: { padding: 11, borderWidth: 1, borderColor: "#EEF2F2", borderRadius: 8 },
-  ruiChecklistTitle: { fontFamily: vsType.family, color: "#14354C", fontWeight: "800", fontSize: vsType.size.meta, marginBottom: 4 },
-  ruiChecklistSubtitle: { color: "#7E94A5", fontSize: vsType.size.caption, lineHeight: 16, marginBottom: 10 },
+  ruiChecklistTitle: { fontFamily:"EventInterBold", color: "#14354C", fontWeight: "900", fontSize: 12, marginBottom: 4 },
+  ruiChecklistSubtitle: { color: "#7E94A5", fontSize: 10.5, lineHeight: 16, marginBottom: 10 },
   ruiChecklistItem: { flexDirection: "row", gap: 7, alignItems: "center", minHeight: 28 },
-  ruiChecklistText: { color: "#35546D", fontSize: vsType.size.meta, flexShrink: 1 },
+  ruiChecklistText: { color: "#35546D", fontSize: 11.5, flexShrink: 1 },
   ruiMiniInput: { marginTop: 9 },
   ruiSkillsChips: { flexDirection: "row", flexWrap: "wrap", gap: 6, marginBottom: 12 },
   ruiSkillChip: { backgroundColor: "#F0F6F7", borderRadius: 8, paddingVertical: 7, paddingHorizontal: 10 },
   ruiSkillChipSelected: { backgroundColor: "#D7F4E9" },
-  ruiSkillChipText: { color: "#467083", fontSize: vsType.size.caption },
-  ruiSkillChipTextSelected: { color: "#087A6D", fontWeight: "800" },
+  ruiSkillChipText: { color: "#467083", fontSize: 10.5 },
+  ruiSkillChipTextSelected: { color: "#087A6D", fontWeight: "900" },
   ruiUploadRow: { flexDirection: "row", gap: 7, flexWrap: "wrap" },
   ruiUploadTile: { borderWidth: 1, borderColor: "#BDCEDC", borderRadius: 8, borderStyle: "dashed", width: 92, height: 95, alignItems: "center", justifyContent: "center", overflow: "hidden", padding: 3 },
   ruiTilePreview: { width: "100%", height: 55, borderRadius: 5 },
-  ruiUploadText: { color: "#2A536C", fontSize: vsType.size.micro, fontWeight: "800", marginTop: 2 },
-  ruiUploadHint: { fontSize: vsType.size.micro, color: "#7790A5" },
+  ruiUploadText: { color: "#2A536C", fontSize: 10, fontWeight: "900", marginTop: 2 },
+  ruiUploadHint: { fontSize: 9, color: "#7790A5" },
   ruiFormFooter: { alignItems: "center", justifyContent: "flex-end", flexDirection: "row", gap: 9 },
   ruiCancelButton: { borderWidth: 1, borderColor: "#D3E2E7", borderRadius: 8, paddingHorizontal: 19, paddingVertical: 11 },
-  ruiCancelText: { color: "#4F7186", fontWeight: "800", fontSize: vsType.size.meta },
+  ruiCancelText: { color: "#4F7186", fontWeight: "800", fontSize: 12 },
   ruiSubmitButton: { paddingHorizontal: 19, marginTop: 0 },
   ruiFilterBackdrop: { backgroundColor: "#0009", flex: 1, justifyContent: "center", alignItems: "center", padding: 15 },
   ruiFilterModal: { backgroundColor: "white", padding: 18, borderRadius: 13, width: "100%", maxWidth: 450 },
