@@ -1,0 +1,50 @@
+name: Resident Header Release Status (READ ONLY)
+on:
+  pull_request:
+    branches: [ui/admin-profile-dropdown-20261120]
+    paths: ['.github/workflows/status-resident-header-release-20261120.yml']
+permissions:
+  actions: read
+  contents: read
+jobs:
+  release-status:
+    if: github.repository == 'calibosofroyarjan-volunserve/VolunServe'
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Inspect production release workflow status using read-only Actions API
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "Read-only status; no deployment credentials or writes"
+          node <<'NODE'
+          (async () => {
+            const base = 'https://api.github.com/repos/'+process.env.GITHUB_REPOSITORY;
+            const workflow = 'release-resident-volunteer-header-hosting-only-20261120.yml';
+            const url = base+'/actions/workflows/'+workflow+'/runs?per_page=15';
+            const response = await fetch(url,{headers:{
+              'Accept':'application/vnd.github+json',
+              'Authorization':'Bearer '+process.env.GH_TOKEN,
+              'X-GitHub-Api-Version':'2022-11-28'
+            }});
+            if(!response.ok)throw Error('GitHub Actions status HTTP '+response.status);
+            const data = await response.json();
+            console.log('RELEASE_WORKFLOW_RUNS='+JSON.stringify(
+              (data.workflow_runs||[]).slice(0,10).map(r=>({
+                id:r.id,event:r.event,branch:r.head_branch,sha:r.head_sha,
+                status:r.status,conclusion:r.conclusion,url:r.html_url
+              }))
+            ));
+            const marker = await fetch('https://volunserve.com/volunserve-release.json',
+              {headers:{'Cache-Control':'no-cache'},signal:AbortSignal.timeout(12000)});
+            if(!marker.ok)throw Error('Production marker HTTP '+marker.status);
+            const value = await marker.json();
+            console.log('LIVE_REVISION='+value.revision);
+            console.log('LIVE_BUILT_AT='+value.builtAt);
+          })().catch(e=>{console.error(e);process.exitCode=1});
+          NODE
+      - name: Status inspection only
+        if: always()
+        run: echo "NO LIVE DEPLOY, NO FIREBASE/RENDER MUTATION"
