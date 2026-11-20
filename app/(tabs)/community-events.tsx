@@ -2556,6 +2556,13 @@ export default function CommunityEventsScreen() {
                       : "Browse approved community activities and propose a meaningful event for your barangay."}
                   </Text>
                 </View>
+                {isVolunteer && (
+                  <Pressable accessibilityRole="button" style={styles.eventsMyEventsShortcut}
+                    onPress={() => { setSection(section === "mine" ? "explore" : "mine"); setResidentDetailsId(null); setNotice(""); }}>
+                    <Ionicons name={section === "mine" ? "calendar-outline" : "people-outline"} size={17} color="#087760"/>
+                    <Text style={styles.eventsMyEventsShortcutText}>{section === "mine" ? "Explore Events" : `My Events (${myEvents.length})`}</Text>
+                  </Pressable>
+                )}
               </View>
               <View style={styles.eventsHeaderStats}>
                 {([
@@ -2574,14 +2581,14 @@ export default function CommunityEventsScreen() {
                 ))}
               </View>
             </View>
-            <View style={styles.lockedToolbar}>
+            {!isVolunteer && <View style={styles.lockedToolbar}>
               <View style={styles.webSectionTabs}>
                 <Pressable onPress={() => { setSection("explore"); setResidentDetailsId(null); setNotice(""); }} style={[styles.webSectionTab, section === "explore" && styles.webSectionTabActive]}><Text style={[styles.webSectionTabText, section === "explore" && styles.webSectionTabTextActive]}>Explore Events</Text></Pressable>
                 <Pressable onPress={() => { setSection("mine"); setResidentDetailsId(null); setNotice(""); }} style={[styles.webSectionTab, section === "mine" && styles.webSectionTabActive]}><Text style={[styles.webSectionTabText, section === "mine" && styles.webSectionTabTextActive]}>{isVolunteer ? "My Events" : "My Proposals"}</Text></Pressable>
                 {canPropose && <Pressable onPress={() => { setSection("propose"); setResidentDetailsId(null); setNotice(""); }} style={[styles.webSectionTab, section === "propose" && styles.webSectionTabActive]}><Text style={[styles.webSectionTabText, section === "propose" && styles.webSectionTabTextActive]}>+ Propose Event</Text></Pressable>}
               </View>
               {section === "explore" && <View style={[styles.webSearchWrap, styles.lockedSearch]}><Ionicons name="search-outline" size={17} color="#6B8392" /><TextInput style={styles.webSearchInput} value={search} onChangeText={setSearch} placeholder="Search community events..." placeholderTextColor="#91A4B1" autoCorrect={false}/></View>}
-            </View>
+            </View>}
             {!!notice && <View style={styles.webNotice}><Ionicons name="information-circle-outline" size={18} color="#0D8273" /><Text style={styles.webNoticeText}>{notice}</Text></View>}
             {section === "mine" && !!recordError && <View style={styles.webError}><Ionicons name="alert-circle-outline" size={17} color="#B42318" /><Text style={styles.webErrorText}>{recordError}</Text></View>}
             {section === "explore" && !residentDetailsId && (
@@ -2598,9 +2605,19 @@ export default function CommunityEventsScreen() {
                   ))}
                 </ScrollView>
                 <View style={styles.eventFilterToolbar}>
-                  <View style={styles.eventFilterCaption}><Ionicons name="search-outline" size={17} color="#607785"/><Text style={styles.eventFilterCaptionText}>Filter events</Text></View>
+                  {isVolunteer ? <View style={styles.eventFilterSearch}>
+                    <Ionicons name="search-outline" size={17} color="#657F86"/>
+                    <TextInput style={styles.eventFilterSearchInput} value={search} onChangeText={setSearch}
+                      placeholder="Search events by title or keyword..." placeholderTextColor="#95A6AA" autoCorrect={false}/>
+                  </View> : <View style={styles.eventFilterCaption}><Ionicons name="options-outline" size={17} color="#607785"/><Text style={styles.eventFilterCaptionText}>Filter events</Text></View>}
                   <Pressable accessibilityRole="button" accessibilityLabel="Filter by event category" style={styles.eventFilterSelect} onPress={()=>setResidentFilterPicker("category")}><Text style={styles.eventFilterSelectText} numberOfLines={1}>{category === "All" ? "All categories" : category}</Text><Ionicons name="chevron-down-outline" size={17} color="#587782"/></Pressable>
                   <Pressable accessibilityRole="button" accessibilityLabel="Filter by barangay" style={styles.eventFilterSelect} onPress={()=>setResidentFilterPicker("barangay")}><Text style={styles.eventFilterSelectText} numberOfLines={1}>{residentBarangayFilter}</Text><Ionicons name="chevron-down-outline" size={17} color="#587782"/></Pressable>
+                  <Pressable accessibilityRole="button" accessibilityLabel="Change event date sorting" style={styles.eventFilterSelect}
+                    onPress={() => setDateSort(current => current === "soonest" ? "latest" : "soonest")}>
+                    <Ionicons name="swap-vertical-outline" size={17} color="#587782"/>
+                    <Text style={styles.eventFilterSelectText}>{dateSort === "soonest" ? "Nearest Date" : "Newest First"}</Text>
+                    <Ionicons name="chevron-down-outline" size={17} color="#587782"/>
+                  </Pressable>
                   {(category !== "All" || residentBarangayFilter !== "All Barangays" || !!search.trim()) &&
                     <Pressable accessibilityRole="button" onPress={()=>{setCategory("All");setResidentBarangayFilter("All Barangays");setEventListFilter("upcoming");setDateSort("soonest");setSearch("");setResidentStatusFilter("All Status");}} style={styles.eventClearFilter}>
                       <Ionicons name="close-circle-outline" size={16} color="#477383"/><Text style={styles.eventClearFilterText}>Clear filters</Text>
@@ -2616,14 +2633,14 @@ export default function CommunityEventsScreen() {
                 </View>
                 <View style={styles.lockedListControls}>
                   <Text style={styles.webEventCount}>{displayEvents.length} event{displayEvents.length === 1 ? "" : "s"}</Text>
-                  <Pressable accessibilityRole="button" accessibilityLabel={`Sort events by date, currently ${dateSort === "soonest" ? "soonest first" : "latest first"}. Tap to change.`}
+                  {section === "mine" && <Pressable accessibilityRole="button" accessibilityLabel={`Sort events by date, currently ${dateSort === "soonest" ? "soonest first" : "latest first"}. Tap to change.`}
                     onPress={() => setDateSort((current) => current === "soonest" ? "latest" : "soonest")}
                     style={styles.lockedSortButton}>
                     <Ionicons name="calendar-outline" size={15} color="#087E74" />
                     <View><Text style={styles.lockedSortCaption}>Scheduled date</Text>
                       <Text style={styles.lockedSortValue}>{dateSort === "soonest" ? "Nearest Date" : "Newest First"}</Text></View>
                     <Ionicons name="swap-vertical-outline" size={15} color="#087E74" />
-                  </Pressable>
+                  </Pressable>}
                 </View>
               </View>}
               {eventsLoading ? <View style={styles.webLoading}><ActivityIndicator color={colors.green}/></View> :
@@ -5708,6 +5725,8 @@ const styles = StyleSheet.create({
   eventsHeaderTop: { flexDirection: "row", alignItems: "flex-start", gap: 17, paddingHorizontal: 24, paddingTop: 23, paddingBottom: 20 },
   eventsHeaderIcon: { height: 47, width: 47, borderRadius: 12, backgroundColor: "#E8F5F1", alignItems: "center", justifyContent: "center", flexShrink: 0 },
   eventsHeaderCopy: { flex: 1, minWidth: 0 },
+  eventsMyEventsShortcut: { paddingHorizontal: 11, minHeight: 39, borderRadius: 9, borderWidth: 1, borderColor: "#B6DCCE", backgroundColor: "#FFFFFF", alignItems: "center", justifyContent: "center", flexDirection: "row", gap: 7 },
+  eventsMyEventsShortcutText: { fontSize: 12, fontWeight: "700", color: "#087760", fontFamily: vsType.family },
   eventsHeaderEyebrow: { fontFamily: vsType.family, fontSize: 11, color: "#237C70", letterSpacing: 0.7, fontWeight: "800", marginBottom: 5 },
   eventsHeaderTitle: { fontFamily: vsType.family, fontSize: 27, lineHeight: 35, fontWeight: "800", color: "#15393E" },
   eventsHeaderDescription: { fontFamily: vsType.family, fontSize: 14, lineHeight: 21, fontWeight: "400", color: "#667B84", marginTop: 4 },
@@ -5738,7 +5757,9 @@ const styles = StyleSheet.create({
   eventStatusTabTextActive: { color: "#FFFFFF" },
   eventStatusCount: { fontSize: 12, fontWeight: "800", color: "#688384", backgroundColor: "#EFF5F4", paddingHorizontal: 6, paddingVertical: 3, borderRadius: 6, overflow: "hidden" },
   eventStatusCountActive: { color: "#076D62", backgroundColor: "#FFFFFF" },
-  eventFilterToolbar: { flexDirection: "row", flexWrap: "wrap", gap: 10, alignItems: "center", paddingVertical: 11, paddingHorizontal: 13, backgroundColor: "#F8FAFA", borderWidth: 1, borderColor: "#E2EBE9", borderRadius: 10 },
+  eventFilterToolbar: { flexDirection: "row", flexWrap: "wrap", gap: 10, alignItems: "center", paddingVertical: 10, paddingHorizontal: 11, backgroundColor: "#F8FAFA", borderWidth: 1, borderColor: "#E2EBE9", borderRadius: 10 },
+  eventFilterSearch: { flexGrow: 2, flexBasis: 200, minWidth: 170, minHeight: 41, paddingHorizontal: 11, borderRadius: 8, borderWidth: 1, borderColor: "#D6E4E0", backgroundColor: "#FFFFFF", flexDirection: "row", alignItems: "center", gap: 8 },
+  eventFilterSearchInput: { fontFamily: vsType.family, fontSize: 13, minWidth: 0, flex: 1, color: "#274D57", paddingVertical: 8 },
   eventFilterCaption: { flexDirection: "row", gap: 7, alignItems: "center" },
   eventFilterCaptionText: { fontSize: 13, fontWeight: "700", color: "#607785" },
   eventFilterSelect: { minWidth: 150, maxWidth: 220, flexGrow: 1, flexBasis: 155, minHeight: 41, paddingHorizontal: 13, borderRadius: 8, borderWidth: 1, borderColor: "#D6E4E0", backgroundColor: "#FFFFFF", flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 9 },
