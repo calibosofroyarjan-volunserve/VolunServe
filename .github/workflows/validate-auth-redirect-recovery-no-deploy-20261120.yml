@@ -59,6 +59,8 @@ jobs:
           const allowed=['app/_layout.tsx','app/login.web.tsx','lib/useUserSession.ts','lib/firebaseAuth.ts',
             'scripts/test-auth-link-session-recovery.cjs',
             'scripts/test-signup-email-policy-preservation.cjs',
+            'scripts/test-auth-browser-staging-smoke-20261120.cjs',
+            '.github/workflows/validate-auth-browser-staging-no-deploy-20261120.yml',
             '.github/workflows/validate-auth-redirect-recovery-no-deploy-20261120.yml'];
           assert.deepEqual(changes.map(v=>v.split('\t')[1]).sort(),allowed.sort());
           assert(changes.every(v=>/^[AM]\t/.test(v)));
