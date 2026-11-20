@@ -1,5 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
-import { useRouter, type Href } from "expo-router";
+import { usePathname, useRouter, type Href } from "expo-router";
 import { collection, onSnapshot, query, where } from "firebase/firestore";
 import React, { useEffect, useMemo, useState } from "react";
 import {
@@ -28,6 +28,13 @@ import {
 import { useUserSession } from "../../lib/useUserSession";
 import { useAnnouncementAlerts } from "../../lib/announcementAlerts";
 import { AppAlert } from "../../lib/appDialog";
+
+// Tab navigators can keep previously visited header instances mounted.
+// Force just one modal to remain active across those instances.
+const closeOpenHeaderMenus = new Set<() => void>();
+const dismissHeaderMenus = () => {
+  for (const close of closeOpenHeaderMenus) close();
+};
 
 type Notice = {
   id: string;
@@ -58,11 +65,30 @@ const toMillis = (date: unknown): number => {
  */
 export default function ResidentDesktopActions() {
   const router = useRouter();
+  const pathname = usePathname();
   const { user, profile } = useUserSession();
   const { items: announcementAlerts } = useAnnouncementAlerts(user?.uid);
   const [notices, setNotices] = useState<Notice[]>([]);
   const [menu, setMenu] = useState<"notifications" | "account" | null>(null);
   const [loggingOut, setLoggingOut] = useState(false);
+
+  useEffect(() => {
+    const close = () => setMenu(null);
+    closeOpenHeaderMenus.add(close);
+    return () => { closeOpenHeaderMenus.delete(close); };
+  }, []);
+
+  // Route changes must dismiss any account overlay retained by other tabs.
+  useEffect(() => { dismissHeaderMenus(); }, [pathname]);
+
+  const toggleMenu = (kind: "notifications" | "account") => {
+    if (menu === kind) {
+      setMenu(null);
+      return;
+    }
+    dismissHeaderMenus();
+    setMenu(kind);
+  };
 
   useEffect(() => {
     if (!user?.uid) {
@@ -101,13 +127,13 @@ export default function ResidentDesktopActions() {
     "VolunServe Member";
 
   const navigate = (href: string) => {
-    setMenu(null);
+    dismissHeaderMenus();
     router.push(href as Href);
   };
 
   const switchMode = async () => {
     if (!canSwitchMode) return;
-    setMenu(null);
+    dismissHeaderMenus();
     try {
       await setActiveUserMode(isVolunteer ? "resident" : "volunteer");
       router.replace("/(tabs)");
@@ -117,7 +143,7 @@ export default function ResidentDesktopActions() {
   };
 
   const signOut = async () => {
-    setMenu(null);
+    dismissHeaderMenus();
     if (loggingOut) return;
     const confirmed = await AppAlert.confirm("Log Out", "Are you sure you want to log out of VolunServe?", "Log Out");
     if (!confirmed) return;
@@ -142,7 +168,7 @@ export default function ResidentDesktopActions() {
         accessibilityRole="button"
         accessibilityLabel="Open notifications"
         accessibilityState={{ expanded: menu === "notifications" }}
-        onPress={() => setMenu(menu === "notifications" ? null : "notifications")}
+        onPress={() => toggleMenu("notifications")}
         style={styles.bell}
       >
         <Ionicons name="notifications-outline" size={23} color="#122B55" />
@@ -156,7 +182,7 @@ export default function ResidentDesktopActions() {
         accessibilityRole="button"
         accessibilityLabel={menu === "account" ? "Close account menu" : "Open account menu"}
         accessibilityState={{ expanded: menu === "account" }}
-        onPress={() => setMenu(menu === "account" ? null : "account")}
+        onPress={() => toggleMenu("account")}
         style={styles.accountButton}
       >
         {profile?.profilePictureUrl ? (
@@ -176,8 +202,8 @@ export default function ResidentDesktopActions() {
       <Modal
         visible={menu !== null}
         transparent
-        animationType="fade"
-        onRequestClose={() => setMenu(null)}
+        animationType="none"
+        onRequestClose={dismissHeaderMenus}
       >
         <View style={styles.modalRoot}>
           <Pressable
