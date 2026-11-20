@@ -1,4 +1,5 @@
 import * as ImagePicker from "expo-image-picker";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import {
   collection,
@@ -169,6 +170,75 @@ type DisasterCase = {
   createdAt?: any;
   updatedAt?: any;
 };
+
+/**
+ * Emergency-report photos only. Do not substitute resident profile photos,
+ * user avatars, or generic stock images. The report form saves ordered
+ * Cloudinary evidence in disasterCases.attachments.
+ */
+const getReportPhotoAttachments = (attachments?: EvidenceAttachment[]) => {
+  if (!Array.isArray(attachments)) return [];
+  return attachments.filter((asset) => {
+    if (!asset || typeof asset !== "object") return false;
+    if (asset.type !== "image" && !String(asset.contentType || "").startsWith("image/")) {
+      return false;
+    }
+    return typeof asset.url === "string" && /^https:\/\//i.test(asset.url.trim());
+  });
+};
+
+const reportIconName = (
+  category?: string,
+): React.ComponentProps<typeof MaterialCommunityIcons>["name"] => {
+  const value = String(category || "").toLowerCase();
+  if (value.includes("flood") || value.includes("water")) return "waves";
+  if (value.includes("fire")) return "fire";
+  if (value.includes("road") || value.includes("obstruction")) return "road-variant";
+  if (value.includes("medical")) return "medical-bag";
+  if (value.includes("home") || value.includes("structural")) return "home-outline";
+  return "alert-circle-outline";
+};
+
+function ReportPhoto({
+  url,
+  category,
+  expanded = false,
+}: {
+  url?: string;
+  category?: string;
+  expanded?: boolean;
+}) {
+  const [failed, setFailed] = useState(false);
+  useEffect(() => {
+    setFailed(false);
+  }, [url]);
+
+  const available = typeof url === "string" && url.length > 0 && !failed;
+  return (
+    <View style={expanded ? styles.reportPhotoExpanded : styles.reportPhotoThumbnail}>
+      {available ? (
+        <Image
+          source={{ uri: url }}
+          resizeMode={expanded ? "contain" : "cover"}
+          style={styles.reportPhotoImage}
+          accessibilityLabel={expanded ? "Uploaded emergency report photo" : "Emergency report photo thumbnail"}
+          onError={() => setFailed(true)}
+        />
+      ) : (
+        <View style={styles.reportPhotoPlaceholder}>
+          <MaterialCommunityIcons
+            name={reportIconName(category)}
+            size={expanded ? 34 : 27}
+            color="#176B52"
+          />
+          <Text style={styles.reportPhotoPlaceholderText}>
+            {failed ? "Photo unavailable" : "No photo"}
+          </Text>
+        </View>
+      )}
+    </View>
+  );
+}
 
 type ResponseAssignment = {
   id: string;
@@ -1959,6 +2029,8 @@ export default function MyCases() {
               assignmentsByCase[
                 incident.id
               ] || [];
+            const reportPhotos = getReportPhotoAttachments(incident.attachments);
+            const primaryReportPhoto = reportPhotos[0]?.url;
             const detailsExpanded = expandedCaseIds.includes(incident.id);
             const evidenceRequested = incident.verificationStatus === "needs_more_evidence" &&
               incident.evidenceReviewStatus !== "resubmitted";
@@ -2003,6 +2075,10 @@ export default function MyCases() {
                     styles.caseTopRow
                   }
                 >
+                  <ReportPhoto
+                    url={primaryReportPhoto}
+                    category={incident.category}
+                  />
                   <View
                     style={
                       styles.caseTitleBlock
@@ -2173,6 +2249,33 @@ export default function MyCases() {
                 {detailsExpanded && (
                   <View style={styles.detailsBody}>
                     <Text style={styles.fullReference}>Full report ID: {incident.id}</Text>
+                    {reportPhotos.length > 0 && (
+                      <View style={styles.reportEvidenceSection}>
+                        <Text style={styles.infoLabel}>
+                          Uploaded report photos ({reportPhotos.length})
+                        </Text>
+                        <Text style={styles.reportEvidenceDescription}>
+                          Photos provided for this emergency report.
+                        </Text>
+                        <View style={styles.reportEvidenceGrid}>
+                          {reportPhotos.map((photo, index) => (
+                            <View
+                              key={photo.publicId || photo.path || `${incident.id}-photo-${index}`}
+                              style={styles.reportEvidenceTile}
+                            >
+                              <ReportPhoto
+                                url={photo.url}
+                                category={incident.category}
+                                expanded
+                              />
+                              <Text style={styles.reportEvidenceCaption}>
+                                Photo {index + 1}
+                              </Text>
+                            </View>
+                          ))}
+                        </View>
+                      </View>
+                    )}
                 <View
                   style={
                     styles.infoBlock
@@ -3143,15 +3246,17 @@ const styles =
 
     caseTopRow: {
       flexDirection: "row",
-      justifyContent:
-        "space-between",
-      alignItems:
-        "flex-start",
-      gap: 12,
+      flexWrap: "wrap",
+      justifyContent: "space-between",
+      alignItems: "center",
+      gap: 13,
     },
 
     caseTitleBlock: {
-      flex: 1,
+      flexGrow: 1,
+      flexShrink: 1,
+      flexBasis: 180,
+      minWidth: 155,
     },
 
     caseTitle: {
@@ -3948,4 +4053,66 @@ const styles =
     },
     detailsBody: { marginTop: 6 },
     fullReference: { marginTop: 10, color: "#647985", fontSize: 11 },
+    reportPhotoThumbnail: {
+      width: 108,
+      height: 82,
+      borderRadius: 10,
+      overflow: "hidden",
+      backgroundColor: "#EDF4F0",
+      borderWidth: 1,
+      borderColor: "#DCE7E0",
+    },
+    reportPhotoExpanded: {
+      width: "100%",
+      height: 175,
+      borderRadius: 10,
+      overflow: "hidden",
+      backgroundColor: "#F3F6F4",
+      borderWidth: 1,
+      borderColor: "#DFE7E2",
+    },
+    reportPhotoImage: {
+      width: "100%",
+      height: "100%",
+    },
+    reportPhotoPlaceholder: {
+      flex: 1,
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 5,
+      paddingHorizontal: 5,
+    },
+    reportPhotoPlaceholderText: {
+      color: "#61746E",
+      fontSize: 10,
+      fontWeight: "600",
+      textAlign: "center",
+    },
+    reportEvidenceSection: {
+      marginTop: 14,
+      gap: 6,
+    },
+    reportEvidenceDescription: {
+      color: "#5A7068",
+      fontSize: 12,
+      lineHeight: 18,
+    },
+    reportEvidenceGrid: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: 10,
+      marginTop: 6,
+    },
+    reportEvidenceTile: {
+      minWidth: 180,
+      flexBasis: 210,
+      flexGrow: 1,
+      maxWidth: 360,
+      gap: 5,
+    },
+    reportEvidenceCaption: {
+      color: "#647985",
+      fontSize: 11,
+      fontWeight: "600",
+    },
   });
