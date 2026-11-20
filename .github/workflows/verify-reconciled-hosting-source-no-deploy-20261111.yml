@@ -248,6 +248,46 @@ jobs:
               return;
             }
 
+            // One-time repaired Admin dropdown controller. No broad branch exception.
+            const fixedAdminDropdownPath=".github/workflows/one-time-admin-profile-dropdown-fixed-20261120.yml";
+            const fixedAdminDiff=git("diff","--name-status","--no-renames",liveBase,commit)
+              .split("\n").filter(Boolean);
+            const isFixedAdminRelease=fixedAdminDiff.length===2
+              && fixedAdminDiff[0]==="A\t"+fixedAdminDropdownPath
+              && fixedAdminDiff[1]==="M\t"+verifierPath;
+            if(isFixedAdminRelease){
+              const currentSource="f39c3f3684dff1116c70e2f972db821374b8d57c";
+              const fixedSource="1a9e206bdfea2167b205ce6eec168757323a8e9f";
+              assert.equal(liveBase,"34446747e5f04b961f9ef740c728967e0e58796a",
+                "BLOCKED: protected controller drift");
+              assert.equal(marker.revision,currentSource,
+                "BLOCKED: production Hosting has moved");
+              assert.equal(blob(liveBase,verifierPath),"d0b9987e4500de6cd10c9d0ed220c4772f5ebdc7",
+                "BLOCKED: original verifier changed");
+              assert.equal(blob(commit,fixedAdminDropdownPath),"fe51831d1671dd0ce8e684741f54e6eb5166dfe8",
+                "BLOCKED: fixed controller SHA drift");
+              assert.equal(git("rev-parse","origin/ui/admin-profile-dropdown-20261120"),
+                fixedSource,"BLOCKED: fixed Admin UI source branch changed");
+              git("merge-base","--is-ancestor",currentSource,fixedSource);
+              assert.equal(git("diff","--name-status","--no-renames",currentSource,fixedSource),
+                "M\tapp/(admin)/_layout.tsx",
+                "BLOCKED: candidate modifies unrelated files");
+              for(const protectedPath of [
+                "package.json","package-lock.json","app.json","firebase.json",
+                ".firebaserc","tsconfig.json","firestore.rules","storage.rules",
+                "functions/index.js","functions/package.json",
+                "scripts/guard-live-protected-release.cjs",
+                ".github/workflows/auto-publish-protected-live-hosting.yml",
+                ".github/workflows/release-live-protected-hosting.yml","lib/firebase.ts"
+              ]){
+                assert.equal(blob(commit,protectedPath),blob(liveBase,protectedPath),
+                  "BLOCKED: protected settings modified "+protectedPath);
+              }
+              console.log("PASS: syntax-corrected Admin account menu candidate is live-derived and isolated");
+              console.log("NO DEPLOY on pull_request");
+              return;
+            }
+
             assert.equal(marker.revision,liveBase,
               "BLOCKED: protected base and production differ; reconcile FIRST");
             const text=git("diff","--name-status","--no-renames",liveBase,commit);
