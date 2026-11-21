@@ -71,7 +71,7 @@ jobs:
             await check(backend+"/api/identity/verify",{method:"POST"},401);
             console.log("PASS: private identity verify cannot be invoked anonymously");
             console.log("LIMIT: no signed-in staging accounts, no Firebase write, no personal image, no Admin approval, no production requests");
-          })().catch(error=>{console.error("FAIL: hosted staging postdeploy identity check: "+String(error?.message||"unknown").replace(/https?:\\/\\/\\S+/g,"[endpoint]"));process.exitCode=1});
+          })().catch(error=>{console.error("FAIL: hosted staging postdeploy identity check: "+String(error?.name||"test_failure"));process.exitCode=1});
           NODE
       - name: Summarize immutable release gate
         run: |
