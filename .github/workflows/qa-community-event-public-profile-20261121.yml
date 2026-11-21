@@ -1,0 +1,37 @@
+name: Community Event Public Profile QA (NO DEPLOY)
+on:
+  push:
+    branches: [qa/community-event-public-profile-20261121]
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      CI: 'true'
+      EXPO_NO_TELEMETRY: '1'
+      EXPO_PUBLIC_VOLUNSERVE_ENV: production
+      EXPO_PUBLIC_IDENTITY_VERIFICATION_API_URL: https://volunserve.onrender.com
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install pinned dependencies
+        run: npm ci --no-audit --no-fund
+      - name: TypeScript
+        run: npx tsc --noEmit --incremental false
+      - name: Scoped public profile security and navigation tests
+        run: node --test scripts/test-community-event-public-profile-qa.cjs
+      - name: Existing roles and map regression
+        run: |
+          node --test scripts/test-admin-volunteer-authorization.cjs
+          node --test scripts/test-embedded-emergency-map-navigation.cjs
+          node scripts/test-login-ui-release.cjs
+          node scripts/test-profile-certificates-account-menu.cjs
+      - name: Export public profile route (NO DEPLOY)
+        run: |
+          npx expo export --platform web --clear
+          test -f dist/community-event-profile.html || test -f dist/community-event-profile/index.html
