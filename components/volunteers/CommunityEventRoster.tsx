@@ -16,8 +16,8 @@ const API_URL = "https://volunserve.onrender.com";
 
 /** Read-only event roster; the backend already limits this response to safe display fields. */
 export default function CommunityEventRoster({
-  eventId, viewer, participantsCount, compact = false, eventTitle,
-}: { eventId: string; viewer: AuthUser; participantsCount: number; compact?: boolean; eventTitle?: string }) {
+  eventId, viewer, participantsCount, compact = false, eventTitle, onOpenProfile,
+}: { eventId: string; viewer: AuthUser; participantsCount: number; compact?: boolean; eventTitle?: string; onOpenProfile?: () => void }) {
   const [page, setPage] = useState(1);
   const [refresh, setRefresh] = useState(0);
   const [showAll, setShowAll] = useState(false);
@@ -93,10 +93,13 @@ export default function CommunityEventRoster({
               <Text style={s.role}>Volunteer · Joined</Text>
             </View>
             <Pressable accessibilityRole="button" accessibilityLabel={`View public profile of ${item.name}`}
-              style={s.profileButton} onPress={() => router.push({
-                pathname: "/(tabs)/community-event-profile",
-                params: { eventId, member: item.key, page: String(page) },
-              } as Href)}>
+              style={s.profileButton} onPress={() => {
+                onOpenProfile?.(); // Close foreground roster modal before leaving Community Events.
+                router.push({
+                  pathname: "/(tabs)/community-event-profile",
+                  params: { eventId, member: item.key, page: String(page) },
+                } as Href);
+              }}>
               <Ionicons name="person-outline" size={14} color="#087C69"/>
               <Text style={s.profileButtonText}>View Profile</Text>
             </Pressable>
