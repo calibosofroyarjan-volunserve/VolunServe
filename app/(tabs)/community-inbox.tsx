@@ -64,7 +64,7 @@ export default function CommunityInbox() {
           </Pressable>):
           <View style={styles.empty}><Ionicons name="chatbubble-ellipses-outline" size={36} color="#8EB5A6"/>
             <Text style={styles.emptyTitle}>No conversations yet</Text>
-            <Text style={styles.emptyText}>Open Online Members and choose Chat on someone who has enabled private messages.</Text>
+            <Text style={styles.emptyText}>Open Community Members and select Message to start a private chat. Members can receive messages even while offline.</Text>
             <Pressable onPress={()=>router.push("/(tabs)")} style={styles.action}>
               <Text style={styles.actionText}>Browse Community Members</Text>
             </Pressable>
