@@ -117,7 +117,60 @@ test("only explicit consent reveals last-seen when offline",async()=>{
  assert.equal((await call("GET",member,"resident",{},publicKey("volunteer"))).payload.member.online,false);
  assert.equal((await call("POST",prefs,"volunteer",{showLastSeen:"true"})).status,400);
  assert.equal((await call("POST",prefs,"volunteer",{other:true})).status,400);
+ assert.equal((await call("POST",prefs,"volunteer",{showLastSeen:false})).status,200);
  collections.communityPresence.volunteer.updatedAt=new Date();
+});
+test("legacy and newly registered accounts share Last Seen only after consent and an authenticated activity record",async()=>{
+ const recent=new Date(Date.now()-4*60000);
+ users.legacy={role:"resident",status:"approved",residentAccess:true,activeMode:"resident",
+   fullName:"Legacy Resident",email:"legacy-secret@example.com"};
+ users.newAccount={role:"resident",status:"approved",residentAccess:true,activeMode:"resident",
+   fullName:"New Resident",phoneNumber:"09000000000"};
+ collections.communityPresence.legacy={visible:false,activeAt:recent,
+   updatedAt:new Date(0),showLastSeen:false,acceptChats:false};
+ try{
+   let roster=(await call("GET",directory,"resident")).payload.members;
+   let legacy=roster.find(p=>p.name==="Legacy Resident");
+   let newcomer=roster.find(p=>p.name==="New Resident");
+   assert(legacy&&newcomer,"old and new approved accounts are both listed");
+   assert.equal(legacy.lastSeenAt,null,"existing activity cannot leak without consent");
+   assert.equal(legacy.presencePrivate,true);
+   assert.equal(newcomer.lastSeenAt,null,"new signups have no fabricated history");
+   assert.equal(newcomer.presencePrivate,true);
+
+   assert.equal((await call("POST",prefs,"legacy",{showLastSeen:true})).status,200);
+   assert.equal((await call("POST",prefs,"newAccount",{showLastSeen:true})).status,200);
+   roster=(await call("GET",directory,"resident")).payload.members;
+   legacy=roster.find(p=>p.name==="Legacy Resident");
+   newcomer=roster.find(p=>p.name==="New Resident");
+   assert.equal(legacy.lastSeenAt,recent.toISOString(),"offline old accounts retain a real timestamp");
+   assert.equal(legacy.online,false);
+   assert.equal(legacy.presencePrivate,false,"explicit Last Seen consent applies without online opt-in");
+   assert.equal(newcomer.lastSeenAt,null,"new account without a heartbeat has no history");
+
+   const firstHeartbeat=new Date();
+   collections.communityPresence.newAccount.activeAt=firstHeartbeat;
+   roster=(await call("GET",directory,"resident")).payload.members;
+   newcomer=roster.find(p=>p.name==="New Resident");
+   assert.equal(newcomer.lastSeenAt,firstHeartbeat.toISOString());
+   assert.equal(newcomer.online,false,"Last Seen opt-in must not share live online presence");
+
+   collections.communityPresence.legacy.activeAt=new Date(Date.now()-8*86400000);
+   roster=(await call("GET",directory,"resident")).payload.members;
+   assert.equal(roster.find(p=>p.name==="Legacy Resident").lastSeenAt,null,
+     "expired historic activity cannot be displayed as current Last Seen");
+   assert.equal((await call("POST",prefs,"newAccount",{showLastSeen:false})).status,200);
+   roster=(await call("GET",directory,"resident")).payload.members;
+   assert.equal(roster.find(p=>p.name==="New Resident").lastSeenAt,null,
+     "turning sharing off immediately hides prior activity");
+   for(const secret of ["legacy-secret@example.com","09000000000"]){
+     assert(!JSON.stringify(roster).includes(secret),"private contact leaked");
+   }
+ }finally{
+   delete users.legacy;delete users.newAccount;
+   delete collections.communityPresence.legacy;
+   delete collections.communityPresence.newAccount;
+ }
 });
 test("users can opt in and out of chat independently of last seen",async()=>{
  assert.equal((await call("GET",self,"resident")).payload.acceptChats,true);
