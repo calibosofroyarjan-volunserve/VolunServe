@@ -17,12 +17,58 @@ FAR/FRR are observed on THIS sample only, never population-certified.
 """
 import argparse
 import csv
+import json
+import os
 from io import BytesIO
 from pathlib import Path
 
 
 MAX_PAIRS = 1000
 MAX_IMAGE_FILE_BYTES = 10 * 1024 * 1024
+REPOSITORY_ROOT = Path(__file__).resolve().parent.parent
+
+
+def _outside_tree(path, tree):
+    return path != tree and tree not in path.parents
+
+
+def _safe_aggregate_target(target, image_root):
+    if target is None:
+        return None
+    candidate = Path(target)
+    if candidate.is_symlink() or candidate.exists() or candidate.suffix.lower() != ".json":
+        raise ValueError("unsafe_aggregate_destination")
+    parent = candidate.parent.resolve(strict=True)
+    dest = parent / candidate.name
+    if (not parent.is_dir() or not _outside_tree(dest, REPOSITORY_ROOT)
+            or not _outside_tree(dest, image_root)
+            or dest.is_symlink()):
+        raise ValueError("unsafe_aggregate_destination")
+    return dest
+
+
+def _write_aggregate_only(target, image_root, summary):
+    dest = _safe_aggregate_target(target, image_root)
+    if dest is None:
+        return
+    payload = {
+        "auditType": "private_sface_1to1_exploratory",
+        **summary,
+        "groundTruthLabelsIndependentlyValidated": False,
+        "automaticApprovalAllowed": False,
+    }
+    content = json.dumps(payload, allow_nan=False, sort_keys=True, indent=2)
+    flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL
+    if hasattr(os, "O_BINARY"):
+        flags |= os.O_BINARY
+    fd = os.open(dest, flags, 0o600)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as stream:
+            stream.write(content + "\n")
+    except BaseException:
+        dest.unlink(missing_ok=True)
+        raise
+
 
 
 def _within_root(root, relative):
@@ -76,8 +122,12 @@ def evaluate(args):
     if not args.consent_confirmed:
         raise ValueError("Informed photo consent must be confirmed locally.")
     root = Path(args.image_root).resolve(strict=True)
-    if not root.is_dir():
-        raise ValueError("Local image directory unavailable.")
+    if not root.is_dir() or not _outside_tree(root, REPOSITORY_ROOT):
+        raise ValueError("Private image directory must stay outside the repository.")
+    manifest = Path(args.pairs_csv).resolve(strict=True)
+    if not _outside_tree(manifest, REPOSITORY_ROOT) or not manifest.is_file():
+        raise ValueError("Private labeled manifest must stay outside the repository.")
+    _safe_aggregate_target(getattr(args, "aggregate_json", None), root)
     import cv2
     import numpy as np
     from PIL import Image
@@ -136,9 +186,12 @@ def main():
     parser.add_argument("--image-root", required=True)
     parser.add_argument("--threshold", type=float, required=True)
     parser.add_argument("--consent-confirmed", action="store_true")
+    parser.add_argument("--aggregate-json", default=None,
+                        help="Optional NEW aggregate-only JSON path outside repository/media folder")
     args = parser.parse_args()
     try:
         results = evaluate(args)
+        _write_aggregate_only(args.aggregate_json, Path(args.image_root).resolve(), results)
     except Exception:
         print("LOCAL_SFACE_EVALUATION_BLOCKED: check consent, input manifest, pinned models and local runtime. No files or identities printed.")
         raise SystemExit(2) from None
