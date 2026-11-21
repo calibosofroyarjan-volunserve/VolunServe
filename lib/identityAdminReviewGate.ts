@@ -9,7 +9,7 @@ import type { DocumentScreening } from "./identityVerification";
  * corrected scan rather than enabling a client-side Verify button.
  */
 const SUPPORTED_ID_TYPES = [
-  "national_id", "drivers_license", "passport", "umid", "prc_id",
+  "national_id", "drivers_license", "passport",
 ] as const;
 
 export function adminReviewDocumentEligible(
@@ -46,7 +46,7 @@ export function adminReviewMethodEligible(
   if (screening.declaredIdType === "national_id") {
     return method === "psa_national_id_qr_check";
   }
-  if (["drivers_license", "passport", "umid", "prc_id"].includes(
+  if (["drivers_license", "passport"].includes(
       String(screening.declaredIdType || ""))) {
     return method === "in_person_lgu_validation" ||
       method === "official_document_check";
