@@ -128,16 +128,6 @@ const ID_TYPES: Array<{
     label: "Passport",
     helper: "Valid passport bio page",
   },
-  {
-    value: "umid",
-    label: "UMID",
-    helper: "SSS / GSIS Unified Multi-Purpose ID",
-  },
-  {
-    value: "prc_id",
-    label: "PRC Professional ID",
-    helper: "PRC Professional Identification Card (PIC)",
-  },
 ];
 
 function scanCopy(scanState: ScanState) {
