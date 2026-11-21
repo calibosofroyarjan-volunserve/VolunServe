@@ -46,8 +46,6 @@ ACCEPTED_ID_TYPES = {
     "national_id",
     "drivers_license",
     "passport",
-    "umid",
-    "prc_id",
 }
 ALLOWED_IMAGE_TYPES = {
     "image/jpeg",
@@ -1420,7 +1418,7 @@ async def document_precheck(
     form = await request.form()
     declared_type = clean_text(form.get("idType"), 60).lower()
     if declared_type not in ACCEPTED_ID_TYPES:
-        raise HTTPException(status_code=400, detail="Choose one of the five supported government IDs.")
+        raise HTTPException(status_code=400, detail="Choose National ID, Driver's License or Passport only.")
     front_upload = form.get("idDocument")
     back_upload = form.get("idBackDocument")
     if declared_type != "passport" and not isinstance(back_upload, StarletteUploadFile):
