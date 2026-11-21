@@ -49,7 +49,9 @@ export default function CommunityOnline({uid,dashboard=false}:{uid?:string|null;
       // heartbeat is current. Show their *own* profile as Online to them,
       // without exposing their private presence to other members.
       setMembers(Array.isArray(payload.members)?payload.members.map(member=>
-        member.isSelf?{...member,online:true,presencePrivate:false}:member):[]);
+        member.isSelf?{...member,online:true,presencePrivate:false}:member)
+        .sort((a,b)=>Number(Boolean(b.isSelf))-Number(Boolean(a.isSelf))||
+          Number(b.online)-Number(a.online)||a.name.localeCompare(b.name)):[]);
       setRegisteredCount(Number.isFinite(payload.registeredCount)?Math.max(0,payload.registeredCount||0):0);
       setActiveCounts(payload.activeCounts&&Number.isFinite(payload.activeCounts.total)?
         payload.activeCounts:{residents:0,volunteers:0,total:0});
