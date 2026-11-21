@@ -1613,54 +1613,58 @@ export default function Profile() {
         </>
       )}
 
-      {activeTab ===
-        "certificates" &&
-        volunteerAccess && (
-          <View
-            style={
-              styles.sectionCard
-            }
-          >
-            <SectionHeading
-              icon="ribbon-outline"
-              title="Certificates"
-            />
-
-            {certificateLoading ? (
-              <InlineLoading />
-            ) : certificateError ? (
-              <EmptyState
-                icon="alert-circle-outline"
-                title="Certificates unavailable"
-                message={
-                  certificateError
-                }
-              />
-            ) : certificates.length >
-              0 ? (
-              certificates.map(
-                (
-                  item,
-                ) => (
-                  <CertificateCard
-                    key={
-                      item.id
-                    }
-                    item={
-                      item
-                    }
-                  />
-                ),
-              )
-            ) : (
-              <EmptyState
-                icon="ribbon-outline"
-                title="No certificates yet"
-                message="Certificates issued from verified volunteer service will appear here."
-              />
-            )}
+      {activeTab === "certificates" && volunteerAccess && (
+        <View style={styles.certificatePanel}>
+          <View style={styles.certificateHeader}>
+            <View style={{flex:1}}>
+              <SectionHeading icon="ribbon-outline" title="My Certificates"/>
+              <Text style={styles.activityHint}>
+                Your actual issued certificates from verified community events and emergency response.
+              </Text>
+            </View>
+            <View style={styles.certCounter}>
+              <Ionicons name="ribbon-outline" size={17} color="#08734D"/>
+              <Text style={styles.certCounterText}>
+                {certificates.filter(item=>item.verificationStatus==="issued").length} issued
+              </Text>
+            </View>
           </View>
-        )}
+          {certificateLoading ? <InlineLoading/> : certificateError ? (
+            <EmptyState icon="alert-circle-outline" title="Certificates unavailable" message={certificateError}/>
+          ) : (
+            <IssuedCertificateGallery
+              certificates={certificates}
+              name={profile.fullName||"Volunteer"}
+              compact={compact}
+              onView={setSelectedIssuedCertificate}
+            />
+          )}
+        </View>
+      )}
+
+      <Modal visible={!!selectedIssuedCertificate} transparent animationType="fade"
+        onRequestClose={()=>setSelectedIssuedCertificate(null)}>
+        <View style={styles.issuedPaperBackdrop}>
+          <View style={styles.issuedPaperDialog}>
+            <View style={styles.issuedPaperHeader}>
+              <View style={{flex:1}}>
+                <Text style={styles.issuedPaperHeading}>Official Issued Certificate</Text>
+                <Text style={styles.issuedPaperSubtitle}>Original VolunServe record · Read-only preview</Text>
+              </View>
+              <TouchableOpacity accessibilityRole="button" accessibilityLabel="Close certificate"
+                onPress={()=>setSelectedIssuedCertificate(null)} style={styles.issuedPaperClose}>
+                <Ionicons name="close" size={20} color="#32665B"/>
+              </TouchableOpacity>
+            </View>
+            <ScrollView contentContainerStyle={{padding:18,paddingBottom:30}} nestedScrollEnabled>
+              {selectedIssuedCertificate && (
+                <CertificatePaper certificate={selectedIssuedCertificate as any}
+                  displayName={profile.fullName||"Volunteer"}/>
+              )}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
 
       <Modal visible={editOpen} transparent animationType="fade" onRequestClose={closeProfileEditor}>
         <View style={styles.modalBackdrop}>
