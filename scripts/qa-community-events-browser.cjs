@@ -85,6 +85,18 @@ async function main(){
     assert(body.includes("QA MOCK PREVIEW"),"Mock preview label missing; inspect diagnostics screenshot and logs");
     assert(body.includes("Community Events"),"Community Events page not visible");
     assert(body.includes("Upcoming"),"Upcoming tab missing");
+    if (width < 640) {
+      const eventTitle=await page.getByText("Community Events",{exact:true}).last().boundingBox();
+      const myEventsButton=await page.getByText(/My Events \\(2\\)/).last().boundingBox();
+      assert(eventTitle && myEventsButton,"Missing mobile event title / shortcut");
+      console.log("QA_MOBILE_TITLE_LAYOUT",JSON.stringify({
+        titleWidth:eventTitle.width,titleY:eventTitle.y,
+        shortcutY:myEventsButton.y,titleBottom:eventTitle.y+eventTitle.height
+      }));
+      assert(eventTitle.width>190,"Mobile title area too narrow; risk of splitting Community mid-word");
+      assert(myEventsButton.y>=eventTitle.y+eventTitle.height-4,
+        "My Events shortcut must be below mobile heading, not cramped alongside it");
+    }
     if (width < 1450) {
       const eventHeading=page.getByText("VOLUNSERVE / COMMUNITY ENGAGEMENT",{exact:true}).last();
       const attendanceHeading=page.getByText("My Attendance",{exact:true}).last();
