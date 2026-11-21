@@ -16,6 +16,7 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  useWindowDimensions,
   View,
 } from "react-native";
 
@@ -46,6 +47,8 @@ const SCREEN_WIDTH = Dimensions.get("window").width;
 
 export default function HomeScreen() {
   const router = useRouter();
+  const { width: viewportWidth } = useWindowDimensions();
+  const communityColumnsStacked = viewportWidth < 1100;
   const insets = useSafeAreaInsets();
   const { profile, user } = useUserSession();
 
@@ -641,8 +644,14 @@ export default function HomeScreen() {
                   </Pressable>
                 )) : <Text style={styles.nativeAnnouncementMessage}>No published announcements available.</Text>}
               </View>
-              <CommunityOnline uid={user?.uid}/>
-              <CommunityCalendar uid={user?.uid} mode={volunteerMode?"volunteer":"resident"}/>
+              <View style={[styles.nativeCommunityColumns,communityColumnsStacked&&styles.nativeCommunityColumnsStacked]}>
+                <View style={[styles.nativeMembersColumn,communityColumnsStacked&&styles.nativeColumnStacked]}>
+                  <CommunityOnline uid={user?.uid} dashboard/>
+                </View>
+                <View style={[styles.nativeCalendarColumn,communityColumnsStacked&&styles.nativeColumnStacked]}>
+                  <CommunityCalendar uid={user?.uid} mode={volunteerMode?"volunteer":"resident"} dashboard/>
+                </View>
+              </View>
             </View>
             <View style={styles.bottomSpace} />
           </View>
@@ -1330,6 +1339,11 @@ function ServiceCard({
 
 const styles = StyleSheet.create({
   communityModules:{gap:15,marginTop:18,marginBottom:15},
+  nativeCommunityColumns:{flexDirection:"row",gap:14,alignItems:"flex-start",width:"100%"},
+  nativeCommunityColumnsStacked:{flexDirection:"column"},
+  nativeMembersColumn:{flex:1.78,minWidth:0},
+  nativeCalendarColumn:{flex:1,minWidth:0},
+  nativeColumnStacked:{width:"100%",flexGrow:0,flexShrink:0},
   nativeAnnouncements:{backgroundColor:"#FFFFFF",borderWidth:1,borderColor:"#DFEBE7",
     borderRadius:16,padding:17,gap:11},
   nativeAnnouncementsTitle:{flexDirection:"row",alignItems:"center",gap:10},
