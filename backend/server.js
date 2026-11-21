@@ -13,6 +13,7 @@ const { combineApprovedBudget } = require("./assistanceDonationBudget");
 const { probeIdentityAiReadiness } = require("./identityAiReadiness");
 const {
   selectedIdRecognized, enforceSelectedIdDecision, blurryNationalIdNeedsReview,
+  demographicsReadyForFaceComparison,
 } = require("./selectedIdPolicy");
 const {reviewIssuerEvidence} = require("./identityIssuerReviewPolicy");
 const {isVerifiedFirebaseToken, isCompletedVolunServeProfile} = require("./verifiedFirebaseToken");
@@ -733,7 +734,7 @@ function normalizeAiDecision(
 function normalizeIdDocumentScreening(value) {
   // Explicit allowlist: never store OCR text, full ID numbers, names,
   // face templates, or photos in Firestore or Admin-visible JSON.
-  const types = ["national_id", "drivers_license", "passport", "umid", "prc_id"];
+  const types = ["national_id", "drivers_license", "passport"];
   const statuses = ["text_consistent_unverified", "mismatch", "inconclusive", "unsupported"];
   const warnings = [
     "selected_id_type_conflicts_with_ocr",
@@ -5054,10 +5055,11 @@ app.post(
       const result = await callIdentityAiService(request, { documentPrecheck: true });
       const screening = normalizeIdDocumentScreening(result?.documentScreening);
       const declared = screening.declaredIdType;
-      const validType = ["national_id", "drivers_license", "passport", "umid", "prc_id"].includes(declared);
+      const validType = ["national_id", "drivers_license", "passport"].includes(declared);
       const birthConflict = screening.profileBirthDateCheck === "possible_conflict";
       const pass = validType &&
         !birthConflict &&
+        demographicsReadyForFaceComparison(screening) &&
         result?.outcome === "pass" &&
         selectedIdRecognized(screening) &&
         (declared === "passport" || screening.backSideScreened === true);
@@ -5072,18 +5074,20 @@ app.post(
         message: birthConflict
           ? "The date of birth on the ID may differ from your saved profile. Retake a clearer document or request Admin profile review; OCR differences are not proof of fraud."
           : pass
-          ? "ID scan and selected type appear consistent. Birthday/barangay are OCR hints only; Admin still checks unresolved details."
+          ? "ID type, profile name and birthday have consistent OCR clues. Government issuance and liveness remain unverified; independent Admin review is required."
           : review
             ? "The National ID is too blurry. You may continue for Admin rescan review but cannot be automatically approved."
             : screening.warningCodes.includes("school_id_not_supported")
-              ? "School and employee IDs are not accepted. Capture one of the five supported government IDs."
+              ? "School and employee IDs are not accepted. Capture one of the three supported government IDs."
               : screening.warningCodes.includes("document_front_back_swapped")
                 ? "Front and back appear reversed. Retake both ID sides in their correct slots."
                 : screening.warningCodes.includes("document_back_looks_like_front")
                   ? "The Back scan appears to show the front. Retake the reverse side."
                   : screening.warningCodes.includes("document_front_side_conflict")
                     ? "The Front scan appears to show back-side details. Retake the portrait/front."
-                    : "ID type or front/back orientation could not be recognized reliably. Retake clearer images.",
+                    : screening.status === "text_consistent_unverified" && !demographicsReadyForFaceComparison(screening)
+                      ? "ID OCR could not positively compare your name and birthday with your saved account. Check details or request Admin rescan/review."
+                      : "ID type or front/back orientation could not be recognized reliably. Retake clearer images.",
         authenticityVerified: false,
         livenessVerified: false,
       });
@@ -5515,7 +5519,7 @@ function identityAdminReviewPayload(verificationSnapshot, userSnapshot) {
     verificationMethod: cleanText(verification.verificationMethod || "", 80),
     manualReviewChannel: verification.manualReviewChannel === "lgu_in_person_no_media"
       ? "lgu_in_person_no_media" : "",
-    manualIdType: ["national_id", "drivers_license", "passport", "umid", "prc_id"]
+    manualIdType: ["national_id", "drivers_license", "passport"]
       .includes(verification.manualIdType) ? verification.manualIdType : "",
 
     status: normalizeIdentityStatus(
@@ -5783,7 +5787,7 @@ app.post(
         if (action === "verify") {
           let declaredReviewIdType = "";
           if (manualNoMedia) {
-            if (!["national_id","drivers_license","passport","umid","prc_id"].includes(
+            if (!["national_id","drivers_license","passport"].includes(
               verification.manualIdType
             )) {
               throw makeHttpError(409, "manual_id_type_invalid",

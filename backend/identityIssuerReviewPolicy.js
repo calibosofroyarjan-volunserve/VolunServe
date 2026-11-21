@@ -5,8 +5,6 @@ const METHODS=Object.freeze({
  national_id:new Set(["psa_national_id_qr_check"]),
  drivers_license:new Set(["in_person_lgu_validation","official_document_check"]),
  passport:new Set(["in_person_lgu_validation","official_document_check"]),
- umid:new Set(["in_person_lgu_validation","official_document_check"]),
- prc_id:new Set(["in_person_lgu_validation","official_document_check"]),
 });
 function reviewIssuerEvidence({declaredType,validationMethod,confirmed,notes}={}){
  const methods=METHODS[declaredType];

@@ -81,12 +81,8 @@ test("unknown ML fields and forged issuer claims always fail closed",()=>{
   assert.equal(evidence.passportMrzCheckDigitsConsistent,false);
   assert.equal(evidence.passportIssuerAuthenticityVerified,false);
 });
-test("no MRZ checker is forced onto other four allowed IDs",()=>{
-  const valid={
-    national_id:"national_id", drivers_license:"drivers_license",
-    umid:"umid", prc_id:"prc_id"
-  };
-  for(const id of Object.values(valid)){
+test("no MRZ checker is forced onto the other two supported IDs",()=>{
+  for(const id of ["national_id","drivers_license"]){
     const doc=sanitizer(input({
       declaredIdType:id,detectedIdType:id,backSideProvided:true,backSideScreened:true,
       backImageQualityStatus:"adequate",
@@ -94,6 +90,17 @@ test("no MRZ checker is forced onto other four allowed IDs",()=>{
     }));
     assert.equal("passportMrzCheck" in doc,false);
     assert.equal(selectedIdRecognized(doc),true);
+  }
+});
+test("UMID and PRC remain unsupported even with supplied MRZ-like fields",()=>{
+  for(const id of ["umid","prc_id"]){
+    const doc=sanitizer(input({
+      declaredIdType:id,detectedIdType:id,
+      backSideProvided:true,backSideScreened:true,
+      backImageQualityStatus:"adequate",
+      passportMrzCheck:"checksum_consistent_unverified",
+    }));
+    assert.equal(selectedIdRecognized(doc),false);
   }
 });
 test("authenticated operational Admin route and transactional self-approval block retained",()=>{

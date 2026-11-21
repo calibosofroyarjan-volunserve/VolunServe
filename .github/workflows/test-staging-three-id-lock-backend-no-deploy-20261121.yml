@@ -1,0 +1,105 @@
+name: Three-ID Lock — Staging Backend (NO DEPLOY)
+on:
+  push:
+    branches:
+      - release/staging-backend-three-id-lock-20261121
+    paths:
+      - 'backend/server.js'
+      - 'backend/selectedIdPolicy.js'
+      - 'backend/identityManualReviewRoutes.js'
+      - 'backend/identityIssuerReviewPolicy.js'
+      - 'backend/test-selectedIdPolicy.js'
+      - 'backend/test-identityIssuerReviewPolicy.js'
+      - 'backend/test-identity-no-media-manual-e2e.cjs'
+      - '.github/workflows/test-staging-three-id-lock-backend-no-deploy-20261121.yml'
+permissions:
+  contents: read
+jobs:
+  backend-policy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - name: Download exact staging candidate archive
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          [[ "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]] || exit 2
+          curl -fLsS --retry 3 -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" "https://api.github.com/repos/${GITHUB_REPOSITORY}/zipball/$SOURCE_SHA" -o /tmp/id3-backend.zip
+          mkdir -p "$RUNNER_TEMP/id3-backend"
+          unzip -q /tmp/id3-backend.zip -d "$RUNNER_TEMP/id3-backend"
+          ROOT="$(find "$RUNNER_TEMP/id3-backend" -mindepth 1 -maxdepth 1 -type d -print -quit)"
+          cp -a "$ROOT/." "$GITHUB_WORKSPACE/"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Assert backend three-ID gates and locked media upload remain intact
+        run: |
+          node --check backend/server.js
+          node --check backend/identityManualReviewRoutes.js
+          grep -Fq 'const STAGING_IDENTITY_MEDIA_UPLOADS_ENABLED = false' backend/server.js
+          node <<'NODE'
+          const assert=require('node:assert/strict');
+          const fs=require('node:fs');
+          const {SUPPORTED_IDS,manualReviewInput}=require('./backend/identityManualReviewRoutes');
+          const {reviewIssuerEvidence}=require('./backend/identityIssuerReviewPolicy');
+          const expected=['drivers_license','national_id','passport'];
+          assert.deepEqual([...SUPPORTED_IDS].sort(),expected);
+          for(const removed of ['umid','prc_id']){
+            assert.equal(manualReviewInput({consent:true,idType:removed}).error,'unsupported_government_id');
+            assert.equal(reviewIssuerEvidence({declaredType:removed,validationMethod:'in_person_lgu_validation',confirmed:true,notes:'Synthetic review note'}).ok,false);
+          }
+          const source=fs.readFileSync('backend/server.js','utf8');
+          assert(!source.includes('"passport","umid"')&&!source.includes('"passport", "umid"'));
+          assert(source.includes('manual_id_type_invalid'));
+          console.log('PASS: backend, manual routes, and issuer policy reject UMID and PRC');
+          NODE
+      - name: Regression tests on exact policy and real extracted Admin routes
+        run: |
+          node --test backend/test-selectedIdPolicy.js
+          node --test backend/test-identityIssuerReviewPolicy.js
+          node --test backend/test-identity-no-media-manual-e2e.cjs
+      - name: Test scope
+        run: |
+          echo 'Backend policy with synthetic records. Old pending UMID/PRC records may be seen historically but can no longer be approved. No live/staging database writes; HTTP 423 ID and selfie gate unchanged.' >> "$GITHUB_STEP_SUMMARY"
+
+  signed-in-emulator:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      CI: 'true'
+      GCLOUD_PROJECT: demo-volunserve-identity-e2e
+      FIREBASE_AUTH_EMULATOR_HOST: '127.0.0.1:9099'
+      FIRESTORE_EMULATOR_HOST: '127.0.0.1:8080'
+    steps:
+      - name: Download exact staging candidate archive
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          [[ "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]] || exit 2
+          curl -fLsS --retry 3 -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" "https://api.github.com/repos/${GITHUB_REPOSITORY}/zipball/$SOURCE_SHA" -o /tmp/id3-emulator.zip
+          mkdir -p "$RUNNER_TEMP/id3-emulator"
+          unzip -q /tmp/id3-emulator.zip -d "$RUNNER_TEMP/id3-emulator"
+          ROOT="$(find "$RUNNER_TEMP/id3-emulator" -mindepth 1 -maxdepth 1 -type d -print -quit)"
+          cp -a "$ROOT/." "$GITHUB_WORKSPACE/"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Install locked test dependencies with install scripts disabled
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          npm ci --prefix backend --ignore-scripts --no-audit --no-fund
+      - name: Real emulator tokens and local Firestore transactions; fictional users only
+        run: |
+          npx --no-install firebase emulators:exec --config backend/identity-e2e-emulators.json --only auth,firestore --project demo-volunserve-identity-e2e "node --test backend/test-identity-emulator-auth-e2e.cjs"
+      - name: No real credentials, IDs or deployment
+        run: |
+          echo 'Signed-in FICTIONAL Firebase emulator actors only; no real users, ID uploads, staging production writes or deployment.' >> "$GITHUB_STEP_SUMMARY"

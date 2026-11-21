@@ -2,7 +2,7 @@
 
 // Only documents explicitly selected in the UI and recognized by OCR may
 // proceed to ID-based manual approval. OCR cannot authenticate issuance.
-const ALLOWED = new Set(["national_id", "drivers_license", "passport", "umid", "prc_id"]);
+const ALLOWED = new Set(["national_id", "drivers_license", "passport"]);
 
 function selectedIdRecognized(screening) {
   return !!screening &&
@@ -32,6 +32,15 @@ function selectedIdRecognized(screening) {
     ) &&
     ALLOWED.has(screening.declaredIdType) &&
     screening.detectedIdType === screening.declaredIdType;
+}
+
+// Precheck advancement (not identity approval) requires positive, sanitized
+// OCR evidence for both the saved profile name and DOB. Unreadable fields
+// must never become positive merely because the ID type looks plausible.
+function demographicsReadyForFaceComparison(screening) {
+  return !!screening &&
+    screening.profileNameCheck === "possible_match" &&
+    screening.profileBirthDateCheck === "possible_match";
 }
 
 function blurryNationalIdNeedsReview(screening) {
@@ -96,4 +105,5 @@ function enforceSelectedIdDecision(rawDecision, screening, livenessImplemented) 
 module.exports = {
   selectedIdRecognized, blurryNationalIdNeedsReview,
   classifyIdentityReviewTrack, enforceSelectedIdDecision,
+  demographicsReadyForFaceComparison,
 };

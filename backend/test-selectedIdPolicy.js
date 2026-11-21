@@ -1,19 +1,39 @@
 "use strict";
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const {selectedIdRecognized, enforceSelectedIdDecision, blurryNationalIdNeedsReview, classifyIdentityReviewTrack} = require("./selectedIdPolicy");
+const {selectedIdRecognized, enforceSelectedIdDecision, blurryNationalIdNeedsReview, classifyIdentityReviewTrack, demographicsReadyForFaceComparison} = require("./selectedIdPolicy");
 const valid = type => ({
   status:"text_consistent_unverified", declaredIdType:type,
   detectedIdType:type, authenticityVerified:false,
   backSideProvided:type!=="passport", backSideScreened:type!=="passport",
 });
-for (const type of ["national_id","drivers_license","passport","umid","prc_id"]) {
+for (const type of ["national_id","drivers_license","passport"]) {
   test("recognizes selected "+type+" type without claiming authenticity", () => {
     assert.equal(selectedIdRecognized(valid(type)),true);
     assert.equal(enforceSelectedIdDecision("verified",valid(type),false),"manual_review");
     assert.equal(enforceSelectedIdDecision("manual_review",valid(type),false),"manual_review");
   });
 }
+test("OCR name and DOB must both positively match before face precheck (never identity proof)",()=>{
+  const candidate={profileNameCheck:"possible_match",profileBirthDateCheck:"possible_match"};
+  assert.equal(demographicsReadyForFaceComparison(candidate),true);
+  for(const field of ["profileNameCheck","profileBirthDateCheck"]){
+    for(const value of ["inconclusive","not_checked","possible_conflict",null,undefined]){
+      assert.equal(demographicsReadyForFaceComparison({...candidate,[field]:value}),false);
+    }
+  }
+  assert.equal(demographicsReadyForFaceComparison(null),false);
+  assert.equal(demographicsReadyForFaceComparison({}),false);
+});
+
+test("UMID and PRC ID are disabled even with matching OCR and perfect face match",()=>{
+  for(const unsupported of ["umid","prc_id"]){
+    const screening=valid(unsupported);
+    assert.equal(selectedIdRecognized(screening),false);
+    assert.equal(enforceSelectedIdDecision("verified",screening,true),"failed");
+    assert.equal(enforceSelectedIdDecision("manual_review",screening,false),"failed");
+  }
+});
 for (const [label,screening] of [
   ["school ID",{status:"unsupported",declaredIdType:"national_id",detectedIdType:null}],
   ["wrong type",{status:"mismatch",declaredIdType:"national_id",detectedIdType:"drivers_license"}],
@@ -28,7 +48,7 @@ for (const [label,screening] of [
   });
 }
 
-for (const type of ["national_id","drivers_license","passport","umid","prc_id"]) {
+for (const type of ["national_id","drivers_license","passport"]) {
   for (const status of ["unsupported","inconclusive","mismatch"]) {
     test("selected "+type+" with "+status+" OCR status is always rejected",()=>{
       const bad={status,declaredIdType:type,detectedIdType:
@@ -40,7 +60,7 @@ for (const type of ["national_id","drivers_license","passport","umid","prc_id"])
   }
 }
 test("non-passport cannot bypass missing-back screening even with matching ID text",()=>{
-  for (const type of ["national_id", "drivers_license", "umid", "prc_id"]) {
+  for (const type of ["national_id", "drivers_license"]) {
     const incomplete={...valid(type),backSideProvided:false,backSideScreened:false};
     assert.equal(selectedIdRecognized(incomplete),false);
     assert.equal(enforceSelectedIdDecision("verified",incomplete,true),"failed");
@@ -171,7 +191,7 @@ test("contradictory positive OCR plus warning is never treated as a recognized g
     "low_document_image_quality",
     "unexpected_untrusted_warning",
   ];
-  for (const type of ["national_id","drivers_license","passport","umid","prc_id"]) {
+  for (const type of ["national_id","drivers_license","passport"]) {
     for (const warning of contradictoryWarnings) {
       const forged={...valid(type),warningCodes:[warning]};
       assert.equal(selectedIdRecognized(forged),false,`${type} should reject ${warning}`);
