@@ -1,8 +1,8 @@
-name: Three-ID Lock — Staging AI (NO DEPLOY)
+name: National ID Only — Staging AI (NO DEPLOY)
 on:
   push:
     branches:
-      - release/staging-ai-three-id-lock-20261121
+      - release/staging-ai-national-id-only-20261121
     paths:
       - 'identity-ai/main.py'
       - 'identity-ai/document_screening.py'
@@ -19,7 +19,7 @@ on:
 permissions:
   contents: read
 jobs:
-  ai-only-three-id-allowlist:
+  ai-only-national-id-allowlist:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -38,12 +38,12 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-      - name: Assert three accepted ID types in API and both OCR screening engines
+      - name: Assert National ID is sole accepted ID in API and OCR screening engines
         run: |
           python - <<'PY'
           import ast
           from pathlib import Path
-          exact = {'national_id','drivers_license','passport'}
+          exact = {'national_id'}
           main=ast.parse(Path("identity-ai/main.py").read_text())
           expression=next(n.value for n in main.body if isinstance(n,ast.Assign) and any(isinstance(t,ast.Name) and t.id=="ACCEPTED_ID_TYPES" for t in n.targets))
           assert set(ast.literal_eval(expression))==exact
@@ -52,7 +52,7 @@ jobs:
               expected_symbol = "SUPPORTED_ID_TYPES" if path.endswith("face_preflight_policy.py") else "SUPPORTED"
               expression=next(n.value for n in tree.body if isinstance(n,ast.Assign) and any(isinstance(t,ast.Name) and t.id==expected_symbol for t in n.targets))
               assert set(ast.literal_eval(expression.args[0]))==exact, path
-          print("PASS: all AI three-ID allowlists exactly match")
+          print("PASS: AI accepts only National ID")
           PY
       - name: Run strict ID, legacy OCR and real extracted HTTP handler tests (synthetic only)
         env:
@@ -67,4 +67,4 @@ jobs:
           python -m unittest discover -s identity-ai -p test_id_backscan_quality.py -v
       - name: No real IDs or deployments
         run: |
-          echo 'Only three synthetic ID classes: National ID, Driver License and Passport. UMID and PRC must be rejected even by direct AI calls. No real biometric media, model-accuracy claims, staging deployment or production change.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'National ID only: Driver License, Passport, UMID and PRC must be rejected even by direct AI calls. No real biometric media, model-accuracy claims, staging deployment or production change.' >> "$GITHUB_STEP_SUMMARY"
