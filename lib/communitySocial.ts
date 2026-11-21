@@ -10,6 +10,7 @@ export type CommunityMember = {
   verified: boolean;
   badge: string;
   online: boolean;
+  presencePrivate?: boolean;
   lastSeenAt: string | null;
   acceptChats: boolean;
   isSelf?: boolean;
@@ -37,6 +38,7 @@ const manilaDay = (value: Date) =>
   }).format(value);
 export function memberLastSeen(person:CommunityMember):string {
   if(person.online)return "Online now";
+  if(person.presencePrivate)return "Status private";
   if(!person.lastSeenAt)return "Offline";
   const date=new Date(person.lastSeenAt);
   if(Number.isNaN(date.getTime()))return "Offline";

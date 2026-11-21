@@ -1,4 +1,5 @@
 import EmailFirstSignup from "../components/auth/EmailFirstSignup";
+import { communitySocialRequest } from "../lib/communitySocial";
 import { userFacingError } from "../lib/userFacingError";
 import { EMAIL_FIRST_SIGNUP_ENABLED } from "../lib/signupFeature";
 import DateTimePicker from "@react-native-community/datetimepicker";
@@ -56,6 +57,7 @@ type FormState = {
   password: string;
   confirmPassword: string;
   acceptTerms: boolean;
+  directoryConsent: boolean;
   confirmReview: boolean;
 };
 
@@ -411,9 +413,9 @@ function TermsModal({ visible, onClose }: { visible: boolean; onClose: () => voi
           <Text style={styles.termsH1}>VolunServe Registration Terms</Text>
           <Text style={styles.termsP}>By registering, you confirm the information you provide is accurate and complete. Your Basic Resident Account becomes active after successful registration. Identity Verification is a separate trust step for protected Resident and Volunteer services.</Text>
           <Text style={styles.termsH2}>Data Privacy</Text>
-          <Text style={styles.termsP}>We collect your personal data including name, contact information, and address to support community services and account management. If you later use Identity Verification, verification evidence is handled as private data and must only be used for the verification process.</Text>
+          <Text style={styles.termsP}>Your contact information, home address and identity verification evidence stay private. If you separately agree to the member directory, other signed-in approved members can view your name, role and optional profile photo. Online status and private messaging require separate settings.</Text>
           <Text style={styles.termsH2}>Consent</Text>
-          <Text style={styles.termsP}>You consent to secure processing of your registration data for VolunServe services and communication. Identity Verification and the Volunteer Application are separate steps after account creation.</Text>
+          <Text style={styles.termsP}>You consent to registration and service processing. Joining the member directory is optional during signup or later in Community Members. Identity Verification and Volunteer Applications remain separate. Ask an administrator to correct or withdraw a directory listing.</Text>
           <Text style={styles.termsH2}>Security</Text>
           <Text style={styles.termsP}>Use a strong password. Do not share your login credentials. Suspicious activity may result in account review.</Text>
           <View style={{ height: 24 }} />
@@ -457,6 +459,7 @@ function LegacySignup() {
     password: "",
     confirmPassword: "",
     acceptTerms: false,
+    directoryConsent: false,
     confirmReview: false,
   });
 
@@ -657,6 +660,11 @@ function LegacySignup() {
         occupationOther: formData.occupationOther || "",
       });
 
+      // Directory visibility requires separate consent; registration remains valid even if offline.
+      if(registeredUser.emailVerified && formData.directoryConsent){
+        void communitySocialRequest("/api/community/directory/preferences","POST",{directoryListed:true})
+          .catch(()=>{/* Member can join from the Community Members screen. */});
+      }
       Alert.alert(
         registeredUser.emailVerified ? "Basic Account Created" : "Verify Your Email",
         googleBound
@@ -958,6 +966,7 @@ function LegacySignup() {
               <SectionTitle title="Compliance & Data Privacy" subtitle="Review and confirm before submitting your registration." />
 
               <CheckRow label="I confirm the details I provided are final and correct." checked={formData.confirmReview} onPress={() => updateField("confirmReview", !formData.confirmReview)} />
+              <CheckRow label="Optional: share my name, role and profile photo with other signed-in Community Members. Contact details and online status remain private." checked={formData.directoryConsent} onPress={() => updateField("directoryConsent", !formData.directoryConsent)} />
 
             </View>
           )}
