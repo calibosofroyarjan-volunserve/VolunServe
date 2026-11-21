@@ -945,6 +945,8 @@ export default function CommunityEventsScreen() {
 
   const [expandedEvent, setExpandedEvent] =
     useState<string | null>(null);
+  // Keep the large directions map closed until the volunteer requests it.
+  const [expandedMapEvent, setExpandedMapEvent] = useState<string | null>(null);
   // Participant selection is independent of Event Details and My Attendance.
   const [rosterFocusId, setRosterFocusId] = useState<string | null>(null);
   const [participantsModalEventId, setParticipantsModalEventId] = useState<string | null>(null);
@@ -2243,6 +2245,7 @@ export default function CommunityEventsScreen() {
     const toggleDetails = () => {
       setRosterFocusId(event.id);
       setExpandedEvent(detailsOpen ? null : event.id);
+      setExpandedMapEvent(null);
       setRouteEventId(null);
       setRouteOrigin(null);
       setRouteNotice("");
@@ -2436,13 +2439,19 @@ export default function CommunityEventsScreen() {
             )}
             {/* Event map belongs to the expanded event details, not the My Attendance rail. */}
             <View style={styles.lockedEventMapCard}>
-              <View style={styles.lockedSectionHeading}>
+              <Pressable accessibilityRole="button"
+                accessibilityLabel={`${expandedMapEvent === event.id ? "Hide" : "Show"} location and directions for ${event.title}`}
+                accessibilityState={{ expanded: expandedMapEvent === event.id }}
+                onPress={() => setExpandedMapEvent(current => current === event.id ? null : event.id)}
+                style={styles.lockedSectionHeading}>
                 <View style={styles.lockedSectionIcon}><Ionicons name="location" size={21} color="#078C80" /></View>
                 <View style={{ flex: 1, minWidth: 0 }}>
                   <Text style={styles.lockedSectionTitle}>Location &amp; Directions</Text>
-                  <Text style={styles.lockedSectionSub}>Meeting point and navigation for volunteers</Text>
+                  <Text style={styles.lockedSectionSub}>{expandedMapEvent === event.id ? "Tap to hide map and navigation" : "Tap to view meeting-point map and navigation"}</Text>
                 </View>
-              </View>
+                <Ionicons name={expandedMapEvent === event.id ? "chevron-up" : "chevron-down"} size={20} color="#08796F" />
+              </Pressable>
+              {expandedMapEvent === event.id && <>
               <Text style={styles.lockedMapAddress}>{event.location}{event.barangay ? `, ${event.barangay}` : ""}, San Jose del Monte, Bulacan</Text>
               <View style={styles.lockedMapFrame}>{renderWebMap(event)}</View>
               {!eventHasCoordinates(event) && <View style={styles.lockedMapHintRow}>
@@ -2477,6 +2486,7 @@ export default function CommunityEventsScreen() {
                 </Pressable>
               </View>
               <Text style={styles.lockedMapFootnote}>In-app route uses OpenStreetMap roads and an OSRM estimate without live traffic. Your GPS is shared only with the routing service when you tap Show Road Route; it is not saved in Firestore.</Text>
+              </>}
             </View>
           </View>
         )}
