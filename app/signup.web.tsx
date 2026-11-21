@@ -1,4 +1,5 @@
 import EmailFirstSignup from "../components/auth/EmailFirstSignup";
+import { communitySocialRequest } from "../lib/communitySocial";
 import { userFacingError } from "../lib/userFacingError";
 import { EMAIL_FIRST_SIGNUP_ENABLED } from "../lib/signupFeature";
 import DateTimePicker from "@react-native-community/datetimepicker";
@@ -47,6 +48,7 @@ type FormState = {
   password: string;
   confirmPassword: string;
   acceptTerms: boolean;
+  directoryConsent: boolean;
   confirmReview: boolean;
 };
 
@@ -402,9 +404,9 @@ function TermsModal({ visible, onClose }: { visible: boolean; onClose: () => voi
           <Text style={styles.termsH1}>VolunServe Registration Terms</Text>
           <Text style={styles.termsP}>By registering, you confirm the information you provide is accurate and complete. Your Basic Account can be created without administrator approval. Resident verification is a separate identity-verification step.</Text>
           <Text style={styles.termsH2}>Data Privacy</Text>
-          <Text style={styles.termsP}>We collect your personal data including name, contact information, and address to support LGU service delivery, coordination, and verification. Access is restricted to authorized administrators.</Text>
+          <Text style={styles.termsP}>Your personal contact information, address, and identity evidence are restricted to authorized users. With your separate directory agreement, other signed-in approved members can view your name, account role, and optional profile photo. Online status, Last Seen, and private messaging have separate settings.</Text>
           <Text style={styles.termsH2}>Consent</Text>
-          <Text style={styles.termsP}>You consent to secure processing of your data for account registration, resident identity verification, volunteer coordination, and program communication. You may request correction of incorrect information via the administrator.</Text>
+          <Text style={styles.termsP}>You consent to account registration and service-related data processing. Joining the member directory is optional and requires your separate agreement during registration or later from Community Members. Contact an administrator to request a correction or withdrawal of your directory listing.</Text>
           <Text style={styles.termsH2}>Security</Text>
           <Text style={styles.termsP}>Use a strong password. Do not share your login credentials. Suspicious activity may result in account review.</Text>
           <View style={{ height: 24 }} />
@@ -447,6 +449,7 @@ function LegacySignup() {
     password: "",
     confirmPassword: "",
     acceptTerms: false,
+    directoryConsent: false,
     confirmReview: false,
   });
 
@@ -682,6 +685,12 @@ function LegacySignup() {
         occupationSpecialization: formData.occupationSpecialization || "",
         occupationOther: formData.occupationOther || "",
       });
+
+      // Directory sharing is optional and must never block successful registration.
+      if(registeredUser.emailVerified && formData.directoryConsent) {
+        void communitySocialRequest("/api/community/directory/preferences","POST",{directoryListed:true})
+          .catch(()=>{/* The new member can retry through Community Members. */});
+      }
 
       const successTitle = registeredUser.emailVerified ? "Basic Account Created" : "Verify Your Email";
       const successMessage = googleBound
@@ -1263,6 +1272,11 @@ function LegacySignup() {
                       label="I confirm that the information provided is accurate."
                       checked={formData.confirmReview}
                       onPress={() => updateField("confirmReview", !formData.confirmReview)}
+                    />
+                    <CheckRow
+                      label="Optional: show my name, Resident/Volunteer role and profile photo to other signed-in Community Members. My contact details and online activity stay private."
+                      checked={formData.directoryConsent}
+                      onPress={() => updateField("directoryConsent", !formData.directoryConsent)}
                     />
                   </View>
 
