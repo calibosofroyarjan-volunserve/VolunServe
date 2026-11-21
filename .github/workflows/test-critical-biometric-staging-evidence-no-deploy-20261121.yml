@@ -4,6 +4,7 @@ on:
     branches:
       - qa/critical-biometric-risk-evaluation-20261121
     paths:
+      - 'identity-ai/main.py'
       - 'identity-ai/sface_pair_metrics.py'
       - 'identity-ai/evaluate_sface_pairs_local.py'
       - 'identity-ai/critical_biometric_risk_gate.py'
@@ -39,7 +40,7 @@ jobs:
         env:
           PYTHONPATH: identity-ai
         run: |
-          python -m py_compile identity-ai/sface_pair_metrics.py identity-ai/evaluate_sface_pairs_local.py identity-ai/critical_biometric_risk_gate.py
+          python -m py_compile identity-ai/main.py identity-ai/sface_pair_metrics.py identity-ai/evaluate_sface_pairs_local.py identity-ai/critical_biometric_risk_gate.py
           python -m unittest discover -s identity-ai -p test_sface_pair_metrics_local.py -v
           python -m unittest discover -s identity-ai -p test_critical_biometric_risk_gate.py -v
           python -m unittest discover -s identity-ai -p test_pad_ensemble_local.py -v
