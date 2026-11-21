@@ -1381,123 +1381,41 @@ export default function Profile() {
         )}
       </View>
 
-      {activeTab ===
-        "info" && (
+      {activeTab === "info" && (
         <>
-          <IdentityAccessCard
-            identityStatus={
-              identityStatus
-            }
-            volunteerAccess={
-              volunteerAccess
-            }
-            volunteerStatus={
-              volunteerStatus
-            }
-            onVerify={() =>
-              router.push(
-                "/identity-verification" as any,
-              )
-            }
-            onApplyVolunteer={() =>
-              router.push(
-                "/volunteer-application" as any,
-              )
-            }
-          />
-
-          <View
-            style={[
-              styles.infoGrid,
-              compact &&
-                styles.infoGridCompact,
-            ]}
-          >
-          <View
-            style={
-              styles.sectionCard
-            }
-          >
-            <SectionHeading
-              icon="person-outline"
-              title="Personal Information"
+          {(currentMode !== "volunteer" || identityStatus !== "verified") && (
+            <IdentityAccessCard
+              identityStatus={identityStatus}
+              volunteerAccess={volunteerAccess}
+              volunteerStatus={volunteerStatus}
+              onVerify={() => router.push("/identity-verification" as any)}
+              onApplyVolunteer={() => router.push("/volunteer-application" as any)}
             />
-
-            <InfoRow
-              label="Full Name"
-              value={
-                profile.fullName
-              }
-            />
-
-            <InfoRow
-              label="Email Address"
-              value={
-                profile.email
-              }
-            />
-
-            <InfoRow
-              label="Phone Number"
-              value={
-                profile.phoneNumber
-              }
-            />
-
-            <InfoRow
-              label="Occupation"
-              value={
-                displayOccupation
-              }
-            />
-          </View>
-
-          <View
-            style={
-              styles.sectionCard
-            }
-          >
-            <SectionHeading
-              icon="location-outline"
-              title="Account Information"
-            />
-
-            <InfoRow
-              label="Current Mode"
-              value={
-                displayRole
-              }
-            />
-
-            <InfoRow label="Barangay" value={profile.barangay || "Not provided"} />
-
-            <InfoRow
-              label="Address"
-              value={
-                displayLocation
-              }
-            />
-
-            <InfoRow
-              label="Account Status"
-              value={
-                humanize(
-                  profile.status ||
-                    "approved",
-                )
-              }
-            />
-
-            <InfoRow
-              label="Date Joined"
-              value={
-                formatDate(
-                  profile.createdAt,
-                )
-              }
-              last
-            />
-          </View>
+          )}
+          <View style={[styles.detailCards,compact&&styles.detailCardsCompact]}>
+            <View style={styles.detailCard}>
+              <SectionHeading icon="person-outline" title="Personal Details"/>
+              <InfoRow label="Full Name" value={profile.fullName}/>
+              <InfoRow label="Occupation" value={displayOccupation}/>
+              <InfoRow label="Barangay" value={profile.barangay||"Not provided"}/>
+              <InfoRow label="Address" value={displayLocation} last/>
+            </View>
+            <View style={styles.detailCard}>
+              <SectionHeading icon="mail-outline" title="Contact Information"/>
+              <InfoRow label="Email Address" value={profile.email}/>
+              <InfoRow label="Phone Number" value={profile.phoneNumber} last/>
+              <View style={styles.ownerPrivacyNotice}>
+                <Ionicons name="lock-closed-outline" size={15} color="#477B6C"/>
+                <Text style={styles.ownerPrivacyText}>Only you can view and edit these contact details.</Text>
+              </View>
+            </View>
+            <View style={styles.detailCard}>
+              <SectionHeading icon="shield-checkmark-outline" title="Volunteer Status"/>
+              <InfoRow label="Identity" value={identityStatus === "verified" ? "Verified" : humanize(identityStatus)}/>
+              <InfoRow label="Volunteer Access" value={volunteerAccess?"Enabled":humanize(volunteerStatus)}/>
+              <InfoRow label="Account Status" value={humanize(profile.status||"approved")}/>
+              <InfoRow label="Date Joined" value={formatDate(profile.createdAt)} last/>
+            </View>
           </View>
         </>
       )}
