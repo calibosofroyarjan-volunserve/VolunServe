@@ -96,7 +96,7 @@ export default function CommunityOnline({uid,dashboard=false}:{uid?:string|null;
     return byRole&&(!term||member.name.toLowerCase().includes(term)||
       member.badge.toLowerCase().includes(term));
   }),[members,filter,search]);
-  const displayed=filtered.slice(0,expanded?pageSize:dashboard?5:compact?6:9);
+  const displayed=filtered.slice(0,expanded?pageSize:dashboard?(compact?4:5):(compact?6:9));
   const residents=members.filter(m=>m.mode==="resident").length;
   const volunteers=members.filter(m=>m.mode==="volunteer").length;
   const onlineCount=members.filter(m=>m.online).length;
@@ -164,7 +164,7 @@ export default function CommunityOnline({uid,dashboard=false}:{uid?:string|null;
         <Ionicons name="cloud-offline-outline" size={24} color="#718C87"/>
         <Text style={styles.emptyText}>{error}</Text>
         <Pressable onPress={()=>void load()} style={styles.retry}><Text style={styles.retryText}>Retry</Text></Pressable>
-      </View> : displayed.length ? <View style={[styles.grid,compact&&styles.gridMobile,dashboard&&styles.dashboardGrid]}>
+      </View> : displayed.length ? <View style={[styles.grid,compact&&styles.gridMobile,dashboard&&styles.dashboardGrid,dashboard&&compact&&styles.dashboardGridMobile]}>
         {displayed.map(member=><View key={member.key}
           style={[styles.memberCard,compact&&styles.memberMobile,dashboard&&styles.dashboardMemberRow,
             dashboard&&compact&&styles.dashboardMemberMobile]}>
@@ -172,9 +172,9 @@ export default function CommunityOnline({uid,dashboard=false}:{uid?:string|null;
             accessibilityLabel={`View profile of ${member.name}, ${member.badge}`}
             onPress={()=>member.isSelf?router.push("/profile"):
               router.push({pathname:"/(tabs)/community-member-profile",params:{member:member.key}} as Href)}
-            style={[styles.memberMain,dashboard&&styles.dashboardIdentity]}>
+            style={[styles.memberMain,dashboard&&styles.dashboardIdentity,dashboard&&compact&&styles.dashboardIdentityMobile]}>
             <Avatar person={member} size={dashboard?43:compact?47:53}/>
-            {dashboard?<View style={styles.dashboardNameGroup}>
+            {dashboard?<View style={[styles.dashboardNameGroup,dashboard&&compact&&styles.dashboardNameMobile]}>
               <Text style={styles.dashboardName} numberOfLines={1}>{member.name}</Text>
               <Text style={styles.dashboardBadge} numberOfLines={1}>{member.badge}</Text>
             </View>:<>
@@ -185,12 +185,12 @@ export default function CommunityOnline({uid,dashboard=false}:{uid?:string|null;
               </Text>
             </>}
           </Pressable>
-          {dashboard&&<View style={styles.dashboardPresence}>
+          {dashboard&&!compact&&<View style={styles.dashboardPresence}>
             {member.online&&<View style={styles.presenceDot}/>}
             <Text style={[styles.dashboardPresenceText,!member.online&&styles.memberOffline]}
               numberOfLines={2}>{memberLastSeen(member)}</Text>
           </View>}
-          {dashboard&&<Pressable accessibilityRole="button"
+          {dashboard&&!compact&&<Pressable accessibilityRole="button"
             onPress={()=>member.isSelf?router.push("/profile"):
               router.push({pathname:"/(tabs)/community-member-profile",params:{member:member.key}} as Href)}
             style={styles.dashboardProfileButton}>
@@ -198,7 +198,7 @@ export default function CommunityOnline({uid,dashboard=false}:{uid?:string|null;
             <Text style={styles.dashboardProfileText}>View Profile</Text>
           </Pressable>}
           {member.isSelf?(!dashboard&&<Text style={styles.ownBadge}>Your profile</Text>):
-            <Pressable accessibilityRole="button" accessibilityLabel={`Chat with ${member.name}`}
+            !(dashboard&&compact)&&<Pressable accessibilityRole="button" accessibilityLabel={`Chat with ${member.name}`}
               disabled={!canStartChat(member)}
               onPress={()=>router.push({pathname:"/(tabs)/community-chat",params:{member:member.key}} as Href)}
               style={[styles.chatButton,dashboard&&styles.dashboardChatButton,
@@ -333,16 +333,23 @@ const styles=StyleSheet.create({
   dashboardSmallCaption:{fontSize:10.5,color:"#6E8A7D",fontWeight:"600"},
   dashboardFilters:{paddingBottom:10,gap:6},
   dashboardGrid:{flexDirection:"column",gap:0},
+  dashboardGridMobile:{flexDirection:"row",gap:8},
   dashboardMemberRow:{width:"100%",flexBasis:"auto",flexGrow:0,minWidth:0,maxWidth:"100%",
     backgroundColor:"#FFFFFF",borderWidth:0,borderBottomWidth:1,borderRadius:0,
     borderBottomColor:"#E8F0EA",paddingHorizontal:4,paddingVertical:10,
     flexDirection:"row",justifyContent:"space-between",gap:8},
-  dashboardMemberMobile:{flexWrap:"wrap",paddingVertical:12,gap:9},
+  dashboardMemberMobile:{flexBasis:"23%",minWidth:72,maxWidth:"25%",flexGrow:1,
+    flexDirection:"column",alignItems:"center",gap:6,
+    borderBottomWidth:0,backgroundColor:"#F8FBF9",borderWidth:1,borderColor:"#E3EEE8",
+    borderRadius:11,paddingHorizontal:5,paddingVertical:12},
   dashboardIdentity:{width:"auto",flex:1.4,minWidth:110,flexDirection:"row",alignItems:"center",
     justifyContent:"flex-start",gap:10},
+  dashboardIdentityMobile:{flexDirection:"column",alignItems:"center",justifyContent:"center",
+    flexGrow:0,flexShrink:0,minWidth:0,width:"100%",gap:6},
   dashboardNameGroup:{flex:1,minWidth:0,alignItems:"flex-start",gap:4},
-  dashboardName:{fontSize:12.5,fontWeight:"800",color:"#153E32"},
-  dashboardBadge:{fontSize:10.5,color:"#408A70",fontWeight:"700"},
+  dashboardNameMobile:{flexGrow:0,alignItems:"center",width:"100%"},
+  dashboardName:{fontSize:12.5,fontWeight:"800",color:"#153E32",textAlign:"center"},
+  dashboardBadge:{fontSize:10.5,color:"#408A70",fontWeight:"700",textAlign:"center"},
   dashboardPresence:{flex:0.95,minWidth:92,alignItems:"center",justifyContent:"center",
     flexDirection:"row",gap:5},
   presenceDot:{height:7,width:7,borderRadius:4,backgroundColor:"#0BA66E"},
