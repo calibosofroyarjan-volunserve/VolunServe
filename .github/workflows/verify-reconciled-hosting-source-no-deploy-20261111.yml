@@ -762,6 +762,72 @@ jobs:
             }
             // END PINNED COMMUNITY PRIVATE CHAT LAST SEEN CONTROLLER GATE
 
+            // BEGIN PINNED FULL OPT-IN DIRECTORY CONTROLLER GATE
+            // Only a Hosting controller + this single additive verifier gate
+            // can modify live-protected; audited app source is separate.
+            {
+              const controller=".github/workflows/release-community-full-directory-hosting-20261121.yml";
+              const verifier=".github/workflows/verify-reconciled-hosting-source-no-deploy-20261111.yml";
+              const changed=git("diff","--name-status","--no-renames",liveBase,commit)
+                .split("\n").filter(Boolean);
+              if(changed.length===2 && changed[0]==="A\t"+controller && changed[1]==="M\t"+verifier){
+                const liveHosting="8587836c945007f26ec715f87316182ff7498677";
+                const source="1dcb67846ca0e31a76454c6070550ede0879c007";
+                const qa="2d36ea7daf39f642da60c633019ef4c7455c8a27";
+                const path="components/home/CommunityOnline.tsx";
+                const hash="87c5129b8c65b8e208dacc563029bc254558857a";
+                assert.equal(liveBase,"0caea0704917119aae41e396bf3250c89072a0a5",
+                  "BLOCKED: protected controller branch revision drift");
+                assert.equal(marker.revision,liveHosting,
+                  "BLOCKED: live Hosting source differs from current reviewed version");
+                assert.equal(blob(liveBase,verifier),"94b97365699575c6eb9a2a28b9d7c2b53ba9c722",
+                  "BLOCKED: original verifier baseline changed");
+                assert.equal(blob(commit,controller),"a7ed9e93f7820785bafbaecaac2122a1e991d89a",
+                  "BLOCKED: unreviewed directory release controller");
+                const before=git("show",liveBase+":"+verifier);
+                const after=git("show",commit+":"+verifier);
+                const begin="            // BEGIN PINNED FULL OPT-IN DIRECTORY CONTROLLER GATE\n";
+                const finish="            // END PINNED FULL OPT-IN DIRECTORY CONTROLLER GATE\n";
+                const first=after.indexOf(begin),last=after.indexOf(finish,first);
+                assert(first>=0&&last>first,"BLOCKED: exact isolated gate markers missing");
+                const end=last+finish.length;
+                assert.equal(after[end],"\n","BLOCKED: isolated verifier gate newline drift");
+                assert.equal(after.slice(0,first)+after.slice(end+1),before,
+                  "BLOCKED: original verifier modified outside isolated gate");
+                git("merge-base","--is-ancestor",liveHosting,source);
+                const diff=git("diff","--name-status","--no-renames",liveHosting,source)
+                  .split("\n").filter(Boolean);
+                assert.equal(diff.length,1,"BLOCKED: unrelated or outdated frontend modules");
+                assert.equal(diff[0],"M\t"+path,"BLOCKED: only the live-derived directory UI may change");
+                assert.equal(blob(source,path),hash,"BLOCKED: source directory UI changed");
+                assert.equal(blob(qa,path),hash,"BLOCKED: tested directory UI differs");
+                // The protected controller branch must never contain changes to
+                // any app, Firebase, Auth, attendance or emergency modules.
+                for(const file of [
+                  path,"package.json","package-lock.json","app.json","firebase.json",".firebaserc",
+                  "tsconfig.json","firestore.rules","storage.rules","backend/communitySocial.js",
+                  "backend/server.js","app/(tabs)/community-member-profile.tsx",
+                  "app/(tabs)/community-chat.tsx","app/(tabs)/community-inbox.tsx",
+                  "components/home/Home.web.tsx","components/home/Home.native.tsx",
+                  "components/home/CommunityCalendar.tsx","lib/communitySocial.ts",
+                  "lib/useCommunityPresenceHeartbeat.ts","lib/firebase.ts",
+                  "scripts/guard-live-protected-release.cjs",
+                  ".github/workflows/auto-publish-protected-live-hosting.yml",
+                  ".github/workflows/release-live-protected-hosting.yml"
+                ]){
+                  const oldTree=git("ls-tree","--name-only",liveBase,"--",file);
+                  const newTree=git("ls-tree","--name-only",commit,"--",file);
+                  assert.equal(newTree,oldTree,"BLOCKED: protected controller module drift "+file);
+                  if(oldTree)assert.equal(blob(commit,file),blob(liveBase,file),
+                    "BLOCKED: modified existing protected module "+file);
+                }
+                console.log("PASS exact one-file frontend Directory patch; protected app, emergency, event, certificate and donation code unmodified");
+                console.log("NO DEPLOY during PR: verified Hosting controller separately handles production backup, publish and rollback");
+                return;
+              }
+            }
+            // END PINNED FULL OPT-IN DIRECTORY CONTROLLER GATE
+
             assert.equal(marker.revision,liveBase,
               "BLOCKED: protected base and production differ; reconcile FIRST");
             const text=git("diff","--name-status","--no-renames",liveBase,commit);
