@@ -97,6 +97,8 @@ test("private last seen defaults OFF, online members show proper role and no UID
  assert.equal(result.payload.onlineCounts.residents,1);
  assert.equal(result.payload.onlineCounts.volunteers,1);
  assert.equal(result.payload.registeredCount,2);
+ assert.equal(result.payload.selfKey,publicKey("resident"));
+ assert.equal(result.payload.members.find(m=>m.key===result.payload.selfKey).isSelf,true);
  assert(result.payload.members.every(x=>x.lastSeenAt===null&&x.online));
  assert(!JSON.stringify(result.payload).includes('"uid":'));
  assert.equal((await call("GET",directory,"admin")).status,403);
@@ -290,4 +292,35 @@ test("expired, rejected and Admin sessions are excluded from active totals",asyn
  const result=await call("GET",directory,"resident");
  assert.equal(result.payload.activeCounts.total,0);
  assert(!JSON.stringify(result.payload).includes("Rejected Member"));
+});
+
+test("self key, private-presence chat and member inbox work with separate mutual chat opt-in",async()=>{
+ const rp=collections.communityPresence.resident;
+ const vp=collections.communityPresence.volunteer;
+ const backup={
+   resident:{visible:rp.visible,directoryListed:rp.directoryListed,acceptChats:rp.acceptChats},
+   volunteer:{visible:vp.visible,directoryListed:vp.directoryListed,acceptChats:vp.acceptChats},
+ };
+ try{
+   rp.visible=false;rp.directoryListed=false;rp.acceptChats=true;
+   vp.visible=false;vp.directoryListed=false;vp.acceptChats=true;
+   const directoryResult=await call("GET",directory,"resident");
+   assert.equal(directoryResult.payload.selfKey,publicKey("resident"));
+   assert(directoryResult.payload.members.some(x=>x.name==="Volunteer Sample"));
+   const chat=await call("GET",thread,"volunteer",{},publicKey("resident"));
+   assert.equal(chat.status,200);
+   assert.equal(chat.payload.canSend,true,"online visibility must not gate mutual chat opt-in");
+   assert.equal(chat.payload.member.name,"Resident Sample");
+   const sent=await call("POST",thread,"volunteer",{text:"Hello from volunteer while both statuses private"},publicKey("resident"));
+   assert.equal(sent.status,200);
+   const inboxResult=await call("GET",inbox,"resident");
+   assert.equal(inboxResult.status,200);
+   assert(inboxResult.payload.conversations.some(x=>x.peer.name==="Volunteer Sample"));
+   vp.acceptChats=false;
+   const disabled=await call("GET",thread,"volunteer",{},publicKey("resident"));
+   assert.equal(disabled.payload.canSend,false);
+ }finally{
+   Object.assign(rp,backup.resident);
+   Object.assign(vp,backup.volunteer);
+ }
 });
