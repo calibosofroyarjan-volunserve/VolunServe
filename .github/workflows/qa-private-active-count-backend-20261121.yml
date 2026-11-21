@@ -1,0 +1,33 @@
+name: QA Private Active Sign-In Counts (NO DEPLOY)
+on:
+  push:
+    branches: [qa/private-active-count-backend-20261121]
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - name: Limited source changes and backend syntax
+        run: |
+          git diff --name-status 6501a55a963d2a600339b7f24b3b9b313e90e7ef f4931d1ee24016f2a8f6c4eead6750374ec55f75
+          node --check backend/communityPresence.js
+          node --check backend/communitySocial.js
+          node --check backend/test-communityPresence.js
+          node --check backend/test-communitySocial.js
+      - name: Consent-safe aggregate online activity, privacy and private chat regressions
+        run: |
+          node --test backend/test-communityPresence.js backend/test-communitySocial.js
+      - name: Existing production backend checks
+        run: |
+          npm ci --prefix backend --no-audit --no-fund
+          npm --prefix backend run check
