@@ -116,9 +116,6 @@ function isNoMediaLGUReview(item: IdentityReview): boolean {
 function reviewMethodAllowed(item: IdentityReview, method: string): boolean {
   if (!isNoMediaLGUReview(item)) return adminReviewMethodEligible(item.documentScreening, method);
   if (item.manualIdType === "national_id") return method === "psa_national_id_qr_check";
-  if (false && ["drivers_license","passport"].includes(String(item.manualIdType || ""))) {
-    return method === "in_person_lgu_validation" || method === "official_document_check";
-  }
   return false;
 }
 
