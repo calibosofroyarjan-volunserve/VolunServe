@@ -37,7 +37,7 @@ jobs:
           a(home.includes('CommunityCalendar'));
           a(member.includes('Share Last Seen')&&member.includes('Allow Private Messages'));
           a(member.includes('View All Members')&&member.includes('community-chat'));
-          a(profile.includes('Send a Message')&&profile.includes('read-only'));
+          a(profile.includes('Send a Message')&&profile.includes('Read-only'));
           a(chat.includes('Block Member')&&chat.includes('Report Conversation'));
           a(inbox.includes('Your Conversations'));
           a(api.includes('Asia/Manila')&&api.includes('getIdToken()'));
