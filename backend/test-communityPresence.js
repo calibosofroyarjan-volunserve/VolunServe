@@ -53,6 +53,10 @@ const vis="/api/community/presence/visibility",hb="/api/community/presence/heart
   list="/api/community/presence",member="/api/community/members/:memberKey";
 test("opt-in defaults OFF and never exposes an unconsented account",async()=>{
   assert.equal((await call("POST",hb,"alice")).json.visible,false);
+  assert(records.alice.activeAt instanceof Date);
+  assert.equal(records.alice.activeMode,"resident");
+  assert.equal(records.alice.visible,undefined);
+  assert.equal(records.alice.displayName,undefined);
   assert.deepEqual((await call("GET",list,"alice")).json.members,[]);
 });
 test("Basic Resident and approved Volunteer are listed in their canonical mode",async()=>{
