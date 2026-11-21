@@ -1,8 +1,8 @@
-name: Three-ID Lock — Staging Expo Web (NO DEPLOY)
+name: National ID Only — Staging Expo Web (NO DEPLOY)
 on:
   push:
     branches:
-      - release/staging-web-three-id-lock-20261121
+      - release/staging-web-national-id-only-20261121
     paths:
       - 'lib/identityAdminReviewGate.ts'
       - 'lib/identityVerification.ts'
@@ -15,7 +15,7 @@ on:
 permissions:
   contents: read
 jobs:
-  expo-three-id-screen:
+  expo-national-id-screen:
     runs-on: ubuntu-latest
     timeout-minutes: 25
     env:
@@ -49,14 +49,15 @@ jobs:
           cache: npm
       - name: Install locked application dependencies
         run: npm ci --no-audit --no-fund
-      - name: Check front-end UI selection and client-side API allowlist
+      - name: Check sole National ID choice and client-side API allowlist
         run: |
           node <<'NODE'
           const fs=require('node:fs'),assert=require('node:assert/strict');
           const ui=['app/identity-verification.tsx','app/identity-verification.web.tsx','app/identity-manual-review.tsx'];
           for(const path of ui){
             const s=fs.readFileSync(path,'utf8');
-            assert(s.includes('"national_id"')&&s.includes('"drivers_license"')&&s.includes('"passport"'),path);
+            assert(s.includes('"national_id"'), path);
+            assert(!/value\s*:\s*["'](?:drivers_license|passport|umid|prc_id)["']/.test(s), path);
             assert(!/value\s*:\s*["'](?:umid|prc_id)["']/.test(s),path);
           }
           const client=fs.readFileSync('lib/identityVerification.ts','utf8');
@@ -66,7 +67,7 @@ jobs:
           assert(!/["'](?:umid|prc_id)["']/.test(gate), 'Admin UI must never allow removed ID types');
           const admin=fs.readFileSync('app/(admin)/identity-reviews.tsx','utf8');
           assert(!admin.includes('"passport","umid"'));
-          console.log('PASS: three ID choices only; client no-photo and Admin cannot use removed types');
+          console.log('PASS: National ID is the sole new-user selection; all other document types remain blocked');
           NODE
           node scripts/check-expo-resident-staging-release.cjs
       - name: Full TypeScript check
@@ -76,4 +77,4 @@ jobs:
       - name: Confirm build without deployment
         run: |
           test -f dist/index.html
-          echo 'Only Philippine National ID, Driver License and Passport in staged identity UI. No real ID, no Firebase write, no Render deploy; production unaffected.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Only Philippine National ID selectable in the staged thesis identity UI. No real ID, no Firebase write, no Render deploy; production unaffected.' >> "$GITHUB_STEP_SUMMARY"
