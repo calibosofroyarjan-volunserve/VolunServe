@@ -7,6 +7,9 @@ on:
       - 'app/(tabs)/community-member-profile.tsx'
       - 'components/home/CommunityOnline.tsx'
       - 'lib/communitySocial.ts'
+      - 'app/signup.web.tsx'
+      - 'app/signup.tsx'
+      - 'components/auth/EmailFirstSignup.tsx'
       - '.github/workflows/qa-approved-community-frontend-20261121.yml'
   workflow_dispatch:
 permissions:
@@ -41,10 +44,18 @@ jobs:
             'app/(tabs)/community-member-profile.tsx',
             'components/home/CommunityOnline.tsx',
             'lib/communitySocial.ts',
+            'app/signup.web.tsx',
+            'app/signup.tsx',
+            'components/auth/EmailFirstSignup.tsx',
             '.github/workflows/qa-approved-community-frontend-20261121.yml'
           }
           assert changed and changed.issubset(allowed),repr(changed)
           print('PASS: scoped to community members UI and isolated QA only')
           PY
+      - name: Regression-test signup and community directory static contracts
+        run: |
+          node scripts/test-signup-prod.cjs
+      - name: Typecheck frontend without deployment
+        run: npx tsc --noEmit --pretty false
       - name: Compile production web bundle without hosting release
         run: npx expo export --platform web --output-dir /tmp/volunserve-approved-directory-qa
