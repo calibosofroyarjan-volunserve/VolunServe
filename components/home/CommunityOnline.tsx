@@ -24,12 +24,11 @@ export default function CommunityOnline({uid,dashboard=false}:{uid?:string|null;
   const router=useRouter();
   const {width}=useWindowDimensions();
   const compact=width<760;
+  const wideDashboard=dashboard&&width>=1280;
   const [members,setMembers]=useState<Member[]>([]);
   const [activeCounts,setActiveCounts]=useState({residents:0,volunteers:0,total:0});
   const [filter,setFilter]=useState<Filter>("all");
-  const [expanded,setExpanded]=useState(false);
-  const [settingsOpen,setSettingsOpen]=useState(false);
-  const [pageSize,setPageSize]=useState(24);
+  const [currentPage,setCurrentPage]=useState(1);
   const [search,setSearch]=useState("");
   const [directoryListed,setDirectoryListed]=useState(false);
   const [visible,setVisible]=useState(false);
@@ -99,13 +98,21 @@ export default function CommunityOnline({uid,dashboard=false}:{uid?:string|null;
     return byRole&&(!term||member.name.toLowerCase().includes(term)||
       member.badge.toLowerCase().includes(term));
   }),[members,filter,search]);
-  const displayed=filtered.slice(0,expanded?pageSize:dashboard?(compact?4:5):(compact?6:9));
+  const rowsPerPage=dashboard?5:10;
+  const totalPages=Math.max(1,Math.ceil(filtered.length/rowsPerPage));
+  const safePage=Math.min(currentPage,totalPages);
+  const pageStart=(safePage-1)*rowsPerPage;
+  const displayed=filtered.slice(pageStart,pageStart+rowsPerPage);
+  const pageOptions=Array.from({length:Math.min(totalPages,5)},(_,i)=>{
+    const first=Math.max(1,Math.min(totalPages-4,safePage-2));
+    return first+i;
+  });
   const residents=members.filter(m=>m.mode==="resident").length;
   const volunteers=members.filter(m=>m.mode==="volunteer").length;
   const onlineCount=members.filter(m=>m.online).length;
   const canStartChat=(member:Member)=>acceptChats&&(visible||directoryListed)&&member.acceptChats;
   const tabs:[Filter,string][]=[["all","All Members"],["resident","Residents"],["volunteer","Volunteers"],["online","Online"],["offline","Offline"]];
-  return <View style={styles.panel}>
+  return <View style={[styles.panel,wideDashboard&&styles.dashboardWidePanel]}>
     <View style={[styles.headingRow,compact&&styles.mobileHeading]}>
       <View style={styles.headingCopy}>
         <View style={styles.iconBox}><Ionicons name="people-outline" size={21} color={GREEN}/></View>
@@ -120,17 +127,18 @@ export default function CommunityOnline({uid,dashboard=false}:{uid?:string|null;
           <Ionicons name="chatbubble-ellipses-outline" size={16} color={GREEN}/>
           <Text style={styles.viewAllText}>Inbox</Text>
         </Pressable>
-        <Pressable accessibilityRole="button" onPress={()=>{setExpanded(v=>!v);setPageSize(24);}} style={styles.viewAll}>
-          <Text style={styles.viewAllText}>{expanded?"Show Fewer":"View All Members"}</Text>
-          <Ionicons name={expanded?"chevron-up":"arrow-forward"} size={15} color={GREEN}/>
+        <Pressable accessibilityRole="button"
+          onPress={()=>dashboard?router.push("/(tabs)/community-members" as Href):router.push("/(tabs)" as Href)}
+          style={styles.viewAll}>
+          <Text style={styles.viewAllText}>{dashboard?"View All":"Back to Home"}</Text>
+          <Ionicons name={dashboard?"arrow-forward":"arrow-back"} size={15} color={GREEN}/>
         </Pressable>
       </View>
     </View>
     {dashboard&&<View style={styles.dashboardTotalRow}>
-      <View style={styles.dashboardTotal}><Ionicons name="people-outline" size={13} color={GREEN}/>
-        <Text style={styles.dashboardTotalText}>{activeCounts.total} Active Members</Text>
-      </View>
-      <Text style={styles.dashboardSmallCaption}>{members.length} shared profiles</Text>
+      <Text style={styles.dashboardSmallCaption}>
+        {activeCounts.total} active signed-in · {members.length} public profiles
+      </Text>
     </View>}
     {!dashboard&&<View style={styles.countRow}>
       <View style={styles.countChip}><Ionicons name="people-outline" size={13} color={GREEN}/>
@@ -144,17 +152,17 @@ export default function CommunityOnline({uid,dashboard=false}:{uid?:string|null;
     </View>}
     <View style={styles.searchRow}>
       <Ionicons name="search-outline" size={17} color="#68867B"/>
-      <TextInput value={search} onChangeText={value=>{setSearch(value);setPageSize(24);}}
+      <TextInput value={search} onChangeText={value=>{setSearch(value);setCurrentPage(1);}}
         placeholder="Search members by name or role" placeholderTextColor="#899E95"
         accessibilityLabel="Search community members" autoCapitalize="none"
         style={styles.searchInput}/>
       {Boolean(search)&&<Pressable accessibilityRole="button" accessibilityLabel="Clear member search"
-        onPress={()=>setSearch("")}><Ionicons name="close-circle" size={18} color="#81978C"/></Pressable>}
+        onPress={()=>{setSearch("");setCurrentPage(1);}}><Ionicons name="close-circle" size={18} color="#81978C"/></Pressable>}
     </View>
     <View style={[styles.filterRow,dashboard&&styles.dashboardFilters]}>
       {tabs.map(([key,text])=><Pressable accessibilityRole="button"
         accessibilityState={{selected:filter===key}} key={key}
-        onPress={()=>{setFilter(key);setPageSize(24);}}
+        onPress={()=>{setFilter(key);setCurrentPage(1);}}
         style={[styles.filter,filter===key&&styles.filterActive]}>
         <Text style={[styles.filterText,filter===key&&styles.filterTextActive]}>
           {dashboard&&key==="all"?"All Members ("+members.length+")":
@@ -191,9 +199,16 @@ export default function CommunityOnline({uid,dashboard=false}:{uid?:string|null;
             </>}
           </Pressable>
           {dashboard&&!compact&&<View style={styles.dashboardPresence}>
-            {member.online&&<View style={styles.presenceDot}/>}
-            <Text style={[styles.dashboardPresenceText,!member.online&&styles.memberOffline]}
-              numberOfLines={2}>{memberLastSeen(member)}</Text>
+            <View style={styles.statusLine}>
+              <View style={[styles.presenceDot,!member.online&&styles.offlinePresenceDot]}/>
+              <Text style={[styles.dashboardPresenceText,!member.online&&styles.memberOffline]}>
+                {member.online?"Online now":"Offline"}
+              </Text>
+            </View>
+            <Text style={styles.lastSeenText} numberOfLines={2}>
+              {member.lastSeenAt?memberLastSeen({...member,online:false}):
+                member.online?"Active now":"Last seen private"}
+            </Text>
           </View>}
           {dashboard&&!compact&&<Pressable accessibilityRole="button"
             onPress={()=>member.isSelf?router.push("/profile"):
@@ -212,7 +227,7 @@ export default function CommunityOnline({uid,dashboard=false}:{uid?:string|null;
                 color={!canStartChat(member)?"#879D94":dashboard?"#FFFFFF":GREEN}/>
               <Text style={[styles.chatText,dashboard&&styles.dashboardChatText,
                 !canStartChat(member)&&styles.chatTextDisabled]}>
-                {member.acceptChats?"Message":"Chat Off"}
+                {canStartChat(member)?"Message":"Chat Off"}
               </Text>
             </Pressable>}
         </View>)}
@@ -234,22 +249,28 @@ export default function CommunityOnline({uid,dashboard=false}:{uid?:string|null;
           <Text style={styles.optInActionText}>Show My Public Profile</Text>
         </Pressable>}
       </View>}
-    {expanded&&displayed.length<filtered.length&&<Pressable accessibilityRole="button"
-      onPress={()=>setPageSize(n=>n+24)} style={styles.showMore}>
-      <Text style={styles.showMoreText}>Show More Members ({filtered.length-displayed.length} remaining)</Text>
-      <Ionicons name="chevron-down" size={16} color={GREEN}/>
-    </Pressable>}
-    {dashboard&&<Pressable accessibilityRole="button" accessibilityLabel="Manage my member profile visibility and messaging settings"
-      accessibilityState={{expanded:settingsOpen}} onPress={()=>setSettingsOpen(o=>!o)}
-      style={styles.settingsDisclosure}>
-      <Ionicons name="shield-checkmark-outline" size={17} color={GREEN}/>
-      <View style={{flex:1,minWidth:0}}>
-        <Text style={styles.settingsDisclosureTitle}>My profile & privacy settings</Text>
-        <Text style={styles.settingsDisclosureHelp}>Only members who choose public visibility are listed.</Text>
-      </View>
-      <Ionicons name={settingsOpen?"chevron-up":"chevron-down"} size={17} color={GREEN}/>
-    </Pressable>}
-    {(!dashboard||settingsOpen)&&<>
+    {totalPages>1&&<View style={[styles.pagination,dashboard&&styles.dashboardPagination]}>
+      <Pressable accessibilityRole="button" accessibilityLabel="Previous members page"
+        disabled={safePage===1} onPress={()=>setCurrentPage(Math.max(1,safePage-1))}
+        style={[styles.pageButton,safePage===1&&styles.pageDisabled]}>
+        <Ionicons name="chevron-back" size={16} color={GREEN}/>
+      </Pressable>
+      {pageOptions.map(value=><Pressable key={value} accessibilityRole="button"
+        accessibilityLabel={`Members page ${value}`}
+        accessibilityState={{selected:value===safePage}}
+        onPress={()=>setCurrentPage(value)}
+        style={[styles.pageButton,value===safePage&&styles.pageButtonActive]}>
+        <Text style={[styles.pageText,value===safePage&&styles.pageTextActive]}>{value}</Text>
+      </Pressable>)}
+      {totalPages>5&&pageOptions[pageOptions.length-1]<totalPages&&<Text style={styles.pageEllipsis}>…</Text>}
+      <Pressable accessibilityRole="button" accessibilityLabel="Next members page"
+        disabled={safePage===totalPages}
+        onPress={()=>setCurrentPage(Math.min(totalPages,safePage+1))}
+        style={[styles.pageButton,safePage===totalPages&&styles.pageDisabled]}>
+        <Ionicons name="chevron-forward" size={16} color={GREEN}/>
+      </Pressable>
+    </View>}
+    {!dashboard&&<>
     <View style={[styles.consent,compact&&styles.consentMobile]}>
       <View style={{flex:1,minWidth:0}}>
         <Text style={styles.consentTitle}>Show my profile while online</Text>
@@ -311,7 +332,8 @@ export default function CommunityOnline({uid,dashboard=false}:{uid?:string|null;
 }
 const styles=StyleSheet.create({
   panel:{backgroundColor:"#FFFFFF",borderWidth:1,borderColor:"#DFEBE7",
-    borderRadius:18,padding:18,gap:13,minWidth:0,width:"100%"},
+    borderRadius:18,padding:18,gap:14,minWidth:0,width:"100%",flexGrow:1},
+  dashboardWidePanel:{minHeight:665},
   headingRow:{flexDirection:"row",alignItems:"center",justifyContent:"space-between",gap:12},
   mobileHeading:{flexWrap:"wrap"},
   headingCopy:{flexDirection:"row",alignItems:"center",gap:12,flex:1,minWidth:0},
@@ -328,6 +350,15 @@ const styles=StyleSheet.create({
   showMore:{alignSelf:"center",paddingHorizontal:16,paddingVertical:11,borderRadius:9,
     backgroundColor:"#ECF7F1",flexDirection:"row",alignItems:"center",gap:7},
   showMoreText:{fontSize:11.5,fontWeight:"800",color:GREEN},
+  pagination:{flexDirection:"row",justifyContent:"center",alignItems:"center",flexWrap:"wrap",gap:6,paddingTop:6},
+  dashboardPagination:{marginTop:"auto",paddingTop:18},
+  pageButton:{minHeight:32,minWidth:32,paddingHorizontal:7,alignItems:"center",justifyContent:"center",
+    backgroundColor:"#F7FAF8",borderWidth:1,borderColor:"#E0EAE5",borderRadius:9},
+  pageButtonActive:{backgroundColor:GREEN,borderColor:GREEN},
+  pageDisabled:{opacity:0.4},
+  pageText:{fontSize:12,fontWeight:"800",color:"#31564B"},
+  pageTextActive:{color:"#FFFFFF"},
+  pageEllipsis:{color:"#69877A",fontSize:14,paddingHorizontal:3},
   optInAction:{flexDirection:"row",alignItems:"center",gap:7,backgroundColor:GREEN,
     borderRadius:9,paddingVertical:11,paddingHorizontal:15,marginTop:7},
   optInActionText:{fontSize:11.5,fontWeight:"800",color:"#FFFFFF"},
@@ -358,22 +389,24 @@ const styles=StyleSheet.create({
   dashboardGridMobile:{flexDirection:"row",gap:8},
   dashboardMemberRow:{width:"100%",flexBasis:"auto",flexGrow:0,minWidth:0,maxWidth:"100%",
     backgroundColor:"#FFFFFF",borderWidth:0,borderBottomWidth:1,borderRadius:0,
-    borderBottomColor:"#E8F0EA",paddingHorizontal:4,paddingVertical:10,
-    flexDirection:"row",justifyContent:"space-between",gap:8},
+    borderBottomColor:"#E8F0EA",paddingHorizontal:4,paddingVertical:11,
+    flexDirection:"row",alignItems:"center",justifyContent:"space-between",gap:7},
   dashboardMemberMobile:{flexBasis:"23%",minWidth:72,maxWidth:"25%",flexGrow:1,
     flexDirection:"column",alignItems:"center",gap:6,
     borderBottomWidth:0,backgroundColor:"#F8FBF9",borderWidth:1,borderColor:"#E3EEE8",
     borderRadius:11,paddingHorizontal:5,paddingVertical:12},
-  dashboardIdentity:{width:"auto",flex:1.4,minWidth:110,flexDirection:"row",alignItems:"center",
+  dashboardIdentity:{width:"auto",flex:1.45,minWidth:120,flexDirection:"row",alignItems:"center",
     justifyContent:"flex-start",gap:10},
   dashboardIdentityMobile:{flexDirection:"column",alignItems:"center",justifyContent:"center",
     flexGrow:0,flexShrink:0,minWidth:0,width:"100%",gap:6},
   dashboardNameGroup:{flex:1,minWidth:0,alignItems:"flex-start",gap:4},
   dashboardNameMobile:{flexGrow:0,alignItems:"center",width:"100%"},
-  dashboardName:{fontSize:12.5,fontWeight:"800",color:"#153E32",textAlign:"center"},
-  dashboardBadge:{fontSize:10.5,color:"#408A70",fontWeight:"700",textAlign:"center"},
-  dashboardPresence:{flex:0.95,minWidth:92,alignItems:"center",justifyContent:"center",
-    flexDirection:"row",gap:5},
+  dashboardName:{fontSize:12.5,fontWeight:"800",color:"#153E32",textAlign:"left"},
+  dashboardBadge:{fontSize:10.5,color:"#408A70",fontWeight:"700",textAlign:"left"},
+  dashboardPresence:{flex:1,minWidth:135,alignItems:"flex-start",justifyContent:"center",gap:4},
+  statusLine:{flexDirection:"row",gap:6,alignItems:"center"},
+  offlinePresenceDot:{backgroundColor:"#A8B3AF"},
+  lastSeenText:{fontSize:10,color:"#708A80",lineHeight:14},
   presenceDot:{height:7,width:7,borderRadius:4,backgroundColor:"#0BA66E"},
   dashboardPresenceText:{fontSize:10.5,color:"#0D865C",fontWeight:"700",flexShrink:1},
   dashboardProfileButton:{flexDirection:"row",alignItems:"center",justifyContent:"center",gap:5,
