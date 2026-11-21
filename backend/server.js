@@ -5116,6 +5116,7 @@ app.get(
     request,
     response,
   ) => {
+    response.set?.("Cache-Control", "private, no-store, max-age=0");
     try {
       const uid =
         request
@@ -5579,6 +5580,7 @@ app.get(
   requireFirebaseUser,
   requireOperationalAdmin,
   async (request, response) => {
+    response.set?.("Cache-Control", "private, no-store, max-age=0");
     try {
       const verificationSnapshot = await db
         .collection("identityVerifications")
