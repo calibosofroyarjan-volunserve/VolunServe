@@ -1,0 +1,58 @@
+name: QA Self Online Card and Private Directory Consent (NO DEPLOY)
+on:
+  push:
+    branches: [qa/self-online-card-fix-20261121]
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    env:
+      CI: 'true'
+      EXPO_NO_TELEMETRY: '1'
+      EXPO_PUBLIC_VOLUNSERVE_ENV: production
+      EXPO_PUBLIC_IDENTITY_VERIFICATION_API_URL: https://volunserve.onrender.com
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: One-file self presence fix, prior opt-in never overridden
+        run: |
+          git diff --name-status a0e1fdeea3705bf4c8da5ef2d6caa3f9391ae1fe c35522bf163911227e350a7a4d11af7029d45b88
+          node - <<'NODE'
+          const a=require('node:assert/strict'),fs=require('node:fs'),cp=require('node:child_process');
+          const change=cp.execFileSync('git',['diff','--name-status',
+            'a0e1fdeea3705bf4c8da5ef2d6caa3f9391ae1fe',
+            'c35522bf163911227e350a7a4d11af7029d45b88'],{encoding:'utf8'}).trim();
+          a.equal(change,'M\tcomponents/home/CommunityOnline.tsx');
+          const s=fs.readFileSync('components/home/CommunityOnline.tsx','utf8');
+          a(s.includes('member.isSelf?{...member,online:true}:member'));
+          a(s.includes('communitySocialRequest') && s.includes('"/api/community/directory"'));
+          a(s.includes('members.filter(m=>m.online).length'));
+          a(s.includes('showLastSeen')&&s.includes('directoryListed'));
+          a(s.includes('!dashboard&&<>'));
+          a(s.includes('const rowsPerPage=dashboard?5:10'));
+          a(s.includes('community-members'));
+          a(!s.includes('collection(db,'));
+          for(const p of ['components/home/CommunityCalendar.tsx','components/home/Home.web.tsx','components/home/Home.native.tsx','app/(tabs)/community-members.tsx']) a(fs.existsSync(p));
+          NODE
+      - name: Install frozen web dependencies
+        run: npm ci --no-audit --no-fund
+      - name: TypeScript, login, profiles and maps regressions
+        run: |
+          npx tsc --noEmit --incremental false
+          node --test scripts/test-admin-volunteer-authorization.cjs
+          node --test scripts/test-embedded-emergency-map-navigation.cjs
+          node scripts/test-login-ui-release.cjs
+          node scripts/test-profile-certificates-account-menu.cjs
+      - name: Web production export, no deploy
+        run: |
+          npx expo export --platform web --clear
+          test -f dist/index.html
+          test -f dist/community-members.html || test -f dist/community-members/index.html
+          test -f dist/community-member-profile.html || test -f dist/community-member-profile/index.html
