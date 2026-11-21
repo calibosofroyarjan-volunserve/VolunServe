@@ -125,7 +125,7 @@ export default function CommunityOnline({uid,dashboard=false}:{uid?:string|null;
         <View style={styles.iconBox}><Ionicons name="people-outline" size={21} color={GREEN}/></View>
         <View style={{flex:1,minWidth:0}}>
           <Text style={styles.title}>Community Members</Text>
-          <Text style={styles.subtitle}>Approved Residents and Volunteers who share their basic profiles. Offline members stay listed; online status is optional.</Text>
+          <Text style={styles.subtitle}>All approved Residents and Volunteers appear automatically. Only signed-in members can view basic names and roles; online status stays private unless shared.</Text>
         </View>
       </View>
       <View style={styles.headingActions}>
@@ -144,7 +144,7 @@ export default function CommunityOnline({uid,dashboard=false}:{uid?:string|null;
     </View>
     {dashboard&&<View style={styles.dashboardTotalRow}>
       <Text style={styles.dashboardSmallCaption}>
-        {registeredCount} registered · {members.length} directory profiles · {activeCounts.total} recently active
+        {registeredCount} registered members · {activeCounts.total} recently active
       </Text>
     </View>}
     {!dashboard&&<View style={styles.countRow}>
@@ -156,22 +156,6 @@ export default function CommunityOnline({uid,dashboard=false}:{uid?:string|null;
         <Text style={styles.countText}>{residents} Listed Residents</Text></View>
       <View style={styles.countChip}><View style={styles.chipDot}/>
         <Text style={styles.countText}>{volunteers} Listed Volunteers</Text></View>
-    </View>}
-    {!settingLoading&&!directoryListed&&<View style={styles.directoryInvite}>
-      <View style={{flex:1,minWidth:0}}>
-        <Text style={styles.consentTitle}>Join the Community Members directory</Text>
-        <Text style={styles.consentDescription}>
-          Share only your name, approved role, and profile photo with signed-in members.
-          Your email, phone, address and identification documents remain private.
-          Online status and messaging have separate settings.
-        </Text>
-      </View>
-      <Pressable accessibilityRole="button" accessibilityLabel="Share my basic profile with community members"
-        disabled={Boolean(savingPreference)}
-        onPress={()=>void updatePreference("directoryListed")}
-        style={[styles.optInAction,Boolean(savingPreference)&&{opacity:0.5}]}>
-        <Text style={styles.optInActionText}>Join Directory</Text>
-      </Pressable>
     </View>}
     <View style={styles.searchRow}>
       <Ionicons name="search-outline" size={17} color="#68867B"/>
@@ -205,16 +189,16 @@ export default function CommunityOnline({uid,dashboard=false}:{uid?:string|null;
           style={[styles.memberCard,compact&&styles.memberMobile,dashboard&&styles.dashboardMemberRow,
             dashboard&&compact&&styles.dashboardMemberMobile]}>
           <Pressable accessibilityRole="button"
-            accessibilityLabel={`View profile of ${member.name}, ${member.badge}`}
+            accessibilityLabel={`View profile of ${member.name}${member.isSelf?", you":""}, ${member.badge}`}
             onPress={()=>member.isSelf?router.push("/profile"):
               router.push({pathname:"/(tabs)/community-member-profile",params:{member:member.key}} as Href)}
             style={[styles.memberMain,dashboard&&styles.dashboardIdentity,dashboard&&compact&&styles.dashboardIdentityMobile]}>
             <Avatar person={member} size={dashboard?43:compact?47:53}/>
             {dashboard?<View style={[styles.dashboardNameGroup,dashboard&&compact&&styles.dashboardNameMobile]}>
-              <Text style={styles.dashboardName} numberOfLines={1}>{member.name}</Text>
+              <Text style={styles.dashboardName} numberOfLines={1}>{member.name}{member.isSelf?<Text style={styles.youLabel}> (You)</Text>:null}</Text>
               <Text style={styles.dashboardBadge} numberOfLines={1}>{member.badge}</Text>
             </View>:<>
-              <Text style={styles.memberName} numberOfLines={2}>{member.name}</Text>
+              <Text style={styles.memberName} numberOfLines={2}>{member.name}{member.isSelf?<Text style={styles.youLabel}> (You)</Text>:null}</Text>
               <Text style={styles.memberBadge} numberOfLines={1}>{member.badge}</Text>
               <Text style={[styles.memberOnline,!member.online&&styles.memberOffline]} numberOfLines={2}>
                 {memberLastSeen(member)}
@@ -258,8 +242,8 @@ export default function CommunityOnline({uid,dashboard=false}:{uid?:string|null;
         <Ionicons name="people-outline" size={26} color="#9BAFA7"/>
         <Text style={styles.emptyText}>
           {members.length===0&&filter==="all"&&!search
-            ?"No members have joined the directory yet."
-            :"No directory profiles match this filter or search."}
+            ?"No approved Residents or Volunteers have registered yet."
+            :"No registered members match this filter or search."}
         </Text>
       </View>}
     {totalPages>1&&<View style={[styles.pagination,dashboard&&styles.dashboardPagination]}>
@@ -401,6 +385,7 @@ const styles=StyleSheet.create({
   dashboardNameGroup:{flex:1,minWidth:0,alignItems:"flex-start",gap:4},
   dashboardNameMobile:{flexGrow:0,alignItems:"center",width:"100%"},
   dashboardName:{fontSize:12.5,fontWeight:"800",color:"#153E32",textAlign:"left"},
+  youLabel:{fontSize:11,fontWeight:"800",color:"#087D62"},
   dashboardBadge:{fontSize:10.5,color:"#408A70",fontWeight:"700",textAlign:"left"},
   dashboardPresence:{flex:1,minWidth:135,alignItems:"flex-start",justifyContent:"center",gap:4},
   statusLine:{flexDirection:"row",gap:6,alignItems:"center"},
