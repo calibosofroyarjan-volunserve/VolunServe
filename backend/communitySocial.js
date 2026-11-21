@@ -35,7 +35,7 @@ const display=(uid,p,now=Date.now())=>{
   key:publicKey(uid),name,avatarUrl:safePhoto(p.avatarUrl),mode,
   verified:p.verified===true,
   badge:mode==="volunteer"?"Volunteer":p.verified===true?"Verified Resident":"Basic Resident",
-  online, lastSeenAt:showOffline&&last>0?new Date(last).toISOString():null,
+  online, presencePrivate:p.visible!==true, lastSeenAt:showOffline&&last>0?new Date(last).toISOString():null,
   directoryListed:p.directoryListed===true,acceptChats:p.acceptChats===true,
  };
 };
@@ -142,6 +142,14 @@ function installCommunitySocial({app,db,requireFirebaseUser,loadUserProfile,isAp
    try{
      if(!await authViewer(req,res))return;
      const rows=await scan(),now=Date.now();
+     // Aggregate count of approved registered accounts. The names of members
+     // who have NOT agreed to directory sharing are never returned.
+     const registered=await db.collection("users").where("status","==","approved").get();
+     const registeredCount=registered.docs.filter(doc=>{
+       const p=doc.data()||{};
+       return permitted(p,isApprovedAccount)&&p.deleted!==true&&
+         p.isDeleted!==true&&p.accountStatus!=="deleted";
+     }).length;
      // Counts include all recently active approved accounts, even if they
      // have NOT opted into profile discovery. Only totals are returned, never
      // their names, IDs, photos or timestamps.
@@ -165,7 +173,7 @@ function installCommunitySocial({app,db,requireFirebaseUser,loadUserProfile,isAp
      res.json({ok:true,members:entries,
        onlineCounts:{residents:entries.filter(x=>x.online&&x.mode==="resident").length,
          volunteers:entries.filter(x=>x.online&&x.mode==="volunteer").length},
-       listedCount:entries.length,activeCounts});
+       listedCount:entries.length,registeredCount,activeCounts});
    }catch(e){errorResponse(res,e,"Community directory");}
  });
  app.get("/api/community/directory/self",requireFirebaseUser,async(req,res)=>{

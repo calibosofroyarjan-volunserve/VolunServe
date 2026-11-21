@@ -9,7 +9,7 @@ const users={
     volunteerStatus:"approved",activeMode:"volunteer",fullName:"Volunteer Sample"},
   admin:{role:"admin",status:"approved",residentAccess:false},
 };
-const collections={communityPresence:{
+const collections={users,communityPresence:{
  resident:{visible:true,displayName:"Resident Sample",mode:"resident",verified:false,
    updatedAt:new Date(),showLastSeen:false,acceptChats:true},
  volunteer:{visible:true,displayName:"Volunteer Sample",mode:"volunteer",verified:true,
@@ -96,6 +96,7 @@ test("private last seen defaults OFF, online members show proper role and no UID
  assert.equal(result.status,200);
  assert.equal(result.payload.onlineCounts.residents,1);
  assert.equal(result.payload.onlineCounts.volunteers,1);
+ assert.equal(result.payload.registeredCount,2);
  assert(result.payload.members.every(x=>x.lastSeenAt===null&&x.online));
  assert(!JSON.stringify(result.payload).includes('"uid":'));
  assert.equal((await call("GET",directory,"admin")).status,403);
@@ -227,7 +228,24 @@ test("active sign-in counts include unlisted approved users but never disclose t
  assert(!result.payload.members.some(x=>x.name==="DO NOT SHOW ME"));
  assert(!JSON.stringify(result.payload).includes("Private User"));
  assert(!JSON.stringify(result.payload).includes("privateMember"));
+ assert.equal(result.payload.registeredCount,4);
  assert.equal((await call("GET",member,"resident",{},publicKey("privateMember"))).status,404);
+});
+test("registered count includes offline non-consenting members without disclosing identities",async()=>{
+ users.hidden={role:"resident",status:"approved",residentAccess:true,
+   activeMode:"resident",fullName:"Private Resident",email:"never-expose@example.com"};
+ users.deleted={role:"resident",status:"approved",residentAccess:true,
+   fullName:"Removed Account",deleted:true};
+ collections.communityPresence.hidden={visible:false,directoryListed:false,
+   displayName:"Private Resident",mode:"resident",updatedAt:new Date(0)};
+ const result=await call("GET",directory,"resident");
+ assert.equal(result.status,200);
+ assert.equal(result.payload.registeredCount,5);
+ for(const data of ["Private Resident","Removed Account","never-expose@example.com","hidden"]){
+   assert(!JSON.stringify(result.payload.members).includes(data));
+ }
+ assert.equal((await call("GET",member,"resident",{},publicKey("hidden"))).status,404);
+ delete users.hidden;delete users.deleted;delete collections.communityPresence.hidden;
 });
 test("expired, rejected and Admin sessions are excluded from active totals",async()=>{
  users.rejected={role:"resident",status:"suspended",residentAccess:true,
