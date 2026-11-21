@@ -33,7 +33,7 @@ export default function CommunityOnline({uid,dashboard=false}:{uid?:string|null;
   const [directoryListed,setDirectoryListed]=useState(false);
   const [visible,setVisible]=useState(false);
   const [showLastSeen,setShowLastSeen]=useState(false);
-  const [acceptChats,setAcceptChats]=useState(false);
+  const [acceptChats,setAcceptChats]=useState(true);
   const [settingLoading,setSettingLoading]=useState(true);
   const [switching,setSwitching]=useState(false);
   const [savingPreference,setSavingPreference]=useState<""|"showLastSeen"|"acceptChats"|"directoryListed">("");
@@ -119,17 +119,11 @@ export default function CommunityOnline({uid,dashboard=false}:{uid?:string|null;
         <View style={styles.iconBox}><Ionicons name="people-outline" size={21} color={GREEN}/></View>
         <View style={{flex:1,minWidth:0}}>
           <Text style={styles.title}>Community Members</Text>
-          <Text style={styles.subtitle}>All approved Residents and Volunteers appear automatically. Only signed-in members can view basic names and roles; online status stays private unless shared.</Text>
+          <Text style={styles.subtitle}>All approved Residents and Volunteers appear automatically and can receive private messages by default. Only signed-in approved members can view names and roles; online status remains private unless shared.</Text>
         </View>
       </View>
       <View style={styles.headingActions}>
-        {dashboard&&!settingLoading&&!acceptChats&&
-        <Pressable accessibilityRole="button" accessibilityLabel="Enable my private messages"
-          disabled={Boolean(savingPreference)} onPress={()=>void updatePreference("acceptChats")}
-          style={[styles.viewAll,styles.enableChatsButton]}>
-          <Ionicons name="chatbubble-outline" size={15} color={GREEN}/>
-          <Text style={styles.viewAllText}>Enable My Chats</Text>
-        </Pressable>}
+
         <Pressable accessibilityRole="button" accessibilityLabel="Open private message inbox"
           onPress={()=>router.push("/(tabs)/community-inbox" as Href)} style={styles.viewAll}>
           <Ionicons name="chatbubble-ellipses-outline" size={16} color={GREEN}/>
@@ -241,7 +235,7 @@ export default function CommunityOnline({uid,dashboard=false}:{uid?:string|null;
                 color={!canStartChat(member)?"#879D94":dashboard?"#FFFFFF":GREEN}/>
               <Text style={[styles.chatText,dashboard&&styles.dashboardChatText,
                 !canStartChat(member)&&styles.chatTextDisabled]}>
-                {canStartChat(member)?"Message":"Chat Off"}
+                {canStartChat(member)?"Message":!acceptChats?"Paused":"Unavailable"}
               </Text>
             </Pressable>}
         </View>)}
@@ -280,19 +274,19 @@ export default function CommunityOnline({uid,dashboard=false}:{uid?:string|null;
       </View>
       <View style={styles.privacyOption}>
         <View style={styles.privacyOptionCopy}>
-          <Text style={styles.consentTitle}>Allow Private Messages</Text>
-          <Text style={styles.consentDescription}>Optional. Both accounts must enable messaging. Online visibility is not required.</Text>
+          <Text style={styles.consentTitle}>Pause Private Messages</Text>
+          <Text style={styles.consentDescription}>Chat is automatically available for approved members, even offline. Pause if you do not want new messages; you can also block or report another member.</Text>
         </View>
-        <Pressable accessibilityRole="switch" accessibilityLabel="Allow Private Messages"
-          accessibilityState={{checked:acceptChats,disabled:settingLoading||Boolean(savingPreference)}}
+        <Pressable accessibilityRole="switch" accessibilityLabel="Pause Private Messages"
+          accessibilityState={{checked:!acceptChats,disabled:settingLoading||Boolean(savingPreference)}}
           disabled={settingLoading||Boolean(savingPreference)} onPress={()=>void updatePreference("acceptChats")}
-          style={[styles.toggle,acceptChats&&styles.toggleOn]}>
-          <View style={[styles.toggleThumb,acceptChats&&styles.toggleThumbOn]}/>
+          style={[styles.toggle,!acceptChats&&styles.toggleOn]}>
+          <View style={[styles.toggleThumb,!acceptChats&&styles.toggleThumbOn]}/>
         </Pressable>
       </View>
     </View>
     {!acceptChats&&<Text style={styles.chatHint}>
-      To test chat, enable messages on both accounts. Messages can be sent while the recipient is offline; online sharing is not required.
+      You have paused private messages. Switch Pause Private Messages off to receive new messages again.
     </Text>}
     </>}
   </View>;
@@ -332,7 +326,6 @@ const styles=StyleSheet.create({
   optInAction:{flexDirection:"row",alignItems:"center",gap:7,backgroundColor:GREEN,
     borderRadius:9,paddingVertical:11,paddingHorizontal:15,marginTop:7},
   optInActionText:{fontSize:11.5,fontWeight:"800",color:"#FFFFFF"},
-  enableChatsButton:{backgroundColor:"#EFF8F4",borderRadius:8,paddingHorizontal:6},
   directoryInvite:{flexDirection:"row",flexWrap:"wrap",alignItems:"center",gap:12,padding:12,
     backgroundColor:"#F6FAF8",borderRadius:11,borderWidth:1,borderColor:"#DDEAE2"},
   directoryChoice:{padding:13,backgroundColor:"#F6FAF8",borderRadius:11,
