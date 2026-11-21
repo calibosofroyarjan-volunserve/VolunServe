@@ -523,7 +523,13 @@ jobs:
                   assert(sourceDiff.includes("M\t"+name),"BLOCKED: unexpected app change "+name);
                   assert.equal(blob(source,name),sha,"BLOCKED: UI source changed "+name);
                   assert.equal(blob(qa,name),sha,"BLOCKED: tested QA differs from source "+name);
-                  assert.equal(blob(commit,name),blob(liveBase,name),
+                  const protectedBefore=git("ls-tree","--name-only",liveBase,"--",name);
+                  const protectedAfter=git("ls-tree","--name-only",commit,"--",name);
+                  assert.equal(protectedAfter,protectedBefore,
+                    "BLOCKED: protected application file added/removed "+name);
+                  // Older protected workflow branch may not contain the newer
+                  // production-hosted public profile route at all.
+                  if(protectedBefore)assert.equal(blob(commit,name),blob(liveBase,name),
                     "BLOCKED: protected application source unexpectedly changed "+name);
                 }
                 for(const other of [
