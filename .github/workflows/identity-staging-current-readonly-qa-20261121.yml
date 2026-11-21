@@ -28,6 +28,34 @@ jobs:
         run: |
           node --check /tmp/verify-staging.cjs
           node /tmp/verify-staging.cjs
+      - name: Check actually deployed experimental SFace and MiniFASNet model readiness (GET only)
+        run: |
+          node <<'NODE'
+          (async()=>{
+            const response=await fetch('https://volunserve-identity-ai-staging.onrender.com/health',{
+              method:'GET',redirect:'manual',headers:{Accept:'application/json'},signal:AbortSignal.timeout(120000)
+            });
+            if(response.status!==200)throw Error('STAGING_AI_NOT_HEALTHY');
+            const h=await response.json();
+            const expectations={
+              'AI verification engine':h.verificationEngineReady===true,
+              'OCR engine':h.documentOcrReady===true,
+              'Profile matching service':h.profileComparisonReady===true,
+              'SFace model':h.sFaceShadow?.modelLoaded===true,
+              'MiniFASNet primary':h.passivePadShadow?.modelLoaded===true,
+              'MiniFASNet secondary':h.secondaryPadShadow?.modelLoaded===true,
+              'No validated PAD claim':h.livenessImplemented===false&&h.passivePadShadow?.independentPadValidated===false&&h.secondaryPadShadow?.independentPadValidated===false,
+              'No biometric auto-grant':h.sFaceShadow?.independentFaceMatchValidated===false&&h.sFaceShadow?.identityDecisionUse==='none',
+              'No ID issuer authenticity claim':h.idDocumentAuthenticityVerified===false
+            };
+            let bad=false;
+            for(const [name,pass] of Object.entries(expectations)){
+              console.log((pass?'PASS':'FAIL')+': '+name);
+              if(!pass)bad=true;
+            }
+            if(bad)process.exitCode=1;
+          })().catch(()=>{console.error('STAGING_MODEL_READINESS_CHECK_BLOCKED');process.exitCode=1});
+          NODE
       - name: Record limitations
         run: |
           echo '## Hybrid AI staging status' >> "$GITHUB_STEP_SUMMARY"
