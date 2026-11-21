@@ -1,13 +1,10 @@
 import Ionicons from "@expo/vector-icons/Ionicons";
-import { useLocalSearchParams, useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter, type Href } from "expo-router";
 import React, { useEffect, useState } from "react";
 import { ActivityIndicator, Image, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from "react-native";
-import { auth } from "../../lib/firebase";
+import { communitySocialRequest, memberLastSeen, type CommunityMember } from "../../lib/communitySocial";
 
-type Member = {
-  key:string; name:string; avatarUrl?:string; mode:"resident"|"volunteer";
-  verified:boolean; badge:string; online:boolean;
-};
+type Member = CommunityMember;
 export default function CommunityMemberProfile() {
   const router=useRouter();
   const {width}=useWindowDimensions();
@@ -26,15 +23,8 @@ export default function CommunityMemberProfile() {
     }
     const fetchProfile=async()=>{
       try {
-        const user=auth.currentUser;
-        if(!user)throw new Error("Sign in to view public member profiles.");
-        const token=await user.getIdToken();
-        const response=await fetch(
-          `https://volunserve.onrender.com/api/community/members/${encodeURIComponent(member)}`,
-          {headers:{Authorization:`Bearer ${token}`}},
-        );
-        const result=await response.json();
-        if(!response.ok||!result.ok)throw new Error(result.message||"Profile unavailable.");
+        const result=await communitySocialRequest<{member:Member}>(
+          "/api/community/directory/"+encodeURIComponent(member));
         if(alive)setData(result.member);
       }catch(reason){if(alive)setError(reason instanceof Error?reason.message:"Profile unavailable.");}
       finally{if(alive)setLoading(false);}
@@ -51,7 +41,7 @@ export default function CommunityMemberProfile() {
       </Pressable>
       <View style={styles.header}>
         <Text style={styles.title}>Community Member Profile</Text>
-        <Text style={styles.subtitle}>Verified presence and voluntary public details</Text>
+        <Text style={styles.subtitle}>Read-only information shared by the member</Text>
       </View>
       {loading?<View style={styles.feedback}><ActivityIndicator color="#087F68"/>
         <Text style={styles.message}>Loading public profile...</Text></View>:
@@ -74,8 +64,8 @@ export default function CommunityMemberProfile() {
                   <Ionicons name={data.mode==="volunteer"?"heart-outline":"people-outline"} size={14} color="#087F68"/>
                   <Text style={styles.roleText}>{data.badge}</Text>
                 </View>
-                <View style={styles.onlineBadge}><View style={styles.onlineDot}/>
-                  <Text style={styles.onlineText}>Online</Text>
+                <View style={styles.onlineBadge}><View style={[styles.onlineDot,!data.online&&styles.offlineDot]}/>
+                  <Text style={[styles.onlineText,!data.online&&styles.offlineText]}>{memberLastSeen(data)}</Text>
                 </View>
               </View>
             </View>
@@ -87,11 +77,27 @@ export default function CommunityMemberProfile() {
           <View style={styles.row}><Text style={styles.label}>Name</Text><Text style={styles.value}>{data.name}</Text></View>
           <View style={styles.row}><Text style={styles.label}>Current Mode</Text><Text style={styles.value}>{data.mode==="volunteer"?"Volunteer":"Resident"}</Text></View>
           <View style={styles.row}><Text style={styles.label}>Account Badge</Text><Text style={styles.value}>{data.badge}</Text></View>
-          <View style={styles.row}><Text style={styles.label}>Presence</Text><Text style={styles.value}>Online · Opted in</Text></View>
+          <View style={styles.row}><Text style={styles.label}>Presence</Text>
+            <Text style={styles.value}>{memberLastSeen(data)}</Text></View>
+          <View style={styles.profileActions}>
+            <Pressable accessibilityRole="button" disabled={!data.acceptChats}
+              onPress={()=>router.push({pathname:"/(tabs)/community-chat",params:{member:data.key}} as Href)}
+              style={[styles.chatButton,!data.acceptChats&&styles.disabledChat]}>
+              <Ionicons name="chatbubble-ellipses-outline" size={18} color={data.acceptChats?"#FFFFFF":"#6D8478"}/>
+              <Text style={[styles.chatText,!data.acceptChats&&styles.disabledChatText]}>
+                {data.acceptChats?"Send a Message":"Private Messages Disabled"}
+              </Text>
+            </Pressable>
+            <Pressable accessibilityRole="button" onPress={()=>router.push("/(tabs)/community-inbox" as Href)}
+              style={styles.inboxButton}>
+              <Ionicons name="mail-outline" size={18} color="#087F68"/>
+              <Text style={styles.inboxText}>My Inbox</Text>
+            </Pressable>
+          </View>
         </View>
         <View style={styles.privacy}>
           <Ionicons name="shield-checkmark-outline" size={19} color="#567E71"/>
-          <Text style={styles.privacyText}>This user chose to appear online. Private email, phone number, home address, identity documents, location, and attendance records are not shared. Their profile disappears from this directory when they opt out or disconnect.</Text>
+          <Text style={styles.privacyText}>This member opted in to a public community profile. Offline Last Seen appears only with separate consent. Private contact details, identity documents, GPS and attendance records are never shown here. Messaging also requires opt-in from both members.</Text>
         </View>
         </>:null}
     </View>
@@ -124,6 +130,17 @@ const styles=StyleSheet.create({
     borderRadius:8,flexDirection:"row",alignItems:"center",gap:7},
   onlineDot:{width:8,height:8,borderRadius:4,backgroundColor:"#0EBA78"},
   onlineText:{fontSize:11,fontWeight:"800",color:"#087B55"},
+  offlineDot:{backgroundColor:"#91A69B"},
+  offlineText:{color:"#718C80"},
+  profileActions:{flexDirection:"row",alignItems:"center",flexWrap:"wrap",gap:10,paddingTop:12},
+  chatButton:{flexDirection:"row",alignItems:"center",gap:8,paddingHorizontal:14,paddingVertical:12,
+    backgroundColor:"#087F68",borderRadius:9},
+  chatText:{color:"white",fontSize:12,fontWeight:"800"},
+  disabledChat:{backgroundColor:"#EAF0EB"},
+  disabledChatText:{color:"#6D8478"},
+  inboxButton:{flexDirection:"row",alignItems:"center",gap:8,paddingHorizontal:14,paddingVertical:12,
+    borderWidth:1,borderColor:"#BBDCC9",borderRadius:9},
+  inboxText:{fontSize:12,fontWeight:"800",color:"#087F68"},
   infoCard:{padding:20,backgroundColor:"white",borderWidth:1,borderColor:"#DDE8E1",borderRadius:14,gap:12},
   infoHeading:{flexDirection:"row",gap:8,alignItems:"center",paddingBottom:5},
   infoTitle:{fontSize:16,fontWeight:"800",color:"#1A4437"},
