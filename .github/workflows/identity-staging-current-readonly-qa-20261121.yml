@@ -1,0 +1,35 @@
+name: Hybrid AI Staging Current Runtime Recheck (NO DEPLOY)
+on:
+  push:
+    branches:
+      - qa/staging-hybrid-current-smoke-20261121
+    paths:
+      - .github/workflows/identity-staging-current-readonly-qa-20261121.yml
+permissions:
+  contents: read
+jobs:
+  staging-readonly:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - name: Fetch only immutable runner script, no submodule checkout
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          [[ "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]] || exit 2
+          curl -fLsS --retry 3 -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" "https://api.github.com/repos/${GITHUB_REPOSITORY}/contents/scripts/verify-hybrid-staging-runtime-no-deploy.cjs?ref=$SOURCE_SHA" -o /tmp/staging-script.json
+          python3 -c "import json,base64; p=json.load(open('/tmp/staging-script.json')); open('/tmp/verify-staging.cjs','wb').write(base64.b64decode(p['content']))"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Re-check isolated staging backend/AI/web and anonymous auth (GET only)
+        run: |
+          node --check /tmp/verify-staging.cjs
+          node /tmp/verify-staging.cjs
+      - name: Record limitations
+        run: |
+          echo '## Hybrid AI staging status' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Read-only public health and anonymous authorization boundary checks only. No real ID/selfie, signed-in staging user, Admin decision or deployment tested.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'NO PRODUCTION TOUCH, NO IDENTITY MEDIA, NO DEPLOY.'
