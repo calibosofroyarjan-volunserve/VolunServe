@@ -3122,6 +3122,7 @@ export default function CommunityEventsScreen() {
               </View>
               <ScrollView style={{maxHeight:520}}>
                 <CommunityEventRoster eventId={participantsModalEvent.id} viewer={user}
+                  onOpenProfile={() => setParticipantsModalEventId(null)}
                   participantsCount={Number(participantsModalEvent.participantsCount || 0)}/>
               </ScrollView>
             </View>
