@@ -49,6 +49,7 @@ const db={
    async add(value){const id="report-"+Object.keys(store).length;store[id]=value;return {id};},
    where(field,op,value){
      const matching=()=>Object.entries(store).filter(([id,p])=>op==="=="?p[field]===value:
+       op===">="?p[field] instanceof Date&&p[field]>=value:
        op==="array-contains"&&Array.isArray(p[field])&&p[field].includes(value));
      const get=async(n=Infinity)=>({docs:matching().slice(0,n).map(([id,p])=>snapshot(id,p))});
      return {get:()=>get(),limit(n){return {get:()=>get(n)};}};
@@ -211,4 +212,30 @@ test("directory opt-out hides member immediately, without changing online/chat c
  assert.equal(collections.communityPresence.newbie.visible,false);
  assert.equal(collections.communityPresence.newbie.acceptChats,false);
  assert(!((await call("GET",directory,"resident")).payload.members.some(x=>x.name==="Basic User")));
+});
+
+test("active sign-in counts include unlisted approved users but never disclose their identities",async()=>{
+ users.privateMember={role:"resident",status:"approved",residentAccess:true,
+   activeMode:"resident",fullName:"Private User"};
+ collections.communityPresence.privateMember={visible:false,directoryListed:false,
+   activeMode:"resident",activeAt:new Date(),acceptChats:false,mode:"resident",
+   displayName:"DO NOT SHOW ME",updatedAt:new Date(0)};
+ const result=await call("GET",directory,"resident");
+ assert.equal(result.status,200);
+ assert.equal(result.payload.activeCounts.residents,1);
+ assert.equal(result.payload.activeCounts.total,1);
+ assert(!result.payload.members.some(x=>x.name==="DO NOT SHOW ME"));
+ assert(!JSON.stringify(result.payload).includes("Private User"));
+ assert(!JSON.stringify(result.payload).includes("privateMember"));
+ assert.equal((await call("GET",member,"resident",{},publicKey("privateMember"))).status,404);
+});
+test("expired, rejected and Admin sessions are excluded from active totals",async()=>{
+ users.rejected={role:"resident",status:"suspended",residentAccess:true,
+   activeMode:"resident",fullName:"Rejected Member"};
+ collections.communityPresence.rejected={activeAt:new Date(),activeMode:"resident"};
+ collections.communityPresence.admin.activeAt=new Date();
+ collections.communityPresence.privateMember.activeAt=new Date(Date.now()-6*60*1000);
+ const result=await call("GET",directory,"resident");
+ assert.equal(result.payload.activeCounts.total,0);
+ assert(!JSON.stringify(result.payload).includes("Rejected Member"));
 });
