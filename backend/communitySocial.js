@@ -1,6 +1,6 @@
 "use strict";
 /**
- * Opt-in Last Seen and private 1:1 text chat. Runs solely behind Firebase ID
+ * Approved account directory, opt-in Last Seen and private 1:1 chat. Runs solely behind Firebase ID
  * verification and existing Admin SDK: NO public Firestore rule changes.
  * Presence is shared only if the user is already visible; offline status
  * requires a separate explicit consent. Chat is an independent opt-in.
@@ -53,35 +53,36 @@ function installCommunitySocial({app,db,requireFirebaseUser,loadUserProfile,isAp
   return p;
  };
  const scan=async()=>{
-  // Read ONLY existing opt-in presence/directory documents; never enumerate
-  // users, Firebase Auth accounts or application records to populate the list.
-  // Both single-field Firestore queries use default automatic indexes.
-  const [shown,listed]=await Promise.all([
-    db.collection("communityPresence").where("visible","==",true).get(),
-    db.collection("communityPresence").where("directoryListed","==",true).get(),
-  ]);
-  const merged=new Map();
-  for(const doc of [...shown.docs,...listed.docs])
-    merged.set(doc.id,{uid:doc.id,p:doc.data()||{}});
-  const now=Date.now(),candidates=[...merged.values()].filter(({p})=>{
-    const elapsed=now-numberTime(p.updatedAt);
-    const legacyPresent=p.visible===true && elapsed>=0 &&
-      (elapsed<FRESH_MS||(p.showLastSeen===true&&elapsed<LAST_SEEN_MAX_MS));
-    return ["resident","volunteer"].includes(p.mode) &&
-      (p.directoryListed===true||legacyPresent);
+  // Read canonical approved Resident/Volunteer accounts, not only presence opt-ins.
+  // Directory discovery is available ONLY to authenticated approved members.
+  // No email, phone, address, birth date, ID, evidence or GPS is returned.
+  const profiles=await db.collection("users").where("status","==","approved").get();
+  const eligible=profiles.docs.filter(doc=>{
+    const p=doc.data()||{};
+    return permitted(p,isApprovedAccount) &&
+      p.deleted!==true&&p.isDeleted!==true&&
+      p.accountStatus!=="deleted"&&p.accountStatus!=="suspended";
   });
-  // Recheck current approval/role on every read. Former, suspended or
-  // rejected members are never leaked merely because a stale consent doc remains.
-  const checked=await Promise.all(candidates.map(async row=>{
-    const canonical=await loadUserProfile(row.uid);
-    if(!permitted(canonical,isApprovedAccount))return null;
-    return {...row,p:{
-      ...row.p,
-      mode:canonicalMode(canonical),
-      verified:canonical.identityVerified===true||canonical.identityStatus==="verified",
+  return Promise.all(eligible.map(async doc=>{
+    const account=doc.data()||{};
+    const snap=await db.collection("communityPresence").doc(doc.id).get();
+    const presence=snap.exists?snap.data()||{}:{};
+    const allowPhoto=presence.directoryListed===true||presence.visible===true;
+    return {uid:doc.id,p:{
+      ...presence,
+      mode:canonicalMode(account),
+      verified:account.identityVerified===true||account.identityStatus==="verified",
+      displayName:clean(account.fullName||
+        [account.firstName,account.lastName].filter(Boolean).join(" ")||
+        "Community member",100),
+      avatarUrl:allowPhoto?safePhoto(account.profilePictureUrl):"",
+      // Online and last-seen remain based only on consented presence records.
+      visible:presence.visible===true,
+      showLastSeen:presence.visible===true&&presence.showLastSeen===true,
+      directoryListed:presence.directoryListed===true,
+      acceptChats:presence.acceptChats===true,
     }};
   }));
-  return checked.filter(Boolean);
  };
  const peerForKey=async(uid,key,includePast=true)=>{
    if(!keyMatches(key))return null;
@@ -142,14 +143,9 @@ function installCommunitySocial({app,db,requireFirebaseUser,loadUserProfile,isAp
    try{
      if(!await authViewer(req,res))return;
      const rows=await scan(),now=Date.now();
-     // Aggregate count of approved registered accounts. The names of members
-     // who have NOT agreed to directory sharing are never returned.
-     const registered=await db.collection("users").where("status","==","approved").get();
-     const registeredCount=registered.docs.filter(doc=>{
-       const p=doc.data()||{};
-       return permitted(p,isApprovedAccount)&&p.deleted!==true&&
-         p.isDeleted!==true&&p.accountStatus!=="deleted";
-     }).length;
+     // Directory rows are canonical approved registered accounts; counting
+     // them avoids a second Firestore scan and keeps the tabs consistent.
+     const registeredCount=rows.length;
      // Counts include all recently active approved accounts, even if they
      // have NOT opted into profile discovery. Only totals are returned, never
      // their names, IDs, photos or timestamps.
@@ -219,7 +215,7 @@ function installCommunitySocial({app,db,requireFirebaseUser,loadUserProfile,isAp
      const peer=await peerForKey(req.firebaseUser.uid,req.params.memberKey,false);
      if(!peer)return notFound(res);
      res.set("Cache-Control","private, no-store");
-     res.json({ok:true,member:publicPeer(peer),self:false});
+     res.json({ok:true,member:display(peer.uid,peer.p),self:peer.uid===req.firebaseUser.uid});
    }catch(e){errorResponse(res,e,"Public member profile");}
  });
  app.get("/api/community/chats",requireFirebaseUser,async(req,res)=>{
