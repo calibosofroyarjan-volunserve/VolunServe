@@ -8,6 +8,33 @@ templates, change Firebase, or connect to production. It can tell you whether
 the model produced an *uncalibrated similarity observation*, **not** whether
 the pictured person is definitively the same.
 
+## Fastest test on Windows — no typed file paths
+
+From the **staging/test working copy**, double-click
+`Start-VolunServe-SFace-Two-Photo-Test.cmd`. The local file picker asks for:
+1. Your **existing**, consented ID portrait or clear photo.
+2. A **different**, consented selfie in the **same private folder**.
+
+You can use the earlier private QA folder under your Windows profile; there is
+no requirement to create `C:\\PrivateFaceQA`. The two-photo diagnostic
+does not open the webcam, download models, upload anything, write a record,
+or mark a Resident Verified. Python 3.11, NumPy, Pillow, OpenCV and the
+checksum-pinned **local** YuNet/SFace weights must already be available.
+
+The console now reports precise **safe codes** without filenames:
+- `LOCAL_SFACE_BLOCKED: private_image_directory_unavailable`: typed CLI root does not exist.
+- `LOCAL_SFACE_BLOCKED: private_photo_missing_or_invalid`: missing or inaccessible selected local image.
+- `LOCAL_SFACE_BLOCKED: photos_must_share_private_folder`: put both selected photos together in one private folder.
+- `LOCAL_SFACE_BLOCKED: photo_selection_cancelled`: finish both picker dialogs.
+- `LOCAL_SFACE_BLOCKED: informed_consent_required`: confirm permission locally.
+- `LOCAL_SFACE_BLOCKED: prerequisite_or_runtime_unavailable`: inspect local Python dependencies and the pinned model installation without uploading photographs.
+- `modelStatus=unavailable; stage=models_not_installed`: at least one model cannot load. No score was generated.
+
+**Model loading =/= accuracy validation**. Only an observed numeric score from
+two actual consented photos demonstrates that the local comparison completed;
+it does not prove identity, anti-spoofing, or a safe threshold. Printed
+photos and replay screens still require separate consented PAD evaluation.
+
 ## Prepare once
 
 1. You need Python 3.11 with `numpy==1.26.4`,
