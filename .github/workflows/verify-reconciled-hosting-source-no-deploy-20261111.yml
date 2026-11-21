@@ -748,8 +748,13 @@ jobs:
                   "scripts/guard-live-protected-release.cjs",
                   ".github/workflows/auto-publish-protected-live-hosting.yml",
                   ".github/workflows/release-live-protected-hosting.yml"
-                ])assert.equal(blob(commit,other),blob(liveBase,other),
-                  "BLOCKED: existing live module/config/security change "+other);
+                ]) {
+                  const oldPath=git("ls-tree","--name-only",liveBase,"--",other);
+                  const newPath=git("ls-tree","--name-only",commit,"--",other);
+                  assert.equal(newPath,oldPath,"BLOCKED: protected module tree drift "+other);
+                  if(oldPath)assert.equal(blob(commit,other),blob(liveBase,other),
+                    "BLOCKED: existing live module/config/security change "+other);
+                }
                 console.log("PASS exactly five online-member/chat UI files, prior announcements, calendar and Emergency Contacts unchanged");
                 console.log("No deploy from PR. Protected controller will check backend and use Hosting-only backup + rollback.");
                 return;
