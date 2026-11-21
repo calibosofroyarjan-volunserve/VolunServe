@@ -2,10 +2,11 @@ import Ionicons from "@expo/vector-icons/Ionicons";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useEffect, useState } from "react";
 import {
-  ActivityIndicator, Image, Pressable, ScrollView, StyleSheet, Text,
+  ActivityIndicator, Image, Modal, Pressable, ScrollView, StyleSheet, Text,
   useWindowDimensions, View,
 } from "react-native";
 import { onAuthChange } from "../../lib/firebaseAuth";
+import { CertificatePaper } from "./certificate";
 
 type Tab = "info" | "activity" | "progress" | "certificates";
 type PublicProfile = {
@@ -18,8 +19,10 @@ type EventProgress = {
   completed: boolean; certificateIssued: boolean; status: string;
 };
 type Certificate = {
-  title: string; eventTitle: string; issuedAt: string | null;
-  serviceMinutes: number; type: string; status: "Issued";
+  title: string; certificateId: string; eventTitle: string; eventDate: string;
+  eventLocation: string; eventBarangay: string; issuedByName: string;
+  issuedAt: string | null; serviceMinutes: number; verifiedHelps: number;
+  peopleHelped: number; type: string; status: "Issued";
 };
 type Portfolio = {
   ok: boolean; message?: string; profile: PublicProfile;
@@ -77,6 +80,7 @@ export default function CommunityEventPublicProfile() {
   const member=typeof rawMember==="string" ? rawMember : "";
   const valid=/^[A-Za-z0-9_-]{1,160}$/.test(eventId)&&/^[a-f0-9]{16}$/.test(member);
   const [tab,setTab]=useState<Tab>("info");
+  const [selectedCertificate,setSelectedCertificate]=useState<Certificate|null>(null);
   const [profile,setProfile]=useState<Portfolio|null>(null);
   const [loading,setLoading]=useState(true);
   const [error,setError]=useState("");
@@ -85,7 +89,7 @@ export default function CommunityEventPublicProfile() {
 
   useEffect(()=>{
     let active=true;
-    setLoading(true);setError("");setProfile(null);setTab("info");
+    setLoading(true);setError("");setProfile(null);setTab("info");setSelectedCertificate(null);
     if(!valid){setLoading(false);setError("Invalid volunteer profile link.");return ()=>{active=false;};}
     const unsubscribe=onAuthChange(async user=>{
       if(!user){
@@ -226,17 +230,26 @@ export default function CommunityEventPublicProfile() {
           </View>
         </>}
         {tab==="certificates"&&<View style={styles.panel}>
-          <PanelTitle icon="ribbon-outline">Certificates</PanelTitle>
+          <PanelTitle icon="ribbon-outline">Actual Issued Certificates</PanelTitle>
+          <Text style={styles.panelDescription}>Certificates shown here are issued records retrieved for this volunteer. Select View Certificate to open the official read-only VolunServe certificate design.</Text>
           {profile.certificates.length===0 ? <Text style={styles.empty}>No issued certificates to display.</Text> :
-            profile.certificates.map((certificate,i)=><View key={i} style={styles.certificate}>
+            profile.certificates.map((certificate,i)=><View key={certificate.certificateId || i} style={styles.certificate}>
               <View style={styles.certificateIcon}><Ionicons name="ribbon-outline" size={24} color="#4F46E5"/></View>
               <View style={styles.certificateBody}>
                 <Text style={styles.recordTitle}>{certificate.title}</Text>
                 {certificate.eventTitle ? <Text style={styles.recordDate}>{certificate.eventTitle}</Text> : null}
+                <Text style={styles.certificateRecordId} selectable>Certificate ID: {certificate.certificateId}</Text>
                 <View style={styles.certificateMeta}>
                   <View><Text style={styles.fieldLabel}>ISSUED</Text><Text style={styles.fieldValue}>{dateLabel(certificate.issuedAt)}</Text></View>
                   <View><Text style={styles.fieldLabel}>SERVICE TIME</Text><Text style={styles.fieldValue}>{timeLabel(certificate.serviceMinutes)}</Text></View>
+                  <View><Text style={styles.fieldLabel}>STATUS</Text><Text style={styles.fieldValue}>Issued</Text></View>
                 </View>
+                <Pressable accessibilityRole="button" accessibilityLabel={`View actual certificate ${certificate.title}`}
+                  onPress={()=>setSelectedCertificate(certificate)} style={styles.viewCertificateButton}>
+                  <Ionicons name="eye-outline" color="#006D56" size={17}/>
+                  <Text style={styles.viewCertificateText}>View Certificate</Text>
+                  <Ionicons name="arrow-forward-outline" color="#006D56" size={16}/>
+                </Pressable>
               </View>
               <Text style={styles.verified}>Issued</Text>
             </View>)}
@@ -247,6 +260,43 @@ export default function CommunityEventPublicProfile() {
         </View>
       </> : null}
     </View>
+    <Modal visible={!!selectedCertificate} transparent animationType="fade"
+      onRequestClose={()=>setSelectedCertificate(null)}>
+      <View style={styles.paperOverlay}>
+        <View style={styles.paperDialog}>
+          <View style={styles.paperHeader}>
+            <View style={{flex:1}}>
+              <Text style={styles.paperHeaderTitle}>Issued VolunServe Certificate</Text>
+              <Text style={styles.paperHeaderSub}>Read-only · Original certificate information</Text>
+            </View>
+            <Pressable accessibilityRole="button" accessibilityLabel="Close certificate preview"
+              onPress={()=>setSelectedCertificate(null)} style={styles.closePaper}>
+              <Ionicons name="close" color="#395E5A" size={21}/>
+            </Pressable>
+          </View>
+          <ScrollView contentContainerStyle={styles.paperScroll} showsVerticalScrollIndicator>
+            {selectedCertificate && <CertificatePaper displayName={name}
+              certificate={{
+                id:selectedCertificate.certificateId,
+                certificateId:selectedCertificate.certificateId,
+                certificateType:selectedCertificate.type,
+                verificationStatus:"issued",
+                volunteerName:name,
+                eventTitle:selectedCertificate.eventTitle,
+                eventDate:selectedCertificate.eventDate,
+                eventLocation:selectedCertificate.eventLocation,
+                eventBarangay:selectedCertificate.eventBarangay,
+                verifiedServiceMinutes:selectedCertificate.serviceMinutes,
+                verifiedHelps:selectedCertificate.verifiedHelps,
+                peopleHelped:selectedCertificate.peopleHelped,
+                issuedByName:selectedCertificate.issuedByName,
+                issuedAt:selectedCertificate.issuedAt,
+              }}/>
+            }
+          </ScrollView>
+        </View>
+      </View>
+    </Modal>
   </ScrollView>;
 }
 
@@ -307,6 +357,17 @@ const styles=StyleSheet.create({
     borderColor:"#E3EAF0",borderRadius:13,backgroundColor:"#FBFCFF"},
   certificateIcon:{width:46,height:46,borderRadius:10,backgroundColor:"#EDF0FF",justifyContent:"center",alignItems:"center"},
   certificateBody:{flex:1,minWidth:0,gap:8},certificateMeta:{flexDirection:"row",gap:30,flexWrap:"wrap",marginTop:8},
+  certificateRecordId:{color:"#6C8793",fontSize:11},
+  viewCertificateButton:{alignSelf:"flex-start",marginTop:7,paddingVertical:10,paddingHorizontal:14,
+    backgroundColor:"#ECF7F1",borderRadius:9,borderWidth:1,borderColor:"#BADDD0",flexDirection:"row",alignItems:"center",gap:9},
+  viewCertificateText:{fontSize:12,fontWeight:"800",color:"#006D56"},
+  paperOverlay:{flex:1,backgroundColor:"rgba(10,28,32,0.66)",padding:16,justifyContent:"center",alignItems:"center"},
+  paperDialog:{width:"100%",maxWidth:740,maxHeight:"94%",backgroundColor:"#FFFFFF",borderRadius:14,overflow:"hidden"},
+  paperHeader:{paddingHorizontal:20,paddingVertical:14,borderBottomWidth:1,borderBottomColor:"#E5EEE9",flexDirection:"row",alignItems:"center",gap:12},
+  paperHeaderTitle:{fontSize:16,fontWeight:"800",color:"#163E38"},
+  paperHeaderSub:{fontSize:11,color:"#607E7B",marginTop:3},
+  closePaper:{width:37,height:37,backgroundColor:"#F0F5F3",borderRadius:10,alignItems:"center",justifyContent:"center"},
+  paperScroll:{padding:18,paddingBottom:32},
   notice:{flexDirection:"row",gap:9,alignItems:"flex-start",backgroundColor:"#EFF5F3",borderRadius:10,padding:13},
   noticeText:{flex:1,color:"#69818C",fontSize:11,lineHeight:18},
   feedback:{padding:35,alignItems:"center",gap:13,backgroundColor:"#FFFFFF",borderWidth:1,borderColor:"#E0E9E7",borderRadius:14},
