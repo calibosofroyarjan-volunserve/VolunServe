@@ -120,9 +120,14 @@ const ID_TYPES: Array<{
     helper: "Valid passport bio page",
   },
   {
-    value: "other_government_id",
-    label: "Other Government ID",
-    helper: "UMID or another government-issued photo ID",
+    value: "umid",
+    label: "UMID",
+    helper: "SSS / GSIS Unified Multi-Purpose ID",
+  },
+  {
+    value: "prc_id",
+    label: "PRC Professional ID",
+    helper: "Professional Regulation Commission ID",
   },
 ];
 
