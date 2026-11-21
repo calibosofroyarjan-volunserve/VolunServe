@@ -549,6 +549,74 @@ jobs:
             }
             // END PINNED PUBLIC VOLUNTEER ACTUAL CERTIFICATES CONTROLLER GATE
 
+            // BEGIN PINNED EXACT THREE-TAB PROFILE CONTROLLER GATE
+            // Only this production-Hosting-only controller + isolated verifier gate
+            // can enter the protected branch. App files stay on audited source SHA.
+            {
+              const controller=".github/workflows/release-exact-three-tab-profile-hosting-20261121.yml";
+              const verifier=".github/workflows/verify-reconciled-hosting-source-no-deploy-20261111.yml";
+              const changed=git("diff","--name-status","--no-renames",liveBase,commit)
+                .split("\n").filter(Boolean);
+              if(changed.length===2 && changed[0]==="A\t"+controller && changed[1]==="M\t"+verifier){
+                const hostingBase="11f41bd3ee3b5434c77efb02ae4465e259c6fe2f";
+                const source="d7eff0990eb8094666ddb7dc44355de050c76f68";
+                const qa="b6919abaedbd050f2245c0e9d8c11b5dc9c56564";
+                const files=[
+                  ["app/(tabs)/certificate.tsx","M","8e5b8bdf6f2da284e4bf1ab2f41a863f8dedf102"],
+                  ["app/(tabs)/community-event-profile.tsx","M","44d476000caf68242378854216dfe2849abad428"],
+                  ["app/(tabs)/profile.tsx","M","2f98e8c8c136ae7a9387d8a0aad3d0a28ea67391"],
+                  ["components/profile/IssuedCertificateGallery.tsx","A","44d33a233ed38d9e5dbb42b8a857539017db949f"],
+                  ["scripts/test-profile-certificates-account-menu.cjs","M","a58f80ec2735db383ae5b74982d214833cb2dc38"]
+                ];
+                assert.equal(liveBase,"e42ccdd3ad3dcd38f1eefd5f62793f70beba15b2",
+                  "BLOCKED: protected controller branch moved");
+                assert.equal(marker.revision,hostingBase,
+                  "BLOCKED: Hosting revision differs from exact reviewed base");
+                assert.equal(blob(liveBase,verifier),"c9491fdeb3a17cea161bfc31349323b4489e26ca",
+                  "BLOCKED: baseline verifier changed");
+                assert.equal(blob(commit,controller),"c9a67f9d2289a830ce6768d25528ef67b57d5bff",
+                  "BLOCKED: unexpected release controller");
+                const before=git("show",liveBase+":"+verifier);
+                const after=git("show",commit+":"+verifier);
+                const begin="            // BEGIN PINNED EXACT THREE-TAB PROFILE CONTROLLER GATE\n";
+                const finish="            // END PINNED EXACT THREE-TAB PROFILE CONTROLLER GATE\n";
+                const first=after.indexOf(begin);
+                const last=after.indexOf(finish,first);
+                assert(first>=0&&last>first,"BLOCKED: isolated gate markers absent");
+                const end=last+finish.length;
+                assert.equal(after[end],"\n","BLOCKED: missing isolated gate trailing newline");
+                assert.equal(after.slice(0,first)+after.slice(end+1),before,
+                  "BLOCKED: protected verifier changed outside isolated gate");
+                git("merge-base","--is-ancestor",hostingBase,source);
+                const diff=git("diff","--name-status","--no-renames",hostingBase,source)
+                  .split("\n").filter(Boolean);
+                assert.equal(diff.length,files.length,"BLOCKED: stale/unrelated application source");
+                for(const [name,status,hash] of files){
+                  assert(diff.includes(status+"\t"+name),"BLOCKED: unexpected file scope/status: "+name);
+                  assert.equal(blob(source,name),hash,"BLOCKED source blob drift: "+name);
+                  assert.equal(blob(qa,name),hash,"BLOCKED QA-tested blob differs: "+name);
+                  const oldExists=git("ls-tree","--name-only",liveBase,"--",name);
+                  const newExists=git("ls-tree","--name-only",commit,"--",name);
+                  assert.equal(newExists,oldExists,"BLOCKED protected app file status changed: "+name);
+                  if(oldExists)assert.equal(blob(commit,name),blob(liveBase,name),
+                    "BLOCKED protected app file altered: "+name);
+                }
+                for(const other of [
+                  "package.json","package-lock.json","app.json","firebase.json",".firebaserc",
+                  "tsconfig.json","firestore.rules","storage.rules","backend/server.js",
+                  "functions/index.js","functions/package.json","lib/firebase.ts",
+                  "scripts/guard-live-protected-release.cjs",
+                  ".github/workflows/auto-publish-protected-live-hosting.yml",
+                  ".github/workflows/release-live-protected-hosting.yml"
+                ])assert.equal(blob(commit,other),blob(liveBase,other),
+                  "BLOCKED security/config/backend changed: "+other);
+                console.log("PASS exact five-file three-tab VolunServe Profile release; no destructive/legacy modules");
+                console.log("NO DEPLOY on PR; backup, Hosting-only release and rollback handled by controller");
+                return;
+              }
+            }
+            // END PINNED EXACT THREE-TAB PROFILE CONTROLLER GATE
+
             assert.equal(marker.revision,liveBase,
               "BLOCKED: protected base and production differ; reconcile FIRST");
             const text=git("diff","--name-status","--no-renames",liveBase,commit);
