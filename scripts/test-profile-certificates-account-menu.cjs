@@ -36,7 +36,9 @@ test("Profile retains secure progress and certificate data",()=>{
  assert.match(profile,/label:"My Progress"/);
  assert.match(profile,/key: "certificates"/);
  assert.match(profile,/<VolunteerImpact embedded \/>/);
- assert.match(profile,/<CertificateCard/);
+ assert.match(profile,/<IssuedCertificateGallery/);
+ assert.match(profile,/<CertificatePaper/);
+ assert.match(profile,/verificationStatus===\"issued\"/);
  assert.match(profile,/volunteerAccess &&/);
  assert.match(profile,/activeTab ===\s*"certificates"/);
 });
