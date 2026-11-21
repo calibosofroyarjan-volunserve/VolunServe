@@ -8,9 +8,9 @@ import type { DocumentScreening } from "./identityVerification";
  * Legacy snapshots missing documented quality evidence must request a
  * corrected scan rather than enabling a client-side Verify button.
  */
-const SUPPORTED_ID_TYPES = [
+const SUPPORTED_ID_TYPES: readonly string[] = [
   "national_id", "drivers_license", "passport",
-] as const;
+];
 
 export function adminReviewDocumentEligible(
   screening?: DocumentScreening | null,
