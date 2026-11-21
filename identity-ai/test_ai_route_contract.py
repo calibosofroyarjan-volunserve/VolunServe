@@ -227,12 +227,13 @@ class RealRouteHandlerContractTests(unittest.TestCase):
         self.assertEqual(result["documentScreening"]["profileBirthDateCheck"],
                          "possible_conflict")
 
-    def test_passport_bio_page_has_no_back_requirement(self):
-        result = self.call("document_precheck", self.form(
-            id_type="passport", front="REPUBLIC OF THE PHILIPPINES PASSPORT SURNAME DELA CRUZ GIVEN NAMES MARIA DATE OF BIRTH 1998-09-05",
-            back=None))
-        self.assertEqual(result["outcome"], "pass")
-        self.assertFalse(result["authenticityVerified"])
+    def test_passport_precheck_is_now_unsupported(self):
+        with self.assertRaises(RouteHTTPException) as exc:
+            self.call("document_precheck", self.form(
+                id_type="passport", front="REPUBLIC OF THE PHILIPPINES PASSPORT",
+                back=None))
+        self.assertEqual(exc.exception.status_code, 400)
+        self.assertEqual(self.hits["screen"], 0)
 
     def test_missing_name_or_birthdate_routes_to_retry_before_face_matching(self):
         for invalid_kwargs in ({"first": ""}, {"last": ""}, {"dob": ""}):
@@ -250,11 +251,13 @@ class RealRouteHandlerContractTests(unittest.TestCase):
         self.assertEqual(result["status"], "failed")
         self.assertEqual(self.hits["face"], 0)
 
-    def test_passport_heading_alone_does_not_pass_demographics_gate(self):
-        result = self.call("document_precheck", self.form(
-            id_type="passport", front="REPUBLIC OF THE PHILIPPINES PASSPORT",
-            back=None))
-        self.assertEqual(result["outcome"], "retry")
+    def test_driver_is_rejected_before_ocr(self):
+        with self.assertRaises(RouteHTTPException) as exc:
+            self.call("document_precheck", self.form(
+                id_type="drivers_license", front="LTO DRIVER S LICENSE",
+                back=None))
+        self.assertEqual(exc.exception.status_code, 400)
+        self.assertEqual(self.hits["screen"], 0)
         self.assertEqual(self.hits["face"], 0)
 
     def test_precheck_rejects_unnecessary_selfie(self):
