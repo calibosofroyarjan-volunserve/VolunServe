@@ -167,7 +167,7 @@ export default function WebHome() {
   const compact = width < 1040;
   const narrow = width < 760;
   // The fixed sidebar leaves less space than viewport width implies.
-  // Stack on tablets and phones; use the approved 64/36 dashboard split on PC.
+  // Match the approved 57/43 Members/Calendar reference, stack on narrow screens.
   const communityColumnsStacked = width < 1280;
 
   const composedName = [
@@ -1247,11 +1247,11 @@ function ContactCard({ kind }: { kind: "local" | "national" }) {
 
 const styles = StyleSheet.create({
   communityExtras:{
-    flexDirection:"row",alignItems:"flex-start",gap:16,
+    flexDirection:"row",alignItems:"stretch",gap:12,
     marginTop:18,marginBottom:18,width:"100%",
   },
   communityExtrasStacked:{flexDirection:"column"},
-  communityMembersColumn:{flex:1.78,minWidth:0},
+  communityMembersColumn:{flex:1.32,minWidth:0},
   communityCalendarColumn:{flex:1,minWidth:0},
   communityColumnStacked:{width:"100%",flexGrow:0,flexShrink:0},
   journeyBar: {
