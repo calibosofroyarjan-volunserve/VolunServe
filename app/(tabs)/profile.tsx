@@ -2819,14 +2819,7 @@ const styles =
       backgroundColor: "#F6F8F7",
     },
 
-    page: {
-      width: "100%",
-      maxWidth: 1180,
-      alignSelf: "center",
-      paddingHorizontal: 24,
-      paddingTop: 28,
-      paddingBottom: 70,
-    },
+    page: { width: "100%", maxWidth: 1180, alignSelf: "center", paddingHorizontal: 24, paddingTop: 22, paddingBottom: 64 },
 
     loadingScreen: {
       flex: 1,
@@ -2845,57 +2838,19 @@ const styles =
       fontWeight: "600",
     },
 
-    pageHeading: {
-      marginBottom: 20,
-    },
+    pageHeading: { marginBottom: 18 },
 
-    pageTitle: {
-      color: "#173D32",
-      fontSize: 28,
-      fontWeight: "700",
-      letterSpacing: -0.6,
-    },
+    pageTitle: { color: "#173C39", fontSize: 26, fontWeight: "800", letterSpacing: -0.4, lineHeight: 34 },
 
-    pageSubtitle: {
-      marginTop: 5,
-      color: "#64748B",
-      fontSize: 14,
-    },
+    pageSubtitle: { marginTop: 5, color: "#66808B", fontSize: 13, lineHeight: 20 },
 
-    profileCard: {
-      overflow: "hidden",
-      borderRadius: 18,
-      backgroundColor:
-        "#FFFFFF",
-      borderWidth: 1,
-      borderColor:
-        "#E2E8F0",
-    },
+    profileCard: { overflow: "hidden", borderRadius: 15, backgroundColor: "#FFFFFF", borderWidth: 1, borderColor: "#DAE8E3" },
 
-    cover: {
-      height: 116,
-      backgroundColor:
-        "#0B4D3C",
-    },
+    cover: { height: 98, backgroundColor: "#0B4A3C" },
 
-    profileHeroBody: {
-      minHeight: 150,
-      flexDirection: "row",
-      alignItems: "center",
-      paddingHorizontal: 28,
-      paddingBottom: 22,
-      gap: 20,
-    },
+    profileHeroBody: { minHeight: 120, flexDirection: "row", alignItems: "center", paddingHorizontal: 24, paddingBottom: 16, gap: 17 },
 
-    profileHeroBodyCompact: {
-      flexDirection:
-        "column",
-      alignItems:
-        "flex-start",
-      paddingHorizontal: 20,
-      paddingBottom: 22,
-      gap: 12,
-    },
+    profileHeroBodyCompact: { flexDirection: "column", alignItems: "flex-start", paddingHorizontal: 16, paddingBottom: 17, gap: 11 },
 
     avatarWrap: {
       width: 116,
@@ -2955,11 +2910,7 @@ const styles =
         "#FFFFFF",
     },
 
-    profileIdentity: {
-      flex: 1,
-      minWidth: 0,
-      paddingTop: 18,
-    },
+    profileIdentity: { flex: 1, minWidth: 0, paddingTop: 8 },
 
     nameRow: {
       flexDirection: "row",
@@ -2968,12 +2919,7 @@ const styles =
       gap: 10,
     },
 
-    profileName: {
-      color: "#0F172A",
-      fontSize: 24,
-      fontWeight: "900",
-      flexShrink: 1,
-    },
+    profileName: { color: "#183C3A", fontSize: 23, fontWeight: "800", letterSpacing: -0.4, flexShrink: 1 },
 
     modeBadge: {
       minHeight: 30,
@@ -2992,71 +2938,19 @@ const styles =
       fontWeight: "800",
     },
 
-    identityLine: {
-      marginTop: 6,
-      color: "#64748B",
-      fontSize: 13,
-    },
+    identityLine: { marginTop: 5, color: "#607D87", fontSize: 12, lineHeight: 18 },
 
-    editProfileButton: {
-      minHeight: 42,
-      flexDirection: "row",
-      alignItems: "center",
-      justifyContent:
-        "center",
-      gap: 7,
-      paddingHorizontal: 15,
-      borderRadius: 11,
-      backgroundColor:
-        "#E7F7EE",
-      borderWidth: 1,
-      borderColor:
-        "#BCE2CE",
-      marginTop: 18,
-    },
+    editProfileButton: { minHeight: 41, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 7, paddingHorizontal: 15, borderRadius: 10, backgroundColor: "#EAF7F0", borderWidth: 1, borderColor: "#BBDDD0", marginTop: 12 },
 
-    editProfileText: {
-      color: "#087A5D",
-      fontSize: 13,
-      fontWeight: "800",
-    },
+    editProfileText: { color: "#007C66", fontSize: 12, fontWeight: "800" },
 
-    tabs: {
-      marginTop: 18,
-      marginBottom: 14,
-      flexDirection: "row",
-      alignItems: "center",
-      flexWrap: "wrap",
-      gap: 6,
-      padding: 5,
-      alignSelf:
-        "flex-start",
-      borderRadius: 12,
-      backgroundColor:
-        "#FFFFFF",
-      borderWidth: 1,
-      borderColor:
-        "#E2E8F0",
-    },
+    tabs: { marginTop: 16, marginBottom: 14, flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 5, padding: 5, alignSelf: "flex-start", borderRadius: 11, backgroundColor: "#FFFFFF", borderWidth: 1, borderColor: "#DDE8E5" },
 
-    tab: {
-      minHeight: 36,
-      justifyContent:
-        "center",
-      paddingHorizontal: 17,
-      borderRadius: 9,
-    },
+    tab: { minHeight: 40, justifyContent: "center", paddingHorizontal: 17, borderRadius: 8 },
 
-    tabActive: {
-      backgroundColor:
-        "#087A5D",
-    },
+    tabActive: { backgroundColor: "#007F68" },
 
-    tabText: {
-      color: "#475569",
-      fontSize: 13,
-      fontWeight: "700",
-    },
+    tabText: { color: "#425A64", fontSize: 12.5, fontWeight: "700" },
 
     tabTextActive: {
       color: "#FFFFFF",
@@ -3074,17 +2968,7 @@ const styles =
         "column",
     },
 
-    identityCard: {
-      width: "100%",
-      marginBottom: 14,
-      padding: 20,
-      borderRadius: 16,
-      backgroundColor:
-        "#FFFFFF",
-      borderWidth: 1,
-      borderColor:
-        "#E2E8F0",
-    },
+    identityCard: { width: "100%", marginBottom: 14, padding: 19, borderRadius: 14, backgroundColor: "#FFFFFF", borderWidth: 1, borderColor: "#DDE9E5" },
 
     identityCardTop: {
       flexDirection: "row",
@@ -3117,12 +3001,7 @@ const styles =
       letterSpacing: 0.8,
     },
 
-    identityCardTitle: {
-      marginTop: 3,
-      color: "#0F172A",
-      fontSize: 18,
-      fontWeight: "900",
-    },
+    identityCardTitle: { marginTop: 3, color: "#193C3B", fontSize: 17, fontWeight: "800" },
 
     identityCardText: {
       marginTop: 6,
@@ -3238,17 +3117,7 @@ const styles =
       fontWeight: "700",
     },
 
-    sectionCard: {
-      flex: 1,
-      width: "100%",
-      padding: 22,
-      borderRadius: 16,
-      backgroundColor:
-        "#FFFFFF",
-      borderWidth: 1,
-      borderColor:
-        "#E2E8F0",
-    },
+    sectionCard: { flex: 1, width: "100%", padding: 20, borderRadius: 14, backgroundColor: "#FFFFFF", borderWidth: 1, borderColor: "#DDE9E5" },
 
     sectionHeading: {
       flexDirection: "row",
@@ -3268,11 +3137,7 @@ const styles =
         "#EEF2FF",
     },
 
-    sectionTitle: {
-      color: "#173D32",
-      fontSize: 17,
-      fontWeight: "700",
-    },
+    sectionTitle: { color: "#173C3A", fontSize: 16, fontWeight: "800", letterSpacing: -0.2 },
 
     infoRow: {
       flexDirection: "row",
