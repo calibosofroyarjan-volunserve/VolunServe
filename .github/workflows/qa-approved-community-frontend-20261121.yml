@@ -52,9 +52,22 @@ jobs:
           assert changed and changed.issubset(allowed),repr(changed)
           print('PASS: scoped to community members UI and isolated QA only')
           PY
-      - name: Regression-test signup and community directory static contracts
+      - name: Verify signup guard and independent member directory consent
         run: |
-          node scripts/test-signup-prod.cjs
+          node <<'NODE'
+          const fs=require('node:fs'),a=require('node:assert/strict');
+          for(const path of ['app/signup.web.tsx','app/signup.tsx','components/auth/EmailFirstSignup.tsx']){
+            const source=fs.readFileSync(path,'utf8');
+            a(source.includes('directoryConsent'),path+' missing optional directory consent');
+            a(source.includes('communitySocialRequest'),path+' missing authenticated opt-in request');
+            a(source.includes('signUpUser('),path+' must keep registration service');
+            a(source.includes('directoryListed:true'),path+' missing explicit opt-in');
+          }
+          const core=fs.readFileSync('lib/firebaseAuth.ts','utf8');
+          a(core.includes('requireCompleteResidentRegistration(data)'));
+          a(core.includes('getRegistrationEmailError(submittedEmail)'));
+          console.log('PASS optional directory consent; existing signup guard functions remain present');
+          NODE
       - name: Typecheck frontend without deployment
         run: npx tsc --noEmit --pretty false
       - name: Compile production web bundle without hosting release
