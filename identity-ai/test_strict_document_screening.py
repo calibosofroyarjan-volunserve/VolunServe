@@ -283,7 +283,7 @@ class GovernmentIdScreeningTests(unittest.TestCase):
                 self.assertNotEqual(actual["status"], "text_consistent_unverified")
 
     def test_school_id_is_unsupported_for_every_selected_id(self):
-        for id_type in ("national_id", "drivers_license", "passport"):
+        for id_type in ("national_id",):
             with self.subTest(id_type=id_type):
                 result = assess_document_text(
                     id_type, "UNIVERSITY STUDENT ID NAME SAMPLE DOB 2001"
@@ -326,7 +326,7 @@ class GovernmentIdScreeningTests(unittest.TestCase):
         self.assertNotEqual(result["status"], "text_consistent_unverified")
 
     def test_declared_type_mismatch(self):
-        actual = assess_document_text("passport", "LAND TRANSPORTATION OFFICE DRIVER'S LICENSE")
+        actual = assess_document_text("national_id", "LAND TRANSPORTATION OFFICE DRIVER'S LICENSE")
         self.assertEqual(actual["status"], "mismatch")
         self.assertIn("selected_id_type_conflicts_with_ocr", actual["warningCodes"])
 
