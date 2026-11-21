@@ -166,6 +166,9 @@ export default function WebHome() {
 
   const compact = width < 1040;
   const narrow = width < 760;
+  // The fixed sidebar leaves less space than viewport width implies.
+  // Stack on tablets and phones; use the approved 64/36 dashboard split on PC.
+  const communityColumnsStacked = width < 1280;
 
   const composedName = [
     profile?.firstName,
@@ -995,9 +998,13 @@ export default function WebHome() {
             </View>
           </View>
 
-          <View style={styles.communityExtras}>
-            <CommunityOnline uid={user?.uid}/>
-            <CommunityCalendar uid={user?.uid} mode={volunteerMode ? "volunteer" : "resident"}/>
+          <View style={[styles.communityExtras,communityColumnsStacked&&styles.communityExtrasStacked]}>
+            <View style={[styles.communityMembersColumn,communityColumnsStacked&&styles.communityColumnStacked]}>
+              <CommunityOnline uid={user?.uid} dashboard/>
+            </View>
+            <View style={[styles.communityCalendarColumn,communityColumnsStacked&&styles.communityColumnStacked]}>
+              <CommunityCalendar uid={user?.uid} mode={volunteerMode ? "volunteer" : "resident"} dashboard/>
+            </View>
           </View>
 
           <View style={[styles.emergencyPanel, narrow && styles.mobilePanel]}>
@@ -1239,7 +1246,14 @@ function ContactCard({ kind }: { kind: "local" | "national" }) {
 }
 
 const styles = StyleSheet.create({
-  communityExtras:{gap:17,marginTop:18,marginBottom:18},
+  communityExtras:{
+    flexDirection:"row",alignItems:"flex-start",gap:16,
+    marginTop:18,marginBottom:18,width:"100%",
+  },
+  communityExtrasStacked:{flexDirection:"column"},
+  communityMembersColumn:{flex:1.78,minWidth:0},
+  communityCalendarColumn:{flex:1,minWidth:0},
+  communityColumnStacked:{width:"100%",flexGrow:0,flexShrink:0},
   journeyBar: {
     borderTopWidth: 1, borderBottomWidth: 1, borderColor: "#D9E8E1",
     paddingVertical: 16, paddingHorizontal: 12, marginBottom: 22,
