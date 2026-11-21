@@ -1,0 +1,42 @@
+name: Staging Backend to New SFace AI Contract (NO DEPLOY)
+on:
+  push:
+    branches:
+      - qa/identity-staging-backend-ai-compat-20261121
+    paths:
+      - scripts/test-staging-backend-ai-contract-readonly-20261121.cjs
+      - .github/workflows/identity-staging-backend-ai-compat-no-deploy-20261121.yml
+permissions:
+  contents: read
+jobs:
+  deployed-backend-to-ai-compat:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - name: Fetch immutable backend release candidate without legacy submodule
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          [[ "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]] || exit 2
+          curl -fLsS --retry 3 -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" "https://api.github.com/repos/${GITHUB_REPOSITORY}/zipball/$SOURCE_SHA" -o /tmp/identity-backend-compat.zip
+          mkdir -p "$RUNNER_TEMP/identity-backend-compat"
+          unzip -q /tmp/identity-backend-compat.zip -d "$RUNNER_TEMP/identity-backend-compat"
+          ROOT="$(find "$RUNNER_TEMP/identity-backend-compat" -mindepth 1 -maxdepth 1 -type d -print -quit)"
+          cp -a "$ROOT/." "$GITHUB_WORKSPACE/"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Existing Node AI readiness unit tests (no model weights, secrets, or media)
+        run: |
+          node --check backend/identityAiReadiness.js
+          node --test backend/test-identityAiReadiness.js
+      - name: Compare actual staging AI GET health to exact deployed backend readiness adapter
+        run: |
+          node --check scripts/test-staging-backend-ai-contract-readonly-20261121.cjs
+          node scripts/test-staging-backend-ai-contract-readonly-20261121.cjs
+      - name: Explicitly report limits and no deployment
+        run: |
+          echo '## Backend to staged SFace contract' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Public staging GET health + synthetic private-auth adapter check. NO signed-in user or real Node-to-AI secret handshake. HTTP 423 media gate remains unchanged. No production/staging deploy or data write.' >> "$GITHUB_STEP_SUMMARY"
