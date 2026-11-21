@@ -1,0 +1,50 @@
+name: QA Approved Community Directory Frontend (NO DEPLOY)
+on:
+  push:
+    branches:
+      - fix/community-members-all-approved-ui-20261121
+    paths:
+      - 'app/(tabs)/community-member-profile.tsx'
+      - 'components/home/CommunityOnline.tsx'
+      - 'lib/communitySocial.ts'
+      - '.github/workflows/qa-approved-community-frontend-20261121.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  web-build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      CI: 'true'
+      EXPO_NO_TELEMETRY: '1'
+      EXPO_PUBLIC_VOLUNSERVE_ENV: production
+      EXPO_PUBLIC_IDENTITY_VERIFICATION_API_URL: https://volunserve.onrender.com
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install pinned dependencies without deployment
+        run: npm ci --no-audit --no-fund
+      - name: Confirm protected change scope
+        run: |
+          git fetch origin fix/self-online-while-signed-in-20261121 --depth=1
+          python3 - <<'PY'
+          import subprocess
+          changed=set(subprocess.check_output(
+            ['git','diff','--name-only',
+             'origin/fix/self-online-while-signed-in-20261121','HEAD'],
+             text=True).splitlines())
+          allowed={
+            'app/(tabs)/community-member-profile.tsx',
+            'components/home/CommunityOnline.tsx',
+            'lib/communitySocial.ts',
+            '.github/workflows/qa-approved-community-frontend-20261121.yml'
+          }
+          assert changed and changed.issubset(allowed),repr(changed)
+          print('PASS: scoped to community members UI and isolated QA only')
+          PY
+      - name: Compile production web bundle without hosting release
+        run: npx expo export --platform web --output-dir /tmp/volunserve-approved-directory-qa
