@@ -1,0 +1,93 @@
+name: Hosted Staging Identity Web and Backend Smoke (NO DEPLOY)
+on:
+  push:
+    branches:
+      - qa/hosted-staging-identity-browser-routes-20261121
+    paths:
+      - .github/workflows/postdeploy-hosted-staging-identity-web-smoke-20261121.yml
+permissions:
+  contents: read
+jobs:
+  hosted-web-anonymous:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Validate actual hosted staging web routes and identity API boundaries
+        run: |
+          node <<'NODE'
+          "use strict";
+          const assert=require("node:assert/strict");
+          const web="https://volunserve-expo-resident-full-staging.onrender.com";
+          const backend="https://volunserve-backend-staging.onrender.com";
+          const ai="https://volunserve-identity-ai-staging.onrender.com";
+          const pause=ms=>new Promise(resolve=>setTimeout(resolve,ms));
+          async function request(url,options={},want=200){
+            let result;
+            for(let attempt=0;attempt<4;attempt++){
+              result=await fetch(url,{
+                method:options.method||"GET",redirect:"manual",
+                headers:{"Accept":options.accept||"text/html",...(options.headers||{})},
+                ...(options.body?{body:options.body}:{}),
+                signal:AbortSignal.timeout(75000),
+              });
+              if([429,502,503,504].includes(result.status)&&attempt<3){
+                await result.body?.cancel();
+                await pause(6000);
+                continue;
+              }
+              break;
+            }
+            assert.equal(result.status,want,"unexpected staging HTTP status for "+new URL(url).pathname);
+            return result;
+          }
+          (async()=>{
+            const routes=[
+              ["/","Staging web homepage"],
+              ["/login","Staging login deep-link"],
+              ["/identity-verification","Resident identity verification deep-link"],
+              ["/identity-manual-review","NEW in-person review deep-link"],
+              ["/identity-reviews","Admin review deep-link"],
+            ];
+            for(const [path,label] of routes){
+              const r=await request(web+path,{accept:"text/html"});
+              const type=r.headers.get("content-type")||"";
+              assert(type.includes("text/html"),label+" must serve HTML");
+              const html=await r.text();
+              assert(html.toLowerCase().includes("<html"),label+" not an HTML document");
+              console.log("PASS: "+label+" serves hosted HTML");
+            }
+            const backendStatus=await (await request(backend+"/health",{accept:"application/json"})).json();
+            assert.equal(backendStatus.ok,true);
+            assert.equal(backendStatus.service,"volunserve-backend");
+            console.log("PASS: current staging backend health");
+            const aiStatus=await (await request(ai+"/health",{accept:"application/json"})).json();
+            assert.equal(aiStatus.ok,true);
+            assert.equal(aiStatus.sFaceShadow?.modelLoaded,true);
+            assert.equal(aiStatus.sFaceShadow?.independentFaceMatchValidated,false);
+            console.log("PASS: staging AI SFace ready only in unvalidated shadow mode");
+            for(const [path,name] of [
+              ["/api/identity/status","Resident status API"],
+              ["/api/admin/identity/reviews","Admin review API"],
+            ]){
+              await request(backend+path,{accept:"application/json"},401);
+              console.log("PASS: signed-out "+name+" blocked");
+            }
+            await request(backend+"/api/identity/manual-review-request",{
+              method:"POST",
+              accept:"application/json",
+              headers:{"Content-Type":"application/json"},
+              body:JSON.stringify({idType:"passport",consent:true})
+            },401);
+            console.log("PASS: signed-out NEW in-person review submission blocked");
+            console.log("LIMITATION: anonymous HTTP smoke only. No signed-in browser, real Firebase accounts, documents, face recognition score, Admin decision, write, or production deployment.");
+          })().catch(e=>{
+            console.error("FAIL: hosted staging browser-route/API test: "+String(e?.message||e?.name||"unknown").slice(0,240));
+            process.exitCode=1;
+          });
+          NODE
+      - name: Summarize non-invasive scope
+        run: |
+          echo 'Read-only hosted staging pages and anonymous API-boundary checks; no signed-in browser or account-status mutation, no biometric validation and no deploy.' >> "$GITHUB_STEP_SUMMARY"
