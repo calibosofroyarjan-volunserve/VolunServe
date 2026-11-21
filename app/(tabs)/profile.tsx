@@ -2757,12 +2757,41 @@ function ProfileInput({label,value,onChange,placeholder,required=false,keyboardT
 
 const styles =
   StyleSheet.create({
+    detailCards:{flexDirection:"row",alignItems:"stretch",gap:14,marginTop:4},
+    detailCardsCompact:{flexDirection:"column"},
+    detailCard:{flex:1,minWidth:0,backgroundColor:"#FFFFFF",borderWidth:1,borderColor:"#DDE9E4",
+      borderRadius:14,padding:17,gap:4},
+    ownerPrivacyNotice:{flexDirection:"row",alignItems:"flex-start",gap:7,padding:12,marginTop:15,
+      backgroundColor:"#F1F8F4",borderRadius:9},
+    ownerPrivacyText:{flex:1,fontSize:11,lineHeight:17,color:"#5B7F74"},
+    coverWatermark:{color:"#EBFFF5",fontSize:22,fontWeight:"900",textAlign:"right",
+      marginRight:22,marginTop:19,opacity:0.68},
+    coverTagline:{color:"#CCEADE",textAlign:"right",fontSize:9,fontWeight:"800",
+      letterSpacing:0.6,marginRight:22,marginTop:2},
+    activityHint:{fontSize:12,lineHeight:19,color:"#66817B",marginTop:5,marginBottom:9},
+    certificatePanel:{borderRadius:15,backgroundColor:"#FFFFFF",borderWidth:1,
+      borderColor:"#DCE9E3",padding:19,gap:13},
+    certificateHeader:{flexDirection:"row",gap:12,alignItems:"center",justifyContent:"space-between"},
+    certCounter:{backgroundColor:"#E8F8EF",borderRadius:10,paddingHorizontal:11,paddingVertical:8,
+      flexDirection:"row",alignItems:"center",gap:6},
+    certCounterText:{fontSize:11,fontWeight:"800",color:"#08734D"},
+    issuedPaperBackdrop:{flex:1,justifyContent:"center",alignItems:"center",
+      padding:16,backgroundColor:"rgba(8,32,26,0.69)"},
+    issuedPaperDialog:{width:"100%",maxWidth:720,maxHeight:"94%",borderRadius:15,
+      overflow:"hidden",backgroundColor:"#FFFFFF"},
+    issuedPaperHeader:{flexDirection:"row",alignItems:"center",gap:12,padding:17,
+      borderBottomWidth:1,borderBottomColor:"#DDE9E4"},
+    issuedPaperHeading:{fontWeight:"800",fontSize:16,color:"#143B32"},
+    issuedPaperSubtitle:{fontSize:11,color:"#66817B",marginTop:4},
+    issuedPaperClose:{width:36,height:36,borderRadius:10,backgroundColor:"#EEF6F2",
+      justifyContent:"center",alignItems:"center"},
+
     screen: {
       flex: 1,
       backgroundColor: "#F6F8F7",
     },
 
-    page: { width: "100%", maxWidth: 1180, alignSelf: "center", paddingHorizontal: 24, paddingTop: 22, paddingBottom: 64 },
+    page: { width:"100%",maxWidth:1190,alignSelf:"center",paddingHorizontal:23,paddingTop:21,paddingBottom:64 },
 
     loadingScreen: {
       flex: 1,
@@ -2789,9 +2818,9 @@ const styles =
 
     profileCard: { overflow: "hidden", borderRadius: 15, backgroundColor: "#FFFFFF", borderWidth: 1, borderColor: "#DAE8E3" },
 
-    cover: { height: 98, backgroundColor: "#0B4A3C" },
+    cover: { height: 115, backgroundColor: "#064D3C" },
 
-    profileHeroBody: { minHeight: 120, flexDirection: "row", alignItems: "center", paddingHorizontal: 24, paddingBottom: 16, gap: 17 },
+    profileHeroBody: { minHeight:112,flexDirection:"row",alignItems:"center",paddingHorizontal:22,paddingBottom:15,gap:18 },
 
     profileHeroBodyCompact: { flexDirection: "column", alignItems: "flex-start", paddingHorizontal: 16, paddingBottom: 17, gap: 11 },
 
@@ -2887,11 +2916,11 @@ const styles =
 
     editProfileText: { color: "#007C66", fontSize: 12, fontWeight: "800" },
 
-    tabs: { marginTop: 16, marginBottom: 14, flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 5, padding: 5, alignSelf: "flex-start", borderRadius: 11, backgroundColor: "#FFFFFF", borderWidth: 1, borderColor: "#DDE8E5" },
+    tabs: { marginTop:16,marginBottom:16,flexDirection:"row",flexWrap:"wrap",gap:5,padding:5,alignSelf:"flex-start",borderRadius:12,backgroundColor:"#FFFFFF",borderWidth:1,borderColor:"#DDE8E5" },
 
-    tab: { minHeight: 40, justifyContent: "center", paddingHorizontal: 17, borderRadius: 8 },
+    tab: { minHeight:40,justifyContent:"center",paddingHorizontal:19,borderRadius:9 },
 
-    tabActive: { backgroundColor: "#007F68" },
+    tabActive: { backgroundColor:"#007C62" },
 
     tabText: { color: "#425A64", fontSize: 12.5, fontWeight: "700" },
 
