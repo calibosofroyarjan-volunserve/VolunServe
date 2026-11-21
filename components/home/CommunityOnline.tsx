@@ -48,7 +48,7 @@ export default function CommunityOnline({uid,dashboard=false}:{uid?:string|null;
       // heartbeat is current. Show their *own* profile as Online to them,
       // without exposing their private presence to other members.
       setMembers(Array.isArray(payload.members)?payload.members.map(member=>
-        member.isSelf?{...member,online:true}:member):[]);
+        member.isSelf?{...member,online:true,presencePrivate:false}:member):[]);
       setActiveCounts(payload.activeCounts&&Number.isFinite(payload.activeCounts.total)?
         payload.activeCounts:{residents:0,volunteers:0,total:0});
       setError("");
@@ -98,7 +98,7 @@ export default function CommunityOnline({uid,dashboard=false}:{uid?:string|null;
   },[showLastSeen,acceptChats,directoryListed,savingPreference,load]);
   const filtered=useMemo(()=>members.filter(member=>{
     const byRole=filter==="all"||(filter==="online"&&member.online)||
-      (filter==="offline"&&!member.online)||member.mode===filter;
+      (filter==="offline"&&!member.online&&!member.presencePrivate)||member.mode===filter;
     const term=search.trim().toLowerCase();
     return byRole&&(!term||member.name.toLowerCase().includes(term)||
       member.badge.toLowerCase().includes(term));
@@ -123,7 +123,7 @@ export default function CommunityOnline({uid,dashboard=false}:{uid?:string|null;
         <View style={styles.iconBox}><Ionicons name="people-outline" size={21} color={GREEN}/></View>
         <View style={{flex:1,minWidth:0}}>
           <Text style={styles.title}>Community Members</Text>
-          <Text style={styles.subtitle}>Approved members who opted in to public profiles, including offline residents and volunteers.</Text>
+          <Text style={styles.subtitle}>Approved Residents and Volunteers, including offline registered members. Online activity is shared only with consent.</Text>
         </View>
       </View>
       <View style={styles.headingActions}>
@@ -142,14 +142,14 @@ export default function CommunityOnline({uid,dashboard=false}:{uid?:string|null;
     </View>
     {dashboard&&<View style={styles.dashboardTotalRow}>
       <Text style={styles.dashboardSmallCaption}>
-        {activeCounts.total} active signed-in · {members.length} public profiles
+        {activeCounts.total} active signed-in · {members.length} registered members
       </Text>
     </View>}
     {!dashboard&&<View style={styles.countRow}>
       <View style={styles.countChip}><Ionicons name="people-outline" size={13} color={GREEN}/>
         <Text style={styles.countText}>{activeCounts.total} Active Members</Text></View>
       <View style={styles.countChip}><Ionicons name="person-circle-outline" size={13} color={GREEN}/>
-        <Text style={styles.countText}>{members.length} Public Profiles</Text></View>
+        <Text style={styles.countText}>{members.length} Registered Members</Text></View>
       <View style={styles.countChip}><View style={styles.chipDot}/>
         <Text style={styles.countText}>{residents} Residents</Text></View>
       <View style={styles.countChip}><View style={styles.chipDot}/>
@@ -207,12 +207,12 @@ export default function CommunityOnline({uid,dashboard=false}:{uid?:string|null;
             <View style={styles.statusLine}>
               <View style={[styles.presenceDot,!member.online&&styles.offlinePresenceDot]}/>
               <Text style={[styles.dashboardPresenceText,!member.online&&styles.memberOffline]}>
-                {member.online?"Online now":"Offline"}
+                {member.online?"Online now":member.presencePrivate?"Status private":"Offline"}
               </Text>
             </View>
             <Text style={styles.lastSeenText} numberOfLines={2}>
               {member.lastSeenAt?memberLastSeen({...member,online:false}):
-                member.online?"Active now":"Last seen private"}
+                member.online?"Active now":member.presencePrivate?"Not shared":"Last seen private"}
             </Text>
           </View>}
           {dashboard&&!compact&&<Pressable accessibilityRole="button"
@@ -240,19 +240,9 @@ export default function CommunityOnline({uid,dashboard=false}:{uid?:string|null;
         <Ionicons name="people-outline" size={26} color="#9BAFA7"/>
         <Text style={styles.emptyText}>
           {members.length===0&&filter==="all"&&!search
-            ?activeCounts.total>0
-              ?`${activeCounts.total} member${activeCounts.total===1?" is":"s are"} active. Their profiles are private until they choose to appear in the directory.`
-              :"No public profiles yet. Signed-in members can choose to share their profile."
-            :"No public profiles match this filter or search."}
+            ?"No approved Resident or Volunteer accounts found."
+            :"No members match this filter or search."}
         </Text>
-        {!visible&&!directoryListed&&!search&&filter==="all"&&<Pressable
-          accessibilityRole="button" accessibilityLabel="Add my public profile to Members Directory"
-          disabled={Boolean(savingPreference)||settingLoading}
-          onPress={()=>void updatePreference("directoryListed")}
-          style={styles.optInAction}>
-          <Ionicons name="person-add-outline" size={16} color="#FFFFFF"/>
-          <Text style={styles.optInActionText}>Show My Public Profile</Text>
-        </Pressable>}
       </View>}
     {totalPages>1&&<View style={[styles.pagination,dashboard&&styles.dashboardPagination]}>
       <Pressable accessibilityRole="button" accessibilityLabel="Previous members page"
@@ -278,29 +268,13 @@ export default function CommunityOnline({uid,dashboard=false}:{uid?:string|null;
     {!dashboard&&<>
     <View style={[styles.consent,compact&&styles.consentMobile]}>
       <View style={{flex:1,minWidth:0}}>
-        <Text style={styles.consentTitle}>Show my profile while online</Text>
-        <Text style={styles.consentDescription}>Optional. Display your public name, photo and active Resident/Volunteer mode while online.</Text>
+        <Text style={styles.consentTitle}>Share my online status</Text>
+        <Text style={styles.consentDescription}>Optional. Other members can see whether you are online. Your basic member listing remains visible either way.</Text>
       </View>
       <Pressable accessibilityRole="switch" accessibilityState={{checked:visible,disabled:settingLoading||switching}}
         disabled={settingLoading||switching} onPress={()=>void toggle()}
         style={[styles.toggle,visible&&styles.toggleOn]}>
         <View style={[styles.toggleThumb,visible&&styles.toggleThumbOn]}/>
-      </Pressable>
-    </View>
-    <View style={styles.directoryChoice}>
-      <View style={styles.privacyOptionCopy}>
-        <Text style={styles.consentTitle}>Keep my profile in Members Directory</Text>
-        <Text style={styles.consentDescription}>
-          Optional. Keep your public name, photo and account badge visible even while offline.
-          You can turn this off anytime. Private email, phone, address and identity documents remain hidden.
-        </Text>
-      </View>
-      <Pressable accessibilityRole="switch" accessibilityLabel="Keep my profile in Members Directory"
-        accessibilityState={{checked:directoryListed,disabled:settingLoading||Boolean(savingPreference)}}
-        disabled={settingLoading||Boolean(savingPreference)}
-        onPress={()=>void updatePreference("directoryListed")}
-        style={[styles.toggle,directoryListed&&styles.toggleOn]}>
-        <View style={[styles.toggleThumb,directoryListed&&styles.toggleThumbOn]}/>
       </Pressable>
     </View>
     <View style={styles.privacyGrid}>
@@ -330,7 +304,7 @@ export default function CommunityOnline({uid,dashboard=false}:{uid?:string|null;
       </View>
     </View>
     {(!(visible||directoryListed)||!acceptChats)&&<Text style={styles.chatHint}>
-      To chat, enable your online profile or directory listing, plus Private Messages. The recipient must also allow chat.
+      To chat, enable online status sharing and Private Messages. The recipient must also allow chat.
     </Text>}
     </>}
   </View>;
