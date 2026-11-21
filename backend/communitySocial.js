@@ -26,8 +26,15 @@ const safePhoto=v=>{
  return /^https:\/\/(?:res\.cloudinary\.com|lh3\.googleusercontent\.com|firebasestorage\.googleapis\.com)\//i.test(u)?u.slice(0,1024):"";
 };
 const display=(uid,p,now=Date.now())=>{
- const last=numberTime(p.updatedAt);
- const online=p.visible===true&&last>0&&now-last>=0&&now-last<FRESH_MS;
+ const lastHeartbeat=numberTime(p.updatedAt);
+ // activeAt is already collected by the authenticated heartbeat for approved
+ // users regardless of public online visibility. Publish a timestamp ONLY
+ // when the account separately opted in to sharing Last Seen.
+ const lastActivity=Math.max(numberTime(p.activeAt),lastHeartbeat);
+ const validLastSeen=lastActivity>0 && lastActivity<=now+10000 &&
+   now-lastActivity>=0 && now-lastActivity<=LAST_SEEN_MAX_MS;
+ const online=p.visible===true&&lastHeartbeat>0&&now-lastHeartbeat>=0&&
+   now-lastHeartbeat<FRESH_MS;
  const showOffline=p.showLastSeen===true;
  const name=clean(p.displayName||"Community member",100);
  const mode=p.mode==="volunteer"?"volunteer":"resident";
@@ -35,7 +42,8 @@ const display=(uid,p,now=Date.now())=>{
   key:publicKey(uid),name,avatarUrl:safePhoto(p.avatarUrl),mode,
   verified:p.verified===true,
   badge:mode==="volunteer"?"Volunteer":p.verified===true?"Verified Resident":"Basic Resident",
-  online, presencePrivate:p.visible!==true, lastSeenAt:showOffline&&last>0?new Date(last).toISOString():null,
+  online, presencePrivate:p.visible!==true&&p.showLastSeen!==true,
+  lastSeenAt:showOffline&&validLastSeen?new Date(lastActivity).toISOString():null,
   directoryListed:p.directoryListed===true,acceptChats:p.acceptChats===true,
  };
 };
@@ -76,9 +84,10 @@ function installCommunitySocial({app,db,requireFirebaseUser,loadUserProfile,isAp
         [account.firstName,account.lastName].filter(Boolean).join(" ")||
         "Community member",100),
       avatarUrl:allowPhoto?safePhoto(account.profilePictureUrl):"",
-      // Online and last-seen remain based only on consented presence records.
+      // Online visibility and Last Seen are separate affirmative choices.
+      // Private activeAt never becomes public unless showLastSeen is true.
       visible:presence.visible===true,
-      showLastSeen:presence.visible===true&&presence.showLastSeen===true,
+      showLastSeen:presence.showLastSeen===true,
       directoryListed:presence.directoryListed===true,
       acceptChats:presence.acceptChats===true,
     }};
