@@ -164,7 +164,8 @@ export default function RootLayout() {
     const isSignupRoute =
       rootSegment === "signup";
     const isIdentityVerificationRoute =
-      rootSegment === "identity-verification";
+      rootSegment === "identity-verification" ||
+      rootSegment === "identity-manual-review";
     const isTabsRoute =
       rootSegment === "(tabs)";
     const isAdminRoute =
@@ -470,6 +471,7 @@ export default function RootLayout() {
         <Stack.Screen name="admin-request" />
         <Stack.Screen name="signup" />
         <Stack.Screen name="identity-verification" />
+        <Stack.Screen name="identity-manual-review" />
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="(admin)" />
         <Stack.Screen name="(superadmin)" />
