@@ -1,0 +1,77 @@
+name: QA Approved Resident and Volunteer Members + Calendar Layout (NO DEPLOY)
+on:
+  push:
+    branches: [qa/approved-two-column-community-layout-20261121]
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      CI: 'true'
+      EXPO_NO_TELEMETRY: '1'
+      EXPO_PUBLIC_VOLUNSERVE_ENV: production
+      EXPO_PUBLIC_IDENTITY_VERIFICATION_API_URL: https://volunserve.onrender.com
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Exact four-file live-derived source scope
+        run: |
+          git diff --name-status 1dcb67846ca0e31a76454c6070550ede0879c007 85bf4026d0c54c98c3432a3102279bb446ae3235
+          node - <<'NODE'
+          const assert=require('node:assert/strict'), fs=require('node:fs');
+          const home=fs.readFileSync('components/home/Home.web.tsx','utf8');
+          const native=fs.readFileSync('components/home/Home.native.tsx','utf8');
+          const members=fs.readFileSync('components/home/CommunityOnline.tsx','utf8');
+          const calendar=fs.readFileSync('components/home/CommunityCalendar.tsx','utf8');
+          for(const x of [home,native]) {
+            assert(x.includes('communityColumnsStacked'),'Adaptive column layout missing');
+            assert(x.includes('dashboard/>'),'Compact member panel missing');
+            assert(x.includes('CommunityCalendar'));
+          }
+          assert(home.includes('title="Announcements"'));
+          assert(home.includes('Emergency Contacts')&&home.includes('ContactCard kind="local"')
+            &&home.includes('ContactCard kind="national"'));
+          assert(native.includes('nativeEmergencyCard')&&native.includes('tel:911')
+            &&native.includes('tel:0443066234'));
+          assert(members.includes('My profile & privacy settings'));
+          assert(members.includes('Keep my profile in Members Directory'));
+          assert(members.includes('Allow Private Messages'));
+          assert(members.includes('memberLastSeen'));
+          assert(members.includes('View Profile')&&members.includes('Message'));
+          assert(members.includes('dashboardGridMobile'));
+          assert(calendar.includes('timeZone:"Asia/Manila"'));
+          assert(calendar.includes('communityEventParticipants'));
+          assert(calendar.includes('where("publicationStatus","==","published")'));
+          const changed=require('node:child_process').execFileSync('git',[
+            'diff','--name-only','1dcb67846ca0e31a76454c6070550ede0879c007',
+            '85bf4026d0c54c98c3432a3102279bb446ae3235'],{encoding:'utf8'}).trim().split('\n');
+          assert.deepEqual(changed.sort(),[
+            'components/home/CommunityCalendar.tsx','components/home/CommunityOnline.tsx',
+            'components/home/Home.native.tsx','components/home/Home.web.tsx'
+          ].sort());
+          NODE
+      - name: Install unchanged pinned frontend dependencies
+        run: npm ci --no-audit --no-fund
+      - name: TypeScript, role, login, maps and profile regressions
+        run: |
+          npx tsc --noEmit --incremental false
+          node --test scripts/test-admin-volunteer-authorization.cjs
+          node --test scripts/test-embedded-emergency-map-navigation.cjs
+          node scripts/test-login-ui-release.cjs
+          node scripts/test-profile-certificates-account-menu.cjs
+      - name: Web homepage and public profile build, no deploy
+        run: |
+          npx expo export --platform web --clear
+          test -f dist/index.html
+          test -f dist/community-member-profile.html || test -f dist/community-member-profile/index.html
+          test -f dist/community-chat.html || test -f dist/community-chat/index.html
+          test -f dist/community-inbox.html || test -f dist/community-inbox/index.html
+      - name: Native Android JavaScript export smoke test, no deploy
+        run: npx expo export --platform android --output-dir qa-android-js --clear
