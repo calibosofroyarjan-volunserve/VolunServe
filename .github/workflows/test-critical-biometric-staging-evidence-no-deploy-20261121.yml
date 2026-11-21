@@ -1,0 +1,50 @@
+name: Critical SFace + PAD Evidence Gates (NO DEPLOY)
+on:
+  push:
+    branches:
+      - qa/critical-biometric-risk-evaluation-20261121
+    paths:
+      - 'identity-ai/sface_pair_metrics.py'
+      - 'identity-ai/evaluate_sface_pairs_local.py'
+      - 'identity-ai/critical_biometric_risk_gate.py'
+      - 'identity-ai/test_sface_pair_metrics_local.py'
+      - 'identity-ai/test_critical_biometric_risk_gate.py'
+      - '.github/workflows/test-critical-biometric-staging-evidence-no-deploy-20261121.yml'
+permissions:
+  contents: read
+jobs:
+  face-accuracy-evidence:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - name: Download immutable QA-only candidate, no gitlink/submodules
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          [[ "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]] || exit 2
+          curl -fLsS --retry 3 -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" "https://api.github.com/repos/${GITHUB_REPOSITORY}/zipball/$SOURCE_SHA" -o /tmp/critical-bio.zip
+          mkdir -p "$RUNNER_TEMP/critical-bio"
+          unzip -q /tmp/critical-bio.zip -d "$RUNNER_TEMP/critical-bio"
+          ROOT="$(find "$RUNNER_TEMP/critical-bio" -mindepth 1 -maxdepth 1 -type d -print -quit)"
+          cp -a "$ROOT/." "$GITHUB_WORKSPACE/"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install only offline synthetic test requirements
+        run: |
+          python -m pip install --disable-pip-version-check numpy==1.26.4 Pillow==11.3.0 opencv-contrib-python-headless==4.11.0.86
+      - name: Static check and privacy-safe synthetic risk scenarios
+        env:
+          PYTHONPATH: identity-ai
+        run: |
+          python -m py_compile identity-ai/sface_pair_metrics.py identity-ai/evaluate_sface_pairs_local.py identity-ai/critical_biometric_risk_gate.py
+          python -m unittest discover -s identity-ai -p test_sface_pair_metrics_local.py -v
+          python -m unittest discover -s identity-ai -p test_critical_biometric_risk_gate.py -v
+          python -m unittest discover -s identity-ai -p test_pad_ensemble_local.py -v
+          python -m unittest discover -s identity-ai -p test_ai_route_contract.py -v
+      - name: Evidence status (not real-data certification)
+        run: |
+          echo '## Critical experimental SFace and PAD evidence' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Synthetic-only math, file safety, physical-print/replay risk summaries, and AI route checks. No consenting physical humans, real-device biometric accuracy, genuine PAD proof, selected threshold, production/staging deploy, Firebase write or automatic Verified Resident.' >> "$GITHUB_STEP_SUMMARY"
