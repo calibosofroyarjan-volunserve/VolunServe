@@ -2438,7 +2438,7 @@ export default function CommunityEventsScreen() {
                 isJoinedVolunteer={joined}
               />
             )}
-            {/* Meeting point stays compact so the attendance rail remains visible. */}
+            {/* Event map belongs to the expanded event details via a dialog, not the My Attendance rail. Meeting point stays compact. */}
             <View style={styles.lockedEventMapCard}>
               <View style={styles.lockedMapSummaryRow}>
                 <View style={styles.lockedSectionIcon}>
