@@ -1,0 +1,95 @@
+name: Staging Identity No-Media Release Candidate (NO DEPLOY)
+on:
+  push:
+    branches:
+      - release/staging-identity-nomedia-from-deployed-20261121
+    paths:
+      - 'backend/server.js'
+      - 'backend/identityManualReviewRoutes.js'
+      - 'backend/test-identity-no-media-manual-e2e.cjs'
+      - 'backend/test-identity-emulator-auth-e2e.cjs'
+      - 'backend/identity-e2e-emulators.json'
+      - '.github/workflows/test-staging-identity-nomedia-release-candidate-20261121.yml'
+permissions:
+  contents: read
+jobs:
+  verify-staging-only-source:
+    name: Node and in-memory identity route regressions
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - name: Load exact immutable candidate source, no submodules
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          [[ "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]] || exit 2
+          curl -fLsS --retry 3 -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" "https://api.github.com/repos/${GITHUB_REPOSITORY}/zipball/$SOURCE_SHA" -o /tmp/release-identity.zip
+          mkdir -p "$RUNNER_TEMP/release-identity"
+          unzip -q /tmp/release-identity.zip -d "$RUNNER_TEMP/release-identity"
+          ROOT="$(find "$RUNNER_TEMP/release-identity" -mindepth 1 -maxdepth 1 -type d -print -quit)"
+          cp -a "$ROOT/." "$GITHUB_WORKSPACE/"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Guard staging-only in-person review; no media upload bypass
+        run: |
+          node --check backend/server.js
+          node --check backend/identityManualReviewRoutes.js
+          grep -Fq 'const STAGING_IDENTITY_MEDIA_UPLOADS_ENABLED = false' backend/server.js
+          grep -Fq 'requireStagingIdentityMediaApproval,' backend/server.js
+          grep -Fq 'isFullStagingRuntime(process.env)' backend/server.js
+          grep -Fq 'auth.app?.options?.projectId === "volunserve-full-staging"' backend/server.js
+          grep -Fq 'auth.app?.options?.projectId!=="volunserve-full-staging"' backend/identityManualReviewRoutes.js
+      - name: Real extracted route code with fake Firestore, no credentials
+        run: |
+          node --test backend/test-identity-no-media-manual-e2e.cjs
+          node --test backend/test-staging-identity-acceptance-e2e.cjs
+          node --test backend/test-identityAiReadiness.js
+      - name: Explicit policy report
+        run: |
+          echo '## Safe no-media identity backend candidate' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Read-only synthetic tests; no production or staging deployment. Staging-only code refuses unknown projects and real ID/selfie uploads remain HTTP 423.' >> "$GITHUB_STEP_SUMMARY"
+
+  emulator-end-to-end:
+    name: Firebase Auth and Firestore demo emulator, fictional profiles
+    runs-on: ubuntu-latest
+    timeout-minutes: 22
+    env:
+      CI: 'true'
+      GCLOUD_PROJECT: demo-volunserve-identity-e2e
+      FIREBASE_AUTH_EMULATOR_HOST: '127.0.0.1:9099'
+      FIRESTORE_EMULATOR_HOST: '127.0.0.1:8080'
+    steps:
+      - name: Load exact immutable candidate source, no submodules
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          [[ "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]] || exit 2
+          curl -fLsS --retry 3 -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" "https://api.github.com/repos/${GITHUB_REPOSITORY}/zipball/$SOURCE_SHA" -o /tmp/release-identity-emulator.zip
+          mkdir -p "$RUNNER_TEMP/release-identity-emulator"
+          unzip -q /tmp/release-identity-emulator.zip -d "$RUNNER_TEMP/release-identity-emulator"
+          ROOT="$(find "$RUNNER_TEMP/release-identity-emulator" -mindepth 1 -maxdepth 1 -type d -print -quit)"
+          cp -a "$ROOT/." "$GITHUB_WORKSPACE/"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Install locked dependencies, suppress install scripts
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          npm ci --prefix backend --ignore-scripts --no-audit --no-fund
+      - name: Exercise real emulator Auth tokens and Firestore transactions
+        run: |
+          node --check backend/test-identity-emulator-auth-e2e.cjs
+          npx --no-install firebase emulators:exec --config backend/identity-e2e-emulators.json --only auth,firestore --project demo-volunserve-identity-e2e "node --test backend/test-identity-emulator-auth-e2e.cjs"
+      - name: Confirm no actual credentials, real photos or deployments
+        run: |
+          echo 'Only synthetic profiles and locally signed-in Firebase emulator users. No real person, staging account, production login or government ID was verified.' >> "$GITHUB_STEP_SUMMARY"
