@@ -1,0 +1,57 @@
+name: Identity Five-ID Web Native Contract (NO DEPLOY)
+on:
+  push:
+    branches:
+      - fix/identity-five-id-ui-contract-20261121
+    paths:
+      - app/identity-verification.web.tsx
+      - app/identity-verification.tsx
+      - lib/identityVerification.ts
+      - .github/workflows/identity-five-id-web-native-no-deploy-20261121.yml
+  pull_request:
+    branches:
+      - live-protected
+    paths:
+      - app/identity-verification.web.tsx
+      - app/identity-verification.tsx
+      - lib/identityVerification.ts
+      - .github/workflows/identity-five-id-web-native-no-deploy-20261121.yml
+permissions:
+  contents: read
+jobs:
+  identity-five-id-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+      - name: Verify five-ID contract without uploading identity media
+        run: |
+          node <<'NODE'
+          const fs = require('node:fs');
+          const assert = require('node:assert/strict');
+          const ids = ['national_id', 'drivers_license', 'passport', 'umid', 'prc_id'];
+          const shared = fs.readFileSync('lib/identityVerification.ts', 'utf8');
+          const web = fs.readFileSync('app/identity-verification.web.tsx', 'utf8');
+          const native = fs.readFileSync('app/identity-verification.tsx', 'utf8');
+          const backend = fs.readFileSync('backend/server.js', 'utf8');
+          for (const id of ids) {
+            assert(shared.includes('"' + id + '"'), 'Shared client missing ' + id);
+            assert(web.includes('value: "' + id + '"'), 'Web ID selection missing ' + id);
+            assert(native.includes('value: "' + id + '"'), 'Mobile ID selection missing ' + id);
+            assert(backend.includes('"' + id + '"'), 'Backend missing ' + id);
+          }
+          for (const content of [shared, web, native]) {
+            assert(!content.includes('other_government_id'), 'Legacy generic ID option still present');
+          }
+          console.log('PASS: five supported ID choices match the protected backend');
+          NODE
+      - name: Install reproducible dependencies
+        run: npm ci --no-audit --no-fund
+      - name: TypeScript compatibility
+        run: npx tsc --noEmit --pretty false
+      - name: Expo web bundle smoke
+        run: npx expo export --platform web --output-dir dist
