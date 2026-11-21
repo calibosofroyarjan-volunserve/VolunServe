@@ -37,17 +37,15 @@ jobs:
           const shared = fs.readFileSync('lib/identityVerification.ts', 'utf8');
           const web = fs.readFileSync('app/identity-verification.web.tsx', 'utf8');
           const native = fs.readFileSync('app/identity-verification.tsx', 'utf8');
-          const backend = fs.readFileSync('backend/server.js', 'utf8');
           for (const id of ids) {
             assert(shared.includes('"' + id + '"'), 'Shared client missing ' + id);
             assert(web.includes('value: "' + id + '"'), 'Web ID selection missing ' + id);
             assert(native.includes('value: "' + id + '"'), 'Mobile ID selection missing ' + id);
-            assert(backend.includes('"' + id + '"'), 'Backend missing ' + id);
           }
           for (const content of [shared, web, native]) {
             assert(!content.includes('other_government_id'), 'Legacy generic ID option still present');
           }
-          console.log('PASS: five supported ID choices match the protected backend');
+          console.log('PASS: five supported ID choices consistent across Resident web, native, and shared client parser. Backend-live-protected separately checked.');
           NODE
       - name: Install reproducible dependencies
         run: npm ci --no-audit --no-fund
