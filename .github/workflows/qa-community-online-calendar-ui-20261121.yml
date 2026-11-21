@@ -1,0 +1,65 @@
+name: QA Community Online + Calendar Home PC Mobile (NO DEPLOY)
+on:
+  push:
+    branches: [qa/home-community-ui-20261121]
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    env:
+      CI: 'true'
+      EXPO_NO_TELEMETRY: '1'
+      EXPO_PUBLIC_VOLUNSERVE_ENV: production
+      EXPO_PUBLIC_IDENTITY_VERIFICATION_API_URL: https://volunserve.onrender.com
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Guard additive live source, announcements and contacts
+        run: |
+          git diff --name-status d7eff0990eb8094666ddb7dc44355de050c76f68 0b748b6a9309e093fbb5dba6d827228d3c0ff302
+          node - <<'NODE'
+          const assert=require('node:assert/strict'),fs=require('fs');
+          const home=fs.readFileSync('components/home/Home.web.tsx','utf8');
+          const native=fs.readFileSync('components/home/Home.native.tsx','utf8');
+          const calendar=fs.readFileSync('components/home/CommunityCalendar.tsx','utf8');
+          const online=fs.readFileSync('components/home/CommunityOnline.tsx','utf8');
+          const route=fs.readFileSync('app/(tabs)/community-member-profile.tsx','utf8');
+          assert(home.includes('title="Announcements"'));
+          assert(home.includes('Emergency Contacts'));
+          assert(home.includes('ContactCard kind="local"'));
+          assert(home.includes('ContactCard kind="national"'));
+          assert(home.includes('<CommunityOnline uid={user?.uid}/>'));
+          assert(home.includes('<CommunityCalendar uid={user?.uid}'));
+          assert(native.includes('<CommunityOnline uid={user?.uid}/>'));
+          assert(native.includes('Announcements'));
+          assert(calendar.includes('timeZone:"Asia/Manila"'));
+          assert(calendar.includes('"communityEvents"'));
+          assert(calendar.includes('"communityEventParticipants"'));
+          assert(online.includes('Show my profile while online'));
+          assert(online.includes('View All Online'));
+          assert(route.includes('Public Information'));
+          for(const forbidden of ['getDoc(', 'onSnapshot(', 'updateUserProfile(', 'Edit Profile']){
+            assert(!route.includes(forbidden), 'Directory member profile must not touch private data: '+forbidden);
+          }
+          NODE
+      - name: Install pinned frontend dependencies
+        run: npm ci --no-audit --no-fund
+      - name: TypeScript and login/role/profile/calendar regressions
+        run: |
+          npx tsc --noEmit --incremental false
+          node --test scripts/test-admin-volunteer-authorization.cjs
+          node --test scripts/test-embedded-emergency-map-navigation.cjs
+          node scripts/test-login-ui-release.cjs
+          node scripts/test-profile-certificates-account-menu.cjs
+      - name: Build both home layouts and member profile (NO DEPLOY)
+        run: |
+          npx expo export --platform web --clear
+          test -f dist/index.html
+          test -f dist/community-member-profile.html || test -f dist/community-member-profile/index.html
