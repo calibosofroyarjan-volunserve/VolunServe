@@ -1,5 +1,8 @@
 import { AppAlert } from "../../lib/appDialog";
 import VolunteerImpact from "./volunteer-impact";
+import { CertificatePaper } from "./certificate";
+import { IssuedCertificateGallery } from "../../components/profile/IssuedCertificateGallery";
+import type { GalleryCertificate } from "../../components/profile/IssuedCertificateGallery";
 import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { updateProfile, User } from "firebase/auth";
@@ -372,6 +375,7 @@ export default function Profile() {
     useState<
       GenericRecord[]
     >([]);
+  const [selectedIssuedCertificate,setSelectedIssuedCertificate] = useState<GalleryCertificate|null>(null);
 
   const [
     activityLoading,
@@ -1080,10 +1084,7 @@ export default function Profile() {
       key: "info",
       label: "Info",
     },
-    {
-      key: "activity",
-      label: "Activity",
-    },
+    ...(currentMode !== "volunteer" ? [{key:"activity" as const,label:"Activity"}] : []),
     ...(currentMode === "volunteer" && volunteerAccess
       ? [{key:"progress" as const,label:"My Progress"}]
       : []),
@@ -1136,11 +1137,10 @@ export default function Profile() {
           styles.profileCard
         }
       >
-        <View
-          style={
-            styles.cover
-          }
-        />
+        <View style={styles.cover}>
+          <Text style={styles.coverWatermark}>VolunServe</Text>
+          <Text style={styles.coverTagline}>CITY OF SAN JOSE DEL MONTE</Text>
+        </View>
 
         <View
           style={[
@@ -1503,7 +1503,7 @@ export default function Profile() {
       )}
 
       {activeTab ===
-        "activity" && (
+        "activity" && currentMode !== "volunteer" && (
         <View
           style={
             styles.sectionCard
