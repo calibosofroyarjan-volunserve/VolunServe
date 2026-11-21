@@ -200,9 +200,9 @@ export async function precheckIdentityDocument(input: {
     throw new Error("Select a supported government ID.");
   }
   validateMedia(input.idDocument, "ID front scan");
-  if (input.idType !== "passport") {
-    validateMedia(input.idBackDocument || undefined, "ID reverse scan");
-  }
+  // Philippine National ID only: front AND reverse are mandatory for this
+  // physical-card thesis demo. No real image transfer until staging sign-off.
+  validateMedia(input.idBackDocument || undefined, "ID reverse scan");
   // Independent of screen navigation: no direct caller may build or send
   // sensitive staging multipart data while the Node capability says paused.
   await ensureStagingIdentityMediaTransferReady();
@@ -211,7 +211,7 @@ export async function precheckIdentityDocument(input: {
   const body = new FormData();
   body.append("idType", input.idType);
   appendMedia(body, "idDocument", input.idDocument);
-  if (input.idType !== "passport" && input.idBackDocument) {
+  if (input.idBackDocument) {
     appendMedia(body, "idBackDocument", input.idBackDocument);
   }
   const response = await fetchWithTimeout(
