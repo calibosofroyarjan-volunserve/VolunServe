@@ -23,10 +23,15 @@ def screening(kind="national_id"):
 
 
 class FacePreflightPolicyTests(unittest.TestCase):
-    def test_all_five_allowed_types_only_advance_to_nondecisional_comparison(self):
-        for kind in ("national_id", "drivers_license", "passport", "umid", "prc_id"):
+    def test_only_three_allowed_types_advance_to_nondecisional_comparison(self):
+        for kind in ("national_id", "drivers_license", "passport"):
             with self.subTest(kind=kind):
                 self.assertTrue(allows(screening(kind), kind))
+
+    def test_removed_umid_prc_cannot_enter_face_comparison(self):
+        for kind in ("umid", "prc_id"):
+            with self.subTest(kind=kind):
+                self.assertFalse(allows(screening(kind), kind))
 
     def test_school_and_mismatched_type_never_run_face_comparison(self):
         for kind in ("school_id", "employee_id", "other_government_id", "", None):
@@ -67,6 +72,23 @@ class FacePreflightPolicyTests(unittest.TestCase):
         ):
             with self.subTest(field=field, invalid=invalid):
                 self.assertFalse(allows({**base, field: invalid}, "national_id"))
+
+    def test_name_and_birth_date_must_be_positively_consistent_before_matching(self):
+        base = screening()
+        for field in ("profileNameCheck", "profileBirthDateCheck"):
+            for value in ("inconclusive", "not_checked", "possible_conflict", None):
+                with self.subTest(field=field, value=value):
+                    self.assertFalse(allows({**base, field: value}, "national_id"))
+            without = dict(base)
+            del without[field]
+            self.assertFalse(allows(without, "national_id"))
+
+    def test_address_absent_is_allowed_only_for_nondecisional_face_comparison(self):
+        for kind in ("national_id", "drivers_license", "passport"):
+            with self.subTest(kind=kind):
+                # Printed residential address is not a universal ID field.
+                self.assertTrue(allows({**screening(kind),
+                                        "profileAddressCheck": "inconclusive"}, kind))
 
     def test_passport_bio_page_exempt_from_reverse_side_but_not_mrz_conflict(self):
         base = screening("passport")

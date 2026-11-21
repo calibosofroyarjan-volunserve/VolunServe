@@ -12,7 +12,7 @@ from pathlib import Path
 import unittest
 
 from strict_document_screening import (
-    assess_document_sides, add_photo_quality, blurry_national_id_claim_needs_review,
+    assess_document_sides, assess_profile_name, add_photo_quality, blurry_national_id_claim_needs_review,
 )
 from profile_consistency import profile_comparison
 from face_preflight_policy import screening_ready_for_face_comparison
@@ -99,8 +99,10 @@ def load_handlers():
             "not_required" if declared_type == "passport" else
             "adequate" if id_back_document_bytes is not None else "not_checked"
         )
+        ocr = front + "\n" + (back or "")
+        screening.update(assess_profile_name(expected_first_name, expected_last_name, ocr))
         screening.update(profile_comparison(
-            expected_date_of_birth, expected_barangay, front + "\n" + (back or "")
+            expected_date_of_birth, expected_barangay, ocr
         ))
         screening["issuerAuthenticityStatus"] = "not_verified"
         screening["presentationAttackStatus"] = "not_validated"
@@ -136,7 +138,7 @@ def load_handlers():
         "MAX_ID_DOCUMENT_BYTES": 10 * 1024 * 1024,
         "MAX_SELFIE_BYTES": 10 * 1024 * 1024,
         "ACCEPTED_ID_TYPES": {
-            "national_id", "drivers_license", "passport", "umid", "prc_id",
+            "national_id", "drivers_license", "passport",
         },
         "hashlib": hashlib, "asyncio": asyncio, "logging": logging,
         "screening_ready_for_face_comparison": screening_ready_for_face_comparison,
@@ -156,13 +158,13 @@ class RealRouteHandlerContractTests(unittest.TestCase):
     def setUp(self):
         self.env, self.hits = load_handlers()
 
-    def call(self, handler, form, key="staging-internal-key", dob="1998-09-05"):
+    def call(self, handler, form, key="staging-internal-key", dob="1998-09-05", first="Maria", last="Dela Cruz"):
         return asyncio.run(self.env[handler](
             Request(form),
             x_volunserve_user_id="resident-demo",
             x_volunserve_internal_key=key,
-            x_volunserve_profile_first_name="Maria",
-            x_volunserve_profile_last_name="Dela Cruz",
+            x_volunserve_profile_first_name=first,
+            x_volunserve_profile_last_name=last,
             x_volunserve_profile_date_of_birth=dob,
             x_volunserve_profile_barangay="Muzon Proper",
         ))
@@ -186,6 +188,15 @@ class RealRouteHandlerContractTests(unittest.TestCase):
         with self.assertRaises(RouteHTTPException) as exc:
             self.call("document_precheck", self.form(id_type="other_government_id"))
         self.assertEqual(exc.exception.status_code, 400)
+
+    def test_removed_id_types_refused_at_ai_api(self):
+        for removed in ("umid", "prc_id"):
+            with self.subTest(id_type=removed):
+                with self.assertRaises(RouteHTTPException) as exc:
+                    self.call("document_precheck", self.form(id_type=removed))
+                self.assertEqual(exc.exception.status_code, 400)
+                self.assertEqual(self.hits["screen"], 0)
+
 
     def test_missing_nonpassport_back_refused(self):
         with self.assertRaises(RouteHTTPException) as exc:
@@ -220,10 +231,33 @@ class RealRouteHandlerContractTests(unittest.TestCase):
 
     def test_passport_bio_page_has_no_back_requirement(self):
         result = self.call("document_precheck", self.form(
-            id_type="passport", front="REPUBLIC OF THE PHILIPPINES PASSPORT",
+            id_type="passport", front="REPUBLIC OF THE PHILIPPINES PASSPORT SURNAME DELA CRUZ GIVEN NAMES MARIA DATE OF BIRTH 1998-09-05",
             back=None))
         self.assertEqual(result["outcome"], "pass")
         self.assertFalse(result["authenticityVerified"])
+
+    def test_missing_name_or_birthdate_routes_to_retry_before_face_matching(self):
+        for invalid_kwargs in ({"first": ""}, {"last": ""}, {"dob": ""}):
+            with self.subTest(**invalid_kwargs):
+                precheck = self.call("document_precheck", self.form(), **invalid_kwargs)
+                self.assertEqual(precheck["outcome"], "retry")
+                verified = self.call("verify_identity", self.form(with_selfie=True),
+                                     **invalid_kwargs)
+                self.assertEqual(verified["status"], "failed")
+                self.assertEqual(self.hits["face"], 0)
+
+    def test_wrong_profile_name_blocks_face_comparison(self):
+        form = self.form(with_selfie=True)
+        result = self.call("verify_identity", form, first="Another")
+        self.assertEqual(result["status"], "failed")
+        self.assertEqual(self.hits["face"], 0)
+
+    def test_passport_heading_alone_does_not_pass_demographics_gate(self):
+        result = self.call("document_precheck", self.form(
+            id_type="passport", front="REPUBLIC OF THE PHILIPPINES PASSPORT",
+            back=None))
+        self.assertEqual(result["outcome"], "retry")
+        self.assertEqual(self.hits["face"], 0)
 
     def test_precheck_rejects_unnecessary_selfie(self):
         with self.assertRaises(RouteHTTPException) as exc:

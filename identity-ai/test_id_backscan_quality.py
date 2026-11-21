@@ -16,8 +16,6 @@ from passport_mrz_shadow import assess_passport_mrz
 FRONT_TEXTS = {
     "national_id": "PHILIPPINE IDENTIFICATION CARD GIVEN NAMES TEST",
     "drivers_license": "LAND TRANSPORTATION OFFICE DRIVER S LICENSE",
-    "umid": "UNIFIED MULTI PURPOSE ID",
-    "prc_id": "PRC PROFESSIONAL IDENTIFICATION CARD",
 }
 GOOD_PHILID_BACK = "BLOOD TYPE O MARITAL STATUS SINGLE DATE OF ISSUE"
 RANDOM_BACK = "THIS PICTURE CONTAINS TEXT BUT NO IDENTIFIABLE REVERSE SIDE"
@@ -71,6 +69,15 @@ class BackScanQualityTests(unittest.TestCase):
                 self.assertIn("document_back_evidence_inconclusive", result["warningCodes"])
                 self.assertTrue(result["backSideScreened"])
                 self.assertFalse(result["authenticityVerified"])
+
+    def test_removed_umid_and_prc_types_are_rejected_by_screening(self):
+        for kind, heading in (
+            ("umid", "UNIFIED MULTI PURPOSE ID"),
+            ("prc_id", "PRC PROFESSIONAL IDENTIFICATION CARD"),
+        ):
+            with self.subTest(kind=kind):
+                with self.assertRaises(ValueError):
+                    assess_document_sides(kind, heading, RANDOM_BACK)
 
     def test_national_id_repeated_front_heading_without_reverse_layout_not_positive(self):
         res = assess_document_sides("national_id", FRONT_TEXTS["national_id"], "PHILID REPUBLIC OF PHILIPPINES")

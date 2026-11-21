@@ -46,8 +46,6 @@ ACCEPTED_ID_TYPES = {
     "national_id",
     "drivers_license",
     "passport",
-    "umid",
-    "prc_id",
 }
 ALLOWED_IMAGE_TYPES = {
     "image/jpeg",
@@ -1420,7 +1418,7 @@ async def document_precheck(
     form = await request.form()
     declared_type = clean_text(form.get("idType"), 60).lower()
     if declared_type not in ACCEPTED_ID_TYPES:
-        raise HTTPException(status_code=400, detail="Choose one of the five supported government IDs.")
+        raise HTTPException(status_code=400, detail="Choose National ID, Driver's License or Passport only.")
     front_upload = form.get("idDocument")
     back_upload = form.get("idBackDocument")
     if declared_type != "passport" and not isinstance(back_upload, StarletteUploadFile):
@@ -1470,7 +1468,7 @@ async def document_precheck(
     if birthday_conflict and outcome == "retry":
         message = "The ID birth date may differ from your saved profile. Retake a clear ID or ask Admin to review your profile; this is not proof of fraud."
     elif outcome == "pass":
-        message = "ID format appears consistent. Birthday and barangay checks are OCR clues only; unresolved fields still require Admin review."
+        message = "ID type, profile name and birthday have consistent OCR clues; this does not authenticate ID issuance, confirm a live person, or replace Admin review."
     elif outcome == "review":
         message = "The selected National ID is too blurry. It may continue only to Admin rescan review, never automatic approval."
     elif "school_id_not_supported" in (screening.get("warningCodes") or []):
@@ -1481,6 +1479,11 @@ async def document_precheck(
         message = "Back scan may show the front of the ID. Retake the reverse side."
     elif "document_front_side_conflict" in (screening.get("warningCodes") or []):
         message = "Front scan appears to contain back-side details. Retake the portrait/front."
+    elif screening.get("status") == "text_consistent_unverified" and (
+        screening.get("profileNameCheck") != "possible_match"
+        or screening.get("profileBirthDateCheck") != "possible_match"
+    ):
+        message = "Name or birth date could not be positively compared to your saved profile. Check details or request an Admin rescan/review."
     else:
         message = "Document type or side could not be confirmed. Retake clear ID photos."
     return {"ok": True, "outcome": outcome, "documentScreening": screening,
@@ -1697,6 +1700,9 @@ async def verify_identity(
                 reason = "The scanned birth date may conflict with your saved profile. Correct the evidence and request independent Admin review; this does not prove fraud."
             elif document_screening.get("passportMrzCheck") in ("checksum_inconsistent_or_ocr_error", "multiple_candidates"):
                 reason = "The passport MRZ text could not be confirmed. Retake a clear bio-page scan for independent review."
+            elif (document_screening.get("profileNameCheck") != "possible_match"
+                  or document_screening.get("profileBirthDateCheck") != "possible_match"):
+                reason = "OCR could not positively compare the document name and birth date with your account. Request Admin review or rescan; no face match was attempted."
             elif document_screening.get("warningCodes"):
                 reason = "The ID scan contains unresolved OCR warnings. Correct the document photos before face comparison."
             elif screening_status == "mismatch":

@@ -7,7 +7,7 @@ No photos, ID numbers, DOB, raw OCR text or facial features are persisted.
 """
 
 SUPPORTED_ID_TYPES = frozenset({
-    "national_id", "drivers_license", "passport", "umid", "prc_id",
+    "national_id", "drivers_license", "passport",
 })
 CONFLICT_VALUES = frozenset({"possible_conflict", "conflict"})
 BAD_MRZ_VALUES = frozenset({
@@ -43,12 +43,19 @@ def screening_ready_for_face_comparison(screening, declared_type):
     ):
         return False
 
-    if (
-        screening.get("profileBirthDateCheck") in CONFLICT_VALUES
-        or screening.get("profileNameCheck") in CONFLICT_VALUES
-        or screening.get("profileAddressCheck") in CONFLICT_VALUES
-        or screening.get("passportMrzBirthDateCheck") in CONFLICT_VALUES
-        or screening.get("passportMrzCheck") in BAD_MRZ_VALUES
-    ):
+    # In this demo/research path, compare faces only after positive OCR clues
+    # for BOTH the resident's name and DOB. Missing, unreadable, or unchecked
+    # demographics must route to an Admin rescan/review rather than advance.
+    # This remains non-decisional: OCR text can be forged or misread.
+    if (screening.get("profileNameCheck") != "possible_match"
+            or screening.get("profileBirthDateCheck") != "possible_match"):
+        return False
+
+    # Address is not universally printed on government IDs (e.g. passports).
+    # If the scanner flags a definite conflict, fail closed; otherwise missing
+    # address is for independent Admin verification, not a biometric claim.
+    if (screening.get("profileAddressCheck") in CONFLICT_VALUES
+            or screening.get("passportMrzBirthDateCheck") in CONFLICT_VALUES
+            or screening.get("passportMrzCheck") in BAD_MRZ_VALUES):
         return False
     return True

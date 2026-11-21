@@ -1,0 +1,70 @@
+name: Three-ID Lock — Staging AI (NO DEPLOY)
+on:
+  push:
+    branches:
+      - release/staging-ai-three-id-lock-20261121
+    paths:
+      - 'identity-ai/main.py'
+      - 'identity-ai/document_screening.py'
+      - 'identity-ai/strict_document_screening.py'
+      - 'identity-ai/test_document_screening.py'
+      - 'identity-ai/test_strict_document_screening.py'
+      - 'identity-ai/test_ai_route_contract.py'
+      - 'identity-ai/face_preflight_policy.py'
+      - 'identity-ai/test_face_preflight_policy.py'
+      - 'identity-ai/profile_consistency.py'
+      - 'identity-ai/test_profile_consistency.py'
+      - 'identity-ai/test_id_backscan_quality.py'
+      - '.github/workflows/test-staging-three-id-lock-ai-no-deploy-20261121.yml'
+permissions:
+  contents: read
+jobs:
+  ai-only-three-id-allowlist:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Download immutable source archive without legacy submodule
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          [[ "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]] || exit 2
+          curl -fLsS --retry 3 -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" "https://api.github.com/repos/${GITHUB_REPOSITORY}/zipball/$SOURCE_SHA" -o /tmp/id3-ai.zip
+          mkdir -p "$RUNNER_TEMP/id3-ai"
+          unzip -q /tmp/id3-ai.zip -d "$RUNNER_TEMP/id3-ai"
+          ROOT="$(find "$RUNNER_TEMP/id3-ai" -mindepth 1 -maxdepth 1 -type d -print -quit)"
+          cp -a "$ROOT/." "$GITHUB_WORKSPACE/"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Assert three accepted ID types in API and both OCR screening engines
+        run: |
+          python - <<'PY'
+          import ast
+          from pathlib import Path
+          exact = {'national_id','drivers_license','passport'}
+          main=ast.parse(Path("identity-ai/main.py").read_text())
+          expression=next(n.value for n in main.body if isinstance(n,ast.Assign) and any(isinstance(t,ast.Name) and t.id=="ACCEPTED_ID_TYPES" for t in n.targets))
+          assert set(ast.literal_eval(expression))==exact
+          for path in ["identity-ai/document_screening.py","identity-ai/strict_document_screening.py","identity-ai/face_preflight_policy.py"]:
+              tree=ast.parse(Path(path).read_text())
+              expected_symbol = "SUPPORTED_ID_TYPES" if path.endswith("face_preflight_policy.py") else "SUPPORTED"
+              expression=next(n.value for n in tree.body if isinstance(n,ast.Assign) and any(isinstance(t,ast.Name) and t.id==expected_symbol for t in n.targets))
+              assert set(ast.literal_eval(expression.args[0]))==exact, path
+          print("PASS: all AI three-ID allowlists exactly match")
+          PY
+      - name: Run strict ID, legacy OCR and real extracted HTTP handler tests (synthetic only)
+        env:
+          PYTHONPATH: identity-ai
+        run: |
+          python -m py_compile identity-ai/main.py identity-ai/document_screening.py identity-ai/strict_document_screening.py identity-ai/face_preflight_policy.py identity-ai/profile_consistency.py
+          python -m unittest discover -s identity-ai -p test_document_screening.py -v
+          python -m unittest discover -s identity-ai -p test_strict_document_screening.py -v
+          python -m unittest discover -s identity-ai -p test_ai_route_contract.py -v
+          python -m unittest discover -s identity-ai -p test_face_preflight_policy.py -v
+          python -m unittest discover -s identity-ai -p test_profile_consistency.py -v
+          python -m unittest discover -s identity-ai -p test_id_backscan_quality.py -v
+      - name: No real IDs or deployments
+        run: |
+          echo 'Only three synthetic ID classes: National ID, Driver License and Passport. UMID and PRC must be rejected even by direct AI calls. No real biometric media, model-accuracy claims, staging deployment or production change.' >> "$GITHUB_STEP_SUMMARY"

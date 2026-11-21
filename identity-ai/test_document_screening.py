@@ -28,10 +28,11 @@ class GovernmentIdScreeningTests(unittest.TestCase):
         self.assertEqual(actual["detectedIdType"], "passport")
         self.assertEqual(actual["status"], "text_consistent_unverified")
 
-    def test_umid(self):
-        actual = assess_document_text("other_government_id", "UNIFIED MULTI-PURPOSE ID")
-        self.assertEqual(actual["status"], "text_consistent_unverified")
-        self.assertEqual(actual["detectedIdType"], "other_government_id")
+    def test_removed_government_ids_are_rejected(self):
+        for id_type in ("umid", "prc_id", "other_government_id"):
+            with self.subTest(id_type=id_type):
+                with self.assertRaises(ValueError):
+                    assess_document_text(id_type, "UNIFIED MULTI-PURPOSE ID")
 
     def test_declared_type_mismatch(self):
         actual = assess_document_text("passport", "LAND TRANSPORTATION OFFICE DRIVER'S LICENSE")
@@ -115,7 +116,6 @@ class GovernmentIdScreeningTests(unittest.TestCase):
             ("national_id", "UNIVERSITY ID STUDENT ID PhilID"),
             ("drivers_license", "SCHOOL ID DRIVER'S LICENSE"),
             ("passport", "CAMPUS ID PASSPORT"),
-            ("other_government_id", "STUDENT IDENTIFICATION CARD UMID"),
         )
         for declared_type, text in examples:
             with self.subTest(declared_type=declared_type):
