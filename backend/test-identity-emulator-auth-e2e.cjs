@@ -19,6 +19,7 @@ const {getProfileRole,isApprovedAccount,isOperationalAdminProfile} = require("./
 const {isVerifiedFirebaseToken,isCompletedVolunServeProfile} = require("./verifiedFirebaseToken");
 const {selectedIdRecognized} = require("./selectedIdPolicy");
 const {reviewIssuerEvidence} = require("./identityIssuerReviewPolicy");
+const {installManualIdentityReviewRoutes} = require("./identityManualReviewRoutes");
 
 const PROJECT = "demo-volunserve-identity-e2e";
 const AUTH_HOST = "127.0.0.1:9099";
@@ -68,6 +69,8 @@ const names={
   inactive:"inactive_emulator_001",
   unverified:"unverified_emulator_001",
   guest:"guest_emulator_001",
+  manual:"manual_resident_emulator_001",
+  manualRetry:"manual_retry_resident_emulator_001",
 };
 const pw="EmulatorOnlyNoRealPassword_2026!";
 const safeBase={
@@ -112,6 +115,19 @@ function createActualHandlers(app) {
     actualStatus+actualAdminRoutes,sandbox,
     {filename:"actual_backend_identity_routes_emulator.js",timeout:7000}
   );
+  // Dedicated no-photo workflow reads actual signed-in emulator tokens and
+  // writes only to the explicitly guarded demo Auth/Firestore emulators.
+  // The injected staging-project label is a pure runtime eligibility stub.
+  // It is NOT a Firebase app, credential or production/staging connection.
+  installManualIdentityReviewRoutes({
+    app,db:transactionRealmBridge,
+    auth:{app:{options:{projectId:"volunserve-full-staging"}}},
+    FieldValue,requireFirebaseUser:sandbox.requireFirebaseUser,
+    runtimeEnvironment:{
+      VOLUNSERVE_STAGING_STRICT:"1",
+      VOLUNSERVE_DEPLOYMENT_ENV:"full-staging",
+    },
+  });
   // Test ONLY the literal media gate from actual backend/server.js.
   app.post("/emulator-test/identity-media",
     sandbox.requireFirebaseUser,sandbox.requireStagingIdentityMediaApproval,
@@ -177,6 +193,10 @@ before(async()=>{
     unverified:{role:"resident",status:"approved",residentAccess:true,
       identityStatus:"pending",identityVerified:false,fullName:"Unverified Mailbox"},
     guest:{role:"guest",status:"pending",fullName:"Incomplete Account"},
+    manual:{role:"resident",status:"approved",residentAccess:true,
+      identityStatus:"basic",identityVerified:false,fullName:"Fictional Manual Resident"},
+    manualRetry:{role:"resident",status:"approved",residentAccess:true,
+      identityStatus:"basic",identityVerified:false,fullName:"Fictional Manual Retry Resident"},
   };
   for(const [kind,uid] of Object.entries(names)){
     const email=kind+"@example.invalid";
@@ -335,4 +355,85 @@ test("Admin queue & audit reflect ONLY original authorized transactions",async()
   for(const forbidden of ["rawMrz","untrustedSelfieBytes","privateKey","idDocumentBytes"]){
     assert.equal(responseStrings.includes(forbidden),false);
   }
+});
+
+test("Authenticated no-photo Resident request -> Admin review -> verified status and audit",async()=>{
+  // This is REAL emulator Auth + Firestore, but no real staging account/media.
+  const url="/api/identity/manual-review-request";
+  assert.equal((await req("POST",url,undefined,{consent:true,idType:"drivers_license"})).code,401);
+  assert.equal((await req("POST",url,tokens.guest,{consent:true,idType:"drivers_license"})).code,403);
+  assert.equal((await req("POST",url,tokens.manual,{consent:true,idType:"school_id"})).code,400);
+  const accepted=await req("POST",url,tokens.manual,{consent:true,idType:"drivers_license"});
+  assert.equal(accepted.code,201,JSON.stringify(accepted.body));
+  assert.equal(accepted.body.status,"pending");
+  assert.equal(accepted.body.identityVerified,false);
+  assert.equal(accepted.body.manualReviewChannel,"lgu_in_person_no_media");
+  assert.equal((await req("POST",url,tokens.manual,{consent:true,idType:"drivers_license"})).code,409);
+  const residentPending=await status(tokens.manual);
+  assert.equal(residentPending.code,200);
+  assert.equal(residentPending.body.identityStatus,"pending");
+  assert.equal(residentPending.body.identityVerified,false);
+  const forbidden=await reviews(tokens.manual);
+  assert.equal(forbidden.code,403);
+  const queue=await reviews(tokens.admin);
+  assert.equal(queue.code,200);
+  const manualRow=queue.body.items.find(x=>x.uid===names.manual);
+  assert.ok(manualRow,"staged Admin queue must include pending no-media request");
+  assert.equal(manualRow.manualIdType,"drivers_license");
+  assert.equal(manualRow.manualReviewChannel,"lgu_in_person_no_media");
+  assert.equal(manualRow.documentScreening,null);
+  assert.equal(manualRow.identityVerified,false);
+  const invalid=await decision(tokens.admin,names.manual,"verify",{
+    validationMethod:"in_person_lgu_validation",
+    notes:"Fictional in-person document review, without physical verification.",
+    inPersonIdInspected:false,
+    inPersonFaceCompared:false,
+  });
+  assert.equal(invalid.code,409,"must refuse Admin Verify without independent checks");
+  assert.equal((await status(tokens.manual)).body.identityVerified,false);
+  const verified=await decision(tokens.admin,names.manual,"verify",{
+    validationMethod:"in_person_lgu_validation",
+    inPersonIdInspected:true,inPersonFaceCompared:true,
+    notes:"FICTIONAL EMULATOR ATTESTATION ONLY; no actual human or document was reviewed.",
+  });
+  assert.equal(verified.code,200,JSON.stringify(verified.body));
+  assert.equal(verified.body.identityVerified,true);
+  const after=await status(tokens.manual);
+  assert.equal(after.code,200);
+  assert.equal(after.body.identityStatus,"verified");
+  assert.equal(after.body.identityVerified,true);
+  assert.equal(after.body.padValidated,false);
+  const saved=await db.collection("users").doc(names.manual).get();
+  assert.equal(saved.data().identityVerified,true);
+  assert.equal(saved.data().identityVerifiedBy,names.admin);
+  const record=await db.collection("identityVerifications").doc(names.manual).get();
+  assert.equal(record.data().manualReviewDecision,"verified");
+  assert.equal(record.data().originalIdInspectedInPerson,true);
+  assert.equal(record.data().faceComparedInPerson,true);
+  assert.equal(record.data().issuerApiAuthenticityVerified,false);
+  assert.equal((await decision(tokens.admin,names.manual,"verify",{
+    validationMethod:"in_person_lgu_validation",
+    inPersonIdInspected:true,inPersonFaceCompared:true,
+  })).code,409,"must reject duplicate Admin review");
+});
+
+test("Authenticated manual no-photo Require Retry updates only fictional Resident status",async()=>{
+  const url="/api/identity/manual-review-request";
+  const created=await req("POST",url,tokens.manualRetry,{consent:true,idType:"passport"});
+  assert.equal(created.code,201,JSON.stringify(created.body));
+  assert.equal(created.body.identityVerified,false);
+  const retry=await decision(tokens.admin,names.manualRetry,"require_retry",{
+    validationMethod:"",issuerReviewAttested:false,
+    notes:"Synthetic request requires an in-person passport inspection; no media was used.",
+  });
+  assert.equal(retry.code,200,JSON.stringify(retry.body));
+  const current=await status(tokens.manualRetry);
+  assert.equal(current.code,200);
+  assert.equal(current.body.identityStatus,"failed");
+  assert.equal(current.body.identityVerified,false);
+  assert.equal(current.body.decision,"retry_required");
+  const audit=await db.collection("adminActivityLogs").get();
+  const actions=audit.docs.filter(x=>x.data().targetUid===names.manualRetry);
+  assert.equal(actions.length,1);
+  assert.equal(actions[0].data().performedBy,names.admin);
 });
