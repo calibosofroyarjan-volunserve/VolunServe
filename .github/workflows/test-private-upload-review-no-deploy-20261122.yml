@@ -1,0 +1,31 @@
+name: Private National ID Upload Lab - Synthetic QA (NO DEPLOY)
+on:
+  push:
+    branches:
+      - feat/staging-local-upload-review-20261122
+    paths:
+      - 'identity-ai/private_upload_id_review.py'
+      - 'identity-ai/test_private_upload_id_review.py'
+      - 'Start-VolunServe-Private-Upload-Review.cmd'
+      - '.github/workflows/test-private-upload-review-no-deploy-20261122.yml'
+permissions:
+  contents: read
+jobs:
+  local-upload-review-synthetic-only:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Syntax check
+        run: python -m py_compile identity-ai/private_upload_id_review.py identity-ai/test_private_upload_id_review.py
+      - name: Run synthetic orchestration and privacy tests
+        run: python -m unittest discover -s identity-ai -p 'test_private_upload_id_review.py' -v
+      - name: Report scope
+        run: |
+          echo 'No real IDs, portraits, account access, Firebase, Node backend, deployment, or actual model accuracy validation occurred.' >> "$GITHUB_STEP_SUMMARY"
