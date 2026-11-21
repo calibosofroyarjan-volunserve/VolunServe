@@ -7,7 +7,7 @@
  */
 const crypto=require("node:crypto");
 const {publicKey,canonicalMode}=require("./communityPresence");
-const FRESH_MS=100000, LAST_SEEN_MAX_MS=7*86400000, DIRECTORY_SCAN=160;
+const FRESH_MS=100000, LAST_SEEN_MAX_MS=7*86400000;
 const clean=(v,n=120)=>String(v??"").replace(/[\u0000-\u001f\u007f]/g," ").trim().slice(0,n);
 const numberTime=v=>{
   if(!v)return 0;
@@ -27,7 +27,7 @@ const safePhoto=v=>{
 };
 const display=(uid,p,now=Date.now())=>{
  const last=numberTime(p.updatedAt);
- const online=last>0&&now-last<FRESH_MS;
+ const online=p.visible===true&&last>0&&now-last>=0&&now-last<FRESH_MS;
  const showOffline=p.showLastSeen===true;
  const name=clean(p.displayName||"Community member",100);
  const mode=p.mode==="volunteer"?"volunteer":"resident";
@@ -36,7 +36,7 @@ const display=(uid,p,now=Date.now())=>{
   verified:p.verified===true,
   badge:mode==="volunteer"?"Volunteer":p.verified===true?"Verified Resident":"Basic Resident",
   online, lastSeenAt:showOffline&&last>0?new Date(last).toISOString():null,
-  acceptChats:p.acceptChats===true,
+  directoryListed:p.directoryListed===true,acceptChats:p.acceptChats===true,
  };
 };
 const conversationId=(a,b)=>crypto.createHash("sha256").update(
@@ -53,17 +53,35 @@ function installCommunitySocial({app,db,requireFirebaseUser,loadUserProfile,isAp
   return p;
  };
  const scan=async()=>{
-  // A single-field query works with the existing automatic Firestore indexes.
-  // Note: this list is limited; no user email, phone or verification fields are read.
-  const snapshot=await db.collection("communityPresence").where("visible","==",true).limit(DIRECTORY_SCAN).get();
-  const now=Date.now();
-  return snapshot.docs.map(doc=>({uid:doc.id,p:doc.data()||{}}))
-   .filter(({p})=>{
-     const last=numberTime(p.updatedAt);
-     const elapsed=now-last;
-     return p.visible===true && ["resident","volunteer"].includes(p.mode)&&
-       last>0 && elapsed>=0 && (elapsed<FRESH_MS || (p.showLastSeen===true&&elapsed<LAST_SEEN_MAX_MS));
-   });
+  // Read ONLY existing opt-in presence/directory documents; never enumerate
+  // users, Firebase Auth accounts or application records to populate the list.
+  // Both single-field Firestore queries use default automatic indexes.
+  const [shown,listed]=await Promise.all([
+    db.collection("communityPresence").where("visible","==",true).get(),
+    db.collection("communityPresence").where("directoryListed","==",true).get(),
+  ]);
+  const merged=new Map();
+  for(const doc of [...shown.docs,...listed.docs])
+    merged.set(doc.id,{uid:doc.id,p:doc.data()||{}});
+  const now=Date.now(),candidates=[...merged.values()].filter(({p})=>{
+    const elapsed=now-numberTime(p.updatedAt);
+    const legacyPresent=p.visible===true && elapsed>=0 &&
+      (elapsed<FRESH_MS||(p.showLastSeen===true&&elapsed<LAST_SEEN_MAX_MS));
+    return ["resident","volunteer"].includes(p.mode) &&
+      (p.directoryListed===true||legacyPresent);
+  });
+  // Recheck current approval/role on every read. Former, suspended or
+  // rejected members are never leaked merely because a stale consent doc remains.
+  const checked=await Promise.all(candidates.map(async row=>{
+    const canonical=await loadUserProfile(row.uid);
+    if(!permitted(canonical,isApprovedAccount))return null;
+    return {...row,p:{
+      ...row.p,
+      mode:canonicalMode(canonical),
+      verified:canonical.identityVerified===true||canonical.identityStatus==="verified",
+    }};
+  }));
+  return checked.filter(Boolean);
  };
  const peerForKey=async(uid,key,includePast=true)=>{
    if(!keyMatches(key))return null;
@@ -83,7 +101,7 @@ function installCommunitySocial({app,db,requireFirebaseUser,loadUserProfile,isAp
    }
    return null;
  };
- const publicPeer=({uid,p})=>p.visible===true?
+ const publicPeer=({uid,p})=>(p.visible===true||p.directoryListed===true)?
    display(uid,p):{key:publicKey(uid),name:"Community member",
     avatarUrl:"",mode:"resident",verified:false,badge:"Private",online:false,lastSeenAt:null,acceptChats:false};
  const isBlocked=async(a,b)=>{
@@ -96,10 +114,14 @@ function installCommunitySocial({app,db,requireFirebaseUser,loadUserProfile,isAp
  const canMessage=async(viewerId,viewerProfile,peer)=>{
    if(!peer||peer.uid===viewerId||!permitted(viewerProfile,isApprovedAccount))return false;
    const self=await db.collection("communityPresence").doc(viewerId).get();
-   if(!self.exists||self.data()?.visible!==true||self.data()?.acceptChats!==true)return false;
-   if(peer.p.visible!==true||peer.p.acceptChats!==true)return false;
+   if(!self.exists||self.data()?.acceptChats!==true||
+      (self.data()?.visible!==true&&self.data()?.directoryListed!==true))return false;
+   if(peer.p.acceptChats!==true||
+      (peer.p.visible!==true&&peer.p.directoryListed!==true))return false;
+   // Legacy online-only profiles expire; explicit directory listings persist.
    const last=numberTime(peer.p.updatedAt);
-   if(last<=0||Date.now()-last>=LAST_SEEN_MAX_MS)return false;
+   if(peer.p.directoryListed!==true &&
+      (last<=0||Date.now()-last>=LAST_SEEN_MAX_MS))return false;
    const canonical=await loadUserProfile(peer.uid);
    if(!permitted(canonical,isApprovedAccount))return false;
    return !(await isBlocked(viewerId,peer.uid));
@@ -135,23 +157,36 @@ function installCommunitySocial({app,db,requireFirebaseUser,loadUserProfile,isAp
      if(!await authViewer(req,res))return;
      const d=await db.collection("communityPresence").doc(req.firebaseUser.uid).get(),p=d.data()||{};
      res.set("Cache-Control","private, no-store");
-     res.json({ok:true,visible:p.visible===true,showLastSeen:p.showLastSeen===true,acceptChats:p.acceptChats===true});
+     res.json({ok:true,visible:p.visible===true,directoryListed:p.directoryListed===true,showLastSeen:p.showLastSeen===true,acceptChats:p.acceptChats===true});
    }catch(e){errorResponse(res,e,"Directory preferences");}
  });
  app.post("/api/community/directory/preferences",requireFirebaseUser,async(req,res)=>{
    try{
-     if(!await authViewer(req,res))return;
+     const account=await authViewer(req,res);if(!account)return;
      const options={};
-     for(const k of ["showLastSeen","acceptChats"]){
+     for(const k of ["showLastSeen","acceptChats","directoryListed"]){
        if(Object.prototype.hasOwnProperty.call(req.body||{},k)){
          if(typeof req.body[k]!=="boolean")return res.status(400).json({ok:false,message:"Invalid preference value."});
          options[k]=req.body[k];
        }
      }
-     if(!Object.keys(options).length||Object.keys(req.body||{}).some(k=>!["showLastSeen","acceptChats"].includes(k)))
+     if(!Object.keys(options).length||Object.keys(req.body||{}).some(k=>!["showLastSeen","acceptChats","directoryListed"].includes(k)))
        return res.status(400).json({ok:false,message:"Only consent preferences can be changed."});
+     if(options.directoryListed===true){
+       // Consent is explicit; hydrate only public values from the signed-in
+       // approved account. Never copy contact, ID, address or location fields.
+       options.mode=canonicalMode(account);
+       options.verified=account.identityVerified===true||account.identityStatus==="verified";
+       options.displayName=clean(account.fullName||
+         [account.firstName,account.lastName].filter(Boolean).join(" ")||
+         req.firebaseUser.name||"Community member",100);
+       options.avatarUrl=safePhoto(account.profilePictureUrl);
+       // updatedAt is useful for existing chat compatibility but does NOT
+       // expose online status while visible=false.
+       options.updatedAt=new Date();
+     }
      await db.collection("communityPresence").doc(req.firebaseUser.uid).set(options,{merge:true});
-     res.json({ok:true,...options});
+     res.json({ok:true,showLastSeen:options.showLastSeen,acceptChats:options.acceptChats,directoryListed:options.directoryListed});
    }catch(e){errorResponse(res,e,"Directory preferences");}
  });
  app.get("/api/community/directory/:memberKey",requireFirebaseUser,async(req,res)=>{
