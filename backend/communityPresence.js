@@ -98,7 +98,7 @@ function installCommunityPresence({app,db,requireFirebaseUser,loadUserProfile,is
           displayName:clean(p.fullName||[p.firstName,p.lastName].filter(Boolean).join(" ")||
             req.firebaseUser.name||"Community member",100),
           avatarUrl:safePhoto(p.profilePictureUrl),
-          updatedAt:new Date(),
+          updatedAt:new Date(),activeAt:new Date(),activeMode:canonicalMode(p),
         },{merge:true});
       }
       return res.json({ok:true,visible});
@@ -110,19 +110,32 @@ function installCommunityPresence({app,db,requireFirebaseUser,loadUserProfile,is
       const p=await authorized(req,res);if(!p)return;
       const record=db.collection("communityPresence").doc(req.firebaseUser.uid);
       const old=await record.get();
-      if(!old.exists || old.data()?.visible!==true)
-        return res.json({ok:true,visible:false});
-      const previous=old.data()||{};
+      const previous=old.exists?old.data()||{}:{};
       const mode=canonicalMode(p);
+      const visible=previous.visible===true;
+      const active=millis(previous.activeAt);
+      const now=Date.now();
+      const needsActivity=!Number.isFinite(active)||now-active>=WRITE_INTERVAL_MS||
+        previous.activeMode!==mode;
+      // Anonymous aggregate activity: record only the signed-in approved UID,
+      // current mode and timestamp. Never publish a hidden user's identity,
+      // profile picture or last-seen timestamp in a public directory.
+      if(!visible) {
+        if(needsActivity)await record.set({
+          activeAt:new Date(now),activeMode:mode,
+        },{merge:true});
+        return res.json({ok:true,visible:false});
+      }
       const verified=p.identityVerified===true || p.identityStatus==="verified";
       const last=millis(previous.updatedAt);
       if(mode!==previous.mode || verified!==previous.verified ||
-        !Number.isFinite(last) || Date.now()-last>=WRITE_INTERVAL_MS) {
+        !Number.isFinite(last) || now-last>=WRITE_INTERVAL_MS || needsActivity) {
         await record.set({
           mode,verified,visible:true,
           displayName:clean(p.fullName||[p.firstName,p.lastName].filter(Boolean).join(" ")||
             req.firebaseUser.name||"Community member",100),
-          avatarUrl:safePhoto(p.profilePictureUrl),updatedAt:new Date(),
+          avatarUrl:safePhoto(p.profilePictureUrl),updatedAt:new Date(now),
+          activeAt:new Date(now),activeMode:mode,
         },{merge:true});
       }
       return res.json({ok:true,visible:true,mode});
