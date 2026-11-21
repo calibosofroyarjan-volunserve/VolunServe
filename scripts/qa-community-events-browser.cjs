@@ -87,7 +87,7 @@ async function main(){
     assert(body.includes("Upcoming"),"Upcoming tab missing");
     if (width < 640) {
       const eventTitle=await page.getByText("Community Events",{exact:true}).last().boundingBox();
-      const myEventsButton=await page.getByText(/My Events \\(2\\)/).last().boundingBox();
+      const myEventsButton=await page.getByText("My Events (2)",{exact:true}).last().boundingBox();
       assert(eventTitle && myEventsButton,"Missing mobile event title / shortcut");
       console.log("QA_MOBILE_TITLE_LAYOUT",JSON.stringify({
         titleWidth:eventTitle.width,titleY:eventTitle.y,
