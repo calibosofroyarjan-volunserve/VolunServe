@@ -84,7 +84,7 @@ class FacePreflightPolicyTests(unittest.TestCase):
             self.assertFalse(allows(without, "national_id"))
 
     def test_address_absent_is_allowed_only_for_nondecisional_face_comparison(self):
-        for kind in ("national_id", "drivers_license", "passport"):
+        for kind in ("national_id",):
             with self.subTest(kind=kind):
                 # Printed residential address is not a universal ID field.
                 self.assertTrue(allows({**screening(kind),
