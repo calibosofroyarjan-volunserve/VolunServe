@@ -115,14 +115,10 @@ function installCommunitySocial({app,db,requireFirebaseUser,loadUserProfile,isAp
  const canMessage=async(viewerId,viewerProfile,peer)=>{
    if(!peer||peer.uid===viewerId||!permitted(viewerProfile,isApprovedAccount))return false;
    const self=await db.collection("communityPresence").doc(viewerId).get();
-   if(!self.exists||self.data()?.acceptChats!==true||
-      (self.data()?.visible!==true&&self.data()?.directoryListed!==true))return false;
-   if(peer.p.acceptChats!==true||
-      (peer.p.visible!==true&&peer.p.directoryListed!==true))return false;
-   // Legacy online-only profiles expire; explicit directory listings persist.
-   const last=numberTime(peer.p.updatedAt);
-   if(peer.p.directoryListed!==true &&
-      (last<=0||Date.now()-last>=LAST_SEEN_MAX_MS))return false;
+   // An explicit chat opt-in is independent of online and directory-photo
+   // sharing. Both approved members must enable chat; no silent enabling.
+   if(!self.exists||self.data()?.acceptChats!==true)return false;
+   if(peer.p.acceptChats!==true)return false;
    const canonical=await loadUserProfile(peer.uid);
    if(!permitted(canonical,isApprovedAccount))return false;
    return !(await isBlocked(viewerId,peer.uid));
@@ -166,7 +162,7 @@ function installCommunitySocial({app,db,requireFirebaseUser,loadUserProfile,isAp
        .sort((a,b)=>Number(b.online)-Number(a.online)||
          (b.lastSeenAt||"").localeCompare(a.lastSeenAt||"")||a.name.localeCompare(b.name));
      res.set("Cache-Control","private, no-store");
-     res.json({ok:true,members:entries,
+     res.json({ok:true,members:entries,selfKey:publicKey(req.firebaseUser.uid),
        onlineCounts:{residents:entries.filter(x=>x.online&&x.mode==="resident").length,
          volunteers:entries.filter(x=>x.online&&x.mode==="volunteer").length},
        listedCount:entries.length,registeredCount,activeCounts});
@@ -228,8 +224,24 @@ function installCommunitySocial({app,db,requireFirebaseUser,loadUserProfile,isAp
        const c=d.data()||{};
        const peerId=Array.isArray(c.participants)?c.participants.find(id=>id!==uid):null;
        if(typeof peerId!=="string")return null;
-       const p=await db.collection("communityPresence").doc(peerId).get();
-       return {peer:publicPeer({uid:peerId,p:p.exists?p.data()||{}:{}}),
+       const [p,profile]=await Promise.all([
+         db.collection("communityPresence").doc(peerId).get(),
+         loadUserProfile(peerId),
+       ]);
+       if(!permitted(profile,isApprovedAccount))return null;
+       const presence=p.exists?p.data()||{}:{};
+       const safePeer={
+         ...presence,
+         displayName:clean(profile.fullName||
+           [profile.firstName,profile.lastName].filter(Boolean).join(" ")||
+           "Community member",100),
+         mode:canonicalMode(profile),
+         verified:profile.identityVerified===true||profile.identityStatus==="verified",
+         avatarUrl:presence.directoryListed===true||presence.visible===true?
+           safePhoto(profile.profilePictureUrl):"",
+         showLastSeen:presence.visible===true&&presence.showLastSeen===true,
+       };
+       return {peer:display(peerId,safePeer),
          lastMessage:clean(c.lastMessage,120),
          lastMessageAt:numberTime(c.updatedAt)>0?new Date(numberTime(c.updatedAt)).toISOString():null,
          lastSenderIsMe:c.lastSender===uid};
@@ -262,7 +274,7 @@ function installCommunitySocial({app,db,requireFirebaseUser,loadUserProfile,isAp
        }).reverse();
      }
      res.set("Cache-Control","private, no-store");
-     res.json({ok:true,member:publicPeer(peer),canSend:sendAllowed,blockedByMe:ownBlock.exists&&ownBlock.data()?.blocked===true,messages});
+     res.json({ok:true,member:display(peer.uid,peer.p),canSend:sendAllowed,blockedByMe:ownBlock.exists&&ownBlock.data()?.blocked===true,messages});
    }catch(e){errorResponse(res,e,"Conversation");}
  });
  app.post("/api/community/chats/:memberKey",requireFirebaseUser,async(req,res)=>{
