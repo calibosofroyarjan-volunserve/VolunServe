@@ -97,7 +97,7 @@ export default function CommunityMemberProfile() {
         </View>
         <View style={styles.privacy}>
           <Ionicons name="shield-checkmark-outline" size={19} color="#567E71"/>
-          <Text style={styles.privacyText}>Approved Residents and Volunteers appear in the member directory with basic account information. Online status and Last Seen require separate sharing consent. Private contact details, identity documents, GPS and attendance records are not displayed. Messaging requires permission from both members.</Text>
+          <Text style={styles.privacyText}>Only approved Residents and Volunteers who agreed to basic directory sharing appear with their names, roles and optional photos. Online status and Last Seen require separate sharing consent. Contact details, identity documents, GPS and attendance records remain private. Messaging requires permission from both members.</Text>
         </View>
         </>:null}
     </View>
