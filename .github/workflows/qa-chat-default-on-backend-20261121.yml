@@ -1,0 +1,38 @@
+name: QA Approved Auto Chat Backend (NO DEPLOY)
+on:
+  push:
+    branches: [fix/chat-default-on-approved-20261121]
+    paths:
+      - 'backend/communitySocial.js'
+      - 'backend/test-communitySocial.js'
+      - '.github/workflows/qa-chat-default-on-backend-20261121.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  auto-chat:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Validate syntax
+        run: |
+          node --check backend/communitySocial.js
+          node --check backend/test-communitySocial.js
+      - name: Run member directory, old/new offline chat, pause and block regression
+        run: node --test backend/test-communitySocial.js backend/test-communityPresence.js
+      - name: Confirm no unrelated backend changes
+        run: |
+          git fetch origin backend-live-protected --depth=1
+          python3 - <<'PY'
+          import subprocess
+          changed=set(subprocess.check_output(['git','diff','--name-only',
+            'origin/backend-live-protected','HEAD'],text=True).splitlines())
+          allowed={'backend/communitySocial.js','backend/test-communitySocial.js',
+            '.github/workflows/qa-chat-default-on-backend-20261121.yml'}
+          assert changed and changed.issubset(allowed), repr(changed)
+          print('PASS only private chat backend, tests and isolated QA changed')
+          PY
