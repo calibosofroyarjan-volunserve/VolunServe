@@ -361,6 +361,67 @@ jobs:
             }
             // END PINNED COMMUNITY EVENTS CONTROLLER GATE
 
+            // BEGIN PINNED COMMUNITY MAP MODAL CONTROLLER GATE
+            // Fail closed: only the new controller and this isolated verifier
+            // addition may change. Deploy source is the one-file production
+            // descendant, never the divergent protected branch application.
+            {
+              const controller=".github/workflows/release-community-map-modal-hosting-20261121.yml";
+              const verifier=".github/workflows/verify-reconciled-hosting-source-no-deploy-20261111.yml";
+              const changed=git("diff","--name-status","--no-renames",liveBase,commit)
+                .split("\n").filter(Boolean);
+              if(changed.length===2 && changed[0]==="A\t"+controller && changed[1]==="M\t"+verifier){
+                const oldHosting="d6080dea320821eb91e2a67f22a1053a8f04fa04";
+                const source="b80b8824ae3390dd7214b2cfa2ebe74fa6e33cbc";
+                const qa="0e1c32c0395c8e899bc605f0d624ba60253c4859";
+                const expectedEventBlob="2ad8dd5c2e0d2944b98bdfae1c843978dc6bc49c";
+                assert.equal(liveBase,"e6db9077e5b828a17ec4be59bed32b7cda83f6d8",
+                  "BLOCKED: protected base advanced; re-review release");
+                assert.equal(marker.revision,oldHosting,
+                  "BLOCKED: Hosting changed; rebase release on exact live");
+                assert.equal(blob(liveBase,verifier),"008fbb9477f8cee5075be97d8b0c7734247fcecf",
+                  "BLOCKED: baseline verifier drift");
+                assert.equal(blob(commit,controller),"4157cf7b29280555501a9860f0375a93a08189f6",
+                  "BLOCKED: unapproved release controller");
+                const baselineVerifier=git("show",liveBase+":"+verifier);
+                const proposedVerifier=git("show",commit+":"+verifier);
+                const start=proposedVerifier.indexOf(
+                  "            // BEGIN PINNED COMMUNITY MAP MODAL CONTROLLER GATE\n");
+                const end=proposedVerifier.indexOf(
+                  "            // END PINNED COMMUNITY MAP MODAL CONTROLLER GATE\n",start);
+                assert(start>=0&&end>start,"BLOCKED: isolated verifier gate markers missing");
+                const endOffset=end+
+                  "            // END PINNED COMMUNITY MAP MODAL CONTROLLER GATE\n".length;
+                assert.equal(proposedVerifier[endOffset],"\n",
+                  "BLOCKED: expected blank line after isolated gate");
+                const cleaned=proposedVerifier.slice(0,start)+proposedVerifier.slice(endOffset+1);
+                assert.equal(cleaned,baselineVerifier,
+                  "BLOCKED: existing protected verifier altered outside scoped gate");
+                git("merge-base","--is-ancestor",oldHosting,source);
+                assert.equal(git("diff","--name-status","--no-renames",oldHosting,source),
+                  "M\tapp/(tabs)/community-events.tsx",
+                  "BLOCKED: outdated or unrelated application source change");
+                assert.equal(blob(source,"app/(tabs)/community-events.tsx"),expectedEventBlob,
+                  "BLOCKED: source map UI drift");
+                assert.equal(blob(qa,"app/(tabs)/community-events.tsx"),expectedEventBlob,
+                  "BLOCKED: QA-tested map UI differs from release");
+                for(const p of [
+                  "app/(tabs)/community-events.tsx","components/volunteers/CommunityEventRoster.tsx",
+                  "package.json","package-lock.json","app.json","firebase.json",
+                  ".firebaserc","tsconfig.json","firestore.rules","storage.rules",
+                  "functions/index.js","functions/package.json","lib/firebase.ts",
+                  "scripts/guard-live-protected-release.cjs",
+                  ".github/workflows/auto-publish-protected-live-hosting.yml",
+                  ".github/workflows/release-live-protected-hosting.yml"
+                ])assert.equal(blob(commit,p),blob(liveBase,p),
+                  "BLOCKED: protected app/security/config change: "+p);
+                console.log("PASS one-file current-live-derived Community Events map dialog only");
+                console.log("NO DEPLOY on PR: production workflow checks QA and backs up Hosting");
+                return;
+              }
+            }
+            // END PINNED COMMUNITY MAP MODAL CONTROLLER GATE
+
             assert.equal(marker.revision,liveBase,
               "BLOCKED: protected base and production differ; reconcile FIRST");
             const text=git("diff","--name-status","--no-renames",liveBase,commit);
