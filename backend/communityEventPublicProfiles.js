@@ -72,6 +72,7 @@ function installCommunityEventPublicProfiles({app, db, requireFirebaseUser, load
         eventBarangay:clean(c.eventBarangay,90),
         eventLocation:clean(c.eventLocation,150),
         issuedAt:date(c.issuedAt),
+        issuedByName:clean(c.issuedByName || "VolunServe Administrator",90),
         serviceMinutes:count(c.verifiedServiceMinutes),
         verifiedHelps:count(c.verifiedHelps),
         peopleHelped:count(c.peopleHelped),
