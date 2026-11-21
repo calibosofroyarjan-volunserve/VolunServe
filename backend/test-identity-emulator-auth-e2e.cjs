@@ -433,7 +433,7 @@ test("Authenticated manual no-photo Require Retry updates only fictional Residen
   assert.equal(current.body.identityVerified,false);
   assert.equal(current.body.decision,"retry_required");
   const audit=await db.collection("adminActivityLogs").get();
-  const actions=audit.docs.filter(x=>x.data().targetUid===names.manualRetry);
+  const actions=audit.docs.filter(x=>x.data().residentUid===names.manualRetry);
   assert.equal(actions.length,1);
   assert.equal(actions[0].data().performedBy,names.admin);
 });
