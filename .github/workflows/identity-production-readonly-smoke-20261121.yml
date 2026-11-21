@@ -1,0 +1,48 @@
+name: Identity Production Read-Only Health and Auth Smoke (NO DEPLOY)
+on:
+  push:
+    branches:
+      - qa/identity-production-smoke-20261121
+    paths:
+      - .github/workflows/identity-production-readonly-smoke-20261121.yml
+permissions:
+  contents: read
+jobs:
+  identity-readonly-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check public service health and unauthenticated private identity boundaries
+        env:
+          NODE_OPTIONS: --no-warnings
+        run: |
+          node <<'NODE'
+          const checks = [
+            { label: 'production_backend_health', url: 'https://volunserve.onrender.com/health', expected: [200] },
+            { label: 'production_identity_ai_health', url: 'https://volunserve-identity-ai.onrender.com/health', expected: [200] },
+            { label: 'production_identity_status_requires_auth', url: 'https://volunserve.onrender.com/api/identity/status', expected: [401, 403] },
+            { label: 'production_admin_identity_queue_requires_auth', url: 'https://volunserve.onrender.com/api/admin/identity/reviews', expected: [401, 403] },
+            { label: 'production_identity_engine_health_requires_auth', url: 'https://volunserve.onrender.com/api/identity/engine-health', expected: [401, 403] }
+          ];
+          (async () => {
+            let failures = 0;
+            for (const check of checks) {
+              try {
+                const resp = await fetch(check.url, {
+                  method: 'GET',
+                  redirect: 'manual',
+                  signal: AbortSignal.timeout(120000),
+                  headers: { accept: 'application/json' }
+                });
+                const pass = check.expected.includes(resp.status);
+                console.log(check.label + ': ' + (pass ? 'PASS' : 'BLOCKED') + ' HTTP ' + resp.status);
+                if (!pass) failures++;
+              } catch (e) {
+                failures++;
+                console.log(check.label + ': BLOCKED network/timeout');
+              }
+            }
+            console.log('No credentials, account changes, ID/selfie media, private API response bodies, or deployment.');
+            if (failures) process.exitCode = 1;
+          })().catch(() => { process.exitCode = 1; });
+          NODE
