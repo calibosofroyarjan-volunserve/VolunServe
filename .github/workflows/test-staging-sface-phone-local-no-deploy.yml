@@ -5,6 +5,9 @@ on:
     paths:
       - 'identity-ai/evaluate_sface_pairs_local.py'
       - 'identity-ai/check_sface_two_photos_local.py'
+      - 'identity-ai/choose_sface_pair_local.py'
+      - 'identity-ai/test_sface_photo_picker_local.py'
+      - 'Start-VolunServe-SFace-Two-Photo-Test.cmd'
       - 'identity-ai/test_sface_phone_pair_local.py'
       - 'identity-ai/SFACE_TWO_PHOTO_LOCAL_QUICKSTART.md'
       - '.github/workflows/test-staging-sface-phone-local-no-deploy.yml'
@@ -42,8 +45,9 @@ jobs:
         env:
           PYTHONPATH: identity-ai
         run: |
-          python -m py_compile identity-ai/evaluate_sface_pairs_local.py identity-ai/check_sface_two_photos_local.py
+          python -m py_compile identity-ai/evaluate_sface_pairs_local.py identity-ai/check_sface_two_photos_local.py identity-ai/choose_sface_pair_local.py identity-ai/test_sface_photo_picker_local.py
           python -m unittest discover -s identity-ai -p 'test_sface_phone_pair_local.py' -v
+          python -m unittest discover -s identity-ai -p 'test_sface_photo_picker_local.py' -v
           python -m unittest discover -s identity-ai -p 'test_sface_pair_metrics_local.py' -v
       - name: Confirm no real photos, Firebase, model weights or deployment
         run: echo 'SYNTHETIC_PIXELS_ONLY_NO_DEPLOY_NO_REAL_IMAGES_NO_FIREBASE'
