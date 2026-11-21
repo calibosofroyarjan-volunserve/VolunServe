@@ -178,7 +178,7 @@ export default function DocumentScreeningSummary({
         </View>
       </View>
       <Text style={styles.disclaimer}>
-        Only Philippine National ID, Driver’s License, and Passport may proceed after document screening.
+        Only Philippine National ID may proceed in this thesis demonstration.
         Birthday, barangay and ID-type comparisons are only OCR clues.
         They do not prove official issuance, residence or liveness.
         Independent issuer checks, qualified anti-spoofing validation and Admin review are still required.
