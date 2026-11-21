@@ -1,0 +1,54 @@
+name: Critical Physical SFace/PAD Local Launcher (NO DEPLOY)
+on:
+  push:
+    branches:
+      - qa/critical-physical-test-launcher-20261121
+    paths:
+      - 'identity-ai/start_critical_face_pad_local.py'
+      - 'identity-ai/test_start_critical_face_pad_local.py'
+      - 'Start-VolunServe-Critical-Face-PAD-Test.cmd'
+      - '.github/workflows/test-critical-physical-face-pad-local-launcher-20261121.yml'
+permissions:
+  contents: read
+jobs:
+  privacy-safety-and-windows-launcher-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Read exact GitHub commit as archive without submodules
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          [[ "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]] || exit 2
+          curl -fLsS --retry 3 -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" "https://api.github.com/repos/${GITHUB_REPOSITORY}/zipball/$SOURCE_SHA" -o /tmp/face-pad-local-qa.zip
+          mkdir -p "$RUNNER_TEMP/face-pad-local-qa"
+          unzip -q /tmp/face-pad-local-qa.zip -d "$RUNNER_TEMP/face-pad-local-qa"
+          ROOT="$(find "$RUNNER_TEMP/face-pad-local-qa" -mindepth 1 -maxdepth 1 -type d -print -quit)"
+          cp -a "$ROOT/." "$GITHUB_WORKSPACE/"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Local-only menu, privacy restrictions and no automatic verification
+        env:
+          PYTHONPATH: identity-ai
+        run: |
+          python -m py_compile identity-ai/start_critical_face_pad_local.py
+          python -m unittest discover -s identity-ai -p test_start_critical_face_pad_local.py -v
+          python - <<'PY'
+          from pathlib import Path
+          source = Path("identity-ai/start_critical_face_pad_local.py").read_text()
+          cmd = Path("Start-VolunServe-Critical-Face-PAD-Test.cmd").read_text()
+          for banned in ("requests.post", "httpx", "urllib.request.urlopen", "firebase_admin", "render.com", "github.com", "download_", "STAGING_IDENTITY_MEDIA_UPLOADS_ENABLED = True"):
+              assert banned not in source, banned
+          for banned in ("curl", "wget", "pip install", "render deploy", "firebase deploy"):
+              assert banned.lower() not in cmd.lower(), banned
+          assert "py -3.11" in cmd
+          assert "--four-hypothesis" in source
+          assert "critical_biometric_risk_gate.py" in source
+          print("PASS: no cloud, no model downloads, no deployment; local consent required.")
+          PY
+      - name: Not a real accuracy test or production permission
+        run: |
+          echo 'Synthetic launcher safety tests only. No physical camera, real face, ID, password, PIN, cloud login or real biometric accuracy test was performed. No deploy.' >> "$GITHUB_STEP_SUMMARY"
