@@ -422,6 +422,66 @@ jobs:
             }
             // END PINNED COMMUNITY MAP MODAL CONTROLLER GATE
 
+            // BEGIN PINNED COMMUNITY PUBLIC PROFILE CONTROLLER GATE
+            // This is a one-time Hosting-only release controller, not permission
+            // to merge divergent protected-branch frontend or backend code.
+            {
+              const controller=".github/workflows/release-community-public-profile-hosting-20261121.yml";
+              const verifier=".github/workflows/verify-reconciled-hosting-source-no-deploy-20261111.yml";
+              const changed=git("diff","--name-status","--no-renames",liveBase,commit)
+                .split("\n").filter(Boolean);
+              if(changed.length===2 && changed[0]==="A\t"+controller && changed[1]==="M\t"+verifier){
+                const currentHosting="b80b8824ae3390dd7214b2cfa2ebe74fa6e33cbc";
+                const source="7f296fa10ee8e0a336b2a2680f16c5891b1397e7";
+                const qa="b20912ad6871979987282a73e8588cd4c0266401";
+                const files=[
+                  ["app/(tabs)/community-event-profile.tsx","added","f31c60f95275c530c48782c78c75c7b8a3064b37"],
+                  ["app/(tabs)/community-events.tsx","modified","6e51e4534ef46ec868a023dcffce24ed50019898"],
+                  ["components/volunteers/CommunityEventRoster.tsx","modified","f9d439779871eaebc0d8ea9ce2122a8083908ae5"]
+                ];
+                assert.equal(liveBase,"483f27ef1b9883ec1200609f9769a28b1aff5326",
+                  "BLOCKED: protected branch moved; re-review controller");
+                assert.equal(marker.revision,currentHosting,"BLOCKED: production Hosting drift");
+                assert.equal(blob(liveBase,verifier),"bded2f59064aa6d76366b582aba801cffb6fe116",
+                  "BLOCKED: existing release protections changed");
+                assert.equal(blob(commit,controller),"5fb8b478a44bff68b7a91bf54153ae84172abf7e",
+                  "BLOCKED: nonreviewed release controller");
+                const before=git("show",liveBase+":"+verifier);
+                const after=git("show",commit+":"+verifier);
+                const start=after.indexOf("            // BEGIN PINNED COMMUNITY PUBLIC PROFILE CONTROLLER GATE\n");
+                const end=after.indexOf("            // END PINNED COMMUNITY PUBLIC PROFILE CONTROLLER GATE\n",start);
+                assert(start>=0&&end>start,"BLOCKED: scoped gate markers missing");
+                const endOffset=end+"            // END PINNED COMMUNITY PUBLIC PROFILE CONTROLLER GATE\n".length;
+                assert.equal(after[endOffset],"\n","BLOCKED: scoped gate blank line missing");
+                assert.equal(after.slice(0,start)+after.slice(endOffset+1),before,
+                  "BLOCKED: verifier changed outside new public profile gate");
+                git("merge-base","--is-ancestor",currentHosting,source);
+                const sourceDiff=git("diff","--name-status","--no-renames",currentHosting,source)
+                  .split("\n").filter(Boolean).map(item=>item.split("\t"));
+                assert.equal(sourceDiff.length,files.length,"BLOCKED: unrelated source file change");
+                for(const [name,status,sha] of files){
+                  assert(sourceDiff.some(([code,p])=>p===name&&code===(status==="added"?"A":"M")),
+                    "BLOCKED: unexpected status or missing public profile UI "+name);
+                  assert.equal(blob(source,name),sha,"BLOCKED: source blob drift "+name);
+                  assert.equal(blob(qa,name),sha,"BLOCKED: QA blob drift "+name);
+                }
+                for(const path of [
+                  "app/(tabs)/community-events.tsx","components/volunteers/CommunityEventRoster.tsx",
+                  "package.json","package-lock.json","app.json","firebase.json",
+                  ".firebaserc","tsconfig.json","firestore.rules","storage.rules",
+                  "functions/index.js","functions/package.json","lib/firebase.ts",
+                  "scripts/guard-live-protected-release.cjs",
+                  ".github/workflows/auto-publish-protected-live-hosting.yml",
+                  ".github/workflows/release-live-protected-hosting.yml"
+                ])assert.equal(blob(commit,path),blob(liveBase,path),
+                  "BLOCKED: protected frontend/backend/security file changed "+path);
+                console.log("PASS: exact current-live source, QA-matched three-file UI release");
+                console.log("NO DEPLOY on PR; protected Hosting controller handles deployment and rollback");
+                return;
+              }
+            }
+            // END PINNED COMMUNITY PUBLIC PROFILE CONTROLLER GATE
+
             assert.equal(marker.revision,liveBase,
               "BLOCKED: protected base and production differ; reconcile FIRST");
             const text=git("diff","--name-status","--no-renames",liveBase,commit);
