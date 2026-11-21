@@ -5,7 +5,8 @@ from pathlib import Path
 import unittest
 
 from sface_pair_metrics import summarize_pairs
-from evaluate_sface_pairs_local import _within_root
+from evaluate_sface_pairs_local import _within_root, _write_aggregate_only, _safe_aggregate_target
+import json
 
 
 class SFaceMetricsTests(unittest.TestCase):
@@ -54,6 +55,56 @@ class SFaceMetricsTests(unittest.TestCase):
                     summarize_pairs([(False,score)],0.42)
         with self.assertRaises(ValueError):
             summarize_pairs([("yes",0.5)],0.3)
+
+    def test_zero_false_accepts_on_small_sample_is_not_proof_of_safety(self):
+        result=summarize_pairs([(False,0.1)]*3 + [(True,0.8)]*2,0.5)
+        self.assertEqual(result["observedFalseAcceptRate"],0.0)
+        self.assertGreater(result["observedFalseAcceptUpper95ScoredPairs"],0.40)
+        self.assertLess(result["observedFalseAcceptUpper95ScoredPairs"],1.0)
+        self.assertEqual(result["sampleAdequacy"],"small_or_incomplete_sample")
+        self.assertFalse(result["faceMatchAccuracyCertified"])
+
+    def test_unscorable_real_faces_count_toward_genuine_failure_risk(self):
+        result=summarize_pairs([
+            (True,0.9),(True,0.3),(True,None),(True,None),
+            (False,0.1),(False,None),
+        ],0.5)
+        self.assertEqual(result["samePairScoreCoverage"],0.5)
+        self.assertEqual(result["differentPairScoreCoverage"],0.5)
+        self.assertEqual(result["observedFalseRejectRate"],0.5)
+        self.assertEqual(result["observedGenuineNoPositiveResultFraction"],0.75)
+        self.assertGreater(result["observedFalseRejectUpper95ScoredPairs"],0.5)
+
+    def test_missing_class_never_fabricates_confidence_bounds(self):
+        result=summarize_pairs([(True,None)],0.5)
+        self.assertIsNone(result["observedFalseAcceptUpper95ScoredPairs"])
+        self.assertIsNone(result["observedFalseRejectUpper95ScoredPairs"])
+        self.assertEqual(result["samePairScoreCoverage"],0.0)
+        self.assertIsNone(result["differentPairScoreCoverage"])
+        self.assertEqual(result["observedGenuineNoPositiveResultFraction"],1.0)
+
+    def test_private_aggregate_only_export_is_exclusive_and_stays_outside_photo_folder(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            base=Path(tmp).resolve()
+            media=base/"private-media"
+            media.mkdir()
+            destination=base/"private-aggregate.json"
+            summary=summarize_pairs([(True,0.9),(False,0.1)],0.5)
+            _write_aggregate_only(destination,media,summary)
+            report=json.loads(destination.read_text(encoding="utf8"))
+            self.assertEqual(report["auditType"],"private_sface_1to1_exploratory")
+            self.assertFalse(report["automaticApprovalAllowed"])
+            self.assertFalse(report["faceMatchAccuracyCertified"])
+            self.assertFalse(report["groundTruthLabelsIndependentlyValidated"])
+            self.assertIn("observedFalseAcceptUpper95ScoredPairs",report)
+            self.assertNotIn("id_image",report)
+            self.assertNotIn("selfie_image",report)
+            with self.assertRaises(ValueError):
+                _write_aggregate_only(destination,media,summary)
+            for unsafe in (media/"inside.json",base/"misnamed.txt"):
+                with self.subTest(unsafe=unsafe.name):
+                    with self.assertRaises(ValueError):
+                        _safe_aggregate_target(unsafe,media)
 
     def test_private_dataset_paths_stay_under_explicit_root(self):
         with tempfile.TemporaryDirectory() as tmp:
