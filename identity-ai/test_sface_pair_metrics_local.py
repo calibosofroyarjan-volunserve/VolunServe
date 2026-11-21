@@ -55,6 +55,33 @@ class SFaceMetricsTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             summarize_pairs([("yes",0.5)],0.3)
 
+    def test_zero_false_accepts_on_small_sample_is_not_proof_of_safety(self):
+        result=summarize_pairs([(False,0.1)]*3 + [(True,0.8)]*2,0.5)
+        self.assertEqual(result["observedFalseAcceptRate"],0.0)
+        self.assertGreater(result["observedFalseAcceptUpper95ScoredPairs"],0.40)
+        self.assertLess(result["observedFalseAcceptUpper95ScoredPairs"],1.0)
+        self.assertEqual(result["sampleAdequacy"],"small_or_incomplete_sample")
+        self.assertFalse(result["faceMatchAccuracyCertified"])
+
+    def test_unscorable_real_faces_count_toward_genuine_failure_risk(self):
+        result=summarize_pairs([
+            (True,0.9),(True,0.3),(True,None),(True,None),
+            (False,0.1),(False,None),
+        ],0.5)
+        self.assertEqual(result["samePairScoreCoverage"],0.5)
+        self.assertEqual(result["differentPairScoreCoverage"],0.5)
+        self.assertEqual(result["observedFalseRejectRate"],0.5)
+        self.assertEqual(result["observedGenuineNoPositiveResultFraction"],0.75)
+        self.assertGreater(result["observedFalseRejectUpper95ScoredPairs"],0.5)
+
+    def test_missing_class_never_fabricates_confidence_bounds(self):
+        result=summarize_pairs([(True,None)],0.5)
+        self.assertIsNone(result["observedFalseAcceptUpper95ScoredPairs"])
+        self.assertIsNone(result["observedFalseRejectUpper95ScoredPairs"])
+        self.assertIsNone(result["samePairScoreCoverage"])
+        self.assertIsNone(result["differentPairScoreCoverage"])
+        self.assertEqual(result["observedGenuineNoPositiveResultFraction"],1.0)
+
     def test_private_dataset_paths_stay_under_explicit_root(self):
         with tempfile.TemporaryDirectory() as tmp:
             root=Path(tmp).resolve()
