@@ -1367,9 +1367,9 @@ function ServiceCard({
 
 const styles = StyleSheet.create({
   communityModules:{gap:15,marginTop:18,marginBottom:15},
-  nativeCommunityColumns:{flexDirection:"row",gap:14,alignItems:"flex-start",width:"100%"},
+  nativeCommunityColumns:{flexDirection:"row",gap:12,alignItems:"stretch",width:"100%"},
   nativeCommunityColumnsStacked:{flexDirection:"column"},
-  nativeMembersColumn:{flex:1.78,minWidth:0},
+  nativeMembersColumn:{flex:1.32,minWidth:0},
   nativeCalendarColumn:{flex:1,minWidth:0},
   nativeColumnStacked:{width:"100%",flexGrow:0,flexShrink:0},
   nativeEmergencyCard:{backgroundColor:"#FFF8F8",borderRadius:16,borderWidth:1,
