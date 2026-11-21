@@ -119,7 +119,7 @@ export default function CommunityOnline({uid,dashboard=false}:{uid?:string|null;
         <View style={styles.iconBox}><Ionicons name="people-outline" size={21} color={GREEN}/></View>
         <View style={{flex:1,minWidth:0}}>
           <Text style={styles.title}>Community Members</Text>
-          <Text style={styles.subtitle}>All approved Residents and Volunteers appear automatically. Only signed-in members can view basic names and roles; online status stays private unless shared.</Text>
+          <Text style={styles.subtitle}>All approved Residents and Volunteers appear automatically and can receive private messages by default. Only signed-in approved members can view names and roles; online status remains private unless shared.</Text>
         </View>
       </View>
       <View style={styles.headingActions}>
