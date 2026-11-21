@@ -75,13 +75,10 @@ const names={
 };
 const pw="EmulatorOnlyNoRealPassword_2026!";
 const safeBase={
-  declaredIdType:"passport",detectedIdType:"passport",
+  declaredIdType:"national_id",detectedIdType:"national_id",
   status:"text_consistent_unverified",warningCodes:[],
-  imageQualityStatus:"adequate",backImageQualityStatus:"not_required",
-  backSideProvided:false,backSideScreened:false,
-  passportMrzCheck:"checksum_consistent_unverified",
-  passportMrzBirthDateCheck:"possible_match",
-  passportMrzCheckDigitsConsistent:true,
+  imageQualityStatus:"adequate",backImageQualityStatus:"adequate",
+  backSideProvided:true,backSideScreened:true,
   profileBirthDateCheck:"possible_match",profileNameCheck:"possible_match",
 };
 let firebaseApp, firebaseAuth, db, server, baseUrl;
@@ -170,7 +167,7 @@ async function reviews(token){return req("GET","/api/admin/identity/reviews",tok
 async function status(token){return req("GET","/api/identity/status",token);}
 async function decision(token,uid,action,extra={}){
   return req("POST","/api/admin/identity/reviews/"+uid+"/decision",token,{
-    action,validationMethod:"official_document_check",
+    action,validationMethod:"psa_national_id_qr_check",
     issuerReviewAttested:true,
     notes:"Emulator-only fictional attestation; no real issuer validation.",
     ...extra,
@@ -217,8 +214,8 @@ before(async()=>{
   await insertPending(names.resident);
   await insertPending(names.reject);
   await insertPending(names.retry,{
-    ...safeBase, passportMrzCheck:"checksum_inconsistent_or_ocr_error",
-    warningCodes:["passport_mrz_conflict"],
+    ...safeBase, profileBirthDateCheck:"possible_conflict",
+    warningCodes:["profile_birth_date_conflict"],
   });
   const app=express();
   app.use(express.json({limit:"16kb"}));
@@ -292,7 +289,7 @@ test("Conflicting evidence cannot Verify; Require Retry updates status and audit
   assert.equal((await decision(tokens.admin,names.retry,"verify")).code,409);
   const retry=await decision(tokens.admin,names.retry,"require_retry",{
     issuerReviewAttested:false,validationMethod:"",
-    notes:"Emulator-only rescan required; fictional mismatched MRZ.",
+    notes:"Emulator-only rescan required; fictional profile DOB conflict.",
   });
   assert.equal(retry.code,200,JSON.stringify(retry.body));
   assert.equal(retry.body.identityVerified,false);
@@ -370,15 +367,15 @@ test("Admin queue & audit reflect ONLY original authorized transactions",async()
 test("Authenticated no-photo Resident request -> Admin review -> verified status and audit",async()=>{
   // This is REAL emulator Auth + Firestore, but no real staging account/media.
   const url="/api/identity/manual-review-request";
-  assert.equal((await req("POST",url,undefined,{consent:true,idType:"drivers_license"})).code,401);
-  assert.equal((await req("POST",url,tokens.guest,{consent:true,idType:"drivers_license"})).code,403);
+  assert.equal((await req("POST",url,undefined,{consent:true,idType:"national_id"})).code,401);
+  assert.equal((await req("POST",url,tokens.guest,{consent:true,idType:"national_id"})).code,403);
   assert.equal((await req("POST",url,tokens.manual,{consent:true,idType:"school_id"})).code,400);
-  const accepted=await req("POST",url,tokens.manual,{consent:true,idType:"drivers_license"});
+  const accepted=await req("POST",url,tokens.manual,{consent:true,idType:"national_id"});
   assert.equal(accepted.code,201,JSON.stringify(accepted.body));
   assert.equal(accepted.body.status,"pending");
   assert.equal(accepted.body.identityVerified,false);
   assert.equal(accepted.body.manualReviewChannel,"lgu_in_person_no_media");
-  assert.equal((await req("POST",url,tokens.manual,{consent:true,idType:"drivers_license"})).code,409);
+  assert.equal((await req("POST",url,tokens.manual,{consent:true,idType:"national_id"})).code,409);
   const residentPending=await status(tokens.manual);
   assert.equal(residentPending.code,200);
   assert.equal(residentPending.body.identityStatus,"pending");
@@ -389,12 +386,12 @@ test("Authenticated no-photo Resident request -> Admin review -> verified status
   assert.equal(queue.code,200);
   const manualRow=queue.body.items.find(x=>x.uid===names.manual);
   assert.ok(manualRow,"staged Admin queue must include pending no-media request");
-  assert.equal(manualRow.manualIdType,"drivers_license");
+  assert.equal(manualRow.manualIdType,"national_id");
   assert.equal(manualRow.manualReviewChannel,"lgu_in_person_no_media");
   assert.equal(manualRow.documentScreening,null);
   assert.equal(manualRow.identityVerified,false);
   const invalid=await decision(tokens.admin,names.manual,"verify",{
-    validationMethod:"in_person_lgu_validation",
+    validationMethod:"psa_national_id_qr_check",
     notes:"Fictional in-person document review, without physical verification.",
     inPersonIdInspected:false,
     inPersonFaceCompared:false,
@@ -403,7 +400,7 @@ test("Authenticated no-photo Resident request -> Admin review -> verified status
   assert.equal(invalid.body.error,"manual_in_person_evidence_required");
   assert.equal((await status(tokens.manual)).body.identityVerified,false);
   const verified=await decision(tokens.admin,names.manual,"verify",{
-    validationMethod:"in_person_lgu_validation",
+    validationMethod:"psa_national_id_qr_check",
     inPersonIdInspected:true,inPersonFaceCompared:true,
     notes:"FICTIONAL EMULATOR ATTESTATION ONLY; no actual human or document was reviewed.",
   });
@@ -423,19 +420,19 @@ test("Authenticated no-photo Resident request -> Admin review -> verified status
   assert.equal(record.data().faceComparedInPerson,true);
   assert.equal(record.data().issuerApiAuthenticityVerified,false);
   assert.equal((await decision(tokens.admin,names.manual,"verify",{
-    validationMethod:"in_person_lgu_validation",
+    validationMethod:"psa_national_id_qr_check",
     inPersonIdInspected:true,inPersonFaceCompared:true,
   })).code,409,"must reject duplicate Admin review");
 });
 
 test("Authenticated manual no-photo Require Retry updates only fictional Resident status",async()=>{
   const url="/api/identity/manual-review-request";
-  const created=await req("POST",url,tokens.manualRetry,{consent:true,idType:"passport"});
+  const created=await req("POST",url,tokens.manualRetry,{consent:true,idType:"national_id"});
   assert.equal(created.code,201,JSON.stringify(created.body));
   assert.equal(created.body.identityVerified,false);
   const retry=await decision(tokens.admin,names.manualRetry,"require_retry",{
     validationMethod:"",issuerReviewAttested:false,
-    notes:"Synthetic request requires an in-person passport inspection; no media was used.",
+    notes:"Synthetic request requires an in-person National ID inspection; no media was used.",
   });
   assert.equal(retry.code,200,JSON.stringify(retry.body));
   const current=await status(tokens.manualRetry);
