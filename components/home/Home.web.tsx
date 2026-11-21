@@ -1,6 +1,7 @@
 import { AppAlert } from "../../lib/appDialog";
 import CommunityOnline from "./CommunityOnline";
 import CommunityCalendar from "./CommunityCalendar";
+import CommunityMessagesMenu from "../layout/CommunityMessagesMenu";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
@@ -162,6 +163,7 @@ export default function WebHome() {
   const [mobileSlide, setMobileSlide] = useState(0);
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   const [notificationMenuOpen, setNotificationMenuOpen] = useState(false);
+  const [messagesMenuOpen, setMessagesMenuOpen] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
 
   const compact = width < 1040;
@@ -606,6 +608,7 @@ export default function WebHome() {
                   accessibilityState={{ expanded: notificationMenuOpen }}
                   onPress={() => {
                     setProfileMenuOpen(false);
+                    setMessagesMenuOpen(false);
                     setNotificationMenuOpen(open => !open);
                   }}
                 >
@@ -623,6 +626,16 @@ export default function WebHome() {
                   ) : null}
                 </Pressable>
 
+                <CommunityMessagesMenu
+                  uid={user?.uid}
+                  open={messagesMenuOpen}
+                  onToggle={() => {
+                    setNotificationMenuOpen(false);
+                    setProfileMenuOpen(false);
+                    setMessagesMenuOpen(current => !current);
+                  }}
+                  onClose={() => setMessagesMenuOpen(false)}
+                />
                 <Pressable
                   accessibilityRole="button"
                   accessibilityLabel={profileMenuOpen ? "Close account menu" : "Open account menu"}
@@ -632,7 +645,7 @@ export default function WebHome() {
                     profileMenuOpen && styles.profileButtonOpen,
                     pressed && styles.pressed,
                   ]}
-                  onPress={() => { setNotificationMenuOpen(false); setProfileMenuOpen(current => !current); }}
+                  onPress={() => { setNotificationMenuOpen(false); setMessagesMenuOpen(false); setProfileMenuOpen(current => !current); }}
                 >
                   {profile?.profilePictureUrl ? (
                     <Image
