@@ -1,4 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
+import CommunityMessagesMenu from "./CommunityMessagesMenu";
 import { usePathname, useRouter, type Href } from "expo-router";
 import { collection, onSnapshot, query, where } from "firebase/firestore";
 import React, { useEffect, useMemo, useState } from "react";
@@ -69,7 +70,7 @@ export default function ResidentDesktopActions() {
   const { user, profile } = useUserSession();
   const { items: announcementAlerts } = useAnnouncementAlerts(user?.uid);
   const [notices, setNotices] = useState<Notice[]>([]);
-  const [menu, setMenu] = useState<"notifications" | "account" | null>(null);
+  const [menu, setMenu] = useState<"notifications" | "messages" | "account" | null>(null);
   const [loggingOut, setLoggingOut] = useState(false);
 
   useEffect(() => {
@@ -81,7 +82,7 @@ export default function ResidentDesktopActions() {
   // Route changes must dismiss any account overlay retained by other tabs.
   useEffect(() => { dismissHeaderMenus(); }, [pathname]);
 
-  const toggleMenu = (kind: "notifications" | "account") => {
+  const toggleMenu = (kind: "notifications" | "messages" | "account") => {
     if (menu === kind) {
       setMenu(null);
       return;
@@ -178,6 +179,11 @@ export default function ResidentDesktopActions() {
           </View>
         )}
       </Pressable>
+      <CommunityMessagesMenu uid={user?.uid}
+        open={menu === "messages"}
+        onToggle={() => toggleMenu("messages")}
+        onClose={() => setMenu(null)}
+      />
       <Pressable
         accessibilityRole="button"
         accessibilityLabel={menu === "account" ? "Close account menu" : "Open account menu"}
@@ -200,7 +206,7 @@ export default function ResidentDesktopActions() {
       </Pressable>
 
       <Modal
-        visible={menu !== null}
+        visible={menu === "notifications" || menu === "account"}
         transparent
         animationType="none"
         onRequestClose={dismissHeaderMenus}
