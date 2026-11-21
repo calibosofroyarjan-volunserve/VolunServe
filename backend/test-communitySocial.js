@@ -105,7 +105,7 @@ test("only explicit consent reveals last-seen when offline",async()=>{
  const age=new Date(Date.now()-5*60*1000);
  collections.communityPresence.volunteer.updatedAt=age;
  let result=await call("GET",directory,"resident");
- assert.equal(result.payload.members.length,1);
+ assert.equal(result.payload.members.length,2);
  assert.equal((await call("POST",prefs,"volunteer",{showLastSeen:true})).status,200);
  result=await call("GET",directory,"resident");
  assert.equal(result.payload.members.length,2);
@@ -152,22 +152,29 @@ test("limits flood and allows the recipient to block, report, and opt out",async
  const prev=await call("GET",thread,"resident",{},publicKey("volunteer"));
  assert.equal(prev.status,200);assert.equal(prev.payload.canSend,false);
 });
-test("turning off directory visibility hides status despite last-seen consent",async()=>{
+test("turning off presence does not remove an approved member from directory",async()=>{
  collections.communityPresence.volunteer.visible=false;
  const result=await call("GET",directory,"resident");
- assert.equal(result.payload.members.length,1);
- assert.equal((await call("GET",member,"resident",{},publicKey("volunteer"))).status,404);
+ assert.equal(result.payload.members.length,2);
+ const volunteer=result.payload.members.find(x=>x.name==="Volunteer Sample");
+ assert(volunteer);assert.equal(volunteer.online,false);
+ assert.equal(volunteer.presencePrivate,true);
+ assert.equal(volunteer.lastSeenAt,null);
+ assert.equal((await call("GET",member,"resident",{},publicKey("volunteer"))).status,200);
  collections.communityPresence.volunteer.visible=true;
 });
 
-test("directory opt-in is independent and shows offline Basic, Verified and Volunteer profiles",async()=>{
- // A second approved, never-online Basic Resident is NOT included by default.
+test("basic residents appear automatically; profile photo stays consent-based",async()=>{
+ // A never-online approved Basic Resident must appear automatically.
  users.newbie={role:"resident",status:"approved",residentAccess:true,
-   activeMode:"resident",fullName:"Basic User"};
+   activeMode:"resident",fullName:"Basic User",profilePictureUrl:"https://res.cloudinary.com/test/image/upload/pic.jpg"};
  collections.communityPresence.newbie={visible:false,showLastSeen:false,
    acceptChats:false,mode:"resident",verified:false,displayName:"Basic User"};
  let result=await call("GET",directory,"resident");
- assert(!result.payload.members.some(x=>x.name==="Basic User"));
+ const initial=result.payload.members.find(x=>x.name==="Basic User");
+ assert(initial,"new approved Basic Resident should appear immediately");
+ assert.equal(initial.online,false);assert.equal(initial.presencePrivate,true);
+ assert.equal(initial.avatarUrl,"","profile photo remains private without opt-in");
  assert.equal((await call("GET",self,"newbie")).payload.directoryListed,false);
  assert.equal((await call("POST",prefs,"newbie",{directoryListed:true})).status,200);
  result=await call("GET",directory,"resident");
@@ -177,6 +184,7 @@ test("directory opt-in is independent and shows offline Basic, Verified and Volu
  assert.equal(entry.lastSeenAt,null);
  assert.equal(entry.badge,"Basic Resident");
  assert.equal(entry.acceptChats,false);
+ assert(entry.avatarUrl.includes("cloudinary.com"),"approved photo consent should make avatar available");
  assert.equal((await call("GET",member,"resident",{},publicKey("newbie"))).payload.member.name,"Basic User");
  assert(!JSON.stringify(result.payload).includes('"uid":'));
  assert.equal((await call("POST",prefs,"newbie",{directoryListed:"yes"})).status,400);
@@ -187,10 +195,11 @@ test("offline directory persists beyond the historical 7-day last-seen cap",asyn
  let result=await call("GET",directory,"resident");
  assert(result.payload.members.some(x=>x.name==="Basic User"));
  assert.equal(result.payload.members.find(x=>x.name==="Basic User").lastSeenAt,null);
- // Consent to Last Seen never implies consent to be discoverable.
+ // Offline presence and directory-photo preference never remove approved members.
  collections.communityPresence.newbie.directoryListed=false;
  result=await call("GET",directory,"resident");
- assert(!result.payload.members.some(x=>x.name==="Basic User"));
+ assert(result.payload.members.some(x=>x.name==="Basic User"));
+ assert.equal(result.payload.members.find(x=>x.name==="Basic User").avatarUrl,"");
  collections.communityPresence.newbie.directoryListed=true;
 });
 test("directory opt-in cannot resurrect unapproved or administrator accounts",async()=>{
@@ -205,19 +214,20 @@ test("directory opt-in cannot resurrect unapproved or administrator accounts",as
  assert.equal((await call("POST",prefs,"admin",{directoryListed:true})).status,403);
  assert.equal((await call("POST",prefs,"revoked",{directoryListed:true})).status,403);
 });
-test("directory opt-out hides member immediately, without changing online/chat consent",async()=>{
+test("profile-photo opt-out keeps basic member name while protecting online and chat",async()=>{
  const before=await call("GET",self,"newbie");
  assert.equal(before.payload.directoryListed,true);
  assert.equal((await call("POST",prefs,"newbie",{directoryListed:false})).status,200);
  assert.equal((await call("GET",self,"newbie")).payload.directoryListed,false);
  assert.equal(collections.communityPresence.newbie.visible,false);
  assert.equal(collections.communityPresence.newbie.acceptChats,false);
- assert(!((await call("GET",directory,"resident")).payload.members.some(x=>x.name==="Basic User")));
+ const row=(await call("GET",directory,"resident")).payload.members.find(x=>x.name==="Basic User");
+ assert(row);assert.equal(row.avatarUrl,"");assert.equal(row.online,false);
 });
 
-test("active sign-in counts include unlisted approved users but never disclose their identities",async()=>{
+test("active counts include private sessions while approved names and roles are discoverable",async()=>{
  users.privateMember={role:"resident",status:"approved",residentAccess:true,
-   activeMode:"resident",fullName:"Private User"};
+   activeMode:"resident",fullName:"Private User",email:"secret@example.com",phoneNumber:"09123456789",address:"Private Location",identityNumber:"SECRET"};
  collections.communityPresence.privateMember={visible:false,directoryListed:false,
    activeMode:"resident",activeAt:new Date(),acceptChats:false,mode:"resident",
    displayName:"DO NOT SHOW ME",updatedAt:new Date(0)};
@@ -226,12 +236,18 @@ test("active sign-in counts include unlisted approved users but never disclose t
  assert.equal(result.payload.activeCounts.residents,1);
  assert.equal(result.payload.activeCounts.total,1);
  assert(!result.payload.members.some(x=>x.name==="DO NOT SHOW ME"));
- assert(!JSON.stringify(result.payload).includes("Private User"));
+ const privateRow=result.payload.members.find(x=>x.name==="Private User");
+ assert(privateRow);assert.equal(privateRow.presencePrivate,true);
+ assert.equal(privateRow.online,false);assert.equal(privateRow.lastSeenAt,null);
+ assert.equal(privateRow.acceptChats,false);
+ for(const secret of ["secret@example.com","09123456789","Private Location","SECRET"]){
+   assert(!JSON.stringify(result.payload).includes(secret),"private field must be excluded");
+ }
  assert(!JSON.stringify(result.payload).includes("privateMember"));
  assert.equal(result.payload.registeredCount,4);
- assert.equal((await call("GET",member,"resident",{},publicKey("privateMember"))).status,404);
+ assert.equal((await call("GET",member,"resident",{},publicKey("privateMember"))).status,200);
 });
-test("registered count includes offline non-consenting members without disclosing identities",async()=>{
+test("registered count matches automatically listed eligible members without sensitive fields",async()=>{
  users.hidden={role:"resident",status:"approved",residentAccess:true,
    activeMode:"resident",fullName:"Private Resident",email:"never-expose@example.com"};
  users.deleted={role:"resident",status:"approved",residentAccess:true,
@@ -241,11 +257,29 @@ test("registered count includes offline non-consenting members without disclosin
  const result=await call("GET",directory,"resident");
  assert.equal(result.status,200);
  assert.equal(result.payload.registeredCount,5);
- for(const data of ["Private Resident","Removed Account","never-expose@example.com","hidden"]){
-   assert(!JSON.stringify(result.payload.members).includes(data));
+ assert.equal(result.payload.registeredCount,result.payload.members.length);
+ assert(result.payload.members.some(x=>x.name==="Private Resident"));
+ for(const secret of ["Removed Account","never-expose@example.com",'"uid":']){
+   assert(!JSON.stringify(result.payload.members).includes(secret),secret+" must not be exposed");
  }
- assert.equal((await call("GET",member,"resident",{},publicKey("hidden"))).status,404);
+ assert.equal((await call("GET",member,"resident",{},publicKey("hidden"))).status,200);
  delete users.hidden;delete users.deleted;delete collections.communityPresence.hidden;
+});
+test("20 more registered offline members appear without requiring presence or re-login",async()=>{
+ const count=20;
+ for(let i=0;i<count;i++){
+   const uid="offline_member_"+i;
+   users[uid]={role:"resident",status:"approved",residentAccess:true,activeMode:"resident",
+     fullName:"Offline Member "+String(i).padStart(2,"0"),email:"private_"+i+"@example.com"};
+ }
+ const result=await call("GET",directory,"resident");
+ assert.equal(result.status,200);
+ assert.equal(result.payload.members.filter(x=>x.name.startsWith("Offline Member ")).length,count);
+ assert.equal(result.payload.registeredCount,result.payload.members.length);
+ assert(result.payload.members.filter(x=>x.name.startsWith("Offline Member "))
+   .every(x=>x.online===false&&x.presencePrivate===true&&x.lastSeenAt===null));
+ assert(!JSON.stringify(result.payload).includes("private_0@example.com"));
+ for(let i=0;i<count;i++)delete users["offline_member_"+i];
 });
 test("expired, rejected and Admin sessions are excluded from active totals",async()=>{
  users.rejected={role:"resident",status:"suspended",residentAccess:true,
