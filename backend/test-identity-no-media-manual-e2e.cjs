@@ -18,7 +18,7 @@ assert(start>=0&&stop>start,"existing Admin queue/decision not found");
 const ORIGINAL_ADMIN=SOURCE.slice(start,stop);
 const UID="resident_synthetic_manual_001",ADMIN="approved_synthetic_admin_001";
 const NOTES="I personally inspected the original ID and compared the person's face to it, with independent LGU document validation completed.";
-const DEFAULT_BODY={consent:true,idType:"drivers_license"};
+const DEFAULT_BODY={consent:true,idType:"national_id"};
 const DELETED={__deleted:true};
 function harness({project="volunserve-full-staging",staging=true,residentRole="resident",
   residentStatus="approved",residentAccess=true}={}){
@@ -136,7 +136,7 @@ function harness({project="volunserve-full-staging",staging=true,residentRole="r
   const decide=(action,extra={},viewerUid=ADMIN)=>call(
     "POST","/api/admin/identity/reviews/:uid/decision",
     {viewerUid,params:{uid:UID},body:{
-      action,notes:NOTES,validationMethod:"in_person_lgu_validation",
+      action,notes:NOTES,validationMethod:"psa_national_id_qr_check",
       issuerReviewAttested:true,...extra,
     }});
   return {request,queue,decide,records,env};
@@ -155,7 +155,7 @@ test("Resident request creates pending only, never biometric/Verified status",as
   assert.equal(user.identityStatus,"pending");
   assert.equal(row.status,"pending");
   assert.equal(row.verificationMethod,"manual_lgu_in_person_no_media");
-  assert.equal(row.manualIdType,"drivers_license");
+  assert.equal(row.manualIdType,"national_id");
   assert.equal(row.matchScore,undefined);
   assert.equal(row.livenessScore,undefined);
   assert.equal(row.documentScreening,undefined);
@@ -181,6 +181,8 @@ test("reject unwanted file fields, unsupported IDs and missing consent",async()=
   for(const body of [
     {idType:"national_id",consent:false},
     {idType:"school_id",consent:true},
+    {idType:"drivers_license",consent:true},
+    {idType:"passport",consent:true},
     {idType:"umid",consent:true},
     {idType:"prc_id",consent:true},
     {idType:"passport",consent:true,idDocument:"FAKE_BINARY"},
@@ -228,7 +230,7 @@ test("manual approval refuses missing in-person evidence or issuer attestation",
     {inPersonFaceCompared:true},
     {inPersonIdInspected:true,inPersonFaceCompared:true,issuerReviewAttested:false},
     {inPersonIdInspected:true,inPersonFaceCompared:true,notes:"too short"},
-    {inPersonIdInspected:true,inPersonFaceCompared:true,validationMethod:"psa_national_id_qr_check"},
+    {inPersonIdInspected:true,inPersonFaceCompared:true,validationMethod:"in_person_lgu_validation"},
   ]){
     const r=await h.decide("verify",extra);
     assert([400,409].includes(r.code),JSON.stringify(extra)+" "+JSON.stringify(r.body));
@@ -274,10 +276,10 @@ test("manual requests can be rejected or sent for retry without granting identit
   }
 });
 
-test("Existing pending UMID and PRC cases cannot be verified after three-ID lock",async()=>{
-  for(const removed of ["umid","prc_id"]){
+test("Existing non-National-ID pending cases cannot be verified after National ID lock",async()=>{
+  for(const removed of ["drivers_license","passport","umid","prc_id"]){
     const h=harness();
-    const req=await h.request({idType:"drivers_license",consent:true});
+    const req=await h.request({idType:"national_id",consent:true});
     assert.equal(req.code,201);
     h.records.get("identityVerifications/"+UID).manualIdType=removed;
     const result=await h.decide("verify",{
