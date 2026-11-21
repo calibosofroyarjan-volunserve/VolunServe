@@ -7,7 +7,7 @@ No photos, ID numbers, DOB, raw OCR text or facial features are persisted.
 """
 
 SUPPORTED_ID_TYPES = frozenset({
-    "national_id", "drivers_license", "passport",
+    "national_id",
 })
 CONFLICT_VALUES = frozenset({"possible_conflict", "conflict"})
 BAD_MRZ_VALUES = frozenset({
