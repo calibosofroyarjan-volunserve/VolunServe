@@ -26,6 +26,7 @@ import {
   signUpUser,
 } from "../../lib/firebaseAuth";
 import {getRegistrationEmailError} from "../../lib/registrationEmailPolicy";
+import {communitySocialRequest} from "../../lib/communitySocial";
 import { userFacingError } from "../../lib/userFacingError";
 import {
   REGISTRATION_EMAIL_CONFLICT_MESSAGE,
@@ -202,6 +203,7 @@ export default function EmailFirstSignup() {
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [consent, setConsent] = useState(false);
+  const [directoryConsent, setDirectoryConsent] = useState(false);
   const [resumeMode, setResumeMode] = useState(false);
   const [firstName, setFirstName] = useState("");
   const [middleName, setMiddleName] = useState("");
@@ -427,6 +429,10 @@ export default function EmailFirstSignup() {
         occupationSpecialization: specialization,
         occupationOther,
       });
+      if(directoryConsent){
+        void communitySocialRequest("/api/community/directory/preferences","POST",{directoryListed:true})
+          .catch(()=>{/* Member can join later through Community Members. */});
+      }
       setCompletedProfile(true);
       router.replace("/(tabs)");
     } catch (e) {
@@ -685,7 +691,7 @@ export default function EmailFirstSignup() {
                     >
                       <Text style={styles.checkBox}>{consent ? "☑" : "☐"}</Text>
                       <Text style={styles.checkText}>
-                        I agree to the Terms of Use and Privacy Notice for VolunServe account registration.
+                        I agree to the Terms of Use and Privacy Notice for VolunServe registration. Community directory sharing is a separate choice.
                       </Text>
                     </Pressable>
                     {showErrors && !consent &&
@@ -874,6 +880,14 @@ export default function EmailFirstSignup() {
                 </Pressable>
                 {showErrors && !reviewed &&
                   <Text style={styles.error}>Please confirm your registration details.</Text>}
+                <Pressable accessibilityRole="checkbox"
+                  accessibilityState={{checked:directoryConsent}} style={styles.check}
+                  onPress={()=>setDirectoryConsent(v=>!v)}>
+                  <Text style={styles.checkBox}>{directoryConsent?"☑":"☐"}</Text>
+                  <Text style={styles.checkText}>
+                    Optional: show my name, Resident/Volunteer role and profile photo to other signed-in community members. Contact details and online activity stay private.
+                  </Text>
+                </Pressable>
                 {checkButton("Complete Basic Resident Registration", () => {void complete();})}
                 {checkButton("Back to Personal Details", () => {
                   setError(""); setShowErrors(false); setStep(3);
