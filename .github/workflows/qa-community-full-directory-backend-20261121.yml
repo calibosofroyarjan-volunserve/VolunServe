@@ -1,0 +1,34 @@
+name: QA Persistent Consent-Only Community Directory Backend (NO DEPLOY)
+on:
+  push:
+    branches: [qa/community-full-directory-backend-20261121]
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - name: Exact two-file source diff and Node syntax
+        run: |
+          git diff --name-status fee322dfc4d17621f594cd1fba4c2cd3a08762b9 e0052f77c88302a0eb2496e46a820decd9107161
+          node --check backend/communitySocial.js
+          node --check backend/test-communitySocial.js
+          node --check backend/communityPresence.js
+          node --check backend/server.js
+      - name: Consent, offline persisted directory, suspended/admin exclusion, chat and last seen safety
+        run: |
+          node --test backend/test-communitySocial.js
+          node --test backend/test-communityPresence.js
+      - name: Existing backend production regression tests
+        run: |
+          npm ci --prefix backend --no-audit --no-fund
+          npm --prefix backend run check
