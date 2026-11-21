@@ -6,8 +6,7 @@ import * as ImagePicker from "expo-image-picker";
 import CommunityEventPinPicker from "../../components/CommunityEventPinPicker";
 import CommunityEventLiveLocation from "../../components/CommunityEventLiveLocation";
 import CommunityEventRoadMap from "../../components/CommunityEventRoadMap";
-import CommunityEventHeroArt from "../../components/CommunityEventHeroArt";
-import CommunityEventRoster from "../../components/volunteers/CommunityEventRoster";
+import CommunityEventRoster, { CommunityEventAvatarPreview } from "../../components/volunteers/CommunityEventRoster";
 import { router } from "expo-router";
 import {
   collection,
@@ -44,6 +43,13 @@ import {
 import { useUserSession } from "../../lib/useUserSession";
 import { canVolunteerJoinEvent, eventScheduleHasPassed } from "../../lib/communityEventJoinWindow";
 
+// Matches the screen's already loaded EventInter font; no new modules or font assets.
+const vsType = {
+  family: "EventInter",
+  size: { micro: 10, caption: 11, meta: 12, label: 13, body: 14, bodyStrong: 15, card: 16, section: 18, subheading: 20 },
+} as const;
+
+
 type Category =
   | "Clean-up Drive"
   | "Tree Planting"
@@ -53,6 +59,7 @@ type Category =
   | "Other";
 
 type Section = "explore" | "mine" | "propose";
+type EventListFilter = "all" | "new" | "upcoming" | "active" | "completed";
 type SelfAttendanceAction = "check-in" | "check-out";
 type AttendanceFeedback = {
   eventId: string;
@@ -384,6 +391,12 @@ const getTime = (value: unknown): number => {
   }
 
   return 0;
+};
+
+// "New" means published within 14 days; absent Firestore timestamps are never guessed.
+const isRecentlyPublished = (event: CommunityEvent): boolean => {
+  const created = getTime(event.createdAt);
+  return created > 0 && created <= Date.now() && Date.now() - created <= 14 * 24 * 60 * 60 * 1000;
 };
 
 const prettyDate = (date?: string, time?: string) => {
@@ -770,10 +783,11 @@ export default function CommunityEventsScreen() {
     useState<Category | "All">("All");
 
   const [search, setSearch] = useState("");
+  const [eventListFilter, setEventListFilter] = useState<EventListFilter>("upcoming");
   const [dateSort, setDateSort] = useState<"soonest" | "latest">("soonest");
   const [attendanceSort, setAttendanceSort] = useState<"latest" | "oldest">("latest");
   const [showAllAttendance, setShowAllAttendance] = useState(false);
-  const [visibleEventCount, setVisibleEventCount] = useState(6);
+  const [eventPage, setEventPage] = useState(1);
 
   const [events, setEvents] =
     useState<CommunityEvent[]>([]);
@@ -931,6 +945,9 @@ export default function CommunityEventsScreen() {
 
   const [expandedEvent, setExpandedEvent] =
     useState<string | null>(null);
+  // Participant selection is independent of Event Details and My Attendance.
+  const [rosterFocusId, setRosterFocusId] = useState<string | null>(null);
+  const [participantsModalEventId, setParticipantsModalEventId] = useState<string | null>(null);
 
   // GPS is requested only when the volunteer clicks the route preview button.
   // Never written to Firestore or saved to local storage.
@@ -1103,14 +1120,14 @@ export default function CommunityEventsScreen() {
           event.status !== "cancelled" &&
           matchesCategory &&
           matchesSearch &&
-          (!canPropose || residentBarangayFilter === "All Barangays" || event.barangay === residentBarangayFilter) &&
-          (!canPropose || residentStatusFilter === "All Status" || event.status === residentStatusFilter)
+          (residentBarangayFilter === "All Barangays" || event.barangay === residentBarangayFilter) &&
+          (!canPropose || residentStatusFilter === "All Status" || event.status === residentStatusFilter) &&
+          (eventListFilter === "all" || (eventListFilter === "new" ? isRecentlyPublished(event)
+            : eventListFilter === "upcoming" ? event.status === "upcoming" && !eventScheduleHasPassed(event)
+            : event.status === eventListFilter))
         );
-      })
-      .sort((a, b) =>
-        a.date.localeCompare(b.date)
-      );
-  }, [events, category, search, canPropose, residentBarangayFilter, residentStatusFilter]);
+      });
+  }, [events, category, search, canPropose, residentBarangayFilter, residentStatusFilter, eventListFilter]);
 
   const participationMap = useMemo(
     () =>
@@ -1150,26 +1167,70 @@ export default function CommunityEventsScreen() {
   const completedCount = events.filter(
     (event) => event.status === "completed"
   ).length;
+  const totalPublishedCount = events.filter(event => event.status !== "cancelled").length;
+  // Keep expired "upcoming" schedules out of the volunteer Upcoming tab.
+  // Do not change Admin-set status, records, or the joined-events attendance history.
+  const upcomingCount = events.filter(event => event.status === "upcoming" && !eventScheduleHasPassed(event)).length;
+  const ongoingCount = events.filter(event => event.status === "active").length;
+
+  const eventStatusFilters: { key: EventListFilter; label: string; count: number }[] = [
+    { key: "upcoming", label: "Upcoming", count: upcomingCount },
+    { key: "active", label: "Ongoing", count: events.filter((event) => event.status === "active").length },
+    { key: "completed", label: "Finished", count: completedCount },
+  ];
 
   // A copy is sorted to avoid mutating the Firestore-backed event arrays.
   const displayEvents = useMemo(() => {
     const source = section === "mine" && isVolunteer ? myEvents : filteredEvents;
     return [...source].sort((a, b) => {
+      // In All Events, ongoing/upcoming activities appear ahead of completed history.
+      // "New" uses publication timestamps, never the scheduled event date.
+      if (section === "explore" && eventListFilter === "all") {
+        const rank: Record<EventStatus, number> = { active: 0, upcoming: 1, completed: 2, cancelled: 3 };
+        const priority = rank[a.status] - rank[b.status];
+        if (priority) return priority;
+      }
+      if (section === "explore" && (eventListFilter === "new" || dateSort === "latest")) {
+        // Newest First means most recently published, not the latest calendar date.
+        // Records without publication timestamps appear after dated records.
+        const aPublished = getTime(a.createdAt);
+        const bPublished = getTime(b.createdAt);
+        if (aPublished !== bPublished) {
+          if (!aPublished) return 1;
+          if (!bPublished) return -1;
+          return bPublished - aPublished;
+        }
+      }
       const aDate = `${a.date || ""}T${a.time || "00:00"}`;
       const bDate = `${b.date || ""}T${b.time || "00:00"}`;
       const byDate = aDate.localeCompare(bDate);
       return (dateSort === "soonest" ? byDate : -byDate) || a.title.localeCompare(b.title);
     });
-  }, [section, isVolunteer, myEvents, filteredEvents, dateSort]);
+  }, [section, isVolunteer, myEvents, filteredEvents, dateSort, eventListFilter]);
+  const pageSize = 5;
+  const totalEventPages = Math.max(1, Math.ceil(displayEvents.length / pageSize));
+  // Display a short window of page numbers, never hundreds of buttons.
+  const firstVisiblePage = Math.max(1, Math.min(eventPage - 2, totalEventPages - 4));
+  const visiblePageCount = Math.min(totalEventPages, 5);
   useEffect(() => {
-    setVisibleEventCount(6);
-  }, [section, category, search, dateSort]);
-  const visibleEvents = displayEvents.slice(0, visibleEventCount);
-  const selectedEvent = events.find((event) => event.id === expandedEvent) ||
-    (isVolunteer ? myAttendanceEvents[0] : undefined) || displayEvents[0] || null;
+    setEventPage(1);
+    setExpandedEvent(null);
+    setRosterFocusId(null);
+    setParticipantsModalEventId(null);
+  }, [section, category, search, dateSort, eventListFilter, residentBarangayFilter, residentStatusFilter]);
+  useEffect(() => {
+    setEventPage(current => Math.min(current, totalEventPages));
+  }, [totalEventPages]);
+  const visibleEvents = displayEvents.slice((eventPage - 1) * pageSize, eventPage * pageSize);
+  // Attendance always points to an event the signed-in volunteer actually joined.
+  // Browsing an unjoined event must not replace the user's attendance summary.
+  const selectedEvent = (expandedEvent ? myEvents.find(event => event.id === expandedEvent) : undefined) ||
+    (isVolunteer ? myAttendanceEvents[0] : undefined) || null;
   const selectedParticipation = selectedEvent ? participationMap.get(selectedEvent.id) : undefined;
   const selectedJoined = selectedParticipation?.status === "joined";
   const selectedOwned = !!selectedEvent && selectedEvent.proposedBy === user?.uid;
+  const selectedRosterEvent = events.find(event => event.id === rosterFocusId) || selectedEvent || displayEvents[0] || null;
+  const participantsModalEvent = events.find(event => event.id === participantsModalEventId);
 
   const setValue = <K extends keyof ProposalForm>(
     field: K,
@@ -2180,6 +2241,7 @@ export default function CommunityEventsScreen() {
     const selected = detailsOpen;
     const cover = eventCover(event);
     const toggleDetails = () => {
+      setRosterFocusId(event.id);
       setExpandedEvent(detailsOpen ? null : event.id);
       setRouteEventId(null);
       setRouteOrigin(null);
@@ -2218,9 +2280,12 @@ export default function CommunityEventsScreen() {
                 <Text style={styles.lockedSlotsText}>{Math.max(0, Number(event.capacity || 0) - Number(event.participantsCount || 0))} slots left</Text>
               </View>
             </View>
-            <View style={styles.lockedSmallTag}>
-              <Ionicons name={categoryIcon(event.category)} color="#078477" size={13} />
-              <Text style={styles.lockedSmallTagText}>{event.category}</Text>
+            <View style={{flexDirection:"row",flexWrap:"wrap",alignItems:"center",gap:7}}>
+              <View style={styles.lockedSmallTag}>
+                <Ionicons name={categoryIcon(event.category)} color="#078477" size={13} />
+                <Text style={styles.lockedSmallTagText}>{event.category}</Text>
+              </View>
+              {isRecentlyPublished(event) && <View style={styles.eventNewPill}><Text style={styles.eventNewPillText}>NEW</Text></View>}
             </View>
             <View style={styles.lockedEventMeta}>
               <Ionicons name="calendar-outline" size={14} color="#6B7F93" />
@@ -2234,10 +2299,7 @@ export default function CommunityEventsScreen() {
               <Ionicons name="people-outline" size={14} color="#6B7F93" />
               <Text style={styles.lockedEventMetaText}>{Number(event.participantsCount || 0)} / {Number(event.capacity || 0)} volunteers</Text>
             </View>
-            <View style={styles.lockedEventTapHint}>
-              <Ionicons name={detailsOpen ? "chevron-up-circle-outline" : "chevron-down-circle-outline"} size={15} color="#087F75" />
-              <Text style={styles.lockedEventTapHintText}>{detailsOpen ? "Tap to close" : "Tap to see event details and Google Maps"}</Text>
-            </View>
+            <Text style={styles.lockedEventExcerpt} numberOfLines={2}>{event.description?.trim() || "Join this community activity and help make a difference."}</Text>
             </Pressable>
             <View style={styles.lockedRowActions}>
               <Pressable accessibilityRole="button" onPress={toggleDetails} style={styles.lockedSecondaryAction}>
@@ -2251,6 +2313,11 @@ export default function CommunityEventsScreen() {
                   <Text style={styles.lockedPrimaryActionText}>{busyEvent === event.id ? "Joining..." : "Join Event"}</Text>
                 </Pressable>
               )}
+              {isVolunteer && user && (
+                <CommunityEventAvatarPreview eventId={event.id} viewer={user}
+                  participantsCount={Number(event.participantsCount || 0)}
+                  onPress={() => { setRosterFocusId(event.id); setParticipantsModalEventId(event.id); }}/>
+              )}
               {joined && <View style={styles.lockedJoined}>
                 <Ionicons name="checkmark-circle" color="#078877" size={14} />
                 <Text style={styles.lockedJoinedText}>Joined</Text>
@@ -2258,6 +2325,12 @@ export default function CommunityEventsScreen() {
             </View>
           </View>
         </View>
+        {isVolunteer && event.status === "active" && eventScheduleHasPassed(event) && (
+          <View style={styles.eventStaleScheduleNotice}>
+            <Ionicons name="information-circle-outline" size={16} color="#9D712D"/>
+            <Text style={styles.eventStaleScheduleText}>The scheduled time has passed, but this event is still marked Ongoing by Admin. Confirm the current schedule before attending.</Text>
+          </View>
+        )}
         {isVolunteer && expiredUpcoming && !joined && (
           <View style={[styles.webAttendanceFeedbackBox, styles.webAttendanceFeedbackError]}>
             <Ionicons name="calendar-outline" color="#B42318" size={18}/>
@@ -2342,7 +2415,7 @@ export default function CommunityEventsScreen() {
                  ? "This event's date has passed. Ask Admin for a new schedule."
                  : "This event is closed for new volunteers."}</Text>
             </View>}
-            {isVolunteer && user && (
+            {isVolunteer && user && !webSideBySide && (
               <CommunityEventRoster
                 eventId={event.id}
                 viewer={user}
@@ -2554,96 +2627,134 @@ export default function CommunityEventsScreen() {
         <View style={[styles.lockedColumns, !webSideBySide && styles.lockedColumnsStack]}>
           <View style={[styles.lockedMain, !webSideBySide && styles.lockedMainStack]}>
             {/* Premium Community Events calendar banner; counts use the existing live state. */}
-            <View style={styles.webHero}>
-              <CommunityEventHeroArt compact={isCompact || webSideBySide}/>
-              <View style={[styles.communityHeroLayout,(isCompact || webSideBySide)&&styles.communityHeroLayoutCompact]}>
-                <View style={[styles.communityHeroCopy,(isCompact || webSideBySide)&&styles.communityHeroCopyCompact]}>
-                  <Text style={styles.communityHeroEyebrow}>VOLUNSERVE  ·  COMMUNITY ENGAGEMENT</Text>
-                  <Text style={[styles.communityHeroTitle,(isCompact || webSideBySide)&&styles.communityHeroTitleCompact]}>Community Events</Text>
-                  <Text style={styles.communityHeroTagline}>Connect. Participate. Make a difference.</Text>
-                  <Text style={styles.communityHeroDescription}>
+            <View style={styles.eventsHeader}>
+              <View style={[styles.eventsHeaderTop, width < 640 && styles.eventsHeaderTopCompact]}>
+                <View style={[styles.eventsHeaderIcon, width < 640 && styles.eventsHeaderIconCompact]}>
+                  <Ionicons name="calendar-outline" size={25} color="#087D70"/>
+                </View>
+                <View style={[styles.eventsHeaderCopy, width < 640 && styles.eventsHeaderCopyCompact]}>
+                  <Text style={styles.eventsHeaderEyebrow}>VOLUNSERVE / COMMUNITY ENGAGEMENT</Text>
+                  <Text style={styles.eventsHeaderTitle}>Community Events</Text>
+                  <Text style={styles.eventsHeaderDescription}>
                     {isVolunteer
-                      ? "Explore local activities, join events, and support your community."
-                      : "Discover community activities or propose an event for your barangay."}
+                      ? "Find approved activities, join local initiatives, and track your volunteer participation."
+                      : "Browse approved community activities and propose a meaningful event for your barangay."}
                   </Text>
                 </View>
-                <View style={[styles.communityHeroStats,(isCompact || webSideBySide)&&styles.communityHeroStatsCompact]}>
-                  {([
-                    {icon:"calendar-outline" as const,value:availableCount,label:"Available Events"},
-                    {icon:"people-outline" as const,value:isVolunteer?myEvents.length:proposals.length,label:isVolunteer?"My Joined Events":"My Proposals"},
-                    {icon:"ribbon-outline" as const,value:completedCount,label:"Completed Events"},
-                  ]).map((metric)=>(
-                    <View key={metric.label} style={styles.communityHeroStatCard}>
-                      <Ionicons name={metric.icon} size={21} color="#078B6B"/>
-                      <View style={styles.communityHeroStatCopy}>
-                        <Text style={styles.communityHeroStatNumber} numberOfLines={1}>{metric.value}</Text>
-                        <Text style={styles.communityHeroStatLabel} numberOfLines={2}>{metric.label}</Text>
-                      </View>
+                {isVolunteer && (
+                  <Pressable accessibilityRole="button" style={[styles.eventsMyEventsShortcut, width < 640 && styles.eventsMyEventsShortcutCompact]}
+                    onPress={() => { setSection(section === "mine" ? "explore" : "mine"); setResidentDetailsId(null); setNotice(""); }}>
+                    <Ionicons name={section === "mine" ? "calendar-outline" : "people-outline"} size={17} color="#087760"/>
+                    <Text style={styles.eventsMyEventsShortcutText}>{section === "mine" ? "Explore Events" : `My Events (${myEvents.length})`}</Text>
+                  </Pressable>
+                )}
+              </View>
+              <View style={styles.eventsHeaderStats}>
+                {([
+                  {icon:"calendar-outline" as const,value:totalPublishedCount,label:"Total Events"},
+                  {icon:"calendar-clear-outline" as const,value:upcomingCount,label:"Upcoming"},
+                  {icon:"play-circle-outline" as const,value:ongoingCount,label:"Ongoing"},
+                  {icon:"checkmark-circle-outline" as const,value:completedCount,label:"Finished"},
+                ]).map((metric)=>(
+                  <View key={metric.label} style={styles.eventsHeaderStat}>
+                    <View style={styles.eventsHeaderStatIcon}><Ionicons name={metric.icon} size={19} color="#0B7E73"/></View>
+                    <View>
+                      <Text style={styles.eventsHeaderStatValue}>{metric.value}</Text>
+                      <Text style={styles.eventsHeaderStatLabel}>{metric.label}</Text>
                     </View>
-                  ))}
-                </View>
+                  </View>
+                ))}
               </View>
             </View>
-            <View style={styles.lockedToolbar}>
+            {!isVolunteer && <View style={styles.lockedToolbar}>
               <View style={styles.webSectionTabs}>
                 <Pressable onPress={() => { setSection("explore"); setResidentDetailsId(null); setNotice(""); }} style={[styles.webSectionTab, section === "explore" && styles.webSectionTabActive]}><Text style={[styles.webSectionTabText, section === "explore" && styles.webSectionTabTextActive]}>Explore Events</Text></Pressable>
                 <Pressable onPress={() => { setSection("mine"); setResidentDetailsId(null); setNotice(""); }} style={[styles.webSectionTab, section === "mine" && styles.webSectionTabActive]}><Text style={[styles.webSectionTabText, section === "mine" && styles.webSectionTabTextActive]}>{isVolunteer ? "My Events" : "My Proposals"}</Text></Pressable>
                 {canPropose && <Pressable onPress={() => { setSection("propose"); setResidentDetailsId(null); setNotice(""); }} style={[styles.webSectionTab, section === "propose" && styles.webSectionTabActive]}><Text style={[styles.webSectionTabText, section === "propose" && styles.webSectionTabTextActive]}>+ Propose Event</Text></Pressable>}
               </View>
               {section === "explore" && <View style={[styles.webSearchWrap, styles.lockedSearch]}><Ionicons name="search-outline" size={17} color="#6B8392" /><TextInput style={styles.webSearchInput} value={search} onChangeText={setSearch} placeholder="Search community events..." placeholderTextColor="#91A4B1" autoCorrect={false}/></View>}
-            </View>
+            </View>}
             {section !== "propose" && !!notice && <View style={styles.webNotice}><Ionicons name="information-circle-outline" size={18} color="#0D8273" /><Text style={styles.webNoticeText}>{notice}</Text></View>}
             {section === "mine" && !!recordError && <View style={styles.webError}><Ionicons name="alert-circle-outline" size={17} color="#B42318" /><Text style={styles.webErrorText}>{recordError}</Text></View>}
-            {section === "explore" && canPropose && !residentDetailsId && (
-              <View style={styles.ruiFilterBar}>
-                <Pressable style={styles.ruiFilterSelect} onPress={()=>setResidentFilterPicker("category")}><Text style={styles.ruiFilterLabel}>{category === "All" ? "All Categories" : category}</Text><Ionicons name="chevron-down-outline" size={15} color="#668198"/></Pressable>
-                <Pressable style={styles.ruiFilterSelect} onPress={()=>setResidentFilterPicker("barangay")}><Text style={styles.ruiFilterLabel}>{residentBarangayFilter}</Text><Ionicons name="chevron-down-outline" size={15} color="#668198"/></Pressable>
-                <Pressable style={styles.ruiFilterSelect} onPress={()=>setResidentFilterPicker("status")}><Text style={styles.ruiFilterLabel}>{residentStatusFilter === "All Status" ? "All Status" : residentStatusFilter.toUpperCase()}</Text><Ionicons name="chevron-down-outline" size={15} color="#668198"/></Pressable>
-                <Pressable style={styles.ruiFilterSelect} onPress={()=>setDateSort((v)=>v==="soonest"?"latest":"soonest")}><Ionicons name="swap-vertical" size={15} color="#07907C"/><Text style={styles.ruiFilterLabel}>Date ({dateSort==="soonest"?"Soonest":"Latest"})</Text></Pressable>
+            {section === "explore" && !residentDetailsId && (
+              <View style={styles.eventBrowseControls}>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.eventStatusTabs}>
+                  {eventStatusFilters.map((item) => (
+                    <Pressable key={item.key} accessibilityRole="button" accessibilityState={{ selected: eventListFilter === item.key }}
+                      onPress={() => { setEventListFilter(item.key); setDateSort(item.key === "upcoming" ? "soonest" : "latest"); }}
+                      style={[styles.eventStatusTab, eventListFilter === item.key && styles.eventStatusTabActive]}>
+                      <Ionicons name={item.key === "upcoming" ? "calendar-outline" : item.key === "active" ? "play-circle-outline" : "checkmark-circle-outline"}
+                        size={18} color={eventListFilter === item.key ? "#FFFFFF" : "#326174"}/>
+                      <Text style={[styles.eventStatusTabText, eventListFilter === item.key && styles.eventStatusTabTextActive]}>{item.label} ({item.count})</Text>
+                    </Pressable>
+                  ))}
+                </ScrollView>
+                <View style={styles.eventFilterToolbar}>
+                  {isVolunteer ? <View style={styles.eventFilterSearch}>
+                    <Ionicons name="search-outline" size={17} color="#657F86"/>
+                    <TextInput style={styles.eventFilterSearchInput} value={search} onChangeText={setSearch}
+                      placeholder="Search events by title or keyword..." placeholderTextColor="#95A6AA" autoCorrect={false}/>
+                  </View> : <View style={styles.eventFilterCaption}><Ionicons name="options-outline" size={17} color="#607785"/><Text style={styles.eventFilterCaptionText}>Filter events</Text></View>}
+                  <Pressable accessibilityRole="button" accessibilityLabel="Filter by event category" style={styles.eventFilterSelect} onPress={()=>setResidentFilterPicker("category")}><Text style={styles.eventFilterSelectText} numberOfLines={1}>{category === "All" ? "All categories" : category}</Text><Ionicons name="chevron-down-outline" size={17} color="#587782"/></Pressable>
+                  <Pressable accessibilityRole="button" accessibilityLabel="Filter by barangay" style={styles.eventFilterSelect} onPress={()=>setResidentFilterPicker("barangay")}><Text style={styles.eventFilterSelectText} numberOfLines={1}>{residentBarangayFilter}</Text><Ionicons name="chevron-down-outline" size={17} color="#587782"/></Pressable>
+                  <Pressable accessibilityRole="button" accessibilityLabel="Change event date sorting" style={styles.eventFilterSelect}
+                    onPress={() => setDateSort(current => current === "soonest" ? "latest" : "soonest")}>
+                    <Ionicons name="swap-vertical-outline" size={17} color="#587782"/>
+                    <Text style={styles.eventFilterSelectText}>{dateSort === "soonest" ? "Nearest Date" : "Newest First"}</Text>
+                    <Ionicons name="chevron-down-outline" size={17} color="#587782"/>
+                  </Pressable>
+                  {(category !== "All" || residentBarangayFilter !== "All Barangays" || !!search.trim()) &&
+                    <Pressable accessibilityRole="button" onPress={()=>{setCategory("All");setResidentBarangayFilter("All Barangays");setEventListFilter("upcoming");setDateSort("soonest");setSearch("");setResidentStatusFilter("All Status");}} style={styles.eventClearFilter}>
+                      <Ionicons name="close-circle-outline" size={16} color="#477383"/><Text style={styles.eventClearFilterText}>Clear filters</Text>
+                    </Pressable>}
+                </View>
               </View>
             )}
-            {section === "explore" && !canPropose && <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.webFilters}>
-              {(["All", ...categories] as const).map((item) => <Pressable key={item} onPress={() => setCategory(item)} style={[styles.webFilterChip, category === item && styles.webFilterChipActive]}>
-                {item !== "All" && <Ionicons name={categoryIcon(item)} size={15} color={category === item ? "white" : "#067A70"}/>}
-                <Text style={[styles.webFilterText, category === item && styles.webFilterTextActive]}>{item}</Text>
-              </Pressable>)}
-            </ScrollView>}
             {(section === "explore" || (section === "mine" && isVolunteer)) && <View style={styles.lockedEventList}>
               {!residentDetailEvent && <View style={[styles.webListHeading, styles.lockedListHeading]}>
                 <View style={{ flex: 1, minWidth: 0 }}>
-                  <Text style={styles.webHeadingTitle}>Community Events</Text>
-                  <Text style={styles.webHeadingHint}>{section === "explore" ? "Explore activities and make a difference in San Jose del Monte." : "Your community event participation."}</Text>
+                  <Text style={styles.webHeadingTitle}>{section === "mine" ? "My Joined Events" : eventListFilter === "all" ? "All Events" : `${eventStatusFilters.find(item => item.key === eventListFilter)?.label || "Community"} Events`}</Text>
+                  <Text style={styles.webHeadingHint}>{section === "mine" ? "Review the events you joined." : "Browse approved community events in San Jose del Monte."}</Text>
                 </View>
                 <View style={styles.lockedListControls}>
                   <Text style={styles.webEventCount}>{displayEvents.length} event{displayEvents.length === 1 ? "" : "s"}</Text>
-                  <Pressable accessibilityRole="button" accessibilityLabel={`Sort events by date, currently ${dateSort === "soonest" ? "soonest first" : "latest first"}. Tap to change.`}
+                  {section === "mine" && <Pressable accessibilityRole="button" accessibilityLabel={`Sort events by date, currently ${dateSort === "soonest" ? "soonest first" : "latest first"}. Tap to change.`}
                     onPress={() => setDateSort((current) => current === "soonest" ? "latest" : "soonest")}
                     style={styles.lockedSortButton}>
                     <Ionicons name="calendar-outline" size={15} color="#087E74" />
-                    <View><Text style={styles.lockedSortCaption}>Sort by Date</Text>
-                      <Text style={styles.lockedSortValue}>{dateSort === "soonest" ? "Soonest First" : "Latest First"}</Text></View>
+                    <View><Text style={styles.lockedSortCaption}>Scheduled date</Text>
+                      <Text style={styles.lockedSortValue}>{dateSort === "soonest" ? "Earliest Schedule" : "Latest Schedule"}</Text></View>
                     <Ionicons name="swap-vertical-outline" size={15} color="#087E74" />
-                  </Pressable>
+                  </Pressable>}
                 </View>
               </View>}
               {eventsLoading ? <View style={styles.webLoading}><ActivityIndicator color={colors.green}/></View> :
                 eventError ? <View style={styles.webError}><Text style={styles.webErrorText}>{eventError}</Text></View> :
-                !displayEvents.length ? <View style={styles.webEmptyCard}><Ionicons name="calendar-outline" size={35} color="#91A6AC"/><Text style={styles.webEmptyTitle}>{section === "mine" ? "No joined events yet" : "No matching community events"}</Text><Text style={styles.webEmptySubtitle}>Browse approved events to see the available activities.</Text></View> :
+                !displayEvents.length ? <View style={styles.webEmptyCard}><Ionicons name="calendar-outline" size={35} color="#91A6AC"/><Text style={styles.webEmptyTitle}>{section === "mine" ? "No joined events yet" : eventListFilter === "upcoming" ? "No scheduled upcoming events" : "No matching community events"}</Text><Text style={styles.webEmptySubtitle}>{section === "explore" && eventListFilter === "upcoming" ? "Only future-dated upcoming activities appear here. Contact Admin if an event needs a new schedule." : "Browse approved events to see the available activities."}</Text></View> :
                 <View style={styles.lockedEventListRows}>
                   {canPropose ? (residentDetailEvent ? renderResidentEventDetail(residentDetailEvent) : <View style={styles.ruiCardGrid}>{visibleEvents.map(renderResidentEventCard)}</View>) : visibleEvents.map(renderEvent)}
-                  {!residentDetailEvent && displayEvents.length > 6 && (
-                    <View style={styles.lockedLoadMoreRow}>
-                      {visibleEventCount < displayEvents.length ? (
-                        <Pressable accessibilityRole="button" onPress={() => setVisibleEventCount((count) => count + 6)} style={styles.lockedLoadMoreButton}>
-                          <Text style={styles.lockedLoadMoreText}>Show More Events ({displayEvents.length - visibleEventCount} remaining)</Text>
-                          <Ionicons name="chevron-down-outline" size={16} color="#087B71" />
+                  {!residentDetailEvent && displayEvents.length > pageSize && (
+                    <View style={styles.eventsPager}>
+                      <Text style={styles.eventsPagerCount}>Showing {(eventPage - 1) * pageSize + 1}–{Math.min(eventPage * pageSize, displayEvents.length)} of {displayEvents.length} events</Text>
+                      <View style={styles.eventsPagerButtons}>
+                        <Pressable accessibilityRole="button" disabled={eventPage === 1}
+                          style={[styles.eventsPageButton, eventPage === 1 && styles.webButtonDisabled]}
+                          onPress={() => setEventPage(page => Math.max(1, page - 1))}>
+                          <Ionicons name="chevron-back-outline" size={16} color="#365D63"/><Text style={styles.eventsPageText}>Previous</Text>
                         </Pressable>
-                      ) : (
-                        <Pressable accessibilityRole="button" onPress={() => { setVisibleEventCount(6); setExpandedEvent(null); }} style={styles.lockedLoadMoreButton}>
-                          <Text style={styles.lockedLoadMoreText}>Show Fewer Events</Text>
-                          <Ionicons name="chevron-up-outline" size={16} color="#087B71" />
+                        {Array.from({ length: visiblePageCount }, (_, index) => firstVisiblePage + index).map(page => (
+                          <Pressable key={page} accessibilityRole="button" accessibilityState={{ selected: eventPage === page }}
+                            style={[styles.eventsPageNumber, eventPage === page && styles.eventsPageNumberActive]}
+                            onPress={() => setEventPage(page)}>
+                            <Text style={[styles.eventsPageNumberText, eventPage === page && styles.eventsPageNumberTextActive]}>{page}</Text>
+                          </Pressable>
+                        ))}
+                        <Pressable accessibilityRole="button" disabled={eventPage === totalEventPages}
+                          style={[styles.eventsPageButton, eventPage === totalEventPages && styles.webButtonDisabled]}
+                          onPress={() => setEventPage(page => Math.min(totalEventPages, page + 1))}>
+                          <Text style={styles.eventsPageText}>Next</Text><Ionicons name="chevron-forward-outline" size={16} color="#365D63"/>
                         </Pressable>
-                      )}
+                      </View>
                     </View>
                   )}
                 </View>}
@@ -2660,42 +2771,6 @@ export default function CommunityEventsScreen() {
                   </View>
                   {selectedParticipation?.attendanceVerified && <View style={styles.lockedAttendanceVerified}><Ionicons name="checkmark-circle" size={14} color="#06856D"/><Text style={styles.lockedAttendanceVerifiedText}>Verified</Text></View>}
                 </View>
-                {isVolunteer && <View style={styles.lockedAttendanceOverview}>
-                  <View style={styles.lockedAttendanceOverviewHeading}>
-                    <Text style={styles.lockedAttendanceOverviewTitle}>Joined Events</Text>
-                    <Pressable accessibilityRole="button" accessibilityLabel="Change attendance sort by date"
-                      onPress={() => setAttendanceSort((previous) => previous === "latest" ? "oldest" : "latest")}
-                      style={styles.lockedAttendanceSort}>
-                      <Ionicons name="calendar-outline" size={14} color="#087668" />
-                      <Text style={styles.lockedAttendanceSortText}>{attendanceSort === "latest" ? "Newest First" : "Oldest First"}</Text>
-                      <Ionicons name="swap-vertical-outline" size={13} color="#087668" />
-                    </Pressable>
-                  </View>
-                  {myAttendanceEvents.length === 0 ? (
-                    <Text style={styles.lockedAttendanceEmptyText}>No joined events yet. Explore published community events to participate.</Text>
-                  ) : <View style={styles.lockedAttendanceHistory}>
-                    {(showAllAttendance ? myAttendanceEvents : myAttendanceEvents.slice(0, 4)).map((item) => {
-                      const participation = participationMap.get(item.id);
-                      const isCurrent = selectedEvent?.id === item.id;
-                      const attendanceState = participation?.attendanceVerified ? "Verified" : participation?.checkedOutAt ? "Timed Out" : participation?.checkedInAt ? "Timed In" : "Joined";
-                      return <Pressable key={item.id} accessibilityRole="button" accessibilityLabel={`View attendance for ${item.title}`}
-                        onPress={() => { setExpandedEvent(item.id); setAttendanceConfirmation(null); }}
-                        style={[styles.lockedAttendanceHistoryItem, isCurrent && styles.lockedAttendanceHistoryActive]}>
-                        <View style={{ flex: 1, minWidth: 0 }}>
-                          <Text style={styles.lockedAttendanceHistoryTitle} numberOfLines={2}>{item.title}</Text>
-                          <Text style={styles.lockedAttendanceHistoryDate}>{eventScheduleLabel(item)}</Text>
-                        </View>
-                        <View style={[styles.lockedAttendanceHistoryBadge, participation?.attendanceVerified && styles.lockedAttendanceHistoryBadgeVerified]}>
-                          <Text style={styles.lockedAttendanceHistoryBadgeText}>{attendanceState}</Text>
-                        </View>
-                      </Pressable>;
-                    })}
-                    {myAttendanceEvents.length > 4 && <Pressable accessibilityRole="button" onPress={() => setShowAllAttendance((previous) => !previous)} style={styles.lockedAttendanceMore}>
-                      <Text style={styles.lockedAttendanceMoreText}>{showAllAttendance ? "Show fewer" : `Show all ${myAttendanceEvents.length} events`}</Text>
-                      <Ionicons name={showAllAttendance ? "chevron-up-outline" : "chevron-down-outline"} size={15} color="#087567" />
-                    </Pressable>}
-                  </View>}
-                </View>}
                 {!selectedEvent ? <Text style={styles.webEmptySubtitle}>Select an event to view attendance.</Text> :
                   !isVolunteer ? <Text style={styles.webEmptySubtitle}>Attendance is available for approved volunteers.</Text> :
                   selectedOwned ? <Text style={styles.webEmptySubtitle}>Your proposed event cannot be joined as a volunteer.</Text> :
@@ -2821,6 +2896,54 @@ export default function CommunityEventsScreen() {
                     {!selectedParticipation?.attendanceVerified && <Text style={styles.webAttendanceNote}>Time In/Out uses server time. Admin/LGU verifies participation.</Text>}
                   </View>}
                   </>}
+                {webSideBySide && selectedRosterEvent && user && (
+                  <CommunityEventRoster eventId={selectedRosterEvent.id} viewer={user}
+                    participantsCount={Number(selectedRosterEvent.participantsCount || 0)}
+                    eventTitle={selectedRosterEvent.title} compact />
+                )}
+                {isVolunteer && <View style={styles.lockedAttendanceOverview}>
+                  <View style={styles.lockedAttendanceOverviewHeading}>
+                    <Text style={styles.lockedAttendanceOverviewTitle}>My Event Attendance History</Text>
+                    <Pressable accessibilityRole="button" accessibilityLabel="Change attendance sort by date"
+                      onPress={() => setAttendanceSort((previous) => previous === "latest" ? "oldest" : "latest")}
+                      style={styles.lockedAttendanceSort}>
+                      <Ionicons name="calendar-outline" size={14} color="#087668" />
+                      <Text style={styles.lockedAttendanceSortText}>{attendanceSort === "latest" ? "Newest First" : "Oldest First"}</Text>
+                      <Ionicons name="swap-vertical-outline" size={13} color="#087668" />
+                    </Pressable>
+                  </View>
+                  {myAttendanceEvents.length === 0 ? (
+                    <Text style={styles.lockedAttendanceEmptyText}>No joined events yet. Explore published community events to participate.</Text>
+                  ) : <View style={styles.lockedAttendanceHistory}>
+                    {(showAllAttendance ? myAttendanceEvents : myAttendanceEvents.slice(0, 3)).map((item) => {
+                      const participation = participationMap.get(item.id);
+                      const isCurrent = selectedEvent?.id === item.id;
+                      const attendanceState = participation?.attendanceVerified ? "Verified" : participation?.checkedOutAt ? "Timed Out" : participation?.checkedInAt ? "Timed In" : "Joined";
+                      return <Pressable key={item.id} accessibilityRole="button" accessibilityLabel={`View attendance for ${item.title}`}
+                        onPress={() => { setExpandedEvent(item.id); setRosterFocusId(item.id); setAttendanceConfirmation(null); }}
+                        style={[styles.lockedAttendanceHistoryItem, isCurrent && styles.lockedAttendanceHistoryActive]}>
+                        <View style={{ flex: 1, minWidth: 0 }}>
+                          <Text style={styles.lockedAttendanceHistoryTitle} numberOfLines={2}>{item.title}</Text>
+                          <Text style={styles.lockedAttendanceHistoryDate}>{eventScheduleLabel(item)}</Text>
+                        </View>
+                        <View style={[styles.lockedAttendanceHistoryBadge, participation?.attendanceVerified && styles.lockedAttendanceHistoryBadgeVerified]}>
+                          <Text style={styles.lockedAttendanceHistoryBadgeText}>{attendanceState}</Text>
+                        </View>
+                      </Pressable>;
+                    })}
+                    {myAttendanceEvents.length > 3 && <Pressable accessibilityRole="button" onPress={() => setShowAllAttendance((previous) => !previous)} style={styles.lockedAttendanceMore}>
+                      <Text style={styles.lockedAttendanceMoreText}>{showAllAttendance ? "Show fewer" : `Show all ${myAttendanceEvents.length} events`}</Text>
+                      <Ionicons name={showAllAttendance ? "chevron-up-outline" : "chevron-down-outline"} size={15} color="#087567" />
+                    </Pressable>}
+                  </View>}
+                </View>}
+
+                <Pressable accessibilityRole="button" style={styles.eventCertificateButton}
+                  onPress={() => router.push("/(tabs)/certificate")}>
+                  <Ionicons name="ribbon-outline" size={20} color="#FFFFFF"/>
+                  <Text style={styles.eventCertificateButtonText}>View My Certificates</Text>
+                  <Ionicons name="arrow-forward-outline" size={17} color="#FFFFFF"/>
+                </Pressable>
               </View>
             </View>
           )}
@@ -2908,7 +3031,7 @@ export default function CommunityEventsScreen() {
           {!!notice && <View style={busy ? styles.webNotice : styles.webError}><Ionicons name={busy ? "information-circle-outline" : "alert-circle-outline"} size={17} color={busy ? "#0D8273" : "#B42318"}/><Text style={busy ? styles.webNoticeText : styles.webErrorText}>{notice}</Text></View>}
         </View>}
 
-        {isVolunteer && (
+        {isVolunteer && Platform.OS !== "web" && (
           <Pressable
             style={
               styles.certificateLink
@@ -2939,6 +3062,28 @@ export default function CommunityEventsScreen() {
           </Pressable>
         )}
       </ScrollView>
+      )}
+      {Platform.OS === "web" && participantsModalEvent && user && (
+        <Modal visible transparent animationType="fade" onRequestClose={() => setParticipantsModalEventId(null)}>
+          <View style={styles.eventRosterBackdrop}>
+            <View style={styles.eventRosterModal}>
+              <View style={styles.eventRosterModalHeading}>
+                <View style={{flex:1,minWidth:0}}>
+                  <Text style={styles.eventRosterModalTitle}>Joined Volunteers</Text>
+                  <Text style={styles.eventRosterModalSubtitle} numberOfLines={2}>{participantsModalEvent.title}</Text>
+                </View>
+                <Pressable accessibilityRole="button" accessibilityLabel="Close joined volunteers"
+                  onPress={() => setParticipantsModalEventId(null)}>
+                  <Ionicons name="close-circle-outline" size={25} color="#607C85"/>
+                </Pressable>
+              </View>
+              <ScrollView style={{maxHeight:520}}>
+                <CommunityEventRoster eventId={participantsModalEvent.id} viewer={user}
+                  participantsCount={Number(participantsModalEvent.participantsCount || 0)}/>
+              </ScrollView>
+            </View>
+          </View>
+        </Modal>
       )}
       <Modal visible={Platform.OS === "web" && residentFilterPicker !== null} transparent animationType="fade" onRequestClose={()=>setResidentFilterPicker(null)}>
         <View style={styles.ruiFilterBackdrop}><View style={styles.ruiFilterModal}>
@@ -5356,9 +5501,9 @@ const styles = StyleSheet.create({
   webDetailColumn: { flex: 1, minWidth: 0 },
   webFullWidth: { width: "100%", flex: 0 },
   webListHeading: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingVertical: 8, gap: 8 },
-  webHeadingTitle: { fontFamily:"EventInterBold", color: "#17453B", fontWeight: "900", fontSize: 17 },
-  webHeadingHint: { color: "#778DA0", fontSize: 11, marginTop: 3 },
-  webEventCount: { color: "#718697", fontSize: 11, fontWeight: "700" },
+  webHeadingTitle: { fontFamily: vsType.family, color: "#153A3D", fontWeight: "800", fontSize: 20, lineHeight: 27 },
+  webHeadingHint: { color: "#697E88", fontSize: 13, marginTop: 5, lineHeight: 19 },
+  webEventCount: { color: "#718697", fontSize: vsType.size.caption, fontWeight: "700" },
   webCardGrid: { flexDirection: "row", flexWrap: "wrap", gap: 12, alignItems: "flex-start", marginTop: 5 },
   webEventCard: { width: "48.9%", minWidth: 230, backgroundColor: "#FFFFFF", borderRadius: 14, borderWidth: 1, borderColor: "#E0ECE9", overflow: "hidden" },
   webEventCompact: { width: "100%" },
@@ -5427,8 +5572,8 @@ const styles = StyleSheet.create({
   webAttendanceStatusText: { fontSize: 9, fontWeight: "900", color: "#06796D" },
   webAttendanceActionArea: { marginTop: 14, gap: 9 },
   webAttendanceActionHelp: { fontSize: 11, lineHeight: 17, color: "#456C7E" },
-  webAttendanceActionButton: { backgroundColor: "#078F82", borderRadius: 9, minHeight: 42, paddingHorizontal: 14, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, flex: 1 },
-  webAttendanceActionButtonText: { color: "white", fontWeight: "900", fontSize: 12 },
+  webAttendanceActionButton: { backgroundColor: "#087D70", borderRadius: 10, minHeight: 52, paddingHorizontal: 18, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10, flex: 1 },
+  webAttendanceActionButtonText: { color: "white", fontWeight: "700", fontSize: 15 },
   webAttendanceConfirmBox: { padding: 12, borderRadius: 9, borderWidth: 1, borderColor: "#BCE4D9", backgroundColor: "#EAF8F4", gap: 10 },
   webAttendanceConfirmText: { color: "#225569", fontSize: 11, lineHeight: 17 },
   webAttendanceConfirmButtons: { flexDirection: "row", alignItems: "center", gap: 8 },
@@ -5460,7 +5605,7 @@ const styles = StyleSheet.create({
   lockedColumns: { flexDirection: "row", alignItems: "flex-start", width: "100%", gap: 18 },
   lockedColumnsStack: { flexDirection: "column" },
   lockedMain: { flex: 1, minWidth: 0 },
-  lockedRail: { width: 338, maxWidth: "100%", flexShrink: 0, gap: 14 },
+  lockedRail: { width: 410, maxWidth: "100%", flexShrink: 0, gap: 14 },
   lockedRailStack: { width: "100%" },
   lockedHeroGradient: { minHeight: 196, flexDirection: "row", paddingHorizontal: 26, paddingVertical: 24, alignItems: "center" },
   lockedHeroWords: { flex: 1, minWidth: 0, paddingRight: 12, zIndex: 3 },
@@ -5480,7 +5625,9 @@ const styles = StyleSheet.create({
   lockedSearch: { width: 250, minWidth: 190, flexShrink: 1 },
   lockedEventList: { marginTop: 8 },
   lockedEventListRows: { gap: 10, paddingTop: 6 },
-  lockedMainStack: { width: "100%", flex: 0 },
+  // Stacked viewport: preserve intrinsic Events height before the Attendance rail.
+  // The old `flex: 0` collapsed the main column at tablet/mobile widths.
+  lockedMainStack: { width: "100%", flexGrow: 0, flexShrink: 0, flexBasis: "auto" },
   lockedEventShell: { backgroundColor: "white", borderColor: "#E1EBE8", borderWidth: 1, borderRadius: 13, overflow: "hidden", width: "100%" },
   lockedEventSummaryClick: { gap: 7, paddingVertical: 6, borderRadius: 8, minWidth: 0 },
   lockedEventTapHint: { flexDirection: "row", alignItems: "center", gap: 7, marginTop: 4 },
@@ -5506,10 +5653,10 @@ const styles = StyleSheet.create({
   lockedLoadMoreRow: { flexDirection: "row", justifyContent: "center", marginTop: 5 },
   lockedLoadMoreButton: { flexDirection: "row", alignItems: "center", gap: 8, paddingVertical: 11, paddingHorizontal: 18, borderRadius: 11, backgroundColor: "#E7F7F2", borderWidth: 1, borderColor: "#CBE8E0" },
   lockedLoadMoreText: { fontSize: 12, fontWeight: "800", color: "#087B71" },
-  lockedEventRow: { backgroundColor: "white", borderRadius: 13, padding: 10, flexDirection: "row", gap: 13, width: "100%" },
+  lockedEventRow: { backgroundColor: "white", borderRadius: 13, padding: 13, flexDirection: "row", gap: 16, width: "100%" },
   lockedEventSelected: { borderColor: "#0A9E8D", borderWidth: 1.5 },
   lockedEventVertical: { flexDirection: "column" },
-  lockedEventPicture: { width: 177, minHeight: 170, borderRadius: 10, overflow: "hidden", backgroundColor: "#CFEDE4", flexShrink: 0 },
+  lockedEventPicture: { width: 170, minHeight: 174, borderRadius: 10, overflow: "hidden", backgroundColor: "#CFEDE4", flexShrink: 0 },
   lockedPictureNarrow: { width: "100%", minHeight: 160 },
   lockedImageFill: { position: "absolute", width: "100%", height: "100%" },
   lockedImageFallback: { width: "100%", height: "100%", alignItems: "center", justifyContent: "center" },
@@ -5518,14 +5665,22 @@ const styles = StyleSheet.create({
   lockedImageStatusText: { color: "#067C60", fontSize: 9, fontWeight: "900" },
   lockedEventInfo: { flex: 1, minWidth: 0, justifyContent: "center", gap: 5 },
   lockedEventTop: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", gap: 5 },
-  lockedEventName: { fontFamily:"EventInterBold", flex: 1, minWidth: 0, color: "#0F3047", fontSize: 15, fontWeight: "900" },
+  lockedEventName: { fontFamily: vsType.family, flex: 1, minWidth: 0, color: "#173A42", fontSize: 17, lineHeight: 24, fontWeight: "700" },
   lockedSlotsPill: { flexDirection: "row", flexShrink: 0, alignItems: "center", gap: 4, backgroundColor: "#E8F8F0", paddingHorizontal: 7, paddingVertical: 5, borderRadius: 7 },
   lockedSlotsText: { color: "#07836E", fontSize: 9, fontWeight: "800" },
   lockedSmallTag: { backgroundColor: "#E8F7F0", paddingHorizontal: 8, paddingVertical: 5, borderRadius: 6, gap: 5, flexDirection: "row", alignItems: "center", alignSelf: "flex-start" },
-  lockedSmallTagText: { color: "#06786E", fontSize: 10, fontWeight: "800" },
-  lockedEventExcerpt: { fontSize: 10.8, lineHeight: 15, color: "#56748A" },
+  lockedSmallTagText: { color: "#06786E", fontSize: vsType.size.micro, fontWeight: "800" },
+  lockedEventExcerpt: { fontFamily: vsType.family, fontSize: 13, lineHeight: 19, color: "#57707C", marginTop: 4 },
   lockedEventMeta: { flexDirection: "row", alignItems: "flex-start", gap: 6 },
-  lockedEventMetaText: { flex: 1, minWidth: 0, color: "#60768A", fontSize: 10.5, lineHeight: 16 },
+  lockedEventMetaText: { flex: 1, minWidth: 0, color: "#617987", fontSize: 13, lineHeight: 19 },
+  eventParticipantsButton: { paddingVertical: 8, paddingHorizontal: 10, flexDirection: "row", alignItems: "center", gap: 5, backgroundColor: "#F2FAF7", borderRadius: 8, borderColor: "#B8DACE", borderWidth: 1 },
+  eventParticipantsButtonText: { fontSize: 12, fontWeight: "700", color: "#087C69", fontFamily: vsType.family },
+  eventStaleScheduleNotice: { flexDirection: "row", alignItems: "flex-start", gap: 8, backgroundColor: "#FFFAEC", borderTopWidth: 1, borderTopColor: "#F3E9D0", paddingHorizontal: 13, paddingVertical: 9 },
+  eventStaleScheduleText: { flex: 1, fontFamily: vsType.family, fontSize: 12, lineHeight: 18, color: "#80632C" },
+  eventNewPill: { backgroundColor: "#DCF4E6", paddingHorizontal: 7, paddingVertical: 4, borderRadius: 6 },
+  eventNewPillText: { fontSize: 10, color: "#07674B", fontWeight: "800" },
+  eventCertificateButton: { marginTop: 12, backgroundColor: "#007B61", padding: 13, borderRadius: 10, flexDirection: "row", justifyContent: "center", alignItems: "center", gap: 9 },
+  eventCertificateButtonText: { fontSize: 14, fontWeight: "800", color: "#FFFFFF", fontFamily: vsType.family },
   lockedRowActions: { flexDirection: "row", alignItems: "center", justifyContent: "flex-end", gap: 7, flexWrap: "wrap", marginTop: 2 },
   lockedSecondaryAction: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, backgroundColor: "#E8F7F4", borderRadius: 8, paddingHorizontal: 11, minHeight: 33 },
   lockedSecondaryActionText: { fontFamily:"EventInterSemiBold", color: "#076E69", fontSize: 10, fontWeight: "900" },
@@ -5535,19 +5690,19 @@ const styles = StyleSheet.create({
   lockedJoinedText: { color: "#077C69", fontSize: 10, fontWeight: "800" },
   lockedAboutCard: { backgroundColor: "white", borderColor: "#E1EBE8", borderWidth: 1, borderRadius: 13, padding: 16, marginTop: 14, gap: 9 },
   lockedAboutText: { color: "#567183", fontSize: 12, lineHeight: 20 },
-  lockedRailCard: { width: "100%", minWidth: 0, backgroundColor: "white", borderRadius: 15, padding: 14, borderWidth: 1, borderColor: "#E1EBE9", overflow: "hidden" },
-  lockedAttendanceRail: { backgroundColor: "#F2FBF6", borderColor: "#B4DDCB", borderWidth: 1.5 },
+  lockedRailCard: { width: "100%", minWidth: 0, backgroundColor: "white", borderRadius: 14, padding: 15, borderWidth: 1, borderColor: "#E1EBE9", overflow: "hidden" },
+  lockedAttendanceRail: { backgroundColor: "#FFFFFF", borderColor: "#D7E6E1", borderWidth: 1 },
   lockedEventMapCard: { backgroundColor: "#F5FAF9", borderRadius: 12, borderWidth: 1, borderColor: "#D6EAE2", padding: 16, marginTop: 4, gap: 4 },
-  lockedAttendanceOverview: { backgroundColor: "#E6F6ED", borderRadius: 11, padding: 10, gap: 9, marginBottom: 12 },
+  lockedAttendanceOverview: { backgroundColor: "#F8FBFA", borderRadius: 11, padding: 12, gap: 9, marginTop: 12, marginBottom: 5 },
   lockedAttendanceOverviewHeading: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 7 },
   lockedAttendanceOverviewTitle: { fontFamily:"EventInterBold", color: "#0D6A55", fontSize: 12, fontWeight: "900" },
   lockedAttendanceSort: { flexDirection: "row", alignItems: "center", gap: 5, paddingVertical: 7, paddingHorizontal: 8, backgroundColor: "white", borderRadius: 8, borderWidth: 1, borderColor: "#B9DECD" },
   lockedAttendanceSortText: { color: "#0B7666", fontSize: 10, fontWeight: "800" },
   lockedAttendanceHistory: { gap: 6 },
-  lockedAttendanceHistoryItem: { flexDirection: "row", alignItems: "center", gap: 7, borderRadius: 9, borderWidth: 1, borderColor: "#C9E5D7", padding: 9, backgroundColor: "#FFFFFF" },
+  lockedAttendanceHistoryItem: { flexDirection: "row", alignItems: "center", gap: 9, borderRadius: 9, borderWidth: 1, borderColor: "#D5E4DF", padding: 10, backgroundColor: "#FFFFFF", minHeight: 56 },
   lockedAttendanceHistoryActive: { borderColor: "#078F82", borderWidth: 1.5, backgroundColor: "#F4FFFA" },
-  lockedAttendanceHistoryTitle: { fontFamily:"EventInterBold", fontSize: 11, fontWeight: "900", color: "#133D3D" },
-  lockedAttendanceHistoryDate: { fontSize: 10, color: "#567F75", marginTop: 4, lineHeight: 15 },
+  lockedAttendanceHistoryTitle: { fontFamily: vsType.family, fontSize: 14, lineHeight: 20, fontWeight: "700", color: "#173C3B" },
+  lockedAttendanceHistoryDate: { fontSize: 12, color: "#607C79", marginTop: 5, lineHeight: 17 },
   lockedAttendanceHistoryBadge: { backgroundColor: "#E3EDF1", borderRadius: 7, paddingHorizontal: 7, paddingVertical: 5, flexShrink: 0 },
   lockedAttendanceHistoryBadgeVerified: { backgroundColor: "#D8F4E4" },
   lockedAttendanceHistoryBadgeText: { fontFamily:"EventInterBold", fontSize: 9, fontWeight: "900", color: "#087666" },
@@ -5573,7 +5728,7 @@ const styles = StyleSheet.create({
   lockedAttendanceVerified: { flexDirection: "row", gap: 4, alignItems: "center", backgroundColor: "#E3F8ED", paddingHorizontal: 7, paddingVertical: 5, borderRadius: 7 },
   lockedAttendanceVerifiedText: { color: "#067D68", fontSize: 9, fontWeight: "900" },
   lockedAttendanceEmpty: { backgroundColor: "#F4F9F9", borderRadius: 11, padding: 22, alignItems: "center", gap: 10 },
-  lockedAttendancePanel: { backgroundColor: "#F0FAF5", borderWidth: 1, borderColor: "#C7E5D4", borderRadius: 12, padding: 10, marginTop: 3 },
+  lockedAttendancePanel: { backgroundColor: "#FFFFFF", borderWidth: 1, borderColor: "#DEEAE5", borderRadius: 12, padding: 15, marginTop: 3 },
   lockedParticipationMeta: { backgroundColor: "#ECF8F5", borderRadius: 8, padding: 9, marginBottom: 7 },
   lockedParticipationText: { fontSize: 11, fontWeight: "800", color: "#087567" },
   lockedCertificateLine: { marginTop: 8, paddingTop: 8, borderTopWidth: 1, borderTopColor: "#E5EFED", flexDirection: "row", alignItems: "center", gap: 7 },
@@ -5594,12 +5749,12 @@ const styles = StyleSheet.create({
   lockedAttendanceEventDate: { flexDirection: "row", alignItems: "center", gap: 4 },
   lockedAttendanceEventDateText: { fontSize: 9.5, color: "#627F96", flexShrink: 1 },
   lockedAttendanceGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8, width: "100%", marginBottom: 9 },
-  lockedAttendanceTile: { flexGrow: 1, flexBasis: "47%", minWidth: 0, minHeight: 65, flexDirection: "row", alignItems: "center", paddingHorizontal: 7, paddingVertical: 8, gap: 6, backgroundColor: "#FCFEFD", borderWidth: 1, borderColor: "#E2ECEA", borderRadius: 10 },
-  lockedAttendanceTileIcon: { width: 29, height: 29, borderRadius: 12, alignItems: "center", justifyContent: "center", flexShrink: 0 },
+  lockedAttendanceTile: { flexGrow: 1, flexBasis: "47%", minWidth: 0, minHeight: 79, flexDirection: "row", alignItems: "center", paddingHorizontal: 10, paddingVertical: 11, gap: 8, backgroundColor: "#F8FBFA", borderWidth: 1, borderColor: "#DBE9E4", borderRadius: 10 },
+  lockedAttendanceTileIcon: { width: 32, height: 32, borderRadius: 10, alignItems: "center", justifyContent: "center", flexShrink: 0 },
   lockedAttendanceTileBody: { flex: 1, minWidth: 0 },
-  lockedAttendanceTileLabel: { color: "#6C8595", fontSize: 9.5, lineHeight: 14 },
-  lockedAttendanceTileValue: { fontFamily:"EventInterBold", color: "#12344A", fontWeight: "900", fontSize: 11.5, marginTop: 2 },
-  lockedAttendanceTileSmall: { color: "#728897", fontSize: 9, marginTop: 2 },
+  lockedAttendanceTileLabel: { color: "#627785", fontSize: 12, lineHeight: 17, fontWeight: "600" },
+  lockedAttendanceTileValue: { fontFamily: vsType.family, color: "#123E46", fontWeight: "800", fontSize: 17, lineHeight: 22, marginTop: 2 },
+  lockedAttendanceTileSmall: { color: "#708490", fontSize: 12, lineHeight: 17, marginTop: 2 },
   lockedAttendanceVerifier: { flexDirection: "row", alignItems: "center", gap: 7, padding: 9, backgroundColor: "#F1F9F7", borderRadius: 8, marginBottom: 9 },
   lockedAttendanceVerifierText: { fontSize: 10.5, fontWeight: "800", color: "#08766B", flex: 1 },
   // Resident Community Proposal: clear section hierarchy, touch-friendly selections and safe media links.
@@ -5671,6 +5826,55 @@ const styles = StyleSheet.create({
   ruiHeroHeight: { minHeight: 170 },
   ruiHeroImage: { position: "absolute", top: 0, right: 0, width: "55%", height: "100%" },
   ruiHeroOverlay: { position: "absolute", left: 0, right: 0, top: 0, bottom: 0 },
+  eventsHeader: { backgroundColor: "#E8F9F2", borderRadius: 14, borderWidth: 1, borderColor: "#D6EEE4", overflow: "hidden" },
+  eventsHeaderTop: { flexDirection: "row", alignItems: "flex-start", gap: 17, paddingHorizontal: 24, paddingTop: 23, paddingBottom: 20 },
+  eventsHeaderTopCompact: { flexWrap: "wrap", gap: 9, paddingHorizontal: 12, paddingTop: 15, paddingBottom: 14 },
+  eventsHeaderIcon: { height: 47, width: 47, borderRadius: 12, backgroundColor: "#E8F5F1", alignItems: "center", justifyContent: "center", flexShrink: 0 },
+  eventsHeaderIconCompact: { height: 37, width: 37, borderRadius: 10 },
+  eventsHeaderCopy: { flex: 1, minWidth: 0 },
+  eventsHeaderCopyCompact: { flexBasis: "70%", flexGrow: 1 },
+  eventsMyEventsShortcut: { paddingHorizontal: 11, minHeight: 39, borderRadius: 9, borderWidth: 1, borderColor: "#B6DCCE", backgroundColor: "#FFFFFF", alignItems: "center", justifyContent: "center", flexDirection: "row", gap: 7 },
+  eventsMyEventsShortcutCompact: { width: "100%", marginTop: 5, justifyContent: "center" },
+  eventsMyEventsShortcutText: { fontSize: 12, fontWeight: "700", color: "#087760", fontFamily: vsType.family },
+  eventsHeaderEyebrow: { fontFamily: vsType.family, fontSize: 11, color: "#237C70", letterSpacing: 0.7, fontWeight: "800", marginBottom: 5 },
+  eventsHeaderTitle: { fontFamily: vsType.family, fontSize: 27, lineHeight: 35, fontWeight: "800", color: "#15393E" },
+  eventsHeaderDescription: { fontFamily: vsType.family, fontSize: 14, lineHeight: 21, fontWeight: "400", color: "#667B84", marginTop: 4 },
+  eventsHeaderStats: { flexDirection: "row", alignItems: "stretch", flexWrap: "wrap", backgroundColor: "#DFF5EC", borderTopWidth: 1, borderTopColor: "#D3EAE1", paddingHorizontal: 12, paddingVertical: 11, gap: 9 },
+  eventsHeaderStat: { flex: 1, minWidth: 150, flexBasis: 140, flexDirection: "row", alignItems: "center", gap: 11, paddingHorizontal: 12, paddingVertical: 12, borderRadius: 10, backgroundColor: "#FFFFFF" },
+  eventsHeaderStatIcon: { width: 37, height: 37, borderRadius: 10, backgroundColor: "#E7F3EE", alignItems: "center", justifyContent: "center" },
+  eventsHeaderStatValue: { fontFamily: vsType.family, color: "#153A3E", fontWeight: "800", fontSize: 22, lineHeight: 26 },
+  eventsHeaderStatLabel: { fontFamily: vsType.family, color: "#6B8189", fontWeight: "600", fontSize: 12, lineHeight: 17 },
+  eventRosterBackdrop: { flex:1,backgroundColor:"rgba(7,34,40,0.55)",alignItems:"center",justifyContent:"center",padding:16 },
+  eventRosterModal: { width:"100%",maxWidth:570,maxHeight:"92%",borderRadius:16,backgroundColor:"#FFFFFF",padding:19 },
+  eventRosterModalHeading: { flexDirection:"row",alignItems:"center",gap:12,marginBottom:8 },
+  eventRosterModalTitle: { fontFamily:vsType.family,fontSize:20,fontWeight:"800",color:"#173E3B" },
+  eventRosterModalSubtitle: { fontFamily:vsType.family,fontSize:13,color:"#607982",marginTop:3 },
+  eventsPager: { marginTop: 12, paddingTop: 12, flexDirection: "row", flexWrap: "wrap", gap: 12, alignItems: "center", justifyContent: "space-between" },
+  eventsPagerCount: { fontFamily: vsType.family, fontSize: 12, color: "#667E86" },
+  eventsPagerButtons: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 6 },
+  eventsPageButton: { borderWidth: 1, borderColor: "#D9E6E3", borderRadius: 8, backgroundColor: "#FFFFFF", paddingHorizontal: 10, minHeight: 38, alignItems: "center", justifyContent: "center", flexDirection: "row", gap: 3 },
+  eventsPageText: { color: "#315B64", fontWeight: "700", fontSize: 12, fontFamily: vsType.family },
+  eventsPageNumber: { borderWidth: 1, borderColor: "#D9E6E3", borderRadius: 8, backgroundColor: "#FFFFFF", width: 38, minHeight: 38, justifyContent: "center", alignItems: "center" },
+  eventsPageNumberActive: { backgroundColor: "#00785C", borderColor: "#00785C" },
+  eventsPageNumberText: { fontWeight: "700", fontSize: 13, color: "#3B6266" },
+  eventsPageNumberTextActive: { color: "#FFFFFF" },
+  eventBrowseControls: { marginTop: 16, gap: 13 },
+  eventStatusTabs: { flexDirection: "row", alignItems: "center", gap: 8, paddingVertical: 2, paddingRight: 4 },
+  eventStatusTab: { flexGrow: 1, flexBasis: 175, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 9, backgroundColor: "#FFFFFF", borderWidth: 1, borderColor: "#DAE6E3", borderRadius: 9, paddingHorizontal: 14, minHeight: 44 },
+  eventStatusTabActive: { backgroundColor: "#087D70", borderColor: "#087D70" },
+  eventStatusTabText: { fontFamily: vsType.family, fontSize: 14, fontWeight: "700", color: "#3C5C63" },
+  eventStatusTabTextActive: { color: "#FFFFFF" },
+  eventStatusCount: { fontSize: 12, fontWeight: "800", color: "#688384", backgroundColor: "#EFF5F4", paddingHorizontal: 6, paddingVertical: 3, borderRadius: 6, overflow: "hidden" },
+  eventStatusCountActive: { color: "#076D62", backgroundColor: "#FFFFFF" },
+  eventFilterToolbar: { flexDirection: "row", flexWrap: "wrap", gap: 10, alignItems: "center", paddingVertical: 10, paddingHorizontal: 11, backgroundColor: "#F8FAFA", borderWidth: 1, borderColor: "#E2EBE9", borderRadius: 10 },
+  eventFilterSearch: { flexGrow: 2, flexBasis: 200, minWidth: 170, minHeight: 41, paddingHorizontal: 11, borderRadius: 8, borderWidth: 1, borderColor: "#D6E4E0", backgroundColor: "#FFFFFF", flexDirection: "row", alignItems: "center", gap: 8 },
+  eventFilterSearchInput: { fontFamily: vsType.family, fontSize: 13, minWidth: 0, flex: 1, color: "#274D57", paddingVertical: 8 },
+  eventFilterCaption: { flexDirection: "row", gap: 7, alignItems: "center" },
+  eventFilterCaptionText: { fontSize: 13, fontWeight: "700", color: "#607785" },
+  eventFilterSelect: { minWidth: 150, maxWidth: 220, flexGrow: 1, flexBasis: 155, minHeight: 41, paddingHorizontal: 13, borderRadius: 8, borderWidth: 1, borderColor: "#D6E4E0", backgroundColor: "#FFFFFF", flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 9 },
+  eventFilterSelectText: { fontSize: 13, fontWeight: "600", color: "#264E56", flexShrink: 1 },
+  eventClearFilter: { minHeight: 41, paddingHorizontal: 9, alignItems: "center", flexDirection: "row", gap: 5 },
+  eventClearFilterText: { fontSize: 13, fontWeight: "700", color: "#477383" },
   ruiFilterBar: { flexDirection: "row", flexWrap: "wrap", gap: 9, marginTop: 15, marginBottom: 11 },
   ruiFilterSelect: { flex: 1, minWidth: 160, borderWidth: 1, borderColor: "#DCE7E9", backgroundColor: "white", borderRadius: 9, paddingHorizontal: 12, minHeight: 39, flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 },
   ruiFilterLabel: { color: "#3D5B73", fontSize: 11.5, fontWeight: "700", flexShrink: 1 },
