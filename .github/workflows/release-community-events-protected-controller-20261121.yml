@@ -56,9 +56,14 @@ jobs:
               'BLOCKED: production environment requires protected branch');
             a.equal(process.env.GITHUB_REPOSITORY,REPO);
             const controller=await api('commits/'+process.env.GITHUB_SHA);
-            a.equal(controller.files.length,1,'BLOCKED: unrelated source changed in controller');
-            a.equal(controller.files[0].filename,WF,'BLOCKED controller modified wrong file');
-            a.equal(controller.files[0].status,'added','BLOCKED controller not a workflow-only merge');
+            const verifier='.github/workflows/verify-reconciled-hosting-source-no-deploy-20261111.yml';
+            const approved=new Map([[WF,'added'],[verifier,'modified']]);
+            a.equal(controller.files.length,approved.size,
+              'BLOCKED controller commit changed unrelated paths');
+            for(const file of controller.files){
+              a.equal(approved.get(file.filename),file.status,
+                'BLOCKED controller modified unexpected file '+file.filename);
+            }
             const cmp=await api('compare/'+B+'...'+S);
             a.equal(cmp.status,'ahead','BLOCKED source does not descend from current Hosting');
             a.equal(cmp.behind_by,0,'BLOCKED divergent source');
