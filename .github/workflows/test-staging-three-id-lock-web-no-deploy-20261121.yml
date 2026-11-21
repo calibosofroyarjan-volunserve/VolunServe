@@ -1,0 +1,79 @@
+name: Three-ID Lock — Staging Expo Web (NO DEPLOY)
+on:
+  push:
+    branches:
+      - release/staging-web-three-id-lock-20261121
+    paths:
+      - 'lib/identityAdminReviewGate.ts'
+      - 'lib/identityVerification.ts'
+      - 'app/identity-manual-review.tsx'
+      - 'app/identity-verification.web.tsx'
+      - 'app/identity-verification.tsx'
+      - 'app/(admin)/identity-reviews.tsx'
+      - 'components/identity/DocumentScreeningSummary.tsx'
+      - '.github/workflows/test-staging-three-id-lock-web-no-deploy-20261121.yml'
+permissions:
+  contents: read
+jobs:
+  expo-three-id-screen:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      EXPO_PUBLIC_VOLUNSERVE_ENV: staging
+      EXPO_PUBLIC_VOLUNSERVE_FIREBASE_TARGET: staging
+      EXPO_PUBLIC_VOLUNSERVE_STAGING_FIREBASE_PROJECT_ID: volunserve-full-staging
+      EXPO_PUBLIC_VOLUNSERVE_STAGING_FIREBASE_AUTH_DOMAIN: volunserve-full-staging.firebaseapp.com
+      EXPO_PUBLIC_VOLUNSERVE_STAGING_FIREBASE_STORAGE_BUCKET: volunserve-full-staging.firebasestorage.app
+      EXPO_PUBLIC_VOLUNSERVE_STAGING_FIREBASE_MESSAGING_SENDER_ID: '429213950126'
+      EXPO_PUBLIC_VOLUNSERVE_STAGING_FIREBASE_APP_ID: '1:429213950126:web:955dbf575697826b674d3f'
+      # CI never signs in; synthetic test-only key.
+      EXPO_PUBLIC_VOLUNSERVE_STAGING_FIREBASE_API_KEY: AIzaSyntheticStageTestKey_NotForRequests000
+      EXPO_PUBLIC_IDENTITY_VERIFICATION_API_URL: https://volunserve-backend-staging.onrender.com
+      CI: '1'
+    steps:
+      - name: Download exact immutable web candidate without legacy submodule
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          [[ "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]] || exit 2
+          curl -fLsS --retry 3 -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" "https://api.github.com/repos/${GITHUB_REPOSITORY}/zipball/$SOURCE_SHA" -o /tmp/id3-web.zip
+          mkdir -p "$RUNNER_TEMP/id3-web"
+          unzip -q /tmp/id3-web.zip -d "$RUNNER_TEMP/id3-web"
+          ROOT="$(find "$RUNNER_TEMP/id3-web" -mindepth 1 -maxdepth 1 -type d -print -quit)"
+          cp -a "$ROOT/." "$GITHUB_WORKSPACE/"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - name: Install locked application dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Check front-end UI selection and client-side API allowlist
+        run: |
+          node <<'NODE'
+          const fs=require('node:fs'),assert=require('node:assert/strict');
+          const ui=['app/identity-verification.tsx','app/identity-verification.web.tsx','app/identity-manual-review.tsx'];
+          for(const path of ui){
+            const s=fs.readFileSync(path,'utf8');
+            assert(s.includes('"national_id"')&&s.includes('"drivers_license"')&&s.includes('"passport"'),path);
+            assert(!/value\s*:\s*["'](?:umid|prc_id)["']/.test(s),path);
+          }
+          const client=fs.readFileSync('lib/identityVerification.ts','utf8');
+          assert(!client.includes('  | "umid"')&&!client.includes('  | "prc_id"'));
+          assert(!client.includes('"passport", "umid"'));
+          const gate=fs.readFileSync('lib/identityAdminReviewGate.ts','utf8');
+          assert(!/["'](?:umid|prc_id)["']/.test(gate), 'Admin UI must never allow removed ID types');
+          const admin=fs.readFileSync('app/(admin)/identity-reviews.tsx','utf8');
+          assert(!admin.includes('"passport","umid"'));
+          console.log('PASS: three ID choices only; client no-photo and Admin cannot use removed types');
+          NODE
+          node scripts/check-expo-resident-staging-release.cjs
+      - name: Full TypeScript check
+        run: npx tsc --noEmit --pretty false
+      - name: Full staging Expo web export
+        run: npx expo export --platform web --output-dir dist
+      - name: Confirm build without deployment
+        run: |
+          test -f dist/index.html
+          echo 'Only Philippine National ID, Driver License and Passport in staged identity UI. No real ID, no Firebase write, no Render deploy; production unaffected.' >> "$GITHUB_STEP_SUMMARY"

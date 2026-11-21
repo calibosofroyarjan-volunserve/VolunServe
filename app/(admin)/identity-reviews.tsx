@@ -116,7 +116,7 @@ function isNoMediaLGUReview(item: IdentityReview): boolean {
 function reviewMethodAllowed(item: IdentityReview, method: string): boolean {
   if (!isNoMediaLGUReview(item)) return adminReviewMethodEligible(item.documentScreening, method);
   if (item.manualIdType === "national_id") return method === "psa_national_id_qr_check";
-  if (["drivers_license","passport","umid","prc_id"].includes(String(item.manualIdType || ""))) {
+  if (["drivers_license","passport"].includes(String(item.manualIdType || ""))) {
     return method === "in_person_lgu_validation" || method === "official_document_check";
   }
   return false;
@@ -779,7 +779,7 @@ function ReviewDetail({
   const manualNoMedia = isNoMediaLGUReview(item);
   const nationalId = (manualNoMedia ? item.manualIdType : item.documentScreening?.declaredIdType) === "national_id";
   const documentEligible = manualNoMedia
-    ? ["national_id","drivers_license","passport","umid","prc_id"].includes(String(item.manualIdType || ""))
+    ? ["national_id","drivers_license","passport"].includes(String(item.manualIdType || ""))
     : adminReviewDocumentEligible(item.documentScreening);
   const canVerify = pending && item.targetEligible === true && documentEligible &&
     reviewMethodAllowed(item, validationMethod) &&

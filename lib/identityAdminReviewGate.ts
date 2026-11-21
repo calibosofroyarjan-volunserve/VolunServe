@@ -8,9 +8,9 @@ import type { DocumentScreening } from "./identityVerification";
  * Legacy snapshots missing documented quality evidence must request a
  * corrected scan rather than enabling a client-side Verify button.
  */
-const SUPPORTED_ID_TYPES = [
-  "national_id", "drivers_license", "passport", "umid", "prc_id",
-] as const;
+const SUPPORTED_ID_TYPES: readonly string[] = [
+  "national_id", "drivers_license", "passport",
+];
 
 export function adminReviewDocumentEligible(
   screening?: DocumentScreening | null,
@@ -46,7 +46,7 @@ export function adminReviewMethodEligible(
   if (screening.declaredIdType === "national_id") {
     return method === "psa_national_id_qr_check";
   }
-  if (["drivers_license", "passport", "umid", "prc_id"].includes(
+  if (["drivers_license", "passport"].includes(
       String(screening.declaredIdType || ""))) {
     return method === "in_person_lgu_validation" ||
       method === "official_document_check";
