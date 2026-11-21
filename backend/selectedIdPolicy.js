@@ -2,7 +2,7 @@
 
 // Only documents explicitly selected in the UI and recognized by OCR may
 // proceed to ID-based manual approval. OCR cannot authenticate issuance.
-const ALLOWED = new Set(["national_id", "drivers_license", "passport", "umid", "prc_id"]);
+const ALLOWED = new Set(["national_id", "drivers_license", "passport"]);
 
 function selectedIdRecognized(screening) {
   return !!screening &&
