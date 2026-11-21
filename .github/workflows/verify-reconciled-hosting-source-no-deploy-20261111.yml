@@ -288,6 +288,76 @@ jobs:
               return;
             }
 
+            // BEGIN PINNED COMMUNITY EVENTS CONTROLLER GATE
+            // One-time scoped Community Events production-derived Hosting controller.
+            // This is a content-pinned, fail-closed release, NOT an authorization
+            // to publish the divergent protected branch's application code.
+            {
+              const eventController=".github/workflows/release-community-events-protected-controller-20261121.yml";
+              const existingVerifier=".github/workflows/verify-reconciled-hosting-source-no-deploy-20261111.yml";
+              const changed=git("diff","--name-status","--no-renames",liveBase,commit)
+                .split("\n").filter(Boolean);
+              const isEventController=changed.length===2 &&
+                changed[0]==="A\t"+eventController &&
+                changed[1]==="M\t"+existingVerifier;
+              if(isEventController){
+                const oldHosting="eef240c29940cc2772c4467a5f7649ae8938b141";
+                const eventSource="d6080dea320821eb91e2a67f22a1053a8f04fa04";
+                const approvedControllerBlob="d3391a0d9119a890c01f364ff256417db26e6452";
+                const approvedOldVerifierBlob="d992a01d9223bba401880b26c7dba735b82e2510";
+                assert.equal(liveBase,"3cbb6810a7df4572cfbbd767fe95721a53e65737",
+                  "BLOCKED: protected branch moved; re-review this one-time release");
+                assert.equal(marker.revision,oldHosting,
+                  "BLOCKED: live Hosting changed; rebase on new live before release");
+                assert.equal(blob(liveBase,existingVerifier),approvedOldVerifierBlob,
+                  "BLOCKED: baseline verifier changed or protections altered");
+                assert.equal(blob(commit,eventController),approvedControllerBlob,
+                  "BLOCKED: release controller content modified");
+                // Verify that the ONLY modifications to this guard are the exact
+                // scoped insertion marked below, with no prior checks deleted.
+                const baselineVerifier=git("show",liveBase+":"+existingVerifier);
+                const proposedVerifier=git("show",commit+":"+existingVerifier);
+                const start=proposedVerifier.indexOf(
+                  "            // BEGIN PINNED COMMUNITY EVENTS CONTROLLER GATE\n");
+                const end=proposedVerifier.indexOf(
+                  "            // END PINNED COMMUNITY EVENTS CONTROLLER GATE\n",start);
+                assert(start>=0 && end>start,"BLOCKED: scoped verifier gate markers missing");
+                const cleaned=proposedVerifier.slice(0,start)+
+                  proposedVerifier.slice(end+
+                    "            // END PINNED COMMUNITY EVENTS CONTROLLER GATE\n".length);
+                assert.equal(cleaned,baselineVerifier,
+                  "BLOCKED: baseline verifier modified outside scoped one-time check");
+                git("merge-base","--is-ancestor",oldHosting,eventSource);
+                assert.equal(git("diff","--name-status","--no-renames",oldHosting,eventSource),
+                  "M\tapp/(tabs)/community-events.tsx\n"+
+                  "M\tcomponents/volunteers/CommunityEventRoster.tsx",
+                  "BLOCKED: Community Events candidate has outdated/unrelated edits");
+                assert.equal(blob(eventSource,"app/(tabs)/community-events.tsx"),
+                  "b295138efffbe971ae9a826e1cccd500a155cfcf",
+                  "BLOCKED: event UI not final reviewed source");
+                assert.equal(blob(eventSource,"components/volunteers/CommunityEventRoster.tsx"),
+                  "5f58a8ea82777fe64410bce029b1e19bdc146630",
+                  "BLOCKED: roster UI not final reviewed source");
+                // Keep all existing protected settings and app sources untouched.
+                for(const p of [
+                  "app/(tabs)/community-events.tsx","components/volunteers/CommunityEventRoster.tsx",
+                  "package.json","package-lock.json","app.json","firebase.json",
+                  ".firebaserc","tsconfig.json","firestore.rules","storage.rules",
+                  "functions/index.js","functions/package.json","lib/firebase.ts",
+                  "scripts/guard-live-protected-release.cjs",
+                  ".github/workflows/auto-publish-protected-live-hosting.yml",
+                  ".github/workflows/release-live-protected-hosting.yml"
+                ]) {
+                  assert.equal(blob(commit,p),blob(liveBase,p),
+                    "BLOCKED: protected app/security/config change: "+p);
+                }
+                console.log("PASS: isolated exact-current-live-derived, two-file Community Events release");
+                console.log("NO DEPLOY: protected PR verifier; controller separately checks QA and backups");
+                return;
+              }
+            }
+            // END PINNED COMMUNITY EVENTS CONTROLLER GATE
+
             assert.equal(marker.revision,liveBase,
               "BLOCKED: protected base and production differ; reconcile FIRST");
             const text=git("diff","--name-status","--no-renames",liveBase,commit);
