@@ -1,0 +1,44 @@
+name: QA Approved Community Members Directory (NO DEPLOY)
+on:
+  push:
+    branches:
+      - fix/approved-community-members-directory-20261121
+    paths:
+      - 'backend/communitySocial.js'
+      - 'backend/test-communitySocial.js'
+      - '.github/workflows/qa-approved-community-directory-20261121.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  directory-only:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Check backend JavaScript syntax
+        run: |
+          node --check backend/communitySocial.js
+          node --check backend/test-communitySocial.js
+      - name: Run community directory and presence regression tests
+        run: |
+          node --test backend/test-communitySocial.js backend/test-communityPresence.js
+      - name: Verify change does not touch auth, rules, money, or identity modules
+        run: |
+          git fetch origin backend-live-protected --depth=10
+          python3 - <<'PY'
+          import subprocess
+          changed=subprocess.check_output(
+            ['git','diff','--name-only','origin/backend-live-protected...HEAD'],
+            text=True).splitlines()
+          allowed={
+            'backend/communitySocial.js',
+            'backend/test-communitySocial.js',
+            '.github/workflows/qa-approved-community-directory-20261121.yml'
+          }
+          assert set(changed).issubset(allowed), 'Unexpected changed files: '+repr(changed)
+          print('PASS: only directory implementation, tests and isolated QA controller changed')
+          PY
