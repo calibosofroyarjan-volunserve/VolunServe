@@ -190,8 +190,10 @@ class RealRouteHandlerContractTests(unittest.TestCase):
     def test_removed_id_types_refused_at_ai_api(self):
         for removed in ("umid", "prc_id"):
             with self.subTest(id_type=removed):
-                with self.assertRaises(Exception):
+                with self.assertRaises(RouteHTTPException) as exc:
                     self.call("document_precheck", self.form(id_type=removed))
+                self.assertEqual(exc.exception.status_code, 400)
+                self.assertEqual(self.hits["screen"], 0)
 
 
     def test_missing_nonpassport_back_refused(self):
