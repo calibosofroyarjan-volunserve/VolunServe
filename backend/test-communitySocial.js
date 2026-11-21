@@ -4,9 +4,9 @@ const assert=require("node:assert/strict");
 const {installCommunitySocial,display,conversationId}=require("./communitySocial");
 const {publicKey}=require("./communityPresence");
 const users={
-  resident:{role:"resident",status:"approved",residentAccess:true,activeMode:"resident"},
+  resident:{role:"resident",status:"approved",residentAccess:true,activeMode:"resident",fullName:"Resident Sample"},
   volunteer:{role:"resident",status:"approved",residentAccess:true,volunteerAccess:true,
-    volunteerStatus:"approved",activeMode:"volunteer"},
+    volunteerStatus:"approved",activeMode:"volunteer",fullName:"Volunteer Sample"},
   admin:{role:"admin",status:"approved",residentAccess:false},
 };
 const collections={communityPresence:{
@@ -48,12 +48,10 @@ const db={
    doc(id){return docRef(name,id);},
    async add(value){const id="report-"+Object.keys(store).length;store[id]=value;return {id};},
    where(field,op,value){
-     return {limit(n){return {async get(){
-       const docs=Object.entries(store).filter(([id,p])=>op==="=="?p[field]===value:
-         op==="array-contains"&&Array.isArray(p[field])&&p[field].includes(value))
-         .slice(0,n).map(([id,p])=>snapshot(id,p));
-       return {docs};
-     }};}}
+     const matching=()=>Object.entries(store).filter(([id,p])=>op==="=="?p[field]===value:
+       op==="array-contains"&&Array.isArray(p[field])&&p[field].includes(value));
+     const get=async(n=Infinity)=>({docs:matching().slice(0,n).map(([id,p])=>snapshot(id,p))});
+     return {get:()=>get(),limit(n){return {get:()=>get(n)};}};
    }
   };
  },
@@ -158,4 +156,59 @@ test("turning off directory visibility hides status despite last-seen consent",a
  assert.equal(result.payload.members.length,1);
  assert.equal((await call("GET",member,"resident",{},publicKey("volunteer"))).status,404);
  collections.communityPresence.volunteer.visible=true;
+});
+
+test("directory opt-in is independent and shows offline Basic, Verified and Volunteer profiles",async()=>{
+ // A second approved, never-online Basic Resident is NOT included by default.
+ users.newbie={role:"resident",status:"approved",residentAccess:true,
+   activeMode:"resident",fullName:"Basic User"};
+ collections.communityPresence.newbie={visible:false,showLastSeen:false,
+   acceptChats:false,mode:"resident",verified:false,displayName:"Basic User"};
+ let result=await call("GET",directory,"resident");
+ assert(!result.payload.members.some(x=>x.name==="Basic User"));
+ assert.equal((await call("GET",self,"newbie")).payload.directoryListed,false);
+ assert.equal((await call("POST",prefs,"newbie",{directoryListed:true})).status,200);
+ result=await call("GET",directory,"resident");
+ const entry=result.payload.members.find(x=>x.name==="Basic User");
+ assert(entry,"offline opted-in Basic Resident must be discoverable");
+ assert.equal(entry.online,false);
+ assert.equal(entry.lastSeenAt,null);
+ assert.equal(entry.badge,"Basic Resident");
+ assert.equal(entry.acceptChats,false);
+ assert.equal((await call("GET",member,"resident",{},publicKey("newbie"))).payload.member.name,"Basic User");
+ assert(!JSON.stringify(result.payload).includes('"uid":'));
+ assert.equal((await call("POST",prefs,"newbie",{directoryListed:"yes"})).status,400);
+});
+test("offline directory persists beyond the historical 7-day last-seen cap",async()=>{
+ collections.communityPresence.newbie.updatedAt=new Date(Date.now()-18*86400000);
+ collections.communityPresence.newbie.showLastSeen=false;
+ let result=await call("GET",directory,"resident");
+ assert(result.payload.members.some(x=>x.name==="Basic User"));
+ assert.equal(result.payload.members.find(x=>x.name==="Basic User").lastSeenAt,null);
+ // Consent to Last Seen never implies consent to be discoverable.
+ collections.communityPresence.newbie.directoryListed=false;
+ result=await call("GET",directory,"resident");
+ assert(!result.payload.members.some(x=>x.name==="Basic User"));
+ collections.communityPresence.newbie.directoryListed=true;
+});
+test("directory opt-in cannot resurrect unapproved or administrator accounts",async()=>{
+ users.revoked={role:"resident",status:"suspended",residentAccess:true,fullName:"Revoked User"};
+ users.admin={role:"admin",status:"approved",residentAccess:false,fullName:"Admin User"};
+ collections.communityPresence.revoked={visible:false,directoryListed:true,
+   mode:"resident",displayName:"Revoked User",updatedAt:new Date()};
+ collections.communityPresence.admin={visible:false,directoryListed:true,
+   mode:"resident",displayName:"Admin User",updatedAt:new Date()};
+ const result=await call("GET",directory,"resident");
+ assert(!result.payload.members.some(p=>p.name==="Revoked User"||p.name==="Admin User"));
+ assert.equal((await call("POST",prefs,"admin",{directoryListed:true})).status,403);
+ assert.equal((await call("POST",prefs,"revoked",{directoryListed:true})).status,403);
+});
+test("directory opt-out hides member immediately, without changing online/chat consent",async()=>{
+ const before=await call("GET",self,"newbie");
+ assert.equal(before.payload.directoryListed,true);
+ assert.equal((await call("POST",prefs,"newbie",{directoryListed:false})).status,200);
+ assert.equal((await call("GET",self,"newbie")).payload.directoryListed,false);
+ assert.equal(collections.communityPresence.newbie.visible,false);
+ assert.equal(collections.communityPresence.newbie.acceptChats,false);
+ assert(!((await call("GET",directory,"resident")).payload.members.some(x=>x.name==="Basic User")));
 });
