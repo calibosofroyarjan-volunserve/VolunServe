@@ -25,7 +25,7 @@ const db={
           const docs=Object.entries(records).filter(([,p])=>p.updatedAt >= date)
             .map(([id,p])=>({id,data:()=>p}));
           return {docs};
-        }};}}};
+        }};}};
       },
     };
   },
