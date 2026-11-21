@@ -79,7 +79,7 @@ class SFaceMetricsTests(unittest.TestCase):
         result=summarize_pairs([(True,None)],0.5)
         self.assertIsNone(result["observedFalseAcceptUpper95ScoredPairs"])
         self.assertIsNone(result["observedFalseRejectUpper95ScoredPairs"])
-        self.assertIsNone(result["samePairScoreCoverage"])
+        self.assertEqual(result["samePairScoreCoverage"],0.0)
         self.assertIsNone(result["differentPairScoreCoverage"])
         self.assertEqual(result["observedGenuineNoPositiveResultFraction"],1.0)
 
