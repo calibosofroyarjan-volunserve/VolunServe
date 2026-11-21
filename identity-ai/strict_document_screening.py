@@ -11,7 +11,7 @@ import re
 import unicodedata
 
 SUPPORTED = frozenset({
-    "national_id", "drivers_license", "passport", "umid", "prc_id",
+    "national_id", "drivers_license", "passport",
 })
 # Preserve backend's allowlisted method identifier for existing clients.
 METHOD = "ph_government_id_ocr_keyword_screen_v1"
