@@ -72,7 +72,7 @@ export default function CommunityInbox() {
       </View>
       <View style={styles.privacy}>
         <Ionicons name="shield-checkmark-outline" size={19} color="#648A7D"/>
-        <Text style={styles.privacyText}>Messages are visible only to the two conversation participants through authenticated access. Chat is not an official emergency response channel. For emergencies, use Emergency Reports or the official hotline.</Text>
+        <Text style={styles.privacyText}>Private messages are available by default between approved members. Pause messaging in Community Members or block/report unwanted contacts. Only the two participants can read their conversation. Chat is not an official emergency response channel. For emergencies, use Emergency Reports or the official hotline.</Text>
       </View>
     </View>
   </ScrollView>;
