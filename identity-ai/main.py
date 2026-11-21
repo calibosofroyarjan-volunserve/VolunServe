@@ -42,11 +42,7 @@ DEFAULT_ALLOWED_ORIGINS = [
     "http://localhost:19006",
     "http://localhost:3000",
 ]
-ACCEPTED_ID_TYPES = {
-    "national_id",
-    "drivers_license",
-    "passport",
-}
+ACCEPTED_ID_TYPES = {"national_id"}
 ALLOWED_IMAGE_TYPES = {
     "image/jpeg",
     "image/jpg",
@@ -1418,7 +1414,7 @@ async def document_precheck(
     form = await request.form()
     declared_type = clean_text(form.get("idType"), 60).lower()
     if declared_type not in ACCEPTED_ID_TYPES:
-        raise HTTPException(status_code=400, detail="Choose National ID, Driver's License or Passport only.")
+        raise HTTPException(status_code=400, detail="Only Philippine National ID is supported for this thesis demonstration.")
     front_upload = form.get("idDocument")
     back_upload = form.get("idBackDocument")
     if declared_type != "passport" and not isinstance(back_upload, StarletteUploadFile):
