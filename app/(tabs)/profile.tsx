@@ -1421,7 +1421,7 @@ export default function Profile() {
       )}
 
       {activeTab ===
-        "activity" && currentMode !== "volunteer" && (
+        "activity" && (
         <View
           style={
             styles.sectionCard
