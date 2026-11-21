@@ -8,7 +8,7 @@ const {getProfileRole,isApprovedAccount}=require("./adminAccess");
 // image, selfie, facial template or passport/ID number.
 const MANUAL_CHANNEL="lgu_in_person_no_media";
 const SUPPORTED_IDS=new Set([
-  "national_id","drivers_license","passport",
+  "national_id",
 ]);
 const MIN_REQUEST_INTERVAL_MS=10*60*1000;
 
@@ -44,7 +44,7 @@ function installManualIdentityReviewRoutes({
       const validation=manualReviewInput(req.body);
       if(validation.error) return res.status(400).json({
         error:validation.error,
-        message:"Select one of the three supported government IDs and consent to an in-person LGU review. Do not upload ID or selfie data.",
+        message:"Only Philippine National ID is accepted for this thesis demonstration. Consent to in-person LGU review. Do not upload ID or selfie data.",
       });
       const uid=req.firebaseUser?.uid;
       if(typeof uid!=="string"|| !/^[A-Za-z0-9_-]{8,200}$/.test(uid))
