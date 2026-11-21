@@ -10,6 +10,10 @@ on:
       - 'identity-ai/test_document_screening.py'
       - 'identity-ai/test_strict_document_screening.py'
       - 'identity-ai/test_ai_route_contract.py'
+      - 'identity-ai/face_preflight_policy.py'
+      - 'identity-ai/test_face_preflight_policy.py'
+      - 'identity-ai/profile_consistency.py'
+      - 'identity-ai/test_profile_consistency.py'
       - '.github/workflows/test-staging-three-id-lock-ai-no-deploy-20261121.yml'
 permissions:
   contents: read
@@ -42,9 +46,10 @@ jobs:
           main=ast.parse(Path("identity-ai/main.py").read_text())
           expression=next(n.value for n in main.body if isinstance(n,ast.Assign) and any(isinstance(t,ast.Name) and t.id=="ACCEPTED_ID_TYPES" for t in n.targets))
           assert set(ast.literal_eval(expression))==exact
-          for path in ["identity-ai/document_screening.py","identity-ai/strict_document_screening.py"]:
+          for path in ["identity-ai/document_screening.py","identity-ai/strict_document_screening.py","identity-ai/face_preflight_policy.py"]:
               tree=ast.parse(Path(path).read_text())
-              expression=next(n.value for n in tree.body if isinstance(n,ast.Assign) and any(isinstance(t,ast.Name) and t.id=="SUPPORTED" for t in n.targets))
+              expected_symbol = "SUPPORTED_ID_TYPES" if path.endswith("face_preflight_policy.py") else "SUPPORTED"
+              expression=next(n.value for n in tree.body if isinstance(n,ast.Assign) and any(isinstance(t,ast.Name) and t.id==expected_symbol for t in n.targets))
               assert set(ast.literal_eval(expression.args[0]))==exact, path
           print("PASS: all AI three-ID allowlists exactly match")
           PY
@@ -52,10 +57,12 @@ jobs:
         env:
           PYTHONPATH: identity-ai
         run: |
-          python -m py_compile identity-ai/main.py identity-ai/document_screening.py identity-ai/strict_document_screening.py
+          python -m py_compile identity-ai/main.py identity-ai/document_screening.py identity-ai/strict_document_screening.py identity-ai/face_preflight_policy.py identity-ai/profile_consistency.py
           python -m unittest discover -s identity-ai -p test_document_screening.py -v
           python -m unittest discover -s identity-ai -p test_strict_document_screening.py -v
           python -m unittest discover -s identity-ai -p test_ai_route_contract.py -v
+          python -m unittest discover -s identity-ai -p test_face_preflight_policy.py -v
+          python -m unittest discover -s identity-ai -p test_profile_consistency.py -v
       - name: No real IDs or deployments
         run: |
           echo 'Only three synthetic ID classes: National ID, Driver License and Passport. UMID and PRC must be rejected even by direct AI calls. No real biometric media, model-accuracy claims, staging deployment or production change.' >> "$GITHUB_STEP_SUMMARY"
