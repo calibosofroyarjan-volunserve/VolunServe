@@ -2628,11 +2628,11 @@ export default function CommunityEventsScreen() {
           <View style={[styles.lockedMain, !webSideBySide && styles.lockedMainStack]}>
             {/* Premium Community Events calendar banner; counts use the existing live state. */}
             <View style={styles.eventsHeader}>
-              <View style={styles.eventsHeaderTop}>
-                <View style={styles.eventsHeaderIcon}>
+              <View style={[styles.eventsHeaderTop, width < 640 && styles.eventsHeaderTopCompact]}>
+                <View style={[styles.eventsHeaderIcon, width < 640 && styles.eventsHeaderIconCompact]}>
                   <Ionicons name="calendar-outline" size={25} color="#087D70"/>
                 </View>
-                <View style={styles.eventsHeaderCopy}>
+                <View style={[styles.eventsHeaderCopy, width < 640 && styles.eventsHeaderCopyCompact]}>
                   <Text style={styles.eventsHeaderEyebrow}>VOLUNSERVE / COMMUNITY ENGAGEMENT</Text>
                   <Text style={styles.eventsHeaderTitle}>Community Events</Text>
                   <Text style={styles.eventsHeaderDescription}>
@@ -2642,7 +2642,7 @@ export default function CommunityEventsScreen() {
                   </Text>
                 </View>
                 {isVolunteer && (
-                  <Pressable accessibilityRole="button" style={styles.eventsMyEventsShortcut}
+                  <Pressable accessibilityRole="button" style={[styles.eventsMyEventsShortcut, width < 640 && styles.eventsMyEventsShortcutCompact]}
                     onPress={() => { setSection(section === "mine" ? "explore" : "mine"); setResidentDetailsId(null); setNotice(""); }}>
                     <Ionicons name={section === "mine" ? "calendar-outline" : "people-outline"} size={17} color="#087760"/>
                     <Text style={styles.eventsMyEventsShortcutText}>{section === "mine" ? "Explore Events" : `My Events (${myEvents.length})`}</Text>
@@ -5828,9 +5828,13 @@ const styles = StyleSheet.create({
   ruiHeroOverlay: { position: "absolute", left: 0, right: 0, top: 0, bottom: 0 },
   eventsHeader: { backgroundColor: "#E8F9F2", borderRadius: 14, borderWidth: 1, borderColor: "#D6EEE4", overflow: "hidden" },
   eventsHeaderTop: { flexDirection: "row", alignItems: "flex-start", gap: 17, paddingHorizontal: 24, paddingTop: 23, paddingBottom: 20 },
+  eventsHeaderTopCompact: { flexWrap: "wrap", gap: 9, paddingHorizontal: 12, paddingTop: 15, paddingBottom: 14 },
   eventsHeaderIcon: { height: 47, width: 47, borderRadius: 12, backgroundColor: "#E8F5F1", alignItems: "center", justifyContent: "center", flexShrink: 0 },
+  eventsHeaderIconCompact: { height: 37, width: 37, borderRadius: 10 },
   eventsHeaderCopy: { flex: 1, minWidth: 0 },
+  eventsHeaderCopyCompact: { flexBasis: "70%", flexGrow: 1 },
   eventsMyEventsShortcut: { paddingHorizontal: 11, minHeight: 39, borderRadius: 9, borderWidth: 1, borderColor: "#B6DCCE", backgroundColor: "#FFFFFF", alignItems: "center", justifyContent: "center", flexDirection: "row", gap: 7 },
+  eventsMyEventsShortcutCompact: { width: "100%", marginTop: 5, justifyContent: "center" },
   eventsMyEventsShortcutText: { fontSize: 12, fontWeight: "700", color: "#087760", fontFamily: vsType.family },
   eventsHeaderEyebrow: { fontFamily: vsType.family, fontSize: 11, color: "#237C70", letterSpacing: 0.7, fontWeight: "800", marginBottom: 5 },
   eventsHeaderTitle: { fontFamily: vsType.family, fontSize: 27, lineHeight: 35, fontWeight: "800", color: "#15393E" },
