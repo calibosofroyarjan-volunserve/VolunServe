@@ -120,7 +120,7 @@ function installCommunitySocial({app,db,requireFirebaseUser,loadUserProfile,isAp
    try{
      if(!await authViewer(req,res))return;
      const rows=await scan(),now=Date.now();
-     const entries=rows.map(({uid,p})=>display(uid,p,now))
+     const entries=rows.map(({uid,p})=>({...display(uid,p,now),isSelf:uid===req.firebaseUser.uid}))
        .sort((a,b)=>Number(b.online)-Number(a.online)||
          (b.lastSeenAt||"").localeCompare(a.lastSeenAt||"")||a.name.localeCompare(b.name));
      res.set("Cache-Control","private, no-store");
@@ -194,6 +194,7 @@ function installCommunitySocial({app,db,requireFirebaseUser,loadUserProfile,isAp
      if(!peer)return notFound(res);
      const c=await thread(uid,peer.uid);
      const sendAllowed=await canMessage(uid,viewer,peer);
+     const ownBlock=await db.collection("communityChatBlocks").doc(blockId(uid,peer.uid)).get();
      if(!c.exists&&!sendAllowed)return notFound(res);
      let messages=[];
      if(c.exists){
@@ -206,7 +207,7 @@ function installCommunitySocial({app,db,requireFirebaseUser,loadUserProfile,isAp
        }).reverse();
      }
      res.set("Cache-Control","private, no-store");
-     res.json({ok:true,member:publicPeer(peer),canSend:sendAllowed,messages});
+     res.json({ok:true,member:publicPeer(peer),canSend:sendAllowed,blockedByMe:ownBlock.exists&&ownBlock.data()?.blocked===true,messages});
    }catch(e){errorResponse(res,e,"Conversation");}
  });
  app.post("/api/community/chats/:memberKey",requireFirebaseUser,async(req,res)=>{
