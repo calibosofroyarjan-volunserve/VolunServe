@@ -734,7 +734,7 @@ function normalizeAiDecision(
 function normalizeIdDocumentScreening(value) {
   // Explicit allowlist: never store OCR text, full ID numbers, names,
   // face templates, or photos in Firestore or Admin-visible JSON.
-  const types = ["national_id", "drivers_license", "passport"];
+  const types = ["national_id"];
   const statuses = ["text_consistent_unverified", "mismatch", "inconclusive", "unsupported"];
   const warnings = [
     "selected_id_type_conflicts_with_ocr",
@@ -5055,7 +5055,7 @@ app.post(
       const result = await callIdentityAiService(request, { documentPrecheck: true });
       const screening = normalizeIdDocumentScreening(result?.documentScreening);
       const declared = screening.declaredIdType;
-      const validType = ["national_id", "drivers_license", "passport"].includes(declared);
+      const validType = ["national_id"].includes(declared);
       const birthConflict = screening.profileBirthDateCheck === "possible_conflict";
       const pass = validType &&
         !birthConflict &&
@@ -5078,7 +5078,7 @@ app.post(
           : review
             ? "The National ID is too blurry. You may continue for Admin rescan review but cannot be automatically approved."
             : screening.warningCodes.includes("school_id_not_supported")
-              ? "School and employee IDs are not accepted. Capture one of the three supported government IDs."
+              ? "Only Philippine National ID is supported in this thesis demo. Please use National ID or request an in-person Admin review."
               : screening.warningCodes.includes("document_front_back_swapped")
                 ? "Front and back appear reversed. Retake both ID sides in their correct slots."
                 : screening.warningCodes.includes("document_back_looks_like_front")
@@ -5519,7 +5519,7 @@ function identityAdminReviewPayload(verificationSnapshot, userSnapshot) {
     verificationMethod: cleanText(verification.verificationMethod || "", 80),
     manualReviewChannel: verification.manualReviewChannel === "lgu_in_person_no_media"
       ? "lgu_in_person_no_media" : "",
-    manualIdType: ["national_id", "drivers_license", "passport"]
+    manualIdType: ["national_id"]
       .includes(verification.manualIdType) ? verification.manualIdType : "",
 
     status: normalizeIdentityStatus(
@@ -5787,7 +5787,7 @@ app.post(
         if (action === "verify") {
           let declaredReviewIdType = "";
           if (manualNoMedia) {
-            if (!["national_id","drivers_license","passport"].includes(
+            if (!["national_id"].includes(
               verification.manualIdType
             )) {
               throw makeHttpError(409, "manual_id_type_invalid",
