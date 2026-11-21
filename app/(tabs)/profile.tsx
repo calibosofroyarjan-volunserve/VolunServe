@@ -1589,7 +1589,28 @@ export default function Profile() {
       )}
 
       {activeTab === "progress" && currentMode === "volunteer" && volunteerAccess && (
-        <VolunteerImpact embedded />
+        <>
+          <VolunteerImpact embedded />
+          <View style={[styles.sectionCard,{marginTop:16}]}>
+            <SectionHeading icon="checkmark-done-outline" title="Verified Volunteer Activity"/>
+            <Text style={styles.activityHint}>Verified emergency contributions are tracked separately from event attendance and certificates.</Text>
+            {activityLoading ? <InlineLoading /> : activityError ? (
+              <EmptyState icon="alert-circle-outline" title="Activity unavailable" message={activityError}/>
+            ) : volunteerActivity.length > 0 ? volunteerActivity.map(item => (
+              <ActivityCard key={item.id}
+                title={item.contributionSummary || humanize(item.contributionType) || "Verified contribution"}
+                subtitle={item.caseTitle || ("Case "+(item.caseId || "—"))}
+                status={item.status||"verified"}
+                date={item.verifiedAt||item.completedAt||item.createdAt}
+                rows={[
+                  {label:"Contribution", value:humanize(item.contributionType)},
+                  {label:"People Helped", value:String(item.peopleHelped??0)},
+                  {label:"Outcome",value:humanize(item.outcome)},
+                ]}/>
+            )) : <EmptyState icon="checkmark-done-outline" title="No verified activity yet"
+              message="Verified volunteer service will appear here after resident confirmation."/>}
+          </View>
+        </>
       )}
 
       {activeTab ===
