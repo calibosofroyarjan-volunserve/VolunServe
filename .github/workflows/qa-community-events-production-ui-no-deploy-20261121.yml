@@ -1,0 +1,132 @@
+# QA only. Never grants production credentials or deploys.
+name: QA Production-Derived Community Events (NO DEPLOY)
+on:
+  push:
+    branches: [qa/community-events-production-readiness-20261121]
+    paths:
+      - 'app/(tabs)/community-events.tsx'
+      - 'components/volunteers/CommunityEventRoster.tsx'
+      - 'scripts/test-community-events-production-ui-qa.cjs'
+      - '.github/workflows/qa-community-events-production-ui-no-deploy-20261121.yml'
+  pull_request:
+    branches: [review/community-events-production-derived-20261121]
+    paths:
+      - 'scripts/test-community-events-production-ui-qa.cjs'
+      - '.github/workflows/qa-community-events-production-ui-no-deploy-20261121.yml'
+permissions:
+  contents: read
+concurrency:
+  group: qa-community-events-production-source-20261121
+  # QA previews are superseded by newer test-only commits; never cancel release jobs.
+  cancel-in-progress: true
+jobs:
+  verify:
+    if: github.repository == 'calibosofroyarjan-volunserve/VolunServe'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    env:
+      CI: 'true'
+      EXPO_NO_TELEMETRY: '1'
+      EXPO_PUBLIC_VOLUNSERVE_ENV: production
+      EXPO_PUBLIC_IDENTITY_VERIFICATION_API_URL: https://volunserve.onrender.com
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Extract exact reviewed source without legacy Git gitlink checkout
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --location --retry 3 \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/tarball/${GITHUB_SHA}" \
+            -o "$RUNNER_TEMP/community-events-qa-source.tar.gz"
+          tar -xzf "$RUNNER_TEMP/community-events-qa-source.tar.gz" --strip-components=1 -C "$GITHUB_WORKSPACE"
+          test -f scripts/test-community-events-production-ui-qa.cjs
+          test -f firestore.rules
+          test -f package-lock.json
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Confirm exact production ancestry, scoped files, and unchanged RSVP/attendance
+        run: node --test scripts/test-community-events-production-ui-qa.cjs
+      - name: Install locked dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Check Firestore Community Events permissions with local synthetic emulator users
+        run: npx firebase-tools emulators:exec --only firestore --project demo-volunserve "node scripts/test-community-events-rules-production-qa.cjs"
+      - name: Protect Admin and Volunteer authorization (no production writes)
+        run: |
+          node --test scripts/test-admin-volunteer-authorization.cjs
+          npx firebase-tools emulators:exec --only firestore --project demo-volunserve-authorization-tests "node scripts/test-admin-volunteer-firestore-production-qa.cjs"
+      - name: Verify TypeScript and existing map navigation
+        run: |
+          npx tsc --noEmit --incremental false
+          node --test scripts/test-embedded-emergency-map-navigation.cjs
+      - name: Export website (NO Hosting deployment)
+        run: npx expo export --platform web --clear
+      - name: Verify static web route and exact QA revision marker (local export only)
+        run: |
+          node scripts/verify-hosting-release.cjs
+          node - <<'NODE'
+          const assert = require('node:assert/strict');
+          const fs = require('node:fs');
+          const marker = JSON.parse(fs.readFileSync('dist/volunserve-release.json', 'utf8'));
+          assert.equal(marker.revision, process.env.GITHUB_SHA);
+          assert.equal(marker.firebaseProject, 'volunserve-3aa5b');
+          console.log('PASS local Expo export revision; NOT DEPLOYED');
+          NODE
+      - name: Check current public Hosting routes and revision (READ ONLY)
+        env:
+          VOLUNSERVE_HOSTING_URL: https://volunserve.com
+        run: |
+          node scripts/check-live-hosting.cjs
+          node - <<'NODE'
+          const assert=require('node:assert/strict');
+          const EXPECTED='eef240c29940cc2772c4467a5f7649ae8938b141';
+          (async()=>{
+            const r=await fetch('https://volunserve.com/volunserve-release.json?qa_readonly='+Date.now(),{
+              headers:{'cache-control':'no-cache'},signal:AbortSignal.timeout(15000)
+            });
+            assert(r.ok,'Live Hosting marker unavailable; block preview acceptance');
+            const marker=await r.json();
+            assert.equal(marker.app,'VolunServe');
+            assert.equal(marker.firebaseProject,'volunserve-3aa5b');
+            assert.equal(marker.revision,EXPECTED,'Production changed since QA baseline; block release');
+            console.log('PASS: production Hosting marker matches reviewed source baseline; READ ONLY');
+          })().catch(e=>{console.error(e.message||e);process.exitCode=1});
+          NODE
+      - name: Upload locally built Expo web preview bundle for review (NO DEPLOY)
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: community-events-production-derived-web-preview
+          path: dist/
+          if-no-files-found: error
+          retention-days: 3
+          compression-level: 6
+      - name: Generate SYNTHETIC preview only AFTER real web artifact is archived
+        run: node scripts/qa-community-events-preview-fixture.cjs
+      - name: Compile isolated mocked Community Events UI (NO deploy)
+        run: |
+          npx tsc --noEmit --incremental false
+          npx expo export --platform web --clear
+      - name: Install local Chromium for mock-only UI screenshot and interaction checks
+        run: |
+          npm install --no-save --no-package-lock playwright
+          npx playwright install --with-deps chromium
+      - name: Test synthetic Community Events UI at desktop and mobile viewports
+        run: node scripts/qa-community-events-browser.cjs
+      - name: Upload MOCK-ONLY browser QA screenshots for inspection (NO deploy)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: community-events-mock-browser-screenshots
+          path: qa-screenshots/
+          if-no-files-found: warn
+          retention-days: 3
+      - name: Confirm no deployment was requested
+        run: echo 'QA complete — original real artifact plus separately mocked screenshots; no production Hosting, rules, Auth, Functions, Render or Firestore changes.'
