@@ -1,6 +1,7 @@
 import Ionicons from "@expo/vector-icons/Ionicons";
 import React, { useEffect, useState } from "react";
-import { ActivityIndicator, Image, Modal, Pressable, StyleSheet, Text, View } from "react-native";
+import { useRouter, type Href } from "expo-router";
+import { ActivityIndicator, Image, Pressable, StyleSheet, Text, View } from "react-native";
 
 type Entry = { key: string; name: string; avatarUrl?: string; status: "Joined" };
 type Response = { ok?: boolean; total?: number; totalPages?: number; volunteers?: Entry[]; message?: string };
@@ -20,13 +21,13 @@ export default function CommunityEventRoster({
   const [page, setPage] = useState(1);
   const [refresh, setRefresh] = useState(0);
   const [showAll, setShowAll] = useState(false);
-  const [preview, setPreview] = useState<Entry | null>(null);
+  const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [data, setData] = useState<Response>({});
 
   useEffect(() => {
-    setPage(1); setShowAll(false); setPreview(null); setData({});
+    setPage(1); setShowAll(false); setData({});
   }, [eventId]);
 
   useEffect(() => {
@@ -92,7 +93,10 @@ export default function CommunityEventRoster({
               <Text style={s.role}>Volunteer · Joined</Text>
             </View>
             <Pressable accessibilityRole="button" accessibilityLabel={`View public profile of ${item.name}`}
-              style={s.profileButton} onPress={() => setPreview(item)}>
+              style={s.profileButton} onPress={() => router.push({
+                pathname: "/(tabs)/community-event-profile",
+                params: { eventId, member: item.key, page: String(page) },
+              } as Href)}>
               <Ionicons name="person-outline" size={14} color="#087C69"/>
               <Text style={s.profileButtonText}>View Profile</Text>
             </Pressable>
@@ -116,24 +120,6 @@ export default function CommunityEventRoster({
       )}
       {!compact && <Text style={s.privacy}>Only display names and approved public profile pictures are visible; personal contact and attendance data stay private.</Text>}
 
-      <Modal transparent animationType="fade" visible={!!preview} onRequestClose={() => setPreview(null)}>
-        <View style={s.backdrop}>
-          <View style={s.modal}>
-            <Pressable accessibilityRole="button" accessibilityLabel="Close profile" onPress={() => setPreview(null)} style={s.close}>
-              <Ionicons name="close-outline" size={22} color="#66818A"/>
-            </Pressable>
-            {preview?.avatarUrl ? <Image source={{uri: preview.avatarUrl}} style={s.largeAvatar}/> :
-              <View style={s.largeFallback}><Ionicons name="person-outline" color="#087C69" size={42}/></View>}
-            <Text style={s.profileName}>{preview?.name || "Volunteer"}</Text>
-            <View style={s.tag}><Ionicons name="people-outline" size={15} color="#087C69"/>
-              <Text style={s.tagText}>Volunteer · Joined this event</Text></View>
-            <Text style={s.previewNote}>Public participant profile preview. Personal details, contact information, verification IDs and attendance records are private.</Text>
-            <Pressable accessibilityRole="button" onPress={() => setPreview(null)} style={s.done}>
-              <Text style={s.doneText}>Close Profile</Text>
-            </Pressable>
-          </View>
-        </View>
-      </Modal>
     </View>
   );
 }
@@ -216,15 +202,4 @@ const s = StyleSheet.create({
   privacy: { fontFamily: vsType.family, fontSize: 11, lineHeight: 16, color: "#799093" },
   moreButton: { flexDirection: "row", alignItems: "center", gap: 7, paddingVertical: 6 },
   moreText: { fontFamily: vsType.family, fontSize: 12, fontWeight: "700", color: "#087C69" },
-  backdrop: { flex: 1, backgroundColor: "rgba(14,35,41,0.55)", alignItems: "center", justifyContent: "center", padding: 18 },
-  modal: { width: "100%", maxWidth: 390, backgroundColor: "#FFFFFF", borderRadius: 16, padding: 23, alignItems: "center", gap: 12 },
-  close: { alignSelf: "flex-end", padding: 5 },
-  largeAvatar: { width: 84, height: 84, borderRadius: 42 },
-  largeFallback: { width: 84, height: 84, borderRadius: 42, backgroundColor: "#E8F7F0", alignItems: "center", justifyContent: "center" },
-  profileName: { fontFamily: vsType.family, fontSize: 21, fontWeight: "800", color: "#153F45", textAlign: "center" },
-  tag: { flexDirection: "row", alignItems: "center", gap: 6, padding: 8, borderRadius: 9, backgroundColor: "#EAF7F1" },
-  tagText: { fontFamily: vsType.family, fontSize: 12, fontWeight: "700", color: "#087C69" },
-  previewNote: { fontFamily: vsType.family, fontSize: 13, lineHeight: 20, color: "#59737C", textAlign: "center" },
-  done: { backgroundColor: "#087C69", borderRadius: 9, paddingVertical: 11, paddingHorizontal: 22, alignSelf: "stretch", alignItems: "center" },
-  doneText: { fontFamily: vsType.family, fontSize: 14, fontWeight: "700", color: "#FFFFFF" },
 });
