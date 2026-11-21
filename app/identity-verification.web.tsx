@@ -118,16 +118,6 @@ const ID_TYPES: Array<{
     label: "National ID",
     helper: "PhilSys / National ID",
   },
-  {
-    value: "drivers_license",
-    label: "Driver's License",
-    helper: "Valid government-issued license",
-  },
-  {
-    value: "passport",
-    label: "Passport",
-    helper: "Valid passport bio page",
-  },
 ];
 
 function scanCopy(scanState: ScanState) {
