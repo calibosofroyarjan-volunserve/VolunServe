@@ -14,6 +14,7 @@ on:
       - 'identity-ai/test_face_preflight_policy.py'
       - 'identity-ai/profile_consistency.py'
       - 'identity-ai/test_profile_consistency.py'
+      - 'identity-ai/test_id_backscan_quality.py'
       - '.github/workflows/test-staging-three-id-lock-ai-no-deploy-20261121.yml'
 permissions:
   contents: read
@@ -63,6 +64,7 @@ jobs:
           python -m unittest discover -s identity-ai -p test_ai_route_contract.py -v
           python -m unittest discover -s identity-ai -p test_face_preflight_policy.py -v
           python -m unittest discover -s identity-ai -p test_profile_consistency.py -v
+          python -m unittest discover -s identity-ai -p test_id_backscan_quality.py -v
       - name: No real IDs or deployments
         run: |
           echo 'Only three synthetic ID classes: National ID, Driver License and Passport. UMID and PRC must be rejected even by direct AI calls. No real biometric media, model-accuracy claims, staging deployment or production change.' >> "$GITHUB_STEP_SUMMARY"
