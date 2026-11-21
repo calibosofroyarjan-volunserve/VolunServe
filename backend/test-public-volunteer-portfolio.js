@@ -75,10 +75,13 @@ test("approved volunteer with shared event sees genuine sanitized progress + ach
   assert.equal(body.summary.certificateCount,1);
   assert.equal(body.progress.length,2);
   assert.equal(body.certificates.length,1);
+  assert.equal(body.certificates[0].certificateId,"PRIVATE_ID");
+  assert.equal(body.certificates[0].eventTitle,"Clean Up Drive");
+  assert.equal(body.certificates[0].serviceMinutes,60);
   assert.equal(body.activity[0].type,"search_and_rescue");
   const encoded=JSON.stringify(body);
   for(const secret of ["secret@example.com","09123456789","Private House",
-    "identityStatus","PRIVATE_ID","SECRETCASE","Private resident notes","private@example.com","checkedInAt","checkedOutAt","volunteer-target"]){
+    "identityStatus","SECRETCASE","Private resident notes","private@example.com","checkedInAt","checkedOutAt","volunteer-target"]){
     assert(!encoded.includes(secret),"Private detail leaked: "+secret);
   }
 });
