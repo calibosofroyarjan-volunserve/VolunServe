@@ -37,11 +37,11 @@ export default function CommunityMemberProfile() {
     <View style={styles.shell}>
       <Pressable accessibilityRole="button" onPress={back} style={styles.back}>
         <Ionicons name="arrow-back" size={18} color="#087F68"/>
-        <Text style={styles.backText}>Back to Community Online</Text>
+        <Text style={styles.backText}>Back to Community Members</Text>
       </Pressable>
       <View style={styles.header}>
         <Text style={styles.title}>Community Member Profile</Text>
-        <Text style={styles.subtitle}>Read-only information shared by the member</Text>
+        <Text style={styles.subtitle}>Basic account information visible to approved community members</Text>
       </View>
       {loading?<View style={styles.feedback}><ActivityIndicator color="#087F68"/>
         <Text style={styles.message}>Loading public profile...</Text></View>:
@@ -97,7 +97,7 @@ export default function CommunityMemberProfile() {
         </View>
         <View style={styles.privacy}>
           <Ionicons name="shield-checkmark-outline" size={19} color="#567E71"/>
-          <Text style={styles.privacyText}>This member opted in to a public community profile. Offline Last Seen appears only with separate consent. Private contact details, identity documents, GPS and attendance records are never shown here. Messaging also requires opt-in from both members.</Text>
+          <Text style={styles.privacyText}>Approved Residents and Volunteers appear in the member directory with basic account information. Online status and Last Seen require separate sharing consent. Private contact details, identity documents, GPS and attendance records are not displayed. Messaging requires permission from both members.</Text>
         </View>
         </>:null}
     </View>
