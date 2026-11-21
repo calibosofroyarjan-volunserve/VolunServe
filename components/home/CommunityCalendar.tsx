@@ -24,6 +24,7 @@ export default function CommunityCalendar({uid,mode,dashboard=false}:{uid?:strin
   const router=useRouter();
   const {width}=useWindowDimensions();
   const compact=width<760||dashboard;
+  const wideDashboard=dashboard&&width>=1280;
   const [today,setToday]=useState(()=>philippinesToday());
   const [selected,setSelected]=useState(()=>philippinesToday());
   const [events,setEvents]=useState<EventItem[]>([]);
@@ -85,8 +86,8 @@ export default function CommunityCalendar({uid,mode,dashboard=false}:{uid?:strin
     setSelected(iso(next.getUTCFullYear(),next.getUTCMonth()+1,1));
   };
   const openEvents=()=>router.push("/community-events");
-  return <View style={[styles.panel,dashboard&&styles.dashboardPanel]}>
-    <View style={[styles.heading,compact&&styles.mobileHeading,dashboard&&styles.dashboardHeading]}>
+  return <View style={[styles.panel,dashboard&&styles.dashboardPanel,wideDashboard&&styles.dashboardWidePanel]}>
+    <View style={[styles.heading,width<760&&styles.mobileHeading,dashboard&&styles.dashboardHeading]}>
       <View style={styles.headingLeft}>
         <View style={styles.iconBox}><Ionicons name="calendar-outline" size={21} color={GREEN}/></View>
         <View style={{flex:1,minWidth:0}}>
@@ -109,11 +110,11 @@ export default function CommunityCalendar({uid,mode,dashboard=false}:{uid?:strin
             <Ionicons name="chevron-forward" size={17} color="#345F53"/>
           </Pressable>
         </View>
-        <View style={styles.days}>
-          {weekdays.map(day=><View style={styles.dayCell} key={day}><Text style={styles.weekday}>{day}</Text></View>)}
+        <View style={[styles.days,dashboard&&styles.dashboardDays]}>
+          {weekdays.map(day=><View style={[styles.dayCell,dashboard&&styles.dashboardWeekdayCell]} key={day}><Text style={styles.weekday}>{day}</Text></View>)}
           {monthDays.map((day,index)=>{
             const date=day?iso(month.y,month.m,day):"";
-            return <View key={index} style={styles.dayCell}>
+            return <View key={index} style={[styles.dayCell,dashboard&&styles.dashboardDayCell]}>
               {day?<Pressable accessibilityRole="button" accessibilityLabel={`Select ${date}`}
                 accessibilityState={{selected:date===selected}} onPress={()=>setSelected(date)}
                 style={[styles.dayButton,date===today&&styles.today,date===selected&&styles.selected]}>
@@ -123,12 +124,12 @@ export default function CommunityCalendar({uid,mode,dashboard=false}:{uid?:strin
             </View>;
           })}
         </View>
-        <Pressable onPress={()=>{
+        {!dashboard&&<Pressable onPress={()=>{
           const date=philippinesToday();setToday(date);setSelected(date);
           setMonth({y:Number(date.slice(0,4)),m:Number(date.slice(5,7))});
-        }} style={styles.todayAction}><Ionicons name="locate-outline" size={14} color={GREEN}/><Text style={styles.todayActionText}>Go to Today</Text></Pressable>
+        }} style={styles.todayAction}><Ionicons name="locate-outline" size={14} color={GREEN}/><Text style={styles.todayActionText}>Go to Today</Text></Pressable>}
       </View>
-      <View style={[styles.eventPane,dashboard&&styles.dashboardEventPane]}>
+      {!dashboard&&<View style={[styles.eventPane,dashboard&&styles.dashboardEventPane]}>
         <View style={styles.selectedDayHeading}>
           <Text style={styles.selectedDayTitle}>{utcDate(Number(selected.slice(0,4)),Number(selected.slice(5,7)),Number(selected.slice(8))).toLocaleDateString("en-PH",{weekday:"long",month:"long",day:"numeric",year:"numeric",timeZone:"UTC"})}</Text>
           <Text style={styles.selectedHint}>{dayEvents.length} scheduled event{dayEvents.length===1?"":"s"}</Text>
@@ -156,16 +157,20 @@ export default function CommunityCalendar({uid,mode,dashboard=false}:{uid?:strin
             <Text style={styles.eventInfo} numberOfLines={1}>{e.barangay||e.location||"SJDM"}</Text></View>
           </Pressable>)}
         </View>}
-      </View>
+      </View>}
     </View>
   </View>;
 }
 const styles=StyleSheet.create({
   panel:{backgroundColor:"#FFFFFF",borderRadius:18,padding:18,borderWidth:1,borderColor:"#DFEBE7",gap:15,minWidth:0,width:"100%"},
-  dashboardPanel:{padding:16,gap:12},
+  dashboardPanel:{padding:18,gap:17},
+  dashboardWidePanel:{minHeight:665},
   dashboardHeading:{gap:8},
   dashboardBody:{gap:14},
   dashboardCalendar:{width:"100%",maxWidth:"100%",minWidth:0},
+  dashboardDays:{borderTopWidth:0,paddingTop:12},
+  dashboardWeekdayCell:{minHeight:44,justifyContent:"center",backgroundColor:"#F5F9F7"},
+  dashboardDayCell:{minHeight:52,justifyContent:"center"},
   dashboardEventPane:{width:"100%",paddingTop:11,borderTopWidth:1,borderTopColor:"#E8F0EB"},
   heading:{flexDirection:"row",justifyContent:"space-between",alignItems:"center",gap:15},
   mobileHeading:{flexWrap:"wrap"},
@@ -180,12 +185,12 @@ const styles=StyleSheet.create({
   calendar:{flexGrow:0,flexShrink:0,width:"43%",maxWidth:440,minWidth:270},
   calendarMobile:{width:"100%",maxWidth:"100%",minWidth:0},
   monthHeader:{flexDirection:"row",alignItems:"center",justifyContent:"space-between",paddingBottom:9},
-  monthTitle:{color:"#21473D",fontSize:15,fontWeight:"800"},
-  monthArrow:{height:32,width:32,alignItems:"center",justifyContent:"center",backgroundColor:"#F1F7F4",borderRadius:9},
+  monthTitle:{color:"#21473D",fontSize:17,fontWeight:"800"},
+  monthArrow:{height:42,width:42,alignItems:"center",justifyContent:"center",backgroundColor:"#F1F7F4",borderRadius:21},
   days:{flexDirection:"row",flexWrap:"wrap",borderTopWidth:1,borderTopColor:"#ECF1EE",paddingTop:10},
   dayCell:{width:"14.2857%",alignItems:"center",minHeight:38},
   weekday:{fontSize:10,fontWeight:"800",color:"#718A7D",marginBottom:6},
-  dayButton:{width:34,height:34,alignItems:"center",justifyContent:"center",borderRadius:10},
+  dayButton:{width:40,height:40,alignItems:"center",justifyContent:"center",borderRadius:20},
   today:{borderWidth:1,borderColor:GREEN},
   selected:{backgroundColor:GREEN,borderWidth:1,borderColor:GREEN},
   dayText:{fontSize:12,fontWeight:"700",color:"#41665A"},
