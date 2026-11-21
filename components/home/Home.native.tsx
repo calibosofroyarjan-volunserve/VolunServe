@@ -1,4 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
+import CommunityOnline from "./CommunityOnline";
+import CommunityCalendar from "./CommunityCalendar";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter, type Href } from "expo-router";
 import { StatusBar } from "expo-status-bar";
@@ -45,7 +47,7 @@ const SCREEN_WIDTH = Dimensions.get("window").width;
 export default function HomeScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { profile } = useUserSession();
+  const { profile, user } = useUserSession();
 
   const activeMode = activeModeForProfile(profile);
   const volunteerMode = activeMode === "volunteer" && hasVolunteerAccess(profile);
@@ -621,6 +623,27 @@ export default function HomeScreen() {
               </>
             )}
 
+            <View style={styles.communityModules}>
+              <View style={styles.nativeAnnouncements}>
+                <View style={styles.nativeAnnouncementsTitle}>
+                  <Ionicons name="megaphone-outline" size={21} color="#087F68"/>
+                  <Text style={styles.nativeAnnouncementsTitleText}>Announcements</Text>
+                </View>
+                {announcements.length ? announcements.slice(0,3).map(item=>(
+                  <Pressable key={String(item.id)} onPress={()=>router.push("/announcements")}
+                    style={styles.nativeAnnouncementRow}>
+                    <Text style={styles.nativeAnnouncementName} numberOfLines={1}>
+                      {String(item.title||"Official announcement")}
+                    </Text>
+                    <Text style={styles.nativeAnnouncementMessage} numberOfLines={2}>
+                      {String(item.message||"View the announcement for details.")}
+                    </Text>
+                  </Pressable>
+                )) : <Text style={styles.nativeAnnouncementMessage}>No published announcements available.</Text>}
+              </View>
+              <CommunityOnline uid={user?.uid}/>
+              <CommunityCalendar uid={user?.uid} mode={volunteerMode?"volunteer":"resident"}/>
+            </View>
             <View style={styles.bottomSpace} />
           </View>
         </ScrollView>
@@ -1306,6 +1329,14 @@ function ServiceCard({
 ============================================================ */
 
 const styles = StyleSheet.create({
+  communityModules:{gap:15,marginTop:18,marginBottom:15},
+  nativeAnnouncements:{backgroundColor:"#FFFFFF",borderWidth:1,borderColor:"#DFEBE7",
+    borderRadius:16,padding:17,gap:11},
+  nativeAnnouncementsTitle:{flexDirection:"row",alignItems:"center",gap:10},
+  nativeAnnouncementsTitleText:{fontSize:16,fontWeight:"800",color:"#193C32"},
+  nativeAnnouncementRow:{paddingVertical:10,borderBottomWidth:1,borderBottomColor:"#ECF1EF",gap:5},
+  nativeAnnouncementName:{fontSize:12,fontWeight:"800",color:"#264639"},
+  nativeAnnouncementMessage:{fontSize:11,lineHeight:17,color:"#678177"},
   journeyBar: {
     backgroundColor: "#F5FAF7", borderBottomWidth: 1, borderTopWidth: 1,
     borderColor: "#DDEAE2", paddingHorizontal: 15, paddingVertical: 13,
