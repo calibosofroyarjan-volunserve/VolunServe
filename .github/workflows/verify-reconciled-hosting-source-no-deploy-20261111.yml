@@ -482,6 +482,73 @@ jobs:
             }
             // END PINNED COMMUNITY PUBLIC PROFILE CONTROLLER GATE
 
+            // BEGIN PINNED PUBLIC VOLUNTEER ACTUAL CERTIFICATES CONTROLLER GATE
+            {
+              const controller=".github/workflows/release-community-actual-certificates-hosting-20261121.yml";
+              const verifier=".github/workflows/verify-reconciled-hosting-source-no-deploy-20261111.yml";
+              const changed=git("diff","--name-status","--no-renames",liveBase,commit)
+                .split("\n").filter(Boolean);
+              if(changed.length===2 && changed[0]==="A\t"+controller && changed[1]==="M\t"+verifier){
+                const oldHosting="7f296fa10ee8e0a336b2a2680f16c5891b1397e7";
+                const source="11f41bd3ee3b5434c77efb02ae4465e259c6fe2f";
+                const qa="b0349b6f64cc45f30e8f08acdc0a4d9b296c1f35";
+                const approved=[
+                  ["app/(tabs)/certificate.tsx","3f825b50e9554201aa0bc939b4bd48c43d4ad7fd"],
+                  ["app/(tabs)/community-event-profile.tsx","c4c3bb78911b71278e1498183ce1d66601c47d44"],
+                  ["app/(tabs)/profile.tsx","449dc22167dd094a10fe94f8f0c505ee4ae82b26"]
+                ];
+                assert.equal(liveBase,"9e541de71b87af2d774b7f54c3ddbec8806fb8f4",
+                  "BLOCKED: protected controller base moved");
+                assert.equal(marker.revision,oldHosting,"BLOCKED: production Hosting changed");
+                assert.equal(blob(liveBase,verifier),"0c3dc320ad3d071053e7456db8454768630d189c",
+                  "BLOCKED: baseline production gate modified");
+                assert.equal(blob(commit,controller),"c8eaacc2339386f2cca087a8c3b792132914cbcf",
+                  "BLOCKED: release controller not reviewed");
+                const before=git("show",liveBase+":"+verifier);
+                const after=git("show",commit+":"+verifier);
+                const begin="            // BEGIN PINNED PUBLIC VOLUNTEER ACTUAL CERTIFICATES CONTROLLER GATE\n";
+                const finish="            // END PINNED PUBLIC VOLUNTEER ACTUAL CERTIFICATES CONTROLLER GATE\n";
+                const start=after.indexOf(begin);
+                const end=after.indexOf(finish,start);
+                assert(start>=0&&end>start,"BLOCKED: scoped release gate missing");
+                const endOffset=end+finish.length;
+                assert.equal(after[endOffset],"\n","BLOCKED: expected newline after gate");
+                assert.equal(after.slice(0,start)+after.slice(endOffset+1),before,
+                  "BLOCKED: verifier changed outside scoped gate");
+                git("merge-base","--is-ancestor",oldHosting,source);
+                const sourceDiff=git("diff","--name-status","--no-renames",oldHosting,source)
+                  .split("\n").filter(Boolean);
+                assert.equal(sourceDiff.length,approved.length,"BLOCKED: source has unrelated/outdated files");
+                for(const [name,sha] of approved){
+                  assert(sourceDiff.includes("M\t"+name),"BLOCKED: unexpected app change "+name);
+                  assert.equal(blob(source,name),sha,"BLOCKED: UI source changed "+name);
+                  assert.equal(blob(qa,name),sha,"BLOCKED: tested QA differs from source "+name);
+                  const protectedBefore=git("ls-tree","--name-only",liveBase,"--",name);
+                  const protectedAfter=git("ls-tree","--name-only",commit,"--",name);
+                  assert.equal(protectedAfter,protectedBefore,
+                    "BLOCKED: protected application file added/removed "+name);
+                  // Older protected workflow branch may not contain the newer
+                  // production-hosted public profile route at all.
+                  if(protectedBefore)assert.equal(blob(commit,name),blob(liveBase,name),
+                    "BLOCKED: protected application source unexpectedly changed "+name);
+                }
+                for(const other of [
+                  "package.json","package-lock.json","app.json","firebase.json",".firebaserc",
+                  "tsconfig.json","firestore.rules","storage.rules",
+                  "backend/server.js","backend/communityEventRoster.js","functions/index.js",
+                  "functions/package.json","lib/firebase.ts",
+                  "scripts/guard-live-protected-release.cjs",
+                  ".github/workflows/auto-publish-protected-live-hosting.yml",
+                  ".github/workflows/release-live-protected-hosting.yml"
+                ])assert.equal(blob(commit,other),blob(liveBase,other),
+                  "BLOCKED: protected service/security change "+other);
+                console.log("PASS three QA-matched actual-certificate public profile UI blobs; no backend or stale module changes");
+                console.log("NO DEPLOY on PR; protected controller performs Hosting-only release after backend readiness");
+                return;
+              }
+            }
+            // END PINNED PUBLIC VOLUNTEER ACTUAL CERTIFICATES CONTROLLER GATE
+
             assert.equal(marker.revision,liveBase,
               "BLOCKED: protected base and production differ; reconcile FIRST");
             const text=git("diff","--name-status","--no-renames",liveBase,commit);
