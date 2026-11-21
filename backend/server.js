@@ -11873,6 +11873,9 @@ require("./communityEventRoster").installCommunityEventRoster({
 require("./communityEventPublicProfiles").installCommunityEventPublicProfiles({
   app, db, requireFirebaseUser, loadUserProfile, isApprovedAccount,
 });
+require("./communityPresence").installCommunityPresence({
+  app, db, requireFirebaseUser, loadUserProfile, isApprovedAccount,
+});
 const { installPublicAssistanceAppeals } = require("./publicAssistanceAppeals");
 installPublicAssistanceAppeals({
   app, db, FieldValue, requireFirebaseUser, requireOperationalAdmin, cleanText, makeHttpError,
