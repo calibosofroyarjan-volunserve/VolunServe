@@ -23,13 +23,13 @@ def screening(kind="national_id"):
 
 
 class FacePreflightPolicyTests(unittest.TestCase):
-    def test_only_three_allowed_types_advance_to_nondecisional_comparison(self):
-        for kind in ("national_id", "drivers_license", "passport"):
+    def test_only_national_id_advances_to_nondecisional_comparison(self):
+        for kind in ("national_id",):
             with self.subTest(kind=kind):
                 self.assertTrue(allows(screening(kind), kind))
 
     def test_removed_umid_prc_cannot_enter_face_comparison(self):
-        for kind in ("umid", "prc_id"):
+        for kind in ("drivers_license", "passport", "umid", "prc_id"):
             with self.subTest(kind=kind):
                 self.assertFalse(allows(screening(kind), kind))
 
@@ -92,7 +92,7 @@ class FacePreflightPolicyTests(unittest.TestCase):
 
     def test_passport_bio_page_exempt_from_reverse_side_but_not_mrz_conflict(self):
         base = screening("passport")
-        self.assertTrue(allows(base, "passport"))
+        self.assertFalse(allows(base, "passport"))
         self.assertFalse(allows({**base,
                                 "passportMrzBirthDateCheck": "possible_conflict"}, "passport"))
         self.assertFalse(allows({**base,
