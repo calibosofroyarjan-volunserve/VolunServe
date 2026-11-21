@@ -1,0 +1,54 @@
+name: QA Live-Source Profile & Actual Certificates UI (NO DEPLOY)
+on:
+  push:
+    branches: [qa/frontend-public-volunteer-profile-20261121]
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      CI: 'true'
+      EXPO_NO_TELEMETRY: '1'
+      EXPO_PUBLIC_VOLUNSERVE_ENV: production
+      EXPO_PUBLIC_IDENTITY_VERIFICATION_API_URL: https://volunserve.onrender.com
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Check exact frontend scope and public read-only certificate view
+        run: |
+          git diff --name-status 7f296fa10ee8e0a336b2a2680f16c5891b1397e7 11f41bd3ee3b5434c77efb02ae4465e259c6fe2f
+          node - <<'NODE'
+          const fs=require('fs'),assert=require('assert');
+          const page=fs.readFileSync('app/(tabs)/community-event-profile.tsx','utf8');
+          const paper=fs.readFileSync('app/(tabs)/certificate.tsx','utf8');
+          const owner=fs.readFileSync('app/(tabs)/profile.tsx','utf8');
+          assert(page.includes('CertificatePaper'));
+          assert(page.includes('View Certificate'));
+          assert(page.includes('selectedCertificate'));
+          assert(page.includes('Issued'));
+          assert(paper.includes('export function CertificatePaper'));
+          assert(owner.includes('openProfileEditor'));
+          assert(owner.includes('verifiedContributions'));
+          assert(owner.includes('certificates'));
+          for(const no of ['updateUserProfile(', 'getDoc(', 'onSnapshot(', 'doc(db']){
+            assert(!page.includes(no),'Public profile must not touch account data: '+no);
+          }
+          NODE
+      - name: Install exact existing dependencies
+        run: npm ci --no-audit --no-fund
+      - name: TypeScript and unchanged module checks
+        run: |
+          npx tsc --noEmit --incremental false
+          node --test scripts/test-admin-volunteer-authorization.cjs
+          node --test scripts/test-embedded-emergency-map-navigation.cjs
+          node scripts/test-profile-certificates-account-menu.cjs
+          node scripts/test-login-ui-release.cjs
+      - name: Export live profile routes without deploying
+        run: |
+          npx expo export --platform web --clear
+          test -f dist/community-event-profile.html || test -f dist/community-event-profile/index.html
