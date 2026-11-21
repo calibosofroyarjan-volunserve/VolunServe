@@ -1,0 +1,29 @@
+name: QA Community Last Seen and 1:1 Messaging Backend (NO DEPLOY)
+on:
+  push:
+    branches: [qa/community-social-backend-20261121]
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - name: Isolated backend change scope
+        run: |
+          git diff --name-status a57ec23cab2e14dba96c711f3511f157148789bf af4bbfd55094d4c2e496444fa5e5fce1908ff13b
+          node --check backend/communitySocial.js
+          node --check backend/server.js
+          node --check backend/test-communitySocial.js
+      - name: Community consent, direct chat privacy, rate limiting and blocks
+        run: node --test backend/test-communitySocial.js backend/test-communityPresence.js
+      - name: Regression guard for production backend functionality
+        run: |
+          npm ci --prefix backend --no-audit --no-fund
+          npm --prefix backend run check
