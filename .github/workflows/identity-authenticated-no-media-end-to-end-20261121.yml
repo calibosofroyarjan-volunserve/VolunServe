@@ -1,0 +1,55 @@
+name: Staging No-Media Authenticated Resident to Admin E2E (NO DEPLOY)
+on:
+  push:
+    branches:
+      - qa/identity-authenticated-no-media-e2e-20261121
+    paths:
+      - backend/test-identity-emulator-auth-e2e.cjs
+      - .github/workflows/identity-authenticated-no-media-end-to-end-20261121.yml
+permissions:
+  contents: read
+jobs:
+  signed-in-no-media-identity:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      CI: "true"
+      GCLOUD_PROJECT: demo-volunserve-identity-e2e
+      FIREBASE_AUTH_EMULATOR_HOST: "127.0.0.1:9099"
+      FIRESTORE_EMULATOR_HOST: "127.0.0.1:8080"
+    steps:
+      - name: Fetch immutable source without legacy Git submodule
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          [[ "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]] || exit 2
+          curl -fLsS --retry 3 -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" "https://api.github.com/repos/${GITHUB_REPOSITORY}/zipball/$SOURCE_SHA" -o /tmp/identity-emulator-no-media.zip
+          mkdir -p "$RUNNER_TEMP/identity-emulator-no-media"
+          unzip -q /tmp/identity-emulator-no-media.zip -d "$RUNNER_TEMP/identity-emulator-no-media"
+          ROOT="$(find "$RUNNER_TEMP/identity-emulator-no-media" -mindepth 1 -maxdepth 1 -type d -print -quit)"
+          cp -a "$ROOT/." "$GITHUB_WORKSPACE/"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Install locked test dependencies, no install scripts
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          npm ci --prefix backend --ignore-scripts --no-audit --no-fund
+      - name: Real local Firebase Auth tokens and Firestore transactions, fictional identities only
+        run: |
+          node --check backend/identityManualReviewRoutes.js
+          node --check backend/test-identity-emulator-auth-e2e.cjs
+          npx --no-install firebase emulators:exec --config backend/identity-e2e-emulators.json --only auth,firestore --project demo-volunserve-identity-e2e "node --test backend/test-identity-emulator-auth-e2e.cjs"
+      - name: No production and no biometric media attestation
+        run: |
+          grep -Fq 'const STAGING_IDENTITY_MEDIA_UPLOADS_ENABLED = false' backend/server.js
+          echo 'Only a DEMO emulator project, fake signed-in accounts and in-memory local Firestore; no cloud staging login, real human identity, real biometric media or deployment.'
+          echo '## No-media authentication QA' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Firebase Auth and Firestore emulator route tests only. Real deployed staging browser login not tested. No real ID or selfie was used.' >> "$GITHUB_STEP_SUMMARY"
