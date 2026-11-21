@@ -43,7 +43,12 @@ export default function CommunityOnline({uid,dashboard=false}:{uid?:string|null;
     if(!uid){setLoading(false);setMembers([]);return;}
     try {
       const payload=await communitySocialRequest<{members:Member[];activeCounts?:{residents:number;volunteers:number;total:number}}>("/api/community/directory");
-      setMembers(Array.isArray(payload.members)?payload.members:[]);
+      // The signed-in viewer is actively using VolunServe right now.
+      // The backend's public presence flag may be OFF even when the private
+      // heartbeat is current. Show their *own* profile as Online to them,
+      // without exposing their private presence to other members.
+      setMembers(Array.isArray(payload.members)?payload.members.map(member=>
+        member.isSelf?{...member,online:true}:member):[]);
       setActiveCounts(payload.activeCounts&&Number.isFinite(payload.activeCounts.total)?
         payload.activeCounts:{residents:0,volunteers:0,total:0});
       setError("");
