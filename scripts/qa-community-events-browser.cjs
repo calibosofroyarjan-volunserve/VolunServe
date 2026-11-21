@@ -85,6 +85,20 @@ async function main(){
     assert(body.includes("QA MOCK PREVIEW"),"Mock preview label missing; inspect diagnostics screenshot and logs");
     assert(body.includes("Community Events"),"Community Events page not visible");
     assert(body.includes("Upcoming"),"Upcoming tab missing");
+    if (width < 1450) {
+      const eventHeading=page.getByText("VOLUNSERVE / COMMUNITY ENGAGEMENT",{exact:true}).last();
+      const attendanceHeading=page.getByText("My Attendance",{exact:true}).last();
+      const eventBox=await eventHeading.boundingBox();
+      const attendanceBox=await attendanceHeading.boundingBox();
+      assert(eventBox && attendanceBox,
+        `Missing visible event header / attendance at ${width}px`);
+      console.log("QA_BROWSER_STACK_ORDER",JSON.stringify({
+        width,eventY:eventBox.y,attendanceY:attendanceBox.y,
+        delta:attendanceBox.y-eventBox.y
+      }));
+      assert(eventBox.height>8 && attendanceBox.y>eventBox.y+80,
+        `Collapsed/reordered event column at ${width}px — eventY=${eventBox.y}, attendanceY=${attendanceBox.y}`);
+    }
     const overflow=await page.evaluate(()=>document.documentElement.scrollWidth-innerWidth);
     assert(overflow<=6,`Horizontal overflow at ${width}px: ${overflow}px`);
     const screenshot=path.join(screens,`community-events-${width}.png`);
