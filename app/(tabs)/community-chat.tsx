@@ -132,7 +132,7 @@ export default function CommunityChat() {
             </View>
             {!canSend?<View style={styles.readOnly}>
               <Ionicons name="information-circle-outline" size={17} color="#758E83"/>
-              <Text style={styles.readOnlyText}>Chat is read-only. Both participants must allow messages and be visible; a blocked conversation cannot send.</Text>
+              <Text style={styles.readOnlyText}>Chat is read-only until both participants enable Private Messages. Offline accounts can receive chats; blocked conversations cannot send.</Text>
             </View>:null}
             <View style={[styles.composer,mobile&&styles.mobileComposer]}>
               <TextInput value={text} onChangeText={setText} placeholder="Write a message..."
