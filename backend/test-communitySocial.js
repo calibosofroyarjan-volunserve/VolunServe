@@ -172,14 +172,14 @@ test("legacy and newly registered accounts share Last Seen only after consent an
    delete collections.communityPresence.newAccount;
  }
 });
-test("users can opt in and out of chat independently of last seen",async()=>{
+test("approved members chat automatically, with optional pause and resume",async()=>{
  assert.equal((await call("GET",self,"resident")).payload.acceptChats,true);
  assert.equal((await call("POST",prefs,"resident",{acceptChats:false})).status,200);
  assert.equal((await call("GET",self,"resident")).payload.acceptChats,false);
  assert.equal((await call("POST",prefs,"resident",{acceptChats:true})).status,200);
  assert.equal((await call("GET",self,"resident")).payload.acceptChats,true);
 });
-test("authenticated chat sends only with mutual opt-in, reads only its thread",async()=>{
+test("authenticated approved chat sends by default, reads only its thread",async()=>{
  const before=await call("GET",thread,"resident",{},publicKey("volunteer"));
  assert.equal(before.status,200);assert.deepEqual(before.payload.messages,[]);
  const send=await call("POST",thread,"resident",{text:"Hello, volunteer!"},publicKey("volunteer"));
@@ -194,7 +194,7 @@ test("authenticated chat sends only with mutual opt-in, reads only its thread",a
  assert.equal((await call("GET",thread,"resident",{},publicKey("resident"))).status,404);
  assert.equal(typeof conversationId("resident","volunteer"),"string");
 });
-test("limits flood and allows the recipient to block, report, and opt out",async()=>{
+test("limits flood and lets recipient block, report, or explicitly pause messages",async()=>{
  const immediate=await call("POST",thread,"resident",{text:"Too quick"},publicKey("volunteer"));
  assert.equal(immediate.status,429);
  assert.equal((await call("POST",block,"volunteer",{blocked:true},publicKey("resident"))).status,200);
@@ -206,6 +206,7 @@ test("limits flood and allows the recipient to block, report, and opt out",async
  assert.equal((await call("POST",thread,"resident",{text:"No consent"},publicKey("volunteer"))).status,403);
  const prev=await call("GET",thread,"resident",{},publicKey("volunteer"));
  assert.equal(prev.status,200);assert.equal(prev.payload.canSend,false);
+ assert.equal((await call("POST",prefs,"volunteer",{acceptChats:true})).status,200);
 });
 test("turning off presence does not remove an approved member from directory",async()=>{
  collections.communityPresence.volunteer.visible=false;
@@ -238,7 +239,7 @@ test("basic residents appear automatically; profile photo stays consent-based",a
  assert.equal(entry.online,false);
  assert.equal(entry.lastSeenAt,null);
  assert.equal(entry.badge,"Basic Resident");
- assert.equal(entry.acceptChats,false);
+ assert.equal(entry.acceptChats,true,"legacy false flag cannot suppress automatic chat");
  assert(entry.avatarUrl.includes("cloudinary.com"),"approved photo consent should make avatar available");
  assert.equal((await call("GET",member,"resident",{},publicKey("newbie"))).payload.member.name,"Basic User");
  assert(!JSON.stringify(result.payload).includes('"uid":'));
@@ -275,7 +276,8 @@ test("profile-photo opt-out keeps basic member name while protecting online and 
  assert.equal((await call("POST",prefs,"newbie",{directoryListed:false})).status,200);
  assert.equal((await call("GET",self,"newbie")).payload.directoryListed,false);
  assert.equal(collections.communityPresence.newbie.visible,false);
- assert.equal(collections.communityPresence.newbie.acceptChats,false);
+ assert.equal(collections.communityPresence.newbie.acceptChats,false,"no bulk migration needed");
+ assert.equal((await call("GET",self,"newbie")).payload.acceptChats,true);
  const row=(await call("GET",directory,"resident")).payload.members.find(x=>x.name==="Basic User");
  assert(row);assert.equal(row.avatarUrl,"");assert.equal(row.online,false);
 });
@@ -294,7 +296,7 @@ test("active counts include private sessions while approved names and roles are 
  const privateRow=result.payload.members.find(x=>x.name==="Private User");
  assert(privateRow);assert.equal(privateRow.presencePrivate,true);
  assert.equal(privateRow.online,false);assert.equal(privateRow.lastSeenAt,null);
- assert.equal(privateRow.acceptChats,false);
+ assert.equal(privateRow.acceptChats,true,"older private accounts are messageable by default");
  for(const secret of ["secret@example.com","09123456789","Private Location","SECRET"]){
    assert(!JSON.stringify(result.payload).includes(secret),"private field must be excluded");
  }
@@ -347,7 +349,7 @@ test("expired, rejected and Admin sessions are excluded from active totals",asyn
  assert(!JSON.stringify(result.payload).includes("Rejected Member"));
 });
 
-test("self key, private-presence chat and member inbox work with separate mutual chat opt-in",async()=>{
+test("self key, private presence, inbox, and automatic chat work without consent switches",async()=>{
  const rp=collections.communityPresence.resident;
  const vp=collections.communityPresence.volunteer;
  const backup={
@@ -369,11 +371,52 @@ test("self key, private-presence chat and member inbox work with separate mutual
    const inboxResult=await call("GET",inbox,"resident");
    assert.equal(inboxResult.status,200);
    assert(inboxResult.payload.conversations.some(x=>x.peer.name==="Volunteer Sample"));
-   vp.acceptChats=false;
+   assert.equal((await call("POST",prefs,"volunteer",{acceptChats:false})).status,200);
    const disabled=await call("GET",thread,"volunteer",{},publicKey("resident"));
    assert.equal(disabled.payload.canSend,false);
+   assert.equal((await call("POST",prefs,"volunteer",{acceptChats:true})).status,200);
  }finally{
    Object.assign(rp,backup.resident);
    Object.assign(vp,backup.volunteer);
+ }
+});
+
+test("legacy, newly created, offline, and no-presence approved members can chat immediately",async()=>{
+ users.oldOffline={role:"resident",status:"approved",residentAccess:true,
+  activeMode:"resident",fullName:"Old Offline Member",email:"private-old@example.com"};
+ users.newOffline={role:"resident",status:"approved",residentAccess:true,
+  activeMode:"resident",fullName:"New Offline Member",phoneNumber:"09999999999"};
+ // An old acceptChats=false flag is not a newly requested Pause action.
+ collections.communityPresence.oldOffline={acceptChats:false,visible:false,updatedAt:new Date(0)};
+ try {
+   const from=(await call("GET",directory,"oldOffline")).payload;
+   const oldMember=from.members.find(x=>x.name==="Old Offline Member");
+   const newMember=from.members.find(x=>x.name==="New Offline Member");
+   assert(oldMember&&newMember);
+   assert.equal(oldMember.acceptChats,true);
+   assert.equal(newMember.acceptChats,true);
+   assert.equal(oldMember.online,false);
+   assert.equal(newMember.online,false);
+   assert.equal((await call("GET",self,"oldOffline")).payload.acceptChats,true);
+   assert.equal((await call("GET",self,"newOffline")).payload.acceptChats,true);
+   const first=await call("GET",thread,"oldOffline",{},publicKey("newOffline"));
+   assert.equal(first.status,200);assert.equal(first.payload.canSend,true);
+   const sent=await call("POST",thread,"oldOffline",{text:"Automatic offline test"},publicKey("newOffline"));
+   assert.equal(sent.status,200);
+   const inboxResult=await call("GET",inbox,"newOffline");
+   assert.equal(inboxResult.status,200);
+   assert(inboxResult.payload.conversations.some(x=>x.peer.name==="Old Offline Member"));
+   assert.equal((await call("GET",thread,"newOffline",{},publicKey("oldOffline"))).payload.messages.at(-1).text,
+    "Automatic offline test");
+   assert(!JSON.stringify(inboxResult.payload).includes("private-old@example.com"));
+   assert(!JSON.stringify(from.members).includes("09999999999"));
+   assert.equal((await call("POST",prefs,"newOffline",{acceptChats:false})).status,200);
+   assert.equal((await call("GET",thread,"oldOffline",{},publicKey("newOffline"))).payload.canSend,false);
+   assert.equal((await call("POST",prefs,"newOffline",{acceptChats:true})).status,200);
+   assert.equal((await call("GET",thread,"oldOffline",{},publicKey("newOffline"))).payload.canSend,true);
+ }finally {
+   delete users.oldOffline;delete users.newOffline;
+   delete collections.communityPresence.oldOffline;
+   delete collections.communityPresence.newOffline;
  }
 });

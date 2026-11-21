@@ -3,7 +3,7 @@
  * Approved account directory, opt-in Last Seen and private 1:1 chat. Runs solely behind Firebase ID
  * verification and existing Admin SDK: NO public Firestore rule changes.
  * Presence is shared only if the user is already visible; offline status
- * requires a separate explicit consent. Chat is an independent opt-in.
+ * requires a separate explicit consent. Messaging is available by default to approved members, with opt-out and block/report.
  */
 const crypto=require("node:crypto");
 const {publicKey,canonicalMode}=require("./communityPresence");
@@ -45,7 +45,7 @@ const display=(uid,p,now=Date.now())=>{
   online, presencePrivate:p.visible!==true&&p.showLastSeen!==true,
   sharesLastSeen:showOffline,
   lastSeenAt:showOffline&&validLastSeen?new Date(lastActivity).toISOString():null,
-  directoryListed:p.directoryListed===true,acceptChats:p.acceptChats===true,
+  directoryListed:p.directoryListed===true,acceptChats:p.messagesDisabled!==true,
  };
 };
 const conversationId=(a,b)=>crypto.createHash("sha256").update(
@@ -90,7 +90,9 @@ function installCommunitySocial({app,db,requireFirebaseUser,loadUserProfile,isAp
       visible:presence.visible===true,
       showLastSeen:presence.showLastSeen===true,
       directoryListed:presence.directoryListed===true,
-      acceptChats:presence.acceptChats===true,
+      // Historical acceptChats=false was a legacy opt-in default, NOT a current ban.
+      // Default chat on for all approved members; only new explicit opt-out is respected.
+      acceptChats:presence.messagesDisabled!==true,
     }};
   }));
  };
@@ -114,7 +116,7 @@ function installCommunitySocial({app,db,requireFirebaseUser,loadUserProfile,isAp
  };
  const publicPeer=({uid,p})=>(p.visible===true||p.directoryListed===true)?
    display(uid,p):{key:publicKey(uid),name:"Community member",
-    avatarUrl:"",mode:"resident",verified:false,badge:"Private",online:false,lastSeenAt:null,acceptChats:false};
+    avatarUrl:"",mode:"resident",verified:false,badge:"Private",online:false,lastSeenAt:null,acceptChats:true};
  const isBlocked=async(a,b)=>{
    const pair=await Promise.all([
      db.collection("communityChatBlocks").doc(blockId(a,b)).get(),
@@ -124,13 +126,15 @@ function installCommunitySocial({app,db,requireFirebaseUser,loadUserProfile,isAp
  };
  const canMessage=async(viewerId,viewerProfile,peer)=>{
    if(!peer||peer.uid===viewerId||!permitted(viewerProfile,isApprovedAccount))return false;
+   // Approved accounts can message each other without enabling anything,
+   // even when offline and without an existing communityPresence document.
+   // A deliberate "Pause Private Messages" action or a block still wins.
    const self=await db.collection("communityPresence").doc(viewerId).get();
-   // An explicit chat opt-in is independent of online and directory-photo
-   // sharing. Both approved members must enable chat; no silent enabling.
-   if(!self.exists||self.data()?.acceptChats!==true)return false;
-   if(peer.p.acceptChats!==true)return false;
+   if(self.exists&&self.data()?.messagesDisabled===true)return false;
+   if(peer.p.messagesDisabled===true)return false;
    const canonical=await loadUserProfile(peer.uid);
-   if(!permitted(canonical,isApprovedAccount))return false;
+   if(!permitted(canonical,isApprovedAccount)||canonical.deleted===true||
+      canonical.isDeleted===true||["deleted","suspended"].includes(canonical.accountStatus))return false;
    return !(await isBlocked(viewerId,peer.uid));
  };
  const thread=async(uid,peerId)=>{
@@ -183,21 +187,25 @@ function installCommunitySocial({app,db,requireFirebaseUser,loadUserProfile,isAp
      if(!await authViewer(req,res))return;
      const d=await db.collection("communityPresence").doc(req.firebaseUser.uid).get(),p=d.data()||{};
      res.set("Cache-Control","private, no-store");
-     res.json({ok:true,visible:p.visible===true,directoryListed:p.directoryListed===true,showLastSeen:p.showLastSeen===true,acceptChats:p.acceptChats===true});
+     res.json({ok:true,visible:p.visible===true,directoryListed:p.directoryListed===true,showLastSeen:p.showLastSeen===true,acceptChats:p.messagesDisabled!==true});
    }catch(e){errorResponse(res,e,"Directory preferences");}
  });
  app.post("/api/community/directory/preferences",requireFirebaseUser,async(req,res)=>{
    try{
      const account=await authViewer(req,res);if(!account)return;
      const options={};
-     for(const k of ["showLastSeen","acceptChats","directoryListed"]){
+     for(const k of ["showLastSeen","directoryListed","acceptChats"]){
        if(Object.prototype.hasOwnProperty.call(req.body||{},k)){
          if(typeof req.body[k]!=="boolean")return res.status(400).json({ok:false,message:"Invalid preference value."});
-         options[k]=req.body[k];
+         if(k==="acceptChats"){
+           // Backward-compatible setting: OFF now means an EXPLICIT pause,
+           // not the default for old accounts missing chat preferences.
+           options.messagesDisabled=!req.body[k];
+         }else options[k]=req.body[k];
        }
      }
      if(!Object.keys(options).length||Object.keys(req.body||{}).some(k=>!["showLastSeen","acceptChats","directoryListed"].includes(k)))
-       return res.status(400).json({ok:false,message:"Only consent preferences can be changed."});
+       return res.status(400).json({ok:false,message:"Only privacy preferences can be changed."});
      if(options.directoryListed===true){
        // Consent is explicit; hydrate only public values from the signed-in
        // approved account. Never copy contact, ID, address or location fields.
@@ -212,7 +220,7 @@ function installCommunitySocial({app,db,requireFirebaseUser,loadUserProfile,isAp
        options.updatedAt=new Date();
      }
      await db.collection("communityPresence").doc(req.firebaseUser.uid).set(options,{merge:true});
-     res.json({ok:true,showLastSeen:options.showLastSeen,acceptChats:options.acceptChats,directoryListed:options.directoryListed});
+     res.json({ok:true,showLastSeen:options.showLastSeen,acceptChats:options.messagesDisabled===undefined?undefined:!options.messagesDisabled,directoryListed:options.directoryListed});
    }catch(e){errorResponse(res,e,"Directory preferences");}
  });
  app.get("/api/community/directory/:memberKey",requireFirebaseUser,async(req,res)=>{
@@ -249,7 +257,7 @@ function installCommunitySocial({app,db,requireFirebaseUser,loadUserProfile,isAp
          verified:profile.identityVerified===true||profile.identityStatus==="verified",
          avatarUrl:presence.directoryListed===true||presence.visible===true?
            safePhoto(profile.profilePictureUrl):"",
-         showLastSeen:presence.visible===true&&presence.showLastSeen===true,
+         showLastSeen:presence.showLastSeen===true,
        };
        return {peer:display(peerId,safePeer),
          lastMessage:clean(c.lastMessage,120),
@@ -301,7 +309,7 @@ function installCommunitySocial({app,db,requireFirebaseUser,loadUserProfile,isAp
      const peer=await peerForKey(uid,key,true);
      if(!peer)return notFound(res);
      if(!(await canMessage(uid,viewer,peer)))
-       return res.status(403).json({ok:false,message:"Messaging is disabled, blocked or the recipient is no longer public."});
+       return res.status(403).json({ok:false,message:"Messaging is paused, blocked, or the account is unavailable."});
      const c=await thread(uid,peer.uid);
      const rateRef=db.collection("communityChatThrottle").doc(uid);
      const msgRef=c.ref.collection("messages").doc(crypto.randomUUID());
