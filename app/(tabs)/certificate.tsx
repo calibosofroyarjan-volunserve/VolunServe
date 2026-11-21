@@ -457,7 +457,7 @@ export function CertificatePaper({
 
 // Dashboard thumbnail only — the original CertificatePaper and A4 printable
 // certificate above are deliberately untouched.
-function CertificateMiniPreview({
+export function CertificateMiniPreview({
   certificate,
   displayName,
 }: {
