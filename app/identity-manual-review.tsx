@@ -11,8 +11,6 @@ const TYPES: {value:IdentityDocumentType;label:string}[] = [
   {value:"national_id",label:"Philippine National ID"},
   {value:"drivers_license",label:"Driver's License"},
   {value:"passport",label:"Philippine Passport"},
-  {value:"umid",label:"UMID"},
-  {value:"prc_id",label:"PRC ID"},
 ];
 
 export default function InPersonIdentityReview() {
