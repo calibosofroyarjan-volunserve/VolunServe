@@ -68,6 +68,8 @@ jobs:
           a(core.includes('getRegistrationEmailError(submittedEmail)'));
           console.log('PASS optional directory consent; existing signup guard functions remain present');
           NODE
+      - name: Verify current production Hosting revision without writes
+        run: VOLUNSERVE_EXPECTED_SHA=c35522bf163911227e350a7a4d11af7029d45b88 node scripts/check-live-hosting.cjs
       - name: Typecheck frontend without deployment
         run: npx tsc --noEmit --pretty false
       - name: Compile production web bundle without hosting release
