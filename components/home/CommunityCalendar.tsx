@@ -20,10 +20,10 @@ const utcDate=(year:number,month:number,day:number)=>new Date(Date.UTC(year,mont
 const iso=(y:number,m:number,d:number)=>`${y}-${String(m).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
 const validDate=(value:unknown)=>typeof value==="string"&&/^\d{4}-\d{2}-\d{2}$/.test(value)
   && !Number.isNaN(Date.parse(value+"T00:00:00Z"));
-export default function CommunityCalendar({uid,mode}:{uid?:string|null;mode:MemberMode}) {
+export default function CommunityCalendar({uid,mode,dashboard=false}:{uid?:string|null;mode:MemberMode;dashboard?:boolean}) {
   const router=useRouter();
   const {width}=useWindowDimensions();
-  const compact=width<760;
+  const compact=width<760||dashboard;
   const [today,setToday]=useState(()=>philippinesToday());
   const [selected,setSelected]=useState(()=>philippinesToday());
   const [events,setEvents]=useState<EventItem[]>([]);
@@ -85,8 +85,8 @@ export default function CommunityCalendar({uid,mode}:{uid?:string|null;mode:Memb
     setSelected(iso(next.getUTCFullYear(),next.getUTCMonth()+1,1));
   };
   const openEvents=()=>router.push("/community-events");
-  return <View style={styles.panel}>
-    <View style={[styles.heading,compact&&styles.mobileHeading]}>
+  return <View style={[styles.panel,dashboard&&styles.dashboardPanel]}>
+    <View style={[styles.heading,compact&&styles.mobileHeading,dashboard&&styles.dashboardHeading]}>
       <View style={styles.headingLeft}>
         <View style={styles.iconBox}><Ionicons name="calendar-outline" size={21} color={GREEN}/></View>
         <View style={{flex:1,minWidth:0}}>
@@ -98,8 +98,8 @@ export default function CommunityCalendar({uid,mode}:{uid?:string|null;mode:Memb
         <Text style={styles.openText}>Browse Events</Text><Ionicons name="arrow-forward" size={15} color={GREEN}/>
       </Pressable>
     </View>
-    <View style={[styles.body,compact&&styles.bodyMobile]}>
-      <View style={[styles.calendar,compact&&styles.calendarMobile]}>
+    <View style={[styles.body,compact&&styles.bodyMobile,dashboard&&styles.dashboardBody]}>
+      <View style={[styles.calendar,compact&&styles.calendarMobile,dashboard&&styles.dashboardCalendar]}>
         <View style={styles.monthHeader}>
           <Pressable accessibilityLabel="Previous month" onPress={()=>changeMonth(-1)} style={styles.monthArrow}>
             <Ionicons name="chevron-back" size={17} color="#345F53"/>
@@ -128,7 +128,7 @@ export default function CommunityCalendar({uid,mode}:{uid?:string|null;mode:Memb
           setMonth({y:Number(date.slice(0,4)),m:Number(date.slice(5,7))});
         }} style={styles.todayAction}><Ionicons name="locate-outline" size={14} color={GREEN}/><Text style={styles.todayActionText}>Go to Today</Text></Pressable>
       </View>
-      <View style={styles.eventPane}>
+      <View style={[styles.eventPane,dashboard&&styles.dashboardEventPane]}>
         <View style={styles.selectedDayHeading}>
           <Text style={styles.selectedDayTitle}>{utcDate(Number(selected.slice(0,4)),Number(selected.slice(5,7)),Number(selected.slice(8))).toLocaleDateString("en-PH",{weekday:"long",month:"long",day:"numeric",year:"numeric",timeZone:"UTC"})}</Text>
           <Text style={styles.selectedHint}>{dayEvents.length} scheduled event{dayEvents.length===1?"":"s"}</Text>
@@ -161,7 +161,12 @@ export default function CommunityCalendar({uid,mode}:{uid?:string|null;mode:Memb
   </View>;
 }
 const styles=StyleSheet.create({
-  panel:{backgroundColor:"#FFFFFF",borderRadius:18,padding:18,borderWidth:1,borderColor:"#DFEBE7",gap:15},
+  panel:{backgroundColor:"#FFFFFF",borderRadius:18,padding:18,borderWidth:1,borderColor:"#DFEBE7",gap:15,minWidth:0,width:"100%"},
+  dashboardPanel:{padding:16,gap:12},
+  dashboardHeading:{gap:8},
+  dashboardBody:{gap:14},
+  dashboardCalendar:{width:"100%",maxWidth:"100%",minWidth:0},
+  dashboardEventPane:{width:"100%",paddingTop:11,borderTopWidth:1,borderTopColor:"#E8F0EB"},
   heading:{flexDirection:"row",justifyContent:"space-between",alignItems:"center",gap:15},
   mobileHeading:{flexWrap:"wrap"},
   headingLeft:{flexDirection:"row",alignItems:"center",gap:12,flex:1,minWidth:0},
