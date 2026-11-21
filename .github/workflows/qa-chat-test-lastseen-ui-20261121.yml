@@ -1,0 +1,67 @@
+name: QA Community Chat Onboarding and Last Seen UI (NO DEPLOY)
+on:
+  push:
+    branches: [fix/community-chat-test-ux-20261121]
+    paths:
+      - 'components/home/CommunityOnline.tsx'
+      - 'app/(tabs)/community-chat.tsx'
+      - 'lib/communitySocial.ts'
+      - '.github/workflows/qa-chat-test-lastseen-ui-20261121.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  web-build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      CI: 'true'
+      EXPO_NO_TELEMETRY: '1'
+      EXPO_PUBLIC_VOLUNSERVE_ENV: production
+      EXPO_PUBLIC_IDENTITY_VERIFICATION_API_URL: https://volunserve.onrender.com
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install pinned dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Protect UI change scope and opt-in contract
+        run: |
+          git fetch origin fix/shared-header-messages-20261121 --depth=1
+          python3 - <<'PY'
+          import subprocess
+          changed=set(subprocess.check_output(
+            ['git','diff','--name-only','origin/fix/shared-header-messages-20261121','HEAD'],text=True).splitlines())
+          allowed={'components/home/CommunityOnline.tsx','app/(tabs)/community-chat.tsx',
+            'lib/communitySocial.ts','.github/workflows/qa-chat-test-lastseen-ui-20261121.yml'}
+          assert changed and changed.issubset(allowed),repr(changed)
+          print('PASS Community Members and Chat UI only')
+          PY
+          node <<'NODE'
+          const a=require('node:assert/strict'),fs=require('node:fs');
+          const members=fs.readFileSync('components/home/CommunityOnline.tsx','utf8');
+          const chat=fs.readFileSync('app/(tabs)/community-chat.tsx','utf8');
+          const social=fs.readFileSync('lib/communitySocial.ts','utf8');
+          a(members.includes('Enable My Chats'));
+          a(members.includes('updatePreference("acceptChats")'));
+          a(members.includes('Share Last Seen'));
+          a(social.includes('sharesLastSeen?: boolean'));
+          a(social.includes('Last seen unavailable'));
+          a(chat.includes('Offline accounts can receive chats'));
+          a(members.includes('member.isSelf?<Text style={styles.youLabel}> (You)</Text>'));
+          a(members.includes('showsVerticalScrollIndicator'));
+          console.log('PASS consent-only Last Seen, optional chat and unchanged member UX');
+          NODE
+      - name: Verify current published Hosting revision (READ ONLY)
+        run: VOLUNSERVE_EXPECTED_SHA=bac425f2ee62e476b5a0322e5e90f17647b30d6e node scripts/check-live-hosting.cjs
+      - name: TypeScript login, roles, profile and map regression
+        run: |
+          npx tsc --noEmit --incremental false
+          node --test scripts/test-admin-volunteer-authorization.cjs
+          node --test scripts/test-embedded-emergency-map-navigation.cjs
+          node scripts/test-login-ui-release.cjs
+          node scripts/test-profile-certificates-account-menu.cjs
+      - name: Build production web bundle without hosting deployment
+        run: npx expo export --platform web --output-dir /tmp/volunserve-chat-lastseen-qa
