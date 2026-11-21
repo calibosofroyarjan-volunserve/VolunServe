@@ -1,0 +1,41 @@
+name: Public Volunteer Achievements QA (NO DEPLOY)
+on:
+  push:
+    branches:
+      - qa/public-volunteer-achievements-20261121
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    env:
+      CI: 'true'
+      EXPO_NO_TELEMETRY: '1'
+      EXPO_PUBLIC_VOLUNSERVE_ENV: production
+      EXPO_PUBLIC_IDENTITY_VERIFICATION_API_URL: https://volunserve.onrender.com
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Backend syntax and privacy contract tests (NO SERVICE DEPLOY)
+        run: |
+          node --check backend/communityEventPublicProfiles.js
+          node --check backend/server.js
+          node --test backend/test-public-volunteer-portfolio.js
+          node --test backend/test-communityEventRoster.js
+      - name: Install existing pinned site dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Typecheck existing app and new read-only profile tabs
+        run: npx tsc --noEmit --incremental false
+      - name: Existing profile and map regressions
+        run: |
+          node --test scripts/test-admin-volunteer-authorization.cjs
+          node --test scripts/test-embedded-emergency-map-navigation.cjs
+          node scripts/test-profile-certificates-account-menu.cjs
+      - name: Build new profile route (NO DEPLOY)
+        run: |
+          npx expo export --platform web --clear
+          test -f dist/community-event-profile.html || test -f dist/community-event-profile/index.html
