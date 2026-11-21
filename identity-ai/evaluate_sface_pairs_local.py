@@ -147,9 +147,14 @@ def main():
         "sameScored", "differentScored", "sameUnscorable", "differentUnscorable",
         "falseAccepts", "falseRejects", "trueAccepts", "trueRejects",
         "threshold", "observedFalseAcceptRate", "observedFalseRejectRate",
+        "samePairScoreCoverage", "differentPairScoreCoverage",
+        "observedGenuineNoPositiveResultFraction",
+        "observedFalseAcceptUpper95ScoredPairs",
+        "observedFalseRejectUpper95ScoredPairs",
         "sampleAdequacy",
     ):
         print(f"{key}={results[key]}")
+    print(results["uncertaintyNote"])
     print("No auto-approval; no liveness, ID-issuer or population accuracy certification.")
 
 
