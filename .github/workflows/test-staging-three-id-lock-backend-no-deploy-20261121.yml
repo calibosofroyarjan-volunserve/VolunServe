@@ -11,6 +11,9 @@ on:
       - 'backend/test-selectedIdPolicy.js'
       - 'backend/test-identityIssuerReviewPolicy.js'
       - 'backend/test-identity-no-media-manual-e2e.cjs'
+      - 'backend/test-identity-emulator-auth-e2e.cjs'
+      - 'backend/test-staging-admin-review-ui-contract.cjs'
+      - 'backend/test-admin-passport-mrz-review.cjs'
       - '.github/workflows/test-staging-three-id-lock-backend-no-deploy-20261121.yml'
 permissions:
   contents: read
