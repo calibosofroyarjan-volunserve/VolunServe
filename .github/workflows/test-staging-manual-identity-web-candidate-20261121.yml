@@ -1,0 +1,70 @@
+name: Staging Manual Identity Web Candidate (NO DEPLOY)
+on:
+  push:
+    branches:
+      - release/staging-web-manual-identity-from-live-20261121
+    paths:
+      - 'app/_layout.tsx'
+      - 'app/identity-manual-review.tsx'
+      - 'app/identity-verification.tsx'
+      - 'app/identity-verification.web.tsx'
+      - 'app/(admin)/identity-reviews.tsx'
+      - 'lib/identityVerification.ts'
+      - '.github/workflows/test-staging-manual-identity-web-candidate-20261121.yml'
+permissions:
+  contents: read
+jobs:
+  web-build-safeguards:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      EXPO_PUBLIC_VOLUNSERVE_ENV: staging
+      EXPO_PUBLIC_VOLUNSERVE_FIREBASE_TARGET: staging
+      EXPO_PUBLIC_VOLUNSERVE_STAGING_FIREBASE_PROJECT_ID: volunserve-full-staging
+      EXPO_PUBLIC_VOLUNSERVE_STAGING_FIREBASE_AUTH_DOMAIN: volunserve-full-staging.firebaseapp.com
+      EXPO_PUBLIC_VOLUNSERVE_STAGING_FIREBASE_STORAGE_BUCKET: volunserve-full-staging.firebasestorage.app
+      EXPO_PUBLIC_VOLUNSERVE_STAGING_FIREBASE_MESSAGING_SENDER_ID: '429213950126'
+      EXPO_PUBLIC_VOLUNSERVE_STAGING_FIREBASE_APP_ID: '1:429213950126:web:955dbf575697826b674d3f'
+      # CI never authenticates. The key is synthetic/test-only.
+      EXPO_PUBLIC_VOLUNSERVE_STAGING_FIREBASE_API_KEY: AIzaSyntheticStageTestKey_NotForRequests000
+      EXPO_PUBLIC_IDENTITY_VERIFICATION_API_URL: https://volunserve-backend-staging.onrender.com
+      CI: '1'
+    steps:
+      - name: Download immutable candidate without legacy Git submodule
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          [[ "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]] || exit 2
+          curl -fLsS --retry 3 -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" "https://api.github.com/repos/${GITHUB_REPOSITORY}/zipball/$SOURCE_SHA" -o /tmp/staging-manual-web.zip
+          mkdir -p "$RUNNER_TEMP/staging-manual-web"
+          unzip -q /tmp/staging-manual-web.zip -d "$RUNNER_TEMP/staging-manual-web"
+          ROOT="$(find "$RUNNER_TEMP/staging-manual-web" -mindepth 1 -maxdepth 1 -type d -print -quit)"
+          cp -a "$ROOT/." "$GITHUB_WORKSPACE/"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Check identity-only UI and staging guard, no biometric upload unlock
+        run: |
+          node scripts/check-expo-resident-staging-release.cjs
+          grep -Fq 'rootSegment === "identity-manual-review"' app/_layout.tsx
+          grep -Fq '<Stack.Screen name="identity-manual-review" />' app/_layout.tsx
+          grep -Fq 'requestInPersonIdentityReview' app/identity-manual-review.tsx
+          grep -Fq '/api/identity/manual-review-request' lib/identityVerification.ts
+          grep -Fq 'identityEnvironmentTarget({' lib/identityVerification.ts
+          grep -Fq 'inPersonIdInspected' 'app/(admin)/identity-reviews.tsx'
+          grep -Fq 'inPersonFaceCompared' 'app/(admin)/identity-reviews.tsx'
+          grep -Fq 'identityVerified !== false' lib/identityVerification.ts
+          echo "PASS: guarded in-person review and Admin evidence UI; no upload permission changes"
+      - name: Full TypeScript type check
+        run: npx tsc --noEmit --pretty false
+      - name: Build Expo web static site for staging (NO DEPLOY)
+        run: npx expo export --platform web --output-dir dist
+      - name: Verify output, not automatic deployment
+        run: |
+          test -f dist/index.html
+          echo 'PASS: staging-only manual Resident/Admin web screens compile to dist; no actual cloud login, real ID photos, Firebase writes or production deployment.' >> "$GITHUB_STEP_SUMMARY"

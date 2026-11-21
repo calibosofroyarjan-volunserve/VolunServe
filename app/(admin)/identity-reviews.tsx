@@ -53,6 +53,9 @@ type IdentityReview = {
   matchScore?: number | null;
   livenessScore?: number | null;
   documentScreening?: DocumentScreening;
+  manualReviewChannel?: string;
+  verificationMethod?: string;
+  manualIdType?: string;
   message?: string;
   requiresManualReview?: boolean;
   manualReviewDecision?: string;
@@ -106,6 +109,18 @@ function formatDate(value?: string) {
 function reviewBucket(item: IdentityReview): ReviewFilter {
   return adminReviewStatusBucket(item);
 }
+function isNoMediaLGUReview(item: IdentityReview): boolean {
+  return item.manualReviewChannel === "lgu_in_person_no_media" &&
+    item.verificationMethod === "manual_lgu_in_person_no_media";
+}
+function reviewMethodAllowed(item: IdentityReview, method: string): boolean {
+  if (!isNoMediaLGUReview(item)) return adminReviewMethodEligible(item.documentScreening, method);
+  if (item.manualIdType === "national_id") return method === "psa_national_id_qr_check";
+  if (["drivers_license","passport","umid","prc_id"].includes(String(item.manualIdType || ""))) {
+    return method === "in_person_lgu_validation" || method === "official_document_check";
+  }
+  return false;
+}
 
 export default function IdentityReviewsAdmin() {
   const params = useLocalSearchParams<{ uid?: string }>();
@@ -126,6 +141,8 @@ export default function IdentityReviewsAdmin() {
   const [selected, setSelected] = useState<IdentityReview | null>(null);
   const [validationMethod, setValidationMethod] = useState("");
   const [issuerReviewAttested, setIssuerReviewAttested] = useState(false);
+  const [inPersonIdInspected, setInPersonIdInspected] = useState(false);
+  const [inPersonFaceCompared, setInPersonFaceCompared] = useState(false);
   const [notes, setNotes] = useState("");
   const [saving, setSaving] = useState<"" | "verify" | "require_retry" | "reject">("");
 
@@ -252,6 +269,8 @@ export default function IdentityReviewsAdmin() {
     setSelected(item);
     setValidationMethod(item.manualValidationMethod || "");
     setIssuerReviewAttested(false);
+    setInPersonIdInspected(false);
+    setInPersonFaceCompared(false);
     setNotes(item.manualReviewNotes || "");
   };
 
@@ -271,9 +290,7 @@ export default function IdentityReviewsAdmin() {
       return;
     }
 
-    if (action === "verify" && !adminReviewMethodEligible(
-      selected.documentScreening, validationMethod,
-    )) {
+    if (action === "verify" && !reviewMethodAllowed(selected, validationMethod)) {
       Alert.alert(
         "Correct Independent Validation Method Required",
         "Select a permitted independent issuer or LGU review method for this exact government ID. An earlier selection from another ID cannot be reused.",
@@ -281,12 +298,19 @@ export default function IdentityReviewsAdmin() {
       return;
     }
 
-    if (action === "verify" && (
+    if (action === "verify" && isNoMediaLGUReview(selected)) {
+      if (!issuerReviewAttested || !inPersonIdInspected ||
+          !inPersonFaceCompared || notes.trim().length < 25) {
+        Alert.alert("In-Person LGU Evidence Required",
+          "Inspect the original government ID, compare the person with the ID in person, complete the allowed independent document check, and record at least 25 characters of review notes. No AI evidence was collected.");
+        return;
+      }
+    } else if (action === "verify" && (
       !issuerReviewAttested || notes.trim().length < 10 ||
       !adminReviewDocumentEligible(selected.documentScreening)
     )) {
       Alert.alert("Independent ID Verification Required",
-        "Verify is disabled for mismatched or unsupported ID types, missing or unclear front/back photo quality, unresolved OCR warnings, and profile date conflicts. Require a corrected scan and independently review the issuer before approval.");
+        "Verify is disabled for unsupported ID types, unclear front/back scans, unresolved OCR warnings and profile date conflicts.");
       return;
     }
     if ((action === "require_retry" || action === "reject") && notes.trim().length < 5) {
@@ -329,6 +353,8 @@ export default function IdentityReviewsAdmin() {
             validationMethod:
               action === "verify" ? validationMethod : "",
             issuerReviewAttested: action === "verify" && issuerReviewAttested,
+            inPersonIdInspected: action === "verify" && isNoMediaLGUReview(selected) && inPersonIdInspected,
+            inPersonFaceCompared: action === "verify" && isNoMediaLGUReview(selected) && inPersonFaceCompared,
             notes: notes.trim(),
           }),
         },
@@ -361,6 +387,8 @@ export default function IdentityReviewsAdmin() {
       setSelected(null);
       setValidationMethod("");
       setIssuerReviewAttested(false);
+      setInPersonIdInspected(false);
+      setInPersonFaceCompared(false);
       setNotes("");
       await loadReviews();
     } catch (saveError: any) {
@@ -648,6 +676,10 @@ export default function IdentityReviewsAdmin() {
                   setValidationMethod={setValidationMethod}
                   issuerReviewAttested={issuerReviewAttested}
                   setIssuerReviewAttested={setIssuerReviewAttested}
+                  inPersonIdInspected={inPersonIdInspected}
+                  setInPersonIdInspected={setInPersonIdInspected}
+                  inPersonFaceCompared={inPersonFaceCompared}
+                  setInPersonFaceCompared={setInPersonFaceCompared}
                   notes={notes}
                   setNotes={setNotes}
                   saving={saving}
@@ -716,6 +748,10 @@ function ReviewDetail({
   setValidationMethod,
   issuerReviewAttested,
   setIssuerReviewAttested,
+  inPersonIdInspected,
+  setInPersonIdInspected,
+  inPersonFaceCompared,
+  setInPersonFaceCompared,
   notes,
   setNotes,
   saving,
@@ -728,6 +764,10 @@ function ReviewDetail({
   setValidationMethod: (value: string) => void;
   issuerReviewAttested: boolean;
   setIssuerReviewAttested: (value: boolean) => void;
+  inPersonIdInspected: boolean;
+  setInPersonIdInspected: (value: boolean) => void;
+  inPersonFaceCompared: boolean;
+  setInPersonFaceCompared: (value: boolean) => void;
   notes: string;
   setNotes: (value: string) => void;
   saving: "" | "verify" | "require_retry" | "reject";
@@ -736,11 +776,15 @@ function ReviewDetail({
   onReject: () => void;
 }) {
   const pending = reviewBucket(item) === "pending";
-  const nationalId = item.documentScreening?.declaredIdType === "national_id";
-  const documentEligible = adminReviewDocumentEligible(item.documentScreening);
+  const manualNoMedia = isNoMediaLGUReview(item);
+  const nationalId = (manualNoMedia ? item.manualIdType : item.documentScreening?.declaredIdType) === "national_id";
+  const documentEligible = manualNoMedia
+    ? ["national_id","drivers_license","passport","umid","prc_id"].includes(String(item.manualIdType || ""))
+    : adminReviewDocumentEligible(item.documentScreening);
   const canVerify = pending && item.targetEligible === true && documentEligible &&
-    adminReviewMethodEligible(item.documentScreening, validationMethod) &&
-    issuerReviewAttested && notes.trim().length >= 10 && !saving;
+    reviewMethodAllowed(item, validationMethod) &&
+    (!manualNoMedia || (inPersonIdInspected && inPersonFaceCompared)) &&
+    issuerReviewAttested && notes.trim().length >= (manualNoMedia ? 25 : 10) && !saving;
   const availableMethods = VALIDATION_METHODS.filter(method =>
     nationalId ? method.value === "psa_national_id_qr_check"
       : method.value !== "psa_national_id_qr_check"
@@ -807,7 +851,17 @@ function ReviewDetail({
         </Text>
       </View>
 
-      <DocumentScreeningSummary screening={item.documentScreening} />
+      {manualNoMedia ? (
+        <View style={styles.privacyNotice}>
+          <Ionicons name="shield-checkmark-outline" size={20} color="#0F766E" />
+          <Text style={styles.noticeText}>
+            No-media LGU request: {item.manualIdType || "government ID"}.
+            The Resident must present the original ID in person.
+            NO AI face match, no ID scan, no independent liveness test.
+            Verify only after physical original ID and face-to-ID inspection.
+          </Text>
+        </View>
+      ) : <DocumentScreeningSummary screening={item.documentScreening} />}
 
       <InfoLine
         label="Face comparison"
@@ -892,6 +946,30 @@ function ReviewDetail({
               I independently checked this ID and confirm the evidence. VolunServe has not verified it through an issuer API.
             </Text>
           </TouchableOpacity>
+          {manualNoMedia ? (
+            <>
+              <TouchableOpacity accessibilityRole="checkbox"
+                accessibilityState={{checked:inPersonIdInspected}}
+                style={styles.methodButton}
+                onPress={()=>setInPersonIdInspected(!inPersonIdInspected)}>
+                <Ionicons name={inPersonIdInspected?"checkbox-outline":"square-outline"}
+                  size={21} color="#0F766E" />
+                <Text style={styles.methodButtonText}>
+                  I personally inspected the original physical government ID.
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity accessibilityRole="checkbox"
+                accessibilityState={{checked:inPersonFaceCompared}}
+                style={styles.methodButton}
+                onPress={()=>setInPersonFaceCompared(!inPersonFaceCompared)}>
+                <Ionicons name={inPersonFaceCompared?"checkbox-outline":"square-outline"}
+                  size={21} color="#0F766E" />
+                <Text style={styles.methodButtonText}>
+                  I compared the Resident's face with the ID photo in person.
+                </Text>
+              </TouchableOpacity>
+            </>
+          ) : null}
           <Text style={styles.inputLabel}>
             Review notes / rejection or retry reason
           </Text>
@@ -906,7 +984,7 @@ function ReviewDetail({
             textAlignVertical="top"
           />
 
-          {!documentEligible ? (
+          {!documentEligible && !manualNoMedia ? (
             <View style={styles.privacyNotice}>
               <Ionicons name="alert-circle-outline" size={19} color="#A13F2B" />
               <Text style={styles.noticeText}>
