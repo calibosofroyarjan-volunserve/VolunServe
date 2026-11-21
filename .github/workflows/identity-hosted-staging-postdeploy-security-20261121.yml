@@ -1,0 +1,79 @@
+name: Postdeploy Hosted Staging Identity Security Check (NO DEPLOY)
+on:
+  push:
+    branches:
+      - qa/identity-hosted-staging-postdeploy-20261121
+    paths:
+      - .github/workflows/identity-hosted-staging-postdeploy-security-20261121.yml
+permissions:
+  contents: read
+jobs:
+  hosted-staging-boundaries:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Actual deployed staging backend/AI health and unauthenticated boundaries
+        run: |
+          node <<'NODE'
+          "use strict";
+          const assert=require("node:assert/strict");
+          const backend="https://volunserve-backend-staging.onrender.com";
+          const ai="https://volunserve-identity-ai-staging.onrender.com";
+          async function check(path, options, expected) {
+            let response;
+            for(let attempt=0;attempt<7;attempt++){
+              response=await fetch(path,{...options,redirect:"manual",
+                signal:AbortSignal.timeout(75000),headers:{
+                  Accept:"application/json",
+                  ...options?.headers
+                }});
+              if([429,502,503,504].includes(response.status)&&attempt<6){
+                await response.body?.cancel().catch(()=>{});
+                await new Promise(resolve=>setTimeout(resolve,7000));
+                continue;
+              }
+              break;
+            }
+            assert.equal(response.status,expected,"Unexpected HTTP status for permitted staging-only test path");
+            return response;
+          }
+          (async()=>{
+            const a=await (await check(backend+"/health",{method:"GET"},200)).json();
+            assert.equal(a.ok,true);
+            assert.equal(a.service,"volunserve-backend");
+            console.log("PASS: deployed staging backend /health");
+            const b=await (await check(ai+"/health",{method:"GET"},200)).json();
+            assert.equal(b.ok,true);
+            assert.equal(b.service,"volunserve-identity-ai");
+            assert.equal(b.sFaceShadow?.modelLoaded,true);
+            assert.equal(b.passivePadShadow?.modelLoaded,true);
+            assert.equal(b.secondaryPadShadow?.modelLoaded,true);
+            assert.equal(b.sFaceShadow?.independentFaceMatchValidated,false);
+            console.log("PASS: SFace and PAD experimental models loaded, not validated");
+            const privateGET=[
+              ["/api/identity/status","Resident status"],
+              ["/api/admin/identity/reviews","Admin review queue"],
+              ["/api/identity/engine-health","AI readiness"],
+            ];
+            for(const [path,label] of privateGET){
+              await check(backend+path,{method:"GET"},401);
+              console.log("PASS: unauthenticated "+label+" blocked");
+            }
+            await check(backend+"/api/identity/manual-review-request",{
+              method:"POST",
+              headers:{"Content-Type":"application/json"},
+              body:JSON.stringify({idType:"passport",consent:true})
+            },401);
+            console.log("PASS: NEW hosted manual review endpoint is mounted and blocks anonymous Resident requests");
+            await check(backend+"/api/identity/verify",{method:"POST"},401);
+            console.log("PASS: private identity verify cannot be invoked anonymously");
+            console.log("LIMIT: no signed-in staging accounts, no Firebase write, no personal image, no Admin approval, no production requests");
+          })().catch(error=>{console.error("FAIL: hosted staging postdeploy identity check: "+String(error?.message||"unknown").replace(/https?:\\/\\/\\S+/g,"[endpoint]"));process.exitCode=1});
+          NODE
+      - name: Summarize immutable release gate
+        run: |
+          echo '## Actual hosted staging post-deploy check' >> "$GITHUB_STEP_SUMMARY"
+          echo 'GET health, GET protected endpoints, and deliberately unauthenticated POST identity routes. No authentication tokens, real accounts, ID/selfie media, database writes or production access. Does not prove actual browser login, ID authenticity, PAD or an authorized Admin decision.' >> "$GITHUB_STEP_SUMMARY"
