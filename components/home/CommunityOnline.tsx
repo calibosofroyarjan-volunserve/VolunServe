@@ -20,13 +20,14 @@ const Avatar=({person,size=54}:{person:Member;size?:number})=>{
     <View style={[styles.onlineDot,!person.online&&styles.offlineDot]}/>
   </View>;
 };
-export default function CommunityOnline({uid}:{uid?:string|null}) {
+export default function CommunityOnline({uid,dashboard=false}:{uid?:string|null;dashboard?:boolean}) {
   const router=useRouter();
   const {width}=useWindowDimensions();
   const compact=width<760;
   const [members,setMembers]=useState<Member[]>([]);
   const [filter,setFilter]=useState<Filter>("all");
   const [expanded,setExpanded]=useState(false);
+  const [settingsOpen,setSettingsOpen]=useState(false);
   const [pageSize,setPageSize]=useState(24);
   const [search,setSearch]=useState("");
   const [directoryListed,setDirectoryListed]=useState(false);
@@ -95,9 +96,11 @@ export default function CommunityOnline({uid}:{uid?:string|null}) {
     return byRole&&(!term||member.name.toLowerCase().includes(term)||
       member.badge.toLowerCase().includes(term));
   }),[members,filter,search]);
-  const displayed=filtered.slice(0,expanded?pageSize:compact?6:9);
-  const residents=members.filter(m=>m.online&&m.mode==="resident").length;
-  const volunteers=members.filter(m=>m.online&&m.mode==="volunteer").length;
+  const displayed=filtered.slice(0,expanded?pageSize:dashboard?5:compact?6:9);
+  const residents=members.filter(m=>m.mode==="resident").length;
+  const volunteers=members.filter(m=>m.mode==="volunteer").length;
+  const onlineCount=members.filter(m=>m.online).length;
+  const canStartChat=(member:Member)=>acceptChats&&(visible||directoryListed)&&member.acceptChats;
   const tabs:[Filter,string][]=[["all","All Members"],["resident","Residents"],["volunteer","Volunteers"],["online","Online"],["offline","Offline"]];
   return <View style={styles.panel}>
     <View style={[styles.headingRow,compact&&styles.mobileHeading]}>
@@ -120,14 +123,20 @@ export default function CommunityOnline({uid}:{uid?:string|null}) {
         </Pressable>
       </View>
     </View>
-    <View style={styles.countRow}>
+    {dashboard&&<View style={styles.dashboardTotalRow}>
+      <View style={styles.dashboardTotal}><Ionicons name="people-outline" size={13} color={GREEN}/>
+        <Text style={styles.dashboardTotalText}>{members.length} Public Members</Text>
+      </View>
+      <Text style={styles.dashboardSmallCaption}>{onlineCount} online now</Text>
+    </View>}
+    {!dashboard&&<View style={styles.countRow}>
       <View style={styles.countChip}><Ionicons name="people-outline" size={13} color={GREEN}/>
         <Text style={styles.countText}>{members.length} Listed Members</Text></View>
       <View style={styles.countChip}><View style={styles.chipDot}/>
         <Text style={styles.countText}>{residents} Residents</Text></View>
       <View style={styles.countChip}><View style={styles.chipDot}/>
         <Text style={styles.countText}>{volunteers} Volunteers</Text></View>
-    </View>
+    </View>}
     <View style={styles.searchRow}>
       <Ionicons name="search-outline" size={17} color="#68867B"/>
       <TextInput value={search} onChangeText={value=>{setSearch(value);setPageSize(24);}}
@@ -137,12 +146,17 @@ export default function CommunityOnline({uid}:{uid?:string|null}) {
       {Boolean(search)&&<Pressable accessibilityRole="button" accessibilityLabel="Clear member search"
         onPress={()=>setSearch("")}><Ionicons name="close-circle" size={18} color="#81978C"/></Pressable>}
     </View>
-    <View style={styles.filterRow}>
+    <View style={[styles.filterRow,dashboard&&styles.dashboardFilters]}>
       {tabs.map(([key,text])=><Pressable accessibilityRole="button"
         accessibilityState={{selected:filter===key}} key={key}
         onPress={()=>{setFilter(key);setPageSize(24);}}
         style={[styles.filter,filter===key&&styles.filterActive]}>
-        <Text style={[styles.filterText,filter===key&&styles.filterTextActive]}>{text}</Text>
+        <Text style={[styles.filterText,filter===key&&styles.filterTextActive]}>
+          {dashboard&&key==="all"?"All Members ("+members.length+")":
+            dashboard&&key==="resident"?"Residents ("+residents+")":
+            dashboard&&key==="volunteer"?"Volunteers ("+volunteers+")":
+            dashboard&&key==="online"?"Online ("+onlineCount+")":text}
+        </Text>
       </Pressable>)}
     </View>
     {loading?<View style={styles.empty}><ActivityIndicator color={GREEN}/><Text style={styles.emptyText}>Loading community members...</Text></View> :
@@ -150,29 +164,50 @@ export default function CommunityOnline({uid}:{uid?:string|null}) {
         <Ionicons name="cloud-offline-outline" size={24} color="#718C87"/>
         <Text style={styles.emptyText}>{error}</Text>
         <Pressable onPress={()=>void load()} style={styles.retry}><Text style={styles.retryText}>Retry</Text></Pressable>
-      </View> : displayed.length ? <View style={[styles.grid,compact&&styles.gridMobile]}>
-        {displayed.map(member=><View key={member.key} style={[styles.memberCard,compact&&styles.memberMobile]}>
+      </View> : displayed.length ? <View style={[styles.grid,compact&&styles.gridMobile,dashboard&&styles.dashboardGrid]}>
+        {displayed.map(member=><View key={member.key}
+          style={[styles.memberCard,compact&&styles.memberMobile,dashboard&&styles.dashboardMemberRow,
+            dashboard&&compact&&styles.dashboardMemberMobile]}>
           <Pressable accessibilityRole="button"
             accessibilityLabel={`View profile of ${member.name}, ${member.badge}`}
             onPress={()=>member.isSelf?router.push("/profile"):
               router.push({pathname:"/(tabs)/community-member-profile",params:{member:member.key}} as Href)}
-            style={styles.memberMain}>
-            <Avatar person={member} size={compact?47:53}/>
-            <Text style={styles.memberName} numberOfLines={2}>{member.name}</Text>
-            <Text style={styles.memberBadge} numberOfLines={1}>{member.badge}</Text>
-            <Text style={[styles.memberOnline,!member.online&&styles.memberOffline]} numberOfLines={2}>
-              {memberLastSeen(member)}
-            </Text>
+            style={[styles.memberMain,dashboard&&styles.dashboardIdentity]}>
+            <Avatar person={member} size={dashboard?43:compact?47:53}/>
+            {dashboard?<View style={styles.dashboardNameGroup}>
+              <Text style={styles.dashboardName} numberOfLines={1}>{member.name}</Text>
+              <Text style={styles.dashboardBadge} numberOfLines={1}>{member.badge}</Text>
+            </View>:<>
+              <Text style={styles.memberName} numberOfLines={2}>{member.name}</Text>
+              <Text style={styles.memberBadge} numberOfLines={1}>{member.badge}</Text>
+              <Text style={[styles.memberOnline,!member.online&&styles.memberOffline]} numberOfLines={2}>
+                {memberLastSeen(member)}
+              </Text>
+            </>}
           </Pressable>
-          {member.isSelf?<Text style={styles.ownBadge}>Your profile</Text>:
+          {dashboard&&<View style={styles.dashboardPresence}>
+            {member.online&&<View style={styles.presenceDot}/>}
+            <Text style={[styles.dashboardPresenceText,!member.online&&styles.memberOffline]}
+              numberOfLines={2}>{memberLastSeen(member)}</Text>
+          </View>}
+          {dashboard&&<Pressable accessibilityRole="button"
+            onPress={()=>member.isSelf?router.push("/profile"):
+              router.push({pathname:"/(tabs)/community-member-profile",params:{member:member.key}} as Href)}
+            style={styles.dashboardProfileButton}>
+            <Ionicons name="person-outline" size={13} color="#31584B"/>
+            <Text style={styles.dashboardProfileText}>View Profile</Text>
+          </Pressable>}
+          {member.isSelf?(!dashboard&&<Text style={styles.ownBadge}>Your profile</Text>):
             <Pressable accessibilityRole="button" accessibilityLabel={`Chat with ${member.name}`}
-              disabled={!acceptChats||!(visible||directoryListed)||!member.acceptChats}
+              disabled={!canStartChat(member)}
               onPress={()=>router.push({pathname:"/(tabs)/community-chat",params:{member:member.key}} as Href)}
-              style={[styles.chatButton,(!acceptChats||!(visible||directoryListed)||!member.acceptChats)&&styles.chatDisabled]}>
+              style={[styles.chatButton,dashboard&&styles.dashboardChatButton,
+                !canStartChat(member)&&styles.chatDisabled]}>
               <Ionicons name="chatbubble-outline" size={13}
-                color={(!acceptChats||!(visible||directoryListed)||!member.acceptChats)?"#879D94":GREEN}/>
-              <Text style={[styles.chatText,(!acceptChats||!(visible||directoryListed)||!member.acceptChats)&&styles.chatTextDisabled]}>
-                {member.acceptChats?"Chat":"Chat Off"}
+                color={!canStartChat(member)?"#879D94":dashboard?"#FFFFFF":GREEN}/>
+              <Text style={[styles.chatText,dashboard&&styles.dashboardChatText,
+                !canStartChat(member)&&styles.chatTextDisabled]}>
+                {member.acceptChats?"Message":"Chat Off"}
               </Text>
             </Pressable>}
         </View>)}
@@ -185,6 +220,17 @@ export default function CommunityOnline({uid}:{uid?:string|null}) {
       <Text style={styles.showMoreText}>Show More Members ({filtered.length-displayed.length} remaining)</Text>
       <Ionicons name="chevron-down" size={16} color={GREEN}/>
     </Pressable>}
+    {dashboard&&<Pressable accessibilityRole="button" accessibilityLabel="Manage my member profile visibility and messaging settings"
+      accessibilityState={{expanded:settingsOpen}} onPress={()=>setSettingsOpen(o=>!o)}
+      style={styles.settingsDisclosure}>
+      <Ionicons name="shield-checkmark-outline" size={17} color={GREEN}/>
+      <View style={{flex:1,minWidth:0}}>
+        <Text style={styles.settingsDisclosureTitle}>My profile & privacy settings</Text>
+        <Text style={styles.settingsDisclosureHelp}>Only members who choose public visibility are listed.</Text>
+      </View>
+      <Ionicons name={settingsOpen?"chevron-up":"chevron-down"} size={17} color={GREEN}/>
+    </Pressable>}
+    {(!dashboard||settingsOpen)&&<>
     <View style={[styles.consent,compact&&styles.consentMobile]}>
       <View style={{flex:1,minWidth:0}}>
         <Text style={styles.consentTitle}>Show my profile while online</Text>
@@ -241,11 +287,12 @@ export default function CommunityOnline({uid}:{uid?:string|null}) {
     {(!(visible||directoryListed)||!acceptChats)&&<Text style={styles.chatHint}>
       To chat, enable your online profile or directory listing, plus Private Messages. The recipient must also allow chat.
     </Text>}
+    </>}
   </View>;
 }
 const styles=StyleSheet.create({
   panel:{backgroundColor:"#FFFFFF",borderWidth:1,borderColor:"#DFEBE7",
-    borderRadius:18,padding:18,gap:13},
+    borderRadius:18,padding:18,gap:13,minWidth:0,width:"100%"},
   headingRow:{flexDirection:"row",alignItems:"center",justifyContent:"space-between",gap:12},
   mobileHeading:{flexWrap:"wrap"},
   headingCopy:{flexDirection:"row",alignItems:"center",gap:12,flex:1,minWidth:0},
@@ -279,6 +326,38 @@ const styles=StyleSheet.create({
     borderWidth:1,borderColor:"#E4EEE9",borderRadius:12,paddingVertical:14,paddingHorizontal:7,
     alignItems:"center",gap:6},
   memberMobile:{minWidth:120,flexBasis:"47%",paddingVertical:10,paddingHorizontal:6},
+  dashboardTotalRow:{flexDirection:"row",alignItems:"center",justifyContent:"space-between",gap:8},
+  dashboardTotal:{backgroundColor:"#ECF7F0",borderRadius:8,paddingHorizontal:10,paddingVertical:7,
+    flexDirection:"row",alignItems:"center",gap:7},
+  dashboardTotalText:{fontSize:11,color:GREEN,fontWeight:"800"},
+  dashboardSmallCaption:{fontSize:10.5,color:"#6E8A7D",fontWeight:"600"},
+  dashboardFilters:{paddingBottom:10,gap:6},
+  dashboardGrid:{flexDirection:"column",gap:0},
+  dashboardMemberRow:{width:"100%",flexBasis:"auto",flexGrow:0,minWidth:0,maxWidth:"100%",
+    backgroundColor:"#FFFFFF",borderWidth:0,borderBottomWidth:1,borderRadius:0,
+    borderBottomColor:"#E8F0EA",paddingHorizontal:4,paddingVertical:10,
+    flexDirection:"row",justifyContent:"space-between",gap:8},
+  dashboardMemberMobile:{flexWrap:"wrap",paddingVertical:12,gap:9},
+  dashboardIdentity:{width:"auto",flex:1.4,minWidth:110,flexDirection:"row",alignItems:"center",
+    justifyContent:"flex-start",gap:10},
+  dashboardNameGroup:{flex:1,minWidth:0,alignItems:"flex-start",gap:4},
+  dashboardName:{fontSize:12.5,fontWeight:"800",color:"#153E32"},
+  dashboardBadge:{fontSize:10.5,color:"#408A70",fontWeight:"700"},
+  dashboardPresence:{flex:0.95,minWidth:92,alignItems:"center",justifyContent:"center",
+    flexDirection:"row",gap:5},
+  presenceDot:{height:7,width:7,borderRadius:4,backgroundColor:"#0BA66E"},
+  dashboardPresenceText:{fontSize:10.5,color:"#0D865C",fontWeight:"700",flexShrink:1},
+  dashboardProfileButton:{flexDirection:"row",alignItems:"center",justifyContent:"center",gap:5,
+    borderWidth:1,borderColor:"#DDEAE3",paddingVertical:9,paddingHorizontal:9,
+    borderRadius:9,minWidth:96},
+  dashboardProfileText:{fontSize:10.5,color:"#31584B",fontWeight:"800"},
+  dashboardChatButton:{backgroundColor:GREEN,paddingHorizontal:11,paddingVertical:9,
+    minWidth:87,width:"auto",marginTop:0},
+  dashboardChatText:{fontSize:10.5,color:"#FFFFFF"},
+  settingsDisclosure:{flexDirection:"row",alignItems:"center",gap:11,padding:13,marginTop:4,
+    backgroundColor:"#F3F9F5",borderRadius:10,borderWidth:1,borderColor:"#E2EFE8"},
+  settingsDisclosureTitle:{fontSize:11.5,color:"#285C4A",fontWeight:"800"},
+  settingsDisclosureHelp:{fontSize:10.5,color:"#70877D",marginTop:3},
   memberMain:{alignItems:"center",gap:6,width:"100%"},
   memberOffline:{color:"#7E938A"},
   offlineDot:{backgroundColor:"#9AAFAA"},
