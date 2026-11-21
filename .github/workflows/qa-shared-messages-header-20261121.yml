@@ -1,0 +1,81 @@
+name: QA Resident Volunteer Messages Header (NO DEPLOY)
+on:
+  push:
+    branches: [fix/shared-header-messages-20261121]
+    paths:
+      - 'components/layout/CommunityMessagesMenu.tsx'
+      - 'components/layout/ResidentDesktopActions.tsx'
+      - 'components/home/Home.web.tsx'
+      - 'app/(tabs)/_layout.tsx'
+      - '.github/workflows/qa-shared-messages-header-20261121.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  messages-header:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      CI: 'true'
+      EXPO_NO_TELEMETRY: '1'
+      EXPO_PUBLIC_VOLUNSERVE_ENV: production
+      EXPO_PUBLIC_IDENTITY_VERIFICATION_API_URL: https://volunserve.onrender.com
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install pinned production dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Validate only shared Messages header, Home and layout changes
+        run: |
+          git fetch origin fix/community-members-scroll-you-20261121 --depth=1
+          python3 - <<'PY'
+          import subprocess
+          changed=set(subprocess.check_output(
+            ['git','diff','--name-only','origin/fix/community-members-scroll-you-20261121','HEAD'],
+            text=True).splitlines())
+          allowed={
+            'components/layout/CommunityMessagesMenu.tsx',
+            'components/layout/ResidentDesktopActions.tsx',
+            'components/home/Home.web.tsx',
+            'app/(tabs)/_layout.tsx',
+            '.github/workflows/qa-shared-messages-header-20261121.yml'
+          }
+          assert changed and changed.issubset(allowed),repr(changed)
+          print('PASS only messages UI, shared nav, and isolated QA changed')
+          PY
+      - name: Check existing authenticated inbox reuse, no fake unread badges
+        run: |
+          node <<'NODE'
+          const a=require('node:assert/strict'),fs=require('node:fs');
+          const menu=fs.readFileSync('components/layout/CommunityMessagesMenu.tsx','utf8');
+          const home=fs.readFileSync('components/home/Home.web.tsx','utf8');
+          const desktop=fs.readFileSync('components/layout/ResidentDesktopActions.tsx','utf8');
+          const mobile=fs.readFileSync('app/(tabs)/_layout.tsx','utf8');
+          a(menu.includes('communitySocialRequest<{conversations:CommunityConversation[]}>("/api/community/chats")'));
+          a(menu.includes('conversations.slice(0,5)'));
+          a(menu.includes('View All Messages'));
+          a(menu.includes('/(tabs)/community-chat'));
+          a(menu.includes('/(tabs)/community-inbox'));
+          a(menu.includes('18000'), 'refresh while open');
+          a(!menu.includes('unreadCount'), 'never invent read receipt counts');
+          a(home.includes('open={messagesMenuOpen}'), 'Home messages dropdown missing');
+          a(desktop.includes('open={menu === "messages"}'), 'All desktop modules messages missing');
+          a(mobile.includes('open={mobileMessagesOpen}'), 'Mobile layout messages missing');
+          a(mobile.includes('<ResidentDesktopActions />'),'Keep non-Home nav headers');
+          a(desktop.includes('visible={menu === "notifications" || menu === "account"}'), 'Prevent competing popup');
+          console.log('PASS single authenticated inbox UI reused in all three headers');
+          NODE
+      - name: Verify currently published Hosting version (READ ONLY)
+        run: VOLUNSERVE_EXPECTED_SHA=e859fde75e9bf294d831e12289ba9d61d9fec400 node scripts/check-live-hosting.cjs
+      - name: TypeScript and navigation/login/profile regression checks
+        run: |
+          npx tsc --noEmit --incremental false
+          node --test scripts/test-admin-volunteer-authorization.cjs
+          node --test scripts/test-embedded-emergency-map-navigation.cjs
+          node scripts/test-login-ui-release.cjs
+          node scripts/test-profile-certificates-account-menu.cjs
+      - name: Export production web bundle without deployment
+        run: npx expo export --platform web --output-dir /tmp/volunserve-messages-header-qa

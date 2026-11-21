@@ -1,4 +1,5 @@
 import ResidentDesktopActions from "../../components/layout/ResidentDesktopActions";
+import CommunityMessagesMenu from "../../components/layout/CommunityMessagesMenu";
 import { AppAlert } from "../../lib/appDialog";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { Redirect, router, Tabs, useSegments, type Href } from "expo-router";
@@ -123,6 +124,8 @@ export default function TabLayout() {
   const isDesktopWeb = Platform.OS === "web" && width >= 1040;
   const [mobileMenuOpen, setMobileMenuOpen] = React.useState(false);
   const [mobileProfileOpen, setMobileProfileOpen] = React.useState(false);
+  const [mobileMessagesOpen, setMobileMessagesOpen] = React.useState(false);
+  React.useEffect(() => { setMobileMessagesOpen(false); }, [segments.join("/")]);
 
   const mode = profile ? activeModeForProfile(profile) : "resident";
   useCommunityPresenceHeartbeat(user?.uid,mode);
@@ -140,6 +143,7 @@ export default function TabLayout() {
   const visit = (name: string) => {
     setMobileMenuOpen(false);
     setMobileProfileOpen(false);
+    setMobileMessagesOpen(false);
     router.push((name === "index" ? "/(tabs)" : `/(tabs)/${name}`) as Href);
   };
 
@@ -147,6 +151,7 @@ export default function TabLayout() {
     if (!canSwitchMode) return;
     setMobileMenuOpen(false);
     setMobileProfileOpen(false);
+    setMobileMessagesOpen(false);
     try {
       await setActiveUserMode(mode === "volunteer" ? "resident" : "volunteer");
       router.replace("/(tabs)");
@@ -200,7 +205,7 @@ export default function TabLayout() {
           <Pressable
             accessibilityRole="button"
             accessibilityLabel={mobileMenuOpen ? "Close sidebar" : "Open sidebar"}
-            onPress={() => { setMobileProfileOpen(false); setMobileMenuOpen((current) => !current); }}
+            onPress={() => { setMobileProfileOpen(false); setMobileMessagesOpen(false); setMobileMenuOpen((current) => !current); }}
             style={styles.mobileHeaderButton}
           >
             <Ionicons name={mobileMenuOpen ? "close" : "menu"} size={22} color="#173D32" />
@@ -224,11 +229,23 @@ export default function TabLayout() {
           >
             <Ionicons name="notifications-outline" size={21} color="#12365B" />
           </Pressable>
+          <CommunityMessagesMenu
+            uid={user?.uid}
+            open={mobileMessagesOpen}
+            compact
+            popupTop={68+insets.top}
+            onToggle={() => {
+              setMobileMenuOpen(false);
+              setMobileProfileOpen(false);
+              setMobileMessagesOpen(value => !value);
+            }}
+            onClose={() => setMobileMessagesOpen(false)}
+          />
           <Pressable
             accessibilityRole="button"
             accessibilityLabel={mobileProfileOpen ? "Close account menu" : "Open account menu"}
             accessibilityState={{ expanded: mobileProfileOpen }}
-            onPress={() => { setMobileMenuOpen(false); setMobileProfileOpen(value => !value); }}
+            onPress={() => { setMobileMenuOpen(false); setMobileMessagesOpen(false); setMobileProfileOpen(value => !value); }}
             style={styles.mobileHeaderButton}
           >
             <Ionicons name="person-circle-outline" size={23} color="#12365B" />
