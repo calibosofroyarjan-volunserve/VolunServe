@@ -38,7 +38,7 @@ const base = Object.freeze({
 });
 
 test("every supported recognized, legible no-warning ID is eligible for *manual* Admin UI review",()=>{
- for(const id of ["national_id","drivers_license","passport","umid","prc_id"]){
+ for(const id of ["national_id","drivers_license","passport"]){
    const data={...base,declaredIdType:id,detectedIdType:id};
    if(id==="passport"){
      data.backSideProvided=false;
@@ -52,7 +52,7 @@ test("every supported recognized, legible no-warning ID is eligible for *manual*
 });
 test("ID-appropriate Admin validation methods match backend issuer review policy",()=>{
  const {reviewIssuerEvidence}=require("./identityIssuerReviewPolicy");
- for(const id of ["national_id","drivers_license","passport","umid","prc_id"]){
+ for(const id of ["national_id","drivers_license","passport"]){
    const validMethods=id==="national_id" ? ["psa_national_id_qr_check"] :
        ["in_person_lgu_validation","official_document_check"];
    for(const method of [
@@ -70,6 +70,19 @@ test("ID-appropriate Admin validation methods match backend issuer review policy
  }
  assert.equal(adminReviewMethodEligible(null,"official_document_check"),false);
  assert.equal(adminReviewMethodEligible({...base,declaredIdType:"school_id"},"official_document_check"),false);
+});
+test("removed UMID and PRC IDs cannot enable Admin UI or issuer attestation",()=>{
+ const {reviewIssuerEvidence}=require("./identityIssuerReviewPolicy");
+ for(const id of ["umid","prc_id"]){
+   const row={...base,declaredIdType:id,detectedIdType:id};
+   assert.equal(selectedIdRecognized(row),false);
+   assert.equal(adminReviewDocumentEligible(row),false);
+   assert.equal(adminReviewMethodEligible(row,"official_document_check"),false);
+   assert.equal(reviewIssuerEvidence({
+     declaredType:id,validationMethod:"official_document_check",
+     confirmed:true,notes:"Synthetic test only."
+   }).ok,false);
+ }
 });
 test("unsupported, school or declared/detected mismatch can never enable client Verify",()=>{
  for(const candidate of [
