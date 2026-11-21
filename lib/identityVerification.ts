@@ -82,7 +82,7 @@ export function documentScreeningLabel(value?: DocumentScreening | null): string
     case "mismatch":
       return "REJECTED: The scanned document does not match the selected government ID. Choose the correct type and scan again.";
     case "unsupported":
-      return "REJECTED: School, student, employee or other unsupported ID detected. Only Philippine National ID, Driver’s License, and Passport are accepted.";
+      return "REJECTED: Only Philippine National ID is accepted in the thesis demo.";
     default:
       return value?.declaredIdType === "national_id" &&
         value?.imageQualityStatus === "low" &&
@@ -95,7 +95,7 @@ export function documentScreeningLabel(value?: DocumentScreening | null): string
 function parseDocumentScreening(value: unknown): DocumentScreening | undefined {
   if (!value || typeof value !== "object") return undefined;
   const raw = value as Record<string, unknown>;
-  const allowed = ["national_id", "drivers_license", "passport"];
+  const allowed = ["national_id"];
   const type = (x: unknown) => allowed.includes(String(x)) ? x as IdentityDocumentType : null;
   return {
     declaredIdType: type(raw.declaredIdType),
@@ -196,7 +196,7 @@ export async function precheckIdentityDocument(input: {
   if (!input.consent) {
     throw new Error("Consent is required before uploading an ID for preliminary AI document screening.");
   }
-  if (!["national_id", "drivers_license", "passport"].includes(input.idType)) {
+  if (input.idType !== "national_id") {
     throw new Error("Select a supported government ID.");
   }
   validateMedia(input.idDocument, "ID front scan");
@@ -265,7 +265,7 @@ export async function requestInPersonIdentityReview(input: {
     throw new Error("Consent is required to request a manual LGU identity review.");
   }
   if (!["national_id", "drivers_license", "passport"].includes(input.idType)) {
-    throw new Error("Select National ID, Driver’s License, or Passport only.");
+    throw new Error("Only Philippine National ID is accepted in this thesis demonstration.");
   }
   const user = await getAuthenticatedUser();
   const token = await user.getIdToken(true);
