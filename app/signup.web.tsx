@@ -404,9 +404,9 @@ function TermsModal({ visible, onClose }: { visible: boolean; onClose: () => voi
           <Text style={styles.termsH1}>VolunServe Registration Terms</Text>
           <Text style={styles.termsP}>By registering, you confirm the information you provide is accurate and complete. Your Basic Account can be created without administrator approval. Resident verification is a separate identity-verification step.</Text>
           <Text style={styles.termsH2}>Data Privacy</Text>
-          <Text style={styles.termsP}>Your personal contact information, address, and identity evidence are restricted to authorized users. With your separate directory agreement, other signed-in approved members can view your name, account role, and optional profile photo. Online status, Last Seen, and private messaging have separate settings.</Text>
+          <Text style={styles.termsP}>Your name and approved Resident/Volunteer role appear automatically in the member directory, visible only to other approved signed-in members. Your contact information, address and identity evidence stay private. Profile photo, online status, Last Seen and messaging have separate optional settings.</Text>
           <Text style={styles.termsH2}>Consent</Text>
-          <Text style={styles.termsP}>You consent to account registration and service-related data processing. Joining the member directory is optional and requires your separate agreement during registration or later from Community Members. Contact an administrator to request a correction or withdrawal of your directory listing.</Text>
+          <Text style={styles.termsP}>By registering, you acknowledge that your basic name and role appear in the authenticated member directory. Sharing your photo is optional and requires separate agreement. Contact an administrator for privacy concerns or account data corrections.</Text>
           <Text style={styles.termsH2}>Security</Text>
           <Text style={styles.termsP}>Use a strong password. Do not share your login credentials. Suspicious activity may result in account review.</Text>
           <View style={{ height: 24 }} />
@@ -1274,7 +1274,7 @@ function LegacySignup() {
                       onPress={() => updateField("confirmReview", !formData.confirmReview)}
                     />
                     <CheckRow
-                      label="Optional: show my name, Resident/Volunteer role and profile photo to other signed-in Community Members. My contact details and online activity stay private."
+                      label="Optional: also show my profile photo to other signed-in Community Members. My name and role are listed automatically; my contact details and online status stay private."
                       checked={formData.directoryConsent}
                       onPress={() => updateField("directoryConsent", !formData.directoryConsent)}
                     />

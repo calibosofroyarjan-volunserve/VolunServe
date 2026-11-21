@@ -1,0 +1,78 @@
+name: QA Auto Community Members UI and You Label (NO DEPLOY)
+on:
+  push:
+    branches: [fix/member-directory-you-label-ui-20261121]
+    paths:
+      - 'components/home/CommunityOnline.tsx'
+      - 'app/(tabs)/community-member-profile.tsx'
+      - 'app/signup.web.tsx'
+      - 'app/signup.tsx'
+      - 'components/auth/EmailFirstSignup.tsx'
+      - '.github/workflows/qa-auto-directory-you-20261121.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  web-build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      CI: 'true'
+      EXPO_NO_TELEMETRY: '1'
+      EXPO_PUBLIC_VOLUNSERVE_ENV: production
+      EXPO_PUBLIC_IDENTITY_VERIFICATION_API_URL: https://volunserve.onrender.com
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install pinned application dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Verify only reviewed community-directory and notice files changed
+        run: |
+          git fetch origin fix/community-members-all-approved-ui-20261121 --depth=1
+          python3 - <<'PY'
+          import subprocess
+          changed=set(subprocess.check_output(
+            ['git','diff','--name-only','origin/fix/community-members-all-approved-ui-20261121','HEAD'],
+            text=True).splitlines())
+          allowed={
+            'components/home/CommunityOnline.tsx',
+            'app/(tabs)/community-member-profile.tsx',
+            'app/signup.web.tsx',
+            'app/signup.tsx',
+            'components/auth/EmailFirstSignup.tsx',
+            '.github/workflows/qa-auto-directory-you-20261121.yml'
+          }
+          assert changed and changed.issubset(allowed),repr(changed)
+          print('PASS approved source changes only')
+          PY
+      - name: Ensure every current user gets their own row with You marker
+        run: |
+          node <<'NODE'
+          const a=require('node:assert/strict'),fs=require('node:fs');
+          const ui=fs.readFileSync('components/home/CommunityOnline.tsx','utf8');
+          a(ui.includes('member.isSelf?<Text style={styles.youLabel}> (You)</Text>'));
+          a(ui.includes('Number(Boolean(b.isSelf))-Number(Boolean(a.isSelf))'));
+          a(ui.includes('member.isSelf?{...member,online:true,presencePrivate:false}:member'));
+          a(!ui.includes('Join the Community Members directory'));
+          a(ui.includes('All approved Residents and Volunteers appear automatically.'));
+          for(const file of ['app/signup.web.tsx','app/signup.tsx','components/auth/EmailFirstSignup.tsx']){
+            const s=fs.readFileSync(file,'utf8');
+            a(s.includes('directoryConsent'),file+' must keep optional photo consent');
+            a(s.includes('signUpUser('),file+' must keep existing authentication');
+          }
+          console.log('PASS self (You), online, all member listing and signup privacy UI');
+          NODE
+      - name: Read-only production Hosting source fingerprint
+        run: VOLUNSERVE_EXPECTED_SHA=b4b33580029a743e196a8af26f82993bf9197e7b node scripts/check-live-hosting.cjs
+      - name: TypeScript compilation
+        run: npx tsc --noEmit --incremental false
+      - name: Core login, role and map smoke tests
+        run: |
+          node --test scripts/test-admin-volunteer-authorization.cjs
+          node --test scripts/test-embedded-emergency-map-navigation.cjs
+          node scripts/test-login-ui-release.cjs
+      - name: Production web export (no Firebase deployment)
+        run: npx expo export --platform web --output-dir /tmp/volunserve-directory-auto-qa

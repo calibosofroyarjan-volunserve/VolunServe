@@ -691,7 +691,7 @@ export default function EmailFirstSignup() {
                     >
                       <Text style={styles.checkBox}>{consent ? "☑" : "☐"}</Text>
                       <Text style={styles.checkText}>
-                        I agree to the Terms of Use and Privacy Notice for VolunServe registration. Community directory sharing is a separate choice.
+                        I agree to the VolunServe Terms and Privacy Notice. My basic name and role are visible to other approved signed-in members; sharing my photo and online status is optional.
                       </Text>
                     </Pressable>
                     {showErrors && !consent &&
@@ -885,7 +885,7 @@ export default function EmailFirstSignup() {
                   onPress={()=>setDirectoryConsent(v=>!v)}>
                   <Text style={styles.checkBox}>{directoryConsent?"☑":"☐"}</Text>
                   <Text style={styles.checkText}>
-                    Optional: show my name, Resident/Volunteer role and profile photo to other signed-in community members. Contact details and online activity stay private.
+                    Optional: show my profile photo to other signed-in community members. My basic name and role appear automatically; contact details and online activity stay private.
                   </Text>
                 </Pressable>
                 {checkButton("Complete Basic Resident Registration", () => {void complete();})}
