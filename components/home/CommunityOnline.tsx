@@ -2,12 +2,12 @@ import Ionicons from "@expo/vector-icons/Ionicons";
 import { useRouter } from "expo-router";
 import type { Href } from "expo-router";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { ActivityIndicator, Image, Pressable, StyleSheet, Text, useWindowDimensions, View } from "react-native";
+import { ActivityIndicator, Image, Pressable, StyleSheet, Text, TextInput, useWindowDimensions, View } from "react-native";
 import { communitySocialRequest, memberLastSeen, type CommunityMember } from "../../lib/communitySocial";
 
 type Mode = "resident" | "volunteer";
 type Member = CommunityMember;
-type Filter = "all" | Mode;
+type Filter = "all" | Mode | "online" | "offline";
 const GREEN = "#087D62";
 const Avatar=({person,size=54}:{person:Member;size?:number})=>{
   const [failed,setFailed]=useState(false);
@@ -27,12 +27,15 @@ export default function CommunityOnline({uid}:{uid?:string|null}) {
   const [members,setMembers]=useState<Member[]>([]);
   const [filter,setFilter]=useState<Filter>("all");
   const [expanded,setExpanded]=useState(false);
+  const [pageSize,setPageSize]=useState(24);
+  const [search,setSearch]=useState("");
+  const [directoryListed,setDirectoryListed]=useState(false);
   const [visible,setVisible]=useState(false);
   const [showLastSeen,setShowLastSeen]=useState(false);
   const [acceptChats,setAcceptChats]=useState(false);
   const [settingLoading,setSettingLoading]=useState(true);
   const [switching,setSwitching]=useState(false);
-  const [savingPreference,setSavingPreference]=useState<""|"showLastSeen"|"acceptChats">("");
+  const [savingPreference,setSavingPreference]=useState<""|"showLastSeen"|"acceptChats"|"directoryListed">("");
   const [loading,setLoading]=useState(true);
   const [error,setError]=useState("");
   const load=useCallback(async()=>{
@@ -49,8 +52,8 @@ export default function CommunityOnline({uid}:{uid?:string|null}) {
     let active=true;
     setSettingLoading(true);setVisible(false);
     if(!uid){setSettingLoading(false);return()=>{active=false;};}
-    communitySocialRequest<{visible:boolean;showLastSeen:boolean;acceptChats:boolean}>("/api/community/directory/self")
-      .then(p=>{if(active){setVisible(p.visible===true);setShowLastSeen(p.showLastSeen===true);setAcceptChats(p.acceptChats===true);}})
+    communitySocialRequest<{visible:boolean;showLastSeen:boolean;acceptChats:boolean;directoryListed:boolean}>("/api/community/directory/self")
+      .then(p=>{if(active){setVisible(p.visible===true);setDirectoryListed(p.directoryListed===true);setShowLastSeen(p.showLastSeen===true);setAcceptChats(p.acceptChats===true);}})
       .catch(()=>{if(active)setVisible(false);})
       .finally(()=>{if(active)setSettingLoading(false);});
     return()=>{active=false;};
@@ -72,29 +75,37 @@ export default function CommunityOnline({uid}:{uid?:string|null}) {
     }catch(reason){setError(reason instanceof Error?reason.message:"Online setting unavailable.");}
     finally{setSwitching(false);}
   },[switching,visible,load]);
-  const updatePreference=useCallback(async(key:"showLastSeen"|"acceptChats")=>{
+  const updatePreference=useCallback(async(key:"showLastSeen"|"acceptChats"|"directoryListed")=>{
     if(savingPreference)return;
     setSavingPreference(key);
-    const next=key==="showLastSeen"?!showLastSeen:!acceptChats;
+    const next=key==="showLastSeen"?!showLastSeen:key==="directoryListed"?!directoryListed:!acceptChats;
     try {
       await communitySocialRequest("/api/community/directory/preferences","POST",{[key]:next});
-      if(key==="showLastSeen")setShowLastSeen(next);else setAcceptChats(next);
+      if(key==="showLastSeen")setShowLastSeen(next);
+      else if(key==="directoryListed")setDirectoryListed(next);
+      else setAcceptChats(next);
       setError("");await load();
     }catch(reason){setError(reason instanceof Error?reason.message:"Cannot save privacy setting.");}
     finally{setSavingPreference("");}
-  },[showLastSeen,acceptChats,savingPreference,load]);
-  const filtered=useMemo(()=>members.filter(member=>filter==="all"||member.mode===filter),[members,filter]);
-  const displayed=expanded?filtered:filtered.slice(0,compact?6:9);
+  },[showLastSeen,acceptChats,directoryListed,savingPreference,load]);
+  const filtered=useMemo(()=>members.filter(member=>{
+    const byRole=filter==="all"||(filter==="online"&&member.online)||
+      (filter==="offline"&&!member.online)||member.mode===filter;
+    const term=search.trim().toLowerCase();
+    return byRole&&(!term||member.name.toLowerCase().includes(term)||
+      member.badge.toLowerCase().includes(term));
+  }),[members,filter,search]);
+  const displayed=filtered.slice(0,expanded?pageSize:compact?6:9);
   const residents=members.filter(m=>m.online&&m.mode==="resident").length;
   const volunteers=members.filter(m=>m.online&&m.mode==="volunteer").length;
-  const tabs:[Filter,string][]=[["all","All Members"],["resident","Residents"],["volunteer","Volunteers"]];
+  const tabs:[Filter,string][]=[["all","All Members"],["resident","Residents"],["volunteer","Volunteers"],["online","Online"],["offline","Offline"]];
   return <View style={styles.panel}>
     <View style={[styles.headingRow,compact&&styles.mobileHeading]}>
       <View style={styles.headingCopy}>
         <View style={styles.iconBox}><Ionicons name="people-outline" size={21} color={GREEN}/></View>
         <View style={{flex:1,minWidth:0}}>
-          <Text style={styles.title}>Online Members</Text>
-          <Text style={styles.subtitle}>Profiles of members who are online or chose to share Last Seen.</Text>
+          <Text style={styles.title}>Community Members</Text>
+          <Text style={styles.subtitle}>Approved members who opted in to public profiles, including offline residents and volunteers.</Text>
         </View>
       </View>
       <View style={styles.headingActions}>
@@ -103,27 +114,38 @@ export default function CommunityOnline({uid}:{uid?:string|null}) {
           <Ionicons name="chatbubble-ellipses-outline" size={16} color={GREEN}/>
           <Text style={styles.viewAllText}>Inbox</Text>
         </Pressable>
-        <Pressable accessibilityRole="button" onPress={()=>setExpanded(v=>!v)} style={styles.viewAll}>
-          <Text style={styles.viewAllText}>{expanded?"Show Less":"View All Members"}</Text>
+        <Pressable accessibilityRole="button" onPress={()=>{setExpanded(v=>!v);setPageSize(24);}} style={styles.viewAll}>
+          <Text style={styles.viewAllText}>{expanded?"Show Fewer":"View All Members"}</Text>
           <Ionicons name={expanded?"chevron-up":"arrow-forward"} size={15} color={GREEN}/>
         </Pressable>
       </View>
     </View>
     <View style={styles.countRow}>
+      <View style={styles.countChip}><Ionicons name="people-outline" size={13} color={GREEN}/>
+        <Text style={styles.countText}>{members.length} Listed Members</Text></View>
       <View style={styles.countChip}><View style={styles.chipDot}/>
         <Text style={styles.countText}>{residents} Residents</Text></View>
       <View style={styles.countChip}><View style={styles.chipDot}/>
         <Text style={styles.countText}>{volunteers} Volunteers</Text></View>
     </View>
+    <View style={styles.searchRow}>
+      <Ionicons name="search-outline" size={17} color="#68867B"/>
+      <TextInput value={search} onChangeText={value=>{setSearch(value);setPageSize(24);}}
+        placeholder="Search members by name or role" placeholderTextColor="#899E95"
+        accessibilityLabel="Search community members" autoCapitalize="none"
+        style={styles.searchInput}/>
+      {Boolean(search)&&<Pressable accessibilityRole="button" accessibilityLabel="Clear member search"
+        onPress={()=>setSearch("")}><Ionicons name="close-circle" size={18} color="#81978C"/></Pressable>}
+    </View>
     <View style={styles.filterRow}>
       {tabs.map(([key,text])=><Pressable accessibilityRole="button"
         accessibilityState={{selected:filter===key}} key={key}
-        onPress={()=>{setFilter(key);setExpanded(false);}}
+        onPress={()=>{setFilter(key);setPageSize(24);}}
         style={[styles.filter,filter===key&&styles.filterActive]}>
         <Text style={[styles.filterText,filter===key&&styles.filterTextActive]}>{text}</Text>
       </Pressable>)}
     </View>
-    {loading?<View style={styles.empty}><ActivityIndicator color={GREEN}/><Text style={styles.emptyText}>Loading online members...</Text></View> :
+    {loading?<View style={styles.empty}><ActivityIndicator color={GREEN}/><Text style={styles.emptyText}>Loading community members...</Text></View> :
       error?<View style={styles.empty}>
         <Ionicons name="cloud-offline-outline" size={24} color="#718C87"/>
         <Text style={styles.emptyText}>{error}</Text>
@@ -144,29 +166,50 @@ export default function CommunityOnline({uid}:{uid?:string|null}) {
           </Pressable>
           {member.isSelf?<Text style={styles.ownBadge}>Your profile</Text>:
             <Pressable accessibilityRole="button" accessibilityLabel={`Chat with ${member.name}`}
-              disabled={!acceptChats||!visible||!member.acceptChats}
+              disabled={!acceptChats||!(visible||directoryListed)||!member.acceptChats}
               onPress={()=>router.push({pathname:"/(tabs)/community-chat",params:{member:member.key}} as Href)}
-              style={[styles.chatButton,(!acceptChats||!visible||!member.acceptChats)&&styles.chatDisabled]}>
+              style={[styles.chatButton,(!acceptChats||!(visible||directoryListed)||!member.acceptChats)&&styles.chatDisabled]}>
               <Ionicons name="chatbubble-outline" size={13}
-                color={(!acceptChats||!visible||!member.acceptChats)?"#879D94":GREEN}/>
-              <Text style={[styles.chatText,(!acceptChats||!visible||!member.acceptChats)&&styles.chatTextDisabled]}>
+                color={(!acceptChats||!(visible||directoryListed)||!member.acceptChats)?"#879D94":GREEN}/>
+              <Text style={[styles.chatText,(!acceptChats||!(visible||directoryListed)||!member.acceptChats)&&styles.chatTextDisabled]}>
                 {member.acceptChats?"Chat":"Chat Off"}
               </Text>
             </Pressable>}
         </View>)}
       </View> : <View style={styles.empty}>
         <Ionicons name="people-outline" size={26} color="#9BAFA7"/>
-        <Text style={styles.emptyText}>No visible {filter==="all"?"members":filter==="resident"?"residents":"volunteers"} right now.</Text>
+        <Text style={styles.emptyText}>No public members match these filters. Try another search or invite members to opt in.</Text>
       </View>}
+    {expanded&&displayed.length<filtered.length&&<Pressable accessibilityRole="button"
+      onPress={()=>setPageSize(n=>n+24)} style={styles.showMore}>
+      <Text style={styles.showMoreText}>Show More Members ({filtered.length-displayed.length} remaining)</Text>
+      <Ionicons name="chevron-down" size={16} color={GREEN}/>
+    </Pressable>}
     <View style={[styles.consent,compact&&styles.consentMobile]}>
       <View style={{flex:1,minWidth:0}}>
         <Text style={styles.consentTitle}>Show my profile while online</Text>
-        <Text style={styles.consentDescription}>Optional. Your name, photo and current mode appear while online. Turning this off hides your profile.</Text>
+        <Text style={styles.consentDescription}>Optional. Display your public name, photo and active Resident/Volunteer mode while online.</Text>
       </View>
       <Pressable accessibilityRole="switch" accessibilityState={{checked:visible,disabled:settingLoading||switching}}
         disabled={settingLoading||switching} onPress={()=>void toggle()}
         style={[styles.toggle,visible&&styles.toggleOn]}>
         <View style={[styles.toggleThumb,visible&&styles.toggleThumbOn]}/>
+      </Pressable>
+    </View>
+    <View style={styles.directoryChoice}>
+      <View style={styles.privacyOptionCopy}>
+        <Text style={styles.consentTitle}>Keep my profile in Members Directory</Text>
+        <Text style={styles.consentDescription}>
+          Optional. Keep your public name, photo and account badge visible even while offline.
+          You can turn this off anytime. Private email, phone, address and identity documents remain hidden.
+        </Text>
+      </View>
+      <Pressable accessibilityRole="switch" accessibilityLabel="Keep my profile in Members Directory"
+        accessibilityState={{checked:directoryListed,disabled:settingLoading||Boolean(savingPreference)}}
+        disabled={settingLoading||Boolean(savingPreference)}
+        onPress={()=>void updatePreference("directoryListed")}
+        style={[styles.toggle,directoryListed&&styles.toggleOn]}>
+        <View style={[styles.toggleThumb,directoryListed&&styles.toggleThumbOn]}/>
       </Pressable>
     </View>
     <View style={styles.privacyGrid}>
@@ -195,8 +238,8 @@ export default function CommunityOnline({uid}:{uid?:string|null}) {
         </Pressable>
       </View>
     </View>
-    {(!visible||!acceptChats)&&<Text style={styles.chatHint}>
-      To chat, enable your public profile and Private Messages. The recipient must also allow chat.
+    {(!(visible||directoryListed)||!acceptChats)&&<Text style={styles.chatHint}>
+      To chat, enable your online profile or directory listing, plus Private Messages. The recipient must also allow chat.
     </Text>}
   </View>;
 }
@@ -213,6 +256,14 @@ const styles=StyleSheet.create({
   viewAll:{flexDirection:"row",alignItems:"center",gap:6,padding:9},
   viewAllText:{color:GREEN,fontSize:11,fontWeight:"800"},
   countRow:{flexDirection:"row",flexWrap:"wrap",gap:9},
+  searchRow:{flexDirection:"row",alignItems:"center",gap:9,paddingHorizontal:13,
+    backgroundColor:"#F8FBF9",borderWidth:1,borderColor:"#DEEBE5",borderRadius:10,minHeight:44},
+  searchInput:{fontSize:12,color:"#274F40",flex:1,minHeight:43,paddingVertical:9},
+  showMore:{alignSelf:"center",paddingHorizontal:16,paddingVertical:11,borderRadius:9,
+    backgroundColor:"#ECF7F1",flexDirection:"row",alignItems:"center",gap:7},
+  showMoreText:{fontSize:11.5,fontWeight:"800",color:GREEN},
+  directoryChoice:{padding:13,backgroundColor:"#F6FAF8",borderRadius:11,
+    borderWidth:1,borderColor:"#DDEAE2",flexDirection:"row",alignItems:"center",gap:15},
   countChip:{flexDirection:"row",alignItems:"center",gap:6,paddingHorizontal:10,paddingVertical:6,
     backgroundColor:"#F1F8F5",borderRadius:9},
   chipDot:{width:7,height:7,borderRadius:4,backgroundColor:"#0DBB78"},
