@@ -1,0 +1,30 @@
+name: QA Opt-In Community Presence Backend (NO DEPLOY)
+on:
+  push:
+    branches: [qa/home-community-presence-backend-20261121]
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - name: Verify exact additive backend scope
+        run: |
+          git diff --name-status e63346dd792d86d21daa8499091a7431d2fa5fbb e4a8d55a7ab9bd505d002f64218e2132e912e87f
+          node --check backend/communityPresence.js
+          node --check backend/server.js
+      - name: Verify opt-in, role mode, privacy, expiry and public member link
+        run: node --test backend/test-communityPresence.js
+      - name: Run pinned production backend checks without deploy
+        run: |
+          npm ci --prefix backend --no-audit --no-fund
+          npm --prefix backend run check
