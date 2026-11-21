@@ -691,7 +691,7 @@ export default function EmailFirstSignup() {
                     >
                       <Text style={styles.checkBox}>{consent ? "☑" : "☐"}</Text>
                       <Text style={styles.checkText}>
-                        I agree to the VolunServe Terms and Privacy Notice. My basic name and role are visible to other approved signed-in members; sharing my photo and online status is optional.
+                        I agree to the VolunServe Terms and Privacy Notice. My basic name and role are visible to approved signed-in members, who can message me by default; I may pause messages or block/report others. Sharing my photo and online status is optional.
                       </Text>
                     </Pressable>
                     {showErrors && !consent &&
