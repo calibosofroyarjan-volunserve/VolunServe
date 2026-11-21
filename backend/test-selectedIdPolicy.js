@@ -1,7 +1,7 @@
 "use strict";
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const {selectedIdRecognized, enforceSelectedIdDecision, blurryNationalIdNeedsReview, classifyIdentityReviewTrack} = require("./selectedIdPolicy");
+const {selectedIdRecognized, enforceSelectedIdDecision, blurryNationalIdNeedsReview, classifyIdentityReviewTrack, demographicsReadyForFaceComparison} = require("./selectedIdPolicy");
 const valid = type => ({
   status:"text_consistent_unverified", declaredIdType:type,
   detectedIdType:type, authenticityVerified:false,
@@ -14,6 +14,18 @@ for (const type of ["national_id","drivers_license","passport"]) {
     assert.equal(enforceSelectedIdDecision("manual_review",valid(type),false),"manual_review");
   });
 }
+test("OCR name and DOB must both positively match before face precheck (never identity proof)",()=>{
+  const candidate={profileNameCheck:"possible_match",profileBirthDateCheck:"possible_match"};
+  assert.equal(demographicsReadyForFaceComparison(candidate),true);
+  for(const field of ["profileNameCheck","profileBirthDateCheck"]){
+    for(const value of ["inconclusive","not_checked","possible_conflict",null,undefined]){
+      assert.equal(demographicsReadyForFaceComparison({...candidate,[field]:value}),false);
+    }
+  }
+  assert.equal(demographicsReadyForFaceComparison(null),false);
+  assert.equal(demographicsReadyForFaceComparison({}),false);
+});
+
 test("UMID and PRC ID are disabled even with matching OCR and perfect face match",()=>{
   for(const unsupported of ["umid","prc_id"]){
     const screening=valid(unsupported);
