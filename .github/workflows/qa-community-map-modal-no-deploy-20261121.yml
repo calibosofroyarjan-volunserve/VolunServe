@@ -30,5 +30,7 @@ jobs:
           node --test scripts/test-embedded-emergency-map-navigation.cjs
           node scripts/test-login-ui-release.cjs
           node scripts/test-profile-certificates-account-menu.cjs
+      - name: Verify contained event map and preserved attendance features
+        run: node --test scripts/test-community-events-map-modal-qa.cjs
       - name: Verify web export builds (no deploy)
         run: npx expo export --platform web --clear
