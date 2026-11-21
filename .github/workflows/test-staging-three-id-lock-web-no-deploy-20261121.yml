@@ -4,6 +4,7 @@ on:
     branches:
       - release/staging-web-three-id-lock-20261121
     paths:
+      - 'lib/identityAdminReviewGate.ts'
       - 'lib/identityVerification.ts'
       - 'app/identity-manual-review.tsx'
       - 'app/identity-verification.web.tsx'
@@ -61,6 +62,8 @@ jobs:
           const client=fs.readFileSync('lib/identityVerification.ts','utf8');
           assert(!client.includes('  | "umid"')&&!client.includes('  | "prc_id"'));
           assert(!client.includes('"passport", "umid"'));
+          const gate=fs.readFileSync('lib/identityAdminReviewGate.ts','utf8');
+          assert(!/["'](?:umid|prc_id)["']/.test(gate), 'Admin UI must never allow removed ID types');
           const admin=fs.readFileSync('app/(admin)/identity-reviews.tsx','utf8');
           assert(!admin.includes('"passport","umid"'));
           console.log('PASS: three ID choices only; client no-photo and Admin cannot use removed types');
