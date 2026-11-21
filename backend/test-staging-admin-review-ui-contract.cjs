@@ -38,7 +38,7 @@ const base = Object.freeze({
 });
 
 test("every supported recognized, legible no-warning ID is eligible for *manual* Admin UI review",()=>{
- for(const id of ["national_id","drivers_license","passport"]){
+ for(const id of ["national_id"]){
    const data={...base,declaredIdType:id,detectedIdType:id};
    if(id==="passport"){
      data.backSideProvided=false;
@@ -52,7 +52,7 @@ test("every supported recognized, legible no-warning ID is eligible for *manual*
 });
 test("ID-appropriate Admin validation methods match backend issuer review policy",()=>{
  const {reviewIssuerEvidence}=require("./identityIssuerReviewPolicy");
- for(const id of ["national_id","drivers_license","passport"]){
+ for(const id of ["national_id"]){
    const validMethods=id==="national_id" ? ["psa_national_id_qr_check"] :
        ["in_person_lgu_validation","official_document_check"];
    for(const method of [
@@ -73,7 +73,7 @@ test("ID-appropriate Admin validation methods match backend issuer review policy
 });
 test("removed UMID and PRC IDs cannot enable Admin UI or issuer attestation",()=>{
  const {reviewIssuerEvidence}=require("./identityIssuerReviewPolicy");
- for(const id of ["umid","prc_id"]){
+ for(const id of ["drivers_license","passport","umid","prc_id"]){
    const row={...base,declaredIdType:id,detectedIdType:id};
    assert.equal(selectedIdRecognized(row),false);
    assert.equal(adminReviewDocumentEligible(row),false);
