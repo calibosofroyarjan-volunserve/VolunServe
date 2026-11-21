@@ -1,0 +1,61 @@
+name: QA Community Online Last Seen and Chat PC Mobile (NO DEPLOY)
+on:
+  push:
+    branches: [qa/community-chat-ui-20261121]
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    env:
+      CI: 'true'
+      EXPO_NO_TELEMETRY: '1'
+      EXPO_PUBLIC_VOLUNSERVE_ENV: production
+      EXPO_PUBLIC_IDENTITY_VERIFICATION_API_URL: https://volunserve.onrender.com
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Exact live-derived scope and privacy-guarded UI
+        run: |
+          git diff --name-status 0b748b6a9309e093fbb5dba6d827228d3c0ff302 8587836c945007f26ec715f87316182ff7498677
+          node - <<'NODE'
+          const a=require('node:assert/strict'),fs=require('fs');
+          const home=fs.readFileSync('components/home/Home.web.tsx','utf8');
+          const member=fs.readFileSync('components/home/CommunityOnline.tsx','utf8');
+          const profile=fs.readFileSync('app/(tabs)/community-member-profile.tsx','utf8');
+          const chat=fs.readFileSync('app/(tabs)/community-chat.tsx','utf8');
+          const inbox=fs.readFileSync('app/(tabs)/community-inbox.tsx','utf8');
+          const api=fs.readFileSync('lib/communitySocial.ts','utf8');
+          a(home.includes('title="Announcements"'));
+          a(home.includes('Emergency Contacts')&&home.includes('ContactCard kind="local"')&&home.includes('ContactCard kind="national"'));
+          a(home.includes('CommunityCalendar'));
+          a(member.includes('Share Last Seen')&&member.includes('Allow Private Messages'));
+          a(member.includes('View All Members')&&member.includes('community-chat'));
+          a(profile.includes('Send a Message')&&profile.includes('read-only'));
+          a(chat.includes('Block Member')&&chat.includes('Report Conversation'));
+          a(inbox.includes('Your Conversations'));
+          a(api.includes('Asia/Manila')&&api.includes('getIdToken()'));
+          a(!chat.includes('collection(db,')&&!chat.includes('setDoc(')&&!chat.includes('updateDoc('));
+          NODE
+      - name: Install exact site dependencies
+        run: npm ci --no-audit --no-fund
+      - name: TypeScript and existing login, role, profile and map tests
+        run: |
+          npx tsc --noEmit --incremental false
+          node --test scripts/test-admin-volunteer-authorization.cjs
+          node --test scripts/test-embedded-emergency-map-navigation.cjs
+          node scripts/test-login-ui-release.cjs
+          node scripts/test-profile-certificates-account-menu.cjs
+      - name: Expo web routes, privacy-preserving chat screens (NO DEPLOY)
+        run: |
+          npx expo export --platform web --clear
+          test -f dist/index.html
+          test -f dist/community-inbox.html || test -f dist/community-inbox/index.html
+          test -f dist/community-chat.html || test -f dist/community-chat/index.html
+          test -f dist/community-member-profile.html || test -f dist/community-member-profile/index.html
