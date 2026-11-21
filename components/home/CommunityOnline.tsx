@@ -2,7 +2,7 @@ import Ionicons from "@expo/vector-icons/Ionicons";
 import { useRouter } from "expo-router";
 import type { Href } from "expo-router";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { ActivityIndicator, Image, Pressable, StyleSheet, Text, TextInput, useWindowDimensions, View } from "react-native";
+import { ActivityIndicator, Image, Pressable, StyleSheet, Text, ScrollView, TextInput, useWindowDimensions, View } from "react-native";
 import { communitySocialRequest, memberLastSeen, type CommunityMember } from "../../lib/communitySocial";
 
 type Mode = "resident" | "volunteer";
@@ -29,7 +29,6 @@ export default function CommunityOnline({uid,dashboard=false}:{uid?:string|null;
   const [registeredCount,setRegisteredCount]=useState(0);
   const [activeCounts,setActiveCounts]=useState({residents:0,volunteers:0,total:0});
   const [filter,setFilter]=useState<Filter>("all");
-  const [currentPage,setCurrentPage]=useState(1);
   const [search,setSearch]=useState("");
   const [directoryListed,setDirectoryListed]=useState(false);
   const [visible,setVisible]=useState(false);
@@ -43,15 +42,16 @@ export default function CommunityOnline({uid,dashboard=false}:{uid?:string|null;
   const load=useCallback(async()=>{
     if(!uid){setLoading(false);setMembers([]);return;}
     try {
-      const payload=await communitySocialRequest<{members:Member[];registeredCount?:number;activeCounts?:{residents:number;volunteers:number;total:number}}>("/api/community/directory");
+      const payload=await communitySocialRequest<{members:Member[];selfKey?:string;registeredCount?:number;activeCounts?:{residents:number;volunteers:number;total:number}}>("/api/community/directory");
       // The signed-in viewer is actively using VolunServe right now.
       // The backend's public presence flag may be OFF even when the private
       // heartbeat is current. Show their *own* profile as Online to them,
       // without exposing their private presence to other members.
-      setMembers(Array.isArray(payload.members)?payload.members.map(member=>
-        member.isSelf?{...member,online:true,presencePrivate:false}:member)
-        .sort((a,b)=>Number(Boolean(b.isSelf))-Number(Boolean(a.isSelf))||
-          Number(b.online)-Number(a.online)||a.name.localeCompare(b.name)):[]);
+      setMembers(Array.isArray(payload.members)?payload.members.map(member=>{
+        const isSelf=member.isSelf===true||(!!payload.selfKey&&payload.selfKey===member.key);
+        return isSelf?{...member,isSelf:true,online:true,presencePrivate:false}:member;
+      }).sort((a,b)=>Number(Boolean(b.isSelf))-Number(Boolean(a.isSelf))||
+        Number(b.online)-Number(a.online)||a.name.localeCompare(b.name)):[]);
       setRegisteredCount(Number.isFinite(payload.registeredCount)?Math.max(0,payload.registeredCount||0):0);
       setActiveCounts(payload.activeCounts&&Number.isFinite(payload.activeCounts.total)?
         payload.activeCounts:{residents:0,volunteers:0,total:0});
@@ -107,19 +107,11 @@ export default function CommunityOnline({uid,dashboard=false}:{uid?:string|null;
     return byRole&&(!term||member.name.toLowerCase().includes(term)||
       member.badge.toLowerCase().includes(term));
   }),[members,filter,search]);
-  const rowsPerPage=dashboard?5:10;
-  const totalPages=Math.max(1,Math.ceil(filtered.length/rowsPerPage));
-  const safePage=Math.min(currentPage,totalPages);
-  const pageStart=(safePage-1)*rowsPerPage;
-  const displayed=filtered.slice(pageStart,pageStart+rowsPerPage);
-  const pageOptions=Array.from({length:Math.min(totalPages,5)},(_,i)=>{
-    const first=Math.max(1,Math.min(totalPages-4,safePage-2));
-    return first+i;
-  });
+  const displayed=filtered;
   const residents=members.filter(m=>m.mode==="resident").length;
   const volunteers=members.filter(m=>m.mode==="volunteer").length;
   const onlineCount=members.filter(m=>m.online).length;
-  const canStartChat=(member:Member)=>acceptChats&&(visible||directoryListed)&&member.acceptChats;
+  const canStartChat=(member:Member)=>acceptChats&&member.acceptChats;
   const tabs:[Filter,string][]=[["all","All Members"],["resident","Residents"],["volunteer","Volunteers"],["online","Online"],["offline","Offline"]];
   return <View style={[styles.panel,wideDashboard&&styles.dashboardWidePanel]}>
     <View style={[styles.headingRow,compact&&styles.mobileHeading]}>
@@ -146,7 +138,7 @@ export default function CommunityOnline({uid,dashboard=false}:{uid?:string|null;
     </View>
     {dashboard&&<View style={styles.dashboardTotalRow}>
       <Text style={styles.dashboardSmallCaption}>
-        {registeredCount} registered members · {activeCounts.total} recently active
+        {registeredCount} registered members · {activeCounts.total} recently active · Scroll for more
       </Text>
     </View>}
     {!dashboard&&<View style={styles.countRow}>
@@ -161,17 +153,17 @@ export default function CommunityOnline({uid,dashboard=false}:{uid?:string|null;
     </View>}
     <View style={styles.searchRow}>
       <Ionicons name="search-outline" size={17} color="#68867B"/>
-      <TextInput value={search} onChangeText={value=>{setSearch(value);setCurrentPage(1);}}
+      <TextInput value={search} onChangeText={value=>setSearch(value)}
         placeholder="Search members by name or role" placeholderTextColor="#899E95"
         accessibilityLabel="Search community members" autoCapitalize="none"
         style={styles.searchInput}/>
       {Boolean(search)&&<Pressable accessibilityRole="button" accessibilityLabel="Clear member search"
-        onPress={()=>{setSearch("");setCurrentPage(1);}}><Ionicons name="close-circle" size={18} color="#81978C"/></Pressable>}
+        onPress={()=>setSearch("")}><Ionicons name="close-circle" size={18} color="#81978C"/></Pressable>}
     </View>
     <View style={[styles.filterRow,dashboard&&styles.dashboardFilters]}>
       {tabs.map(([key,text])=><Pressable accessibilityRole="button"
         accessibilityState={{selected:filter===key}} key={key}
-        onPress={()=>{setFilter(key);setCurrentPage(1);}}
+        onPress={()=>setFilter(key)}
         style={[styles.filter,filter===key&&styles.filterActive]}>
         <Text style={[styles.filterText,filter===key&&styles.filterTextActive]}>
           {dashboard&&key==="all"?"All Members ("+members.length+")":
@@ -186,7 +178,12 @@ export default function CommunityOnline({uid,dashboard=false}:{uid?:string|null;
         <Ionicons name="cloud-offline-outline" size={24} color="#718C87"/>
         <Text style={styles.emptyText}>{error}</Text>
         <Pressable onPress={()=>void load()} style={styles.retry}><Text style={styles.retryText}>Retry</Text></Pressable>
-      </View> : displayed.length ? <View style={[styles.grid,compact&&styles.gridMobile,dashboard&&styles.dashboardGrid,dashboard&&compact&&styles.dashboardGridMobile]}>
+      </View> : displayed.length ? <ScrollView
+        nestedScrollEnabled showsVerticalScrollIndicator
+        style={[styles.memberScroll,dashboard&&styles.dashboardMemberScroll]}
+        contentContainerStyle={styles.memberScrollInner}
+        accessibilityLabel="Scrollable list of all community members">
+        <View style={[styles.grid,compact&&styles.gridMobile,dashboard&&styles.dashboardGrid,dashboard&&compact&&styles.dashboardGridMobile]}>
         {displayed.map(member=><View key={member.key}
           style={[styles.memberCard,compact&&styles.memberMobile,dashboard&&styles.dashboardMemberRow,
             dashboard&&compact&&styles.dashboardMemberMobile]}>
@@ -224,7 +221,7 @@ export default function CommunityOnline({uid,dashboard=false}:{uid?:string|null;
               router.push({pathname:"/(tabs)/community-member-profile",params:{member:member.key}} as Href)}
             style={styles.dashboardProfileButton}>
             <Ionicons name="person-outline" size={13} color="#31584B"/>
-            <Text style={styles.dashboardProfileText}>View Profile</Text>
+            <Text style={styles.dashboardProfileText}>{member.isSelf?"My Profile":"View Profile"}</Text>
           </Pressable>}
           {member.isSelf?(!dashboard&&<Text style={styles.ownBadge}>Your profile</Text>):
             !(dashboard&&compact)&&<Pressable accessibilityRole="button" accessibilityLabel={`Chat with ${member.name}`}
@@ -240,7 +237,7 @@ export default function CommunityOnline({uid,dashboard=false}:{uid?:string|null;
               </Text>
             </Pressable>}
         </View>)}
-      </View> : <View style={styles.empty}>
+      </View></ScrollView> : <View style={styles.empty}>
         <Ionicons name="people-outline" size={26} color="#9BAFA7"/>
         <Text style={styles.emptyText}>
           {members.length===0&&filter==="all"&&!search
@@ -248,27 +245,6 @@ export default function CommunityOnline({uid,dashboard=false}:{uid?:string|null;
             :"No registered members match this filter or search."}
         </Text>
       </View>}
-    {totalPages>1&&<View style={[styles.pagination,dashboard&&styles.dashboardPagination]}>
-      <Pressable accessibilityRole="button" accessibilityLabel="Previous members page"
-        disabled={safePage===1} onPress={()=>setCurrentPage(Math.max(1,safePage-1))}
-        style={[styles.pageButton,safePage===1&&styles.pageDisabled]}>
-        <Ionicons name="chevron-back" size={16} color={GREEN}/>
-      </Pressable>
-      {pageOptions.map(value=><Pressable key={value} accessibilityRole="button"
-        accessibilityLabel={`Members page ${value}`}
-        accessibilityState={{selected:value===safePage}}
-        onPress={()=>setCurrentPage(value)}
-        style={[styles.pageButton,value===safePage&&styles.pageButtonActive]}>
-        <Text style={[styles.pageText,value===safePage&&styles.pageTextActive]}>{value}</Text>
-      </Pressable>)}
-      {totalPages>5&&pageOptions[pageOptions.length-1]<totalPages&&<Text style={styles.pageEllipsis}>…</Text>}
-      <Pressable accessibilityRole="button" accessibilityLabel="Next members page"
-        disabled={safePage===totalPages}
-        onPress={()=>setCurrentPage(Math.min(totalPages,safePage+1))}
-        style={[styles.pageButton,safePage===totalPages&&styles.pageDisabled]}>
-        <Ionicons name="chevron-forward" size={16} color={GREEN}/>
-      </Pressable>
-    </View>}
     {!dashboard&&<>
     <View style={[styles.consent,compact&&styles.consentMobile]}>
       <View style={{flex:1,minWidth:0}}>
@@ -297,7 +273,7 @@ export default function CommunityOnline({uid,dashboard=false}:{uid?:string|null;
       <View style={styles.privacyOption}>
         <View style={styles.privacyOptionCopy}>
           <Text style={styles.consentTitle}>Allow Private Messages</Text>
-          <Text style={styles.consentDescription}>Optional. Members who also allow chat can message you.</Text>
+          <Text style={styles.consentDescription}>Optional. Both accounts must enable messaging. Online visibility is not required.</Text>
         </View>
         <Pressable accessibilityRole="switch" accessibilityLabel="Allow Private Messages"
           accessibilityState={{checked:acceptChats,disabled:settingLoading||Boolean(savingPreference)}}
@@ -307,8 +283,8 @@ export default function CommunityOnline({uid,dashboard=false}:{uid?:string|null;
         </Pressable>
       </View>
     </View>
-    {(!(visible||directoryListed)||!acceptChats)&&<Text style={styles.chatHint}>
-      To chat, enable online status sharing and Private Messages. The recipient must also allow chat.
+    {!acceptChats&&<Text style={styles.chatHint}>
+      To test chat, open View All on both accounts and enable Allow Private Messages. Online sharing is optional.
     </Text>}
     </>}
   </View>;
@@ -317,6 +293,9 @@ const styles=StyleSheet.create({
   panel:{backgroundColor:"#FFFFFF",borderWidth:1,borderColor:"#DFEBE7",
     borderRadius:18,padding:18,gap:14,minWidth:0,width:"100%",flexGrow:1},
   dashboardWidePanel:{minHeight:665},
+  memberScroll:{maxHeight:615,flexGrow:0},
+  dashboardMemberScroll:{maxHeight:369},
+  memberScrollInner:{paddingBottom:6},
   headingRow:{flexDirection:"row",alignItems:"center",justifyContent:"space-between",gap:12},
   mobileHeading:{flexWrap:"wrap"},
   headingCopy:{flexDirection:"row",alignItems:"center",gap:12,flex:1,minWidth:0},
