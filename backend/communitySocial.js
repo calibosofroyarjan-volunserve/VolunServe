@@ -142,6 +142,22 @@ function installCommunitySocial({app,db,requireFirebaseUser,loadUserProfile,isAp
    try{
      if(!await authViewer(req,res))return;
      const rows=await scan(),now=Date.now();
+     // Counts include all recently active approved accounts, even if they
+     // have NOT opted into profile discovery. Only totals are returned, never
+     // their names, IDs, photos or timestamps.
+     const activity=await db.collection("communityPresence")
+       .where("activeAt",">=",new Date(now-FRESH_MS)).get();
+     const approvedActivity=await Promise.all(activity.docs.map(async doc=>{
+       const entry=doc.data()||{},active=numberTime(entry.activeAt);
+       if(active<=0||active>now+10000||now-active>=FRESH_MS)return null;
+       const profile=await loadUserProfile(doc.id);
+       return permitted(profile,isApprovedAccount)?canonicalMode(profile):null;
+     }));
+     const activeCounts={
+       residents:approvedActivity.filter(mode=>mode==="resident").length,
+       volunteers:approvedActivity.filter(mode=>mode==="volunteer").length,
+       total:approvedActivity.filter(Boolean).length,
+     };
      const entries=rows.map(({uid,p})=>({...display(uid,p,now),isSelf:uid===req.firebaseUser.uid}))
        .sort((a,b)=>Number(b.online)-Number(a.online)||
          (b.lastSeenAt||"").localeCompare(a.lastSeenAt||"")||a.name.localeCompare(b.name));
@@ -149,7 +165,7 @@ function installCommunitySocial({app,db,requireFirebaseUser,loadUserProfile,isAp
      res.json({ok:true,members:entries,
        onlineCounts:{residents:entries.filter(x=>x.online&&x.mode==="resident").length,
          volunteers:entries.filter(x=>x.online&&x.mode==="volunteer").length},
-       listedCount:entries.length});
+       listedCount:entries.length,activeCounts});
    }catch(e){errorResponse(res,e,"Community directory");}
  });
  app.get("/api/community/directory/self",requireFirebaseUser,async(req,res)=>{
