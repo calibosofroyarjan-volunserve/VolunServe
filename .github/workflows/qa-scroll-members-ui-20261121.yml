@@ -1,0 +1,65 @@
+name: QA Community Members Vertical Scroll and You (NO DEPLOY)
+on:
+  push:
+    branches: [fix/community-members-scroll-you-20261121]
+    paths:
+      - components/home/CommunityOnline.tsx
+      - .github/workflows/qa-scroll-members-ui-20261121.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  ui-production-build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      CI: 'true'
+      EXPO_NO_TELEMETRY: '1'
+      EXPO_PUBLIC_VOLUNSERVE_ENV: production
+      EXPO_PUBLIC_IDENTITY_VERIFICATION_API_URL: https://volunserve.onrender.com
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install production pinned dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Verify scope, self-key mapping, vertical scrollbar and chat toggle
+        run: |
+          git fetch origin fix/member-directory-you-label-ui-20261121 --depth=1
+          python3 - <<'PY'
+          import subprocess
+          changed=set(subprocess.check_output(
+            ['git','diff','--name-only','origin/fix/member-directory-you-label-ui-20261121','HEAD'],
+            text=True).splitlines())
+          allowed={
+            'components/home/CommunityOnline.tsx',
+            '.github/workflows/qa-scroll-members-ui-20261121.yml'
+          }
+          assert changed and changed.issubset(allowed),repr(changed)
+          print('PASS only member component and isolated QA changed')
+          PY
+          node <<'NODE'
+          const fs=require('node:fs'),assert=require('node:assert/strict');
+          const s=fs.readFileSync('components/home/CommunityOnline.tsx','utf8');
+          assert(s.includes('payload.selfKey===member.key'),'backend authenticated selfKey must be used');
+          assert(s.includes('member.isSelf?<Text style={styles.youLabel}> (You)</Text>'),'(You) must render');
+          assert(s.includes('Number(Boolean(b.isSelf))-Number(Boolean(a.isSelf))'),'Self must be first');
+          assert(s.includes('nestedScrollEnabled showsVerticalScrollIndicator'),'vertical scroll enabled');
+          assert(s.includes('const displayed=filtered;'),'must show full member roster');
+          assert(!s.includes('totalPages')&&!s.includes('setCurrentPage'),'pagination must be removed');
+          assert(s.includes('acceptChats&&member.acceptChats'),'both sides consent to chat');
+          console.log('PASS selfKey, (You), scroll without pagination and mutual chat settings');
+          NODE
+      - name: Verify unchanged live Hosting revision without writes
+        run: VOLUNSERVE_EXPECTED_SHA=efd85bc6ae111b8c59c6af871b33375f357a4de1 node scripts/check-live-hosting.cjs
+      - name: TypeScript and core regression checks
+        run: |
+          npx tsc --noEmit --incremental false
+          node --test scripts/test-admin-volunteer-authorization.cjs
+          node --test scripts/test-embedded-emergency-map-navigation.cjs
+          node scripts/test-login-ui-release.cjs
+          node scripts/test-profile-certificates-account-menu.cjs
+      - name: Export production web bundle without publishing
+        run: npx expo export --platform web --output-dir /tmp/volunserve-scroll-members-qa
