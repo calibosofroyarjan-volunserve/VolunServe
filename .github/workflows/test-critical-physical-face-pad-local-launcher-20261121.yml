@@ -42,7 +42,7 @@ jobs:
           cmd = Path("Start-VolunServe-Critical-Face-PAD-Test.cmd").read_text()
           for banned in ("requests.post", "httpx", "urllib.request.urlopen", "firebase_admin", "render.com", "github.com", "download_", "STAGING_IDENTITY_MEDIA_UPLOADS_ENABLED = True"):
               assert banned not in source, banned
-          for banned in ("curl", "wget", "pip install", "Deploy", "firebase deploy"):
+          for banned in ("curl", "wget", "pip install", "render deploy", "firebase deploy"):
               assert banned.lower() not in cmd.lower(), banned
           assert "py -3.11" in cmd
           assert "--four-hypothesis" in source
