@@ -7,8 +7,9 @@ import {
 } from "react-native";
 import { onAuthChange } from "../../lib/firebaseAuth";
 import { CertificatePaper } from "./certificate";
+import { IssuedCertificateGallery, type GalleryCertificate } from "../../components/profile/IssuedCertificateGallery";
 
-type Tab = "info" | "activity" | "progress" | "certificates";
+type Tab = "info" | "progress" | "certificates";
 type PublicProfile = {
   name: string; avatarUrl?: string; role: "Volunteer"; joinedEvent: boolean;
   accountJoinedAt: string | null; approved: boolean;
@@ -118,8 +119,8 @@ export default function CommunityEventPublicProfile() {
   const name=profile?.profile.name||"Volunteer";
   const photo=safeAvatar(profile?.profile.avatarUrl);
   const tabs: {key:Tab;label:string}[]=[
-    {key:"info",label:"Info"},{key:"activity",label:"Activity"},
-    {key:"progress",label:"My Progress"},{key:"certificates",label:"Certificates"},
+    {key:"info",label:"Info"},{key:"progress",label:"My Progress"},
+    {key:"certificates",label:"Certificates"},
   ];
 
   return <ScrollView style={styles.screen} showsVerticalScrollIndicator
@@ -140,7 +141,7 @@ export default function CommunityEventPublicProfile() {
         <Pressable onPress={goBack} style={styles.returnButton}><Text style={styles.returnText}>Back to Events</Text></Pressable>
       </View> : profile ? <>
         <View style={styles.hero}>
-          <View style={styles.cover}/>
+          <View style={styles.cover}><Text style={styles.coverBrand}>VolunServe</Text></View>
           <View style={[styles.heroContent,compact&&styles.heroCompact]}>
             {photo ? <Image source={{uri:photo}} resizeMode="cover" style={styles.avatar}/> :
               <View style={styles.avatarFallback}><Text style={styles.avatarInitials}>{name.trim().slice(0,1).toUpperCase()}</Text></View>}
@@ -181,23 +182,6 @@ export default function CommunityEventPublicProfile() {
             </View>
           </View>
         </>}
-        {tab==="activity"&&<View style={styles.panel}>
-          <PanelTitle icon="checkmark-done-outline">Verified Volunteer Activity</PanelTitle>
-          {profile.activity.length===0 ?
-            <Text style={styles.empty}>No verified emergency contributions available for this volunteer.</Text> :
-            profile.activity.map((item,index)=><View key={index} style={styles.record}>
-              <View style={styles.recordTop}>
-                <Text style={styles.recordTitle}>{item.title}</Text>
-                <Text style={styles.verified}>Verified</Text>
-              </View>
-              <Text style={styles.recordDate}>{dateLabel(item.verifiedAt)}</Text>
-              <View style={styles.recordFields}>
-                <View style={styles.field}><Text style={styles.fieldLabel}>CONTRIBUTION</Text><Text style={styles.fieldValue}>{formatWord(item.type)}</Text></View>
-                <View style={styles.field}><Text style={styles.fieldLabel}>PEOPLE HELPED</Text><Text style={styles.fieldValue}>{item.peopleHelped}</Text></View>
-                <View style={styles.field}><Text style={styles.fieldLabel}>OUTCOME</Text><Text style={styles.fieldValue}>{formatWord(item.outcome)}</Text></View>
-              </View>
-            </View>)}
-        </View>}
         {tab==="progress"&&<>
           <View style={styles.metrics}>
             <Metric icon="time-outline" tint="#078F82" value={timeLabel(profile.summary.verifiedMinutes)}
@@ -228,31 +212,41 @@ export default function CommunityEventPublicProfile() {
                 <Text style={[styles.statusTag,e.certificateIssued&&styles.statusIssued]}>{e.status.toUpperCase()}</Text>
               </View>)}
           </View>
+          <View style={styles.panel}>
+          <PanelTitle icon="checkmark-done-outline">Verified Volunteer Activity</PanelTitle>
+          {profile.activity.length===0 ?
+            <Text style={styles.empty}>No verified emergency contributions available for this volunteer.</Text> :
+            profile.activity.map((item,index)=><View key={index} style={styles.record}>
+              <View style={styles.recordTop}>
+                <Text style={styles.recordTitle}>{item.title}</Text>
+                <Text style={styles.verified}>Verified</Text>
+              </View>
+              <Text style={styles.recordDate}>{dateLabel(item.verifiedAt)}</Text>
+              <View style={styles.recordFields}>
+                <View style={styles.field}><Text style={styles.fieldLabel}>CONTRIBUTION</Text><Text style={styles.fieldValue}>{formatWord(item.type)}</Text></View>
+                <View style={styles.field}><Text style={styles.fieldLabel}>PEOPLE HELPED</Text><Text style={styles.fieldValue}>{item.peopleHelped}</Text></View>
+                <View style={styles.field}><Text style={styles.fieldLabel}>OUTCOME</Text><Text style={styles.fieldValue}>{formatWord(item.outcome)}</Text></View>
+              </View>
+            </View>)}
+        </View>
         </>}
         {tab==="certificates"&&<View style={styles.panel}>
-          <PanelTitle icon="ribbon-outline">Actual Issued Certificates</PanelTitle>
-          <Text style={styles.panelDescription}>Certificates shown here are issued records retrieved for this volunteer. Select View Certificate to open the official read-only VolunServe certificate design.</Text>
-          {profile.certificates.length===0 ? <Text style={styles.empty}>No issued certificates to display.</Text> :
-            profile.certificates.map((certificate,i)=><View key={certificate.certificateId || i} style={styles.certificate}>
-              <View style={styles.certificateIcon}><Ionicons name="ribbon-outline" size={24} color="#4F46E5"/></View>
-              <View style={styles.certificateBody}>
-                <Text style={styles.recordTitle}>{certificate.title}</Text>
-                {certificate.eventTitle ? <Text style={styles.recordDate}>{certificate.eventTitle}</Text> : null}
-                <Text style={styles.certificateRecordId} selectable>Certificate ID: {certificate.certificateId}</Text>
-                <View style={styles.certificateMeta}>
-                  <View><Text style={styles.fieldLabel}>ISSUED</Text><Text style={styles.fieldValue}>{dateLabel(certificate.issuedAt)}</Text></View>
-                  <View><Text style={styles.fieldLabel}>SERVICE TIME</Text><Text style={styles.fieldValue}>{timeLabel(certificate.serviceMinutes)}</Text></View>
-                  <View><Text style={styles.fieldLabel}>STATUS</Text><Text style={styles.fieldValue}>Issued</Text></View>
-                </View>
-                <Pressable accessibilityRole="button" accessibilityLabel={`View actual certificate ${certificate.title}`}
-                  onPress={()=>setSelectedCertificate(certificate)} style={styles.viewCertificateButton}>
-                  <Ionicons name="eye-outline" color="#006D56" size={17}/>
-                  <Text style={styles.viewCertificateText}>View Certificate</Text>
-                  <Ionicons name="arrow-forward-outline" color="#006D56" size={16}/>
-                </Pressable>
-              </View>
-              <Text style={styles.verified}>Issued</Text>
-            </View>)}
+          <View style={styles.publicCertificateTitleRow}>
+            <View style={{flex:1}}>
+              <PanelTitle icon="ribbon-outline">Issued Certificates</PanelTitle>
+              <Text style={styles.panelDescription}>Original records from verified volunteer service. Select a thumbnail to view the genuine VolunServe certificate.</Text>
+            </View>
+            <Text style={styles.publicCertCount}>{profile.certificates.length} issued</Text>
+          </View>
+          <IssuedCertificateGallery
+            name={name}
+            compact={compact}
+            certificates={profile.certificates.map(c=>({
+              ...c,certificateType:c.type,certificateTitle:c.title,
+              verifiedServiceMinutes:c.serviceMinutes,verificationStatus:c.status.toLowerCase(),
+            }) as GalleryCertificate)}
+            onView={record=>setSelectedCertificate(record as unknown as Certificate)}
+          />
         </View>}
         <View style={styles.notice}>
           <Ionicons name="shield-checkmark-outline" size={19} color="#527A73"/>
@@ -301,6 +295,9 @@ export default function CommunityEventPublicProfile() {
 }
 
 const styles=StyleSheet.create({
+  publicCertificateTitleRow:{flexDirection:"row",gap:12,alignItems:"center",justifyContent:"space-between"},
+  publicCertCount:{fontSize:11,fontWeight:"800",color:"#08734D",backgroundColor:"#E9F8F0",padding:10,borderRadius:10,overflow:"hidden"},
+
   screen:{flex:1,backgroundColor:"#F6F9F8"},page:{paddingHorizontal:24,paddingTop:24,paddingBottom:50,alignItems:"center"},
   pageCompact:{paddingHorizontal:12,paddingTop:14},shell:{width:"100%",maxWidth:1120,gap:16},
   back:{alignSelf:"flex-start",flexDirection:"row",alignItems:"center",gap:8,paddingVertical:6},
@@ -308,7 +305,8 @@ const styles=StyleSheet.create({
   pageHeading:{gap:5,marginTop:2},pageTitle:{fontWeight:"800",fontSize:26,color:"#103E39"},
   pageSubtitle:{fontSize:13,color:"#647A8A"},
   hero:{backgroundColor:"#FFFFFF",borderRadius:15,borderWidth:1,borderColor:"#DFE8E7",overflow:"hidden"},
-  cover:{height:115,backgroundColor:"#0B4A38"},
+  cover:{height:109,backgroundColor:"#065340",justifyContent:"flex-start",alignItems:"flex-end",padding:23},
+  coverBrand:{color:"#BDE5D0",fontSize:22,fontWeight:"900",opacity:0.85},
   heroContent:{paddingHorizontal:28,paddingTop:12,paddingBottom:22,flexDirection:"row",alignItems:"center",gap:18},
   heroCompact:{paddingHorizontal:15,flexWrap:"wrap",gap:12,paddingBottom:18},
   avatar:{width:92,height:92,borderRadius:48,borderWidth:4,borderColor:"white",marginTop:-52,backgroundColor:"#E3F1EC"},
