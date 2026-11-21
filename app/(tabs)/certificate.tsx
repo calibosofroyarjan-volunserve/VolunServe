@@ -360,7 +360,7 @@ h2{font:bold 25px/1.3 Georgia,serif;color:#184552;margin:4mm 0}.event-detail{fon
 };
 
 // Shared on-screen certificate paper. Both certificate types keep their own data.
-function CertificatePaper({
+export function CertificatePaper({
   certificate,
   displayName,
 }: {
