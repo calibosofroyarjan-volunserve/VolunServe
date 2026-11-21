@@ -1,0 +1,129 @@
+name: AI Identity Automated Re-defense Evidence (NO DEPLOY)
+on:
+  push:
+    branches:
+      - qa/identity-automated-defence-check-20261121
+    paths:
+      - .github/workflows/identity-automated-redefense-evidence-20261121.yml
+permissions:
+  contents: read
+jobs:
+  sface-ocr-guards:
+    name: Face / OCR / duplicate photo synthetic QA
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Read immutable QA source (avoid legacy submodule checkout)
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          [[ "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]] || exit 2
+          curl -fLsS --retry 3 -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" "https://api.github.com/repos/${GITHUB_REPOSITORY}/zipball/$SOURCE_SHA" -o /tmp/identity-qa.zip
+          mkdir -p "$RUNNER_TEMP/identity-qa"
+          unzip -q /tmp/identity-qa.zip -d "$RUNNER_TEMP/identity-qa"
+          ROOT="$(find "$RUNNER_TEMP/identity-qa" -mindepth 1 -maxdepth 1 -type d -print -quit)"
+          cp -a "$ROOT/." "$GITHUB_WORKSPACE/"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install isolated offline-comparison test libraries (no weights)
+        run: python -m pip install --disable-pip-version-check numpy==1.26.4 Pillow==11.3.0 opencv-contrib-python-headless==4.11.0.86
+      - name: Test current SFace photo picker, matching guards, OCR, PAD failure isolation
+        env:
+          PYTHONPATH: identity-ai
+        run: |
+          python -m py_compile identity-ai/check_sface_two_photos_local.py identity-ai/choose_sface_pair_local.py identity-ai/main.py
+          python -m unittest discover -s identity-ai -p 'test_sface_photo_picker_local.py' -v
+          python -m unittest discover -s identity-ai -p 'test_sface_phone_pair_local.py' -v
+          python -m unittest discover -s identity-ai -p 'test_sface_pair_metrics_local.py' -v
+          python -m unittest discover -s identity-ai -p 'test_face_pair_integrity.py' -v
+          python -m unittest discover -s identity-ai -p 'test_face_shadow_failure_isolation.py' -v
+          python -m unittest discover -s identity-ai -p 'test_strict_document_screening.py' -v
+          python -m unittest discover -s identity-ai -p 'test_profile_consistency.py' -v
+      - name: Record honest test scope
+        run: |
+          echo '## Face/OCR result' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Synthetic tests only: no real people, no uploaded IDs, no real-camera accuracy evidence, no claims of PAD validation.' >> "$GITHUB_STEP_SUMMARY"
+
+  manual-admin-review:
+    name: Fictional Resident to Admin manual verification
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Read immutable QA source (avoid legacy submodule checkout)
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          [[ "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]] || exit 2
+          curl -fLsS --retry 3 -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" "https://api.github.com/repos/${GITHUB_REPOSITORY}/zipball/$SOURCE_SHA" -o /tmp/identity-admin.zip
+          mkdir -p "$RUNNER_TEMP/identity-admin"
+          unzip -q /tmp/identity-admin.zip -d "$RUNNER_TEMP/identity-admin"
+          ROOT="$(find "$RUNNER_TEMP/identity-admin" -mindepth 1 -maxdepth 1 -type d -print -quit)"
+          cp -a "$ROOT/." "$GITHUB_WORKSPACE/"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install Node test dependencies with scripts disabled
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          npm ci --prefix backend --ignore-scripts --no-audit --no-fund
+      - name: Test genuine route/policy code with fictional test records only
+        run: |
+          node --check backend/identityManualReviewRoutes.js
+          node --check backend/server.js
+          node --test backend/test-identity-no-media-manual-e2e.cjs
+          node --test backend/test-staging-admin-review-ui-contract.cjs
+          node --test backend/test-staging-identity-acceptance-e2e.cjs
+      - name: Ensure actual media upload hold remains enforced in staging
+        run: |
+          grep -Fq 'const STAGING_IDENTITY_MEDIA_UPLOADS_ENABLED = false' backend/server.js
+          grep -Fq 'requireStagingIdentityMediaApproval,' backend/server.js
+          echo '## Admin review result' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Fictional in-memory Resident/Admin review flow; no real photos or account grants. Staging media safety gate remains closed.' >> "$GITHUB_STEP_SUMMARY"
+
+  auth-firestore-emulator:
+    name: Authenticated fictional Resident to Admin emulator E2E
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      CI: 'true'
+      GCLOUD_PROJECT: demo-volunserve-identity-e2e
+      FIREBASE_AUTH_EMULATOR_HOST: 127.0.0.1:9099
+      FIRESTORE_EMULATOR_HOST: 127.0.0.1:8080
+    steps:
+      - name: Read immutable QA source (avoid legacy submodule checkout)
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          [[ "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]] || exit 2
+          curl -fLsS --retry 3 -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" "https://api.github.com/repos/${GITHUB_REPOSITORY}/zipball/$SOURCE_SHA" -o /tmp/identity-emulators.zip
+          mkdir -p "$RUNNER_TEMP/identity-emulators"
+          unzip -q /tmp/identity-emulators.zip -d "$RUNNER_TEMP/identity-emulators"
+          ROOT="$(find "$RUNNER_TEMP/identity-emulators" -mindepth 1 -maxdepth 1 -type d -print -quit)"
+          cp -a "$ROOT/." "$GITHUB_WORKSPACE/"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Install locked dependencies without install scripts
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          npm ci --prefix backend --ignore-scripts --no-audit --no-fund
+      - name: Real emulator Auth and Firestore integration with synthetic actors
+        run: |
+          npx --no-install firebase emulators:exec --config backend/identity-e2e-emulators.json --only auth,firestore --project demo-volunserve-identity-e2e "node --test backend/test-identity-emulator-auth-e2e.cjs"
+      - name: Confirm simulation cannot write actual production Firebase
+        run: |
+          echo '## Auth/Firestore result' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Local demo-project Auth and Firestore emulators only; no real accounts, no real biometric data, no deploy.' >> "$GITHUB_STEP_SUMMARY"
