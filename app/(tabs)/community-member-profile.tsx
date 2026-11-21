@@ -85,7 +85,7 @@ export default function CommunityMemberProfile() {
               style={[styles.chatButton,!data.acceptChats&&styles.disabledChat]}>
               <Ionicons name="chatbubble-ellipses-outline" size={18} color={data.acceptChats?"#FFFFFF":"#6D8478"}/>
               <Text style={[styles.chatText,!data.acceptChats&&styles.disabledChatText]}>
-                {data.acceptChats?"Send a Message":"Private Messages Disabled"}
+                {data.acceptChats?"Send a Message":"Messages Paused"}
               </Text>
             </Pressable>
             <Pressable accessibilityRole="button" onPress={()=>router.push("/(tabs)/community-inbox" as Href)}
@@ -97,7 +97,7 @@ export default function CommunityMemberProfile() {
         </View>
         <View style={styles.privacy}>
           <Ionicons name="shield-checkmark-outline" size={19} color="#567E71"/>
-          <Text style={styles.privacyText}>Approved Residents and Volunteers are discoverable by basic name and role to approved signed-in members. Profile photo, online status and Last Seen require separate sharing permission. Contact details, identity documents, GPS and attendance records remain private. Messaging requires permission from both members.</Text>
+          <Text style={styles.privacyText}>Approved Residents and Volunteers are discoverable by basic name and role to approved signed-in members. Profile photo, online status and Last Seen require separate sharing permission. Contact details, identity documents, GPS and attendance records remain private. Approved members can message one another by default, including while offline. Members can pause messages or block and report unwanted contact.</Text>
         </View>
         </>:null}
     </View>
