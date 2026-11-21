@@ -399,7 +399,8 @@ test("Authenticated no-photo Resident request -> Admin review -> verified status
     inPersonIdInspected:false,
     inPersonFaceCompared:false,
   });
-  assert.equal(invalid.code,409,"must refuse Admin Verify without independent checks");
+  assert.equal(invalid.code,400,"must refuse Admin Verify without independent checks");
+  assert.equal(invalid.body.error,"manual_in_person_evidence_required");
   assert.equal((await status(tokens.manual)).body.identityVerified,false);
   const verified=await decision(tokens.admin,names.manual,"verify",{
     validationMethod:"in_person_lgu_validation",
