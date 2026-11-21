@@ -34,6 +34,15 @@ function selectedIdRecognized(screening) {
     screening.detectedIdType === screening.declaredIdType;
 }
 
+// Precheck advancement (not identity approval) requires positive, sanitized
+// OCR evidence for both the saved profile name and DOB. Unreadable fields
+// must never become positive merely because the ID type looks plausible.
+function demographicsReadyForFaceComparison(screening) {
+  return !!screening &&
+    screening.profileNameCheck === "possible_match" &&
+    screening.profileBirthDateCheck === "possible_match";
+}
+
 function blurryNationalIdNeedsReview(screening) {
   // Do not infer this is truly a National ID. Only an inconclusive scan
   // selected as National ID with objectively low image sharpness may be
@@ -96,4 +105,5 @@ function enforceSelectedIdDecision(rawDecision, screening, livenessImplemented) 
 module.exports = {
   selectedIdRecognized, blurryNationalIdNeedsReview,
   classifyIdentityReviewTrack, enforceSelectedIdDecision,
+  demographicsReadyForFaceComparison,
 };
