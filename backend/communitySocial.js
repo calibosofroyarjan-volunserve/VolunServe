@@ -43,6 +43,7 @@ const display=(uid,p,now=Date.now())=>{
   verified:p.verified===true,
   badge:mode==="volunteer"?"Volunteer":p.verified===true?"Verified Resident":"Basic Resident",
   online, presencePrivate:p.visible!==true&&p.showLastSeen!==true,
+  sharesLastSeen:showOffline,
   lastSeenAt:showOffline&&validLastSeen?new Date(lastActivity).toISOString():null,
   directoryListed:p.directoryListed===true,acceptChats:p.acceptChats===true,
  };
