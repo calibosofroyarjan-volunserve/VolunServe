@@ -12,6 +12,7 @@ export type CommunityMember = {
   online: boolean;
   presencePrivate?: boolean;
   lastSeenAt: string | null;
+  sharesLastSeen?: boolean;
   acceptChats: boolean;
   isSelf?: boolean;
 };
@@ -39,7 +40,7 @@ const manilaDay = (value: Date) =>
 export function memberLastSeen(person:CommunityMember):string {
   if(person.online)return "Online now";
   if(person.presencePrivate)return "Status private";
-  if(!person.lastSeenAt)return "Offline";
+  if(!person.lastSeenAt)return person.sharesLastSeen?"Last seen unavailable":"Offline";
   const date=new Date(person.lastSeenAt);
   if(Number.isNaN(date.getTime()))return "Offline";
   const day=manilaDay(date),today=manilaDay(new Date());

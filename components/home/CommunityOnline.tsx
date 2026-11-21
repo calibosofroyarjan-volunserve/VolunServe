@@ -123,6 +123,13 @@ export default function CommunityOnline({uid,dashboard=false}:{uid?:string|null;
         </View>
       </View>
       <View style={styles.headingActions}>
+        {dashboard&&!settingLoading&&!acceptChats&&
+        <Pressable accessibilityRole="button" accessibilityLabel="Enable my private messages"
+          disabled={Boolean(savingPreference)} onPress={()=>void updatePreference("acceptChats")}
+          style={[styles.viewAll,styles.enableChatsButton]}>
+          <Ionicons name="chatbubble-outline" size={15} color={GREEN}/>
+          <Text style={styles.viewAllText}>Enable My Chats</Text>
+        </Pressable>}
         <Pressable accessibilityRole="button" accessibilityLabel="Open private message inbox"
           onPress={()=>router.push("/(tabs)/community-inbox" as Href)} style={styles.viewAll}>
           <Ionicons name="chatbubble-ellipses-outline" size={16} color={GREEN}/>
@@ -213,7 +220,8 @@ export default function CommunityOnline({uid,dashboard=false}:{uid?:string|null;
             </View>
             <Text style={styles.lastSeenText} numberOfLines={2}>
               {member.lastSeenAt?memberLastSeen({...member,online:false}):
-                member.online?"Active now":member.presencePrivate?"Not shared":"Last seen private"}
+                member.online?"Active now":member.presencePrivate?"Not shared":
+                member.sharesLastSeen?"Last seen unavailable":"Last seen not shared"}
             </Text>
           </View>}
           {dashboard&&!compact&&<Pressable accessibilityRole="button"
@@ -261,7 +269,7 @@ export default function CommunityOnline({uid,dashboard=false}:{uid?:string|null;
       <View style={styles.privacyOption}>
         <View style={styles.privacyOptionCopy}>
           <Text style={styles.consentTitle}>Share Last Seen</Text>
-          <Text style={styles.consentDescription}>Optional. Show when you were last active after going offline.</Text>
+          <Text style={styles.consentDescription}>Optional. Share your latest recorded activity with signed-in members, even when Online Status is private. Last Seen is available for up to 7 days after activity.</Text>
         </View>
         <Pressable accessibilityRole="switch" accessibilityLabel="Share Last Seen"
           accessibilityState={{checked:showLastSeen,disabled:settingLoading||Boolean(savingPreference)}}
@@ -284,7 +292,7 @@ export default function CommunityOnline({uid,dashboard=false}:{uid?:string|null;
       </View>
     </View>
     {!acceptChats&&<Text style={styles.chatHint}>
-      To test chat, open View All on both accounts and enable Allow Private Messages. Online sharing is optional.
+      To test chat, enable messages on both accounts. Messages can be sent while the recipient is offline; online sharing is not required.
     </Text>}
     </>}
   </View>;
@@ -324,6 +332,7 @@ const styles=StyleSheet.create({
   optInAction:{flexDirection:"row",alignItems:"center",gap:7,backgroundColor:GREEN,
     borderRadius:9,paddingVertical:11,paddingHorizontal:15,marginTop:7},
   optInActionText:{fontSize:11.5,fontWeight:"800",color:"#FFFFFF"},
+  enableChatsButton:{backgroundColor:"#EFF8F4",borderRadius:8,paddingHorizontal:6},
   directoryInvite:{flexDirection:"row",flexWrap:"wrap",alignItems:"center",gap:12,padding:12,
     backgroundColor:"#F6FAF8",borderRadius:11,borderWidth:1,borderColor:"#DDEAE2"},
   directoryChoice:{padding:13,backgroundColor:"#F6FAF8",borderRadius:11,
