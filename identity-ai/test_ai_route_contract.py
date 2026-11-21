@@ -137,9 +137,7 @@ def load_handlers():
         "document_ocr_unavailable": lambda declared_type: {},
         "MAX_ID_DOCUMENT_BYTES": 10 * 1024 * 1024,
         "MAX_SELFIE_BYTES": 10 * 1024 * 1024,
-        "ACCEPTED_ID_TYPES": {
-            "national_id", "drivers_license", "passport",
-        },
+        "ACCEPTED_ID_TYPES": {"national_id"},
         "hashlib": hashlib, "asyncio": asyncio, "logging": logging,
         "screening_ready_for_face_comparison": screening_ready_for_face_comparison,
     }
@@ -190,7 +188,7 @@ class RealRouteHandlerContractTests(unittest.TestCase):
         self.assertEqual(exc.exception.status_code, 400)
 
     def test_removed_id_types_refused_at_ai_api(self):
-        for removed in ("umid", "prc_id"):
+        for removed in ("drivers_license", "passport", "umid", "prc_id"):
             with self.subTest(id_type=removed):
                 with self.assertRaises(RouteHTTPException) as exc:
                     self.call("document_precheck", self.form(id_type=removed))
