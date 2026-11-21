@@ -181,6 +181,8 @@ test("reject unwanted file fields, unsupported IDs and missing consent",async()=
   for(const body of [
     {idType:"national_id",consent:false},
     {idType:"school_id",consent:true},
+    {idType:"umid",consent:true},
+    {idType:"prc_id",consent:true},
     {idType:"passport",consent:true,idDocument:"FAKE_BINARY"},
     {idType:"passport",consent:true,selfie:"FAKE_BINARY"},
     {idType:"passport",consent:true,rawOcr:"FAKE_OCR"},
@@ -269,5 +271,20 @@ test("manual requests can be rejected or sent for retry without granting identit
     assert.equal(result.code,200,JSON.stringify(result.body));
     assert.equal(h.records.get("users/"+UID).identityVerified,false);
     assert.equal(h.records.get("identityVerifications/"+UID).requiresManualReview,false);
+  }
+});
+
+test("Existing pending UMID and PRC cases cannot be verified after three-ID lock",async()=>{
+  for(const removed of ["umid","prc_id"]){
+    const h=harness();
+    const req=await h.request({idType:"drivers_license",consent:true});
+    assert.equal(req.code,201);
+    h.records.get("identityVerifications/"+UID).manualIdType=removed;
+    const result=await h.decide("verify",{
+      inPersonIdInspected:true,inPersonFaceCompared:true,
+    });
+    assert.equal(result.code,409,JSON.stringify(result.body));
+    assert.equal(result.body.error,"manual_id_type_invalid");
+    assert.equal(h.records.get("users/"+UID).identityVerified,false);
   }
 });
