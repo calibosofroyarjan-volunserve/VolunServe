@@ -1046,6 +1046,71 @@ jobs:
             }
             // END PINNED SCREENSHOT MEMBERS CALENDAR CONTROLLER GATE
 
+            // BEGIN PINNED SELF ONLINE MEMBER CARD GATE
+            // Allow only a new audited Hosting controller and this isolated
+            // fail-closed verifier block; no source files on protected.
+            {
+              const controller=".github/workflows/release-self-online-member-status-20261121.yml";
+              const verifier=".github/workflows/verify-reconciled-hosting-source-no-deploy-20261111.yml";
+              const changed=git("diff","--name-status","--no-renames",liveBase,commit)
+                .split("\n").filter(Boolean);
+              if(changed.length===2&&changed[0]==="A\t"+controller&&changed[1]==="M\t"+verifier){
+                const currentHosting="a0e1fdeea3705bf4c8da5ef2d6caa3f9391ae1fe";
+                const source="c35522bf163911227e350a7a4d11af7029d45b88";
+                const qa="f64a30dbd02f553261d0e2b2fd43327239ff71c9";
+                const memberPath="components/home/CommunityOnline.tsx";
+                const memberHash="66d58cb3693039d9b6987c6cc53be2f53171c8bf";
+                assert.equal(liveBase,"693b8aec16d0dade3a55d79969afddacd997bbc7",
+                  "BLOCKED: protected base drift");
+                assert.equal(marker.revision,currentHosting,
+                  "BLOCKED: live revision is not the audited reference UI");
+                assert.equal(blob(liveBase,verifier),"5dc14e5047c7bf4eae990250d000a85af0cce6fb",
+                  "BLOCKED: existing verifier changed");
+                assert.equal(blob(commit,controller),"b6553b7d747c8346767744be16f22e029d111c90",
+                  "BLOCKED: release controller not audited");
+                const before=git("show",liveBase+":"+verifier);
+                const after=git("show",commit+":"+verifier);
+                const begin="            // BEGIN PINNED SELF ONLINE MEMBER CARD GATE\n";
+                const finish="            // END PINNED SELF ONLINE MEMBER CARD GATE\n";
+                const first=after.indexOf(begin),last=after.indexOf(finish,first);
+                assert(first>=0&&last>first,"BLOCKED: guard marker missing");
+                const end=last+finish.length;
+                assert.equal(after[end],"\n","BLOCKED: changed verifier newline structure");
+                assert.equal(after.slice(0,first)+after.slice(end+1),before,
+                  "BLOCKED: previous verifier logic changed");
+                git("merge-base","--is-ancestor",currentHosting,source);
+                const diff=git("diff","--name-status","--no-renames",currentHosting,source)
+                  .split("\n").filter(Boolean);
+                assert.deepEqual(diff,["M\t"+memberPath],
+                  "BLOCKED: unrelated or outdated modules in source");
+                assert.equal(blob(source,memberPath),memberHash,
+                  "BLOCKED: source UI content not audited");
+                assert.equal(blob(qa,memberPath),memberHash,
+                  "BLOCKED: QA source differs from audited release");
+                for(const file of [
+                  memberPath,"app/(tabs)/community-members.tsx",
+                  "components/home/CommunityCalendar.tsx","components/home/Home.web.tsx",
+                  "components/home/Home.native.tsx","app/(tabs)/community-events.tsx",
+                  "app/(tabs)/community-inbox.tsx","app/(tabs)/community-member-profile.tsx",
+                  "app/(tabs)/community-chat.tsx","app/(tabs)/_layout.tsx",
+                  "app/(tabs)/profile.tsx","lib/useCommunityPresenceHeartbeat.ts",
+                  "lib/communitySocial.ts","lib/firebase.ts","package.json",
+                  "package-lock.json","firebase.json",".firebaserc","firestore.rules",
+                  "storage.rules","backend/communitySocial.js","backend/communityPresence.js",
+                  "scripts/guard-live-protected-release.cjs"
+                ]){
+                  const oldTree=git("ls-tree","--name-only",liveBase,"--",file);
+                  const newTree=git("ls-tree","--name-only",commit,"--",file);
+                  assert.equal(oldTree,newTree,"BLOCKED: protected source tree changed "+file);
+                  if(oldTree)assert.equal(blob(commit,file),blob(liveBase,file),
+                    "BLOCKED: existing protected module changed "+file);
+                }
+                console.log("PASS exact signed-in self-presence UI fix; public opt-ins unchanged");
+                return;
+              }
+            }
+            // END PINNED SELF ONLINE MEMBER CARD GATE
+
             assert.equal(marker.revision,liveBase,
               "BLOCKED: protected base and production differ; reconcile FIRST");
             const text=git("diff","--name-status","--no-renames",liveBase,commit);
