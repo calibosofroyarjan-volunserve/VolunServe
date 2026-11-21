@@ -1,4 +1,6 @@
 import { AppAlert } from "../../lib/appDialog";
+import CommunityOnline from "./CommunityOnline";
+import CommunityCalendar from "./CommunityCalendar";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
@@ -957,8 +959,8 @@ export default function WebHome() {
             <View style={[styles.panel, narrow && styles.mobilePanel]}>
               <PanelTitle
                 icon="megaphone"
-                title="Community Updates"
-                subtitle="Important announcements from the local response team."
+                title="Announcements"
+                subtitle="Official announcements from the local response team."
                 action="View All"
                 onAction={() => router.push("/announcements")}
               />
@@ -991,6 +993,11 @@ export default function WebHome() {
                 </View>
               )}
             </View>
+          </View>
+
+          <View style={styles.communityExtras}>
+            <CommunityOnline uid={user?.uid}/>
+            <CommunityCalendar uid={user?.uid} mode={volunteerMode ? "volunteer" : "resident"}/>
           </View>
 
           <View style={[styles.emergencyPanel, narrow && styles.mobilePanel]}>
@@ -1232,6 +1239,7 @@ function ContactCard({ kind }: { kind: "local" | "national" }) {
 }
 
 const styles = StyleSheet.create({
+  communityExtras:{gap:17,marginTop:18,marginBottom:18},
   journeyBar: {
     borderTopWidth: 1, borderBottomWidth: 1, borderColor: "#D9E8E1",
     paddingVertical: 16, paddingHorizontal: 12, marginBottom: 22,
