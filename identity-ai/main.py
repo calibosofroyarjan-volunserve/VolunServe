@@ -1255,9 +1255,10 @@ def run_face_verification(
             "matchThreshold":
                 threshold,
             "message": (
-                "The government ID face and submitted selfie "
-                "passed the VolunServe 1-to-1 landmark comparison. "
-                "Manual Admin review is required; liveness and ID authenticity are unverified."
+                "The ID portrait and selfie produced a preliminary, "
+                "uncalibrated landmark similarity observation. This does NOT "
+                "establish same-person identity, freshness or liveness. "
+                "Independent LGU/Admin review is required."
             ),
             "warnings": [
                 (
