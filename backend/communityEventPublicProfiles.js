@@ -66,9 +66,15 @@ function installCommunityEventPublicProfiles({app, db, requireFirebaseUser, load
       const certificates=[...certificateMap.values()].sort((a,b)=>millis(b.issuedAt)-millis(a.issuedAt)).map(c=>({
         title:clean(c.certificateTitle|| (c.certificateType==="community_event_participation"
           ? "Certificate of Participation" : "Certificate of Volunteer Service"),100),
+        certificateId:clean(c.certificateId || c.id,100),
         eventTitle:clean(c.eventTitle,120),
+        eventDate:clean(c.eventDate,32),
+        eventBarangay:clean(c.eventBarangay,90),
+        eventLocation:clean(c.eventLocation,150),
         issuedAt:date(c.issuedAt),
         serviceMinutes:count(c.verifiedServiceMinutes),
+        verifiedHelps:count(c.verifiedHelps),
+        peopleHelped:count(c.peopleHelped),
         type:c.certificateType,
         status:"Issued",
       }));
@@ -110,7 +116,7 @@ function installCommunityEventPublicProfiles({app, db, requireFirebaseUser, load
           certificateCount:certificates.length,verifiedHelps},
         activity,progress,certificates,
         // Never return UID, private identity verification status, contact, case IDs,
-        // internal certificate ID, attendance check-in/check-out timestamps or address.
+        // private attendance check-in/check-out timestamps or home address.
       });
     }catch(err){
       console.error("Public volunteer profile read failed:",err?.message);
