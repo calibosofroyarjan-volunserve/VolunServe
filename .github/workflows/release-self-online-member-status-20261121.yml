@@ -1,0 +1,230 @@
+# Controller is allowed to run ONLY from the protected default branch.
+# Site is built from the exact audited production descendant, never from divergent
+# protected branch app files. Hosting only, with backup + rollback.
+name: Protected Self Online Member Card Fix Hosting ONLY
+on:
+  push:
+    branches: [live-protected]
+    paths:
+      - '.github/workflows/release-self-online-member-status-20261121.yml'
+permissions:
+  contents: read
+concurrency:
+  group: volunserve-production-hosting-release
+  cancel-in-progress: false
+jobs:
+  guarded-release:
+    if: github.repository == 'calibosofroyarjan-volunserve/VolunServe' && github.ref == 'refs/heads/live-protected'
+    environment: production
+    runs-on: ubuntu-24.04
+    timeout-minutes: 80
+    env:
+      CI: 'true'
+      EXPO_NO_TELEMETRY: '1'
+      EXPO_PUBLIC_VOLUNSERVE_ENV: production
+      EXPO_PUBLIC_IDENTITY_VERIFICATION_API_URL: https://volunserve.onrender.com
+      SITE: volunserve-3aa5b
+      BASE_SHA: a0e1fdeea3705bf4c8da5ef2d6caa3f9391ae1fe
+      SOURCE_SHA: c35522bf163911227e350a7a4d11af7029d45b88
+      QA_SHA: f64a30dbd02f553261d0e2b2fd43327239ff71c9
+      MEMBERS_BLOB: 66d58cb3693039d9b6987c6cc53be2f53171c8bf
+      VOLUNSERVE_HOSTING_URL: https://volunserve.com
+      BACKUP_CHANNEL: self-online-card-before-release-20261121
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Verify protected controller, exact production-source patch, and successful UI QA (NO DEPLOY)
+        shell: bash
+        run: |
+          node <<'NODE'
+          const a=require('node:assert/strict');
+          const REPO='calibosofroyarjan-volunserve/VolunServe';
+          const B=process.env.BASE_SHA,S=process.env.SOURCE_SHA,Q=process.env.QA_SHA;
+          const MEMBERS='components/home/CommunityOnline.tsx';
+          const WF='.github/workflows/release-self-online-member-status-20261121.yml';
+          const api=async (route)=>{
+            const url='https://api.github.com/repos/'+REPO+'/'+route;
+            const r=await fetch(url,{headers:{Authorization:'Bearer '+process.env.GH_TOKEN,
+              Accept:'application/vnd.github+json','User-Agent':'VolunServe-Protected-Hosting-Controller'},
+              signal:AbortSignal.timeout(25000)});
+            a(r.ok,'BLOCKED: GitHub API HTTP '+r.status+' for '+route);
+            return r.json();
+          };
+          (async()=>{
+            a.equal(process.env.GITHUB_REF,'refs/heads/live-protected',
+              'BLOCKED: production environment requires protected branch');
+            a.equal(process.env.GITHUB_REPOSITORY,REPO);
+            const controller=await api('commits/'+process.env.GITHUB_SHA);
+            const verifier='.github/workflows/verify-reconciled-hosting-source-no-deploy-20261111.yml';
+            const approved=new Map([[WF,'added'],[verifier,'modified']]);
+            a.equal(controller.files.length,approved.size,
+              'BLOCKED controller commit changed unrelated paths');
+            for(const file of controller.files){
+              a.equal(approved.get(file.filename),file.status,
+                'BLOCKED controller modified unexpected file '+file.filename);
+            }
+            const cmp=await api('compare/'+B+'...'+S);
+            a.equal(cmp.status,'ahead','BLOCKED source does not descend from current Hosting');
+            a.equal(cmp.behind_by,0,'BLOCKED divergent source');
+            const changes=new Map(cmp.files.map(f=>[f.filename,f.status]));
+            a.equal(changes.size,1,'BLOCKED: only one reviewed member count component permitted');
+            a.equal(changes.get(MEMBERS),'modified','BLOCKED unrelated or outdated module');
+            const blob=async (path,sha)=>(await api('contents/'+path+'?ref='+sha)).sha;
+            for(const [path,expected] of [[MEMBERS,process.env.MEMBERS_BLOB]]){
+              a.equal(await blob(path,S),expected,'BLOCKED source UI drift: '+path);
+              a.equal(await blob(path,Q),expected,'BLOCKED QA and release source differ: '+path);
+            }
+            let green=false;
+            for(let i=0;i<55;i++){
+              const items=await api('actions/runs?branch=qa%2Fself-online-card-fix-20261121&per_page=40');
+              const relevant=items.workflow_runs.filter(x=>x.head_sha===Q &&
+                x.name==='QA Self Online Card and Private Directory Consent (NO DEPLOY)' &&
+                x.event==='push');
+              if(relevant.some(x=>x.status==='completed' && x.conclusion==='success')){
+                green=true;break;
+              }
+              if(relevant.length && relevant.every(x=>x.status==='completed')) {
+                throw Error('BLOCKED latest exact-UI QA failed');
+              }
+              console.log('WAITING on pinned QA, no live access');
+              await new Promise(resolve=>setTimeout(resolve,12000));
+            }
+            a(green,'BLOCKED: no successful pinned QA run');
+            console.log('PASS current live source; one exact QA-pinned self-presence UI fix, privacy retained');
+          })().catch(e=>{console.error(e.stack||e);process.exitCode=1});
+          NODE
+      - name: Extract exact audited site revision without legacy gitlink checkout
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p site
+          curl --fail --silent --show-error --location --retry 3 \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/$GITHUB_REPOSITORY/tarball/$SOURCE_SHA" \
+            -o "$RUNNER_TEMP/community-events-reviewed-source.tar.gz"
+          tar -xzf "$RUNNER_TEMP/community-events-reviewed-source.tar.gz" \
+            --strip-components=1 -C site
+          test -f 'site/app/(tabs)/community-member-profile.tsx'
+          test -f 'site/app/(tabs)/community-chat.tsx'
+          test -f 'site/app/(tabs)/community-inbox.tsx'
+          test -f 'site/components/home/Home.web.tsx'
+          test -f 'site/components/home/Home.native.tsx'
+          test -f 'site/components/home/CommunityOnline.tsx'
+          test -f 'site/components/home/CommunityCalendar.tsx'
+          test -f site/package-lock.json
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: site/package-lock.json
+      - name: Confirm authenticated Last Seen and private Chat endpoints are deployed
+        shell: bash
+        run: |
+          set -euo pipefail
+          for route in /api/community/directory /api/community/chats; do
+            STATUS=$(curl --silent --location --output /dev/null --write-out '%{http_code}' \
+              --max-time 25 "https://volunserve.onrender.com$route")
+            test "$STATUS" = "401" || { echo "::error::Backend route $route unavailable or unprotected: HTTP $STATUS"; exit 1; }
+          done
+          echo 'PASS authenticated directory and private chat endpoints'
+      - name: Confirm Hosting source still equals audited production (READ ONLY)
+        working-directory: site
+        shell: bash
+        run: VOLUNSERVE_EXPECTED_SHA="$BASE_SHA" node scripts/check-live-hosting.cjs
+      - name: Install exact pinned site dependencies
+        working-directory: site
+        run: npm ci --no-audit --no-fund
+      - name: TypeScript, roles, login, profile, and map regression checks
+        working-directory: site
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx tsc --noEmit --incremental false
+          node --test scripts/test-admin-volunteer-authorization.cjs
+          node --test scripts/test-embedded-emergency-map-navigation.cjs
+          node scripts/test-login-ui-release.cjs
+          node scripts/test-profile-certificates-account-menu.cjs
+      - name: Build signed-in self Online card without modifying backend or other members
+        working-directory: site
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx expo export --platform web --clear
+          GITHUB_SHA="$SOURCE_SHA" node scripts/verify-hosting-release.cjs
+          node <<'NODE'
+          const a=require('node:assert/strict'),fs=require('node:fs');
+          const marker=JSON.parse(fs.readFileSync('dist/volunserve-release.json','utf8'));
+          a.equal(marker.revision,process.env.SOURCE_SHA);
+          a.equal(marker.firebaseProject,process.env.SITE);
+          a(fs.existsSync('dist/index.html'));
+          for(const route of ['community-member-profile','community-inbox','community-chat']){
+            a(fs.existsSync('dist/'+route+'.html')||
+              fs.existsSync('dist/'+route+'/index.html'),'Missing public chat route '+route);
+          }
+          console.log('PASS current Hosting revision, signed-in self Online, existing Resident/Volunteer pages');
+          NODE
+      - name: Reconfirm live unchanged, validate correct production Hosting secret
+        working-directory: site
+        shell: bash
+        env:
+          FIREBASE_SA: ${{ secrets.VOLUNSERVE_PRODUCTION_HOSTING_SERVICE_ACCOUNT }}
+        run: |
+          set -euo pipefail
+          VOLUNSERVE_EXPECTED_SHA="$BASE_SHA" node scripts/check-live-hosting.cjs
+          test -n "$FIREBASE_SA" || { echo "::error::Missing production Hosting credential, blocked"; exit 1; }
+          node <<'NODE'
+          const a=require('node:assert/strict'),fs=require('node:fs');
+          const v=JSON.parse(process.env.FIREBASE_SA);
+          a.equal(v.type,'service_account');
+          a.equal(v.project_id,process.env.SITE);
+          a(v.client_email&&v.private_key,'BLOCKED: invalid production Hosting key');
+          fs.writeFileSync(process.env.RUNNER_TEMP+'/community-events-prod-hosting-key.json',
+            process.env.FIREBASE_SA,{mode:0o600});
+          console.log('PASS correct Firebase Hosting project key (secret not printed)');
+          NODE
+          echo "GOOGLE_APPLICATION_CREDENTIALS=$RUNNER_TEMP/community-events-prod-hosting-key.json" >> "$GITHUB_ENV"
+      - name: Back up published live Hosting before any deploy
+        id: backup
+        working-directory: site
+        shell: bash
+        run: |
+          set -euo pipefail
+          VOLUNSERVE_EXPECTED_SHA="$BASE_SHA" node scripts/check-live-hosting.cjs
+          npx firebase-tools hosting:clone "$SITE:live" "$SITE:$BACKUP_CHANNEL" \
+            --project "$SITE" --non-interactive
+          echo "PASS published Hosting backup created"
+      - name: Deploy Hosting ONLY, not Firestore, Auth, Functions, Render or data
+        id: deploy
+        working-directory: site
+        shell: bash
+        run: |
+          set -euo pipefail
+          VOLUNSERVE_EXPECTED_SHA="$BASE_SHA" node scripts/check-live-hosting.cjs
+          npx firebase-tools deploy --only hosting --project "$SITE" --non-interactive
+          echo "Hosting-only deploy complete; verifying fingerprint"
+      - name: Verify actual live Hosting revision and public routes
+        working-directory: site
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in 1 2 3 4 5 6; do
+            if VOLUNSERVE_EXPECTED_SHA="$SOURCE_SHA" node scripts/check-live-hosting.cjs; then
+              echo "PASS viewer's own member card online while signed in, other member privacy and Firestore unchanged"
+              exit 0
+            fi
+            sleep 12
+          done
+          echo "::error::Production smoke failed; trigger backup rollback"
+          exit 1
+      - name: Restore previous Hosting snapshot on deployment / smoke failure
+        if: failure() && steps.backup.outcome == 'success' && steps.deploy.outcome != 'skipped'
+        working-directory: site
+        shell: bash
+        run: |
+          npx firebase-tools hosting:clone "$SITE:$BACKUP_CHANNEL" "$SITE:live" \
+            --project "$SITE" --non-interactive
+          VOLUNSERVE_EXPECTED_SHA="$BASE_SHA" node scripts/check-live-hosting.cjs
+      - name: Remove temporary production credential file
+        if: always()
+        shell: bash
+        run: rm -f "$RUNNER_TEMP/community-events-prod-hosting-key.json"
