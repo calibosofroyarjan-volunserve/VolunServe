@@ -303,7 +303,7 @@ jobs:
               if(isEventController){
                 const oldHosting="eef240c29940cc2772c4467a5f7649ae8938b141";
                 const eventSource="d6080dea320821eb91e2a67f22a1053a8f04fa04";
-                const approvedControllerBlob="d3391a0d9119a890c01f364ff256417db26e6452";
+                const approvedControllerBlob="55e7c8437151d85fe5a43cb8c0c4f98a574558cd";
                 const approvedOldVerifierBlob="d992a01d9223bba401880b26c7dba735b82e2510";
                 assert.equal(liveBase,"3cbb6810a7df4572cfbbd767fe95721a53e65737",
                   "BLOCKED: protected branch moved; re-review this one-time release");
@@ -322,9 +322,12 @@ jobs:
                 const end=proposedVerifier.indexOf(
                   "            // END PINNED COMMUNITY EVENTS CONTROLLER GATE\n",start);
                 assert(start>=0 && end>start,"BLOCKED: scoped verifier gate markers missing");
+                const endOffset=end+
+                  "            // END PINNED COMMUNITY EVENTS CONTROLLER GATE\n".length;
+                assert.equal(proposedVerifier[endOffset],"\n",
+                  "BLOCKED: scoped insertion must end with one blank line");
                 const cleaned=proposedVerifier.slice(0,start)+
-                  proposedVerifier.slice(end+
-                    "            // END PINNED COMMUNITY EVENTS CONTROLLER GATE\n".length);
+                  proposedVerifier.slice(endOffset+1);
                 assert.equal(cleaned,baselineVerifier,
                   "BLOCKED: baseline verifier modified outside scoped one-time check");
                 git("merge-base","--is-ancestor",oldHosting,eventSource);
