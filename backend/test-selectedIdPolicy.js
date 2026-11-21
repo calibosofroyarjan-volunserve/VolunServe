@@ -7,7 +7,7 @@ const valid = type => ({
   detectedIdType:type, authenticityVerified:false,
   backSideProvided:type!=="passport", backSideScreened:type!=="passport",
 });
-for (const type of ["national_id","drivers_license","passport"]) {
+for (const type of ["national_id"]) {
   test("recognizes selected "+type+" type without claiming authenticity", () => {
     assert.equal(selectedIdRecognized(valid(type)),true);
     assert.equal(enforceSelectedIdDecision("verified",valid(type),false),"manual_review");
@@ -27,7 +27,7 @@ test("OCR name and DOB must both positively match before face precheck (never id
 });
 
 test("UMID and PRC ID are disabled even with matching OCR and perfect face match",()=>{
-  for(const unsupported of ["umid","prc_id"]){
+  for(const unsupported of ["drivers_license","passport","umid","prc_id"]){
     const screening=valid(unsupported);
     assert.equal(selectedIdRecognized(screening),false);
     assert.equal(enforceSelectedIdDecision("verified",screening,true),"failed");
@@ -48,7 +48,7 @@ for (const [label,screening] of [
   });
 }
 
-for (const type of ["national_id","drivers_license","passport"]) {
+for (const type of ["national_id"]) {
   for (const status of ["unsupported","inconclusive","mismatch"]) {
     test("selected "+type+" with "+status+" OCR status is always rejected",()=>{
       const bad={status,declaredIdType:type,detectedIdType:
@@ -60,12 +60,12 @@ for (const type of ["national_id","drivers_license","passport"]) {
   }
 }
 test("non-passport cannot bypass missing-back screening even with matching ID text",()=>{
-  for (const type of ["national_id", "drivers_license"]) {
+  for (const type of ["national_id"]) {
     const incomplete={...valid(type),backSideProvided:false,backSideScreened:false};
     assert.equal(selectedIdRecognized(incomplete),false);
     assert.equal(enforceSelectedIdDecision("verified",incomplete,true),"failed");
   }
-  assert.equal(selectedIdRecognized(valid("passport")),true);
+  assert.equal(selectedIdRecognized(valid("passport")),false);
 });
 test("duplicate side OCR warning cannot pass as a recognized government ID",()=>{
   const candidate={...valid("national_id"),warningCodes:["document_duplicate_side_text"]};
@@ -191,7 +191,7 @@ test("contradictory positive OCR plus warning is never treated as a recognized g
     "low_document_image_quality",
     "unexpected_untrusted_warning",
   ];
-  for (const type of ["national_id","drivers_license","passport"]) {
+  for (const type of ["national_id"]) {
     for (const warning of contradictoryWarnings) {
       const forged={...valid(type),warningCodes:[warning]};
       assert.equal(selectedIdRecognized(forged),false,`${type} should reject ${warning}`);
