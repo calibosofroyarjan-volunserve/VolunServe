@@ -32,7 +32,7 @@ jobs:
           python3 - <<'PY'
           import subprocess
           changed=subprocess.check_output(
-            ['git','diff','--name-only','origin/backend-live-protected...HEAD'],
+            ['git','diff','--name-only','origin/backend-live-protected HEAD'],
             text=True).splitlines()
           allowed={
             'backend/communitySocial.js',
