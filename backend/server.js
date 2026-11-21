@@ -13,6 +13,7 @@ const { combineApprovedBudget } = require("./assistanceDonationBudget");
 const { probeIdentityAiReadiness } = require("./identityAiReadiness");
 const {
   selectedIdRecognized, enforceSelectedIdDecision, blurryNationalIdNeedsReview,
+  demographicsReadyForFaceComparison,
 } = require("./selectedIdPolicy");
 const {reviewIssuerEvidence} = require("./identityIssuerReviewPolicy");
 const {isVerifiedFirebaseToken, isCompletedVolunServeProfile} = require("./verifiedFirebaseToken");
@@ -5058,6 +5059,7 @@ app.post(
       const birthConflict = screening.profileBirthDateCheck === "possible_conflict";
       const pass = validType &&
         !birthConflict &&
+        demographicsReadyForFaceComparison(screening) &&
         result?.outcome === "pass" &&
         selectedIdRecognized(screening) &&
         (declared === "passport" || screening.backSideScreened === true);
@@ -5072,7 +5074,7 @@ app.post(
         message: birthConflict
           ? "The date of birth on the ID may differ from your saved profile. Retake a clearer document or request Admin profile review; OCR differences are not proof of fraud."
           : pass
-          ? "ID scan and selected type appear consistent. Birthday/barangay are OCR hints only; Admin still checks unresolved details."
+          ? "ID type, profile name and birthday have consistent OCR clues. Government issuance and liveness remain unverified; independent Admin review is required."
           : review
             ? "The National ID is too blurry. You may continue for Admin rescan review but cannot be automatically approved."
             : screening.warningCodes.includes("school_id_not_supported")
@@ -5083,7 +5085,9 @@ app.post(
                   ? "The Back scan appears to show the front. Retake the reverse side."
                   : screening.warningCodes.includes("document_front_side_conflict")
                     ? "The Front scan appears to show back-side details. Retake the portrait/front."
-                    : "ID type or front/back orientation could not be recognized reliably. Retake clearer images.",
+                    : screening.status === "text_consistent_unverified" && !demographicsReadyForFaceComparison(screening)
+                      ? "ID OCR could not positively compare your name and birthday with your saved account. Check details or request Admin rescan/review."
+                      : "ID type or front/back orientation could not be recognized reliably. Retake clearer images.",
         authenticityVerified: false,
         livenessVerified: false,
       });
