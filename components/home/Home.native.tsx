@@ -12,6 +12,7 @@ import {
   Dimensions,
   Easing,
   Image,
+  Linking,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -650,6 +651,33 @@ export default function HomeScreen() {
                 </View>
                 <View style={[styles.nativeCalendarColumn,communityColumnsStacked&&styles.nativeColumnStacked]}>
                   <CommunityCalendar uid={user?.uid} mode={volunteerMode?"volunteer":"resident"} dashboard/>
+                </View>
+              </View>
+              <View style={styles.nativeEmergencyCard}>
+                <View style={styles.nativeEmergencyHeader}>
+                  <View style={styles.nativeEmergencyIcon}>
+                    <Ionicons name="call-outline" size={20} color="#FFFFFF"/>
+                  </View>
+                  <View style={{flex:1,minWidth:0}}>
+                    <Text style={styles.nativeEmergencyTitle}>Emergency Contacts</Text>
+                    <Text style={styles.nativeEmergencyDescription}>
+                      For immediate emergencies, contact authorized services directly.
+                    </Text>
+                  </View>
+                </View>
+                <View style={styles.nativeEmergencyNumbers}>
+                  <Pressable accessibilityRole="button" accessibilityLabel="Call SJDM CDRRMO"
+                    onPress={()=>{void Linking.openURL("tel:0443066234").catch(()=>{});}}
+                    style={styles.nativeEmergencyNumber}>
+                    <Text style={styles.nativeEmergencyLabel}>SJDM CDRRMO</Text>
+                    <Text style={styles.nativeEmergencyValue}>044-306-6234</Text>
+                  </Pressable>
+                  <Pressable accessibilityRole="button" accessibilityLabel="Call national emergency hotline 911"
+                    onPress={()=>{void Linking.openURL("tel:911").catch(()=>{});}}
+                    style={styles.nativeEmergencyNumber}>
+                    <Text style={styles.nativeEmergencyLabel}>National Emergency Hotline</Text>
+                    <Text style={styles.nativeEmergencyValue}>911</Text>
+                  </Pressable>
                 </View>
               </View>
             </View>
@@ -1344,6 +1372,18 @@ const styles = StyleSheet.create({
   nativeMembersColumn:{flex:1.78,minWidth:0},
   nativeCalendarColumn:{flex:1,minWidth:0},
   nativeColumnStacked:{width:"100%",flexGrow:0,flexShrink:0},
+  nativeEmergencyCard:{backgroundColor:"#FFF8F8",borderRadius:16,borderWidth:1,
+    borderColor:"#F2DCDD",padding:16,gap:12},
+  nativeEmergencyHeader:{flexDirection:"row",alignItems:"center",gap:12},
+  nativeEmergencyIcon:{height:43,width:43,borderRadius:12,backgroundColor:"#EF344C",
+    alignItems:"center",justifyContent:"center"},
+  nativeEmergencyTitle:{fontWeight:"800",fontSize:16,color:"#243F39"},
+  nativeEmergencyDescription:{fontSize:11,color:"#6F8581",lineHeight:17,marginTop:3},
+  nativeEmergencyNumbers:{flexDirection:"row",flexWrap:"wrap",gap:10},
+  nativeEmergencyNumber:{flexGrow:1,flexBasis:"44%",minWidth:130,padding:13,
+    backgroundColor:"#FFFFFF",borderWidth:1,borderColor:"#F1DFDF",borderRadius:10},
+  nativeEmergencyLabel:{fontSize:10.5,color:"#7F665F",fontWeight:"700"},
+  nativeEmergencyValue:{fontSize:18,color:"#CC2A40",fontWeight:"900",marginTop:5},
   nativeAnnouncements:{backgroundColor:"#FFFFFF",borderWidth:1,borderColor:"#DFEBE7",
     borderRadius:16,padding:17,gap:11},
   nativeAnnouncementsTitle:{flexDirection:"row",alignItems:"center",gap:10},
