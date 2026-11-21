@@ -99,7 +99,7 @@ export default function CommunityCalendar({uid,mode}:{uid?:string|null;mode:Memb
       </Pressable>
     </View>
     <View style={[styles.body,compact&&styles.bodyMobile]}>
-      <View style={styles.calendar}>
+      <View style={[styles.calendar,compact&&styles.calendarMobile]}>
         <View style={styles.monthHeader}>
           <Pressable accessibilityLabel="Previous month" onPress={()=>changeMonth(-1)} style={styles.monthArrow}>
             <Ionicons name="chevron-back" size={17} color="#345F53"/>
@@ -173,6 +173,7 @@ const styles=StyleSheet.create({
   body:{flexDirection:"row",alignItems:"flex-start",gap:20},
   bodyMobile:{flexDirection:"column"},
   calendar:{flexGrow:0,flexShrink:0,width:"43%",maxWidth:440,minWidth:270},
+  calendarMobile:{width:"100%",maxWidth:"100%",minWidth:0},
   monthHeader:{flexDirection:"row",alignItems:"center",justifyContent:"space-between",paddingBottom:9},
   monthTitle:{color:"#21473D",fontSize:15,fontWeight:"800"},
   monthArrow:{height:32,width:32,alignItems:"center",justifyContent:"center",backgroundColor:"#F1F7F4",borderRadius:9},
