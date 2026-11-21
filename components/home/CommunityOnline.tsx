@@ -25,6 +25,7 @@ export default function CommunityOnline({uid,dashboard=false}:{uid?:string|null;
   const {width}=useWindowDimensions();
   const compact=width<760;
   const [members,setMembers]=useState<Member[]>([]);
+  const [activeCounts,setActiveCounts]=useState({residents:0,volunteers:0,total:0});
   const [filter,setFilter]=useState<Filter>("all");
   const [expanded,setExpanded]=useState(false);
   const [settingsOpen,setSettingsOpen]=useState(false);
@@ -42,8 +43,10 @@ export default function CommunityOnline({uid,dashboard=false}:{uid?:string|null;
   const load=useCallback(async()=>{
     if(!uid){setLoading(false);setMembers([]);return;}
     try {
-      const payload=await communitySocialRequest<{members:Member[]}>("/api/community/directory");
+      const payload=await communitySocialRequest<{members:Member[];activeCounts?:{residents:number;volunteers:number;total:number}}>("/api/community/directory");
       setMembers(Array.isArray(payload.members)?payload.members:[]);
+      setActiveCounts(payload.activeCounts&&Number.isFinite(payload.activeCounts.total)?
+        payload.activeCounts:{residents:0,volunteers:0,total:0});
       setError("");
     } catch(reason){
       setError(reason instanceof Error?reason.message:"Unable to load online members.");
@@ -125,13 +128,15 @@ export default function CommunityOnline({uid,dashboard=false}:{uid?:string|null;
     </View>
     {dashboard&&<View style={styles.dashboardTotalRow}>
       <View style={styles.dashboardTotal}><Ionicons name="people-outline" size={13} color={GREEN}/>
-        <Text style={styles.dashboardTotalText}>{members.length} Public Members</Text>
+        <Text style={styles.dashboardTotalText}>{activeCounts.total} Active Members</Text>
       </View>
-      <Text style={styles.dashboardSmallCaption}>{onlineCount} online now</Text>
+      <Text style={styles.dashboardSmallCaption}>{members.length} shared profiles</Text>
     </View>}
     {!dashboard&&<View style={styles.countRow}>
       <View style={styles.countChip}><Ionicons name="people-outline" size={13} color={GREEN}/>
-        <Text style={styles.countText}>{members.length} Listed Members</Text></View>
+        <Text style={styles.countText}>{activeCounts.total} Active Members</Text></View>
+      <View style={styles.countChip}><Ionicons name="person-circle-outline" size={13} color={GREEN}/>
+        <Text style={styles.countText}>{members.length} Public Profiles</Text></View>
       <View style={styles.countChip}><View style={styles.chipDot}/>
         <Text style={styles.countText}>{residents} Residents</Text></View>
       <View style={styles.countChip}><View style={styles.chipDot}/>
@@ -213,7 +218,21 @@ export default function CommunityOnline({uid,dashboard=false}:{uid?:string|null;
         </View>)}
       </View> : <View style={styles.empty}>
         <Ionicons name="people-outline" size={26} color="#9BAFA7"/>
-        <Text style={styles.emptyText}>No public members match these filters. Try another search or invite members to opt in.</Text>
+        <Text style={styles.emptyText}>
+          {members.length===0&&filter==="all"&&!search
+            ?activeCounts.total>0
+              ?`${activeCounts.total} member${activeCounts.total===1?" is":"s are"} active. Their profiles are private until they choose to appear in the directory.`
+              :"No public profiles yet. Signed-in members can choose to share their profile."
+            :"No public profiles match this filter or search."}
+        </Text>
+        {!visible&&!directoryListed&&!search&&filter==="all"&&<Pressable
+          accessibilityRole="button" accessibilityLabel="Add my public profile to Members Directory"
+          disabled={Boolean(savingPreference)||settingLoading}
+          onPress={()=>void updatePreference("directoryListed")}
+          style={styles.optInAction}>
+          <Ionicons name="person-add-outline" size={16} color="#FFFFFF"/>
+          <Text style={styles.optInActionText}>Show My Public Profile</Text>
+        </Pressable>}
       </View>}
     {expanded&&displayed.length<filtered.length&&<Pressable accessibilityRole="button"
       onPress={()=>setPageSize(n=>n+24)} style={styles.showMore}>
@@ -309,6 +328,9 @@ const styles=StyleSheet.create({
   showMore:{alignSelf:"center",paddingHorizontal:16,paddingVertical:11,borderRadius:9,
     backgroundColor:"#ECF7F1",flexDirection:"row",alignItems:"center",gap:7},
   showMoreText:{fontSize:11.5,fontWeight:"800",color:GREEN},
+  optInAction:{flexDirection:"row",alignItems:"center",gap:7,backgroundColor:GREEN,
+    borderRadius:9,paddingVertical:11,paddingHorizontal:15,marginTop:7},
+  optInActionText:{fontSize:11.5,fontWeight:"800",color:"#FFFFFF"},
   directoryChoice:{padding:13,backgroundColor:"#F6FAF8",borderRadius:11,
     borderWidth:1,borderColor:"#DDEAE2",flexDirection:"row",alignItems:"center",gap:15},
   countChip:{flexDirection:"row",alignItems:"center",gap:6,paddingHorizontal:10,paddingVertical:6,
