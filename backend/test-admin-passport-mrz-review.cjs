@@ -81,8 +81,8 @@ test("unknown ML fields and forged issuer claims always fail closed",()=>{
   assert.equal(evidence.passportMrzCheckDigitsConsistent,false);
   assert.equal(evidence.passportIssuerAuthenticityVerified,false);
 });
-test("no MRZ checker is forced onto the other two supported IDs",()=>{
-  for(const id of ["national_id","drivers_license"]){
+test("no MRZ checker is forced onto National ID",()=>{
+  for(const id of ["national_id"]){
     const doc=sanitizer(input({
       declaredIdType:id,detectedIdType:id,backSideProvided:true,backSideScreened:true,
       backImageQualityStatus:"adequate",
@@ -93,7 +93,7 @@ test("no MRZ checker is forced onto the other two supported IDs",()=>{
   }
 });
 test("UMID and PRC remain unsupported even with supplied MRZ-like fields",()=>{
-  for(const id of ["umid","prc_id"]){
+  for(const id of ["drivers_license","passport","umid","prc_id"]){
     const doc=sanitizer(input({
       declaredIdType:id,detectedIdType:id,
       backSideProvided:true,backSideScreened:true,
