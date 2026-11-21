@@ -945,6 +945,8 @@ export default function CommunityEventsScreen() {
 
   const [expandedEvent, setExpandedEvent] =
     useState<string | null>(null);
+  // Keep the large directions map closed until the volunteer requests it.
+  const [expandedMapEvent, setExpandedMapEvent] = useState<string | null>(null);
   // Participant selection is independent of Event Details and My Attendance.
   const [rosterFocusId, setRosterFocusId] = useState<string | null>(null);
   const [participantsModalEventId, setParticipantsModalEventId] = useState<string | null>(null);
@@ -1231,6 +1233,7 @@ export default function CommunityEventsScreen() {
   const selectedOwned = !!selectedEvent && selectedEvent.proposedBy === user?.uid;
   const selectedRosterEvent = events.find(event => event.id === rosterFocusId) || selectedEvent || displayEvents[0] || null;
   const participantsModalEvent = events.find(event => event.id === participantsModalEventId);
+  const mapModalEvent = events.find(event => event.id === expandedMapEvent);
 
   const setValue = <K extends keyof ProposalForm>(
     field: K,
@@ -2243,6 +2246,7 @@ export default function CommunityEventsScreen() {
     const toggleDetails = () => {
       setRosterFocusId(event.id);
       setExpandedEvent(detailsOpen ? null : event.id);
+      setExpandedMapEvent(null);
       setRouteEventId(null);
       setRouteOrigin(null);
       setRouteNotice("");
@@ -2434,49 +2438,31 @@ export default function CommunityEventsScreen() {
                 isJoinedVolunteer={joined}
               />
             )}
-            {/* Event map belongs to the expanded event details, not the My Attendance rail. */}
+            {/* Event map belongs to the expanded event details via a dialog, not the My Attendance rail. Meeting point stays compact. */}
             <View style={styles.lockedEventMapCard}>
-              <View style={styles.lockedSectionHeading}>
-                <View style={styles.lockedSectionIcon}><Ionicons name="location" size={21} color="#078C80" /></View>
+              <View style={styles.lockedMapSummaryRow}>
+                <View style={styles.lockedSectionIcon}>
+                  <Ionicons name="location-outline" size={20} color="#08796F" />
+                </View>
                 <View style={{ flex: 1, minWidth: 0 }}>
                   <Text style={styles.lockedSectionTitle}>Location &amp; Directions</Text>
-                  <Text style={styles.lockedSectionSub}>Meeting point and navigation for volunteers</Text>
+                  <Text style={styles.lockedMapSummaryAddress} numberOfLines={2}>
+                    {event.location}{event.barangay ? `, ${event.barangay}` : ""}, San Jose del Monte, Bulacan
+                  </Text>
                 </View>
               </View>
-              <Text style={styles.lockedMapAddress}>{event.location}{event.barangay ? `, ${event.barangay}` : ""}, San Jose del Monte, Bulacan</Text>
-              <View style={styles.lockedMapFrame}>{renderWebMap(event)}</View>
-              {!eventHasCoordinates(event) && <View style={styles.lockedMapHintRow}>
-                <Ionicons name="information-circle-outline" size={14} color="#7C929E" />
-                <Text style={styles.lockedMapWarning}>Approximate location · confirm the exact meeting point with Admin/LGU</Text>
-              </View>}
-              {routeEventId === event.id && routeOrigin ? (
-                <View style={styles.lockedRouteReady}>
-                  <Ionicons name="navigate-circle" size={17} color="#078371" />
-                  <Text style={styles.lockedRouteReadyText}>Road route preview from your permitted device GPS · approximate travel time</Text>
-                  <Pressable accessibilityRole="button" onPress={() => { setRouteEventId(null); setRouteNotice(""); }}>
-                    <Text style={styles.lockedRouteReset}>Location map</Text>
-                  </Pressable>
-                </View>
-              ) : null}
-              {!!routeNotice && <View style={styles.lockedRouteHintRow}>
-                <Ionicons name="information-circle-outline" size={15} color="#6F8794" />
-                <Text style={styles.lockedRouteNotice}>{routeNotice}</Text>
-              </View>}
-              <View style={styles.lockedMapActions}>
-                {eventHasCoordinates(event) && (
-                  <Pressable style={styles.lockedMapOutline} accessibilityRole="button" accessibilityLabel="Show road route inside VolunServe" disabled={routeLoading}
-                    onPress={() => showRouteInVolunServe(event)}>
-                    {routeLoading ? <ActivityIndicator size="small" color="#08796F" /> : <Ionicons name="map-outline" size={16} color="#0B5963" />}
-                    <Text style={styles.lockedMapOutlineText}>{routeLoading ? "Locating…" : "Show Road Route"}</Text>
-                  </Pressable>
-                )}
-                <Pressable style={styles.lockedMapSolid} accessibilityRole="button" accessibilityLabel="Open directions in Google Maps"
-                  onPress={() => void Linking.openURL(googleMapsNavigationUrl(event))}>
-                  <Ionicons name="navigate-outline" size={16} color="white" />
-                  <Text style={styles.lockedMapSolidText}>{eventHasCoordinates(event) ? "Navigate to GPS Pin" : "Open in Google Maps"}</Text>
-                </Pressable>
-              </View>
-              <Text style={styles.lockedMapFootnote}>In-app route uses OpenStreetMap roads and an OSRM estimate without live traffic. Your GPS is shared only with the routing service when you tap Show Road Route; it is not saved in Firestore.</Text>
+              <Pressable accessibilityRole="button" accessibilityLabel={`Open location map and directions for ${event.title}`}
+                onPress={() => {
+                  setExpandedMapEvent(event.id);
+                  setRouteEventId(null);
+                  setRouteOrigin(null);
+                  setRouteNotice("");
+                }}
+                style={styles.lockedMapSummaryButton}>
+                <Ionicons name="map-outline" size={17} color="#08796F" />
+                <Text style={styles.lockedMapSummaryButtonText}>View Map &amp; Directions</Text>
+                <Ionicons name="arrow-forward" size={16} color="#08796F" />
+              </Pressable>
             </View>
           </View>
         )}
@@ -3062,6 +3048,63 @@ export default function CommunityEventsScreen() {
           </Pressable>
         )}
       </ScrollView>
+      )}
+
+      {Platform.OS === "web" && mapModalEvent && (
+        <Modal visible transparent animationType="fade" onRequestClose={() => setExpandedMapEvent(null)}>
+          <View style={styles.eventRosterBackdrop}>
+            <View style={styles.lockedMapModal}>
+              <View style={styles.lockedMapModalHeader}>
+                <View style={{ flex: 1, minWidth: 0 }}>
+                  <Text style={styles.lockedMapModalKicker}>EVENT MEETING POINT</Text>
+                  <Text style={styles.lockedMapModalTitle}>Location &amp; Directions</Text>
+                  <Text style={styles.lockedMapModalSubtitle} numberOfLines={2}>{mapModalEvent.title}</Text>
+                </View>
+                <Pressable accessibilityRole="button" accessibilityLabel="Close location map"
+                  style={styles.lockedMapModalClose} onPress={() => setExpandedMapEvent(null)}>
+                  <Ionicons name="close" size={22} color="#31575A" />
+                </Pressable>
+              </View>
+              <ScrollView style={styles.lockedMapModalScroll} contentContainerStyle={{ paddingBottom: 8 }} keyboardShouldPersistTaps="handled">
+              <Text style={styles.lockedMapAddress}>{mapModalEvent.location}{mapModalEvent.barangay ? `, ${mapModalEvent.barangay}` : ""}, San Jose del Monte, Bulacan</Text>
+              <View style={styles.lockedMapFrame}>{renderWebMap(mapModalEvent)}</View>
+              {!eventHasCoordinates(mapModalEvent) && <View style={styles.lockedMapHintRow}>
+                <Ionicons name="information-circle-outline" size={14} color="#7C929E" />
+                <Text style={styles.lockedMapWarning}>Approximate location · confirm the exact meeting point with Admin/LGU</Text>
+              </View>}
+              {routeEventId === mapModalEvent.id && routeOrigin ? (
+                <View style={styles.lockedRouteReady}>
+                  <Ionicons name="navigate-circle" size={17} color="#078371" />
+                  <Text style={styles.lockedRouteReadyText}>Road route preview from your permitted device GPS · approximate travel time</Text>
+                  <Pressable accessibilityRole="button" onPress={() => { setRouteEventId(null); setRouteNotice(""); }}>
+                    <Text style={styles.lockedRouteReset}>Location map</Text>
+                  </Pressable>
+                </View>
+              ) : null}
+              {!!routeNotice && <View style={styles.lockedRouteHintRow}>
+                <Ionicons name="information-circle-outline" size={15} color="#6F8794" />
+                <Text style={styles.lockedRouteNotice}>{routeNotice}</Text>
+              </View>}
+              <View style={styles.lockedMapActions}>
+                {eventHasCoordinates(mapModalEvent) && (
+                  <Pressable style={styles.lockedMapOutline} accessibilityRole="button" accessibilityLabel="Show road route inside VolunServe" disabled={routeLoading}
+                    onPress={() => showRouteInVolunServe(mapModalEvent)}>
+                    {routeLoading ? <ActivityIndicator size="small" color="#08796F" /> : <Ionicons name="map-outline" size={16} color="#0B5963" />}
+                    <Text style={styles.lockedMapOutlineText}>{routeLoading ? "Locating…" : "Show Road Route"}</Text>
+                  </Pressable>
+                )}
+                <Pressable style={styles.lockedMapSolid} accessibilityRole="button" accessibilityLabel="Open directions in Google Maps"
+                  onPress={() => void Linking.openURL(googleMapsNavigationUrl(mapModalEvent))}>
+                  <Ionicons name="navigate-outline" size={16} color="white" />
+                  <Text style={styles.lockedMapSolidText}>{eventHasCoordinates(mapModalEvent) ? "Navigate to GPS Pin" : "Open in Google Maps"}</Text>
+                </Pressable>
+              </View>
+              <Text style={styles.lockedMapFootnote}>In-app route uses OpenStreetMap roads and an OSRM estimate without live traffic. Your GPS is shared only with the routing service when you tap Show Road Route; it is not saved in Firestore.</Text>
+
+              </ScrollView>
+            </View>
+          </View>
+        </Modal>
       )}
       {Platform.OS === "web" && participantsModalEvent && user && (
         <Modal visible transparent animationType="fade" onRequestClose={() => setParticipantsModalEventId(null)}>
@@ -5693,6 +5736,19 @@ const styles = StyleSheet.create({
   lockedRailCard: { width: "100%", minWidth: 0, backgroundColor: "white", borderRadius: 14, padding: 15, borderWidth: 1, borderColor: "#E1EBE9", overflow: "hidden" },
   lockedAttendanceRail: { backgroundColor: "#FFFFFF", borderColor: "#D7E6E1", borderWidth: 1 },
   lockedEventMapCard: { backgroundColor: "#F5FAF9", borderRadius: 12, borderWidth: 1, borderColor: "#D6EAE2", padding: 16, marginTop: 4, gap: 4 },
+
+  lockedMapSummaryRow: { flexDirection: "row", alignItems: "center", gap: 11 },
+  lockedMapSummaryAddress: { fontFamily: vsType.family, fontSize: 12, color: "#5B7880", lineHeight: 18, marginTop: 4 },
+  lockedMapSummaryButton: { marginTop: 9, minHeight: 43, borderRadius: 9, backgroundColor: "#FFFFFF", borderWidth: 1, borderColor: "#B7D9D2", flexDirection: "row", justifyContent: "center", alignItems: "center", gap: 10, paddingHorizontal: 12 },
+  lockedMapSummaryButtonText: { fontFamily: vsType.family, color: "#08796F", fontSize: 12, fontWeight: "800" },
+  lockedMapModal: { width: "100%", maxWidth: 820, maxHeight: "90%", borderRadius: 16, backgroundColor: "#FFFFFF", padding: 20, borderWidth: 1, borderColor: "#DCEAE4" },
+  lockedMapModalHeader: { flexDirection: "row", gap: 12, alignItems: "flex-start", borderBottomWidth: 1, borderBottomColor: "#E0EBE7", paddingBottom: 14, marginBottom: 13 },
+  lockedMapModalKicker: { fontFamily: vsType.family, fontSize: 10, fontWeight: "800", color: "#08796F", letterSpacing: 0.6 },
+  lockedMapModalTitle: { fontFamily: vsType.family, fontSize: 20, lineHeight: 28, fontWeight: "800", color: "#173D3C", marginTop: 4 },
+  lockedMapModalSubtitle: { fontFamily: vsType.family, fontSize: 12, color: "#647E82", marginTop: 3 },
+  lockedMapModalClose: { width: 36, height: 36, borderRadius: 9, backgroundColor: "#EEF6F3", alignItems: "center", justifyContent: "center" },
+  lockedMapModalScroll: { flexGrow: 0, flexShrink: 1 },
+
   lockedAttendanceOverview: { backgroundColor: "#F8FBFA", borderRadius: 11, padding: 12, gap: 9, marginTop: 12, marginBottom: 5 },
   lockedAttendanceOverviewHeading: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 7 },
   lockedAttendanceOverviewTitle: { fontFamily:"EventInterBold", color: "#0D6A55", fontSize: 12, fontWeight: "900" },
