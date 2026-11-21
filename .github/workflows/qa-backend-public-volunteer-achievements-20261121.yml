@@ -1,0 +1,29 @@
+name: QA Live-Derived Backend Public Volunteer Portfolio (NO DEPLOY)
+on:
+  push:
+    branches: [qa/backend-public-volunteer-achievements-20261121]
+permissions:
+  contents: read
+jobs:
+  no-deploy-backend:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Source and privacy endpoint syntax
+        run: |
+          node --check backend/server.js
+          node --check backend/communityEventPublicProfiles.js
+          node --test backend/test-public-volunteer-portfolio.js
+          node --test backend/test-communityEventRoster.js
+      - name: Ensure unchanged original production routes
+        run: |
+          git diff --name-status 61baa71355f155bb7f66301be0e5f367d407cf0f 7b506b9799b156286e1073f61296ba761183f6e3
+          node -e "const fs=require('fs');const s=fs.readFileSync('backend/server.js','utf8');if(!s.includes('installCommunityEventPublicProfiles')||!s.includes('installCommunityEventRoster'))process.exit(1)"
+      - name: Existing backend pinned checks (with dependencies)
+        run: |
+          npm ci --prefix backend --no-audit --no-fund
+          npm --prefix backend run check
