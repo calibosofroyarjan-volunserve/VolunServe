@@ -20,6 +20,7 @@ const {isVerifiedFirebaseToken,isCompletedVolunServeProfile} = require("./verifi
 const {selectedIdRecognized} = require("./selectedIdPolicy");
 const {reviewIssuerEvidence} = require("./identityIssuerReviewPolicy");
 const {installManualIdentityReviewRoutes} = require("./identityManualReviewRoutes");
+const {isFullStagingRuntime} = require("./stagingFirebaseIsolation");
 
 const PROJECT = "demo-volunserve-identity-e2e";
 const AUTH_HOST = "127.0.0.1:9099";
@@ -96,8 +97,20 @@ function createActualHandlers(app) {
     collection:(...args)=>db.collection(...args),
     runTransaction:(callback)=>db.runTransaction(tx=>Promise.resolve(callback(tx))),
   };
+  // Auth tokens and Firestore reads/writes are REAL local demo emulators.
+  // Only the service's staging environment/project-ID checks are simulated
+  // to exercise staging-only manual-review policy without any cloud project.
+  const mockStagingServiceIdentity={
+    app:{options:{projectId:"volunserve-full-staging"}},
+    verifyIdToken:(...args)=>firebaseAuth.verifyIdToken(...args),
+  };
+  const simulatedStagingEnvironment={
+    VOLUNSERVE_STAGING_STRICT:"1",
+    VOLUNSERVE_DEPLOYMENT_ENV:"full-staging",
+  };
   const sandbox={
-    app,auth:firebaseAuth,db:transactionRealmBridge,FieldValue,
+    app,auth:mockStagingServiceIdentity,db:transactionRealmBridge,FieldValue,
+    isFullStagingRuntime,process:{env:simulatedStagingEnvironment},
     isVerifiedFirebaseToken,isCompletedVolunServeProfile,
     classifyStagingFirestoreFailure:()=> "emulator_only",
     isOperationalAdminProfile,getProfileRole,isApprovedAccount,
@@ -121,12 +134,9 @@ function createActualHandlers(app) {
   // It is NOT a Firebase app, credential or production/staging connection.
   installManualIdentityReviewRoutes({
     app,db:transactionRealmBridge,
-    auth:{app:{options:{projectId:"volunserve-full-staging"}}},
+    auth:mockStagingServiceIdentity,
     FieldValue,requireFirebaseUser:sandbox.requireFirebaseUser,
-    runtimeEnvironment:{
-      VOLUNSERVE_STAGING_STRICT:"1",
-      VOLUNSERVE_DEPLOYMENT_ENV:"full-staging",
-    },
+    runtimeEnvironment:simulatedStagingEnvironment,
   });
   // Test ONLY the literal media gate from actual backend/server.js.
   app.post("/emulator-test/identity-media",
