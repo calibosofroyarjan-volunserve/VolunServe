@@ -98,7 +98,7 @@ test("private last seen defaults OFF, online members show proper role and no UID
  assert.equal(result.payload.onlineCounts.residents,1);
  assert.equal(result.payload.onlineCounts.volunteers,1);
  assert(result.payload.members.every(x=>x.lastSeenAt===null&&x.online));
- assert(!JSON.stringify(result.payload).includes("resident\""));
+ assert(!JSON.stringify(result.payload).includes('"uid":'));
  assert.equal((await call("GET",directory,"admin")).status,403);
 });
 test("only explicit consent reveals last-seen when offline",async()=>{
