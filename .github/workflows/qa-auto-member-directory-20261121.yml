@@ -1,0 +1,42 @@
+name: QA Auto-Listed Community Members Backend (NO DEPLOY)
+on:
+  push:
+    branches: [fix/member-directory-auto-all-approved-20261121]
+    paths:
+      - 'backend/communitySocial.js'
+      - 'backend/test-communitySocial.js'
+      - '.github/workflows/qa-auto-member-directory-20261121.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  directory-only:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Validate syntax of changed module and tests
+        run: |
+          node --check backend/communitySocial.js
+          node --check backend/test-communitySocial.js
+      - name: Regression tests for member listing, presence and chat
+        run: node --test backend/test-communitySocial.js backend/test-communityPresence.js
+      - name: Block unrelated production backend changes
+        run: |
+          git fetch origin backend-live-protected --depth=1
+          python3 - <<'PY'
+          import subprocess
+          changed=set(subprocess.check_output(
+            ['git','diff','--name-only','origin/backend-live-protected','HEAD'],
+            text=True).splitlines())
+          allowed={
+            'backend/communitySocial.js',
+            'backend/test-communitySocial.js',
+            '.github/workflows/qa-auto-member-directory-20261121.yml'
+          }
+          assert changed and changed.issubset(allowed), repr(changed)
+          print('PASS: only Community Members backend and QA changed')
+          PY
