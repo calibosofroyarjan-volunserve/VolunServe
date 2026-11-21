@@ -969,6 +969,83 @@ jobs:
             }
             // END PINNED PRIVATE ACTIVE COMMUNITY COUNT CONTROLLER GATE
 
+            // BEGIN PINNED SCREENSHOT MEMBERS CALENDAR CONTROLLER GATE
+            // Production changes are limited to a reviewed Hosting controller
+            // and this isolated verifier addition; no app source on protected.
+            {
+              const controller=".github/workflows/release-exact-members-calendar-20261121.yml";
+              const verifier=".github/workflows/verify-reconciled-hosting-source-no-deploy-20261111.yml";
+              const changed=git("diff","--name-status","--no-renames",liveBase,commit)
+                .split("\n").filter(Boolean);
+              if(changed.length===2&&changed[0]==="A\t"+controller&&changed[1]==="M\t"+verifier){
+                const currentHosting="df63157a1933453fd9055b552fa6a18889ade98a";
+                const source="a0e1fdeea3705bf4c8da5ef2d6caa3f9391ae1fe";
+                const qa="3ef8ecdf033ebe54596754ef06c15781b780ddc1";
+                const files=[
+                  ["app/(tabs)/community-members.tsx","A","420ce9af248b921cf18e543849df531135598fb9"],
+                  ["components/home/CommunityCalendar.tsx","M","c6b4e03d0c944fdd18dc6bd946e956da7fcf22b2"],
+                  ["components/home/CommunityOnline.tsx","M","3951a45fed9d92326acf0adfe99cfb70128f88a1"],
+                  ["components/home/Home.native.tsx","M","62dc42e14f22ffc7ba6fc7232a998c944e58ae18"],
+                  ["components/home/Home.web.tsx","M","7b0457486ca878b6a89d6ddd9596330a1861a79e"]
+                ];
+                assert.equal(liveBase,"509024f1bf46446028ecbc7f0842129223619e46",
+                  "BLOCKED: protected controller branch changed");
+                assert.equal(marker.revision,currentHosting,
+                  "BLOCKED: deployed Hosting changed during review");
+                assert.equal(blob(liveBase,verifier),"23b491c2007811d258d5e345c457a1306f2fd085",
+                  "BLOCKED: existing verifier baseline modified");
+                assert.equal(blob(commit,controller),"31c40420a8f4c66a8caff1abd950daa654ee6bc1",
+                  "BLOCKED: unreviewed Hosting controller");
+                const before=git("show",liveBase+":"+verifier);
+                const after=git("show",commit+":"+verifier);
+                const begin="            // BEGIN PINNED SCREENSHOT MEMBERS CALENDAR CONTROLLER GATE\n";
+                const finish="            // END PINNED SCREENSHOT MEMBERS CALENDAR CONTROLLER GATE\n";
+                const first=after.indexOf(begin),last=after.indexOf(finish,first);
+                assert(first>=0&&last>first,"BLOCKED: isolated gate missing");
+                const end=last+finish.length;
+                assert.equal(after[end],"\n","BLOCKED: verifier newline structure changed");
+                assert.equal(after.slice(0,first)+after.slice(end+1),before,
+                  "BLOCKED: existing verifier modified beyond isolated gate");
+                git("merge-base","--is-ancestor",currentHosting,source);
+                const diff=git("diff","--name-status","--no-renames",currentHosting,source)
+                  .split("\n").filter(Boolean);
+                assert.equal(diff.length,files.length,
+                  "BLOCKED: unrelated or stale code entered this release");
+                for(const [path,status,sha] of files){
+                  assert(diff.includes(status+"\t"+path),"BLOCKED: unexpected UI path "+path);
+                  assert.equal(blob(source,path),sha,"BLOCKED: source blob differs "+path);
+                  assert.equal(blob(qa,path),sha,"BLOCKED: QA blob differs "+path);
+                  const oldPath=git("ls-tree","--name-only",liveBase,"--",path);
+                  const newPath=git("ls-tree","--name-only",commit,"--",path);
+                  assert.equal(newPath,oldPath,"BLOCKED: protected branch app source changed "+path);
+                  if(oldPath)assert.equal(blob(commit,path),blob(liveBase,path),
+                    "BLOCKED: protected app bytes changed "+path);
+                }
+                for(const file of [
+                  "package.json","package-lock.json","app.json","firebase.json",".firebaserc",
+                  "firestore.rules","storage.rules","backend/server.js","backend/communitySocial.js",
+                  "backend/communityPresence.js","app/(tabs)/_layout.tsx",
+                  "app/(tabs)/community-events.tsx","app/(tabs)/community-chat.tsx",
+                  "app/(tabs)/community-inbox.tsx","app/(tabs)/community-member-profile.tsx",
+                  "app/(tabs)/profile.tsx","lib/communitySocial.ts",
+                  "lib/useCommunityPresenceHeartbeat.ts","lib/firebase.ts",
+                  "scripts/guard-live-protected-release.cjs",
+                  ".github/workflows/auto-publish-protected-live-hosting.yml",
+                  ".github/workflows/release-live-protected-hosting.yml"
+                ]){
+                  const oldTree=git("ls-tree","--name-only",liveBase,"--",file);
+                  const newTree=git("ls-tree","--name-only",commit,"--",file);
+                  assert.equal(newTree,oldTree,"BLOCKED: protected branch non-UI drift "+file);
+                  if(oldTree)assert.equal(blob(commit,file),blob(liveBase,file),
+                    "BLOCKED: non-UI code touched "+file);
+                }
+                console.log("PASS exact five screenshot files, current Hosting source, QA pins, untouched protected modules");
+                console.log("This gate never deploys; guarded controller has Hosting-only backup+rollback");
+                return;
+              }
+            }
+            // END PINNED SCREENSHOT MEMBERS CALENDAR CONTROLLER GATE
+
             assert.equal(marker.revision,liveBase,
               "BLOCKED: protected base and production differ; reconcile FIRST");
             const text=git("diff","--name-status","--no-renames",liveBase,commit);
