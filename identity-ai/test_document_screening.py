@@ -11,22 +11,20 @@ class GovernmentIdScreeningTests(unittest.TestCase):
         self.assertFalse(actual["authenticityVerified"])
         self.assertTrue(actual["manualReviewRequired"])
 
-    def test_drivers_license(self):
-        actual = assess_document_text("drivers_license", "Republic of the Philippines Land Transportation Office DRIVER'S LICENSE")
-        self.assertEqual(actual["detectedIdType"], "drivers_license")
-        self.assertEqual(actual["status"], "text_consistent_unverified")
+    def test_drivers_license_disallowed(self):
+        with self.assertRaises(ValueError):
+            assess_document_text("drivers_license", "Republic of the Philippines Land Transportation Office DRIVER'S LICENSE")
 
     def test_ocr_apostrophe_split_in_drivers_license(self):
         # Tesseract often separates DRIVER'S into DRIVER S.
         for text in ("DRIVER'S LICENSE", "DRIVER S LICENSE", "DRIVERS LICENSE"):
             with self.subTest(text=text):
-                actual = assess_document_text("drivers_license", text)
-                self.assertEqual(actual["status"], "text_consistent_unverified")
+                with self.assertRaises(ValueError):
+                    assess_document_text("drivers_license", text)
 
-    def test_passport(self):
-        actual = assess_document_text("passport", "REPUBLIC OF THE PHILIPPINES PASAPORTE / PASSPORT")
-        self.assertEqual(actual["detectedIdType"], "passport")
-        self.assertEqual(actual["status"], "text_consistent_unverified")
+    def test_passport_disallowed(self):
+        with self.assertRaises(ValueError):
+            assess_document_text("passport", "REPUBLIC OF THE PHILIPPINES PASAPORTE / PASSPORT")
 
     def test_removed_government_ids_are_rejected(self):
         for id_type in ("umid", "prc_id", "other_government_id"):
@@ -35,7 +33,7 @@ class GovernmentIdScreeningTests(unittest.TestCase):
                     assess_document_text(id_type, "UNIFIED MULTI-PURPOSE ID")
 
     def test_declared_type_mismatch(self):
-        actual = assess_document_text("passport", "LAND TRANSPORTATION OFFICE DRIVER'S LICENSE")
+        actual = assess_document_text("national_id", "LAND TRANSPORTATION OFFICE DRIVER'S LICENSE")
         self.assertEqual(actual["status"], "mismatch")
         self.assertIn("selected_id_type_conflicts_with_ocr", actual["warningCodes"])
 
@@ -96,9 +94,8 @@ class GovernmentIdScreeningTests(unittest.TestCase):
         self.assertNotIn("1990", repr(actual))
 
     def test_wrong_declared_id_not_approved_by_national_id_text(self):
-        result = assess_document_text("drivers_license", "NATIONAL ID IN PAPER GIVEN NAMES TEST")
-        self.assertEqual(result["status"], "mismatch")
-        self.assertFalse(result["authenticityVerified"])
+        with self.assertRaises(ValueError):
+            assess_document_text("drivers_license", "NATIONAL ID IN PAPER GIVEN NAMES TEST")
 
     def test_combined_id_documents_need_manual_review(self):
         result = assess_document_text("national_id", "PhilID with PASSPORT")
@@ -114,8 +111,8 @@ class GovernmentIdScreeningTests(unittest.TestCase):
     def test_school_id_with_government_keywords_never_passes(self):
         examples = (
             ("national_id", "UNIVERSITY ID STUDENT ID PhilID"),
-            ("drivers_license", "SCHOOL ID DRIVER'S LICENSE"),
-            ("passport", "CAMPUS ID PASSPORT"),
+            ("national_id", "SCHOOL ID DRIVER'S LICENSE"),
+            ("national_id", "CAMPUS ID PASSPORT"),
         )
         for declared_type, text in examples:
             with self.subTest(declared_type=declared_type):
