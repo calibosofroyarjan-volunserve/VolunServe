@@ -1,0 +1,41 @@
+name: QA Public Volunteer Profile Actual Certificates (NO DEPLOY)
+on:
+  push:
+    branches: [qa/public-volunteer-profile-actual-certs-20261121]
+permissions:
+  contents: read
+jobs:
+  full-qa:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      CI: 'true'
+      EXPO_NO_TELEMETRY: '1'
+      EXPO_PUBLIC_VOLUNSERVE_ENV: production
+      EXPO_PUBLIC_IDENTITY_VERIFICATION_API_URL: https://volunserve.onrender.com
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Check restricted backend and official record rendering
+        run: |
+          node --check backend/communityEventPublicProfiles.js
+          node --check backend/server.js
+          node --test backend/test-public-volunteer-portfolio.js
+          node --test backend/test-communityEventRoster.js
+          node scripts/test-public-volunteer-actual-certificates-20261121.cjs
+      - name: Install pinned dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Typecheck and existing production module regression tests
+        run: |
+          npx tsc --noEmit --incremental false
+          node --test scripts/test-admin-volunteer-authorization.cjs
+          node --test scripts/test-embedded-emergency-map-navigation.cjs
+          node scripts/test-profile-certificates-account-menu.cjs
+          node scripts/test-login-ui-release.cjs
+      - name: Verify web export with public certificate preview
+        run: |
+          npx expo export --platform web --clear
+          test -f dist/community-event-profile.html || test -f dist/community-event-profile/index.html
