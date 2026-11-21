@@ -26,6 +26,7 @@ import {
   UserProfile,
 } from "../../lib/firebaseAuth";
 import { useUserSession } from "../../lib/useUserSession";
+import { useCommunityPresenceHeartbeat } from "../../lib/useCommunityPresenceHeartbeat";
 
 type TabDefinition = {
   name: string;
@@ -124,6 +125,7 @@ export default function TabLayout() {
   const [mobileProfileOpen, setMobileProfileOpen] = React.useState(false);
 
   const mode = profile ? activeModeForProfile(profile) : "resident";
+  useCommunityPresenceHeartbeat(user?.uid,mode);
   const menuItems = mode === "volunteer" ? volunteerDesktopTabs : residentDesktopTabs;
   const canSwitchMode = Boolean(profile && hasResidentAccess(profile) && hasVolunteerAccess(profile));
   const adminRoute = profile ? administrativeRouteForProfile(profile) : null;
