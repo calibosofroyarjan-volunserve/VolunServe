@@ -58,6 +58,15 @@ def sanitize_observation(observation):
 def inspect_two_photos(args):
     if not args.consent_confirmed:
         raise ValueError("informed_consent_required")
+    # Identify missing local folders before loading optional AI packages.
+    # This was the actual blocker on the previous Windows two-photo test.
+    root = Path(args.image_root).resolve(strict=False)
+    if not root.is_dir():
+        raise ValueError("private_image_directory_unavailable")
+    id_path = _within_root(root, args.id_image)
+    selfie_path = _within_root(root, args.selfie_image)
+    if id_path is None or selfie_path is None:
+        raise ValueError("private_photo_missing_or_invalid")
     import cv2
     import numpy as np
     from PIL import Image
@@ -67,13 +76,6 @@ def inspect_two_photos(args):
     from face_pair_integrity import exact_image_reuse
     from image_upload_bounds import image_dimensions_allowed
 
-    root = Path(args.image_root).resolve(strict=True)
-    if not root.is_dir():
-        raise ValueError("private_image_directory_unavailable")
-    id_path = _within_root(root, args.id_image)
-    selfie_path = _within_root(root, args.selfie_image)
-    if id_path is None or selfie_path is None:
-        raise ValueError("private_photo_missing_or_invalid")
     # Never download missing models or fall back to random/research scores.
     os.environ["VOLUNSERVE_SFACE_SHADOW"] = "1"
     if (not sface_shadow.readiness().get("modelLoaded") or
@@ -90,6 +92,32 @@ def inspect_two_photos(args):
     return sanitize_observation(sface_shadow.assess_pair_shadow(id_image, selfie_image))
 
 
+SAFE_BLOCK_REASONS = frozenset({
+    "informed_consent_required",
+    "private_image_directory_unavailable",
+    "private_photo_missing_or_invalid",
+    "photos_must_share_private_folder",
+    "photo_selection_cancelled",
+})
+
+
+def safe_block_reason(error):
+    """Never echo an exception containing identity/filename/private path."""
+    code = str(error) if isinstance(error, ValueError) else ""
+    return code if code in SAFE_BLOCK_REASONS else "prerequisite_or_runtime_unavailable"
+
+
+def print_safe_result(result):
+    """Only a bounded research observation, never a biometric approval."""
+    print("VOLUNSERVE_SFACE_LOCAL_RESEARCH_ONLY")
+    print("stage=" + str(result["stage"]))
+    print("modelStatus=" + str(result["status"]))
+    if result["score"] is not None:
+        print(f"uncalibratedCosineSimilarity={result['score']:.5f}")
+    print("identityVerified=false; livenessValidated=false; idIssuerVerified=false")
+    print("No image upload, no automatic same-person decision.")
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--image-root", required=True)
@@ -101,18 +129,11 @@ def main():
     args = parser.parse_args()
     try:
         result = inspect_two_photos(args)
-    except Exception:
-        # Absolute filenames and model/OpenCV errors can expose private
-        # information; never echo them or dump exception tracebacks.
-        print("LOCAL_SFACE_BLOCKED: confirm local consent, picture files, prerequisites and model checks.")
+    except Exception as error:
+        # Never print raw filename, path, exception or private image content.
+        print("LOCAL_SFACE_BLOCKED: " + safe_block_reason(error))
         raise SystemExit(2) from None
-    print("VOLUNSERVE_SFACE_LOCAL_RESEARCH_ONLY")
-    print("stage=" + result["stage"])
-    print("modelStatus=" + result["status"])
-    if result["score"] is not None:
-        print(f"uncalibratedCosineSimilarity={result['score']:.5f}")
-    print("identityVerified=false; livenessValidated=false; idIssuerVerified=false")
-    print("No image upload, no automatic same-person decision.")
+    print_safe_result(result)
 
 
 if __name__ == "__main__":
