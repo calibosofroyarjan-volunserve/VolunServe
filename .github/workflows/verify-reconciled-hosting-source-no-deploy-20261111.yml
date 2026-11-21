@@ -904,6 +904,71 @@ jobs:
             }
             // END PINNED RESIDENT VOLUNTEER COMMUNITY DASHBOARD LAYOUT GATE
 
+            // BEGIN PINNED PRIVATE ACTIVE COMMUNITY COUNT CONTROLLER GATE
+            // Only this new Hosting workflow and isolated verifier guard can
+            // change live-protected. Production app comes from a tested source.
+            {
+              const controller=".github/workflows/release-private-active-count-home-20261121.yml";
+              const verifier=".github/workflows/verify-reconciled-hosting-source-no-deploy-20261111.yml";
+              const changed=git("diff","--name-status","--no-renames",liveBase,commit)
+                .split("\n").filter(Boolean);
+              if(changed.length===2&&changed[0]==="A\t"+controller&&changed[1]==="M\t"+verifier){
+                const liveHosting="85bf4026d0c54c98c3432a3102279bb446ae3235";
+                const source="df63157a1933453fd9055b552fa6a18889ade98a";
+                const qa="9eb52eed2c78b44b8616a14b648a362cc395d505";
+                const path="components/home/CommunityOnline.tsx";
+                const hash="8c6f1f81bf5f2a25e45391cc8f04d06ed88c3c2f";
+                assert.equal(liveBase,"88407411696028687c008373e909648c4684ba0c",
+                  "BLOCKED: protected controller branch revision drift");
+                assert.equal(marker.revision,liveHosting,
+                  "BLOCKED: current live Hosting source changed during review");
+                assert.equal(blob(liveBase,verifier),"f5a352fbb8b5df6002bf56115555fa8bd38d9ea0",
+                  "BLOCKED: prior protected verifier changed");
+                assert.equal(blob(commit,controller),"41c5b0b97de58b0a0dbcedf0a21a8c430d534ce7",
+                  "BLOCKED: unreviewed Hosting release controller");
+                const before=git("show",liveBase+":"+verifier);
+                const after=git("show",commit+":"+verifier);
+                const begin="            // BEGIN PINNED PRIVATE ACTIVE COMMUNITY COUNT CONTROLLER GATE\n";
+                const finish="            // END PINNED PRIVATE ACTIVE COMMUNITY COUNT CONTROLLER GATE\n";
+                const first=after.indexOf(begin),last=after.indexOf(finish,first);
+                assert(first>=0&&last>first,"BLOCKED: isolated gate markers missing");
+                const end=last+finish.length;
+                assert.equal(after[end],"\n","BLOCKED: verifier guard newline drift");
+                assert.equal(after.slice(0,first)+after.slice(end+1),before,
+                  "BLOCKED: verifier modified outside isolated guard");
+                git("merge-base","--is-ancestor",liveHosting,source);
+                const diff=git("diff","--name-status","--no-renames",liveHosting,source)
+                  .split("\n").filter(Boolean);
+                assert.equal(diff.length,1,"BLOCKED: unrelated or outdated UI module");
+                assert.equal(diff[0],"M\t"+path,"BLOCKED: only Member panel may change");
+                assert.equal(blob(source,path),hash,"BLOCKED: source Member panel changed");
+                assert.equal(blob(qa,path),hash,"BLOCKED: QA Member panel changed");
+                for(const file of [
+                  path,"package.json","package-lock.json","app.json","firebase.json",".firebaserc",
+                  "firestore.rules","storage.rules","backend/server.js","backend/communitySocial.js",
+                  "backend/communityPresence.js","app/(tabs)/_layout.tsx","app/(tabs)/community-events.tsx",
+                  "app/(tabs)/community-chat.tsx","app/(tabs)/community-inbox.tsx",
+                  "app/(tabs)/community-member-profile.tsx","app/(tabs)/profile.tsx",
+                  "components/home/Home.web.tsx","components/home/Home.native.tsx",
+                  "components/home/CommunityCalendar.tsx","lib/communitySocial.ts",
+                  "lib/useCommunityPresenceHeartbeat.ts","lib/firebase.ts",
+                  "scripts/guard-live-protected-release.cjs",
+                  ".github/workflows/auto-publish-protected-live-hosting.yml",
+                  ".github/workflows/release-live-protected-hosting.yml"
+                ]){
+                  const oldTree=git("ls-tree","--name-only",liveBase,"--",file);
+                  const newTree=git("ls-tree","--name-only",commit,"--",file);
+                  assert.equal(newTree,oldTree,"BLOCKED: protected app module drift "+file);
+                  if(oldTree)assert.equal(blob(commit,file),blob(liveBase,file),
+                    "BLOCKED: unrelated protected source modified "+file);
+                }
+                console.log("PASS one exact QA-pinned Member panel; previous Homepage, chat, emergency and certificates retained");
+                console.log("No deploy from PR. Protected workflow controls Hosting backup, publish and rollback.");
+                return;
+              }
+            }
+            // END PINNED PRIVATE ACTIVE COMMUNITY COUNT CONTROLLER GATE
+
             assert.equal(marker.revision,liveBase,
               "BLOCKED: protected base and production differ; reconcile FIRST");
             const text=git("diff","--name-status","--no-renames",liveBase,commit);
