@@ -35,7 +35,8 @@ const display=(uid,p,now=Date.now())=>{
   key:publicKey(uid),name,avatarUrl:safePhoto(p.avatarUrl),mode,
   verified:p.verified===true,
   badge:mode==="volunteer"?"Volunteer":p.verified===true?"Verified Resident":"Basic Resident",
-  online, lastSeenAt:showOffline&&last>0?new Date(last).toISOString():null,
+  online, presencePrivate:p.visible!==true,
+  lastSeenAt:showOffline&&last>0?new Date(last).toISOString():null,
   directoryListed:p.directoryListed===true,acceptChats:p.acceptChats===true,
  };
 };
@@ -53,35 +54,42 @@ function installCommunitySocial({app,db,requireFirebaseUser,loadUserProfile,isAp
   return p;
  };
  const scan=async()=>{
-  // Read ONLY existing opt-in presence/directory documents; never enumerate
-  // users, Firebase Auth accounts or application records to populate the list.
-  // Both single-field Firestore queries use default automatic indexes.
-  const [shown,listed]=await Promise.all([
+  // The authenticated member directory lists current, approved Resident and
+  // Volunteer accounts, including offline accounts without presence opt-in.
+  // Never list Admins, applications, rejected, suspended or deleted profiles.
+  // Read canonical server-side users; never trust a client-side role/UID.
+  const [approved,shown,listed]=await Promise.all([
+    db.collection("users").where("status","==","approved").get(),
     db.collection("communityPresence").where("visible","==",true).get(),
     db.collection("communityPresence").where("directoryListed","==",true).get(),
   ]);
-  const merged=new Map();
+  const presenceByUid=new Map();
   for(const doc of [...shown.docs,...listed.docs])
-    merged.set(doc.id,{uid:doc.id,p:doc.data()||{}});
-  const now=Date.now(),candidates=[...merged.values()].filter(({p})=>{
-    const elapsed=now-numberTime(p.updatedAt);
-    const legacyPresent=p.visible===true && elapsed>=0 &&
-      (elapsed<FRESH_MS||(p.showLastSeen===true&&elapsed<LAST_SEEN_MAX_MS));
-    return ["resident","volunteer"].includes(p.mode) &&
-      (p.directoryListed===true||legacyPresent);
-  });
-  // Recheck current approval/role on every read. Former, suspended or
-  // rejected members are never leaked merely because a stale consent doc remains.
-  const checked=await Promise.all(candidates.map(async row=>{
-    const canonical=await loadUserProfile(row.uid);
-    if(!permitted(canonical,isApprovedAccount))return null;
-    return {...row,p:{
-      ...row.p,
+    presenceByUid.set(doc.id,doc.data()||{});
+  const rows=[];
+  for(const doc of approved.docs){
+    const canonical=doc.data()||{};
+    if(!permitted(canonical,isApprovedAccount)||
+      canonical.deleted===true||canonical.isDeleted===true||
+      canonical.accountStatus==="deleted")continue;
+    const presence=presenceByUid.get(doc.id)||{};
+    const name=clean(canonical.fullName||
+      [canonical.firstName,canonical.lastName].filter(Boolean).join(" ")||
+      "Community member",100);
+    rows.push({uid:doc.id,p:{
+      ...presence,
       mode:canonicalMode(canonical),
       verified:canonical.identityVerified===true||canonical.identityStatus==="verified",
-    }};
-  }));
-  return checked.filter(Boolean);
+      displayName:name,
+      avatarUrl:safePhoto(canonical.profilePictureUrl),
+      // Prior user consent still governs online/last-seen and messaging.
+      visible:presence.visible===true,
+      showLastSeen:presence.visible===true&&presence.showLastSeen===true,
+      directoryListed:presence.directoryListed===true,
+      acceptChats:presence.acceptChats===true,
+    }});
+  }
+  return rows;
  };
  const peerForKey=async(uid,key,includePast=true)=>{
    if(!keyMatches(key))return null;
@@ -211,7 +219,7 @@ function installCommunitySocial({app,db,requireFirebaseUser,loadUserProfile,isAp
      const peer=await peerForKey(req.firebaseUser.uid,req.params.memberKey,false);
      if(!peer)return notFound(res);
      res.set("Cache-Control","private, no-store");
-     res.json({ok:true,member:publicPeer(peer),self:false});
+     res.json({ok:true,member:display(peer.uid,peer.p),self:false});
    }catch(e){errorResponse(res,e,"Public member profile");}
  });
  app.get("/api/community/chats",requireFirebaseUser,async(req,res)=>{
