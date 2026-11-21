@@ -5625,7 +5625,9 @@ const styles = StyleSheet.create({
   lockedSearch: { width: 250, minWidth: 190, flexShrink: 1 },
   lockedEventList: { marginTop: 8 },
   lockedEventListRows: { gap: 10, paddingTop: 6 },
-  lockedMainStack: { width: "100%", flex: 0 },
+  // Stacked viewport: preserve intrinsic Events height before the Attendance rail.
+  // The old `flex: 0` collapsed the main column at tablet/mobile widths.
+  lockedMainStack: { width: "100%", flexGrow: 0, flexShrink: 0, flexBasis: "auto" },
   lockedEventShell: { backgroundColor: "white", borderColor: "#E1EBE8", borderWidth: 1, borderRadius: 13, overflow: "hidden", width: "100%" },
   lockedEventSummaryClick: { gap: 7, paddingVertical: 6, borderRadius: 8, minWidth: 0 },
   lockedEventTapHint: { flexDirection: "row", alignItems: "center", gap: 7, marginTop: 4 },
