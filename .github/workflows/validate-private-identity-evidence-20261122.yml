@@ -29,6 +29,7 @@ jobs:
           node --check backend/identityStagingGuard.js
           node --test backend/tests/identityStagingGuard.test.js
           node --test backend/tests/identityEvidence.test.js
+          node --test backend/tests/identityEvidenceRoundTrip.test.js
       - name: Check existing Identity and Admin contracts
         run: |
           node scripts/test-identity-api-staging-guard.cjs
