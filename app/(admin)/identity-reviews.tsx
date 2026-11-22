@@ -129,7 +129,8 @@ export default function IdentityReviewsAdmin() {
   const params = useLocalSearchParams<{ uid?: string }>();
   const { loading: sessionLoading, user, profile } = useUserSession();
   const { width } = useWindowDimensions();
-  const wide = width >= 1050;
+  // Two columns need space for both the 5-record queue and detailed evidence cards.
+  const wide = width >= 1240;
   const scrollRef = useRef<ScrollView | null>(null);
 
   const [items, setItems] = useState<IdentityReview[]>([]);
@@ -480,21 +481,6 @@ export default function IdentityReviewsAdmin() {
               Loading identity reviews...
             </Text>
           </View>
-        ) : filtered.length === 0 && !mobileDetail ? (
-          <View style={styles.emptyCard}>
-            <Ionicons
-              name="shield-checkmark-outline"
-              size={38}
-              color="#94A3B8"
-            />
-            <Text style={styles.emptyTitle}>
-              No identity reviews here
-            </Text>
-            <Text style={styles.centerText}>
-              New AI-uncertain cases will appear in Pending when manual
-              validation is required.
-            </Text>
-          </View>
         ) : (
           <View
             style={[
@@ -552,6 +538,16 @@ export default function IdentityReviewsAdmin() {
                 <Text style={styles.queuePrivacyText}>Private evidence is available only to authorized LGU reviewers.</Text>
               </View>
 
+              {pagedReviews.length === 0 ? (
+                <View style={styles.queueEmptyState}>
+                  <Ionicons name="search-outline" size={23} color="#8CA99A" />
+                  <Text style={styles.queueEmptyTitle}>No matching reviews</Text>
+                  <Text style={styles.queueEmptyText}>
+                    {search.trim() ? "Try another resident name or ID." :
+                      "No submissions in this status. Select another filter to continue."}
+                  </Text>
+                </View>
+              ) : null}
               {pagedReviews.map((item) => {
                 const active = selected?.uid === item.uid;
                 return (
@@ -1319,6 +1315,12 @@ const styles = StyleSheet.create({
     backgroundColor: "#F4FAF6", padding: 9, borderRadius: 8, marginBottom: 2 },
   queuePrivacyText: { flex: 1, color: "#527568", fontSize: vsType.size.micro,
     fontFamily: vsType.family, lineHeight: 15 },
+  queueEmptyState: { minHeight: 165, padding: 18, alignItems: "center",
+    justifyContent: "center", gap: 8 },
+  queueEmptyTitle: { color: "#173D32", fontSize: vsType.size.label,
+    fontFamily: vsType.family, fontWeight: "700" },
+  queueEmptyText: { color: "#71867A", textAlign: "center",
+    fontSize: vsType.size.caption, fontFamily: vsType.family, lineHeight: 17 },
   queueFooter: { marginTop: 7, borderTopWidth: 1, borderTopColor: "#E8F0EB",
     paddingTop: 12, alignItems: "center", gap: 5 },
   queueFooterLabel: { color: "#647E71", fontSize: vsType.size.caption, fontFamily: vsType.family },
