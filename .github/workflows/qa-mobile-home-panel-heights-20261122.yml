@@ -68,4 +68,4 @@ jobs:
           node --test scripts/test-embedded-emergency-map-navigation.cjs
       - name: Build full Expo web site (NO DEPLOY)
         run: npx expo export --platform web --clear
-      - run: echo 'QA only: no backend changes or production publish'
+      - run: echo "NO DEPLOY - QA only - no backend modifications"
