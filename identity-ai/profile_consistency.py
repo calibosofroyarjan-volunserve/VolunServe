@@ -65,7 +65,7 @@ def _ocr_dob_dates(value: str) -> set[date]:
         # English month name, e.g. "2004 DECEMBER 18". Parse only within
         # the labeled DOB window, never from unrelated issuance dates.
         for yyyy, month, dd in re.findall(
-            r"\b(\d{4})\s+(JANUARY|FEBRUARY|MARCH|APRIL|MAY|JUNE|JULY|AUGUST|SEPTEMBER|OCTOBER|NOVEMBER|DECEMBER|JAN|FEB|MAR|APR|JUN|JUL|AUG|SEP|SEPT|OCT|NOV|DEC)\s+(\d{1,2})\b",
+            r"\b(\d{4})[-\s]+(JANUARY|FEBRUARY|MARCH|APRIL|MAY|JUNE|JULY|AUGUST|SEPTEMBER|OCTOBER|NOVEMBER|DECEMBER|JAN|FEB|MAR|APR|JUN|JUL|AUG|SEP|SEPT|OCT|NOV|DEC)[-\s]+(\d{1,2})\b",
             window):
             parsed = _valid_date(int(yyyy), _MONTH_LOOKUP.get(month[:3], 0), int(dd))
             if parsed:
@@ -78,7 +78,7 @@ def _ocr_dob_dates(value: str) -> set[date]:
             if parsed:
                 dates.add(parsed)
         for dd, month, yyyy in re.findall(
-            r"\b(\d{1,2})\s+(JANUARY|FEBRUARY|MARCH|APRIL|MAY|JUNE|JULY|AUGUST|SEPTEMBER|OCTOBER|NOVEMBER|DECEMBER|JAN|FEB|MAR|APR|JUN|JUL|AUG|SEP|SEPT|OCT|NOV|DEC)\s+(\d{4})\b",
+            r"\b(\d{1,2})[-\s]+(JANUARY|FEBRUARY|MARCH|APRIL|MAY|JUNE|JULY|AUGUST|SEPTEMBER|OCTOBER|NOVEMBER|DECEMBER|JAN|FEB|MAR|APR|JUN|JUL|AUG|SEP|SEPT|OCT|NOV|DEC)[-\s]+(\d{4})\b",
             window):
             parsed = _valid_date(int(yyyy), _MONTH_LOOKUP.get(month[:3], 0), int(dd))
             if parsed:
