@@ -1,0 +1,71 @@
+name: QA Published-Source Identity Reviews UI (NO DEPLOY)
+on:
+  push:
+    branches:
+      - design/published-identity-reviews-ui-20261123
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build-and-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      CI: 'true'
+      EXPO_NO_TELEMETRY: '1'
+      PUBLISHED_BASE: b0aafbc9a244fdb2c871ed94b402639c4ec8025d
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Assert exact published ancestor and presentation-only file changes
+        run: |
+          node <<'NODE'
+          const assert = require('node:assert/strict');
+          const cp = require('node:child_process');
+          const git = (...args) => cp.execFileSync('git', args, {encoding:'utf8'}).trim();
+          const base = process.env.PUBLISHED_BASE;
+          cp.execFileSync('git', ['merge-base','--is-ancestor',base,'HEAD']);
+          assert.deepEqual(
+            git('diff','--name-only',base,'HEAD').split('\n').sort(),
+            ['app/(admin)/identity-reviews.tsx',
+             '.github/workflows/qa-published-identity-reviews-ui-20261123.yml'].sort());
+          const file = 'app/(admin)/identity-reviews.tsx';
+          const before = git('show',base+':'+file);
+          const after = require('node:fs').readFileSync(file,'utf8');
+          const extract=(text,start,end)=>{
+            const a=text.indexOf(start),b=text.indexOf(end,a+start.length);
+            assert(a>=0&&b>a, 'Missing unchanged production logic boundary');
+            return text.slice(a,b);
+          };
+          for(const [start,end] of [
+            ['const VALIDATION_METHODS = [','function formatDate('],
+            ['function reviewBucket(','export default function IdentityReviewsAdmin()'],
+            ['  const saveDecision = async (','  if (sessionLoading) {'],
+          ]) {
+            assert.equal(extract(after,start,end),extract(before,start,end),
+              'BLOCKED: live production validation decision, status, or review methods changed');
+          }
+          for(const mark of [
+            'issuerReviewAttested','https://everify.gov.ph/check',
+            'blurry_id_review','setIssuerReviewAttested',
+            'Private ID photos are not retained by the current published backend.',
+            'National ID','Back to Identity Verification Queue',
+            'No matching identity reviews']) {
+            assert(after.includes(mark),'Expected safeguard or UI missing: '+mark);
+          }
+          assert(!after.includes('AdminIdentityEvidence'),
+            'BLOCKED: unpublished private evidence API cannot be bundled into this UI release');
+          assert(after.includes('https://volunserve.onrender.com'));
+          console.log('PASS exact published source; LGU review logic unchanged; UI-only release');
+          NODE
+      - name: Install locked dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Validate TypeScript
+        run: npx tsc --noEmit --incremental false
+      - name: Build Expo web without deploying
+        run: npx expo export --platform web --clear
