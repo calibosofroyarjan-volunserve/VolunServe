@@ -8,10 +8,12 @@ const get = (file) => fs.readFileSync(path.join(__dirname, "..", file), "utf8");
 test("only authenticated operational Admins may request signed identity pictures", () => {
   const api = get("backend/server.js");
   assert.match(api, /"\/api\/admin\/identity\/reviews\/:uid\/evidence",\s*requireFirebaseUser,\s*requireOperationalAdmin,/);
-  assert.match(api, /privateIdentityEvidenceUrl\(data\.images\[key\]\)/);
-  assert.match(api, /identity_evidence_viewed/);
-  assert.match(api, /current\.verificationId !== data\.verificationId/);
-  assert.match(api, /Date\.now\(\) >= expiresAt/);
+  const handler = get("backend/identityEvidenceReviewHandler.js");
+  assert.match(api, /createProtectedIdentityEvidenceHandler/);
+  assert.match(handler, /privateIdentityEvidenceUrl\(data\.images\[side\]\)/);
+  assert.match(handler, /identity_evidence_viewed/);
+  assert.match(handler, /current\.verificationId !== data\.verificationId/);
+  assert.match(handler, /expiryMs <= Date\.now\(\)/);
 });
 test("Admin decision requires unexpired matching images, not merely AI score", () => {
   const api = get("backend/server.js");
