@@ -1,0 +1,60 @@
+name: QA crop and sharpen readable National ID for OCR (NO DEPLOY)
+
+on:
+  push:
+    branches: [fix/national-id-card-autocrop-ocr-20261122]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  national-id-autocrop-regression:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout exact production-derived Identity AI without historical gitlinks
+        env:
+          REPO: ${{ github.repository }}
+          SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          git init -q
+          git remote add origin "https://github.com/${REPO}.git"
+          git -c protocol.version=2 fetch --no-tags --depth=1 --filter=blob:none --no-recurse-submodules origin "$SHA"
+          git sparse-checkout init --cone
+          git sparse-checkout set identity-ai
+          git checkout --force FETCH_HEAD
+      - name: Fail if anything outside OCR-only source and tests changed
+        run: |
+          set -euo pipefail
+          BASE=267093163d2f34280a073eb4decc4363c77a3e9b
+          git -c protocol.version=2 fetch --no-tags --depth=1 --filter=blob:none --no-recurse-submodules origin "$BASE"
+          git diff --name-status "$BASE" HEAD >/tmp/changes
+          python - <<'PY'
+          from pathlib import Path
+          actual=sorted(Path('/tmp/changes').read_text().strip().splitlines())
+          expected=sorted([
+            'M\tidentity-ai/main.py',
+            'A\tidentity-ai/test_national_card_autocrop_20261122.py',
+            'A\t.github/workflows/qa-national-card-autocrop-20261122.yml',
+          ])
+          assert actual==expected,(actual,expected)
+          print('PASS isolated OCR image preprocessing only; no auth, rules, model or face changes')
+          PY
+      - name: Build exact Identity AI Docker dependencies
+        run: docker build -t volunserve-autocrop-ocr:qa identity-ai
+      - name: Run synthetic automatic card crop and complete AI safety suite without network
+        run: |
+          docker run --rm --network none --entrypoint python \
+            volunserve-autocrop-ocr:qa -m unittest -v \
+            test_document_screening test_profile_consistency \
+            test_face_box_dedup test_document_precheck \
+            test_synthetic_document_pipeline test_ai_runtime_smoke \
+            test_name_check_soft_feedback_20261122 \
+            test_bounded_ocr_render_free_20261122 \
+            test_national_id_partial_ocr_recovery_20261122 \
+            test_mild_blur_ocr_name_gate_20261122 \
+            test_national_card_autocrop_20261122
+      - name: Confirm no data or production deployment
+        run: echo 'No real documents, no network, no Facebook or identity data, no Firebase and no Render deployment.'
