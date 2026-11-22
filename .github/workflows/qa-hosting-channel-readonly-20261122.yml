@@ -1,0 +1,31 @@
+name: Diagnose Firebase Hosting Backup Channels (READ ONLY)
+on:
+  push:
+    branches:
+      - test/hosting-channel-backup-diagnostic-20261122
+permissions:
+  contents: read
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - name: List existing Hosting channels and inspect failure conditions (NO CHANGES)
+        env:
+          FIREBASE_SA: ${{ secrets.VOLUNSERVE_PRODUCTION_HOSTING_SERVICE_ACCOUNT }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$FIREBASE_SA" || { echo "Hosting secret not configured"; exit 1; }
+          printf '%s' "$FIREBASE_SA" > "$RUNNER_TEMP/volunserve-readonly-sa.json"
+          chmod 600 "$RUNNER_TEMP/volunserve-readonly-sa.json"
+          export GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/volunserve-readonly-sa.json"
+          echo "READ-ONLY Hosting channel inventory:"
+          npx firebase-tools hosting:channel:list --site volunserve-3aa5b --project volunserve-3aa5b --non-interactive
+          rm -f "$GOOGLE_APPLICATION_CREDENTIALS"
