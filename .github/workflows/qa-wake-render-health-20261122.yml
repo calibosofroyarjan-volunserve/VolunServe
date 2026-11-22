@@ -77,3 +77,5 @@ jobs:
       - name: Confirm nothing was deployed
         if: success()
         run: echo 'Read-only health checks only. Current VolunServe code and Firebase data are untouched.'
+
+# Re-run read-only health after National ID OCR recovery rollout; no deployment.
