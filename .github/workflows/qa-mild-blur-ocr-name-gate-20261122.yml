@@ -1,0 +1,61 @@
+name: QA mild-blur OCR and real name mismatch (NO DEPLOY)
+
+on:
+  push:
+    branches: [fix/national-id-ocr-legibility-name-gate-20261122]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  synthetic-id-quality-and-name:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout current AI source without unrelated git submodules
+        env:
+          REPO: ${{ github.repository }}
+          REVISION: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          git init -q
+          git remote add origin "https://github.com/${REPO}.git"
+          git -c protocol.version=2 fetch --no-tags --depth=1 --filter=blob:none --no-recurse-submodules origin "${REVISION}"
+          git sparse-checkout init --cone
+          git sparse-checkout set identity-ai
+          git checkout --force FETCH_HEAD
+      - name: Strict change guard against outdated VolunServe modules
+        run: |
+          set -euo pipefail
+          BASE=a4c618a8638f53ca63ebf99a97f40259e26f66e7
+          git -c protocol.version=2 fetch --no-tags --depth=1 --filter=blob:none --no-recurse-submodules origin "$BASE"
+          git diff --name-status "$BASE" HEAD > /tmp/ocr-change-scope
+          python - <<'PY'
+          from pathlib import Path
+          actual=sorted(Path('/tmp/ocr-change-scope').read_text().strip().splitlines())
+          expected=sorted([
+            'M\tidentity-ai/main.py',
+            'M\tidentity-ai/test_bounded_ocr_render_free_20261122.py',
+            'M\tidentity-ai/test_national_id_partial_ocr_recovery_20261122.py',
+            'A\tidentity-ai/test_mild_blur_ocr_name_gate_20261122.py',
+            'A\t.github/workflows/qa-mild-blur-ocr-name-gate-20261122.yml',
+          ])
+          assert actual==expected,(actual,expected)
+          print('PASS isolated OCR/name gate and synthetic QA only; no live app/Auth/DB code restored')
+          PY
+      - name: Build the actual production AI Docker dependencies (offline test only)
+        run: docker build -t volunserve-mild-blur-qa:no-deploy identity-ai
+      - name: Run full current synthetic AI safety suite, including new blur checks
+        run: |
+          docker run --rm --network none --entrypoint python \
+            volunserve-mild-blur-qa:no-deploy -m unittest -v \
+            test_document_screening test_profile_consistency \
+            test_face_box_dedup test_document_precheck \
+            test_synthetic_document_pipeline test_ai_runtime_smoke \
+            test_name_check_soft_feedback_20261122 \
+            test_bounded_ocr_render_free_20261122 \
+            test_national_id_partial_ocr_recovery_20261122 \
+            test_mild_blur_ocr_name_gate_20261122
+      - name: Verify no prod deployment
+        run: echo 'NO DEPLOY. Fake ID photos only. No ID numbers, real selfies, auth tokens, Firebase writes or Render changes.'
