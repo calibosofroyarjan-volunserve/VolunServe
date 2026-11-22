@@ -703,6 +703,9 @@ function ReviewDetail({
   onRetry: () => void;
 }) {
   const pending = reviewBucket(item) === "pending";
+  const evidenceExpired = !!item.evidenceExpiresAt &&
+    Date.parse(item.evidenceExpiresAt) <= Date.now();
+  const evidenceMissing = item.evidenceAvailable !== true || evidenceExpired;
 
   return (
     <View>
@@ -816,6 +819,15 @@ function ReviewDetail({
 
       {pending ? (
         <>
+          {evidenceMissing ? (
+            <View style={{ borderColor: "#FCD34D", borderWidth: 1, backgroundColor: "#FFFBEB", borderRadius: 10, padding: 13, marginVertical: 12 }}>
+              <Text style={{ color: "#92400E", fontWeight: "700", fontSize: 13 }}>Private identity evidence required</Text>
+              <Text style={{ color: "#92400E", fontSize: 12, marginTop: 5 }}>
+                The submission has no usable saved photos or the 30-day review period expired.
+                Require a fresh ID Front, ID Back and Selfie submission before approval.
+              </Text>
+            </View>
+          ) : null}
           <SectionTitle
             icon="shield-checkmark-outline"
             title="Independent LGU Validation"
@@ -874,10 +886,10 @@ function ReviewDetail({
             <TouchableOpacity
               style={[
                 styles.verifyButton,
-                (!validationMethod || !!saving) &&
+                (!validationMethod || !!saving || evidenceMissing) &&
                   styles.disabledButton,
               ]}
-              disabled={!validationMethod || !!saving}
+              disabled={!validationMethod || !!saving || evidenceMissing}
               onPress={onVerify}
             >
               {saving === "verify" ? (
