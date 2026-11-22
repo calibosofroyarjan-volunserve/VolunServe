@@ -5762,6 +5762,14 @@ app.get(
       const signed = signedIdentityEvidence({
         uid, assets: evidence.assets, cloudinary, configureCloudinary,
       });
+      // Access audit records contain no ID numbers, photographs or signed URL.
+      await db.collection("adminActivityLogs").add({
+        action: "Resident Identity Evidence Viewed",
+        residentUid: uid,
+        verificationId: evidence.verificationId,
+        performedBy: request.firebaseUser.uid,
+        timestamp: FieldValue.serverTimestamp(),
+      });
       response.json({ok:true, uid, verificationId: evidence.verificationId, ...signed});
     } catch (error) {
       response.status(Number(error?.statusCode) || 500).json({
