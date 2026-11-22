@@ -13,7 +13,7 @@ const {
 const { reconcileCommunityEventCertificates } = require("./communityCertificates");
 const { combineApprovedBudget } = require("./assistanceDonationBudget");
 const { probeIdentityAiReadiness } = require("./identityAiReadiness");
-const { readIdentityEvidence, storeIdentityEvidence, destroyIdentityEvidence, privateIdentityEvidenceUrl, purgeExpiredIdentityEvidence, RETENTION_MS } = require("./identityEvidence");
+const { readIdentityEvidence, storeIdentityEvidence, destroyIdentityEvidence, privateIdentityEvidenceUrl, purgeExpiredIdentityEvidence, purgeRetiredIdentityEvidence, RETENTION_MS } = require("./identityEvidence");
 const {isVerifiedFirebaseToken, isCompletedVolunServeProfile} = require("./verifiedFirebaseToken");
 const {
   getProfileRole,
@@ -5104,6 +5104,7 @@ app.post(
       configureCloudinary();
       storedEvidence = await storeIdentityEvidence(uid, evidenceMedia.images);
       const evidenceRef = db.collection("identityEvidence").doc(uid);
+      const retirementRef = db.collection("identityEvidenceRetirements").doc(uid + "_" + requestId);
       const evidenceExpiresAt = new Date(Date.now() + RETENTION_MS);
 
       const outcome = await db.runTransaction(async (transaction) => {
@@ -5122,6 +5123,12 @@ app.post(
             "Your account verification status has changed. Please refresh your identity status.");
         }
         previousEvidence = previousEvidenceSnapshot.exists ? previousEvidenceSnapshot.data()?.images : null;
+        if (previousEvidence && Object.values(previousEvidence).some((image) => image?.publicId)) {
+          transaction.create(retirementRef, {
+            uid, requestId, images: previousEvidence,
+            createdAt: FieldValue.serverTimestamp(),
+          });
+        }
         const attemptCount = identityAttemptCount(current.aiAttemptCount) + 1;
         const attemptCycle = Number.isSafeInteger(current.aiAttemptCycle) && current.aiAttemptCycle > 0
           ? current.aiAttemptCycle : 1;
@@ -5239,11 +5246,33 @@ app.post(
         };
       });
       evidenceCommitted = true;
-      if (previousEvidence) await destroyIdentityEvidence(previousEvidence);
+      // Replacement cleanup is best-effort at submission time, and persisted
+      // to a retry queue in the transaction so a temporary provider outage
+      // never causes a false failed response or leaves ID photos orphaned.
+      if (previousEvidence) {
+        try {
+          const deleted = await destroyIdentityEvidence(previousEvidence);
+          if (deleted.every((entry) => entry.status === "fulfilled")) {
+            await retirementRef.delete();
+          }
+        } catch (cleanupError) {
+          console.warn("Retired identity evidence remains queued for cleanup.");
+        }
+      }
       response.status(200).json(outcome);
     } catch (error) {
       if (storedEvidence && !evidenceCommitted) {
-        await destroyIdentityEvidence(storedEvidence);
+        const deleted = await destroyIdentityEvidence(storedEvidence);
+        if (deleted.some((entry) => entry.status === "rejected")) {
+          try {
+            await db.collection("identityEvidenceRetirements").doc(uid + "_" + requestId + "_failed").set({
+              uid, requestId, images: storedEvidence,
+              createdAt: FieldValue.serverTimestamp(),
+            });
+          } catch {
+            console.warn("Uncommitted private identity photo cleanup needs manual investigation.");
+          }
+        }
       }
       if (claimed) {
         // Unlock only our own attempt, never another request's lease.
@@ -11721,6 +11750,7 @@ async function sweepExpiredIdentityImages() {
   try {
     configureCloudinary();
     await purgeExpiredIdentityEvidence(db);
+    await purgeRetiredIdentityEvidence(db);
   } catch (error) {
     console.warn("Identity evidence retention cleanup needs retry:", error?.code || "unavailable");
   }
