@@ -1,5 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useLocalSearchParams } from "expo-router";
 import ListPagination from "../../components/ui/ListPagination";
 import AdminReviewHero from "../../components/admin/AdminReviewHero";
@@ -119,7 +119,8 @@ export default function IdentityReviewsAdmin() {
   const params = useLocalSearchParams<{ uid?: string }>();
   const { loading: sessionLoading, user, profile } = useUserSession();
   const { width } = useWindowDimensions();
-  const wide = width >= 1050;
+  const wide = width >= 1240;
+  const scrollRef = useRef<ScrollView | null>(null);
 
   const [items, setItems] = useState<IdentityReview[]>([]);
   const [loading, setLoading] = useState(true);
@@ -132,6 +133,7 @@ export default function IdentityReviewsAdmin() {
   const [page, setPage] = useState(1);
   const PAGE_SIZE = 5;
   const [selected, setSelected] = useState<IdentityReview | null>(null);
+  const mobileDetail = !wide && !!selected;
   const [validationMethod, setValidationMethod] = useState("");
   const [issuerReviewAttested,setIssuerReviewAttested] = useState(false);
   const [notes, setNotes] = useState("");
@@ -260,8 +262,15 @@ export default function IdentityReviewsAdmin() {
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const activePage = Math.max(1, Math.min(page, totalPages));
   const pagedReviews = filtered.slice((activePage - 1) * PAGE_SIZE, activePage * PAGE_SIZE);
+  useEffect(() => {
+    if (!wide || loading || selected || pagedReviews.length === 0) return;
+    openReview(pagedReviews[0]);
+    // Only open automatically in a wide layout; tablet/phone retains queue navigation.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [wide, loading, selected, page, filter, items, search]);
 
   const openReview = (item: IdentityReview) => {
+    if (!wide) scrollRef.current?.scrollTo({y:0,animated:false});
     setSelected(item);
     setValidationMethod(item.manualValidationMethod || "");
     setIssuerReviewAttested(false);
@@ -400,15 +409,17 @@ export default function IdentityReviewsAdmin() {
   return (
     <View style={styles.screen}>
       <ScrollView
+        ref={scrollRef}
         style={[
           styles.scroll,
           Platform.OS === "web" && styles.webScrollBar,
         ]}
-        contentContainerStyle={styles.page}
+        contentContainerStyle={[styles.page, !wide && styles.pageCompact]}
         showsVerticalScrollIndicator={true}
         keyboardShouldPersistTaps="handled"
         accessibilityLabel="Identity reviews content"
       >
+        {!mobileDetail ? <>
         <AdminReviewHero
           eyebrow="LGU OPERATIONS / PEOPLE & VERIFICATION"
           title="Resident Identity Reviews"
@@ -425,11 +436,46 @@ export default function IdentityReviewsAdmin() {
           ].map(metric => (
             <View key={metric.label} style={styles.summaryMetric}>
               <View style={styles.summaryIcon}><Ionicons name={metric.icon} size={20} color="#08765A" /></View>
-              <Text style={styles.summaryLabel}>{metric.label}</Text>
-              <Text style={styles.summaryValue}>{metric.value}</Text>
+              <View style={styles.summaryCopy}>
+                <Text style={styles.summaryLabel}>{metric.label}</Text>
+                <Text style={styles.summaryValue}>{metric.value}</Text>
+              </View>
             </View>
           ))}
         </View>
+        </> : (
+          <TouchableOpacity accessibilityRole="button" style={styles.backToQueue}
+            onPress={() => { setSelected(null); setIssuerReviewAttested(false); scrollRef.current?.scrollTo({y:0,animated:false}); }}>
+            <Ionicons name="arrow-back" size={18} color="#08765A" />
+            <Text style={styles.backToQueueLabel}>Back to Identity Verification Queue</Text>
+          </TouchableOpacity>
+        )}
+        {error ? (
+          <View style={styles.errorCard}>
+            <Ionicons
+              name="alert-circle-outline"
+              size={20}
+              color="#B91C1C"
+            />
+            <Text style={styles.errorText}>{error}</Text>
+          </View>
+        ) : null}
+
+        {loading ? (
+          <View style={styles.loadingCard}>
+            <ActivityIndicator size="large" color="#08765A" />
+            <Text style={styles.centerText}>
+              Loading identity reviews...
+            </Text>
+          </View>
+        ) : (
+          <View
+            style={[
+              styles.workspace,
+              wide && styles.workspaceWide,
+            ]}
+          >
+            {!mobileDetail ? <View style={[styles.queue, wide && styles.queueWide]}>
         <View style={styles.queueHeading}>
           <View style={styles.flexOne}>
             <Text style={styles.queueTitle}>Identity Verification Queue</Text>
@@ -441,25 +487,7 @@ export default function IdentityReviewsAdmin() {
             <Text style={styles.refreshButtonText}>Refresh</Text>
           </TouchableOpacity>
         </View>
-        <View style={styles.privacyNotice}>
-          <Ionicons
-            name="lock-closed-outline"
-            size={20}
-            color="#0F766E"
-          />
-          <View style={styles.flexOne}>
-            <Text style={styles.noticeTitle}>
-              Privacy-preserving manual fallback
-            </Text>
-            <Text style={styles.noticeText}>
-              The AI service processes the submitted ID and selfie for
-              the 1-to-1 comparison, but this queue does not retain or
-              display those private images. Manual verification must use
-              an independent LGU-approved validation method.
-            </Text>
-          </View>
-        </View>
-
+        
         <View style={styles.filterRow}>
           {[
             { key: "pending" as const, label: "Pending", count: counts.pending },
@@ -479,7 +507,7 @@ export default function IdentityReviewsAdmin() {
                   styles.filterButton,
                   active && styles.filterButtonActive,
                 ]}
-                onPress={() => { setFilter(item.key); setPage(1); setSelected(null); }}
+                onPress={() => { setFilter(item.key); setPage(1); setSelected(null); setIssuerReviewAttested(false); }}
               >
                 <Text
                   style={[
@@ -518,54 +546,26 @@ export default function IdentityReviewsAdmin() {
           <TextInput
             style={styles.searchInput}
             value={search}
-            onChangeText={value => { setSearch(value); setPage(1); }}
+            onChangeText={value => { setSearch(value); setPage(1); setSelected(null); setIssuerReviewAttested(false); }}
             placeholder="Search Resident, email, barangay, or verification ID"
             placeholderTextColor="#94A3B8"
           />
         </View>
 
-        <ListPagination page={activePage} total={filtered.length} pageSize={PAGE_SIZE} onChange={setPage} />
-        {error ? (
-          <View style={styles.errorCard}>
-            <Ionicons
-              name="alert-circle-outline"
-              size={20}
-              color="#B91C1C"
-            />
-            <Text style={styles.errorText}>{error}</Text>
-          </View>
-        ) : null}
+        
 
-        {loading ? (
-          <View style={styles.loadingCard}>
-            <ActivityIndicator size="large" color="#08765A" />
-            <Text style={styles.centerText}>
-              Loading identity reviews...
-            </Text>
-          </View>
-        ) : filtered.length === 0 ? (
-          <View style={styles.emptyCard}>
-            <Ionicons
-              name="shield-checkmark-outline"
-              size={38}
-              color="#94A3B8"
-            />
-            <Text style={styles.emptyTitle}>
-              No identity reviews here
-            </Text>
-            <Text style={styles.centerText}>
-              New AI-uncertain cases will appear in Pending when manual
-              validation is required.
-            </Text>
-          </View>
-        ) : (
-          <View
-            style={[
-              styles.workspace,
-              wide && styles.workspaceWide,
-            ]}
-          >
-            <View style={[styles.queue, wide && styles.queueWide]}>
+              <View style={styles.queuePrivacyLine}>
+                <Ionicons name="lock-closed-outline" size={15} color="#08765A" />
+                <Text style={styles.queuePrivacyText}>Private ID photos are not retained by the current published backend.</Text>
+              </View>
+
+              {pagedReviews.length === 0 ? (
+                <View style={styles.queueEmptyState}>
+                  <Ionicons name="search-outline" size={24} color="#7EA18C" />
+                  <Text style={styles.queueEmptyTitle}>No matching identity reviews</Text>
+                  <Text style={styles.queueEmptyText}>Select another status or change the search query.</Text>
+                </View>
+              ) : null}
               {pagedReviews.map((item) => {
                 const active = selected?.uid === item.uid;
                 return (
@@ -632,7 +632,14 @@ export default function IdentityReviewsAdmin() {
                   </TouchableOpacity>
                 );
               })}
-            </View>
+              <View style={styles.queueFooter}>
+                <Text style={styles.queueFooterLabel}>
+                  {filtered.length ? (activePage - 1) * PAGE_SIZE + 1 : 0}–{Math.min(activePage * PAGE_SIZE, filtered.length)} of {filtered.length} records · 5 per page
+                </Text>
+                <ListPagination page={activePage} total={filtered.length} pageSize={PAGE_SIZE}
+                  onChange={(next) => { setPage(next); setSelected(null); setIssuerReviewAttested(false); }} />
+              </View>
+            </View> : null}
 
             <View
               style={[
@@ -729,6 +736,8 @@ function ReviewDetail({
   onVerify: () => void;
   onRetry: () => void;
 }) {
+  const [activeTab, setActiveTab] = useState<"review" | "history" | "audit">("review");
+  useEffect(() => { setActiveTab("review"); }, [item.uid, item.verificationId]);
   const pending = reviewBucket(item) === "pending";
   const nationalId = item.documentScreening?.declaredIdType === "national_id";
   const blurry = item.reviewTrack === "blurry_id_review";
@@ -759,6 +768,86 @@ function ReviewDetail({
         <StatusChip bucket={reviewBucket(item)} />
       </View>
 
+
+      <View style={styles.detailTabRow}>
+        {([
+          {key:"review" as const,label:"Identity Review",icon:"shield-checkmark-outline" as const},
+          {key:"history" as const,label:"Details & History",icon:"time-outline" as const},
+          {key:"audit" as const,label:"Audit Trail",icon:"document-text-outline" as const},
+        ]).map(entry=>(
+          <TouchableOpacity key={entry.key} accessibilityRole="tab"
+            accessibilityState={{selected:activeTab===entry.key}}
+            style={[styles.detailTab,activeTab===entry.key && styles.detailTabActive]}
+            onPress={()=>setActiveTab(entry.key)}>
+            <Ionicons name={entry.icon} size={15} color={activeTab===entry.key?"#08765A":"#71867A"} />
+            <Text style={[styles.detailTabLabel,activeTab===entry.key && styles.detailTabLabelActive]}>{entry.label}</Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+      {activeTab === "review" ? (<>
+        <View style={styles.evidenceAndAiGrid}>
+          <View style={styles.previewEvidenceCard}>
+            <View style={styles.previewCardHeading}>
+              <Ionicons name="id-card-outline" size={18} color="#08765A" />
+              <Text style={styles.previewCardHeadingText}>Submitted Identity Evidence</Text>
+              <Ionicons name="lock-closed-outline" size={14} color="#08765A" />
+            </View>
+            <View style={styles.previewEvidenceTiles}>
+              {([
+                {key:"front",label:"Government ID — Front",icon:"id-card-outline" as const},
+                {key:"back",label:"Government ID — Back",icon:"card-outline" as const},
+                {key:"selfie",label:"Live Selfie",icon:"person-outline" as const},
+              ]).map(tile=>(
+                <View key={tile.key} style={styles.previewEvidenceTile}>
+                  <View style={styles.previewEvidenceImage}>
+                    <Ionicons name={tile.icon} size={25} color="#8BA899" />
+                    <Text style={styles.previewEvidenceText}>Photo not retained</Text>
+                  </View>
+                  <Text style={styles.previewEvidenceLabel}>{tile.label}</Text>
+                </View>
+              ))}
+            </View>
+            <Text style={styles.previewEvidenceCaption}>
+              Current published records do not retain private ID/selfie photos for Admin viewing.
+              Only the separate secure evidence release can enable these previews.
+            </Text>
+          </View>
+          <View style={styles.previewAiCard}>
+            <View style={styles.previewCardHeading}>
+              <Ionicons name="scan-outline" size={18} color="#08765A" />
+              <Text style={styles.previewCardHeadingText}>AI Verification Result</Text>
+            </View>
+            <View style={styles.previewScoreBox}>
+              <Text style={styles.previewScoreLabel}>Face similarity</Text>
+              <Text style={styles.previewScoreValue}>
+                {typeof item.matchScore === "number" && Number.isFinite(item.matchScore)
+                  && item.matchScore >= 0 && item.matchScore <= 1
+                  ? (item.matchScore * 100).toFixed(1) + "%"
+                  : "Not evaluated"}
+              </Text>
+              <Text style={styles.previewScoreNote}>Preliminary AI estimate, not identity proof.</Text>
+            </View>
+            <InfoLine label="ID quality" value={
+              item.documentScreening?.imageQualityStatus || "Not evaluated"
+            } />
+            <InfoLine label="ID back screening" value={
+              item.documentScreening?.backSideScreened === true ? "Screened — authenticity unverified"
+                : "Not evaluated"
+            } />
+            <InfoLine label="AI route" value={
+              item.reviewTrack === "blurry_id_review" ? "Rescan required" :
+              item.reviewTrack === "priority_admin_review" ? "Priority Admin review" :
+              "Independent LGU review"
+            } />
+          </View>
+        </View>
+        <View style={styles.previewDisclaimer}>
+          <Ionicons name="alert-circle-outline" size={16} color="#A16207" />
+          <Text style={styles.previewDisclaimerText}>
+            AI/OCR cannot prove government ID authenticity or liveness.
+            The existing independent LGU verification requirements still apply.
+          </Text>
+        </View>
       <SectionTitle
         icon="person-circle-outline"
         title="Resident Account"
@@ -982,6 +1071,34 @@ function ReviewDetail({
           ) : null}
         </>
       )}
+      </>) : activeTab === "history" ? (
+        <View style={styles.previewInfoCard}>
+          <SectionTitle icon="person-circle-outline" title="Resident Details & Verification History" />
+          <InfoLine label="Resident" value={item.resident?.fullName || "Resident"} />
+          <InfoLine label="Barangay" value={item.resident?.barangay || "Not set"} />
+          <InfoLine label="Verification ID" value={item.verificationId || "—"} />
+          <InfoLine label="Submitted" value={formatDate(item.lastSubmissionAt || item.createdAt)} />
+          <InfoLine label="Current status" value={item.status || "—"} />
+          <InfoLine label="Review track" value={item.reviewTrack || "—"} />
+          <InfoLine label="AI decision" value={item.aiDecision || "—"} />
+          <Text style={styles.previewEvidenceCaption}>
+            This tab displays the recorded verification details, not a fabricated event history.
+          </Text>
+        </View>
+      ) : (
+        <View style={styles.previewInfoCard}>
+          <SectionTitle icon="document-text-outline" title="Recorded Review Audit Details" />
+          <InfoLine label="Verification ID" value={item.verificationId || "—"} />
+          <InfoLine label="Manual decision" value={item.manualReviewDecision || "No manual decision recorded"} />
+          <InfoLine label="Validation method" value={item.manualValidationMethod || "—"} />
+          <InfoLine label="Reviewed by" value={item.reviewedByName || item.reviewedBy || "—"} />
+          <InfoLine label="Reviewed at" value={formatDate(item.reviewedAt)} />
+          {item.manualReviewNotes ? <Text style={styles.previewEvidenceCaption}>{item.manualReviewNotes}</Text> : null}
+          <Text style={styles.previewEvidenceCaption}>
+            Full audit activity remains in authorized system logs; no private images are exposed here.
+          </Text>
+        </View>
+      )}
     </View>
   );
 }
@@ -1063,16 +1180,17 @@ const styles = StyleSheet.create({
   flexOne: {
     flex: 1,
   },
-  summaryMetrics: { flexDirection: "row", flexWrap: "wrap", gap: 11, marginBottom: 17 },
-  summaryMetric: { flexGrow: 1, flexBasis: 175, minWidth: 150, padding: 16, backgroundColor: "#FFFFFF",
-    borderRadius: 15, borderWidth: 1, borderColor: "#D8E9E0" },
-  summaryIcon: { width: 38, height: 38, borderRadius: 10, backgroundColor: "#E2F5EA",
-    alignItems: "center", justifyContent: "center", marginBottom: 9 },
+  summaryMetrics: { flexDirection: "row", flexWrap: "wrap", gap: 11, marginBottom: 13 },
+  summaryMetric: { flexGrow: 1, flexBasis: 200, minWidth: 150, minHeight: 74,
+    paddingVertical: 12, paddingHorizontal: 15, backgroundColor: "#FFFFFF",
+    borderRadius: 12, borderWidth: 1, borderColor: "#D8E9E0",
+    flexDirection: "row", alignItems: "center", gap: 11 },
+  summaryIcon: { width: 43, height: 43, borderRadius: 11, backgroundColor: "#E2F5EA",
+    alignItems: "center", justifyContent: "center" },
   summaryLabel: { color: "#315A4C", fontSize: 11, fontWeight: "800" },
-  summaryValue: { color: "#123F32", fontSize: 25, fontWeight: "900", marginTop: 5 },
-  queueHeading: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 12,
-    backgroundColor: "#FFFFFF", borderRadius: 14, borderWidth: 1, borderColor: "#D8E9E0",
-    padding: 15, marginBottom: 13 },
+  summaryValue: { color: "#123F32", fontSize: 23, fontWeight: "800" },
+  queueHeading: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 7,
+    borderBottomWidth: 1, borderBottomColor: "#E6EEE9", paddingBottom: 12, marginBottom: 3 },
   queueTitle: { color: "#153D32", fontWeight: "900", fontSize: 17 },
   queueSubheading: { color: "#647E71", fontSize: 12, lineHeight: 19, marginTop: 4 },
   header: {
@@ -1274,11 +1392,10 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "flex-start",
   },
-  queue: {
-    gap: 9,
-  },
+  queue: { gap: 9, backgroundColor: "#FFFFFF", borderWidth: 1,
+    borderColor: "#D8E9E0", borderRadius: 13, padding: 13, minWidth: 0 },
   queueWide: {
-    width: 410,
+    width: 365,
     flexShrink: 0,
   },
   queueCard: {
@@ -1289,8 +1406,8 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFFFF",
   },
   queueCardActive: {
-    borderColor: "#818CF8",
-    backgroundColor: "#EEF2FF",
+    borderColor: "#8AC9A7",
+    backgroundColor: "#F1FAF4",
   },
   queueTop: {
     flexDirection: "row",
@@ -1353,13 +1470,8 @@ const styles = StyleSheet.create({
     color: "#94A3B8",
     fontSize: 9.5,
   },
-  detailPanel: {
-    padding: 18,
-    borderRadius: 9,
-    borderWidth: 1,
-    borderColor: "#E2E8F0",
-    backgroundColor: "#FFFFFF",
-  },
+  detailPanel: { padding: 15, borderRadius: 13, borderWidth: 1,
+    borderColor: "#D8E9E0", backgroundColor: "#FFFFFF" },
   detailPanelWide: {
     flex: 1,
     minWidth: 0,
@@ -1593,4 +1705,52 @@ const styles = StyleSheet.create({
     fontSize: 11,
     lineHeight: 17,
   },
+
+  // Scoped production visual design: all security, OCR and approval behavior is unchanged.
+  pageCompact: { paddingHorizontal: 12, paddingVertical: 14, paddingBottom: 60 },
+  backToQueue: { backgroundColor: "#FFFFFF", borderColor: "#DBE7DF", borderWidth: 1,
+    borderRadius: 10, padding: 12, marginBottom: 12, flexDirection: "row", alignItems: "center", gap: 10 },
+  backToQueueLabel: { color: "#08765A", fontWeight: "800", fontSize: 13 },
+  queuePrivacyLine: { flexDirection: "row", backgroundColor: "#F3FAF5",
+    borderRadius: 8, gap: 8, padding: 9, alignItems: "flex-start" },
+  queuePrivacyText: { fontSize: 11, color: "#557865", flex: 1, lineHeight: 16 },
+  queueEmptyState: { minHeight: 160, alignItems: "center", justifyContent: "center", padding: 16, gap: 8 },
+  queueEmptyTitle: { fontSize: 13, fontWeight: "800", color: "#244436" },
+  queueEmptyText: { fontSize: 11, color: "#647E71", textAlign: "center" },
+  queueFooter: { borderTopWidth: 1, borderTopColor: "#E6EEE9", paddingTop: 12, marginTop: 8, gap: 6 },
+  queueFooterLabel: { color: "#668373", fontSize: 11, textAlign: "center" },
+  summaryCopy: { flex: 1, gap: 2 },
+
+
+  detailTabRow: { flexDirection: "row", flexWrap: "wrap", gap: 9, borderBottomWidth: 1,
+    borderBottomColor: "#E3ECE5", marginTop: 10, marginBottom: 12 },
+  detailTab: { minHeight: 42, flexDirection: "row", alignItems: "center", gap: 6,
+    paddingHorizontal: 7, borderBottomWidth: 3, borderBottomColor: "transparent" },
+  detailTabActive: { borderBottomColor: "#08765A" },
+  detailTabLabel: { color: "#698477", fontWeight: "600", fontSize: 12 },
+  detailTabLabelActive: { color: "#08765A", fontWeight: "800" },
+  evidenceAndAiGrid: { flexDirection: "row", flexWrap: "wrap", gap: 11, marginBottom: 11 },
+  previewEvidenceCard: { flex: 2, flexBasis: 315, minWidth: 0, borderWidth: 1, borderColor: "#DBE9DF",
+    borderRadius: 11, padding: 12, backgroundColor: "#FFFFFF" },
+  previewAiCard: { flex: 1, flexBasis: 220, minWidth: 0, borderWidth: 1, borderColor: "#DBE9DF",
+    borderRadius: 11, padding: 12, backgroundColor: "#FFFFFF" },
+  previewCardHeading: { flexDirection: "row", alignItems: "center", gap: 7, marginBottom: 11 },
+  previewCardHeadingText: { flex: 1, color: "#173D32", fontWeight: "800", fontSize: 13 },
+  previewEvidenceTiles: { flexDirection: "row", gap: 7 },
+  previewEvidenceTile: { flex: 1, minWidth: 0, borderWidth: 1, borderColor: "#DBE9DF",
+    borderRadius: 8, backgroundColor: "#F8FBF9", padding: 5, gap: 6 },
+  previewEvidenceImage: { backgroundColor: "#EBF3EE", minHeight: 120, borderRadius: 5,
+    alignItems: "center", justifyContent: "center", gap: 7, padding: 5 },
+  previewEvidenceText: { color: "#64816E", fontSize: 10, textAlign: "center" },
+  previewEvidenceLabel: { color: "#355C4B", fontWeight: "700", fontSize: 10, textAlign: "center" },
+  previewEvidenceCaption: { marginTop: 11, color: "#597664", fontSize: 11, lineHeight: 17 },
+  previewScoreBox: { borderRadius: 9, backgroundColor: "#EAF7EE", padding: 11, marginBottom: 9 },
+  previewScoreLabel: { color: "#557963", fontSize: 11, fontWeight: "700" },
+  previewScoreValue: { color: "#08765A", fontSize: 22, fontWeight: "800", marginTop: 4 },
+  previewScoreNote: { color: "#577763", fontSize: 11, lineHeight: 16, marginTop: 3 },
+  previewDisclaimer: { borderRadius: 9, backgroundColor: "#FFF9E9", flexDirection: "row",
+    padding: 11, gap: 8, marginBottom: 12 },
+  previewDisclaimerText: { flex: 1, fontSize: 11, color: "#82642D", lineHeight: 17 },
+  previewInfoCard: { borderRadius: 11, borderWidth: 1, borderColor: "#DCE8DF", padding: 15 },
+
 });

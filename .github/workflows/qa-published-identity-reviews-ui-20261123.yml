@@ -1,0 +1,147 @@
+name: QA Published-Source Identity Reviews UI (NO DEPLOY)
+on:
+  push:
+    branches:
+      - design/published-identity-reviews-ui-20261123
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build-and-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      CI: 'true'
+      EXPO_NO_TELEMETRY: '1'
+      PUBLISHED_BASE: b0aafbc9a244fdb2c871ed94b402639c4ec8025d
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Assert exact published ancestor and presentation-only file changes
+        run: |
+          node <<'NODE'
+          const assert = require('node:assert/strict');
+          const cp = require('node:child_process');
+          const git = (...args) => cp.execFileSync('git', args, {encoding:'utf8'}).trim();
+          const base = process.env.PUBLISHED_BASE;
+          cp.execFileSync('git', ['merge-base','--is-ancestor',base,'HEAD']);
+          assert.deepEqual(
+            git('diff','--name-only',base,'HEAD').split('\n').sort(),
+            ['app/(admin)/identity-reviews.tsx',
+             '.github/workflows/qa-published-identity-reviews-ui-20261123.yml'].sort());
+          const file = 'app/(admin)/identity-reviews.tsx';
+          const before = git('show',base+':'+file);
+          const after = require('node:fs').readFileSync(file,'utf8');
+          const extract=(text,start,end)=>{
+            const a=text.indexOf(start),b=text.indexOf(end,a+start.length);
+            assert(a>=0&&b>a, 'Missing unchanged production logic boundary');
+            return text.slice(a,b);
+          };
+          for(const [start,end] of [
+            ['const VALIDATION_METHODS = [','function formatDate('],
+            ['function reviewBucket(','export default function IdentityReviewsAdmin()'],
+            ['  const saveDecision = async (','  if (sessionLoading) {'],
+          ]) {
+            assert.equal(extract(after,start,end),extract(before,start,end),
+              'BLOCKED: live production validation decision, status, or review methods changed');
+          }
+          for(const mark of [
+            'issuerReviewAttested','https://everify.gov.ph/check',
+            'blurry_id_review','setIssuerReviewAttested',
+            'Private ID photos are not retained by the current published backend.',
+            'National ID','Back to Identity Verification Queue',
+            'No matching identity reviews']) {
+            assert(after.includes(mark),'Expected safeguard or UI missing: '+mark);
+          }
+          assert(!after.includes('AdminIdentityEvidence'),
+            'BLOCKED: unpublished private evidence API cannot be bundled into this UI release');
+          assert(after.includes('https://volunserve.onrender.com'));
+          console.log('PASS exact published source; LGU review logic unchanged; UI-only release');
+          NODE
+      - name: Read-only verify current production is still the approved published source
+        run: |
+          node <<'NODE'
+          const assert=require('node:assert/strict');
+          (async()=>{
+            const url='https://volunserve.com/volunserve-release.json?qa='+Date.now();
+            const response=await fetch(url,{headers:{'Cache-Control':'no-cache'},signal:AbortSignal.timeout(15000)});
+            assert(response.ok,'BLOCKED: public live revision not accessible');
+            const marker=await response.json();
+            assert.equal(marker.app,'VolunServe');
+            assert.equal(marker.firebaseProject,'volunserve-3aa5b');
+            assert.equal(marker.revision,process.env.PUBLISHED_BASE,
+              'BLOCKED: production changed; compare published code again before deployment');
+            console.log('PASS read-only live revision agrees with approved published-source base');
+          })().catch(e=>{console.error(e.message);process.exitCode=1});
+          NODE
+      - name: Install locked dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Validate TypeScript
+        run: npx tsc --noEmit --incremental false
+      - name: Compare existing Admin, Identity and cross-role tests to published baseline
+        run: |
+          node <<'NODE'
+          const assert=require('node:assert/strict');
+          const cp=require('node:child_process');
+          const fs=require('node:fs'),os=require('node:os'),path=require('node:path');
+          const tests=[
+            'scripts/test-admin-people-verification-premium-ui.cjs',
+            'scripts/test-lgu-admin-global-ui-pagination.cjs',
+            'scripts/test-admin-navigation-contract.cjs',
+            'scripts/test-profile-certificates-account-menu.cjs',
+            'scripts/test-portal-resident-volunteer-ui-flow.cjs',
+            'scripts/test-unified-identity-ai-government-id-screening.cjs',
+          ];
+          const source=process.cwd();
+          const published=fs.mkdtempSync(path.join(os.tmpdir(),'volunserve-published-qa-'));
+          const run=(cwd,test)=>cp.spawnSync(process.execPath,[test],{
+            cwd,encoding:'utf8',timeout:45000,env:{...process.env,CI:'true'},
+          });
+          function fingerprint(result){
+            const output=(result.stdout||'')+'\n'+(result.stderr||'');
+            const m=output.match(/AssertionError \[ERR_ASSERTION\]:\s*([^\n]+)/)
+              || output.match(/not ok \d+ - ([^\n]+)/)
+              || output.match(/Error: ([^\n]+)/);
+            return m?.[1]?.trim()||'UNKNOWN FAILURE';
+          }
+          let fresh=0,baselineFailures=0;
+          try {
+            cp.execFileSync('git',['worktree','add','--detach',published,
+              process.env.PUBLISHED_BASE],{stdio:'pipe'});
+            for(const test of tests){
+              const current=run(source,test);
+              const original=run(published,test);
+              if(current.status===0){
+                console.log('PASS '+test);
+                if(original.status!==0)console.log('  Improved versus published baseline');
+                continue;
+              }
+              if(original.status!==0 &&
+                 fingerprint(current)===fingerprint(original) &&
+                 fingerprint(current)!=='UNKNOWN FAILURE') {
+                baselineFailures++;
+                console.log('::warning::PRE-EXISTING published-source failure in '+
+                  test+': '+fingerprint(current));
+                continue;
+              }
+              fresh++;
+              console.error('NEW / DIFFERENT QA FAILURE: '+test);
+              console.error('Published source: '+fingerprint(original));
+              console.error('Design candidate: '+fingerprint(current));
+            }
+          } finally {
+            cp.spawnSync('git',['worktree','remove','--force',published],
+              {stdio:'pipe'});
+            fs.rmSync(published,{recursive:true,force:true});
+          }
+          console.log('Cross-role QA: '+tests.length+' test scripts; '+
+            baselineFailures+' confirmed pre-existing failures; '+fresh+' new failures.');
+          assert.equal(fresh,0,'BLOCKED: changed identity UI introduced new regression');
+          NODE
+      - name: Build Expo web without deploying
+        run: npx expo export --platform web --clear
