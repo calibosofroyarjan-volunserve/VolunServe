@@ -26,6 +26,7 @@ jobs:
           node --test backend/test-identityPrivateEvidence.js
           node --test backend/test-identity-final-admin-only.js
           node --test backend/test-identity-three-attempt-review.js
+          node --test backend/test-identity-review-reject.js
           (cd backend && node --test test-identityHybridPrecheckDecision.js)
           node --test backend/test-identityAiReadiness.js
           node --test backend/test-identityIssuerReviewPolicy.js
