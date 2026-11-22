@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator, Image, Modal, ScrollView, Text, TouchableOpacity,
   View, useWindowDimensions,
@@ -12,6 +12,7 @@ type EvidenceImage = { url: string; expiresAt: number };
 type EvidenceResponse = {
   ok: boolean;
   verificationId: string;
+  idType?: string;
   expiresAt?: string;
   images: { front?: EvidenceImage; back?: EvidenceImage; selfie?: EvidenceImage };
 };
@@ -28,13 +29,14 @@ const LABELS = [
  * issuing short-lived authenticated Cloudinary URLs.
  */
 export default function AdminIdentityEvidence({
-  uid, user, verificationId, matchScore, aiDecision,
+  uid, user, verificationId, matchScore, aiDecision, onEvidenceStateChange,
 }: {
   uid: string;
   verificationId?: string;
   user: AuthUser | null;
   matchScore?: number | null;
   aiDecision?: string;
+  onEvidenceStateChange?: (ready: boolean) => void;
 }) {
   const { width } = useWindowDimensions();
   // Binding each response to the selected UID prevents the previous
@@ -46,12 +48,16 @@ export default function AdminIdentityEvidence({
     ? loadedEvidence.value : null;
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [loadedImageUrls, setLoadedImageUrls] = useState<string[]>([]);
+  const notifyEvidenceState = useRef(onEvidenceStateChange);
+  notifyEvidenceState.current = onEvidenceStateChange;
   const [refreshIndex, setRefreshIndex] = useState(0);
   const [expanded, setExpanded] = useState<{ uid: string; verificationId: string; label: string; uri: string } | null>(null);
   useEffect(() => {
     let cancelled = false;
     setExpanded(null);
     setLoadedEvidence(null);
+    setLoadedImageUrls([]);
     setError("");
     if (!user || !uid) return () => { cancelled = true; };
     const run = async () => {
@@ -96,6 +102,16 @@ export default function AdminIdentityEvidence({
     }, delay);
     return () => clearTimeout(timer);
   }, [evidence]);
+
+  const requiredSides = evidence?.idType === "national_id"
+    ? (["front", "back", "selfie"] as const)
+    : (["front", "selfie"] as const);
+  const imageEvidenceReady = !!evidence && !loading && !error && requiredSides.every(
+    (side) => !!evidence.images[side]?.url && loadedImageUrls.includes(evidence.images[side]!.url),
+  );
+  useEffect(() => {
+    notifyEvidenceState.current?.(imageEvidenceReady);
+  }, [imageEvidenceReady, uid, verificationId]);
 
   const similarityLabel = typeof matchScore === "number" &&
     Number.isFinite(matchScore) && matchScore >= 0 && matchScore <= 1
@@ -146,6 +162,8 @@ export default function AdminIdentityEvidence({
                   <TouchableOpacity onPress={() => setExpanded({ uid, verificationId: verificationId || "", label, uri: photo.url })}
                     accessibilityRole="button" accessibilityLabel={"Enlarge " + label}>
                     <Image source={{ uri: photo.url }} resizeMode="contain"
+                      onLoad={() => setLoadedImageUrls((previous) => previous.includes(photo.url) ? previous : [...previous, photo.url])}
+                      onError={() => setError("A protected photo failed to load. Select Refresh, or request resubmission.")}
                       style={{ width: "100%", height: wide ? 172 : 145, backgroundColor: "#E8EEF2" }} />
                   </TouchableOpacity>
                 ) : (
@@ -202,6 +220,13 @@ export default function AdminIdentityEvidence({
           <Text style={{ color: "#46596A", fontSize: 11, lineHeight: 17 }}>
             {aiLabel}. This score measures facial similarity, not a probability of genuine identity.
             Review the full ID image, details, and independent LGU validation before approving.
+          </Text>
+        </View>
+        <View style={{ flexDirection: "row", gap: 7, alignItems: "center" }}>
+          <Ionicons name={imageEvidenceReady ? "checkmark-circle" : "time-outline"} size={16}
+            color={imageEvidenceReady ? "#08765A" : "#B45309"} />
+          <Text style={{ color: imageEvidenceReady ? "#08765A" : "#92400E", fontSize: 11, fontWeight: "600" }}>
+            {imageEvidenceReady ? "Required protected photos loaded for review" : "Awaiting all required protected photos"}
           </Text>
         </View>
         <Text style={{ fontSize: 11, color: "#64748B" }}>
