@@ -21,6 +21,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           path: controller
+          fetch-depth: 0
           submodules: false
       - uses: actions/checkout@v4
         with:
@@ -33,7 +34,7 @@ jobs:
       - name: Verify exactly this no-deploy audit workflow was added
         run: |
           set -euo pipefail
-          test "$(git -C controller diff --name-only HEAD^ HEAD)" = '.github/workflows/qa-protected-hosting-release-snapshot-20261122.yml'
+          test "$(git -C controller diff --name-status HEAD^ HEAD)" = "$(printf 'M\t.github/workflows/qa-protected-hosting-release-snapshot-20261122.yml')"
           node --check snapshot-code/.github/scripts/hosting-live-release-snapshot-20261122.cjs
           echo 'PASS protected source scoped to read-only QA'
       - name: Create temporary production scoped Hosting read-only credential
