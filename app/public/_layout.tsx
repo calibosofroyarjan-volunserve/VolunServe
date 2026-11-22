@@ -1,4 +1,4 @@
-import { Stack } from "expo-router";
+import { Stack, useSegments } from "expo-router";
 import {onAuthStateChanged, signOut} from "firebase/auth";
 import {useCallback, useEffect, useState} from "react";
 import {ActivityIndicator, Pressable, Text, View} from "react-native";
@@ -13,6 +13,10 @@ import {auth} from "../../lib/firebase";
  * The guest navigator mounts only AFTER Firebase confirms signed-out state.
  */
 export default function PublicLayout() {
+  const segments = useSegments();
+  // A nested Guest stack can remain mounted while the parent navigator
+  // switches to Signup or Login. Never sign out that *new* Auth session.
+  const isGuestRoute = segments[0] === "public";
   const [ready, setReady] = useState(false);
   const [error, setError] = useState("");
   const [retry, setRetry] = useState(0);
@@ -28,6 +32,11 @@ export default function PublicLayout() {
   }, []);
 
   useEffect(() => {
+    if (!isGuestRoute) {
+      setReady(false);
+      return;
+    }
+    setReady(false);
     let active = true;
     let clearing = false;
     const unsubscribe = onAuthStateChanged(auth, (user) => {
@@ -51,7 +60,10 @@ export default function PublicLayout() {
       if (active) setError("Could not verify signed-out Guest Mode. Check your connection and try again.");
     });
     return () => {active = false; unsubscribe();};
-  }, [retry]);
+  }, [retry, isGuestRoute]);
+
+  // Do not keep the account-free sign-out gate active behind Signup/Login.
+  if (!isGuestRoute) return null;
 
   if (!ready || auth.currentUser) {
     return <View style={{flex: 1, backgroundColor: "#F6F8F7", justifyContent: "center", alignItems: "center", padding: 24}}>
