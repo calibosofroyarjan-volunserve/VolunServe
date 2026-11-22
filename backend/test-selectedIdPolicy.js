@@ -140,3 +140,20 @@ test("older profile with no saved birthday does not count as birthday mismatch",
  const screening={...valid("national_id"),profileBirthDateCheck:"not_checked"};
  assert.equal(enforceSelectedIdDecision("manual_review",screening,false),"manual_review");
 });
+
+
+test("a readable but different account name never receives a positive face verdict",()=>{
+  const screening={
+    ...valid("national_id"), profileNameCheck:"possible_conflict",
+    profileNameCompared:true, imageQualityStatus:"adequate",
+    profileBirthDateCheck:"possible_match", profileAddressCheck:"possible_match",
+  };
+  assert.equal(selectedIdRecognized(screening),true); // ID type alone recognized
+  assert.equal(enforceSelectedIdDecision("verified",screening,true),"failed");
+  assert.equal(enforceSelectedIdDecision("manual_review",screening,false),"failed");
+  assert.equal(classifyIdentityReviewTrack({screening,decision:"failed",idImageQualityScore:.99}),"none");
+});
+test("an unreadable name is not falsely classified as a conflict",()=>{
+  const screening={...valid("national_id"),profileNameCheck:"inconclusive"};
+  assert.equal(enforceSelectedIdDecision("manual_review",screening,false),"manual_review");
+});
