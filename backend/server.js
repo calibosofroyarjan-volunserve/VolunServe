@@ -4790,9 +4790,11 @@ async function callIdentityAiService(
       method: "POST",
       headers: getIdentityAiHeaders(request),
       body: request.body,
-      // Release the verification lease on AI outages rather than waiting
-      // indefinitely. The frontend request times out after 65 seconds.
-      signal: AbortSignal.timeout(55000),
+      // Document-only OCR is CPU-heavy on the Render Free plan; each
+      // front/back Tesseract subprocess has a strict 40s bound.
+      // Allow this consented, zero-attempt precheck 105s; keep real
+      // face-verification requests at their original 55s lease deadline.
+      signal: AbortSignal.timeout(options.documentPrecheck ? 105000 : 55000),
     });
   } catch (error) {
     console.error("Identity AI connection failed:", error?.name || "network_error");
