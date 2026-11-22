@@ -31,6 +31,7 @@ import {getRegistrationEmailError} from "../../lib/registrationEmailPolicy";
 import {verificationCooldownSeconds} from "../../lib/verificationCooldown";
 import {getResidentRegistrationFieldErrors} from "../../lib/requireCompleteResidentRegistration";
 import { userFacingError } from "../../lib/userFacingError";
+import { googleSignInErrorMessage } from "../../lib/googleSignInFeedback";
 import {
   REGISTRATION_EMAIL_CONFLICT_MESSAGE,
   EMAIL_VERIFICATION_INSTRUCTIONS,
@@ -415,8 +416,19 @@ export default function EmailFirstSignup() {
       else if (!state.profileExists) setMessage(
         "Google verified! Continue with your personal details. No extra password is needed when signing in with Google."
       );
-    } catch (e) {setError(safeAuthError(e));}
-    finally {setBusy(false);}
+    } catch (e) {
+      // Firebase account collision means the address already has credentials.
+      // Do not create/merge another UID. The existing password owner can link
+      // Google from Login after proving the original account password.
+      const authCode = (e as { code?: unknown } | null)?.code;
+      if (authCode === "auth/account-exists-with-different-credential") {
+        setError(
+          "This email already has a VolunServe sign-in method. Open Sign In, choose Continue with Google, then use Sign In & Link Google with your original password. Do not register another account."
+        );
+      } else {
+        setError(googleSignInErrorMessage(e));
+      }
+    } finally { setBusy(false); }
   }
 
   async function checkVerified() {
