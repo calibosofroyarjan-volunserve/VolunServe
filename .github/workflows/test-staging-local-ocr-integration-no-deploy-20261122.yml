@@ -32,3 +32,19 @@ jobs:
           python -m unittest discover -s identity-ai -p test_local_national_id_both_sides.py -v
       - name: Safety statement
         run: echo 'No real documents, no Firebase, no Admin status changes, no deployment, no public upload. Synthetic tests only.' >> "$GITHUB_STEP_SUMMARY"
+
+  web-typescript-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'npm'
+      - name: Install locked dependencies (CI only)
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Compile web TypeScript without emitting files
+        run: ./node_modules/.bin/tsc --noEmit --pretty false
