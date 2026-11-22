@@ -7,6 +7,7 @@ import ListPagination from "../../components/ui/ListPagination";
 import AdminReviewHero from "../../components/admin/AdminReviewHero";
 import DocumentScreeningSummary from "../../components/identity/DocumentScreeningSummary";
 import AdminIdentityEvidence from "../../components/identity/AdminIdentityEvidence";
+import { getIdentityBackendBaseUrl } from "../../lib/identityBackendUrl";
 import type { DocumentScreening } from "../../lib/identityVerification";
 import {
     ActivityIndicator,
@@ -23,7 +24,7 @@ import {
 
 import { useUserSession } from "../../lib/useUserSession";
 
-const BACKEND_URL = "https://volunserve.onrender.com";
+
 
 type ReviewFilter = "pending" | "verified" | "retry_required" | "all";
 
@@ -162,7 +163,7 @@ export default function IdentityReviewsAdmin() {
 
       const token = await user.getIdToken(true);
       const response = await fetch(
-        `${BACKEND_URL}/api/admin/identity/reviews`,
+        `${getIdentityBackendBaseUrl()}/api/admin/identity/reviews`,
         {
           method: "GET",
           headers: {
@@ -296,7 +297,7 @@ export default function IdentityReviewsAdmin() {
 
       const token = await user.getIdToken(true);
       const response = await fetch(
-        `${BACKEND_URL}/api/admin/identity/reviews/${encodeURIComponent(
+        `${getIdentityBackendBaseUrl()}/api/admin/identity/reviews/${encodeURIComponent(
           selected.uid,
         )}/decision`,
         {
