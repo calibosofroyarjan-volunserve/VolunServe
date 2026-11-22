@@ -1,0 +1,172 @@
+# One-time, fail-closed, live-derived Hosting-only VolunServe authentication/calendar release.
+# Changes ONLY the reviewed current-published-site-derived web assets.
+# No functions, Firestore rules/data, storage, Identity Platform, or Render operations.
+name: Guarded Latest Live Guest/Google Signup Without Linking (Hosting only)
+on:
+  push:
+    branches: [live-protected]
+    paths:
+      - '.github/workflows/release-guest-signup-no-link-20261122.yml'
+permissions:
+  contents: read
+concurrency:
+  group: volunserve-production-hosting-release
+  cancel-in-progress: false
+jobs:
+  guarded-hosting-release:
+    if: github.repository == 'calibosofroyarjan-volunserve/VolunServe' && github.ref == 'refs/heads/live-protected'
+    runs-on: ubuntu-latest
+    environment: production
+    timeout-minutes: 65
+    env:
+      CI: 'true'
+      EXPO_NO_TELEMETRY: '1'
+      PROJECT: 'volunserve-3aa5b'
+      EXPECTED_LIVE: 'c264df140d94b5d3d578c72e6ae9edb3ef280f28'
+      SOURCE_SHA: 'bceffc32fa51cc9315771754b524360bef1a8cc6'
+      SOURCE_BRANCH: 'fix/live-latest-guest-signup-no-link-20261122'
+      BACKUP_CHANNEL: 'guest-signup-backup-20261122'
+    steps:
+      - name: Check out exact one-file protected release controller
+        uses: actions/checkout@v4
+        with:
+          path: controller
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          submodules: false
+      - name: Check out exact immutable site commit derived from published live revision
+        uses: actions/checkout@v4
+        with:
+          path: site
+          ref: 'bceffc32fa51cc9315771754b524360bef1a8cc6'
+          fetch-depth: 0
+          submodules: false
+      - name: Fail closed on changed production, drift, stale code, or unexpected files
+        working-directory: site
+        shell: bash
+        run: |
+          node <<'NODE'
+          const assert=require("node:assert/strict");
+          const cp=require("node:child_process");
+          const fs=require("node:fs");
+          const git=(...args)=>cp.execFileSync("git",args,{encoding:"utf8"}).trim();
+          (async()=>{
+            const base=process.env.EXPECTED_LIVE, source=process.env.SOURCE_SHA;
+            assert(/^[0-9a-f]{40}$/.test(base) && /^[0-9a-f]{40}$/.test(source));
+            assert.equal(git("rev-parse","HEAD"),source,"BLOCKED: source checkout does not match pinned site");
+            cp.execFileSync("git",["merge-base","--is-ancestor",base,source]);
+            const sourceHead=git("ls-remote","--heads","origin",process.env.SOURCE_BRANCH).split(/\s+/)[0];
+            assert.equal(sourceHead,source,"BLOCKED: reviewed source branch moved");
+            const currentProtected=git("ls-remote","--heads","origin","live-protected").split(/\s+/)[0];
+            assert.equal(currentProtected,process.env.GITHUB_SHA,"BLOCKED: newer protected controller exists");
+            const ctrl=cp.execFileSync("git",["-C","../controller","diff","--name-status","--no-renames","HEAD^","HEAD"],{encoding:"utf8"}).trim();
+            assert.equal(ctrl,"A\t.github/workflows/release-guest-signup-no-link-20261122.yml",
+              "BLOCKED: controller push included unrelated changes");
+            const expected={
+              "app/_layout.tsx":"M",
+              "components/auth/EmailFirstSignup.tsx":"M"
+            };
+            const changes=git("diff","--name-status","--no-renames",base,source)
+              .split("\n").filter(Boolean).map(line=>line.split("\t"));
+            assert.deepEqual(changes.map(x=>x[1]).sort(),Object.keys(expected).sort(),
+              "BLOCKED: source contains unrelated/outdated modules");
+            for(const [status,path] of changes)
+              assert.equal(status,expected[path],"BLOCKED: deletion, rename or unexpected change "+path);
+            const cfg=JSON.parse(fs.readFileSync(".firebaserc","utf8"));
+            assert.equal(cfg.projects.default,process.env.PROJECT,"BLOCKED: Firebase project mismatch");
+            const response=await fetch("https://volunserve.com/volunserve-release.json?preflight="+Date.now(),{
+              headers:{"Cache-Control":"no-cache"},signal:AbortSignal.timeout(15000)
+            });
+            assert(response.ok,"BLOCKED: production site revision unreadable");
+            const marker=await response.json();
+            assert.equal(marker.app,"VolunServe");
+            assert.equal(marker.firebaseProject,process.env.PROJECT);
+            assert.equal(marker.revision,base,
+              "BLOCKED: production changed; cannot overwrite newer VolunServe");
+            console.log("PASS: only two reviewed auth/signup files; exact previously published revision verified");
+          })().catch(e=>{console.error(e);process.exitCode=1});
+          NODE
+      - name: Install exact locked live-derived dependencies
+        working-directory: site
+        run: npm ci --no-audit --no-fund
+      - name: TypeScript and preserved login, route, Guest tests
+        working-directory: site
+        run: |
+          npx tsc --noEmit --incremental false
+          node scripts/test-unified-login-routing.cjs
+          node scripts/test-login-field-validation.cjs
+          node scripts/test-login-ui-release.cjs
+          node scripts/test-route-entrypoints.cjs
+          node scripts/test-guest-readonly-preview.cjs
+          node <<'NODE'
+          const assert=require("node:assert/strict"),fs=require("node:fs");
+          const ui=fs.readFileSync("components/auth/EmailFirstSignup.tsx","utf8");
+          const root=fs.readFileSync("app/_layout.tsx","utf8");
+          assert(!ui.includes("linkEmailFirstGooglePassword"));
+          assert(!ui.includes("Link Password & Continue"));
+          assert(ui.includes("setStep(user.emailVerified ? 3 : 2)"));
+          assert(ui.includes('authProvider: googleSignupAccount ? "google" : "verified_email"'));
+          assert(ui.includes("const createdProfile = await getUserProfile(user.uid)"));
+          assert(ui.includes("googleSignupSession && !consent"));
+          assert(root.includes("auth.currentUser?.uid === authUser.uid"));
+          assert(root.includes("isPublicRoute"));
+          console.log("PASS same-UID Resident registration, no Google password-link step, no signed-in Guest fallback");
+          NODE
+      - name: Build web and verify exact release artifact (NO DEPLOY)
+        working-directory: site
+        run: |
+          npx expo export --platform web --clear
+          env -u GITHUB_SHA node scripts/verify-hosting-release.cjs
+          node -e 'const assert=require("node:assert/strict");const m=require("./dist/volunserve-release.json");assert.equal(m.revision,process.env.SOURCE_SHA);assert.equal(m.firebaseProject,process.env.PROJECT);console.log("PASS reviewed web artifact pinned to immutable source")'
+      - name: Verify production marker again immediately before backup and release
+        working-directory: site
+        shell: bash
+        env:
+          FIREBASE_SA: ${{ secrets.VOLUNSERVE_PRODUCTION_HOSTING_SERVICE_ACCOUNT }}
+        run: |
+          test -n "$FIREBASE_SA" || { echo "BLOCKED: production Hosting credential unavailable"; exit 1; }
+          printf '%s' "$FIREBASE_SA" > "$RUNNER_TEMP/volunserve-auth-calendar-service-account.json"
+          chmod 600 "$RUNNER_TEMP/volunserve-auth-calendar-service-account.json"
+          echo "GOOGLE_APPLICATION_CREDENTIALS=$RUNNER_TEMP/volunserve-auth-calendar-service-account.json" >> "$GITHUB_ENV"
+          node <<'NODE'
+          const assert=require("node:assert/strict");
+          (async()=>{
+            const r=await fetch("https://volunserve.com/volunserve-release.json?recheck="+Date.now(),{
+              headers:{"Cache-Control":"no-cache"},signal:AbortSignal.timeout(15000)});
+            assert(r.ok,"BLOCKED: live revision unavailable");
+            const m=await r.json();
+            assert.equal(m.revision,process.env.EXPECTED_LIVE,"BLOCKED: production changed before release");
+            assert.equal(m.firebaseProject,process.env.PROJECT);
+            console.log("PASS production unchanged before backup/release");
+          })().catch(e=>{console.error(e);process.exitCode=1});
+          NODE
+      - name: Backup currently published Firebase Hosting (NO user data changes)
+        id: backup
+        working-directory: site
+        run: npx firebase-tools hosting:clone "$PROJECT:live" "$PROJECT:$BACKUP_CHANNEL" --project "$PROJECT" --non-interactive
+      - name: Publish reviewed live-derived web assets to Firebase Hosting only
+        id: deploy
+        uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          firebaseServiceAccount: ${{ secrets.VOLUNSERVE_PRODUCTION_HOSTING_SERVICE_ACCOUNT }}
+          projectId: volunserve-3aa5b
+          channelId: live
+          entryPoint: ./site
+      - name: Verify exact published source and public VolunServe pages
+        working-directory: site
+        env:
+          VOLUNSERVE_HOSTING_URL: 'https://volunserve.com'
+          VOLUNSERVE_EXPECTED_SHA: 'bceffc32fa51cc9315771754b524360bef1a8cc6'
+        run: |
+          for attempt in 1 2 3 4 5 6; do
+            if node scripts/check-live-hosting.cjs; then exit 0; fi
+            sleep 10
+          done
+          echo "BLOCKED: public Hosting failed to serve the exact reviewed revision"
+          exit 1
+      - name: Roll back Hosting if deployment or public verification fails
+        if: failure() && steps.backup.outcome == 'success' && steps.deploy.outcome != 'skipped'
+        working-directory: site
+        run: |
+          echo "Rolling back Hosting only from the authenticated pre-release backup channel"
+          npx firebase-tools hosting:clone "$PROJECT:$BACKUP_CHANNEL" "$PROJECT:live" --project "$PROJECT" --non-interactive
