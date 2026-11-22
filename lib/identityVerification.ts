@@ -126,6 +126,10 @@ export type IdentityVerificationResult = {
 
 export type DocumentPrecheckResult = {
   outcome: "pass" | "review" | "retry";
+  // status=pending is a server-confirmed persisted Admin queue record.
+  status?: "pending";
+  decision?: "ready_for_face_scan" | "pending_admin_review" | "profile_mismatch" | "rescan_required";
+  verificationId?: string;
   detectedIdType: IdentityDocumentType | null;
   documentScreening?: DocumentScreening;
   message: string;
@@ -187,6 +191,12 @@ export async function precheckIdentityDocument(input: {
     : data?.outcome === "review" ? "review" : "retry";
   return {
     outcome,
+    status: data?.status === "pending" && outcome === "review" ? "pending" : undefined,
+    decision: ["ready_for_face_scan", "pending_admin_review", "profile_mismatch", "rescan_required"]
+      .includes(String(data?.decision || ""))
+      ? data.decision : undefined,
+    verificationId: typeof data?.verificationId === "string"
+      ? data.verificationId.slice(0, 200) : undefined,
     detectedIdType: screening?.detectedIdType || null,
     documentScreening: screening,
     message: getResponseMessage(data, "Retake the scanned government ID."),
