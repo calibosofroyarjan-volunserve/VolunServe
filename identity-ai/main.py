@@ -1266,17 +1266,41 @@ async def verify_identity(
     try:
         # Both the profile's Be a Verified Resident flow and the LGU review
         # queue use this one protected endpoint; no separate visual-only AI.
-        result = await asyncio.to_thread(
-            run_face_verification,
-            uid=uid,
-            id_document_bytes=id_document_bytes,
-            selfie_bytes=selfie_bytes,
-        )
+        # Screen the declared ID before comparing faces. For National IDs,
+        # an unreadable or conflicting OCR result is never treated as a
+        # successful face verification. Admin can request a clearer scan or
+        # independently review the document. Other legacy ID types retain
+        # their existing flow; this narrow change avoids unrelated regressions.
         document_screening = await asyncio.to_thread(
             screen_government_id,
             declared_type=id_type,
             id_document_bytes=id_document_bytes,
         )
+        national_id_needs_review = (
+            id_type == "national_id"
+            and (
+                document_screening.get("status") != "text_consistent_unverified"
+                or document_screening.get("detectedIdType") != "national_id"
+            )
+        )
+        if national_id_needs_review:
+            result = manual_review_result(
+                uid=uid,
+                message=(
+                    "The National ID type could not be confidently confirmed "
+                    "from the photo. An Admin must review the document or "
+                    "request a clearer image before identity approval. "
+                    "No automatic face-match decision was made."
+                ),
+                warning="national_id_ocr_requires_manual_review",
+            )
+        else:
+            result = await asyncio.to_thread(
+                run_face_verification,
+                uid=uid,
+                id_document_bytes=id_document_bytes,
+                selfie_bytes=selfie_bytes,
+            )
     except HTTPException:
         raise
     except Exception:
