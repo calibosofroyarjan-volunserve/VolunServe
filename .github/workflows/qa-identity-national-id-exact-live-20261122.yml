@@ -1,0 +1,69 @@
+name: QA exact National ID VolunServe UI (NO DEPLOY)
+
+on:
+  push:
+    branches:
+      - ui/identity-national-id-exact-live-20261122
+    paths:
+      - 'app/identity-verification.web.tsx'
+      - '.github/workflows/qa-identity-national-id-exact-live-20261122.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: identity-national-id-exact-ui-no-deploy
+  cancel-in-progress: true
+
+jobs:
+  verify-live-based-ui:
+    name: Check live baseline, scoped changes, TypeScript and web build
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      CI: 'true'
+      EXPO_NO_TELEMETRY: '1'
+      EXPO_PUBLIC_VOLUNSERVE_ENV: production
+      EXPO_PUBLIC_IDENTITY_VERIFICATION_API_URL: https://volunserve.onrender.com
+      VOLUNSERVE_HOSTING_URL: https://volunserve.com
+      VOLUNSERVE_EXPECTED_SHA: 3f9db212e44483ef3befd6d442219cbbd0a4c3a7
+    steps:
+      - name: Fetch code without broken legacy VolunServe gitlink
+        env:
+          REPO: ${{ github.repository }}
+          REVISION: ${{ github.sha }}
+        run: |
+          set -eu
+          git init -q
+          git remote add origin "https://github.com/${REPO}.git"
+          git -c protocol.version=2 fetch --no-tags --depth=1 --filter=blob:none --no-recurse-submodules origin "${REVISION}"
+          git sparse-checkout init --cone
+          git sparse-checkout set app assets backend components constants hooks lib public scripts
+          git checkout --force FETCH_HEAD
+      - name: Strict scoped-diff check and existing auth/backend safety
+        run: |
+          set -eu
+          BASE=3f9db212e44483ef3befd6d442219cbbd0a4c3a7
+          git -c protocol.version=2 fetch --no-tags --depth=1 --filter=blob:none --no-recurse-submodules origin "$BASE"
+          git diff --name-only FETCH_HEAD HEAD >/tmp/changes.txt
+          cat /tmp/changes.txt
+          test "$(wc -l < /tmp/changes.txt)" -eq 2
+          grep -qx 'app/identity-verification.web.tsx' /tmp/changes.txt
+          grep -qx '.github/workflows/qa-identity-national-id-exact-live-20261122.yml' /tmp/changes.txt
+          git diff --exit-code FETCH_HEAD HEAD -- app/login.tsx app/signup.tsx app/_layout.tsx 'app/(tabs)' lib backend functions firebase.json firestore.rules storage.rules package-lock.json package.json
+      - name: Confirm current live Hosting is STILL the exact source revision (read-only)
+        run: node scripts/check-live-hosting.cjs
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install lockfile-pinned dependencies
+        run: npm ci --no-audit --no-fund
+      - name: TypeScript compile
+        run: npx tsc --noEmit --incremental false
+      - name: Production web export (no publishing)
+        run: |
+          npx expo export --platform web --max-workers 1
+          node scripts/verify-hosting-release.cjs
+      - name: Confirm no deployment happened
+        run: echo "NO DEPLOY - this is offline/readonly QA only. No Firebase, Render, Auth, or database writes."
