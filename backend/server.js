@@ -11,7 +11,7 @@ const {
 const { reconcileCommunityEventCertificates } = require("./communityCertificates");
 const { combineApprovedBudget } = require("./assistanceDonationBudget");
 const { probeIdentityAiReadiness } = require("./identityAiReadiness");
-const { readIdentityEvidence, storeIdentityEvidence, destroyIdentityEvidence, privateIdentityEvidenceUrl, RETENTION_MS } = require("./identityEvidence");
+const { readIdentityEvidence, storeIdentityEvidence, destroyIdentityEvidence, privateIdentityEvidenceUrl, purgeExpiredIdentityEvidence, RETENTION_MS } = require("./identityEvidence");
 const {isVerifiedFirebaseToken, isCompletedVolunServeProfile} = require("./verifiedFirebaseToken");
 const {
   getProfileRole,
@@ -11693,6 +11693,20 @@ const { installPublicAssistanceAppeals } = require("./publicAssistanceAppeals");
 installPublicAssistanceAppeals({
   app, db, FieldValue, requireFirebaseUser, requireOperationalAdmin, cleanText, makeHttpError,
 });
+// Periodic privacy cleanup, without touching any other media collections.
+// Cloud services may sleep; on every process start retry the expired sweep.
+async function sweepExpiredIdentityImages() {
+  try {
+    configureCloudinary();
+    await purgeExpiredIdentityEvidence(db);
+  } catch (error) {
+    console.warn("Identity evidence retention cleanup needs retry:", error?.code || "unavailable");
+  }
+}
+const identityCleanupTimer = setInterval(() => { void sweepExpiredIdentityImages(); }, 6 * 60 * 60 * 1000);
+identityCleanupTimer.unref?.();
+const identityCleanupStart = setTimeout(() => { void sweepExpiredIdentityImages(); }, 30 * 1000);
+identityCleanupStart.unref?.();
 const port =
   Number(
     process.env.PORT ||
