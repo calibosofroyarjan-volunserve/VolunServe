@@ -30,6 +30,8 @@ const {
   uploadIdentityEvidence,
   signedIdentityEvidence,
   destroyIdentityEvidence,
+  identityEvidenceRetentionDate,
+  purgeExpiredIdentityEvidence,
 } = require("./identityPrivateEvidence");
 const {
   getProfileRole,
@@ -5490,6 +5492,7 @@ app.post(
           transaction.set(evidenceRef, {
             uid, requestId, verificationId, assets: newEvidenceAssets,
             storedAt: FieldValue.serverTimestamp(),
+            retentionUntil: identityEvidenceRetentionDate(),
             purpose: "consented_manual_identity_review",
           });
         } else if (evidenceSnapshot.exists) {
@@ -5749,6 +5752,12 @@ app.get(
           verification.verificationId !== evidence.verificationId) {
         throw makeHttpError(404, "identity_evidence_not_retained",
           "No evidence is available for the currently selected verification.");
+      }
+      // Even when Render has been idle, expired evidence must never be shown.
+      if (!evidence.retentionUntil ||
+          evidence.retentionUntil.toMillis() <= Date.now()) {
+        throw makeHttpError(410, "identity_evidence_expired",
+          "Private identity evidence has expired. Request a new submission if needed.");
       }
       const signed = signedIdentityEvidence({
         uid, assets: evidence.assets, cloudinary, configureCloudinary,
@@ -12094,6 +12103,16 @@ installPublicAssistanceAppeals({
 // Automatic, idempotent recovery for eligible completed event certificates.
 // Does not change attendance, roles, certificates that already exist, or rules.
 startCommunityCertificateAutoSync({db,reconcile:reconcileCommunityEventCertificates});
+// Isolated 30-day ID-photo retention sweep. Render may sleep between runs;
+// authorization additionally blocks expired evidence even before deletion.
+const runIdentityEvidenceCleanup = () => {
+  void purgeExpiredIdentityEvidence({db, FieldValue, cloudinary, configureCloudinary})
+    .catch(() => console.warn("Private identity evidence cleanup will retry later."));
+};
+const identitySweepStartup = setTimeout(runIdentityEvidenceCleanup, 30000);
+identitySweepStartup.unref();
+const identitySweepInterval = setInterval(runIdentityEvidenceCleanup, 6 * 60 * 60 * 1000);
+identitySweepInterval.unref();
 const port =
   Number(
     process.env.PORT ||
