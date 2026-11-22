@@ -1632,6 +1632,22 @@ export default function IdentityVerificationWeb() {
             </View>
           </View>
 
+          {documentPrecheckScreening && documentPrecheckOutcome === "pass" ? (
+            <View style={styles.idScanStepSuccess} accessibilityLabel="Completed preliminary document scan">
+              <Ionicons name="checkmark-circle" size={18} color="#13724F" />
+              <Text style={styles.idScanStepSuccessText}>National ID text readable</Text>
+              <Text style={styles.idScanStepSeparator}>•</Text>
+              <Ionicons
+                name={documentPrecheckScreening.profileNameCheck === "possible_match" ? "checkmark-circle" : "help-circle-outline"}
+                size={18}
+                color={documentPrecheckScreening.profileNameCheck === "possible_match" ? "#13724F" : "#7B8993"}
+              />
+              <Text style={styles.idScanStepSuccessText}>
+                {documentPrecheckScreening.profileNameCheck === "possible_match" ?
+                  "Name appears to match" : "Name not clear yet"}
+              </Text>
+            </View>
+          ) : null}
           <View style={styles.scanGrid}>
             <View style={styles.cameraCard}>
               {selfie ? (
@@ -3153,6 +3169,14 @@ const styles = StyleSheet.create({
     fontSize: 9.5,
     lineHeight: 14,
   },
+  idScanStepSuccess: {
+    flexDirection: "row", flexWrap: "wrap", alignItems: "center",
+    gap: 8, paddingVertical: 10, paddingHorizontal: 14,
+    backgroundColor: "#F1FBF5", borderRadius: 12,
+    borderColor: "#D3EADD", borderWidth: 1, marginBottom: 13,
+  },
+  idScanStepSuccessText: { fontSize: 11.5, color: "#176348", fontWeight: "700" },
+  idScanStepSeparator: { fontSize: 11, color: "#98B0A4" },
   idScanResults: {
     marginTop: 12, padding: 13, borderRadius: 12,
     borderWidth: 1, borderColor: "#DCE9E3", backgroundColor: "#F7FBF8",
