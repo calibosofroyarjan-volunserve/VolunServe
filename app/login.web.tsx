@@ -3,6 +3,8 @@ import { LinearGradient } from "expo-linear-gradient";
 import GoogleBrandMark from "../components/auth/GoogleBrandMark";
 import AuthFeedback from "../components/auth/AuthFeedback";
 import { unifiedPasswordDestination } from "../lib/unifiedLoginRouting";
+import { setExistingGoogleLinkInProgress } from "../lib/googleAccountLinkFlow";
+import { isKnownDisposableEmail } from "../lib/registrationEmailPolicy";
 import { getLoginEmailError, getLoginEmailSuggestion } from "../lib/loginInputValidation";
 import { userFacingError } from "../lib/userFacingError";
 import { googleSignInErrorMessage } from "../lib/googleSignInFeedback";
@@ -12,9 +14,13 @@ import { useRouter, type Href } from "expo-router";
 import {
   browserLocalPersistence,
   browserSessionPersistence,
+  getIdToken,
+  GoogleAuthProvider,
+  linkWithCredential,
   setPersistence,
+  type AuthCredential,
 } from "firebase/auth";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Pressable,
@@ -41,6 +47,7 @@ import {
  * No email addresses, tokens, UIDs or technical error payloads are stored.
  */
 const GOOGLE_LOGIN_NOTICE_KEY = "volunserve.google-login-notice";
+type PendingGoogleLink = { email: string; credential: AuthCredential };
 
 function rememberGoogleLoginNotice(message: string) {
   if (typeof window === "undefined") return;
@@ -71,6 +78,8 @@ export default function WebLogin() {
   const [pendingAction, setPendingAction] = useState<"login" | "google" | null>(null);
   const [googleFeedback, setGoogleFeedback] = useState("");
   const [googleProgress, setGoogleProgress] = useState("");
+  const pendingGoogleLink = useRef<PendingGoogleLink | null>(null);
+  const [pendingGoogleLinkEmail, setPendingGoogleLinkEmail] = useState<string | null>(null);
   useEffect(() => {
     const pending = consumeGoogleLoginNotice();
     if (pending) setGoogleFeedback(pending);
@@ -95,20 +104,26 @@ export default function WebLogin() {
         : browserSessionPersistence
     );
   };
-  const handleLogin = async () => {
+  const handleLogin = async (linkGoogle = false) => {
     if (loading) return;
     setAttemptedLogin(true);
     clearFeedback();
+    const pending = linkGoogle ? pendingGoogleLink.current : null;
+    if (linkGoogle && (!pending || pending.email !== email.trim().toLowerCase())) {
+      showError("Choose Continue with Google first, then enter your original VolunServe password to link it safely.");
+      return;
+    }
     const emailError = getLoginEmailError(email);
     if (emailError || !password) {
       showError(emailError || "Enter your password.");
       return;
     }
+    if (pending) setExistingGoogleLinkInProgress(true);
     try {
       setLoading(true);
       setPendingAction("login");
       await applySessionPersistence();
-      const { profile } = await loginUser(
+      const { user, profile } = await loginUser(
         email.trim().toLowerCase(),
         password
       );
@@ -119,10 +134,40 @@ export default function WebLogin() {
         await logoutUser();
         throw accessError;
       }
+      if (pending) {
+        // Proof of original password, existing same UID and exact matching
+        // profile/Auth/provider email are REQUIRED. No account merge or reset.
+        const authEmail = String(user.email || "").trim().toLowerCase();
+        const profileEmail = String(profile.email || "").trim().toLowerCase();
+        if (
+          !["resident", "volunteer"].includes(profile.role) ||
+          !user.emailVerified ||
+          authEmail !== pending.email ||
+          profileEmail !== pending.email ||
+          auth.currentUser?.uid !== user.uid ||
+          isKnownDisposableEmail(pending.email)
+        ) {
+          await logoutUser();
+          throw new Error("Google linking requires your own verified Resident or Volunteer account and its original password.");
+        }
+        try {
+          const linked = await linkWithCredential(user, pending.credential);
+          if (linked.user.uid !== user.uid || auth.currentUser?.uid !== user.uid) {
+            throw new Error("Google linking returned a different account UID.");
+          }
+          await getIdToken(linked.user, true);
+          pendingGoogleLink.current = null;
+          setPendingGoogleLinkEmail(null);
+        } catch {
+          await logoutUser().catch(() => undefined);
+          throw new Error("Google linking could not be confirmed. Your original password login is still available; please try again.");
+        }
+      }
       router.replace(destination as any);
     } catch (error: any) {
       showError(userFacingError(error, "Unable to sign in. Check your details and try again."));
     } finally {
+      if (pending) setExistingGoogleLinkInProgress(false);
       setLoading(false);
       setPendingAction(null);
     }
@@ -134,6 +179,8 @@ export default function WebLogin() {
     setGoogleProgress("Opening your Google account chooser...");
     // Clear an older attempt's notice without creating a new error.
     consumeGoogleLoginNotice();
+    pendingGoogleLink.current = null;
+    setPendingGoogleLinkEmail(null);
     let selectedUid: string | null = null;
     try {
       setLoading(true);
@@ -174,7 +221,18 @@ export default function WebLogin() {
       setGoogleProgress("Sign-in approved. Opening your account...");
       router.replace(homeRouteForProfile(profile) as any);
     } catch (error: unknown) {
-      const message = googleSignInErrorMessage(error);
+      let message = googleSignInErrorMessage(error);
+      const collision = error as {code?: string; customData?: {email?: string}} | null;
+      if (collision?.code === "auth/account-exists-with-different-credential") {
+        const credential = GoogleAuthProvider.credentialFromError(error as any);
+        const matchingEmail = String(collision.customData?.email || "").trim().toLowerCase();
+        if (credential && matchingEmail && !isKnownDisposableEmail(matchingEmail)) {
+          pendingGoogleLink.current = {email: matchingEmail, credential};
+          setPendingGoogleLinkEmail(matchingEmail);
+          setEmail(matchingEmail);
+          message = "This email already has a VolunServe password login. Enter your original password and select Sign In & Link Google. Normal Sign In remains available.";
+        }
+      }
       // Preserve every Google failure (including a cancelled or blocked popup)
       // across any auth-driven remount, not only a successfully selected UID.
       rememberGoogleLoginNotice(message);
@@ -274,6 +332,25 @@ export default function WebLogin() {
             </View>
           )}
         </Pressable>
+        {!!pendingGoogleLinkEmail && (
+          <View>
+            <Text style={styles.googleProgress}>
+              Google linking is optional. Confirm your original password to link to this same account.
+            </Text>
+            <TouchableOpacity
+              accessibilityRole="button"
+              accessibilityLabel="Sign in and link your Google account"
+              disabled={loading}
+              onPress={() => void handleLogin(true)}
+              style={[styles.outlineButton, loading && styles.disabled]}
+            >
+              <View style={styles.centerRow}>
+                <GoogleBrandMark size={21} />
+                <Text style={styles.outlineText}>Sign In & Link Google</Text>
+              </View>
+            </TouchableOpacity>
+          </View>
+        )}
         <View style={styles.divider}>
           <View style={styles.dividerLine} />
           <Text style={styles.muted}>or continue with</Text>
@@ -305,7 +382,7 @@ export default function WebLogin() {
             onDismiss={() => { setGoogleFeedback(""); consumeGoogleLoginNotice(); }}
           />
         )}
-        <TouchableOpacity accessibilityRole="button" onPress={() => router.replace("/public")}
+        <TouchableOpacity accessibilityRole="button" onPress={() => { void logoutUser().then(() => router.replace("/public")).catch(() => showError("Could not open Guest Mode. Please try again.")); }}
           disabled={loading}
           style={[styles.outlineButton, authCornerCut(10), (loading) && styles.disabled]}>
           <View style={styles.centerRow}>
