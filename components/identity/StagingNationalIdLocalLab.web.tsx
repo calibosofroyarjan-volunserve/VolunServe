@@ -57,7 +57,7 @@ const ui = {
   actionText: { color: "#FFFFFF", fontWeight: "800", fontSize: 13 } as const,
 };
 
-export default function StagingNationalIdLocalLab() {
+export default function StagingNationalIdLocalLab({ showAdminReviewLink = true }: { showAdminReviewLink?: boolean } = {}) {
   const router = useRouter();
   const mounted = useRef(true);
   const [front, setFront] = useState<File | null>(null);
@@ -178,14 +178,14 @@ export default function StagingNationalIdLocalLab() {
         </View>
       ) : null}
       {message ? <Text style={ui.small} accessibilityRole="alert">{message}</Text> : null}
-      <TouchableOpacity
+      {showAdminReviewLink ? <TouchableOpacity
         onPress={() => router.push("/identity-manual-review" as any)}
         accessibilityRole="button"
         style={{ paddingVertical: 7 }}>
         <Text style={{ color: "#047857", fontWeight: "700", fontSize: 13 }}>
           Request In-Person LGU Admin Review (no image upload)
         </Text>
-      </TouchableOpacity>
+      </TouchableOpacity> : null}
       <Text style={ui.small}>
         Requesting Admin review is a separate authorized action. The local OCR result is
         NOT submitted to Firebase or Admin, and it never grants Verified Resident status.
