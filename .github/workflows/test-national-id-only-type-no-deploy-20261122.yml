@@ -1,0 +1,30 @@
+name: National ID Only OCR Type Screening - synthetic no deploy
+on:
+  push:
+    branches:
+      - feat/staging-national-id-type-only-20261122
+    paths:
+      - 'identity-ai/local_national_id_type_only.py'
+      - 'identity-ai/test_local_national_id_type_only.py'
+      - 'Start-VolunServe-National-ID-Only.cmd'
+      - '.github/workflows/test-national-id-only-type-no-deploy-20261122.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  type-check-only:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Compile type-check script
+        run: python -m py_compile identity-ai/local_national_id_type_only.py identity-ai/test_local_national_id_type_only.py
+      - name: Synthetic classification tests
+        run: python -m unittest discover -s identity-ai -p test_local_national_id_type_only.py -v
+      - name: No deployment or real images
+        run: echo 'Only fictional OCR strings; no photos, user accounts, Firebase, identity approval, or deployment.' >> "$GITHUB_STEP_SUMMARY"
