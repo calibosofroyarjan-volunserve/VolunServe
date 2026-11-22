@@ -545,7 +545,7 @@ export default function IdentityVerification() {
       if (!consent) {
         Alert.alert(
           "Consent Required",
-          "Confirm that VolunServe may process the submitted identity images for account verification.",
+          "Consent to secure storage of your ID scans and selfie for authorized LGU Admin review is required.",
         );
         return;
       }
@@ -1050,9 +1050,9 @@ export default function IdentityVerification() {
             styles.privacyNoteText
           }
         >
-          VolunServe performs a private 1-to-1 comparison between the
-          face on your submitted ID and your face scan. It does not
-          search a public face database.
+          VolunServe performs a private 1-to-1 face comparison.
+          Consented ID scans and selfies are securely stored for authorized
+          LGU Admin review; they are not posted publicly.
         </Text>
       </View>
     </ScrollView>
@@ -2007,8 +2007,9 @@ function FaceScanStep({
             styles.consentText
           }
         >
-          I consent to VolunServe processing my submitted government ID
-          and face scan for private 1-to-1 identity verification.
+          I consent to VolunServe privately processing and securely
+          storing my ID front and back scans and live selfie for AI checks
+          and authorized LGU Admin identity review.
         </Text>
       </TouchableOpacity>
 
