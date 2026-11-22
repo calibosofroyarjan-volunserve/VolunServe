@@ -3,7 +3,9 @@
 Usage: py -3.11 identity-ai/staging_national_id_loopback.py
 Binds ONLY to 127.0.0.1:8765, only accepts browser Origins from local
 development. No Firebase, Render, persistence, account decisions, QR checks
-or selfie/face matching. Never expose the port to LAN or public network.
+or automatic selfie identity verification. Optional SFace research scores
+may be calculated for explicitly consented ID-front/selfie pairs, but never
+produce match decisions. Never expose the port to LAN or public network.
 
 A local browser submits front/back photos to THIS SAME COMPUTER, not to
 the VolunServe Node, Python cloud service or ChatGPT.
@@ -116,7 +118,7 @@ class LocalOnlyHandler(BaseHTTPRequestHandler):
                 and allowed_origin(self.headers.get("Origin")))
 
     def do_OPTIONS(self) -> None:
-        if not self._permitted() or self.path != "/check":
+        if not self._permitted() or self.path not in ("/check", "/compare-face"):
             self._send(403, {"error": "origin_not_allowed"})
             return
         self.send_response(204)
@@ -135,7 +137,7 @@ class LocalOnlyHandler(BaseHTTPRequestHandler):
             self._send(404, {"error": "not_found"})
 
     def do_POST(self) -> None:
-        if self.path != "/check":
+        if self.path not in ("/check", "/compare-face"):
             self._send(404, {"error": "not_found"})
             return
         if not self._permitted():
@@ -153,19 +155,36 @@ class LocalOnlyHandler(BaseHTTPRequestHandler):
             return
         try:
             data = json.loads(self.rfile.read(size).decode("utf-8"))
-            result = process_request(data)
+            if self.path == "/check":
+                result = process_request(data)
+            else:
+                # Explicit, per-request consent is required by the local-only
+                # SFace research endpoint. No account, OCR or Admin action.
+                if not isinstance(data, dict) or set(data) != {
+                    "idFront", "capturedSelfie", "consent"
+                } or data.get("consent") is not True:
+                    raise ValueError("face_consent_required")
+                from local_sface_browser_pair import process_pair
+                result = process_pair({
+                    "idFront": data["idFront"],
+                    "capturedSelfie": data["capturedSelfie"],
+                })
             self._send(200, result)
         except (UnicodeError, json.JSONDecodeError, ValueError):
             self._send(400, {"error": "invalid_image_pair"})
         except Exception:
             # Never leak OCR text, file paths or internal stack details.
-            self._send(503, {"error": "local_ocr_unavailable"})
+            self._send(503, {"error": (
+                "local_sface_unavailable" if self.path == "/compare-face"
+                else "local_ocr_unavailable"
+            )})
 
 def main() -> None:
     server = HTTPServer((HOST, PORT), LocalOnlyHandler)
     print(f"LOCAL ONLY OCR COMPANION: http://{HOST}:{PORT}")
     print("Allowed browser: localhost:8081 / 19006 / 3000 only")
     print("No ID storage, internet upload, Firebase, or account approval.")
+    print("Opt-in local SFace comparison: POST /compare-face (research score only).")
     print("Press Ctrl+C to stop this loopback-only tool.")
     try:
         server.serve_forever()
