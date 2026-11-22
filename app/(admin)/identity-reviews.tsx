@@ -736,6 +736,8 @@ function ReviewDetail({
   onVerify: () => void;
   onRetry: () => void;
 }) {
+  const [activeTab, setActiveTab] = useState<"review" | "history" | "audit">("review");
+  useEffect(() => { setActiveTab("review"); }, [item.uid, item.verificationId]);
   const pending = reviewBucket(item) === "pending";
   const nationalId = item.documentScreening?.declaredIdType === "national_id";
   const blurry = item.reviewTrack === "blurry_id_review";
@@ -766,6 +768,86 @@ function ReviewDetail({
         <StatusChip bucket={reviewBucket(item)} />
       </View>
 
+
+      <View style={styles.detailTabRow}>
+        {([
+          {key:"review" as const,label:"Identity Review",icon:"shield-checkmark-outline" as const},
+          {key:"history" as const,label:"Details & History",icon:"time-outline" as const},
+          {key:"audit" as const,label:"Audit Trail",icon:"document-text-outline" as const},
+        ]).map(entry=>(
+          <TouchableOpacity key={entry.key} accessibilityRole="tab"
+            accessibilityState={{selected:activeTab===entry.key}}
+            style={[styles.detailTab,activeTab===entry.key && styles.detailTabActive]}
+            onPress={()=>setActiveTab(entry.key)}>
+            <Ionicons name={entry.icon} size={15} color={activeTab===entry.key?"#08765A":"#71867A"} />
+            <Text style={[styles.detailTabLabel,activeTab===entry.key && styles.detailTabLabelActive]}>{entry.label}</Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+      {activeTab === "review" ? (<>
+        <View style={styles.evidenceAndAiGrid}>
+          <View style={styles.previewEvidenceCard}>
+            <View style={styles.previewCardHeading}>
+              <Ionicons name="id-card-outline" size={18} color="#08765A" />
+              <Text style={styles.previewCardHeadingText}>Submitted Identity Evidence</Text>
+              <Ionicons name="lock-closed-outline" size={14} color="#08765A" />
+            </View>
+            <View style={styles.previewEvidenceTiles}>
+              {([
+                {key:"front",label:"Government ID — Front",icon:"id-card-outline" as const},
+                {key:"back",label:"Government ID — Back",icon:"card-outline" as const},
+                {key:"selfie",label:"Live Selfie",icon:"person-outline" as const},
+              ]).map(tile=>(
+                <View key={tile.key} style={styles.previewEvidenceTile}>
+                  <View style={styles.previewEvidenceImage}>
+                    <Ionicons name={tile.icon} size={25} color="#8BA899" />
+                    <Text style={styles.previewEvidenceText}>Photo not retained</Text>
+                  </View>
+                  <Text style={styles.previewEvidenceLabel}>{tile.label}</Text>
+                </View>
+              ))}
+            </View>
+            <Text style={styles.previewEvidenceCaption}>
+              Current published records do not retain private ID/selfie photos for Admin viewing.
+              Only the separate secure evidence release can enable these previews.
+            </Text>
+          </View>
+          <View style={styles.previewAiCard}>
+            <View style={styles.previewCardHeading}>
+              <Ionicons name="scan-outline" size={18} color="#08765A" />
+              <Text style={styles.previewCardHeadingText}>AI Verification Result</Text>
+            </View>
+            <View style={styles.previewScoreBox}>
+              <Text style={styles.previewScoreLabel}>Face similarity</Text>
+              <Text style={styles.previewScoreValue}>
+                {typeof item.matchScore === "number" && Number.isFinite(item.matchScore)
+                  && item.matchScore >= 0 && item.matchScore <= 1
+                  ? (item.matchScore * 100).toFixed(1) + "%"
+                  : "Not evaluated"}
+              </Text>
+              <Text style={styles.previewScoreNote}>Preliminary AI estimate, not identity proof.</Text>
+            </View>
+            <InfoLine label="ID quality" value={
+              item.documentScreening?.imageQualityStatus || "Not evaluated"
+            } />
+            <InfoLine label="ID back screening" value={
+              item.documentScreening?.backSideScreened === true ? "Screened — authenticity unverified"
+                : "Not evaluated"
+            } />
+            <InfoLine label="AI route" value={
+              item.reviewTrack === "blurry_id_review" ? "Rescan required" :
+              item.reviewTrack === "priority_admin_review" ? "Priority Admin review" :
+              "Independent LGU review"
+            } />
+          </View>
+        </View>
+        <View style={styles.previewDisclaimer}>
+          <Ionicons name="alert-circle-outline" size={16} color="#A16207" />
+          <Text style={styles.previewDisclaimerText}>
+            AI/OCR cannot prove government ID authenticity or liveness.
+            The existing independent LGU verification requirements still apply.
+          </Text>
+        </View>
       <SectionTitle
         icon="person-circle-outline"
         title="Resident Account"
@@ -988,6 +1070,34 @@ function ReviewDetail({
             </View>
           ) : null}
         </>
+      )}
+      </>) : activeTab === "history" ? (
+        <View style={styles.previewInfoCard}>
+          <SectionTitle icon="person-circle-outline" title="Resident Details & Verification History" />
+          <InfoLine label="Resident" value={item.resident?.fullName || "Resident"} />
+          <InfoLine label="Barangay" value={item.resident?.barangay || "Not set"} />
+          <InfoLine label="Verification ID" value={item.verificationId || "—"} />
+          <InfoLine label="Submitted" value={formatDate(item.lastSubmissionAt || item.createdAt)} />
+          <InfoLine label="Current status" value={item.status || "—"} />
+          <InfoLine label="Review track" value={item.reviewTrack || "—"} />
+          <InfoLine label="AI decision" value={item.aiDecision || "—"} />
+          <Text style={styles.previewEvidenceCaption}>
+            This tab displays the recorded verification details, not a fabricated event history.
+          </Text>
+        </View>
+      ) : (
+        <View style={styles.previewInfoCard}>
+          <SectionTitle icon="document-text-outline" title="Recorded Review Audit Details" />
+          <InfoLine label="Verification ID" value={item.verificationId || "—"} />
+          <InfoLine label="Manual decision" value={item.manualReviewDecision || "No manual decision recorded"} />
+          <InfoLine label="Validation method" value={item.manualValidationMethod || "—"} />
+          <InfoLine label="Reviewed by" value={item.reviewedByName || item.reviewedBy || "—"} />
+          <InfoLine label="Reviewed at" value={formatDate(item.reviewedAt)} />
+          {item.manualReviewNotes ? <Text style={styles.previewEvidenceCaption}>{item.manualReviewNotes}</Text> : null}
+          <Text style={styles.previewEvidenceCaption}>
+            Full audit activity remains in authorized system logs; no private images are exposed here.
+          </Text>
+        </View>
       )}
     </View>
   );
@@ -1615,5 +1725,37 @@ const styles = StyleSheet.create({
   queueFooter: { borderTopWidth: 1, borderTopColor: "#E6EEE9", paddingTop: 12, marginTop: 8, gap: 6 },
   queueFooterLabel: { color: "#668373", fontSize: 11, textAlign: "center" },
   summaryCopy: { flex: 1, gap: 2 },
+
+
+  detailTabRow: { flexDirection: "row", flexWrap: "wrap", gap: 9, borderBottomWidth: 1,
+    borderBottomColor: "#E3ECE5", marginTop: 10, marginBottom: 12 },
+  detailTab: { minHeight: 42, flexDirection: "row", alignItems: "center", gap: 6,
+    paddingHorizontal: 7, borderBottomWidth: 3, borderBottomColor: "transparent" },
+  detailTabActive: { borderBottomColor: "#08765A" },
+  detailTabLabel: { color: "#698477", fontWeight: "600", fontSize: 12 },
+  detailTabLabelActive: { color: "#08765A", fontWeight: "800" },
+  evidenceAndAiGrid: { flexDirection: "row", flexWrap: "wrap", gap: 11, marginBottom: 11 },
+  previewEvidenceCard: { flex: 2, flexBasis: 315, minWidth: 0, borderWidth: 1, borderColor: "#DBE9DF",
+    borderRadius: 11, padding: 12, backgroundColor: "#FFFFFF" },
+  previewAiCard: { flex: 1, flexBasis: 220, minWidth: 0, borderWidth: 1, borderColor: "#DBE9DF",
+    borderRadius: 11, padding: 12, backgroundColor: "#FFFFFF" },
+  previewCardHeading: { flexDirection: "row", alignItems: "center", gap: 7, marginBottom: 11 },
+  previewCardHeadingText: { flex: 1, color: "#173D32", fontWeight: "800", fontSize: 13 },
+  previewEvidenceTiles: { flexDirection: "row", gap: 7 },
+  previewEvidenceTile: { flex: 1, minWidth: 0, borderWidth: 1, borderColor: "#DBE9DF",
+    borderRadius: 8, backgroundColor: "#F8FBF9", padding: 5, gap: 6 },
+  previewEvidenceImage: { backgroundColor: "#EBF3EE", minHeight: 120, borderRadius: 5,
+    alignItems: "center", justifyContent: "center", gap: 7, padding: 5 },
+  previewEvidenceText: { color: "#64816E", fontSize: 10, textAlign: "center" },
+  previewEvidenceLabel: { color: "#355C4B", fontWeight: "700", fontSize: 10, textAlign: "center" },
+  previewEvidenceCaption: { marginTop: 11, color: "#597664", fontSize: 11, lineHeight: 17 },
+  previewScoreBox: { borderRadius: 9, backgroundColor: "#EAF7EE", padding: 11, marginBottom: 9 },
+  previewScoreLabel: { color: "#557963", fontSize: 11, fontWeight: "700" },
+  previewScoreValue: { color: "#08765A", fontSize: 22, fontWeight: "800", marginTop: 4 },
+  previewScoreNote: { color: "#577763", fontSize: 11, lineHeight: 16, marginTop: 3 },
+  previewDisclaimer: { borderRadius: 9, backgroundColor: "#FFF9E9", flexDirection: "row",
+    padding: 11, gap: 8, marginBottom: 12 },
+  previewDisclaimerText: { flex: 1, fontSize: 11, color: "#82642D", lineHeight: 17 },
+  previewInfoCard: { borderRadius: 11, borderWidth: 1, borderColor: "#DCE8DF", padding: 15 },
 
 });
