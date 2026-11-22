@@ -1,0 +1,30 @@
+name: National ID Front and Back Scanner - synthetic QA only
+on:
+  push:
+    branches:
+      - feat/staging-national-id-front-back-20261122
+    paths:
+      - 'identity-ai/local_national_id_both_sides.py'
+      - 'identity-ai/test_local_national_id_both_sides.py'
+      - 'Start-VolunServe-National-ID-Front-Back.cmd'
+      - '.github/workflows/test-national-id-front-back-no-deploy-20261122.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  both-sides-synthetic-qa:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Python syntax validation
+        run: python -m py_compile identity-ai/local_national_id_both_sides.py identity-ai/test_local_national_id_both_sides.py
+      - name: OCR decision tests - synthetic text only
+        run: python -m unittest discover -s identity-ai -p 'test_local_national_id_both_sides.py' -v
+      - name: Confirm no deployment or real photos used
+        run: echo 'No real ID images, Firebase access, biometric verification, user approval, or deployment.' >> "$GITHUB_STEP_SUMMARY"
