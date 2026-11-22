@@ -82,6 +82,9 @@ export type IdentityVerificationResult = {
 export type SubmitIdentityVerificationInput = {
   idType: IdentityDocumentType;
   idDocument: CapturedIdentityMedia;
+  // Back side required by the National ID web UI. Optional at API type level
+  // until the separate native client has been migrated and tested.
+  idBackDocument?: CapturedIdentityMedia;
   selfie: CapturedIdentityMedia;
 };
 
@@ -301,6 +304,13 @@ export const submitIdentityVerification = async (
     "Government ID image",
   );
 
+  if (input.idBackDocument) {
+    if (input.idType !== "national_id") {
+      throw new Error("National ID BACK is supported only for Philippine National ID.");
+    }
+    validateMedia(input.idBackDocument, "National ID BACK image");
+  }
+
   validateMedia(
     input.selfie,
     "Live selfie",
@@ -321,6 +331,10 @@ export const submitIdentityVerification = async (
     "idDocument",
     input.idDocument,
   );
+
+  if (input.idBackDocument) {
+    appendMedia(formData, "idBackDocument", input.idBackDocument);
+  }
 
   appendMedia(
     formData,
