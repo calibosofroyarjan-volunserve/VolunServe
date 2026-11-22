@@ -1,0 +1,76 @@
+name: QA CORS fix for live National ID precheck (NO DEPLOY)
+
+on:
+  push:
+    branches: [fix/identity-precheck-cors-consent-live-20261122]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  cors:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout only source required, not historical submodules
+        env:
+          REPO: ${{ github.repository }}
+          SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          git init -q
+          git remote add origin "https://github.com/${REPO}.git"
+          git -c protocol.version=2 fetch --no-tags --depth=1 --filter=blob:none --no-recurse-submodules origin "$SHA"
+          git sparse-checkout init --cone
+          git sparse-checkout set backend
+          git checkout --force FETCH_HEAD
+      - name: Stop on unrelated code or outdated source
+        run: |
+          set -euo pipefail
+          BASE=4c191495c988b65dec4bf9aebd41e3dccdfea515
+          git -c protocol.version=2 fetch --no-tags --depth=1 --filter=blob:none --no-recurse-submodules origin "$BASE"
+          git diff --name-status "$BASE" HEAD >/tmp/change-list
+          cat /tmp/change-list
+          python - <<'PY'
+          from pathlib import Path
+          actual=sorted(Path('/tmp/change-list').read_text().strip().splitlines())
+          expected=sorted([
+            'M\tbackend/server.js',
+            'A\tbackend/test-identityPrecheckCors.js',
+            'A\t.github/workflows/qa-identity-precheck-cors-20261122.yml',
+          ])
+          assert actual==expected,(actual,expected)
+          print('PASS: no Auth, Firestore, AI, website, or unrelated backend code modified')
+          PY
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Source syntax, CORS guard, and existing identity policy tests
+        run: |
+          set -euo pipefail
+          node --check backend/server.js
+          node --test backend/test-identityPrecheckCors.js
+          node --test backend/test-selectedIdPolicy.js
+          node --test backend/test-identityAiReadiness.js
+          node --test backend/test-identity-final-admin-only.js
+          node --test backend/test-identity-three-attempt-review.js
+      - name: Observe LIVE browser CORS preflight (read only, no ID data)
+        run: |
+          node <<'NODE'
+          (async()=>{
+            const response=await fetch('https://volunserve.onrender.com/api/identity/document/precheck',{
+              method:'OPTIONS',
+              headers:{
+                Origin:'https://volunserve.com',
+                'Access-Control-Request-Method':'POST',
+                'Access-Control-Request-Headers':'authorization,x-volunserve-document-precheck-consent',
+              },
+              signal:AbortSignal.timeout(45000),
+            });
+            const allowed=response.headers.get('access-control-allow-headers')||'';
+            const required=['authorization','x-volunserve-document-precheck-consent'];
+            const present=required.every(h=>allowed.toLowerCase().split(',').map(x=>x.trim()).includes(h));
+            console.log(JSON.stringify({preflightStatus:response.status,allowHeaders:allowed,requiredHeadersPresent:present}));
+            console.log('Only OPTIONS request sent; no ID photos, token, Firestore writes, or deployment');
+          })().catch(e=>{console.log('Existing Render preflight unavailable: '+(e.name||'network_error'));});
+          NODE
+      - run: echo 'NO DEPLOY. Existing protected branch and production services untouched.'
