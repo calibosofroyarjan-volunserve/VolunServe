@@ -14,6 +14,30 @@ const WASM_URL = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.1.0/was
 const MODEL_URL = "https://storage.googleapis.com/mediapipe-models/face_detector/blaze_face_short_range/float16/1/blaze_face_short_range.tflite";
 
 type Phase = "idle" | "loading" | "red" | "green" | "captured" | "error";
+type ResearchOutcome = {
+  status: "similarity_observed_unvalidated" | "inconclusive" | "unavailable" | "disabled";
+  stage: string;
+  score: number | null;
+};
+const COMPARE_LOCAL_ENDPOINT = "http://127.0.0.1:8765/compare-face";
+const MAX_LOCAL_IMAGE_BYTES = 10 * 1024 * 1024;
+
+function localBase64(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error("The selected photo could not be read locally."));
+    reader.onload = () => {
+      const value = reader.result;
+      if (typeof value === "string" && value.startsWith("data:") &&
+          value.includes(",")) {
+        resolve(value.slice(value.indexOf(",") + 1));
+      } else {
+        reject(new Error("Invalid local photo data."));
+      }
+    };
+    reader.readAsDataURL(blob);
+  });
+}
 const localOnly = () => __DEV__ && typeof window !== "undefined" &&
   ["localhost", "127.0.0.1"].includes(window.location.hostname);
 
@@ -65,6 +89,7 @@ export default function LocalFaceCaptureDemo() {
   const lastScanAtRef = useRef(0);
   const captureLockedRef = useRef(false);
   const previewUrlRef = useRef<string | null>(null);
+  const capturedBlobRef = useRef<Blob | null>(null);
   const [consent, setConsent] = useState(false);
   const [active, setActive] = useState(false);
   const [phase, setPhase] = useState<Phase>("idle");
@@ -72,6 +97,12 @@ export default function LocalFaceCaptureDemo() {
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [progress, setProgress] = useState(0);
+  const [idFrontPhoto, setIdFrontPhoto] = useState<File | null>(null);
+  const [comparisonConsent, setComparisonConsent] = useState(false);
+  const [comparisonBusy, setComparisonBusy] = useState(false);
+  const [comparison, setComparison] = useState<ResearchOutcome | null>(null);
+  const [comparisonError, setComparisonError] = useState("");
+  const compareTokenRef = useRef(0);
 
   const stopCamera = useCallback(() => {
     sessionRef.current += 1;
@@ -86,6 +117,10 @@ export default function LocalFaceCaptureDemo() {
     captureLockedRef.current = false;
   }, []);
   const clearPreview = useCallback(() => {
+    compareTokenRef.current += 1;
+    capturedBlobRef.current = null;
+    setComparison(null);
+    setComparisonError("");
     if (previewUrlRef.current) {
       URL.revokeObjectURL(previewUrlRef.current);
       previewUrlRef.current = null;
@@ -97,6 +132,8 @@ export default function LocalFaceCaptureDemo() {
     if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current);
     detectorRef.current?.close?.();
     detectorRef.current = null;
+    capturedBlobRef.current = null;
+    compareTokenRef.current += 1;
   }, [stopCamera]);
 
   const capturePhoto = useCallback(async (token: number) => {
@@ -120,6 +157,7 @@ export default function LocalFaceCaptureDemo() {
       const url = URL.createObjectURL(blob);
       clearPreview();
       previewUrlRef.current = url;
+      capturedBlobRef.current = blob;
       setPreviewUrl(url);
       stopCamera();
       setActive(false);
@@ -138,6 +176,68 @@ export default function LocalFaceCaptureDemo() {
     }
   }, [clearPreview, stopCamera]);
 
+  const compareFaceLocally = async () => {
+    if (!localOnly() || !consent || !comparisonConsent || !idFrontPhoto ||
+        !capturedBlobRef.current || comparisonBusy || phase !== "captured") {
+      setComparisonError("Choose an ID front and give comparison consent after a selfie is captured.");
+      return;
+    }
+    if (idFrontPhoto.size <= 0 || idFrontPhoto.size > MAX_LOCAL_IMAGE_BYTES ||
+        capturedBlobRef.current.size > MAX_LOCAL_IMAGE_BYTES ||
+        !["image/jpeg", "image/png", "image/webp"].includes(idFrontPhoto.type)) {
+      setComparisonError("Choose a JPG, PNG or WebP ID front under 10 MB.");
+      return;
+    }
+    const token = ++compareTokenRef.current;
+    setComparisonBusy(true);
+    setComparison(null);
+    setComparisonError("");
+    try {
+      const selfie = capturedBlobRef.current;
+      const [idFront, capturedSelfie] = await Promise.all([
+        localBase64(idFrontPhoto), localBase64(selfie),
+      ]);
+      if (token !== compareTokenRef.current || !comparisonConsent || !consent) return;
+      const response = await fetch(COMPARE_LOCAL_ENDPOINT, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        cache: "no-store",
+        body: JSON.stringify({ idFront, capturedSelfie, consent: true }),
+      });
+      const json: unknown = await response.json();
+      if (!response.ok || !json || typeof json !== "object") {
+        throw new Error("Local SFace service unavailable. Keep the Python OCR Companion terminal running.");
+      }
+      const data = json as Record<string, unknown>;
+      if (!["similarity_observed_unvalidated", "inconclusive",
+            "unavailable", "disabled"].includes(String(data.status)) ||
+          data.identityVerified !== false || data.samePersonVerified !== false ||
+          data.livenessValidated !== false || data.idIssuerVerified !== false ||
+          data.manualReviewRequired !== true ||
+          (data.score !== null && (typeof data.score !== "number" ||
+            !Number.isFinite(data.score) || Math.abs(data.score) > 1))) {
+        throw new Error("Invalid local model response. No face conclusion was made.");
+      }
+      if (token === compareTokenRef.current) {
+        setComparison({
+          status: data.status as ResearchOutcome["status"],
+          stage: typeof data.stage === "string" ? data.stage : "unknown",
+          score: typeof data.score === "number" ? data.score : null,
+        });
+      }
+    } catch (err: any) {
+      if (token === compareTokenRef.current) {
+        setComparisonError(
+          err instanceof TypeError ?
+            "Could not connect to local SFace. Restart the Python OCR Companion, not Expo." :
+            (typeof err?.message === "string" ? err.message : "Local experimental comparison unavailable."),
+        );
+      }
+    } finally {
+      if (token === compareTokenRef.current) setComparisonBusy(false);
+    }
+  };
+
   const beginCamera = async () => {
     if (!localOnly() || !consent) {
       setError("Consent is required to use the camera.");
@@ -145,6 +245,7 @@ export default function LocalFaceCaptureDemo() {
     }
     stopCamera();
     clearPreview();
+    setComparisonBusy(false);
     const token = sessionRef.current;
     setError("");
     setPhase("loading");
@@ -261,6 +362,9 @@ export default function LocalFaceCaptureDemo() {
               if (consent) {
                 stopCamera();
                 clearPreview();
+                setIdFrontPhoto(null);
+                setComparisonConsent(false);
+                setComparisonBusy(false);
                 setActive(false);
                 setPhase("idle");
                 setProgress(0);
@@ -332,6 +436,9 @@ export default function LocalFaceCaptureDemo() {
             <TouchableOpacity onPress={() => {
               stopCamera();
               clearPreview();
+              setIdFrontPhoto(null);
+              setComparisonConsent(false);
+              setComparisonBusy(false);
               setActive(false);
               setProgress(0);
               setPhase("idle");
@@ -342,9 +449,82 @@ export default function LocalFaceCaptureDemo() {
             </TouchableOpacity>
           </View>
           {phase === "captured" ? (
-            <Text style={{ color: "#166534", fontWeight: "700" }}>
-              Preview ready. No face match, liveness test, or Verified Resident status is created.
-            </Text>
+            <View style={{ gap: 10, padding: 12, borderWidth: 1,
+              borderColor: "#CBD5E1", borderRadius: 9 }}>
+              <Text style={{ color: "#143A5B", fontWeight: "800", fontSize: 15 }}>
+                Optional: ID Photo vs Auto-Captured Selfie (SFace Research)
+              </Text>
+              <Text style={{ color: "#475569", lineHeight: 19, fontSize: 12 }}>
+                Select only your own or expressly consented National ID FRONT photo.
+                This private comparison is separate from National ID OCR and does not
+                authenticate the card, validate liveness, or decide whether faces match.
+                The image pair goes only to 127.0.0.1 on this PC.
+              </Text>
+              {React.createElement("input", {
+                "aria-label": "Choose National ID FRONT photo for SFace research",
+                type: "file",
+                accept: "image/jpeg,image/png,image/webp",
+                onChange: (event: React.ChangeEvent<HTMLInputElement>) => {
+                  compareTokenRef.current += 1;
+                  setIdFrontPhoto(event.target.files?.[0] || null);
+                  setComparison(null);
+                  setComparisonError("");
+                  setComparisonBusy(false);
+                },
+                style: { width: "100%", color: "#334155", fontSize: 13 },
+              })}
+              <TouchableOpacity accessibilityRole="checkbox"
+                accessibilityState={{ checked: comparisonConsent }}
+                onPress={() => {
+                  compareTokenRef.current += 1;
+                  setComparisonConsent(!comparisonConsent);
+                  setComparison(null);
+                  setComparisonError("");
+                  setComparisonBusy(false);
+                }}
+                style={{ flexDirection: "row", gap: 8, alignItems: "flex-start" }}>
+                <Text style={{ color: "#0F766E", fontSize: 19 }}>
+                  {comparisonConsent ? "☑" : "☐"}
+                </Text>
+                <Text style={{ color: "#334155", fontSize: 12, flex: 1, lineHeight: 19 }}>
+                  I consent to a private, one-to-one experimental comparison on this device.
+                  I understand the score is uncalibrated and is not identity verification.
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity accessibilityRole="button"
+                disabled={!comparisonConsent || !idFrontPhoto || comparisonBusy}
+                onPress={() => void compareFaceLocally()}
+                style={{ padding: 12, borderRadius: 8, alignItems: "center",
+                  backgroundColor: !comparisonConsent || !idFrontPhoto || comparisonBusy ?
+                    "#94A3B8" : "#134D78" }}>
+                <Text style={{ color: "white", fontWeight: "800", fontSize: 13 }}>
+                  {comparisonBusy ? "Comparing LOCALLY..." :
+                    "COMPARE ID PHOTO VS SELFIE (RESEARCH ONLY)"}
+                </Text>
+              </TouchableOpacity>
+              {comparison ? <View accessibilityRole="alert"
+                style={{ padding: 12, borderRadius: 8, backgroundColor: "#F1F5F9", gap: 5 }}>
+                <Text style={{ color: "#143A5B", fontWeight: "800", fontSize: 13 }}>
+                  {comparison.status === "similarity_observed_unvalidated" ?
+                    "SFace similarity observed (NOT a verified match)" :
+                    comparison.status === "unavailable" ?
+                    "Local YuNet/SFace model weights unavailable" :
+                    "Comparison inconclusive — retake photos or manual review"}
+                </Text>
+                {comparison.score !== null ?
+                  <Text style={{ color: "#334155", fontSize: 13 }}>
+                    Uncalibrated cosine similarity: {comparison.score.toFixed(5)}
+                  </Text> : null}
+                <Text style={{ color: "#475569", fontSize: 12 }}>
+                  Diagnostic stage: {comparison.stage}. No match threshold, face
+                  acceptance, liveness certification, or Resident approval.
+                </Text>
+              </View> : null}
+              {comparisonError ? <Text accessibilityRole="alert"
+                style={{ color: "#B91C1C", fontSize: 12 }}>
+                {comparisonError}
+              </Text> : null}
+            </View>
           ) : null}
         </View>
         <TouchableOpacity onPress={() => router.push("/public/local-admin-review-demo" as any)}
