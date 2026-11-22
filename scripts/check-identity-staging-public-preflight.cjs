@@ -34,7 +34,15 @@ async function getPublic(endpoint, expectedType) {
         });
         const data = await response.text();
         if (data.length > 1500000) throw new Error("Response exceeds safe inspection size.");
-        const json = expectedType === "json" ? JSON.parse(data) : null;
+        let json = null;
+        if (expectedType === "json") {
+          try { json = JSON.parse(data); }
+          catch {
+            if (response.status === 200) throw new Error("Unexpected successful non-JSON response.");
+            // Older staging code may return an HTML 404 for the new PR route.
+            // Keep HTTP 404 so it is classified as NOT_DEPLOYED, not as a leak.
+          }
+        }
         return { status: response.status, json, html: expectedType === "html" ? data : null };
       } finally {
         clearTimeout(timer);
