@@ -295,6 +295,11 @@ def assess_document_sides(
         result["warningCodes"] = list(dict.fromkeys(
             result["warningCodes"] + ["document_back_ocr_inconclusive"]
         ))
+        # An empty OCR read is not independent evidence of a National ID
+        # back side. Preserve stronger unsupported/mismatch outcomes; never
+        # upgrade an unreadable second image to a successful type screen.
+        if declared_type == "national_id" and result["status"] == "text_consistent_unverified":
+            result["status"] = "inconclusive"
     # Orientation is checked after unsupported/wrong-ID classification so
     # a school ID can never be downgraded to harmless "inconclusive".
     orientation = _orientation_warning(declared_type, front_ocr_text, back_ocr_text)
