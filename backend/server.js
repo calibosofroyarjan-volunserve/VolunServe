@@ -5090,6 +5090,8 @@ app.post(
       const matchScore = numberOrNull(aiResult?.matchScore);
       const livenessScore = numberOrNull(aiResult?.livenessScore);
       const idImageQualityScore = numberOrNull(aiResult?.idImageQualityScore);
+      const idBackImageQualityScore = numberOrNull(aiResult?.idBackImageQualityScore);
+      const idBackQualityChecked = aiResult?.idBackQualityChecked === true;
       const selfieQualityScore = numberOrNull(aiResult?.selfieQualityScore);
       const scanWarnings = Array.isArray(aiResult?.warnings)
         ? aiResult.warnings.filter((warning) => typeof warning === "string")
@@ -5173,6 +5175,8 @@ app.post(
           matchScore,
           livenessScore,
           idImageQualityScore,
+          idBackImageQualityScore,
+          idBackQualityChecked,
           selfieQualityScore,
           scanWarnings,
           documentScreening,
@@ -5210,7 +5214,8 @@ app.post(
             aiDecision: decision,
             status: result.status,
             requiresManualReview: result.requiresManualReview,
-            matchScore, livenessScore, idImageQualityScore, selfieQualityScore, scanWarnings,
+            matchScore, livenessScore, idImageQualityScore, idBackImageQualityScore,
+            idBackQualityChecked, selfieQualityScore, scanWarnings,
             documentScreening,
             verificationMethod: "volunserve_ai",
             previousReview,
@@ -5246,7 +5251,8 @@ app.post(
         }
         return {
           ok: true, status: result.status, verificationId, decision,
-          matchScore, livenessScore, idImageQualityScore, selfieQualityScore,
+          matchScore, livenessScore, idImageQualityScore, idBackImageQualityScore,
+          idBackQualityChecked, selfieQualityScore,
           scanWarnings, documentScreening, message: resultMessage,
           attemptCount, maxAttempts: MAX_IDENTITY_AI_ATTEMPTS,
           attemptsRemaining: MAX_IDENTITY_AI_ATTEMPTS - attemptCount,
@@ -5344,6 +5350,8 @@ function identityAdminReviewPayload(verificationSnapshot, userSnapshot) {
     matchScore: numberOrNull(verification.matchScore),
     livenessScore: numberOrNull(verification.livenessScore),
     idImageQualityScore: numberOrNull(verification.idImageQualityScore),
+    idBackImageQualityScore: numberOrNull(verification.idBackImageQualityScore),
+    idBackQualityChecked: verification.idBackQualityChecked === true,
     selfieQualityScore: numberOrNull(verification.selfieQualityScore),
     scanWarnings: Array.isArray(verification.scanWarnings)
       ? verification.scanWarnings.filter((value) => typeof value === "string").slice(0, 5)
