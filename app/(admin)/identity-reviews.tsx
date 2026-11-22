@@ -267,12 +267,13 @@ export default function IdentityReviewsAdmin() {
   const pagedReviews = filtered.slice((activePage - 1) * PAGE_SIZE, activePage * PAGE_SIZE);
   // Keep mobile queue navigation explicit; on desktop show the first case.
   useEffect(() => {
-    if (!wide || loading || selected || filtered.length === 0) return;
-    const first = filtered[0];
+    if (!wide || loading || selected || pagedReviews.length === 0) return;
+    const first = pagedReviews[0];
+    if (!first) return;
     setSelected(first);
     setValidationMethod(first.manualValidationMethod || "");
     setNotes(first.manualReviewNotes || "");
-  }, [wide, loading, selected, filtered]);
+  }, [wide, loading, selected, activePage, items, filter, search]);
 
 
   const openReview = (item: IdentityReview) => {
@@ -591,17 +592,6 @@ export default function IdentityReviewsAdmin() {
                       <StatusChip bucket={reviewBucket(item)} />
                     </View>
 
-                    <View style={styles.scoreRow}>
-                      <Text style={styles.scoreLabel}>Government ID check</Text>
-                      <Text style={styles.scoreValue}>
-                        {item.documentScreening?.status === "text_consistent_unverified"
-                          ? "ID type recognized — unverified"
-                          : item.documentScreening?.status === "mismatch"
-                            ? "Selected ID type mismatch"
-                            : "Recognition inconclusive"}
-                      </Text>
-                    </View>
-
                     <View style={styles.evidenceStatusRow}>
                       <Ionicons name={item.evidenceAvailable ? "lock-closed-outline" : "alert-circle-outline"}
                         size={14} color={item.evidenceAvailable ? "#08765A" : "#B45309"} />
@@ -624,7 +614,8 @@ export default function IdentityReviewsAdmin() {
                 <Text style={styles.queueFooterLabel}>
                   {filtered.length ? (activePage - 1) * PAGE_SIZE + 1 : 0}–{Math.min(activePage * PAGE_SIZE, filtered.length)} of {filtered.length} records · 5 per page
                 </Text>
-                <ListPagination page={activePage} total={filtered.length} pageSize={PAGE_SIZE} onChange={setPage} />
+                <ListPagination page={activePage} total={filtered.length} pageSize={PAGE_SIZE}
+                  onChange={(next) => { setPage(next); setSelected(null); setReadyEvidenceKey(""); setConfirmedEvidenceKey(""); }} />
               </View>
             </View> : null}
 
@@ -809,7 +800,7 @@ function ReviewDetail({
               </View>
               <AdminIdentityEvidence uid={item.uid} verificationId={item.verificationId} user={user}
                 matchScore={item.matchScore} aiDecision={item.aiDecision}
-                onEvidenceStateChange={onEvidenceStateChange} />
+                onEvidenceStateChange={onEvidenceStateChange} compact />
             </View>
 
             <View style={[styles.reviewAiPanel, wideDetail && styles.reviewAiNarrow]}>
