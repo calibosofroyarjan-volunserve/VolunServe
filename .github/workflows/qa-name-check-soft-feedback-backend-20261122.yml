@@ -57,6 +57,8 @@ jobs:
           node --test backend/test-identityAiReadiness.js
           node --test backend/test-identity-final-admin-only.js
           node --test backend/test-identity-three-attempt-review.js
-          node --test backend/test-frontBackCaptureContract.js
+          # This backend-only run does not check out the website. The legacy
+          # frontBackCaptureContract is tied to pre-redesign UI text; web UI
+          # regression coverage runs in the separate latest-Hosting QA job.
       - name: No production deploy or data writes
         run: echo 'NO DEPLOY - no Render deployments, Firebase database changes, ID media, or Auth writes.'
