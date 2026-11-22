@@ -1,0 +1,27 @@
+name: Private National ID FRONT+BACK OCR Tests (NO DEPLOY)
+on:
+  pull_request:
+    branches: [live-protected]
+    paths:
+      - 'identity-ai/main.py'
+      - 'identity-ai/document_screening.py'
+      - 'identity-ai/national_id_both_sides_screening.py'
+      - 'identity-ai/test_national_id_both_sides_screening.py'
+      - '.github/workflows/national-id-both-sides-no-deploy.yml'
+permissions:
+  contents: read
+jobs:
+  private-screening:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Check Python syntax only
+        run: python -m py_compile identity-ai/main.py identity-ai/document_screening.py identity-ai/national_id_both_sides_screening.py
+      - name: Test front/back ID screening including school ID negatives
+        run: python -m unittest discover -s identity-ai -p 'test_national_id_both_sides_screening.py' -v
+      - name: Confirm no production deployment
+        run: echo 'Synthetic test-only workflow. No Firebase, Render, documents or accounts touched.'
