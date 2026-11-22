@@ -5162,7 +5162,7 @@ app.post(
         // verification result; only metadata and Cloudinary identifiers live
         // in Firestore. Public Firestore reads stay denied by existing rules.
         transaction.set(evidenceRef, {
-          uid, verificationId, images: storedEvidence,
+          uid, verificationId, idType: evidenceMedia.idType, images: storedEvidence,
           consentToPrivateAdminReview: true,
           submittedAt: FieldValue.serverTimestamp(),
           expiresAt: evidenceExpiresAt,
@@ -5518,10 +5518,12 @@ app.post(
         .collection("identityVerifications")
         .doc(targetUid);
       const activityRef = db.collection("adminActivityLogs").doc();
+      const evidenceRef = db.collection("identityEvidence").doc(targetUid);
       const result = await db.runTransaction(async (transaction) => {
-        const [userSnapshot, verificationSnapshot] = await Promise.all([
+        const [userSnapshot, verificationSnapshot, evidenceSnapshot] = await Promise.all([
           transaction.get(userRef),
           transaction.get(verificationRef),
+          transaction.get(evidenceRef),
         ]);
         if (!userSnapshot.exists) {
           throw makeHttpError(
@@ -5565,6 +5567,19 @@ app.post(
             "identity_review_not_pending",
             "This identity verification is no longer waiting for manual review.",
           );
+        }
+        if (action === "verify") {
+          const evidence = evidenceSnapshot.data() || {};
+          const expiration = evidence.expiresAt?.toMillis?.() || new Date(evidence.expiresAt || 0).getTime();
+          if (!evidenceSnapshot.exists ||
+              evidence.verificationId !== verification.verificationId ||
+              evidence.consentToPrivateAdminReview !== true ||
+              !evidence.images?.front || !evidence.images?.selfie ||
+              (evidence.idType === "national_id" && !evidence.images?.back) ||
+              !Number.isFinite(expiration) || Date.now() >= expiration) {
+            throw makeHttpError(409, "identity_evidence_required",
+              "The required private ID front/back and selfie evidence is missing or expired. Ask the Resident to resubmit.");
+          }
         }
         const commonReviewFields = {
           requiresManualReview: false,
