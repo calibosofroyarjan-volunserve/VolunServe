@@ -1,0 +1,54 @@
+name: QA render-free bounded National ID OCR (NO DEPLOY)
+on:
+  push:
+    branches: [fix/identity-ocr-timeout-optimized-ai-20261122]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  synthetic-bounded-ocr:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - name: Fetch only production AI source, skip historical gitlink
+        env:
+          REPO: ${{ github.repository }}
+          SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          git init -q
+          git remote add origin "https://github.com/${REPO}.git"
+          git -c protocol.version=2 fetch --no-tags --depth=1 --filter=blob:none --no-recurse-submodules origin "$SHA"
+          git sparse-checkout init --cone
+          git sparse-checkout set identity-ai
+          git checkout --force FETCH_HEAD
+      - name: Protect existing live AI code and app modules
+        run: |
+          set -euo pipefail
+          BASE=d08e076b83b1395983685f568d5d814f60693a08
+          git -c protocol.version=2 fetch --no-tags --depth=1 --filter=blob:none --no-recurse-submodules origin "$BASE"
+          git diff --name-status "$BASE" HEAD >/tmp/changed
+          python - <<'PY'
+          from pathlib import Path
+          actual=sorted(Path('/tmp/changed').read_text().strip().splitlines())
+          expected=sorted([
+            "M\tidentity-ai/main.py",
+            "A\tidentity-ai/test_bounded_ocr_render_free_20261122.py",
+            "A\t.github/workflows/qa-render-free-bounded-ocr-20261122.yml",
+          ])
+          assert actual==expected,(actual,expected)
+          print("PASS only AI OCR performance code and tests")
+          PY
+      - name: Build exact live AI Docker dependencies without deploy
+        run: docker build --tag volunserve-bounded-ocr:qa identity-ai
+      - name: Existing AI tests and new OCR CPU/memory guards (no network)
+        run: |
+          docker run --rm --network none --entrypoint python volunserve-bounded-ocr:qa \
+            -m unittest -v \
+            test_document_screening test_profile_consistency \
+            test_face_box_dedup test_document_precheck \
+            test_synthetic_document_pipeline test_ai_runtime_smoke \
+            test_name_check_soft_feedback_20261122 \
+            test_bounded_ocr_render_free_20261122
+      - name: Safety note
+        run: echo "NO DEPLOY. All images synthetic; no real ID, token, Firestore, biometric, or Render write."
