@@ -9,37 +9,39 @@ type Props = {
   subtitle: string;
   icon: React.ComponentProps<typeof Ionicons>["name"];
   tag?: string;
+  variant?: "emerald" | "mint";
 };
 
 /**
  * Shared botanical-inspired header for LGU Admin operational review screens.
  * Pure presentation: does not alter authentication, verification or approvals.
  */
-export default function AdminReviewHero({ eyebrow, title, subtitle, icon, tag }: Props) {
+export default function AdminReviewHero({ eyebrow, title, subtitle, icon, tag, variant = "emerald" }: Props) {
   const { width } = useWindowDimensions();
   const compact = width < 760;
+  const mint = variant === "mint";
 
   return (
-    <View style={[styles.hero, compact && styles.heroCompact]} accessibilityLabel={title + " page header"}>
-      <View pointerEvents="none" style={styles.orbLarge} />
-      <View pointerEvents="none" style={styles.orbSmall} />
-      <View pointerEvents="none" style={styles.orbAccent} />
+    <View style={[styles.hero, mint && styles.heroMint, compact && styles.heroCompact]} accessibilityLabel={title + " page header"}>
+      <View pointerEvents="none" style={[styles.orbLarge, mint && styles.orbMintLarge]} />
+      <View pointerEvents="none" style={[styles.orbSmall, mint && styles.orbMintSmall]} />
+      <View pointerEvents="none" style={[styles.orbAccent, mint && styles.orbMintAccent]} />
       <View pointerEvents="none" style={styles.decorativeStem}>
-        <Ionicons name="leaf-outline" size={compact ? 76 : 110} color="rgba(218,255,233,0.16)" />
+        <Ionicons name="leaf-outline" size={compact ? 76 : 110} color={mint ? "rgba(15,112,79,0.09)" : "rgba(218,255,233,0.16)"} />
       </View>
       <View style={styles.copy}>
-        <Text style={styles.brandIdentity}>VOLUNSERVE  /  LGU OPERATIONS</Text>
+        {!mint ? <Text style={styles.brandIdentity}>VOLUNSERVE  /  LGU OPERATIONS</Text> : null}
         <View style={styles.eyebrowRow}>
-          <View style={styles.eyebrowMark} />
-          <Text style={styles.eyebrow}>{eyebrow}</Text>
+          <View style={[styles.eyebrowMark, mint && styles.mintMark]} />
+          <Text style={[styles.eyebrow, mint && styles.mintEyebrow]}>{eyebrow}</Text>
         </View>
-        <Text style={[styles.title, compact && styles.titleCompact]}>{title}</Text>
-        <Text style={styles.subtitle}>{subtitle}</Text>
+        <Text style={[styles.title, mint && styles.mintTitle, compact && styles.titleCompact]}>{title}</Text>
+        <Text style={[styles.subtitle, mint && styles.mintSubtitle]}>{subtitle}</Text>
       </View>
       {!compact && (
         <View style={styles.side}>
-          <View style={styles.iconCircle}><Ionicons name={icon} size={24} color="#0A624A" /></View>
-          {!!tag && <Text style={styles.tag}>{tag}</Text>}
+          <View style={[styles.iconCircle, mint && styles.mintIconCircle]}><Ionicons name={icon} size={24} color="#0A624A" /></View>
+          {!!tag && <Text style={[styles.tag, mint && styles.mintTag]}>{tag}</Text>}
         </View>
       )}
     </View>
@@ -54,6 +56,17 @@ const styles = StyleSheet.create({
     flexDirection: "row", alignItems: "center", justifyContent: "space-between",
   },
   heroCompact: { paddingHorizontal: 17, paddingVertical: 17, minHeight: 120 },
+  heroMint: { backgroundColor: "#E4F4EC", borderColor: "#C4E8D8", minHeight: 119, paddingVertical: 17 },
+  orbMintLarge: { backgroundColor: "rgba(45,177,128,0.10)", borderColor: "rgba(7,113,81,0.04)" },
+  orbMintSmall: { backgroundColor: "rgba(45,177,128,0.07)" },
+  orbMintAccent: { backgroundColor: "rgba(71,199,148,0.08)" },
+  mintBrand: { color: "#087052" },
+  mintEyebrow: { color: "#087052" },
+  mintMark: { backgroundColor: "#0B9065" },
+  mintTitle: { color: "#143D31" },
+  mintSubtitle: { color: "#527568" },
+  mintIconCircle: { borderColor: "#B8E3D0", backgroundColor: "#F4FFFA" },
+  mintTag: { color: "#0C6349" },
   orbLarge: {
     position: "absolute", width: 350, height: 350, borderRadius: 175,
     backgroundColor: "rgba(114,207,160,0.12)", right: -130, top: -135,
