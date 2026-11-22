@@ -1031,9 +1031,15 @@ def extract_government_id_text(
     OCR never authenticates an issued ID. No image bytes, names, QR contents,
     card numbers or raw Tesseract output are written to logs or returned.
     """
-    image = decode_image(id_document_bytes, label)
-    if declared_type == "national_id":
-        image = crop_national_id_for_ocr(image)
+    original_image = decode_image(id_document_bytes, label)
+    image = (
+        crop_national_id_for_ocr(original_image)
+        if declared_type == "national_id" else original_image
+    )
+    # A detected card outline is not proof the crop is correct. Preserve
+    # the original frame for the SECOND OCR pass if the cropped read fails.
+    # This prevents a false-positive contour from permanently hiding text.
+    used_card_crop = image is not original_image
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
     longest = max(gray.shape[:2])
     if longest > 1400:
@@ -1087,6 +1093,22 @@ def extract_government_id_text(
             contrast, None, fx=scale, fy=scale,
             interpolation=cv2.INTER_AREA,
         )
+    # When card detection clipped a heading/name, the second bounded OCR
+    # read MUST use the full original frame, not the same incorrect crop.
+    # Keep exactly two Tesseract passes and the existing execution time cap.
+    if used_card_crop:
+        uncropped = cv2.cvtColor(original_image, cv2.COLOR_BGR2GRAY)
+        longest = max(uncropped.shape[:2])
+        if longest > 1400:
+            uncropped = cv2.resize(
+                uncropped, None, fx=1400 / longest, fy=1400 / longest,
+                interpolation=cv2.INTER_AREA,
+            )
+        if side == "back" and declared_type == "national_id":
+            uncropped = _avoid_national_id_back_qr_noise(uncropped)
+        fallback = cv2.createCLAHE(
+            clipLimit=2.0, tileGridSize=(8, 8),
+        ).apply(uncropped)
     # Adaptive local contrast improves moderately blurred text in poor light.
     fallback = cv2.adaptiveThreshold(
         fallback, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
