@@ -66,6 +66,8 @@ type IdentityReview = {
   };
 };
 
+const identityReviewKey = (item: IdentityReview) => item.uid + "::" + (item.verificationId || "");
+
 const VALIDATION_METHODS = [
   {
     value: "in_person_lgu_validation",
@@ -143,6 +145,8 @@ export default function IdentityReviewsAdmin() {
   const [validationMethod, setValidationMethod] = useState("");
   const [notes, setNotes] = useState("");
   const [saving, setSaving] = useState<"" | "verify" | "require_retry">("");
+  const [readyEvidenceKey, setReadyEvidenceKey] = useState("");
+  const [confirmedEvidenceKey, setConfirmedEvidenceKey] = useState("");
 
   const role =
     typeof profile?.role === "string"
@@ -261,6 +265,8 @@ export default function IdentityReviewsAdmin() {
   const pagedReviews = filtered.slice((activePage - 1) * PAGE_SIZE, activePage * PAGE_SIZE);
 
   const openReview = (item: IdentityReview) => {
+    setReadyEvidenceKey("");
+    setConfirmedEvidenceKey("");
     if (!wide) scrollRef.current?.scrollTo({ y: 0, animated: false });
     setSelected(item);
     setValidationMethod(item.manualValidationMethod || "");
@@ -271,6 +277,14 @@ export default function IdentityReviewsAdmin() {
     action: "verify" | "require_retry",
   ) => {
     if (!selected || !user || saving) return;
+
+    if (action === "verify" &&
+        (readyEvidenceKey !== identityReviewKey(selected) ||
+         confirmedEvidenceKey !== identityReviewKey(selected))) {
+      Alert.alert("Review Photos First",
+        "Open all required private ID and selfie photos, then confirm your evidence review before approving.");
+      return;
+    }
 
     if (action === "verify" && !validationMethod) {
       Alert.alert(
@@ -314,6 +328,8 @@ export default function IdentityReviewsAdmin() {
           },
           body: JSON.stringify({
             action,
+            imagesReviewed: action === "verify" &&
+              confirmedEvidenceKey === identityReviewKey(selected),
             validationMethod:
               action === "verify" ? validationMethod : "",
             notes: notes.trim(),
@@ -342,6 +358,8 @@ export default function IdentityReviewsAdmin() {
       );
 
       setSelected(null);
+      setReadyEvidenceKey("");
+      setConfirmedEvidenceKey("");
       setValidationMethod("");
       setNotes("");
       await loadReviews();
@@ -648,6 +666,18 @@ export default function IdentityReviewsAdmin() {
                   user={user}
                   validationMethod={validationMethod}
                   setValidationMethod={setValidationMethod}
+                  evidenceReady={readyEvidenceKey === identityReviewKey(selected)}
+                  evidenceAcknowledged={confirmedEvidenceKey === identityReviewKey(selected)}
+                  onEvidenceStateChange={(ready) => {
+                    const key = identityReviewKey(selected);
+                    if (ready) setReadyEvidenceKey(key);
+                    else {
+                      setReadyEvidenceKey((current) => current === key ? "" : current);
+                      setConfirmedEvidenceKey((current) => current === key ? "" : current);
+                    }
+                  }}
+                  onAcknowledgeEvidence={() => setConfirmedEvidenceKey((current) =>
+                    current === identityReviewKey(selected) ? "" : identityReviewKey(selected))}
                   notes={notes}
                   setNotes={setNotes}
                   saving={saving}
@@ -712,6 +742,10 @@ function ReviewDetail({
   user,
   validationMethod,
   setValidationMethod,
+  evidenceReady,
+  evidenceAcknowledged,
+  onEvidenceStateChange,
+  onAcknowledgeEvidence,
   notes,
   setNotes,
   saving,
@@ -722,6 +756,10 @@ function ReviewDetail({
   user: { getIdToken: (forceRefresh?: boolean) => Promise<string> } | null;
   validationMethod: string;
   setValidationMethod: (value: string) => void;
+  evidenceReady: boolean;
+  evidenceAcknowledged: boolean;
+  onEvidenceStateChange: (ready: boolean) => void;
+  onAcknowledgeEvidence: () => void;
   notes: string;
   setNotes: (value: string) => void;
   saving: "" | "verify" | "require_retry";
@@ -774,7 +812,9 @@ function ReviewDetail({
       />
 
       <SectionTitle icon="images-outline" title="Submitted Identity Photos" />
-      <AdminIdentityEvidence uid={item.uid} verificationId={item.verificationId} user={user} matchScore={item.matchScore} aiDecision={item.aiDecision} />
+      <AdminIdentityEvidence uid={item.uid} verificationId={item.verificationId} user={user}
+        matchScore={item.matchScore} aiDecision={item.aiDecision}
+        onEvidenceStateChange={onEvidenceStateChange} />
 
       <SectionTitle
         icon="scan-outline"
@@ -888,6 +928,22 @@ function ReviewDetail({
             title="Independent LGU Validation"
           />
 
+          <TouchableOpacity accessibilityRole="checkbox"
+            accessibilityState={{ checked: evidenceAcknowledged, disabled: !evidenceReady || evidenceMissing }}
+            disabled={!evidenceReady || evidenceMissing}
+            onPress={onAcknowledgeEvidence}
+            style={[styles.evidenceAcknowledgement, evidenceAcknowledged && styles.evidenceAcknowledgementChecked]}>
+            <Ionicons name={evidenceAcknowledged ? "checkbox" : "square-outline"}
+              size={23} color={evidenceAcknowledged ? "#08765A" : "#64748B"} />
+            <View style={styles.flexOne}>
+              <Text style={styles.evidenceAcknowledgementTitle}>I reviewed the submitted identity images</Text>
+              <Text style={styles.evidenceAcknowledgementText}>
+                I checked the original ID front, any required back photo, the selfie,
+                and the independent AI result. This does not replace official validation.
+              </Text>
+            </View>
+          </TouchableOpacity>
+
           <Text style={styles.helperText}>
             Choose the method actually used by LGU/Admin. Do not verify
             based only on the AI score.
@@ -941,10 +997,10 @@ function ReviewDetail({
             <TouchableOpacity
               style={[
                 styles.verifyButton,
-                (!validationMethod || !!saving || evidenceMissing) &&
+                (!validationMethod || !!saving || evidenceMissing || !evidenceReady || !evidenceAcknowledged) &&
                   styles.disabledButton,
               ]}
-              disabled={!validationMethod || !!saving || evidenceMissing}
+              disabled={!validationMethod || !!saving || evidenceMissing || !evidenceReady || !evidenceAcknowledged}
               onPress={onVerify}
             >
               {saving === "verify" ? (
@@ -1097,6 +1153,16 @@ const styles = StyleSheet.create({
     padding: 24,
     backgroundColor: "#F5F7FB",
   },
+  evidenceAcknowledgement: {
+    marginTop: 12, marginBottom: 12, flexDirection: "row", alignItems: "flex-start", gap: 10,
+    borderRadius: 11, borderWidth: 1, borderColor: "#DCE6ED", padding: 13,
+    backgroundColor: "#F8FAFC",
+  },
+  evidenceAcknowledgementChecked: { backgroundColor: "#EFFAF3", borderColor: "#8CCDB3" },
+  evidenceAcknowledgementTitle: { color: "#173D32", fontSize: vsType.size.label,
+    fontFamily: vsType.family, fontWeight: "700" },
+  evidenceAcknowledgementText: { color: "#64748B", fontSize: vsType.size.caption,
+    fontFamily: vsType.family, lineHeight: 17, marginTop: 4 },
   mobileBackButton: {
     minHeight: 62,
     backgroundColor: "#FFFFFF",
