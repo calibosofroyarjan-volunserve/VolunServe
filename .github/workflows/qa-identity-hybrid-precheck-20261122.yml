@@ -33,6 +33,7 @@ jobs:
           actual=sorted(Path('/tmp/changes').read_text().strip().splitlines())
           expected=sorted([
             'M\tbackend/server.js',
+            'M\tbackend/test-identityOcrRescanHints.js',
             'A\tbackend/identityHybridPrecheckDecision.js',
             'A\tbackend/test-identityHybridPrecheckDecision.js',
             'A\t.github/workflows/qa-identity-hybrid-precheck-20261122.yml',
