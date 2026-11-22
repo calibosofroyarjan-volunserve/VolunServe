@@ -139,3 +139,13 @@ test("approved VolunServe identity reviews layout is scoped to Admin page only",
   assert.match(page, /onEvidenceStateChange=\{onEvidenceStateChange\} compact/);
   assert.match(page, /!evidenceReady \|\| !evidenceAcknowledged/);
 });
+
+test("empty review results preserve status filters and search; narrow screens use focused details", () => {
+  const ui = get("app/(admin)/identity-reviews.tsx");
+  assert.match(ui, /const wide = width >= 1240/);
+  assert.match(ui, /No matching reviews/);
+  assert.match(ui, /No submissions in this status\. Select another filter to continue\./);
+  assert.ok(!ui.includes('filtered.length === 0 && !mobileDetail ? ('),
+    "Do not hide the entire queue and status filters when the active status is empty");
+  assert.match(ui, /Back to identity verification queue/);
+});
