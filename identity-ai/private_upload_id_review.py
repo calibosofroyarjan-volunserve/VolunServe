@@ -57,6 +57,34 @@ def _valid_reference_date(value: str) -> bool:
         return False
     return True
 
+def _extra_ocr_diagnostic(front_bytes, back_bytes, expected_dob):
+    """Local-only second OCR pass; diagnostics never modify approval status."""
+    import cv2
+    import pytesseract
+    import main as ai
+    from strict_document_screening import _national_back_family_corrob
+    from profile_consistency import assess_profile_birth_date
+
+    def read(data, label):
+        photo = ai.decode_image(data, label)
+        gray = cv2.cvtColor(photo, cv2.COLOR_BGR2GRAY)
+        if max(gray.shape) < 2000:
+            factor = min(2.0, 2000.0 / max(gray.shape))
+            gray = cv2.resize(gray, None, fx=factor, fy=factor,
+                              interpolation=cv2.INTER_CUBIC)
+        enhanced = cv2.createCLAHE(clipLimit=2.5, tileGridSize=(8, 8)).apply(gray)
+        return (pytesseract.image_to_string(enhanced, config="--psm 4") + "\n"
+                + pytesseract.image_to_string(enhanced, config="--psm 11"))
+
+    front = read(front_bytes, "Local front OCR diagnostic")
+    back = read(back_bytes, "Local back OCR diagnostic")
+    return {
+        "back": ("extra_label_clues_observed"
+                 if _national_back_family_corrob(back) else "still_inconclusive"),
+        "dob": assess_profile_birth_date(expected_dob, front + "\n" + back)[
+            "profileBirthDateCheck"],
+    }
+
 def evaluate_private_uploads(
     front_bytes: bytes,
     back_bytes: bytes,
@@ -132,7 +160,18 @@ def evaluate_private_uploads(
         "identity_verified": False,
         "issuer_authenticity_verified": False,
         "liveness_validated": False,
+        "extra_back_ocr": "not_needed",
+        "extra_dob_ocr": "not_needed",
     }
+
+    if result["ocr_status"] == "inconclusive" or result["dob"] == "inconclusive":
+        try:
+            diagnostic = _extra_ocr_diagnostic(front_bytes, back_bytes, reference_dob)
+            result["extra_back_ocr"] = diagnostic["back"]
+            result["extra_dob_ocr"] = _safe_check(diagnostic["dob"])
+        except Exception:
+            result["extra_back_ocr"] = "unavailable"
+            result["extra_dob_ocr"] = "unavailable"
 
     # Research may be run independently of OCR success; unlike account-level
     # face verification it never decides PASS/FAIL or changes profile status.
@@ -186,6 +225,8 @@ def safe_report(value: dict) -> str:
         "Manual-reference first/last name: " + value["name"],
         "Manual-reference birthdate: " + value["dob"],
         "Review flags: " + flags,
+        "Additional back OCR clues: " + value.get("extra_back_ocr", "not_needed"),
+        "Additional birthdate OCR clue: " + value.get("extra_dob_ocr", "not_needed"),
         "Optional ID portrait vs selfie SFace: " + value["face"] + face_score,
         "",
         "Admin step: PENDING HUMAN REVIEW (DEMO ONLY — NOT SUBMITTED)",
