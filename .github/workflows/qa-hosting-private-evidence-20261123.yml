@@ -1,0 +1,47 @@
+name: QA Published Hosting Identity Evidence Viewer (NO DEPLOY)
+on:
+  push:
+    branches: [fix/hosting-identity-evidence-preview-20261123]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  protected-photos-ui:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      CI: 'true'
+      EXPO_NO_TELEMETRY: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Assert admin decision rules remain untouched
+        run: |
+          node <<'NODE'
+          const fs=require('fs'),cp=require('child_process'),assert=require('assert');
+          const base='design/published-identity-reviews-ui-20261123';
+          cp.execFileSync('git',['fetch','origin',base,'--depth=1'],{stdio:'pipe'});
+          const path='app/(admin)/identity-reviews.tsx';
+          const old=cp.execFileSync('git',['show','FETCH_HEAD:'+path],{encoding:'utf8'});
+          const now=fs.readFileSync(path,'utf8');
+          const extract=(text,a,b)=>text.slice(text.indexOf(a),text.indexOf(b,text.indexOf(a)+a.length));
+          assert.equal(extract(old,'  const saveDecision = async (','  if (sessionLoading) {'),
+            extract(now,'  const saveDecision = async (','  if (sessionLoading) {'));
+          assert(now.includes('require_retry') && now.includes('issuerReviewAttested'));
+          assert(now.includes('/evidence'));
+          assert(!now.includes('Photo not retained'));
+          console.log('PASS existing LGU independent decision gates unchanged');
+          NODE
+      - name: Install pinned dependencies
+        run: npm ci --no-audit --no-fund
+      - name: TypeScript typecheck
+        run: npx tsc --noEmit --incremental false
+      - name: Build web without deploying
+        run: npx expo export --platform web --clear
+      - name: No live website or Firestore writes
+        run: echo 'No Firebase Hosting or Render deploy.'
