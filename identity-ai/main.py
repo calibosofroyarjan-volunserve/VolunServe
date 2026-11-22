@@ -10,6 +10,7 @@ import cv2
 import mediapipe as mp
 import pytesseract
 from document_screening import assess_document_text, document_ocr_unavailable
+from back_quality_policy import back_quality_warning
 import numpy as np
 from fastapi import FastAPI, Header, HTTPException, Request
 from starlette.datastructures import UploadFile as StarletteUploadFile
@@ -1298,14 +1299,17 @@ async def verify_identity(
             back_quality = await asyncio.to_thread(image_quality, back_image)
             # Mild blur may still be readable to a reviewer; only very poor
             # quality triggers manual review. Never claim ID authenticity.
-            if back_quality["score"] < get_min_quality_threshold():
+            back_warning = back_quality_warning(
+                back_quality["score"], get_min_quality_threshold(),
+            )
+            if back_warning:
                 result = {
                     **result,
                     "status": "pending",
                     "decision": "manual_review",
                     "message": "National ID back image quality is low. LGU/Admin review is required.",
                     "warnings": list(result.get("warnings") or []) + [
-                        "low_id_back_image_quality"
+                        back_warning
                     ],
                 }
     except HTTPException:
