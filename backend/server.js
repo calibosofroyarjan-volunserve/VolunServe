@@ -5102,7 +5102,15 @@ app.post(
       // Store only authenticated Cloudinary assets. Do not put photo bytes or
       // signed URLs in Firestore, the review queue or logs.
       configureCloudinary();
-      storedEvidence = await storeIdentityEvidence(uid, evidenceMedia.images);
+      storedEvidence = await storeIdentityEvidence(uid, evidenceMedia.images, {
+        onCleanupFailure: async (images) => {
+          // A stream can fail after the provider received bytes. Preserve the
+          // candidate IDs for retry, rather than losing track of private ID media.
+          await db.collection("identityEvidenceRetirements")
+            .doc(uid + "_" + requestId + "_upload_failure")
+            .set({ uid, requestId, images, createdAt: FieldValue.serverTimestamp() });
+        },
+      });
       const evidenceRef = db.collection("identityEvidence").doc(uid);
       const retirementRef = db.collection("identityEvidenceRetirements").doc(uid + "_" + requestId);
       const evidenceExpiresAt = new Date(Date.now() + RETENTION_MS);
