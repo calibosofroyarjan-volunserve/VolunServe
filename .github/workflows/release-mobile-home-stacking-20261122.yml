@@ -1,0 +1,206 @@
+# One-time, fail-closed Hosting-only VolunServe mobile Home layout release.
+# Actual site is built from the immutable, current-production-derived source, NOT live-protected app files.
+# Approval gate: exact source, green no-deploy QA, live marker, Hosting backup and rollback.
+name: Guarded Mobile Home Layout Overlap HOTFIX Hosting Only (2026-11-22)
+on:
+  push:
+    branches: [live-protected]
+    paths:
+      - '.github/workflows/release-mobile-home-stacking-20261122.yml'
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: volunserve-production-hosting-release
+  cancel-in-progress: false
+jobs:
+  hosting-ui-only:
+    if: github.repository == 'calibosofroyarjan-volunserve/VolunServe' && github.ref == 'refs/heads/live-protected'
+    environment: production
+    runs-on: ubuntu-24.04
+    timeout-minutes: 80
+    env:
+      CI: 'true'
+      EXPO_NO_TELEMETRY: '1'
+      EXPO_PUBLIC_VOLUNSERVE_ENV: production
+      EXPO_PUBLIC_IDENTITY_VERIFICATION_API_URL: https://volunserve.onrender.com
+      SITE: volunserve-3aa5b
+      BASE_SHA: 0278ccd37a0406b5080bedbcb10eeb00755300ca
+      SOURCE_SHA: f45c9c50ba854166bba9f604a899848312284da6
+      SOURCE_BRANCH: fix/mobile-home-column-sizing-overlap-20261122
+      QA_RUN_ID: '45021050945'
+      BACKUP_CHANNEL: mobile-overlap-before-20261122
+      VOLUNSERVE_HOSTING_URL: https://volunserve.com
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Checkout protected controller only
+        uses: actions/checkout@v4
+        with:
+          path: controller
+          fetch-depth: 0
+          submodules: false
+      - name: Checkout exact audited latest-live-derived site
+        uses: actions/checkout@v4
+        with:
+          path: site
+          ref: f45c9c50ba854166bba9f604a899848312284da6
+          fetch-depth: 0
+          submodules: false
+      - name: Preflight pinned QA, exact diffs, project and unchanged live marker
+        working-directory: site
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const a=require('node:assert/strict');
+          const cp=require('node:child_process');
+          const fs=require('node:fs');
+          const git=(...args)=>cp.execFileSync('git',args,{encoding:'utf8'}).trim();
+          const B=process.env.BASE_SHA,S=process.env.SOURCE_SHA;
+          const api=async route=>{
+            const url='https://api.github.com/repos/'+process.env.GITHUB_REPOSITORY+'/'+route;
+            const r=await fetch(url,{headers:{Authorization:'Bearer '+process.env.GH_TOKEN,Accept:'application/vnd.github+json','User-Agent':'VolunServe-Mobile-UI-Release'},signal:AbortSignal.timeout(25000)});
+            a(r.ok,'BLOCKED GitHub API HTTP '+r.status+' '+route);
+            return r.json();
+          };
+          (async()=>{
+            a.equal(process.env.GITHUB_REF,'refs/heads/live-protected');
+            a.equal(process.env.GITHUB_REPOSITORY,'calibosofroyarjan-volunserve/VolunServe');
+            a.equal(git('rev-parse','HEAD'),S,'BLOCKED source checkout drift');
+            cp.execFileSync('git',['merge-base','--is-ancestor',B,S]);
+            a.equal(git('ls-remote','--heads','origin',process.env.SOURCE_BRANCH).split(/\s+/)[0],S,'BLOCKED reviewed source branch moved');
+            a.equal(git('ls-remote','--heads','origin','live-protected').split(/\s+/)[0],process.env.GITHUB_SHA,'BLOCKED newer protected controller exists');
+            const controllerDiff=cp.execFileSync('git',['-C','../controller','diff','--name-status','--no-renames','HEAD^','HEAD'],{encoding:'utf8'}).trim();
+            a.equal(controllerDiff,'A\t.github/workflows/release-mobile-home-stacking-20261122.yml','BLOCKED protected push contained other files');
+            const changes=git('diff','--name-status','--no-renames',B,S).split('\n').filter(Boolean).sort();
+            const expected=[
+              'M\tcomponents/home/Home.web.tsx',
+              'M\tcomponents/home/CommunityOnline.tsx',
+              'A\t.github/workflows/qa-mobile-home-stacking-20261122.yml'
+            ].sort();
+            a.deepEqual(changes,expected,'BLOCKED unrelated or old frontend code');
+            const pins={
+              'components/home/Home.web.tsx':'32b7a460cd9f46bace5da76ab8fe14a9689e8533',
+              'components/home/CommunityOnline.tsx':'cd864a8ce5195a3d0ae03ac5c13020ce83ad633b',
+            };
+            for(const [path,sha] of Object.entries(pins))
+              a.equal(git('rev-parse','HEAD:'+path),sha,'BLOCKED changed UI blob '+path);
+            const run=await api('actions/runs/'+process.env.QA_RUN_ID);
+            a.equal(run.head_sha,S,'BLOCKED QA did not test pinned source');
+            a.equal(run.name,'QA Mobile Home Stacking Overlap Fix (NO DEPLOY)');
+            a.equal(run.status,'completed');
+            a.equal(run.conclusion,'success','BLOCKED failed QA');
+            const cfg=JSON.parse(fs.readFileSync('.firebaserc','utf8'));
+            a.equal(cfg.projects.default,process.env.SITE);
+            const r=await fetch('https://volunserve.com/volunserve-release.json?preflight='+Date.now(),{headers:{'Cache-Control':'no-cache'},signal:AbortSignal.timeout(15000)});
+            a(r.ok,'BLOCKED live site unreadable');
+            const live=await r.json();
+            a.equal(live.app,'VolunServe');
+            a.equal(live.firebaseProject,process.env.SITE);
+            a.equal(live.revision,B,'BLOCKED live changed since UI QA');
+            console.log('PASS exact approved 3 UI files, QA pin and unchanged live Hosting');
+          })().catch(e=>{console.error(e.stack||e);process.exitCode=1});
+          NODE
+      - name: Confirm existing authenticated member API remains protected
+        shell: bash
+        run: |
+          set -euo pipefail
+          for route in /api/community/directory /api/community/chats; do
+            code=$(curl -sL -o /dev/null -w '%{http_code}' --max-time 25 "https://volunserve.onrender.com$route")
+            test "$code" = '401' || { echo "BLOCKED expected protected $route, got HTTP $code"; exit 1; }
+          done
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: site/package-lock.json
+      - name: Install pinned dependencies (no deployment)
+        working-directory: site
+        run: npm ci --no-audit --no-fund
+      - name: Re-run TypeScript and protected core UX regression tests
+        working-directory: site
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx tsc --noEmit --incremental false
+          node scripts/test-login-ui-release.cjs
+          node scripts/test-profile-certificates-account-menu.cjs
+          node scripts/test-guest-readonly-preview.cjs
+          node --test scripts/test-admin-volunteer-authorization.cjs
+          node --test scripts/test-embedded-emergency-map-navigation.cjs
+      - name: Build exact audited source and release fingerprint (no deployment)
+        working-directory: site
+        shell: bash
+        run: |
+          set -euo pipefail
+          GITHUB_SHA="$SOURCE_SHA" npx expo export --platform web --clear
+          GITHUB_SHA="$SOURCE_SHA" node scripts/verify-hosting-release.cjs
+          node <<'NODE'
+          const a=require('node:assert/strict'),fs=require('node:fs');
+          const m=JSON.parse(fs.readFileSync('dist/volunserve-release.json','utf8'));
+          a.equal(m.revision,process.env.SOURCE_SHA);
+          a.equal(m.firebaseProject,process.env.SITE);
+          a(fs.existsSync('dist/index.html'),'BLOCKED missing web release');
+          console.log('PASS only audited source built for Hosting');
+          NODE
+      - name: Recheck unchanged production and validate Hosting-only credentials
+        working-directory: site
+        env:
+          FIREBASE_SA: ${{ secrets.VOLUNSERVE_PRODUCTION_HOSTING_SERVICE_ACCOUNT }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          VOLUNSERVE_EXPECTED_SHA="$BASE_SHA" node scripts/check-live-hosting.cjs
+          test -n "$FIREBASE_SA" || { echo "BLOCKED missing production Hosting secret"; exit 1; }
+          node <<'NODE'
+          const a=require('node:assert/strict'),fs=require('node:fs');
+          const sa=JSON.parse(process.env.FIREBASE_SA);
+          a.equal(sa.type,'service_account');
+          a.equal(sa.project_id,process.env.SITE);
+          a(sa.client_email&&sa.private_key,'BLOCKED invalid Hosting credential');
+          fs.writeFileSync(process.env.RUNNER_TEMP+'/mobile-home-prod-hosting-key.json',
+            process.env.FIREBASE_SA,{mode:0o600});
+          console.log('PASS scoped production Hosting credentials');
+          NODE
+          echo "GOOGLE_APPLICATION_CREDENTIALS=$RUNNER_TEMP/mobile-home-prod-hosting-key.json" >> "$GITHUB_ENV"
+      - name: Back up current Firebase Hosting before any change
+        id: backup
+        working-directory: site
+        shell: bash
+        run: |
+          set -euo pipefail
+          VOLUNSERVE_EXPECTED_SHA="$BASE_SHA" node scripts/check-live-hosting.cjs
+          npx firebase-tools hosting:clone "$SITE:live" "$SITE:$BACKUP_CHANNEL" --project "$SITE" --non-interactive
+      - name: Deploy Firebase HOSTING ONLY, no Firestore or backend writes
+        id: deploy
+        working-directory: site
+        shell: bash
+        run: |
+          set -euo pipefail
+          VOLUNSERVE_EXPECTED_SHA="$BASE_SHA" node scripts/check-live-hosting.cjs
+          npx firebase-tools deploy --only hosting --project "$SITE" --non-interactive
+      - name: Verify published source, public routes and unchanged project
+        working-directory: site
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in 1 2 3 4 5 6; do
+            if VOLUNSERVE_EXPECTED_SHA="$SOURCE_SHA" node scripts/check-live-hosting.cjs; then
+              echo 'PASS exact mobile Home UI source is deployed on current live Hosting'
+              exit 0
+            fi
+            sleep 12
+          done
+          exit 1
+      - name: Restore previous Hosting snapshot if deployment or verification fails
+        if: failure() && steps.backup.outcome == 'success' && steps.deploy.outcome != 'skipped'
+        working-directory: site
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx firebase-tools hosting:clone "$SITE:$BACKUP_CHANNEL" "$SITE:live" --project "$SITE" --non-interactive
+          VOLUNSERVE_EXPECTED_SHA="$BASE_SHA" node scripts/check-live-hosting.cjs
+      - name: Delete temporary Hosting credentials
+        if: always()
+        shell: bash
+        run: rm -f "$RUNNER_TEMP/mobile-home-prod-hosting-key.json"
