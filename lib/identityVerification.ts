@@ -110,6 +110,24 @@ function getBackendBaseUrl() {
     value = value.slice(0, -statusSuffix.length);
   }
 
+  // Never send a staging Resident's ID images or selfie to production.
+  // Production web builds retain their existing backend behavior.
+  const firebaseTarget =
+    process.env.EXPO_PUBLIC_VOLUNSERVE_FIREBASE_TARGET?.trim() ||
+    "production";
+  const STAGING_IDENTITY_BACKEND_URL =
+    "https://volunserve-backend-staging.onrender.com";
+  if (firebaseTarget === "staging" && value !== STAGING_IDENTITY_BACKEND_URL) {
+    throw new Error(
+      "Staging identity upload blocked: configure EXPO_PUBLIC_IDENTITY_VERIFICATION_API_URL to the isolated staging backend.",
+    );
+  }
+  if (firebaseTarget !== "staging" && value === STAGING_IDENTITY_BACKEND_URL) {
+    throw new Error(
+      "Production identity upload blocked: staging backend cannot be used by a production Firebase client.",
+    );
+  }
+
   return value;
 }
 
