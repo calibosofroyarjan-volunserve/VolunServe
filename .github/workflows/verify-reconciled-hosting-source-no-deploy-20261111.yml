@@ -1182,79 +1182,6 @@ jobs:
             }
             // END PINNED IDENTITY REVIEWS DESIGN CONTROLLER GATE
 
-            // BEGIN PINNED IDENTITY UI CONTROLLER DIFF-REPAIR GATE
-            // Correct exactly one failed pre-deploy shape assertion. The previous
-            // release never wrote to Firebase. General protected guards stay intact.
-            {
-              const controller=".github/workflows/release-approved-identity-review-design-20261123.yml";
-              const verifier=".github/workflows/verify-reconciled-hosting-source-no-deploy-20261111.yml";
-              const changed=git("diff","--name-status","--no-renames",liveBase,commit)
-                .split("\n").filter(Boolean).sort();
-              if(changed.length===2 &&
-                 changed[0]==="M\t"+controller &&
-                 changed[1]==="M\t"+verifier){
-                const currentHosting="b0aafbc9a244fdb2c871ed94b402639c4ec8025d";
-                const approvedSource="66116a1032d3d2944eaa16f95275774880c0f06f";
-                assert.equal(liveBase,"544880597bf04ca42f1083bbac7cf1c35cc8e16d",
-                  "BLOCKED protected branch changed since controlled release repair");
-                assert.equal(marker.revision,currentHosting,
-                  "BLOCKED production Hosting changed; review current source again");
-                assert.equal(blob(liveBase,verifier),
-                  "d4338a615bbe72a370d034ab4f8789579ec54679",
-                  "BLOCKED previously audited guard changed");
-                assert.equal(blob(commit,controller),
-                  "8cf166e35dad36f8bdcfe178e4e50d77ef4969e0",
-                  "BLOCKED amended release controller differs from exact audited content");
-                const source=git("ls-remote","--heads","origin",
-                  "design/published-identity-reviews-ui-20261123").split(/\s+/)[0];
-                assert.equal(source,approvedSource,
-                  "BLOCKED preflight-tested UI source was modified");
-                git("merge-base","--is-ancestor",currentHosting,approvedSource);
-                assert.deepEqual(git("diff","--name-status","--no-renames",
-                  currentHosting,approvedSource).split("\n").filter(Boolean).sort(),[
-                    "A\t.github/workflows/qa-published-identity-reviews-ui-20261123.yml",
-                    "M\tapp/(admin)/identity-reviews.tsx"
-                  ],"BLOCKED UI source contains unpublished or unrelated files");
-                const prior=git("show",liveBase+":"+verifier);
-                const updated=git("show",commit+":"+verifier);
-                const begin="            // BEGIN PINNED IDENTITY UI CONTROLLER DIFF-REPAIR GATE\n";
-                const endMark="            // END PINNED IDENTITY UI CONTROLLER DIFF-REPAIR GATE\n";
-                const first=updated.indexOf(begin);
-                const last=updated.indexOf(endMark,first);
-                assert(first>=0 && last>first,"BLOCKED repair audit marker absent");
-                const next=last+endMark.length;
-                assert.equal(updated[next],"\n","BLOCKED missing exact audit block separator");
-                assert.equal(updated.slice(0,first)+updated.slice(next+1),prior,
-                  "BLOCKED unrelated existing protected release gate changed");
-                const previousController=git("show",liveBase+":"+controller);
-                const updatedController=git("show",commit+":"+controller);
-                const removed=["            const controllerDiff=git('-C','../controller','diff','--name-status','--no-renames','HEAD^','HEAD');","            assert.equal(controllerDiff,'A\\t'+controller,'BLOCKED: unrelated protected changes');"].join("\n");
-                const replacement=["            const controllerDiff=git('-C','../controller','diff','--name-status','--no-renames','HEAD^','HEAD')","              .split('\\n').filter(Boolean).sort();","            assert.deepEqual(controllerDiff,[","              'M\\t'+controller,","              'M\\t.github/workflows/verify-reconciled-hosting-source-no-deploy-20261111.yml',","            ].sort(),'BLOCKED: protected push must change only the audited controller and scoped PR verifier');"].join("\n");
-                assert(previousController.includes(removed) && updatedController.includes(replacement),
-                  "BLOCKED expected single corrected controller assertion was not found");
-                assert.equal(updatedController.replace(replacement,removed),previousController,
-                  "BLOCKED controller changed beyond the exact diff-shape assertion");
-                for(const file of [
-                  "package.json","package-lock.json","app.json","tsconfig.json",
-                  "firebase.json",".firebaserc","firestore.rules","storage.rules",
-                  "lib/firebase.ts","backend/server.js","functions/index.js",
-                  "scripts/guard-live-protected-release.cjs",
-                  ".github/workflows/auto-publish-protected-live-hosting.yml",
-                  ".github/workflows/release-live-protected-hosting.yml"
-                ]){
-                  const old=git("ls-tree","--name-only",liveBase,"--",file);
-                  const current=git("ls-tree","--name-only",commit,"--",file);
-                  assert.equal(current,old,"BLOCKED protected file changed: "+file);
-                  if(old)assert.equal(blob(commit,file),blob(liveBase,file),
-                    "BLOCKED security or backend configuration changed: "+file);
-                }
-                console.log("PASS exact one-assertion controller repair; no live data touched");
-                console.log("NO DEPLOY during PR validation");
-                return;
-              }
-            }
-            // END PINNED IDENTITY UI CONTROLLER DIFF-REPAIR GATE
-
             // BEGIN PINNED IDENTITY HOSTING IMMUTABLE BACKUP GATE
             // Repair only the Hosting rollback backup mechanism. Preview channel
             // creation failed before publish. Use the previously approved
@@ -1336,6 +1263,79 @@ jobs:
               }
             }
             // END PINNED IDENTITY HOSTING IMMUTABLE BACKUP GATE
+
+            // BEGIN PINNED IDENTITY UI CONTROLLER DIFF-REPAIR GATE
+            // Correct exactly one failed pre-deploy shape assertion. The previous
+            // release never wrote to Firebase. General protected guards stay intact.
+            {
+              const controller=".github/workflows/release-approved-identity-review-design-20261123.yml";
+              const verifier=".github/workflows/verify-reconciled-hosting-source-no-deploy-20261111.yml";
+              const changed=git("diff","--name-status","--no-renames",liveBase,commit)
+                .split("\n").filter(Boolean).sort();
+              if(changed.length===2 &&
+                 changed[0]==="M\t"+controller &&
+                 changed[1]==="M\t"+verifier){
+                const currentHosting="b0aafbc9a244fdb2c871ed94b402639c4ec8025d";
+                const approvedSource="66116a1032d3d2944eaa16f95275774880c0f06f";
+                assert.equal(liveBase,"544880597bf04ca42f1083bbac7cf1c35cc8e16d",
+                  "BLOCKED protected branch changed since controlled release repair");
+                assert.equal(marker.revision,currentHosting,
+                  "BLOCKED production Hosting changed; review current source again");
+                assert.equal(blob(liveBase,verifier),
+                  "d4338a615bbe72a370d034ab4f8789579ec54679",
+                  "BLOCKED previously audited guard changed");
+                assert.equal(blob(commit,controller),
+                  "8cf166e35dad36f8bdcfe178e4e50d77ef4969e0",
+                  "BLOCKED amended release controller differs from exact audited content");
+                const source=git("ls-remote","--heads","origin",
+                  "design/published-identity-reviews-ui-20261123").split(/\s+/)[0];
+                assert.equal(source,approvedSource,
+                  "BLOCKED preflight-tested UI source was modified");
+                git("merge-base","--is-ancestor",currentHosting,approvedSource);
+                assert.deepEqual(git("diff","--name-status","--no-renames",
+                  currentHosting,approvedSource).split("\n").filter(Boolean).sort(),[
+                    "A\t.github/workflows/qa-published-identity-reviews-ui-20261123.yml",
+                    "M\tapp/(admin)/identity-reviews.tsx"
+                  ],"BLOCKED UI source contains unpublished or unrelated files");
+                const prior=git("show",liveBase+":"+verifier);
+                const updated=git("show",commit+":"+verifier);
+                const begin="            // BEGIN PINNED IDENTITY UI CONTROLLER DIFF-REPAIR GATE\n";
+                const endMark="            // END PINNED IDENTITY UI CONTROLLER DIFF-REPAIR GATE\n";
+                const first=updated.indexOf(begin);
+                const last=updated.indexOf(endMark,first);
+                assert(first>=0 && last>first,"BLOCKED repair audit marker absent");
+                const next=last+endMark.length;
+                assert.equal(updated[next],"\n","BLOCKED missing exact audit block separator");
+                assert.equal(updated.slice(0,first)+updated.slice(next+1),prior,
+                  "BLOCKED unrelated existing protected release gate changed");
+                const previousController=git("show",liveBase+":"+controller);
+                const updatedController=git("show",commit+":"+controller);
+                const removed=["            const controllerDiff=git('-C','../controller','diff','--name-status','--no-renames','HEAD^','HEAD');","            assert.equal(controllerDiff,'A\\t'+controller,'BLOCKED: unrelated protected changes');"].join("\n");
+                const replacement=["            const controllerDiff=git('-C','../controller','diff','--name-status','--no-renames','HEAD^','HEAD')","              .split('\\n').filter(Boolean).sort();","            assert.deepEqual(controllerDiff,[","              'M\\t'+controller,","              'M\\t.github/workflows/verify-reconciled-hosting-source-no-deploy-20261111.yml',","            ].sort(),'BLOCKED: protected push must change only the audited controller and scoped PR verifier');"].join("\n");
+                assert(previousController.includes(removed) && updatedController.includes(replacement),
+                  "BLOCKED expected single corrected controller assertion was not found");
+                assert.equal(updatedController.replace(replacement,removed),previousController,
+                  "BLOCKED controller changed beyond the exact diff-shape assertion");
+                for(const file of [
+                  "package.json","package-lock.json","app.json","tsconfig.json",
+                  "firebase.json",".firebaserc","firestore.rules","storage.rules",
+                  "lib/firebase.ts","backend/server.js","functions/index.js",
+                  "scripts/guard-live-protected-release.cjs",
+                  ".github/workflows/auto-publish-protected-live-hosting.yml",
+                  ".github/workflows/release-live-protected-hosting.yml"
+                ]){
+                  const old=git("ls-tree","--name-only",liveBase,"--",file);
+                  const current=git("ls-tree","--name-only",commit,"--",file);
+                  assert.equal(current,old,"BLOCKED protected file changed: "+file);
+                  if(old)assert.equal(blob(commit,file),blob(liveBase,file),
+                    "BLOCKED security or backend configuration changed: "+file);
+                }
+                console.log("PASS exact one-assertion controller repair; no live data touched");
+                console.log("NO DEPLOY during PR validation");
+                return;
+              }
+            }
+            // END PINNED IDENTITY UI CONTROLLER DIFF-REPAIR GATE
 
             assert.equal(marker.revision,liveBase,
               "BLOCKED: protected base and production differ; reconcile FIRST");
