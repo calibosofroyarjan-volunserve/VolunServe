@@ -1,5 +1,5 @@
 import type { ReactElement } from "react";
 
-/** Web-only staging local OCR panel. Native builds never render this component. */
-declare function StagingNationalIdLocalLab(): ReactElement;
+/** Web-only staging OCR panel. The local preview disables Admin navigation. */
+declare function StagingNationalIdLocalLab(props?: { showAdminReviewLink?: boolean }): ReactElement;
 export default StagingNationalIdLocalLab;
