@@ -5894,12 +5894,13 @@ app.post(
       }
       if (
         action !== "verify" &&
-        action !== "require_retry"
+        action !== "require_retry" &&
+        action !== "reject"
       ) {
         throw makeHttpError(
           400,
           "invalid_identity_review_action",
-          "Choose Verify Resident or Require Retry.",
+          "Choose Verify Resident, Require Retry, or Reject Verification.",
         );
       }
       if (
@@ -5921,6 +5922,10 @@ app.post(
           "identity_retry_reason_required",
           "Enter a clear reason before requiring the Resident to retry identity verification.",
         );
+      }
+      if (action === "reject" && notes.length < 10) {
+        throw makeHttpError(400, "identity_rejection_reason_required",
+          "Enter at least 10 characters explaining why the identity submission was rejected.");
       }
       const userRef = db.collection("users").doc(targetUid);
       const verificationRef = db
@@ -6005,7 +6010,7 @@ app.post(
           manualReviewDecision:
             action === "verify"
               ? "verified"
-              : "retry_required",
+              : action === "reject" ? "rejected" : "retry_required",
           manualValidationMethod:
             action === "verify"
               ? validationMethod
@@ -6074,7 +6079,7 @@ app.post(
           {
             ...commonReviewFields,
             status: "failed",
-            decision: "retry_required",
+            decision: action === "reject" ? "rejected" : "retry_required",
             message: notes,
             aiAttemptCount: 0,
             aiAttemptCycle: (Number.isSafeInteger(verification.aiAttemptCycle) && verification.aiAttemptCycle > 0
@@ -6093,7 +6098,9 @@ app.post(
           { merge: true },
         );
         transaction.set(activityRef, {
-          action: "Resident Identity Retry Required",
+          action: action === "reject"
+            ? "Resident Identity Verification Rejected"
+            : "Resident Identity Retry Required",
           residentUid: targetUid,
           verificationId: cleanText(
             verification.verificationId || "",
@@ -6112,6 +6119,7 @@ app.post(
         return {
           status: "failed",
           identityVerified: false,
+          manualReviewDecision: action === "reject" ? "rejected" : "retry_required",
         };
       });
       response.json({
@@ -6121,7 +6129,9 @@ app.post(
         message:
           action === "verify"
             ? "Resident identity verified after manual LGU/Admin validation."
-            : "The Resident must retry identity verification with clearer or corrected information.",
+            : action === "reject"
+              ? "Identity submission rejected with Admin notes. The Resident may submit a corrected application."
+              : "The Resident must retry identity verification with clearer or corrected information.",
       });
     } catch (error) {
       console.error("Identity review decision failed:", error);
