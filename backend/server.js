@@ -5089,6 +5089,12 @@ app.post(
         : rawDecision;
       const matchScore = numberOrNull(aiResult?.matchScore);
       const livenessScore = numberOrNull(aiResult?.livenessScore);
+      const idImageQualityScore = numberOrNull(aiResult?.idImageQualityScore);
+      const selfieQualityScore = numberOrNull(aiResult?.selfieQualityScore);
+      const scanWarnings = Array.isArray(aiResult?.warnings)
+        ? aiResult.warnings.filter((warning) => typeof warning === "string")
+          .slice(0, 5).map((warning) => cleanText(warning, 100))
+        : [];
       const verificationId = cleanText(
         aiResult?.verificationId || `identity_${uid}_${Date.now()}`, 200,
       );
@@ -5151,6 +5157,9 @@ app.post(
           reviewedByName: FieldValue.delete(),
           matchScore,
           livenessScore,
+          idImageQualityScore,
+          selfieQualityScore,
+          scanWarnings,
           documentScreening,
           message: resultMessage,
           evidenceAvailable: true,
@@ -5186,7 +5195,7 @@ app.post(
             aiDecision: decision,
             status: result.status,
             requiresManualReview: result.requiresManualReview,
-            matchScore, livenessScore,
+            matchScore, livenessScore, idImageQualityScore, selfieQualityScore, scanWarnings,
             documentScreening,
             verificationMethod: "volunserve_ai",
             previousReview,
@@ -5222,7 +5231,8 @@ app.post(
         }
         return {
           ok: true, status: result.status, verificationId, decision,
-          matchScore, livenessScore, documentScreening, message: resultMessage,
+          matchScore, livenessScore, idImageQualityScore, selfieQualityScore,
+          scanWarnings, documentScreening, message: resultMessage,
           attemptCount, maxAttempts: MAX_IDENTITY_AI_ATTEMPTS,
           attemptsRemaining: MAX_IDENTITY_AI_ATTEMPTS - attemptCount,
           requiresManualReview: result.requiresManualReview,
@@ -5296,6 +5306,11 @@ function identityAdminReviewPayload(verificationSnapshot, userSnapshot) {
     decision: cleanText(verification.decision || "", 80),
     matchScore: numberOrNull(verification.matchScore),
     livenessScore: numberOrNull(verification.livenessScore),
+    idImageQualityScore: numberOrNull(verification.idImageQualityScore),
+    selfieQualityScore: numberOrNull(verification.selfieQualityScore),
+    scanWarnings: Array.isArray(verification.scanWarnings)
+      ? verification.scanWarnings.filter((value) => typeof value === "string").slice(0, 5)
+      : [],
     documentScreening: verification.documentScreening ? normalizeIdDocumentScreening(verification.documentScreening) : null,
     evidenceAvailable: verification.evidenceAvailable === true,
     evidenceExpiresAt: identityAdminTimestampIso(verification.evidenceExpiresAt),
