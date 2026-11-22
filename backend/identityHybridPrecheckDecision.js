@@ -7,7 +7,8 @@ const {selectedIdRecognized, blurryNationalIdNeedsReview} = require("./selectedI
 function classifyHybridDocumentPrecheck({ screening, aiOutcome } = {}) {
   const warnings = screening?.warningCodes || [];
   const nameMismatch = screening?.profileNameCheck === "possible_conflict";
-  const birthMismatch = screening?.profileBirthDateCheck === "possible_conflict";
+  // DOB OCR is advisory during precheck. An OCR date conflict cannot
+  // authorize account approval and stays visible to LGU/Admin after face scan.
   const unsupported = screening?.status === "unsupported" ||
     warnings.includes("school_id_not_supported");
   const typeMismatch = screening?.status === "mismatch" ||
@@ -22,7 +23,7 @@ function classifyHybridDocumentPrecheck({ screening, aiOutcome } = {}) {
   if (unsupported || typeMismatch || invalidSides) {
     return {outcome:"retry",decision:"rescan_required",reviewTrack:"none"};
   }
-  if (nameMismatch || birthMismatch) {
+  if (nameMismatch) {
     return {outcome:"retry",decision:"profile_mismatch",reviewTrack:"none"};
   }
   if (aiOutcome === "pass" && selectedIdRecognized(screening) &&

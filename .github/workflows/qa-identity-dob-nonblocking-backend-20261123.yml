@@ -1,0 +1,41 @@
+name: QA DOB-advisory protected backend (NO DEPLOY)
+on:
+  push:
+    branches: [fix/identity-dob-nonblocking-backend-20261123]
+permissions:
+  contents: read
+jobs:
+  backend-policy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Check narrow scope and syntax
+        run: |
+          set -euo pipefail
+          git diff --name-status 0c1fcdd9fdd5cd6a076761db6a20e567fa295fc6 HEAD
+          node --check backend/identityHybridPrecheckDecision.js
+          node --check backend/test-identityHybridPrecheckDecision.js
+          node - <<'NODE'
+          const {execFileSync}=require('node:child_process'), assert=require('node:assert/strict');
+          const changed=execFileSync('git',['diff','--name-only','0c1fcdd9fdd5cd6a076761db6a20e567fa295fc6','HEAD'],{encoding:'utf8'}).trim().split('\n').sort();
+          assert.deepEqual(changed,[
+            '.github/workflows/qa-identity-dob-nonblocking-backend-20261123.yml',
+            'backend/identityHybridPrecheckDecision.js',
+            'backend/test-identityHybridPrecheckDecision.js'
+          ].sort());
+          NODE
+      - name: Test hybrid DOB and existing ID safety gates
+        run: |
+          (cd backend && node --test test-identityHybridPrecheckDecision.js)
+          (cd backend && node --test test-identityIssuerReviewPolicy.js)
+          node --test backend/test-identity-final-admin-only.js
+          node --test backend/test-identity-three-attempt-review.js
+      - name: No deployment
+        run: |
+          echo 'No Render, Firebase, or real resident data changes.'

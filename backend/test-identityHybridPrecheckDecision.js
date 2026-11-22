@@ -29,6 +29,12 @@ test("unsupported or wrong document never queues or progresses",()=>{
   assert.equal(classifyHybridDocumentPrecheck({screening:s,aiOutcome:o}).outcome,"retry");
  }
 });
+test("DOB OCR mismatch is advisory for face stage, never auto Verified",()=>{
+ const s=screening({profileBirthDateCheck:"possible_conflict"});
+ assert.deepEqual(classifyHybridDocumentPrecheck({screening:s,aiOutcome:"pass"}),
+  {outcome:"pass",decision:"ready_for_face_scan",reviewTrack:"none"});
+ assert.equal(classifyHybridDocumentPrecheck({screening:s,aiOutcome:"retry"}).outcome,"retry");
+});
 test("explicit different account name never queues",()=>{
  const s=screening({profileNameCheck:"possible_conflict",imageQualityStatus:"low",
    warningCodes:["low_document_image_quality"]});
