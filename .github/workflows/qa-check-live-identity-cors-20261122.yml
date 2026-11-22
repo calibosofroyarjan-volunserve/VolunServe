@@ -1,0 +1,78 @@
+name: VERIFY live National ID OCR preflight and Render health (read only)
+
+on:
+  push:
+    branches: [qa/verify-live-precheck-cors-after-fix-20261122]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - name: Confirm exact browser CORS headers on live Render (OPTIONS only)
+        run: |
+          node <<'NODE'
+          const sleep = ms => new Promise(resolve=>setTimeout(resolve,ms));
+          const allowedHeaders = ["authorization", "x-volunserve-document-precheck-consent"];
+          const url = "https://volunserve.onrender.com/api/identity/document/precheck";
+          async function probe(){
+            const res=await fetch(url,{
+              method:"OPTIONS",
+              headers:{
+                Origin:"https://volunserve.com",
+                "Access-Control-Request-Method":"POST",
+                "Access-Control-Request-Headers":"authorization,x-volunserve-document-precheck-consent"
+              },
+              signal:AbortSignal.timeout(25000)
+            });
+            const origin = res.headers.get("access-control-allow-origin") || "";
+            const methods = res.headers.get("access-control-allow-methods") || "";
+            const headers=(res.headers.get("access-control-allow-headers")||"").split(",").map(v=>v.trim().toLowerCase());
+            const ok = res.status===204 && origin==="https://volunserve.com" &&
+              methods.toUpperCase().split(",").map(v=>v.trim()).includes("POST") &&
+              allowedHeaders.every(x=>headers.includes(x));
+            console.log(JSON.stringify({
+              preflightStatus:res.status,allowOrigin:origin,
+              allowedHeaders:headers,requiredConsentAllowed:headers.includes(allowedHeaders[1]),ready:ok
+            }));
+            return ok;
+          }
+          (async()=>{
+            for(let i=1;i<=12;i++){
+              console.log("Production preflight verification attempt "+i);
+              try {
+                if(await probe()){
+                  console.log("PASS: Live production CORS permits National ID consented OCR POST");
+                  console.log("No ID photo, bearer token, face data, Firebase write or code deployment");
+                  return;
+                }
+              }catch(e){console.log("Network probe unavailable: "+(e.name||"network_error"));}
+              if(i<12) await sleep(12000);
+            }
+            throw new Error("Live backend CORS has not passed exact browser preflight");
+          })().catch(e=>{console.error(e.message);process.exitCode=1;});
+          NODE
+      - name: Check both live Render health endpoints without authentication or data
+        run: |
+          node <<'NODE'
+          (async()=>{
+            for (const [name,url] of [
+              ["backend","https://volunserve.onrender.com/health"],
+              ["identity_ai","https://volunserve-identity-ai.onrender.com/health"]
+            ]){
+              const r=await fetch(url,{signal:AbortSignal.timeout(35000)});
+              const b=await r.json();
+              const ready=r.ok && b.ok===true &&
+                (name==="backend" ? b.service==="volunserve-backend" :
+                  b.service==="volunserve-identity-ai" && b.verificationEngineReady===true &&
+                  b.documentOcrReady===true && b.documentPrecheckReady===true);
+              console.log(JSON.stringify({service:name,http:r.status,ready}));
+              if(!ready)throw Error(name+" health not ready");
+            }
+            console.log("PASS: both Render services healthy (read-only)");
+          })().catch(e=>{console.error(e.message);process.exitCode=1;});
+          NODE
