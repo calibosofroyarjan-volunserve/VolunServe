@@ -6,7 +6,9 @@ const crypto = require("crypto");
 const { v2: cloudinary } = require("cloudinary");
 const { identityEvidencePrefix } = require("./identityStagingGuard");
 
-const MAX_IMAGE_BYTES = 7 * 1024 * 1024;
+// Three images must fit within the backend's existing 20 MB multipart limit.
+const MAX_IMAGE_BYTES = 6 * 1024 * 1024;
+const MAX_REQUEST_BYTES = 19 * 1024 * 1024;
 const RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
 const TEMP_URL_SECONDS = 300;
 const FIELDS = Object.freeze({ front: "idDocument", back: "idBack", selfie: "selfie" });
@@ -33,7 +35,7 @@ async function readImage(form, field, required) {
     throw evidenceError("identity_image_missing", field + " photo must be captured before submission.");
   }
   if (!Number.isFinite(file.size) || file.size < 200 || file.size > MAX_IMAGE_BYTES) {
-    throw evidenceError("identity_image_size_invalid", field + " photo must be between 200 bytes and 7 MB.");
+    throw evidenceError("identity_image_size_invalid", field + " photo must be between 200 bytes and 6 MB.");
   }
   const buffer = Buffer.from(await file.arrayBuffer());
   const format = imageFormat(buffer);
@@ -46,6 +48,10 @@ async function readImage(form, field, required) {
 async function readIdentityEvidence(request) {
   if (!Buffer.isBuffer(request.body) || !request.body.length) {
     throw evidenceError("identity_media_missing", "Government ID images and selfie are required.");
+  }
+  if (request.body.length > MAX_REQUEST_BYTES) {
+    throw evidenceError("identity_upload_too_large",
+      "Front ID, Back ID and selfie combined must be under 19 MB. Retake with smaller photos.", 413);
   }
   const contentType = String(request.headers["content-type"] || "");
   if (!/^multipart\/form-data;\s*boundary=/i.test(contentType)) {
