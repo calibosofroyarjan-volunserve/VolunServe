@@ -19,7 +19,7 @@ The staging backend environment must include:
 | \`FIREBASE_SERVICE_ACCOUNT_JSON\` | **Private** service account JSON from \`volunserve-full-staging\`, configured only in Render's secret environment UI |
 | \`IDENTITY_AI_SERVICE_URL\` | \`https://volunserve-identity-ai-staging.onrender.com\` (separate staging AI service) |
 | \`ALLOWED_ORIGINS\` | \`https://volunserve-expo-resident-full-staging.onrender.com\` (only staging origins; local testing can add \`http://localhost:3000\`) |
-| \`CLOUDINARY_CLOUD_NAME\`, \`CLOUDINARY_API_KEY\`, \`CLOUDINARY_API_SECRET\` | Private staging Cloudinary credentials; preferably a separate account/environment, never committed |
+| \`CLOUDINARY_CLOUD_NAME\`, \`CLOUDINARY_API_KEY\`, \`CLOUDINARY_API_SECRET\` | **Required:** a dedicated non-production Cloudinary cloud and API key/secret; the startup guard rejects missing credentials or the known live cloud |
 | \`FIREBASE_PROJECT_ID\` / \`GOOGLE_CLOUD_PROJECT\` / \`GCLOUD_PROJECT\` (if set) | Must equal \`volunserve-full-staging\` |
 
 The staging frontend build must include:
@@ -45,3 +45,22 @@ The staging frontend build must include:
 - A single face selfie, facial geometry and OCR keywords are *not* validated proof of physical liveness, ID authenticity, or government-issued identity. Manual LGU verification remains necessary.
 - The existing staging services may be serving different code and credentials. Never submit real IDs to staging before the correct Firebase, Cloudinary, and AI isolation has been checked end-to-end.
 - Prior submissions never persisted these photos; their original media cannot be reconstructed. Those Residents must resubmit.
+
+
+## Read-only public staging preflight
+The draft branch includes a no-deploy Actions workflow called **Preflight Isolated Identity Staging (Read-Only)**.
+It sends only public GET requests to the dedicated staging backend/AI health endpoints, the staging web landing page,
+and an unauthenticated GET to the Admin evidence route using a fictional synthetic UID.
+It cannot read ID media, sign in, trigger AI attempts or write any account records.
+
+- PASS on the anonymous evidence route means HTTP 401 or 403. It does not verify the role check with a real Admin token.
+- NOT_DEPLOYED means HTTP 404 from old code. This is not a successful deployment of PR #808.
+- Cloudinary configured means some credentials are present, not necessarily isolated. The new backend startup guard requires a separate cloud.
+- This workflow makes no changes in Render or Firebase and is not a camera/face matching test.
+
+## Manual staging deployment gate
+The current Render integration supports triggering a deploy from the existing branch, but cannot change a service's
+Git branch or inspect private environment variable values. The staging backend, staging AI and staging web services
+are all on older branches. Their branch pointers must be updated to the PR code and the isolated Firebase and
+Cloudinary credentials verified in Render before triggering a deploy. Do not redeploy an older branch and claim
+that PR #808 was tested. Never place deployment credentials in GitHub commits, test output, or conversation text.
