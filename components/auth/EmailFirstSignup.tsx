@@ -25,6 +25,7 @@ import {OCCUPATION_OPTIONS, SPECIALIZATIONS} from "../../constants/occupationOpt
 import {auth} from "../../lib/firebase";
 import {
   signUpUser,
+  getUserProfile,
 } from "../../lib/firebaseAuth";
 import {getRegistrationEmailError} from "../../lib/registrationEmailPolicy";
 import {communitySocialRequest} from "../../lib/communitySocial";
@@ -37,7 +38,6 @@ import {
   EMAIL_VERIFICATION_REQUESTED_MESSAGE,
 } from "../../lib/signupMessages";
 
-import {linkEmailFirstGooglePassword} from "../../lib/emailFirstSignupAuth";
 import {useSignupGoogle} from "../../lib/useSignupGoogle";
 
 import {authenticateEmailSignup, inspectSignupUser} from "../../lib/signupRegistration";
@@ -242,10 +242,9 @@ export default function EmailFirstSignup() {
     setSignedInUser(user);
     setEmail((user.email || "").toLowerCase());
     setCompletedProfile(profileExists && user.emailVerified);
-    if (!user.emailVerified) setStep(2);
-    else if (user.providerData.some(p => p.providerId === "google.com") &&
-             !user.providerData.some(p => p.providerId === "password")) setStep(1);
-    else setStep(3);
+    // Google already proves inbox ownership. Do not request or link a second
+    // password during Signup; all verified accounts must finish personal fields.
+    setStep(user.emailVerified ? 3 : 2);
   }, []);
 
   useEffect(() => {
@@ -280,6 +279,11 @@ export default function EmailFirstSignup() {
     setShowErrors(true);
     setError("");
     setMessage("");
+    if (googleOnly) {
+      setStep(3);
+      setError("Continue with your personal details. Google signup does not require linking a VolunServe password.");
+      return;
+    }
     if (resumeMode ? !email.trim() : !!emailErr) return;
     // Existing accounts may have older passwords; only new credentials
     // must pass the current complexity policy.
@@ -289,15 +293,7 @@ export default function EmailFirstSignup() {
     if (busy) return;
     setBusy(true);
     try {
-      if (googleOnly && signedInUser) {
-        const current = await linkEmailFirstGooglePassword(password);
-        const state = await inspectSignupUser(current);
-        showRegistrationState(state);
-        if (!current.emailVerified) {
-          await sendEmailVerification(current);
-          setMessage(EMAIL_VERIFICATION_REQUESTED_MESSAGE);
-        } else setMessage("Google email verified and VolunServe password linked.");
-      } else {
+      {
         if (signedInUser && !resumeMode) {
           throw new Error("A registration session is already active. Resume it or sign out first.");
         }
@@ -334,12 +330,12 @@ export default function EmailFirstSignup() {
       else if (!state.profileExists) setMessage(
         user.providerData.some(p => p.providerId === "password")
           ? "Google email verified. Complete your resident details."
-          : "Google email verified. Create a VolunServe password to use both sign-in methods."
+          : "Google verified. Complete Personal Details and Address & Profile; no password linking is needed."
       );
     } catch (e) {
       const code = (e as {code?: unknown} | null)?.code;
       if (code === "auth/account-exists-with-different-credential") {
-        setError("This email already has a VolunServe login. Open Sign In, choose Continue with Google, then confirm your original password using Sign In & Link Google. Do not register a second account.");
+        setError("This email already has a VolunServe account. Return to Login and use its original sign-in method. Signup does not link accounts or create a second UID.");
       } else {
         setError(googleSignInErrorMessage(e));
       }
@@ -399,6 +395,11 @@ export default function EmailFirstSignup() {
   async function complete() {
     setShowErrors(true);
     setError(""); setMessage("");
+    if (!consent) {
+      setStep(3);
+      setError("Agree to the Terms and Privacy Notice before completing registration.");
+      return;
+    }
     if (!personalOk) {
       setStep(3);
       setError("Complete your name and date of birth.");
@@ -419,8 +420,10 @@ export default function EmailFirstSignup() {
         throw new Error("Email verification is required before creating a Basic Resident profile.");
       }
       await getIdToken(user, true);
+      const googleOnlyAccount = user.providerData.some(p => p.providerId === "google.com") &&
+        !user.providerData.some(p => p.providerId === "password");
       await signUpUser({
-        authProvider: "verified_email",
+        authProvider: googleOnlyAccount ? "google" : "verified_email",
         email: (user.email || "").toLowerCase(),
         password: "", // The verified Auth UID already owns its credential.
         firstName: firstName.trim(),
@@ -437,6 +440,15 @@ export default function EmailFirstSignup() {
         occupationSpecialization: specialization,
         occupationOther,
       });
+      // Never navigate to an implicit Guest/pending view after only Firebase
+      // Auth succeeds. Require the SAME UID to have a completed Resident
+      // document before opening the Resident dashboard.
+      const createdProfile = await getUserProfile(user.uid);
+      if (auth.currentUser?.uid !== user.uid ||
+          createdProfile.role !== "resident" ||
+          String(createdProfile.email || "").trim().toLowerCase() !== (user.email || "").trim().toLowerCase()) {
+        throw new Error("Resident registration could not be confirmed. Stay here and retry; you were not sent to Guest Mode.");
+      }
       if(directoryConsent){
         void communitySocialRequest("/api/community/directory/preferences","POST",{directoryListed:true})
           .catch(()=>{/* Member can join later through Community Members. */});
@@ -707,8 +719,7 @@ export default function EmailFirstSignup() {
                   </>
                 )}
                 {checkButton(
-                  googleOnly ? "Link Password & Continue" :
-                    resumeMode ? "Resume Registration" : "Create Account & Verify Email",
+                  resumeMode ? "Resume Registration" : "Create Account & Verify Email",
                   () => {void startEmail();}
                 )}
                 {!signedInUser && !resumeMode && (
@@ -800,8 +811,27 @@ export default function EmailFirstSignup() {
                   error={(showErrors || !!birth) && (age === null || age < 18 || age > 100)
                     ? "Select a valid birth date (ages 18–100)." : null}
                 />
+                {googleOnly && (
+                  <Pressable
+                    accessibilityRole="checkbox"
+                    accessibilityState={{checked: consent}}
+                    style={styles.check}
+                    onPress={() => setConsent(value => !value)}
+                  >
+                    <Text style={styles.checkBox}>{consent ? "☑" : "☐"}</Text>
+                    <Text style={styles.checkText}>
+                      I agree to the VolunServe Terms and Privacy Notice. My basic name and role appear to approved members, and I can control messaging and profile visibility.
+                    </Text>
+                  </Pressable>
+                )}
+                {googleOnly && showErrors && !consent &&
+                  <Text style={styles.error}>Agree to the Terms and Privacy Notice to continue.</Text>}
                 {checkButton("Continue to Address & Profile", () => {
                   setShowErrors(true);
+                  if (googleOnly && !consent) {
+                    setError("Please agree to the Terms and Privacy Notice first.");
+                    return;
+                  }
                   if (!personalOk) {
                     setError("Please complete the highlighted personal information first.");
                     return;
