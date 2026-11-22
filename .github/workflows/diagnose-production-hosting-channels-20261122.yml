@@ -1,0 +1,35 @@
+name: Read Only Production Hosting Channel Inventory (2026-11-22)
+on:
+  push:
+    branches: [live-protected]
+    paths:
+      - '.github/workflows/diagnose-production-hosting-channels-20261122.yml'
+permissions:
+  contents: read
+jobs:
+  inventory:
+    runs-on: ubuntu-latest
+    environment: production
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - name: List Firebase Hosting channels (read only; no deploy/delete)
+        env:
+          FIREBASE_SA: ${{ secrets.VOLUNSERVE_PRODUCTION_HOSTING_SERVICE_ACCOUNT }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$FIREBASE_SA" || { echo "BLOCKED: production service account unavailable"; exit 1; }
+          printf '%s' "$FIREBASE_SA" > "$RUNNER_TEMP/volunserve-readonly.json"
+          chmod 600 "$RUNNER_TEMP/volunserve-readonly.json"
+          export GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/volunserve-readonly.json"
+          echo "READ-ONLY Firebase Hosting preview channel inventory:"
+          npx firebase-tools hosting:channel:list --site volunserve-3aa5b --project volunserve-3aa5b --non-interactive
+          rm -f "$GOOGLE_APPLICATION_CREDENTIALS"
