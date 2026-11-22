@@ -110,3 +110,35 @@ test("private upload and temporary preview never publish direct image URLs", asy
     cloudinary.utils.private_download_url = previousDownload;
   }
 });
+
+test("incomplete upload metadata triggers deletion of already-created private assets", async () => {
+  const previousUpload = cloudinary.uploader.upload_stream;
+  const previousDestroy = cloudinary.uploader.destroy;
+  const deleted = [];
+  try {
+    cloudinary.uploader.upload_stream = (options, callback) => new Writable({
+      write(_chunk, _encoding, done) { done(); },
+      final(done) {
+        // Cloudinary claims the resource exists but omits its asset_id.
+        callback(null, { public_id: options.public_id, format: "jpg" });
+        done();
+      },
+    });
+    cloudinary.uploader.destroy = async (publicId, options) => {
+      deleted.push({ publicId, type: options.type });
+      return { result: "ok" };
+    };
+    await assert.rejects(
+      storeIdentityEvidence("mockResident123", {
+        front: { buffer: Buffer.from(jpeg()), format: "jpg" },
+      }),
+      { code: "identity_evidence_upload_failed" },
+    );
+    assert.equal(deleted.length, 1);
+    assert.ok(deleted[0].publicId.endsWith("-front"));
+    assert.equal(deleted[0].type, "authenticated");
+  } finally {
+    cloudinary.uploader.upload_stream = previousUpload;
+    cloudinary.uploader.destroy = previousDestroy;
+  }
+});
