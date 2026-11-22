@@ -1,0 +1,69 @@
+name: QA OCR-only browser timeout on current live Hosting (NO DEPLOY)
+on:
+  push:
+    branches: [fix/identity-ocr-precheck-browser-timeout-20261122]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  web-timeout-qa:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      CI: 'true'
+      EXPO_NO_TELEMETRY: '1'
+      EXPO_PUBLIC_VOLUNSERVE_ENV: production
+      EXPO_PUBLIC_IDENTITY_VERIFICATION_API_URL: https://volunserve.onrender.com
+      VOLUNSERVE_HOSTING_URL: https://volunserve.com
+      VOLUNSERVE_EXPECTED_SHA: 68b15f6869a8f3b8a996c9baecdb0f6816318c3c
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: false
+      - name: Current published Hosting source and UI-only diff
+        run: |
+          set -euo pipefail
+          BASE=68b15f6869a8f3b8a996c9baecdb0f6816318c3c
+          git diff --name-status --no-renames "$BASE" HEAD >/tmp/diff
+          python - <<'PY'
+          from pathlib import Path
+          actual=sorted(Path('/tmp/diff').read_text().strip().splitlines())
+          expected=sorted([
+            'M\tlib/identityVerification.ts',
+            'A\t.github/workflows/qa-identity-ocr-precheck-browser-timeout-20261122.yml',
+          ])
+          assert actual==expected,(actual,expected)
+          print('PASS only precheck timeout in existing live browser API helper')
+          PY
+          git diff --check "$BASE" HEAD
+      - name: Confirm production Hosting still exact expected live revision
+        run: node scripts/check-live-hosting.cjs
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install pinned dependencies
+        run: npm ci --no-audit --no-fund
+      - name: TypeScript, login/signup and user route regressions
+        run: |
+          set -euo pipefail
+          npx tsc --noEmit --incremental false
+          node scripts/test-unified-login-routing.cjs
+          node scripts/test-login-field-validation.cjs
+          node scripts/test-login-ui-release.cjs
+          node scripts/test-route-entrypoints.cjs
+          node scripts/test-guest-readonly-preview.cjs
+      - name: Build full web app without publishing
+        run: |
+          set -euo pipefail
+          npx expo export --platform web --clear
+          env -u GITHUB_SHA node scripts/verify-hosting-release.cjs
+          node - <<'NODE'
+          const m=require('./dist/volunserve-release.json'),assert=require('node:assert/strict');
+          const actual=require('node:child_process').execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim();
+          assert.equal(m.revision,actual);
+          assert.equal(m.firebaseProject,'volunserve-3aa5b');
+          console.log('PASS verified exact reviewed revision');
+          NODE
+      - run: echo "NO DEPLOY, NO Firebase, AI, Backend, Auth or Rules writes"
