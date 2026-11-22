@@ -239,3 +239,18 @@ test("Cloudinary timeout after storage is queued for private-image deletion retr
     cloudinary.uploader.destroy = previousDestroy;
   }
 });
+
+test("identical National ID front and back photo files are rejected", async () => {
+  const form = new FormData();
+  form.set("idType", "national_id");
+  form.set("evidenceConsent", "true");
+  const sameImage = new Blob([jpeg()], { type: "image/jpeg" });
+  form.set("idDocument", sameImage, "front.jpg");
+  form.set("idBack", sameImage, "back.jpg");
+  form.set("selfie", new Blob([Buffer.concat([Buffer.from(jpeg()), Buffer.from([0,1,2])])], { type: "image/jpeg" }), "selfie.jpg");
+  const request = new Request("http://localhost/test", { method: "POST", body: form });
+  await assert.rejects(readIdentityEvidence({
+    body: Buffer.from(await request.arrayBuffer()),
+    headers: { "content-type": request.headers.get("content-type") },
+  }), { code: "identity_id_sides_duplicate" });
+});
