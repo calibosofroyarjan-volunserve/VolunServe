@@ -940,7 +940,7 @@ def _ocr_readability_clues(text, *, side, declared_type):
 
 
 def extract_government_id_text(
-    id_document_bytes, label, *, side="front", declared_type="",
+    id_document_bytes, label, *, side="front", declared_type="national_id",
 ):
     """Bounded OCR, with one lower-cost recovery attempt if reading fails.
 
