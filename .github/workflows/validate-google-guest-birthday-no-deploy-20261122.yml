@@ -1,0 +1,37 @@
+name: Validate Guest Login, Google Linking and Birthday Calendar (NO DEPLOY)
+on:
+  push:
+    branches:
+      - test/auth-google-calendar-no-deploy-20261122
+permissions:
+  contents: read
+jobs:
+  validate-auth:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      CI: 'true'
+      EXPO_NO_TELEMETRY: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install exact production-locked dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Typecheck web and shared components
+        run: npx tsc --noEmit --incremental false
+      - name: Existing authentication and resident regression tests
+        run: |
+          node scripts/test-signup-prod.cjs
+          node scripts/test-guest-auth-route-isolation.cjs
+          node scripts/test-unified-login-routing.cjs
+          node scripts/test-login-ui-release.cjs
+          node scripts/test-login-field-validation.cjs
+          node scripts/test-route-entrypoints.cjs
+          node scripts/test-existing-account-compatibility.cjs
+      - name: Export real web bundle (never deploy)
+        run: npx expo export --platform web --clear
