@@ -131,7 +131,7 @@ test("web and native require consented document OCR precheck before opening self
  assert.match(screen,/No selfie is uploaded at this stage/);
 });
 
-test("Node uses protected, bounded, no-photo-storage document-only route",()=>{
+test("Node preserves bounded document OCR with consent-gated Admin evidence",()=>{
  const routeIndex=server.indexOf('"/api/identity/document/precheck"');
  assert.ok(routeIndex > 0);
  const slice=server.slice(routeIndex,server.indexOf('"/api/identity/status"',routeIndex));
@@ -140,8 +140,17 @@ test("Node uses protected, bounded, no-photo-storage document-only route",()=>{
  assert.match(slice,/documentPrecheck: true/);
  assert.match(slice,/IDENTITY_DOC_PRECHECK_DAILY_LIMIT/);
  assert.match(slice,/identityDocumentPrecheckThrottle/);
- assert.match(slice,/selectedIdRecognized\(screening\)/);
- assert.match(slice,/blurryNationalIdNeedsReview\(screening\)/);
- assert.doesNotMatch(slice,/aiAttemptCount:|identityVerificationAttempts|\.save\(|\.upload\(/);
+ // Hybrid policy categorizes uncertain National IDs for Admin review and
+ // does not equate OCR similarity with identity authentication.
+ assert.match(slice,/classifyHybridDocumentPrecheck/);
+ assert.match(slice,/categorized\.outcome === "review"/);
+ // The published legacy OCR endpoint remains transient. A second consent-
+ // requiring endpoint may save ONLY an Admin-escalated ID, with no selfie.
+ assert.match(slice,/precheck-with-evidence/);
+ assert.match(slice,/parseConsentedIdentityEvidence\(request, \{requireSelfie:false\}\)/);
+ assert.match(slice,/precheckEvidenceAssets = await uploadIdentityEvidence/);
+ assert.match(slice,/retentionUntil:identityEvidenceRetentionDate\(\)/);
+ assert.doesNotMatch(slice,/identityVerified: true/);
+ assert.doesNotMatch(slice,/transaction\.create\(\s*db\.collection\("identityVerificationAttempts"\)/);
  assert.match(server,/options\.documentPrecheck/);
 });
