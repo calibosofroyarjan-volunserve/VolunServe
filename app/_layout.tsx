@@ -73,7 +73,10 @@ export default function RootLayout() {
         currentAuthUidRef.current =
           user?.uid ?? null;
         profileRetryInFlightRef.current = false;
+        // A new Auth UID must never inherit the previous UID's Resident,
+        // Volunteer or staff profile while Firestore is still loading.
         setAuthUser(user);
+        setProfile(null);
         if (!user) {
           setProfile(null);
           setProfileLoading(false);
