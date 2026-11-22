@@ -1,7 +1,7 @@
 # The only release controller for the user-approved National ID page.
 # Runs from existing protected production branch; deploys an immutable site
 # based on CURRENT published revision, never the unpublished protected backlog.
-name: Guarded National ID OCR timeout patch (Hosting only)
+name: Guarded Hybrid Admin OCR auto-review web update (Hosting only)
 on:
   push:
     branches: [live-protected]
@@ -24,10 +24,10 @@ jobs:
       EXPO_PUBLIC_VOLUNSERVE_ENV: production
       EXPO_PUBLIC_IDENTITY_VERIFICATION_API_URL: https://volunserve.onrender.com
       PROJECT: 'volunserve-3aa5b'
-      EXPECTED_LIVE: '68b15f6869a8f3b8a996c9baecdb0f6816318c3c'
-      SOURCE_SHA: '7fe7e33689fbd75a1abdbf84efe6d17c59863a8f'
-      SOURCE_BRANCH: 'fix/identity-ocr-precheck-browser-timeout-20261122'
-      BACKUP_CHANNEL: 'identity-ocr-before-20261122'
+      EXPECTED_LIVE: 'e7e9b230e98a44965cda75ab603ab0391ee726cb'
+      SOURCE_SHA: 'c37a83eb96cac832b03dec9c0f8eea44056bee4c'
+      SOURCE_BRANCH: 'fix/identity-hybrid-autoreview-web-latest-signup-20261122'
+      BACKUP_CHANNEL: 'hybrid-latest-before-20261122'
 
     steps:
       - name: Checkout only protected release controller
@@ -41,7 +41,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           path: site
-          ref: '7fe7e33689fbd75a1abdbf84efe6d17c59863a8f'
+          ref: 'c37a83eb96cac832b03dec9c0f8eea44056bee4c'
           fetch-depth: 0
           submodules: false
       - name: FAIL CLOSED on stale production, changed branch, other modules, or controller
@@ -67,15 +67,19 @@ jobs:
               'BLOCKED protected source contains unrelated, outdated or deleted modules');
             const changes=git('diff','--name-status','--no-renames',base,source).split('\n');
             assert.deepEqual(changes.sort(),[
-              'A\t.github/workflows/qa-identity-ocr-precheck-browser-timeout-20261122.yml',
+              'A\t.github/workflows/qa-identity-hybrid-autoreview-latest-site-20261122.yml',
+              'M\tapp/identity-verification.web.tsx',
               'M\tlib/identityVerification.ts'
             ].sort(),'BLOCKED unrelated changes in proposed production site');
-            assert.equal(git('rev-parse',base+':lib/identityVerification.ts'),
-              'b90d4cfcaf3be6f61a3d0b593f0493db94614abe',
-              'BLOCKED existing live browser helper changed');
-            assert.equal(git('rev-parse',source+':lib/identityVerification.ts'),
-              '123d0de650c6411df1d7a38429c516cd781d1144',
-              'BLOCKED OCR precheck-only timeout source changed');
+            for(const [path,baseBlob,sourceBlob] of [
+              ['app/identity-verification.web.tsx','ba83425d1975df09d11b6080f6154819161ba9fb','a8be050239a46c824c4be18e8fd954d32bd19617'],
+              ['lib/identityVerification.ts','123d0de650c6411df1d7a38429c516cd781d1144','9d25b7898ff667d95ad6af14c93835f79a4c8ad7'],
+            ]){
+              assert.equal(git('rev-parse',base+':'+path),baseBlob,
+                'BLOCKED current live identity source changed '+path);
+              assert.equal(git('rev-parse',source+':'+path),sourceBlob,
+                'BLOCKED reviewed auto-Admin-review source changed '+path);
+            }
             const cfg=JSON.parse(require('node:fs').readFileSync('.firebaserc','utf8'));
             assert.equal(cfg.projects.default,process.env.PROJECT,'BLOCKED Firebase target changed');
             const r=await fetch('https://volunserve.com/volunserve-release.json?check='+Date.now(),
@@ -85,7 +89,7 @@ jobs:
             assert.equal(marker.app,'VolunServe');
             assert.equal(marker.firebaseProject,process.env.PROJECT);
             assert.equal(marker.revision,base,'BLOCKED current live changed, do NOT overwrite newer VolunServe');
-            console.log('PASS exact current live source; only bounded OCR document-precheck timeout + offline QA');
+            console.log('PASS exact newest live source; only OCR Admin-review UI/API + offline QA');
             console.log('PASS protected controller changed only one approved release workflow');
           })().catch(e=>{console.error(e);process.exitCode=1});
           NODE
@@ -168,12 +172,12 @@ jobs:
         working-directory: site
         env:
           VOLUNSERVE_HOSTING_URL: https://volunserve.com
-          VOLUNSERVE_EXPECTED_SHA: '7fe7e33689fbd75a1abdbf84efe6d17c59863a8f'
+          VOLUNSERVE_EXPECTED_SHA: 'c37a83eb96cac832b03dec9c0f8eea44056bee4c'
         run: |
           set -euo pipefail
           for attempt in 1 2 3 4 5 6; do
             if node scripts/check-live-hosting.cjs; then
-              echo 'PASS OCR precheck timeout update is live on volunserve.com'
+              echo 'PASS Hybrid OCR Admin-review update is live on volunserve.com'
               echo 'PASS Hosting only: no Firebase rules/functions/data or Auth changes'
               exit 0
             fi
