@@ -4849,6 +4849,16 @@ app.get(
   async (_request, response) => {
     response.set("Cache-Control", "no-store");
     try {
+      // Fail before any private media leaves the device: a working AI engine
+      // is not sufficient if the Admin photo store is unavailable.
+      try { getCloudinaryConfig(); }
+      catch {
+        return response.status(503).json({
+          ok: false, ready: false,
+          error: "identity_evidence_storage_unavailable",
+          message: "Secure government ID photo storage is not ready. Please ask an administrator to configure isolated private storage. No AI verification attempt was used.",
+        });
+      }
       const result = await probeIdentityAiReadiness({
         endpoint: getIdentityAiEndpoint(),
         internalKey: String(process.env.IDENTITY_AI_INTERNAL_KEY || "").trim(),
@@ -5021,6 +5031,9 @@ app.post(
     let previousEvidence = null;
 
     try {
+      // Reject missing private media storage BEFORE Firestore leases and AI
+      // calls. AI can be healthy while Cloudinary is unconfigured in staging.
+      configureCloudinary();
       // Firestore transaction ensures concurrent requests cannot bypass the
       // three-attempt limit. No attempt is consumed until the AI responds.
       await db.runTransaction(async (transaction) => {
