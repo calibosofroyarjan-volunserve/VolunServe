@@ -1,0 +1,35 @@
+name: Preflight Isolated Identity Staging (Read-Only)
+on:
+  push:
+    branches:
+      - feat/identity-secure-evidence-admin-review-20261122
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  public-staging-preflight:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Validate preflight refuses production endpoints
+        run: |
+          node --check scripts/check-identity-staging-public-preflight.cjs
+          node - <<'NODE'
+          const assert = require('node:assert/strict');
+          const {assertIsolatedTarget,targets} =
+            require('./scripts/check-identity-staging-public-preflight.cjs');
+          assert.equal(assertIsolatedTarget(targets.backend), targets.backend);
+          assert.equal(assertIsolatedTarget(targets.ai), targets.ai);
+          assert.equal(assertIsolatedTarget(targets.web), targets.web);
+          for(const value of ['https://volunserve.com','https://volunserve.onrender.com',
+            'http://volunserve-backend-staging.onrender.com',
+            'https://volunserve-backend-staging.onrender.com.evil.test']) {
+            assert.throws(() => assertIsolatedTarget(value));
+          }
+          NODE
+      - name: Read-only deployed staging health and authorization
+        run: node scripts/check-identity-staging-public-preflight.cjs
