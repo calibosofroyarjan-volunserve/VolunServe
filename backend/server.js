@@ -11,6 +11,7 @@ const {
 const { reconcileCommunityEventCertificates } = require("./communityCertificates");
 const { combineApprovedBudget } = require("./assistanceDonationBudget");
 const { probeIdentityAiReadiness } = require("./identityAiReadiness");
+const { readIdentityEvidence, storeIdentityEvidence, destroyIdentityEvidence, privateIdentityEvidenceUrl, RETENTION_MS } = require("./identityEvidence");
 const {isVerifiedFirebaseToken, isCompletedVolunServeProfile} = require("./verifiedFirebaseToken");
 const {
   getProfileRole,
@@ -5008,6 +5009,9 @@ app.post(
     const verificationRef = db.collection("identityVerifications").doc(uid);
     const requestId = crypto.randomUUID();
     let claimed = false;
+    let storedEvidence = null;
+    let evidenceCommitted = false;
+    let previousEvidence = null;
 
     try {
       // Firestore transaction ensures concurrent requests cannot bypass the
@@ -5062,6 +5066,10 @@ app.post(
       });
       claimed = true;
 
+      // Validate the same multipart bytes used by the AI service. A National
+      // ID requires front AND back; all submissions require a live selfie and
+      // informed consent for private Admin review evidence retention.
+      const evidenceMedia = await readIdentityEvidence(request);
       const aiResult = await callIdentityAiService(request);
       const documentScreening = normalizeIdDocumentScreening(aiResult?.documentScreening);
       const rawDecision = normalizeAiDecision(aiResult?.decision || aiResult?.status);
@@ -5078,10 +5086,18 @@ app.post(
         aiResult?.verificationId || `identity_${uid}_${Date.now()}`, 200,
       );
 
+      // Store only authenticated Cloudinary assets. Do not put photo bytes or
+      // signed URLs in Firestore, the review queue or logs.
+      configureCloudinary();
+      storedEvidence = await storeIdentityEvidence(uid, evidenceMedia.images);
+      const evidenceRef = db.collection("identityEvidence").doc(uid);
+      const evidenceExpiresAt = new Date(Date.now() + RETENTION_MS);
+
       const outcome = await db.runTransaction(async (transaction) => {
-        const [userSnapshot, verificationSnapshot] = await Promise.all([
+        const [userSnapshot, verificationSnapshot, previousEvidenceSnapshot] = await Promise.all([
           transaction.get(userRef),
           transaction.get(verificationRef),
+          transaction.get(evidenceRef),
         ]);
         const current = verificationSnapshot.data() || {};
         if (current.processingRequestId !== requestId) {
@@ -5092,6 +5108,7 @@ app.post(
           throw makeHttpError(409, "identity_account_changed",
             "Your account verification status has changed. Please refresh your identity status.");
         }
+        previousEvidence = previousEvidenceSnapshot.exists ? previousEvidenceSnapshot.data()?.images : null;
         const attemptCount = identityAttemptCount(current.aiAttemptCount) + 1;
         const attemptCycle = Number.isSafeInteger(current.aiAttemptCycle) && current.aiAttemptCycle > 0
           ? current.aiAttemptCycle : 1;
@@ -5129,6 +5146,8 @@ app.post(
           livenessScore,
           documentScreening,
           message: resultMessage,
+          evidenceAvailable: true,
+          evidenceExpiresAt,
           requiresManualReview: result.requiresManualReview,
           aiAttemptCount: attemptCount,
           aiAttemptCycle: attemptCycle,
@@ -5138,6 +5157,16 @@ app.post(
           updatedAt: FieldValue.serverTimestamp(),
           createdAt: current.createdAt || FieldValue.serverTimestamp(),
         }, { merge: true });
+
+        // Latest private evidence replaces prior media atomically with the
+        // verification result; only metadata and Cloudinary identifiers live
+        // in Firestore. Public Firestore reads stay denied by existing rules.
+        transaction.set(evidenceRef, {
+          uid, verificationId, images: storedEvidence,
+          consentToPrivateAdminReview: true,
+          submittedAt: FieldValue.serverTimestamp(),
+          expiresAt: evidenceExpiresAt,
+        });
 
         // Immutable attempt metadata; no ID image, selfie, or biometric media
         // is stored here. Existing Admin decision logs are never deleted.
@@ -5192,8 +5221,13 @@ app.post(
           requiresManualReview: result.requiresManualReview,
         };
       });
+      evidenceCommitted = true;
+      if (previousEvidence) await destroyIdentityEvidence(previousEvidence);
       response.status(200).json(outcome);
     } catch (error) {
+      if (storedEvidence && !evidenceCommitted) {
+        await destroyIdentityEvidence(storedEvidence);
+      }
       if (claimed) {
         // Unlock only our own attempt, never another request's lease.
         try {
@@ -5256,6 +5290,8 @@ function identityAdminReviewPayload(verificationSnapshot, userSnapshot) {
     matchScore: numberOrNull(verification.matchScore),
     livenessScore: numberOrNull(verification.livenessScore),
     documentScreening: verification.documentScreening ? normalizeIdDocumentScreening(verification.documentScreening) : null,
+    evidenceAvailable: verification.evidenceAvailable === true,
+    evidenceExpiresAt: identityAdminTimestampIso(verification.evidenceExpiresAt),
     message: cleanText(verification.message || "", 500),
     requiresManualReview: verification.requiresManualReview === true,
     attemptCount: identityAttemptCount(verification.aiAttemptCount),
@@ -5352,6 +5388,62 @@ app.get(
             "Unable to load identity verification reviews.",
           700,
         ),
+      });
+    }
+  },
+);
+// Protected on-demand evidence access. URLs are deliberately excluded from the
+// queue response and cannot be requested by Residents or unauthenticated users.
+app.get(
+  "/api/admin/identity/reviews/:uid/evidence",
+  requireFirebaseUser,
+  requireOperationalAdmin,
+  async (request, response) => {
+    response.set("Cache-Control", "private, no-store, max-age=0");
+    try {
+      const uid = cleanText(request.params?.uid || "", 200);
+      if (!/^[A-Za-z0-9_-]{8,200}$/.test(uid)) {
+        throw makeHttpError(400, "invalid_identity_evidence_uid", "Invalid Resident ID.");
+      }
+      const [evidenceDoc, verificationDoc] = await Promise.all([
+        db.collection("identityEvidence").doc(uid).get(),
+        db.collection("identityVerifications").doc(uid).get(),
+      ]);
+      const data = evidenceDoc.data();
+      const current = verificationDoc.data();
+      if (!evidenceDoc.exists || !verificationDoc.exists ||
+          !data?.consentToPrivateAdminReview ||
+          !current?.verificationId ||
+          current.verificationId !== data.verificationId) {
+        throw makeHttpError(404, "identity_evidence_not_found",
+          "This submission does not have securely saved identity photos. Ask the Resident to resubmit.");
+      }
+      const expiresAt = data.expiresAt?.toMillis?.() || new Date(data.expiresAt || 0).getTime();
+      if (!Number.isFinite(expiresAt) || Date.now() >= expiresAt) {
+        throw makeHttpError(410, "identity_evidence_expired", "Identity evidence has expired. Request a fresh submission.");
+      }
+      configureCloudinary();
+      const images = {};
+      for (const key of ["front", "back", "selfie"]) {
+        if (data.images?.[key]) images[key] = privateIdentityEvidenceUrl(data.images[key]);
+      }
+      if (!images.front || !images.selfie) {
+        throw makeHttpError(404, "identity_evidence_incomplete", "Required images are missing. Ask for resubmission.");
+      }
+      // Audit every successful access without logging any image URL or OCR data.
+      await db.collection("adminActivityLogs").add({
+        action: "identity_evidence_viewed",
+        actorUid: request.firebaseUser.uid,
+        targetUid: uid,
+        verificationId: current.verificationId,
+        createdAt: FieldValue.serverTimestamp(),
+      });
+      response.json({ ok: true, verificationId: current.verificationId, images, expiresAt: new Date(expiresAt).toISOString() });
+    } catch (error) {
+      response.status(Number(error?.statusCode) || 500).json({
+        ok: false,
+        error: cleanText(error?.code || "identity_evidence_access_failed", 100),
+        message: cleanText(error?.message || "Unable to view private identity photos.", 300),
       });
     }
   },
