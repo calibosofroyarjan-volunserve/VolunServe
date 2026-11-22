@@ -1544,8 +1544,9 @@ function UploadIdStep({
           {documentConsent ? <Ionicons name="checkmark" size={15} color="#FFFFFF" /> : null}
         </View>
         <Text style={styles.consentText}>
-          I consent to sending my government ID scans to VolunServe for a preliminary
-          OCR type and front/back check before the face scan. This is not ID authentication.
+          I consent to submitting my ID front and back for OCR screening.
+          If referred to LGU Admin, these scans may be securely kept for up to
+          30 days. No selfie is captured yet; OCR is not ID authentication.
         </Text>
       </TouchableOpacity>
       {documentPrecheckMessage ? (
