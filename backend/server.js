@@ -24,6 +24,7 @@ const {
   classifyIdentityReviewTrack,
 } = require("./selectedIdPolicy");
 const { reviewIssuerEvidence } = require("./identityIssuerReviewPolicy");
+const { classifyHybridDocumentPrecheck } = require("./identityHybridPrecheckDecision");
 const {
   getProfileRole,
   isApprovedAccount,
@@ -4966,6 +4967,29 @@ app.post(
           normalizeIdentityStatus(profile.identityStatus || "basic") === "verified") {
         throw makeHttpError(409, "already_verified", "Your identity is already verified.");
       }
+      const verificationRef = db.collection("identityVerifications").doc(uid);
+      const existingSnapshot = await verificationRef.get();
+      const existing = existingSnapshot.exists ? existingSnapshot.data() || {} : {};
+      // A previously queued case is idempotent: never upload another ID,
+      // run face processing or create a duplicate pending request.
+      if (existing.requiresManualReview === true &&
+          normalizeIdentityStatus(existing.status) === "pending") {
+        return response.json({
+          ok: true,
+          outcome: "review",
+          decision: "pending_admin_review",
+          status: "pending",
+          verificationId: cleanText(existing.verificationId || "", 200),
+          documentScreening: existing.documentScreening
+            ? normalizeIdDocumentScreening(existing.documentScreening) : null,
+          detectedIdType: existing.documentScreening
+            ? normalizeIdDocumentScreening(existing.documentScreening).detectedIdType : null,
+          message: "Your identity case is already pending Admin review. No new scan or verification attempt was used.",
+          authenticityVerified: false,
+          livenessVerified: false,
+          requiresManualReview: true,
+        });
+      }
       if (!Buffer.isBuffer(request.body) || request.body.length === 0 ||
           !String(request.headers["content-type"] || "").toLowerCase().startsWith("multipart/form-data")) {
         throw makeHttpError(400, "missing_identity_document", "Select and capture both sides of the government ID first.");
@@ -5003,51 +5027,114 @@ app.post(
       // Never store uploads in Firestore, Storage, Cloudinary or audit logs.
       const result = await callIdentityAiService(request, { documentPrecheck: true });
       const screening = normalizeIdDocumentScreening(result?.documentScreening);
-      const declared = screening.declaredIdType;
-      const validType = ["national_id", "drivers_license", "passport", "umid", "prc_id"].includes(declared);
-      const birthConflict = screening.profileBirthDateCheck === "possible_conflict";
-      const nameConflict = screening.profileNameCheck === "possible_conflict";
-      const pass = validType &&
-        !birthConflict &&
-        !nameConflict &&
-        // Independent backend guard: AI's preliminary result cannot allow
-        // National ID Face Scan unless the name agrees with trusted profile.
-        (declared !== "national_id" || screening.profileNameCheck === "possible_match") &&
-        result?.outcome === "pass" &&
-        selectedIdRecognized(screening) &&
-        (declared === "passport" || screening.backSideScreened === true);
-      const review = !pass && !nameConflict && result?.outcome === "review" &&
-        blurryNationalIdNeedsReview(screening);
+      const categorized = classifyHybridDocumentPrecheck({
+        screening, aiOutcome: result?.outcome,
+      });
+      const warnings = screening.warningCodes || [];
+      const message = categorized.decision === "profile_mismatch"
+        ? screening.profileNameCheck === "possible_conflict"
+          ? "The name read from the ID appears different from this account. Use your own ID or ask Admin to check your saved profile. OCR mistakes are possible."
+          : "The ID birth date may differ from the saved profile. Retake or request Admin profile correction."
+        : categorized.outcome === "pass"
+          ? "ID text and profile name appear consistent. Continue to face comparison; no government-ID authenticity or liveness validation is implied."
+          : categorized.outcome === "review"
+            ? "Your National ID scan is unclear. A pending Admin case was created automatically. Admin can request a clearer ID scan; no selfie was collected and no face attempt was used."
+            : warnings.includes("school_id_not_supported")
+              ? "School and employee IDs are not accepted. Retake a supported government ID."
+              : warnings.includes("document_front_back_swapped")
+                ? "ID front/back appear swapped. Retake in the correct slots."
+                : warnings.includes("document_back_looks_like_front")
+                  ? "The Back scan appears to show the Front. Retake the reverse side."
+                  : warnings.includes("document_front_side_conflict")
+                    ? "The Front scan appears to show the reverse. Retake the portrait side."
+                    : warnings.includes("ocr_unavailable")
+                      ? "ID OCR was not readable. Retake the Front with even light and less glare."
+                      : warnings.includes("document_back_ocr_inconclusive")
+                        ? "ID back text was not readable. Retake the Back."
+                        : "ID type or required account name could not be confirmed. Retake a clearer image.";
+
+      let pending = null;
+      if (categorized.outcome === "review") {
+        const userRef = db.collection("users").doc(uid);
+        // One queue record per authenticated UID. Compare/write atomically
+        // against concurrent /verify and Admin decisions.
+        pending = await db.runTransaction(async (transaction) => {
+          const [userSnapshot, verificationSnapshot] = await Promise.all([
+            transaction.get(userRef), transaction.get(verificationRef),
+          ]);
+          if (!userSnapshot.exists) {
+            throw makeHttpError(404, "profile_not_found", "Your VolunServe profile was not found.");
+          }
+          const currentUser = userSnapshot.data() || {};
+          if (currentUser.identityVerified === true ||
+              normalizeIdentityStatus(currentUser.identityStatus || "basic") === "verified") {
+            throw makeHttpError(409, "already_verified", "Your identity is already verified.");
+          }
+          if (cleanText(currentUser.status || "approved", 40).toLowerCase() !== "approved") {
+            throw makeHttpError(403, "account_not_active", "This Resident account is not active.");
+          }
+          const current = verificationSnapshot.exists ? verificationSnapshot.data() || {} : {};
+          if (current.requiresManualReview === true &&
+              normalizeIdentityStatus(current.status) === "pending") {
+            return {verificationId: cleanText(current.verificationId || "", 200),
+              documentScreening: current.documentScreening
+                ? normalizeIdDocumentScreening(current.documentScreening) : null,
+              alreadyPending: true};
+          }
+          if (identityAttemptCount(current.aiAttemptCount) >= MAX_IDENTITY_AI_ATTEMPTS) {
+            throw makeHttpError(409, "identity_attempt_limit_reached",
+              "Three face-verification attempts were used. Request Admin help.");
+          }
+          const started = current.processingStartedAt?.toMillis?.() || 0;
+          if (current.processingRequestId && Date.now() - started >= 0 &&
+              Date.now() - started < IDENTITY_PROCESSING_LEASE_MS) {
+            throw makeHttpError(409, "identity_verification_in_progress",
+              "A face-verification attempt is still processing. Check status.");
+          }
+          const verificationId = `identity_precheck_${crypto.randomUUID()}`;
+          transaction.set(verificationRef, {
+            uid, verificationId,
+            verificationMethod: "volunserve_ai_ocr_manual_review",
+            status: "pending",
+            aiDecision: "manual_review",
+            decision: FieldValue.delete(),
+            reviewTrack: "blurry_id_review",
+            documentScreening: screening,
+            requiresManualReview: true,
+            matchScore: null,
+            livenessScore: null,
+            message,
+            manualReviewDecision: FieldValue.delete(),
+            manualValidationMethod: FieldValue.delete(),
+            manualReviewNotes: FieldValue.delete(),
+            reviewedAt: FieldValue.delete(),
+            reviewedBy: FieldValue.delete(),
+            reviewedByName: FieldValue.delete(),
+            updatedAt: FieldValue.serverTimestamp(),
+            lastSubmissionAt: FieldValue.serverTimestamp(),
+            createdAt: current.createdAt || FieldValue.serverTimestamp(),
+          }, {merge: true});
+          transaction.set(userRef, {
+            identityStatus: "pending",
+            identityVerified: false,
+            identityVerificationMethod: "volunserve_ai_ocr_manual_review",
+            updatedAt: FieldValue.serverTimestamp(),
+          }, {merge: true});
+          return {verificationId, documentScreening: screening, alreadyPending: false};
+        });
+      }
+      const responseScreening = pending?.documentScreening || screening;
       return response.json({
         ok: true,
-        outcome: pass ? "pass" : review ? "review" : "retry",
-        detectedIdType: screening.detectedIdType,
-        documentScreening: screening,
-        // Sanitized hints only; no raw OCR values and no issuer claim.
-        message: nameConflict
-          ? "The name read from the National ID appears different from this account. Use your own National ID, or ask Admin to check your saved profile. OCR can make mistakes; this is not proof the ID is fake."
-          : birthConflict
-          ? "The date of birth on the ID may differ from your saved profile. Retake a clearer document or request Admin profile review; OCR differences are not proof of fraud."
-          : pass
-          ? "ID scan and selected type appear consistent. Birthday/barangay are OCR hints only; Admin still checks unresolved details."
-          : review
-            ? "The National ID is too blurry. You may continue for Admin rescan review but cannot be automatically approved."
-            : screening.warningCodes.includes("school_id_not_supported")
-              ? "School and employee IDs are not accepted. Capture one of the five supported government IDs."
-              : screening.warningCodes.includes("document_front_back_swapped")
-                ? "Front and back appear reversed. Retake both ID sides in their correct slots."
-                : screening.warningCodes.includes("document_back_looks_like_front")
-                  ? "The Back scan appears to show the front. Retake the reverse side."
-                  : screening.warningCodes.includes("document_front_side_conflict")
-                    ? "The Front scan appears to show back-side details. Retake the portrait/front."
-                    : screening.warningCodes.includes("ocr_unavailable")
-                      ? "The front ID photo could not be read reliably. Try a clear front photo with less glare."
-                      : screening.warningCodes.includes("document_back_ocr_inconclusive")
-                        ? "The back ID text could not be read reliably. Retake just the back photo with less glare."
-                        : declared === "national_id" && screening.detectedIdType === "national_id" &&
-                          ["inconclusive", "not_checked"].includes(screening.profileNameCheck)
-                          ? "National ID format detected, but the account name could not be confirmed. Retake the front to show both name fields, or ask Admin to check your saved profile."
-                        : "ID type or front/back orientation could not be recognized reliably. Retake clearer images.",
+        outcome: categorized.outcome,
+        decision: categorized.decision,
+        status: pending ? "pending" : null,
+        verificationId: pending?.verificationId || null,
+        detectedIdType: responseScreening?.detectedIdType || null,
+        documentScreening: responseScreening,
+        message: pending?.alreadyPending
+          ? "Your identity case is already pending Admin review. No additional attempt was used."
+          : message,
         authenticityVerified: false,
         livenessVerified: false,
       });
@@ -5701,6 +5788,12 @@ app.post(
           );
         }
         if (action === "verify") {
+          // This queue entry has no selfie, retained ID image or face match.
+          // An Admin may request a rescan but cannot mark it verified.
+          if (verification.verificationMethod === "volunserve_ai_ocr_manual_review") {
+            throw makeHttpError(409, "ocr_only_review_requires_rescan",
+              "This ID-only case has no face scan or retained ID evidence. Require Retry to complete full verification.");
+          }
           const selectedIdCheck = normalizeIdDocumentScreening(verification.documentScreening);
           if (!selectedIdRecognized(selectedIdCheck)) {
             throw makeHttpError(
