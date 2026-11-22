@@ -5451,61 +5451,16 @@ app.get(
     }
   },
 );
-// Protected on-demand evidence access. URLs are deliberately excluded from the
-// queue response and cannot be requested by Residents or unauthenticated users.
+// Protected on-demand evidence access; Firebase and operational Admin role
+// middleware must run before the handler issues any signed private URL.
 app.get(
   "/api/admin/identity/reviews/:uid/evidence",
   requireFirebaseUser,
   requireOperationalAdmin,
-  async (request, response) => {
-    response.set("Cache-Control", "private, no-store, max-age=0");
-    try {
-      const uid = cleanText(request.params?.uid || "", 200);
-      if (!/^[A-Za-z0-9_-]{8,200}$/.test(uid)) {
-        throw makeHttpError(400, "invalid_identity_evidence_uid", "Invalid Resident ID.");
-      }
-      const [evidenceDoc, verificationDoc] = await Promise.all([
-        db.collection("identityEvidence").doc(uid).get(),
-        db.collection("identityVerifications").doc(uid).get(),
-      ]);
-      const data = evidenceDoc.data();
-      const current = verificationDoc.data();
-      if (!evidenceDoc.exists || !verificationDoc.exists ||
-          !data?.consentToPrivateAdminReview ||
-          !current?.verificationId ||
-          current.verificationId !== data.verificationId) {
-        throw makeHttpError(404, "identity_evidence_not_found",
-          "This submission does not have securely saved identity photos. Ask the Resident to resubmit.");
-      }
-      const expiresAt = data.expiresAt?.toMillis?.() || new Date(data.expiresAt || 0).getTime();
-      if (!Number.isFinite(expiresAt) || Date.now() >= expiresAt) {
-        throw makeHttpError(410, "identity_evidence_expired", "Identity evidence has expired. Request a fresh submission.");
-      }
-      configureCloudinary();
-      const images = {};
-      for (const key of ["front", "back", "selfie"]) {
-        if (data.images?.[key]) images[key] = privateIdentityEvidenceUrl(data.images[key]);
-      }
-      if (!images.front || !images.selfie) {
-        throw makeHttpError(404, "identity_evidence_incomplete", "Required images are missing. Ask for resubmission.");
-      }
-      // Audit every successful access without logging any image URL or OCR data.
-      await db.collection("adminActivityLogs").add({
-        action: "identity_evidence_viewed",
-        actorUid: request.firebaseUser.uid,
-        targetUid: uid,
-        verificationId: current.verificationId,
-        createdAt: FieldValue.serverTimestamp(),
-      });
-      response.json({ ok: true, verificationId: current.verificationId, images, expiresAt: new Date(expiresAt).toISOString() });
-    } catch (error) {
-      response.status(Number(error?.statusCode) || 500).json({
-        ok: false,
-        error: cleanText(error?.code || "identity_evidence_access_failed", 100),
-        message: cleanText(error?.message || "Unable to view private identity photos.", 300),
-      });
-    }
-  },
+  require("./identityEvidenceReviewHandler").createProtectedIdentityEvidenceHandler({
+    db, FieldValue, configureCloudinary, privateIdentityEvidenceUrl,
+    cleanText, makeHttpError,
+  }),
 );
 app.post(
   "/api/admin/identity/reviews/:uid/decision",
