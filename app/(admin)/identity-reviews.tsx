@@ -673,10 +673,10 @@ export default function IdentityReviewsAdmin() {
   );
 }
 
-function StatusChip({ bucket }: { bucket: ReviewFilter }) {
+function StatusChip({ bucket, detailed = false }: { bucket: ReviewFilter; detailed?: boolean }) {
   const meta =
     bucket === "pending"
-      ? { label: "Pending", background: "#FEF3C7", color: "#92400E" }
+      ? { label: detailed ? "Pending Review" : "Pending", background: "#FEF3C7", color: "#92400E" }
       : bucket === "verified"
         ? { label: "Verified", background: "#DCFCE7", color: "#166534" }
         : bucket === "retry_required"
@@ -768,7 +768,7 @@ function ReviewDetail({
             Submitted {formatDate(item.lastSubmissionAt || item.updatedAt || item.createdAt)}
           </Text>
         </View>
-        <StatusChip bucket={reviewBucket(item)} />
+        <StatusChip bucket={reviewBucket(item)} detailed />
       </View>
 
       <View style={styles.detailTabRow}>
