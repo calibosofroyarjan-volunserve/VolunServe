@@ -38,6 +38,9 @@ type IdentityReview = {
   decision?: string;
   matchScore?: number | null;
   livenessScore?: number | null;
+  idImageQualityScore?: number | null;
+  selfieQualityScore?: number | null;
+  scanWarnings?: string[];
   documentScreening?: DocumentScreening;
   evidenceAvailable?: boolean;
   evidenceExpiresAt?: string;
@@ -793,6 +796,35 @@ function ReviewDetail({
             The current engine does not independently authenticate ID or prove liveness.
           </Text>
         </View>
+      </View>
+
+      <View style={{ backgroundColor: "#F8FAFC", borderColor: "#DEE8F0", borderWidth: 1, borderRadius: 11, padding: 14, marginBottom: 14, gap: 9 }}>
+        <Text style={{ color: "#19394E", fontSize: 13, fontWeight: "700" }}>Image Quality Screening</Text>
+        <Text style={{ color: "#617283", fontSize: 11 }}>
+          Preliminary quality indicators only; readable text and an unobstructed face still require Admin inspection.
+        </Text>
+        <InfoLine label="ID front image quality" value={
+          typeof item.idImageQualityScore === "number" &&
+          Number.isFinite(item.idImageQualityScore) && item.idImageQualityScore >= 0 &&
+          item.idImageQualityScore <= 1
+            ? (item.idImageQualityScore * 100).toFixed(0) + " / 100"
+            : "Not evaluated"
+        } />
+        <InfoLine label="Selfie image quality" value={
+          typeof item.selfieQualityScore === "number" &&
+          Number.isFinite(item.selfieQualityScore) && item.selfieQualityScore >= 0 &&
+          item.selfieQualityScore <= 1
+            ? (item.selfieQualityScore * 100).toFixed(0) + " / 100"
+            : "Not evaluated"
+        } />
+        {item.scanWarnings?.length ? (
+          <View style={{ padding: 10, backgroundColor: "#FFFBEB", borderRadius: 9 }}>
+            <Text style={{ color: "#92400E", fontSize: 11, fontWeight: "600" }}>AI scan notices</Text>
+            <Text style={{ color: "#92400E", fontSize: 11, marginTop: 4 }}>
+              {item.scanWarnings.map((warning) => warning.replace(/_/g, " ")).join(" · ")}
+            </Text>
+          </View>
+        ) : null}
       </View>
 
       <DocumentScreeningSummary screening={item.documentScreening} />
