@@ -1,0 +1,31 @@
+name: Validate Private Identity Evidence and Admin Review
+on:
+  push:
+    branches:
+      - feat/identity-secure-evidence-admin-review-20261122
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  identity-evidence:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install locked frontend dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Install locked backend dependencies
+        run: npm ci --prefix backend --no-audit --no-fund
+      - name: Check private backend syntax and multipart tests
+        run: |
+          node --check backend/server.js
+          node --check backend/identityEvidence.js
+          node --test backend/tests/identityEvidence.test.js
+      - name: Check frontend TypeScript
+        run: npx tsc --noEmit --pretty false
+      - name: Compile web without deploying
+        run: npx expo export --platform web
