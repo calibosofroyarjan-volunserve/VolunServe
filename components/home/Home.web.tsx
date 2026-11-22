@@ -1011,14 +1011,28 @@ export default function WebHome() {
             </View>
           </View>
 
-          <View style={[styles.communityExtras,communityColumnsStacked&&styles.communityExtrasStacked]}>
-            <View style={communityColumnsStacked ? styles.communityColumnStacked : styles.communityMembersColumn}>
-              <CommunityOnline uid={user?.uid} dashboard/>
+          {narrow ? (
+            // Dedicated mobile stack avoids desktop flex columns entirely.
+            // Calendar and directory must occupy their natural height before
+            // Emergency Contacts instead of overlapping in a flex row.
+            <View style={styles.communityPhoneStack}>
+              <View style={styles.communityPhoneSection}>
+                <CommunityOnline uid={user?.uid} dashboard/>
+              </View>
+              <View style={styles.communityPhoneSection}>
+                <CommunityCalendar uid={user?.uid} mode={volunteerMode ? "volunteer" : "resident"} dashboard/>
+              </View>
             </View>
-            <View style={communityColumnsStacked ? styles.communityColumnStacked : styles.communityCalendarColumn}>
-              <CommunityCalendar uid={user?.uid} mode={volunteerMode ? "volunteer" : "resident"} dashboard/>
+          ) : (
+            <View style={[styles.communityExtras,communityColumnsStacked&&styles.communityExtrasStacked]}>
+              <View style={communityColumnsStacked ? styles.communityColumnStacked : styles.communityMembersColumn}>
+                <CommunityOnline uid={user?.uid} dashboard/>
+              </View>
+              <View style={communityColumnsStacked ? styles.communityColumnStacked : styles.communityCalendarColumn}>
+                <CommunityCalendar uid={user?.uid} mode={volunteerMode ? "volunteer" : "resident"} dashboard/>
+              </View>
             </View>
-          </View>
+          )}
 
           <View style={[styles.emergencyPanel, narrow && styles.mobilePanel]}>
             <View style={styles.emergencyHeader}>
@@ -1276,6 +1290,14 @@ function ContactCard({ kind }: { kind: "local" | "national" }) {
 }
 
 const styles = StyleSheet.create({
+  communityPhoneStack:{
+    width:"100%",minWidth:0,flexDirection:"column",alignItems:"stretch",
+    marginTop:14,marginBottom:14,gap:14,flexGrow:0,flexShrink:0,
+  },
+  communityPhoneSection:{
+    width:"100%",minWidth:0,flexGrow:0,flexShrink:0,
+    flexBasis:"auto",alignSelf:"stretch",position:"relative",
+  },
   communityExtras:{
     flexDirection:"row",alignItems:"stretch",gap:12,
     marginTop:18,marginBottom:18,width:"100%",

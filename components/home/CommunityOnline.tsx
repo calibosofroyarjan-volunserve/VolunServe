@@ -119,7 +119,7 @@ export default function CommunityOnline({uid,dashboard=false}:{uid?:string|null;
         <View style={styles.iconBox}><Ionicons name="people-outline" size={21} color={GREEN}/></View>
         <View style={{flex:1,minWidth:0}}>
           <Text style={styles.title}>Community Members</Text>
-          <Text style={styles.subtitle}>All approved Residents and Volunteers appear automatically and can receive private messages by default. Only signed-in approved members can view names and roles; online status remains private unless shared.</Text>
+          <Text style={styles.subtitle}>{dashboard&&compact?"Browse approved members, profiles and private messages.":"All approved Residents and Volunteers appear automatically and can receive private messages by default. Only signed-in approved members can view names and roles; online status remains private unless shared."}</Text>
         </View>
       </View>
       <View style={styles.headingActions}>
@@ -186,13 +186,16 @@ export default function CommunityOnline({uid,dashboard=false}:{uid?:string|null;
         accessibilityLabel="Scrollable list of all community members">
         <View style={[styles.grid,compact&&styles.gridMobile,dashboard&&styles.dashboardGrid,dashboard&&compact&&styles.dashboardGridMobile]}>
         {displayed.map(member=><View key={member.key}
-          style={[styles.memberCard,compact&&styles.memberMobile,dashboard&&styles.dashboardMemberRow,
-            dashboard&&compact&&styles.dashboardMemberMobile]}>
+          style={dashboard&&compact?styles.dashboardMemberMobile:[
+            styles.memberCard,compact&&styles.memberMobile,dashboard&&styles.dashboardMemberRow
+          ]}>
           <Pressable accessibilityRole="button"
             accessibilityLabel={`View profile of ${member.name}${member.isSelf?", you":""}, ${member.badge}`}
             onPress={()=>member.isSelf?router.push("/profile"):
               router.push({pathname:"/(tabs)/community-member-profile",params:{member:member.key}} as Href)}
-            style={[styles.memberMain,dashboard&&styles.dashboardIdentity,dashboard&&compact&&styles.dashboardIdentityMobile]}>
+            style={dashboard&&compact?styles.dashboardIdentityMobile:[
+              styles.memberMain,dashboard&&styles.dashboardIdentity
+            ]}>
             <Avatar person={member} size={dashboard&&compact?40:dashboard?43:compact?47:53}/>
             {dashboard?<View style={[styles.dashboardNameGroup,dashboard&&compact&&styles.dashboardNameMobile]}>
               <Text style={[styles.dashboardName,compact&&styles.dashboardNameMobileText]} numberOfLines={compact?2:1}>{member.name}{member.isSelf?<Text style={styles.youLabel}> (You)</Text>:null}</Text>
@@ -365,9 +368,9 @@ const styles=StyleSheet.create({
     borderBottomColor:"#E8F0EA",paddingHorizontal:4,paddingVertical:11,
     flexDirection:"row",alignItems:"center",justifyContent:"space-between",gap:7},
   dashboardMemberMobile:{width:"100%",maxWidth:"100%",flexBasis:"auto",minWidth:0,flexGrow:0,flexShrink:0,
-    flexDirection:"row",alignItems:"center",alignSelf:"stretch",gap:8,minHeight:66,
+    flexDirection:"row",alignItems:"center",alignSelf:"stretch",gap:8,minHeight:68,
     borderBottomWidth:1,borderBottomColor:"#E5EFE9",backgroundColor:"#FFFFFF",borderWidth:0,
-    borderRadius:0,paddingHorizontal:5,paddingVertical:9},
+    borderRadius:0,paddingHorizontal:6,paddingVertical:10},
   dashboardIdentity:{width:"auto",flex:1.45,minWidth:120,flexDirection:"row",alignItems:"center",
     justifyContent:"flex-start",gap:10},
   dashboardIdentityMobile:{flexDirection:"row",alignItems:"center",justifyContent:"flex-start",
@@ -375,10 +378,10 @@ const styles=StyleSheet.create({
   dashboardNameGroup:{flex:1,minWidth:0,alignItems:"flex-start",gap:4},
   dashboardNameMobile:{flexGrow:1,flexShrink:1,minWidth:0,alignItems:"flex-start",width:"auto"},
   dashboardName:{fontSize:12.5,fontWeight:"800",color:"#153E32",textAlign:"left"},
-  dashboardNameMobileText:{fontSize:12,textAlign:"left",lineHeight:16},
+  dashboardNameMobileText:{fontSize:13,textAlign:"left",lineHeight:18},
   youLabel:{fontSize:11,fontWeight:"800",color:"#087D62"},
   dashboardBadge:{fontSize:10.5,color:"#408A70",fontWeight:"700",textAlign:"left"},
-  dashboardBadgeMobileText:{fontSize:10,textAlign:"left"},
+  dashboardBadgeMobileText:{fontSize:11,textAlign:"left"},
   dashboardPresence:{flex:1,minWidth:135,alignItems:"flex-start",justifyContent:"center",gap:4},
   statusLine:{flexDirection:"row",gap:6,alignItems:"center"},
   offlinePresenceDot:{backgroundColor:"#A8B3AF"},

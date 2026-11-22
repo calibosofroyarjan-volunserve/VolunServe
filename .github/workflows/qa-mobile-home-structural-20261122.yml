@@ -1,0 +1,77 @@
+name: QA Dedicated Mobile Home Stack - Browser Geometry (NO DEPLOY)
+on:
+  push:
+    branches: [fix/mobile-home-structural-stack-20261122]
+    paths:
+      - 'components/home/Home.web.tsx'
+      - 'components/home/CommunityOnline.tsx'
+      - 'scripts/qa-mobile-home-geometry.cjs'
+      - '.github/workflows/qa-mobile-home-structural-20261122.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  mobile-layout:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    env:
+      CI: 'true'
+      EXPO_NO_TELEMETRY: '1'
+      EXPO_PUBLIC_VOLUNSERVE_ENV: production
+      EXPO_PUBLIC_IDENTITY_VERIFICATION_API_URL: https://volunserve.onrender.com
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: false
+      - name: Exact-current-live-source, scoped changes, no old code
+        run: |
+          set -euo pipefail
+          BASE=f45c9c50ba854166bba9f604a899848312284da6
+          git merge-base --is-ancestor "$BASE" HEAD
+          git diff --check "$BASE" HEAD
+          python3 - <<'PY'
+          from subprocess import check_output
+          files=set(check_output(['git','diff','--name-only','f45c9c50ba854166bba9f604a899848312284da6','HEAD'],text=True).splitlines())
+          approved={
+            'components/home/Home.web.tsx',
+            'components/home/CommunityOnline.tsx',
+            'scripts/qa-mobile-home-geometry.cjs',
+            '.github/workflows/qa-mobile-home-structural-20261122.yml',
+          }
+          assert files==approved,(files,approved)
+          print('PASS exactly 2 current-live Home UI files + isolated QA files, no auth/backend/rules')
+          PY
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install pinned project
+        run: npm ci --no-audit --no-fund
+      - name: Real RN Web styles and headless Chrome geometry at mobile widths
+        run: |
+          set -euo pipefail
+          node scripts/qa-mobile-home-geometry.cjs
+          CHROME="$(command -v google-chrome || command -v chromium || command -v chromium-browser || true)"
+          test -n "$CHROME" || { echo 'BLOCKED browser not installed'; exit 1; }
+          "$CHROME" --headless --no-sandbox --disable-gpu --disable-dev-shm-usage --hide-scrollbars --window-size=1200,900 --virtual-time-budget=5000 \
+            --dump-dom "file:///tmp/volunserve-mobile-layout-geometry.html" > /tmp/volunserve-mobile-geometry-results.html 2>/tmp/chrome-mobile-stderr || {
+              tail -40 /tmp/chrome-mobile-stderr; exit 1;
+            }
+          grep -o '<pre id="qa-result">[^<]*' /tmp/volunserve-mobile-geometry-results.html || true
+          grep -q 'PASS mobile browser geometry at 320/360/390/430' /tmp/volunserve-mobile-geometry-results.html
+          echo 'PASS browser measures no overlapping calendar/members, no giant contacts gap, wide readable member rows'
+      - name: Verify exact live revision read-only
+        run: VOLUNSERVE_EXPECTED_SHA=f45c9c50ba854166bba9f604a899848312284da6 node scripts/check-live-hosting.cjs
+      - name: TypeScript and existing role, profile, login, community map tests
+        run: |
+          set -euo pipefail
+          npx tsc --noEmit --incremental false
+          node scripts/test-login-ui-release.cjs
+          node scripts/test-profile-certificates-account-menu.cjs
+          node scripts/test-guest-readonly-preview.cjs
+          node --test scripts/test-admin-volunteer-authorization.cjs
+          node --test scripts/test-embedded-emergency-map-navigation.cjs
+      - name: Build exact web app without deployment
+        run: npx expo export --platform web --clear
+      - run: echo 'NO DEPLOY, no Firebase Auth/data/rules, no AI/Render changes'
