@@ -1,4 +1,5 @@
 import { auth } from "./firebase";
+import { getIdentityBackendBaseUrl } from "./identityBackendUrl";
 
 export type IdentityVerificationStatus =
   | "basic"
@@ -85,31 +86,6 @@ export type SubmitIdentityVerificationInput = {
   idBack?: CapturedIdentityMedia | null;
   selfie: CapturedIdentityMedia;
 };
-
-const FALLBACK_BACKEND_URL = "https://volunserve.onrender.com";
-
-function getBackendBaseUrl() {
-  // The Resident app must always call the main VolunServe backend.
-  // The separate AI service is private and is reached only server-to-server.
-  let value =
-    process.env.EXPO_PUBLIC_IDENTITY_VERIFICATION_API_URL?.trim() ||
-    FALLBACK_BACKEND_URL;
-
-  value = value.replace(/\/+$/, "");
-
-  const verifySuffix = "/api/identity/verify";
-  const statusSuffix = "/api/identity/status";
-
-  if (value.endsWith(verifySuffix)) {
-    value = value.slice(0, -verifySuffix.length);
-  }
-
-  if (value.endsWith(statusSuffix)) {
-    value = value.slice(0, -statusSuffix.length);
-  }
-
-  return value;
-}
 
 async function getAuthenticatedUser() {
   const user = auth.currentUser;
@@ -263,7 +239,7 @@ export async function checkIdentityEngineReady(): Promise<void> {
   const user = await getAuthenticatedUser();
   const token = await user.getIdToken();
   const response = await fetchWithTimeout(
-    `${getBackendBaseUrl()}/api/identity/engine-health`,
+    `${getIdentityBackendBaseUrl()}/api/identity/engine-health`,
     {
       method: "GET",
       headers: { Authorization: `Bearer ${token}` },
@@ -338,7 +314,7 @@ export const submitIdentityVerification = async (
   );
 
   const endpoint =
-    `${getBackendBaseUrl()}/api/identity/verify`;
+    `${getIdentityBackendBaseUrl()}/api/identity/verify`;
 
   const response = await fetchWithTimeout(
     endpoint,
@@ -416,7 +392,7 @@ export const getIdentityVerificationStatus =
     const token = await user.getIdToken();
 
     const endpoint =
-      `${getBackendBaseUrl()}/api/identity/status`;
+      `${getIdentityBackendBaseUrl()}/api/identity/status`;
 
     const response = await fetchWithTimeout(
       endpoint,
