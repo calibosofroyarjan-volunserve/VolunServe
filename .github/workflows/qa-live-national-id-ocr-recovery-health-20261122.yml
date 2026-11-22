@@ -1,0 +1,65 @@
+name: Check live AI/backend OCR recovery readiness (GET only)
+
+on:
+  push:
+    branches: [qa/check-live-national-id-recovery-health-20261122]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  read-only-health:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - name: Wake and verify live backend and Identity AI health without images
+        run: |
+          node <<'NODE'
+          const services=[
+            {
+              name:"Backend",
+              url:"https://volunserve.onrender.com/health",
+              ready:x=>x?.ok===true&&x?.service==="volunserve-backend",
+            },
+            {
+              name:"Identity AI",
+              url:"https://volunserve-identity-ai.onrender.com/health",
+              ready:x=>x?.ok===true&&x?.service==="volunserve-identity-ai"&&
+                x?.verificationEngineReady===true&&x?.documentOcrReady===true&&
+                x?.documentPrecheckReady===true&&x?.internalAuthConfigured===true,
+            },
+          ];
+          const sleep=ms=>new Promise(resolve=>setTimeout(resolve,ms));
+          async function check(service){
+            try{
+              const r=await fetch(service.url,{
+                method:"GET",headers:{"Accept":"application/json","Cache-Control":"no-cache"},
+                signal:AbortSignal.timeout(35000),
+              });
+              const b=await r.json().catch(()=>null);
+              const passed=r.ok&&service.ready(b);
+              console.log(JSON.stringify({service:service.name,http:r.status,passed,
+                ocrReady:service.name==="Identity AI"?b?.documentOcrReady:undefined,
+                engineReady:service.name==="Identity AI"?b?.verificationEngineReady:undefined}));
+              return passed;
+            }catch(e){
+              console.log(JSON.stringify({service:service.name,passed:false,reason:String(e.name||"fetch_error")}));
+              return false;
+            }
+          }
+          (async()=>{
+            for(let i=1;i<=10;i++){
+              console.log("GET-only readiness attempt "+i+"/10");
+              const vals=await Promise.all(services.map(check));
+              if(vals.every(Boolean)){
+                console.log("PASS: BOTH CURRENT PRODUCTION RENDER HEALTH ENDPOINTS RESPOND OK");
+                console.log("WARNING: Health does not prove real-card OCR accuracy; use own account ID only.");
+                return;
+              }
+              if(i<10) await sleep(12000);
+            }
+            throw Error("Render AI/backend not fully healthy yet");
+          })().catch(e=>{console.error(e.message);process.exitCode=1});
+          NODE
+      - run: echo 'Read-only GETs only: no ID documents, account writes, renders or Firebase changes.'
