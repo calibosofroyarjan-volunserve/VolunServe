@@ -30,7 +30,7 @@ export default function AdminReviewHero({ eyebrow, title, subtitle, icon, tag, v
         <Ionicons name="leaf-outline" size={compact ? 76 : 110} color={mint ? "rgba(15,112,79,0.09)" : "rgba(218,255,233,0.16)"} />
       </View>
       <View style={styles.copy}>
-        <Text style={[styles.brandIdentity, mint && styles.mintBrand]}>VOLUNSERVE  /  LGU OPERATIONS</Text>
+        {!mint ? <Text style={styles.brandIdentity}>VOLUNSERVE  /  LGU OPERATIONS</Text> : null}
         <View style={styles.eyebrowRow}>
           <View style={[styles.eyebrowMark, mint && styles.mintMark]} />
           <Text style={[styles.eyebrow, mint && styles.mintEyebrow]}>{eyebrow}</Text>
