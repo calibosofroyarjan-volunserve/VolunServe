@@ -82,6 +82,9 @@ export type IdentityVerificationResult = {
 export type SubmitIdentityVerificationInput = {
   idType: IdentityDocumentType;
   idDocument: CapturedIdentityMedia;
+  // Back side required by the National ID web UI. Optional at API type level
+  // until the separate native client has been migrated and tested.
+  idBackDocument?: CapturedIdentityMedia;
   selfie: CapturedIdentityMedia;
 };
 
@@ -105,6 +108,24 @@ function getBackendBaseUrl() {
 
   if (value.endsWith(statusSuffix)) {
     value = value.slice(0, -statusSuffix.length);
+  }
+
+  // Never send a staging Resident's ID images or selfie to production.
+  // Production web builds retain their existing backend behavior.
+  const firebaseTarget =
+    process.env.EXPO_PUBLIC_VOLUNSERVE_FIREBASE_TARGET?.trim() ||
+    "production";
+  const STAGING_IDENTITY_BACKEND_URL =
+    "https://volunserve-backend-staging.onrender.com";
+  if (firebaseTarget === "staging" && value !== STAGING_IDENTITY_BACKEND_URL) {
+    throw new Error(
+      "Staging identity upload blocked: configure EXPO_PUBLIC_IDENTITY_VERIFICATION_API_URL to the isolated staging backend.",
+    );
+  }
+  if (firebaseTarget !== "staging" && value === STAGING_IDENTITY_BACKEND_URL) {
+    throw new Error(
+      "Production identity upload blocked: staging backend cannot be used by a production Firebase client.",
+    );
   }
 
   return value;
@@ -301,6 +322,13 @@ export const submitIdentityVerification = async (
     "Government ID image",
   );
 
+  if (input.idBackDocument) {
+    if (input.idType !== "national_id") {
+      throw new Error("National ID BACK is supported only for Philippine National ID.");
+    }
+    validateMedia(input.idBackDocument, "National ID BACK image");
+  }
+
   validateMedia(
     input.selfie,
     "Live selfie",
@@ -321,6 +349,10 @@ export const submitIdentityVerification = async (
     "idDocument",
     input.idDocument,
   );
+
+  if (input.idBackDocument) {
+    appendMedia(formData, "idBackDocument", input.idBackDocument);
+  }
 
   appendMedia(
     formData,

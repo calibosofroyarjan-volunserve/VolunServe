@@ -10,6 +10,7 @@ const {
 const {
   getAuth,
 } = require("firebase-admin/auth");
+const { assertIsolatedStagingFirebase } = require("./stagingFirebaseIsolationPolicy");
 
 const {
   getFirestore,
@@ -52,15 +53,19 @@ function getServiceAccount() {
 }
 
 function getFirebaseApp() {
+  const serviceAccount =
+    getServiceAccount();
+
+  // Enforce staging isolation BEFORE initializing or reusing Firebase Admin.
+  // A missing/mismatched staging project ID is a startup-blocking error.
+  assertIsolatedStagingFirebase(process.env, serviceAccount);
+
   const existingApps =
     getApps();
 
   if (existingApps.length > 0) {
     return existingApps[0];
   }
-
-  const serviceAccount =
-    getServiceAccount();
 
   if (serviceAccount) {
     return initializeApp({

@@ -18,6 +18,14 @@ for (const [name, condition] of [
   ["LGU new applicant rejects disposable email before UID creation", staff.includes("getRegistrationEmailError(email)") && staff.indexOf("getRegistrationEmailError(email)") < staff.indexOf("createUserWithEmailAndPassword(candidateAuth")],
   ["Guest URL gates on Firebase Auth resolution", publicLayout.includes("onAuthStateChanged(auth")],
   ["Guest URL signs out an inherited account session", publicLayout.includes("void signOut(auth)")],
+  ["Guest auth sign-out listener runs ONLY on Guest paths", publicLayout.includes('const isGuestRoute = segments[0] === "public";') &&
+    publicLayout.includes('if (!isGuestRoute) {') &&
+    publicLayout.includes('}, [retry, isGuestRoute]);') &&
+    publicLayout.includes('if (!isGuestRoute) return null;')],
+  ["Guest exits cannot keep Guest stack behind Login or Signup", guest.includes('router.replace("/signup")') &&
+    guest.includes('router.replace("/login")') &&
+    !guest.includes('router.push("/signup")') &&
+    !guest.includes('router.push("/login")')],
   ["Guest URL shows preview only after confirmed signout", publicLayout.includes("!ready || auth.currentUser")],
   ["Guest URL has no anonymous sign-in", !publicLayout.includes("signInAnonymously")],
   ["Guest URL has no profile creation", !publicLayout.includes("setDoc(")],

@@ -1,0 +1,49 @@
+name: National ID Two-Side Web+AI Integration Checks (NO DEPLOY)
+on:
+  pull_request:
+    branches: [live-protected]
+    paths:
+      - 'app/identity-verification.web.tsx'
+      - 'app/(admin)/identity-reviews.tsx'
+      - 'lib/identityVerification.ts'
+      - 'backend/server.js'
+      - 'backend/identityAiApprovalPolicy.js'
+      - 'identity-ai/**'
+      - 'scripts/test-national-id-two-sides-web-contract.cjs'
+      - '.github/workflows/national-id-front-back-integration-no-deploy.yml'
+permissions:
+  contents: read
+jobs:
+  contract-and-types:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install locked project dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Check TypeScript without writing compiled JS
+        run: npx tsc --noEmit --incremental false --pretty false
+      - name: Node contracts and admin gate
+        run: |
+          node --check backend/server.js
+          node --test backend/test-identity-ai-approval-policy.cjs scripts/test-national-id-two-sides-web-contract.cjs
+  python-screening:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Compile Python sources
+        run: python -m py_compile identity-ai/main.py identity-ai/document_screening.py identity-ai/national_id_both_sides_screening.py
+      - name: Run synthetic-only screening tests
+        run: |
+          python -m unittest discover -s identity-ai -p 'test_document_screening.py' -v
+          python -m unittest discover -s identity-ai -p 'test_national_id_both_sides_screening.py' -v
+      - name: No production release
+        run: echo 'No production Firebase, no Render deploy, no credential access.'

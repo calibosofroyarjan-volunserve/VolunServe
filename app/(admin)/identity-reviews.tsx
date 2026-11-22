@@ -22,7 +22,17 @@ import {
 
 import { useUserSession } from "../../lib/useUserSession";
 
-const BACKEND_URL = "https://volunserve.onrender.com";
+// Keep staging Admin identity review requests isolated from the production API.
+// The production URL remains unchanged for existing live builds.
+const STAGING_BACKEND_URL = "https://volunserve-backend-staging.onrender.com";
+const IS_STAGING = process.env.EXPO_PUBLIC_VOLUNSERVE_FIREBASE_TARGET === "staging";
+const BACKEND_URL = IS_STAGING
+  ? (process.env.EXPO_PUBLIC_IDENTITY_VERIFICATION_API_URL || "").trim().replace(/\/+$/, "")
+  : "https://volunserve.onrender.com";
+
+if (IS_STAGING && BACKEND_URL !== STAGING_BACKEND_URL) {
+  throw new Error("Staging Admin Identity Review blocked: staging backend URL required.");
+}
 
 type ReviewFilter = "pending" | "verified" | "retry_required" | "all";
 
