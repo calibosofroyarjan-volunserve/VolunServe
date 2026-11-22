@@ -1,0 +1,29 @@
+name: Identity Admin-Gated Release Candidate (NO DEPLOY)
+on:
+  pull_request:
+    branches: [live-protected]
+    paths:
+      - 'backend/server.js'
+      - 'backend/identityAiApprovalPolicy.js'
+      - 'backend/test-identity-ai-approval-policy.cjs'
+      - '.github/workflows/identity-admin-gated-no-deploy.yml'
+permissions:
+  contents: read
+jobs:
+  safety-gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Syntax check production backend and new AI policy
+        run: |
+          node --check backend/server.js
+          node --check backend/identityAiApprovalPolicy.js
+          node --check backend/test-identity-ai-approval-policy.cjs
+      - name: Test AI result never grants Verified Resident on its own
+        run: node --test backend/test-identity-ai-approval-policy.cjs
+      - name: Confirm NO deploy
+        run: echo 'This job does not touch Render, Firebase or resident accounts.'
