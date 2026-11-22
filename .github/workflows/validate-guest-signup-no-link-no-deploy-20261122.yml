@@ -1,0 +1,72 @@
+name: Validate Guest Redirect and Google Signup Without Linking (NO DEPLOY)
+on:
+  push:
+    branches:
+      - test/live-latest-guest-no-link-qa-20261122
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      CI: 'true'
+      EXPO_NO_TELEMETRY: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - name: Validate exact Signup/Guest/Google source invariants
+        run: |
+          node <<'NODE'
+          const assert=require("node:assert/strict");
+          const fs=require("node:fs");
+          const ui=fs.readFileSync("components/auth/EmailFirstSignup.tsx","utf8");
+          const root=fs.readFileSync("app/_layout.tsx","utf8");
+          const google=fs.readFileSync("lib/firebaseAuth.ts","utf8");
+          const guest=fs.readFileSync("components/guest/GuestWorkspace.tsx","utf8");
+          assert(!ui.includes("linkEmailFirstGooglePassword"),"Signup still calls password linking");
+          assert(!ui.includes("Link Password & Continue"),"Signup still asks Google for a password");
+          assert(ui.includes("setStep(user.emailVerified ? 3 : 2)"),"Google must go to personal details");
+          assert(ui.includes('authProvider: googleSignupAccount ? "google" : "verified_email"'),"Google registration must use its own provider");
+          assert(ui.includes("const createdProfile = await getUserProfile(user.uid)"),"Dashboard must require a completed same-UID Resident profile");
+          assert(ui.includes('createdProfile.role !== "resident"'),"Do not route an incomplete profile as Resident");
+          assert(ui.includes("googleSignupSession && !consent"),"Google must accept Privacy/Terms");
+          assert(root.includes("if (isPublicRoute)"),"Guest route guard missing");
+          assert(root.includes("auth.currentUser?.uid === authUser.uid"),"Guest route must use actual live Auth session");
+          assert(root.includes('router.replace("/signup")'),"Unfinished signups should resume, not fall into Guest");
+          assert(guest.includes('router.replace("/login")'),"Guest should exit to Login");
+          assert(google.includes('role: "resident" as Role'),"Resident creation role changed unexpectedly");
+          assert(google.includes("request.resource")===false,"Firestore Security Rules must remain server-side");
+          console.log("PASS: Google Signup has no password link; Guest is never a fallback for signed-in users");
+          NODE
+      - name: Existing Login, Guest and Resident UI regression tests
+        run: |
+          node scripts/test-login-field-validation.cjs
+          node scripts/test-login-ui-release.cjs
+          node scripts/test-unified-login-routing.cjs
+          node scripts/test-route-entrypoints.cjs
+          node scripts/test-guest-readonly-preview.cjs
+      - name: TypeScript check
+        run: npx tsc --noEmit --incremental false
+      - name: Export real production-style Expo web assets (NO DEPLOY)
+        run: npx expo export --platform web --clear
+      - name: Read actual production Hosting release marker (READ ONLY)
+        run: |
+          node <<'NODE'
+          (async()=>{
+            const r=await fetch("https://volunserve.com/volunserve-release.json?audit="+Date.now(),{
+              headers:{"Cache-Control":"no-cache"},signal:AbortSignal.timeout(15000)});
+            if(!r.ok)throw Error("Live release marker inaccessible: HTTP "+r.status);
+            const m=await r.json();
+            if(m.app!=="VolunServe"||m.firebaseProject!=="volunserve-3aa5b")throw Error("Unknown production Hosting marker");
+            console.log("CURRENT_LIVE_REVISION="+m.revision);
+            console.log("CURRENT_LIVE_BUILT_AT="+m.builtAt);
+          })().catch(e=>{console.error(e);process.exitCode=1});
+          NODE
