@@ -2,7 +2,6 @@
  * Selectively adapted from origin/fix/email-verification-validation-20261104.
  * Enabled only by EXPO_PUBLIC_EMAIL_FIRST_SIGNUP=true; production profile schema retained.
  */
-import {Picker} from "@react-native-picker/picker";
 import {Feather} from "@expo/vector-icons";
 import GoogleBrandMark from "./GoogleBrandMark";
 import BirthdateCalendar from "./BirthdateCalendar";
@@ -186,6 +185,111 @@ function Field({
   );
 }
 
+
+type SignupDropdownProps = {
+  label: string;
+  value: string;
+  options: readonly string[];
+  placeholder: string;
+  onChange: (value: string) => void;
+  expanded: boolean;
+  onToggle: () => void;
+  required?: boolean;
+  disabled?: boolean;
+  error?: string | null;
+  hint?: string;
+  searchable?: boolean;
+  icon?: "map-pin" | "briefcase" | "layers";
+};
+
+/**
+ * One accessible boxed selector used by all Step 4 fields.
+ * Options open immediately below the field and update React state on tap,
+ * without relying on browser-native Picker styling or form submission.
+ */
+function SignupDropdown({
+  label, value, options, placeholder, onChange, expanded, onToggle,
+  required = false, disabled = false, error, hint, searchable = false, icon = "layers",
+}: SignupDropdownProps) {
+  const [search, setSearch] = useState("");
+  const filtered = searchable && search.trim()
+    ? options.filter(option => option.toLowerCase().includes(search.trim().toLowerCase()))
+    : options;
+  return (
+    <View style={styles.field}>
+      <Text style={styles.label}>
+        {label}{required && <Text style={styles.dropdownRequired}> *</Text>}
+      </Text>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={label + " dropdown. " + (value || placeholder)}
+        accessibilityState={{ expanded: expanded && !disabled, disabled }}
+        disabled={disabled}
+        onPress={() => { setSearch(""); onToggle(); }}
+        style={[
+          styles.dropdownTrigger,
+          expanded && styles.dropdownTriggerExpanded,
+          !!error && styles.dropdownTriggerError,
+          disabled && styles.dropdownTriggerDisabled,
+        ]}
+      >
+        <Feather name={icon} size={17} color={disabled ? "#94a3b8" : "#64748b"} />
+        <Text numberOfLines={1} style={[
+          styles.dropdownSelectedText,
+          !value && styles.dropdownPlaceholderText,
+          disabled && styles.dropdownDisabledText,
+        ]}>{value || placeholder}</Text>
+        <Feather name={expanded ? "chevron-up" : "chevron-down"} size={19}
+          color={disabled ? "#94a3b8" : "#475569"} />
+      </Pressable>
+      {expanded && !disabled && (
+        <View style={styles.dropdownPanel}>
+          {searchable && (
+            <View style={styles.dropdownSearchShell}>
+              <Feather name="search" size={16} color="#64748b" />
+              <TextInput
+                accessibilityLabel={"Search " + label}
+                value={search}
+                onChangeText={setSearch}
+                placeholder={"Search " + label.toLowerCase() + "..."}
+                placeholderTextColor="#94a3b8"
+                autoCorrect={false}
+                style={styles.dropdownSearchInput}
+              />
+            </View>
+          )}
+          <ScrollView
+            style={styles.dropdownOptionsScroll}
+            nestedScrollEnabled
+            keyboardShouldPersistTaps="always"
+          >
+            {filtered.length ? filtered.map(option => (
+              <Pressable
+                key={option}
+                accessibilityRole="button"
+                accessibilityLabel={"Select " + option}
+                accessibilityState={{ selected: option === value }}
+                style={[styles.dropdownOption, option === value && styles.dropdownOptionSelected]}
+                onPress={() => { setSearch(""); onChange(option); }}
+              >
+                <Text style={[
+                  styles.dropdownOptionText,
+                  option === value && styles.dropdownOptionTextSelected,
+                ]}>{option}</Text>
+                {option === value && <Feather name="check" size={16} color="#047857" />}
+              </Pressable>
+            )) : (
+              <Text style={styles.dropdownNoResults}>No matching {label.toLowerCase()} found.</Text>
+            )}
+          </ScrollView>
+        </View>
+      )}
+      {!!error && <Text accessibilityRole="alert" style={styles.error}>{error}</Text>}
+      {!error && !!hint && <Text style={styles.fieldHint}>{hint}</Text>}
+    </View>
+  );
+}
+
 export default function EmailFirstSignup() {
   const router = useRouter();
   const signInGoogle = useSignupGoogle();
@@ -215,6 +319,7 @@ export default function EmailFirstSignup() {
   const [barangay, setBarangay] = useState("");
   const [occupation, setOccupation] = useState("");
   const [specialization, setSpecialization] = useState("");
+  const [expandedDropdown, setExpandedDropdown] = useState<"barangay" | "occupation" | "specialization" | null>(null);
   const [occupationOther, setOccupationOther] = useState("");
   const [reviewed, setReviewed] = useState(false);
 
@@ -851,54 +956,62 @@ export default function EmailFirstSignup() {
                 <Text style={styles.readonly}>Bulacan</Text>
                 <Text style={styles.label}>City</Text>
                 <Text style={styles.readonly}>City of San Jose del Monte</Text>
-                <Text style={styles.label}>Barangay *</Text>
-                <View style={[styles.pickerBox, showErrors && !barangay && styles.inputError]}>
-                  <Picker
-                    selectedValue={barangay}
-                    onValueChange={v => setBarangay(String(v))}
-                  >
-                    <Picker.Item label="Choose your barangay" value=""/>
-                    {SJDM_BARANGAYS.map(b =>
-                      <Picker.Item key={b} label={b} value={b}/>
-                    )}
-                  </Picker>
-                </View>
-                {showErrors && !barangay &&
-                  <Text style={styles.error}>Please select your SJDM barangay.</Text>}
-                <Text style={styles.label}>Occupation *</Text>
-                <View style={[styles.pickerBox, showErrors && !occupation && styles.inputError]}>
-                  <Picker
-                    selectedValue={occupation}
-                    onValueChange={v => {
-                      setOccupation(String(v)); setSpecialization(""); setOccupationOther("");
-                    }}
-                  >
-                    <Picker.Item label="Choose occupation" value=""/>
-                    {OCCUPATION_OPTIONS.map(o =>
-                      <Picker.Item key={o} label={o} value={o}/>
-                    )}
-                  </Picker>
-                </View>
-                {showErrors && !occupation &&
-                  <Text style={styles.error}>Please select an occupation.</Text>}
-                {needsSpecialization && (
-                  <>
-                    <Text style={styles.label}>Specialization *</Text>
-                    <View style={[styles.pickerBox, showErrors && !specialization && styles.inputError]}>
-                      <Picker
-                        selectedValue={specialization}
-                        onValueChange={v => setSpecialization(String(v))}
-                      >
-                        <Picker.Item label="Choose specialization" value=""/>
-                        {(SPECIALIZATIONS[occupation] || []).map(o =>
-                          <Picker.Item key={o} label={o} value={o}/>
-                        )}
-                      </Picker>
-                    </View>
-                    {showErrors && !specialization &&
-                      <Text style={styles.error}>Please select a specialization.</Text>}
-                  </>
-                )}
+                <SignupDropdown
+                  label="Barangay"
+                  required
+                  icon="map-pin"
+                  value={barangay}
+                  options={SJDM_BARANGAYS}
+                  placeholder="Choose your barangay"
+                  searchable
+                  expanded={expandedDropdown === "barangay"}
+                  onToggle={() => setExpandedDropdown(v => v === "barangay" ? null : "barangay")}
+                  onChange={v => { setBarangay(v); setExpandedDropdown(null); setError(""); }}
+                  error={showErrors && !barangay ? "Please select your SJDM barangay." : null}
+                />
+                <SignupDropdown
+                  label="Occupation"
+                  required
+                  icon="briefcase"
+                  value={occupation}
+                  options={OCCUPATION_OPTIONS}
+                  placeholder="Choose your occupation"
+                  expanded={expandedDropdown === "occupation"}
+                  onToggle={() => setExpandedDropdown(v => v === "occupation" ? null : "occupation")}
+                  onChange={v => {
+                    // Immediately reload the relevant specializations, even
+                    // before the Complete Registration button is pressed.
+                    setOccupation(v);
+                    setSpecialization("");
+                    setOccupationOther("");
+                    setExpandedDropdown(null);
+                    setError("");
+                  }}
+                  error={showErrors && !occupation ? "Please select an occupation." : null}
+                />
+                <SignupDropdown
+                  label="Specialization"
+                  required={needsSpecialization}
+                  icon="layers"
+                  value={specialization}
+                  options={SPECIALIZATIONS[occupation] || []}
+                  placeholder={!occupation
+                    ? "Select occupation first"
+                    : needsSpecialization
+                      ? "Choose your specialization"
+                      : "Not required for this occupation"}
+                  disabled={!needsSpecialization}
+                  expanded={expandedDropdown === "specialization" && needsSpecialization}
+                  onToggle={() => setExpandedDropdown(v => v === "specialization" ? null : "specialization")}
+                  onChange={v => { setSpecialization(v); setExpandedDropdown(null); setError(""); }}
+                  hint={!occupation
+                    ? "Choose an occupation above to see its specializations."
+                    : needsSpecialization && !specialization
+                      ? "Select your specialization for " + occupation + " before completing registration."
+                      : !needsSpecialization ? "No specialization is required for this occupation." : undefined}
+                  error={showErrors && needsSpecialization && !specialization
+                    ? "Please select a specialization." : null}
+                />
                 {occupation === "Other (Specify)" && (
                   <Field label="Specify Occupation *" value={occupationOther}
                     onChange={setOccupationOther} placeholder="Your occupation"
@@ -1088,6 +1201,36 @@ const styles = StyleSheet.create({
   highlight: {borderRadius: 10, backgroundColor: "#f0fdf4", padding: 14, marginBottom: 15},
   highlightText: {color: DARK, fontSize: 15, fontWeight: "800"},
   tiny: {fontSize: 11, color: "#64748b", lineHeight: 18, marginTop: 15},
-  pickerBox: {borderRadius: 10, borderWidth: 1, borderColor: "#cbd5e1", marginBottom: 13, overflow: "hidden"},
+  dropdownRequired: {color: "#c62828"},
+  dropdownTrigger: {
+    minHeight: 50, borderRadius: 9, borderWidth: 1.25, borderColor: "#cbd5e1",
+    backgroundColor: "#ffffff", flexDirection: "row", alignItems: "center",
+    paddingHorizontal: 14, gap: 11,
+  },
+  dropdownTriggerExpanded: {borderColor: "#047857", borderWidth: 1.5},
+  dropdownTriggerError: {borderColor: "#dc2626", borderWidth: 1.5},
+  dropdownTriggerDisabled: {backgroundColor: "#f8fafc", borderColor: "#e2e8f0"},
+  dropdownSelectedText: {flex: 1, fontSize: 14, fontWeight: "500", color: "#0f172a"},
+  dropdownPlaceholderText: {color: "#64748b"},
+  dropdownDisabledText: {color: "#94a3b8"},
+  dropdownPanel: {
+    borderWidth: 1, borderColor: "#cbd5e1", borderRadius: 10,
+    backgroundColor: "#fff", marginTop: 7, overflow: "hidden",
+  },
+  dropdownSearchShell: {
+    minHeight: 44, flexDirection: "row", alignItems: "center",
+    borderBottomWidth: 1, borderColor: "#e2e8f0", paddingHorizontal: 13, gap: 8,
+  },
+  dropdownSearchInput: {flex: 1, minHeight: 42, fontSize: 14, color: "#0f172a", paddingVertical: 0},
+  dropdownOptionsScroll: {maxHeight: 226},
+  dropdownOption: {
+    minHeight: 45, flexDirection: "row", alignItems: "center",
+    paddingHorizontal: 14, paddingVertical: 11, justifyContent: "space-between",
+    borderBottomWidth: 0.5, borderBottomColor: "#f1f5f9",
+  },
+  dropdownOptionSelected: {backgroundColor: "#ecfdf5"},
+  dropdownOptionText: {color: "#334155", fontSize: 14, flex: 1},
+  dropdownOptionTextSelected: {color: "#047857", fontWeight: "700"},
+  dropdownNoResults: {fontSize: 13, color: "#64748b", padding: 17},
   footer: {fontSize: 11, textAlign: "center", color: "#94a3b8", marginTop: 35},
 });
