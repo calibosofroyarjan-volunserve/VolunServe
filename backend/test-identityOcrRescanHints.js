@@ -2,7 +2,7 @@
 const assert=require("node:assert/strict"), test=require("node:test"), fs=require("node:fs");
 const source=fs.readFileSync("backend/server.js","utf8");
 test("specific Front/Back OCR problems are friendly and cannot pass",()=>{
-  const start=source.indexOf('app.post("/api/identity/document/precheck"');
+  const start=source.indexOf('"/api/identity/document/precheck"');
   assert.ok(start>=0,"Existing authenticated precheck must remain");
   const end=source.indexOf('app.post(',start+10);
   const section=source.slice(start,end>start?end:start+11000);
