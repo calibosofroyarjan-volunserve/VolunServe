@@ -1,4 +1,5 @@
 import { canResumeEmailFirstSignup } from "../lib/signupFeature";
+import { isExistingGoogleLinkInProgress } from "../lib/googleAccountLinkFlow";
 
 import { useFonts } from "expo-font";
 import AppDialogHost from "../components/ui/AppDialogHost";
@@ -73,6 +74,8 @@ export default function RootLayout() {
           user?.uid ?? null;
         profileRetryInFlightRef.current = false;
         setAuthUser(user);
+        // Never carry another UID's cached profile into this session.
+        setProfile(null);
         if (!user) {
           setProfile(null);
           setProfileLoading(false);
@@ -313,6 +316,12 @@ export default function RootLayout() {
 
     const destination =
       homeRouteForProfile(profile);
+
+    // Do not route away while original-password ownership is being checked
+    // for explicit same-UID Google linking. Firestore Rules remain authoritative.
+    if (isLoginRoute && isExistingGoogleLinkInProgress()) {
+      return;
+    }
 
     /*
      * An already signed-in approved account should not remain on
