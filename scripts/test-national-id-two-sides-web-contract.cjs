@@ -34,3 +34,9 @@ test("verified cannot be granted from an AI-only decision",()=>{
   assert.match(server, /const decision = requireAdminFinalApproval\(rawDecision\)/);
   assert.match(server, /const status = requiresManualReview \? "pending" : "failed"/);
 });
+
+test("staging web client must never fall back to production backend", ()=>{
+  assert.match(client, /firebaseTarget === "staging" && value !== STAGING_IDENTITY_BACKEND_URL/);
+  assert.match(client, /Staging identity upload blocked: configure EXPO_PUBLIC_IDENTITY_VERIFICATION_API_URL/);
+  assert.match(client, /firebaseTarget !== "staging" && value === STAGING_IDENTITY_BACKEND_URL/);
+});
