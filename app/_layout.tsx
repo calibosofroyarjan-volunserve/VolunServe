@@ -1,5 +1,6 @@
 import { canResumeEmailFirstSignup } from "../lib/signupFeature";
 import { isExistingGoogleLinkInProgress } from "../lib/googleAccountLinkFlow";
+import { auth } from "../lib/firebase";
 
 import { useFonts } from "expo-font";
 import AppDialogHost from "../components/ui/AppDialogHost";
@@ -176,10 +177,27 @@ export default function RootLayout() {
       rootSegment === "(lgu)";
 
     /*
-     * Public Mode and certificate verification are available whether
-     * the user is signed in or not.
+     * Guest Preview is only for users who explicitly signed out.
+     * If a verified Firebase session survives a stale /public URL, never
+     * show Guest as if that were the user's registered account.
+     *
+     * Checking auth.currentUser protects the intentional Continue as Guest
+     * button: that button awaits signOut before opening /public.
      */
-    if (isPublicRoute || isCertificateVerificationRoute || isAdminRequestRoute) {
+    if (isPublicRoute) {
+      if (authUser && auth.currentUser?.uid === authUser.uid) {
+        if (profile && isApprovedProfile(profile)) {
+          router.replace(homeRouteForProfile(profile) as any);
+        } else if (!profile && canResumeEmailFirstSignup(authUser)) {
+          router.replace("/signup");
+        } else {
+          router.replace("/login");
+        }
+      }
+      return;
+    }
+    // Public certificate verification and staff access request are unchanged.
+    if (isCertificateVerificationRoute || isAdminRequestRoute) {
       return;
     }
 
