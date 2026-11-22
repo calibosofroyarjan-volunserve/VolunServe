@@ -9,7 +9,6 @@ function classifyHybridDocumentPrecheck({ screening, aiOutcome } = {}) {
   const nameMismatch = screening?.profileNameCheck === "possible_conflict";
   // DOB OCR is advisory during precheck. An OCR date conflict cannot
   // authorize account approval and stays visible to LGU/Admin after face scan.
-  const birthMismatch = screening?.profileBirthDateCheck === "possible_conflict";
   const unsupported = screening?.status === "unsupported" ||
     warnings.includes("school_id_not_supported");
   const typeMismatch = screening?.status === "mismatch" ||
@@ -31,8 +30,7 @@ function classifyHybridDocumentPrecheck({ screening, aiOutcome } = {}) {
       readableMatchingNationalName &&
       (screening.declaredIdType === "passport" || screening.backSideScreened === true)) {
     // Only advances to a face scan: this is never Verified Resident.
-    return {outcome:"pass",decision:"ready_for_face_scan",
-      reviewTrack: birthMismatch ? "dob_manual_review" : "none"};
+    return {outcome:"pass",decision:"ready_for_face_scan",reviewTrack:"none"};
   }
   if (aiOutcome === "review" && blurryNationalIdNeedsReview(screening) &&
       screening?.backSideProvided === true &&
