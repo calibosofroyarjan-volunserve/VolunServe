@@ -82,6 +82,7 @@ export type IdentityVerificationResult = {
 export type SubmitIdentityVerificationInput = {
   idType: IdentityDocumentType;
   idDocument: CapturedIdentityMedia;
+  idBack?: CapturedIdentityMedia | null;
   selfie: CapturedIdentityMedia;
 };
 
@@ -301,6 +302,11 @@ export const submitIdentityVerification = async (
     "Government ID image",
   );
 
+  if (input.idType === "national_id" && !input.idBack) {
+    throw new Error("Capture the back of your National ID before submitting.");
+  }
+  if (input.idBack) validateMedia(input.idBack, "Back of government ID");
+
   validateMedia(
     input.selfie,
     "Live selfie",
@@ -321,6 +327,9 @@ export const submitIdentityVerification = async (
     "idDocument",
     input.idDocument,
   );
+
+  if (input.idBack) appendMedia(formData, "idBack", input.idBack);
+  formData.append("evidenceConsent", "true");
 
   appendMedia(
     formData,
