@@ -1,0 +1,230 @@
+# One-time, fail-closed, live-derived Hosting-only VolunServe authentication/calendar release.
+# Changes ONLY the reviewed current-published-site-derived web assets.
+# No functions, Firestore rules/data, storage, Identity Platform, or Render operations.
+name: Guarded Professional Signup Layout With Immutable Rollback (Hosting only)
+on:
+  push:
+    branches: [live-protected]
+    paths:
+      - '.github/workflows/release-signup-ui-immutable-rollback-20261122.yml'
+permissions:
+  contents: read
+concurrency:
+  group: volunserve-production-hosting-release
+  cancel-in-progress: false
+jobs:
+  guarded-hosting-release:
+    if: github.repository == 'calibosofroyarjan-volunserve/VolunServe' && github.ref == 'refs/heads/live-protected'
+    runs-on: ubuntu-latest
+    environment: production
+    timeout-minutes: 65
+    env:
+      CI: 'true'
+      EXPO_NO_TELEMETRY: '1'
+      PROJECT: 'volunserve-3aa5b'
+      EXPECTED_LIVE: 'c37a83eb96cac832b03dec9c0f8eea44056bee4c'
+      SOURCE_SHA: '64bc79690ef3fba1b23bbf2c3e5c9880abec17ff'
+      SOURCE_BRANCH: 'fix/live-signup-professional-responsive-ui-20261122'
+      ROLLBACK_SHA: 'c37a83eb96cac832b03dec9c0f8eea44056bee4c'
+    steps:
+      - name: Check out exact one-file protected release controller
+        uses: actions/checkout@v4
+        with:
+          path: controller
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          submodules: false
+      - name: Check out exact immutable site commit derived from published live revision
+        uses: actions/checkout@v4
+        with:
+          path: site
+          ref: '64bc79690ef3fba1b23bbf2c3e5c9880abec17ff'
+          fetch-depth: 0
+          submodules: false
+      - name: Fail closed on changed production, drift, stale code, or unexpected files
+        working-directory: site
+        shell: bash
+        run: |
+          node <<'NODE'
+          const assert=require("node:assert/strict");
+          const cp=require("node:child_process");
+          const fs=require("node:fs");
+          const git=(...args)=>cp.execFileSync("git",args,{encoding:"utf8"}).trim();
+          (async()=>{
+            const base=process.env.EXPECTED_LIVE, source=process.env.SOURCE_SHA;
+            assert(/^[0-9a-f]{40}$/.test(base) && /^[0-9a-f]{40}$/.test(source));
+            assert.equal(git("rev-parse","HEAD"),source,"BLOCKED: source checkout does not match pinned site");
+            cp.execFileSync("git",["merge-base","--is-ancestor",base,source]);
+            const sourceHead=git("ls-remote","--heads","origin",process.env.SOURCE_BRANCH).split(/\s+/)[0];
+            assert.equal(sourceHead,source,"BLOCKED: reviewed source branch moved");
+            const currentProtected=git("ls-remote","--heads","origin","live-protected").split(/\s+/)[0];
+            assert.equal(currentProtected,process.env.GITHUB_SHA,"BLOCKED: newer protected controller exists");
+            const ctrl=cp.execFileSync("git",["-C","../controller","diff","--name-status","--no-renames","HEAD^","HEAD"],{encoding:"utf8"}).trim();
+            assert.equal(ctrl,"A\t.github/workflows/release-signup-ui-immutable-rollback-20261122.yml",
+              "BLOCKED: controller push included unrelated changes");
+            const expected={
+              "components/auth/EmailFirstSignup.tsx":"M"
+            };
+            const changes=git("diff","--name-status","--no-renames",base,source)
+              .split("\n").filter(Boolean).map(line=>line.split("\t"));
+            assert.deepEqual(changes.map(x=>x[1]).sort(),Object.keys(expected).sort(),
+              "BLOCKED: source contains unrelated/outdated modules");
+            for(const [status,path] of changes)
+              assert.equal(status,expected[path],"BLOCKED: deletion, rename or unexpected change "+path);
+            const cfg=JSON.parse(fs.readFileSync(".firebaserc","utf8"));
+            assert.equal(cfg.projects.default,process.env.PROJECT,"BLOCKED: Firebase project mismatch");
+            const response=await fetch("https://volunserve.com/volunserve-release.json?preflight="+Date.now(),{
+              headers:{"Cache-Control":"no-cache"},signal:AbortSignal.timeout(15000)
+            });
+            assert(response.ok,"BLOCKED: production site revision unreadable");
+            const marker=await response.json();
+            assert.equal(marker.app,"VolunServe");
+            assert.equal(marker.firebaseProject,process.env.PROJECT);
+            assert.equal(marker.revision,base,
+              "BLOCKED: production changed; cannot overwrite newer VolunServe");
+            console.log("PASS: only one reviewed Signup UI file; exact previously published revision verified");
+          })().catch(e=>{console.error(e);process.exitCode=1});
+          NODE
+      - name: Install exact locked live-derived dependencies
+        working-directory: site
+        run: npm ci --no-audit --no-fund
+      - name: TypeScript and preserved login, route, Guest tests
+        working-directory: site
+        run: |
+          npx tsc --noEmit --incremental false
+          node scripts/test-unified-login-routing.cjs
+          node scripts/test-login-field-validation.cjs
+          node scripts/test-login-ui-release.cjs
+          node scripts/test-route-entrypoints.cjs
+          node scripts/test-guest-readonly-preview.cjs
+          node <<'NODE'
+          const assert=require("node:assert/strict"),fs=require("node:fs"),ts=require("typescript");
+          const ui=fs.readFileSync("components/auth/EmailFirstSignup.tsx","utf8");
+          assert.equal((ui.match(/<SignupDropdown/g)||[]).length,3);
+          assert(!ui.includes("<Picker"));
+          for(const label of ["Barangay","Occupation","Specialization"])
+            assert(ui.includes('label="'+label+'"'),"Missing selector: "+label);
+          assert(ui.includes("setOccupation(v);")&&ui.includes('setSpecialization("");'));
+          assert(ui.includes('options={SPECIALIZATIONS[occupation] || []}'));
+          assert(ui.includes("disabled={!needsSpecialization}"));
+          assert(ui.includes("Please select a specialization."));
+          assert(ui.includes("<BirthdateCalendar"));
+          assert(!ui.includes("Link Password & Continue"));
+          assert(!ui.includes("linkEmailFirstGooglePassword"));
+          assert(ui.includes('authProvider: googleSignupAccount ? "google" : "verified_email"'));
+          assert(ui.includes("styles.legacyMainCardMobile"),"Responsive signup card must remain");
+          assert(ui.includes('width: "41%"')&&ui.includes('minWidth: 340'),"Photo and form should be balanced on desktops");
+          assert(ui.includes("legacySignupEyebrow"),"Clear step label missing");
+          assert(ui.includes("Account details")&&ui.includes("Your information")&&ui.includes("Your SJDM address"));
+          assert(!ui.includes("Step 4 — Address & Profile"),"Redundant Step 4 heading returned");
+          assert(ui.includes('width < 520 && label === "Address & Profile" ? "Profile" : label'));
+          assert(ui.includes("const createdProfile = await getUserProfile(user.uid)"),"Never skip Resident profile validation");
+          console.log("PASS professional desktop mobile Signup design, all existing auth and dropdown behavior preserved");
+          NODE
+      - name: Build web and verify exact release artifact (NO DEPLOY)
+        working-directory: site
+        run: |
+          npx expo export --platform web --clear
+          env -u GITHUB_SHA node scripts/verify-hosting-release.cjs
+          node -e 'const assert=require("node:assert/strict");const m=require("./dist/volunserve-release.json");assert.equal(m.revision,process.env.SOURCE_SHA);assert.equal(m.firebaseProject,process.env.PROJECT);console.log("PASS reviewed web artifact pinned to immutable source")'
+      - name: Verify production marker again immediately before backup and release
+        working-directory: site
+        shell: bash
+        env:
+          FIREBASE_SA: ${{ secrets.VOLUNSERVE_PRODUCTION_HOSTING_SERVICE_ACCOUNT }}
+        run: |
+          test -n "$FIREBASE_SA" || { echo "BLOCKED: production Hosting credential unavailable"; exit 1; }
+          printf '%s' "$FIREBASE_SA" > "$RUNNER_TEMP/volunserve-auth-calendar-service-account.json"
+          chmod 600 "$RUNNER_TEMP/volunserve-auth-calendar-service-account.json"
+          echo "GOOGLE_APPLICATION_CREDENTIALS=$RUNNER_TEMP/volunserve-auth-calendar-service-account.json" >> "$GITHUB_ENV"
+          node <<'NODE'
+          const assert=require("node:assert/strict");
+          (async()=>{
+            const r=await fetch("https://volunserve.com/volunserve-release.json?recheck="+Date.now(),{
+              headers:{"Cache-Control":"no-cache"},signal:AbortSignal.timeout(15000)});
+            assert(r.ok,"BLOCKED: live revision unavailable");
+            const m=await r.json();
+            assert.equal(m.revision,process.env.EXPECTED_LIVE,"BLOCKED: production changed before release");
+            assert.equal(m.firebaseProject,process.env.PROJECT);
+            console.log("PASS production unchanged before backup/release");
+          })().catch(e=>{console.error(e);process.exitCode=1});
+          NODE
+      # Hosting preview-channel capacity is exhausted. Instead of deleting or
+      # overwriting existing backups, keep a built immutable copy of the
+      # currently published GitHub source available for immediate rollback.
+      - name: Check out exact existing live source for rollback (NO DEPLOY)
+        uses: actions/checkout@v4
+        with:
+          path: restore
+          ref: 'c37a83eb96cac832b03dec9c0f8eea44056bee4c'
+          fetch-depth: 0
+          submodules: false
+      - name: Build exact previous live source for rollback
+        id: rollback_source
+        working-directory: restore
+        run: |
+          npm ci --no-audit --no-fund
+          npx expo export --platform web --clear
+          env -u GITHUB_SHA node scripts/verify-hosting-release.cjs
+          node -e 'const assert=require("node:assert/strict");const m=require("./dist/volunserve-release.json");assert.equal(m.revision,process.env.ROLLBACK_SHA);assert.equal(m.firebaseProject,process.env.PROJECT);console.log("PASS immutable previously published source ready for rollback")'
+      - name: Preserve former live release build as a downloadable rollback artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: volunserve-hosting-pre-signup-ui-rollback
+          path: restore/dist
+          retention-days: 7
+          if-no-files-found: error
+      - name: Publish reviewed live-derived web assets to Firebase Hosting only
+        id: deploy
+        uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          firebaseServiceAccount: ${{ secrets.VOLUNSERVE_PRODUCTION_HOSTING_SERVICE_ACCOUNT }}
+          projectId: volunserve-3aa5b
+          channelId: live
+          entryPoint: ./site
+      - name: Verify exact published source and public VolunServe pages
+        working-directory: site
+        env:
+          VOLUNSERVE_HOSTING_URL: 'https://volunserve.com'
+          VOLUNSERVE_EXPECTED_SHA: '64bc79690ef3fba1b23bbf2c3e5c9880abec17ff'
+        run: |
+          for attempt in 1 2 3 4 5 6; do
+            if node scripts/check-live-hosting.cjs; then exit 0; fi
+            sleep 10
+          done
+          echo "BLOCKED: public Hosting failed to serve the exact reviewed revision"
+          exit 1
+      - name: Restore exact previously published live source if verification fails
+        if: failure() && steps.rollback_source.outcome == 'success' && steps.deploy.outcome != 'skipped'
+        working-directory: restore
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Never overwrite another newer deployment: only roll back when the
+          # failed candidate itself is still the release being served.
+          set +e
+          node <<'NODE'
+          const assert=require("node:assert/strict");
+          (async()=>{
+            const r=await fetch("https://volunserve.com/volunserve-release.json?rollback-check="+Date.now(),{
+              headers:{"Cache-Control":"no-cache"},signal:AbortSignal.timeout(15000)
+            });
+            assert(r.ok,"Cannot validate live revision before attempting rollback");
+            const m=await r.json();
+            assert.equal(m.firebaseProject,process.env.PROJECT);
+            if(m.revision===process.env.SOURCE_SHA) {
+              console.log("Roll back the failed candidate; no newer source detected");
+              return;
+            }
+            console.error("BLOCKED rollback: live is not the candidate; no source will be overwritten. Current revision:",m.revision);
+            process.exitCode=20;
+          })().catch(e=>{console.error(e);process.exitCode=20});
+          NODE
+          status=$?
+          set -e
+          if [ "$status" -ne 0 ]; then
+            echo "Skipped rollback because the candidate is not the current published version"
+            exit 1
+          fi
+          npx firebase-tools deploy --only hosting --project "$PROJECT" --non-interactive
+          VOLUNSERVE_HOSTING_URL=https://volunserve.com VOLUNSERVE_EXPECTED_SHA="$ROLLBACK_SHA" node scripts/check-live-hosting.cjs
