@@ -34,6 +34,7 @@ jobs:
           expected=sorted([
             'M\tbackend/server.js',
             'M\tbackend/test-identityOcrRescanHints.js',
+            'M\tbackend/test-identityNationalNamePrecheckGate.js',
             'A\tbackend/identityHybridPrecheckDecision.js',
             'A\tbackend/test-identityHybridPrecheckDecision.js',
             'A\t.github/workflows/qa-identity-hybrid-precheck-20261122.yml',
