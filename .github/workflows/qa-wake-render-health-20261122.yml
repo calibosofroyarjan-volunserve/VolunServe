@@ -79,3 +79,5 @@ jobs:
         run: echo 'Read-only health checks only. Current VolunServe code and Firebase data are untouched.'
 
 # Re-run read-only health after National ID OCR recovery rollout; no deployment.
+
+# Final GET-only readiness check after blur/name-gate AI + Node deployments on Nov 22.
