@@ -391,7 +391,7 @@ export default function IdentityReviewsAdmin() {
           styles.scroll,
           Platform.OS === "web" && styles.webScrollBar,
         ]}
-        contentContainerStyle={styles.page}
+        contentContainerStyle={[styles.page, !wide && styles.pageCompact]}
         showsVerticalScrollIndicator={true}
         keyboardShouldPersistTaps="handled"
         accessibilityLabel="Identity reviews content"
@@ -616,6 +616,13 @@ export default function IdentityReviewsAdmin() {
                       </Text>
                     </View>
 
+                    <View style={styles.evidenceStatusRow}>
+                      <Ionicons name={item.evidenceAvailable ? "lock-closed-outline" : "alert-circle-outline"}
+                        size={14} color={item.evidenceAvailable ? "#08765A" : "#B45309"} />
+                      <Text style={[styles.evidenceStatusText, !item.evidenceAvailable && styles.evidenceStatusWarning]}>
+                        {item.evidenceAvailable ? "Protected ID and selfie saved" : "Pictures unavailable — resubmission needed"}
+                      </Text>
+                    </View>
                     <Text style={styles.queueDate}>
                       Submitted{" "}
                       {formatDate(
@@ -632,7 +639,7 @@ export default function IdentityReviewsAdmin() {
             <View
               style={[
                 styles.detailPanel,
-                wide && styles.detailPanelWide,
+                wide ? styles.detailPanelWide : styles.detailPanelCompact,
               ]}
             >
               {selected ? (
@@ -733,7 +740,7 @@ function ReviewDetail({
           <Ionicons
             name="person-outline"
             size={24}
-            color="#4F46E5"
+            color="#08765A"
           />
         </View>
 
@@ -1080,6 +1087,8 @@ const styles = StyleSheet.create({
     padding: 24,
     paddingBottom: 70,
   },
+  pageCompact: { paddingHorizontal: 12, paddingTop: 14, paddingBottom: 60 },
+  detailPanelCompact: { padding: 12, borderRadius: 13 },
   center: {
     flex: 1,
     minHeight: 500,
@@ -1343,8 +1352,8 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFFFF",
   },
   queueCardActive: {
-    borderColor: "#818CF8",
-    backgroundColor: "#EEF2FF",
+    borderColor: "#08765A",
+    backgroundColor: "#EFFAF3",
   },
   queueTop: {
     flexDirection: "row",
@@ -1357,10 +1366,10 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#E0E7FF",
+    backgroundColor: "#E1F4EA",
   },
   avatarText: {
-    color: "#4338CA",
+    color: "#08765A",
     fontSize: vsType.size.label, fontFamily: vsType.family,
     fontWeight: "800",
   },
@@ -1402,6 +1411,9 @@ const styles = StyleSheet.create({
     fontSize: vsType.size.meta, fontFamily: vsType.family,
     fontWeight: "800",
   },
+  evidenceStatusRow: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 10 },
+  evidenceStatusText: { color: "#08765A", fontSize: vsType.size.caption, fontFamily: vsType.family, fontWeight: "600" },
+  evidenceStatusWarning: { color: "#B45309" },
   queueDate: {
     marginTop: 6,
     color: "#94A3B8",
