@@ -58,7 +58,7 @@ jobs:
             test-identityAiReadiness.js \
             test-identity-final-admin-only.js \
             test-identity-three-attempt-review.js; do
-            (cd backend && node --test "$t")
+            node --test "backend/$t"
           done
       - name: Confirm no writes
         run: echo 'NO DEPLOY, NO Firestore/Auth/Render writes, no actual ID or biometric uploads.'
