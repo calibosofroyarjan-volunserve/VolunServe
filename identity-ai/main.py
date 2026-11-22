@@ -884,25 +884,37 @@ def failed_attempt_result(
 
 
 def extract_government_id_text(id_document_bytes, label):
-    """Transient OCR only; never log, persist, or return raw ID content."""
+    """One bounded OCR pass per side, with no raw ID data logged or persisted.
+
+    Render Free's limited CPU made the previous upscaled two-pass *per side*
+    workflow exceed the Node gateway's 55-second request deadline. Keep
+    Tesseract on a bounded image and apply the same documented OCR screening,
+    name comparison and mandatory independent Admin approval.
+    """
     image = decode_image(id_document_bytes, label)
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
     longest = max(gray.shape[:2])
-    if longest < 1500:
-        factor = min(1.6, 2100.0 / float(longest))
+    # At most 1400 px on the longer side; never upscale an already legible
+    # 1260-px frame to 2000+ px before running OCR on a shared CPU.
+    if longest > 1400:
+        factor = 1400.0 / float(longest)
         gray = cv2.resize(
             gray, None, fx=factor, fy=factor,
-            interpolation=cv2.INTER_CUBIC,
+            interpolation=cv2.INTER_AREA,
         )
+    elif longest < 900:
+        factor = min(1.2, 1000.0 / float(max(longest, 1)))
+        if factor > 1.0:
+            gray = cv2.resize(
+                gray, None, fx=factor, fy=factor,
+                interpolation=cv2.INTER_CUBIC,
+            )
     contrast = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8)).apply(gray)
-    processed = cv2.adaptiveThreshold(
-        contrast, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
-        cv2.THRESH_BINARY, 31, 11,
-    )
-    return (
-        pytesseract.image_to_string(gray, config="--psm 11")
-        + "\n"
-        + pytesseract.image_to_string(processed, config="--psm 6")
+    # Bounding each subprocess prevents requests from hanging indefinitely.
+    # On OCR timeout, the existing fail-closed handler returns a rescan,
+    # never a positive document or face verdict.
+    return pytesseract.image_to_string(
+        contrast, config="--oem 1 --psm 11", timeout=40,
     )
 
 
