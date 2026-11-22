@@ -59,9 +59,12 @@ assert(lgu.includes('<DocumentScreeningSummary screening={item.documentScreening
   lgu.includes('DocumentScreening') &&
   lgu.includes("LGU Validation"),
   "LGU review must see the SAME assessment before independently verifying identity");
-assert(summary.includes("authenticity") && !summary.includes("ID image") &&
-  summary.includes("Independent LGU verification is required."),
-  "Shared display must avoid false issuance claims or exposed ID scans");
+assert(summary.includes("Official issuer check") &&
+  summary.includes("Not verified — PSA/issuer check required") &&
+  summary.includes("Anti-spoofing (PAD)") &&
+  summary.includes("Independent issuer checks, qualified anti-spoofing validation and Admin review are still required.") &&
+  !summary.includes("ID image"),
+  "Shared display must warn about unverified issuance and liveness without exposing ID scans");
 assert(document.includes("NATIONAL ID IN PAPER") &&
   document.includes("DIGITAL NATIONAL ID") &&
   document.includes("corroborated >= 2"),
