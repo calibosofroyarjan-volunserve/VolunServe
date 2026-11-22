@@ -5,6 +5,7 @@
 import {Picker} from "@react-native-picker/picker";
 import {Feather} from "@expo/vector-icons";
 import GoogleBrandMark from "./GoogleBrandMark";
+import BirthdateCalendar from "./BirthdateCalendar";
 import {useRouter} from "expo-router";
 import {
   getIdToken,
@@ -28,6 +29,7 @@ import {
 import {getRegistrationEmailError} from "../../lib/registrationEmailPolicy";
 import {communitySocialRequest} from "../../lib/communitySocial";
 import { userFacingError } from "../../lib/userFacingError";
+import { googleSignInErrorMessage } from "../../lib/googleSignInFeedback";
 import {
   REGISTRATION_EMAIL_CONFLICT_MESSAGE,
   EMAIL_VERIFICATION_INSTRUCTIONS,
@@ -334,8 +336,14 @@ export default function EmailFirstSignup() {
           ? "Google email verified. Complete your resident details."
           : "Google email verified. Create a VolunServe password to use both sign-in methods."
       );
-    } catch (e) {setError(safeAuthError(e));}
-    finally {setBusy(false);}
+    } catch (e) {
+      const code = (e as {code?: unknown} | null)?.code;
+      if (code === "auth/account-exists-with-different-credential") {
+        setError("This email already has a VolunServe login. Open Sign In, choose Continue with Google, then confirm your original password using Sign In & Link Google. Do not register a second account.");
+      } else {
+        setError(googleSignInErrorMessage(e));
+      }
+    } finally { setBusy(false); }
   }
 
   async function checkVerified() {
@@ -786,11 +794,11 @@ export default function EmailFirstSignup() {
                   <Text style={styles.checkBox}>{noMiddleName ? "☑" : "☐"}</Text>
                   <Text style={styles.checkText}>I have no middle name</Text>
                 </Pressable>
-                <Field
-                  label="Date of Birth *" value={birth}
-                  onChange={setBirth} placeholder="YYYY-MM-DD"
+                <BirthdateCalendar
+                  value={birth}
+                  onChange={setBirth}
                   error={(showErrors || !!birth) && (age === null || age < 18 || age > 100)
-                    ? "Use YYYY-MM-DD. Registration requires ages 18–100." : null}
+                    ? "Select a valid birth date (ages 18–100)." : null}
                 />
                 {checkButton("Continue to Address & Profile", () => {
                   setShowErrors(true);
