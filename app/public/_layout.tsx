@@ -1,4 +1,5 @@
 import { Stack } from "expo-router";
+import { useIsFocused } from "@react-navigation/native";
 import {onAuthStateChanged, signOut} from "firebase/auth";
 import {useCallback, useEffect, useState} from "react";
 import {ActivityIndicator, Pressable, Text, View} from "react-native";
@@ -16,6 +17,9 @@ export default function PublicLayout() {
   const [ready, setReady] = useState(false);
   const [error, setError] = useState("");
   const [retry, setRetry] = useState(0);
+  // An inactive Guest screen may remain mounted beneath Login or Signup.
+  // Never let that background navigator revoke a new authenticated session.
+  const isFocused = useIsFocused();
 
   const clearSession = useCallback(async () => {
     setReady(false);
@@ -28,6 +32,10 @@ export default function PublicLayout() {
   }, []);
 
   useEffect(() => {
+    // Only an actively visible Guest screen may clear an account session.
+    // Without this, Guest -> Login using stack navigation can sign out the
+    // freshly authenticated user while the old Guest screen stays mounted.
+    if (!isFocused) return;
     let active = true;
     let clearing = false;
     const unsubscribe = onAuthStateChanged(auth, (user) => {
@@ -51,7 +59,7 @@ export default function PublicLayout() {
       if (active) setError("Could not verify signed-out Guest Mode. Check your connection and try again.");
     });
     return () => {active = false; unsubscribe();};
-  }, [retry]);
+  }, [retry, isFocused]);
 
   if (!ready || auth.currentUser) {
     return <View style={{flex: 1, backgroundColor: "#F6F8F7", justifyContent: "center", alignItems: "center", padding: 24}}>
