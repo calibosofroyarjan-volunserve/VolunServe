@@ -751,7 +751,7 @@ function ReviewDetail({
       />
 
       <SectionTitle icon="images-outline" title="Submitted Identity Photos" />
-      <AdminIdentityEvidence uid={item.uid} user={user} matchScore={item.matchScore} aiDecision={item.aiDecision} />
+      <AdminIdentityEvidence uid={item.uid} verificationId={item.verificationId} user={user} matchScore={item.matchScore} aiDecision={item.aiDecision} />
 
       <SectionTitle
         icon="scan-outline"
