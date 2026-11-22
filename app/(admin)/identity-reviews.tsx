@@ -639,6 +639,7 @@ function StatusChip({ bucket }: { bucket: ReviewFilter }) {
 function ReviewDetail({
   item,
   viewer,
+  screenWide,
   validationMethod,
   setValidationMethod,
   issuerReviewAttested,
@@ -648,18 +649,21 @@ function ReviewDetail({
   saving,
   onVerify,
   onRetry,
+  onReject,
 }: {
   item: IdentityReview;
   viewer: {getIdToken: (forceRefresh?: boolean) => Promise<string>} | null;
+  screenWide: boolean;
   validationMethod: string;
   setValidationMethod: (value: string) => void;
   issuerReviewAttested: boolean;
   setIssuerReviewAttested: (value: boolean) => void;
   notes: string;
   setNotes: (value: string) => void;
-  saving: "" | "verify" | "require_retry";
+  saving: "" | "verify" | "require_retry" | "reject";
   onVerify: () => void;
   onRetry: () => void;
+  onReject: () => void;
 }) {
   const [activeTab, setActiveTab] = useState<"review" | "history" | "audit">("review");
   const [evidenceUris, setEvidenceUris] = useState<{
@@ -707,405 +711,369 @@ function ReviewDetail({
     nationalId ? m.value === "psa_national_id_qr_check" : m.value !== "psa_national_id_qr_check"
   );
 
+  const idQuality = String(item.documentScreening?.imageQualityStatus || "").toLowerCase();
+  const weakImage = blurry || idQuality === "low" || idQuality === "poor";
+  const recognized = item.documentScreening?.status === "text_consistent_unverified" &&
+    item.documentScreening?.declaredIdType === item.documentScreening?.detectedIdType;
+  const faceScore = typeof item.matchScore === "number" &&
+    Number.isFinite(item.matchScore) && item.matchScore >= 0 && item.matchScore <= 1
+    ? (item.matchScore * 100).toFixed(1) + "%" : "Not evaluated";
+  const declaredIdLabel = item.documentScreening?.declaredIdType === "national_id"
+    ? "Philippine National ID" :
+    String(item.documentScreening?.declaredIdType || "Unspecified").replace(/_/g, " ");
+  const checkRows = [
+    {
+      name:"Document upload",
+      value:item.evidenceAvailable ? "Protected evidence available" : "Earlier images not retained",
+      ok:item.evidenceAvailable===true,
+      warning:!item.evidenceAvailable,
+    },
+    {
+      name:"Government ID type",
+      value:recognized ? declaredIdLabel + " (OCR consistent)" :
+        declaredIdLabel + " — not confirmed by OCR",
+      ok:recognized,
+      warning:!recognized,
+    },
+    {
+      name:"Image quality",
+      value:weakImage ? "Blurry — clearer scan needed" :
+        idQuality === "adequate" ? "Adequate for preliminary screening" : "Not confirmed",
+      ok:!weakImage && idQuality === "adequate",
+      warning:weakImage,
+    },
+    {
+      name:"Face matching",
+      value:faceScore === "Not evaluated" ? "Not yet evaluated" :
+        faceScore + " preliminary similarity",
+      ok:false,
+      warning:false,
+    },
+  ];
+  const openIssuerCheck = () => void Linking.openURL("https://everify.gov.ph/check");
+
   return (
-    <View>
-      <View style={styles.detailHeader}>
-        <View style={styles.detailHeaderIcon}>
-          <Ionicons
-            name="person-outline"
-            size={24}
-            color="#4F46E5"
-          />
-        </View>
-
-        <View style={styles.flexOne}>
-          <Text style={styles.detailTitle}>
-            {item.resident?.fullName || "Resident"}
-          </Text>
-          <Text style={styles.detailMeta}>
-            {item.resident?.email || "No email"}
-          </Text>
-        </View>
-
-        <StatusChip bucket={reviewBucket(item)} />
-      </View>
-
-
-      <View style={styles.detailTabRow}>
-        {([
-          {key:"review" as const,label:"Identity Review",icon:"shield-checkmark-outline" as const},
-          {key:"history" as const,label:"Details & History",icon:"time-outline" as const},
-          {key:"audit" as const,label:"Audit Trail",icon:"document-text-outline" as const},
-        ]).map(entry=>(
-          <TouchableOpacity key={entry.key} accessibilityRole="tab"
-            accessibilityState={{selected:activeTab===entry.key}}
-            style={[styles.detailTab,activeTab===entry.key && styles.detailTabActive]}
-            onPress={()=>setActiveTab(entry.key)}>
-            <Ionicons name={entry.icon} size={15} color={activeTab===entry.key?"#08765A":"#71867A"} />
-            <Text style={[styles.detailTabLabel,activeTab===entry.key && styles.detailTabLabelActive]}>{entry.label}</Text>
-          </TouchableOpacity>
-        ))}
-      </View>
-      <Modal visible={Boolean(zoomedEvidence)} transparent animationType="fade"
-        onRequestClose={() => setZoomedEvidence(null)}>
-        <View style={styles.fullScreenEvidence}>
-          <TouchableOpacity style={styles.fullScreenEvidenceClose}
-            accessibilityRole="button" onPress={() => setZoomedEvidence(null)}>
-            <Ionicons name="close-outline" size={22} color="#FFFFFF" />
-            <Text style={styles.fullScreenEvidenceCloseText}>Close photo</Text>
-          </TouchableOpacity>
-          {zoomedEvidence ? (
-            <Image source={{uri:zoomedEvidence}} style={styles.fullScreenEvidenceImage}
-              resizeMode="contain" accessibilityLabel="Enlarged private identity evidence" />
-          ) : null}
-        </View>
-      </Modal>
-      {activeTab === "review" ? (<>
-        <View style={styles.evidenceAndAiGrid}>
-          <View style={styles.previewEvidenceCard}>
-            <View style={styles.previewCardHeading}>
-              <Ionicons name="id-card-outline" size={18} color="#08765A" />
-              <Text style={styles.previewCardHeadingText}>Submitted Identity Evidence</Text>
-              <TouchableOpacity onPress={() => setEvidenceRefresh(value => value + 1)}
-                disabled={!item.evidenceAvailable} accessibilityRole="button"
-                accessibilityLabel="Refresh protected identity photos">
-                <Ionicons name="refresh-outline" size={17}
-                  color={item.evidenceAvailable ? "#08765A" : "#A6B7AC"} />
-              </TouchableOpacity>
-              <Ionicons name="lock-closed-outline" size={14} color="#08765A" />
+    <View style={[styles.premiumDetailColumns, !screenWide && styles.premiumDetailStack]}>
+      <View style={[styles.premiumLeftColumn, !screenWide && styles.premiumFullWidth]}>
+        <View style={styles.premiumCard}>
+          <View style={styles.premiumResidentHeader}>
+            <View style={styles.premiumResidentIcon}>
+              <Ionicons name="person-outline" size={28} color="#08765A" />
             </View>
-            <View style={styles.previewEvidenceTiles}>
-              {([
-                {key:"front" as const,label:"Government ID — Front",icon:"id-card-outline" as const},
-                {key:"back" as const,label:"Government ID — Back",icon:"card-outline" as const},
-                {key:"selfie" as const,label:"Live Selfie",icon:"person-outline" as const},
-              ]).map(tile=>{
-                const photo = evidenceUris?.[tile.key];
-                return (
-                  <TouchableOpacity key={tile.key} style={styles.previewEvidenceTile}
-                    accessibilityRole="button" disabled={!photo}
-                    accessibilityLabel={photo ? `View full ${tile.label} image` : `${tile.label} unavailable`}
-                    onPress={() => photo && setZoomedEvidence(photo)}>
-                    <View style={styles.previewEvidenceImage}>
-                      {photo ? (
-                        <Image source={{uri:photo}} resizeMode="contain"
-                          style={styles.previewEvidencePhoto}
-                          accessibilityLabel={tile.label} />
-                      ) : (
-                        <>
-                          <Ionicons name={tile.icon} size={25} color="#8BA899" />
-                          <Text style={styles.previewEvidenceText}>
-                            {evidenceLoading ? "Loading secure photo..." :
-                              evidenceError ? "Unable to load" :
-                              item.evidenceAvailable
-                                ? tile.key === "selfie" && item.verificationMethod === "volunserve_ai_ocr_manual_review"
-                                  ? "Not captured (OCR only)"
-                                  : "Not submitted"
-                                : "Not saved previously"}
-                          </Text>
-                        </>
-                      )}
-                    </View>
-                    <Text style={styles.previewEvidenceLabel}>{tile.label}</Text>
-                  </TouchableOpacity>
-                );
-              })}
+            <View style={styles.flexOne}>
+              <Text style={styles.premiumResidentName}>{item.resident?.fullName || "Resident"}</Text>
+              <Text style={styles.premiumResidentEmail} numberOfLines={2}>
+                {item.resident?.email || "Email not available"}
+              </Text>
             </View>
-            <Text style={styles.previewEvidenceCaption}>
-              {evidenceError || (item.evidenceAvailable
-                ? item.verificationMethod === "volunserve_ai_ocr_manual_review"
-                  ? "OCR-only Admin case: the ID front and back are securely saved, but no live selfie was captured. Require a complete resubmission before any face comparison."
-                  : "Private ID and selfie photos are available only to authorized reviewers for up to 30 days. Tap to enlarge. View links expire after 3 minutes."
-                : "This older verification record has no retained ID/selfie images. Request a new Resident submission to review the photos.")}
+          </View>
+          <View style={styles.premiumInfoDivider} />
+          <InfoLine label="Account Type" value={item.identityVerified === true ? "Verified Resident" : "Basic Resident"} />
+          <InfoLine label="Barangay" value={item.resident?.barangay || "Not set"} />
+          <InfoLine label="Submitted" value={formatDate(item.lastSubmissionAt || item.createdAt)} />
+          <InfoLine label="Verification ID" value={item.verificationId || "Not available"} />
+        </View>
+
+        <View style={styles.premiumCard}>
+          <View style={styles.premiumCardTitleRow}>
+            <Ionicons name="hardware-chip-outline" size={21} color="#08765A" />
+            <Text style={styles.premiumCardTitle}>AI Verification Result</Text>
+          </View>
+          <View style={styles.premiumFaceResult}>
+            <Text style={styles.premiumFaceValue}>{faceScore}</Text>
+            <Text style={styles.premiumSubCopy}>Preliminary face similarity; not identity proof.</Text>
+          </View>
+          <View style={styles.premiumResultRow}>
+            <Text style={styles.premiumResultLabel}>ID Quality</Text>
+            <Text style={[styles.premiumResultValue,weakImage && styles.premiumWarningText]}>
+              {weakImage ? "Low · Blurry" : idQuality || "Not evaluated"}
             </Text>
           </View>
-          <View style={styles.previewAiCard}>
-            <View style={styles.previewCardHeading}>
-              <Ionicons name="scan-outline" size={18} color="#08765A" />
-              <Text style={styles.previewCardHeadingText}>AI Verification Result</Text>
-            </View>
-            <View style={styles.previewScoreBox}>
-              <Text style={styles.previewScoreLabel}>Face similarity</Text>
-              <Text style={styles.previewScoreValue}>
-                {typeof item.matchScore === "number" && Number.isFinite(item.matchScore)
-                  && item.matchScore >= 0 && item.matchScore <= 1
-                  ? (item.matchScore * 100).toFixed(1) + "%"
-                  : "Not evaluated"}
-              </Text>
-              <Text style={styles.previewScoreNote}>Preliminary AI estimate, not identity proof.</Text>
-            </View>
-            <InfoLine label="ID quality" value={
-              item.documentScreening?.imageQualityStatus || "Not evaluated"
-            } />
-            <InfoLine label="ID back screening" value={
-              item.documentScreening?.backSideScreened === true ? "Screened — authenticity unverified"
-                : "Not evaluated"
-            } />
-            <InfoLine label="AI route" value={
-              item.reviewTrack === "blurry_id_review" ? "Rescan required" :
-              item.reviewTrack === "priority_admin_review" ? "Priority Admin review" :
-              "Independent LGU review"
-            } />
+          <View style={styles.premiumResultRow}>
+            <Text style={styles.premiumResultLabel}>ID Back Screening</Text>
+            <Text style={styles.premiumResultValue}>
+              {item.documentScreening?.backSideScreened === true
+                ? "Screened · Unverified" : "Not evaluated"}
+            </Text>
+          </View>
+          <View style={styles.premiumResultRow}>
+            <Text style={styles.premiumResultLabel}>AI Route</Text>
+            <Text style={[styles.premiumResultValue,blurry && styles.premiumWarningText]}>
+              {blurry ? "Rescan required" :
+                item.reviewTrack === "priority_admin_review"
+                  ? "Priority Admin review" : "Independent LGU review"}
+            </Text>
           </View>
         </View>
-        <View style={styles.previewDisclaimer}>
-          <Ionicons name="alert-circle-outline" size={16} color="#A16207" />
-          <Text style={styles.previewDisclaimerText}>
-            AI/OCR cannot prove government ID authenticity or liveness.
-            The existing independent LGU verification requirements still apply.
-          </Text>
-        </View>
-      <SectionTitle
-        icon="person-circle-outline"
-        title="Resident Account"
-      />
-      <InfoLine
-        label="Barangay"
-        value={item.resident?.barangay || "Not set"}
-      />
-      <InfoLine
-        label="Phone"
-        value={item.resident?.phoneNumber || "Not set"}
-      />
-      <InfoLine
-        label="Account status"
-        value={item.resident?.accountStatus || "—"}
-      />
 
-      <SectionTitle
-        icon="scan-outline"
-        title="AI Verification Result"
-      />
-
-      <View style={styles.scoreCard}>
-        <View>
-          <Text style={styles.scoreCardLabel}>Document and identity review</Text>
-          <Text style={styles.scoreCardDecision}>
-            {blurry
-              ? "The image selected as National ID is too blurry to identify. Require a clearer scan; do not approve this record."
-              : item.reviewTrack === "priority_admin_review"
-                ? "Priority review: OCR found the selected National ID type and the account name, but did not authenticate the document."
-                : item.documentScreening?.status === "text_consistent_unverified"
-                  ? "Document text is consistent with the selected ID type; not authenticated"
-                  : item.documentScreening?.status === "mismatch"
-                    ? "Selected ID type conflicts with recognized document text"
-                    : "Document type is inconclusive; independent LGU review is required"}
-          </Text>
+        <View style={styles.premiumCard}>
+          <View style={styles.premiumCardTitleRow}>
+            <Ionicons name="shield-checkmark-outline" size={21} color="#08765A" />
+            <Text style={styles.premiumCardTitle}>Independent LGU Validation</Text>
+          </View>
+          {pending ? (
+            <>
+              <Text style={styles.premiumSubCopy}>
+                {blurry ? "Unclear National ID: request a new scan. Approval is blocked." :
+                  "Select the method actually completed. AI and OCR alone are not sufficient."}
+              </Text>
+              <View style={styles.premiumMethodOptions}>
+                {availableMethods.map(method => (
+                  <TouchableOpacity key={method.value} accessibilityRole="radio"
+                    accessibilityState={{selected:validationMethod===method.value}}
+                    style={[styles.premiumMethod,validationMethod===method.value&&styles.premiumMethodSelected]}
+                    onPress={() => setValidationMethod(method.value)}>
+                    <Ionicons
+                      name={validationMethod===method.value ? "radio-button-on-outline" : "radio-button-off-outline"}
+                      size={20} color="#08765A" />
+                    <Text style={styles.premiumMethodText}>{method.label}</Text>
+                    {nationalId ? (
+                      <TouchableOpacity accessibilityRole="link"
+                        accessibilityLabel="Open official PSA National ID check"
+                        onPress={openIssuerCheck}>
+                        <Ionicons name="open-outline" size={18} color="#08765A" />
+                      </TouchableOpacity>
+                    ) : null}
+                  </TouchableOpacity>
+                ))}
+              </View>
+              <TouchableOpacity accessibilityRole="checkbox"
+                accessibilityState={{checked:issuerReviewAttested}}
+                style={styles.premiumAttestation}
+                onPress={() => setIssuerReviewAttested(!issuerReviewAttested)}>
+                <Ionicons name={issuerReviewAttested ? "checkbox-outline" : "square-outline"}
+                  color="#08765A" size={22} />
+                <Text style={styles.premiumAttestationText}>
+                  I personally completed the independent identity check.
+                  No official verification result is automatically transferred to VolunServe.
+                </Text>
+              </TouchableOpacity>
+            </>
+          ) : (
+            <>
+              <InfoLine label="Decision" value={item.manualReviewDecision || item.decision || item.status || "—"} />
+              <InfoLine label="Method" value={item.manualValidationMethod || "Not recorded"} />
+              <InfoLine label="Reviewed By" value={item.reviewedByName || item.reviewedBy || "—"} />
+              <InfoLine label="Reviewed At" value={formatDate(item.reviewedAt)} />
+            </>
+          )}
         </View>
-        <Text style={styles.scoreCardLabel}>
-          AI screening is preliminary. Approve only after checking identity through an approved LGU validation method.
-        </Text>
       </View>
 
-      <DocumentScreeningSummary screening={item.documentScreening} />
-
-      <InfoLine
-        label="Verification ID"
-        value={item.verificationId || "—"}
-      />
-      <InfoLine
-        label="Submitted"
-        value={formatDate(item.lastSubmissionAt || item.createdAt)}
-      />
-
-      {item.message ? (
-        <View style={styles.aiMessage}>
-          <Ionicons
-            name="information-circle-outline"
-            size={19}
-            color="#0F766E"
-          />
-          <Text style={styles.aiMessageText}>{item.message}</Text>
-        </View>
-      ) : null}
-
-      {pending ? (
-        <>
-          <SectionTitle
-            icon="shield-checkmark-outline"
-            title="Independent LGU Validation"
-          />
-
-          <Text style={styles.helperText}>
-            {blurry
-              ? "The OCR cannot identify this ID. Select Require Retry and ask for a clearer scan. Approval is blocked until an acceptable scan and independent ID check."
-              : "Choose the method actually used by LGU/Admin. Do not verify based only on the AI score or an OCR name match."}
-          </Text>
-
-          <View style={styles.methodList}>
-            {availableMethods.map((method) => {
-              const active = validationMethod === method.value;
+      <View style={[styles.premiumRightColumn,!screenWide && styles.premiumFullWidth]}>
+        <View style={styles.premiumCard}>
+          <View style={styles.premiumCardTitleRow}>
+            <Ionicons name="document-text-outline" size={21} color="#08765A" />
+            <View style={styles.flexOne}>
+              <Text style={styles.premiumCardTitle}>Submitted Identity Evidence</Text>
+              <Text style={styles.premiumSubCopy}>Review the government ID images and live selfie before a decision.</Text>
+            </View>
+            <TouchableOpacity accessibilityRole="button"
+              accessibilityLabel="Refresh secure identity images"
+              onPress={()=>setEvidenceRefresh(value=>value+1)}
+              disabled={!item.evidenceAvailable}>
+              <Ionicons name="refresh-outline" size={20}
+                color={item.evidenceAvailable ? "#08765A" : "#CBD5E1"} />
+            </TouchableOpacity>
+          </View>
+          <View style={styles.premiumEvidenceTiles}>
+            {([
+              {key:"front" as const,label:"Government ID — Front",icon:"id-card-outline" as const},
+              {key:"back" as const,label:"Government ID — Back",icon:"card-outline" as const},
+              {key:"selfie" as const,label:"Live Selfie",icon:"person-outline" as const},
+            ]).map(tile => {
+              const uri = evidenceUris?.[tile.key];
+              const notCaptured = tile.key === "selfie" &&
+                item.verificationMethod === "volunserve_ai_ocr_manual_review";
+              const description = evidenceLoading ? "Loading protected image..." :
+                evidenceError ? "Photo unavailable" : notCaptured ? "Not captured (OCR only)" :
+                item.evidenceAvailable ? "Not available" : "Not retained previously";
               return (
-                <TouchableOpacity
-                  key={method.value}
-                  style={[
-                    styles.methodButton,
-                    active && styles.methodButtonActive,
-                  ]}
-                  onPress={() => setValidationMethod(method.value)}
-                >
-                  <Ionicons
-                    name={method.icon}
-                    size={18}
-                    color={active ? "#0F766E" : "#64748B"}
-                  />
-                  <Text
-                    style={[
-                      styles.methodButtonText,
-                      active && styles.methodButtonTextActive,
-                    ]}
-                  >
-                    {method.label}
-                  </Text>
+                <TouchableOpacity key={tile.key} style={styles.premiumEvidenceTile}
+                  accessibilityRole="button" disabled={!uri}
+                  accessibilityLabel={uri ? "Enlarge " + tile.label : tile.label + ": " + description}
+                  onPress={() => uri && setZoomedEvidence(uri)}>
+                  <View style={styles.premiumEvidenceImage}>
+                    {uri ? (
+                      <Image source={{uri}} resizeMode="contain"
+                        style={styles.premiumEvidencePhoto}
+                        accessibilityLabel={tile.label} />
+                    ) : (
+                      <>
+                        {evidenceLoading ? <ActivityIndicator color="#08765A" /> :
+                          <Ionicons name={tile.icon} size={28} color="#94A3B8" />}
+                        <Text style={styles.premiumMissingLabel}>{description}</Text>
+                      </>
+                    )}
+                  </View>
+                  <View style={styles.premiumEvidenceFooter}>
+                    <Text style={styles.premiumEvidenceText} numberOfLines={2}>{tile.label}</Text>
+                    <Ionicons name={uri ? "checkmark-circle" : "ellipse-outline"}
+                      size={18} color={uri ? "#08765A" : "#CBD5E1"} />
+                  </View>
                 </TouchableOpacity>
               );
             })}
           </View>
-
-          {nationalId ? (
-            <TouchableOpacity accessibilityRole="link" onPress={() => void Linking.openURL("https://everify.gov.ph/check")}>
-              <Text style={styles.helperText}>Official PSA National ID Check: https://everify.gov.ph/check (opens separately; no API result is transferred)</Text>
-            </TouchableOpacity>
-          ) : (
-            <Text style={styles.helperText}>Independently inspect or confirm the issuing document with the holder. OCR alone is not proof of authenticity.</Text>
-          )}
-          <TouchableOpacity accessibilityRole="checkbox" accessibilityState={{checked: issuerReviewAttested}}
-            onPress={() => setIssuerReviewAttested(!issuerReviewAttested)} style={styles.methodButton}>
-            <Ionicons name={issuerReviewAttested ? "checkbox-outline" : "square-outline"} size={22} color="#0F766E" />
-            <Text style={styles.methodButtonText}>
-              I personally completed this independent check. No official API result has been returned to VolunServe.
+          {evidenceError || !item.evidenceAvailable ? (
+            <Text style={styles.premiumEvidenceNotice}>
+              {evidenceError || "Earlier submissions did not store private images. Ask the Resident to submit a new scan."}
             </Text>
-          </TouchableOpacity>
-          <Text style={styles.inputLabel}>
-            Review notes / retry reason
-          </Text>
+          ) : item.verificationMethod === "volunserve_ai_ocr_manual_review" ? (
+            <Text style={styles.premiumEvidenceNotice}>
+              This is an ID-only OCR review. No selfie has been captured and face matching has not been performed.
+            </Text>
+          ) : (
+            <Text style={styles.premiumEvidenceNotice}>
+              Enlarge photos to review. Authorized access only; temporary links expire after 3 minutes.
+            </Text>
+          )}
 
-          <TextInput
-            style={styles.notesInput}
-            value={notes}
-            onChangeText={setNotes}
-            multiline
-            placeholder="Add LGU validation notes. A retry decision requires a clear reason."
-            placeholderTextColor="#94A3B8"
-            textAlignVertical="top"
-          />
-
-          <View style={styles.actionRow}>
-            <TouchableOpacity
-              style={[
-                styles.verifyButton,
-                (blurry || !validationMethod || !issuerReviewAttested || notes.trim().length < 10 || !!saving) &&
-                  styles.disabledButton,
-              ]}
-              disabled={blurry || !validationMethod || !issuerReviewAttested || notes.trim().length < 10 || !!saving}
-              onPress={onVerify}
-            >
-              {saving === "verify" ? (
-                <ActivityIndicator size="small" color="#FFFFFF" />
-              ) : (
-                <Ionicons
-                  name="shield-checkmark-outline"
-                  size={19}
-                  color="#FFFFFF"
-                />
-              )}
-              <Text style={styles.verifyButtonText}>
-                Verify Resident
-              </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[
-                styles.retryButton,
-                (notes.trim().length < 5 || !!saving) &&
-                  styles.disabledButton,
-              ]}
-              disabled={notes.trim().length < 5 || !!saving}
-              onPress={onRetry}
-            >
-              {saving === "require_retry" ? (
-                <ActivityIndicator size="small" color="#B91C1C" />
-              ) : (
-                <Ionicons
-                  name="refresh-outline"
-                  size={19}
-                  color="#B91C1C"
-                />
-              )}
-              <Text style={styles.retryButtonText}>
-                Require Retry
-              </Text>
-            </TouchableOpacity>
+          <View style={styles.premiumInfoDivider} />
+          <View style={styles.premiumCardTitleRow}>
+            <Ionicons name="checkbox-outline" size={21} color="#08765A" />
+            <Text style={styles.premiumCardTitle}>Verification Checks</Text>
           </View>
-        </>
-      ) : (
-        <>
-          <SectionTitle
-            icon="checkmark-circle-outline"
-            title="Manual Review Decision"
-          />
-          <InfoLine
-            label="Decision"
-            value={
-              item.manualReviewDecision ||
-              item.decision ||
-              item.status ||
-              "—"
-            }
-          />
-          <InfoLine
-            label="Validation method"
-            value={item.manualValidationMethod || "—"}
-          />
-          <InfoLine
-            label="Reviewed by"
-            value={item.reviewedByName || item.reviewedBy || "—"}
-          />
-          <InfoLine
-            label="Reviewed at"
-            value={formatDate(item.reviewedAt)}
-          />
-
-          {item.manualReviewNotes ? (
-            <View style={styles.resolvedNotes}>
-              <Text style={styles.resolvedNotesLabel}>
-                Review notes
-              </Text>
-              <Text style={styles.resolvedNotesText}>
-                {item.manualReviewNotes}
+          <View style={[styles.premiumChecksLayout,!screenWide&&styles.premiumChecksStack]}>
+            <View style={styles.premiumChecksTable}>
+              {checkRows.map(row => (
+                <View key={row.name} style={styles.premiumCheckRow}>
+                  <Ionicons name={row.ok ? "checkmark-circle" :
+                      row.warning ? "alert-circle" : "ellipse-outline"}
+                    size={20} color={row.ok ? "#08765A" : row.warning ? "#D97706" : "#94A3B8"} />
+                  <Text style={styles.premiumCheckName}>{row.name}</Text>
+                  <Text style={styles.premiumCheckValue}>{row.value}</Text>
+                </View>
+              ))}
+            </View>
+            <View style={styles.premiumAssessment}>
+              <View style={styles.premiumCardTitleRow}>
+                <Ionicons name="information-circle-outline" size={20} color="#1D4ED8" />
+                <Text style={styles.premiumAssessmentTitle}>Assessment Summary</Text>
+              </View>
+              <Text style={styles.premiumAssessmentText}>
+                {blurry ? "The submitted National ID scan is too blurry to identify. Request a clearer scan before approval." :
+                  item.documentScreening?.status === "mismatch"
+                    ? "The declared ID type and scanned document do not match. Request a corrected submission."
+                    : item.message || "AI screening is preliminary; independent LGU validation is required."}
               </Text>
             </View>
+          </View>
+          <Text style={styles.premiumDisclaimer}>
+            AI/OCR checks are preliminary and do not prove government ID authenticity, residency, or liveness.
+          </Text>
+
+          {pending ? (
+            <>
+              <View style={styles.premiumNotesHeader}>
+                <Text style={styles.premiumNotesLabel}>Review Notes / Retry Reason</Text>
+                <Text style={styles.premiumNotesMeta}>Required for retry or rejection</Text>
+              </View>
+              <TextInput style={styles.premiumNotesInput} multiline
+                maxLength={500} textAlignVertical="top" value={notes}
+                onChangeText={setNotes}
+                placeholder="Record LGU findings, document issues, or the reason for retry..."
+                placeholderTextColor="#94A3B8" />
+              <Text style={styles.premiumNotesCounter}>{notes.length}/500</Text>
+              <View style={[styles.premiumActions,!screenWide&&styles.premiumActionsStack]}>
+                <TouchableOpacity accessibilityRole="button"
+                  style={[styles.premiumVerifyAction,
+                    (blurry || !validationMethod || !issuerReviewAttested || notes.trim().length<10 || !!saving)
+                      && styles.disabledButton]}
+                  disabled={blurry || !validationMethod || !issuerReviewAttested || notes.trim().length<10 || !!saving}
+                  onPress={onVerify}>
+                  {saving === "verify" ? <ActivityIndicator color="#FFFFFF" /> :
+                    <Ionicons name="shield-checkmark-outline" size={21} color="#FFFFFF" />}
+                  <Text style={styles.premiumVerifyText}>Verify Resident</Text>
+                </TouchableOpacity>
+                <TouchableOpacity accessibilityRole="button"
+                  style={[styles.premiumRetryAction,(notes.trim().length<5 || !!saving)&&styles.disabledButton]}
+                  disabled={notes.trim().length<5 || !!saving} onPress={onRetry}>
+                  {saving === "require_retry" ? <ActivityIndicator color="#A16207" /> :
+                    <Ionicons name="refresh-outline" size={20} color="#A16207" />}
+                  <Text style={styles.premiumRetryText}>Require Retry</Text>
+                </TouchableOpacity>
+                <TouchableOpacity accessibilityRole="button"
+                  style={[styles.premiumRejectAction,(notes.trim().length<10 || !!saving)&&styles.disabledButton]}
+                  disabled={notes.trim().length<10 || !!saving} onPress={onReject}>
+                  {saving === "reject" ? <ActivityIndicator color="#B91C1C" /> :
+                    <Ionicons name="close-circle-outline" size={21} color="#B91C1C" />}
+                  <Text style={styles.premiumRejectText}>Reject Verification</Text>
+                </TouchableOpacity>
+              </View>
+              {blurry ? (
+                <Text style={styles.premiumDecisionHint}>
+                  This OCR-only or blurry ID case cannot be approved. Request a corrected scan after entering your review notes.
+                </Text>
+              ) : null}
+            </>
+          ) : (
+            <View style={styles.premiumResolvedNotes}>
+              <Text style={styles.premiumNotesLabel}>Recorded Review Notes</Text>
+              <Text style={styles.premiumSubCopy}>
+                {item.manualReviewNotes || "No review notes recorded."}
+              </Text>
+            </View>
+          )}
+        </View>
+        <View style={styles.premiumSecondaryTabs}>
+          {([
+            {key:"review" as const,label:"Review Overview"},
+            {key:"history" as const,label:"Details & History"},
+            {key:"audit" as const,label:"Audit Trail"},
+          ]).map(tab => (
+            <TouchableOpacity key={tab.key} onPress={()=>setActiveTab(tab.key)}
+              style={[styles.premiumSecondaryTab,activeTab===tab.key&&styles.premiumSecondaryTabActive]}>
+              <Text style={[styles.premiumSecondaryTabText,activeTab===tab.key&&styles.premiumSecondaryTabTextActive]}>
+                {tab.label}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+        {activeTab === "history" ? (
+          <View style={styles.premiumCard}>
+            <View style={styles.premiumCardTitleRow}>
+              <Ionicons name="time-outline" size={20} color="#08765A" />
+              <Text style={styles.premiumCardTitle}>Details &amp; History</Text>
+            </View>
+            <InfoLine label="Resident" value={item.resident?.fullName || "—"} />
+            <InfoLine label="Verification ID" value={item.verificationId || "—"} />
+            <InfoLine label="Submitted" value={formatDate(item.lastSubmissionAt || item.createdAt)} />
+            <InfoLine label="AI decision" value={item.aiDecision || "—"} />
+            <InfoLine label="Status" value={item.status || "—"} />
+            <DocumentScreeningSummary screening={item.documentScreening} />
+          </View>
+        ) : activeTab === "audit" ? (
+          <View style={styles.premiumCard}>
+            <View style={styles.premiumCardTitleRow}>
+              <Ionicons name="document-text-outline" size={20} color="#08765A" />
+              <Text style={styles.premiumCardTitle}>Recorded Audit Details</Text>
+            </View>
+            <InfoLine label="Manual decision" value={item.manualReviewDecision || "No decision recorded"} />
+            <InfoLine label="Validation method" value={item.manualValidationMethod || "—"} />
+            <InfoLine label="Reviewed by" value={item.reviewedByName || item.reviewedBy || "—"} />
+            <InfoLine label="Reviewed at" value={formatDate(item.reviewedAt)} />
+            <Text style={styles.premiumEvidenceNotice}>
+              Additional access events are recorded in authorized system logs.
+            </Text>
+          </View>
+        ) : null}
+      </View>
+      <Modal visible={Boolean(zoomedEvidence)} transparent animationType="fade"
+        onRequestClose={()=>setZoomedEvidence(null)}>
+        <View style={styles.fullScreenEvidence}>
+          <TouchableOpacity style={styles.fullScreenEvidenceClose}
+            accessibilityRole="button" onPress={()=>setZoomedEvidence(null)}>
+            <Ionicons name="close-outline" size={22} color="#FFFFFF" />
+            <Text style={styles.fullScreenEvidenceCloseText}>Close photo</Text>
+          </TouchableOpacity>
+          {zoomedEvidence ? (
+            <Image source={{uri:zoomedEvidence}} resizeMode="contain"
+              style={styles.fullScreenEvidenceImage}
+              accessibilityLabel="Enlarged private identity image" />
           ) : null}
-        </>
-      )}
-      </>) : activeTab === "history" ? (
-        <View style={styles.previewInfoCard}>
-          <SectionTitle icon="person-circle-outline" title="Resident Details & Verification History" />
-          <InfoLine label="Resident" value={item.resident?.fullName || "Resident"} />
-          <InfoLine label="Barangay" value={item.resident?.barangay || "Not set"} />
-          <InfoLine label="Verification ID" value={item.verificationId || "—"} />
-          <InfoLine label="Submitted" value={formatDate(item.lastSubmissionAt || item.createdAt)} />
-          <InfoLine label="Current status" value={item.status || "—"} />
-          <InfoLine label="Review track" value={item.reviewTrack || "—"} />
-          <InfoLine label="AI decision" value={item.aiDecision || "—"} />
-          <Text style={styles.previewEvidenceCaption}>
-            This tab displays the recorded verification details, not a fabricated event history.
-          </Text>
         </View>
-      ) : (
-        <View style={styles.previewInfoCard}>
-          <SectionTitle icon="document-text-outline" title="Recorded Review Audit Details" />
-          <InfoLine label="Verification ID" value={item.verificationId || "—"} />
-          <InfoLine label="Manual decision" value={item.manualReviewDecision || "No manual decision recorded"} />
-          <InfoLine label="Validation method" value={item.manualValidationMethod || "—"} />
-          <InfoLine label="Reviewed by" value={item.reviewedByName || item.reviewedBy || "—"} />
-          <InfoLine label="Reviewed at" value={formatDate(item.reviewedAt)} />
-          {item.manualReviewNotes ? <Text style={styles.previewEvidenceCaption}>{item.manualReviewNotes}</Text> : null}
-          <Text style={styles.previewEvidenceCaption}>
-            Full audit activity remains in authorized system logs; no private images are exposed here.
-          </Text>
-        </View>
-      )}
+      </Modal>
     </View>
   );
 }
