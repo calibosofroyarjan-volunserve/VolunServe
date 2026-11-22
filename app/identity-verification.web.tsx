@@ -104,26 +104,7 @@ const ID_TYPES: Array<{
   label: string;
   helper: string;
 }> = [
-  {
-    value: "national_id",
-    label: "National ID",
-    helper: "PhilSys / National ID",
-  },
-  {
-    value: "drivers_license",
-    label: "Driver's License",
-    helper: "Valid government-issued license",
-  },
-  {
-    value: "passport",
-    label: "Passport",
-    helper: "Valid passport bio page",
-  },
-  {
-    value: "other_government_id",
-    label: "Other Government ID",
-    helper: "UMID or another government-issued photo ID",
-  },
+  { value: "national_id", label: "Philippine National ID", helper: "PhilSys / National ID only (FRONT + BACK)" },
 ];
 
 function scanCopy(scanState: ScanState) {
@@ -241,6 +222,9 @@ export default function IdentityVerificationWeb() {
     useState<IdentityDocumentType>("national_id");
   const [idDocument, setIdDocument] =
     useState<CapturedIdentityMedia | null>(null);
+  const [idBackDocument, setIdBackDocument] =
+    useState<CapturedIdentityMedia | null>(null);
+  const [idCaptureSide, setIdCaptureSide] = useState<"front" | "back">("front");
   const [selfie, setSelfie] =
     useState<CapturedIdentityMedia | null>(null);
 
@@ -317,6 +301,13 @@ export default function IdentityVerificationWeb() {
       if (uri?.startsWith("blob:")) URL.revokeObjectURL(uri);
     };
   }, [idDocument?.uri]);
+
+  useEffect(() => {
+    const uri = idBackDocument?.uri;
+    return () => {
+      if (uri?.startsWith("blob:")) URL.revokeObjectURL(uri);
+    };
+  }, [idBackDocument?.uri]);
 
   const identityStatus = getIdentityStatus(profile);
   const currentIdentityStatus =
@@ -462,7 +453,8 @@ export default function IdentityVerificationWeb() {
     };
   }, [idCameraOpen, stopIdCamera]);
 
-  const chooseIdDocument = () => {
+  const chooseIdDocument = (side: "front" | "back" = "front") => {
+    setIdCaptureSide(side);
     setIdCameraReady(false);
     setIdCameraError("");
     setIdCameraOpen(true);
@@ -485,10 +477,14 @@ export default function IdentityVerificationWeb() {
           0.92,
         );
       });
-      const name = `government-id-camera-${Date.now()}.jpg`;
+      const name = `national-id-${idCaptureSide}-${Date.now()}.jpg`;
       const file = new File([blob], name, { type: "image/jpeg" });
-      if (idDocument?.uri.startsWith("blob:")) URL.revokeObjectURL(idDocument.uri);
-      setIdDocument({ uri: URL.createObjectURL(blob), name, type: "image/jpeg", file });
+      const media = { uri: URL.createObjectURL(blob), name, type: "image/jpeg", file };
+      if (idCaptureSide === "back") {
+        setIdBackDocument(media);
+      } else {
+        setIdDocument(media);
+      }
       setLocalMessage("");
       setIdCameraOpen(false);
     } catch (error: any) {
@@ -497,8 +493,8 @@ export default function IdentityVerificationWeb() {
   };
 
   const discardIdDocument = () => {
-    if (idDocument?.uri.startsWith("blob:")) URL.revokeObjectURL(idDocument.uri);
     setIdDocument(null);
+    setIdBackDocument(null);
   };
 
   const ensureDetector = async () => {
@@ -899,10 +895,10 @@ export default function IdentityVerificationWeb() {
   };
 
   const openFaceScan = async () => {
-    if (!idDocument) {
+    if (!idDocument || !idBackDocument) {
       Alert.alert(
-        "Government ID Required",
-        "Capture a clear government ID image using your camera before starting the face scan.",
+        "National ID FRONT and BACK Required",
+        "Capture clear photos of BOTH sides of the Philippine National ID before starting the face scan.",
       );
       return;
     }
@@ -941,6 +937,12 @@ export default function IdentityVerificationWeb() {
       return;
     }
 
+    if (!idBackDocument) {
+      setStep(1);
+      Alert.alert("National ID BACK Required", "Capture the reverse side of your National ID.");
+      return;
+    }
+
     if (!selfie) {
       setStep(2);
       Alert.alert(
@@ -975,6 +977,7 @@ export default function IdentityVerificationWeb() {
         await submitIdentityVerification({
           idType,
           idDocument,
+          idBackDocument,
           selfie,
         });
 
@@ -1110,6 +1113,7 @@ export default function IdentityVerificationWeb() {
           setLocalMessage("");
           setSubmittedIdPreviewUri(null);
           setIdDocument(null);
+          setIdBackDocument(null);
           setSelfie(null);
           setConsent(false);
           setScanState("idle");
@@ -1236,17 +1240,21 @@ export default function IdentityVerificationWeb() {
           idType={idType}
           setIdType={setIdType}
           idDocument={idDocument}
+          idBackDocument={idBackDocument}
+          captureSide={idCaptureSide}
           selectedIdLabel={selectedIdLabel}
           cameraOpen={idCameraOpen}
           cameraReady={idCameraReady}
           cameraError={idCameraError}
           idVideoRef={idVideoRef}
           idCanvasRef={idCanvasRef}
-          onPick={chooseIdDocument}
+          onPick={() => chooseIdDocument("front")}
+          onPickBack={() => chooseIdDocument("back")}
           onCapture={() => void captureIdDocument()}
           onCancel={() => setIdCameraOpen(false)}
           onNext={() => void openFaceScan()}
           onRemove={discardIdDocument}
+          onRemoveBack={() => setIdBackDocument(null)}
         />
       ) : null}
 
@@ -1689,6 +1697,8 @@ function UploadIdStep({
   idType,
   setIdType,
   idDocument,
+  idBackDocument,
+  captureSide,
   selectedIdLabel,
   cameraOpen,
   cameraReady,
@@ -1696,14 +1706,18 @@ function UploadIdStep({
   idVideoRef,
   idCanvasRef,
   onPick,
+  onPickBack,
   onCapture,
   onCancel,
   onNext,
   onRemove,
+  onRemoveBack,
 }: {
   idType: IdentityDocumentType;
   setIdType: (value: IdentityDocumentType) => void;
   idDocument: CapturedIdentityMedia | null;
+  idBackDocument: CapturedIdentityMedia | null;
+  captureSide: "front" | "back";
   selectedIdLabel: string;
   cameraOpen: boolean;
   cameraReady: boolean;
@@ -1711,10 +1725,12 @@ function UploadIdStep({
   idVideoRef: React.MutableRefObject<HTMLVideoElement | null>;
   idCanvasRef: React.MutableRefObject<HTMLCanvasElement | null>;
   onPick: () => void;
+  onPickBack: () => void;
   onCapture: () => void;
   onCancel: () => void;
   onNext: () => void;
   onRemove: () => void;
+  onRemoveBack: () => void;
 }) {
   return (
     <View style={styles.stepCard}>
@@ -1726,10 +1742,10 @@ function UploadIdStep({
         </View>
         <View style={styles.stepHeaderCopy}>
           <Text style={styles.stepTitle}>
-            Scan Government ID
+            Scan National ID FRONT + BACK
           </Text>
           <Text style={styles.stepSubtitle}>
-            Scan your physical government-issued ID with the camera. Make the face and printed details clear.
+            Capture BOTH sides of your Philippine National ID. Other document types are not accepted in this verification flow.
           </Text>
         </View>
       </View>
@@ -1783,10 +1799,10 @@ function UploadIdStep({
       </View>
 
       <Text style={styles.fieldLabel}>
-        ID Photo
+        National ID FRONT Photo
       </Text>
 
-      {idDocument ? (
+      {!cameraOpen && idDocument ? (
         <View style={styles.mediaPreviewCard}>
           <Image
             source={{ uri: idDocument.uri }}
@@ -1850,7 +1866,7 @@ function UploadIdStep({
               disabled={!cameraReady}
             >
               <Ionicons name="camera" size={19} color="#FFFFFF" />
-              <Text style={styles.nextButtonText}>Capture ID</Text>
+              <Text style={styles.nextButtonText}>Capture National ID {captureSide === "back" ? "BACK" : "FRONT"}</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.secondaryWideButton} onPress={onCancel}>
               <Text style={styles.secondaryWideButtonText}>Cancel</Text>
@@ -1880,13 +1896,43 @@ function UploadIdStep({
         </TouchableOpacity>
       )}
 
+
+      <View style={{ marginTop: 16 }}>
+        <Text style={styles.fieldLabel}>National ID BACK Photo</Text>
+        {idBackDocument ? (
+          <View style={styles.mediaPreviewCard}>
+            <Image source={{ uri: idBackDocument.uri }} style={styles.idPreview} resizeMode="contain" />
+            <View style={styles.mediaPreviewInfo}>
+              <View style={styles.mediaPreviewCopy}>
+                <Text style={styles.mediaPreviewTitle}>National ID BACK captured</Text>
+                <Text style={styles.mediaPreviewText} numberOfLines={1}>{idBackDocument.name}</Text>
+              </View>
+              <TouchableOpacity style={styles.iconButton} onPress={onRemoveBack}>
+                <Ionicons name="trash-outline" size={18} color={COLORS.danger} />
+              </TouchableOpacity>
+            </View>
+          </View>
+        ) : (
+          <TouchableOpacity
+            style={[styles.uploadZone, (!idDocument || cameraOpen) && styles.disabledButton]}
+            disabled={!idDocument || cameraOpen}
+            onPress={onPickBack}
+          >
+            <View style={styles.uploadIcon}>
+              <Ionicons name="camera-outline" size={29} color={COLORS.blue} />
+            </View>
+            <Text style={styles.uploadTitle}>Capture National ID BACK</Text>
+            <Text style={styles.uploadText}>Turn your physical card over. Keep the complete reverse side readable.</Text>
+          </TouchableOpacity>
+        )}
+      </View>
       <View style={styles.stepFooter}>
         <TouchableOpacity
           style={[
             styles.nextButton,
-            !idDocument && styles.disabledButton,
+            (!idDocument || !idBackDocument) && styles.disabledButton,
           ]}
-          disabled={!idDocument}
+          disabled={!idDocument || !idBackDocument}
           onPress={onNext}
         >
           <Text style={styles.nextButtonText}>
