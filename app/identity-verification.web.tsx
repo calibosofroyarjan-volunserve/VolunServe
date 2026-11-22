@@ -2038,7 +2038,7 @@ function WizardProgress({
 
         return (
           <React.Fragment key={item.number}>
-            <View style={styles.progressItem}>
+            <View style={[styles.progressItem, active && styles.progressItemActive]}>
               <View
                 style={[
                   styles.progressCircle,
@@ -2105,6 +2105,7 @@ function UploadIdStep({
   idCanvasRef,
   onPick,
   onPickBack,
+  onUploadFile,
   onCapture,
   onCancel,
   onNext,
@@ -2131,6 +2132,7 @@ function UploadIdStep({
   idCanvasRef: React.MutableRefObject<HTMLCanvasElement | null>;
   onPick: () => void;
   onPickBack: () => void;
+  onUploadFile: (side: "front" | "back") => void;
   onCapture: () => void;
   onCancel: () => void;
   onNext: () => void;
@@ -2142,80 +2144,63 @@ function UploadIdStep({
   onRemove: () => void;
   onRemoveBack: () => void;
 }) {
+  const { width: windowWidth } = useWindowDimensions();
+  const compactDesktop = windowWidth >= 1280;
+  const [idTypeDropdownOpen, setIdTypeDropdownOpen] = useState(false);
   return (
     <View style={styles.stepCard}>
       <View style={styles.stepHeader}>
         <View style={styles.stepHeaderNumber}>
-          <Text style={styles.stepHeaderNumberText}>
-            1
-          </Text>
+          <Ionicons name="card-outline" size={23} color="#006C47" />
         </View>
         <View style={styles.stepHeaderCopy}>
-          <Text style={styles.stepTitle}>
-            Scan Government ID
-          </Text>
+          <Text style={styles.stepTitle}>Government ID Details</Text>
           <Text style={styles.stepSubtitle}>
-            Scan your physical government ID. Put the portrait/front in Front and the reverse in Back. Auto-capture checks steadiness, not which side is shown; OCR checks orientation after submission.
+            Select your government-issued ID and provide clear photos of the front and back.
           </Text>
         </View>
       </View>
 
-      <Text style={styles.fieldLabel}>
-        ID Type
-      </Text>
-
-      <View style={styles.idTypeGrid}>
-        {ID_TYPES.map((item) => {
-          const selected = idType === item.value;
-
-          return (
+      <View style={styles.idSelectorRow}>
+        <Text style={styles.fieldLabel}>ID Type</Text>
+        <View style={styles.idSelectorControl}>
+          <TouchableOpacity
+            accessibilityRole="button"
+            accessibilityLabel="Choose government ID type"
+            accessibilityState={{ expanded: idTypeDropdownOpen }}
+            style={styles.idTypeSelect}
+            onPress={() => setIdTypeDropdownOpen(open => !open)}
+          >
+            <Ionicons name="card-outline" size={21} color="#086642" />
+            <Text style={styles.idTypeSelectText}>
+              <Text style={styles.idTypeSelectStrong}>National ID</Text> (Philippine Identification System)
+            </Text>
+            <Ionicons name={idTypeDropdownOpen ? "chevron-up" : "chevron-down"} size={20} color="#123B33" />
+          </TouchableOpacity>
+          {idTypeDropdownOpen ? (
             <TouchableOpacity
-              key={item.value}
-              style={[
-                styles.idTypeButton,
-                selected && styles.idTypeButtonActive,
-              ]}
-              onPress={() => setIdType(item.value)}
+              accessibilityRole="button"
+              accessibilityLabel="Select National ID"
+              style={styles.idTypeDropdownOption}
+              onPress={() => { setIdType("national_id"); setIdTypeDropdownOpen(false); }}
             >
-              <Ionicons
-                name={
-                  selected
-                    ? "checkmark-circle"
-                    : "card-outline"
-                }
-                size={18}
-                color={
-                  selected
-                    ? COLORS.blue
-                    : "#64748B"
-                }
-              />
-              <View style={styles.idTypeCopy}>
-                <Text
-                  style={[
-                    styles.idTypeLabel,
-                    selected && styles.idTypeLabelActive,
-                  ]}
-                >
-                  {item.label}
-                </Text>
-                <Text style={styles.idTypeHelper}>
-                  {item.helper}
-                </Text>
+              <Ionicons name="checkmark-circle" size={19} color="#06764D" />
+              <View>
+                <Text style={styles.idTypeOptionText}>National ID</Text>
+                <Text style={styles.idTypeOptionHelper}>Currently available for identity verification testing</Text>
               </View>
             </TouchableOpacity>
-          );
-        })}
+          ) : null}
+        </View>
       </View>
-
+      <View style={[styles.idCaptureGrid, compactDesktop && styles.idCaptureGridDesktop]}>
       {([
         { side: "front" as const, label: "Front of ID", media: idDocument, open: onPick, remove: onRemove },
         ...(idType === "passport" ? [] : [
           { side: "back" as const, label: "Back of ID", media: idBackDocument, open: onPickBack, remove: onRemoveBack },
         ]),
       ]).map(({ side, label, media, open, remove }) => (
-        <View key={side}>
-          <Text style={styles.fieldLabel}>{label}</Text>
+        <View key={side} style={[styles.idCapturePanel, compactDesktop && styles.idCapturePanelDesktop]}>
           {media ? (
             <View style={styles.mediaPreviewCard}>
               <Image
@@ -2275,22 +2260,35 @@ function UploadIdStep({
               </View>
             </View>
           ) : (
-            <TouchableOpacity
-              style={styles.uploadZone}
-              onPress={open}
-              disabled={cameraOpen}
-            >
-              <View style={styles.uploadIcon}>
-                <Ionicons name="camera-outline" size={29} color={COLORS.blue} />
+            <View style={styles.idCaptureEmpty}>
+              <View style={styles.idCaptureGlyph}>
+                <Ionicons name={side === "front" ? "person-outline" : "barcode-outline"} size={31} color="#16865D" />
               </View>
-              <Text style={styles.uploadTitle}>Open Camera — {label}</Text>
-              <Text style={styles.uploadText}>
-                The camera may capture the wrong side. Review the preview, then tap Check ID: the AI will screen the ID type and front/back layout before you enter the face scan. This is not proof of authenticity.
+              <Text style={styles.idCaptureTitle}>
+                {side === "front" ? "Front of National ID" : "Back of National ID"}
               </Text>
-            </TouchableOpacity>
+              <Text style={styles.idCaptureHint}>
+                Upload or capture the {side === "front" ? "front" : "back"} side of your National ID.
+              </Text>
+              <View style={styles.idCaptureActions}>
+                <TouchableOpacity accessibilityRole="button"
+                  style={[styles.idCaptureCameraButton, cameraOpen && styles.disabledButton]}
+                  disabled={cameraOpen} onPress={open}>
+                  <Ionicons name="camera-outline" size={20} color="#FFFFFF" />
+                  <Text style={styles.idCaptureCameraText}>Open Camera</Text>
+                </TouchableOpacity>
+                <TouchableOpacity accessibilityRole="button"
+                  style={[styles.idCaptureUploadButton, cameraOpen && styles.disabledButton]}
+                  disabled={cameraOpen} onPress={() => onUploadFile(side)}>
+                  <Ionicons name="cloud-upload-outline" size={20} color="#1B354A" />
+                  <Text style={styles.idCaptureUploadText}>Upload File</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
           )}
         </View>
       ))}
+      </View>
 
       <TouchableOpacity
         accessibilityRole="checkbox"
@@ -2302,9 +2300,9 @@ function UploadIdStep({
           {documentConsent ? <Ionicons name="checkmark" color="#FFFFFF" size={15} /> : null}
         </View>
         <Text style={styles.consentText}>
-          I agree to securely submit my ID front/back images for a preliminary OCR
-          scan before the selfie. No selfie is uploaded at this stage.
-          The check does not confirm government issuance.
+          I agree to securely submit my National ID (front and back) for preliminary
+          OCR screening before the face scan. No selfie is uploaded at this stage.
+          Screening does not confirm that the ID is authentic.
         </Text>
       </TouchableOpacity>
       {documentPrecheckMessage ? (
@@ -2321,9 +2319,9 @@ function UploadIdStep({
         <TouchableOpacity
           style={[
             styles.nextButton,
-            (!idDocument || (idType !== "passport" && !idBackDocument) || documentChecking) && styles.disabledButton,
+            (!idDocument || (idType !== "passport" && !idBackDocument) || !documentConsent || documentChecking) && styles.disabledButton,
           ]}
-          disabled={!idDocument || (idType !== "passport" && !idBackDocument) || documentChecking}
+          disabled={!idDocument || (idType !== "passport" && !idBackDocument) || !documentConsent || documentChecking}
           onPress={onNext}
         >
           <Text style={styles.nextButtonText}>
