@@ -1182,6 +1182,88 @@ jobs:
             }
             // END PINNED IDENTITY REVIEWS DESIGN CONTROLLER GATE
 
+            // BEGIN PINNED IDENTITY HOSTING IMMUTABLE BACKUP GATE
+            // Repair only the Hosting rollback backup mechanism. Preview channel
+            // creation failed before publish. Use the previously approved
+            // read-only immutable live version snapshot instead.
+            {
+              const controller=".github/workflows/release-approved-identity-review-design-20261123.yml";
+              const verifier=".github/workflows/verify-reconciled-hosting-source-no-deploy-20261111.yml";
+              const changed=git("diff","--name-status","--no-renames",liveBase,commit)
+                .split("\n").filter(Boolean).sort();
+              if(changed.length===2 &&
+                 changed[0]==="M\t"+controller &&
+                 changed[1]==="M\t"+verifier){
+                const liveSource="b0aafbc9a244fdb2c871ed94b402639c4ec8025d";
+                const reviewedUi="66116a1032d3d2944eaa16f95275774880c0f06f";
+                assert.equal(liveBase,"dbdbf416c4570d74a7f2ab39a63b450db8834155",
+                  "BLOCKED protected controller changed since immutable-backup audit");
+                assert.equal(marker.revision,liveSource,
+                  "BLOCKED live Hosting moved after approved UI review");
+                assert.equal(blob(liveBase,verifier),
+                  "b0b5a8461be71e1b56f094801cbc364e7df4c9b2",
+                  "BLOCKED previous protected verifier drifted");
+                assert.equal(blob(liveBase,controller),
+                  "8cf166e35dad36f8bdcfe178e4e50d77ef4969e0",
+                  "BLOCKED old preflight controller differs from audited version");
+                assert.equal(blob(commit,controller),
+                  "04251483c68c9dd03b39815083c3b2d8518e2e1e",
+                  "BLOCKED revised version-backed release controller changed");
+                const helper=".github/scripts/hosting-live-release-snapshot-20261122.cjs";
+                assert.equal(blob(commit,helper),
+                  "7d339c1c1873b5a2b9d8a6516ec7516ffcc69d6c",
+                  "BLOCKED immutable live-version rollback utility changed");
+                const source=git("ls-remote","--heads","origin",
+                  "design/published-identity-reviews-ui-20261123").split(/\s+/)[0];
+                assert.equal(source,reviewedUi,"BLOCKED reviewed design branch changed");
+                git("merge-base","--is-ancestor",liveSource,reviewedUi);
+                assert.deepEqual(git("diff","--name-status","--no-renames",
+                  liveSource,reviewedUi).split("\n").filter(Boolean).sort(),[
+                    "A\t.github/workflows/qa-published-identity-reviews-ui-20261123.yml",
+                    "M\tapp/(admin)/identity-reviews.tsx"
+                  ],"BLOCKED design source contains unrelated or stale files");
+                const previousController=git("show",liveBase+":"+controller);
+                const candidateController=git("show",commit+":"+controller);
+                assert(candidateController.includes("hosting-live-release-snapshot-20261122.cjs snapshot") &&
+                  candidateController.includes("hosting-live-release-snapshot-20261122.cjs restore") &&
+                  !candidateController.includes("hosting:clone"),
+                  "BLOCKED approved immutable rollback strategy not present");
+                assert(candidateController.includes("SOURCE_SHA: "+reviewedUi) &&
+                  candidateController.includes("EXPECTED_LIVE: "+liveSource) &&
+                  candidateController.includes("BASE_SHA: "+liveSource),
+                  "BLOCKED immutable release source/version pin changed");
+                const old=git("show",liveBase+":"+verifier);
+                const revised=git("show",commit+":"+verifier);
+                const startTag="            // BEGIN PINNED IDENTITY HOSTING IMMUTABLE BACKUP GATE\n";
+                const endTag="            // END PINNED IDENTITY HOSTING IMMUTABLE BACKUP GATE\n";
+                const first=revised.indexOf(startTag);
+                const last=revised.indexOf(endTag,first);
+                assert(first>=0 && last>first,"BLOCKED missing scoped backup review marker");
+                const next=last+endTag.length;
+                assert.equal(revised[next],"\n","BLOCKED scoped backup audit separator changed");
+                assert.equal(revised.slice(0,first)+revised.slice(next+1),old,
+                  "BLOCKED existing protected PR verifier was changed outside review block");
+                for(const p of [
+                  "package.json","package-lock.json","app.json","tsconfig.json",
+                  "firebase.json",".firebaserc","firestore.rules","storage.rules",
+                  "backend/server.js","functions/index.js","lib/firebase.ts",
+                  "scripts/guard-live-protected-release.cjs",
+                  ".github/workflows/auto-publish-protected-live-hosting.yml",
+                  ".github/workflows/release-live-protected-hosting.yml"
+                ]){
+                  const before=git("ls-tree","--name-only",liveBase,"--",p);
+                  const after=git("ls-tree","--name-only",commit,"--",p);
+                  assert.equal(after,before,"BLOCKED protected release tree changed: "+p);
+                  if(before)assert.equal(blob(commit,p),blob(liveBase,p),
+                    "BLOCKED protected application/security path changed: "+p);
+                }
+                console.log("PASS content-pinned existing Hosting snapshot and rollback release");
+                console.log("NO DEPLOY from protected PR audit");
+                return;
+              }
+            }
+            // END PINNED IDENTITY HOSTING IMMUTABLE BACKUP GATE
+
             // BEGIN PINNED IDENTITY UI CONTROLLER DIFF-REPAIR GATE
             // Correct exactly one failed pre-deploy shape assertion. The previous
             // release never wrote to Firebase. General protected guards stay intact.

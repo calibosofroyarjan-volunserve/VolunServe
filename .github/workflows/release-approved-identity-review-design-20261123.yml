@@ -24,6 +24,8 @@ jobs:
       EXPO_PUBLIC_VOLUNSERVE_ENV: production
       EXPO_PUBLIC_IDENTITY_VERIFICATION_API_URL: https://volunserve.onrender.com
       PROJECT: volunserve-3aa5b
+      SITE: volunserve-3aa5b
+      BASE_SHA: b0aafbc9a244fdb2c871ed94b402639c4ec8025d
       EXPECTED_LIVE: b0aafbc9a244fdb2c871ed94b402639c4ec8025d
       SOURCE_SHA: 66116a1032d3d2944eaa16f95275774880c0f06f
       SOURCE_BRANCH: design/published-identity-reviews-ui-20261123
@@ -147,14 +149,14 @@ jobs:
           })().catch(err=>{console.error(err.message);process.exitCode=1;});
           NODE
           echo "GOOGLE_APPLICATION_CREDENTIALS=$RUNNER_TEMP/volunserve-ui-hosting.json" >> "$GITHUB_ENV"
-      - name: Back up exact current production Hosting before publish
+      - name: Capture immutable existing Hosting version for safe rollback, no preview channel
         id: backup
         working-directory: site
         run: |
           set -euo pipefail
           VOLUNSERVE_HOSTING_URL='https://volunserve.com' VOLUNSERVE_EXPECTED_SHA="$EXPECTED_LIVE" node scripts/check-live-hosting.cjs
-          npx firebase-tools hosting:clone "$PROJECT:live" "$PROJECT:$BACKUP_CHANNEL" --project "$PROJECT" --non-interactive
-          echo "PASS current Hosting backup ready"
+          node ../controller/.github/scripts/hosting-live-release-snapshot-20261122.cjs snapshot
+          echo "PASS immutable current Hosting version saved; no changes to live release"
       - name: Publish approved frontend only, no Firestore or backend changes
         id: deploy
         uses: FirebaseExtended/action-hosting-deploy@v0
@@ -180,12 +182,14 @@ jobs:
           done
           echo "BLOCKED postpublish verification failed; rollback required"
           exit 1
-      - name: Restore backed-up current Hosting after any failed deploy or verification
+      - name: Restore exact immutable previous Hosting version after a failed deploy
         if: failure() && steps.backup.outcome == 'success' && steps.deploy.outcome != 'skipped'
         working-directory: site
         run: |
-          npx firebase-tools hosting:clone "$PROJECT:$BACKUP_CHANNEL" "$PROJECT:live" --project "$PROJECT" --non-interactive
-          echo "Restored previous live Hosting backup"
+          set -euo pipefail
+          node ../controller/.github/scripts/hosting-live-release-snapshot-20261122.cjs restore
+          VOLUNSERVE_HOSTING_URL='https://volunserve.com' VOLUNSERVE_EXPECTED_SHA="$EXPECTED_LIVE" node scripts/check-live-hosting.cjs
+          echo "Verified exact previous Hosting version was restored"
       - name: Erase temporary Hosting credential
         if: always()
         run: rm -f "$RUNNER_TEMP/volunserve-ui-hosting.json"
