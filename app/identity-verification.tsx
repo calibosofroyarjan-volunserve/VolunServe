@@ -2009,7 +2009,7 @@ function FaceScanStep({
         >
           I consent to VolunServe privately processing and securely
           storing my ID front and back scans and live selfie for AI checks
-          and authorized LGU Admin identity review.
+          and authorized LGU Admin identity review (up to 30 days).
         </Text>
       </TouchableOpacity>
 
