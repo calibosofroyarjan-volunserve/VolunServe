@@ -205,3 +205,37 @@ test("retired private images stay queued on provider failure and are removed on 
     cloudinary.uploader.destroy = prior;
   }
 });
+
+
+test("Cloudinary timeout after storage is queued for private-image deletion retry", async () => {
+  const previousUpload = cloudinary.uploader.upload_stream;
+  const previousDestroy = cloudinary.uploader.destroy;
+  const seen = [];
+  let queued = null;
+  try {
+    cloudinary.uploader.upload_stream = (options, callback) => new Writable({
+      write(_chunk, _encoding, done) { done(); },
+      final(done) {
+        seen.push(options.public_id);
+        callback(new Error("transport timeout after upload"));
+        done();
+      },
+    });
+    cloudinary.uploader.destroy = async () => ({ result: "error" });
+    await assert.rejects(
+      storeIdentityEvidence("testResident123", {
+        front: { buffer: Buffer.from(jpeg()), format: "jpg" },
+      }, {
+        onCleanupFailure: async (images) => { queued = images; },
+      }),
+      { code: "identity_evidence_upload_failed", statusCode: 503 },
+    );
+    assert.equal(seen.length, 1);
+    assert.ok(queued?.front?.publicId);
+    assert.equal(queued.front.publicId, seen[0]);
+    assert.ok(queued.front.publicId.endsWith("-front"));
+  } finally {
+    cloudinary.uploader.upload_stream = previousUpload;
+    cloudinary.uploader.destroy = previousDestroy;
+  }
+});
