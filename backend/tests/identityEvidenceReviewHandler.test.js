@@ -28,7 +28,7 @@ function harness(overrides = {}) {
     collection: (name) => {
       if (name === "adminActivityLogs") {
         return { add: async (value) => {
-          if (overrides.auditFailure) throw new Error("audit database offline");
+          if (overrides.auditFailure) throw new Error("audit database offline PRIVATE_SECRET_TEST_ONLY");
           logs.push(value);
         }};
       }
@@ -129,4 +129,6 @@ test("audit failure must prevent release of protected ID links", async () => {
   assert.equal(res.statusCode, 500);
   assert.equal(res.payload.ok, false);
   assert.ok(!JSON.stringify(res.payload).includes("private.example"));
+  assert.ok(!JSON.stringify(res.payload).includes("PRIVATE_SECRET_TEST_ONLY"));
+  assert.equal(res.payload.message, "Unable to view private identity photos. Please retry or contact an administrator.");
 });
