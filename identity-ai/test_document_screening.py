@@ -159,7 +159,31 @@ class GovernmentIdScreeningTests(unittest.TestCase):
             "PHILIPPINE IDENTIFICATION CARD",
             "",
         )
+        self.assertEqual(result["status"], "inconclusive")
+        self.assertTrue(result["backSideProvided"])
+        self.assertTrue(result["backSideScreened"])
         self.assertIn("document_back_ocr_inconclusive", result["warningCodes"])
+        self.assertFalse(result["authenticityVerified"])
+        self.assertTrue(result["manualReviewRequired"])
+
+    def test_whitespace_only_national_id_back_never_passes(self):
+        result = assess_document_sides(
+            "national_id",
+            "PHILIPPINE IDENTIFICATION CARD SURNAME SAMPLE",
+            " \t\n ",
+        )
+        self.assertEqual(result["status"], "inconclusive")
+        self.assertIn("document_back_ocr_inconclusive", result["warningCodes"])
+        self.assertFalse(result["authenticityVerified"])
+
+    def test_empty_back_never_overrides_unsupported_front(self):
+        result = assess_document_sides(
+            "national_id",
+            "SCHOOL ID UNIVERSITY PHILIPPINE IDENTIFICATION CARD",
+            "",
+        )
+        self.assertEqual(result["status"], "unsupported")
+        self.assertIn("school_id_not_supported", result["warningCodes"])
         self.assertFalse(result["authenticityVerified"])
 
     def test_no_raw_private_id_data_survives_two_side_screening(self):
