@@ -1111,6 +1111,77 @@ jobs:
             }
             // END PINNED SELF ONLINE MEMBER CARD GATE
 
+            // BEGIN PINNED IDENTITY REVIEWS DESIGN CONTROLLER GATE
+            // One-time exception for the audited *Hosting-only release controller*.
+            // Does not let unshipped protected application code into production
+            // and does not alter the default fail-closed rule for any other PR.
+            {
+              const controllerPath=".github/workflows/release-approved-identity-review-design-20261123.yml";
+              const verifierPath=".github/workflows/verify-reconciled-hosting-source-no-deploy-20261111.yml";
+              const changed=git("diff","--name-status","--no-renames",liveBase,commit)
+                .split("\n").filter(Boolean).sort();
+              const exactController=changed.length===2 &&
+                changed[0]==="A\t"+controllerPath &&
+                changed[1]==="M\t"+verifierPath;
+              if(exactController){
+                const originalHosting="b0aafbc9a244fdb2c871ed94b402639c4ec8025d";
+                const approvedUi="66116a1032d3d2944eaa16f95275774880c0f06f";
+                assert.equal(liveBase,"25f125f90425f77f15f4a754bb4f42a7c5f4f467",
+                  "BLOCKED: protected HEAD moved since identity UI release audit");
+                assert.equal(marker.revision,originalHosting,
+                  "BLOCKED: Hosting changed; review a new current-live-derived UI source");
+                assert.equal(blob(liveBase,verifierPath),
+                  "e83592617654d9fcb2caf8b18881e825983095fe",
+                  "BLOCKED: previous PR verifier was modified");
+                assert.equal(blob(commit,controllerPath),
+                  "0f3bd37312e27765d6d3ec60e9f05b05a4c5dd1c",
+                  "BLOCKED: audited Hosting-only release controller changed");
+                const remote=git("ls-remote","--heads","origin",
+                  "design/published-identity-reviews-ui-20261123").split(/\s+/)[0];
+                assert.equal(remote,approvedUi,
+                  "BLOCKED: identity UI release branch moved since QA");
+                git("merge-base","--is-ancestor",originalHosting,approvedUi);
+                const siteChanges=git("diff","--name-status","--no-renames",
+                  originalHosting,approvedUi).split("\n").filter(Boolean).sort();
+                assert.deepEqual(siteChanges,[
+                  "A\t.github/workflows/qa-published-identity-reviews-ui-20261123.yml",
+                  "M\tapp/(admin)/identity-reviews.tsx"
+                ],"BLOCKED: audited source includes unrelated or outdated code");
+                const prior=git("show",liveBase+":"+verifierPath);
+                const updated=git("show",commit+":"+verifierPath);
+                const begin="            // BEGIN PINNED IDENTITY REVIEWS DESIGN CONTROLLER GATE\n";
+                const endMark="            // END PINNED IDENTITY REVIEWS DESIGN CONTROLLER GATE\n";
+                const start=updated.indexOf(begin);
+                const last=updated.indexOf(endMark,start);
+                assert(start>=0 && last>start,"BLOCKED: exact one-time audit block absent");
+                const after=last+endMark.length;
+                assert.equal(updated[after],"\n",
+                  "BLOCKED: one blank line required after scoped audit gate");
+                const unmodified=updated.slice(0,start)+updated.slice(after+1);
+                assert.equal(unmodified,prior,
+                  "BLOCKED: any previous PR release gate logic was altered");
+                for(const file of [
+                  "package.json","package-lock.json","app.json","tsconfig.json",
+                  "firebase.json",".firebaserc","firestore.rules","storage.rules",
+                  "lib/firebase.ts","backend/server.js",
+                  "scripts/guard-live-protected-release.cjs",
+                  ".github/workflows/auto-publish-protected-live-hosting.yml",
+                  ".github/workflows/release-live-protected-hosting.yml"
+                ]){
+                  const old=git("ls-tree","--name-only",liveBase,"--",file);
+                  const now=git("ls-tree","--name-only",commit,"--",file);
+                  assert.equal(now,old,"BLOCKED: protected path changed: "+file);
+                  if(old)assert.equal(blob(commit,file),blob(liveBase,file),
+                    "BLOCKED: original security, backend or deployment file changed: "+file);
+                }
+                console.log("PASS content-pinned Identity Reviews UI Hosting-only controller");
+                console.log("PASS published source and protected guard unchanged outside this block");
+                console.log("NO DEPLOY: PR audit only");
+                return;
+              }
+            }
+            // END PINNED IDENTITY REVIEWS DESIGN CONTROLLER GATE
+
             assert.equal(marker.revision,liveBase,
               "BLOCKED: protected base and production differ; reconcile FIRST");
             const text=git("diff","--name-status","--no-renames",liveBase,commit);

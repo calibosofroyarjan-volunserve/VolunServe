@@ -1,0 +1,187 @@
+# One-time approved presentation-only Hosting deployment.
+# Builds exactly from the current published site revision + a single Admin UI edit.
+# Does NOT use the diverged protected branch application tree.
+name: Guarded Approved Identity Reviews Design (Hosting Only)
+on:
+  push:
+    branches: [live-protected]
+    paths:
+      - '.github/workflows/release-approved-identity-review-design-20261123.yml'
+permissions:
+  contents: read
+concurrency:
+  group: volunserve-production-hosting-release
+  cancel-in-progress: false
+jobs:
+  publish:
+    if: github.repository == 'calibosofroyarjan-volunserve/VolunServe' && github.ref == 'refs/heads/live-protected'
+    environment: production
+    runs-on: ubuntu-latest
+    timeout-minutes: 70
+    env:
+      CI: 'true'
+      EXPO_NO_TELEMETRY: '1'
+      EXPO_PUBLIC_VOLUNSERVE_ENV: production
+      EXPO_PUBLIC_IDENTITY_VERIFICATION_API_URL: https://volunserve.onrender.com
+      PROJECT: volunserve-3aa5b
+      EXPECTED_LIVE: b0aafbc9a244fdb2c871ed94b402639c4ec8025d
+      SOURCE_SHA: 66116a1032d3d2944eaa16f95275774880c0f06f
+      SOURCE_BRANCH: design/published-identity-reviews-ui-20261123
+      BACKUP_CHANNEL: identity-ui-design-backup-20261123
+    steps:
+      - name: Checkout protected controller only
+        uses: actions/checkout@v4
+        with:
+          path: controller
+          ref: "${{ github.sha }}"
+          fetch-depth: 0
+          submodules: false
+      - name: Checkout immutable published-derived website source
+        uses: actions/checkout@v4
+        with:
+          path: site
+          ref: 66116a1032d3d2944eaa16f95275774880c0f06f
+          fetch-depth: 0
+          submodules: false
+      - name: FAIL CLOSED on unapproved code, stale source or changed published website
+        working-directory: site
+        run: |
+          node <<'NODE'
+          const assert=require('node:assert/strict'),cp=require('node:child_process'),fs=require('node:fs');
+          const git=(...args)=>cp.execFileSync('git',args,{encoding:'utf8'}).trim();
+          const {EXPECTED_LIVE:base,SOURCE_SHA:source,SOURCE_BRANCH:branch,PROJECT:project}=process.env;
+          const controller='.github/workflows/release-approved-identity-review-design-20261123.yml';
+          (async()=>{
+            assert.match(base,/^[0-9a-f]{40}$/);assert.match(source,/^[0-9a-f]{40}$/);
+            assert.equal(git('rev-parse','HEAD'),source,'BLOCKED: not approved source');
+            cp.execFileSync('git',['merge-base','--is-ancestor',base,source]);
+            assert.equal(git('ls-remote','--heads','origin',branch).split(/\s+/)[0],source,
+              'BLOCKED: design source branch changed after QA');
+            assert.equal(git('ls-remote','--heads','origin','live-protected').split(/\s+/)[0],
+              process.env.GITHUB_SHA,'BLOCKED: protected controller branch moved');
+            const controllerDiff=git('-C','../controller','diff','--name-status','--no-renames','HEAD^','HEAD');
+            assert.equal(controllerDiff,'A\t'+controller,'BLOCKED: unrelated protected changes');
+            const paths=git('diff','--name-status','--no-renames',base,source).split('\n').sort();
+            assert.deepEqual(paths,[
+              'A\t.github/workflows/qa-published-identity-reviews-ui-20261123.yml',
+              'M\tapp/(admin)/identity-reviews.tsx'
+            ].sort(),'BLOCKED: site source modifies unapproved files');
+            assert.equal(JSON.parse(fs.readFileSync('.firebaserc','utf8')).projects.default,project);
+            const previous=git('show',base+':app/(admin)/identity-reviews.tsx');
+            const current=fs.readFileSync('app/(admin)/identity-reviews.tsx','utf8');
+            const region=(text,a,b)=>{
+              const start=text.indexOf(a),end=text.indexOf(b,start+a.length);
+              assert(start>=0&&end>start,'BLOCKED: review guard anchors missing');
+              return text.slice(start,end);
+            };
+            for(const [a,b] of [
+              ['const VALIDATION_METHODS = [','function formatDate('],
+              ['function reviewBucket(','export default function IdentityReviewsAdmin()'],
+              ['  const saveDecision = async (','  if (sessionLoading) {']
+            ]){
+              assert.equal(region(current,a,b),region(previous,a,b),
+                'BLOCKED: issuer validation, OCR, or Admin approval behavior changed');
+            }
+            assert(current.includes('https://everify.gov.ph/check'));
+            assert(current.includes('issuerReviewAttested'));
+            assert(!current.includes('AdminIdentityEvidence'));
+            const response=await fetch('https://volunserve.com/volunserve-release.json?check='+Date.now(),
+              {headers:{'Cache-Control':'no-cache'},signal:AbortSignal.timeout(15000)});
+            assert(response.ok,'BLOCKED: cannot inspect current live marker');
+            const live=await response.json();
+            assert.equal(live.app,'VolunServe');
+            assert.equal(live.firebaseProject,project);
+            assert.equal(live.revision,base,'BLOCKED: live Hosting changed; do not overwrite');
+            console.log('PASS: exact published base, single UI edit, original LGU guards, live SHA');
+          })().catch(e=>{console.error(e.message);process.exitCode=1;});
+          NODE
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: site/package-lock.json
+      - name: Install production website dependencies
+        working-directory: site
+        run: npm ci --no-audit --no-fund
+      - name: Validate and build exact approved full web bundle
+        working-directory: site
+        run: |
+          set -euo pipefail
+          npx tsc --noEmit --incremental false
+          npx expo export --platform web --clear
+          env -u GITHUB_SHA node scripts/verify-hosting-release.cjs
+          node <<'NODE'
+          const assert=require('node:assert/strict'),fs=require('node:fs');
+          const m=JSON.parse(fs.readFileSync('dist/volunserve-release.json','utf8'));
+          assert.equal(m.app,'VolunServe');
+          assert.equal(m.firebaseProject,process.env.PROJECT);
+          assert.equal(m.revision,process.env.SOURCE_SHA);
+          console.log('PASS immutable website artifact is the source reviewed by CI');
+          NODE
+      - name: Recheck current live revision and provide scoped Hosting credential
+        working-directory: site
+        env:
+          FIREBASE_SA: "${{ secrets.VOLUNSERVE_PRODUCTION_HOSTING_SERVICE_ACCOUNT }}"
+        run: |
+          set -euo pipefail
+          test -n "$FIREBASE_SA" || { echo "BLOCKED no production environment Hosting credential"; exit 1; }
+          node <<'NODE'
+          const fs=require('node:fs'),assert=require('node:assert/strict');
+          (async()=>{
+            const key=JSON.parse(process.env.FIREBASE_SA);
+            assert.equal(key.type,'service_account');
+            assert.equal(key.project_id,process.env.PROJECT);
+            assert.ok(key.private_key&&key.client_email);
+            const response=await fetch('https://volunserve.com/volunserve-release.json?before='+Date.now(),
+              {headers:{'Cache-Control':'no-cache'},signal:AbortSignal.timeout(15000)});
+            assert(response.ok);
+            const live=await response.json();
+            assert.equal(live.revision,process.env.EXPECTED_LIVE,'BLOCKED live revision drift');
+            fs.writeFileSync(process.env.RUNNER_TEMP+'/volunserve-ui-hosting.json',
+              process.env.FIREBASE_SA,{mode:0o600});
+            console.log('PASS Hosting credentials and unchanged current live version');
+          })().catch(err=>{console.error(err.message);process.exitCode=1;});
+          NODE
+          echo "GOOGLE_APPLICATION_CREDENTIALS=$RUNNER_TEMP/volunserve-ui-hosting.json" >> "$GITHUB_ENV"
+      - name: Back up exact current production Hosting before publish
+        id: backup
+        working-directory: site
+        run: |
+          set -euo pipefail
+          VOLUNSERVE_HOSTING_URL='https://volunserve.com' VOLUNSERVE_EXPECTED_SHA="$EXPECTED_LIVE" node scripts/check-live-hosting.cjs
+          npx firebase-tools hosting:clone "$PROJECT:live" "$PROJECT:$BACKUP_CHANNEL" --project "$PROJECT" --non-interactive
+          echo "PASS current Hosting backup ready"
+      - name: Publish approved frontend only, no Firestore or backend changes
+        id: deploy
+        uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          firebaseServiceAccount: "${{ secrets.VOLUNSERVE_PRODUCTION_HOSTING_SERVICE_ACCOUNT }}"
+          projectId: volunserve-3aa5b
+          channelId: live
+          entryPoint: ./site
+      - name: Confirm published source SHA on existing production domain
+        id: verify
+        working-directory: site
+        env:
+          VOLUNSERVE_HOSTING_URL: https://volunserve.com
+          VOLUNSERVE_EXPECTED_SHA: 66116a1032d3d2944eaa16f95275774880c0f06f
+        run: |
+          set -euo pipefail
+          for attempt in 1 2 3 4 5 6; do
+            if node scripts/check-live-hosting.cjs; then
+              echo "PASS identity design published; no backend/Firebase Auth/Firestore changes"
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "BLOCKED postpublish verification failed; rollback required"
+          exit 1
+      - name: Restore backed-up current Hosting after any failed deploy or verification
+        if: failure() && steps.backup.outcome == 'success' && steps.deploy.outcome != 'skipped'
+        working-directory: site
+        run: |
+          npx firebase-tools hosting:clone "$PROJECT:$BACKUP_CHANNEL" "$PROJECT:live" --project "$PROJECT" --non-interactive
+          echo "Restored previous live Hosting backup"
+      - name: Erase temporary Hosting credential
+        if: always()
+        run: rm -f "$RUNNER_TEMP/volunserve-ui-hosting.json"
