@@ -9,6 +9,8 @@ import {
     ActivityIndicator,
     Alert,
     Linking,
+    Image,
+    Modal,
     ScrollView,
     Platform,
     StyleSheet,
@@ -39,6 +41,7 @@ type IdentityReview = {
   reviewTrack?: "blurry_id_review" | "priority_admin_review" | "standard_admin_review" | "none";
   message?: string;
   requiresManualReview?: boolean;
+  evidenceAvailable?: boolean;
   manualReviewDecision?: string;
   manualValidationMethod?: string;
   manualReviewNotes?: string;
@@ -650,6 +653,7 @@ export default function IdentityReviewsAdmin() {
               {selected ? (
                 <ReviewDetail
                   item={selected}
+                  viewer={user}
                   validationMethod={validationMethod}
                   setValidationMethod={setValidationMethod}
                   issuerReviewAttested={issuerReviewAttested}
@@ -715,6 +719,7 @@ function StatusChip({ bucket }: { bucket: ReviewFilter }) {
 
 function ReviewDetail({
   item,
+  viewer,
   validationMethod,
   setValidationMethod,
   issuerReviewAttested,
@@ -726,6 +731,7 @@ function ReviewDetail({
   onRetry,
 }: {
   item: IdentityReview;
+  viewer: {getIdToken: (forceRefresh?: boolean) => Promise<string>} | null;
   validationMethod: string;
   setValidationMethod: (value: string) => void;
   issuerReviewAttested: boolean;
@@ -737,7 +743,44 @@ function ReviewDetail({
   onRetry: () => void;
 }) {
   const [activeTab, setActiveTab] = useState<"review" | "history" | "audit">("review");
+  const [evidenceUris, setEvidenceUris] = useState<{
+    front?: string | null; back?: string | null; selfie?: string | null;
+  } | null>(null);
+  const [evidenceLoading, setEvidenceLoading] = useState(false);
+  const [evidenceError, setEvidenceError] = useState("");
+  const [zoomedEvidence, setZoomedEvidence] = useState<string | null>(null);
+  const [evidenceRefresh, setEvidenceRefresh] = useState(0);
   useEffect(() => { setActiveTab("review"); }, [item.uid, item.verificationId]);
+  useEffect(() => {
+    let active = true;
+    setEvidenceUris(null);
+    setEvidenceError("");
+    setZoomedEvidence(null);
+    if (!viewer || !item.evidenceAvailable) {
+      setEvidenceLoading(false);
+      return () => { active = false; };
+    }
+    setEvidenceLoading(true);
+    void (async () => {
+      try {
+        const token = await viewer.getIdToken(true);
+        const response = await fetch(
+          `${BACKEND_URL}/api/admin/identity/reviews/${encodeURIComponent(item.uid)}/evidence`,
+          { headers: { Authorization: `Bearer ${token}` } },
+        );
+        const body = await response.json().catch(() => null);
+        if (!response.ok || !body?.ok || body.verificationId !== item.verificationId) {
+          throw new Error(body?.message || "The private evidence viewer is unavailable.");
+        }
+        if (active) setEvidenceUris(body.images || null);
+      } catch (error: any) {
+        if (active) setEvidenceError(error?.message || "Unable to load protected identity photos.");
+      } finally {
+        if (active) setEvidenceLoading(false);
+      }
+    })();
+    return () => { active = false; };
+  }, [viewer, item.uid, item.verificationId, item.evidenceAvailable, evidenceRefresh]);
   const pending = reviewBucket(item) === "pending";
   const nationalId = item.documentScreening?.declaredIdType === "national_id";
   const blurry = item.reviewTrack === "blurry_id_review";
@@ -784,32 +827,71 @@ function ReviewDetail({
           </TouchableOpacity>
         ))}
       </View>
+      <Modal visible={Boolean(zoomedEvidence)} transparent animationType="fade"
+        onRequestClose={() => setZoomedEvidence(null)}>
+        <View style={styles.fullScreenEvidence}>
+          <TouchableOpacity style={styles.fullScreenEvidenceClose}
+            accessibilityRole="button" onPress={() => setZoomedEvidence(null)}>
+            <Ionicons name="close-outline" size={22} color="#FFFFFF" />
+            <Text style={styles.fullScreenEvidenceCloseText}>Close photo</Text>
+          </TouchableOpacity>
+          {zoomedEvidence ? (
+            <Image source={{uri:zoomedEvidence}} style={styles.fullScreenEvidenceImage}
+              resizeMode="contain" accessibilityLabel="Enlarged private identity evidence" />
+          ) : null}
+        </View>
+      </Modal>
       {activeTab === "review" ? (<>
         <View style={styles.evidenceAndAiGrid}>
           <View style={styles.previewEvidenceCard}>
             <View style={styles.previewCardHeading}>
               <Ionicons name="id-card-outline" size={18} color="#08765A" />
               <Text style={styles.previewCardHeadingText}>Submitted Identity Evidence</Text>
+              <TouchableOpacity onPress={() => setEvidenceRefresh(value => value + 1)}
+                disabled={!item.evidenceAvailable} accessibilityRole="button"
+                accessibilityLabel="Refresh protected identity photos">
+                <Ionicons name="refresh-outline" size={17}
+                  color={item.evidenceAvailable ? "#08765A" : "#A6B7AC"} />
+              </TouchableOpacity>
               <Ionicons name="lock-closed-outline" size={14} color="#08765A" />
             </View>
             <View style={styles.previewEvidenceTiles}>
               {([
-                {key:"front",label:"Government ID — Front",icon:"id-card-outline" as const},
-                {key:"back",label:"Government ID — Back",icon:"card-outline" as const},
-                {key:"selfie",label:"Live Selfie",icon:"person-outline" as const},
-              ]).map(tile=>(
-                <View key={tile.key} style={styles.previewEvidenceTile}>
-                  <View style={styles.previewEvidenceImage}>
-                    <Ionicons name={tile.icon} size={25} color="#8BA899" />
-                    <Text style={styles.previewEvidenceText}>Photo not retained</Text>
-                  </View>
-                  <Text style={styles.previewEvidenceLabel}>{tile.label}</Text>
-                </View>
-              ))}
+                {key:"front" as const,label:"Government ID — Front",icon:"id-card-outline" as const},
+                {key:"back" as const,label:"Government ID — Back",icon:"card-outline" as const},
+                {key:"selfie" as const,label:"Live Selfie",icon:"person-outline" as const},
+              ]).map(tile=>{
+                const photo = evidenceUris?.[tile.key];
+                return (
+                  <TouchableOpacity key={tile.key} style={styles.previewEvidenceTile}
+                    accessibilityRole="button" disabled={!photo}
+                    accessibilityLabel={photo ? `View full ${tile.label} image` : `${tile.label} unavailable`}
+                    onPress={() => photo && setZoomedEvidence(photo)}>
+                    <View style={styles.previewEvidenceImage}>
+                      {photo ? (
+                        <Image source={{uri:photo}} resizeMode="contain"
+                          style={styles.previewEvidencePhoto}
+                          accessibilityLabel={tile.label} />
+                      ) : (
+                        <>
+                          <Ionicons name={tile.icon} size={25} color="#8BA899" />
+                          <Text style={styles.previewEvidenceText}>
+                            {evidenceLoading ? "Loading secure photo..." :
+                              evidenceError ? "Unable to load" :
+                              item.evidenceAvailable ? "Not submitted" : "Not saved previously"}
+                          </Text>
+                        </>
+                      )}
+                    </View>
+                    <Text style={styles.previewEvidenceLabel}>{tile.label}</Text>
+                  </TouchableOpacity>
+                );
+              })}
             </View>
             <Text style={styles.previewEvidenceCaption}>
-              Current published records do not retain private ID/selfie photos for Admin viewing.
-              Only the separate secure evidence release can enable these previews.
+              {evidenceError || (item.evidenceAvailable
+                ? "Private ID and selfie photos are available only to authorized reviewers. Tap to enlarge. Links expire shortly."
+                : "This older verification record has no retained ID/selfie images. Request a new Resident submission to review the photos.")}
             </Text>
           </View>
           <View style={styles.previewAiCard}>
@@ -1742,6 +1824,12 @@ const styles = StyleSheet.create({
   previewEvidenceImage: { backgroundColor: "#EBF3EE", minHeight: 120, borderRadius: 5,
     alignItems: "center", justifyContent: "center", gap: 7, padding: 5 },
   previewEvidenceText: { color: "#64816E", fontSize: 10, textAlign: "center" },
+  previewEvidencePhoto: { width: "100%", height: 120, borderRadius: 5 },
+  fullScreenEvidence: { flex: 1, backgroundColor: "rgba(4,22,18,0.96)", padding: 16, justifyContent: "center" },
+  fullScreenEvidenceImage: { flex: 1, width: "100%", maxHeight: "90%" },
+  fullScreenEvidenceClose: { flexDirection: "row", alignItems: "center", gap: 6, alignSelf: "flex-end",
+    paddingVertical: 10, paddingHorizontal: 14 },
+  fullScreenEvidenceCloseText: { color: "#FFFFFF", fontWeight: "700", fontSize: 14 },
   previewEvidenceLabel: { color: "#355C4B", fontWeight: "700", fontSize: 10, textAlign: "center" },
   previewEvidenceCaption: { marginTop: 11, color: "#597664", fontSize: 11, lineHeight: 17 },
   previewScoreBox: { borderRadius: 9, backgroundColor: "#EAF7EE", padding: 11, marginBottom: 9 },
