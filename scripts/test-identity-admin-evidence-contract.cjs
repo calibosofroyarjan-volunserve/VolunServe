@@ -65,3 +65,27 @@ test("private image previews never carry over between Residents or submissions",
   assert.match(reviewer, /expanded\.verificationId === \(verificationId \|\| ""\)/);
   assert.match(page, /verificationId=\{item\.verificationId\}/);
 });
+
+test("Approve requires loaded protected images and an explicit signed-in Admin attestation", () => {
+  const viewer = get("components/identity/AdminIdentityEvidence.tsx");
+  const page = get("app/(admin)/identity-reviews.tsx");
+  const backend = get("backend/server.js");
+  const handler = get("backend/identityEvidenceReviewHandler.js");
+  assert.match(viewer, /onEvidenceStateChange/);
+  assert.match(viewer, /onLoad=\{/);
+  assert.match(viewer, /loadedImageUrls\.includes/);
+  assert.match(viewer, /requiredSides\.every/);
+  assert.match(page, /I reviewed the submitted identity images/);
+  assert.match(page, /evidenceAcknowledged/);
+  assert.match(page, /imagesReviewed: action === "verify"/);
+  assert.match(backend, /request\.body\?\.imagesReviewed !== true/);
+  assert.match(backend, /identity_evidence_review_required/);
+  assert.match(handler, /idType: cleanText\(data\.idType/);
+});
+test("mobile review focuses on selected Resident and has Back to Queue", () => {
+  const page = get("app/(admin)/identity-reviews.tsx");
+  assert.match(page, /mobileDetail = !wide && !!selected/);
+  assert.match(page, /Back to identity verification queue/);
+  assert.match(page, /!mobileDetail \? <View style=\{\[styles\.queue/);
+  assert.match(page, /detailPanelCompact/);
+});
