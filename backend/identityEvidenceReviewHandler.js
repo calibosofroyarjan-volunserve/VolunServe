@@ -65,10 +65,15 @@ function createProtectedIdentityEvidenceHandler({
         images, expiresAt: new Date(expiryMs).toISOString(),
       });
     } catch (error) {
-      response.status(Number(error?.statusCode) || 500).json({
+      const clientError = Number(error?.statusCode);
+      const safeStatus = clientError >= 400 && clientError <= 499 ? clientError : 500;
+      response.status(safeStatus).json({
         ok: false,
-        error: cleanText(error?.code || "identity_evidence_access_failed", 100),
-        message: cleanText(error?.message || "Unable to view private identity photos.", 300),
+        error: safeStatus === 500 ? "identity_evidence_access_failed" :
+          cleanText(error?.code || "identity_evidence_access_denied", 100),
+        message: safeStatus === 500
+          ? "Unable to view private identity photos. Please retry or contact an administrator."
+          : cleanText(error?.message || "Private identity evidence is unavailable.", 300),
       });
     }
   };
