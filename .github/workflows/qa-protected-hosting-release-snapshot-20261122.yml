@@ -1,0 +1,66 @@
+name: Protected QA Immutable Hosting Live Release Snapshot (NO DEPLOY)
+on:
+  push:
+    branches: [live-protected]
+    paths:
+      - '.github/workflows/qa-protected-hosting-release-snapshot-20261122.yml'
+permissions:
+  contents: read
+jobs:
+  verify:
+    if: github.repository == 'calibosofroyarjan-volunserve/VolunServe' && github.ref == 'refs/heads/live-protected'
+    environment: production
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      SITE: volunserve-3aa5b
+      BASE_SHA: c37a83eb96cac832b03dec9c0f8eea44056bee4c
+      SOURCE_SHA: 742e711b87d53c2eba681e9bd81ea39f86f7ba8b
+      FIREBASE_SA: ${{ secrets.VOLUNSERVE_PRODUCTION_HOSTING_SERVICE_ACCOUNT }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: controller
+          submodules: false
+      - uses: actions/checkout@v4
+        with:
+          path: snapshot-code
+          ref: 7292ad0a7c1f47d39b2eff9004aa398a001b709c
+          submodules: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify exactly this no-deploy audit workflow was added
+        run: |
+          set -euo pipefail
+          test "$(git -C controller diff --name-only HEAD^ HEAD)" = '.github/workflows/qa-protected-hosting-release-snapshot-20261122.yml'
+          node --check snapshot-code/.github/scripts/hosting-live-release-snapshot-20261122.cjs
+          echo 'PASS protected source scoped to read-only QA'
+      - name: Create temporary production scoped Hosting read-only credential
+        run: |
+          set -euo pipefail
+          test -n "$FIREBASE_SA"
+          node <<'NODE'
+          const fs=require('fs'),assert=require('assert');
+          const sa=JSON.parse(process.env.FIREBASE_SA);
+          assert.equal(sa.project_id,'volunserve-3aa5b');
+          assert.equal(sa.type,'service_account');
+          fs.writeFileSync(process.env.RUNNER_TEMP+'/snapshot-readonly-key.json',
+            process.env.FIREBASE_SA,{mode:0o600});
+          NODE
+          echo "GOOGLE_APPLICATION_CREDENTIALS=$RUNNER_TEMP/snapshot-readonly-key.json" >> "$GITHUB_ENV"
+      - name: Test REST read-only immutable current live release lookup
+        run: |
+          set -euo pipefail
+          node snapshot-code/.github/scripts/hosting-live-release-snapshot-20261122.cjs snapshot
+          node <<'NODE'
+          const fs=require('fs'),assert=require('assert'),path=require('path');
+          const file=path.join(process.env.RUNNER_TEMP,'volunserve-mobile-home-live-version-snapshot-20261122.json');
+          const snap=JSON.parse(fs.readFileSync(file,'utf8'));
+          assert.equal(snap.base,process.env.BASE_SHA);
+          assert(/^sites\/volunserve-3aa5b\/versions\//.test(snap.versionName));
+          console.log('PASS immutable live version snapshot through Firebase REST GET');
+          NODE
+      - name: Clean all temporary credentials and snapshot
+        if: always()
+        run: rm -f "$RUNNER_TEMP/snapshot-readonly-key.json" "$RUNNER_TEMP/volunserve-mobile-home-live-version-snapshot-20261122.json"
