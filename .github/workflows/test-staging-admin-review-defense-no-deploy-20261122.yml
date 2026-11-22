@@ -1,0 +1,56 @@
+name: Synthetic Admin Final Review Defense - NO DEPLOY
+on:
+  push:
+    branches:
+      - feat/staging-admin-final-review-defense-demo-20261122
+    paths:
+      - 'app/public/local-admin-review-demo.web.tsx'
+      - 'app/public/local-admin-review-demo.tsx'
+      - 'backend/test-identity-no-media-manual-e2e.cjs'
+      - 'identity-ai/test_local_admin_review_defense_20261122.py'
+      - '.github/workflows/test-staging-admin-review-defense-no-deploy-20261122.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  backend-real-route-synthetic-e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 7
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Test real Admin route + Resident manual submission against fake in-memory Firestore
+        run: node --test backend/test-identity-no-media-manual-e2e.cjs
+      - name: Safety evidence
+        run: echo 'Synthetic users only. No actual Firebase, photo media, service accounts, hosted backend, or deployment.' >> "$GITHUB_STEP_SUMMARY"
+  account-free-ui-safety:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Confirm demo never issues Admin or Firebase requests
+        run: python -m unittest discover -s identity-ai -p test_local_admin_review_defense_20261122.py -v
+  web-typescript:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'npm'
+      - name: Install locked dependencies for CI only
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Type check web UI
+        run: ./node_modules/.bin/tsc --noEmit --pretty false
