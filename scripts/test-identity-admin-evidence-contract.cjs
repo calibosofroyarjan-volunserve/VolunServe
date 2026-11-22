@@ -114,3 +114,28 @@ test("AI readiness and verify fail before processing when private ID storage is 
   assert.ok(verification.indexOf("configureCloudinary();") >= 0);
   assert.ok(verification.indexOf("configureCloudinary();") < verification.indexOf("db.runTransaction"));
 });
+
+test("approved VolunServe identity reviews layout is scoped to Admin page only", () => {
+  const page = get("app/(admin)/identity-reviews.tsx");
+  const hero = get("components/admin/AdminReviewHero.tsx");
+  const viewer = get("components/identity/AdminIdentityEvidence.tsx");
+  const tokens = get("constants/volunserveLiveUi.ts");
+  assert.match(page, /variant="mint"/);
+  assert.match(hero, /variant\?: "emerald" \| "mint"/);
+  assert.match(hero, /variant = "emerald"/);
+  assert.match(tokens, /sidebar: "#103D30"/);
+  assert.match(page, /Identity Verification Queue/);
+  assert.match(page, /styles\.queuePrivacyLine/);
+  assert.match(page, /styles\.queueFooter/);
+  assert.match(page, /styles\.reviewTopGrid/);
+  assert.match(page, /styles\.reviewBottomGrid/);
+  assert.match(page, /Submitted Identity Evidence/);
+  assert.match(page, /AI Verification Result/);
+  assert.match(page, /Review Summary/);
+  assert.match(page, /Independent LGU Validation/);
+  assert.match(page, /I reviewed the submitted identity images/);
+  assert.match(page, /5 per page/);
+  assert.match(viewer, /compact = false/);
+  assert.match(page, /onEvidenceStateChange=\{onEvidenceStateChange\} compact/);
+  assert.match(page, /!evidenceReady \|\| !evidenceAcknowledged/);
+});
