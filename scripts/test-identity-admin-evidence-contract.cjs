@@ -24,7 +24,7 @@ test("Admin decision requires unexpired matching images, not merely AI score", (
 test("Resident submission includes back of National ID and explicit evidence consent", () => {
   const lib = get("lib/identityVerification.ts");
   assert.match(lib, /input\.idType === "national_id" && !input\.idBack/);
-  assert.match(lib, /formData\.append\("idBack", input\.idBack\)/);
+  assert.match(lib, /appendMedia\(formData, "idBack", input\.idBack\)/);
   assert.match(lib, /formData\.append\("evidenceConsent", "true"\)/);
   for (const file of ["app/identity-verification.web.tsx", "app/identity-verification.tsx"]) {
     const client = get(file);
