@@ -30,6 +30,7 @@ type ReviewFilter = "pending" | "verified" | "retry_required" | "all";
 type IdentityReview = {
   uid: string;
   verificationId?: string;
+  verificationMethod?: string;
   status?: string;
   identityStatus?: string;
   identityVerified?: boolean;
@@ -878,7 +879,11 @@ function ReviewDetail({
                           <Text style={styles.previewEvidenceText}>
                             {evidenceLoading ? "Loading secure photo..." :
                               evidenceError ? "Unable to load" :
-                              item.evidenceAvailable ? "Not submitted" : "Not saved previously"}
+                              item.evidenceAvailable
+                                ? tile.key === "selfie" && item.verificationMethod === "volunserve_ai_ocr_manual_review"
+                                  ? "Not captured (OCR only)"
+                                  : "Not submitted"
+                                : "Not saved previously"}
                           </Text>
                         </>
                       )}
@@ -890,7 +895,9 @@ function ReviewDetail({
             </View>
             <Text style={styles.previewEvidenceCaption}>
               {evidenceError || (item.evidenceAvailable
-                ? "Private ID and selfie photos are available only to authorized reviewers for up to 30 days. Tap to enlarge. View links expire after 3 minutes."
+                ? item.verificationMethod === "volunserve_ai_ocr_manual_review"
+                  ? "OCR-only Admin case: the ID front and back are securely saved, but no live selfie was captured. Require a complete resubmission before any face comparison."
+                  : "Private ID and selfie photos are available only to authorized reviewers for up to 30 days. Tap to enlarge. View links expire after 3 minutes."
                 : "This older verification record has no retained ID/selfie images. Request a new Resident submission to review the photos.")}
             </Text>
           </View>
