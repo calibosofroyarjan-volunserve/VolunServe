@@ -767,6 +767,30 @@ function ReviewDetail({
         </Text>
       </View>
 
+      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10, marginVertical: 12 }}>
+        <View style={{ flex: 1, minWidth: 145, padding: 14, backgroundColor: "#F4F8FB", borderRadius: 11, borderWidth: 1, borderColor: "#E1EAF0" }}>
+          <Text style={{ color: "#526375", fontSize: 11, fontWeight: "600", marginBottom: 7 }}>FACE COMPARISON</Text>
+          <Text style={{ color: "#163047", fontSize: 17, fontWeight: "700" }}>
+            {typeof item.matchScore === "number" && Number.isFinite(item.matchScore)
+              ? (item.matchScore * 100).toFixed(1) + "%"
+              : "Not available"}
+          </Text>
+          <Text style={{ color: "#64748B", fontSize: 11, marginTop: 5 }}>
+            AI similarity only. Compare the ID portrait and selfie yourself.
+          </Text>
+        </View>
+        <View style={{ flex: 1, minWidth: 145, padding: 14, backgroundColor: "#F4F8FB", borderRadius: 11, borderWidth: 1, borderColor: "#E1EAF0" }}>
+          <Text style={{ color: "#526375", fontSize: 11, fontWeight: "600", marginBottom: 7 }}>AI DECISION</Text>
+          <Text style={{ color: "#163047", fontSize: 16, fontWeight: "700" }}>
+            {item.aiDecision === "verified" ? "Similarity Passed" :
+              item.aiDecision === "failed" ? "Check Failed" : "Manual Review"}
+          </Text>
+          <Text style={{ color: "#64748B", fontSize: 11, marginTop: 5 }}>
+            The current engine does not independently authenticate ID or prove liveness.
+          </Text>
+        </View>
+      </View>
+
       <DocumentScreeningSummary screening={item.documentScreening} />
 
       <InfoLine
