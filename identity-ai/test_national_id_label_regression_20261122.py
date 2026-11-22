@@ -55,6 +55,8 @@ class NationalIdLabelRegression(unittest.TestCase):
         for text in (
             "DATE OF BIRTH: 1998 SEPTEMBER 05",
             "PETSA NG KAPANGANAKAN: 1998 SEP 05",
+            "DATE OF BIRTH: 1998-SEP-05",
+            "DATE OF BIRTH: 05-SEP-1998",
             "DATE OF BIRTH 1998 09 05",
             "DATE OF BIRTH 1998-09-05",
         ):
