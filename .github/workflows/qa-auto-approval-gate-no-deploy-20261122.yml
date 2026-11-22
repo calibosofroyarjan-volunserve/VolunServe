@@ -49,5 +49,5 @@ jobs:
           node --test backend/test-identityAutoApprovalPolicy.js
           node --test backend/test-selectedIdPolicy.js
           node --test backend/test-identity-final-admin-only.js
-          node --test backend/test-identityHybridPrecheckDecision.js
+          (cd backend && node --test test-identityHybridPrecheckDecision.js)
       - run: echo 'NO DEPLOY; no automatic Verified status writes, Auth/Firestore changes or ID data used.'
