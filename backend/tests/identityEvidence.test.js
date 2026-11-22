@@ -142,3 +142,30 @@ test("incomplete upload metadata triggers deletion of already-created private as
     cloudinary.uploader.destroy = previousDestroy;
   }
 });
+
+test("combined media exceeding safe multipart budget is rejected with a useful error", async () => {
+  await assert.rejects(readIdentityEvidence({
+    body: Buffer.alloc(19 * 1024 * 1024 + 1),
+    headers: { "content-type": "multipart/form-data; boundary=x" },
+  }), {
+    code: "identity_upload_too_large",
+    statusCode: 413,
+  });
+});
+test("individual oversized photos are rejected before a Cloudinary upload", async () => {
+  const form = new FormData();
+  form.set("idType", "national_id");
+  form.set("evidenceConsent", "true");
+  const front = Buffer.concat([Buffer.from([255,216,255,224]), Buffer.alloc(6 * 1024 * 1024)]);
+  form.set("idDocument", new Blob([front], {type:"image/jpeg"}), "front.jpg");
+  form.set("idBack", new Blob([jpeg()], {type:"image/jpeg"}), "back.jpg");
+  form.set("selfie", new Blob([jpeg()], {type:"image/jpeg"}), "selfie.jpg");
+  const request = new Request("http://localhost/test", { method: "POST", body: form });
+  const bytes = Buffer.from(await request.arrayBuffer());
+  await assert.rejects(readIdentityEvidence({
+    body: bytes,
+    headers: { "content-type": request.headers.get("content-type") },
+  }), {
+    code: "identity_image_size_invalid",
+  });
+});
