@@ -1012,10 +1012,10 @@ export default function WebHome() {
           </View>
 
           <View style={[styles.communityExtras,communityColumnsStacked&&styles.communityExtrasStacked]}>
-            <View style={[styles.communityMembersColumn,communityColumnsStacked&&styles.communityColumnStacked]}>
+            <View style={communityColumnsStacked ? styles.communityColumnStacked : styles.communityMembersColumn}>
               <CommunityOnline uid={user?.uid} dashboard/>
             </View>
-            <View style={[styles.communityCalendarColumn,communityColumnsStacked&&styles.communityColumnStacked]}>
+            <View style={communityColumnsStacked ? styles.communityColumnStacked : styles.communityCalendarColumn}>
               <CommunityCalendar uid={user?.uid} mode={volunteerMode ? "volunteer" : "resident"} dashboard/>
             </View>
           </View>
@@ -1283,7 +1283,10 @@ const styles = StyleSheet.create({
   communityExtrasStacked:{flexDirection:"column",alignItems:"stretch",gap:14,marginTop:14,marginBottom:12},
   communityMembersColumn:{flex:1.32,minWidth:0},
   communityCalendarColumn:{flex:1,minWidth:0},
-  communityColumnStacked:{width:"100%",minWidth:0,flexGrow:0,flexShrink:0,alignSelf:"stretch",position:"relative"},
+  // CRITICAL: use this style INSTEAD of flex:1.32/flex:1 desktop columns.
+  // A leftover flexBasis:0% collapses stacked mobile column heights, making
+  // the calendar visually overlap members and leaving an empty space below.
+  communityColumnStacked:{width:"100%",minWidth:0,flexGrow:0,flexShrink:0,flexBasis:"auto",alignSelf:"stretch"},
   journeyBar: {
     borderTopWidth: 1, borderBottomWidth: 1, borderColor: "#D9E8E1",
     paddingVertical: 16, paddingHorizontal: 12, marginBottom: 22,
