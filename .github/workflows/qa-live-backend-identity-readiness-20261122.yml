@@ -1,0 +1,48 @@
+name: QA live backend identity readiness (NO DEPLOY)
+
+on:
+  push:
+    branches:
+      - qa/live-backend-identity-readiness-815e4e-20261122
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  live-backend-identity-readiness:
+    name: Exact live backend offline readiness checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - name: Checkout backend source only without historical gitlink
+        env:
+          REPO: ${{ github.repository }}
+          REVISION: ${{ github.sha }}
+        run: |
+          set -eu
+          git init -q
+          git remote add origin "https://github.com/${REPO}.git"
+          git -c protocol.version=2 fetch --no-tags --depth=1 --filter=blob:none --no-recurse-submodules origin "${REVISION}"
+          git sparse-checkout init --cone
+          git sparse-checkout set backend
+          git checkout --force FETCH_HEAD
+      - name: Verify unchanged exact Render backend source
+        run: |
+          set -eu
+          BASE=815e4e8df965aec11b2ad74cfcf3acf850580cda
+          git -c protocol.version=2 fetch --no-tags --depth=1 --filter=blob:none --no-recurse-submodules origin "$BASE"
+          git diff --exit-code FETCH_HEAD HEAD -- backend
+          echo "Backend code identical to live Render commit"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Syntax check live backend identity routes
+        run: |
+          node --check backend/server.js
+          node --check backend/identityAiReadiness.js
+          node --check backend/verifiedFirebaseToken.js
+      - name: Test readiness and authentication without production requests
+        run: node --test backend/test-identityAiReadiness.js backend/tests/verifiedFirebaseToken.test.js
+      - name: No deploy, no production API calls
+        run: echo "NO DEPLOY - tests use mocked AI readiness and synthetic Firebase token data only."
