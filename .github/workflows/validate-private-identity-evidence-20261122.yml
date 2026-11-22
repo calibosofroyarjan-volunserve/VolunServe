@@ -25,6 +25,10 @@ jobs:
           node --check backend/server.js
           node --check backend/identityEvidence.js
           node --test backend/tests/identityEvidence.test.js
+      - name: Check existing Identity and Admin contracts
+        run: |
+          node scripts/test-unified-identity-ai-government-id-screening.cjs
+          node scripts/test-admin-people-verification-premium-ui.cjs
       - name: Check frontend TypeScript
         run: npx tsc --noEmit --pretty false
       - name: Compile web without deploying
