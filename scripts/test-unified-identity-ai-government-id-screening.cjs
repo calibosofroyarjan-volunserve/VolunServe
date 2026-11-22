@@ -24,9 +24,20 @@ assert(document.includes('"authenticityVerified": False') &&
 assert(backend.includes("normalizeIdDocumentScreening") &&
   backend.includes("documentScreening,") &&
   backend.includes('const rawDecision = normalizeAiDecision') &&
-  backend.includes('documentScreening.authenticityVerified !== true') &&
-  backend.includes('aiResult?.livenessImplemented !== true'),
+  backend.includes('const decision = enforceSelectedIdDecision(') &&
+  backend.includes('const result = identityAttemptOutcome(decision, attemptCount);') &&
+  backend.includes('identityVerified: false'),
   "Node must preserve sanitized screening for the LGU and prevent unsupported automatic verification");
+const {enforceSelectedIdDecision} = require("../backend/selectedIdPolicy");
+assert.equal(enforceSelectedIdDecision("verified", {
+  status: "text_consistent_unverified",
+  declaredIdType: "national_id",
+  detectedIdType: "national_id",
+  imageQualityStatus: "adequate",
+  warningCodes: [],
+  authenticityVerified: true,
+  livenessVerified: true,
+}, true), "manual_review", "AI cannot grant Verified Resident without Admin review");
 assert(backend.includes("self_identity_review_forbidden") &&
   backend.includes("targetUid === adminUid"),
   "LGU Admin must not self-approve identity");
