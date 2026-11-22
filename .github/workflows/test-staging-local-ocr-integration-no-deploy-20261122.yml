@@ -7,6 +7,7 @@ on:
       - 'identity-ai/staging_national_id_loopback.py'
       - 'identity-ai/test_staging_national_id_loopback.py'
       - 'components/identity/StagingNationalIdLocalLab.web.tsx'
+      - 'components/identity/StagingNationalIdLocalLab.d.ts'
       - 'app/identity-verification.web.tsx'
       - 'Start-VolunServe-Staging-OCR-Companion.cmd'
       - '.github/workflows/test-staging-local-ocr-integration-no-deploy-20261122.yml'
