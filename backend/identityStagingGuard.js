@@ -65,6 +65,22 @@ function assertIdentityStagingIsolation(env = process.env) {
       aiEndpoint.hostname === LIVE_AI_HOST) {
     throw stagingGuardError("Identity AI must use a dedicated HTTPS staging host, not production.");
   }
+  const origins = String(env.ALLOWED_ORIGINS || "").split(",").map(x => x.trim()).filter(Boolean);
+  if (!origins.length) {
+    throw stagingGuardError("Set ALLOWED_ORIGINS to isolated staging web origins.");
+  }
+  for (const origin of origins) {
+    let parsed;
+    try { parsed = new URL(origin); } catch {
+      throw stagingGuardError("Staging ALLOWED_ORIGINS contains an invalid origin.");
+    }
+    const local = parsed.protocol === "http:" && ["localhost", "127.0.0.1"].includes(parsed.hostname);
+    const stagingHost = parsed.protocol === "https:" &&
+      /(?:^|[-.])staging(?:[-.]|$)/i.test(parsed.hostname);
+    if ((!local && !stagingHost) || parsed.origin !== origin || parsed.username || parsed.password) {
+      throw stagingGuardError("Staging CORS must allow only dedicated staging sites or localhost.");
+    }
+  }
   return { staging: true, firebaseProject: STAGING_PROJECT_ID };
 }
 
