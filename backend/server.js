@@ -289,6 +289,9 @@ app.use(
     allowedHeaders: [
       "Content-Type",
       "Authorization",
+      // Browser preflight for the consented National ID OCR POST.
+      // Without this, cross-origin requests fail as TypeError: Failed to fetch.
+      "X-VolunServe-Document-Precheck-Consent",
       "X-File-Name",
       "X-Document-Type",
       "X-Proposal-Id",
