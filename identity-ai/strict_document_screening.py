@@ -203,9 +203,11 @@ def _national_back_family_corrob(ocr_text: str) -> bool:
     normalized = _normalized(ocr_text)
     back_families = (
         ("BLOOD TYPE", "URI NG DUGO"),
-        ("MARITAL STATUS", "KATAYUANG SIBIL"),
+        # The official printed ePhilID uses "Kalagayang Sibil", while
+        # other PhilID labels use Katayuang Sibil / English equivalents.
+        ("MARITAL STATUS", "KATAYUANG SIBIL", "KALAGAYANG SIBIL", "CIVIL STATUS"),
         ("PLACE OF BIRTH", "LUGAR NG KAPANGANAKAN"),
-        ("DATE OF ISSUE", "PETSA NG PAGKAKALABAS"),
+        ("DATE OF ISSUE", "DATE OF ISSUANCE", "PETSA NG PAGKAKALABAS"),
     )
     count = sum(any(_contains(normalized, word) for word in family)
                 for family in back_families)
