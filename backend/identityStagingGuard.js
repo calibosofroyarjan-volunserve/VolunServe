@@ -8,6 +8,7 @@
 const LIVE_PROJECT_ID = "volunserve-3aa5b";
 const STAGING_PROJECT_ID = "volunserve-full-staging";
 const LIVE_AI_HOST = "volunserve-identity-ai.onrender.com";
+const LIVE_CLOUDINARY_CLOUD = "netjawtz";
 
 function isIdentityStagingEnvironment(env = process.env) {
   return String(env.VOLUNSERVE_RUNTIME_ENV || "").toLowerCase() === "staging" ||
@@ -64,6 +65,18 @@ function assertIdentityStagingIsolation(env = process.env) {
       !/(?:^|[-.])staging(?:[-.]|$)/i.test(aiEndpoint.hostname) ||
       aiEndpoint.hostname === LIVE_AI_HOST) {
     throw stagingGuardError("Identity AI must use a dedicated HTTPS staging host, not production.");
+  }
+  // The live backend defaults to the production Cloudinary cloud. Separate
+  // staging paths alone are NOT sufficient: staging must use another cloud
+  // account and explicit API credentials before private ID uploads are allowed.
+  const identityCloud = String(env.CLOUDINARY_CLOUD_NAME || "").trim();
+  if (!/^[a-z0-9][a-z0-9_-]{1,119}$/i.test(identityCloud) ||
+      identityCloud.toLowerCase() === LIVE_CLOUDINARY_CLOUD ||
+      !String(env.CLOUDINARY_API_KEY || "").trim() ||
+      !String(env.CLOUDINARY_API_SECRET || "").trim()) {
+    throw stagingGuardError(
+      "Provide private credentials for a dedicated staging Cloudinary cloud; production storage is prohibited."
+    );
   }
   const origins = String(env.ALLOWED_ORIGINS || "").split(",").map(x => x.trim()).filter(Boolean);
   if (!origins.length) {
