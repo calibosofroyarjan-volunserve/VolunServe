@@ -39,6 +39,8 @@ type IdentityReview = {
   matchScore?: number | null;
   livenessScore?: number | null;
   idImageQualityScore?: number | null;
+  idBackImageQualityScore?: number | null;
+  idBackQualityChecked?: boolean;
   selfieQualityScore?: number | null;
   scanWarnings?: string[];
   documentScreening?: DocumentScreening;
@@ -871,6 +873,14 @@ function ReviewDetail({
           Number.isFinite(item.idImageQualityScore) && item.idImageQualityScore >= 0 &&
           item.idImageQualityScore <= 1
             ? (item.idImageQualityScore * 100).toFixed(0) + " / 100"
+            : "Not evaluated"
+        } />
+        <InfoLine label="ID back image quality" value={
+          item.idBackQualityChecked === true &&
+          typeof item.idBackImageQualityScore === "number" &&
+          Number.isFinite(item.idBackImageQualityScore) &&
+          item.idBackImageQualityScore >= 0 && item.idBackImageQualityScore <= 1
+            ? (item.idBackImageQualityScore * 100).toFixed(0) + " / 100"
             : "Not evaluated"
         } />
         <InfoLine label="Selfie image quality" value={
