@@ -4,6 +4,7 @@
 // unchanged to the AI engine; these are protected copies for authorized review.
 const crypto = require("crypto");
 const { v2: cloudinary } = require("cloudinary");
+const { identityEvidencePrefix } = require("./identityStagingGuard");
 
 const MAX_IMAGE_BYTES = 7 * 1024 * 1024;
 const RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
@@ -103,7 +104,7 @@ async function storeIdentityEvidence(uid, images) {
   try {
     for (const [kind, media] of Object.entries(images)) {
       if (!media) continue;
-      const publicId = "volunserve/identity-review/" + uid + "/" + crypto.randomUUID() + "-" + kind;
+      const publicId = identityEvidencePrefix() + "/" + uid + "/" + crypto.randomUUID() + "-" + kind;
       const upload = await new Promise((resolve, reject) => {
         const stream = cloudinary.uploader.upload_stream({
           resource_type: "image",
