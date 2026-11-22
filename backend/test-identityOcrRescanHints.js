@@ -7,12 +7,12 @@ test("specific Front/Back OCR problems are friendly and cannot pass",()=>{
   const end=source.indexOf('app.post(',start+10);
   const section=source.slice(start,end>start?end:start+11000);
   assert.match(section,/normalizeIdDocumentScreening/);
-  assert.match(section,/const pass = validType &&/);
-  assert.match(section,/result\?\.outcome === "pass"/);
-  assert.match(section,/screening\.warningCodes\.includes\("ocr_unavailable"\)/);
-  assert.match(section,/screening\.warningCodes\.includes\("document_back_ocr_inconclusive"\)/);
-  assert.match(section,/Retake just the back photo/);
-  assert.match(section,/The front ID photo could not be read reliably/);
+  assert.match(section,/classifyHybridDocumentPrecheck/);
+  assert.match(section,/categorized\.outcome === "pass"/);
+  assert.match(section,/warnings\.includes\("ocr_unavailable"\)/);
+  assert.match(section,/warnings\.includes\("document_back_ocr_inconclusive"\)/);
+  assert.match(section,/Retake the Back/);
+  assert.match(section,/ID OCR was not readable/);
   assert.match(section,/school_id_not_supported/);
   assert.match(section,/document_front_back_swapped/);
   assert.match(section,/authenticityVerified: false/);
