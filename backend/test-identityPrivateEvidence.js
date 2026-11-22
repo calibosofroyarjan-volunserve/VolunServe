@@ -7,6 +7,7 @@ const {
   uploadIdentityEvidence,
   signedIdentityEvidence,
   destroyIdentityEvidence,
+  identityEvidenceRetentionDate,
 } = require("./identityPrivateEvidence");
 
 const jpeg = Buffer.concat([Buffer.from([255, 216, 255, 224]), Buffer.alloc(48, 7)]);
@@ -98,4 +99,10 @@ test("forged public-ID path cannot be signed",()=>{
     assets:{front:{publicId:"volunserve/assistance-evidence/foo",format:"jpg",resourceType:"image",deliveryType:"authenticated"}},
     cloudinary:client,configureCloudinary:()=>{},
   }),e=>e.code==="identity_evidence_not_private");
+});
+
+test("private image retention expires 30 days after consented upload",()=>{
+  const start = Date.UTC(2026,10,23);
+  assert.equal(identityEvidenceRetentionDate(start).toISOString(),
+    new Date(start+30*24*60*60*1000).toISOString());
 });
