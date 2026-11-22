@@ -680,8 +680,9 @@ export default function EmailFirstSignup() {
               <Text style={styles.legacyMobileBrandText}>VolunServe</Text>
             </View>
           )}
-          <View style={styles.legacyMainCard}>
+          <View style={[styles.legacyMainCard, width < 900 && styles.legacyMainCardMobile]}>
             <View style={styles.legacySignupHeading}>
+              <Text style={styles.legacySignupEyebrow}>RESIDENT REGISTRATION  ·  STEP {step} OF 4</Text>
               <Text style={styles.legacySignupTitle}>
                 {step === 1 ? "Email & Password" :
               step === 2 ? "Verify Your Email" :
@@ -725,7 +726,7 @@ export default function EmailFirstSignup() {
                         <Text style={[
                           styles.legacyStepLabel,
                           step === n && styles.legacyStepLabelActive,
-                        ]}>{label}</Text>
+                        ]}>{width < 520 && label === "Address & Profile" ? "Profile" : label}</Text>
                       </View>
                       {n < 4 && (
                         <View style={[
@@ -738,17 +739,6 @@ export default function EmailFirstSignup() {
                 })}
               </View>
             </View>
-            {step === 1 && !completedProfile && (
-              <View style={styles.legacyInfoBox}>
-                <Text style={styles.legacyInfoTitle}>Basic Account registration</Text>
-                <Text style={styles.legacyInfoText}>
-                  {resumeMode
-                    ? "Already created an account but did not finish? Enter the same email and VolunServe password to continue where you left off. No new account will be created."
-                    : "Create an account with @gmail.com or @yahoo.com and a password. Verify your inbox before completing your Basic Resident profile. Google sign-in is optional."}
-                </Text>
-              </View>
-            )}
-
         {!!error && <View style={styles.errorBox}>
           <Text style={styles.errorBoxText}>{error}</Text>
         </View>}
@@ -771,11 +761,11 @@ export default function EmailFirstSignup() {
             )}
             {step === 1 && (
               <View>
-                <Text style={styles.sectionTitle}>Step 1 — Email & Password</Text>
+                <Text style={styles.sectionTitle}>Account details</Text>
                 <Text style={styles.helper}>
                   {resumeMode
-                    ? "Use the SAME email and VolunServe password you created earlier. We'll check whether you still need to verify your email or finish your profile."
-                    : "Only @gmail.com and @yahoo.com are accepted for new Resident accounts. Both support email and password with email verification. Continue with Google is optional."}
+                    ? "Enter the original email and password you used for VolunServe. This resumes your existing account without creating another."
+                    : "Use a @gmail.com or @yahoo.com email. Email verification is required, or continue with Google."}
                 </Text>
                 <Field
                   label="Email Address *" value={email}
@@ -851,7 +841,7 @@ export default function EmailFirstSignup() {
 
             {step === 2 && (
               <View>
-                <Text style={styles.sectionTitle}>Step 2 — Verify Your Email</Text>
+                <Text style={styles.sectionTitle}>Check your inbox</Text>
                 <Text style={styles.helper}>
                   Open your email and click the verification link sent to:
                 </Text>
@@ -877,7 +867,7 @@ export default function EmailFirstSignup() {
 
             {step === 3 && (
               <View>
-                <Text style={styles.sectionTitle}>Step 3 — Personal Details</Text>
+                <Text style={styles.sectionTitle}>Your information</Text>
                 <Text style={styles.helper}>
                   Verified email: {signedInUser?.email || email}. Tell us about yourself.
                 </Text>
@@ -948,7 +938,7 @@ export default function EmailFirstSignup() {
 
             {step === 4 && (
               <View>
-                <Text style={styles.sectionTitle}>Step 4 — Address & Profile</Text>
+                <Text style={styles.sectionTitle}>Your SJDM address</Text>
                 <Text style={styles.helper}>
                   Registration is for residents of the City of San Jose del Monte, Bulacan.
                 </Text>
@@ -1067,41 +1057,43 @@ const styles = StyleSheet.create({
   legacyPasswordEyeButton: { minWidth: 44, height: 44, alignItems: "center", justifyContent: "center", paddingHorizontal: 10 },
   inputText: {color: "#0f172a", fontSize: 14, paddingVertical: 0},
 
-  legacyScreen: { flex: 1, height: Platform.OS === "web" ? ("100vh" as any) : undefined, backgroundColor: "#eef4f7" },
+  legacyScreen: { flex: 1, height: Platform.OS === "web" ? ("100vh" as any) : undefined, backgroundColor: "#f3f7f8" },
   legacyDesktopShell: { flex: 1, flexDirection: "row", minHeight: 0 },
-  legacyPhotoPanel: { position: "relative", width: "46%", minWidth: 520, height: "100%", justifyContent: "space-between", overflow: "hidden", backgroundColor: "#115e59" },
+  legacyPhotoPanel: { position: "relative", width: "41%", minWidth: 340, maxWidth: 720, height: "100%", justifyContent: "space-between", overflow: "hidden", backgroundColor: "#115e59" },
   legacyPhotoImage: { position: "absolute", top: 0, right: 0, bottom: 0, left: 0, width: "100%", height: "100%" },
   legacyPhotoOverlay: { position: "absolute", top: 0, right: 0, bottom: 0, left: 0, backgroundColor: "rgba(2, 55, 61, 0.52)" },
-  legacyPhotoTop: { paddingHorizontal: 48, paddingTop: 46, flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  legacySecureBadge: { borderWidth: 1, borderColor: "rgba(255,255,255,0.3)", backgroundColor: "rgba(4,74,78,0.42)", borderRadius: 14, paddingHorizontal: 17, paddingVertical: 11, maxWidth: 205 },
-  legacySecureBadgeText: { color: "#fff", fontSize: 12, lineHeight: 16, fontWeight: "800" },
-  legacyPhotoControls: { position: "absolute", top: "48%", left: 28, right: 28, flexDirection: "row", justifyContent: "space-between" },
+  legacyPhotoTop: { paddingHorizontal: 34, paddingTop: 36, flexDirection: "column", alignItems: "flex-start", gap: 18 },
+  legacySecureBadge: { borderWidth: 1, borderColor: "rgba(255,255,255,0.27)", backgroundColor: "rgba(4,74,78,0.44)", borderRadius: 10, paddingHorizontal: 12, paddingVertical: 9, maxWidth: 240 },
+  legacySecureBadgeText: { color: "#fff", fontSize: 11, lineHeight: 16, fontWeight: "700" },
+  legacyPhotoControls: { position: "absolute", top: "48%", left: 14, right: 14, flexDirection: "row", justifyContent: "space-between" },
   legacyPhotoArrow: { width: 48, height: 48, borderRadius: 24, borderWidth: 1, borderColor: "rgba(255,255,255,0.7)", backgroundColor: "rgba(3,35,42,0.5)", alignItems: "center", justifyContent: "center" },
   legacyPhotoArrowText: { color: "#fff", fontSize: 38, lineHeight: 40, fontWeight: "300" },
-  legacyPhotoCopy: { paddingHorizontal: 48, paddingBottom: 46 },
+  legacyPhotoCopy: { paddingHorizontal: 34, paddingBottom: 35 },
   legacyPhotoAccentLine: { width: 82, height: 4, borderRadius: 4, backgroundColor: "#2dd4bf", marginBottom: 30 },
-  legacyPhotoTitle: { color: "#fff", fontSize: 50, lineHeight: 57, fontWeight: "900", marginBottom: 17 },
-  legacyPhotoBody: { color: "#f0fdfa", fontSize: 17, lineHeight: 27, maxWidth: 570, fontWeight: "500" },
-  legacyPhotoFooter: { marginTop: 38, flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+  legacyPhotoTitle: { color: "#fff", fontSize: 39, lineHeight: 46, fontWeight: "800", marginBottom: 13 },
+  legacyPhotoBody: { color: "#f0fdfa", fontSize: 15, lineHeight: 24, maxWidth: 490, fontWeight: "400" },
+  legacyPhotoFooter: { marginTop: 26, flexDirection: "column", alignItems: "flex-start", gap: 15 },
   legacyPhotoLocation: { color: "#d7f7f3", fontSize: 12, fontWeight: "700" },
   legacyBrandRow: { flexDirection: "row", alignItems: "center" },
-  legacyLogo: { width: 62, height: 62, marginRight: 12, backgroundColor: "#fff", borderRadius: 18 },
-  legacyBrandTitle: { color: "#fff", fontSize: 32, fontWeight: "900" },
+  legacyLogo: { width: 54, height: 54, marginRight: 12, backgroundColor: "#fff", borderRadius: 13 },
+  legacyBrandTitle: { color: "#fff", fontSize: 27, fontWeight: "800" },
   legacyBrandSub: { color: "#e6fffb", fontSize: 13, fontWeight: "500", marginTop: 2 },
   legacyDots: { flexDirection: "row", alignItems: "center", gap: 8 },
   legacyDot: { width: 9, height: 9, borderRadius: 99 },
   legacyDotOn: { width: 28, backgroundColor: "#2dd4bf" },
   legacyDotOff: { backgroundColor: "rgba(255,255,255,0.6)" },
-  legacyFormScroll: { flex: 1, backgroundColor: "#eef7fb" },
-  legacyContent: { width: "100%", maxWidth: 610, alignSelf: "center", justifyContent: "flex-start", minHeight: "100%", paddingHorizontal: 0, paddingTop: 54, paddingBottom: 54 },
-  legacyContentMobile: { maxWidth: 610, paddingHorizontal: 16, paddingTop: 24, paddingBottom: 30 },
-  legacyMobileBrand: { flexDirection: "row", alignItems: "center", justifyContent: "center", marginBottom: 18 },
+  legacyFormScroll: { flex: 1, backgroundColor: "#f3f7f8" },
+  legacyContent: { width: "100%", maxWidth: 650, alignSelf: "center", justifyContent: "flex-start", minHeight: "100%", paddingHorizontal: 18, paddingTop: 30, paddingBottom: 30 },
+  legacyContentMobile: { maxWidth: 650, paddingHorizontal: 14, paddingTop: 18, paddingBottom: 26 },
+  legacyMobileBrand: { flexDirection: "row", alignItems: "center", justifyContent: "center", marginBottom: 14 },
   legacyMobileLogo: { width: 38, height: 38, borderRadius: 10, marginRight: 9 },
   legacyMobileBrandText: { color: "#115e59", fontSize: 20, fontWeight: "900" },
-  legacyMainCard: { backgroundColor: "#fff", borderRadius: 14, borderWidth: 1, borderColor: "#dce6eb", paddingHorizontal: 32, paddingVertical: 34, shadowColor: "#64748b", shadowOpacity: 0.12, shadowRadius: 22, elevation: 5 },
-  legacySignupHeading: { alignItems: "center", marginBottom: 22 },
-  legacySignupTitle: { color: "#0f172a", fontSize: 31, lineHeight: 37, fontWeight: "900", textAlign: "center" },
-  legacySignupSubtitle: { color: "#64748b", fontSize: 15, marginTop: 4, fontWeight: "500", textAlign: "center", lineHeight: 21 },
+  legacyMainCard: { backgroundColor: "#fff", borderRadius: 14, borderWidth: 1, borderColor: "#e0e8ec", paddingHorizontal: 30, paddingVertical: 28, shadowColor: "#64748b", shadowOpacity: 0.07, shadowRadius: 16, elevation: 2 },
+  legacyMainCardMobile: { paddingHorizontal: 20, paddingVertical: 25, borderRadius: 12 },
+  legacySignupHeading: { alignItems: "center", marginBottom: 17 },
+  legacySignupEyebrow: { color: "#0f766e", fontSize: 10, fontWeight: "800", letterSpacing: 1.15, textAlign: "center", marginBottom: 8 },
+  legacySignupTitle: { color: "#0f172a", fontSize: 27, lineHeight: 34, fontWeight: "800", textAlign: "center" },
+  legacySignupSubtitle: { color: "#64748b", fontSize: 13, marginTop: 7, fontWeight: "400", textAlign: "center", lineHeight: 19, maxWidth: 440 },
   legacySelectedRoleBanner: {
     flexDirection: "row",
     alignItems: "center",
@@ -1110,37 +1102,37 @@ const styles = StyleSheet.create({
     borderColor: "#cde5e1",
     backgroundColor: "#f0fdfa",
     borderRadius: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    marginBottom: 18,
+    paddingHorizontal: 13,
+    paddingVertical: 9,
+    marginBottom: 16,
   },
   legacySelectedRoleCopy: { minWidth: 0 },
   legacySelectedRoleLabel: { color: "#64748b", fontSize: 9, fontWeight: "900", letterSpacing: 0.8 },
-  legacySelectedRoleName: { color: "#115e59", fontSize: 14, fontWeight: "900", marginTop: 2 },
+  legacySelectedRoleName: { color: "#115e59", fontSize: 13, fontWeight: "800", marginTop: 2 },
   legacyRoleChoiceBadge: {
-    marginTop: 16,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
+    marginTop: 4,
+    paddingHorizontal: 9,
+    paddingVertical: 5,
     borderRadius: 999,
     backgroundColor: "#e0f2fe",
   },
   legacyRoleChoiceBadgeText: { color: "#334155", fontSize: 10.5, fontWeight: "900" },
   legacyStepperCard: {
     backgroundColor: "transparent",
-    paddingHorizontal: 4,
+    paddingHorizontal: 0,
     paddingVertical: 0,
-    marginBottom: 28,
+    marginBottom: 23,
   },
   legacyStepRow: { flexDirection: "row", alignItems: "flex-start" },
   legacyStepItem: { flex: 1, flexDirection: "row", alignItems: "flex-start" },
-  legacyStepNode: { width: 70, alignItems: "center" },
-  legacyStepCircle: { width: 38, height: 38, borderRadius: 999, backgroundColor: "#e7edf2", justifyContent: "center", alignItems: "center" },
+  legacyStepNode: { width: 60, alignItems: "center" },
+  legacyStepCircle: { width: 34, height: 34, borderRadius: 17, backgroundColor: "#e7edf2", justifyContent: "center", alignItems: "center" },
   legacyStepCircleActive: { backgroundColor: "#0f766e" },
   legacyStepCircleText: { color: "#64748b", fontSize: 12, fontWeight: "900" },
   legacyStepCircleTextActive: { color: "#fff" },
-  legacyStepLabel: { color: "#334155", fontSize: 11.5, fontWeight: "700", marginTop: 7 },
+  legacyStepLabel: { color: "#475569", fontSize: 10.5, fontWeight: "600", marginTop: 7, textAlign: "center" },
   legacyStepLabelActive: { color: "#115e59", fontWeight: "900" },
-  legacyStepLine: { flex: 1, height: 2, backgroundColor: "#dbe5eb", marginHorizontal: -9, marginTop: 18, borderRadius: 999 },
+  legacyStepLine: { flex: 1, height: 2, backgroundColor: "#dbe5eb", marginHorizontal: -6, marginTop: 16, borderRadius: 999 },
   legacyStepLineActive: { backgroundColor: "#0f766e" },
   legacyInfoBox: {
     backgroundColor: "#eff6ff", borderRadius: 10, borderWidth: 1,
@@ -1172,38 +1164,38 @@ const styles = StyleSheet.create({
   stepNumTextActive: {color: "#fff"},
   stepName: {fontSize: 11, marginTop: 8, textAlign: "center", color: "#64748b"},
   stepNameActive: {fontWeight: "800", color: DARK},
-  sectionTitle: {fontSize: 20, fontWeight: "800", color: DARK, marginBottom: 8},
-  helper: {fontSize: 13, color: "#475569", lineHeight: 20, marginBottom: 16},
-  field: {marginBottom: 16},
-  label: {fontSize: 12.5, fontWeight: "800", color: "#0f172a", marginBottom: 7},
+  sectionTitle: {fontSize: 17, fontWeight: "800", color: DARK, marginBottom: 6},
+  helper: {fontSize: 13, color: "#64748b", lineHeight: 20, marginBottom: 16},
+  field: {marginBottom: 15},
+  label: {fontSize: 13, fontWeight: "700", color: "#0f172a", marginBottom: 7},
   input: {height: 46, borderRadius: 8, borderWidth: 1, borderColor: "#cfdbe3", paddingHorizontal: 13, color: "#0f172a", backgroundColor: "#fff", fontSize: 14},
   inputError: {borderColor: RED, borderWidth: 1.5},
   disabled: {backgroundColor: "#f1f5f9"},
-  readonly: {padding: 12, borderWidth: 1, borderColor: "#e2e8f0", borderRadius: 10, backgroundColor: "#f8fafc", marginBottom: 15, color: "#334155"},
+  readonly: {minHeight: 48, paddingHorizontal: 13, paddingVertical: 14, borderWidth: 1, borderColor: "#e2e8f0", borderRadius: 9, backgroundColor: "#f8fafc", marginBottom: 15, color: "#334155", fontSize: 14},
   error: {fontSize: 12, color: RED, fontWeight: "700", marginTop: 5, marginBottom: 6},
   fieldHint: {fontSize: 12, color: "#52525b", lineHeight: 18, marginTop: 5},
   errorBox: {padding: 13, borderRadius: 9, backgroundColor: "#fef2f2", borderColor: "#fecaca", borderWidth: 1, marginBottom: 16},
   errorBoxText: {fontSize: 13, color: RED, lineHeight: 19},
   successBox: {padding: 13, borderRadius: 9, backgroundColor: PALE, borderColor: "#86efac", borderWidth: 1, marginBottom: 16},
   successText: {fontSize: 13, color: DARK, lineHeight: 19},
-  button: {minHeight: 49, borderRadius: 10, backgroundColor: GREEN, marginTop: 13, alignItems: "center", justifyContent: "center", paddingHorizontal: 14},
+  button: {minHeight: 50, borderRadius: 9, backgroundColor: GREEN, marginTop: 11, alignItems: "center", justifyContent: "center", paddingHorizontal: 14},
   altButton: {backgroundColor: "#fff", borderColor: GREEN, borderWidth: 1.5},
-  buttonText: {color: "#fff", fontSize: 14, fontWeight: "800", textAlign: "center"},
+  buttonText: {color: "#fff", fontSize: 14, fontWeight: "700", textAlign: "center"},
   altText: {color: GREEN},
   googleButtonContent: {flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10},
   dim: {opacity: 0.6},
   inlineButton: {paddingVertical: 11, alignItems: "center"},
   link: {fontSize: 13, color: GREEN, fontWeight: "800"},
   orText: {textAlign: "center", color: "#64748b", marginTop: 16, fontSize: 12, fontWeight: "800"},
-  check: {flexDirection: "row", alignItems: "flex-start", gap: 8, marginVertical: 9},
+  check: {flexDirection: "row", alignItems: "flex-start", gap: 10, marginVertical: 11},
   checkBox: {fontSize: 20, color: GREEN},
-  checkText: {flex: 1, color: "#475569", fontSize: 13, lineHeight: 20},
+  checkText: {flex: 1, color: "#475569", fontSize: 12.5, lineHeight: 19},
   highlight: {borderRadius: 10, backgroundColor: "#f0fdf4", padding: 14, marginBottom: 15},
   highlightText: {color: DARK, fontSize: 15, fontWeight: "800"},
   tiny: {fontSize: 11, color: "#64748b", lineHeight: 18, marginTop: 15},
   dropdownRequired: {color: "#c62828"},
   dropdownTrigger: {
-    minHeight: 50, borderRadius: 9, borderWidth: 1.25, borderColor: "#cbd5e1",
+    minHeight: 49, borderRadius: 9, borderWidth: 1, borderColor: "#cbd5e1",
     backgroundColor: "#ffffff", flexDirection: "row", alignItems: "center",
     paddingHorizontal: 14, gap: 11,
   },
@@ -1232,5 +1224,5 @@ const styles = StyleSheet.create({
   dropdownOptionText: {color: "#334155", fontSize: 14, flex: 1},
   dropdownOptionTextSelected: {color: "#047857", fontWeight: "700"},
   dropdownNoResults: {fontSize: 13, color: "#64748b", padding: 17},
-  footer: {fontSize: 11, textAlign: "center", color: "#94a3b8", marginTop: 35},
+  footer: {fontSize: 11, textAlign: "center", color: "#94a3b8", marginTop: 24, lineHeight: 16},
 });
