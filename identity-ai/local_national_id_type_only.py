@@ -28,6 +28,31 @@ _FRONT_LABEL_FAMILIES = (
     ("TIRAHAN", "ADDRESS"),
 )
 
+def _strong_student_card_clues(ocr_text: str) -> bool:
+    """Recognize school-ID OCR variants without rejecting on SCHOOL alone.
+
+    Requires clear institutional/student AND card/ID clues. A lone school
+    name, campus, grade, or the word STUDENT is insufficient evidence.
+    """
+    from strict_document_screening import _contains, _normalized, _school_id_signal
+    if _school_id_signal(ocr_text):
+        return True
+    text = _normalized(ocr_text)
+    student = any(_contains(text, term) for term in (
+        "STUDENT", "LEARNER", "PUPIL", "ESTUDYANTE",
+    ))
+    institution = any(_contains(text, term) for term in (
+        "SCHOOL", "UNIVERSITY", "COLLEGE", "ACADEMY", "CAMPUS",
+        "INSTITUTE", "ELEMENTARY", "HIGH SCHOOL",
+    ))
+    card = any(_contains(text, term) for term in (
+        "ID", "I D", "IDENTIFICATION", "IDENTITY CARD", "STUDENT NUMBER",
+        "STUDENT NO", "LEARNER REFERENCE NUMBER", "CARD",
+    ))
+    # Strong STUDENT + institutional issuer is common even if OCR misses ID.
+    # STUDENT + ID/CARD is likewise a strong explicit school-card clue.
+    return student and (institution or card)
+
 def classify_national_id_ocr(front_text: str) -> dict:
     """Type screening only. A positive result is never identity verification.
 
@@ -44,7 +69,7 @@ def classify_national_id_ocr(front_text: str) -> dict:
 
     # A school/employee/library card, passport, driver's licence, UMID or PRC
     # cannot satisfy the National ID-only rule just by mentioning "PhilSys".
-    if _school_id_signal(front_text) or (other and "national_id" not in found):
+    if _strong_student_card_clues(front_text) or (other and "national_id" not in found):
         outcome, reason = "unsupported_other_card", "other_id_detected"
     elif other:
         outcome, reason = "needs_review", "conflicting_id_clues"
@@ -116,7 +141,25 @@ def screen_photo_type(image_bytes: bytes) -> dict:
         pytesseract.image_to_string(sharpened, config="--psm 4")
         + "\n" + pytesseract.image_to_string(sharpened, config="--psm 11")
     )
-    return classify_national_id_ocr(initial_text + "\n" + extra_text)
+    combined = initial_text + "\n" + extra_text
+    second = classify_national_id_ocr(combined)
+    if second["status"] != "needs_review":
+        return second
+
+    # Third local OCR attempt: separate title/issuer and ID-body text regions.
+    # A large portrait or colorful card background may confuse whole-card OCR.
+    # No image is saved, and weak/ambiguous reads still stay INCONCLUSIVE.
+    h = sharpened.shape[0]
+    split = max(1, int(h * 0.55))
+    regions = (sharpened[:split], sharpened[h - split:])
+    try:
+        retry_text = "\n".join(
+            pytesseract.image_to_string(region, config="--psm 6")
+            for region in regions
+        )
+        return classify_national_id_ocr(combined + "\n" + retry_text)
+    except Exception:
+        return second
 
 def report_safe(value: dict) -> str:
     """Output only allowlisted statuses; never personal information."""
