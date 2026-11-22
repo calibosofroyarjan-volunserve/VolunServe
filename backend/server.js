@@ -2,6 +2,8 @@
 const express = require("express");
 const cors = require("cors");
 const crypto = require("crypto");
+// Block any staging runtime that can reach production identity data.
+require("./identityStagingGuard").assertIdentityStagingIsolation();
 const { v2: cloudinary } = require("cloudinary");
 const {
   auth,
