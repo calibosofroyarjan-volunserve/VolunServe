@@ -6,6 +6,7 @@ import { volunserveTypography as vsType } from "../../constants/volunserveLiveUi
 import {Picker} from "@react-native-picker/picker";
 import {Feather} from "@expo/vector-icons";
 import GoogleBrandMark from "./GoogleBrandMark";
+import BirthdateCalendar from "./BirthdateCalendar";
 import {useRouter} from "expo-router";
 import {
   getIdToken,
@@ -30,6 +31,7 @@ import {getRegistrationEmailError} from "../../lib/registrationEmailPolicy";
 import {verificationCooldownSeconds} from "../../lib/verificationCooldown";
 import {getResidentRegistrationFieldErrors} from "../../lib/requireCompleteResidentRegistration";
 import { userFacingError } from "../../lib/userFacingError";
+import { googleSignInErrorMessage } from "../../lib/googleSignInFeedback";
 import {
   REGISTRATION_EMAIL_CONFLICT_MESSAGE,
   EMAIL_VERIFICATION_INSTRUCTIONS,
@@ -414,8 +416,19 @@ export default function EmailFirstSignup() {
       else if (!state.profileExists) setMessage(
         "Google verified! Continue with your personal details. No extra password is needed when signing in with Google."
       );
-    } catch (e) {setError(safeAuthError(e));}
-    finally {setBusy(false);}
+    } catch (e) {
+      // Firebase account collision means the address already has credentials.
+      // Do not create/merge another UID. The existing password owner can link
+      // Google from Login after proving the original account password.
+      const authCode = (e as { code?: unknown } | null)?.code;
+      if (authCode === "auth/account-exists-with-different-credential") {
+        setError(
+          "This email already has a VolunServe sign-in method. Open Sign In, choose Continue with Google, then use Sign In & Link Google with your original password. Do not register another account."
+        );
+      } else {
+        setError(googleSignInErrorMessage(e));
+      }
+    } finally { setBusy(false); }
   }
 
   async function checkVerified() {
@@ -457,13 +470,6 @@ export default function EmailFirstSignup() {
       setMessage(EMAIL_VERIFICATION_REQUESTED_MESSAGE);
     } catch (e) { setError(safeAuthError(e)); }
     finally { setBusy(false); }
-  }
-
-  function formatBirthday(value: string) {
-    // Auto-add separators so people can simply type eight date digits.
-    const digits = value.replace(/\D/g, "").slice(0, 8);
-    return [digits.slice(0, 4), digits.slice(4, 6), digits.slice(6, 8)]
-      .filter(Boolean).join("-");
   }
 
   async function changeEmail() {
@@ -883,11 +889,9 @@ export default function EmailFirstSignup() {
                   <Text style={styles.checkBox}>{noMiddleName ? "☑" : "☐"}</Text>
                   <Text style={styles.checkText}>I have no middle name</Text>
                 </Pressable>
-                <Field
-                  label="Date of Birth *" value={birth}
-                  onChange={v => setBirth(formatBirthday(v))} placeholder="YYYY-MM-DD"
-                  keyboardType="phone-pad"
-                  hint="Type 8 digits (year, month, day). The dashes appear automatically."
+                <BirthdateCalendar
+                  value={birth}
+                  onChange={setBirth}
                   error={(showErrors || !!birth) ? registrationErrors.age : null}
                 />
                 {checkButton("Continue to Address & Profile", () => {

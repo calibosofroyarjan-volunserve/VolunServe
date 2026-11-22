@@ -1,4 +1,5 @@
 import { canResumeEmailFirstSignup } from "../lib/signupFeature";
+import { isExistingGoogleLinkInProgress } from "../lib/googleAccountLinkFlow";
 
 import { useFonts } from "expo-font";
 import AppDialogHost from "../components/ui/AppDialogHost";
@@ -73,7 +74,10 @@ export default function RootLayout() {
         currentAuthUidRef.current =
           user?.uid ?? null;
         profileRetryInFlightRef.current = false;
+        // A new Auth UID must never inherit the previous UID's Resident,
+        // Volunteer or staff profile while Firestore is still loading.
         setAuthUser(user);
+        setProfile(null);
         if (!user) {
           setProfile(null);
           setProfileLoading(false);
@@ -314,6 +318,13 @@ export default function RootLayout() {
 
     const destination =
       homeRouteForProfile(profile);
+
+    // Google linking is initiated ONLY by the account owner after password
+    // authentication. Do not unmount Login before linkWithCredential resolves.
+    // Normal approved logins still route as before; this grants no permissions.
+    if (isLoginRoute && isExistingGoogleLinkInProgress()) {
+      return;
+    }
 
     /*
      * An already signed-in approved account should not remain on

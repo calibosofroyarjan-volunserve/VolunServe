@@ -5,6 +5,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import GoogleBrandMark from "../components/auth/GoogleBrandMark";
 import AuthFeedback from "../components/auth/AuthFeedback";
 import { unifiedPasswordDestination } from "../lib/unifiedLoginRouting";
+import { setExistingGoogleLinkInProgress } from "../lib/googleAccountLinkFlow";
 import { getLoginEmailError, getLoginEmailSuggestion } from "../lib/loginInputValidation";
 import { getRegistrationEmailError } from "../lib/registrationEmailPolicy";
 import { isKnownDisposableEmail } from "../lib/registrationEmailPolicy";
@@ -124,6 +125,9 @@ export default function WebLogin() {
       showError(emailError || "Enter your password.");
       return;
     }
+    // Hold the Login screen through the password + Google credential exchange.
+    // Otherwise the global auth listener can navigate away before linking ends.
+    if (pending) setExistingGoogleLinkInProgress(true);
     try {
       setLoading(true);
       setPendingAction("login");
@@ -175,6 +179,7 @@ export default function WebLogin() {
     } catch (error: any) {
       showError(userFacingError(error, "Unable to sign in. Check your details and try again."));
     } finally {
+      if (pending) setExistingGoogleLinkInProgress(false);
       setLoading(false);
       setPendingAction(null);
     }
