@@ -89,9 +89,12 @@ function cloudinaryImage(upload, bytes) {
 async function destroyIdentityEvidence(images) {
   const entries = Object.values(images || {}).filter((image) => image?.publicId);
   return await Promise.allSettled(entries.map(async (image) => {
-    await cloudinary.uploader.destroy(image.publicId, {
+    const result = await cloudinary.uploader.destroy(image.publicId, {
       resource_type: "image", type: "authenticated", invalidate: true,
     });
+    if (!["ok", "not found"].includes(result?.result)) {
+      throw new Error("Cloudinary private identity evidence deletion is not confirmed.");
+    }
   }));
 }
 
