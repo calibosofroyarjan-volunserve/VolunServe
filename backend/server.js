@@ -4956,13 +4956,18 @@ app.get(
 const IDENTITY_DOC_PRECHECK_COOLDOWN_MS = 8000;
 const IDENTITY_DOC_PRECHECK_DAILY_LIMIT = 30;
 app.post(
-  "/api/identity/document/precheck",
+  ["/api/identity/document/precheck", "/api/identity/document/precheck-with-evidence"],
   requireFirebaseUser,
   express.raw({ type: "multipart/form-data", limit: "21mb" }),
   async (request, response) => {
     response.set("Cache-Control", "no-store");
+    const uid = request.firebaseUser.uid;
+    const precheckRequestId = crypto.randomUUID();
+    const evidenceRef = db.collection("identityPrivateEvidence").doc(uid);
+    let precheckEvidenceAssets = null;
+    let precheckPreviousAssets = null;
+    let precheckEvidenceCommitted = false;
     try {
-      const uid = request.firebaseUser.uid;
       if (request.headers["x-volunserve-document-precheck-consent"] !== "true") {
         throw makeHttpError(400, "document_precheck_consent_required",
           "Agree to preliminary ID processing before continuing.");
@@ -5002,6 +5007,16 @@ app.post(
           !String(request.headers["content-type"] || "").toLowerCase().startsWith("multipart/form-data")) {
         throw makeHttpError(400, "missing_identity_document", "Select and capture both sides of the government ID first.");
       }
+      // Preserve the old transient OCR path for older app versions.
+      // The new path requires explicit storage consent and retains ID scans
+      // only if the OCR result is auto-queued for an Admin; no selfie exists yet.
+      const needsPrivateIdEvidence =
+        request.path === "/api/identity/document/precheck-with-evidence";
+      const consentedIdImages = needsPrivateIdEvidence
+        ? await parseConsentedIdentityEvidence(request, {requireSelfie:false}) : null;
+      if (needsPrivateIdEvidence && !consentedIdImages)
+        throw makeHttpError(400, "document_evidence_consent_required",
+          "Please accept protected ID photo storage for Admin review.");
       const throttleRef = db.collection("identityDocumentPrecheckThrottle").doc(uid);
       await db.runTransaction(async transaction => {
         const record = await transaction.get(throttleRef);
@@ -5063,12 +5078,19 @@ app.post(
 
       let pending = null;
       if (categorized.outcome === "review") {
+        if (consentedIdImages) {
+          precheckEvidenceAssets = await uploadIdentityEvidence({
+            images: consentedIdImages, uid, requestId:precheckRequestId,
+            cloudinary, configureCloudinary,
+          });
+        }
         const userRef = db.collection("users").doc(uid);
         // One queue record per authenticated UID. Compare/write atomically
         // against concurrent /verify and Admin decisions.
         pending = await db.runTransaction(async (transaction) => {
-          const [userSnapshot, verificationSnapshot] = await Promise.all([
+          const [userSnapshot, verificationSnapshot, evidenceSnapshot] = await Promise.all([
             transaction.get(userRef), transaction.get(verificationRef),
+            transaction.get(evidenceRef),
           ]);
           if (!userSnapshot.exists) {
             throw makeHttpError(404, "profile_not_found", "Your VolunServe profile was not found.");
@@ -5082,6 +5104,8 @@ app.post(
             throw makeHttpError(403, "account_not_active", "This Resident account is not active.");
           }
           const current = verificationSnapshot.exists ? verificationSnapshot.data() || {} : {};
+          precheckPreviousAssets = evidenceSnapshot.exists
+            ? evidenceSnapshot.data()?.assets || null : null;
           if (current.requiresManualReview === true &&
               normalizeIdentityStatus(current.status) === "pending") {
             return {verificationId: cleanText(current.verificationId || "", 200),
@@ -5103,6 +5127,8 @@ app.post(
           transaction.set(verificationRef, {
             uid, verificationId,
             verificationMethod: "volunserve_ai_ocr_manual_review",
+            privateEvidenceRequestId: precheckEvidenceAssets
+              ? precheckRequestId : FieldValue.delete(),
             status: "pending",
             aiDecision: "manual_review",
             decision: FieldValue.delete(),
@@ -5122,6 +5148,17 @@ app.post(
             lastSubmissionAt: FieldValue.serverTimestamp(),
             createdAt: current.createdAt || FieldValue.serverTimestamp(),
           }, {merge: true});
+          if (precheckEvidenceAssets) {
+            transaction.set(evidenceRef, {
+              uid, requestId:precheckRequestId, verificationId,
+              assets:precheckEvidenceAssets,
+              storedAt:FieldValue.serverTimestamp(),
+              retentionUntil:identityEvidenceRetentionDate(),
+              purpose:"consented_ocr_admin_id_review",
+            });
+          } else if (evidenceSnapshot.exists) {
+            transaction.delete(evidenceRef);
+          }
           transaction.set(userRef, {
             identityStatus: "pending",
             identityVerified: false,
@@ -5130,6 +5167,25 @@ app.post(
           }, {merge: true});
           return {verificationId, documentScreening: screening, alreadyPending: false};
         });
+        if (pending.alreadyPending) {
+          if (precheckEvidenceAssets) {
+            try {
+              await destroyIdentityEvidence({
+                assets:precheckEvidenceAssets, cloudinary, configureCloudinary,
+              });
+            } catch { console.warn("Duplicate OCR ID photos require cleanup."); }
+            precheckEvidenceAssets = null;
+          }
+        } else {
+          precheckEvidenceCommitted = true;
+          if (precheckPreviousAssets) {
+            try {
+              await destroyIdentityEvidence({
+                assets:precheckPreviousAssets, cloudinary, configureCloudinary,
+              });
+            } catch { console.warn("Previous OCR ID photos require cleanup."); }
+          }
+        }
       }
       const responseScreening = pending?.documentScreening || screening;
       return response.json({
@@ -5147,6 +5203,13 @@ app.post(
         livenessVerified: false,
       });
     } catch (error) {
+      if (!precheckEvidenceCommitted && precheckEvidenceAssets) {
+        try {
+          await destroyIdentityEvidence({
+            assets:precheckEvidenceAssets, cloudinary, configureCloudinary,
+          });
+        } catch { console.warn("Uncommitted OCR ID photos require cleanup."); }
+      }
       // Never log private ID bytes, OCR text or profile fields.
       if ((error.statusCode || 500) >= 500) {
         console.warn("ID precheck service unavailable:", error?.code || "internal_error");
@@ -5156,7 +5219,9 @@ app.post(
         ok: false,
         error: cleanText(error.code || "document_precheck_failed", 100),
         message: status >= 500
-          ? "ID recognition is unavailable. No selfie was collected and no face verification attempt was used."
+          ? error?.code === "identity_evidence_upload_failed"
+            ? "Private ID storage is unavailable. No Admin case was created; please retry."
+            : "ID recognition is unavailable. No selfie was collected and no face verification attempt was used."
           : cleanText(error.message || "ID recognition could not continue.", 250),
       });
     }
