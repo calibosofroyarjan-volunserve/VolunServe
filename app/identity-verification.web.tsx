@@ -280,6 +280,7 @@ export default function IdentityVerificationWeb() {
   const [documentChecking, setDocumentChecking] = useState(false);
   const [documentPrecheckMessage, setDocumentPrecheckMessage] = useState("");
   const [documentPrecheckOutcome, setDocumentPrecheckOutcome] = useState<"pass" | "review" | "retry" | null>(null);
+  const [documentPrecheckScreening, setDocumentPrecheckScreening] = useState<DocumentScreening | null>(null);
   useEffect(() => () => {
     // An in-flight OCR response cannot reopen the selfie screen after navigation.
     documentPrecheckRevisionRef.current += 1;
@@ -534,6 +535,7 @@ export default function IdentityVerificationWeb() {
   const chooseIdDocument = (side: "front" | "back") => {
     documentPrecheckRevisionRef.current += 1;
     setDocumentPrecheckOutcome(null);
+    setDocumentPrecheckScreening(null);
     setDocumentPrecheckMessage("");
     idCameraSessionRef.current += 1;
     setIdCameraSide(side);
@@ -577,6 +579,7 @@ export default function IdentityVerificationWeb() {
         }
         documentPrecheckRevisionRef.current += 1;
         setDocumentPrecheckOutcome(null);
+    setDocumentPrecheckScreening(null);
         setDocumentPrecheckMessage("");
         const media: CapturedIdentityMedia = { uri, name: file.name, type: file.type, file };
         if (side === "front") setIdDocument(media);
@@ -624,6 +627,7 @@ export default function IdentityVerificationWeb() {
       const media: CapturedIdentityMedia = { uri: URL.createObjectURL(blob), name, type: "image/jpeg", file };
       documentPrecheckRevisionRef.current += 1;
       setDocumentPrecheckOutcome(null);
+    setDocumentPrecheckScreening(null);
       setDocumentPrecheckMessage("");
       if (captureSide === "front") {
         setIdDocument(media);
@@ -709,12 +713,14 @@ export default function IdentityVerificationWeb() {
   const discardIdDocument = () => {
     documentPrecheckRevisionRef.current += 1;
     setDocumentPrecheckOutcome(null);
+    setDocumentPrecheckScreening(null);
     setDocumentPrecheckMessage("");
     setIdDocument(null);
   };
   const discardIdBackDocument = () => {
     documentPrecheckRevisionRef.current += 1;
     setDocumentPrecheckOutcome(null);
+    setDocumentPrecheckScreening(null);
     setDocumentPrecheckMessage("");
     setIdBackDocument(null);
   };
@@ -1183,6 +1189,7 @@ export default function IdentityVerificationWeb() {
     const revision = documentPrecheckRevisionRef.current;
     setDocumentChecking(true);
     setDocumentPrecheckOutcome(null);
+    setDocumentPrecheckScreening(null);
     setDocumentPrecheckMessage("Checking the selected ID type, front/back arrangement and image quality...");
     try {
       await checkIdentityEngineReady();
@@ -1194,6 +1201,7 @@ export default function IdentityVerificationWeb() {
       });
       if (revision !== documentPrecheckRevisionRef.current) return;
       setDocumentPrecheckOutcome(result.outcome);
+      setDocumentPrecheckScreening(result.documentScreening || null);
       setDocumentPrecheckMessage(result.message);
       if (result.outcome === "retry") return;
       // PASS is preliminary OCR plausibility; REVIEW is a blurry-National-ID
@@ -1586,6 +1594,7 @@ export default function IdentityVerificationWeb() {
             if (!allowed) {
               documentPrecheckRevisionRef.current += 1;
               setDocumentPrecheckOutcome(null);
+    setDocumentPrecheckScreening(null);
               setDocumentPrecheckMessage("");
             }
             setDocumentConsent(allowed);
@@ -1593,6 +1602,7 @@ export default function IdentityVerificationWeb() {
           documentChecking={documentChecking}
           documentPrecheckMessage={documentPrecheckMessage}
           documentPrecheckOutcome={documentPrecheckOutcome}
+          documentPrecheckScreening={documentPrecheckScreening}
           onRemove={discardIdDocument}
           onRemoveBack={discardIdBackDocument}
         />
@@ -2114,6 +2124,7 @@ function UploadIdStep({
   documentChecking,
   documentPrecheckMessage,
   documentPrecheckOutcome,
+  documentPrecheckScreening,
   onRemove,
   onRemoveBack,
 }: {
@@ -2141,6 +2152,7 @@ function UploadIdStep({
   documentChecking: boolean;
   documentPrecheckMessage: string;
   documentPrecheckOutcome: "pass" | "review" | "retry" | null;
+  documentPrecheckScreening: DocumentScreening | null;
   onRemove: () => void;
   onRemoveBack: () => void;
 }) {
@@ -2305,6 +2317,48 @@ function UploadIdStep({
           Screening does not confirm that the ID is authentic.
         </Text>
       </TouchableOpacity>
+      {documentPrecheckScreening ? (
+        <View style={styles.idScanResults} accessibilityLabel="Preliminary National ID scan results">
+          <View style={styles.idScanResultsTitleRow}>
+            <Ionicons name="scan-outline" size={17} color="#176847" />
+            <Text style={styles.idScanResultsTitle}>ID scan results</Text>
+            <Text style={styles.idScanResultsSubtitle}>Preliminary OCR only</Text>
+          </View>
+          {([
+            {
+              label: "National ID text",
+              state: documentPrecheckScreening.status === "text_consistent_unverified" &&
+                documentPrecheckScreening.detectedIdType === "national_id" ? "pass" : "retry",
+              message: documentPrecheckScreening.status === "text_consistent_unverified" &&
+                documentPrecheckScreening.detectedIdType === "national_id" ? "Text readable" : "Please scan again",
+            },
+            {
+              label: "Account name",
+              state: documentPrecheckScreening.profileNameCheck === "possible_match" ? "pass" :
+                documentPrecheckScreening.profileNameCheck === "possible_conflict" ? "retry" : "neutral",
+              message: documentPrecheckScreening.profileNameCheck === "possible_match" ? "Name appears to match" :
+                documentPrecheckScreening.profileNameCheck === "possible_conflict" ? "Please check the name" : "Not clear yet",
+            },
+          ] as const).map((check) => (
+            <View key={check.label} style={styles.idScanResultRow}>
+              <Ionicons
+                name={check.state === "pass" ? "checkmark-circle" :
+                  check.state === "retry" ? "refresh-circle" : "help-circle-outline"}
+                size={19}
+                color={check.state === "pass" ? "#12805A" :
+                  check.state === "retry" ? "#B64D44" : "#7B8993"}
+              />
+              <Text style={styles.idScanResultLabel}>{check.label}</Text>
+              <Text style={[
+                styles.idScanResultValue,
+                check.state === "pass" ? styles.idScanResultSuccess :
+                  check.state === "retry" ? styles.idScanResultRetry : styles.idScanResultNeutral,
+              ]}>{check.message}</Text>
+            </View>
+          ))}
+          <Text style={styles.idScanDisclaimer}>These are reading hints, not proof that the ID is authentic. Admin approval is still required.</Text>
+        </View>
+      ) : null}
       {documentPrecheckMessage ? (
         <View style={styles.truthNote} accessibilityRole="alert">
           <Ionicons
@@ -3099,6 +3153,21 @@ const styles = StyleSheet.create({
     fontSize: 9.5,
     lineHeight: 14,
   },
+  idScanResults: {
+    marginTop: 12, padding: 13, borderRadius: 12,
+    borderWidth: 1, borderColor: "#DCE9E3", backgroundColor: "#F7FBF8",
+    gap: 9,
+  },
+  idScanResultsTitleRow: { flexDirection: "row", alignItems: "center", gap: 8 },
+  idScanResultsTitle: { color: "#183F35", fontSize: 13, fontWeight: "800" },
+  idScanResultsSubtitle: { marginLeft: "auto", color: "#688278", fontSize: 10.5 },
+  idScanResultRow: { flexDirection: "row", alignItems: "center", gap: 9, minHeight: 28 },
+  idScanResultLabel: { color: "#29483D", fontSize: 12, fontWeight: "600", flex: 1 },
+  idScanResultValue: { fontSize: 11.5, fontWeight: "800", textAlign: "right", flexShrink: 1 },
+  idScanResultSuccess: { color: "#13724F" },
+  idScanResultRetry: { color: "#A8443B" },
+  idScanResultNeutral: { color: "#6D7F8C" },
+  idScanDisclaimer: { color: "#698078", fontSize: 10, lineHeight: 15 },
   truthNote: {
     marginTop: 10,
     flexDirection: "row",
