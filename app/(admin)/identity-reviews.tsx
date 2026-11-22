@@ -1,5 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useLocalSearchParams } from "expo-router";
 import ListPagination from "../../components/ui/ListPagination";
 import AdminReviewHero from "../../components/admin/AdminReviewHero";
@@ -119,7 +119,8 @@ export default function IdentityReviewsAdmin() {
   const params = useLocalSearchParams<{ uid?: string }>();
   const { loading: sessionLoading, user, profile } = useUserSession();
   const { width } = useWindowDimensions();
-  const wide = width >= 1050;
+  const wide = width >= 1240;
+  const scrollRef = useRef<ScrollView | null>(null);
 
   const [items, setItems] = useState<IdentityReview[]>([]);
   const [loading, setLoading] = useState(true);
@@ -132,6 +133,7 @@ export default function IdentityReviewsAdmin() {
   const [page, setPage] = useState(1);
   const PAGE_SIZE = 5;
   const [selected, setSelected] = useState<IdentityReview | null>(null);
+  const mobileDetail = !wide && !!selected;
   const [validationMethod, setValidationMethod] = useState("");
   const [issuerReviewAttested,setIssuerReviewAttested] = useState(false);
   const [notes, setNotes] = useState("");
@@ -260,8 +262,15 @@ export default function IdentityReviewsAdmin() {
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const activePage = Math.max(1, Math.min(page, totalPages));
   const pagedReviews = filtered.slice((activePage - 1) * PAGE_SIZE, activePage * PAGE_SIZE);
+  useEffect(() => {
+    if (!wide || loading || selected || pagedReviews.length === 0) return;
+    openReview(pagedReviews[0]);
+    // Only open automatically in a wide layout; tablet/phone retains queue navigation.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [wide, loading, selected, page, filter, items, search]);
 
   const openReview = (item: IdentityReview) => {
+    if (!wide) scrollRef.current?.scrollTo({y:0,animated:false});
     setSelected(item);
     setValidationMethod(item.manualValidationMethod || "");
     setIssuerReviewAttested(false);
@@ -400,15 +409,17 @@ export default function IdentityReviewsAdmin() {
   return (
     <View style={styles.screen}>
       <ScrollView
+        ref={scrollRef}
         style={[
           styles.scroll,
           Platform.OS === "web" && styles.webScrollBar,
         ]}
-        contentContainerStyle={styles.page}
+        contentContainerStyle={[styles.page, !wide && styles.pageCompact]}
         showsVerticalScrollIndicator={true}
         keyboardShouldPersistTaps="handled"
         accessibilityLabel="Identity reviews content"
       >
+        {!mobileDetail ? <>
         <AdminReviewHero
           eyebrow="LGU OPERATIONS / PEOPLE & VERIFICATION"
           title="Resident Identity Reviews"
@@ -425,11 +436,46 @@ export default function IdentityReviewsAdmin() {
           ].map(metric => (
             <View key={metric.label} style={styles.summaryMetric}>
               <View style={styles.summaryIcon}><Ionicons name={metric.icon} size={20} color="#08765A" /></View>
-              <Text style={styles.summaryLabel}>{metric.label}</Text>
-              <Text style={styles.summaryValue}>{metric.value}</Text>
+              <View style={styles.summaryCopy}>
+                <Text style={styles.summaryLabel}>{metric.label}</Text>
+                <Text style={styles.summaryValue}>{metric.value}</Text>
+              </View>
             </View>
           ))}
         </View>
+        </> : (
+          <TouchableOpacity accessibilityRole="button" style={styles.backToQueue}
+            onPress={() => { setSelected(null); setIssuerReviewAttested(false); scrollRef.current?.scrollTo({y:0,animated:false}); }}>
+            <Ionicons name="arrow-back" size={18} color="#08765A" />
+            <Text style={styles.backToQueueLabel}>Back to Identity Verification Queue</Text>
+          </TouchableOpacity>
+        )}
+        {error ? (
+          <View style={styles.errorCard}>
+            <Ionicons
+              name="alert-circle-outline"
+              size={20}
+              color="#B91C1C"
+            />
+            <Text style={styles.errorText}>{error}</Text>
+          </View>
+        ) : null}
+
+        {loading ? (
+          <View style={styles.loadingCard}>
+            <ActivityIndicator size="large" color="#08765A" />
+            <Text style={styles.centerText}>
+              Loading identity reviews...
+            </Text>
+          </View>
+        ) : (
+          <View
+            style={[
+              styles.workspace,
+              wide && styles.workspaceWide,
+            ]}
+          >
+            {!mobileDetail ? <View style={[styles.queue, wide && styles.queueWide]}>
         <View style={styles.queueHeading}>
           <View style={styles.flexOne}>
             <Text style={styles.queueTitle}>Identity Verification Queue</Text>
@@ -441,25 +487,7 @@ export default function IdentityReviewsAdmin() {
             <Text style={styles.refreshButtonText}>Refresh</Text>
           </TouchableOpacity>
         </View>
-        <View style={styles.privacyNotice}>
-          <Ionicons
-            name="lock-closed-outline"
-            size={20}
-            color="#0F766E"
-          />
-          <View style={styles.flexOne}>
-            <Text style={styles.noticeTitle}>
-              Privacy-preserving manual fallback
-            </Text>
-            <Text style={styles.noticeText}>
-              The AI service processes the submitted ID and selfie for
-              the 1-to-1 comparison, but this queue does not retain or
-              display those private images. Manual verification must use
-              an independent LGU-approved validation method.
-            </Text>
-          </View>
-        </View>
-
+        
         <View style={styles.filterRow}>
           {[
             { key: "pending" as const, label: "Pending", count: counts.pending },
@@ -479,7 +507,7 @@ export default function IdentityReviewsAdmin() {
                   styles.filterButton,
                   active && styles.filterButtonActive,
                 ]}
-                onPress={() => { setFilter(item.key); setPage(1); setSelected(null); }}
+                onPress={() => { setFilter(item.key); setPage(1); setSelected(null); setIssuerReviewAttested(false); }}
               >
                 <Text
                   style={[
@@ -518,54 +546,26 @@ export default function IdentityReviewsAdmin() {
           <TextInput
             style={styles.searchInput}
             value={search}
-            onChangeText={value => { setSearch(value); setPage(1); }}
+            onChangeText={value => { setSearch(value); setPage(1); setSelected(null); setIssuerReviewAttested(false); }}
             placeholder="Search Resident, email, barangay, or verification ID"
             placeholderTextColor="#94A3B8"
           />
         </View>
 
-        <ListPagination page={activePage} total={filtered.length} pageSize={PAGE_SIZE} onChange={setPage} />
-        {error ? (
-          <View style={styles.errorCard}>
-            <Ionicons
-              name="alert-circle-outline"
-              size={20}
-              color="#B91C1C"
-            />
-            <Text style={styles.errorText}>{error}</Text>
-          </View>
-        ) : null}
+        
 
-        {loading ? (
-          <View style={styles.loadingCard}>
-            <ActivityIndicator size="large" color="#08765A" />
-            <Text style={styles.centerText}>
-              Loading identity reviews...
-            </Text>
-          </View>
-        ) : filtered.length === 0 ? (
-          <View style={styles.emptyCard}>
-            <Ionicons
-              name="shield-checkmark-outline"
-              size={38}
-              color="#94A3B8"
-            />
-            <Text style={styles.emptyTitle}>
-              No identity reviews here
-            </Text>
-            <Text style={styles.centerText}>
-              New AI-uncertain cases will appear in Pending when manual
-              validation is required.
-            </Text>
-          </View>
-        ) : (
-          <View
-            style={[
-              styles.workspace,
-              wide && styles.workspaceWide,
-            ]}
-          >
-            <View style={[styles.queue, wide && styles.queueWide]}>
+              <View style={styles.queuePrivacyLine}>
+                <Ionicons name="lock-closed-outline" size={15} color="#08765A" />
+                <Text style={styles.queuePrivacyText}>Private ID photos are not retained by the current published backend.</Text>
+              </View>
+
+              {pagedReviews.length === 0 ? (
+                <View style={styles.queueEmptyState}>
+                  <Ionicons name="search-outline" size={24} color="#7EA18C" />
+                  <Text style={styles.queueEmptyTitle}>No matching identity reviews</Text>
+                  <Text style={styles.queueEmptyText}>Select another status or change the search query.</Text>
+                </View>
+              ) : null}
               {pagedReviews.map((item) => {
                 const active = selected?.uid === item.uid;
                 return (
@@ -632,7 +632,14 @@ export default function IdentityReviewsAdmin() {
                   </TouchableOpacity>
                 );
               })}
-            </View>
+              <View style={styles.queueFooter}>
+                <Text style={styles.queueFooterLabel}>
+                  {filtered.length ? (activePage - 1) * PAGE_SIZE + 1 : 0}–{Math.min(activePage * PAGE_SIZE, filtered.length)} of {filtered.length} records · 5 per page
+                </Text>
+                <ListPagination page={activePage} total={filtered.length} pageSize={PAGE_SIZE}
+                  onChange={(next) => { setPage(next); setSelected(null); setIssuerReviewAttested(false); }} />
+              </View>
+            </View> : null}
 
             <View
               style={[
@@ -1063,7 +1070,7 @@ const styles = StyleSheet.create({
   flexOne: {
     flex: 1,
   },
-  summaryMetrics: { flexDirection: "row", flexWrap: "wrap", gap: 11, marginBottom: 17 },
+  summaryMetrics: { flexDirection: "row", flexWrap: "wrap", gap: 11, marginBottom: 13 },
   summaryMetric: { flexGrow: 1, flexBasis: 175, minWidth: 150, padding: 16, backgroundColor: "#FFFFFF",
     borderRadius: 15, borderWidth: 1, borderColor: "#D8E9E0" },
   summaryIcon: { width: 38, height: 38, borderRadius: 10, backgroundColor: "#E2F5EA",
@@ -1278,7 +1285,7 @@ const styles = StyleSheet.create({
     gap: 9,
   },
   queueWide: {
-    width: 410,
+    width: 365,
     flexShrink: 0,
   },
   queueCard: {
@@ -1593,4 +1600,20 @@ const styles = StyleSheet.create({
     fontSize: 11,
     lineHeight: 17,
   },
+
+  // Scoped production visual design: all security, OCR and approval behavior is unchanged.
+  pageCompact: { paddingHorizontal: 12, paddingVertical: 14, paddingBottom: 60 },
+  backToQueue: { backgroundColor: "#FFFFFF", borderColor: "#DBE7DF", borderWidth: 1,
+    borderRadius: 10, padding: 12, marginBottom: 12, flexDirection: "row", alignItems: "center", gap: 10 },
+  backToQueueLabel: { color: "#08765A", fontWeight: "800", fontSize: 13 },
+  queuePrivacyLine: { flexDirection: "row", backgroundColor: "#F3FAF5",
+    borderRadius: 8, gap: 8, padding: 9, alignItems: "flex-start" },
+  queuePrivacyText: { fontSize: 11, color: "#557865", flex: 1, lineHeight: 16 },
+  queueEmptyState: { minHeight: 160, alignItems: "center", justifyContent: "center", padding: 16, gap: 8 },
+  queueEmptyTitle: { fontSize: 13, fontWeight: "800", color: "#244436" },
+  queueEmptyText: { fontSize: 11, color: "#647E71", textAlign: "center" },
+  queueFooter: { borderTopWidth: 1, borderTopColor: "#E6EEE9", paddingTop: 12, marginTop: 8, gap: 6 },
+  queueFooterLabel: { color: "#668373", fontSize: 11, textAlign: "center" },
+  summaryCopy: { flex: 1, gap: 2 },
+
 });
