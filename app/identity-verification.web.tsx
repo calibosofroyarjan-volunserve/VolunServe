@@ -19,6 +19,7 @@ import {
     Text,
     TouchableOpacity,
     View,
+    useWindowDimensions,
 } from "react-native";
 
 import { db } from "../lib/firebase";
@@ -1441,7 +1442,7 @@ export default function IdentityVerificationWeb() {
     <ScrollView
       style={styles.screen}
       contentContainerStyle={styles.page}
-      showsVerticalScrollIndicator={false}
+      showsVerticalScrollIndicator={true}
     >
       <View style={styles.topBar}>
         <TouchableOpacity
@@ -2038,6 +2039,9 @@ function UploadIdStep({
   onRemove: () => void;
   onRemoveBack: () => void;
 }) {
+  const { width: windowWidth } = useWindowDimensions();
+  const twoColumnIdScan = windowWidth >= 1040 && idType !== "passport";
+
   return (
     <View style={styles.stepCard}>
       <View style={styles.stepHeader}>
@@ -2104,13 +2108,14 @@ function UploadIdStep({
         })}
       </View>
 
+      <View style={[styles.idCaptureGrid, twoColumnIdScan && styles.idCaptureGridTwoColumn]}>
       {([
         { side: "front" as const, label: "Front of ID", media: idDocument, open: onPick, remove: onRemove },
         ...(idType === "passport" ? [] : [
           { side: "back" as const, label: "Back of ID", media: idBackDocument, open: onPickBack, remove: onRemoveBack },
         ]),
       ]).map(({ side, label, media, open, remove }) => (
-        <View key={side}>
+        <View key={side} style={[styles.idCapturePanel, twoColumnIdScan && styles.idCapturePanelHalf]}>
           <Text style={styles.fieldLabel}>{label}</Text>
           {media ? (
             <View style={styles.mediaPreviewCard}>
@@ -2181,12 +2186,13 @@ function UploadIdStep({
               </View>
               <Text style={styles.uploadTitle}>Open Camera — {label}</Text>
               <Text style={styles.uploadText}>
-                The camera may capture the wrong side. Review the preview, then tap Check ID: the AI will screen the ID type and front/back layout before you enter the face scan. This is not proof of authenticity.
+                Keep the {side === "front" ? "portrait/front" : "reverse/back"} side clear and well-lit. Review the capture before checking your ID.
               </Text>
             </TouchableOpacity>
           )}
         </View>
       ))}
+      </View>
 
       <TouchableOpacity
         accessibilityRole="checkbox"
@@ -2633,11 +2639,11 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     flexWrap: "wrap",
     gap: 9,
-    marginBottom: 19,
+    marginBottom: 15,
   },
   idTypeButton: {
     flex: 1,
-    minWidth: 210,
+    minWidth: 176,
     minHeight: 62,
     flexDirection: "row",
     alignItems: "center",
@@ -2668,11 +2674,29 @@ const styles = StyleSheet.create({
     color: "#94A3B8",
     fontSize: 9.5,
   },
+  idCaptureGrid: {
+    width: "100%",
+    flexDirection: "column",
+    gap: 16,
+  },
+  idCaptureGridTwoColumn: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 14,
+  },
+  idCapturePanel: {
+    width: "100%",
+    minWidth: 0,
+  },
+  idCapturePanelHalf: {
+    width: "48%",
+    flexGrow: 1,
+  },
   uploadZone: {
-    minHeight: 230,
+    minHeight: 164,
     alignItems: "center",
     justifyContent: "center",
-    padding: 24,
+    padding: 16,
     borderRadius: 15,
     borderWidth: 1.5,
     borderStyle: "dashed",
@@ -2680,15 +2704,15 @@ const styles = StyleSheet.create({
     backgroundColor: "#F8FBFF",
   },
   uploadIcon: {
-    width: 60,
-    height: 60,
-    borderRadius: 16,
+    width: 46,
+    height: 46,
+    borderRadius: 12,
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: "#DBEAFE",
   },
   uploadTitle: {
-    marginTop: 12,
+    marginTop: 9,
     color: COLORS.navy,
     fontSize: 13,
     fontWeight: "900",
@@ -2696,7 +2720,9 @@ const styles = StyleSheet.create({
   uploadText: {
     marginTop: 4,
     color: "#64748B",
-    fontSize: 10.5,
+    fontSize: 11,
+    lineHeight: 16,
+    maxWidth: 360,
     textAlign: "center",
   },
   mediaPreviewCard: {
@@ -2708,7 +2734,7 @@ const styles = StyleSheet.create({
   },
   idPreview: {
     width: "100%",
-    height: 240,
+    height: 190,
     backgroundColor: "#E2E8F0",
   },
   mediaPreviewInfo: {
@@ -2804,7 +2830,7 @@ const styles = StyleSheet.create({
   submissionErrorTitle: { fontSize: 14, fontWeight: "800", color: COLORS.danger },
   submissionErrorText: { fontSize: 12.5, lineHeight: 19, marginTop: 5, color: "#7F1D1D" },
   submissionErrorHint: { fontSize: 11.5, lineHeight: 17, marginTop: 6, color: "#991B1B" },
-  idLivePreview: { width: "100%", height: 290, backgroundColor: "#111827", borderRadius: 12, overflow: "hidden" },
+  idLivePreview: { width: "100%", height: 260, backgroundColor: "#111827", borderRadius: 12, overflow: "hidden" },
   idCameraError: { marginTop: 8, color: "#B91C1C", fontSize: 12 },
   idCameraActions: { flexDirection: "row", flexWrap: "wrap", gap: 10, marginTop: 12, alignItems: "center" },
   scanOverlay: {
