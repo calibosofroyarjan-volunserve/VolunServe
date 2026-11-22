@@ -12,7 +12,7 @@ function uploadRequest({ withBack = true, consent = true, idType = "national_id"
   if (consent) form.set("evidenceConsent", "true");
   const binary = badFormat ? new Uint8Array(404) : jpeg();
   form.set("idDocument", new Blob([binary], { type: "image/jpeg" }), "front.jpg");
-  if (withBack) form.set("idBack", new Blob([jpeg()], { type: "image/jpeg" }), "back.jpg");
+  if (withBack) form.set("idBack", new Blob([Buffer.concat([Buffer.from(jpeg()), Buffer.from([9])])], { type: "image/jpeg" }), "back.jpg");
   form.set("selfie", new Blob([jpeg()], { type: "image/jpeg" }), "selfie.jpg");
   const request = new Request("http://localhost/test", { method: "POST", body: form });
   return request.arrayBuffer().then((buffer) => ({
