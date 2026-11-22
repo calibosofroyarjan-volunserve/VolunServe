@@ -1,0 +1,79 @@
+name: Wake VolunServe Render backend and Identity AI (GET only)
+
+on:
+  push:
+    branches: [qa/wake-render-backend-identity-ai-20261122]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  wake-render:
+    name: Read-only Render cold-start readiness probe
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - name: Wake both live Render services through harmless GET /health
+        shell: bash
+        run: |
+          node <<'NODE'
+          const endpoints = [
+            {
+              name: "VolunServe backend",
+              url: "https://volunserve.onrender.com/health",
+              healthy: (b) => b?.ok === true && b?.service === "volunserve-backend",
+            },
+            {
+              name: "VolunServe Identity AI",
+              url: "https://volunserve-identity-ai.onrender.com/health",
+              healthy: (b) => b?.ok === true &&
+                b?.service === "volunserve-identity-ai" &&
+                b?.verificationEngineReady === true &&
+                b?.internalAuthConfigured === true &&
+                b?.documentOcrReady === true &&
+                b?.profileComparisonReady === true &&
+                b?.documentPrecheckReady === true,
+            },
+          ];
+          const sleep = ms => new Promise(resolve => setTimeout(resolve,ms));
+          async function check(service) {
+            try {
+              const res = await fetch(service.url, {
+                method: "GET",
+                headers: {"Accept":"application/json","Cache-Control":"no-cache"},
+                signal: AbortSignal.timeout(45000),
+              });
+              const result = await res.json().catch(()=>null);
+              const ready = res.ok && service.healthy(result);
+              const safe = service.name.includes("Identity") ? {
+                verificationEngineReady:result?.verificationEngineReady,
+                internalAuthConfigured:result?.internalAuthConfigured,
+                documentOcrReady:result?.documentOcrReady,
+                profileComparisonReady:result?.profileComparisonReady,
+                documentPrecheckReady:result?.documentPrecheckReady,
+              } : {identityEngine:result?.identityEngine};
+              console.log(JSON.stringify({service:service.name,http:res.status,ready,...safe}));
+              return ready;
+            } catch(err) {
+              console.log(JSON.stringify({service:service.name,ready:false,issue:String(err?.name||"network_error")}));
+              return false;
+            }
+          }
+          (async()=>{
+            for(let attempt=1;attempt<=12;attempt++) {
+              console.log("Read-only warmup attempt "+attempt+"/12");
+              const results = await Promise.all(endpoints.map(check));
+              if(results.every(Boolean)) {
+                console.log("PASS BOTH LIVE RENDER SERVICES ARE AWAKE AND HEALTH ENDPOINTS READY");
+                console.log("No private auth-check, ID uploads, Firebase writes, or deployments performed");
+                return;
+              }
+              if(attempt<12)await sleep(15000);
+            }
+            throw Error("One or both Render services are not confirmed ready. Check service logs; do NOT submit an ID until healthy.");
+          })().catch(e=>{console.error(e.message);process.exitCode=1});
+          NODE
+      - name: Confirm nothing was deployed
+        if: success()
+        run: echo 'Read-only health checks only. Current VolunServe code and Firebase data are untouched.'
