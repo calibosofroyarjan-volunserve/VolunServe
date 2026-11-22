@@ -1,0 +1,49 @@
+name: Read-Only Public Identity Photo Release Smoke Test (NO DEPLOY)
+on:
+  push:
+    branches: [qa/identity-photo-live-smoke-20261123]
+    paths: ['.github/workflows/qa-identity-photo-live-smoke-20261123.yml']
+permissions:
+  contents: read
+jobs:
+  read-only-live:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Verify actual published website revision, routes and protected backend without credentials
+        run: |
+          node <<'NODE'
+          const assert=require('node:assert/strict');
+          (async()=>{
+            const expected='b2b07fbc02dfe184e622240d628a8365b27693fa';
+            const get=async(url,accept='text/html')=>{
+              const r=await fetch(url,{headers:{'Cache-Control':'no-cache','Accept':accept},
+                signal:AbortSignal.timeout(18000)});
+              console.log('GET',new URL(url).pathname,r.status,r.headers.get('content-type'));
+              return r;
+            };
+            const markerResponse=await get(
+              'https://volunserve.com/volunserve-release.json?release_audit='+Date.now(),
+              'application/json');
+            assert(markerResponse.ok);
+            const marker=await markerResponse.json();
+            assert.equal(marker.app,'VolunServe');
+            assert.equal(marker.firebaseProject,'volunserve-3aa5b');
+            assert.equal(marker.revision,expected,
+              'Published frontend is not the reviewed identity photo viewer source');
+            for(const path of ['/', '/login', '/admin-login', '/identity-reviews',
+              '/community-events','/disaster-response']) {
+              const r=await get('https://volunserve.com'+path);
+              assert(r.ok,'Live page failed '+path);
+              assert((r.headers.get('content-type')||'').includes('html'));
+            }
+            const health=await get('https://volunserve.onrender.com/health','application/json');
+            assert(health.ok,'Node backend health failed');
+            const evidence=await get(
+              'https://volunserve.onrender.com/api/admin/identity/reviews/preflight-identity/evidence',
+              'application/json');
+            assert.equal(evidence.status,401,'Admin private photo API must deny unsigned requests');
+            console.log('PASS published website revision',expected,
+              'and healthy protected API; NO user photos or Firebase records accessed.');
+          })().catch(e=>{console.error('FAILED read-only site verification: '+e.message);process.exitCode=1});
+          NODE
