@@ -113,7 +113,7 @@ export default function CommunityOnline({uid,dashboard=false}:{uid?:string|null;
   const onlineCount=members.filter(m=>m.online).length;
   const canStartChat=(member:Member)=>acceptChats&&member.acceptChats;
   const tabs:[Filter,string][]=[["all","All Members"],["resident","Residents"],["volunteer","Volunteers"],["online","Online"],["offline","Offline"]];
-  return <View style={[styles.panel,wideDashboard&&styles.dashboardWidePanel]}>
+  return <View style={[styles.panel,wideDashboard&&styles.dashboardWidePanel,dashboard&&compact&&styles.dashboardMobilePanel]}>
     <View style={[styles.headingRow,compact&&styles.mobileHeading]}>
       <View style={styles.headingCopy}>
         <View style={styles.iconBox}><Ionicons name="people-outline" size={21} color={GREEN}/></View>
@@ -181,7 +181,7 @@ export default function CommunityOnline({uid,dashboard=false}:{uid?:string|null;
         <Pressable onPress={()=>void load()} style={styles.retry}><Text style={styles.retryText}>Retry</Text></Pressable>
       </View> : displayed.length ? <ScrollView
         nestedScrollEnabled showsVerticalScrollIndicator
-        style={[styles.memberScroll,dashboard&&styles.dashboardMemberScroll]}
+        style={[styles.memberScroll,dashboard&&styles.dashboardMemberScroll,dashboard&&compact&&styles.dashboardMobileMemberScroll]}
         contentContainerStyle={styles.memberScrollInner}
         accessibilityLabel="Scrollable list of all community members">
         <View style={[styles.grid,compact&&styles.gridMobile,dashboard&&styles.dashboardGrid,dashboard&&compact&&styles.dashboardGridMobile]}>
@@ -195,8 +195,8 @@ export default function CommunityOnline({uid,dashboard=false}:{uid?:string|null;
             style={[styles.memberMain,dashboard&&styles.dashboardIdentity,dashboard&&compact&&styles.dashboardIdentityMobile]}>
             <Avatar person={member} size={dashboard?43:compact?47:53}/>
             {dashboard?<View style={[styles.dashboardNameGroup,dashboard&&compact&&styles.dashboardNameMobile]}>
-              <Text style={styles.dashboardName} numberOfLines={1}>{member.name}{member.isSelf?<Text style={styles.youLabel}> (You)</Text>:null}</Text>
-              <Text style={styles.dashboardBadge} numberOfLines={1}>{member.badge}</Text>
+              <Text style={[styles.dashboardName,compact&&styles.dashboardNameMobileText]} numberOfLines={compact?2:1}>{member.name}{member.isSelf?<Text style={styles.youLabel}> (You)</Text>:null}</Text>
+              <Text style={[styles.dashboardBadge,compact&&styles.dashboardBadgeMobileText]} numberOfLines={1}>{member.badge}</Text>
             </View>:<>
               <Text style={styles.memberName} numberOfLines={2}>{member.name}{member.isSelf?<Text style={styles.youLabel}> (You)</Text>:null}</Text>
               <Text style={styles.memberBadge} numberOfLines={1}>{member.badge}</Text>
@@ -295,8 +295,10 @@ const styles=StyleSheet.create({
   panel:{backgroundColor:"#FFFFFF",borderWidth:1,borderColor:"#DFEBE7",
     borderRadius:18,padding:18,gap:14,minWidth:0,width:"100%",flexGrow:1},
   dashboardWidePanel:{minHeight:665},
+  dashboardMobilePanel:{padding:12,gap:10,flexGrow:0,minHeight:0,alignSelf:"stretch"},
   memberScroll:{maxHeight:615,flexGrow:0},
   dashboardMemberScroll:{maxHeight:369},
+  dashboardMobileMemberScroll:{maxHeight:354,flexGrow:0,flexShrink:1,width:"100%"},
   memberScrollInner:{paddingBottom:6},
   headingRow:{flexDirection:"row",alignItems:"center",justifyContent:"space-between",gap:12},
   mobileHeading:{flexWrap:"wrap"},
@@ -352,15 +354,16 @@ const styles=StyleSheet.create({
   dashboardSmallCaption:{fontSize:10.5,color:"#6E8A7D",fontWeight:"600"},
   dashboardFilters:{paddingBottom:10,gap:6},
   dashboardGrid:{flexDirection:"column",gap:0},
-  dashboardGridMobile:{flexDirection:"row",gap:8},
+  // Mobile dashboard uses readable two-column cards instead of four narrow, stretched tiles.
+  dashboardGridMobile:{flexDirection:"row",flexWrap:"wrap",alignItems:"flex-start",justifyContent:"space-between",gap:8},
   dashboardMemberRow:{width:"100%",flexBasis:"auto",flexGrow:0,minWidth:0,maxWidth:"100%",
     backgroundColor:"#FFFFFF",borderWidth:0,borderBottomWidth:1,borderRadius:0,
     borderBottomColor:"#E8F0EA",paddingHorizontal:4,paddingVertical:11,
     flexDirection:"row",alignItems:"center",justifyContent:"space-between",gap:7},
-  dashboardMemberMobile:{flexBasis:"23%",minWidth:72,maxWidth:"25%",flexGrow:1,
-    flexDirection:"column",alignItems:"center",gap:6,
+  dashboardMemberMobile:{width:"47%",flexBasis:"47%",minWidth:0,maxWidth:"47%",flexGrow:0,flexShrink:0,
+    flexDirection:"column",alignItems:"center",alignSelf:"flex-start",gap:6,minHeight:108,
     borderBottomWidth:0,backgroundColor:"#F8FBF9",borderWidth:1,borderColor:"#E3EEE8",
-    borderRadius:11,paddingHorizontal:5,paddingVertical:12},
+    borderRadius:11,paddingHorizontal:8,paddingVertical:12},
   dashboardIdentity:{width:"auto",flex:1.45,minWidth:120,flexDirection:"row",alignItems:"center",
     justifyContent:"flex-start",gap:10},
   dashboardIdentityMobile:{flexDirection:"column",alignItems:"center",justifyContent:"center",
@@ -368,8 +371,10 @@ const styles=StyleSheet.create({
   dashboardNameGroup:{flex:1,minWidth:0,alignItems:"flex-start",gap:4},
   dashboardNameMobile:{flexGrow:0,alignItems:"center",width:"100%"},
   dashboardName:{fontSize:12.5,fontWeight:"800",color:"#153E32",textAlign:"left"},
+  dashboardNameMobileText:{fontSize:11.5,textAlign:"center",lineHeight:15},
   youLabel:{fontSize:11,fontWeight:"800",color:"#087D62"},
   dashboardBadge:{fontSize:10.5,color:"#408A70",fontWeight:"700",textAlign:"left"},
+  dashboardBadgeMobileText:{fontSize:10,textAlign:"center"},
   dashboardPresence:{flex:1,minWidth:135,alignItems:"flex-start",justifyContent:"center",gap:4},
   statusLine:{flexDirection:"row",gap:6,alignItems:"center"},
   offlinePresenceDot:{backgroundColor:"#A8B3AF"},
