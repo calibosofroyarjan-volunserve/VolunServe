@@ -77,6 +77,11 @@ async function readIdentityEvidence(request) {
   for (const [key, field] of Object.entries(FIELDS)) {
     images[key] = await readImage(form, field, key !== "back" || idType === "national_id");
   }
+  if (idType === "national_id" && images.front?.buffer && images.back?.buffer &&
+      images.front.buffer.equals(images.back.buffer)) {
+    throw evidenceError("identity_id_sides_duplicate",
+      "Front and back National ID photos are identical. Retake the actual back of your ID.");
+  }
   return { idType, images };
 }
 
