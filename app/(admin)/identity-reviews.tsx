@@ -529,7 +529,10 @@ export default function IdentityReviewsAdmin() {
               <View style={styles.searchWrap}>
                 <Ionicons name="search-outline" size={17} color="#64748B" />
                 <TextInput style={styles.searchInput} value={search}
-                  onChangeText={(value) => { setSearch(value); setPage(1); }}
+                  onChangeText={(value) => {
+                    setSearch(value); setPage(1); setSelected(null);
+                    setReadyEvidenceKey(""); setConfirmedEvidenceKey("");
+                  }}
                   placeholder="Search resident, email, barangay, or ID..."
                   placeholderTextColor="#94A3B8" />
               </View>
