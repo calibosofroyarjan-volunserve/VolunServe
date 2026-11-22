@@ -1,0 +1,55 @@
+name: Observe live AI synthetic name mismatch (NO DEPLOY)
+
+on:
+  push:
+    branches:
+      - qa/observe-national-id-name-mismatch-deployed-ai-20261122
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  exact-deployed-ai-name-observation:
+    name: Source-identical live AI Docker test (synthetic only)
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - name: Checkout AI source only (skip legacy submodule)
+        env:
+          REPO: ${{ github.repository }}
+          SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          git init -q
+          git remote add origin "https://github.com/${REPO}.git"
+          git -c protocol.version=2 fetch --no-tags --depth=1 --filter=blob:none --no-recurse-submodules origin "${SHA}"
+          git sparse-checkout init --cone
+          git sparse-checkout set identity-ai
+          git checkout --force FETCH_HEAD
+      - name: Stop if any production AI code changed or outdated code included
+        run: |
+          set -euo pipefail
+          BASE=8949ebf592bd1688efb1ef85a176a65efe4e4949
+          git -c protocol.version=2 fetch --no-tags --depth=1 --filter=blob:none --no-recurse-submodules origin "$BASE"
+          git diff --name-status "$BASE" HEAD > /tmp/changes
+          cat /tmp/changes
+          python - <<'PY'
+          from pathlib import Path
+          changes = sorted(Path('/tmp/changes').read_text().strip().splitlines())
+          expected = sorted([
+            'A\tidentity-ai/test_observe_name_mismatch_20261122.py',
+            'A\t.github/workflows/qa-observe-national-id-name-mismatch-20261122.yml',
+          ])
+          assert changes == expected, f'Unexpected changes: {changes}'
+          print('PASS AI runtime/source identical to live Render commit; only offline test files added')
+          PY
+      - name: Build identical production AI Dockerfile locally only
+        run: docker build --tag volunserve-identity-name-observation:no-deploy identity-ai
+      - name: Run synthetic name mismatch tests, network disabled
+        run: |
+          docker run --rm --network none --entrypoint python \
+            volunserve-identity-name-observation:no-deploy -m unittest -v \
+            test_observe_name_mismatch_20261122
+      - name: Confirm no live actions
+        run: echo 'NO DEPLOY, no Firebase writes, no real ID images and no verification attempts'
