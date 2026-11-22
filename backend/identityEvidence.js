@@ -88,7 +88,7 @@ function cloudinaryImage(upload, bytes) {
 
 async function destroyIdentityEvidence(images) {
   const entries = Object.values(images || {}).filter((image) => image?.publicId);
-  await Promise.allSettled(entries.map(async (image) => {
+  return await Promise.allSettled(entries.map(async (image) => {
     await cloudinary.uploader.destroy(image.publicId, {
       resource_type: "image", type: "authenticated", invalidate: true,
     });
@@ -136,11 +136,36 @@ function privateIdentityEvidenceUrl(image) {
   };
 }
 
+// Best-effort private-media cleanup: access already expires on the server at
+// expiresAt, and this sweep removes stored bytes when the backend is active.
+// Failed Cloudinary deletions leave metadata available for the next retry.
+async function purgeExpiredIdentityEvidence(db) {
+  const expired = await db.collection("identityEvidence")
+    .where("expiresAt", "<=", new Date()).limit(25).get();
+  let purged = 0;
+  for (const doc of expired.docs) {
+    const state = doc.data() || {};
+    const outcome = await destroyIdentityEvidence(state.images);
+    if (outcome.some((entry) => entry.status === "rejected")) continue;
+    await db.runTransaction(async (transaction) => {
+      const current = await transaction.get(doc.ref);
+      const currentData = current.data() || {};
+      // Never delete a newer submission that replaced an expired record.
+      if (!current.exists || currentData.verificationId !== state.verificationId ||
+          (currentData.expiresAt?.toMillis?.() || Number.POSITIVE_INFINITY) > Date.now()) return;
+      transaction.delete(doc.ref);
+      purged++;
+    });
+  }
+  return { examined: expired.size, purged };
+}
+
 module.exports = {
   readIdentityEvidence,
   storeIdentityEvidence,
   destroyIdentityEvidence,
   privateIdentityEvidenceUrl,
   RETENTION_MS,
+  purgeExpiredIdentityEvidence,
   imageFormat,
 };
