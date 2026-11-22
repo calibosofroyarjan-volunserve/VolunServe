@@ -7,6 +7,7 @@ A recognized *label* is never proof of genuine document issuance.
 """
 import unittest
 from io import BytesIO
+from unittest.mock import patch
 
 import cv2
 import numpy as np
@@ -129,6 +130,43 @@ class SyntheticDocumentImagePipelineTests(unittest.TestCase):
         )
         self.assertEqual(result["status"], "inconclusive")
         self.assertIn("document_back_looks_like_front", result["warningCodes"])
+
+    def test_false_card_crop_recovers_real_text_from_original_frame(self):
+        """Actual Tesseract on a fabricated ID, no personal data or network.
+
+        Simulates a false-positive card contour returning only a blank patch.
+        The first OCR read cannot see the title or name. The second must be
+        performed on the original image, not the failed crop.
+        """
+        from main import extract_government_id_text
+        from document_screening import assess_document_text, assess_profile_name
+        def false_crop(image):
+            return np.full((400, 700, 3), 255, dtype=np.uint8)
+        with patch("main.crop_national_id_for_ocr", side_effect=false_crop):
+            text = extract_government_id_text(
+                self.national_clear, "Fabricated synthetic document",
+                side="front", declared_type="national_id",
+            )
+        screening = assess_document_text("national_id", text)
+        self.assertEqual(screening["status"], "text_consistent_unverified")
+        name = assess_profile_name("TEST", "SAMPLE", text)
+        self.assertEqual(name["profileNameCheck"], "possible_match")
+        self.assertFalse(screening["authenticityVerified"])
+
+    def test_explicit_wrong_id_from_first_ocr_is_never_upgraded(self):
+        """A detected school ID cannot be overwritten by a later scan."""
+        from main import extract_government_id_text
+        with patch("main.crop_national_id_for_ocr", side_effect=lambda image: image.copy()):
+            with patch("main.pytesseract.image_to_string", side_effect=[
+                "STUDENT ID - UNIVERSITY",
+                "PHILIPPINE IDENTIFICATION CARD SURNAME SAMPLE GIVEN NAMES TEST",
+            ]) as ocr:
+                text = extract_government_id_text(
+                    self.national_clear, "Fabricated synthetic document",
+                    side="front", declared_type="national_id",
+                )
+        self.assertIn("STUDENT ID", text)
+        self.assertEqual(ocr.call_count, 1)
 
     def test_school_card_claiming_national_id_is_unsupported_not_reviewable(self):
         image, _ = synthetic_photo(SCHOOL_SAMPLE)

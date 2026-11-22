@@ -1031,9 +1031,15 @@ def extract_government_id_text(
     OCR never authenticates an issued ID. No image bytes, names, QR contents,
     card numbers or raw Tesseract output are written to logs or returned.
     """
-    image = decode_image(id_document_bytes, label)
-    if declared_type == "national_id":
-        image = crop_national_id_for_ocr(image)
+    original_image = decode_image(id_document_bytes, label)
+    image = (
+        crop_national_id_for_ocr(original_image)
+        if declared_type == "national_id" else original_image
+    )
+    # A detected card outline is not proof the crop is correct. Preserve
+    # the original frame for the SECOND OCR pass if the cropped read fails.
+    # This prevents a false-positive contour from permanently hiding text.
+    used_card_crop = image is not original_image
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
     longest = max(gray.shape[:2])
     if longest > 1400:
@@ -1087,6 +1093,22 @@ def extract_government_id_text(
             contrast, None, fx=scale, fy=scale,
             interpolation=cv2.INTER_AREA,
         )
+    # When card detection clipped a heading/name, the second bounded OCR
+    # read MUST use the full original frame, not the same incorrect crop.
+    # Keep exactly two Tesseract passes and the existing execution time cap.
+    if used_card_crop:
+        uncropped = cv2.cvtColor(original_image, cv2.COLOR_BGR2GRAY)
+        longest = max(uncropped.shape[:2])
+        if longest > 1400:
+            uncropped = cv2.resize(
+                uncropped, None, fx=1400 / longest, fy=1400 / longest,
+                interpolation=cv2.INTER_AREA,
+            )
+        if side == "back" and declared_type == "national_id":
+            uncropped = _avoid_national_id_back_qr_noise(uncropped)
+        fallback = cv2.createCLAHE(
+            clipLimit=2.0, tileGridSize=(8, 8),
+        ).apply(uncropped)
     # Adaptive local contrast improves moderately blurred text in poor light.
     fallback = cv2.adaptiveThreshold(
         fallback, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
@@ -1594,9 +1616,11 @@ async def document_precheck(
         declared_type == "national_id"
         and name_status != "possible_match"
     )
+    # DOB OCR is advisory for the face-scan stage. A badly read date must
+    # not block a readable supported ID, matching account name and selfie.
+    # Keep its conflict status for independent Admin review after face matching.
     recognized = (
-        not birthday_conflict
-        and not name_conflict
+        not name_conflict
         and not national_id_name_unconfirmed
         and screening.get("status") == "text_consistent_unverified"
         and screening.get("detectedIdType") == declared_type
@@ -1607,8 +1631,7 @@ async def document_precheck(
                                  "document_back_looks_like_front"))
     )
     review = (
-        not birthday_conflict
-        and not name_conflict
+        not name_conflict
         and not recognized
         and blurry_national_id_claim_needs_review(declared_type, screening)
     )
@@ -1619,14 +1642,18 @@ async def document_precheck(
         message = "The front ID photo could not be read. Retake a clear front photo with even lighting."
     elif "document_back_ocr_inconclusive" in (screening.get("warningCodes") or []):
         message = "The back ID text could not be read. Retake the back photo with less glare."
-    elif birthday_conflict and outcome == "retry":
-        message = "The ID birth date may differ from your saved profile. Retake a clear ID or ask Admin to review your profile; this is not proof of fraud."
     elif national_id_name_unconfirmed and screening.get("status") == "text_consistent_unverified":
         message = ("The National ID format was detected, but the account name "
                    "could not be confirmed. Retake the front to show both name "
                    "fields, or ask Admin to check your profile.")
     elif outcome == "pass":
-        message = "ID format appears consistent. Birthday and barangay checks are OCR clues only; unresolved fields still require Admin review."
+        message = (
+            "ID type and account name appear consistent. Continue to face "
+            "comparison; the DOB clue needs independent LGU/Admin review."
+            if birthday_conflict else
+            "ID format appears consistent. DOB and barangay OCR clues are "
+            "advisory; independent LGU/Admin review is still required."
+        )
     elif outcome == "review":
         message = "The selected National ID is too blurry. It may continue only to Admin rescan review, never automatic approval."
     elif "school_id_not_supported" in (screening.get("warningCodes") or []):

@@ -97,16 +97,19 @@ class DocumentPrecheckTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(result["authenticityVerified"])
         self.assertFalse(result["livenessVerified"])
 
-    async def test_birth_date_conflict_blocks_face_stage_without_accusing_of_fraud(self):
+    async def test_birth_date_ocr_conflict_is_advisory_only_for_face_stage(self):
         result = await self.run_check(
             front=self.dob_front, back=self.barangay_back,
             birth_date="2001-02-03", barangay="Muzon",
         )
-        self.assertEqual(result["outcome"], "retry")
+        # Explicitly readable ID type, labeled matching name and both correct
+        # sides advance only to face comparison; DOB is reserved for LGU Admin.
+        self.assertEqual(result["outcome"], "pass")
         self.assertEqual(result["documentScreening"]["profileBirthDateCheck"],
                          "possible_conflict")
         self.assertIn("Admin", result["message"])
         self.assertFalse(result["authenticityVerified"])
+        self.assertFalse(result["livenessVerified"])
 
     async def test_missing_legacy_birthday_is_not_falsely_verified(self):
         result = await self.run_check(
