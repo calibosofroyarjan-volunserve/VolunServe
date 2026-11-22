@@ -178,6 +178,22 @@ async function purgeExpiredIdentityEvidence(db) {
   return { examined: expired.size, purged };
 }
 
+// Replaced submissions must also be deleted. A retry queue prevents an
+// intermittent Cloudinary deletion failure leaving old sensitive ID photos
+// with no Firestore reference and no future cleanup opportunity.
+async function purgeRetiredIdentityEvidence(db) {
+  const retired = await db.collection("identityEvidenceRetirements")
+    .limit(25).get();
+  let purged = 0;
+  for (const record of retired.docs) {
+    const deleted = await destroyIdentityEvidence(record.data()?.images);
+    if (deleted.some((result) => result.status === "rejected")) continue;
+    await record.ref.delete();
+    purged++;
+  }
+  return { examined: retired.size, purged };
+}
+
 module.exports = {
   readIdentityEvidence,
   storeIdentityEvidence,
@@ -185,5 +201,6 @@ module.exports = {
   privateIdentityEvidenceUrl,
   RETENTION_MS,
   purgeExpiredIdentityEvidence,
+  purgeRetiredIdentityEvidence,
   imageFormat,
 };
