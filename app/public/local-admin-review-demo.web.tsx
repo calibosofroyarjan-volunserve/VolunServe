@@ -11,6 +11,14 @@ import { adminReviewStatusBucket } from "../../lib/identityAdminReviewGate";
 type Decision = "pending" | "verified" | "rejected" | "retry_required";
 type Action = "verify" | "reject" | "require_retry";
 const NATIONAL_METHOD = "psa_national_id_qr_check";
+const PRESET_REASONS = [
+  "Blurry National ID FRONT — submit a clearer photo",
+  "Unreadable National ID BACK — capture the complete reverse side",
+  "Face not centered — retake the selfie within the guide",
+  "Poor lighting — move to a brighter location and retake the selfie",
+  "Unsupported document — only the Philippine National ID is accepted",
+  "Document information unclear — submit corrected evidence",
+] as const;
 const navy = "#143A5B";
 const base = { color: "#475569", fontSize: 13, lineHeight: 20 } as const;
 function localOnly(): boolean {
@@ -38,6 +46,7 @@ export default function LocalAdminReviewDemo() {
   const [personChecked, setPersonChecked] = useState(false);
   const [attested, setAttested] = useState(false);
   const [notes, setNotes] = useState("");
+  const [presetReason, setPresetReason] = useState("");
   const [confirmation, setConfirmation] = useState<Action | null>(null);
   const [message, setMessage] = useState("");
   const [audit, setAudit] = useState("");
@@ -64,6 +73,7 @@ export default function LocalAdminReviewDemo() {
     setPersonChecked(false);
     setAttested(false);
     setNotes("");
+    setPresetReason("");
     setConfirmation(null);
     setAudit("");
     setMessage("Reset completed locally. No Resident account was changed.");
@@ -74,8 +84,8 @@ export default function LocalAdminReviewDemo() {
       setMessage("Approval blocked: PSA method, original ID inspection, in-person face comparison, independent review attestation and 25+ characters of notes are required.");
       return;
     }
-    if (action !== "verify" && notes.trim().length < 5) {
-      setMessage("Enter at least 5 characters explaining rejection or resubmission.");
+    if (action !== "verify" && !PRESET_REASONS.some(x => x === presetReason)) {
+      setMessage("Choose one predefined reason for Retry or Reject. No manual notes needed.");
       return;
     }
     setConfirmation(action);
@@ -88,8 +98,8 @@ export default function LocalAdminReviewDemo() {
       setConfirmation(null);
       return;
     }
-    if (confirmation !== "verify" && notes.trim().length < 5) {
-      setMessage("Reason too short.");
+    if (confirmation !== "verify" && !PRESET_REASONS.some(x => x === presetReason)) {
+      setMessage("Select a valid predefined reason.");
       setConfirmation(null);
       return;
     }
@@ -98,7 +108,9 @@ export default function LocalAdminReviewDemo() {
     setDecision(next);
     setConfirmation(null);
     setMessage("Synthetic case finalized. Reset to try another decision.");
-    setAudit("LOCAL SIMULATION: " + next + ". No authentication, database write or real Admin approval.");
+    setAudit("LOCAL SIMULATION: " + next +
+      (confirmation === "verify" ? ". Fictional independent review completed." : ". Reason: " + presetReason) +
+      " No authentication, database write or real Admin approval.");
   };
   const check = (text: string, value: boolean, setter: (x: boolean) => void) => (
     <TouchableOpacity accessibilityRole="checkbox"
@@ -162,7 +174,7 @@ export default function LocalAdminReviewDemo() {
           {check("Person compared with ID portrait in person", personChecked, setPersonChecked)}
           {check("Independent ID check completed and attested", attested, setAttested)}
           <Text style={{ ...base, fontWeight: "700" }}>
-            Review notes (25+ characters for Verify; 5+ for Reject/Retry)
+            Verification notes only (25+ characters; required for an independently reviewed approval)
           </Text>
           <TextInput multiline editable={pending} maxLength={1000}
             accessibilityLabel="Demo Admin review notes"
@@ -171,6 +183,22 @@ export default function LocalAdminReviewDemo() {
             placeholderTextColor="#64748B"
             style={{ borderWidth: 1, borderColor: "#CBD5E1", borderRadius: 8,
               padding: 12, minHeight: 90, color: navy, textAlignVertical: "top" }} />
+          {pending ? <View style={{ borderWidth: 1, borderColor: "#CBD5E1",
+            borderRadius: 9, padding: 12, gap: 7 }}>
+            <Text style={{ ...base, fontWeight: "800" }}>
+              Retry / Reject reason — select one (no typing required)
+            </Text>
+            {PRESET_REASONS.map(reason => (
+              <TouchableOpacity key={reason} accessibilityRole="radio"
+                accessibilityState={{ checked: presetReason === reason }}
+                onPress={() => { setPresetReason(reason); setConfirmation(null); }}
+                style={{ padding: 9, borderRadius: 7, borderWidth: 1,
+                  borderColor: presetReason === reason ? "#0F766E" : "#CBD5E1",
+                  backgroundColor: presetReason === reason ? "#ECFDF5" : "white" }}>
+                <Text style={base}>{presetReason === reason ? "◉ " : "◯ "}{reason}</Text>
+              </TouchableOpacity>
+            ))}
+          </View> : null}
           <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
             <TouchableOpacity accessibilityRole="button" disabled={!pending}
               style={actionStyle("#0F766E", !pending)}
@@ -204,6 +232,15 @@ export default function LocalAdminReviewDemo() {
                 <Text style={base}>Cancel</Text>
               </TouchableOpacity>
             </View>
+          ) : null}
+          {decision === "retry_required" ? (
+            <TouchableOpacity accessibilityRole="button"
+              onPress={() => router.push("/public/local-face-capture-demo" as any)}
+              style={actionStyle("#14507D")}>
+              <Text style={{ color: "white", fontWeight: "800" }}>
+                Try Again — Open Camera Auto-Capture Demo
+              </Text>
+            </TouchableOpacity>
           ) : null}
           {message ? <Text style={base} accessibilityRole="alert">{message}</Text> : null}
           {audit ? <Text style={{ ...base, color: "#166534" }}>{audit}</Text> : null}

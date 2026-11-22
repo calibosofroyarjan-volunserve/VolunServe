@@ -1,0 +1,37 @@
+name: Staging Face Auto Capture and Retry - NO DEPLOY
+on:
+  push:
+    branches:
+      - feat/staging-face-autocapture-and-retry-20261122
+    paths:
+      - 'lib/localFaceQualityCheck.ts'
+      - 'app/public/local-face-capture-demo.web.tsx'
+      - 'app/public/local-face-capture-demo.tsx'
+      - 'app/public/local-admin-review-demo.web.tsx'
+      - 'backend/test-staging-face-autocapture-retry.cjs'
+      - '.github/workflows/test-staging-face-autocapture-retry-no-deploy-20261122.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  synthetic-face-and-retry-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'npm'
+      - name: Exact npm dependencies, tests only
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Synthetic framing and retry tests (no camera access)
+        run: node --test backend/test-staging-face-autocapture-retry.cjs
+      - name: Existing manual Admin review contract (synthetic Firestore)
+        run: node --test backend/test-identity-no-media-manual-e2e.cjs
+      - name: Full TypeScript typecheck without deployment
+        run: ./node_modules/.bin/tsc --noEmit --pretty false
+      - name: Test restrictions
+        run: echo 'No real ID image, webcam, account, Firestore, or deployment accessed by CI.' >> "$GITHUB_STEP_SUMMARY"
