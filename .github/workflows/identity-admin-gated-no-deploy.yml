@@ -4,6 +4,9 @@ on:
     branches: [live-protected]
     paths:
       - 'backend/server.js'
+      - 'backend/firebaseAdmin.js'
+      - 'backend/stagingFirebaseIsolationPolicy.js'
+      - 'backend/test-staging-firebase-isolation-policy.cjs'
       - 'backend/identityAiApprovalPolicy.js'
       - 'backend/test-identity-ai-approval-policy.cjs'
       - '.github/workflows/identity-admin-gated-no-deploy.yml'
@@ -21,9 +24,12 @@ jobs:
       - name: Syntax check production backend and new AI policy
         run: |
           node --check backend/server.js
+          node --check backend/firebaseAdmin.js
+          node --check backend/stagingFirebaseIsolationPolicy.js
+          node --check backend/test-staging-firebase-isolation-policy.cjs
           node --check backend/identityAiApprovalPolicy.js
           node --check backend/test-identity-ai-approval-policy.cjs
       - name: Test AI result never grants Verified Resident on its own
-        run: node --test backend/test-identity-ai-approval-policy.cjs
+        run: node --test backend/test-identity-ai-approval-policy.cjs backend/test-staging-firebase-isolation-policy.cjs
       - name: Confirm NO deploy
         run: echo 'This job does not touch Render, Firebase or resident accounts.'
