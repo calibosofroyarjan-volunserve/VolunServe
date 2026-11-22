@@ -122,6 +122,17 @@ export default function AdminIdentityEvidence({
     "Manual review required";
 
   const wide = width >= 850;
+  const nationalId = evidence?.idType === "national_id";
+  const tiles = LABELS
+    .filter(({ key }) => key !== "back" || nationalId || !!evidence?.images.back)
+    .map((tile) => ({
+      ...tile,
+      label: tile.key === "front"
+        ? nationalId ? "National ID — Front" : "Government ID — Front"
+        : tile.key === "back"
+          ? nationalId ? "National ID — Back" : "Government ID — Back"
+          : "Live Selfie",
+    }));
   return (
     <View style={{ marginTop: 10, marginBottom: 22, gap: 12 }}>
       <View style={{ flexDirection: "row", justifyContent: "space-between", gap: 12, alignItems: "center" }}>
@@ -150,7 +161,7 @@ export default function AdminIdentityEvidence({
       </View> : null}
       {evidence && !loading ? <>
         <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
-          {LABELS.map(({ key, label, icon }) => {
+          {tiles.map(({ key, label, icon }) => {
             const photo = evidence.images?.[key];
             return (
               <View key={key} style={{
