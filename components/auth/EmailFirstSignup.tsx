@@ -225,9 +225,10 @@ export default function EmailFirstSignup() {
   const completedEmailInput = /^[^@\s]+@[^@\s]+\.[a-z]{2,}$/i.test(email.trim());
   const passwordErr = passwordError(password);
   const needsSpecialization = (SPECIALIZATIONS[occupation] || []).length > 0;
-  const googleOnly = !!signedInUser &&
-    signedInUser.providerData.some(p => p.providerId === "google.com") &&
-    !signedInUser.providerData.some(p => p.providerId === "password");
+  // A Google user may already have a password from an older incomplete
+  // signup. That must NEVER force a new link or skip explicit consent.
+  const googleSignupSession = !!signedInUser &&
+    signedInUser.providerData.some(p => p.providerId === "google.com");
   const emailCanEdit = !signedInUser;
   const personalOk = validName(firstName) && validName(lastName) &&
     (noMiddleName || middleName.trim() === "" || validName(middleName)) &&
@@ -279,7 +280,7 @@ export default function EmailFirstSignup() {
     setShowErrors(true);
     setError("");
     setMessage("");
-    if (googleOnly) {
+    if (googleSignupSession) {
       setStep(3);
       setError("Continue with your personal details. Google signup does not require linking a VolunServe password.");
       return;
@@ -420,10 +421,9 @@ export default function EmailFirstSignup() {
         throw new Error("Email verification is required before creating a Basic Resident profile.");
       }
       await getIdToken(user, true);
-      const googleOnlyAccount = user.providerData.some(p => p.providerId === "google.com") &&
-        !user.providerData.some(p => p.providerId === "password");
+      const googleSignupAccount = user.providerData.some(p => p.providerId === "google.com");
       await signUpUser({
-        authProvider: googleOnlyAccount ? "google" : "verified_email",
+        authProvider: googleSignupAccount ? "google" : "verified_email",
         email: (user.email || "").toLowerCase(),
         password: "", // The verified Auth UID already owns its credential.
         firstName: firstName.trim(),
@@ -728,7 +728,7 @@ export default function EmailFirstSignup() {
                     {checkButton("Continue with Google", () => {void continueWithGoogle();}, true)}
                   </>
                 )}
-                {!googleOnly && (
+                {!googleSignupSession && (
                   <Pressable style={styles.inlineButton} onPress={() => {
                     setResumeMode(v => !v);
                     setPassword(""); setConfirmPassword(""); setError(""); setShowErrors(false);
@@ -811,7 +811,7 @@ export default function EmailFirstSignup() {
                   error={(showErrors || !!birth) && (age === null || age < 18 || age > 100)
                     ? "Select a valid birth date (ages 18–100)." : null}
                 />
-                {googleOnly && (
+                {googleSignupSession && (
                   <Pressable
                     accessibilityRole="checkbox"
                     accessibilityState={{checked: consent}}
@@ -824,11 +824,11 @@ export default function EmailFirstSignup() {
                     </Text>
                   </Pressable>
                 )}
-                {googleOnly && showErrors && !consent &&
+                {googleSignupSession && showErrors && !consent &&
                   <Text style={styles.error}>Agree to the Terms and Privacy Notice to continue.</Text>}
                 {checkButton("Continue to Address & Profile", () => {
                   setShowErrors(true);
-                  if (googleOnly && !consent) {
+                  if (googleSignupSession && !consent) {
                     setError("Please agree to the Terms and Privacy Notice first.");
                     return;
                   }
