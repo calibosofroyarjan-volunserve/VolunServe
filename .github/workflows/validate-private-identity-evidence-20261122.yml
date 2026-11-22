@@ -24,6 +24,8 @@ jobs:
         run: |
           node --check backend/server.js
           node --check backend/identityEvidence.js
+          node --check backend/identityEvidenceReviewHandler.js
+          node --test backend/tests/identityEvidenceReviewHandler.test.js
           node --check backend/identityStagingGuard.js
           node --test backend/tests/identityStagingGuard.test.js
           node --test backend/tests/identityEvidence.test.js
