@@ -5010,6 +5010,9 @@ app.post(
       const pass = validType &&
         !birthConflict &&
         !nameConflict &&
+        // Independent backend guard: AI's preliminary result cannot allow
+        // National ID Face Scan unless the name agrees with trusted profile.
+        (declared !== "national_id" || screening.profileNameCheck === "possible_match") &&
         result?.outcome === "pass" &&
         selectedIdRecognized(screening) &&
         (declared === "passport" || screening.backSideScreened === true);
@@ -5022,7 +5025,7 @@ app.post(
         documentScreening: screening,
         // Sanitized hints only; no raw OCR values and no issuer claim.
         message: nameConflict
-          ? "Please check the name on your National ID. Retake a clear front photo or ask Admin to review your account details. OCR differences are not proof of an invalid ID."
+          ? "The name read from the National ID appears different from this account. Use your own National ID, or ask Admin to check your saved profile. OCR can make mistakes; this is not proof the ID is fake."
           : birthConflict
           ? "The date of birth on the ID may differ from your saved profile. Retake a clearer document or request Admin profile review; OCR differences are not proof of fraud."
           : pass
@@ -5041,6 +5044,9 @@ app.post(
                       ? "The front ID photo could not be read reliably. Try a clear front photo with less glare."
                       : screening.warningCodes.includes("document_back_ocr_inconclusive")
                         ? "The back ID text could not be read reliably. Retake just the back photo with less glare."
+                        : declared === "national_id" && screening.detectedIdType === "national_id" &&
+                          ["inconclusive", "not_checked"].includes(screening.profileNameCheck)
+                          ? "National ID format detected, but the account name could not be confirmed. Retake the front to show both name fields, or ask Admin to check your saved profile."
                         : "ID type or front/back orientation could not be recognized reliably. Retake clearer images.",
         authenticityVerified: false,
         livenessVerified: false,
