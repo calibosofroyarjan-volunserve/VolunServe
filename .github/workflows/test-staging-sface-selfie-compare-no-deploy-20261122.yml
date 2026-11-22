@@ -1,0 +1,50 @@
+name: Local ID vs Auto Selfie SFace Research - NO DEPLOY
+on:
+  push:
+    branches:
+      - feat/staging-local-sface-selfie-compare-20261122
+    paths:
+      - 'identity-ai/local_sface_browser_pair.py'
+      - 'identity-ai/staging_national_id_loopback.py'
+      - 'identity-ai/test_local_sface_browser_pair_20261122.py'
+      - 'app/public/local-face-capture-demo.web.tsx'
+      - '.github/workflows/test-staging-sface-selfie-compare-no-deploy-20261122.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  research-privacy-and-backcompat:
+    runs-on: ubuntu-latest
+    timeout-minutes: 7
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Python syntax compile
+        run: python -m py_compile identity-ai/local_sface_browser_pair.py identity-ai/staging_national_id_loopback.py identity-ai/test_local_sface_browser_pair_20261122.py
+      - name: Consent and synthetic model output tests (no real biometric photos)
+        run: python -m unittest discover -s identity-ai -p test_local_sface_browser_pair_20261122.py -v
+      - name: Existing front and back OCR bridge privacy regressions
+        run: python -m unittest discover -s identity-ai -p test_staging_national_id_loopback.py -v
+  typescript-and-camera:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'npm'
+      - name: Install exact locked web dependencies for CI only
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: TypeScript compilation without output files
+        run: ./node_modules/.bin/tsc --noEmit --pretty false
+      - name: Existing synthetic camera and Admin safety checks
+        run: node --test backend/test-staging-face-autocapture-retry.cjs
+      - name: No production use
+        run: echo "Research-only score, no match verdict or Firebase account action. CI has no real image." >> "$GITHUB_STEP_SUMMARY"
