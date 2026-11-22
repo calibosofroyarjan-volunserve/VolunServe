@@ -27,6 +27,7 @@ jobs:
           node --test backend/tests/identityEvidence.test.js
       - name: Check existing Identity and Admin contracts
         run: |
+          node scripts/test-identity-api-staging-guard.cjs
           node scripts/test-unified-identity-ai-government-id-screening.cjs
           node scripts/test-admin-people-verification-premium-ui.cjs
       - name: Check frontend TypeScript
