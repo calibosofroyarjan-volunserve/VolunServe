@@ -1,0 +1,97 @@
+name: QA Mobile Home Layout - No Deploy (2026-11-22)
+on:
+  push:
+    branches:
+      - fix/mobile-home-responsive-calendar-members-20261122
+    paths:
+      - 'components/home/Home.web.tsx'
+      - 'components/home/CommunityCalendar.tsx'
+      - 'components/home/CommunityOnline.tsx'
+      - '.github/workflows/qa-mobile-home-layout-20261122.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  mobile-web:
+    name: Typecheck, Mobile UI Contract and Web Export
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    env:
+      CI: 'true'
+      EXPO_NO_TELEMETRY: '1'
+      EXPO_PUBLIC_VOLUNSERVE_ENV: production
+      EXPO_PUBLIC_IDENTITY_VERIFICATION_API_URL: https://volunserve.onrender.com
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: false
+      - name: Exact-source and scoped change guard
+        run: |
+          set -euo pipefail
+          BASE=7fe7e33689fbd75a1abdbf84efe6d17c59863a8f
+          test "$(git merge-base "$BASE" HEAD)" = "$BASE"
+          git diff --check "$BASE" HEAD
+          python3 - <<'PY'
+          import subprocess
+          base="7fe7e33689fbd75a1abdbf84efe6d17c59863a8f"
+          actual=set(subprocess.check_output(["git","diff","--name-only",base,"HEAD"],text=True).splitlines())
+          expected={
+            "components/home/Home.web.tsx",
+            "components/home/CommunityCalendar.tsx",
+            "components/home/CommunityOnline.tsx",
+            ".github/workflows/qa-mobile-home-layout-20261122.yml",
+          }
+          assert actual==expected,{"actual":sorted(actual),"expected":sorted(expected)}
+          print("PASS: current live-derived source, exact 3 UI files + isolated QA; no auth/backend/rules modifications")
+          PY
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install lockfile-pinned packages
+        run: npm ci --no-audit --no-fund
+      - name: Assert mobile-only layout invariants
+        run: |
+          node - <<'NODE'
+          const a=require("node:assert/strict"),fs=require("node:fs");
+          const home=fs.readFileSync("components/home/Home.web.tsx","utf8");
+          const cal=fs.readFileSync("components/home/CommunityCalendar.tsx","utf8");
+          const members=fs.readFileSync("components/home/CommunityOnline.tsx","utf8");
+          a(home.includes("communityColumnsStacked = width < 1280"));
+          a(home.includes('mobilePanel: { flex: 0'));
+          a(home.includes('mobile && styles.mobileStatusPill')===false,"mobile pills must follow descriptions and not crowd the row");
+          a(home.includes("mobile ? 3 : 1"),"mobile activity text must remain readable");
+          a(home.includes("updateDateMobile"),"mobile announcements must display dates");
+          a(cal.includes("dashboardMobileDayCell"),"compact month cells required");
+          a(cal.includes("dashboardMobileDayButton"),"compact date controls required");
+          a(cal.includes("eventDates.has(date)"),"preserve actual event markers");
+          a(members.includes('dashboardMobileMemberScroll'),"bounded member scroll required");
+          a(members.includes('dashboardMemberMobile:{width:"47%"'),"readable two-column member cards required");
+          a(members.includes("const displayed=filtered;"),"full member roster must not be paginated");
+          a(members.includes("member.isSelf?<Text style={styles.youLabel}> (You)</Text>"),"self badge required");
+          a(members.includes("nestedScrollEnabled showsVerticalScrollIndicator"),"member scrolling required");
+          a(members.includes("member.isSelf?router.push"),"profile routes preserved");
+          for (const viewport of [320,360,390,430]) {
+            const content=viewport-22-24;
+            const item=content*0.47;
+            a(item*2+8 <= content, "two-column cards must fit "+viewport+"px");
+          }
+          console.log("PASS: mobile grid fit contracts at 320/360/390/430px; event/roster navigation unchanged");
+          NODE
+      - name: TypeScript and authenticated-role / Home routing regressions
+        run: |
+          set -euo pipefail
+          npx tsc --noEmit --incremental false
+          node scripts/test-login-ui-release.cjs
+          node scripts/test-profile-certificates-account-menu.cjs
+          node scripts/test-guest-readonly-preview.cjs
+          node --test scripts/test-admin-volunteer-authorization.cjs
+          node --test scripts/test-embedded-emergency-map-navigation.cjs
+      - name: Build complete Expo web app without publishing
+        run: npx expo export --platform web --output-dir /tmp/volunserve-mobile-home-qa
+      - name: Read-only production Hosting smoke (does not deploy)
+        run: |
+          VOLUNSERVE_HOSTING_URL=https://volunserve.com node scripts/check-live-hosting.cjs
+      - name: Finish without release
+        run: echo "NO DEPLOY. No Firebase, Auth, Firestore, identity, backend, or production writes."
