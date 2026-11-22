@@ -299,7 +299,8 @@ export default function IdentityVerificationWeb() {
     useState<IdentityVerificationStatusResult | null>(null);
   const [localMessage, setLocalMessage] = useState("");
   const [submissionError, setSubmissionError] = useState("");
-  // In-memory only: never write captured government IDs to Firestore or browser storage.
+  // Browser previews remain in memory. Consented submissions are saved
+  // separately by the protected backend for authorized Admin review.
   const [submittedIdPreviewUri, setSubmittedIdPreviewUri] = useState<string | null>(null);
 
   const [cameraActive, setCameraActive] = useState(false);
@@ -1297,7 +1298,7 @@ export default function IdentityVerificationWeb() {
     if (!consent) {
       Alert.alert(
         "Consent Required",
-        "Confirm that VolunServe may process the submitted identity images for account verification.",
+        "Consent to secure storage of your ID scans and selfie for authorized LGU Admin review is required.",
       );
       return;
     }
@@ -1933,9 +1934,9 @@ export default function IdentityVerificationWeb() {
               ) : null}
             </View>
             <Text style={styles.consentText}>
-              I consent to VolunServe processing my
-              government ID and captured face image for
-              private 1-to-1 identity verification.
+              I consent to VolunServe privately processing and securely
+              storing both sides of my government ID and my live selfie
+              for AI checks and authorized LGU Admin identity review.
             </Text>
           </TouchableOpacity>
 
@@ -1979,8 +1980,8 @@ export default function IdentityVerificationWeb() {
           color={COLORS.tealDark}
         />
         <Text style={styles.privacyNoteText}>
-          Your ID images are processed privately for identity screening. A face comparison
-          does not prove ID authenticity or liveness; final verification requires independent Admin review.
+          Submitted ID photos and selfies are stored privately for authorized LGU Admin review.
+          AI face comparison alone does not prove document authenticity or liveness.
         </Text>
       </View>
         </ScrollView>
@@ -2586,8 +2587,8 @@ function StatusScreen({
             />
             <Text style={styles.submittedIdLabel}>{idPreviewLabel || "Government ID"}</Text>
             <Text style={styles.submittedIdPrivacy}>
-              Private preview from this scan only. It disappears after reloading or leaving this page;
-              the ID image is not retained in your account or shown to Admin reviewers.
+              This on-screen preview disappears after you leave the page.
+              A separate secure copy is retained for authorized LGU Admin review.
             </Text>
           </View>
         ) : null}
