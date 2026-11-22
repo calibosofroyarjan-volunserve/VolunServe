@@ -4,6 +4,7 @@ on:
     branches: [live-protected]
     paths:
       - 'app/identity-verification.web.tsx'
+      - 'app/(admin)/identity-reviews.tsx'
       - 'lib/identityVerification.ts'
       - 'backend/server.js'
       - 'backend/identityAiApprovalPolicy.js'
