@@ -38,6 +38,7 @@ jobs:
           actual=sorted(Path('/tmp/changes').read_text().strip().splitlines())
           expected=sorted([
             'M\tidentity-ai/main.py',
+            'M\tidentity-ai/test_bounded_ocr_render_free_20261122.py',
             'A\tidentity-ai/test_national_id_partial_ocr_recovery_20261122.py',
             'A\t.github/workflows/qa-national-id-partial-ocr-recovery-20261122.yml',
           ])
