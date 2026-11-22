@@ -60,7 +60,7 @@ def classify_national_id_ocr(front_text: str) -> dict:
     illegible, unlabeled or contradictory material remains needs_review.
     """
     from strict_document_screening import (
-        _contains, _normalized, _document_signals, _school_id_signal,
+        _contains, _normalized, _document_signals,
     )
 
     text = _normalized(front_text)
@@ -209,7 +209,7 @@ def main() -> None:
     tk.Label(header, text="Philippine National ID — Type Check",
              font=("Segoe UI", 18, "bold"), bg="#153b63",
              fg="white").pack(anchor="w")
-    tk.Label(header, text="Front photo only · local OCR · no birthday or selfie required",
+    tk.Label(header, text="Test a National ID or another card type · front photo only · no selfie",
              bg="#153b63", fg="#e5effc", font=("Segoe UI", 10)).pack(
                  anchor="w", pady=(5, 0))
 
@@ -222,13 +222,13 @@ def main() -> None:
 
     row = tk.Frame(body, bg="#f5f8fb")
     row.pack(fill="x", pady=(18, 14))
-    tk.Label(row, text="National ID FRONT photo", width=25,
+    tk.Label(row, text="ID card FRONT photo", width=25,
              font=("Segoe UI", 11, "bold"), bg="#f5f8fb").pack(side="left")
     status = tk.StringVar(value="No photo selected")
 
     def choose() -> None:
         selected = filedialog.askopenfilename(
-            parent=root, title="Choose your National ID FRONT locally",
+            parent=root, title="Choose a consented ID card FRONT photo locally",
             filetypes=[("Images", "*.jpg *.jpeg *.png *.webp")])
         if selected:
             photo["front"] = selected
@@ -246,7 +246,7 @@ def main() -> None:
     output = tk.Text(body, font=("Consolas", 10), wrap="word", height=14,
                      bg="white", fg="#123047")
     output.pack(fill="both", expand=True, pady=(0, 12))
-    output.insert("end", "Select a front JPG/PNG/WebP photo and press CHECK NATIONAL ID TYPE.")
+    output.insert("end", "Choose any consented ID card FRONT photo to test National ID-only screening.")
 
     def scan() -> None:
         if not consent.get():
@@ -255,7 +255,7 @@ def main() -> None:
             return
         if "front" not in photo:
             messagebox.showwarning("Missing photo",
-                "Choose a National ID FRONT photo first.", parent=root)
+                "Choose an ID card FRONT photo first.", parent=root)
             return
         run_button.config(state="disabled")
         output.delete("1.0", "end")
