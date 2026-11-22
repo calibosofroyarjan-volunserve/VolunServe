@@ -890,7 +890,7 @@ function ReviewDetail({
             </View>
             <Text style={styles.previewEvidenceCaption}>
               {evidenceError || (item.evidenceAvailable
-                ? "Private ID and selfie photos are available only to authorized reviewers. Tap to enlarge. Links expire shortly."
+                ? "Private ID and selfie photos are available only to authorized reviewers for up to 30 days. Tap to enlarge. View links expire after 3 minutes."
                 : "This older verification record has no retained ID/selfie images. Request a new Resident submission to review the photos.")}
             </Text>
           </View>
