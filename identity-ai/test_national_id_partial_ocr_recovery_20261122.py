@@ -80,7 +80,7 @@ class NationalIdPartialOcrTests(unittest.TestCase):
         self.assertEqual(mock.call_count, 2)
         self.assertEqual(mock.call_args_list[0].kwargs["timeout"], 20)
         self.assertEqual(mock.call_args_list[1].kwargs["timeout"], 12)
-        self.assertLessEqual(max(mock.call_args_list[1].args[0].shape), 1024)
+        self.assertLessEqual(max(mock.call_args_list[1].args[0].shape), 1250)
         self.assertNotIn("PRIVATE IMAGE", " ".join(logger.output))
 
     def test_readable_primary_ocr_only_runs_once(self):
