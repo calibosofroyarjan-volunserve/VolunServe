@@ -1,7 +1,7 @@
 import { volunserveTypography as vsType } from "../../constants/volunserveLiveUi";
 import { liveUi as designUi } from "../../constants/volunserveLiveUi";
 import { Ionicons } from "@expo/vector-icons";
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useLocalSearchParams } from "expo-router";
 import ListPagination from "../../components/ui/ListPagination";
 import AdminReviewHero from "../../components/admin/AdminReviewHero";
@@ -126,6 +126,7 @@ export default function IdentityReviewsAdmin() {
   const { loading: sessionLoading, user, profile } = useUserSession();
   const { width } = useWindowDimensions();
   const wide = width >= 1050;
+  const scrollRef = useRef<ScrollView | null>(null);
 
   const [items, setItems] = useState<IdentityReview[]>([]);
   const [loading, setLoading] = useState(true);
@@ -138,6 +139,7 @@ export default function IdentityReviewsAdmin() {
   const [page, setPage] = useState(1);
   const PAGE_SIZE = 5;
   const [selected, setSelected] = useState<IdentityReview | null>(null);
+  const mobileDetail = !wide && !!selected;
   const [validationMethod, setValidationMethod] = useState("");
   const [notes, setNotes] = useState("");
   const [saving, setSaving] = useState<"" | "verify" | "require_retry">("");
@@ -259,6 +261,7 @@ export default function IdentityReviewsAdmin() {
   const pagedReviews = filtered.slice((activePage - 1) * PAGE_SIZE, activePage * PAGE_SIZE);
 
   const openReview = (item: IdentityReview) => {
+    if (!wide) scrollRef.current?.scrollTo({ y: 0, animated: false });
     setSelected(item);
     setValidationMethod(item.manualValidationMethod || "");
     setNotes(item.manualReviewNotes || "");
@@ -383,6 +386,7 @@ export default function IdentityReviewsAdmin() {
   return (
     <View style={styles.screen}>
       <ScrollView
+        ref={scrollRef}
         style={[
           styles.scroll,
           Platform.OS === "web" && styles.webScrollBar,
@@ -392,6 +396,7 @@ export default function IdentityReviewsAdmin() {
         keyboardShouldPersistTaps="handled"
         accessibilityLabel="Identity reviews content"
       >
+        {!mobileDetail ? <>
         <AdminReviewHero
           eyebrow="LGU OPERATIONS / PEOPLE & VERIFICATION"
           title="Resident Identity Reviews"
@@ -508,6 +513,17 @@ export default function IdentityReviewsAdmin() {
         </View>
 
         <ListPagination page={activePage} total={filtered.length} pageSize={PAGE_SIZE} onChange={setPage} />
+        </> : (
+          <TouchableOpacity accessibilityRole="button" accessibilityLabel="Back to identity verification queue"
+            onPress={() => { setSelected(null); setValidationMethod(""); setNotes(""); scrollRef.current?.scrollTo({ y: 0, animated: false }); }}
+            style={styles.mobileBackButton}>
+            <Ionicons name="arrow-back" size={18} color="#08765A" />
+            <View style={styles.flexOne}>
+              <Text style={styles.mobileBackText}>Back to identity verification queue</Text>
+              <Text style={styles.mobileBackDescription}>Resident details and private evidence</Text>
+            </View>
+          </TouchableOpacity>
+        )}
         {error ? (
           <View style={styles.errorCard}>
             <Ionicons
@@ -526,7 +542,7 @@ export default function IdentityReviewsAdmin() {
               Loading identity reviews...
             </Text>
           </View>
-        ) : filtered.length === 0 ? (
+        ) : filtered.length === 0 && !mobileDetail ? (
           <View style={styles.emptyCard}>
             <Ionicons
               name="shield-checkmark-outline"
@@ -548,7 +564,7 @@ export default function IdentityReviewsAdmin() {
               wide && styles.workspaceWide,
             ]}
           >
-            <View style={[styles.queue, wide && styles.queueWide]}>
+            {!mobileDetail ? <View style={[styles.queue, wide && styles.queueWide]}>
               {pagedReviews.map((item) => {
                 const active = selected?.uid === item.uid;
                 return (
@@ -611,7 +627,7 @@ export default function IdentityReviewsAdmin() {
                   </TouchableOpacity>
                 );
               })}
-            </View>
+            </View> : null}
 
             <View
               style={[
@@ -1071,6 +1087,27 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     padding: 24,
     backgroundColor: "#F5F7FB",
+  },
+  mobileBackButton: {
+    minHeight: 62,
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: "#D7E6DF",
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    marginBottom: 14,
+  },
+  mobileBackText: {
+    color: "#08765A", fontSize: vsType.size.label,
+    fontWeight: "700", fontFamily: vsType.family,
+  },
+  mobileBackDescription: {
+    marginTop: 3, color: "#64748B", fontSize: vsType.size.caption,
+    fontFamily: vsType.family,
   },
   centerText: {
     marginTop: 9,
