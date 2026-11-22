@@ -26,9 +26,21 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
-        with:
-          persist-credentials: false
+      # Deliberately use a sparse, read-only checkout of identity-ai only.
+      # This repository has a historical VolunServe gitlink with no
+      # .gitmodules URL; actions/checkout triggers submodule cleanup errors.
+      # No repository files or production branches are modified.
+      - name: Checkout only AI source without submodules
+        env:
+          REPO: ${{ github.repository }}
+          REVISION: ${{ github.sha }}
+        run: |
+          git init -q
+          git remote add origin "https://github.com/${REPO}.git"
+          git -c protocol.version=2 fetch --no-tags --depth=1 --filter=blob:none --no-recurse-submodules origin "${REVISION}"
+          git sparse-checkout init --cone
+          git sparse-checkout set identity-ai
+          git checkout --force FETCH_HEAD
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
