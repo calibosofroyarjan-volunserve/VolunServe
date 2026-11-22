@@ -79,13 +79,13 @@ class NationalIdPartialOcrTests(unittest.TestCase):
         self.assertEqual(text, "PHILIPPINE IDENTIFICATION CARD")
         self.assertEqual(mock.call_count, 2)
         self.assertEqual(mock.call_args_list[0].kwargs["timeout"], 20)
-        self.assertEqual(mock.call_args_list[1].kwargs["timeout"], 12)
-        self.assertLessEqual(max(mock.call_args_list[1].args[0].shape), 1024)
+        self.assertEqual(mock.call_args_list[1].kwargs["timeout"], 15)
+        self.assertLessEqual(max(mock.call_args_list[1].args[0].shape), 1250)
         self.assertNotIn("PRIVATE IMAGE", " ".join(logger.output))
 
     def test_readable_primary_ocr_only_runs_once(self):
-        with patch("main.pytesseract.image_to_string", return_value="NATIONAL ID") as mock:
-            self.assertEqual(extract_government_id_text(self.front, "synthetic card"), "NATIONAL ID")
+        with patch("main.pytesseract.image_to_string", return_value="PHILIPPINE IDENTIFICATION CARD\nSURNAME: SAMPLE\nGIVEN NAMES: TEST") as mock:
+            self.assertEqual(extract_government_id_text(self.front, "synthetic card"), "PHILIPPINE IDENTIFICATION CARD\nSURNAME: SAMPLE\nGIVEN NAMES: TEST")
         mock.assert_called_once()
 
     def test_qr_heavy_right_side_is_avoided_without_reading_qr(self):

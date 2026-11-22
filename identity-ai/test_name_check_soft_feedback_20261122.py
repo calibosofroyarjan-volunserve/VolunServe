@@ -83,7 +83,7 @@ class NameFeedbackPrivatePrecheckTests(unittest.IsolatedAsyncioTestCase):
         result = await self.precheck("MATEO", "MUNSAYAC")
         self.assertEqual(result["outcome"], "retry")
         self.assertEqual(result["documentScreening"]["profileNameCheck"], "possible_conflict")
-        self.assertIn("Please check the name", result["message"])
+        self.assertIn("appears different", result["message"])
         self.assertFalse(result["authenticityVerified"])
         self.assertFalse(result["livenessVerified"])
         # Neither raw OCR nor profile names are echoed in the response.

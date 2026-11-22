@@ -3,6 +3,7 @@ import hashlib
 import logging
 import math
 import os
+import re
 import secrets
 import uuid
 from functools import lru_cache
@@ -11,7 +12,7 @@ from io import BytesIO
 import cv2
 import mediapipe as mp
 import pytesseract
-from document_screening import assess_document_sides, assess_profile_name, document_ocr_unavailable, add_photo_quality, blurry_national_id_claim_needs_review
+from document_screening import assess_document_sides, assess_document_text, assess_profile_name, document_ocr_unavailable, add_photo_quality, blurry_national_id_claim_needs_review
 from profile_consistency import profile_comparison
 from face_boxes import deduplicate_face_boxes
 import numpy as np
@@ -905,8 +906,41 @@ def _avoid_national_id_back_qr_noise(gray):
     return gray
 
 
+def _ocr_readability_clues(text, *, side, declared_type):
+    """Private type/field-label evidence for selecting one OCR result.
+
+    Never expose scores, raw text, personal information or OCR passes to
+    clients. This only decides whether a second bounded read is worthwhile.
+    """
+    normalized = re.sub(r"[^A-Z0-9]+", " ", str(text or "").upper())
+    normalized = " ".join(normalized.split())
+    if not normalized:
+        return 0
+    screened = assess_document_text(declared_type, text)
+    if screened["status"] in ("unsupported", "mismatch"):
+        return -100  # Never replace explicit wrong or unsupported ID clues
+    score = 4 if screened["status"] == "text_consistent_unverified" else 0
+    if side == "front":
+        fields = (
+            ("APELYIDO", "LAST NAME", "SURNAME"),
+            ("MGA PANGALAN", "GIVEN NAMES", "FIRST NAME"),
+            ("PETSA NG KAPANGANAKAN", "DATE OF BIRTH"),
+        )
+    else:
+        fields = (
+            ("BLOOD TYPE", "URI NG DUGO"),
+            ("MARITAL STATUS", "KATAYUANG SIBIL"),
+            ("PLACE OF BIRTH", "LUGAR NG KAPANGANAKAN"),
+            ("DATE OF ISSUE", "ARAW NG PAGKAKALABAS"),
+        )
+    for family in fields:
+        if any(f" {label} " in f" {normalized} " for label in family):
+            score += 2
+    return score
+
+
 def extract_government_id_text(
-    id_document_bytes, label, *, side="front", declared_type="",
+    id_document_bytes, label, *, side="front", declared_type="national_id",
 ):
     """Bounded OCR, with one lower-cost recovery attempt if reading fails.
 
@@ -936,31 +970,67 @@ def extract_government_id_text(
     # threads and subprocess time without changing identity-validation rules.
     os.environ.setdefault("OMP_THREAD_LIMIT", "1")
     primary_psm = "6" if side == "back" and declared_type == "national_id" else "11"
+    text = ""
     try:
         text = pytesseract.image_to_string(
             contrast, config=f"--oem 1 --psm {primary_psm}", timeout=20,
         )
-        if text.strip():
+        score = _ocr_readability_clues(
+            text, side=side, declared_type=declared_type,
+        )
+        # Text that is merely non-empty is NOT a readable ID. For physical
+        # PhilID front require a type heading and at least the two name labels
+        # before accepting the primary read without a second attempt.
+        target = 8 if side == "front" else 4
+        if score == -100 or score >= target:
             return text
     except Exception as exc:
-        # Exception CLASS only: avoid Tesseract messages that could carry
-        # personal file paths or OCR information. Always fail closed.
+        # Exception CLASS only; never log raw OCR text or private ID images.
         logging.warning("Government ID %s OCR primary failed (%s)",
                         side if side in ("front", "back") else "unknown",
                         type(exc).__name__)
-    # One bounded, smaller fallback for low-quality/slow OCR. It cannot
-    # override an unsupported-ID or name conflict in the screening stage.
+
+    # Second and last bounded reading using a more structured line-layout
+    # mode. Only retry when first reading did not establish strong evidence.
+    # Retain a successful first read if the fallback is weaker.
     size = max(contrast.shape[:2])
     fallback = contrast
-    if size > 1024:
-        scale = 1024 / size
+    if size > 1250:
+        scale = 1250 / size
         fallback = cv2.resize(
             contrast, None, fx=scale, fy=scale,
             interpolation=cv2.INTER_AREA,
         )
-    return pytesseract.image_to_string(
-        fallback, config="--oem 1 --psm 6", timeout=12,
+    # Adaptive local contrast improves moderately blurred text in poor light.
+    fallback = cv2.adaptiveThreshold(
+        fallback, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
+        cv2.THRESH_BINARY, 25, 9,
     )
+    try:
+        second = pytesseract.image_to_string(
+            fallback, config="--oem 1 --psm 6", timeout=15,
+        )
+    except Exception as exc:
+        logging.warning("Government ID %s OCR fallback failed (%s)",
+                        side if side in ("front", "back") else "unknown",
+                        type(exc).__name__)
+        if text.strip():
+            return text
+        raise
+    first_score = _ocr_readability_clues(
+        text, side=side, declared_type=declared_type,
+    )
+    second_score = _ocr_readability_clues(
+        second, side=side, declared_type=declared_type,
+    )
+    # If either reading clearly says wrong/school ID, fail closed, even
+    # when another reading sees a government heading.
+    if first_score == -100:
+        return text
+    if second_score == -100:
+        return second
+    return second if second_score > first_score else text
+
 
 
 def screen_government_id(
@@ -1022,6 +1092,23 @@ def screen_government_id(
             expected_first_name, expected_last_name, ocr_combined,
             front_ocr_text=front_text,
         ))
+        # A mild camera blur is acceptable when the physical National ID
+        # format and BOTH labeled account-name fields are still readable.
+        # Severe blur remains low; conflicts remain blocked by the gate.
+        variance = float(quality["blurVariance"])
+        if (declared_type == "national_id"
+                and 12.0 <= variance < 40.0
+                and result["status"] == "text_consistent_unverified"
+                and result["detectedIdType"] == "national_id"
+                and result["backSideScreened"] is True
+                and back_text is not None and bool(back_text.strip())
+                and result["profileNameCheck"] in ("possible_match", "possible_conflict")
+                and not front_failed and not back_failed):
+            result["imageQualityStatus"] = "adequate"
+            result["warningCodes"] = [
+                code for code in result.get("warningCodes", [])
+                if code != "low_document_image_quality"
+            ]
         result.update(profile_comparison(
             expected_date_of_birth, expected_barangay, ocr_combined
         ))
@@ -1410,10 +1497,16 @@ async def document_precheck(
         expected_barangay=x_volunserve_profile_barangay or "",
     )
     birthday_conflict = screening.get("profileBirthDateCheck") == "possible_conflict"
-    name_conflict = screening.get("profileNameCheck") == "possible_conflict"
+    name_status = screening.get("profileNameCheck")
+    name_conflict = name_status == "possible_conflict"
+    national_id_name_unconfirmed = (
+        declared_type == "national_id"
+        and name_status != "possible_match"
+    )
     recognized = (
         not birthday_conflict
         and not name_conflict
+        and not national_id_name_unconfirmed
         and screening.get("status") == "text_consistent_unverified"
         and screening.get("detectedIdType") == declared_type
         and screening.get("imageQualityStatus") == "adequate"
@@ -1430,13 +1523,17 @@ async def document_precheck(
     )
     outcome = "pass" if recognized else "review" if review else "retry"
     if name_conflict and outcome == "retry":
-        message = "Please check the name on your National ID against your account details. Try a clearer front photo or ask Admin for help. This is not proof of an invalid ID."
+        message = "The name read from your National ID appears different from your account. Please use your own ID or ask Admin to review your profile. This is an OCR clue, not proof of a fake ID."
     elif "ocr_unavailable" in (screening.get("warningCodes") or []):
         message = "The front ID photo could not be read. Retake a clear front photo with even lighting."
     elif "document_back_ocr_inconclusive" in (screening.get("warningCodes") or []):
         message = "The back ID text could not be read. Retake the back photo with less glare."
     elif birthday_conflict and outcome == "retry":
         message = "The ID birth date may differ from your saved profile. Retake a clear ID or ask Admin to review your profile; this is not proof of fraud."
+    elif national_id_name_unconfirmed and screening.get("status") == "text_consistent_unverified":
+        message = ("The National ID format was detected, but the account name "
+                   "could not be confirmed. Retake the front to show both name "
+                   "fields, or ask Admin to check your profile.")
     elif outcome == "pass":
         message = "ID format appears consistent. Birthday and barangay checks are OCR clues only; unresolved fields still require Admin review."
     elif outcome == "review":
