@@ -28,10 +28,12 @@ const LABELS = [
  * issuing short-lived authenticated Cloudinary URLs.
  */
 export default function AdminIdentityEvidence({
-  uid, user,
+  uid, user, matchScore, aiDecision,
 }: {
   uid: string;
   user: AuthUser | null;
+  matchScore?: number | null;
+  aiDecision?: string;
 }) {
   const { width } = useWindowDimensions();
   const [evidence, setEvidence] = useState<EvidenceResponse | null>(null);
@@ -67,6 +69,31 @@ export default function AdminIdentityEvidence({
     void run();
     return () => { cancelled = true; };
   }, [uid, user, refreshIndex]);
+
+  // Signed photo links remain valid for only five minutes. Clear them after
+  // expiry so a reviewer must explicitly re-authorize a fresh preview.
+  useEffect(() => {
+    if (!evidence) return;
+    const expirations = Object.values(evidence.images || {})
+      .filter((entry): entry is EvidenceImage => !!entry && Number.isFinite(entry.expiresAt))
+      .map((entry) => entry.expiresAt * 1000);
+    if (!expirations.length) return;
+    const delay = Math.max(0, Math.min(...expirations) - Date.now());
+    const timer = setTimeout(() => {
+      setEvidence(null);
+      setExpanded(null);
+      setError("Secure image links expired. Select Refresh to open the evidence again.");
+    }, delay);
+    return () => clearTimeout(timer);
+  }, [evidence]);
+
+  const similarityLabel = typeof matchScore === "number" &&
+    Number.isFinite(matchScore) && matchScore >= 0 && matchScore <= 1
+      ? (matchScore * 100).toFixed(1) + "%"
+      : "Not available";
+  const aiLabel = aiDecision === "failed" ? "AI check flagged" :
+    aiDecision === "verified" ? "AI similarity passed" :
+    "Manual review required";
 
   const wide = width >= 850;
   return (
@@ -127,6 +154,45 @@ export default function AdminIdentityEvidence({
               </View>
             );
           })}
+        </View>
+        <View style={{ backgroundColor: "#F8FAFC", borderColor: "#DCE6ED", borderWidth: 1, borderRadius: 12, padding: 14, gap: 11 }}>
+          <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+            <View style={{ gap: 3 }}>
+              <Text style={{ color: "#172B3A", fontSize: 14, fontWeight: "700" }}>Face Matching Review</Text>
+              <Text style={{ color: "#64748B", fontSize: 11 }}>Compare the ID photo and live selfie side by side</Text>
+            </View>
+            <View style={{ backgroundColor: "#E8F4F0", paddingHorizontal: 10, paddingVertical: 7, borderRadius: 9 }}>
+              <Text style={{ color: "#075D48", fontSize: 12, fontWeight: "700" }}>AI similarity: {similarityLabel}</Text>
+            </View>
+          </View>
+          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
+            {([
+              { key: "front", label: "ID Front — Portrait Reference" },
+              { key: "selfie", label: "Captured Live Selfie" },
+            ] as const).map(({ key, label }) => {
+              const photo = evidence.images?.[key];
+              return <TouchableOpacity
+                key={key}
+                accessibilityRole="button"
+                accessibilityLabel={"Enlarge " + label}
+                disabled={!photo?.url}
+                onPress={() => photo?.url && setExpanded({ label, uri: photo.url })}
+                style={{ flexGrow: 1, flexBasis: wide ? "44%" : "46%", minWidth: 135, overflow: "hidden", backgroundColor: "#EEF2F6", borderRadius: 9 }}
+              >
+                {photo?.url
+                  ? <Image source={{ uri: photo.url }} resizeMode="contain"
+                      style={{ height: wide ? 205 : 155, width: "100%" }} />
+                  : <View style={{ height: 155, alignItems: "center", justifyContent: "center" }}>
+                      <Text style={{ color: "#64748B", fontSize: 11 }}>Image unavailable</Text>
+                    </View>}
+                <Text style={{ color: "#253F50", fontSize: 11, fontWeight: "600", textAlign: "center", padding: 9 }}>{label}</Text>
+              </TouchableOpacity>;
+            })}
+          </View>
+          <Text style={{ color: "#46596A", fontSize: 11, lineHeight: 17 }}>
+            {aiLabel}. This score measures facial similarity, not a probability of genuine identity.
+            Review the full ID image, details, and independent LGU validation before approving.
+          </Text>
         </View>
         <Text style={{ fontSize: 11, color: "#64748B" }}>
           Compare the ID portrait with the selfie and review the independent AI screening below.
