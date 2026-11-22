@@ -7,6 +7,8 @@ on:
       - 'identity-ai/strict_document_screening.py'
       - 'identity-ai/profile_consistency.py'
       - 'identity-ai/test_national_id_label_regression_20261122.py'
+      - 'identity-ai/private_upload_id_review.py'
+      - 'identity-ai/test_private_upload_ocr_diagnostic_20261122.py'
       - '.github/workflows/test-national-id-labels-no-deploy-20261122.yml'
   workflow_dispatch:
 permissions:
@@ -24,11 +26,13 @@ jobs:
         with:
           python-version: '3.11'
       - name: Validate syntax
-        run: python -m py_compile identity-ai/strict_document_screening.py identity-ai/profile_consistency.py identity-ai/test_national_id_label_regression_20261122.py
+        run: python -m py_compile identity-ai/strict_document_screening.py identity-ai/profile_consistency.py identity-ai/test_national_id_label_regression_20261122.py identity-ai/private_upload_id_review.py identity-ai/test_private_upload_ocr_diagnostic_20261122.py
       - name: Run synthetic regression without real documents
         run: |
           python -m unittest discover -s identity-ai -p test_national_id_label_regression_20261122.py -v
           python -m unittest discover -s identity-ai -p test_profile_consistency.py -v
           python -m unittest discover -s identity-ai -p test_strict_document_screening.py -v
+          python -m unittest discover -s identity-ai -p test_private_upload_id_review.py -v
+          python -m unittest discover -s identity-ai -p test_private_upload_ocr_diagnostic_20261122.py -v
       - name: No production release
         run: echo "Only synthetic test strings. No real ID, files, Firebase, Render, deployment, or automatic Verified Resident status." >> "$GITHUB_STEP_SUMMARY"
