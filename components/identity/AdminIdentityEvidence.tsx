@@ -4,8 +4,9 @@ import {
   View, useWindowDimensions,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { getIdentityBackendBaseUrl } from "../../lib/identityBackendUrl";
 
-const API = "https://volunserve.onrender.com";
+
 type AuthUser = { getIdToken: (forceRefresh?: boolean) => Promise<string> };
 type EvidenceImage = { url: string; expiresAt: number };
 type EvidenceResponse = {
@@ -49,7 +50,7 @@ export default function AdminIdentityEvidence({
       try {
         const token = await user.getIdToken(true);
         const res = await fetch(
-          API + "/api/admin/identity/reviews/" + encodeURIComponent(uid) + "/evidence",
+          getIdentityBackendBaseUrl() + "/api/admin/identity/reviews/" + encodeURIComponent(uid) + "/evidence",
           { headers: { Authorization: "Bearer " + token, "Cache-Control": "no-store" }, cache: "no-store" },
         );
         const body = await res.json().catch(() => null);
