@@ -1,0 +1,56 @@
+name: QA bounded National ID OCR backend timeout (NO DEPLOY)
+on:
+  push:
+    branches: [fix/identity-ocr-precheck-gateway-timeout-20261122]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  backend-timeout-qa:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout backend without historical gitlink
+        env:
+          REPO: ${{ github.repository }}
+          SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          git init -q
+          git remote add origin "https://github.com/${REPO}.git"
+          git -c protocol.version=2 fetch --no-tags --depth=1 --filter=blob:none --no-recurse-submodules origin "$SHA"
+          git sparse-checkout init --cone
+          git sparse-checkout set backend
+          git checkout --force FETCH_HEAD
+      - name: Exact deployed-backend source and diff guard
+        run: |
+          set -euo pipefail
+          BASE=314e2fc125bd9e05b929433052508253eb579ee5
+          git -c protocol.version=2 fetch --no-tags --depth=1 --filter=blob:none --no-recurse-submodules origin "$BASE"
+          git diff --name-status "$BASE" HEAD > /tmp/diff
+          python - <<'PY'
+          from pathlib import Path
+          actual=sorted(Path('/tmp/diff').read_text().strip().splitlines())
+          expected=sorted([
+            'M\tbackend/server.js',
+            'A\tbackend/test-identityPrecheckTimeoutOnly.js',
+            'A\t.github/workflows/qa-identity-ocr-precheck-gateway-timeout-20261122.yml',
+          ])
+          assert actual==expected, (actual, expected)
+          print('PASS only gateway OCR timeout changed; auth, policies, other modules untouched')
+          PY
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Backend syntax and identity regressions
+        run: |
+          set -euo pipefail
+          node --check backend/server.js
+          node --test backend/test-identityPrecheckTimeoutOnly.js
+          node --test backend/test-identityPrecheckCors.js
+          node --test backend/test-selectedIdPolicy.js
+          node --test backend/test-identityAiReadiness.js
+          node --test backend/test-identity-final-admin-only.js
+          node --test backend/test-identity-three-attempt-review.js
+      - name: Read-only test; no deployment
+        run: echo 'NO DEPLOY. No face uploads, authentication changes, Firestore or Render writes.'
