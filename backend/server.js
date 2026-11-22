@@ -5293,7 +5293,7 @@ app.get(
   },
 );
 app.post(
-  "/api/identity/verify",
+  ["/api/identity/verify", "/api/identity/verify-with-evidence"],
   requireFirebaseUser,
   express.raw({ type: "multipart/form-data", limit: IDENTITY_UPLOAD_LIMIT }),
   async (request, response) => {
@@ -5367,10 +5367,20 @@ app.post(
       });
       claimed = true;
 
+      // New clients use a dedicated, additive route. It MUST have consented
+      // front/back/selfie evidence; never silently create another empty Admin
+      // evidence card. The existing /verify route stays compatible with old apps.
+      const requiresPrivateEvidence = request.path === "/api/identity/verify-with-evidence";
+      const parsedImages = requiresPrivateEvidence
+        ? await parseConsentedIdentityEvidence(request) : null;
+      if (requiresPrivateEvidence && !parsedImages) {
+        throw makeHttpError(400, "identity_evidence_consent_required",
+          "Please accept private photo storage for Admin review before submitting.");
+      }
       const aiResult = await callIdentityAiService(request);
-      // The existing AI request and decision gates are unchanged. With explicit
-      // resident consent, store images privately BEFORE counting the attempt.
-      const consentedImages = await parseConsentedIdentityEvidence(request);
+      // The existing AI and Admin decision gates remain unchanged. Secure
+      // upload happens before any Firestore AI attempt is counted.
+      const consentedImages = parsedImages || await parseConsentedIdentityEvidence(request);
       if (consentedImages) {
         newEvidenceAssets = await uploadIdentityEvidence({
           images: consentedImages, uid, requestId, cloudinary, configureCloudinary,
