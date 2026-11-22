@@ -86,7 +86,7 @@ export default function CommunityCalendar({uid,mode,dashboard=false}:{uid?:strin
     setSelected(iso(next.getUTCFullYear(),next.getUTCMonth()+1,1));
   };
   const openEvents=()=>router.push("/community-events");
-  return <View style={[styles.panel,dashboard&&styles.dashboardPanel,wideDashboard&&styles.dashboardWidePanel]}>
+  return <View style={[styles.panel,dashboard&&styles.dashboardPanel,wideDashboard&&styles.dashboardWidePanel,dashboard&&width<760&&styles.dashboardMobilePanel]}>
     <View style={[styles.heading,width<760&&styles.mobileHeading,dashboard&&styles.dashboardHeading]}>
       <View style={styles.headingLeft}>
         <View style={styles.iconBox}><Ionicons name="calendar-outline" size={21} color={GREEN}/></View>
@@ -102,22 +102,22 @@ export default function CommunityCalendar({uid,mode,dashboard=false}:{uid?:strin
     <View style={[styles.body,compact&&styles.bodyMobile,dashboard&&styles.dashboardBody]}>
       <View style={[styles.calendar,compact&&styles.calendarMobile,dashboard&&styles.dashboardCalendar]}>
         <View style={styles.monthHeader}>
-          <Pressable accessibilityLabel="Previous month" onPress={()=>changeMonth(-1)} style={styles.monthArrow}>
+          <Pressable accessibilityLabel="Previous month" onPress={()=>changeMonth(-1)} style={[styles.monthArrow,width<760&&styles.mobileMonthArrow]}>
             <Ionicons name="chevron-back" size={17} color="#345F53"/>
           </Pressable>
-          <Text style={styles.monthTitle}>{monthTitle}</Text>
-          <Pressable accessibilityLabel="Next month" onPress={()=>changeMonth(1)} style={styles.monthArrow}>
+          <Text style={[styles.monthTitle,width<760&&styles.mobileMonthTitle]}>{monthTitle}</Text>
+          <Pressable accessibilityLabel="Next month" onPress={()=>changeMonth(1)} style={[styles.monthArrow,width<760&&styles.mobileMonthArrow]}>
             <Ionicons name="chevron-forward" size={17} color="#345F53"/>
           </Pressable>
         </View>
         <View style={[styles.days,dashboard&&styles.dashboardDays]}>
-          {weekdays.map(day=><View style={[styles.dayCell,dashboard&&styles.dashboardWeekdayCell]} key={day}><Text style={styles.weekday}>{day}</Text></View>)}
+          {weekdays.map(day=><View style={[styles.dayCell,dashboard&&styles.dashboardWeekdayCell,dashboard&&width<760&&styles.dashboardMobileWeekdayCell]} key={day}><Text style={styles.weekday}>{day}</Text></View>)}
           {monthDays.map((day,index)=>{
             const date=day?iso(month.y,month.m,day):"";
-            return <View key={index} style={[styles.dayCell,dashboard&&styles.dashboardDayCell]}>
+            return <View key={index} style={[styles.dayCell,dashboard&&styles.dashboardDayCell,dashboard&&width<760&&styles.dashboardMobileDayCell]}>
               {day?<Pressable accessibilityRole="button" accessibilityLabel={`Select ${date}`}
                 accessibilityState={{selected:date===selected}} onPress={()=>setSelected(date)}
-                style={[styles.dayButton,date===today&&styles.today,date===selected&&styles.selected]}>
+                style={[styles.dayButton,dashboard&&width<760&&styles.dashboardMobileDayButton,date===today&&styles.today,date===selected&&styles.selected]}>
                 <Text style={[styles.dayText,date===today&&styles.todayText,date===selected&&styles.selectedText]}>{day}</Text>
                 {eventDates.has(date)&&<View style={[styles.eventDot,date===selected&&styles.selectedDot]}/>}
               </Pressable>:null}
@@ -164,13 +164,18 @@ export default function CommunityCalendar({uid,mode,dashboard=false}:{uid?:strin
 const styles=StyleSheet.create({
   panel:{backgroundColor:"#FFFFFF",borderRadius:18,padding:18,borderWidth:1,borderColor:"#DFEBE7",gap:15,minWidth:0,width:"100%"},
   dashboardPanel:{padding:18,gap:17},
+  // Dashboard is a month-at-a-glance on small screens, never a full-height overlay.
+  dashboardMobilePanel:{padding:12,gap:12,flexGrow:0,alignSelf:"stretch"},
   dashboardWidePanel:{minHeight:665},
   dashboardHeading:{gap:8},
   dashboardBody:{gap:14},
   dashboardCalendar:{width:"100%",maxWidth:"100%",minWidth:0},
   dashboardDays:{borderTopWidth:0,paddingTop:12},
   dashboardWeekdayCell:{minHeight:44,justifyContent:"center",backgroundColor:"#F5F9F7"},
+  dashboardMobileWeekdayCell:{minHeight:30},
   dashboardDayCell:{minHeight:52,justifyContent:"center"},
+  dashboardMobileDayCell:{minHeight:42},
+  dashboardMobileDayButton:{width:36,height:36,borderRadius:18},
   dashboardEventPane:{width:"100%",paddingTop:11,borderTopWidth:1,borderTopColor:"#E8F0EB"},
   heading:{flexDirection:"row",justifyContent:"space-between",alignItems:"center",gap:15},
   mobileHeading:{flexWrap:"wrap"},
@@ -186,6 +191,8 @@ const styles=StyleSheet.create({
   calendarMobile:{width:"100%",maxWidth:"100%",minWidth:0},
   monthHeader:{flexDirection:"row",alignItems:"center",justifyContent:"space-between",paddingBottom:9},
   monthTitle:{color:"#21473D",fontSize:17,fontWeight:"800"},
+  mobileMonthTitle:{fontSize:15},
+  mobileMonthArrow:{height:36,width:36,borderRadius:18},
   monthArrow:{height:42,width:42,alignItems:"center",justifyContent:"center",backgroundColor:"#F1F7F4",borderRadius:21},
   days:{flexDirection:"row",flexWrap:"wrap",borderTopWidth:1,borderTopColor:"#ECF1EE",paddingTop:10},
   dayCell:{width:"14.2857%",alignItems:"center",minHeight:38},
