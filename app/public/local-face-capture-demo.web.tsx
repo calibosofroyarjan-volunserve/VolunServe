@@ -257,7 +257,17 @@ export default function LocalFaceCaptureDemo() {
           backgroundColor: "white", padding: 16, gap: 12 }}>
           <TouchableOpacity accessibilityRole="checkbox"
             accessibilityState={{ checked: consent }}
-            onPress={() => setConsent(!consent)}
+            onPress={() => {
+              if (consent) {
+                stopCamera();
+                clearPreview();
+                setActive(false);
+                setPhase("idle");
+                setProgress(0);
+                setHint("Consent withdrawn — camera stopped and local photo discarded.");
+              }
+              setConsent(!consent);
+            }}
             style={{ flexDirection: "row", gap: 10 }}>
             <Text style={{ color: "#087F72", fontSize: 19 }}>{consent ? "☑" : "☐"}</Text>
             <Text style={{ color: "#334155", fontSize: 13, flex: 1 }}>
