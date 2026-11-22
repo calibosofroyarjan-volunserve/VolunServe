@@ -246,7 +246,8 @@ export interface SignupData {
 export const isApprovedProfile = (
   profile: UserProfile | null | undefined
 ) => {
-  if (!profile) {
+  if (!profile || String(profile.role) === "guest") {
+    // Guest Preview is not a registered account. Never inherit Resident access.
     return false;
   }
   return (
@@ -673,6 +674,10 @@ export const loginUser = async (
     }
     const profile =
       profileSnapshot.data() as UserProfile;
+    if (String(profile.role) === "guest") {
+      await signOut(auth);
+      throw new Error("Guest Preview is not a registered VolunServe account. Ask an administrator to review a legacy Guest record.");
+    }
     const status = profile.status;
     /**
      * Basic Accounts are valid active accounts because their status is
@@ -732,7 +737,11 @@ export const getUserProfile = async (
   if (!snapshot.exists()) {
     throw new Error("Profile not found.");
   }
-  return snapshot.data() as UserProfile;
+  const profile = snapshot.data() as UserProfile;
+  if (String(profile.role) === "guest") {
+    throw new Error("Guest Preview is not a registered VolunServe account. Contact an administrator about a legacy Guest record.");
+  }
+  return profile;
 };
 
 export const updateUserProfile = async (
