@@ -1,7 +1,7 @@
 "use strict";
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const { readIdentityEvidence, imageFormat, storeIdentityEvidence, destroyIdentityEvidence, privateIdentityEvidenceUrl } = require("../identityEvidence");
+const { readIdentityEvidence, imageFormat, storeIdentityEvidence, destroyIdentityEvidence, privateIdentityEvidenceUrl, purgeRetiredIdentityEvidence } = require("../identityEvidence");
 const { v2: cloudinary } = require("cloudinary");
 const { Writable } = require("node:stream");
 
@@ -168,4 +168,40 @@ test("individual oversized photos are rejected before a Cloudinary upload", asyn
   }), {
     code: "identity_image_size_invalid",
   });
+});
+
+test("retired private images stay queued on provider failure and are removed on retry", async () => {
+  const prior = cloudinary.uploader.destroy;
+  const images = { front: { publicId: "private/mock/old-front" } };
+  let shouldFail = true, deletedRecord = false;
+  const record = {
+    data: () => ({ images }),
+    ref: { delete: async () => { deletedRecord = true; } },
+  };
+  const db = {
+    collection: (name) => {
+      assert.equal(name, "identityEvidenceRetirements");
+      return {
+        limit: (count) => {
+          assert.equal(count, 25);
+          return {
+            get: async () => ({ size: 1, docs: [record] }),
+          };
+        },
+      };
+    },
+  };
+  try {
+    cloudinary.uploader.destroy = async () => shouldFail
+      ? { result: "error" } : { result: "ok" };
+    const first = await purgeRetiredIdentityEvidence(db);
+    assert.equal(first.purged, 0);
+    assert.equal(deletedRecord, false);
+    shouldFail = false;
+    const second = await purgeRetiredIdentityEvidence(db);
+    assert.equal(second.purged, 1);
+    assert.equal(deletedRecord, true);
+  } finally {
+    cloudinary.uploader.destroy = prior;
+  }
 });
