@@ -1,0 +1,86 @@
+name: Validate Professional Signup Desktop Mobile Layout (NO DEPLOY)
+on:
+  push:
+    branches:
+      - test/live-signup-professional-ui-no-deploy-20261122
+permissions:
+  contents: read
+jobs:
+  validate-web:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      CI: 'true'
+      EXPO_NO_TELEMETRY: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - name: Verify Step 4 immediately reactive boxed selection
+        run: |
+          node <<'NODE'
+          const fs=require("node:fs"),assert=require("node:assert/strict"),ts=require("typescript");
+          const ui=fs.readFileSync("components/auth/EmailFirstSignup.tsx","utf8");
+          assert(!ui.includes("<Picker"),"Legacy browser-native underlined pickers remain in email-first signup");
+          assert.equal((ui.match(/<SignupDropdown/g)||[]).length,3,"Expected 3 consistent boxed dropdowns");
+          assert(ui.includes('label="Barangay"')&&ui.includes('label="Occupation"')&&ui.includes('label="Specialization"'));
+          assert(ui.includes("searchable"),"Barangay search is missing");
+          assert(ui.includes("setOccupation(v);")&&ui.includes('setSpecialization("");'),"Occupation must immediately reset/update specializations");
+          assert(ui.includes("disabled={!needsSpecialization}")&&ui.includes('required={needsSpecialization}'),"Specialization should be visible and only required when needed");
+          assert(ui.includes('options={SPECIALIZATIONS[occupation] || []}'),"Specializations must come from selected occupation");
+          assert(ui.includes("Please select a specialization."),"Missing required specialization validation");
+          assert(ui.includes("maxHeight: 226"),"Long Barangay lists should scroll inside the dropdown");
+          assert(ui.includes("<BirthdateCalendar"),"Calendar birth date picker must be retained");
+          assert(!ui.includes("Link Password & Continue"),"Deprecated Google signup linking must not return");
+          assert(!ui.includes("linkEmailFirstGooglePassword"),"Deprecated Google signup linking call must not return");
+          assert(ui.includes('authProvider: googleSignupAccount ? "google" : "verified_email"'),"Do not break verified signup provider flow");
+          const tsConfig={target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS};
+          const out=ts.transpileModule(fs.readFileSync("constants/occupationOptions.ts","utf8"),{compilerOptions:tsConfig}).outputText;
+          const mod={exports:{}};
+          new Function("module","exports",out)(mod,mod.exports);
+          const spec=mod.exports.SPECIALIZATIONS;
+          assert(spec.Student.includes("College"),"Student specializations must be listed before submit");
+          assert(spec["Medical Professional"].length>0);
+          assert(!spec.Unemployed,"Unemployed must not require specialization");
+          assert(ui.includes("styles.legacyMainCardMobile"),"Responsive mobile card is missing");
+          assert(ui.includes('width: "41%"')&&ui.includes('minWidth: 340'),"Balanced desktop side panel missing");
+          assert(ui.includes("legacySignupEyebrow"),"Registration step context missing");
+          for(const text of ["Account details","Check your inbox","Your information","Your SJDM address"])
+            assert(ui.includes(text),"Missing non-redundant heading: "+text);
+          assert(!ui.includes("Step 4 — Address & Profile"),"Duplicated section title remains");
+          assert(!ui.includes("Step 1 — Email & Password"),"Duplicated section title remains");
+          assert(ui.includes('width < 520 && label === "Address & Profile" ? "Profile" : label'),
+            "Mobile step label overflow fix missing");
+          assert(ui.includes('const createdProfile = await getUserProfile(user.uid)'),
+            "Do not remove same-UID Resident profile confirmation");
+          console.log("PASS: polished desktop/mobile Signup layout and preserved calendar, dropdowns, and security flow");
+          NODE
+      - name: Existing login, resident and Guest regression tests
+        run: |
+          node scripts/test-login-field-validation.cjs
+          node scripts/test-login-ui-release.cjs
+          node scripts/test-unified-login-routing.cjs
+          node scripts/test-route-entrypoints.cjs
+          node scripts/test-guest-readonly-preview.cjs
+      - name: TypeScript compile check
+        run: npx tsc --noEmit --incremental false
+      - name: Build Expo web (NO DEPLOY)
+        run: npx expo export --platform web --clear
+      - name: Read live Hosting release marker only
+        run: |
+          node <<'NODE'
+          (async()=>{
+            const r=await fetch("https://volunserve.com/volunserve-release.json?verify="+Date.now(),{
+              headers:{"Cache-Control":"no-cache"},signal:AbortSignal.timeout(15000)});
+            if(!r.ok)throw Error("Cannot verify current production revision");
+            const m=await r.json();
+            if(m.app!=="VolunServe"||m.firebaseProject!=="volunserve-3aa5b")throw Error("Wrong production site");
+            console.log("CURRENT_LIVE_REVISION="+m.revision);
+          })().catch(e=>{console.error(e);process.exitCode=1});
+          NODE
