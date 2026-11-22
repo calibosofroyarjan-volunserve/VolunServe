@@ -1229,12 +1229,12 @@ jobs:
                 const previousController=git("show",liveBase+":"+controller);
                 const updatedController=git("show",commit+":"+controller);
                 const removed=String.raw`            const controllerDiff=git('-C','../controller','diff','--name-status','--no-renames','HEAD^','HEAD');
-            assert.equal(controllerDiff,'A\\t'+controller,'BLOCKED: unrelated protected changes');`;
+            assert.equal(controllerDiff,'A\t'+controller,'BLOCKED: unrelated protected changes');`;
                 const replacement=String.raw`            const controllerDiff=git('-C','../controller','diff','--name-status','--no-renames','HEAD^','HEAD')
-              .split('\\n').filter(Boolean).sort();
+              .split('\n').filter(Boolean).sort();
             assert.deepEqual(controllerDiff,[
-              'M\\t'+controller,
-              'M\\t.github/workflows/verify-reconciled-hosting-source-no-deploy-20261111.yml',
+              'M\t'+controller,
+              'M\t.github/workflows/verify-reconciled-hosting-source-no-deploy-20261111.yml',
             ].sort(),'BLOCKED: protected push must change only the audited controller and scoped PR verifier');`;
                 assert(previousController.includes(removed) && updatedController.includes(replacement),
                   "BLOCKED expected single corrected controller assertion was not found");
