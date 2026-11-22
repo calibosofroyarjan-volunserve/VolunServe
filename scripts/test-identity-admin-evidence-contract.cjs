@@ -52,3 +52,14 @@ test("Identity evidence collection is not exposed by Firestore client rules", ()
   assert.ok(!rules.includes("match /identityEvidence/{"), "No client read rule permitted for private Admin evidence collection");
   assert.match(rules, /match \/\{document=\*\*\} \{\s*allow read, write: if false;/);
 });
+
+test("private image previews never carry over between Residents or submissions", () => {
+  const reviewer = get("components/identity/AdminIdentityEvidence.tsx");
+  const page = get("app/(admin)/identity-reviews.tsx");
+  assert.match(reviewer, /loadedEvidence\?\.uid === uid/);
+  assert.match(reviewer, /loadedEvidence\?\.verificationId === \(verificationId \|\| ""\)/);
+  assert.match(reviewer, /body\.verificationId !== verificationId/);
+  assert.match(reviewer, /expanded\.uid === uid/);
+  assert.match(reviewer, /expanded\.verificationId === \(verificationId \|\| ""\)/);
+  assert.match(page, /verificationId=\{item\.verificationId\}/);
+});
