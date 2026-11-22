@@ -11,14 +11,14 @@ const {
 } = require("./identityPrivateEvidence");
 
 const jpeg = Buffer.concat([Buffer.from([255, 216, 255, 224]), Buffer.alloc(48, 7)]);
-async function makeRequest({consent=true,back=true,passport=false,invalid=false}={}) {
+async function makeRequest({consent=true,back=true,passport=false,invalid=false,selfie=true}={}) {
   const form = new FormData();
   form.append("idType", passport ? "passport" : "national_id");
   if (consent) form.append("identityEvidenceConsent","true");
   const photo = invalid ? Buffer.alloc(40, 2) : jpeg;
   form.append("idDocument",new Blob([photo],{type:"image/jpeg"}),"front.jpg");
   if(back) form.append("idBackDocument",new Blob([jpeg],{type:"image/jpeg"}),"back.jpg");
-  form.append("selfie",new Blob([jpeg],{type:"image/jpeg"}),"selfie.jpg");
+  if (selfie) form.append("selfie",new Blob([jpeg],{type:"image/jpeg"}),"selfie.jpg");
   const request=new Request("http://localhost/verify",{method:"POST",body:form});
   return {body:Buffer.from(await request.arrayBuffer()),headers:{"content-type":request.headers.get("content-type")}};
 }
@@ -105,4 +105,12 @@ test("private image retention expires 30 days after consented upload",()=>{
   const start = Date.UTC(2026,10,23);
   assert.equal(identityEvidenceRetentionDate(start).toISOString(),
     new Date(start+30*24*60*60*1000).toISOString());
+});
+
+test("OCR-only Admin queue stores two ID sides without pretending to have a selfie",async()=>{
+  const request=await makeRequest({selfie:false});
+  const idOnly=await parseConsentedIdentityEvidence(request,{requireSelfie:false});
+  assert.deepEqual(Object.keys(idOnly),["front","back"]);
+  await assert.rejects(parseConsentedIdentityEvidence(request),
+    e=>e.code==="identity_evidence_incomplete");
 });
