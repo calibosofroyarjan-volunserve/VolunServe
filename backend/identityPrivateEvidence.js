@@ -6,6 +6,11 @@ const crypto = require("node:crypto");
 
 const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
 const URL_LIFETIME_SECONDS = 180;
+const RETENTION_DAYS = 30;
+const RETENTION_MS = RETENTION_DAYS * 24 * 60 * 60 * 1000;
+function identityEvidenceRetentionDate(from = Date.now()) {
+  return new Date(from + RETENTION_MS);
+}
 const FILES = Object.freeze([
   ["front", "idDocument"],
   ["back", "idBackDocument"],
@@ -165,9 +170,49 @@ function signedIdentityEvidence({uid, assets, cloudinary, configureCloudinary}) 
   return {images, expiresAt};
 }
 
+// The Firestore metadata is inaccessible to clients; Render performs a
+// lightweight, resumable sweep when awake. Expired assets are never signed.
+async function purgeExpiredIdentityEvidence({db, FieldValue, cloudinary, configureCloudinary}) {
+  const now = new Date();
+  const expired = await db.collection("identityPrivateEvidence")
+    .where("retentionUntil", "<=", now).limit(25).get();
+  let purged = 0;
+  for (const document of expired.docs) {
+    const current = document.data() || {};
+    const currentRequestId = String(current.requestId || "");
+    if (!currentRequestId) continue;
+    try {
+      await destroyIdentityEvidence({
+        assets: current.assets, cloudinary, configureCloudinary,
+      });
+      await db.runTransaction(async transaction => {
+        const snapshot = await transaction.get(document.ref);
+        if (!snapshot.exists || snapshot.data()?.requestId !== currentRequestId) return;
+        const record = snapshot.data() || {};
+        if (!record.retentionUntil || record.retentionUntil.toMillis() > Date.now()) return;
+        const verificationRef = db.collection("identityVerifications").doc(document.id);
+        const verification = await transaction.get(verificationRef);
+        transaction.delete(document.ref);
+        if (verification.exists &&
+            verification.data()?.privateEvidenceRequestId === currentRequestId) {
+          transaction.set(verificationRef,
+            {privateEvidenceRequestId: FieldValue.delete()}, {merge:true});
+        }
+      });
+      purged += 1;
+    } catch {
+      // Keep metadata to allow retry; no signed URL can be issued after expiry.
+      console.warn("Expired private identity evidence cleanup will be retried.");
+    }
+  }
+  return purged;
+}
+
 module.exports = {
   parseConsentedIdentityEvidence,
   uploadIdentityEvidence,
   signedIdentityEvidence,
   destroyIdentityEvidence,
+  identityEvidenceRetentionDate,
+  purgeExpiredIdentityEvidence,
 };
