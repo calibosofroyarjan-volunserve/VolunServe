@@ -1,0 +1,51 @@
+name: QA compact identity web upload UI (NO DEPLOY)
+
+on:
+  push:
+    branches:
+      - ui/identity-id-scan-compact-live-derived-20261122
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate-identity-ui:
+    name: Exact Hosting-derived source compile and web export
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout needed source without historical submodule
+        env:
+          REPO: ${{ github.repository }}
+          SHA: ${{ github.sha }}
+        run: |
+          set -eu
+          git init -q
+          git remote add origin "https://github.com/${REPO}.git"
+          git -c protocol.version=2 fetch --no-tags --depth=1 --filter=blob:none --no-recurse-submodules origin "${SHA}"
+          git sparse-checkout init --cone
+          git sparse-checkout set app assets backend components constants hooks lib public scripts
+          git checkout --force FETCH_HEAD
+      - name: Check only one web UI module changed from Hosting source
+        run: |
+          set -eu
+          BASE=3f9db212e44483ef3befd6d442219cbbd0a4c3a7
+          git -c protocol.version=2 fetch --no-tags --depth=1 --filter=blob:none --no-recurse-submodules origin "$BASE"
+          git diff --name-only FETCH_HEAD HEAD > /tmp/changed-files
+          cat /tmp/changed-files
+          test "$(wc -l </tmp/changed-files)" -eq 2
+          grep -qx 'app/identity-verification.web.tsx' /tmp/changed-files
+          grep -qx '.github/workflows/qa-identity-web-compact-no-deploy-20261122.yml' /tmp/changed-files
+          git diff --exit-code FETCH_HEAD HEAD -- lib backend app/identity-verification.tsx firebase.json firestore.rules storage.rules
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install existing dependencies unchanged
+        run: npm ci --no-audit --no-fund
+      - name: Type-check without modifying source
+        run: npx tsc --noEmit --pretty false
+      - name: Export web without publishing Hosting
+        run: npx expo export --platform web --max-workers 1
+      - name: No deployment
+        run: echo "NO DEPLOY - UI compile only; existing Hosting, login, identity AI, backend, and Firestore unchanged."
