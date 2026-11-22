@@ -16,6 +16,9 @@ const safe = {
   RENDER_SERVICE_NAME: "volunserve-backend-staging",
   FIREBASE_SERVICE_ACCOUNT_JSON: firebaseJson(),
   IDENTITY_AI_SERVICE_URL: "https://volunserve-identity-ai-staging.onrender.com",
+  CLOUDINARY_CLOUD_NAME: "volunserve-identity-isolated-stage",
+  CLOUDINARY_API_KEY: "synthetic-non-secret-test-key",
+  CLOUDINARY_API_SECRET: "synthetic-non-secret-test-secret",
   ALLOWED_ORIGINS: "https://volunserve-expo-resident-full-staging.onrender.com",
 };
 
@@ -70,4 +73,16 @@ test("staging backend refuses live frontend origins", () => {
   assert.throws(() => assertIdentityStagingIsolation({
     ...safe, ALLOWED_ORIGINS: "https://volunserve-expo-resident-full-staging.onrender.com,https://www.volunserve.com",
   }), /Staging CORS/);
+});
+
+test("staging refuses production Cloudinary and missing private storage credentials", () => {
+  assert.throws(() => assertIdentityStagingIsolation({
+    ...safe, CLOUDINARY_CLOUD_NAME: "netjawtz",
+  }), /dedicated staging Cloudinary/);
+  assert.throws(() => assertIdentityStagingIsolation({
+    ...safe, CLOUDINARY_CLOUD_NAME: "",
+  }), /dedicated staging Cloudinary/);
+  assert.throws(() => assertIdentityStagingIsolation({
+    ...safe, CLOUDINARY_API_SECRET: "",
+  }), /dedicated staging Cloudinary/);
 });
