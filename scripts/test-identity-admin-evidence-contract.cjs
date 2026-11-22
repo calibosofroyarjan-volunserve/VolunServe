@@ -97,3 +97,20 @@ test("Admin photo tiles reflect declared government ID type rather than always s
   assert.match(reviewer, /Government ID — Back/);
   assert.match(reviewer, /key !== "back" \|\| nationalId/);
 });
+
+test("AI readiness and verify fail before processing when private ID storage is unavailable", () => {
+  const api = get("backend/server.js");
+  const health = api.slice(
+    api.indexOf('"/api/identity/engine-health"'),
+    api.indexOf('"/api/identity/status"'),
+  );
+  assert.ok(health.indexOf("getCloudinaryConfig()") >= 0);
+  assert.ok(health.indexOf("getCloudinaryConfig()") < health.indexOf("probeIdentityAiReadiness"));
+  assert.match(health, /identity_evidence_storage_unavailable/);
+  const verification = api.slice(
+    api.indexOf('"/api/identity/verify"'),
+    api.indexOf('"/api/admin/identity/reviews"'),
+  );
+  assert.ok(verification.indexOf("configureCloudinary();") >= 0);
+  assert.ok(verification.indexOf("configureCloudinary();") < verification.indexOf("db.runTransaction"));
+});
