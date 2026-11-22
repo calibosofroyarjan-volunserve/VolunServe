@@ -16,6 +16,7 @@ const safe = {
   RENDER_SERVICE_NAME: "volunserve-backend-staging",
   FIREBASE_SERVICE_ACCOUNT_JSON: firebaseJson(),
   IDENTITY_AI_SERVICE_URL: "https://volunserve-identity-ai-staging.onrender.com",
+  ALLOWED_ORIGINS: "https://volunserve-expo-resident-full-staging.onrender.com",
 };
 
 test("production defaults are unaffected by the staging guard", () => {
@@ -57,4 +58,16 @@ test("staging rejects conflicting project vars, accepts isolated values", () => 
     firebaseProject: "volunserve-full-staging",
   });
   assert.equal(identityEvidencePrefix(safe), "volunserve/identity-review-staging");
+});
+
+test("staging backend refuses live frontend origins", () => {
+  assert.throws(() => assertIdentityStagingIsolation({
+    ...safe, ALLOWED_ORIGINS: "https://volunserve.com",
+  }), /Staging CORS/);
+  assert.throws(() => assertIdentityStagingIsolation({
+    ...safe, ALLOWED_ORIGINS: "",
+  }), /ALLOWED_ORIGINS/);
+  assert.throws(() => assertIdentityStagingIsolation({
+    ...safe, ALLOWED_ORIGINS: "https://volunserve-expo-resident-full-staging.onrender.com,https://www.volunserve.com",
+  }), /Staging CORS/);
 });
