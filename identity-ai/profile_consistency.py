@@ -61,6 +61,22 @@ def _ocr_dob_dates(value: str) -> set[date]:
                 parsed = _valid_date(year, month, day)
                 if parsed:
                     dates.add(parsed)
+        # Some National ID printouts/OCR runs place the year before an
+        # English month name, e.g. "2004 DECEMBER 18". Parse only within
+        # the labeled DOB window, never from unrelated issuance dates.
+        for yyyy, month, dd in re.findall(
+            r"\b(\d{4})\s+(JANUARY|FEBRUARY|MARCH|APRIL|MAY|JUNE|JULY|AUGUST|SEPTEMBER|OCTOBER|NOVEMBER|DECEMBER|JAN|FEB|MAR|APR|JUN|JUL|AUG|SEP|SEPT|OCT|NOV|DEC)\s+(\d{1,2})\b",
+            window):
+            parsed = _valid_date(int(yyyy), _MONTH_LOOKUP.get(month[:3], 0), int(dd))
+            if parsed:
+                dates.add(parsed)
+        # OCR may drop dashes from an ISO birthdate, yielding YYYY MM DD.
+        # Do not guess DD MM YYYY or MM DD YYYY when numeric dates are ambiguous.
+        for yyyy, mm, dd in re.findall(
+            r"\b((?:19|20)\d{2})\s+(\d{1,2})\s+(\d{1,2})\b", window):
+            parsed = _valid_date(int(yyyy), int(mm), int(dd))
+            if parsed:
+                dates.add(parsed)
         for dd, month, yyyy in re.findall(
             r"\b(\d{1,2})\s+(JANUARY|FEBRUARY|MARCH|APRIL|MAY|JUNE|JULY|AUGUST|SEPTEMBER|OCTOBER|NOVEMBER|DECEMBER|JAN|FEB|MAR|APR|JUN|JUL|AUG|SEP|SEPT|OCT|NOV|DEC)\s+(\d{4})\b",
             window):
