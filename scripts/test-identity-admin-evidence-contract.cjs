@@ -89,3 +89,11 @@ test("mobile review focuses on selected Resident and has Back to Queue", () => {
   assert.match(page, /!mobileDetail \? <View style=\{\[styles\.queue/);
   assert.match(page, /detailPanelCompact/);
 });
+
+test("Admin photo tiles reflect declared government ID type rather than always saying National ID", () => {
+  const reviewer = get("components/identity/AdminIdentityEvidence.tsx");
+  assert.match(reviewer, /const nationalId = evidence\?\.idType === "national_id"/);
+  assert.match(reviewer, /Government ID — Front/);
+  assert.match(reviewer, /Government ID — Back/);
+  assert.match(reviewer, /key !== "back" \|\| nationalId/);
+});
