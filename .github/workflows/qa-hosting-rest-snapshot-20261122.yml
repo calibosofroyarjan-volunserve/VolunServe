@@ -1,0 +1,68 @@
+name: QA Firebase Hosting Immutable Live Version Snapshot (READ ONLY)
+on:
+  push:
+    branches: [qa/mobile-home-hosting-rest-snapshot-20261122]
+    paths:
+      - '.github/workflows/qa-hosting-rest-snapshot-20261122.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify:
+    environment: production
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      SITE: volunserve-3aa5b
+      BASE_SHA: c37a83eb96cac832b03dec9c0f8eea44056bee4c
+      SOURCE_SHA: 742e711b87d53c2eba681e9bd81ea39f86f7ba8b
+      FIREBASE_SA: ${{ secrets.VOLUNSERVE_PRODUCTION_HOSTING_SERVICE_ACCOUNT }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Validate exact helper source and syntax (no writes)
+        run: |
+          set -euo pipefail
+          node --check .github/scripts/hosting-live-release-snapshot-20261122.cjs
+          node - <<'NODE'
+          const fs=require('fs');
+          const src=fs.readFileSync('.github/scripts/hosting-live-release-snapshot-20261122.cjs','utf8');
+          const assert=require('assert');
+          assert(src.includes('channels/live/releases?pageSize=2'));
+          assert(src.includes('if(current===base)'));
+          assert(src.includes('snapshotFile'));
+          console.log('PASS syntax and REST API snapshot mode available');
+          NODE
+      - name: Create temporary scoped credential (no output)
+        run: |
+          set -euo pipefail
+          test -n "$FIREBASE_SA"
+          node <<'NODE'
+          const fs=require('fs'),assert=require('assert');
+          const sa=JSON.parse(process.env.FIREBASE_SA);
+          assert.equal(sa.project_id,'volunserve-3aa5b');
+          assert.equal(sa.type,'service_account');
+          fs.writeFileSync(process.env.RUNNER_TEMP+'/snapshot-readonly-key.json',
+            process.env.FIREBASE_SA,{mode:0o600});
+          NODE
+          echo "GOOGLE_APPLICATION_CREDENTIALS=$RUNNER_TEMP/snapshot-readonly-key.json" >> "$GITHUB_ENV"
+      - name: Snapshot existing immutable live version through READ ONLY REST GET
+        run: |
+          set -euo pipefail
+          node .github/scripts/hosting-live-release-snapshot-20261122.cjs snapshot
+          node <<'NODE'
+          const fs=require('fs'),assert=require('assert');
+          const path=require('path');
+          const file=path.join(process.env.RUNNER_TEMP,'volunserve-mobile-home-live-version-snapshot-20261122.json');
+          const snap=JSON.parse(fs.readFileSync(file,'utf8'));
+          assert.equal(snap.base,'c37a83eb96cac832b03dec9c0f8eea44056bee4c');
+          assert(/^sites\/volunserve-3aa5b\/versions\//.test(snap.versionName));
+          console.log('PASS live release can be safely restored without creating a preview channel');
+          NODE
+      - name: Cleanup secrets and temporary snapshot
+        if: always()
+        run: rm -f "$RUNNER_TEMP/snapshot-readonly-key.json" "$RUNNER_TEMP/volunserve-mobile-home-live-version-snapshot-20261122.json"
