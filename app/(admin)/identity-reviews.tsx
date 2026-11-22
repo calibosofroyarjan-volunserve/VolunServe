@@ -712,19 +712,9 @@ function StatusChip({ bucket }: { bucket: ReviewFilter }) {
 }
 
 function ReviewDetail({
-  item,
-  user,
-  validationMethod,
-  setValidationMethod,
-  evidenceReady,
-  evidenceAcknowledged,
-  onEvidenceStateChange,
-  onAcknowledgeEvidence,
-  notes,
-  setNotes,
-  saving,
-  onVerify,
-  onRetry,
+  item, user, validationMethod, setValidationMethod,
+  evidenceReady, evidenceAcknowledged, onEvidenceStateChange, onAcknowledgeEvidence,
+  notes, setNotes, saving, onVerify, onRetry,
 }: {
   item: IdentityReview;
   user: { getIdToken: (forceRefresh?: boolean) => Promise<string> } | null;
@@ -740,328 +730,272 @@ function ReviewDetail({
   onVerify: () => void;
   onRetry: () => void;
 }) {
+  const { width } = useWindowDimensions();
+  const wideDetail = width >= 1400;
+  const [tab, setTab] = useState<"review" | "details" | "audit">("review");
+  const [methodOpen, setMethodOpen] = useState(false);
+  useEffect(() => {
+    setTab("review");
+    setMethodOpen(false);
+  }, [item.uid, item.verificationId]);
+
   const pending = reviewBucket(item) === "pending";
   const evidenceExpired = !!item.evidenceExpiresAt &&
     Date.parse(item.evidenceExpiresAt) <= Date.now();
   const evidenceMissing = item.evidenceAvailable !== true || evidenceExpired;
-
+  const score = typeof item.matchScore === "number" && Number.isFinite(item.matchScore)
+    && item.matchScore >= 0 && item.matchScore <= 1
+    ? (item.matchScore * 100).toFixed(1) + "%" : "Not evaluated";
+  const quality = (value?: number | null) =>
+    typeof value === "number" && Number.isFinite(value) && value >= 0 && value <= 1
+      ? (value * 100).toFixed(0) + " / 100" : "Not evaluated";
+  const documentType = ({
+    national_id: "Philippine National ID",
+    passport: "Philippine Passport",
+    drivers_license: "Driver's License",
+    other_government_id: "Other Government ID",
+  } as const)[item.documentScreening?.declaredIdType || "other_government_id"];
+  const screening = item.documentScreening?.status === "text_consistent_unverified"
+    ? "ID type recognized — not authenticated"
+    : item.documentScreening?.status === "mismatch"
+      ? "Detected document type mismatch" : "Document screening inconclusive";
+  const selectedMethod = VALIDATION_METHODS.find((method) => method.value === validationMethod);
   return (
-    <View>
+    <View style={styles.reviewDetailRoot}>
       <View style={styles.detailHeader}>
         <View style={styles.detailHeaderIcon}>
-          <Ionicons
-            name="person-outline"
-            size={24}
-            color="#08765A"
-          />
+          <Text style={styles.detailAvatarText}>
+            {String(item.resident?.fullName || "R").trim().charAt(0).toUpperCase()}
+          </Text>
         </View>
-
         <View style={styles.flexOne}>
-          <Text style={styles.detailTitle}>
-            {item.resident?.fullName || "Resident"}
+          <Text style={styles.detailTitle}>{item.resident?.fullName || "Resident"}</Text>
+          <Text style={styles.detailMeta}>
+            {item.resident?.barangay ? "Brgy. " + item.resident.barangay : "Barangay not set"}
           </Text>
           <Text style={styles.detailMeta}>
-            {item.resident?.email || "No email"}
+            Submitted {formatDate(item.lastSubmissionAt || item.updatedAt || item.createdAt)}
           </Text>
         </View>
-
         <StatusChip bucket={reviewBucket(item)} />
       </View>
 
-      <SectionTitle
-        icon="person-circle-outline"
-        title="Resident Account"
-      />
-      <InfoLine
-        label="Barangay"
-        value={item.resident?.barangay || "Not set"}
-      />
-      <InfoLine
-        label="Phone"
-        value={item.resident?.phoneNumber || "Not set"}
-      />
-      <InfoLine
-        label="Account status"
-        value={item.resident?.accountStatus || "—"}
-      />
-
-      <SectionTitle icon="images-outline" title="Submitted Identity Photos" />
-      <AdminIdentityEvidence uid={item.uid} verificationId={item.verificationId} user={user}
-        matchScore={item.matchScore} aiDecision={item.aiDecision}
-        onEvidenceStateChange={onEvidenceStateChange} />
-
-      <SectionTitle
-        icon="scan-outline"
-        title="AI Verification Result"
-      />
-
-      <View style={styles.scoreCard}>
-        <View>
-          <Text style={styles.scoreCardLabel}>Document and identity review</Text>
-          <Text style={styles.scoreCardDecision}>
-            {item.documentScreening?.status === "text_consistent_unverified"
-              ? "Document text is consistent with the selected ID type; not authenticated"
-              : item.documentScreening?.status === "mismatch"
-                ? "Selected ID type conflicts with recognized document text"
-                : "Document type is inconclusive; verify using an independent LGU method"}
-          </Text>
-        </View>
-        <Text style={styles.scoreCardLabel}>
-          AI screening is preliminary. Approve only after checking identity through an approved LGU validation method.
-        </Text>
+      <View style={styles.detailTabRow}>
+        {([
+          { key: "review" as const, label: "Identity Review", icon: "shield-checkmark-outline" as const },
+          { key: "details" as const, label: "Details & History", icon: "time-outline" as const },
+          { key: "audit" as const, label: "Audit Trail", icon: "document-text-outline" as const },
+        ]).map(({ key, label, icon }) => (
+          <TouchableOpacity key={key} accessibilityRole="tab"
+            accessibilityState={{ selected: tab === key }}
+            onPress={() => setTab(key)}
+            style={[styles.detailTab, tab === key && styles.detailTabActive]}>
+            <Ionicons name={icon} size={16} color={tab === key ? "#08765A" : "#64748B"} />
+            <Text style={[styles.detailTabText, tab === key && styles.detailTabTextActive]}>
+              {label}
+            </Text>
+          </TouchableOpacity>
+        ))}
       </View>
 
-      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10, marginVertical: 12 }}>
-        <View style={{ flex: 1, minWidth: 145, padding: 14, backgroundColor: "#F4F8FB", borderRadius: 11, borderWidth: 1, borderColor: "#E1EAF0" }}>
-          <Text style={{ color: "#526375", fontSize: 11, fontWeight: "600", marginBottom: 7 }}>FACE COMPARISON</Text>
-          <Text style={{ color: "#163047", fontSize: 17, fontWeight: "700" }}>
-            {typeof item.matchScore === "number" && Number.isFinite(item.matchScore)
-              ? (item.matchScore * 100).toFixed(1) + "%"
-              : "Not available"}
-          </Text>
-          <Text style={{ color: "#64748B", fontSize: 11, marginTop: 5 }}>
-            AI similarity only. Compare the ID portrait and selfie yourself.
-          </Text>
-        </View>
-        <View style={{ flex: 1, minWidth: 145, padding: 14, backgroundColor: "#F4F8FB", borderRadius: 11, borderWidth: 1, borderColor: "#E1EAF0" }}>
-          <Text style={{ color: "#526375", fontSize: 11, fontWeight: "600", marginBottom: 7 }}>AI DECISION</Text>
-          <Text style={{ color: "#163047", fontSize: 16, fontWeight: "700" }}>
-            {item.aiDecision === "verified" ? "Similarity Passed" :
-              item.aiDecision === "failed" ? "Check Failed" : "Manual Review"}
-          </Text>
-          <Text style={{ color: "#64748B", fontSize: 11, marginTop: 5 }}>
-            The current engine does not independently authenticate ID or prove liveness.
-          </Text>
-        </View>
-      </View>
+      {tab === "review" ? (
+        <>
+          <View style={[styles.reviewTopGrid, wideDetail && styles.reviewTopGridWide]}>
+            <View style={[styles.reviewEvidencePanel, wideDetail && styles.reviewEvidenceWide]}>
+              <View style={styles.panelHeading}>
+                <Ionicons name="id-card-outline" size={19} color="#08765A" />
+                <Text style={styles.panelHeadingText}>Submitted Identity Evidence</Text>
+                <Ionicons name="lock-closed-outline" size={15} color="#08765A" />
+              </View>
+              <AdminIdentityEvidence uid={item.uid} verificationId={item.verificationId} user={user}
+                matchScore={item.matchScore} aiDecision={item.aiDecision}
+                onEvidenceStateChange={onEvidenceStateChange} />
+            </View>
 
-      <View style={{ backgroundColor: "#F8FAFC", borderColor: "#DEE8F0", borderWidth: 1, borderRadius: 11, padding: 14, marginBottom: 14, gap: 9 }}>
-        <Text style={{ color: "#19394E", fontSize: 13, fontWeight: "700" }}>Image Quality Screening</Text>
-        <Text style={{ color: "#617283", fontSize: 11 }}>
-          Preliminary quality indicators only; readable text and an unobstructed face still require Admin inspection.
-        </Text>
-        <InfoLine label="ID front image quality" value={
-          typeof item.idImageQualityScore === "number" &&
-          Number.isFinite(item.idImageQualityScore) && item.idImageQualityScore >= 0 &&
-          item.idImageQualityScore <= 1
-            ? (item.idImageQualityScore * 100).toFixed(0) + " / 100"
-            : "Not evaluated"
-        } />
-        <InfoLine label="ID back image quality" value={
-          item.idBackQualityChecked === true &&
-          typeof item.idBackImageQualityScore === "number" &&
-          Number.isFinite(item.idBackImageQualityScore) &&
-          item.idBackImageQualityScore >= 0 && item.idBackImageQualityScore <= 1
-            ? (item.idBackImageQualityScore * 100).toFixed(0) + " / 100"
-            : "Not evaluated"
-        } />
-        <InfoLine label="Selfie image quality" value={
-          typeof item.selfieQualityScore === "number" &&
-          Number.isFinite(item.selfieQualityScore) && item.selfieQualityScore >= 0 &&
-          item.selfieQualityScore <= 1
-            ? (item.selfieQualityScore * 100).toFixed(0) + " / 100"
-            : "Not evaluated"
-        } />
-        {item.scanWarnings?.length ? (
-          <View style={{ padding: 10, backgroundColor: "#FFFBEB", borderRadius: 9 }}>
-            <Text style={{ color: "#92400E", fontSize: 11, fontWeight: "600" }}>AI scan notices</Text>
-            <Text style={{ color: "#92400E", fontSize: 11, marginTop: 4 }}>
-              {item.scanWarnings.map((warning) => warning.replace(/_/g, " ")).join(" · ")}
+            <View style={[styles.reviewAiPanel, wideDetail && styles.reviewAiNarrow]}>
+              <View style={styles.panelHeading}>
+                <Ionicons name="scan-outline" size={19} color="#08765A" />
+                <Text style={styles.panelHeadingText}>AI Verification Result</Text>
+              </View>
+              <View style={styles.reviewAiScoreBox}>
+                <Text style={styles.reviewAiScoreLabel}>Face similarity</Text>
+                <Text style={styles.reviewAiScore}>{score}</Text>
+                <Text style={styles.reviewAiScoreDescription}>
+                  Preliminary AI comparison only. Not proof of identity or liveness.
+                </Text>
+              </View>
+              <SectionTitle icon="images-outline" title="Image Quality Screening" />
+              <InfoLine label="ID Front" value={quality(item.idImageQualityScore)} />
+              <InfoLine label="ID Back" value={
+                item.idBackQualityChecked ? quality(item.idBackImageQualityScore) : "Not evaluated"
+              } />
+              <InfoLine label="Live Selfie" value={quality(item.selfieQualityScore)} />
+              <InfoLine label="AI result" value={
+                item.aiDecision === "failed" ? "Requires attention" :
+                item.requiresManualReview ? "Manual review required" : "Pending assessment"
+              } />
+              {item.scanWarnings?.length ? (
+                <View style={styles.reviewAiWarnings}>
+                  <Ionicons name="alert-circle-outline" size={15} color="#A16207" />
+                  <Text style={styles.reviewAiWarningText}>
+                    {item.scanWarnings.map((warning) => warning.replace(/_/g, " ")).join(" · ")}
+                  </Text>
+                </View>
+              ) : null}
+            </View>
+          </View>
+
+          <View style={styles.reviewNotice}>
+            <Ionicons name="alert-circle-outline" size={17} color="#A16207" />
+            <Text style={styles.reviewNoticeText}>
+              AI similarity and OCR screening cannot establish document authenticity or liveness.
+              Final approval requires independent LGU validation.
             </Text>
           </View>
-        ) : null}
-      </View>
 
-      <DocumentScreeningSummary screening={item.documentScreening} />
-
-      <InfoLine
-        label="Verification ID"
-        value={item.verificationId || "—"}
-      />
-      <InfoLine
-        label="Submitted"
-        value={formatDate(item.lastSubmissionAt || item.createdAt)}
-      />
-
-      {item.message ? (
-        <View style={styles.aiMessage}>
-          <Ionicons
-            name="information-circle-outline"
-            size={19}
-            color="#0F766E"
-          />
-          <Text style={styles.aiMessageText}>{item.message}</Text>
-        </View>
-      ) : null}
-
-      {pending ? (
-        <>
-          {evidenceMissing ? (
-            <View style={{ borderColor: "#FCD34D", borderWidth: 1, backgroundColor: "#FFFBEB", borderRadius: 10, padding: 13, marginVertical: 12 }}>
-              <Text style={{ color: "#92400E", fontWeight: "700", fontSize: 13 }}>Private identity evidence required</Text>
-              <Text style={{ color: "#92400E", fontSize: 12, marginTop: 5 }}>
-                The submission has no usable saved photos or the 30-day review period expired.
-                Require a fresh ID Front, ID Back and Selfie submission before approval.
-              </Text>
+          <View style={[styles.reviewBottomGrid, wideDetail && styles.reviewBottomGridWide]}>
+            <View style={[styles.reviewSummaryPanel, wideDetail && styles.reviewBottomChild]}>
+              <View style={styles.panelHeading}>
+                <Ionicons name="clipboard-outline" size={18} color="#08765A" />
+                <Text style={styles.panelHeadingText}>Review Summary</Text>
+              </View>
+              <InfoLine label="Document Type" value={documentType} />
+              <InfoLine label="Government ID Check" value={screening} />
+              <InfoLine label="AI Face Similarity" value={score} />
+              <InfoLine label="Evidence Status" value={
+                evidenceMissing ? "Missing / expired — resubmission needed" : "Private photos saved"
+              } />
+              <DocumentScreeningSummary screening={item.documentScreening} />
+              {item.message ? <Text style={styles.reviewSummaryMessage}>{item.message}</Text> : null}
             </View>
-          ) : null}
-          <SectionTitle
-            icon="shield-checkmark-outline"
-            title="Independent LGU Validation"
-          />
 
-          <TouchableOpacity accessibilityRole="checkbox"
-            accessibilityState={{ checked: evidenceAcknowledged, disabled: !evidenceReady || evidenceMissing }}
-            disabled={!evidenceReady || evidenceMissing}
-            onPress={onAcknowledgeEvidence}
-            style={[styles.evidenceAcknowledgement, evidenceAcknowledged && styles.evidenceAcknowledgementChecked]}>
-            <Ionicons name={evidenceAcknowledged ? "checkbox" : "square-outline"}
-              size={23} color={evidenceAcknowledged ? "#08765A" : "#64748B"} />
-            <View style={styles.flexOne}>
-              <Text style={styles.evidenceAcknowledgementTitle}>I reviewed the submitted identity images</Text>
-              <Text style={styles.evidenceAcknowledgementText}>
-                I checked the original ID front, any required back photo, the selfie,
-                and the independent AI result. This does not replace official validation.
-              </Text>
-            </View>
-          </TouchableOpacity>
-
-          <Text style={styles.helperText}>
-            Choose the method actually used by LGU/Admin. Do not verify
-            based only on the AI score.
-          </Text>
-
-          <View style={styles.methodList}>
-            {VALIDATION_METHODS.map((method) => {
-              const active = validationMethod === method.value;
-              return (
-                <TouchableOpacity
-                  key={method.value}
-                  style={[
-                    styles.methodButton,
-                    active && styles.methodButtonActive,
-                  ]}
-                  onPress={() => setValidationMethod(method.value)}
-                >
-                  <Ionicons
-                    name={method.icon}
-                    size={18}
-                    color={active ? "#0F766E" : "#64748B"}
-                  />
-                  <Text
-                    style={[
-                      styles.methodButtonText,
-                      active && styles.methodButtonTextActive,
-                    ]}
-                  >
-                    {method.label}
+            <View style={[styles.reviewValidationPanel, wideDetail && styles.reviewBottomChild]}>
+              {pending ? (
+                <>
+                  <View style={styles.panelHeading}>
+                    <Ionicons name="shield-checkmark-outline" size={19} color="#08765A" />
+                    <Text style={styles.panelHeadingText}>Independent LGU Validation</Text>
+                  </View>
+                  {evidenceMissing ? (
+                    <View style={styles.reviewAiWarnings}>
+                      <Ionicons name="alert-circle-outline" size={16} color="#A16207" />
+                      <Text style={styles.reviewAiWarningText}>
+                        Required Front/Back ID or selfie evidence is unavailable.
+                        Ask the Resident to resubmit before approval.
+                      </Text>
+                    </View>
+                  ) : null}
+                  <TouchableOpacity accessibilityRole="checkbox"
+                    accessibilityState={{ checked: evidenceAcknowledged, disabled: !evidenceReady || evidenceMissing }}
+                    disabled={!evidenceReady || evidenceMissing}
+                    onPress={onAcknowledgeEvidence}
+                    style={styles.reviewCheckboxRow}>
+                    <Ionicons name={evidenceAcknowledged ? "checkbox" : "square-outline"}
+                      size={21} color={evidenceAcknowledged ? "#08765A" : "#64748B"} />
+                    <Text style={styles.reviewCheckboxText}>
+                      I reviewed the submitted identity images and AI results.
+                    </Text>
+                  </TouchableOpacity>
+                  <Text style={styles.reviewFieldLabel}>Validation Method *</Text>
+                  <TouchableOpacity accessibilityRole="button"
+                    accessibilityState={{ expanded: methodOpen }}
+                    style={styles.reviewSelectField} onPress={() => setMethodOpen(!methodOpen)}>
+                    <Text style={[styles.reviewSelectText, !selectedMethod && styles.reviewPlaceholder]}>
+                      {selectedMethod?.label || "Select an independent LGU validation method"}
+                    </Text>
+                    <Ionicons name={methodOpen ? "chevron-up-outline" : "chevron-down-outline"} size={17} color="#64748B" />
+                  </TouchableOpacity>
+                  {methodOpen ? (
+                    <View style={styles.reviewSelectOptions}>
+                      {VALIDATION_METHODS.map((method) => (
+                        <TouchableOpacity key={method.value} accessibilityRole="button"
+                          style={[styles.reviewSelectOption,
+                            validationMethod === method.value && styles.reviewSelectOptionSelected]}
+                          onPress={() => { setValidationMethod(method.value); setMethodOpen(false); }}>
+                          <Ionicons name={method.icon} size={16} color="#08765A" />
+                          <Text style={styles.reviewSelectOptionText}>{method.label}</Text>
+                          {validationMethod === method.value ?
+                            <Ionicons name="checkmark" size={16} color="#08765A" /> : null}
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  ) : null}
+                  <Text style={styles.reviewFieldLabel}>Review Notes / Retry Reason</Text>
+                  <TextInput multiline value={notes} onChangeText={setNotes}
+                    placeholder="Enter review observations or reason for retry..."
+                    placeholderTextColor="#94A3B8" textAlignVertical="top"
+                    style={styles.reviewNotesInput} maxLength={500} />
+                  <Text style={styles.reviewNoteHint}>
+                    Verify requires completed evidence review and independent validation.
+                    Retry requires a reason of at least 5 characters.
                   </Text>
-                </TouchableOpacity>
-              );
-            })}
+                </>
+              ) : (
+                <>
+                  <View style={styles.panelHeading}>
+                    <Ionicons name="checkmark-circle-outline" size={18} color="#08765A" />
+                    <Text style={styles.panelHeadingText}>Recorded LGU Decision</Text>
+                  </View>
+                  <InfoLine label="Decision" value={item.manualReviewDecision || item.decision || item.status || "—"} />
+                  <InfoLine label="Method" value={item.manualValidationMethod || "—"} />
+                  <InfoLine label="Reviewed by" value={item.reviewedByName || item.reviewedBy || "—"} />
+                  <InfoLine label="Reviewed at" value={formatDate(item.reviewedAt)} />
+                  {item.manualReviewNotes ? <Text style={styles.reviewSummaryMessage}>{item.manualReviewNotes}</Text> : null}
+                </>
+              )}
+            </View>
           </View>
 
-          <Text style={styles.inputLabel}>
-            Review notes / retry reason
-          </Text>
-
-          <TextInput
-            style={styles.notesInput}
-            value={notes}
-            onChangeText={setNotes}
-            multiline
-            placeholder="Add LGU validation notes. A retry decision requires a clear reason."
-            placeholderTextColor="#94A3B8"
-            textAlignVertical="top"
-          />
-
-          <View style={styles.actionRow}>
-            <TouchableOpacity
-              style={[
+          {pending ? (
+            <View style={styles.reviewFooterActions}>
+              <TouchableOpacity style={[styles.retryButton, (notes.trim().length < 5 || !!saving) && styles.disabledButton]}
+                disabled={notes.trim().length < 5 || !!saving} onPress={onRetry}
+                accessibilityRole="button">
+                {saving === "require_retry" ? <ActivityIndicator color="#B91C1C" size="small" /> :
+                  <Ionicons name="refresh-outline" size={18} color="#B91C1C" />}
+                <Text style={styles.retryButtonText}>Require Retry</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[
                 styles.verifyButton,
-                (!validationMethod || !!saving || evidenceMissing || !evidenceReady || !evidenceAcknowledged) &&
-                  styles.disabledButton,
-              ]}
-              disabled={!validationMethod || !!saving || evidenceMissing || !evidenceReady || !evidenceAcknowledged}
-              onPress={onVerify}
-            >
-              {saving === "verify" ? (
-                <ActivityIndicator size="small" color="#FFFFFF" />
-              ) : (
-                <Ionicons
-                  name="shield-checkmark-outline"
-                  size={19}
-                  color="#FFFFFF"
-                />
-              )}
-              <Text style={styles.verifyButtonText}>
-                Verify Resident
-              </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[
-                styles.retryButton,
-                (notes.trim().length < 5 || !!saving) &&
-                  styles.disabledButton,
-              ]}
-              disabled={notes.trim().length < 5 || !!saving}
-              onPress={onRetry}
-            >
-              {saving === "require_retry" ? (
-                <ActivityIndicator size="small" color="#B91C1C" />
-              ) : (
-                <Ionicons
-                  name="refresh-outline"
-                  size={19}
-                  color="#B91C1C"
-                />
-              )}
-              <Text style={styles.retryButtonText}>
-                Require Retry
-              </Text>
-            </TouchableOpacity>
-          </View>
-        </>
-      ) : (
-        <>
-          <SectionTitle
-            icon="checkmark-circle-outline"
-            title="Manual Review Decision"
-          />
-          <InfoLine
-            label="Decision"
-            value={
-              item.manualReviewDecision ||
-              item.decision ||
-              item.status ||
-              "—"
-            }
-          />
-          <InfoLine
-            label="Validation method"
-            value={item.manualValidationMethod || "—"}
-          />
-          <InfoLine
-            label="Reviewed by"
-            value={item.reviewedByName || item.reviewedBy || "—"}
-          />
-          <InfoLine
-            label="Reviewed at"
-            value={formatDate(item.reviewedAt)}
-          />
-
-          {item.manualReviewNotes ? (
-            <View style={styles.resolvedNotes}>
-              <Text style={styles.resolvedNotesLabel}>
-                Review notes
-              </Text>
-              <Text style={styles.resolvedNotesText}>
-                {item.manualReviewNotes}
-              </Text>
+                (!validationMethod || !!saving || evidenceMissing || !evidenceReady || !evidenceAcknowledged)
+                  && styles.disabledButton,
+              ]} disabled={!validationMethod || !!saving || evidenceMissing || !evidenceReady || !evidenceAcknowledged}
+                onPress={onVerify} accessibilityRole="button">
+                {saving === "verify" ? <ActivityIndicator color="#FFFFFF" size="small" /> :
+                  <Ionicons name="checkmark-outline" size={19} color="#FFFFFF" />}
+                <Text style={styles.verifyButtonText}>Verify Resident</Text>
+              </TouchableOpacity>
             </View>
           ) : null}
         </>
+      ) : tab === "details" ? (
+        <View style={styles.reviewInformationPanel}>
+          <SectionTitle icon="person-circle-outline" title="Resident Account & Verification History" />
+          <InfoLine label="Resident" value={item.resident?.fullName || "Resident"} />
+          <InfoLine label="Email" value={item.resident?.email || "Not available"} />
+          <InfoLine label="Barangay" value={item.resident?.barangay || "Not provided"} />
+          <InfoLine label="Account status" value={item.resident?.accountStatus || "—"} />
+          <InfoLine label="Verification ID" value={item.verificationId || "—"} />
+          <InfoLine label="Submitted" value={formatDate(item.lastSubmissionAt || item.createdAt)} />
+          <InfoLine label="Current status" value={item.status || "—"} />
+          <InfoLine label="AI decision" value={item.aiDecision || "—"} />
+          <InfoLine label="Evidence expiry" value={formatDate(item.evidenceExpiresAt)} />
+          {item.message ? <Text style={styles.reviewSummaryMessage}>{item.message}</Text> : null}
+        </View>
+      ) : (
+        <View style={styles.reviewInformationPanel}>
+          <SectionTitle icon="document-text-outline" title="Available Review Audit Details" />
+          <Text style={styles.reviewNoteHint}>
+            This panel shows decision metadata from the current verification record.
+            Complete Admin activity logs remain in the protected audit system.
+          </Text>
+          <InfoLine label="Verification ID" value={item.verificationId || "—"} />
+          <InfoLine label="Last decision" value={item.manualReviewDecision || "No manual decision recorded"} />
+          <InfoLine label="LGU method" value={item.manualValidationMethod || "—"} />
+          <InfoLine label="Reviewed by" value={item.reviewedByName || item.reviewedBy || "—"} />
+          <InfoLine label="Reviewed at" value={formatDate(item.reviewedAt)} />
+          {item.manualReviewNotes ? <Text style={styles.reviewSummaryMessage}>{item.manualReviewNotes}</Text> : null}
+        </View>
       )}
     </View>
   );
