@@ -1,0 +1,29 @@
+name: National ID Only School Card OCR - Synthetic No Deploy
+on:
+  push:
+    branches:
+      - feat/staging-national-id-school-ocr-20261122
+    paths:
+      - 'identity-ai/local_national_id_type_only.py'
+      - 'identity-ai/test_local_national_id_type_only.py'
+      - '.github/workflows/test-school-ocr-no-deploy-20261122.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  synthetic-ocr-school-guard:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Check Python syntax
+        run: python -m py_compile identity-ai/local_national_id_type_only.py identity-ai/test_local_national_id_type_only.py
+      - name: Run fake text tests (no OCR photos)
+        run: python -m unittest discover -s identity-ai -p test_local_national_id_type_only.py -v
+      - name: Record scope
+        run: echo 'Synthetic text only. No real ID photos, account updates, Firebase, Render or deployment.' >> "$GITHUB_STEP_SUMMARY"
