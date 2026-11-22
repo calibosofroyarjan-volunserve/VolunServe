@@ -1,0 +1,92 @@
+name: QA auto Admin review frontend from published Hosting (NO DEPLOY)
+on:
+  push:
+    branches: [fix/identity-hybrid-autoreview-web-current-live-20261122]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  qa:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      CI: 'true'
+      EXPO_NO_TELEMETRY: '1'
+      EXPO_PUBLIC_VOLUNSERVE_ENV: production
+      EXPO_PUBLIC_IDENTITY_VERIFICATION_API_URL: https://volunserve.onrender.com
+      VOLUNSERVE_HOSTING_URL: https://volunserve.com
+      VOLUNSERVE_EXPECTED_SHA: bceffc32fa51cc9315771754b524360bef1a8cc6
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: false
+      - name: Exact current Hosting source, only OCR/Admin UI patch
+        run: |
+          set -euo pipefail
+          BASE=bceffc32fa51cc9315771754b524360bef1a8cc6
+          git diff --name-status --no-renames "$BASE" HEAD >/tmp/changed
+          python - <<'PY'
+          from pathlib import Path
+          actual=sorted(Path('/tmp/changed').read_text().strip().splitlines())
+          expected=sorted([
+            'M\tapp/identity-verification.web.tsx',
+            'M\tlib/identityVerification.ts',
+            'A\t.github/workflows/qa-identity-hybrid-autoreview-current-site-20261122.yml',
+          ])
+          assert actual==expected,(actual,expected)
+          print('PASS no login, signup, dashboard or unrelated module source changed')
+          PY
+          git diff --check "$BASE" HEAD
+      - name: Verify production site still at exact expected latest Hosting revision
+        run: node scripts/check-live-hosting.cjs
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install pinned dependencies
+        run: npm ci --no-audit --no-fund
+      - name: TypeScript and existing auth/route regression suite
+        run: |
+          set -euo pipefail
+          npx tsc --noEmit --incremental false
+          node scripts/test-unified-login-routing.cjs
+          node scripts/test-login-field-validation.cjs
+          node scripts/test-login-ui-release.cjs
+          node scripts/test-route-entrypoints.cjs
+          node scripts/test-guest-readonly-preview.cjs
+      - name: Check review UI fail-closed and no camera after pending OCR precheck
+        run: |
+          node <<'NODE'
+          const fs=require('node:fs'),assert=require('node:assert/strict');
+          const ui=fs.readFileSync('app/identity-verification.web.tsx','utf8');
+          const api=fs.readFileSync('lib/identityVerification.ts','utf8');
+          const start=ui.indexOf('const openFaceScan = async () =>');
+          const end=ui.indexOf('const retake = () =>',start);
+          assert.ok(start>=0 && end>start);
+          const f=ui.slice(start,end);
+          assert.match(f,/if \(result\.outcome === "retry"\) return/);
+          assert.match(f,/if \(result\.outcome === "review"\)/);
+          assert.match(f,/result\.status === "pending"/);
+          assert.match(f,/identityVerified: false/);
+          assert.match(f,/setStatusResult\(/);
+          assert.match(f,/setStep\(3\)/);
+          const reviewEnd=f.indexOf('return;',f.indexOf('if (result.outcome === "review")'));
+          assert.ok(reviewEnd>f.indexOf('setStatusResult'));
+          assert.ok(f.indexOf('setStep(2)')>reviewEnd,'only positive ID OCR may start face scan');
+          assert.match(api,/status: data\?\.status === "pending" && outcome === "review"/);
+          console.log('PASS only persisted pending review shows Admin status; no selfie/face scan on uncertain ID');
+          NODE
+      - name: Build full web app without deploying
+        run: |
+          set -euo pipefail
+          npx expo export --platform web --clear
+          env -u GITHUB_SHA node scripts/verify-hosting-release.cjs
+          node - <<'NODE'
+          const m=require('./dist/volunserve-release.json'),assert=require('node:assert/strict');
+          const sha=require('node:child_process').execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim();
+          assert.equal(m.revision,sha);
+          assert.equal(m.firebaseProject,'volunserve-3aa5b');
+          console.log('PASS exact reviewed web artifact, no deployment');
+          NODE
+      - run: echo 'NO DEPLOY. No Auth/Firestore/Render uploads. Only synthetic and source checks.'
