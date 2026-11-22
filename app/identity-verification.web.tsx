@@ -1204,8 +1204,33 @@ export default function IdentityVerificationWeb() {
       setDocumentPrecheckScreening(result.documentScreening || null);
       setDocumentPrecheckMessage(result.message);
       if (result.outcome === "retry") return;
-      // PASS is preliminary OCR plausibility; REVIEW is a blurry-National-ID
-      // human rescan case. Neither authenticates an ID or establishes liveness.
+      if (result.outcome === "review") {
+        // A pending queue entry must be persisted by the authenticated
+        // backend BEFORE we display a success state. The ID-only review never
+        // starts a face camera or consumes one of the three face attempts.
+        setSelfie(null);
+        stopCamera();
+        if (result.status === "pending") {
+          setSubmittedIdPreviewUri(idDocument.uri);
+          setStatusResult({
+            identityStatus: "pending",
+            identityVerified: false,
+            verificationId: result.verificationId,
+            decision: result.decision,
+            documentScreening: result.documentScreening,
+            message: result.message,
+          });
+          setLocalMessage(result.message);
+          setStep(3);
+        } else {
+          setDocumentPrecheckMessage(
+            "The scan needs Admin review, but a pending record was not confirmed. Check your status before retrying. No face scan was started.",
+          );
+        }
+        return;
+      }
+      // PASS allows *face comparison only*. Neither OCR, a face-score, nor
+      // an unvalidated movement challenge auto-verifies the account.
       setSelfie(null);
       stopCamera();
       setStep(2);
