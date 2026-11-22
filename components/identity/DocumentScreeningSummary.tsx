@@ -31,16 +31,18 @@ export default function DocumentScreeningSummary({
     ["document_front_back_swapped", "document_front_side_conflict", "document_back_looks_like_front"].includes(code),
   );
   const birthConflict = screening.profileBirthDateCheck === "possible_conflict";
+  const nameConflict = screening.profileNameCheck === "possible_conflict";
   const title = sideProblem ? "Retake ID — front/back position may be wrong"
     : birthConflict ? "Birth date needs Admin review"
+    : nameConflict ? "Please check the account name"
     : recognized
     ? (screening.detectedIdType === "national_id" ? "National ID text recognized" : "Government ID text recognized")
     : unsupported ? "ID rejected — not supported"
       : mismatch ? "ID rejected — wrong government ID type"
         : blurryNationalId ? "Blurry scan — Admin review / rescan"
           : "ID not accepted — scan inconclusive";
-  const icon = recognized && !sideProblem ? "document-text-outline" : unsupported || mismatch || sideProblem ? "alert-circle-outline" : "help-circle-outline";
-  const accent = recognized && !sideProblem ? "#12644E" : unsupported || mismatch || sideProblem ? "#A13F2B" : "#A46B16";
+  const icon = recognized && !sideProblem && !nameConflict ? "document-text-outline" : unsupported || mismatch || sideProblem || nameConflict ? "alert-circle-outline" : "help-circle-outline";
+  const accent = recognized && !sideProblem && !nameConflict ? "#12644E" : unsupported || mismatch || sideProblem || nameConflict ? "#A13F2B" : "#A46B16";
 
   return (
     <View style={styles.panel} accessibilityLabel="Government ID document screening result">
@@ -79,9 +81,11 @@ export default function DocumentScreeningSummary({
           <Text style={styles.label}>Account name vs ID text</Text>
           <Text style={styles.value}>
             {screening.profileNameCheck === "possible_match"
-              ? "Name appears in ID text"
-              : screening.profileNameCheck === "inconclusive"
-                ? "Not confirmed by OCR"
+              ? "Name appears to match (OCR only)"
+              : screening.profileNameCheck === "possible_conflict"
+                ? "Possible difference — rescan or Admin review"
+                : screening.profileNameCheck === "inconclusive"
+                ? "Not clear yet — rescan if needed"
                 : "Not checked"}
           </Text>
         </View>
@@ -115,6 +119,7 @@ export default function DocumentScreeningSummary({
           <Text style={styles.value}>
             {sideProblem ? "Rejected / retake correct ID side"
               : birthConflict ? "Pending Admin review — birth date differs"
+              : nameConflict ? "Rescan the ID name or ask Admin to review"
               : recognized ? "Pending LGU validation (independent check required)"
               : blurryNationalId ? "Pending Admin review — no approval" : "Rejected / retry required"}
           </Text>
