@@ -1002,7 +1002,9 @@ def screen_government_id(
         quality = image_quality(decode_image(id_document_bytes, "Government ID front image"))
         result = add_photo_quality(result, quality["blurVariance"])
         if front_failed or back_failed:
-            result["status"] = "inconclusive"
+            # Do not downgrade explicit unsupported/wrong-ID evidence.
+            if result["status"] not in ("unsupported", "mismatch"):
+                result["status"] = "inconclusive"
             flags = []
             if front_failed:
                 flags.append("ocr_unavailable")
