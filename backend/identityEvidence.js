@@ -117,11 +117,19 @@ async function storeIdentityEvidence(uid, images) {
         stream.on("error", reject);
         stream.end(media.buffer);
       });
+      // Track the returned asset before validating its metadata. Otherwise a
+      // partially valid upload result could leave a private photo orphaned.
+      if (upload?.public_id) {
+        saved[kind] = { publicId: upload.public_id };
+      }
       saved[kind] = cloudinaryImage(upload, media.buffer.length);
     }
     return saved;
   } catch (error) {
-    await destroyIdentityEvidence(saved);
+    const cleanup = await destroyIdentityEvidence(saved);
+    if (cleanup.some((entry) => entry.status === "rejected")) {
+      console.warn("Private identity photo cleanup requires follow-up.");
+    }
     throw evidenceError("identity_evidence_upload_failed", "Could not securely save the identity photos for Admin review. Retry without consuming an AI attempt.", 503);
   }
 }
