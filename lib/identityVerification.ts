@@ -224,11 +224,17 @@ function getBackendBaseUrl() {
 
   value = value.replace(/\/+$/, "");
 
-  const verifySuffix = "/api/identity/verify";
+  const verifySuffixes = [
+    "/api/identity/verify-with-evidence",
+    "/api/identity/verify",
+  ];
   const statusSuffix = "/api/identity/status";
 
-  if (value.endsWith(verifySuffix)) {
-    value = value.slice(0, -verifySuffix.length);
+  for (const verifySuffix of verifySuffixes) {
+    if (value.endsWith(verifySuffix)) {
+      value = value.slice(0, -verifySuffix.length);
+      break;
+    }
   }
 
   if (value.endsWith(statusSuffix)) {
@@ -517,7 +523,7 @@ export const submitIdentityVerification = async (
   );
 
   const endpoint =
-    `${getBackendBaseUrl()}/api/identity/verify`;
+    `${getBackendBaseUrl()}/api/identity/verify-with-evidence`;
 
   const response = await fetchWithTimeout(
     endpoint,
