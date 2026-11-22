@@ -1,0 +1,75 @@
+name: QA National ID UI on newly published VolunServe source (NO DEPLOY)
+
+on:
+  push:
+    branches:
+      - site/identity-green-national-id-from-live-82f7-20261122
+    paths:
+      - 'app/identity-verification.web.tsx'
+      - '.github/workflows/qa-identity-green-live82f7-no-deploy-20261122.yml'
+permissions:
+  contents: read
+jobs:
+  verify-current-live:
+    name: Exact latest-site diff, TypeScript, auth regression and Expo web export
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      CI: 'true'
+      EXPO_NO_TELEMETRY: '1'
+      EXPO_PUBLIC_VOLUNSERVE_ENV: production
+      EXPO_PUBLIC_IDENTITY_VERIFICATION_API_URL: https://volunserve.onrender.com
+      VOLUNSERVE_HOSTING_URL: https://volunserve.com
+      VOLUNSERVE_EXPECTED_SHA: 82f7c0c7c6ea255b8669cd1b6c6f58b192d29a85
+    steps:
+      - name: Checkout exact current-production-derived source
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: false
+      - name: Prove only identity UI and no-deploy QA file changed
+        run: |
+          set -euo pipefail
+          BASE=82f7c0c7c6ea255b8669cd1b6c6f58b192d29a85
+          git merge-base --is-ancestor "$BASE" HEAD
+          git diff --name-status --no-renames "$BASE" HEAD >/tmp/identity-only-diff
+          node - <<'NODE'
+          const fs = require('node:fs'),assert = require('node:assert/strict');
+          const changes = fs.readFileSync('/tmp/identity-only-diff','utf8').trim().split('\n');
+          assert.deepEqual(changes.sort(),[
+            'A\t.github/workflows/qa-identity-green-live82f7-no-deploy-20261122.yml',
+            'M\tapp/identity-verification.web.tsx'
+          ].sort(), 'BLOCKED unexpected or outdated modules');
+          console.log('PASS exactly one UI file; all other app code and Firebase settings unchanged');
+          NODE
+          git diff --check "$BASE" HEAD
+      - name: Read-only confirm current live Hosting revision remains expected
+        run: node scripts/check-live-hosting.cjs
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install existing locked dependencies
+        run: npm ci --no-audit --no-fund
+      - name: TypeScript and existing authentication/route regressions
+        run: |
+          set -euo pipefail
+          npx tsc --noEmit --incremental false
+          node scripts/test-unified-login-routing.cjs
+          node scripts/test-login-field-validation.cjs
+          node scripts/test-login-ui-release.cjs
+          node scripts/test-route-entrypoints.cjs
+          node scripts/test-guest-readonly-preview.cjs
+      - name: Export full current web application without deploying
+        run: |
+          set -euo pipefail
+          npx expo export --platform web --clear
+          env -u GITHUB_SHA node scripts/verify-hosting-release.cjs
+          node - <<'NODE'
+          const marker=require('./dist/volunserve-release.json'), assert=require('node:assert/strict');
+          assert.equal(marker.firebaseProject,'volunserve-3aa5b');
+          assert.equal(marker.revision,require('node:child_process').execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim());
+          console.log('PASS exact reviewed site SHA in export');
+          NODE
+      - name: Safe finish, no deployment performed
+        run: echo "NO DEPLOY. No Firebase service account, Auth, database, Render or hosting write."
