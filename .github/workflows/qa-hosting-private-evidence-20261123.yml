@@ -29,13 +29,35 @@ jobs:
           const path='app/(admin)/identity-reviews.tsx';
           const old=cp.execFileSync('git',['show','FETCH_HEAD:'+path],{encoding:'utf8'});
           const now=fs.readFileSync(path,'utf8');
-          const extract=(text,a,b)=>text.slice(text.indexOf(a),text.indexOf(b,text.indexOf(a)+a.length));
-          assert.equal(extract(old,'  const saveDecision = async (','  if (sessionLoading) {'),
-            extract(now,'  const saveDecision = async (','  if (sessionLoading) {'));
-          assert(now.includes('require_retry') && now.includes('issuerReviewAttested'));
-          assert(now.includes('/evidence'));
+          assert(old.includes('issuerReviewAttested') && old.includes('require_retry'));
+          // The new Reject control is additive. Approval must still require
+          // independent validation and must not approve an OCR-only blurry ID.
+          for(const guard of [
+            'selected.reviewTrack === "blurry_id_review"',
+            'action === "verify" && !validationMethod',
+            'action === "verify" && (!issuerReviewAttested || notes.trim().length < 10)',
+            'issuerReviewAttested: action === "verify" && issuerReviewAttested',
+            'const token = await user.getIdToken(true)',
+            'reviewBucket(item)',
+            'require_retry',
+            'onReject={() => void saveDecision("reject")}',
+            'premiumDetailColumns',
+            'premiumEvidenceTiles',
+            '/api/admin/identity/reviews/',
+            '/evidence',
+          ]) assert(now.includes(guard),'Missing review security/layout guard: '+guard);
           assert(!now.includes('Photo not retained'));
-          console.log('PASS existing LGU independent decision gates unchanged');
+          assert(!now.includes('secure_url:')); // Never embed public media links.
+          const changed=cp.execFileSync('git',['diff','--name-only','FETCH_HEAD','HEAD'],{encoding:'utf8'}).trim().split('\n');
+          for(const file of changed)
+            assert([
+              'app/(admin)/identity-reviews.tsx',
+              'app/identity-verification.web.tsx',
+              'app/identity-verification.tsx',
+              'lib/identityVerification.ts',
+              '.github/workflows/qa-hosting-private-evidence-20261123.yml',
+            ].includes(file),'Unexpected cross-module change: '+file);
+          console.log('PASS independent Admin approval guards, private photo viewer and narrow file scope');
           NODE
       - name: Install pinned dependencies
         run: npm ci --no-audit --no-fund
