@@ -884,6 +884,90 @@ def failed_attempt_result(
     }
 
 
+
+def crop_national_id_for_ocr(image):
+    """Crop a credible landscape card quadrilateral for OCR only.
+
+    Conservative geometric detection: leave photos untouched if card edges
+    cannot be found reliably. This does not infer authenticity, ID type,
+    identity, or camera liveness; no crop or derived image is persisted.
+    """
+    height, width = image.shape[:2]
+    if min(height, width) < 360:
+        return image
+    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    scale = min(1.0, 960.0 / max(height, width))
+    small = (
+        cv2.resize(gray, None, fx=scale, fy=scale,
+                   interpolation=cv2.INTER_AREA)
+        if scale < 1 else gray
+    )
+    blurred = cv2.GaussianBlur(small, (5, 5), 0)
+    edges = cv2.Canny(blurred, 45, 140)
+    edges = cv2.morphologyEx(
+        edges, cv2.MORPH_CLOSE,
+        np.ones((5, 5), np.uint8), iterations=2,
+    )
+    contours, _ = cv2.findContours(
+        edges, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE,
+    )
+    frame_area = float(small.shape[0] * small.shape[1])
+    candidates = []
+    for contour in contours:
+        area = cv2.contourArea(contour)
+        if not (0.08 * frame_area <= area <= 0.86 * frame_area):
+            continue
+        perimeter = cv2.arcLength(contour, True)
+        quad = cv2.approxPolyDP(contour, 0.025 * perimeter, True)
+        if len(quad) != 4 or not cv2.isContourConvex(quad):
+            continue
+        rectangle = cv2.minAreaRect(quad)
+        card_width, card_height = rectangle[1]
+        if min(card_width, card_height) < 140:
+            continue
+        ratio = max(card_width, card_height) / max(
+            min(card_width, card_height), 1
+        )
+        rectangularity = area / max(card_width * card_height, 1)
+        if not (1.35 <= ratio <= 1.95 and rectangularity >= 0.77):
+            continue
+        candidates.append((area, quad))
+    if not candidates:
+        return image
+
+    _, quad = max(candidates, key=lambda candidate: candidate[0])
+    points = quad.reshape(4, 2).astype(np.float32) / scale
+    sums = points.sum(axis=1)
+    differences = np.diff(points, axis=1).reshape(-1)
+    top_left = points[np.argmin(sums)]
+    top_right = points[np.argmin(differences)]
+    bottom_right = points[np.argmax(sums)]
+    bottom_left = points[np.argmax(differences)]
+    output_width = int(round(max(
+        np.linalg.norm(bottom_right - bottom_left),
+        np.linalg.norm(top_right - top_left),
+    )))
+    output_height = int(round(max(
+        np.linalg.norm(bottom_left - top_left),
+        np.linalg.norm(bottom_right - top_right),
+    )))
+    if not (300 <= output_width <= 3000 and
+            170 <= output_height <= 2400):
+        return image
+    source = np.array(
+        [top_left, top_right, bottom_right, bottom_left],
+        dtype=np.float32,
+    )
+    dest = np.array([
+        [0, 0], [output_width - 1, 0],
+        [output_width - 1, output_height - 1], [0, output_height - 1],
+    ], dtype=np.float32)
+    return cv2.warpPerspective(
+        image, cv2.getPerspectiveTransform(source, dest),
+        (output_width, output_height),
+    )
+
+
 def _avoid_national_id_back_qr_noise(gray):
     """Conservatively avoid QR-heavy half in a horizontal physical PhilID.
 
@@ -948,6 +1032,8 @@ def extract_government_id_text(
     card numbers or raw Tesseract output are written to logs or returned.
     """
     image = decode_image(id_document_bytes, label)
+    if declared_type == "national_id":
+        image = crop_national_id_for_ocr(image)
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
     longest = max(gray.shape[:2])
     if longest > 1400:
@@ -1068,8 +1154,13 @@ def screen_government_id(
                 logging.warning("Government ID back OCR unavailable (%s)",
                                 type(exc).__name__)
         result = assess_document_sides(declared_type, front_text, back_text)
-        # Transient whole-image blur estimate; not proof of real ID issuance.
-        quality = image_quality(decode_image(id_document_bytes, "Government ID front image"))
+        # Estimate legibility on the ID card, not a sharp table/background.
+        # This crop is OCR-only; the uploaded image used for face matching
+        # remains unchanged. No image is persisted or returned.
+        quality_image = decode_image(id_document_bytes, "Government ID front image")
+        if declared_type == "national_id":
+            quality_image = crop_national_id_for_ocr(quality_image)
+        quality = image_quality(quality_image)
         result = add_photo_quality(result, quality["blurVariance"])
         if front_failed or back_failed:
             # Do not downgrade explicit unsupported/wrong-ID evidence.
