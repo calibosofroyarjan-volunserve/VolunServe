@@ -1134,22 +1134,37 @@ function ActivityRow({
       </View>
       <View style={styles.activityCopy}>
         <Text style={styles.activityTitle}>{title}</Text>
-        <Text style={styles.activitySubtitle} numberOfLines={mobile ? 2 : 1}>
+        <Text style={styles.activitySubtitle} numberOfLines={mobile ? 3 : 1}>
           {subtitle}
         </Text>
+        {mobile ? (
+          <View style={[
+            styles.statusPill,
+            styles.mobileStatusPill,
+            /pending|awaiting/i.test(status) && styles.statusPillPending,
+            /approved|verified|complete/i.test(status) && styles.statusPillApproved,
+          ]}>
+            <Text style={[
+              styles.statusText,
+              /pending|awaiting/i.test(status) && styles.statusTextPending,
+              /approved|verified|complete/i.test(status) && styles.statusTextApproved,
+            ]} numberOfLines={1}>{status}</Text>
+          </View>
+        ) : null}
       </View>
-      <View style={[
-        styles.statusPill,
-        mobile && styles.mobileStatusPill,
-        /pending|awaiting/i.test(status) && styles.statusPillPending,
-        /approved|verified|complete/i.test(status) && styles.statusPillApproved,
-      ]}>
-        <Text style={[
-          styles.statusText,
-          /pending|awaiting/i.test(status) && styles.statusTextPending,
-          /approved|verified|complete/i.test(status) && styles.statusTextApproved,
-        ]} numberOfLines={1}>{status}</Text>
-      </View>
+      {!mobile ? (
+        <View style={[
+          styles.statusPill,
+          /pending|awaiting/i.test(status) && styles.statusPillPending,
+          /approved|verified|complete/i.test(status) && styles.statusPillApproved,
+        ]}>
+          <Text style={[
+            styles.statusText,
+            /pending|awaiting/i.test(status) && styles.statusTextPending,
+            /approved|verified|complete/i.test(status) && styles.statusTextApproved,
+          ]} numberOfLines={1}>{status}</Text>
+        </View>
+      ) : null}
       <Ionicons name="chevron-forward" size={16} color="#8CA3BB" />
     </Pressable>
   );
@@ -1165,6 +1180,7 @@ function UpdateRow({
   last?: boolean;
 }) {
   const urgent = announcement.priority === "urgent";
+  const mobile = useWindowDimensions().width < 760;
 
   return (
     <Pressable
@@ -1188,14 +1204,15 @@ function UpdateRow({
         />
       </View>
       <View style={styles.updateCopy}>
-        <Text style={styles.updateTitle} numberOfLines={1}>
+        <Text style={styles.updateTitle} numberOfLines={mobile ? 2 : 1}>
           {announcement.title || "VolunServe Update"}
         </Text>
         <Text style={styles.updateMessage} numberOfLines={2}>
           {announcement.message || "Open this announcement to view details."}
         </Text>
+        {mobile ? <Text style={styles.updateDateMobile}>{formatDate(announcement.publishAt)}</Text> : null}
       </View>
-      <Text style={styles.updateDate}>{formatDate(announcement.publishAt)}</Text>
+      {!mobile ? <Text style={styles.updateDate}>{formatDate(announcement.publishAt)}</Text> : null}
     </Pressable>
   );
 }
@@ -1263,10 +1280,10 @@ const styles = StyleSheet.create({
     flexDirection:"row",alignItems:"stretch",gap:12,
     marginTop:18,marginBottom:18,width:"100%",
   },
-  communityExtrasStacked:{flexDirection:"column"},
+  communityExtrasStacked:{flexDirection:"column",alignItems:"stretch",gap:14,marginTop:14,marginBottom:12},
   communityMembersColumn:{flex:1.32,minWidth:0},
   communityCalendarColumn:{flex:1,minWidth:0},
-  communityColumnStacked:{width:"100%",flexGrow:0,flexShrink:0},
+  communityColumnStacked:{width:"100%",minWidth:0,flexGrow:0,flexShrink:0,alignSelf:"stretch",position:"relative"},
   journeyBar: {
     borderTopWidth: 1, borderBottomWidth: 1, borderColor: "#D9E8E1",
     paddingVertical: 16, paddingHorizontal: 12, marginBottom: 22,
@@ -1307,9 +1324,10 @@ const styles = StyleSheet.create({
   mobileSlideDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: "rgba(255,255,255,0.45)" },
   mobileSlideDotActive: { width: 20, backgroundColor: "#FFFFFF" },
   mobileSlideCount: { color: "#FFFFFF", fontSize: 10, fontWeight: "800" },
-  mobilePanel: { padding: 13, borderRadius: 17 },
-  mobileActivityRow: { gap: 8, paddingHorizontal: 0, paddingVertical: 10 },
-  mobileStatusPill: { minWidth: 70, maxWidth: 92, paddingHorizontal: 6 },
+  // Stacked mobile panels must size to their content, not share desktop flex heights.
+  mobilePanel: { flex: 0, padding: 13, borderRadius: 17 },
+  mobileActivityRow: { gap: 10, paddingHorizontal: 0, paddingVertical: 12, alignItems: "flex-start" },
+  mobileStatusPill: { minWidth: 0, maxWidth: "100%", paddingHorizontal: 10, alignSelf: "flex-start", marginTop: 8 },
   screen: {
     flex: 1,
     backgroundColor: "#EEF8FD",
@@ -1957,6 +1975,7 @@ const styles = StyleSheet.create({
     fontSize: 11.5,
     lineHeight: 16,
   },
+  updateDateMobile: { marginTop: 7, fontSize: 10, color: "#6980A8" },
   updateDate: {
     width: 118,
     textAlign: "right",
