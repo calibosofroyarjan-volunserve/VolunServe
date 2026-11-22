@@ -2354,9 +2354,10 @@ function UploadIdStep({
           {documentConsent ? <Ionicons name="checkmark" color="#FFFFFF" size={15} /> : null}
         </View>
         <Text style={styles.consentText}>
-          I agree to securely submit my National ID (front and back) for preliminary
-          OCR screening before the face scan. No selfie is uploaded at this stage.
-          Screening does not confirm that the ID is authentic.
+          I consent to privately processing my ID front and back for OCR screening.
+          If unclear and referred to LGU Admin, those ID photos may be securely
+          retained for up to 30 days. No selfie is captured at this stage.
+          OCR does not confirm government ID authenticity.
         </Text>
       </TouchableOpacity>
       {documentPrecheckScreening ? (
