@@ -83,7 +83,7 @@ function Gate({ action }: { action: string }) {
       <Text style={styles.gateTitle}>Preview only — sign in to {action}</Text>
       <Text style={styles.gateDetail}>A verified or approved account is required. Guest mode never saves or submits information.</Text>
     </View>
-    <Pressable accessibilityRole="button" accessibilityLabel="Log in" onPress={() => router.push("/login")} style={styles.gateButton}>
+    <Pressable accessibilityRole="button" accessibilityLabel="Log in" onPress={() => router.replace("/login")} style={styles.gateButton}>
       <Text style={styles.gateButtonText}>Log in</Text>
     </Pressable>
   </View>;
@@ -349,7 +349,7 @@ export default function GuestWorkspace({ landing = false }: { landing?: boolean 
       <View style={styles.landingFooter}>
         <Ionicons name="lock-closed-outline" size={19} color="#377D70" />
         <Text style={styles.landingFooterText}>Not a real verified account. No Firebase sign-in, personal data, submissions, payments, or LGU approval.</Text>
-        <Pressable onPress={() => router.push("/login")} accessibilityRole="button"><Text style={styles.linkText}>Sign in  ›</Text></Pressable>
+        <Pressable onPress={() => router.replace("/login")} accessibilityRole="button"><Text style={styles.linkText}>Sign in  ›</Text></Pressable>
       </View>
     </ScrollView>;
   }
@@ -396,12 +396,12 @@ export default function GuestWorkspace({ landing = false }: { landing?: boolean 
         <Pressable accessibilityRole="button" style={styles.accountOption} onPress={() => {setAccountOpen(false);router.push("/public");}}>
           <Text style={styles.accountOptionText}>Switch workspace</Text><Ionicons name="swap-horizontal-outline" size={16} color="#81909E" />
         </Pressable>
-        <Pressable accessibilityRole="button" style={styles.accountOption} onPress={() => router.push("/login")}><Text style={styles.accountOptionText}>Log in</Text><Ionicons name="log-in-outline" size={16} color="#81909E" /></Pressable>
+        <Pressable accessibilityRole="button" style={styles.accountOption} onPress={() => router.replace("/login")}><Text style={styles.accountOptionText}>Log in</Text><Ionicons name="log-in-outline" size={16} color="#81909E" /></Pressable>
       </View> : null}
       <ScrollView style={styles.contentScroll} contentContainerStyle={styles.content} key={role + ":" + module}>
         {module === "home" ? <Home role={role} narrow={narrow} /> : <OtherModule key={role + ":" + module} role={role} module={module} narrow={narrow} />}
         <View style={styles.bottomBar}><Text style={styles.bottomText}>GUEST PREVIEW · Sample screens only. No account permissions or production data.</Text>
-          <Pressable onPress={() => router.push("/signup")} accessibilityRole="button"><Text style={styles.linkText}>Create an account  ›</Text></Pressable></View>
+          <Pressable onPress={() => router.replace("/signup")} accessibilityRole="button"><Text style={styles.linkText}>Create an account  ›</Text></Pressable></View>
       </ScrollView>
     </View>
     {narrow && drawerOpen ? <View style={styles.mobileOverlay}>
