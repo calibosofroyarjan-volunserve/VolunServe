@@ -1,0 +1,61 @@
+name: QA OCR full-frame recovery on selected National ID (NO DEPLOY)
+on:
+  push:
+    branches: [fix/identity-ocr-crop-fallback-20261123]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  ocr-regression:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout exact production-derived AI source, no submodules
+        env:
+          REPO: ${{ github.repository }}
+          SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          git init -q
+          git remote add origin "https://github.com/$REPO.git"
+          git -c protocol.version=2 fetch --no-tags --depth=1 --filter=blob:none --no-recurse-submodules origin "$SHA"
+          git sparse-checkout init --cone
+          git sparse-checkout set identity-ai .github/workflows
+          git checkout --force FETCH_HEAD
+      - name: Prove only OCR code, synthetic tests and QA changed
+        run: |
+          set -euo pipefail
+          BASE=0df824c11f2eff85bd161f03031d372287236b79
+          git -c protocol.version=2 fetch --no-tags --depth=1 --filter=blob:none --no-recurse-submodules origin "$BASE"
+          git diff --name-status "$BASE" HEAD >/tmp/ocr-changes
+          cat /tmp/ocr-changes
+          python - <<'PY'
+          from pathlib import Path
+          actual=sorted(Path("/tmp/ocr-changes").read_text().strip().splitlines())
+          expected=sorted([
+            "M\tidentity-ai/main.py",
+            "M\tidentity-ai/test_synthetic_document_pipeline.py",
+            "A\t.github/workflows/qa-identity-ocr-crop-fallback-20261123.yml",
+          ])
+          assert actual==expected,(actual,expected)
+          print("PASS production-derived isolated OCR only; no old code or other modules")
+          PY
+      - name: Compile OCR Python without starting service
+        run: |
+          python -m py_compile identity-ai/main.py identity-ai/test_synthetic_document_pipeline.py
+      - name: Build exact production AI Docker dependencies
+        run: docker build -t volunserve-ocr-fallback:qa identity-ai
+      - name: Run real Tesseract with fabricated ID and complete safety regression
+        run: |
+          docker run --rm --network none --entrypoint python \
+            volunserve-ocr-fallback:qa -m unittest -v \
+            test_document_screening test_profile_consistency \
+            test_face_box_dedup test_document_precheck \
+            test_synthetic_document_pipeline test_ai_runtime_smoke \
+            test_name_check_soft_feedback_20261122 \
+            test_bounded_ocr_render_free_20261122 \
+            test_national_id_partial_ocr_recovery_20261122 \
+            test_mild_blur_ocr_name_gate_20261122 \
+            test_national_card_autocrop_20261122
+      - name: No real photos or production deployment
+        run: echo 'Tests only: no private ID, no production credentials, no Render, no Firebase.'
