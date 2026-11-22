@@ -1,5 +1,6 @@
 import { liveUi as designUi } from "../constants/volunserveLiveUi";
 import DocumentScreeningSummary from "../components/identity/DocumentScreeningSummary";
+import StagingNationalIdLocalLab from "../components/identity/StagingNationalIdLocalLab";
 import type { DocumentScreening } from "../lib/identityVerification";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
@@ -1519,8 +1520,9 @@ export default function IdentityVerificationWeb() {
           Become a Verified Resident
         </Text>
         <Text style={styles.subtitle}>
-          Government ID + real-time face detection + private
-          1-to-1 AI face comparison.
+          {canOpenLocalFaceDemo
+            ? "Staging: privately check a National ID FRONT and BACK using local OCR. Only authorized Admin review can verify a Resident."
+            : "Government ID + real-time face detection + private 1-to-1 AI face comparison."}
         </Text>
         {canOpenLocalFaceDemo ? (
           <TouchableOpacity
@@ -1550,6 +1552,10 @@ export default function IdentityVerificationWeb() {
       </TouchableOpacity>
 
       <WizardProgress step={step} />
+
+      {step === 1 && canOpenLocalFaceDemo ? (
+        <StagingNationalIdLocalLab />
+      ) : null}
 
       {step === 1 ? (
         <UploadIdStep
