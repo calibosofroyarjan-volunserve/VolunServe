@@ -59,8 +59,12 @@ jobs:
               'BLOCKED: design source branch changed after QA');
             assert.equal(git('ls-remote','--heads','origin','live-protected').split(/\s+/)[0],
               process.env.GITHUB_SHA,'BLOCKED: protected controller branch moved');
-            const controllerDiff=git('-C','../controller','diff','--name-status','--no-renames','HEAD^','HEAD');
-            assert.equal(controllerDiff,'A\t'+controller,'BLOCKED: unrelated protected changes');
+            const controllerDiff=git('-C','../controller','diff','--name-status','--no-renames','HEAD^','HEAD')
+              .split('\n').filter(Boolean).sort();
+            assert.deepEqual(controllerDiff,[
+              'M\t'+controller,
+              'M\t.github/workflows/verify-reconciled-hosting-source-no-deploy-20261111.yml',
+            ].sort(),'BLOCKED: protected push must change only the audited controller and scoped PR verifier');
             const paths=git('diff','--name-status','--no-renames',base,source).split('\n').sort();
             assert.deepEqual(paths,[
               'A\t.github/workflows/qa-published-identity-reviews-ui-20261123.yml',
