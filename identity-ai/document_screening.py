@@ -353,20 +353,76 @@ def blurry_national_id_claim_needs_review(declared_type: str, screening: dict) -
     )
 
 
-def assess_profile_name(first_name: str, last_name: str, ocr_text: str) -> dict:
-    """Conservative text-presence check against server-supplied account name.
+def _labeled_name_value(front_ocr_text: str, labels: tuple[str, ...]) -> str | None:
+    """Extract a short value only under a clear name-field label.
 
-    It cannot authenticate an ID or extract a reliable full legal name from
-    arbitrary layouts. Missing tokens are inconclusive, never proof of fraud.
-    Raw names and OCR strings are not returned.
+    Missing or garbled labels are inconclusive, not evidence of a mismatch.
+    Never return extracted values outside this private comparison routine.
+    """
+    lines = [_normalized(line) for line in str(front_ocr_text or "").splitlines()]
+    labels = tuple(sorted(labels, key=len, reverse=True))
+    other_fields = (
+        "APELYIDO", "SURNAME", "LAST NAME", "GIVEN NAMES",
+        "MGA PANGALAN", "GIVEN NAME", "FIRST NAME", "MIDDLE NAME",
+        "GITNANG PANGALAN", "DATE OF BIRTH", "PETSA NG KAPANGANAKAN",
+        "ADDRESS", "TIRAHAN", "PLACE OF BIRTH", "BLOOD TYPE",
+    )
+    for index, line in enumerate(lines):
+        for label in labels:
+            if line != label and not line.startswith(label + " "):
+                continue
+            value = line[len(label):].strip()
+            if not value and index + 1 < len(lines):
+                value = lines[index + 1]
+            if (not value or len(value) > 65 or
+                    any(ch.isdigit() for ch in value) or
+                    any(value == h or value.startswith(h + " ")
+                        for h in other_fields)):
+                continue
+            chunks = value.split()
+            if 1 <= len(chunks) <= 5 and all(
+                len(token) >= 2 and token.isalpha() for token in chunks
+            ):
+                return value
+    return None
+
+
+def assess_profile_name(
+    first_name: str,
+    last_name: str,
+    ocr_text: str,
+    *,
+    front_ocr_text: str | None = None,
+) -> dict:
+    """Sanitized, conservative account-name-to-ID OCR comparison.
+
+    A possible conflict needs TWO readable, labeled front-side name values.
+    Absence/blur remains inconclusive; never imply fraud or ID authenticity.
     """
     first = [part for part in _normalized(first_name).split() if len(part) >= 3]
     last = [part for part in _normalized(last_name).split() if len(part) >= 3]
     if not first or not last:
         return {"profileNameCheck": "not_checked", "profileNameCompared": False}
-    text = _normalized(ocr_text)
-    matches = all(_contains(text, part) for part in first + last)
-    return {
-        "profileNameCheck": "possible_match" if matches else "inconclusive",
-        "profileNameCompared": True,
-    }
+
+    # Only the front-side name fields may give strong conflict evidence.
+    # The back-side text and unrelated passages cannot declare a mismatch.
+    front = front_ocr_text if front_ocr_text is not None else ocr_text
+    surname_value = _labeled_name_value(front, (
+        "APELYIDO LAST NAME", "APELYIDO", "LAST NAME", "SURNAME",
+    ))
+    given_value = _labeled_name_value(front, (
+        "MGA PANGALAN GIVEN NAMES", "MGA PANGALAN",
+        "GIVEN NAMES", "GIVEN NAME", "FIRST NAME",
+    ))
+    if surname_value and given_value:
+        last_match = all(_contains(surname_value, token) for token in last)
+        first_match = all(_contains(given_value, token) for token in first)
+        state = "possible_match" if first_match and last_match else "possible_conflict"
+    else:
+        # Preserve the existing weak positive signal for legacy layouts.
+        # Missing labeled evidence is never promoted to a negative verdict.
+        text = _normalized(ocr_text)
+        state = ("possible_match"
+                 if all(_contains(text, token) for token in first + last)
+                 else "inconclusive")
+    return {"profileNameCheck": state, "profileNameCompared": True}
