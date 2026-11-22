@@ -1,0 +1,34 @@
+name: Staging Verified Resident local National ID OCR integration - NO DEPLOY
+on:
+  push:
+    branches:
+      - feat/staging-verified-resident-national-id-local-20261122
+    paths:
+      - 'identity-ai/staging_national_id_loopback.py'
+      - 'identity-ai/test_staging_national_id_loopback.py'
+      - 'components/identity/StagingNationalIdLocalLab.web.tsx'
+      - 'app/identity-verification.web.tsx'
+      - 'Start-VolunServe-Staging-OCR-Companion.cmd'
+      - '.github/workflows/test-staging-local-ocr-integration-no-deploy-20261122.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  integration-privacy-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Python compile
+        run: python -m py_compile identity-ai/staging_national_id_loopback.py identity-ai/local_national_id_both_sides.py identity-ai/test_staging_national_id_loopback.py
+      - name: Run local OCR bridge tests with synthetic bytes
+        run: |
+          python -m unittest discover -s identity-ai -p test_staging_national_id_loopback.py -v
+          python -m unittest discover -s identity-ai -p test_local_national_id_both_sides.py -v
+      - name: Safety statement
+        run: echo 'No real documents, no Firebase, no Admin status changes, no deployment, no public upload. Synthetic tests only.' >> "$GITHUB_STEP_SUMMARY"
