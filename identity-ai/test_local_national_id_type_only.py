@@ -70,6 +70,35 @@ class NationalIdTypeOnlyTests(unittest.TestCase):
                 self.assertEqual(
                     self.classify(sample)["status"], "unsupported_other_card")
 
+    def test_school_student_ocr_variants_are_unsupported(self):
+        # Synthetic mis-spaced strings representative of OCR; no real ID photos.
+        for sample in (
+            "SAMPLE UNIVERSITY\\nSTUDENT\\nI D",
+            "STUDENT\\nSCHOOL",
+            "COLLEGE\\nLEARNER\\nIDENTIFICATION",
+            "ACADEMY\\nPUPIL\\nCARD",
+            "STUDENT\\nSTUDENT NUMBER 123",
+            "ELEMENTARY\\nESTUDYANTE",
+        ):
+            with self.subTest(sample=sample):
+                self.assertEqual(
+                    self.classify(sample.replace("\\\\n", "\\n"))["status"],
+                    "unsupported_other_card")
+
+    def test_weak_school_terms_alone_remain_inconclusive(self):
+        for sample in (
+            "SCHOOL", "STUDENT", "COLLEGE", "CAMPUS",
+            "LEARNER", "HIGH SCHOOL", "INSTITUTE", "ID",
+            "SCHOOL YEAR",
+        ):
+            with self.subTest(sample=sample):
+                self.assertEqual(self.classify(sample)["status"], "needs_review")
+
+    def test_philid_not_blocked_for_unrelated_school_address_word(self):
+        sample = NATIONAL_WITHOUT_DOB + "\\nTIRAHAN NEAR SCHOOL"
+        self.assertEqual(self.classify(sample.replace("\\\\n", "\\n"))["status"],
+                         "national_id_format_candidate")
+
     def test_national_heading_embedded_on_student_card_is_never_candidate(self):
         sample = FRONT + "\nSTUDENT ID\nUNIVERSITY ID\n"
         self.assertEqual(
