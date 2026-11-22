@@ -79,7 +79,7 @@ class NationalIdPartialOcrTests(unittest.TestCase):
         self.assertEqual(text, "PHILIPPINE IDENTIFICATION CARD")
         self.assertEqual(mock.call_count, 2)
         self.assertEqual(mock.call_args_list[0].kwargs["timeout"], 20)
-        self.assertEqual(mock.call_args_list[1].kwargs["timeout"], 12)
+        self.assertEqual(mock.call_args_list[1].kwargs["timeout"], 15)
         self.assertLessEqual(max(mock.call_args_list[1].args[0].shape), 1250)
         self.assertNotIn("PRIVATE IMAGE", " ".join(logger.output))
 
