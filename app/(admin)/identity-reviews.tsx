@@ -2,7 +2,6 @@ import { Ionicons } from "@expo/vector-icons";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useLocalSearchParams } from "expo-router";
 import ListPagination from "../../components/ui/ListPagination";
-import AdminReviewHero from "../../components/admin/AdminReviewHero";
 import DocumentScreeningSummary from "../../components/identity/DocumentScreeningSummary";
 import type { DocumentScreening } from "../../lib/identityVerification";
 import {
@@ -25,7 +24,7 @@ import { useUserSession } from "../../lib/useUserSession";
 
 const BACKEND_URL = "https://volunserve.onrender.com";
 
-type ReviewFilter = "pending" | "verified" | "retry_required" | "all";
+type ReviewFilter = "pending" | "verified" | "retry_required" | "rejected" | "all";
 
 type IdentityReview = {
   uid: string;
@@ -109,6 +108,8 @@ function reviewBucket(item: IdentityReview): ReviewFilter {
     return "verified";
   }
 
+  if (item.manualReviewDecision === "rejected") return "rejected";
+
   if (
     item.status === "failed" ||
     item.manualReviewDecision === "retry_required"
@@ -137,11 +138,11 @@ export default function IdentityReviewsAdmin() {
   const [page, setPage] = useState(1);
   const PAGE_SIZE = 5;
   const [selected, setSelected] = useState<IdentityReview | null>(null);
-  const mobileDetail = !wide && !!selected;
+  const [queueMode, setQueueMode] = useState(false);
   const [validationMethod, setValidationMethod] = useState("");
   const [issuerReviewAttested,setIssuerReviewAttested] = useState(false);
   const [notes, setNotes] = useState("");
-  const [saving, setSaving] = useState<"" | "verify" | "require_retry">("");
+  const [saving, setSaving] = useState<"" | "verify" | "require_retry" | "reject">("");
 
   const role =
     typeof profile?.role === "string"
@@ -219,6 +220,7 @@ export default function IdentityReviewsAdmin() {
       pending: 0,
       verified: 0,
       retry_required: 0,
+      rejected: 0,
       all: items.length,
     };
 
@@ -227,6 +229,7 @@ export default function IdentityReviewsAdmin() {
       if (bucket === "pending") result.pending += 1;
       if (bucket === "verified") result.verified += 1;
       if (bucket === "retry_required") result.retry_required += 1;
+      if (bucket === "rejected") result.rejected += 1;
     });
 
     return result;
@@ -267,14 +270,15 @@ export default function IdentityReviewsAdmin() {
   const activePage = Math.max(1, Math.min(page, totalPages));
   const pagedReviews = filtered.slice((activePage - 1) * PAGE_SIZE, activePage * PAGE_SIZE);
   useEffect(() => {
-    if (!wide || loading || selected || pagedReviews.length === 0) return;
+    if (!wide || queueMode || loading || selected || pagedReviews.length === 0) return;
     openReview(pagedReviews[0]);
     // Only open automatically in a wide layout; tablet/phone retains queue navigation.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [wide, loading, selected, page, filter, items, search]);
+  }, [wide, queueMode, loading, selected, page, filter, items, search]);
 
   const openReview = (item: IdentityReview) => {
-    if (!wide) scrollRef.current?.scrollTo({y:0,animated:false});
+    scrollRef.current?.scrollTo({y:0,animated:false});
+    setQueueMode(false);
     setSelected(item);
     setValidationMethod(item.manualValidationMethod || "");
     setIssuerReviewAttested(false);
@@ -282,7 +286,7 @@ export default function IdentityReviewsAdmin() {
   };
 
   const saveDecision = async (
-    action: "verify" | "require_retry",
+    action: "verify" | "require_retry" | "reject",
   ) => {
     if (!selected || !user || saving) return;
 
@@ -306,6 +310,11 @@ export default function IdentityReviewsAdmin() {
       return;
     }
 
+    if (action === "reject" && notes.trim().length < 10) {
+      Alert.alert("Rejection Reason Required",
+        "Explain why the submitted identity evidence is rejected (at least 10 characters).");
+      return;
+    }
     if (action === "require_retry" && notes.trim().length < 5) {
       Alert.alert(
         "Retry Reason Required",
@@ -319,7 +328,9 @@ export default function IdentityReviewsAdmin() {
       const confirmed = confirmFn(
         action === "verify"
           ? "Verify this Resident identity after independent LGU/Admin validation?"
-          : "Require this Resident to retry identity verification?",
+          : action === "reject"
+            ? "Reject this identity submission? The Resident can submit a corrected verification."
+            : "Require this Resident to retry identity verification?",
       );
       if (!confirmed) return;
     }
@@ -361,13 +372,16 @@ export default function IdentityReviewsAdmin() {
       Alert.alert(
         action === "verify"
           ? "Identity Verified"
-          : "Retry Required",
+          : action === "reject" ? "Submission Rejected" : "Retry Required",
         body?.message ||
           (action === "verify"
             ? "The Resident is now identity verified."
-            : "The Resident must submit identity verification again."),
+            : action === "reject"
+              ? "The identity submission was rejected. The Resident can submit corrected evidence."
+              : "The Resident must submit identity verification again."),
       );
 
+      setQueueMode(true);
       setSelected(null);
       setValidationMethod("");
       setNotes("");
@@ -414,53 +428,30 @@ export default function IdentityReviewsAdmin() {
     <View style={styles.screen}>
       <ScrollView
         ref={scrollRef}
-        style={[
-          styles.scroll,
-          Platform.OS === "web" && styles.webScrollBar,
-        ]}
+        style={[styles.scroll, Platform.OS === "web" && styles.webScrollBar]}
         contentContainerStyle={[styles.page, !wide && styles.pageCompact]}
-        showsVerticalScrollIndicator={true}
+        showsVerticalScrollIndicator
         keyboardShouldPersistTaps="handled"
-        accessibilityLabel="Identity reviews content"
+        accessibilityLabel="Resident identity reviews"
       >
-        {!mobileDetail ? <>
-        <AdminReviewHero
-          eyebrow="LGU OPERATIONS / PEOPLE & VERIFICATION"
-          title="Resident Identity Reviews"
-          subtitle="Review identity cases requiring independent LGU validation. AI-assisted checks and manual review remain separate."
-          icon="shield-checkmark-outline"
-          tag="IDENTITY PROTECTION"
-        />
-        <View style={styles.summaryMetrics}>
-          {[
-            { label: "Pending Review", value: counts.pending, icon: "time-outline" as const },
-            { label: "Verified", value: counts.verified, icon: "shield-checkmark-outline" as const },
-            { label: "Retry Required", value: counts.retry_required, icon: "refresh-circle-outline" as const },
-            { label: "Total Records", value: counts.all, icon: "people-outline" as const },
-          ].map(metric => (
-            <View key={metric.label} style={styles.summaryMetric}>
-              <View style={styles.summaryIcon}><Ionicons name={metric.icon} size={20} color="#08765A" /></View>
-              <View style={styles.summaryCopy}>
-                <Text style={styles.summaryLabel}>{metric.label}</Text>
-                <Text style={styles.summaryValue}>{metric.value}</Text>
-              </View>
-            </View>
-          ))}
+        <View style={styles.premiumHeading}>
+          <Text style={styles.premiumPageTitle}>Resident Identity Reviews</Text>
+          <Text style={styles.premiumPageSubtitle}>
+            Review resident identity submissions with AI-assisted screening and independent LGU validation.
+          </Text>
         </View>
-        </> : (
-          <TouchableOpacity accessibilityRole="button" style={styles.backToQueue}
-            onPress={() => { setSelected(null); setIssuerReviewAttested(false); scrollRef.current?.scrollTo({y:0,animated:false}); }}>
-            <Ionicons name="arrow-back" size={18} color="#08765A" />
-            <Text style={styles.backToQueueLabel}>Back to Identity Verification Queue</Text>
-          </TouchableOpacity>
-        )}
+        <View style={styles.premiumBreadcrumb}>
+          <Ionicons name="home-outline" size={17} color="#08765A" />
+          <Text style={styles.premiumBreadcrumbText}>People &amp; Verification</Text>
+          <Ionicons name="chevron-forward" size={14} color="#94A3B8" />
+          <Text style={styles.premiumBreadcrumbText}>Resident Identity Reviews</Text>
+          <Ionicons name="chevron-forward" size={14} color="#94A3B8" />
+          <Text style={styles.premiumBreadcrumbCurrent}>{selected ? "Review Details" : "All Reviews"}</Text>
+        </View>
+
         {error ? (
           <View style={styles.errorCard}>
-            <Ionicons
-              name="alert-circle-outline"
-              size={20}
-              color="#B91C1C"
-            />
+            <Ionicons name="alert-circle-outline" size={18} color="#B91C1C" />
             <Text style={styles.errorText}>{error}</Text>
           </View>
         ) : null}
@@ -468,221 +459,148 @@ export default function IdentityReviewsAdmin() {
         {loading ? (
           <View style={styles.loadingCard}>
             <ActivityIndicator size="large" color="#08765A" />
-            <Text style={styles.centerText}>
-              Loading identity reviews...
-            </Text>
+            <Text style={styles.centerText}>Loading identity reviews...</Text>
           </View>
-        ) : (
-          <View
-            style={[
-              styles.workspace,
-              wide && styles.workspaceWide,
-            ]}
-          >
-            {!mobileDetail ? <View style={[styles.queue, wide && styles.queueWide]}>
-        <View style={styles.queueHeading}>
-          <View style={styles.flexOne}>
-            <Text style={styles.queueTitle}>Identity Verification Queue</Text>
-            <Text style={styles.queueSubheading}>Review supporting information, select a validation method, and record the decision.</Text>
-          </View>
-          <TouchableOpacity style={styles.refreshButton} onPress={() => void loadReviews()} disabled={loading}
-            accessibilityRole="button" accessibilityLabel="Refresh identity verification queue">
-            {loading ? <ActivityIndicator size="small" color="#08765A" /> : <Ionicons name="refresh-outline" size={19} color="#08765A" />}
-            <Text style={styles.refreshButtonText}>Refresh</Text>
-          </TouchableOpacity>
-        </View>
-        
-        <View style={styles.filterRow}>
-          {[
-            { key: "pending" as const, label: "Pending", count: counts.pending },
-            { key: "verified" as const, label: "Verified", count: counts.verified },
-            {
-              key: "retry_required" as const,
-              label: "Retry Required",
-              count: counts.retry_required,
-            },
-            { key: "all" as const, label: "All", count: counts.all },
-          ].map((item) => {
-            const active = filter === item.key;
-            return (
-              <TouchableOpacity
-                key={item.key}
-                style={[
-                  styles.filterButton,
-                  active && styles.filterButtonActive,
-                ]}
-                onPress={() => { setFilter(item.key); setPage(1); setSelected(null); setIssuerReviewAttested(false); }}
-              >
-                <Text
-                  style={[
-                    styles.filterButtonText,
-                    active && styles.filterButtonTextActive,
-                  ]}
-                >
-                  {item.label}
-                </Text>
-                <View
-                  style={[
-                    styles.countBadge,
-                    active && styles.countBadgeActive,
-                  ]}
-                >
-                  <Text
-                    style={[
-                      styles.countBadgeText,
-                      active && styles.countBadgeTextActive,
-                    ]}
-                  >
-                    {item.count}
+        ) : selected ? (
+          <>
+            <View style={styles.premiumReviewHeader}>
+              <TouchableOpacity accessibilityRole="button"
+                style={styles.premiumBackButton}
+                onPress={() => {
+                  setQueueMode(true);
+                  setSelected(null);
+                  setIssuerReviewAttested(false);
+                  scrollRef.current?.scrollTo({y:0,animated:false});
+                }}>
+                <Ionicons name="arrow-back-outline" size={19} color="#08765A" />
+                <Text style={styles.premiumBackText}>Back to List</Text>
+              </TouchableOpacity>
+              <View style={styles.premiumReviewTitleWrap}>
+                <Ionicons name="document-text-outline" size={28} color="#08765A" />
+                <View style={styles.flexOne}>
+                  <Text style={styles.premiumReviewTitle}>Identity Review Details</Text>
+                  <Text style={styles.premiumReviewSubtitle} numberOfLines={2}>
+                    Verification ID: {selected.verificationId || "Not available"}
                   </Text>
                 </View>
-              </TouchableOpacity>
-            );
-          })}
-        </View>
-
-        <View style={styles.searchWrap}>
-          <Ionicons
-            name="search-outline"
-            size={18}
-            color="#64748B"
-          />
-          <TextInput
-            style={styles.searchInput}
-            value={search}
-            onChangeText={value => { setSearch(value); setPage(1); setSelected(null); setIssuerReviewAttested(false); }}
-            placeholder="Search Resident, email, barangay, or verification ID"
-            placeholderTextColor="#94A3B8"
-          />
-        </View>
-
-        
-
-              <View style={styles.queuePrivacyLine}>
-                <Ionicons name="lock-closed-outline" size={15} color="#08765A" />
-                <Text style={styles.queuePrivacyText}>Private ID photos are not retained by the current published backend.</Text>
               </View>
-
-              {pagedReviews.length === 0 ? (
-                <View style={styles.queueEmptyState}>
-                  <Ionicons name="search-outline" size={24} color="#7EA18C" />
-                  <Text style={styles.queueEmptyTitle}>No matching identity reviews</Text>
-                  <Text style={styles.queueEmptyText}>Select another status or change the search query.</Text>
+              <StatusChip bucket={reviewBucket(selected)} />
+            </View>
+            <ReviewDetail
+              item={selected}
+              viewer={user}
+              screenWide={wide}
+              validationMethod={validationMethod}
+              setValidationMethod={setValidationMethod}
+              issuerReviewAttested={issuerReviewAttested}
+              setIssuerReviewAttested={setIssuerReviewAttested}
+              notes={notes}
+              setNotes={setNotes}
+              saving={saving}
+              onVerify={() => void saveDecision("verify")}
+              onRetry={() => void saveDecision("require_retry")}
+              onReject={() => void saveDecision("reject")}
+            />
+          </>
+        ) : (
+          <>
+            <View style={styles.summaryMetrics}>
+              {[
+                {label:"Pending Review",value:counts.pending,icon:"time-outline" as const},
+                {label:"Verified",value:counts.verified,icon:"shield-checkmark-outline" as const},
+                {label:"Retry Required",value:counts.retry_required,icon:"refresh-circle-outline" as const},
+                {label:"Rejected",value:counts.rejected,icon:"close-circle-outline" as const},
+                {label:"Total Records",value:counts.all,icon:"people-outline" as const},
+              ].map(metric => (
+                <View key={metric.label} style={styles.summaryMetric}>
+                  <View style={styles.summaryIcon}>
+                    <Ionicons name={metric.icon} size={19} color="#08765A" />
+                  </View>
+                  <View style={styles.summaryCopy}>
+                    <Text style={styles.summaryLabel}>{metric.label}</Text>
+                    <Text style={styles.summaryValue}>{metric.value}</Text>
+                  </View>
                 </View>
-              ) : null}
-              {pagedReviews.map((item) => {
-                const active = selected?.uid === item.uid;
-                return (
-                  <TouchableOpacity
-                    key={item.uid}
-                    style={[
-                      styles.queueCard,
-                      active && styles.queueCardActive,
-                    ]}
-                    onPress={() => openReview(item)}
-                    activeOpacity={0.86}
-                  >
-                    <View style={styles.queueTop}>
-                      <View style={styles.avatar}>
-                        <Text style={styles.avatarText}>
-                          {String(item.resident?.fullName || "R")
-                            .trim()
-                            .charAt(0)
-                            .toUpperCase()}
-                        </Text>
-                      </View>
-
-                      <View style={styles.flexOne}>
-                        <Text
-                          style={styles.residentName}
-                          numberOfLines={1}
-                        >
-                          {item.resident?.fullName || "Resident"}
-                        </Text>
-                        <Text
-                          style={styles.residentMeta}
-                          numberOfLines={1}
-                        >
-                          {item.resident?.barangay || "Barangay not set"}
-                        </Text>
-                      </View>
-
-                      <StatusChip bucket={reviewBucket(item)} />
-                    </View>
-
-                    <View style={styles.scoreRow}>
-                      <Text style={styles.scoreLabel}>Government ID check</Text>
-                      <Text style={styles.scoreValue}>
-                        {item.reviewTrack === "blurry_id_review"
-                          ? "Blurry ID — Admin rescan review"
-                          : item.reviewTrack === "priority_admin_review"
-                            ? "Priority review — account name may match"
-                            : item.documentScreening?.status === "text_consistent_unverified"
-                              ? "ID type recognized — unverified"
-                              : item.documentScreening?.status === "mismatch"
-                                ? "Selected ID type mismatch"
-                                : "Recognition inconclusive"}
-                      </Text>
-                    </View>
-
-                    <Text style={styles.queueDate}>
-                      Submitted{" "}
-                      {formatDate(
-                        item.lastSubmissionAt ||
-                          item.updatedAt ||
-                          item.createdAt,
-                      )}
+              ))}
+            </View>
+            <View style={styles.premiumQueuePanel}>
+              <View style={styles.queueHeading}>
+                <View style={styles.flexOne}>
+                  <Text style={styles.queueTitle}>Identity Verification Queue</Text>
+                  <Text style={styles.queueSubheading}>
+                    Select a submission to review its evidence and verification results.
+                  </Text>
+                </View>
+                <TouchableOpacity style={styles.refreshButton}
+                  onPress={() => void loadReviews()} accessibilityRole="button"
+                  accessibilityLabel="Refresh verification queue">
+                  <Ionicons name="refresh-outline" size={18} color="#08765A" />
+                  <Text style={styles.refreshButtonText}>Refresh</Text>
+                </TouchableOpacity>
+              </View>
+              <View style={styles.filterRow}>
+                {([
+                  {key:"pending" as const,label:"Pending",count:counts.pending},
+                  {key:"verified" as const,label:"Verified",count:counts.verified},
+                  {key:"retry_required" as const,label:"Retry Required",count:counts.retry_required},
+                  {key:"rejected" as const,label:"Rejected",count:counts.rejected},
+                  {key:"all" as const,label:"All",count:counts.all},
+                ]).map(option => (
+                  <TouchableOpacity key={option.key} accessibilityRole="button"
+                    accessibilityState={{selected:filter===option.key}}
+                    style={[styles.filterButton,filter===option.key&&styles.filterButtonActive]}
+                    onPress={() => {setFilter(option.key);setPage(1);}}>
+                    <Text style={[styles.filterButtonText,filter===option.key&&styles.filterButtonTextActive]}>
+                      {option.label} ({option.count})
                     </Text>
                   </TouchableOpacity>
-                );
-              })}
+                ))}
+              </View>
+              <View style={styles.searchWrap}>
+                <Ionicons name="search-outline" size={18} color="#64748B" />
+                <TextInput value={search} style={styles.searchInput}
+                  onChangeText={value=>{setSearch(value);setPage(1);}}
+                  placeholder="Search resident, email, barangay, or verification ID"
+                  placeholderTextColor="#94A3B8" />
+              </View>
+              {pagedReviews.length === 0 ? (
+                <View style={styles.queueEmptyState}>
+                  <Ionicons name="search-outline" size={27} color="#94A3B8" />
+                  <Text style={styles.queueEmptyTitle}>No matching verification records</Text>
+                  <Text style={styles.queueEmptyText}>Change your search or select another status.</Text>
+                </View>
+              ) : (
+                <View style={styles.premiumQueueCards}>
+                  {pagedReviews.map(item => (
+                    <TouchableOpacity key={item.uid} style={styles.premiumQueueCard}
+                      accessibilityRole="button" onPress={() => openReview(item)}>
+                      <View style={styles.avatar}>
+                        <Text style={styles.avatarText}>
+                          {String(item.resident?.fullName || "R").trim().charAt(0).toUpperCase()}
+                        </Text>
+                      </View>
+                      <View style={styles.flexOne}>
+                        <Text style={styles.residentName}>{item.resident?.fullName || "Resident"}</Text>
+                        <Text style={styles.residentMeta}>{item.resident?.barangay || "Barangay not set"} · {formatDate(item.lastSubmissionAt || item.updatedAt || item.createdAt)}</Text>
+                        <Text style={styles.premiumQueueSummary} numberOfLines={1}>
+                          {item.reviewTrack === "blurry_id_review" ? "Blurry ID — rescan review" : item.message || "Review the submitted record"}
+                        </Text>
+                      </View>
+                      <StatusChip bucket={reviewBucket(item)} />
+                      <Ionicons name="chevron-forward-outline" size={19} color="#94A3B8" />
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              )}
               <View style={styles.queueFooter}>
                 <Text style={styles.queueFooterLabel}>
                   {filtered.length ? (activePage - 1) * PAGE_SIZE + 1 : 0}–{Math.min(activePage * PAGE_SIZE, filtered.length)} of {filtered.length} records · 5 per page
                 </Text>
                 <ListPagination page={activePage} total={filtered.length} pageSize={PAGE_SIZE}
-                  onChange={(next) => { setPage(next); setSelected(null); setIssuerReviewAttested(false); }} />
+                  onChange={next=>setPage(next)} />
               </View>
-            </View> : null}
-
-            <View
-              style={[
-                styles.detailPanel,
-                wide && styles.detailPanelWide,
-              ]}
-            >
-              {selected ? (
-                <ReviewDetail
-                  item={selected}
-                  viewer={user}
-                  validationMethod={validationMethod}
-                  setValidationMethod={setValidationMethod}
-                  issuerReviewAttested={issuerReviewAttested}
-                  setIssuerReviewAttested={setIssuerReviewAttested}
-                  notes={notes}
-                  setNotes={setNotes}
-                  saving={saving}
-                  onVerify={() => void saveDecision("verify")}
-                  onRetry={() => void saveDecision("require_retry")}
-                />
-              ) : (
-                <View style={styles.detailEmpty}>
-                  <Ionicons
-                    name="document-text-outline"
-                    size={39}
-                    color="#94A3B8"
-                  />
-                  <Text style={styles.emptyTitle}>
-                    Select a Resident
-                  </Text>
-                  <Text style={styles.centerText}>
-                    Open a verification record to review its AI result
-                    and manual-validation decision.
-                  </Text>
-                </View>
-              )}
             </View>
-          </View>
+          </>
         )}
       </ScrollView>
     </View>
