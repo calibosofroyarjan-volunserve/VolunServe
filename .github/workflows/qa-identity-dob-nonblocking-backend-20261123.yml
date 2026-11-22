@@ -31,12 +31,11 @@ jobs:
           ].sort());
           NODE
       - name: Test hybrid DOB and existing ID safety gates
-        working-directory: backend
         run: |
-          node --test test-identityHybridPrecheckDecision.js
-          node --test test-identityIssuerReviewPolicy.js
-          node --test test-identity-final-admin-only.js
-          node --test test-identity-three-attempt-review.js
+          (cd backend && node --test test-identityHybridPrecheckDecision.js)
+          (cd backend && node --test test-identityIssuerReviewPolicy.js)
+          node --test backend/test-identity-final-admin-only.js
+          node --test backend/test-identity-three-attempt-review.js
       - name: No deployment
         run: |
           echo 'No Render, Firebase, or real resident data changes.'
