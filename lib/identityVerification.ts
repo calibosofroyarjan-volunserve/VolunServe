@@ -24,7 +24,7 @@ export type DocumentScreening = {
   backSideProvided?: boolean;
   backSideScreened?: boolean;
   profileNameCompared?: boolean;
-  profileNameCheck?: "possible_match" | "inconclusive" | "not_checked";
+  profileNameCheck?: "possible_match" | "possible_conflict" | "inconclusive" | "not_checked";
   profileBirthDateCompared?: boolean;
   profileBirthDateCheck?: "possible_match" | "possible_conflict" | "inconclusive" | "not_checked";
   profileAddressCompared?: boolean;
@@ -80,7 +80,7 @@ function parseDocumentScreening(value: unknown): DocumentScreening | undefined {
     backSideProvided: raw.backSideProvided === true,
     backSideScreened: raw.backSideScreened === true,
     profileNameCompared: raw.profileNameCompared === true,
-    profileNameCheck: raw.profileNameCheck === "possible_match" || raw.profileNameCheck === "inconclusive"
+    profileNameCheck: raw.profileNameCheck === "possible_match" || raw.profileNameCheck === "possible_conflict" || raw.profileNameCheck === "inconclusive"
       ? raw.profileNameCheck : "not_checked",
     profileBirthDateCompared: raw.profileBirthDateCompared === true,
     profileBirthDateCheck: raw.profileBirthDateCheck === "possible_match" ||
