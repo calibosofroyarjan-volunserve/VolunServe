@@ -1,0 +1,56 @@
+name: QA current live backend OCR-specific rescan guidance (NO DEPLOY)
+on:
+  push:
+    branches: [fix/national-id-precheck-specific-rescan-20261122]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  backend-safety:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Fetch exact backend source without legacy gitlink
+        env:
+          REPO: ${{ github.repository }}
+          REVISION: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          git init -q
+          git remote add origin "https://github.com/${REPO}.git"
+          git -c protocol.version=2 fetch --no-tags --depth=1 --filter=blob:none --no-recurse-submodules origin "${REVISION}"
+          git sparse-checkout init --cone
+          git sparse-checkout set backend
+          git checkout --force FETCH_HEAD
+      - name: Strict deployed backend source check
+        run: |
+          set -euo pipefail
+          BASE=83333ba26a917ee02b08b741cab6d774ce6cae4e
+          git -c protocol.version=2 fetch --no-tags --depth=1 --filter=blob:none --no-recurse-submodules origin "$BASE"
+          git diff --name-status "$BASE" HEAD >/tmp/changes
+          python - <<'PY'
+          from pathlib import Path
+          changes=sorted(Path('/tmp/changes').read_text().strip().splitlines())
+          expected=sorted([
+            'M\tbackend/server.js',
+            'A\tbackend/test-identityOcrRescanHints.js',
+            'A\t.github/workflows/qa-national-id-ocr-rescan-hints-20261122.yml',
+          ])
+          assert changes==expected,(changes,expected)
+          print('PASS: only OCR rescan copy, safe test, workflow were added')
+          PY
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Syntax and live-policy regressions
+        run: |
+          set -euo pipefail
+          node --check backend/server.js
+          node --test backend/test-identityOcrRescanHints.js
+          node --test backend/test-selectedIdPolicy.js
+          node --test backend/test-identityPrecheckCors.js
+          node --test backend/test-identityPrecheckTimeoutOnly.js
+          node --test backend/test-identityAiReadiness.js
+          node --test backend/test-identity-final-admin-only.js
+          node --test backend/test-identity-three-attempt-review.js
+      - run: echo 'NO DEPLOY. No Auth, Firebase, Hosting, AI or Render writes.'

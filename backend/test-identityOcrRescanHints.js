@@ -1,0 +1,20 @@
+"use strict";
+const assert=require("node:assert/strict"), test=require("node:test"), fs=require("node:fs");
+const source=fs.readFileSync("backend/server.js","utf8");
+test("specific Front/Back OCR problems are friendly and cannot pass",()=>{
+  const start=source.indexOf('"/api/identity/document/precheck"');
+  assert.ok(start>=0,"Existing authenticated precheck must remain");
+  const end=source.indexOf('app.post(',start+10);
+  const section=source.slice(start,end>start?end:start+11000);
+  assert.match(section,/normalizeIdDocumentScreening/);
+  assert.match(section,/const pass = validType &&/);
+  assert.match(section,/result\?\.outcome === "pass"/);
+  assert.match(section,/screening\.warningCodes\.includes\("ocr_unavailable"\)/);
+  assert.match(section,/screening\.warningCodes\.includes\("document_back_ocr_inconclusive"\)/);
+  assert.match(section,/Retake just the back photo/);
+  assert.match(section,/The front ID photo could not be read reliably/);
+  assert.match(section,/school_id_not_supported/);
+  assert.match(section,/document_front_back_swapped/);
+  assert.match(section,/authenticityVerified: false/);
+  assert.match(section,/livenessVerified: false/);
+});

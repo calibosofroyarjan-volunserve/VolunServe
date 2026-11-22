@@ -5037,7 +5037,11 @@ app.post(
                   ? "The Back scan appears to show the front. Retake the reverse side."
                   : screening.warningCodes.includes("document_front_side_conflict")
                     ? "The Front scan appears to show back-side details. Retake the portrait/front."
-                    : "ID type or front/back orientation could not be recognized reliably. Retake clearer images.",
+                    : screening.warningCodes.includes("ocr_unavailable")
+                      ? "The front ID photo could not be read reliably. Try a clear front photo with less glare."
+                      : screening.warningCodes.includes("document_back_ocr_inconclusive")
+                        ? "The back ID text could not be read reliably. Retake just the back photo with less glare."
+                        : "ID type or front/back orientation could not be recognized reliably. Retake clearer images.",
         authenticityVerified: false,
         livenessVerified: false,
       });
