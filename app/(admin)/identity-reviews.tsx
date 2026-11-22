@@ -265,6 +265,15 @@ export default function IdentityReviewsAdmin() {
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const activePage = Math.max(1, Math.min(page, totalPages));
   const pagedReviews = filtered.slice((activePage - 1) * PAGE_SIZE, activePage * PAGE_SIZE);
+  // Keep mobile queue navigation explicit; on desktop show the first case.
+  useEffect(() => {
+    if (!wide || loading || selected || filtered.length === 0) return;
+    const first = filtered[0];
+    setSelected(first);
+    setValidationMethod(first.manualValidationMethod || "");
+    setNotes(first.manualReviewNotes || "");
+  }, [wide, loading, selected, filtered]);
+
 
   const openReview = (item: IdentityReview) => {
     setReadyEvidenceKey("");
@@ -423,6 +432,7 @@ export default function IdentityReviewsAdmin() {
           subtitle="Review identity cases requiring independent LGU validation. AI-assisted checks and manual review remain separate."
           icon="shield-checkmark-outline"
           tag="IDENTITY PROTECTION"
+          variant="mint"
         />
         <View style={styles.summaryMetrics}>
           {[
@@ -433,106 +443,13 @@ export default function IdentityReviewsAdmin() {
           ].map(metric => (
             <View key={metric.label} style={styles.summaryMetric}>
               <View style={styles.summaryIcon}><Ionicons name={metric.icon} size={20} color="#08765A" /></View>
-              <Text style={styles.summaryLabel}>{metric.label}</Text>
-              <Text style={styles.summaryValue}>{metric.value}</Text>
+              <View style={styles.summaryCopy}>
+                <Text style={styles.summaryLabel}>{metric.label}</Text>
+                <Text style={styles.summaryValue}>{metric.value}</Text>
+              </View>
             </View>
           ))}
         </View>
-        <View style={styles.queueHeading}>
-          <View style={styles.flexOne}>
-            <Text style={styles.queueTitle}>Identity Verification Queue</Text>
-            <Text style={styles.queueSubheading}>Review supporting information, select a validation method, and record the decision.</Text>
-          </View>
-          <TouchableOpacity style={styles.refreshButton} onPress={() => void loadReviews()} disabled={loading}
-            accessibilityRole="button" accessibilityLabel="Refresh identity verification queue">
-            {loading ? <ActivityIndicator size="small" color="#08765A" /> : <Ionicons name="refresh-outline" size={19} color="#08765A" />}
-            <Text style={styles.refreshButtonText}>Refresh</Text>
-          </TouchableOpacity>
-        </View>
-        <View style={styles.privacyNotice}>
-          <Ionicons
-            name="lock-closed-outline"
-            size={20}
-            color="#0F766E"
-          />
-          <View style={styles.flexOne}>
-            <Text style={styles.noticeTitle}>
-              Privacy-preserving manual fallback
-            </Text>
-            <Text style={styles.noticeText}>
-              New identity submissions retain encrypted-in-transit, private
-              front/back ID and live selfie evidence for authorized Admin review.
-              Older records may require a fresh upload. An AI score alone
-              does not prove document authenticity or genuine liveness.
-            </Text>
-          </View>
-        </View>
-
-        <View style={styles.filterRow}>
-          {[
-            { key: "pending" as const, label: "Pending", count: counts.pending },
-            { key: "verified" as const, label: "Verified", count: counts.verified },
-            {
-              key: "retry_required" as const,
-              label: "Retry Required",
-              count: counts.retry_required,
-            },
-            { key: "all" as const, label: "All", count: counts.all },
-          ].map((item) => {
-            const active = filter === item.key;
-            return (
-              <TouchableOpacity
-                key={item.key}
-                style={[
-                  styles.filterButton,
-                  active && styles.filterButtonActive,
-                ]}
-                onPress={() => { setFilter(item.key); setPage(1); setSelected(null); }}
-              >
-                <Text
-                  style={[
-                    styles.filterButtonText,
-                    active && styles.filterButtonTextActive,
-                  ]}
-                >
-                  {item.label}
-                </Text>
-                <View
-                  style={[
-                    styles.countBadge,
-                    active && styles.countBadgeActive,
-                  ]}
-                >
-                  <Text
-                    style={[
-                      styles.countBadgeText,
-                      active && styles.countBadgeTextActive,
-                    ]}
-                  >
-                    {item.count}
-                  </Text>
-                </View>
-              </TouchableOpacity>
-            );
-          })}
-        </View>
-
-        <View style={styles.searchWrap}>
-          <Ionicons
-            name="search-outline"
-            size={18}
-            color="#64748B"
-          />
-          <TextInput
-            style={styles.searchInput}
-            value={search}
-            onChangeText={value => { setSearch(value); setPage(1); }}
-            placeholder="Search Resident, email, barangay, or verification ID"
-            placeholderTextColor="#94A3B8"
-          />
-        </View>
-
-        <ListPagination page={activePage} total={filtered.length} pageSize={PAGE_SIZE} onChange={setPage} />
         </> : (
           <TouchableOpacity accessibilityRole="button" accessibilityLabel="Back to identity verification queue"
             onPress={() => { setSelected(null); setValidationMethod(""); setNotes(""); scrollRef.current?.scrollTo({ y: 0, animated: false }); }}
@@ -585,6 +502,55 @@ export default function IdentityReviewsAdmin() {
             ]}
           >
             {!mobileDetail ? <View style={[styles.queue, wide && styles.queueWide]}>
+              <View style={styles.queueHeading}>
+                <View style={styles.flexOne}>
+                  <Text style={styles.queueTitle}>Identity Verification Queue</Text>
+                  <Text style={styles.queueSubheading}>Select a resident to review and validate.</Text>
+                </View>
+                <TouchableOpacity style={styles.refreshButton} accessibilityRole="button"
+                  accessibilityLabel="Refresh identity verification queue"
+                  onPress={() => void loadReviews()} disabled={loading}>
+                  {loading ? <ActivityIndicator size="small" color="#08765A" /> :
+                    <Ionicons name="refresh-outline" size={17} color="#08765A" />}
+                  <Text style={styles.refreshButtonText}>Refresh</Text>
+                </TouchableOpacity>
+              </View>
+              <View style={styles.filterRow}>
+                {([
+                  { key: "pending" as const, label: "Pending", count: counts.pending },
+                  { key: "verified" as const, label: "Verified", count: counts.verified },
+                  { key: "retry_required" as const, label: "Retry Required", count: counts.retry_required },
+                  { key: "all" as const, label: "All", count: counts.all },
+                ]).map((choice) => {
+                  const active = filter === choice.key;
+                  return (
+                    <TouchableOpacity key={choice.key} accessibilityRole="button"
+                      accessibilityState={{ selected: active }}
+                      style={[styles.filterButton, active && styles.filterButtonActive]}
+                      onPress={() => {
+                        setFilter(choice.key); setPage(1); setSelected(null);
+                        setReadyEvidenceKey(""); setConfirmedEvidenceKey("");
+                      }}>
+                      <Text style={[styles.filterButtonText, active && styles.filterButtonTextActive]}>{choice.label}</Text>
+                      <View style={[styles.countBadge, active && styles.countBadgeActive]}>
+                        <Text style={[styles.countBadgeText, active && styles.countBadgeTextActive]}>{choice.count}</Text>
+                      </View>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+              <View style={styles.searchWrap}>
+                <Ionicons name="search-outline" size={17} color="#64748B" />
+                <TextInput style={styles.searchInput} value={search}
+                  onChangeText={(value) => { setSearch(value); setPage(1); }}
+                  placeholder="Search resident, email, barangay, or ID..."
+                  placeholderTextColor="#94A3B8" />
+              </View>
+              <View style={styles.queuePrivacyLine}>
+                <Ionicons name="lock-closed-outline" size={13} color="#08765A" />
+                <Text style={styles.queuePrivacyText}>Private evidence is available only to authorized LGU reviewers.</Text>
+              </View>
+
               {pagedReviews.map((item) => {
                 const active = selected?.uid === item.uid;
                 return (
@@ -654,6 +620,12 @@ export default function IdentityReviewsAdmin() {
                   </TouchableOpacity>
                 );
               })}
+              <View style={styles.queueFooter}>
+                <Text style={styles.queueFooterLabel}>
+                  {filtered.length ? (activePage - 1) * PAGE_SIZE + 1 : 0}–{Math.min(activePage * PAGE_SIZE, filtered.length)} of {filtered.length} records · 5 per page
+                </Text>
+                <ListPagination page={activePage} total={filtered.length} pageSize={PAGE_SIZE} onChange={setPage} />
+              </View>
             </View> : null}
 
             <View
