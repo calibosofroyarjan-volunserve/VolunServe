@@ -28,9 +28,10 @@ const LABELS = [
  * issuing short-lived authenticated Cloudinary URLs.
  */
 export default function AdminIdentityEvidence({
-  uid, user, matchScore, aiDecision,
+  uid, user, verificationId, matchScore, aiDecision,
 }: {
   uid: string;
+  verificationId?: string;
   user: AuthUser | null;
   matchScore?: number | null;
   aiDecision?: string;
@@ -39,13 +40,14 @@ export default function AdminIdentityEvidence({
   // Binding each response to the selected UID prevents the previous
   // Resident's protected photos flashing when the Admin changes records.
   const [loadedEvidence, setLoadedEvidence] = useState<{
-    uid: string; value: EvidenceResponse;
+    uid: string; verificationId: string; value: EvidenceResponse;
   } | null>(null);
-  const evidence = loadedEvidence?.uid === uid ? loadedEvidence.value : null;
+  const evidence = loadedEvidence?.uid === uid && loadedEvidence?.verificationId === (verificationId || "")
+    ? loadedEvidence.value : null;
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [refreshIndex, setRefreshIndex] = useState(0);
-  const [expanded, setExpanded] = useState<{ uid: string; label: string; uri: string } | null>(null);
+  const [expanded, setExpanded] = useState<{ uid: string; verificationId: string; label: string; uri: string } | null>(null);
   useEffect(() => {
     let cancelled = false;
     setExpanded(null);
@@ -64,7 +66,10 @@ export default function AdminIdentityEvidence({
         if (!res.ok || !body?.ok) {
           throw new Error(body?.message || "Private identity images could not be retrieved.");
         }
-        if (!cancelled) setLoadedEvidence({ uid, value: body as EvidenceResponse });
+        if (verificationId && body.verificationId !== verificationId) {
+          throw new Error("The selected identity review has changed. Refresh the Admin queue before viewing private photos.");
+        }
+        if (!cancelled) setLoadedEvidence({ uid, verificationId: verificationId || "", value: body as EvidenceResponse });
       } catch (caught: any) {
         if (!cancelled) setError(String(caught?.message || "Could not load secure ID evidence."));
       } finally {
@@ -73,7 +78,7 @@ export default function AdminIdentityEvidence({
     };
     void run();
     return () => { cancelled = true; };
-  }, [uid, user, refreshIndex]);
+  }, [uid, verificationId, user, refreshIndex]);
 
   // Signed photo links remain valid for only five minutes. Clear them after
   // expiry so a reviewer must explicitly re-authorize a fresh preview.
@@ -138,7 +143,7 @@ export default function AdminIdentityEvidence({
                 borderColor: "#DCE6ED", borderWidth: 1, overflow: "hidden",
               }}>
                 {photo?.url ? (
-                  <TouchableOpacity onPress={() => setExpanded({ uid, label, uri: photo.url })}
+                  <TouchableOpacity onPress={() => setExpanded({ uid, verificationId: verificationId || "", label, uri: photo.url })}
                     accessibilityRole="button" accessibilityLabel={"Enlarge " + label}>
                     <Image source={{ uri: photo.url }} resizeMode="contain"
                       style={{ width: "100%", height: wide ? 172 : 145, backgroundColor: "#E8EEF2" }} />
@@ -181,7 +186,7 @@ export default function AdminIdentityEvidence({
                 accessibilityRole="button"
                 accessibilityLabel={"Enlarge " + label}
                 disabled={!photo?.url}
-                onPress={() => photo?.url && setExpanded({ uid, label, uri: photo.url })}
+                onPress={() => photo?.url && setExpanded({ uid, verificationId: verificationId || "", label, uri: photo.url })}
                 style={{ flexGrow: 1, flexBasis: wide ? "44%" : "46%", minWidth: 135, overflow: "hidden", backgroundColor: "#EEF2F6", borderRadius: 9 }}
               >
                 {photo?.url
@@ -205,7 +210,7 @@ export default function AdminIdentityEvidence({
           Evidence access is audited.
         </Text>
       </> : null}
-      <Modal visible={!!expanded && expanded.uid === uid} animationType="fade" transparent
+      <Modal visible={!!expanded && expanded.uid === uid && expanded.verificationId === (verificationId || "")} animationType="fade" transparent
         onRequestClose={() => setExpanded(null)}>
         <View style={{ flex: 1, backgroundColor: "rgba(8,20,30,0.96)", padding: 18 }}>
           <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingTop: 18 }}>
@@ -216,7 +221,7 @@ export default function AdminIdentityEvidence({
             </TouchableOpacity>
           </View>
           <ScrollView contentContainerStyle={{ flexGrow: 1, justifyContent: "center" }}>
-            {expanded?.uid === uid ? <Image source={{ uri: expanded.uri }} resizeMode="contain"
+            {expanded?.uid === uid && expanded.verificationId === (verificationId || "") ? <Image source={{ uri: expanded.uri }} resizeMode="contain"
               style={{ width: "100%", height: Math.max(320, width < 800 ? 440 : 620) }} /> : null}
           </ScrollView>
         </View>
