@@ -1,0 +1,143 @@
+name: Release exact National ID resident identity UI - Hosting ONLY
+
+on:
+  push:
+    branches:
+      - release/identity-national-id-exact-ui-hosting-20261122
+    paths:
+      - '.github/workflows/release-identity-national-id-exact-ui-hosting-20261122.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: volunserve-production-hosting-release
+  cancel-in-progress: false
+
+jobs:
+  guarded-hosting:
+    name: Backup, validate, release and verify identity UI
+    if: github.repository == 'calibosofroyarjan-volunserve/VolunServe'
+    environment: production
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      CI: 'true'
+      EXPO_NO_TELEMETRY: '1'
+      EXPO_PUBLIC_VOLUNSERVE_ENV: production
+      EXPO_PUBLIC_IDENTITY_VERIFICATION_API_URL: https://volunserve.onrender.com
+      VOLUNSERVE_HOSTING_URL: https://volunserve.com
+      BASE_SHA: 3f9db212e44483ef3befd6d442219cbbd0a4c3a7
+      SITE: volunserve-3aa5b
+      BACKUP_CHANNEL: national-id-ui-before-20261122
+
+    steps:
+      - name: Check out release candidate without broken historical submodule
+        env:
+          REPO: ${{ github.repository }}
+          REVISION: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          git init -q
+          git remote add origin "https://github.com/${REPO}.git"
+          git -c protocol.version=2 fetch --no-tags --depth=1 --filter=blob:none --no-recurse-submodules origin "$REVISION"
+          git sparse-checkout init --cone
+          git sparse-checkout set app assets backend components constants hooks lib public scripts
+          git checkout --force FETCH_HEAD
+
+      - name: Hard stop on unrelated changes or outdated source
+        run: |
+          set -euo pipefail
+          git -c protocol.version=2 fetch --no-tags --depth=1 --filter=blob:none --no-recurse-submodules origin "$BASE_SHA"
+          git diff --name-only FETCH_HEAD HEAD >/tmp/identity-ui-scoped-release.txt
+          cat /tmp/identity-ui-scoped-release.txt
+          node - <<'NODE'
+          const fs = require('node:fs');
+          const assert = require('node:assert/strict');
+          const files = fs.readFileSync('/tmp/identity-ui-scoped-release.txt', 'utf8').trim().split('\n');
+          const allowed = new Set([
+            'app/identity-verification.web.tsx',
+            '.github/workflows/qa-identity-national-id-exact-live-20261122.yml',
+            '.github/workflows/release-identity-national-id-exact-ui-hosting-20261122.yml',
+          ]);
+          assert.equal(files.length, allowed.size, 'Blocked unexpected change count');
+          for (const file of files) assert.ok(allowed.has(file), 'Blocked unrelated/outdated source: '+file);
+          console.log('PASS only requested web identity UI + CI/release workflows');
+          NODE
+          git diff --exit-code FETCH_HEAD HEAD --             app/login.tsx app/signup.tsx app/_layout.tsx 'app/(tabs)'             lib backend functions firebase.json .firebaserc firestore.rules             storage.rules package.json package-lock.json
+          echo 'PASS production modules, auth, signup, database rules and backend unchanged'
+
+      - name: Confirm live Hosting still matches exact base BEFORE downloading secrets
+        run: |
+          export VOLUNSERVE_EXPECTED_SHA="$BASE_SHA"
+          node scripts/check-live-hosting.cjs
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install locked dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Type check and build entire current Hosting source
+        run: |
+          set -euo pipefail
+          npx tsc --noEmit --incremental false
+          npx expo export --platform web --max-workers 1
+          node scripts/verify-hosting-release.cjs
+          node - <<'NODE'
+          const fs = require('node:fs');
+          const assert = require('node:assert/strict');
+          const v = JSON.parse(fs.readFileSync('dist/volunserve-release.json', 'utf8'));
+          assert.equal(v.revision, process.env.GITHUB_SHA, 'Build revision mismatch');
+          assert.equal(v.firebaseProject, process.env.SITE, 'Wrong Firebase project');
+          console.log('PASS exact candidate revision and correct Firebase site');
+          NODE
+
+      - name: Check live base has not drifted before release
+        run: |
+          export VOLUNSERVE_EXPECTED_SHA="$BASE_SHA"
+          node scripts/check-live-hosting.cjs
+
+      - name: Validate credentials for Hosting only
+        env:
+          FIREBASE_SA: ${{ secrets.VOLUNSERVE_PRODUCTION_HOSTING_SERVICE_ACCOUNT }}
+        run: |
+          set -euo pipefail
+          test -n "$FIREBASE_SA" || { echo 'BLOCKED: missing Hosting-only credential'; exit 1; }
+          node - <<'NODE'
+          const fs = require('node:fs');
+          const key = JSON.parse(process.env.FIREBASE_SA);
+          if (key.type !== 'service_account' || key.project_id !== process.env.SITE ||
+              !key.client_email || !key.private_key) throw Error('Wrong Firebase project credential');
+          const dest = process.env.RUNNER_TEMP + '/national-id-ui-hosting-key.json';
+          fs.writeFileSync(dest, process.env.FIREBASE_SA, {mode: 0o600});
+          console.log('PASS production Hosting service account belongs to expected project');
+          NODE
+          echo "GOOGLE_APPLICATION_CREDENTIALS=$RUNNER_TEMP/national-id-ui-hosting-key.json" >> "$GITHUB_ENV"
+
+      - name: Final live check, backup, Hosting-only deploy, verify or rollback
+        run: |
+          set -euo pipefail
+          export VOLUNSERVE_EXPECTED_SHA="$BASE_SHA"
+          node scripts/check-live-hosting.cjs
+          npx firebase-tools hosting:clone "$SITE:live" "$SITE:$BACKUP_CHANNEL"             --project "$SITE" --non-interactive
+          echo "PASS live Hosting backup created"
+          # Only Firebase Hosting: never touch Rules/Auth/Functions/Render/DB.
+          npx firebase-tools deploy --only hosting --project "$SITE" --non-interactive
+          export VOLUNSERVE_EXPECTED_SHA="$GITHUB_SHA"
+          VERIFIED=0
+          for attempt in 1 2 3 4 5 6; do
+            if node scripts/check-live-hosting.cjs; then
+              VERIFIED=1
+              break
+            fi
+            sleep 12
+          done
+          if [ "$VERIFIED" != 1 ]; then
+            echo 'BLOCKED postdeploy Hosting verification; rolling back to backed-up release'
+            npx firebase-tools hosting:clone "$SITE:$BACKUP_CHANNEL" "$SITE:live"               --project "$SITE" --non-interactive ||               echo 'ERROR Hosting rollback failed, manual action required'
+            exit 1
+          fi
+          echo "PASS: exact National ID UI revision is live on volunserve.com"
+          echo "PASS: backend, auth, Firebase Rules, AI service and other modules unchanged"
