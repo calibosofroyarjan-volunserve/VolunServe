@@ -928,7 +928,8 @@ def screen_government_id(
         result = add_photo_quality(result, quality["blurVariance"])
         ocr_combined = front_text + "\n" + (back_text or "")
         result.update(assess_profile_name(
-            expected_first_name, expected_last_name, ocr_combined
+            expected_first_name, expected_last_name, ocr_combined,
+            front_ocr_text=front_text,
         ))
         result.update(profile_comparison(
             expected_date_of_birth, expected_barangay, ocr_combined
@@ -1316,8 +1317,10 @@ async def document_precheck(
         expected_barangay=x_volunserve_profile_barangay or "",
     )
     birthday_conflict = screening.get("profileBirthDateCheck") == "possible_conflict"
+    name_conflict = screening.get("profileNameCheck") == "possible_conflict"
     recognized = (
         not birthday_conflict
+        and not name_conflict
         and screening.get("status") == "text_consistent_unverified"
         and screening.get("detectedIdType") == declared_type
         and screening.get("imageQualityStatus") == "adequate"
@@ -1328,11 +1331,14 @@ async def document_precheck(
     )
     review = (
         not birthday_conflict
+        and not name_conflict
         and not recognized
         and blurry_national_id_claim_needs_review(declared_type, screening)
     )
     outcome = "pass" if recognized else "review" if review else "retry"
-    if birthday_conflict and outcome == "retry":
+    if name_conflict and outcome == "retry":
+        message = "Please check the name on your National ID against your account details. Try a clearer front photo or ask Admin for help. This is not proof of an invalid ID."
+    elif birthday_conflict and outcome == "retry":
         message = "The ID birth date may differ from your saved profile. Retake a clear ID or ask Admin to review your profile; this is not proof of fraud."
     elif outcome == "pass":
         message = "ID format appears consistent. Birthday and barangay checks are OCR clues only; unresolved fields still require Admin review."
@@ -1533,7 +1539,19 @@ async def verify_identity(
             expected_barangay=x_volunserve_profile_barangay or "",
         )
         screening_status = document_screening.get("status")
-        if blurry_national_id_claim_needs_review(id_type, document_screening):
+        if document_screening.get("profileNameCheck") == "possible_conflict":
+            # Defense in depth: direct /verify cannot bypass the OCR precheck.
+            # Never treat a different readable name as a successful face match.
+            result = failed_attempt_result(
+                uid=uid,
+                message=(
+                    "The name on the scanned ID may differ from the saved "
+                    "account. Retake the front photo or ask Admin to review "
+                    "your details. This is not an authenticity judgment."
+                ),
+                warning="id_name_needs_review",
+            )
+        elif blurry_national_id_claim_needs_review(id_type, document_screening):
             # Claim not verified. Human can request a better scan.
             # Keep this blocked from Approved identity state.
             result = manual_review_result(

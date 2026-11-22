@@ -1,0 +1,57 @@
+name: QA soft National ID name detection (NO DEPLOY)
+
+on:
+  push:
+    branches:
+      - feature/identity-name-check-soft-feedback-ai-20261122
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  test-current-production-ai-base:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - name: Checkout scoped AI source without historical submodule
+        env:
+          REPO: ${{ github.repository }}
+          REVISION: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          git init -q
+          git remote add origin "https://github.com/${REPO}.git"
+          git -c protocol.version=2 fetch --no-tags --depth=1 --filter=blob:none --no-recurse-submodules origin "${REVISION}"
+          git sparse-checkout init --cone
+          git sparse-checkout set identity-ai
+          git checkout --force FETCH_HEAD
+      - name: Ensure AI change is scoped and no old files restored
+        run: |
+          set -euo pipefail
+          BASE=8949ebf592bd1688efb1ef85a176a65efe4e4949
+          git -c protocol.version=2 fetch --no-tags --depth=1 --filter=blob:none --no-recurse-submodules origin "$BASE"
+          git diff --name-status "$BASE" HEAD >/tmp/identity-name-changes
+          cat /tmp/identity-name-changes
+          python - <<'PY'
+          from pathlib import Path
+          actual=sorted(Path('/tmp/identity-name-changes').read_text().strip().splitlines())
+          expected=sorted([
+            'M\tidentity-ai/document_screening.py',
+            'M\tidentity-ai/main.py',
+            'A\tidentity-ai/test_name_check_soft_feedback_20261122.py',
+            'A\t.github/workflows/qa-name-check-soft-feedback-ai-20261122.yml',
+          ])
+          assert actual==expected, (actual, expected)
+          print('PASS no changes to backend, frontend, Firebase rules or other AI files')
+          PY
+      - name: Build production-equivalent AI Docker image offline
+        run: docker build -t volunserve-name-detection-qa:no-deploy identity-ai
+      - name: Run current AI suite plus new synthetic name cases (no network)
+        run: |
+          docker run --rm --network none --entrypoint python \
+            volunserve-name-detection-qa:no-deploy -m unittest -v \
+            test_document_screening test_profile_consistency \
+            test_face_box_dedup test_document_precheck \
+            test_synthetic_document_pipeline test_ai_runtime_smoke \
+            test_name_check_soft_feedback_20261122
+      - name: Confirm no production changes
+        run: echo 'NO DEPLOY - no Render deploy, no Firebase writes, no real biometric documents.'
