@@ -62,6 +62,7 @@ function createProtectedIdentityEvidenceHandler({
       });
       response.status(200).json({
         ok: true, verificationId: current.verificationId,
+        idType: cleanText(data.idType || "", 60),
         images, expiresAt: new Date(expiryMs).toISOString(),
       });
     } catch (error) {
