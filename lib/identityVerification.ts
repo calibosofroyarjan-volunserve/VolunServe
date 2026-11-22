@@ -170,7 +170,10 @@ export async function precheckIdentityDocument(input: {
       },
       body,
     },
-    70000,
+    // Read-only document OCR can take longer on Render Free; the backend
+    // enforces a separate 105s cap for this zero-attempt precheck.
+    // Keep client > backend to show a friendly server message if it times out.
+    135000,
   );
   const data = await readResponseBody(response);
   if (!response.ok) {
