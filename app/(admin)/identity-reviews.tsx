@@ -610,7 +610,7 @@ export default function IdentityReviewsAdmin() {
 function StatusChip({ bucket }: { bucket: ReviewFilter }) {
   const meta =
     bucket === "pending"
-      ? { label: "Pending", background: "#FEF3C7", color: "#92400E" }
+      ? { label: "Pending Review", background: "#FEF3C7", color: "#92400E" }
       : bucket === "verified"
         ? { label: "Verified", background: "#DCFCE7", color: "#166534" }
         : bucket === "retry_required"
@@ -717,6 +717,8 @@ function ReviewDetail({
   const weakImage = blurry || idQuality === "low" || idQuality === "poor";
   const recognized = item.documentScreening?.status === "text_consistent_unverified" &&
     item.documentScreening?.declaredIdType === item.documentScreening?.detectedIdType;
+  const cannotApprove = blurry || !recognized ||
+    item.verificationMethod === "volunserve_ai_ocr_manual_review";
   const faceScore = typeof item.matchScore === "number" &&
     Number.isFinite(item.matchScore) && item.matchScore >= 0 && item.matchScore <= 1
     ? (item.matchScore * 100).toFixed(1) + "%" : "Not evaluated";
@@ -980,9 +982,9 @@ function ReviewDetail({
               <View style={[styles.premiumActions,!screenWide&&styles.premiumActionsStack]}>
                 <TouchableOpacity accessibilityRole="button"
                   style={[styles.premiumVerifyAction,
-                    (blurry || !validationMethod || !issuerReviewAttested || notes.trim().length<10 || !!saving)
+                    (cannotApprove || !validationMethod || !issuerReviewAttested || notes.trim().length<10 || !!saving)
                       && styles.disabledButton]}
-                  disabled={blurry || !validationMethod || !issuerReviewAttested || notes.trim().length<10 || !!saving}
+                  disabled={cannotApprove || !validationMethod || !issuerReviewAttested || notes.trim().length<10 || !!saving}
                   onPress={onVerify}>
                   {saving === "verify" ? <ActivityIndicator color="#FFFFFF" /> :
                     <Ionicons name="shield-checkmark-outline" size={21} color="#FFFFFF" />}
@@ -1003,9 +1005,9 @@ function ReviewDetail({
                   <Text style={styles.premiumRejectText}>Reject Verification</Text>
                 </TouchableOpacity>
               </View>
-              {blurry ? (
+              {cannotApprove ? (
                 <Text style={styles.premiumDecisionHint}>
-                  This OCR-only or blurry ID case cannot be approved. Request a corrected scan after entering your review notes.
+                  This ID has not passed the required document screening. Request a corrected scan before approval.
                 </Text>
               ) : null}
             </>
@@ -1119,7 +1121,7 @@ const styles = StyleSheet.create({
   screen: {
     flex: 1,
     minHeight: 0,
-    backgroundColor: "#F4F8F5",
+    backgroundColor: "#F8FAF9",
   },
   scroll: {
     flex: 1,
@@ -1420,8 +1422,8 @@ const styles = StyleSheet.create({
     borderRadius: 999,
   },
   statusChipText: {
-    fontSize: 9.5,
-    fontWeight: "900",
+    fontSize: 11.5,
+    fontWeight: "700",
   },
   scoreRow: {
     flexDirection: "row",
@@ -1510,13 +1512,13 @@ const styles = StyleSheet.create({
   infoLabel: {
     width: 130,
     color: "#64748B",
-    fontSize: 10.5,
-    fontWeight: "700",
+    fontSize: 12,
+    fontWeight: "600",
   },
   infoValue: {
     flex: 1,
     color: "#173D32",
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: "700",
     textAlign: "right",
   },
