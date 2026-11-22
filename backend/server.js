@@ -5517,6 +5517,13 @@ app.post(
           "Select the LGU validation method used before manually verifying this Resident.",
         );
       }
+      // A manual Verify requires explicit reviewer attestation that the
+      // protected evidence was opened and inspected. It does not establish
+      // official authenticity, which the independent LGU method must cover.
+      if (action === "verify" && request.body?.imagesReviewed !== true) {
+        throw makeHttpError(400, "identity_evidence_review_required",
+          "Open and inspect the private identity photos before approving.");
+      }
       if (
         action === "require_retry" &&
         notes.length < 5
