@@ -1,0 +1,64 @@
+name: QA hybrid OCR auto-queue Admin Review (NO DEPLOY)
+on:
+  push:
+    branches: [fix/identity-hybrid-autoreview-precheck-20261122]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  identity-hybrid-qa:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Fetch current backend only without old git submodules
+        env:
+          REPO: ${{ github.repository }}
+          SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          git init -q
+          git remote add origin "https://github.com/${REPO}.git"
+          git -c protocol.version=2 fetch --no-tags --depth=1 --filter=blob:none --no-recurse-submodules origin "$SHA"
+          git sparse-checkout init --cone
+          git sparse-checkout set backend
+          git checkout --force FETCH_HEAD
+      - name: Check precise deployed backend diff scope
+        run: |
+          set -euo pipefail
+          BASE=c3393cef102334765446580a2f1734c61c47c2a0
+          git -c protocol.version=2 fetch --no-tags --depth=1 --filter=blob:none --no-recurse-submodules origin "$BASE"
+          git diff --name-status "$BASE" HEAD >/tmp/changes
+          python - <<'PY'
+          from pathlib import Path
+          actual=sorted(Path('/tmp/changes').read_text().strip().splitlines())
+          expected=sorted([
+            'M\tbackend/server.js',
+            'A\tbackend/identityHybridPrecheckDecision.js',
+            'A\tbackend/test-identityHybridPrecheckDecision.js',
+            'A\t.github/workflows/qa-identity-hybrid-precheck-20261122.yml',
+          ])
+          assert actual==expected,(actual,expected)
+          print('PASS only isolated backend OCR queue/decision code changed')
+          PY
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Syntax, deterministic hybrid classifier and all identity policy regressions
+        run: |
+          set -euo pipefail
+          node --check backend/server.js
+          node --check backend/identityHybridPrecheckDecision.js
+          (cd backend && node --test test-identityHybridPrecheckDecision.js)
+          for t in \
+            test-selectedIdPolicy.js \
+            test-identityPrecheckCors.js \
+            test-identityPrecheckTimeoutOnly.js \
+            test-identityOcrRescanHints.js \
+            test-identityNationalNamePrecheckGate.js \
+            test-identityAiReadiness.js \
+            test-identity-final-admin-only.js \
+            test-identity-three-attempt-review.js; do
+            (cd backend && node --test "$t")
+          done
+      - name: Confirm no writes
+        run: echo 'NO DEPLOY, NO Firestore/Auth/Render writes, no actual ID or biometric uploads.'
