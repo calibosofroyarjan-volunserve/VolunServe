@@ -1,0 +1,55 @@
+name: QA current Render Identity AI commit (NO DEPLOY)
+
+on:
+  push:
+    branches:
+      - qa/identity-render-current-8949ebf-offline-20261122
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: qa-render-identity-ai-current-no-deploy
+  cancel-in-progress: true
+
+jobs:
+  test-deployed-ai-source:
+    name: Docker runtime + all synthetic AI regression tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout exact source without broken historical submodule
+        env:
+          REPO: ${{ github.repository }}
+          REVISION: ${{ github.sha }}
+        run: |
+          set -eu
+          git init -q
+          git remote add origin "https://github.com/${REPO}.git"
+          git -c protocol.version=2 fetch --no-tags --depth=1 --filter=blob:none --no-recurse-submodules origin "${REVISION}"
+          git sparse-checkout init --cone
+          git sparse-checkout set identity-ai
+          git checkout --force FETCH_HEAD
+      - name: Verify unchanged runtime source from live Render SHA
+        run: |
+          set -eu
+          BASE=8949ebf592bd1688efb1ef85a176a65efe4e4949
+          git -c protocol.version=2 fetch --no-tags --depth=1 --filter=blob:none --no-recurse-submodules origin "$BASE"
+          git diff --exit-code FETCH_HEAD HEAD -- identity-ai
+          echo 'Identity AI source exactly matches the current Render-deployed commit.'
+      - name: Build exact production Docker image locally (NO DEPLOY)
+        run: docker build --tag volunserve-identity-ai-no-deploy-qa:latest identity-ai
+      - name: Run full offline synthetic test suite inside Docker (network disabled)
+        run: |
+          docker run --rm --network none \
+            --entrypoint python volunserve-identity-ai-no-deploy-qa:latest \
+            -m unittest -v \
+            test_document_screening \
+            test_profile_consistency \
+            test_face_box_dedup \
+            test_document_precheck \
+            test_synthetic_document_pipeline \
+            test_ai_runtime_smoke
+      - name: No production change
+        run: echo "NO DEPLOY - no Render deployment, Firebase modification, real biometrics, or backend write."
