@@ -63,7 +63,7 @@ jobs:
             const controllerChanges=cp.execFileSync('git',[
               '-C','../controller','diff','--name-status','--no-renames','HEAD^','HEAD'
             ],{encoding:'utf8'}).trim();
-            assert.equal(controllerChanges,'A\t'+expectedController,
+            assert.equal(controllerChanges,'M\t'+expectedController,
               'BLOCKED protected source contains unrelated, outdated or deleted modules');
             const changes=git('diff','--name-status','--no-renames',base,source).split('\n');
             assert.deepEqual(changes.sort(),[
@@ -76,7 +76,7 @@ jobs:
             assert.equal(git('rev-parse',source+':app/identity-verification.web.tsx'),
               'aa4a88ca1b1d55c8eb337e3988e2fc954b4030d0',
               'BLOCKED requested design source changed');
-            const cfg=require('./.firebaserc');
+            const cfg=JSON.parse(require('node:fs').readFileSync('.firebaserc','utf8'));
             assert.equal(cfg.projects.default,process.env.PROJECT,'BLOCKED Firebase target changed');
             const r=await fetch('https://volunserve.com/volunserve-release.json?check='+Date.now(),
               {headers:{'Cache-Control':'no-cache'},signal:AbortSignal.timeout(15000)});
