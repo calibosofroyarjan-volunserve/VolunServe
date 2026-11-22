@@ -271,3 +271,102 @@ test("manual requests can be rejected or sent for retry without granting identit
     assert.equal(h.records.get("identityVerifications/"+UID).requiresManualReview,false);
   }
 });
+
+
+test("National ID manual Admin review refuses wrong validation method and missing physical checks", async () => {
+  const h=harness();
+  assert.equal((await h.request({idType:"national_id",consent:true})).code,201);
+  const before=h.records.get("users/"+UID);
+  assert.equal(before.identityVerified,false);
+  const attempts=[
+    {validationMethod:"in_person_lgu_validation",inPersonIdInspected:true,inPersonFaceCompared:true},
+    {validationMethod:"official_document_check",inPersonIdInspected:true,inPersonFaceCompared:true},
+    {validationMethod:"psa_national_id_qr_check",inPersonIdInspected:false,inPersonFaceCompared:true},
+    {validationMethod:"psa_national_id_qr_check",inPersonIdInspected:true,inPersonFaceCompared:false},
+    {validationMethod:"psa_national_id_qr_check",inPersonIdInspected:true,inPersonFaceCompared:true,issuerReviewAttested:false},
+    {validationMethod:"psa_national_id_qr_check",inPersonIdInspected:true,inPersonFaceCompared:true,notes:"incomplete"},
+  ];
+  for(const attempt of attempts){
+    const result=await h.decide("verify",attempt);
+    assert([400,409].includes(result.code),JSON.stringify(attempt)+" "+JSON.stringify(result.body));
+    assert.equal(h.records.get("users/"+UID).identityVerified,false);
+    assert.equal(h.records.get("identityVerifications/"+UID).status,"pending");
+  }
+  const unauthorized=await h.decide("verify",{
+    validationMethod:"psa_national_id_qr_check",inPersonIdInspected:true,
+    inPersonFaceCompared:true
+  },UID);
+  assert.equal(unauthorized.code,403);
+  assert.equal(h.records.get("users/"+UID).identityVerified,false);
+});
+
+test("National ID: pending -> independent Admin approval -> verified + one audit record",async()=>{
+  const h=harness();
+  const request=await h.request({idType:"national_id",consent:true});
+  assert.equal(request.code,201,JSON.stringify(request.body));
+  const pendingQueue=await h.queue();
+  assert.equal(pendingQueue.code,200);
+  const pending=pendingQueue.body.items.find(row=>row.uid===UID);
+  assert(pending);
+  assert.equal(pending.manualIdType,"national_id");
+  assert.equal(pending.status,"pending");
+  assert.equal(pending.identityVerified,false);
+  assert.equal(pending.documentScreening,null);
+  const response=await h.decide("verify",{
+    validationMethod:"psa_national_id_qr_check",
+    inPersonIdInspected:true,
+    inPersonFaceCompared:true,
+    issuerReviewAttested:true,
+  });
+  assert.equal(response.code,200,JSON.stringify(response.body));
+  assert.equal(response.body.identityVerified,true);
+  const user=h.records.get("users/"+UID);
+  const row=h.records.get("identityVerifications/"+UID);
+  assert.equal(user.identityStatus,"verified");
+  assert.equal(user.identityVerified,true);
+  assert.equal(user.identityVerificationMethod,"volunserve_lgu_in_person_manual_review");
+  assert.equal(row.manualReviewDecision,"verified");
+  assert.equal(row.manualValidationMethod,"psa_national_id_qr_check");
+  assert.equal(row.independentAdminCheckAttested,true);
+  assert.equal(row.originalIdInspectedInPerson,true);
+  assert.equal(row.faceComparedInPerson,true);
+  assert.equal(row.issuerApiAuthenticityVerified,false);
+  const logs=[...h.records.entries()].filter(([key])=>key.startsWith("adminActivityLogs/"));
+  assert.equal(logs.length,1);
+  assert.equal(logs[0][1].performedBy,ADMIN);
+  assert.equal((await h.decide("verify",{
+    validationMethod:"psa_national_id_qr_check",
+    inPersonIdInspected:true,inPersonFaceCompared:true
+  })).code,409);
+});
+
+test("National ID reject and retry never auto-verify; authorized resubmission returns Pending",async()=>{
+  for(const action of ["reject","require_retry"]){
+    const h=harness();
+    await h.request({idType:"national_id",consent:true});
+    const missingReason=await h.decide(action,{notes:"",validationMethod:""});
+    assert.equal(missingReason.code,400);
+    const outcome=await h.decide(action,{
+      notes:"Corrected physical documents are required.",
+      validationMethod:"",issuerReviewAttested:false
+    });
+    assert.equal(outcome.code,200,JSON.stringify(outcome.body));
+    assert.equal(outcome.body.identityVerified,false);
+    const user=h.records.get("users/"+UID);
+    assert.equal(user.identityVerified,false);
+    assert.equal(user.identityStatus,"failed");
+    const row=h.records.get("identityVerifications/"+UID);
+    assert.equal(row.manualReviewDecision,action==="reject"?"rejected":"retry_required");
+    assert.equal(row.requiresManualReview,false);
+    const again=await h.request({idType:"national_id",consent:true});
+    if(action==="require_retry"){
+      assert.equal(again.code,201,JSON.stringify(again.body));
+      assert.equal(h.records.get("users/"+UID).identityVerified,false);
+      assert.equal(h.records.get("users/"+UID).identityStatus,"pending");
+      assert.equal(h.records.get("identityVerifications/"+UID).status,"pending");
+    }else{
+      // Rejection retains the cooldown; no silent immediate attempt reset.
+      assert.equal(again.code,429);
+    }
+  }
+});
