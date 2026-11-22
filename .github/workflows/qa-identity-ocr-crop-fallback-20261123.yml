@@ -58,4 +58,5 @@ jobs:
             test_mild_blur_ocr_name_gate_20261122 \
             test_national_card_autocrop_20261122
       - name: No real photos or production deployment
-        run: echo 'Tests only: no private ID, no production credentials, no Render, no Firebase.'
+        run: |
+          echo 'Tests only: no private ID, no production credentials, no Render, no Firebase.'
