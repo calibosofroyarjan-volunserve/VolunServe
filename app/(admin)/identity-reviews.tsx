@@ -1110,6 +1110,8 @@ function InfoLine({
       <Text
         style={styles.infoValue}
         selectable
+        numberOfLines={2}
+        ellipsizeMode="middle"
       >
         {value}
       </Text>
