@@ -492,6 +492,9 @@ export const submitIdentityVerification = async (
     "idType",
     input.idType,
   );
+  // This field is sent only after the Resident explicitly accepts private
+  // Admin evidence retention in the verification screen.
+  formData.append("identityEvidenceConsent", "true");
 
   appendMedia(
     formData,
