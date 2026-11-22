@@ -10,6 +10,7 @@ import cv2
 import mediapipe as mp
 import pytesseract
 from document_screening import assess_document_text, document_ocr_unavailable
+from national_id_both_sides_screening import assess_national_id_sides
 import numpy as np
 from fastapi import FastAPI, Header, HTTPException, Request
 from starlette.datastructures import UploadFile as StarletteUploadFile
@@ -873,38 +874,45 @@ def failed_attempt_result(
     }
 
 
-def screen_government_id(*, declared_type, id_document_bytes):
-    """OCR checks ID *type plausibility* only; it cannot authenticate issuance.
+def extract_government_id_ocr_text(id_document_bytes):
+    """Extract temporary OCR text only inside this request; never log/store."""
+    image = decode_image(id_document_bytes, "Government ID image")
+    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    longest = max(gray.shape[:2])
+    if longest < 1500:
+        factor = min(1.6, 2100.0 / float(longest))
+        gray = cv2.resize(gray, None, fx=factor, fy=factor,
+                          interpolation=cv2.INTER_CUBIC)
+    contrast = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8)).apply(gray)
+    processed = cv2.adaptiveThreshold(
+        contrast, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
+        cv2.THRESH_BINARY, 31, 11,
+    )
+    extracted = pytesseract.image_to_string(gray, config="--psm 11")
+    enhanced = pytesseract.image_to_string(processed, config="--psm 6")
+    return extracted + "\n" + enhanced
 
-    No OCR text, names, ID numbers, or face data are returned or persisted.
-    Every result requires an independent LGU document-authenticity review.
-    """
+
+def screen_government_id(*, declared_type, id_document_bytes):
+    """Conservative legacy single-photo ID type check; never authenticates."""
     try:
-        image = decode_image(id_document_bytes, "Government ID image")
-        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-        # Bound processing size while sharpening smaller photographed labels.
-        longest = max(gray.shape[:2])
-        if longest < 1500:
-            factor = min(1.6, 2100.0 / float(longest))
-            gray = cv2.resize(
-                gray, None, fx=factor, fy=factor,
-                interpolation=cv2.INTER_CUBIC,
-            )
-        # Complement sparse-card OCR with an adaptive-contrast OCR pass.
-        # No resulting text is logged, retained, or sent back to clients.
-        contrast = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8)).apply(gray)
-        processed = cv2.adaptiveThreshold(
-            contrast, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
-            cv2.THRESH_BINARY, 31, 11,
+        return assess_document_text(
+            declared_type, extract_government_id_ocr_text(id_document_bytes)
         )
-        extracted = pytesseract.image_to_string(gray, config="--psm 11")
-        enhanced = pytesseract.image_to_string(processed, config="--psm 6")
-        return assess_document_text(declared_type, extracted + "\n" + enhanced)
     except Exception:
-        # OCR depends on local Tesseract assets and camera image quality.
-        # Fail closed: no automatic rejection or claims of genuine IDs.
         logging.warning("Government ID keyword screening unavailable")
         return document_ocr_unavailable(declared_type)
+
+
+def screen_national_id_both_sides(*, front_bytes, back_bytes):
+    """Two independent photo OCR passes; fail closed without logging OCR text."""
+    try:
+        front_text = extract_government_id_ocr_text(front_bytes)
+        back_text = extract_government_id_ocr_text(back_bytes)
+        return assess_national_id_sides(front_text, back_text)
+    except Exception:
+        logging.warning("National ID front/back screening unavailable")
+        return document_ocr_unavailable("national_id")
 
 
 def run_face_verification(
@@ -1223,6 +1231,15 @@ async def verify_identity(
     selfie_upload = form.get(
         "selfie"
     )
+    # Optional two-sided extension; existing one-photo API stays compatible.
+    # An unrelated ID back must never be treated as Philippine National ID.
+    id_back_upload = form.get("idBackDocument")
+    if id_back_upload is not None and id_type != "national_id":
+        raise HTTPException(
+            status_code=400,
+            detail="Front/back scanning supports Philippine National ID only.",
+        )
+    id_back_bytes = None
     try:
         id_document_bytes = (
             await read_upload(
@@ -1244,6 +1261,12 @@ async def verify_identity(
                 ),
             )
         )
+        if id_back_upload is not None:
+            id_back_bytes = await read_upload(
+                id_back_upload,
+                label="National ID BACK image",
+                maximum_bytes=MAX_ID_DOCUMENT_BYTES,
+            )
     finally:
         if isinstance(
             id_upload,
@@ -1255,6 +1278,8 @@ async def verify_identity(
             StarletteUploadFile,
         ):
             await selfie_upload.close()
+        if isinstance(id_back_upload, StarletteUploadFile):
+            await id_back_upload.close()
     if not face_mesh_engine_ready():
         raise HTTPException(
             status_code=503,
@@ -1272,11 +1297,34 @@ async def verify_identity(
             id_document_bytes=id_document_bytes,
             selfie_bytes=selfie_bytes,
         )
-        document_screening = await asyncio.to_thread(
-            screen_government_id,
-            declared_type=id_type,
-            id_document_bytes=id_document_bytes,
-        )
+        if id_back_bytes is not None:
+            document_screening = await asyncio.to_thread(
+                screen_national_id_both_sides,
+                front_bytes=id_document_bytes,
+                back_bytes=id_back_bytes,
+            )
+            if document_screening["status"] == "mismatch":
+                # Never accept an independently recognized unsupported ID type.
+                result["decision"] = "failed"
+                result["status"] = "failed"
+                result["message"] = (
+                    "Unsupported or inconsistent document type. "
+                    "Only the Philippine National ID is accepted for front/back scanning."
+                )
+            elif document_screening["status"] == "inconclusive":
+                # Unclear type requires retry or Admin review, not identity approval.
+                result["decision"] = "manual_review"
+                result["status"] = "pending"
+                result["message"] = (
+                    "Front/back National ID format screening was inconclusive. "
+                    "Admin review or clearer photos are required."
+                )
+        else:
+            document_screening = await asyncio.to_thread(
+                screen_government_id,
+                declared_type=id_type,
+                id_document_bytes=id_document_bytes,
+            )
     except HTTPException:
         raise
     except Exception:
