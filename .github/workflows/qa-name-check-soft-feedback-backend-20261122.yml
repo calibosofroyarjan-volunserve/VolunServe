@@ -1,0 +1,64 @@
+name: QA soft name check on exact Render Node backend (NO DEPLOY)
+
+on:
+  push:
+    branches:
+      - feature/identity-name-check-soft-feedback-backend-20261122
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  backend-unit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout only Node backend without historical broken gitlink
+        env:
+          REPO: ${{ github.repository }}
+          SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          git init -q
+          git remote add origin "https://github.com/${REPO}.git"
+          git -c protocol.version=2 fetch --no-tags --depth=1 --filter=blob:none --no-recurse-submodules origin "${SHA}"
+          git sparse-checkout init --cone
+          git sparse-checkout set backend
+          git checkout --force FETCH_HEAD
+      - name: Prove only current backend identity files modified
+        run: |
+          set -euo pipefail
+          BASE=815e4e8df965aec11b2ad74cfcf3acf850580cda
+          git -c protocol.version=2 fetch --no-tags --depth=1 --filter=blob:none --no-recurse-submodules origin "$BASE"
+          git diff --name-status "$BASE" HEAD >/tmp/identity-backend-changes
+          python - <<'PY'
+          from pathlib import Path
+          actual=sorted(Path('/tmp/identity-backend-changes').read_text().strip().splitlines())
+          expected=sorted([
+            'M\tbackend/server.js',
+            'M\tbackend/selectedIdPolicy.js',
+            'M\tbackend/test-selectedIdPolicy.js',
+            'A\t.github/workflows/qa-name-check-soft-feedback-backend-20261122.yml',
+          ])
+          assert actual==expected,(actual,expected)
+          print('PASS scoped backend-only additions from currently deployed backend SHA')
+          PY
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Syntax check protected current Node code
+        run: |
+          node --check backend/server.js
+          node --check backend/selectedIdPolicy.js
+      - name: Run existing offline identity policy and auth readiness tests
+        run: |
+          node --test backend/test-selectedIdPolicy.js
+          node --test backend/test-identityAiReadiness.js
+          node --test backend/test-identity-final-admin-only.js
+          node --test backend/test-identity-three-attempt-review.js
+          # This backend-only run does not check out the website. The legacy
+          # frontBackCaptureContract is tied to pre-redesign UI text; web UI
+          # regression coverage runs in the separate latest-Hosting QA job.
+      - name: No production deploy or data writes
+        run: echo 'NO DEPLOY - no Render deployments, Firebase database changes, ID media, or Auth writes.'

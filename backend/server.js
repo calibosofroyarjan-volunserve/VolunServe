@@ -753,7 +753,7 @@ function normalizeIdDocumentScreening(value) {
     imageQualityStatus: ["low", "adequate"].includes(value?.imageQualityStatus)
       ? value.imageQualityStatus : "unknown",
     profileNameCompared: value?.profileNameCompared === true,
-    profileNameCheck: ["possible_match", "inconclusive", "not_checked"].includes(value?.profileNameCheck)
+    profileNameCheck: ["possible_match", "possible_conflict", "inconclusive", "not_checked"].includes(value?.profileNameCheck)
       ? value.profileNameCheck : "not_checked",
     profileBirthDateCompared: value?.profileBirthDateCompared === true,
     profileBirthDateCheck: ["possible_match", "possible_conflict", "inconclusive", "not_checked"].includes(value?.profileBirthDateCheck)
@@ -5001,12 +5001,14 @@ app.post(
       const declared = screening.declaredIdType;
       const validType = ["national_id", "drivers_license", "passport", "umid", "prc_id"].includes(declared);
       const birthConflict = screening.profileBirthDateCheck === "possible_conflict";
+      const nameConflict = screening.profileNameCheck === "possible_conflict";
       const pass = validType &&
         !birthConflict &&
+        !nameConflict &&
         result?.outcome === "pass" &&
         selectedIdRecognized(screening) &&
         (declared === "passport" || screening.backSideScreened === true);
-      const review = !pass && result?.outcome === "review" &&
+      const review = !pass && !nameConflict && result?.outcome === "review" &&
         blurryNationalIdNeedsReview(screening);
       return response.json({
         ok: true,
@@ -5014,7 +5016,9 @@ app.post(
         detectedIdType: screening.detectedIdType,
         documentScreening: screening,
         // Sanitized hints only; no raw OCR values and no issuer claim.
-        message: birthConflict
+        message: nameConflict
+          ? "Please check the name on your National ID. Retake a clear front photo or ask Admin to review your account details. OCR differences are not proof of an invalid ID."
+          : birthConflict
           ? "The date of birth on the ID may differ from your saved profile. Retake a clearer document or request Admin profile review; OCR differences are not proof of fraud."
           : pass
           ? "ID scan and selected type appear consistent. Birthday/barangay are OCR hints only; Admin still checks unresolved details."

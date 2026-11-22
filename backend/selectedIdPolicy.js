@@ -56,6 +56,10 @@ function classifyIdentityReviewTrack({screening, decision, idImageQualityScore} 
 function enforceSelectedIdDecision(rawDecision, screening, livenessImplemented) {
   if (rawDecision === "manual_review" && blurryNationalIdNeedsReview(screening)) return "manual_review";
   if (!selectedIdRecognized(screening)) return "failed";
+  // Never permit a positive face verdict after both labeled OCR name fields
+  // visibly disagree with the authenticated account. Request a clear rescan
+  // or independent Admin correction; the OCR clue is NOT proof of fraud.
+  if (screening.profileNameCheck === "possible_conflict") return "failed";
   // A DOB conflict is an OCR clue, not fraud. Do not grant verification;
   // route to independent Admin correction/identity review.
   if (screening.profileBirthDateCheck === "possible_conflict" &&
