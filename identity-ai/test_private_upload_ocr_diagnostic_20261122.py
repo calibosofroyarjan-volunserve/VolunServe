@@ -30,7 +30,7 @@ class SafeSecondaryOcrTests(unittest.TestCase):
                 }):
             result = lab.evaluate_private_uploads(
                 front, back, reference_first="TEST",
-                reference_last="RESIDENT", reference_dob="2004-12-18")
+                reference_last="RESIDENT", reference_dob="1998-09-05")
         self.assertEqual(result["ocr_status"], "inconclusive")
         self.assertEqual(result["document"], "inconclusive_requires_review")
         self.assertEqual(result["dob"], "inconclusive")
@@ -39,7 +39,7 @@ class SafeSecondaryOcrTests(unittest.TestCase):
         self.assertFalse(result["identity_verified"])
         self.assertEqual(result["admin"], "manual_review_required_NOT_SUBMITTED")
         report = lab.safe_report(result)
-        for forbidden in ("2004-12-18", "TEST RESIDENT", "synthetic front"):
+        for forbidden in ("1998-09-05", "TEST RESIDENT", "synthetic front"):
             self.assertNotIn(forbidden, report)
 
     def test_exception_in_extra_ocr_does_not_override_strict_warning(self):
@@ -54,7 +54,7 @@ class SafeSecondaryOcrTests(unittest.TestCase):
         with patch.dict(sys.modules, {"main": types.SimpleNamespace(
                 screen_government_id=screening)}), patch.object(
                 lab, "_extra_ocr_diagnostic", side_effect=RuntimeError("private text")):
-            value = lab.evaluate_private_uploads(b"a", b"b", reference_dob="2004-12-18")
+            value = lab.evaluate_private_uploads(b"a", b"b", reference_dob="1998-09-05")
         self.assertEqual(value["extra_back_ocr"], "unavailable")
         self.assertEqual(value["ocr_status"], "inconclusive")
         self.assertNotIn("private text", lab.safe_report(value))
