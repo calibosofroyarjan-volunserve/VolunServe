@@ -11,6 +11,7 @@ const {
 const { reconcileCommunityEventCertificates } = require("./communityCertificates");
 const { combineApprovedBudget } = require("./assistanceDonationBudget");
 const { probeIdentityAiReadiness } = require("./identityAiReadiness");
+const { requireAdminFinalApproval } = require("./identityAiApprovalPolicy");
 const {isVerifiedFirebaseToken, isCompletedVolunServeProfile} = require("./verifiedFirebaseToken");
 const {
   getProfileRole,
@@ -53,9 +54,9 @@ function identityAttemptCount(value) {
 
 function identityAttemptOutcome(decision, attempts) {
   const requiresManualReview = decision === "manual_review" ||
+    decision === "verified" ||
     (decision === "failed" && attempts >= MAX_IDENTITY_AI_ATTEMPTS);
-  const status = decision === "verified" ? "verified" :
-    requiresManualReview ? "pending" : "failed";
+  const status = requiresManualReview ? "pending" : "failed";
   return { status, requiresManualReview };
 }
 const ASSISTANCE_EVIDENCE_UPLOAD_LIMIT = "10mb";
@@ -5065,13 +5066,9 @@ app.post(
       const aiResult = await callIdentityAiService(request);
       const documentScreening = normalizeIdDocumentScreening(aiResult?.documentScreening);
       const rawDecision = normalizeAiDecision(aiResult?.decision || aiResult?.status);
-      // Face comparison and keyword OCR cannot authenticate a government ID
-      // or prove liveness. Never auto-verify without both verified assurances.
-      const decision = rawDecision === "verified" &&
-          (documentScreening.authenticityVerified !== true ||
-            aiResult?.livenessImplemented !== true)
-        ? "manual_review"
-        : rawDecision;
+      // OCR/face similarity is evidence for Admin, never account approval.
+      // An AI "verified" signal remains pending independent human review.
+      const decision = requireAdminFinalApproval(rawDecision);
       const matchScore = numberOrNull(aiResult?.matchScore);
       const livenessScore = numberOrNull(aiResult?.livenessScore);
       const verificationId = cleanText(
@@ -5158,7 +5155,7 @@ app.post(
           },
         );
 
-        if (decision === "verified") {
+        if (result.status === "verified") {
           transaction.set(userRef, {
             identityStatus: "verified",
             identityVerified: true,
