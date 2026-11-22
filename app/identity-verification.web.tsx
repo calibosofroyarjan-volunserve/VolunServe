@@ -1,4 +1,5 @@
 import DocumentScreeningSummary from "../components/identity/DocumentScreeningSummary";
+import ResidentDesktopActions from "../components/layout/ResidentDesktopActions";
 import type { DocumentScreening } from "../lib/identityVerification";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
@@ -19,6 +20,7 @@ import {
     Text,
     TouchableOpacity,
     View,
+    useWindowDimensions,
 } from "react-native";
 
 import { db } from "../lib/firebase";
@@ -236,6 +238,8 @@ function scanCopy(scanState: ScanState) {
 
 export default function IdentityVerificationWeb() {
   const router = useRouter();
+  const { width: viewportWidth } = useWindowDimensions();
+  const desktopIdentityShell = viewportWidth >= 1040;
 
   const videoRef = useRef<any>(null);
   const idVideoRef = useRef<HTMLVideoElement | null>(null);
@@ -539,6 +543,53 @@ export default function IdentityVerificationWeb() {
     setIdAutoProgress(0);
     idAutoFramesRef.current = { previous: null, steadySince: null };
     setIdCameraOpen(true);
+  };
+
+  // Keep file media in browser memory until consented OCR precheck.
+  // Uploaded images never bypass independent OCR and LGU/Admin review.
+  const chooseIdFile = (side: "front" | "back") => {
+    if (idCameraOpen) return;
+    const session = idCameraSessionRef.current;
+    const picker = document.createElement("input");
+    picker.type = "file";
+    picker.accept = "image/jpeg,image/png,image/webp";
+    picker.onchange = () => {
+      const file = picker.files?.[0];
+      if (!file) return;
+      if (!["image/jpeg", "image/png", "image/webp"].includes(file.type) ||
+          file.size > 10 * 1024 * 1024 || file.size < 1024) {
+        setDocumentPrecheckOutcome("retry");
+        setDocumentPrecheckMessage("Choose a clear JPG, PNG, or WebP photo under 10 MB.");
+        return;
+      }
+      const uri = URL.createObjectURL(file);
+      const preview = new window.Image();
+      preview.onload = () => {
+        if (session !== idCameraSessionRef.current) {
+          URL.revokeObjectURL(uri);
+          return;
+        }
+        if (preview.naturalWidth < 320 || preview.naturalHeight < 200) {
+          URL.revokeObjectURL(uri);
+          setDocumentPrecheckOutcome("retry");
+          setDocumentPrecheckMessage("The image is too small. Use a clear, higher-resolution photo.");
+          return;
+        }
+        documentPrecheckRevisionRef.current += 1;
+        setDocumentPrecheckOutcome(null);
+        setDocumentPrecheckMessage("");
+        const media: CapturedIdentityMedia = { uri, name: file.name, type: file.type, file };
+        if (side === "front") setIdDocument(media);
+        else setIdBackDocument(media);
+      };
+      preview.onerror = () => {
+        URL.revokeObjectURL(uri);
+        setDocumentPrecheckOutcome("retry");
+        setDocumentPrecheckMessage("Unable to open this image. Select another photo.");
+      };
+      preview.src = uri;
+    };
+    picker.click();
   };
 
   const captureIdDocument = async () => {
@@ -1438,11 +1489,15 @@ export default function IdentityVerificationWeb() {
   const copy = scanCopy(scanState);
 
   return (
-    <ScrollView
-      style={styles.screen}
-      contentContainerStyle={styles.page}
-      showsVerticalScrollIndicator={false}
-    >
+    <View style={styles.identityShell}>
+      {desktopIdentityShell ? <IdentityDesktopSidebar /> : null}
+      <View style={styles.identityMain}>
+        {desktopIdentityShell ? <ResidentDesktopActions /> : null}
+        <ScrollView
+          style={styles.screen}
+          contentContainerStyle={styles.page}
+          showsVerticalScrollIndicator
+        >
       <View style={styles.topBar}>
         <TouchableOpacity
           style={styles.backButton}
@@ -1486,8 +1541,8 @@ export default function IdentityVerificationWeb() {
           Become a Verified Resident
         </Text>
         <Text style={styles.subtitle}>
-          Government ID + real-time face detection + private
-          1-to-1 AI face comparison.
+          Verify your identity using a government-issued ID and a face scan to
+          upgrade your account and access additional features.
         </Text>
       </View>
 
@@ -1519,6 +1574,7 @@ export default function IdentityVerificationWeb() {
           idCanvasRef={idCanvasRef}
           onPick={() => chooseIdDocument("front")}
           onPickBack={() => chooseIdDocument("back")}
+          onUploadFile={chooseIdFile}
           onCapture={() => void captureIdDocument()}
           onCancel={() => {
             idCameraSessionRef.current += 1;
@@ -1872,13 +1928,61 @@ export default function IdentityVerificationWeb() {
           color={COLORS.tealDark}
         />
         <Text style={styles.privacyNoteText}>
-          Live face detection runs in your browser. Only
-          the captured verification image is submitted to
-          the VolunServe backend for the ID-to-selfie
-          comparison.
+          Your ID images are processed privately for identity screening. A face comparison
+          does not prove ID authenticity or liveness; final verification requires independent Admin review.
         </Text>
       </View>
-    </ScrollView>
+        </ScrollView>
+      </View>
+    </View>
+  );
+}
+
+function IdentityDesktopSidebar() {
+  const router = useRouter();
+  const navigation = [
+    { label: "Home", icon: "home-outline", href: "/(tabs)" },
+    { label: "Emergency Reports", icon: "alert-circle-outline", href: "/(tabs)/disaster-response" },
+    { label: "Request Assistance", icon: "hand-left-outline", href: "/(tabs)/resident" },
+    { label: "Community Events", icon: "calendar-outline", href: "/(tabs)/community-events" },
+    { label: "Donations", icon: "heart-outline", href: "/(tabs)/donation" },
+  ];
+  return (
+    <View style={styles.identitySidebar}>
+      <View style={styles.identitySidebarBrand}>
+        <Image source={require("../assets/images/logo.png")} style={styles.identitySidebarLogo} resizeMode="contain" />
+        <View>
+          <Text style={styles.identitySidebarBrandName}>VolunServe</Text>
+          <Text style={styles.identitySidebarBrandSub}>CITY OF SAN JOSE DEL MONTE</Text>
+        </View>
+      </View>
+      <Text style={styles.identitySidebarSection}>RESIDENT SERVICES</Text>
+      <View style={styles.identitySidebarNav}>
+        {navigation.map((item) => (
+          <TouchableOpacity
+            key={item.label}
+            accessibilityRole="button"
+            onPress={() => router.push(item.href as any)}
+            style={[styles.identitySidebarItem, item.label === "Home" && styles.identitySidebarItemActive]}
+          >
+            <View style={styles.identitySidebarIcon}>
+              <Ionicons name={item.icon as any} color="#ECFDF5" size={21} />
+            </View>
+            <Text style={styles.identitySidebarItemText}>{item.label}</Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+      <View style={styles.identitySidebarBottom}>
+        <TouchableOpacity
+          accessibilityRole="button"
+          onPress={() => router.push("/(tabs)/volunteer-application" as any)}
+          style={styles.identitySidebarItem}
+        >
+          <Ionicons name="people-outline" color="#ECFDF5" size={21} />
+          <Text style={styles.identitySidebarItemText}>Apply as Volunteer</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
   );
 }
 
