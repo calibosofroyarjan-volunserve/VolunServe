@@ -36,15 +36,20 @@ export default function AdminIdentityEvidence({
   aiDecision?: string;
 }) {
   const { width } = useWindowDimensions();
-  const [evidence, setEvidence] = useState<EvidenceResponse | null>(null);
+  // Binding each response to the selected UID prevents the previous
+  // Resident's protected photos flashing when the Admin changes records.
+  const [loadedEvidence, setLoadedEvidence] = useState<{
+    uid: string; value: EvidenceResponse;
+  } | null>(null);
+  const evidence = loadedEvidence?.uid === uid ? loadedEvidence.value : null;
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [refreshIndex, setRefreshIndex] = useState(0);
-  const [expanded, setExpanded] = useState<{ label: string; uri: string } | null>(null);
+  const [expanded, setExpanded] = useState<{ uid: string; label: string; uri: string } | null>(null);
   useEffect(() => {
     let cancelled = false;
     setExpanded(null);
-    setEvidence(null);
+    setLoadedEvidence(null);
     setError("");
     if (!user || !uid) return () => { cancelled = true; };
     const run = async () => {
@@ -59,7 +64,7 @@ export default function AdminIdentityEvidence({
         if (!res.ok || !body?.ok) {
           throw new Error(body?.message || "Private identity images could not be retrieved.");
         }
-        if (!cancelled) setEvidence(body as EvidenceResponse);
+        if (!cancelled) setLoadedEvidence({ uid, value: body as EvidenceResponse });
       } catch (caught: any) {
         if (!cancelled) setError(String(caught?.message || "Could not load secure ID evidence."));
       } finally {
@@ -80,7 +85,7 @@ export default function AdminIdentityEvidence({
     if (!expirations.length) return;
     const delay = Math.max(0, Math.min(...expirations) - Date.now());
     const timer = setTimeout(() => {
-      setEvidence(null);
+      setLoadedEvidence(null);
       setExpanded(null);
       setError("Secure image links expired. Select Refresh to open the evidence again.");
     }, delay);
@@ -133,7 +138,7 @@ export default function AdminIdentityEvidence({
                 borderColor: "#DCE6ED", borderWidth: 1, overflow: "hidden",
               }}>
                 {photo?.url ? (
-                  <TouchableOpacity onPress={() => setExpanded({ label, uri: photo.url })}
+                  <TouchableOpacity onPress={() => setExpanded({ uid, label, uri: photo.url })}
                     accessibilityRole="button" accessibilityLabel={"Enlarge " + label}>
                     <Image source={{ uri: photo.url }} resizeMode="contain"
                       style={{ width: "100%", height: wide ? 172 : 145, backgroundColor: "#E8EEF2" }} />
@@ -176,7 +181,7 @@ export default function AdminIdentityEvidence({
                 accessibilityRole="button"
                 accessibilityLabel={"Enlarge " + label}
                 disabled={!photo?.url}
-                onPress={() => photo?.url && setExpanded({ label, uri: photo.url })}
+                onPress={() => photo?.url && setExpanded({ uid, label, uri: photo.url })}
                 style={{ flexGrow: 1, flexBasis: wide ? "44%" : "46%", minWidth: 135, overflow: "hidden", backgroundColor: "#EEF2F6", borderRadius: 9 }}
               >
                 {photo?.url
@@ -200,7 +205,7 @@ export default function AdminIdentityEvidence({
           Evidence access is audited.
         </Text>
       </> : null}
-      <Modal visible={!!expanded} animationType="fade" transparent
+      <Modal visible={!!expanded && expanded.uid === uid} animationType="fade" transparent
         onRequestClose={() => setExpanded(null)}>
         <View style={{ flex: 1, backgroundColor: "rgba(8,20,30,0.96)", padding: 18 }}>
           <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingTop: 18 }}>
@@ -211,7 +216,7 @@ export default function AdminIdentityEvidence({
             </TouchableOpacity>
           </View>
           <ScrollView contentContainerStyle={{ flexGrow: 1, justifyContent: "center" }}>
-            {expanded ? <Image source={{ uri: expanded.uri }} resizeMode="contain"
+            {expanded?.uid === uid ? <Image source={{ uri: expanded.uri }} resizeMode="contain"
               style={{ width: "100%", height: Math.max(320, width < 800 ? 440 : 620) }} /> : null}
           </ScrollView>
         </View>
