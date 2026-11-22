@@ -63,9 +63,34 @@ jobs:
           assert(after.includes('https://volunserve.onrender.com'));
           console.log('PASS exact published source; LGU review logic unchanged; UI-only release');
           NODE
+      - name: Read-only verify current production is still the approved published source
+        run: |
+          node <<'NODE'
+          const assert=require('node:assert/strict');
+          (async()=>{
+            const url='https://volunserve.com/volunserve-release.json?qa='+Date.now();
+            const response=await fetch(url,{headers:{'Cache-Control':'no-cache'},signal:AbortSignal.timeout(15000)});
+            assert(response.ok,'BLOCKED: public live revision not accessible');
+            const marker=await response.json();
+            assert.equal(marker.app,'VolunServe');
+            assert.equal(marker.firebaseProject,'volunserve-3aa5b');
+            assert.equal(marker.revision,process.env.PUBLISHED_BASE,
+              'BLOCKED: production changed; compare published code again before deployment');
+            console.log('PASS read-only live revision agrees with approved published-source base');
+          })().catch(e=>{console.error(e.message);process.exitCode=1});
+          NODE
       - name: Install locked dependencies
         run: npm ci --no-audit --no-fund
       - name: Validate TypeScript
         run: npx tsc --noEmit --incremental false
+      - name: Existing Admin, Identity, role and navigation regression checks
+        run: |
+          set -euo pipefail
+          node scripts/test-admin-people-verification-premium-ui.cjs
+          node scripts/test-lgu-admin-global-ui-pagination.cjs
+          node scripts/test-admin-navigation-contract.cjs
+          node scripts/test-profile-certificates-account-menu.cjs
+          node scripts/test-portal-resident-volunteer-ui-flow.cjs
+          node scripts/test-unified-identity-ai-government-id-screening.cjs
       - name: Build Expo web without deploying
         run: npx expo export --platform web --clear
