@@ -1,0 +1,32 @@
+name: QA Private Identity Evidence (NO DEPLOY)
+on:
+  push:
+    branches: [fix/backend-private-identity-evidence-20261123]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  private-evidence:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify only isolated backend files changed
+        run: |
+          git diff --name-only origin/backend-live-protected...HEAD | sort
+          node --check backend/server.js
+          node --check backend/identityPrivateEvidence.js
+      - name: Test private ID evidence and existing Admin guards
+        run: |
+          node --test backend/test-identityPrivateEvidence.js
+          node --test backend/test-identity-final-admin-only.js
+          node --test backend/test-identity-three-attempt-review.js
+          node --test backend/test-identityAiReadiness.js
+          node --test backend/test-identityIssuerReviewPolicy.js
+      - name: No deployment, no real user identity records
+        run: echo 'Checks only. No Firebase/Cloudinary/Render production writes.'
