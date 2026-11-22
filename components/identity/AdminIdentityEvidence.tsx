@@ -29,7 +29,7 @@ const LABELS = [
  * issuing short-lived authenticated Cloudinary URLs.
  */
 export default function AdminIdentityEvidence({
-  uid, user, verificationId, matchScore, aiDecision, onEvidenceStateChange,
+  uid, user, verificationId, matchScore, aiDecision, onEvidenceStateChange, compact = false,
 }: {
   uid: string;
   verificationId?: string;
@@ -37,6 +37,7 @@ export default function AdminIdentityEvidence({
   matchScore?: number | null;
   aiDecision?: string;
   onEvidenceStateChange?: (ready: boolean) => void;
+  compact?: boolean;
 }) {
   const { width } = useWindowDimensions();
   // Binding each response to the selected UID prevents the previous
@@ -134,12 +135,12 @@ export default function AdminIdentityEvidence({
           : "Live Selfie",
     }));
   return (
-    <View style={{ marginTop: 10, marginBottom: 22, gap: 12 }}>
+    <View style={{ marginTop: compact ? 0 : 10, marginBottom: compact ? 0 : 22, gap: compact ? 9 : 12 }}>
       <View style={{ flexDirection: "row", justifyContent: "space-between", gap: 12, alignItems: "center" }}>
         <View style={{ flex: 1 }}>
-          <Text style={{ fontSize: 15, fontWeight: "700", color: "#172B3A" }}>Secure Identity Evidence</Text>
-          <Text style={{ fontSize: 12, color: "#64748B", marginTop: 3 }}>
-            Original captured ID photos and selfie · authorized Admin access only
+          {!compact ? <Text style={{ fontSize: 15, fontWeight: "700", color: "#172B3A" }}>Secure Identity Evidence</Text> : null}
+          <Text style={{ fontSize: compact ? 11 : 12, color: "#64748B", marginTop: compact ? 0 : 3 }}>
+            Original ID photos and live selfie · authorized Admin access only
           </Text>
         </View>
         <TouchableOpacity accessibilityRole="button" accessibilityLabel="Refresh private identity pictures"
@@ -165,7 +166,7 @@ export default function AdminIdentityEvidence({
             const photo = evidence.images?.[key];
             return (
               <View key={key} style={{
-                minWidth: wide ? 185 : 138, flexGrow: 1, flexBasis: wide ? "28%" : "46%",
+                minWidth: compact ? 105 : wide ? 185 : 138, flexGrow: 1, flexBasis: compact ? "29%" : wide ? "28%" : "46%",
                 borderRadius: 11, backgroundColor: "#F8FAFC",
                 borderColor: "#DCE6ED", borderWidth: 1, overflow: "hidden",
               }}>
@@ -175,18 +176,18 @@ export default function AdminIdentityEvidence({
                     <Image source={{ uri: photo.url }} resizeMode="contain"
                       onLoad={() => setLoadedImageUrls((previous) => previous.includes(photo.url) ? previous : [...previous, photo.url])}
                       onError={() => setError("A protected photo failed to load. Select Refresh, or request resubmission.")}
-                      style={{ width: "100%", height: wide ? 172 : 145, backgroundColor: "#E8EEF2" }} />
+                      style={{ width: "100%", height: compact ? 150 : wide ? 172 : 145, backgroundColor: "#E8EEF2" }} />
                   </TouchableOpacity>
                 ) : (
-                  <View style={{ height: wide ? 172 : 145, backgroundColor: "#F1F5F9",
+                  <View style={{ height: compact ? 150 : wide ? 172 : 145, backgroundColor: "#F1F5F9",
                     justifyContent: "center", alignItems: "center", gap: 8 }}>
                     <Ionicons name={icon} size={32} color="#94A3B8" />
                     <Text style={{ fontSize: 11, color: "#64748B" }}>Not submitted</Text>
                   </View>
                 )}
-                <View style={{ paddingHorizontal: 12, paddingVertical: 10, flexDirection: "row",
+                <View style={{ paddingHorizontal: compact ? 7 : 12, paddingVertical: compact ? 8 : 10, flexDirection: "row",
                   justifyContent: "space-between", alignItems: "center" }}>
-                  <Text style={{ fontSize: 12, color: "#243647", fontWeight: "600" }}>{label}</Text>
+                  <Text style={{ fontSize: compact ? 10 : 12, color: "#243647", fontWeight: "700" }}>{label}</Text>
                   <Ionicons name={photo ? "expand-outline" : "alert-circle-outline"}
                     size={16} color={photo ? "#08765A" : "#B45309"} />
                 </View>
@@ -194,7 +195,7 @@ export default function AdminIdentityEvidence({
             );
           })}
         </View>
-        <View style={{ backgroundColor: "#F8FAFC", borderColor: "#DCE6ED", borderWidth: 1, borderRadius: 12, padding: 14, gap: 11 }}>
+        {!compact ? <View style={{ backgroundColor: "#F8FAFC", borderColor: "#DCE6ED", borderWidth: 1, borderRadius: 12, padding: 14, gap: 11 }}>
           <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
             <View style={{ gap: 3 }}>
               <Text style={{ color: "#172B3A", fontSize: 14, fontWeight: "700" }}>Face Matching Review</Text>
@@ -233,6 +234,7 @@ export default function AdminIdentityEvidence({
             Review the full ID image, details, and independent LGU validation before approving.
           </Text>
         </View>
+        : null}
         <View style={{ flexDirection: "row", gap: 7, alignItems: "center" }}>
           <Ionicons name={imageEvidenceReady ? "checkmark-circle" : "time-outline"} size={16}
             color={imageEvidenceReady ? "#08765A" : "#B45309"} />
@@ -241,9 +243,8 @@ export default function AdminIdentityEvidence({
           </Text>
         </View>
         <Text style={{ fontSize: 11, color: "#64748B" }}>
-          Compare the ID portrait with the selfie and review the independent AI screening below.
-          Access links expire in 5 minutes; refresh to continue reviewing.
-          Evidence access is audited.
+          {compact ? "Secure previews expire in 5 minutes. Evidence access is audited." :
+            "Compare the ID portrait and selfie. Secure links expire in 5 minutes; access is audited."}
         </Text>
       </> : null}
       <Modal visible={!!expanded && expanded.uid === uid && expanded.verificationId === (verificationId || "")} animationType="fade" transparent
