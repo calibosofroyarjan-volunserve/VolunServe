@@ -178,6 +178,7 @@ export default function IdentityVerification() {
     useState<IdentityDocumentType>("national_id");
   const [idDocument, setIdDocument] =
     useState<CapturedIdentityMedia | null>(null);
+  const [idBack, setIdBack] = useState<CapturedIdentityMedia | null>(null);
   const [selfie, setSelfie] =
     useState<CapturedIdentityMedia | null>(null);
 
@@ -329,7 +330,7 @@ export default function IdentityVerification() {
     identityStatus,
   ]);
 
-  const chooseIdDocument = async () => {
+  const chooseIdDocument = async (side: "front" | "back" = "front") => {
     if (pickingId || submitting) return;
     try {
       setPickingId(true);
@@ -345,7 +346,9 @@ export default function IdentityVerification() {
         cameraType: ImagePicker.CameraType.back,
       });
       if (!result.canceled && result.assets[0]) {
-        setIdDocument(mediaFromAsset(result.assets[0], "government-id-camera"));
+        const captured = mediaFromAsset(result.assets[0], "government-id-camera");
+        if (side === "back") setIdBack(captured);
+        else setIdDocument(captured);
         setLocalMessage("");
       }
     } catch (error: any) {
@@ -357,6 +360,10 @@ export default function IdentityVerification() {
 
   const openFaceScan =
     async () => {
+      if (idType === "national_id" && !idBack) {
+        Alert.alert("National ID Back Required", "Capture both sides of the National ID first.");
+        return;
+      }
       if (!idDocument) {
         Alert.alert(
           "Government ID Required",
@@ -473,6 +480,11 @@ export default function IdentityVerification() {
         return;
       }
 
+      if (idType === "national_id" && !idBack) {
+        setStep(1);
+        Alert.alert("National ID Back Required", "Capture the back side of the National ID.");
+        return;
+      }
       if (!selfie) {
         setStep(2);
         Alert.alert(
@@ -500,6 +512,7 @@ export default function IdentityVerification() {
             {
               idType,
               idDocument,
+              idBack,
               selfie,
             },
           );
@@ -538,6 +551,7 @@ export default function IdentityVerification() {
           "verified"
         ) {
           setIdDocument(null);
+          setIdBack(null);
           setSelfie(null);
           setConsent(false);
         }
@@ -846,29 +860,25 @@ export default function IdentityVerification() {
           idType={
             idType
           }
-          setIdType={
-            setIdType
-          }
-          idDocument={
-            idDocument
-          }
+          setIdType={(value) => {
+            if (value !== idType) { setIdDocument(null); setIdBack(null); }
+            setIdType(value);
+          }}
+          idDocument={idDocument}
+          idBack={idBack}
           selectedIdLabel={
             selectedIdLabel
           }
           picking={
             pickingId
           }
-          onPick={() =>
-            void chooseIdDocument()
-          }
+          onPick={() => void chooseIdDocument("front")}
+          onPickBack={() => void chooseIdDocument("back")}
           onNext={() =>
             void openFaceScan()
           }
-          onRemove={() =>
-            setIdDocument(
-              null,
-            )
-          }
+          onRemove={() => setIdDocument(null)}
+          onRemoveBack={() => setIdBack(null)}
         />
       ) : null}
 
@@ -1066,11 +1076,14 @@ function UploadIdStep({
   idType,
   setIdType,
   idDocument,
+  idBack,
   selectedIdLabel,
   picking,
   onPick,
+  onPickBack,
   onNext,
   onRemove,
+  onRemoveBack,
 }: {
   idType: IdentityDocumentType;
   setIdType: (
@@ -1079,16 +1092,19 @@ function UploadIdStep({
   ) => void;
   idDocument:
     CapturedIdentityMedia | null;
+  idBack: CapturedIdentityMedia | null;
   selectedIdLabel:
     string;
   picking:
     boolean;
   onPick:
     () => void;
+  onPickBack: () => void;
   onNext:
     () => void;
   onRemove:
     () => void;
+  onRemoveBack: () => void;
 }) {
   return (
     <View
@@ -1360,6 +1376,36 @@ function UploadIdStep({
         </TouchableOpacity>
       )}
 
+      {idType === "national_id" ? (
+        <View style={{ marginTop: 14, marginBottom: 18 }}>
+          <Text style={styles.fieldLabel}>National ID — Back</Text>
+          {idBack ? (
+            <View style={styles.mediaPreviewCard}>
+              <Image source={{ uri: idBack.uri }} style={styles.idPreview} resizeMode="contain" />
+              <View style={styles.mediaPreviewInfo}>
+                <Ionicons name="checkmark-circle" size={20} color="#08765A" />
+                <View style={styles.mediaPreviewCopy}>
+                  <Text style={styles.mediaPreviewTitle}>National ID back captured</Text>
+                  <Text style={styles.mediaPreviewText} numberOfLines={1}>{idBack.name}</Text>
+                </View>
+                <TouchableOpacity onPress={onRemoveBack} style={styles.iconButton}>
+                  <Ionicons name="trash-outline" size={18} color={COLORS.danger} />
+                </TouchableOpacity>
+              </View>
+              <TouchableOpacity style={styles.uploadZone} onPress={onPickBack} disabled={picking}>
+                <Text style={styles.uploadText}>Retake Back Photo</Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <TouchableOpacity style={styles.uploadZone} onPress={onPickBack} disabled={picking}>
+              <Ionicons name="camera-outline" size={29} color={COLORS.blue} />
+              <Text style={styles.uploadTitle}>Capture Back of National ID</Text>
+              <Text style={styles.uploadText}>Keep all corners visible and text readable</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+      ) : null}
+
       <View
         style={
           styles.stepFooter
@@ -1368,11 +1414,11 @@ function UploadIdStep({
         <TouchableOpacity
           style={[
             styles.nextButton,
-            !idDocument &&
+            (!idDocument || (idType === "national_id" && !idBack)) &&
               styles.disabledButton,
           ]}
           disabled={
-            !idDocument
+            !idDocument || (idType === "national_id" && !idBack)
           }
           activeOpacity={
             0.85
@@ -1810,8 +1856,7 @@ function FaceScanStep({
             styles.consentText
           }
         >
-          I consent to VolunServe processing my submitted government ID
-          and face scan for private 1-to-1 identity verification.
+          I consent to secure storage of my ID front/back and face scan for private identity verification and authorized Admin review for up to 30 days.
         </Text>
       </TouchableOpacity>
 
