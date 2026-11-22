@@ -105,12 +105,15 @@ async function destroyIdentityEvidence(images) {
   }));
 }
 
-async function storeIdentityEvidence(uid, images) {
+async function storeIdentityEvidence(uid, images, options = {}) {
+  const onCleanupFailure = options.onCleanupFailure;
   const saved = {};
   try {
     for (const [kind, media] of Object.entries(images)) {
       if (!media) continue;
       const publicId = identityEvidencePrefix() + "/" + uid + "/" + crypto.randomUUID() + "-" + kind;
+      // Keep an identifier even if the provider stores the bytes but loses the reply.
+      saved[kind] = { publicId };
       const upload = await new Promise((resolve, reject) => {
         const stream = cloudinary.uploader.upload_stream({
           resource_type: "image",
@@ -134,6 +137,12 @@ async function storeIdentityEvidence(uid, images) {
   } catch (error) {
     const cleanup = await destroyIdentityEvidence(saved);
     if (cleanup.some((entry) => entry.status === "rejected")) {
+      if (typeof onCleanupFailure === "function") {
+        try { await onCleanupFailure(saved); }
+        catch (cleanupError) {
+          console.error("CRITICAL: protected ID media cleanup queue unavailable.", cleanupError?.code || "write_failed");
+        }
+      }
       console.warn("Private identity photo cleanup requires follow-up.");
     }
     throw evidenceError("identity_evidence_upload_failed", "Could not securely save the identity photos for Admin review. Retry without consuming an AI attempt.", 503);
