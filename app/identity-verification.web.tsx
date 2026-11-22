@@ -1936,7 +1936,7 @@ export default function IdentityVerificationWeb() {
             <Text style={styles.consentText}>
               I consent to VolunServe privately processing and securely
               storing both sides of my government ID and my live selfie
-              for AI checks and authorized LGU Admin identity review.
+              for AI checks and authorized LGU Admin identity review (up to 30 days).
             </Text>
           </TouchableOpacity>
 
