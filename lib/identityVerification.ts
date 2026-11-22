@@ -137,8 +137,9 @@ export type DocumentPrecheckResult = {
 
 /**
  * Private authenticated ID-only OCR screening before face capture.
- * Explicit user consent is required. Photos are transient and do not
- * consume a limited face-verification attempt; no selfie is sent.
+ * Explicit user consent is required. Passing OCR images stay transient;
+ * images escalated to Admin review are stored privately up to 30 days.
+ * No selfie is sent and no face-verification attempt is consumed.
  */
 export async function precheckIdentityDocument(input: {
   idType: IdentityDocumentType;
@@ -160,12 +161,15 @@ export async function precheckIdentityDocument(input: {
   const token = await user.getIdToken(true);
   const body = new FormData();
   body.append("idType", input.idType);
+  // OCR-only Admin escalation has a separate, explicitly consented
+  // private ID-photo route. No selfie exists at this precheck stage.
+  body.append("identityEvidenceConsent", "true");
   appendMedia(body, "idDocument", input.idDocument);
   if (input.idType !== "passport" && input.idBackDocument) {
     appendMedia(body, "idBackDocument", input.idBackDocument);
   }
   const response = await fetchWithTimeout(
-    `${getBackendBaseUrl()}/api/identity/document/precheck`,
+    `${getBackendBaseUrl()}/api/identity/document/precheck-with-evidence`,
     {
       method: "POST",
       headers: {
@@ -224,11 +228,17 @@ function getBackendBaseUrl() {
 
   value = value.replace(/\/+$/, "");
 
-  const verifySuffix = "/api/identity/verify";
+  const verifySuffixes = [
+    "/api/identity/verify-with-evidence",
+    "/api/identity/verify",
+  ];
   const statusSuffix = "/api/identity/status";
 
-  if (value.endsWith(verifySuffix)) {
-    value = value.slice(0, -verifySuffix.length);
+  for (const verifySuffix of verifySuffixes) {
+    if (value.endsWith(verifySuffix)) {
+      value = value.slice(0, -verifySuffix.length);
+      break;
+    }
   }
 
   if (value.endsWith(statusSuffix)) {
@@ -492,6 +502,9 @@ export const submitIdentityVerification = async (
     "idType",
     input.idType,
   );
+  // This field is sent only after the Resident explicitly accepts private
+  // Admin evidence retention in the verification screen.
+  formData.append("identityEvidenceConsent", "true");
 
   appendMedia(
     formData,
@@ -514,7 +527,7 @@ export const submitIdentityVerification = async (
   );
 
   const endpoint =
-    `${getBackendBaseUrl()}/api/identity/verify`;
+    `${getBackendBaseUrl()}/api/identity/verify-with-evidence`;
 
   const response = await fetchWithTimeout(
     endpoint,

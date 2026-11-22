@@ -1,0 +1,69 @@
+name: QA Published Hosting Identity Evidence Viewer (NO DEPLOY)
+on:
+  push:
+    branches: [fix/hosting-identity-evidence-preview-20261123]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  protected-photos-ui:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      CI: 'true'
+      EXPO_NO_TELEMETRY: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Assert admin decision rules remain untouched
+        run: |
+          node <<'NODE'
+          const fs=require('fs'),cp=require('child_process'),assert=require('assert');
+          const base='design/published-identity-reviews-ui-20261123';
+          cp.execFileSync('git',['fetch','origin',base,'--depth=1'],{stdio:'pipe'});
+          const path='app/(admin)/identity-reviews.tsx';
+          const old=cp.execFileSync('git',['show','FETCH_HEAD:'+path],{encoding:'utf8'});
+          const now=fs.readFileSync(path,'utf8');
+          assert(old.includes('issuerReviewAttested') && old.includes('require_retry'));
+          // The new Reject control is additive. Approval must still require
+          // independent validation and must not approve an OCR-only blurry ID.
+          for(const guard of [
+            'selected.reviewTrack === "blurry_id_review"',
+            'action === "verify" && !validationMethod',
+            'action === "verify" && (!issuerReviewAttested || notes.trim().length < 10)',
+            'issuerReviewAttested: action === "verify" && issuerReviewAttested',
+            'const token = await user.getIdToken(true)',
+            'reviewBucket(item)',
+            'require_retry',
+            'onReject={() => void saveDecision("reject")}',
+            'premiumDetailColumns',
+            'premiumEvidenceTiles',
+            '/api/admin/identity/reviews/',
+            '/evidence',
+          ]) assert(now.includes(guard),'Missing review security/layout guard: '+guard);
+          assert(!now.includes('Photo not retained'));
+          assert(!now.includes('secure_url:')); // Never embed public media links.
+          const changed=cp.execFileSync('git',['diff','--name-only','FETCH_HEAD','HEAD'],{encoding:'utf8'}).trim().split('\n');
+          for(const file of changed)
+            assert([
+              'app/(admin)/identity-reviews.tsx',
+              'app/identity-verification.web.tsx',
+              'app/identity-verification.tsx',
+              'lib/identityVerification.ts',
+              '.github/workflows/qa-hosting-private-evidence-20261123.yml',
+            ].includes(file),'Unexpected cross-module change: '+file);
+          console.log('PASS independent Admin approval guards, private photo viewer and narrow file scope');
+          NODE
+      - name: Install pinned dependencies
+        run: npm ci --no-audit --no-fund
+      - name: TypeScript typecheck
+        run: npx tsc --noEmit --incremental false
+      - name: Build web without deploying
+        run: npx expo export --platform web --clear
+      - name: No live website or Firestore writes
+        run: echo 'No Firebase Hosting or Render deploy.'
