@@ -40,3 +40,10 @@ test("staging web client must never fall back to production backend", ()=>{
   assert.match(client, /Staging identity upload blocked: configure EXPO_PUBLIC_IDENTITY_VERIFICATION_API_URL/);
   assert.match(client, /firebaseTarget !== "staging" && value === STAGING_IDENTITY_BACKEND_URL/);
 });
+
+test("staging Admin identity review must only call staging backend", ()=>{
+  const admin = fs.readFileSync("app/(admin)/identity-reviews.tsx", "utf8");
+  assert.match(admin, /const IS_STAGING = process\.env\.EXPO_PUBLIC_VOLUNSERVE_FIREBASE_TARGET === "staging"/);
+  assert.match(admin, /if \(IS_STAGING && BACKEND_URL !== STAGING_BACKEND_URL\)/);
+  assert.match(admin, /Staging Admin Identity Review blocked: staging backend URL required/);
+});
