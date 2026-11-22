@@ -6,6 +6,7 @@ import { useLocalSearchParams } from "expo-router";
 import ListPagination from "../../components/ui/ListPagination";
 import AdminReviewHero from "../../components/admin/AdminReviewHero";
 import DocumentScreeningSummary from "../../components/identity/DocumentScreeningSummary";
+import AdminIdentityEvidence from "../../components/identity/AdminIdentityEvidence";
 import type { DocumentScreening } from "../../lib/identityVerification";
 import {
     ActivityIndicator,
@@ -37,6 +38,8 @@ type IdentityReview = {
   matchScore?: number | null;
   livenessScore?: number | null;
   documentScreening?: DocumentScreening;
+  evidenceAvailable?: boolean;
+  evidenceExpiresAt?: string;
   message?: string;
   requiresManualReview?: boolean;
   manualReviewDecision?: string;
@@ -428,10 +431,10 @@ export default function IdentityReviewsAdmin() {
               Privacy-preserving manual fallback
             </Text>
             <Text style={styles.noticeText}>
-              The AI service processes the submitted ID and selfie for
-              the 1-to-1 comparison, but this queue does not retain or
-              display those private images. Manual verification must use
-              an independent LGU-approved validation method.
+              New identity submissions retain encrypted-in-transit, private
+              front/back ID and live selfie evidence for authorized Admin review.
+              Older records may require a fresh upload. An AI score alone
+              does not prove document authenticity or genuine liveness.
             </Text>
           </View>
         </View>
@@ -615,6 +618,7 @@ export default function IdentityReviewsAdmin() {
               {selected ? (
                 <ReviewDetail
                   item={selected}
+                  user={user}
                   validationMethod={validationMethod}
                   setValidationMethod={setValidationMethod}
                   notes={notes}
@@ -678,6 +682,7 @@ function StatusChip({ bucket }: { bucket: ReviewFilter }) {
 
 function ReviewDetail({
   item,
+  user,
   validationMethod,
   setValidationMethod,
   notes,
@@ -687,6 +692,7 @@ function ReviewDetail({
   onRetry,
 }: {
   item: IdentityReview;
+  user: { getIdToken: (forceRefresh?: boolean) => Promise<string> } | null;
   validationMethod: string;
   setValidationMethod: (value: string) => void;
   notes: string;
@@ -736,6 +742,9 @@ function ReviewDetail({
         label="Account status"
         value={item.resident?.accountStatus || "—"}
       />
+
+      <SectionTitle icon="images-outline" title="Submitted Identity Photos" />
+      <AdminIdentityEvidence uid={item.uid} user={user} />
 
       <SectionTitle
         icon="scan-outline"
