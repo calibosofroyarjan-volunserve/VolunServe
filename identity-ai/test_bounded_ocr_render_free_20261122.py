@@ -24,7 +24,7 @@ class BoundedOcrTests(unittest.TestCase):
         mock.assert_called_once()
         image = mock.call_args.args[0]
         self.assertLessEqual(max(image.shape), 1400)
-        self.assertEqual(mock.call_args.kwargs["timeout"], 40)
+        self.assertEqual(mock.call_args.kwargs["timeout"], 20)
         self.assertEqual(mock.call_args.kwargs["config"], "--oem 1 --psm 11")
 
     def test_readable_normal_image_not_needlessly_upscaled(self):

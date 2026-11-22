@@ -883,38 +883,83 @@ def failed_attempt_result(
     }
 
 
-def extract_government_id_text(id_document_bytes, label):
-    """One bounded OCR pass per side, with no raw ID data logged or persisted.
+def _avoid_national_id_back_qr_noise(gray):
+    """Conservatively avoid QR-heavy half in a horizontal physical PhilID.
 
-    Render Free's limited CPU made the previous upscaled two-pass *per side*
-    workflow exceed the Node gateway's 55-second request deadline. Keep
-    Tesseract on a bounded image and apply the same documented OCR screening,
-    name comparison and mandatory independent Admin approval.
+    A QR grid can consume OCR CPU while adding no readable side labels.
+    The crop is only a text-read optimization, never proof of document type,
+    orientation, authenticity or a successful identity match.
+    """
+    height, width = gray.shape[:2]
+    if width < 1.30 * height or width < 650:
+        return gray
+    half = width // 2
+    left = cv2.Canny(gray[:, :half], 80, 180)
+    right = cv2.Canny(gray[:, half:], 80, 180)
+    left_density = float(np.count_nonzero(left)) / max(left.size, 1)
+    right_density = float(np.count_nonzero(right)) / max(right.size, 1)
+    if right_density > 0.075 and right_density > 1.85 * max(left_density, 0.01):
+        return gray[:, :round(width * 0.59)]
+    if left_density > 0.075 and left_density > 1.85 * max(right_density, 0.01):
+        return gray[:, round(width * 0.41):]
+    return gray
+
+
+def extract_government_id_text(
+    id_document_bytes, label, *, side="front", declared_type="",
+):
+    """Bounded OCR, with one lower-cost recovery attempt if reading fails.
+
+    OCR never authenticates an issued ID. No image bytes, names, QR contents,
+    card numbers or raw Tesseract output are written to logs or returned.
     """
     image = decode_image(id_document_bytes, label)
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
     longest = max(gray.shape[:2])
-    # At most 1400 px on the longer side; never upscale an already legible
-    # 1260-px frame to 2000+ px before running OCR on a shared CPU.
     if longest > 1400:
-        factor = 1400.0 / float(longest)
         gray = cv2.resize(
-            gray, None, fx=factor, fy=factor,
+            gray, None, fx=1400 / longest, fy=1400 / longest,
             interpolation=cv2.INTER_AREA,
         )
     elif longest < 900:
-        factor = min(1.2, 1000.0 / float(max(longest, 1)))
-        if factor > 1.0:
+        scale = min(1.2, 1000 / max(longest, 1))
+        if scale > 1:
             gray = cv2.resize(
-                gray, None, fx=factor, fy=factor,
+                gray, None, fx=scale, fy=scale,
                 interpolation=cv2.INTER_CUBIC,
             )
+
+    if side == "back" and declared_type == "national_id":
+        gray = _avoid_national_id_back_qr_noise(gray)
     contrast = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8)).apply(gray)
-    # Bounding each subprocess prevents requests from hanging indefinitely.
-    # On OCR timeout, the existing fail-closed handler returns a rescan,
-    # never a positive document or face verdict.
+    # Tesseract on a very small CPU can hang on QR grids. Limit OpenMP
+    # threads and subprocess time without changing identity-validation rules.
+    os.environ.setdefault("OMP_THREAD_LIMIT", "1")
+    primary_psm = "6" if side == "back" and declared_type == "national_id" else "11"
+    try:
+        text = pytesseract.image_to_string(
+            contrast, config=f"--oem 1 --psm {primary_psm}", timeout=20,
+        )
+        if text.strip():
+            return text
+    except Exception as exc:
+        # Exception CLASS only: avoid Tesseract messages that could carry
+        # personal file paths or OCR information. Always fail closed.
+        logging.warning("Government ID %s OCR primary failed (%s)",
+                        side if side in ("front", "back") else "unknown",
+                        type(exc).__name__)
+    # One bounded, smaller fallback for low-quality/slow OCR. It cannot
+    # override an unsupported-ID or name conflict in the screening stage.
+    size = max(contrast.shape[:2])
+    fallback = contrast
+    if size > 1024:
+        scale = 1024 / size
+        fallback = cv2.resize(
+            contrast, None, fx=scale, fy=scale,
+            interpolation=cv2.INTER_AREA,
+        )
     return pytesseract.image_to_string(
-        contrast, config="--oem 1 --psm 11", timeout=40,
+        fallback, config="--oem 1 --psm 6", timeout=12,
     )
 
 
@@ -925,19 +970,53 @@ def screen_government_id(
 ):
     """OCR plausibility and profile consistency; never government issuance."""
     try:
-        front_text = extract_government_id_text(
-            id_document_bytes, "Government ID front image"
-        )
-        back_text = (
-            extract_government_id_text(
-                id_back_document_bytes, "Government ID back image"
+        # A problem reading the reverse must not erase correctly extracted
+        # front text (or the front-side account-name mismatch signal).
+        # Incomplete OCR is always review/rescan, never a positive gate.
+        front_failed = False
+        back_failed = False
+        try:
+            front_text = extract_government_id_text(
+                id_document_bytes, "Government ID front image",
+                side="front", declared_type=declared_type,
             )
-            if id_back_document_bytes is not None else None
-        )
+        except Exception as exc:
+            front_text = ""
+            front_failed = True
+            logging.warning("Government ID front OCR unavailable (%s)",
+                            type(exc).__name__)
+        back_text = None
+        if id_back_document_bytes is not None:
+            try:
+                back_text = extract_government_id_text(
+                    id_back_document_bytes, "Government ID back image",
+                    side="back", declared_type=declared_type,
+                )
+            except Exception as exc:
+                back_text = ""
+                back_failed = True
+                logging.warning("Government ID back OCR unavailable (%s)",
+                                type(exc).__name__)
         result = assess_document_sides(declared_type, front_text, back_text)
         # Transient whole-image blur estimate; not proof of real ID issuance.
         quality = image_quality(decode_image(id_document_bytes, "Government ID front image"))
         result = add_photo_quality(result, quality["blurVariance"])
+        if front_failed or back_failed:
+            # Do not downgrade explicit unsupported/wrong-ID evidence.
+            if result["status"] not in ("unsupported", "mismatch"):
+                result["status"] = "inconclusive"
+            flags = []
+            if front_failed:
+                flags.append("ocr_unavailable")
+                result["detectedIdType"] = None
+            if back_failed:
+                flags.append("document_back_ocr_inconclusive")
+            result["warningCodes"] = list(dict.fromkeys(
+                (result.get("warningCodes") or []) + flags
+            ))
+            result["backSideScreened"] = (
+                back_text is not None and not back_failed
+            )
         ocr_combined = front_text + "\n" + (back_text or "")
         result.update(assess_profile_name(
             expected_first_name, expected_last_name, ocr_combined,
@@ -951,8 +1030,10 @@ def screen_government_id(
         result["issuerAuthenticityStatus"] = "not_verified"
         result["presentationAttackStatus"] = "not_validated"
         return result
-    except Exception:
-        logging.warning("Government ID OCR screening unavailable")
+    except Exception as exc:
+        # No OCR text or uploaded ID metadata in logs.
+        logging.warning("Government ID screening failed at post-OCR stage (%s)",
+                        type(exc).__name__)
         result = document_ocr_unavailable(declared_type)
         result["backSideProvided"] = id_back_document_bytes is not None
         result["backSideScreened"] = False
@@ -1350,6 +1431,10 @@ async def document_precheck(
     outcome = "pass" if recognized else "review" if review else "retry"
     if name_conflict and outcome == "retry":
         message = "Please check the name on your National ID against your account details. Try a clearer front photo or ask Admin for help. This is not proof of an invalid ID."
+    elif "ocr_unavailable" in (screening.get("warningCodes") or []):
+        message = "The front ID photo could not be read. Retake a clear front photo with even lighting."
+    elif "document_back_ocr_inconclusive" in (screening.get("warningCodes") or []):
+        message = "The back ID text could not be read. Retake the back photo with less glare."
     elif birthday_conflict and outcome == "retry":
         message = "The ID birth date may differ from your saved profile. Retake a clear ID or ask Admin to review your profile; this is not proof of fraud."
     elif outcome == "pass":
