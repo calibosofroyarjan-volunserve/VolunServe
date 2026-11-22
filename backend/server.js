@@ -243,6 +243,11 @@ function getAllowedOrigins() {
     .split(",")
     .map((value) => value.trim())
     .filter(Boolean);
+  // An isolated identity staging service must NEVER inherit production CORS
+  // origins from the live server. Its configured origins pass the startup gate.
+  if (require("./identityStagingGuard").isIdentityStagingEnvironment()) {
+    return new Set(configured);
+  }
   return new Set([
     ...DEFAULT_ALLOWED_ORIGINS,
     ...configured,
