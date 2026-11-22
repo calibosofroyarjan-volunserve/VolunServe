@@ -614,8 +614,10 @@ function StatusChip({ bucket }: { bucket: ReviewFilter }) {
       : bucket === "verified"
         ? { label: "Verified", background: "#DCFCE7", color: "#166534" }
         : bucket === "retry_required"
-          ? { label: "Retry", background: "#FEE2E2", color: "#B91C1C" }
-          : { label: "Other", background: "#F1F5F9", color: "#475569" };
+          ? { label: "Retry Required", background: "#FFF2D6", color: "#92400E" }
+          : bucket === "rejected"
+            ? { label: "Rejected", background: "#FEE2E2", color: "#B91C1C" }
+            : { label: "Other", background: "#F1F5F9", color: "#475569" };
 
   return (
     <View
@@ -1733,5 +1735,184 @@ const styles = StyleSheet.create({
     padding: 11, gap: 8, marginBottom: 12 },
   previewDisclaimerText: { flex: 1, fontSize: 11, color: "#82642D", lineHeight: 17 },
   previewInfoCard: { borderRadius: 11, borderWidth: 1, borderColor: "#DCE8DF", padding: 15 },
+
+  // Unified Resident Identity Reviews layout: 8px grid, 13px body,
+  // 15px section headings, and one accessible color scale.
+  premiumHeading: {
+    backgroundColor: "#FFFFFF",
+    borderBottomWidth: 1,
+    borderBottomColor: "#E2E8F0",
+    paddingVertical: 14,
+    marginBottom: 14,
+  },
+  premiumPageTitle: {
+    color: "#102B26", fontSize: 25, lineHeight: 31, fontWeight: "800", letterSpacing: -0.5,
+  },
+  premiumPageSubtitle: {
+    color: "#536B64", fontSize: 13, lineHeight: 19, marginTop: 3,
+  },
+  premiumBreadcrumb: {
+    flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 9,
+    paddingVertical: 8, marginBottom: 13,
+  },
+  premiumBreadcrumbText: { color: "#435750", fontSize: 12, lineHeight: 18, fontWeight: "600" },
+  premiumBreadcrumbCurrent: { color: "#132D26", fontSize: 12, lineHeight: 18, fontWeight: "700" },
+  premiumReviewHeader: {
+    minHeight: 84, paddingHorizontal: 17, paddingVertical: 12, borderRadius: 15,
+    backgroundColor: "#FFFFFF", borderWidth: 1, borderColor: "#DDE6E1",
+    flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 18, marginBottom: 14,
+  },
+  premiumBackButton: {
+    flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8,
+    minHeight: 42, paddingHorizontal: 15, borderRadius: 10,
+    borderColor: "#A7D7BD", borderWidth: 1, backgroundColor: "#FFFFFF",
+  },
+  premiumBackText: { fontSize: 13, fontWeight: "700", color: "#08765A" },
+  premiumReviewTitleWrap: {
+    flex: 1, minWidth: 170, flexDirection: "row", gap: 12, alignItems: "center",
+  },
+  premiumReviewTitle: {
+    fontWeight: "800", fontSize: 20, lineHeight: 25, color: "#102B26", letterSpacing: -0.4,
+  },
+  premiumReviewSubtitle: { fontSize: 11, lineHeight: 16, color: "#64748B", marginTop: 3 },
+  premiumDetailColumns: { flexDirection: "row", alignItems: "flex-start", gap: 16 },
+  premiumDetailStack: { flexDirection: "column" },
+  premiumLeftColumn: { flexBasis: 335, flexGrow: 0, flexShrink: 0, minWidth: 0, gap: 13 },
+  premiumRightColumn: { flex: 1, minWidth: 0, gap: 13 },
+  premiumFullWidth: { width: "100%", flexBasis: "auto", flexGrow: 0, flexShrink: 1 },
+  premiumCard: {
+    borderRadius: 15, backgroundColor: "#FFFFFF", borderWidth: 1,
+    borderColor: "#DFE7E2", padding: 16,
+  },
+  premiumResidentHeader: { flexDirection: "row", alignItems: "center", gap: 13 },
+  premiumResidentIcon: {
+    width: 62, height: 62, borderRadius: 13, justifyContent: "center",
+    alignItems: "center", backgroundColor: "#E8F8EF",
+  },
+  premiumResidentName: { color: "#102B26", fontWeight: "800", fontSize: 18, lineHeight: 24 },
+  premiumResidentEmail: { color: "#53677D", fontSize: 12, lineHeight: 18, marginTop: 4 },
+  premiumInfoDivider: { height: 1, backgroundColor: "#E8EFEB", marginVertical: 12 },
+  premiumCardTitleRow: { flexDirection: "row", alignItems: "center", gap: 9, marginBottom: 10 },
+  premiumCardTitle: { color: "#102B26", fontSize: 15, lineHeight: 21, fontWeight: "800" },
+  premiumSubCopy: { color: "#60756B", fontSize: 12, lineHeight: 18, marginTop: 2 },
+  premiumFaceResult: { backgroundColor: "#E8F9F0", borderRadius: 10, padding: 12, marginBottom: 10 },
+  premiumFaceValue: { color: "#08765A", fontWeight: "800", fontSize: 20, lineHeight: 27 },
+  premiumResultRow: {
+    flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start",
+    borderBottomColor: "#EDF2EF", borderBottomWidth: 1, paddingVertical: 8, gap: 9,
+  },
+  premiumResultLabel: { color: "#4B5E6B", fontSize: 12, lineHeight: 18, fontWeight: "600" },
+  premiumResultValue: {
+    color: "#223E32", fontSize: 12, lineHeight: 18, fontWeight: "700",
+    flexShrink: 1, textAlign: "right",
+  },
+  premiumWarningText: { color: "#A15A08" },
+  premiumMethodOptions: { marginTop: 9, gap: 8 },
+  premiumMethod: {
+    paddingHorizontal: 10, paddingVertical: 11, borderRadius: 9,
+    backgroundColor: "#FFFFFF", borderWidth: 1, borderColor: "#DFE7E2",
+    flexDirection: "row", alignItems: "center", gap: 9,
+  },
+  premiumMethodSelected: { backgroundColor: "#ECFDF5", borderColor: "#77C69E" },
+  premiumMethodText: {
+    flex: 1, color: "#263F34", fontSize: 12, lineHeight: 18, fontWeight: "700",
+  },
+  premiumAttestation: {
+    flexDirection: "row", gap: 9, alignItems: "flex-start",
+    marginTop: 12, paddingTop: 10, borderTopWidth: 1, borderTopColor: "#EDF2EF",
+  },
+  premiumAttestationText: { flex: 1, color: "#425A52", fontSize: 11.5, lineHeight: 18 },
+  premiumEvidenceTiles: { flexDirection: "row", gap: 10, flexWrap: "wrap" },
+  premiumEvidenceTile: {
+    flex: 1, flexBasis: 175, minWidth: 135, borderRadius: 10, borderWidth: 1,
+    borderColor: "#DEE7E2", padding: 6, backgroundColor: "#FFFFFF",
+  },
+  premiumEvidenceImage: {
+    height: 143, width: "100%", alignItems: "center", justifyContent: "center",
+    backgroundColor: "#F0F6F2", borderRadius: 7, padding: 7, gap: 8,
+  },
+  premiumEvidencePhoto: { width: "100%", height: "100%", borderRadius: 6 },
+  premiumMissingLabel: { color: "#6B8378", fontSize: 11, lineHeight: 16, textAlign: "center" },
+  premiumEvidenceFooter: {
+    flexDirection: "row", alignItems: "center", justifyContent: "space-between",
+    gap: 7, paddingVertical: 7, paddingHorizontal: 2,
+  },
+  premiumEvidenceText: { flex: 1, fontSize: 11.5, lineHeight: 16, color: "#142F25", fontWeight: "700" },
+  premiumEvidenceNotice: { color: "#6B7C75", fontSize: 11.5, lineHeight: 18, marginTop: 9 },
+  premiumChecksLayout: { flexDirection: "row", alignItems: "stretch", gap: 12 },
+  premiumChecksStack: { flexDirection: "column" },
+  premiumChecksTable: {
+    flex: 1.45, minWidth: 0, borderRadius: 10, borderColor: "#E3EBE6",
+    borderWidth: 1, padding: 10, backgroundColor: "#FFFFFF",
+  },
+  premiumCheckRow: {
+    flexDirection: "row", alignItems: "flex-start", gap: 8, paddingVertical: 8,
+    borderBottomColor: "#F1F4F2", borderBottomWidth: 1,
+  },
+  premiumCheckName: {
+    color: "#1E332D", fontSize: 11.5, fontWeight: "700", lineHeight: 17,
+    flexBasis: 100, flexShrink: 1,
+  },
+  premiumCheckValue: { color: "#40566D", fontSize: 11.5, flex: 1, lineHeight: 17 },
+  premiumAssessment: {
+    flex: 1, minWidth: 0, backgroundColor: "#ECF4FF", borderWidth: 1,
+    borderColor: "#CFDEF6", padding: 12, borderRadius: 10,
+  },
+  premiumAssessmentTitle: { color: "#123B63", fontWeight: "800", fontSize: 12.5, lineHeight: 18 },
+  premiumAssessmentText: { color: "#2A4762", fontSize: 12, lineHeight: 19 },
+  premiumDisclaimer: { fontSize: 11, lineHeight: 16, color: "#78857D", marginTop: 10 },
+  premiumNotesHeader: { flexDirection: "row", alignItems: "baseline", flexWrap: "wrap", gap: 9, marginTop: 16 },
+  premiumNotesLabel: { color: "#20362D", fontWeight: "800", fontSize: 12.5, lineHeight: 18 },
+  premiumNotesMeta: { color: "#7B8D82", fontSize: 10.5, lineHeight: 17 },
+  premiumNotesInput: {
+    minHeight: 108, width: "100%", backgroundColor: "#FFFFFF", color: "#233C32",
+    borderWidth: 1, borderColor: "#C9D9D1", borderRadius: 10,
+    fontSize: 12.5, lineHeight: 20, padding: 12, marginTop: 8,
+    outlineStyle: "none",
+  } as any,
+  premiumNotesCounter: { color: "#6B7F74", textAlign: "right", fontSize: 10.5, marginTop: 4 },
+  premiumActions: { flexDirection: "row", gap: 10, marginTop: 10 },
+  premiumActionsStack: { flexWrap: "wrap" },
+  premiumVerifyAction: {
+    flex: 1.2, minWidth: 145, minHeight: 48, flexDirection: "row",
+    alignItems: "center", justifyContent: "center", gap: 8,
+    borderRadius: 10, backgroundColor: "#006E4F", paddingHorizontal: 10,
+  },
+  premiumVerifyText: { color: "#FFFFFF", fontSize: 12.5, fontWeight: "800" },
+  premiumRetryAction: {
+    flex: 1, minWidth: 135, minHeight: 48, flexDirection: "row",
+    alignItems: "center", justifyContent: "center", gap: 8,
+    borderRadius: 10, backgroundColor: "#FFF4D8", borderColor: "#E8B958",
+    borderWidth: 1, paddingHorizontal: 10,
+  },
+  premiumRetryText: { color: "#8B4B00", fontSize: 12.5, fontWeight: "800" },
+  premiumRejectAction: {
+    flex: 1, minWidth: 145, minHeight: 48, flexDirection: "row",
+    alignItems: "center", justifyContent: "center", gap: 8,
+    borderRadius: 10, backgroundColor: "#FFF3F2", borderColor: "#FDA7A2",
+    borderWidth: 1, paddingHorizontal: 10,
+  },
+  premiumRejectText: { color: "#B91C1C", fontSize: 12.5, fontWeight: "800" },
+  premiumDecisionHint: { color: "#965B08", fontSize: 11.5, marginTop: 10, lineHeight: 18 },
+  premiumResolvedNotes: {
+    marginTop: 13, borderRadius: 9, backgroundColor: "#F5F9F6",
+    padding: 12, gap: 5,
+  },
+  premiumSecondaryTabs: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
+  premiumSecondaryTab: {
+    paddingHorizontal: 12, paddingVertical: 10, borderRadius: 9,
+    borderWidth: 1, borderColor: "#DCE7E0", backgroundColor: "#FFFFFF",
+  },
+  premiumSecondaryTabActive: { borderColor: "#08765A", backgroundColor: "#EAF7EF" },
+  premiumSecondaryTabText: { color: "#61756A", fontWeight: "700", fontSize: 11.5 },
+  premiumSecondaryTabTextActive: { color: "#08765A" },
+  premiumQueuePanel: { gap: 12, padding: 18, borderRadius: 15, borderWidth: 1,
+    borderColor: "#DFE7E2", backgroundColor: "#FFFFFF" },
+  premiumQueueCards: { gap: 9 },
+  premiumQueueCard: {
+    flexDirection: "row", alignItems: "center", gap: 12, padding: 13,
+    borderColor: "#E1EAE4", borderWidth: 1, borderRadius: 10, backgroundColor: "#FFFFFF",
+  },
+  premiumQueueSummary: { marginTop: 5, color: "#60756A", fontSize: 11.5, lineHeight: 18 },
 
 });
