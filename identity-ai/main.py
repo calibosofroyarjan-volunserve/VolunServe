@@ -898,9 +898,9 @@ def _avoid_national_id_back_qr_noise(gray):
     right = cv2.Canny(gray[:, half:], 80, 180)
     left_density = float(np.count_nonzero(left)) / max(left.size, 1)
     right_density = float(np.count_nonzero(right)) / max(right.size, 1)
-    if right_density > 0.14 and right_density > 1.85 * max(left_density, 0.01):
+    if right_density > 0.075 and right_density > 1.85 * max(left_density, 0.01):
         return gray[:, :round(width * 0.59)]
-    if left_density > 0.14 and left_density > 1.85 * max(right_density, 0.01):
+    if left_density > 0.075 and left_density > 1.85 * max(right_density, 0.01):
         return gray[:, round(width * 0.41):]
     return gray
 
