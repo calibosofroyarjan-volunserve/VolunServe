@@ -20,7 +20,7 @@ class BoundedOcrTests(unittest.TestCase):
     def test_large_image_is_resized_and_only_one_bounded_ocr_pass_is_used(self):
         with patch("main.pytesseract.image_to_string", return_value="PHILIPPINE IDENTIFICATION CARD\nSURNAME: SAMPLE\nGIVEN NAMES: TEST") as mock:
             result = extract_government_id_text(self._png(2600, 1800), "fabricated photo")
-        self.assertEqual(result, "SYNTHETIC OCR")
+        self.assertEqual(result, "PHILIPPINE IDENTIFICATION CARD\nSURNAME: SAMPLE\nGIVEN NAMES: TEST")
         mock.assert_called_once()
         image = mock.call_args.args[0]
         self.assertLessEqual(max(image.shape), 1400)
