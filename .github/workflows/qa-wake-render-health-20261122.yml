@@ -81,3 +81,5 @@ jobs:
 # Re-run read-only health after National ID OCR recovery rollout; no deployment.
 
 # Final GET-only readiness check after blur/name-gate AI + Node deployments on Nov 22.
+
+# Verify current production hybrid OCR auto Admin queue rollout (GET health only) on Nov 22.
