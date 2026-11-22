@@ -860,7 +860,7 @@ export default function WebHome() {
           </View>
 
           <View style={[styles.mainGrid, compact && styles.mainGridCompact]}>
-            <View style={[styles.panel, narrow && styles.mobilePanel]}>
+            <View style={narrow ? styles.mobileHomeCard : styles.panel}>
               <PanelTitle
                 icon="document-text"
                 title="Your Current Activity"
@@ -972,7 +972,7 @@ export default function WebHome() {
               )}
             </View>
 
-            <View style={[styles.panel, narrow && styles.mobilePanel]}>
+            <View style={narrow ? styles.mobileHomeCard : styles.panel}>
               <PanelTitle
                 icon="megaphone"
                 title="Announcements"
@@ -1350,7 +1350,16 @@ const styles = StyleSheet.create({
   mobileSlideDotActive: { width: 20, backgroundColor: "#FFFFFF" },
   mobileSlideCount: { color: "#FFFFFF", fontSize: 10, fontWeight: "800" },
   // Stacked mobile panels must size to their content, not share desktop flex heights.
-  mobilePanel: { flex: 0, padding: 13, borderRadius: 17 },
+  // Never put flex:0 on auto-height mobile cards: RN Web turns it into
+  // flex-basis:0%, letting Activity/Announcements text overflow their boxes.
+  // Use a separate card style WITHOUT inherited desktop flex:1.
+  mobileHomeCard: {
+    minWidth: 0, padding: 13, borderRadius: 17,
+    backgroundColor: "#FFFFFF", borderWidth: 1, borderColor: "#DEEDF2",
+    shadowColor: "#0D506A", shadowOpacity: 0.035,
+    shadowRadius: 12, shadowOffset: { width: 0, height: 4 },
+  },
+  mobilePanel: { padding: 13, borderRadius: 17 },
   mobileActivityRow: { gap: 10, paddingHorizontal: 0, paddingVertical: 12, alignItems: "flex-start" },
   mobileStatusPill: { minWidth: 0, maxWidth: "100%", paddingHorizontal: 10, alignSelf: "flex-start", marginTop: 8 },
   screen: {
