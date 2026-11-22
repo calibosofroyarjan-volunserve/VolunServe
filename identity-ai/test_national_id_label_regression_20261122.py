@@ -7,7 +7,7 @@ from profile_consistency import assess_profile_birth_date
 
 FRONT = ("PAMBANSANG PAGKAKAKILANLAN\nPHILIPPINE IDENTIFICATION CARD\n"
          "APELYIDO: SAMPLE\nMGA PANGALAN: TEST\n"
-         "DATE OF BIRTH: 2004-12-18")
+         "DATE OF BIRTH: 1998-09-05")
 BACK = ("KALAGAYANG SIBIL / MARITAL STATUS: SINGLE\n"
         "LUGAR NG KAPANGANAKAN / PLACE OF BIRTH: DEMO CITY")
 
@@ -53,24 +53,24 @@ class NationalIdLabelRegression(unittest.TestCase):
 
     def test_labeled_year_first_named_month_is_possible_match_only(self):
         for text in (
-            "DATE OF BIRTH: 2004 DECEMBER 18",
-            "PETSA NG KAPANGANAKAN: 2004 DEC 18",
-            "DATE OF BIRTH 2004 12 18",
-            "DATE OF BIRTH 2004-12-18",
+            "DATE OF BIRTH: 1998 SEPTEMBER 05",
+            "PETSA NG KAPANGANAKAN: 1998 SEP 05",
+            "DATE OF BIRTH 1998 09 05",
+            "DATE OF BIRTH 1998-09-05",
         ):
             with self.subTest(text=text):
-                report = assess_profile_birth_date("2004-12-18", text)
+                report = assess_profile_birth_date("1998-09-05", text)
                 self.assertEqual(report["profileBirthDateCheck"], "possible_match")
 
     def test_conflict_remains_conflict(self):
-        value = assess_profile_birth_date("2004-12-18", "DATE OF BIRTH: 2003 DECEMBER 18")
+        value = assess_profile_birth_date("1998-09-05", "DATE OF BIRTH: 1997 SEPTEMBER 05")
         self.assertEqual(value["profileBirthDateCheck"], "possible_conflict")
 
     def test_unlabeled_or_unrelated_dates_never_match(self):
-        for text in ("2004 12 18", "DATE OF ISSUANCE: 2004 12 18",
-                     "EXPIRY: 2004 DECEMBER 18"):
+        for text in ("1998 09 05", "DATE OF ISSUANCE: 1998 09 05",
+                     "EXPIRY: 1998 SEPTEMBER 05"):
             with self.subTest(text=text):
-                value = assess_profile_birth_date("2004-12-18", text)
+                value = assess_profile_birth_date("1998-09-05", text)
                 self.assertEqual(value["profileBirthDateCheck"], "inconclusive")
 
     def test_ambiguous_numeric_dob_still_inconclusive(self):
