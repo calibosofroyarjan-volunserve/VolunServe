@@ -35,6 +35,10 @@ jobs:
           node --test scripts/test-identity-admin-evidence-contract.cjs
           node scripts/test-unified-identity-ai-government-id-screening.cjs
           node scripts/test-admin-people-verification-premium-ui.cjs
+      - name: Validate National ID Back AI quality policy
+        run: |
+          python3 -m py_compile identity-ai/main.py identity-ai/back_quality_policy.py identity-ai/document_screening.py
+          python3 -m unittest discover -s identity-ai -p 'test_back_quality_policy.py'
       - name: Check frontend TypeScript
         run: npx tsc --noEmit --pretty false
       - name: Compile web without deploying
