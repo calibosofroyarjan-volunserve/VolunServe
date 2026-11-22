@@ -1,0 +1,60 @@
+name: QA live AI National ID front/back OCR recovery (NO DEPLOY)
+
+on:
+  push:
+    branches: [fix/national-id-ocr-partial-recovery-20261122]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test-national-id:
+    name: Test production-derived AI with fabricated IDs only
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Check out scoped current AI source without legacy submodule
+        env:
+          REPO: ${{ github.repository }}
+          REVISION: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          git init -q
+          git remote add origin "https://github.com/${REPO}.git"
+          git -c protocol.version=2 fetch --no-tags --depth=1 --filter=blob:none --no-recurse-submodules origin "${REVISION}"
+          git sparse-checkout init --cone
+          git sparse-checkout set identity-ai
+          git checkout --force FETCH_HEAD
+      - name: Block restoring any outdated or unrelated modules
+        run: |
+          set -euo pipefail
+          BASE=efbb08b7c6b8e8e859d6a92c82033e2f9e61d316
+          git -c protocol.version=2 fetch --no-tags --depth=1 --filter=blob:none --no-recurse-submodules origin "$BASE"
+          git diff --name-status "$BASE" HEAD >/tmp/changes
+          cat /tmp/changes
+          python - <<'PY'
+          from pathlib import Path
+          actual=sorted(Path('/tmp/changes').read_text().strip().splitlines())
+          expected=sorted([
+            'M\tidentity-ai/main.py',
+            'A\tidentity-ai/test_national_id_partial_ocr_recovery_20261122.py',
+            'A\t.github/workflows/qa-national-id-partial-ocr-recovery-20261122.yml',
+          ])
+          assert actual==expected,(actual,expected)
+          print('PASS only OCR module and offline QA added; no unrelated source')
+          PY
+      - name: Build production AI container locally, no deploy
+        run: docker build -t volunserve-ocr-recovery:qa identity-ai
+      - name: Run all current synthetic ID, name, side and face integrity tests
+        run: |
+          docker run --rm --network none --entrypoint python volunserve-ocr-recovery:qa \
+            -m unittest -v \
+            test_document_screening test_profile_consistency \
+            test_face_box_dedup test_document_precheck \
+            test_synthetic_document_pipeline test_ai_runtime_smoke \
+            test_name_check_soft_feedback_20261122 \
+            test_bounded_ocr_render_free_20261122 \
+            test_national_id_partial_ocr_recovery_20261122
+      - name: Ensure no production changes
+        run: echo "NO DEPLOY. No real ID files, user information, face biometrics, Firebase writes or Render changes."
