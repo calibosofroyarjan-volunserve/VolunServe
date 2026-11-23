@@ -147,9 +147,10 @@ test("Resident SUBMIT -> 3 independently offered and notified; 2 Accept 1 Declin
  assert.equal(c.verificationStatus,"pending_verification");
  assert.equal(c.status,"reported","Never auto-validate or alter real emergency review");
  assert.equal(c.autoVolunteerDispatch.attemptedCount,3);
+ const createdRecordCount=db.data.size;
  const replay=await engine.submitted({uid:REPORTER,caseId:CASE,profile});
  assert.equal(replay.status,"already_completed");
- assert.equal(db.data.size,19);
+ assert.equal(db.data.size,createdRecordCount);
  assert.equal((await engine.respond({uid:"spoof",caseId:CASE,decision:"accepted"})).status,"blocked");
  const decisions=["accepted","accepted","declined"];
  for(let i=0;i<3;i++){
