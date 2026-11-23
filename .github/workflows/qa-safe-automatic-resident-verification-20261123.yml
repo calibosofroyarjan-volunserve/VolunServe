@@ -1,0 +1,38 @@
+name: QA Safe Automatic Resident Identity Approval Policy (No Deploy)
+on:
+  push:
+    branches: [feat/identity-auto-approval-safe-gate-20261123]
+permissions:
+  contents: read
+jobs:
+  approval-policy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Assert only isolated policy and tests added
+        run: |
+          set -euo pipefail
+          node --check backend/automaticIdentityApprovalPolicy.js
+          node --check backend/test-automaticIdentityApprovalPolicy.js
+          node <<'NODE'
+          const cp=require('child_process'),assert=require('assert');
+          const files=cp.execFileSync('git',['diff','--name-only','HEAD~3','HEAD'],{encoding:'utf8'}).trim().split('\n').sort();
+          assert.deepEqual(files,[
+            '.github/workflows/qa-safe-automatic-resident-verification-20261123.yml',
+            'backend/automaticIdentityApprovalPolicy.js',
+            'backend/test-automaticIdentityApprovalPolicy.js',
+          ].sort());
+          NODE
+      - name: Test future automatic approval eligibility against fraud paths
+        run: |
+          node --test backend/test-automaticIdentityApprovalPolicy.js
+          node --test backend/test-identity-final-admin-only.js
+          (cd backend && node --test test-identityHybridPrecheckDecision.js)
+      - name: No production changes
+        run: echo "Policy staged only. No live auto-verification enabled, no Firebase/Render writes."
