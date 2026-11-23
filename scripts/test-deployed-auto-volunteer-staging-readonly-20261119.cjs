@@ -97,7 +97,7 @@ async function run(){
   const assetSources=[...ui.body.matchAll(/<script\b[^>]*\bsrc=["']([^"']+\.js(?:\?[^"']*)?)["'][^>]*>/gi)]
     .map(m=>m[1]);
   assert.ok(assetSources.length>0,"Staging HTML has no JavaScript assets");
-  let hasFixture=false,hasStageProject=false;
+  let hasFixture=false,hasStageProject=false,hasCorrectFirebaseApiKey=false;
   for(const asset of assetSources.slice(0,16)){
     const target=new URL(asset,UI);
     assert.equal(target.origin,UI,"All bundle reads must stay on staging UI origin");
@@ -107,9 +107,11 @@ async function run(){
     assert.equal(response.status,200,"Staging bundle asset is unavailable");
     hasFixture ||= response.body.includes("STAGING_E2E_002");
     hasStageProject ||= response.body.includes("volunserve-volunteer-staging");
+    hasCorrectFirebaseApiKey ||= response.body.includes("AIzaSyCGS-VySgPPEcqgKH0tBqQCZX_YYhJFuuM");
   }
   assert.ok(hasFixture,"Deployed web bundle is missing fictional Volunteer 002 UI bridge");
   assert.ok(hasStageProject,"Deployed web bundle does not reference isolated staging Firebase project");
+  assert.ok(hasCorrectFirebaseApiKey,"Deployed staging web Firebase Auth API key differs from the working staging backend login key");
   passed("Deployed web bundle includes fictional 002 bridge and isolated staging Firebase project");
 
   console.log("PASS "+checks.length+" read-only staging checks.");
