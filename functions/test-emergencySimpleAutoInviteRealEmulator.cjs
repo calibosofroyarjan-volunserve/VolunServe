@@ -31,7 +31,8 @@ const app=adminInitialize({projectId:PROJECT},"simple_invites_e2e_"+process.pid)
 const db=getFirestore(app),authAdmin=adminGetAuth(app);
 const U={admin:"qa_simple_admin",resident:"qa_simple_resident",
   a:"qa_simple_vol_a",b:"qa_simple_vol_b",c:"qa_simple_vol_c",
-  suspended:"qa_simple_suspended",outsider:"qa_simple_outsider"};
+  suspended:"qa_simple_suspended",outsider:"qa_simple_outsider",
+  notInvited:"qa_simple_no_application"};
 const CASE="QA_SIMPLE_AUTO_CASE_001";
 const PASSWORD="TestOnly!eMUlAt0rA67x";
 const mail=uid=>uid+"@fictional.invalid";
@@ -96,6 +97,11 @@ async function seed(){
       uid,status:"approved",skills:["Cooking"]
     });
   }
+  batch.set(ref("users",U.notInvited),approvedProfile(U.notInvited,{
+    barangay:"Bagong Buhay I"
+  }));
+  // Approved Volunteer capability alone does not grant case visibility:
+  // no approved application and no automatic task invitation for this UID.
   batch.set(ref("disasterCases",CASE),{
     status:"reported",verificationStatus:"pending_verification",
     evidenceReviewStatus:"pending_review",
@@ -164,10 +170,23 @@ test("Each signed-in Volunteer can read THEIR own real Firestore assignment inbo
       where("volunteerId","==",uid));
     const snapshot=await getDocs(q);
     assert.deepEqual(snapshot.docs.map(x=>x.id),[CASE+"_"+uid]);
+    const incident=await getDoc(doc(ctx.firestore,"disasterCases",CASE));
+    assert.equal(incident.exists(),true,
+      "Invited Volunteer should see the emergency report before accepting");
+    assert.equal(incident.data().title,"FICTIONAL EMULATOR ONLY - Emergency report");
     const strangerId=CASE+"_"+(uid===U.a?U.b:U.a);
     await denied(getDoc(doc(ctx.firestore,"responseAssignments",strangerId)),
       "permission-denied");
   }
+});
+test("A verified Volunteer without an invite cannot read private incident details",async()=>{
+  const uninvited=await client(U.notInvited);
+  const missing=await getDocs(query(
+    collection(uninvited.firestore,"responseAssignments"),
+    where("volunteerId","==",U.notInvited)));
+  assert.equal(missing.empty,true);
+  await denied(getDoc(doc(uninvited.firestore,"disasterCases",CASE)),
+    "permission-denied");
 });
 test("Anonymous and uninvited Volunteer cannot impersonate another invitation",async()=>{
   const anonymous=await client(null);
@@ -186,6 +205,9 @@ test("REAL authenticated callable: Volunteer A Accept, B Decline, C Accept",asyn
   assert.equal((await ref("responderLocks",U.c).get()).data().responderUid,U.c);
   assert.equal((await ref("responderLocks",U.b).get()).exists,false);
   assert.equal((await ref("autoVolunteerReservations",U.b).get()).exists,false);
+  // A declined Volunteer loses the special case-details read path.
+  await denied(getDoc(doc(two.firestore,"disasterCases",CASE)),
+    "permission-denied");
   assert.equal((await ref("notifications","auto_decision_"+CASE+"_"+U.a).get()).data().userId,U.resident);
   assert.equal((await ref("notifications","auto_decision_"+CASE+"_"+U.b).get()).data().userId,U.admin);
   assert.equal((await ref("emergencyAutoDispatchBatches",CASE).get()).data().status,"supported");
