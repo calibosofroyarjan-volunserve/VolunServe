@@ -12224,6 +12224,14 @@ const { installPublicAssistanceAppeals } = require("./publicAssistanceAppeals");
 installPublicAssistanceAppeals({
   app, db, FieldValue, requireFirebaseUser, requireOperationalAdmin, cleanText, makeHttpError,
 });
+// OFF-BY-DEFAULT Render alternative to Firebase Cloud Functions: the signed-in
+// Resident calls this once after Firestore saves a report. No collection polling.
+// Render Firebase Admin verifies the report owner and eligible Volunteers.
+// Automatic certificates are unchanged.
+require("./renderEmergencyAutoInvites").installRoutes({
+  app, db, FieldValue, requireFirebaseUser, loadUserProfile,
+});
+
 // Automatic, idempotent recovery for eligible completed event certificates.
 // Does not change attendance, roles, certificates that already exist, or rules.
 startCommunityCertificateAutoSync({db,reconcile:reconcileCommunityEventCertificates});

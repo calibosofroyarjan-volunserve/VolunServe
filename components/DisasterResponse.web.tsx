@@ -28,6 +28,7 @@ const isInsideSjdm = (lat: number, lng: number) =>
   insideSjdmBoundary(sjdmFeature, lat, lng);
 
 import { db } from "../lib/firebase";
+import {renderEmergencyEnabled, requestRenderEmergencyAuto} from "../lib/renderEmergencyAuto";
 import { isApprovedProfile } from "../lib/firebaseAuth";
 import { useUserSession } from "../lib/useUserSession";
 
@@ -1054,6 +1055,17 @@ export default function WebDisasterReport() {
         updatedAt: serverTimestamp(),
       });
 
+      if (renderEmergencyEnabled()) {
+        try {
+          setProgress("Inviting eligible Volunteers...");
+          await requestRenderEmergencyAuto(caseId);
+        } catch (dispatchError) {
+          // The Resident report was ALREADY saved. Never mark it unsaved or
+          // create a duplicate just because Render was asleep/offline.
+          console.warn("Render auto-invite status not confirmed:", dispatchError);
+          setError("Emergency report saved. Volunteer invitations could not be confirmed; Admin can check the request.");
+        }
+      }
       setSuccess(caseId);
     } catch (cause) {
       try {
