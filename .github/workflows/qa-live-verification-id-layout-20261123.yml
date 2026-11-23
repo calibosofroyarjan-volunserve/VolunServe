@@ -1,0 +1,59 @@
+name: QA Clean Verification ID Display (NO DEPLOY)
+on:
+  push:
+    branches: [fix/live-verification-id-layout-20261123]
+permissions:
+  contents: read
+jobs:
+  check-only:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      CI: 'true'
+      EXPO_NO_TELEMETRY: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Fail if unrelated or outdated frontend code is included
+        run: |
+          set -euo pipefail
+          git diff --name-status b2b07fbc02dfe184e622240d628a8365b27693fa HEAD
+          node <<'NODE'
+          const fs=require('fs'),assert=require('node:assert/strict'),cp=require('child_process');
+          const base='b2b07fbc02dfe184e622240d628a8365b27693fa';
+          const changed=cp.execFileSync('git',['diff','--name-only',base,'HEAD'],{encoding:'utf8'}).trim().split('\n').sort();
+          assert.deepEqual(changed,[
+            '.github/workflows/qa-live-verification-id-layout-20261123.yml',
+            'app/(admin)/identity-reviews.tsx'
+          ].sort());
+          const now=fs.readFileSync('app/(admin)/identity-reviews.tsx','utf8');
+          const old=cp.execFileSync('git',['show',base+':app/(admin)/identity-reviews.tsx'],{encoding:'utf8'});
+          for(const guard of [
+            'issuerReviewAttested', 'onReject={() => void saveDecision("reject")}',
+            'selected.reviewTrack === "blurry_id_review"',
+            'premiumDetailColumns', 'premiumEvidenceTiles',
+            '/api/admin/identity/reviews/', 'const token = await user.getIdToken(true)',
+          ]) {
+            assert(old.includes(guard)&&now.includes(guard), 'Lost identity security guard: '+guard);
+          }
+          assert(now.includes('<VerificationIdLine id={item.verificationId} />'));
+          assert(now.includes('shortVerificationId(fullId)'));
+          assert(now.includes('navigator.clipboard.writeText(fullId)'));
+          assert(now.includes('This is the original system reference'));
+          assert(!now.includes('Verification ID: {selected.verificationId'));
+          console.log('PASS full system ID intact, shortened UI with copy control, narrow diff');
+          NODE
+      - name: Install exactly pinned frontend dependencies
+        run: npm ci --no-audit --no-fund
+      - name: TypeScript typecheck
+        run: npx tsc --noEmit --incremental false
+      - name: Build live-derived Expo web without deployment
+        run: npx expo export --platform web --clear
+      - name: No production writes
+        run: echo 'Tests only. No Firebase Hosting, Firestore, rules or Render changes.'
