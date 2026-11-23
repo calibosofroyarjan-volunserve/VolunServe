@@ -250,8 +250,13 @@ jobs:
             const r=await fetch('https://firebaserules.googleapis.com/v1/'+route,{
               method,headers:{Authorization:'Bearer '+access,'Content-Type':'application/json'},
               body:body==null?undefined:JSON.stringify(body),signal:AbortSignal.timeout(30000)});
-            if(!r.ok)throw Error('Firebase Rules REST '+method+' '+route+' HTTP '+r.status+
-              ' (no credential material logged)');
+            if(!r.ok){
+              const raw=(await r.text()).slice(0,1800);
+              let detail='';try{detail=JSON.parse(raw)?.error?.message||'';}catch{}
+              const safe=String(detail||raw).replace(/Bearer\\s+\\S+/gi,'Bearer REDACTED')
+                .replace(/private_key[^,}]*/gi,'private_key REDACTED').slice(0,850);
+              throw Error('Firebase Rules REST '+method+' '+route+' HTTP '+r.status+' reason: '+safe);
+            }
             return r.json();
           }
           (async()=>{
@@ -270,8 +275,7 @@ jobs:
             const latest=await api(access,releaseName);
             assert.equal(latest.rulesetName,before.ruleset,'BLOCKED concurrent active Rules release');
             const updated=await api(access,releaseName,'PATCH',{
-              release:{name:releaseName,rulesetName:created.name},
-              updateMask:'rulesetName'
+              release:{name:releaseName,rulesetName:created.name}
             });
             assert.equal(updated.rulesetName,created.name,'BLOCKED Rules PATCH response mismatch');
             const confirmation=await api(access,releaseName);
