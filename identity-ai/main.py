@@ -1612,9 +1612,15 @@ async def document_precheck(
     birthday_conflict = screening.get("profileBirthDateCheck") == "possible_conflict"
     name_status = screening.get("profileNameCheck")
     name_conflict = name_status == "possible_conflict"
+    # OCR can miss printed name fields on otherwise recognizable ID cards.
+    # Permit face *comparison* when the name is inconclusive (not mismatched),
+    # but never auto-grant Verified status; the Admin must examine ID evidence.
     national_id_name_unconfirmed = (
         declared_type == "national_id"
-        and name_status != "possible_match"
+        and name_status not in ("possible_match", "inconclusive")
+    )
+    name_needs_manual_review = (
+        declared_type == "national_id" and name_status == "inconclusive"
     )
     # DOB OCR is advisory for the face-scan stage. A badly read date must
     # not block a readable supported ID, matching account name and selfie.
@@ -1643,9 +1649,13 @@ async def document_precheck(
     elif "document_back_ocr_inconclusive" in (screening.get("warningCodes") or []):
         message = "The back ID text could not be read. Retake the back photo with less glare."
     elif national_id_name_unconfirmed and screening.get("status") == "text_consistent_unverified":
-        message = ("The National ID format was detected, but the account name "
-                   "could not be confirmed. Retake the front to show both name "
-                   "fields, or ask Admin to check your profile.")
+        message = ("The National ID format was detected, but a saved account "
+                   "name is missing. Complete your profile or ask Admin for help.")
+    elif outcome == "pass" and name_needs_manual_review:
+        message = ("National ID type was recognized, but printed name fields were "
+                   "not fully readable. You may continue to facial comparison. "
+                   "This does not verify identity: LGU/Admin must check your "
+                   "actual document name and photo independently.")
     elif outcome == "pass":
         message = (
             "ID type and account name appear consistent. Continue to face "
