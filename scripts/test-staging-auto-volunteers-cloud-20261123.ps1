@@ -70,9 +70,16 @@ function CloudPost([string]$Path, [string]$Token, [hashtable]$Body) {
   } -Body ($Body | ConvertTo-Json -Compress) -ContentType "application/json" -TimeoutSec 60
 }
 function GetStagingToken([string]$Role, [string]$DefaultEmail = "") {
-  $emailPrompt = if ($DefaultEmail) {"$Role email [$DefaultEmail]"} else {"$Role email (staging ONLY)"}
-  $email = Read-Host $emailPrompt
-  if (-not $email -and $DefaultEmail) { $email = $DefaultEmail }
+  # Exact pre-registered fictional Volunteer slots do not need email typing.
+  # Admin email is never hardcoded or copied from private user data.
+  if ($DefaultEmail -and $Role -like "Volunteer *") {
+    $email = $DefaultEmail
+    Write-Host ("{0} fixed fictional staging email: {1}" -f $Role,$email) -ForegroundColor Cyan
+  } else {
+    $emailPrompt = if ($DefaultEmail) {"$Role email [$DefaultEmail]"} else {"$Role email (staging ONLY)"}
+    $email = Read-Host $emailPrompt
+    if (-not $email -and $DefaultEmail) { $email = $DefaultEmail }
+  }
   if (-not $email -or $email -notmatch '^[^@\s]+@[^@\s]+$') {
     Fail "A valid isolated staging Firebase email is required."
   }
@@ -88,7 +95,23 @@ function GetStagingToken([string]$Role, [string]$DefaultEmail = "") {
       returnSecureToken = $true
     } | ConvertTo-Json -Compress
     $authUrl = "https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=$PublicFirebaseWebApiKey"
-    $response = Invoke-RestMethod -Method Post -Uri $authUrl -Body $payload -ContentType "application/json" -TimeoutSec 45
+    try {
+      $response = Invoke-RestMethod -Method Post -Uri $authUrl -Body $payload -ContentType "application/json" -TimeoutSec 45
+    } catch {
+      # Print only a recognized Firebase error CODE. Never expose the HTTP
+      # request, password, ID token or raw Firebase response.
+      $firebaseCode = "SIGN_IN_REJECTED"
+      try {
+        $safeDetails = $_.ErrorDetails.Message
+        if ($safeDetails) {
+          $errorName = [string](($safeDetails | ConvertFrom-Json).error.message)
+          if ($errorName -in @("INVALID_PASSWORD","INVALID_LOGIN_CREDENTIALS","EMAIL_NOT_FOUND","USER_DISABLED","TOO_MANY_ATTEMPTS_TRY_LATER")) {
+            $firebaseCode = $errorName
+          }
+        }
+      } catch {}
+      Fail ("{0} Firebase Auth failed ({1}). Verify the STAGING account email/password; no Volunteer invitation changed." -f $Role,$firebaseCode)
+    }
     if (-not $response.idToken -or -not $response.localId) { Fail "Staging Firebase Auth did not return a valid session." }
     Write-Host "$Role Firebase Auth: PASS (UID hidden; token not printed)" -ForegroundColor Green
     return $response.idToken
