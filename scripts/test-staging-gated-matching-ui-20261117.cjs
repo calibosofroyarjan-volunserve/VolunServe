@@ -139,7 +139,6 @@ const entries=diff.split("\n").filter(Boolean).map(line=>line.split("\t"));
 const extraStaging=new Map([
  ["app/(tabs)/notifications.tsx","M"],
  [".github/workflows/qa-staging-web-resident-auto-demo-20261123.yml","A"],
- ["scripts/test-staging-gated-matching-ui-20261117.cjs","M"],
 ]);
 assert.equal(entries.length,ui.length+additions.size+2+extraStaging.size);checks++;
 for(const [status,path] of entries){
