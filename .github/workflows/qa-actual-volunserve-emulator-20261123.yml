@@ -27,6 +27,8 @@ jobs:
       FIREBASE_CLI_DISABLE_TELEMETRY: "1"
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
@@ -43,8 +45,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test "$(git diff-tree --no-commit-id --name-only -r HEAD | wc -l)" -eq 1
-          test "$(git diff-tree --no-commit-id --name-only -r HEAD)" = ".github/workflows/qa-actual-volunserve-emulator-20261123.yml"
+          git diff --name-only dc13e8b17560bac67b6b8fa94fa8764ae1ab6ff5 HEAD > /tmp/qa-scope
+          test "$(wc -l </tmp/qa-scope)" -eq 1
+          test "$(cat /tmp/qa-scope)" = ".github/workflows/qa-actual-volunserve-emulator-20261123.yml"
           test "$VOLUNSERVE_SIMPLE_AUTO_INVITES_PRODUCTION_APPROVED" = false
           test "$GCLOUD_PROJECT" = demo-volunserve-simple-invites
       - name: Install pinned root and Firebase Functions dependencies
