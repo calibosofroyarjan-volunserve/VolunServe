@@ -55,9 +55,13 @@ async function main(){
   if(creds.project_id!==PROJECT||creds.type!=="service_account"||
     !String(creds.client_email||"").endsWith("@"+PROJECT+".iam.gserviceaccount.com")||
     !creds.private_key)throw Error("BLOCKED: not an isolated staging credential");
-  const {initializeApp,cert,deleteApp}=require("../backend/node_modules/firebase-admin/app");
-  const {getAuth}=require("../backend/node_modules/firebase-admin/auth");
-  const {getFirestore}=require("../backend/node_modules/firebase-admin/firestore");
+  // Node package subpath exports require a package-aware resolver, not a direct
+  // ../node_modules/firebase-admin/app filesystem path.
+  const {createRequire}=require("node:module");
+  const backendRequire=createRequire(path.resolve(__dirname,"../backend/package.json"));
+  const {initializeApp,cert,deleteApp}=backendRequire("firebase-admin/app");
+  const {getAuth}=backendRequire("firebase-admin/auth");
+  const {getFirestore}=backendRequire("firebase-admin/firestore");
   const sdk=initializeApp({credential:cert(creds),projectId:PROJECT},"staging002-test-reset");
   try{
     const [record,u,v]=await Promise.all([
