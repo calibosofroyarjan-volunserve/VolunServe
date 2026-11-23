@@ -1,0 +1,37 @@
+name: Quick defense automatic Volunteer invite staging UI check
+on:
+  push:
+    branches:
+      - fix/defense-staging-auto-invite-quick-ui-20261123
+permissions:
+  contents: read
+jobs:
+  qa:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Check exact staging-only change scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --name-status 07c0e2b0e382fbb5d8670d6402eda8acebdda0a3 HEAD >/tmp/paths
+          test "$(wc -l </tmp/paths)" -eq 3
+          while IFS="$(printf '\t')" read -r st file; do
+            case "$st:$file" in
+              "M:backend/stagingAdminLogin.html"|"A:backend/test-stagingQuickAutoInviteDefenseUI.cjs"|"A:.github/workflows/qa-staging-quick-auto-invite-defense-20261123.yml") ;;
+              *) echo "Blocked unexpected file: $st $file"; exit 1 ;;
+            esac
+          done </tmp/paths
+          test -z "$(git diff --name-only 07c0e2b0e382fbb5d8670d6402eda8acebdda0a3 HEAD -- backend/server.js functions/index.js)"
+      - name: Test automatic invite quick demo screen
+        run: |
+          node --check backend/test-stagingQuickAutoInviteDefenseUI.cjs
+          node --test backend/test-stagingQuickAutoInviteDefenseUI.cjs backend/test-staging002VolunteerAdminUI.cjs
+      - name: No production deploy
+        run: echo "Staging Admin HTML only; no live VolunServe files, Firebase rules, new assignments or credentials."

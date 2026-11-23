@@ -48,12 +48,12 @@ a{color:#075c49}input:focus-visible,button:focus-visible{outline:3px solid #4db8
 <p class="small">A case already assigned or in progress must not be manually reset to validated. Use the read-only verification and controlled reissue flow instead. The preparation control only works for the pre-existing, fictional status="reported" case with no matching assignments and already-validated verification.</p>
 <section aria-labelledby="fresh-heading" style="border-top:1px solid #dce9e4;margin-top:24px;padding-top:12px">
 <h2 id="fresh-heading">Fresh isolated E2E test — STAGING_E2E_002</h2>
-<p>This is a NEW fictional report, separate from the accepted STAGING_TEST_001. It starts unvalidated and uses only the already-approved staging test Resident. Admin must explicitly create, validate, and offer. It cannot assign official responders or operate on production Firebase.</p>
+<p><strong>QUICK DEFENSE DEMO:</strong> Sign in with the staging Admin account, check 002, create 002 if missing, then click <strong>Validate 002 + AUTOMATICALLY invite</strong>. Invitations are sent by the backend immediately to eligible staging Volunteers; use the separate staging Volunteer page to Accept/Decline. No manual bulk-send click needed. Existing accepted tasks are never reset.</p><p>This is a NEW fictional report, separate from the accepted STAGING_TEST_001. It starts unvalidated and uses only the already-approved staging test Resident. Admin must explicitly create and validate; the backend automatically invites when the dedicated staging feature is enabled. It cannot assign official responders or operate on production Firebase.</p>
 <div class="buttons">
 <button type="button" class="secondary" id="check-002" disabled>Check 002 readiness</button>
 <button type="button" class="secondary" id="eligibility-002" disabled>Why 0 eligible Volunteers? (read-only)</button>
 <button type="button" class="secondary" id="create-002" disabled>Create fictional 002</button>
-<button type="button" class="secondary" id="validate-002" disabled>Validate fictional 002</button>
+<button type="button" class="secondary" id="validate-002" disabled>Validate 002 + AUTOMATICALLY invite all eligible Volunteers</button>
 <button type="button" id="offer-002" disabled>Offer single task for 002 (legacy)</button>
 <button type="button" id="bulk-offer-002" disabled>Offer to ALL eligible Volunteers (isolated test)</button>
 <button type="button" class="secondary" id="bulk-status-002" disabled>Check ALL eligible offer statuses</button>
@@ -200,7 +200,10 @@ async function refresh002(){
   el002("check-002").disabled=false;
   el002("eligibility-002").disabled=false;
   el002("create-002").disabled=!(stagingActivationReady&&status==="not_created");
-  el002("validate-002").disabled=!(stagingActivationReady&&status==="reported");
+  // Safe retry for previously validated 002 when first automatic fanout failed.
+  // Server-side startBatchOffers rejects any existing assignment/batch atomically.
+  el002("validate-002").disabled=!(stagingActivationReady&&
+    (status==="reported"||status==="ready"));
   el002("offer-002").disabled=!(stagingActivationReady&&status==="ready");
   el002("bulk-offer-002").disabled=true;
   el002("bulk-status-002").disabled=true;
@@ -280,7 +283,9 @@ async function do002(action,confirmation){
       batch?.status==="blocked" ?
         "\nVALIDATION SAVED, BUT AUTOMATIC MATCHING BLOCKED: "+
         String(batch.reason||"review_needed")+". No automatic assignments claimed." :
-        "\nAutomatic offers are disabled in this isolated staging test. No offers sent." :
+      batch?.status==="already_started" ?
+        "\nEXISTING FICTIONAL OFFERS PROTECTED: no duplicate invitations were sent. Check BULK statuses." :
+        "\nAutomatic offers disabled or unavailable; check the isolated staging Admin status. No new invitations confirmed." :
       "";
     show002("Staging E2E 002 "+action+": "+String(result.status||result.action||"completed")+
       autoInfo+"\nNo production records changed. "+
