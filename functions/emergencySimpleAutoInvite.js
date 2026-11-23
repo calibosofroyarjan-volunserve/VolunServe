@@ -6,6 +6,16 @@
 const UID=/^[A-Za-z0-9_-]{1,160}$/;
 const ACTIVE=["offered","accepted","responding","on_site"];
 const ORIGIN="automatic_all_volunteers_no_barangay";
+const DEMO_ORIGIN="automatic_resident_submission_demo";
+function residentDemoEnabled(env=process.env){
+  const project=String(env.GCLOUD_PROJECT||env.GOOGLE_CLOUD_PROJECT||"");
+  return env.VOLUNSERVE_RESIDENT_SUBMISSION_DEMO_ENABLED==="true" &&
+    env.VOLUNSERVE_SIMPLE_AUTO_INVITES_ENABLED==="true" &&
+    env.VOLUNSERVE_SIMPLE_AUTO_INVITES_PROJECT_ID===project &&
+    (project==="demo-volunserve-simple-invites" ||
+     (project==="volunserve-volunteer-staging" &&
+      env.VOLUNSERVE_RESIDENT_DEMO_STAGING_APPROVED==="true"));
+}
 const LIMIT=40,POOL_LIMIT=200;
 const ref=(db,col,id)=>db.collection(col).doc(id);
 const result=(status,reason,extra={})=>({status,reason:reason||null,...extra});
@@ -132,7 +142,8 @@ function makeApprovedCaseAutoInviteHandler({db,FieldValue,env=process.env,clock=
 function makeAutoVolunteerDecisionHandler({db,FieldValue,env=process.env}={}){
   if(!db||!FieldValue?.serverTimestamp)throw Error("Firestore dependencies required");
   return async ({uid,caseId,decision}={})=>{
-    if(!dispatchEnabled(env))return result("disabled","explicit_feature_gate_off");
+    if(!dispatchEnabled(env)&&!residentDemoEnabled(env))
+      return result("disabled","explicit_feature_gate_off");
     if(!UID.test(String(uid||""))||!UID.test(String(caseId||""))||
       !["accepted","declined"].includes(decision))
       return result("blocked","invalid_volunteer_case_or_decision");
@@ -152,12 +163,15 @@ function makeAutoVolunteerDecisionHandler({db,FieldValue,env=process.env}={}){
         await Promise.all([cRef,taskRef,reserveRef,lockRef,batchRef,
           userRef,appRef,originalRef,outcomeRef,auditRef].map(r=>tx.get(r)));
       const c=cSnap.data()||{},t=task.data()||{},b=batch.data()||{};
-      if(!cSnap.exists||!task.exists||!batch.exists||
-        b.origin!==ORIGIN||c.autoVolunteerDispatch?.origin!==ORIGIN||
-        t.offerMode!==ORIGIN||t.caseId!==caseId||t.volunteerId!==uid)
+      const allowedOrigin=(b.origin===ORIGIN &&
+        c.autoVolunteerDispatch?.origin===ORIGIN && dispatchEnabled(env)) ||
+        (b.origin===DEMO_ORIGIN &&
+        c.autoVolunteerDispatch?.origin===DEMO_ORIGIN && residentDemoEnabled(env));
+      if(!cSnap.exists||!task.exists||!batch.exists||!allowedOrigin||
+        t.offerMode!==b.origin||t.caseId!==caseId||t.volunteerId!==uid)
         return result("blocked","not_owned_automatic_invitation");
       if(t.status===decision)return result("already_"+decision);
-      if(t.status!=="offered"||!["waiting","supported"].includes(b.status)||
+      if(t.status!=="offered"||!["dispatching","waiting","supported"].includes(b.status)||
         !["validated","assigned","in_progress"].includes(c.status)||
         c.dispatchBlocked===true||c.closedAt||c.resolvedAt)
         return result("blocked","offer_no_longer_pending");
@@ -169,7 +183,8 @@ function makeAutoVolunteerDecisionHandler({db,FieldValue,env=process.env}={}){
         !original.exists||original.data()?.userId!==uid||
         outcome.exists||audit.exists)
         return result("blocked","reservation_or_notification_conflict");
-      const recipient=decision==="accepted"?c.reporterUid:c.validatedBy;
+      const recipient=(decision==="accepted"||b.origin===DEMO_ORIGIN)?
+        c.reporterUid:c.validatedBy;
       if(!UID.test(String(recipient||""))||recipient===uid)
         return result("blocked","invalid_notification_recipient");
       const stamp=FieldValue.serverTimestamp();
@@ -201,4 +216,4 @@ function makeAutoVolunteerDecisionHandler({db,FieldValue,env=process.env}={}){
   };
 }
 
-module.exports={dispatchEnabled,approvedTransition,volunteerAllowed,makeApprovedCaseAutoInviteHandler,makeAutoVolunteerDecisionHandler};
+module.exports={dispatchEnabled,residentDemoEnabled,approvedTransition,volunteerAllowed,makeApprovedCaseAutoInviteHandler,makeAutoVolunteerDecisionHandler};
