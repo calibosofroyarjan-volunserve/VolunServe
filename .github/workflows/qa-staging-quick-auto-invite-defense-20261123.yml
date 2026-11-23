@@ -28,7 +28,7 @@ jobs:
               *) echo "Blocked unexpected file: $st $file"; exit 1 ;;
             esac
           done </tmp/paths
-          ! git diff 07c0e2b0e382fbb5d8670d6402eda8acebdda0a3 HEAD -- backend/server.js functions/index.js
+          test -z "$(git diff --name-only 07c0e2b0e382fbb5d8670d6402eda8acebdda0a3 HEAD -- backend/server.js functions/index.js)"
       - name: Test automatic invite quick demo screen
         run: |
           node --check backend/test-stagingQuickAutoInviteDefenseUI.cjs
