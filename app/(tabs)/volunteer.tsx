@@ -26,7 +26,9 @@ import {
   View,
 } from "react-native";
 
-import { db } from "../../lib/firebase";
+import { db, functions } from "../../lib/firebase";
+import { httpsCallable } from "firebase/functions";
+import {RENDER_EMERGENCY_ORIGIN, respondRenderEmergencyAuto} from "../../lib/renderEmergencyAuto";
 import {
   activeModeForProfile,
   hasVolunteerAccess,
@@ -52,6 +54,7 @@ type ResponseAssignment = {
   volunteerName?: string;
   status?: AssignmentStatus;
   createdBy?: string;
+  offerMode?: string;
   createdAt?: any;
   updatedAt?: any;
   responseStartedAt?: any;
@@ -622,6 +625,38 @@ export default function VolunteerTasks() {
     try {
       setBusyId(assignment.id);
       setError("");
+
+      // Render service handles Resident-submitted automatic invitations.
+      // Firebase Cloud Functions remain unused for this offer mode.
+      if ((next === "accepted" || next === "declined") &&
+          assignment.offerMode === RENDER_EMERGENCY_ORIGIN) {
+        if (!assignment.caseId) throw Error("Emergency case is missing.");
+        const outcome = await respondRenderEmergencyAuto(assignment.caseId, next);
+        if (![next, "already_" + next].includes(String(outcome.status || "")))
+          throw Error("Render did not confirm this Volunteer decision.");
+        Alert.alert(next === "accepted" ? "Assignment Accepted" : "Assignment Declined",
+          "Your automatic invitation response was saved.");
+        if (next === "accepted") setFilter("active");
+        return;
+      }
+
+      // Server-verified independent response for a newly automatic task.
+      // Existing manual assignments still use this original local transaction.
+      if ((next === "accepted" || next === "declined") &&
+          assignment.offerMode === "automatic_all_volunteers_no_barangay") {
+        if (!assignment.caseId) throw new Error("Emergency case is missing.");
+        const decide = httpsCallable(functions, "respondToAutoVolunteerInvitation");
+        const response = await decide({caseId: assignment.caseId, decision: next});
+        const status = (response.data as {status?: string})?.status || "";
+        if (!["accepted", "declined", "already_accepted", "already_declined"].includes(status))
+          throw new Error("Automatic invitation decision was not saved.");
+        Alert.alert(next === "accepted" ? "Assignment Accepted" : "Assignment Declined",
+          next === "accepted" ?
+            "Automatic invitation accepted. Select Start Response when ready." :
+            "Automatic invitation declined.");
+        if (next === "accepted") setFilter("active");
+        return;
+      }
 
       await runTransaction(
         db,
