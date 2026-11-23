@@ -24,7 +24,7 @@ $main = Get-Content .\functions\index.js -Raw
 $decide = Get-Content .\functions\emergencySimpleAutoInvite.js -Raw
 if (-not $source.Contains('project==="volunserve-volunteer-staging"') -or
     -not $source.Contains('data.title.startsWith("TEST ONLY - ")') -or
-    -not $source.Contains("project===\"demo-volunserve-simple-invites\"") -or
+    -not $source.Contains('project==="demo-volunserve-simple-invites"') -or
     -not $main.Contains('exports.autoInviteFictionalResidentSubmittedVolunteers') -or
     -not $main.Contains('exports.respondToAutoVolunteerInvitation') -or
     -not $decide.Contains('automatic_resident_submission_demo')) {
