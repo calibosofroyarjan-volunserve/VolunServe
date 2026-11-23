@@ -2754,6 +2754,24 @@ exports.autoInviteApprovedEmergencyVolunteers = onDocumentUpdated(
 );
 
 
+// DEMO ONLY: submitted fictional Resident reports automatically invite all
+// eligible Volunteers without requiring an Admin to press Validate/Assign.
+// Additional explicit env gate; production Firebase project ALWAYS rejected.
+// Real operational Emergency Report review remains unchanged.
+const {makeResidentSubmissionDemoHandler} =
+    require("./emergencyResidentSubmissionDemo");
+exports.autoInviteFictionalResidentSubmittedVolunteers = onDocumentCreated(
+    {
+      document: "disasterCases/{caseId}",
+      retry: true,
+      timeoutSeconds: 540,
+      memory: "512MiB",
+      maxInstances: 1,
+    },
+    makeResidentSubmissionDemoHandler({db: getFirestore(), FieldValue}),
+);
+
+
 // New automatic offers use a server-side Auth verified decision, so the
 // existing Firestore Volunteer task screen never creates unprotected locks.
 const decideAutomaticVolunteer = makeAutoVolunteerDecisionHandler({

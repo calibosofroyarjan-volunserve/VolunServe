@@ -120,6 +120,8 @@ interface DisasterCase {
   requiredVolunteers?: number;
   assignedVolunteersCount?: number;
   assignedVolunteerIds?: string[];
+  // DEMO-only automatic invitation batch. Admin monitoring is read-only.
+  autoVolunteerDispatch?: { origin?: string; state?: string; attemptedCount?: number };
 
   // Optional Volunteer support is tracked separately from the official LGU responder.
   activeVolunteerSupportUid?: string;
@@ -1001,6 +1003,7 @@ export default function AdminCases() {
             attachments: Array.isArray(data.attachments) ? data.attachments : [],
 
             requiredVolunteers: Number(data.requiredVolunteers || 0),
+            autoVolunteerDispatch: data.autoVolunteerDispatch || undefined,
             assignedVolunteersCount: Number(data.assignedVolunteersCount || 0),
             assignedVolunteerIds: Array.isArray(data.assignedVolunteerIds)
               ? data.assignedVolunteerIds
@@ -1381,6 +1384,15 @@ export default function AdminCases() {
     visibleCases.find((item) => item.id === selectedCaseId) ||
     visibleCases[0] ||
     null;
+  const isResidentSubmissionDemo =
+    selectedCase?.autoVolunteerDispatch?.origin === "automatic_resident_submission_demo";
+  const demoResponses = isResidentSubmissionDemo && selectedCase
+    ? assignments.filter(item => item.caseId === selectedCase.id)
+    : [];
+  const demoAccepted = demoResponses.filter(item =>
+    ["accepted", "responding", "on_site", "completed"].includes(item.status)).length;
+  const demoDeclined = demoResponses.filter(item => item.status === "declined").length;
+  const demoPending = demoResponses.filter(item => item.status === "offered").length;
 
   useEffect(() => {
     setDetailTab("overview");
@@ -2879,6 +2891,11 @@ export default function AdminCases() {
     incident: DisasterCase,
     volunteer: VolunteerProfile
   ) => {
+    if (incident.autoVolunteerDispatch?.origin === "automatic_resident_submission_demo") {
+      Alert.alert("Automatic Volunteer Invitations",
+        "This fictional demo already invited eligible Volunteers. Admin only monitors their responses.");
+      return;
+    }
     const auth = getAuth();
     const adminUser = auth.currentUser;
 
@@ -3252,6 +3269,12 @@ export default function AdminCases() {
   };
 
   const cancelAssignment = async (assignment: ResponseAssignment) => {
+    if (cases.some(item => item.id === assignment.caseId &&
+        item.autoVolunteerDispatch?.origin === "automatic_resident_submission_demo")) {
+      Alert.alert("Read-only Volunteer Monitor",
+        "Automatic fictional demo invitations are handled by Volunteers, not manually cancelled by Admin.");
+      return;
+    }
     try {
       const assignmentRef = doc(
         db,
@@ -3430,6 +3453,25 @@ export default function AdminCases() {
         icon="warning-outline"
         tag="INCIDENT RESPONSE"
       />
+      {isResidentSubmissionDemo && selectedCase && (
+        <View style={styles.autoDemoMonitor}>
+          <Text style={styles.autoDemoTitle}>TEST ONLY • Automatic Volunteer Response Monitor</Text>
+          <Text style={styles.autoDemoSummary}>
+            {demoResponses.length} Invited   •   {demoAccepted} Accepted   •   {demoDeclined} Declined   •   {demoPending} Pending
+          </Text>
+          {pageFive(demoResponses, activeAssignmentPage).map(item => (
+            <View key={item.id} style={styles.autoDemoResponse}>
+              <Text style={styles.autoDemoName}>{item.volunteerName || "Volunteer"}</Text>
+              <Text style={styles.autoDemoStatus}>{item.status.toUpperCase()}</Text>
+            </View>
+          ))}
+          <ListPagination page={activeAssignmentPage} total={demoResponses.length}
+            pageSize={5} onChange={setActiveAssignmentPage} />
+          <Text style={styles.autoDemoHelp}>
+            Automatic invitations follow fictional Resident submission. Admin only views responses.
+          </Text>
+        </View>
+      )}
       <View style={styles.pageHeader}>
         <View style={styles.headerTools}>
             <View style={styles.searchBox}>
@@ -10579,6 +10621,18 @@ const styles = StyleSheet.create({
     lineHeight: 14,
     fontWeight: "700",
   },
+
+  autoDemoMonitor: {
+    backgroundColor: "#F4FAF6", borderColor: "#CDE9D7", borderWidth: 1,
+    borderRadius: 14, padding: 15, gap: 9, marginVertical: 12
+  },
+  autoDemoTitle: { color: "#075D47", fontSize: 13, fontWeight: "900" },
+  autoDemoSummary: { color: "#174C3C", fontSize: 12, fontWeight: "800" },
+  autoDemoResponse: { flexDirection: "row", justifyContent: "space-between",
+    borderBottomWidth: 1, borderBottomColor: "#DCEFE2", paddingVertical: 8, gap: 10 },
+  autoDemoName: { color: "#16483A", fontSize: 12, fontWeight: "700", flex: 1 },
+  autoDemoStatus: { color: "#087D60", fontSize: 11, fontWeight: "800" },
+  autoDemoHelp: { color: "#527967", fontSize: 11, marginTop: 2 },
 
   emptyCard: {
     backgroundColor: "#ffffff",
