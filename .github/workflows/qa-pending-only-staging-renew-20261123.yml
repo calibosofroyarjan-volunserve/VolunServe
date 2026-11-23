@@ -1,0 +1,44 @@
+name: Isolated staging expired-pending Volunteer demo QA (NO DEPLOY)
+on:
+  push:
+    branches:
+      - fix/staging002-pending-only-renew-20261123
+permissions:
+  contents: read
+jobs:
+  pending-only-staging:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      VOLUNSERVE_AUTO_VOLUNTEER_DISPATCH: disabled
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Strict staging-only files check
+        run: |
+          git fetch origin feat/emergency-auto-dispatch-server-staging-20261115
+          git diff --name-only FETCH_HEAD HEAD | sort > /tmp/actual
+          printf '%s\n' \
+            .github/workflows/qa-pending-only-staging-renew-20261123.yml \
+            backend/emergencyAutoDispatchStagingServer.js \
+            backend/staging002PendingOnlyRenew.js \
+            backend/test-staging002PendingOnlyRenew.cjs \
+            scripts/test-staging-auto-volunteers-cloud-20261123.ps1 | sort > /tmp/expected
+          diff -u /tmp/expected /tmp/actual
+          test "$VOLUNSERVE_AUTO_VOLUNTEER_DISPATCH" = disabled
+      - name: Install staging backend only
+        run: npm ci --prefix backend --ignore-scripts --no-audit --no-fund
+      - name: Server syntax, new code, and scoped test
+        run: |
+          node --check backend/staging002PendingOnlyRenew.js
+          node --check backend/emergencyAutoDispatchStagingServer.js
+          node --check backend/test-staging002PendingOnlyRenew.cjs
+          node --test backend/test-staging002PendingOnlyRenew.cjs
+      - name: Existing staging all-volunteer demo regression
+        run: node --test backend/test-stagingAllVolunteerDefense.cjs
+      - name: No deployment or cloud writes
+        run: echo 'PASS isolated fictional test code only - no production changes'
