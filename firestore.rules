@@ -2206,10 +2206,9 @@ service cloud.firestore {
             'resolved'
           ]
         )
-        // Read-only Render invitation: the reservation is server-owned,
-        // keyed by Volunteer UID, and deleted when that Volunteer Declines.
+        // Server-owned reservation; withdrawn on Decline.
         || (
-          isVolunteer()
+          hasVolunteerAccess()
           && get(
             /databases/$(database)/documents/autoVolunteerReservations/$(request.auth.uid)
           ).data.caseId == caseId
