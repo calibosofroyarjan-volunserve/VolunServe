@@ -18,7 +18,7 @@ jobs:
       - name: Checkout pinned read-only QA source
         uses: actions/checkout@v4
         with:
-          fetch-depth: 4
+          fetch-depth: 5
       - name: Guard exact published-derived QA source
         run: |
           set -euo pipefail
@@ -38,13 +38,31 @@ jobs:
           node scripts/test-clean-emergency-report-header.cjs
           node scripts/test-embedded-emergency-map-navigation.cjs
       - name: Admin report review, response map and assignment UX contracts
-        continue-on-error: true # Known old exact-copy assertion may fail; all other Admin checks run first.
+        continue-on-error: true # Run ALL Admin source tests; report any outdated or failed assertions.
+        shell: bash
         run: |
-          node scripts/test-admin-emergency-master-detail-20261118.cjs
-          node scripts/test-admin-focused-response-map-20261115.cjs
-          node scripts/test-admin-response-workspace-ux.cjs
-          node scripts/test-unified-admin-dashboard-and-emergency-pagination.cjs
-          node scripts/test-admin-emergency-ui-consistency-20261115.cjs
+          set +e
+          failures=0
+          for test_file in \
+            scripts/test-admin-emergency-master-detail-20261118.cjs \
+            scripts/test-admin-focused-response-map-20261115.cjs \
+            scripts/test-admin-response-workspace-ux.cjs \
+            scripts/test-unified-admin-dashboard-and-emergency-pagination.cjs \
+            scripts/test-admin-emergency-ui-consistency-20261115.cjs
+          do
+            echo "::group::Run $test_file"
+            node "$test_file"
+            code=$?
+            if [ "$code" -ne 0 ]; then
+              echo "::error::QA assertion failed: $test_file"
+              failures=$((failures+1))
+            else
+              echo "PASS: $test_file"
+            fi
+            echo "::endgroup::"
+          done
+          echo "Admin UI contract assertion failures: $failures"
+          test "$failures" -eq 0
       - name: Volunteer eligibility and dispatch wave planner logic
         run: |
           node scripts/test-emergency-volunteer-wave-planner-20261115.cjs
