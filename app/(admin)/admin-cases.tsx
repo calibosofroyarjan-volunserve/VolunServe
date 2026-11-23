@@ -132,6 +132,8 @@ interface DisasterCase {
 
   requiredVolunteers?: number;
   assignedVolunteersCount?: number;
+  // Isolated fictional demo origin: Admin monitors Volunteer decisions only.
+  autoVolunteerDispatch?: { origin?: string; state?: string; attemptedCount?: number };
   assignedVolunteerIds?: string[];
 
   // Optional Volunteer support is tracked separately from the official LGU responder.
@@ -1017,6 +1019,7 @@ export default function AdminCases() {
             attachments: Array.isArray(data.attachments) ? data.attachments : [],
 
             requiredVolunteers: Number(data.requiredVolunteers || 0),
+            autoVolunteerDispatch: data.autoVolunteerDispatch || undefined,
             assignedVolunteersCount: Number(data.assignedVolunteersCount || 0),
             assignedVolunteerIds: Array.isArray(data.assignedVolunteerIds)
               ? data.assignedVolunteerIds
@@ -1772,6 +1775,10 @@ export default function AdminCases() {
     incident: DisasterCase,
     action: "validate" | "request_more_evidence" | "reject"
   ) => {
+    if (incident.autoVolunteerDispatch?.origin === "automatic_resident_submission_demo") {
+      Alert.alert("Automatic Invitations", "Volunteers are invited automatically. Admin monitors responses only.");
+      return;
+    }
     const auth = getAuth();
     const adminUser = auth.currentUser;
 
@@ -3353,7 +3360,13 @@ export default function AdminCases() {
     }
   };
 
+  // Auto-demo decisions belong only to the invited Volunteer.
   const cancelAssignment = async (assignment: ResponseAssignment) => {
+    if (cases.some(item => item.id === assignment.caseId &&
+      item.autoVolunteerDispatch?.origin === "automatic_resident_submission_demo")) {
+      Alert.alert("Read-only Automatic Monitor", "Admin cannot manually cancel fictional automatic invitations.");
+      return;
+    }
     try {
       const assignmentRef = doc(
         db,
@@ -3924,6 +3937,26 @@ export default function AdminCases() {
 
           return (
             <View key={incident.id} style={styles.caseCard}>
+              {incident.autoVolunteerDispatch?.origin === "automatic_resident_submission_demo" && (
+                <View style={styles.fictionalAutoMonitor}>
+                  <Text style={styles.fictionalAutoMonitorTitle}>TEST ONLY • Automatic Volunteer Response Monitor</Text>
+                  <Text style={styles.fictionalAutoMonitorSummary}>
+                    {incidentAssignments.length} Invited  •  {incidentAssignments.filter(item =>
+                      ["accepted", "responding", "on_site", "completed"].includes(item.status)).length} Accepted
+                    {"  •  "}{incidentAssignments.filter(item => item.status === "declined").length} Declined
+                    {"  •  "}{incidentAssignments.filter(item => item.status === "offered").length} Pending
+                  </Text>
+                  {pageFive(incidentAssignments, activeAssignmentPage).map(item => (
+                    <View key={item.id} style={styles.fictionalAutoMonitorRow}>
+                      <Text style={styles.fictionalAutoMonitorName}>{item.volunteerName || "Volunteer"}</Text>
+                      <Text style={styles.fictionalAutoMonitorStatus}>{String(item.status).toUpperCase()}</Text>
+                    </View>
+                  ))}
+                  <ListPagination page={activeAssignmentPage}
+                    total={incidentAssignments.length} pageSize={5} onChange={setActiveAssignmentPage} />
+                  <Text style={styles.fictionalAutoMonitorHelp}>No Admin Assign button needed. Volunteers Accept or Decline independently.</Text>
+                </View>
+              )}
               <View
                 style={[
                   styles.caseMain,
@@ -10866,6 +10899,15 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
 
+  fictionalAutoMonitor: { backgroundColor: "#F4FAF6", borderColor: "#CDE9D7",
+    borderWidth: 1, borderRadius: 14, padding: 15, gap: 9, marginBottom: 12 },
+  fictionalAutoMonitorTitle: { color: "#075D47", fontSize: 13, fontWeight: "900" },
+  fictionalAutoMonitorSummary: { color: "#174C3C", fontSize: 12, fontWeight: "800" },
+  fictionalAutoMonitorRow: { flexDirection: "row", justifyContent: "space-between",
+    borderBottomWidth: 1, borderBottomColor: "#DCEFE2", paddingVertical: 7, gap: 9 },
+  fictionalAutoMonitorName: { color: "#16483A", fontSize: 12, fontWeight: "700", flex: 1 },
+  fictionalAutoMonitorStatus: { color: "#087D60", fontSize: 11, fontWeight: "800" },
+  fictionalAutoMonitorHelp: { color: "#527967", fontSize: 11, marginTop: 2 },
   emptyCard: {
     backgroundColor: "#ffffff",
     borderWidth: 1,
