@@ -55,9 +55,17 @@ function skip(name) {
   console.log("SKIP " + name + " (dependency failed)");
 }
 
+function fixtureEmail(uid) {
+  return uid + "@example.invalid";
+}
+
+function verifiedSession(env, uid) {
+  return env.authenticatedContext(uid, { email: fixtureEmail(uid), email_verified: true }).firestore();
+}
+
 function residentProfile(uid) {
   return {
-    uid, role: "resident", status: "approved",
+    uid, email: fixtureEmail(uid), role: "resident", status: "approved",
     residentAccess: true, activeMode: "resident",
     volunteerAccess: false, volunteerStatus: "not_applied",
     fullName: "Example Resident",
@@ -121,11 +129,11 @@ async function main() {
       await db.doc("users/" + superAdminUid).set({uid:superAdminUid,role:"superadmin",status:"approved",fullName:"System Programmer"});
     });
 
-    const resident = env.authenticatedContext(residentUid).firestore();
-    const volunteer = env.authenticatedContext(volunteerUid).firestore();
-    const admin = env.authenticatedContext(adminUid).firestore();
-    const superAdmin = env.authenticatedContext(superAdminUid).firestore();
-    const other = env.authenticatedContext(otherUid).firestore();
+    const resident = verifiedSession(env, residentUid);
+    const volunteer = verifiedSession(env, volunteerUid);
+    const admin = verifiedSession(env, adminUid);
+    const superAdmin = verifiedSession(env, superAdminUid);
+    const other = verifiedSession(env, otherUid);
     const anonymous = env.unauthenticatedContext().firestore();
 
     const proposalRef = resident.doc("communityEventProposals/" + eventId);
@@ -141,7 +149,16 @@ async function main() {
         ...proposalPayload(), title: "No",
       }), true);
 
-    const submitted = await check("VERIFIED RESIDENT SUBMITS VALID PROPOSAL", () =>
+    for (const [label, claims] of [
+      ["Unverified email", { email: fixtureEmail(residentUid), email_verified: false }],
+      ["Mismatched profile email", { email: fixtureEmail(otherUid), email_verified: true }],
+    ]) {
+      const session = env.authenticatedContext(residentUid, claims).firestore();
+      await check(label + " cannot submit a proposal", () =>
+        session.doc("communityEventProposals/" + eventId).set(proposalPayload()), true);
+    }
+
+    const submitted = await check("EMAIL-VERIFIED RESIDENT SUBMITS VALID PROPOSAL", () =>
       proposalRef.set(proposalPayload()));
 
     if (submitted) {
