@@ -1,4 +1,4 @@
-name: QA Inconclusive OCR Name: Allow Face Comparison, Not Auto Verify (NO DEPLOY)
+name: "QA OCR Inconclusive Face Comparison No Deploy"
 on:
   push:
     branches: [fix/allow-face-scan-on-ocr-inconclusive-20261123]
