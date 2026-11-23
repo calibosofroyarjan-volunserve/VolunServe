@@ -73,7 +73,17 @@ function evaluateDiditDecision(result) {
     hasPassed("liveness_checks") &&
     hasPassed("face_matches") &&
     documentsAllowed;
-  // This must also be restricted to approved, supported ID types in the Didit workflow.
+  // Explicitly unsupported documents (including an ID classified as Other)
+  // must be rejected rather than approved by a passing simulated result.
+  const explicitlyUnsupported = Array.isArray(result?.id_verifications) &&
+    result.id_verifications.some((record) =>
+      Boolean(record?.document_type) &&
+      (!permittedIdentityFamilies.has(String(record.document_type)) ||
+        (record?.issuing_state && record.issuing_state !== "PHL")),
+    );
+  if (explicitlyUnsupported) {
+    return { providerStatus, decision: "declined", review: false };
+  }
   if (normalized === "approved" && requiredChecksPassed) {
     return { providerStatus, decision: "approved", review: false };
   }
