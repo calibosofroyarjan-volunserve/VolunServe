@@ -107,8 +107,8 @@ async function createDiditSession({
     await fetch(
       `${DIDIT_BASE_URL}/session/`,
       {
-        method:
-          "POST",
+        method: "POST",
+        signal: AbortSignal.timeout(12000),
 
         headers: {
           "x-api-key":
@@ -131,21 +131,8 @@ async function createDiditSession({
     );
 
   if (!response.ok) {
-    const message =
-      data?.detail ||
-      data?.message ||
-      data?.error ||
-      `Didit session creation failed with HTTP ${response.status}.`;
-
-    const error =
-      new Error(message);
-
-    error.statusCode =
-      response.status;
-
-    error.providerResponse =
-      data;
-
+    const error = new Error("Identity provider could not create a session.");
+    error.statusCode = 502;
     throw error;
   }
 
