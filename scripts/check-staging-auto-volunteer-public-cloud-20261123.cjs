@@ -24,9 +24,18 @@ async function get(url){
   throw err;
 }
 test("staging backend connected to isolated Firebase and no real emergency dispatch",async()=>{
-  const r=await get(HOST+"/health");
-  assert.equal(r.status,200);
-  const h=JSON.parse(r.body);
+  // Render Free instances can be cold-starting: the health handler initially
+  // reports 'checking' while its isolated Firestore read runs asynchronously.
+  // Do not mistake a valid transient readiness state for a broken backend.
+  let h=null;
+  for(let n=0;n<20;n++){
+    const r=await get(HOST+"/health");
+    assert.equal(r.status,200);
+    h=JSON.parse(r.body);
+    if(h.stagingFirestoreReadStatus!=="checking")break;
+    await new Promise(resolve=>setTimeout(resolve,1500));
+  }
+  assert.ok(h,"Health must be returned");
   assert.equal(h.service,"volunserve-emergency-matching-staging");
   assert.equal(h.stagingServiceAccountMatches,true);
   assert.equal(h.stagingFirestoreReadStatus,"verified");
