@@ -121,7 +121,7 @@ function registerDiditIdentityRoutes(app, { db, FieldValue, requireFirebaseUser 
       process.env.DIDIT_AUTO_VERIFY_ENABLED === "true";
     const isLiveResponse = String(remote?.environment || "live").toLowerCase() === "live";
     const isApproved = decision.decision === "approved" && liveAllowed && isLiveResponse;
-    const requiresReview = decision.review || (decision.decision === "approved" && !isApproved);
+    const requiresReview = liveAllowed && (decision.review || (decision.decision === "approved" && !isApproved));
     const identityStatus = isApproved ? "verified" :
       decision.decision === "failed" ? "failed" : "pending";
 
@@ -135,6 +135,12 @@ function registerDiditIdentityRoutes(app, { db, FieldValue, requireFirebaseUser 
       }
       const profile = freshUser.data() || {};
       const entry = freshVerification.data() || {};
+      const reviewedAt = entry.reviewedAt?.toMillis?.() || 0;
+      const startedAt = entry.sessionRequestedAt?.toMillis?.() || 0;
+      if (reviewedAt && startedAt && reviewedAt > startedAt) {
+        return { ok: true, identityStatus: profile.identityStatus || "pending",
+          providerStatus: decision.providerStatus, requiresManualReview: false };
+      }
       if (profile.identityVerified === true || profile.identityStatus === "verified") {
         return { ok: true, identityStatus: "verified", providerStatus: decision.providerStatus };
       }
@@ -152,6 +158,7 @@ function registerDiditIdentityRoutes(app, { db, FieldValue, requireFirebaseUser 
         aiDecision: isApproved ? "verified" : requiresReview ? "manual_review" : decision.decision,
         requiresManualReview: requiresReview,
         message: isApproved ? "Identity verification completed successfully." :
+          !liveAllowed && decision.decision === "approved" ? "Sandbox test passed; production verification is not enabled." :
           requiresReview ? "Verification requires Admin review." :
           identityStatus === "failed" ? "Verification expired. Please start again." :
           "Verification is still in progress.",
@@ -209,6 +216,7 @@ function registerDiditIdentityRoutes(app, { db, FieldValue, requireFirebaseUser 
         transaction.set(verification(uid), {
           uid, provider: "didit", sessionId: session.sessionId,
           workflowId: session.workflowId, providerStatus: session.providerStatus,
+          sessionRequestedAt: FieldValue.serverTimestamp(),
           verificationId: session.sessionId, verificationMethod: "didit",
           status: "pending", requiresManualReview: false,
           aiDecision: FieldValue.delete(), message: "Verification is waiting for completion.",
