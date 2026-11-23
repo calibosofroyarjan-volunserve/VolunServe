@@ -2741,7 +2741,7 @@ exports.deliverAndroidPushForNotification = onDocumentCreated(
 // No geography or skills matching in this deliberately simple opt-in version.
 // IMPORTANT: releasing Cloud Functions alone never turns it on; a separate
 // explicitly reviewed project+production approval env gate is required.
-const {makeApprovedCaseAutoInviteHandler} =
+const {makeApprovedCaseAutoInviteHandler, makeAutoVolunteerDecisionHandler} =
     require("./emergencySimpleAutoInvite");
 exports.autoInviteApprovedEmergencyVolunteers = onDocumentUpdated(
     {
@@ -2751,4 +2751,29 @@ exports.autoInviteApprovedEmergencyVolunteers = onDocumentUpdated(
       maxInstances: 2,
     },
     makeApprovedCaseAutoInviteHandler({db: getFirestore(), FieldValue}),
+);
+
+
+// New automatic offers use a server-side Auth verified decision, so the
+// existing Firestore Volunteer task screen never creates unprotected locks.
+const decideAutomaticVolunteer = makeAutoVolunteerDecisionHandler({
+  db: getFirestore(), FieldValue,
+});
+exports.respondToAutoVolunteerInvitation = onCall(
+    {maxInstances: 3},
+    async (request) => {
+      if (!request.auth?.uid) {
+        throw new HttpsError("unauthenticated", "Sign in as a Volunteer.");
+      }
+      const outcome = await decideAutomaticVolunteer({
+        uid: request.auth.uid,
+        caseId: request.data?.caseId,
+        decision: request.data?.decision,
+      });
+      if (outcome.status === "blocked" || outcome.status === "disabled") {
+        throw new HttpsError("failed-precondition",
+            outcome.reason || "Automatic invitations not available.");
+      }
+      return outcome;
+    },
 );
