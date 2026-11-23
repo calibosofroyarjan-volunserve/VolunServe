@@ -1,3 +1,4 @@
+import DiditVerificationPage from "./identity-didit";
 import { liveUi as designUi } from "../constants/volunserveLiveUi";
 import DocumentScreeningSummary from "../components/identity/DocumentScreeningSummary";
 import type { DocumentScreening } from "../lib/identityVerification";
@@ -215,7 +216,7 @@ function scanCopy(scanState: ScanState) {
   }
 }
 
-export default function IdentityVerificationWeb() {
+function LegacyIdentityVerificationWeb() {
   const router = useRouter();
 
   const videoRef = useRef<any>(null);
@@ -2925,3 +2926,11 @@ const styles = StyleSheet.create({
     fontWeight: "900",
   },
 });
+
+
+// Opt-in launch switch; old verification stays unchanged until Didit is tested.
+export default function IdentityVerificationWeb() {
+  return process.env.EXPO_PUBLIC_DIDIT_ENABLED === "true"
+    ? <DiditVerificationPage />
+    : <LegacyIdentityVerificationWeb />;
+}
