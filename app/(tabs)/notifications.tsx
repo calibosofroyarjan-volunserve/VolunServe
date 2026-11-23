@@ -1,10 +1,11 @@
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { onAuthStateChanged } from "firebase/auth";
+import { httpsCallable } from "firebase/functions";
 import { collection, doc, onSnapshot, query, updateDoc, where } from "firebase/firestore";
 import React, { useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
-import { auth, db } from "../../lib/firebase";
+import { auth, db, functions } from "../../lib/firebase";
 import { useAnnouncementAlerts } from "../../lib/announcementAlerts";
 import { enableAndroidPhoneAlerts, disableAndroidPhoneAlerts } from "../../lib/androidNativePush";
 
@@ -14,6 +15,8 @@ type NotificationItem = {
   title: string;
   message: string;
   type?: string;
+  caseId?: string;
+  assignmentId?: string;
   read?: boolean;
   createdAt?: any;
 };
@@ -48,12 +51,17 @@ export default function NotificationsScreen() {
   const [page, setPage] = useState(1);
   const [updating, setUpdating] = useState(false);
   const [pushBusy, setPushBusy] = useState(false);
+  const [decisionBusy, setDecisionBusy] = useState("");
+  const [autoTaskStatuses, setAutoTaskStatuses] = useState<
+    Record<string, { status: string; offerMode: string; caseId: string }>
+  >({});
   const [phoneStatus, setPhoneStatus] = useState("");
   const [phoneEnabled, setPhoneEnabled] = useState(false);
 
   useEffect(() => onAuthStateChanged(auth, user => {
     setUid(user?.uid ?? null);
     setNotifications([]);
+    setAutoTaskStatuses({});
     setError("");
     setPhoneStatus("");
     setPhoneEnabled(false);
@@ -74,6 +82,53 @@ export default function NotificationsScreen() {
       setError("Could not load notifications. Check your connection and try again.");
     });
   }, [uid]);
+
+  // Both Notification and Volunteer Task buttons use the SAME Firestore offer.
+  useEffect(() => {
+    if (!uid) return;
+    const q = query(collection(db, "responseAssignments"),
+      where("volunteerId", "==", uid));
+    return onSnapshot(q, snapshot => {
+      const next: Record<string, { status: string; offerMode: string; caseId: string }> = {};
+      snapshot.docs.forEach(d => {
+        const task = d.data();
+        next[d.id] = {
+          status: String(task.status || ""),
+          offerMode: String(task.offerMode || ""),
+          caseId: String(task.caseId || ""),
+        };
+      });
+      setAutoTaskStatuses(next);
+    }, () => setAutoTaskStatuses({}));
+  }, [uid]);
+
+  const canRespondFromNotification = (item: NotificationItem) => {
+    if (!uid || item.userId !== uid || item.type !== "response_assignment" ||
+        !item.caseId || !item.assignmentId ||
+        item.assignmentId !== item.caseId + "_" + uid ||
+        item.id !== "auto_response_" + item.assignmentId) return false;
+    const task = autoTaskStatuses[item.assignmentId];
+    return task?.status === "offered" && task.caseId === item.caseId &&
+      ["automatic_all_volunteers_no_barangay",
+        "automatic_resident_submission_demo"].includes(task.offerMode);
+  };
+
+  const respondFromNotification = async (
+    item: NotificationItem, decision: "accepted" | "declined"
+  ) => {
+    if (!auth.currentUser || auth.currentUser.uid !== uid ||
+        !canRespondFromNotification(item) || decisionBusy) return;
+    setDecisionBusy(item.id);
+    setError("");
+    try {
+      const decide = httpsCallable(functions, "respondToAutoVolunteerInvitation");
+      await decide({ caseId: item.caseId, decision });
+    } catch {
+      setError("Invitation response failed. Open Volunteer Tasks and try again.");
+    } finally {
+      setDecisionBusy("");
+    }
+  };
 
   const combined = useMemo(() => [...notifications, ...announcementAlerts].sort((a, b) => timestamp(b.createdAt) - timestamp(a.createdAt)), [notifications, announcementAlerts]);
   const unread = useMemo(() => combined.filter(item => !item.read).length, [combined]);
@@ -194,6 +249,26 @@ export default function NotificationsScreen() {
               </View>
               <Text style={styles.category}>{categoryOf(item)} • {timestamp(item.createdAt) ? new Date(timestamp(item.createdAt)).toLocaleString() : "Just now"}</Text>
               <Text style={styles.message}>{item.message || "You have a new update."}</Text>
+               {canRespondFromNotification(item) && (
+                 <View style={styles.emergencyDecisionRow}>
+                   <TouchableOpacity accessibilityRole="button"
+                     accessibilityLabel="Accept this automatic emergency invitation"
+                     disabled={!!decisionBusy}
+                     style={[styles.decisionAccept, !!decisionBusy && styles.disabled]}
+                     onPress={() => void respondFromNotification(item, "accepted")}>
+                     <Text style={styles.decisionAcceptText}>
+                       {decisionBusy === item.id ? "Updating…" : "Accept"}
+                     </Text>
+                   </TouchableOpacity>
+                   <TouchableOpacity accessibilityRole="button"
+                     accessibilityLabel="Decline this automatic emergency invitation"
+                     disabled={!!decisionBusy}
+                     style={[styles.decisionDecline, !!decisionBusy && styles.disabled]}
+                     onPress={() => void respondFromNotification(item, "declined")}>
+                     <Text style={styles.decisionDeclineText}>Decline</Text>
+                   </TouchableOpacity>
+                 </View>
+               )}
               {!item.read && <TouchableOpacity disabled={updating} accessibilityRole="button"
                 style={styles.readButton} onPress={() => void markAsRead([item.id])}>
                 <Text style={styles.readText}>Mark as read</Text><Ionicons name="checkmark" size={15} color="#087D60"/>
@@ -257,6 +332,11 @@ const styles = StyleSheet.create({
   newDot: { width: 8, height: 8, borderRadius: 99, backgroundColor: "#0E9B6D", marginTop: 5 },
   category: { color: "#6D887A", fontSize: 11, marginTop: 5, fontWeight: "700" },
   message: { color: "#435F51", fontSize: 13, marginTop: 10, lineHeight: 20 },
+  emergencyDecisionRow: { flexDirection: "row", flexWrap: "wrap", gap: 9, marginTop: 11 },
+  decisionAccept: { backgroundColor: "#087D60", borderRadius: 9, paddingVertical: 10, paddingHorizontal: 18 },
+  decisionAcceptText: { color: "#FFFFFF", fontWeight: "800", fontSize: 12 },
+  decisionDecline: { backgroundColor: "#FFF2EF", borderColor: "#D5B0AA", borderWidth: 1, borderRadius: 9, paddingVertical: 10, paddingHorizontal: 18 },
+  decisionDeclineText: { color: "#9B3F33", fontWeight: "800", fontSize: 12 },
   readButton: { flexDirection: "row", alignItems: "center", alignSelf: "flex-start", marginTop: 11, gap: 4, padding: 5 },
   readText: { color: "#087D60", fontWeight: "800", fontSize: 12 },
   pagination: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 12, gap: 6 },
