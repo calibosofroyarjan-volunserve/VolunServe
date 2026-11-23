@@ -1,0 +1,59 @@
+name: Guarded actual Emergency Admin approval to Volunteer invites - NO DEPLOY
+on:
+  push:
+    branches:
+      - feat/live-emergency-auto-invite-approval-guarded-20261123
+  pull_request:
+    branches:
+      - backend-live-protected
+permissions:
+  contents: read
+jobs:
+  integration:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      VOLUNSERVE_SIMPLE_AUTO_INVITES_ENABLED: "false"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            functions/package-lock.json
+            backend/package-lock.json
+      - name: Six-file integration change allowlist
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --name-status a1c66af149b6a16d3ae4d3ab8ae3551c9bc06782 HEAD >/tmp/scope
+          test "$(wc -l </tmp/scope)" -eq 6
+          while IFS="$(printf '\t')" read -r st file; do
+            case "$st:$file" in
+              "A:functions/emergencySimpleAutoInvite.js"|"A:functions/test-emergencySimpleAutoInvite.cjs"|"M:functions/index.js"|"M:app/(tabs)/volunteer.web.tsx"|"M:app/(tabs)/volunteer.tsx"|"A:.github/workflows/verify-guarded-live-auto-volunteer-integration-20261123.yml") ;;
+              *) echo "BLOCKED: unrelated production file $st $file"; exit 1 ;;
+            esac
+          done </tmp/scope
+          test -z "$(git diff --name-only a1c66af149b6a16d3ae4d3ab8ae3551c9bc06782 HEAD -- backend/server.js firestore.rules app/'(admin)'/admin-cases.tsx)"
+      - name: Install pinned dependencies
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          npm ci --prefix functions --ignore-scripts --no-audit --no-fund
+          npm ci --prefix backend --ignore-scripts --no-audit --no-fund
+      - name: Verify genuine existing Admin approval and Volunteer inbox wiring
+        run: |
+          node --check functions/emergencySimpleAutoInvite.js
+          node --check functions/index.js
+          node --check functions/test-emergencySimpleAutoInvite.cjs
+          node --test functions/test-emergencySimpleAutoInvite.cjs
+          node -e 'const fs=require("fs"); const a=fs.readFileSync("app/(admin)/admin-cases.tsx","utf8"); const v=fs.readFileSync("app/(tabs)/volunteer.web.tsx","utf8"); const m=fs.readFileSync("app/(tabs)/volunteer.tsx","utf8"); if(!a.includes("basePatch.verificationStatus = \"validated\"") || !a.includes("basePatch.validatedBy = adminUser.uid") || !v.includes("respondToAutoVolunteerInvitation") || !m.includes("respondToAutoVolunteerInvitation"))process.exit(1);'
+      - name: TypeScript compatibility across web and mobile
+        run: npx tsc --noEmit --incremental false
+      - name: Existing production backend regressions
+        run: npm run check --prefix backend
+      - name: Guardrails remain OFF and no deployment
+        run: echo "No Firebase or Render writes. New production auto invitations explicitly OFF unless separately approved with project-specific env flags."
