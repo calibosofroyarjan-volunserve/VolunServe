@@ -2988,6 +2988,11 @@ export default function AdminCases() {
     incident: DisasterCase,
     volunteer: VolunteerProfile
   ) => {
+    if (incident.autoVolunteerDispatch?.origin === "automatic_resident_submission_demo") {
+      Alert.alert("Read-only Automatic Monitor",
+        "Eligible Volunteers are invited automatically. Admin only views the decisions.");
+      return;
+    }
     const auth = getAuth();
     const adminUser = auth.currentUser;
 
