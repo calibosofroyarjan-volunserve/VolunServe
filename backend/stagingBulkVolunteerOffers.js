@@ -146,7 +146,7 @@ async function startBatchOffers(db,adminUid,now=Date.now(),{allAvailableNoBarang
         updatedAt:stamp},
       updatedAt:stamp});
     return {status:"offered",wave:plan.wave,offered:targets.length,
-      scope:allAvailableNoBarangay===true?"all_approved_available_test_volunteers":"verified_geographic_wave",
+      ...(allAvailableNoBarangay===true?{scope:"all_approved_available_test_volunteers"}:{}),
       expiresAtMs,fullWaveAtomic:true};
   });
 }
