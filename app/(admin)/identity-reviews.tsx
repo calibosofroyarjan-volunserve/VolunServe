@@ -44,6 +44,7 @@ type ReviewFilter = "pending" | "verified" | "retry_required" | "rejected" | "al
 type IdentityReview = {
   uid: string;
   verificationId?: string;
+  diditSummary?: string;
   status?: string;
   identityStatus?: string;
   identityVerified?: boolean;
@@ -882,6 +883,7 @@ function ReviewDetail({
         value={formatDate(item.lastSubmissionAt || item.createdAt)}
       />
 
+      {item.diditSummary && <InfoLine label="Sandbox checks" value={item.diditSummary} />}
       {item.message ? (
         <View style={styles.aiMessage}>
           <Ionicons

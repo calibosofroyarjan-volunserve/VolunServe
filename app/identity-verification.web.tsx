@@ -1,3 +1,4 @@
+import DiditVerificationPage, { diditAvailable } from "./identity-didit";
 import { liveUi as designUi } from "../constants/volunserveLiveUi";
 import DocumentScreeningSummary from "../components/identity/DocumentScreeningSummary";
 import type { DocumentScreening } from "../lib/identityVerification";
@@ -237,7 +238,7 @@ function scanCopy(scanState: ScanState) {
   }
 }
 
-export default function IdentityVerificationWeb() {
+function LegacyIdentityVerificationWeb() {
   const router = useRouter();
 
   const videoRef = useRef<any>(null);
@@ -3330,3 +3331,7 @@ const styles = StyleSheet.create({
     fontWeight: "900",
   },
 });
+
+export default function IdentityVerificationWeb() {
+  return diditAvailable ? <DiditVerificationPage /> : <LegacyIdentityVerificationWeb />;
+}

@@ -1,3 +1,4 @@
+import DiditVerificationPage, { diditAvailable } from "./identity-didit";
 import { liveUi as designUi } from "../constants/volunserveLiveUi";
 import DocumentScreeningSummary from "../components/identity/DocumentScreeningSummary";
 import type { DocumentScreening } from "../lib/identityVerification";
@@ -161,7 +162,7 @@ async function mediaFromCameraUri(
   };
 }
 
-export default function IdentityVerification() {
+function LegacyIdentityVerification() {
   const router = useRouter();
 
   const cameraRef =
@@ -3891,3 +3892,7 @@ const styles =
         "900",
     },
   });
+
+export default function IdentityVerification() {
+  return diditAvailable ? <DiditVerificationPage /> : <LegacyIdentityVerification />;
+}
