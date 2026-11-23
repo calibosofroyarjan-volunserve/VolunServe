@@ -28,6 +28,7 @@ const {startBatchOffers,getBatchOffer,respondBatchOffer,batchStatus}
   =require("./stagingBulkVolunteerOffers");
 const {advanceBatchWave}=require("./stagingBulkWaveAdvance");
 const {retryExpiredBatch002}=require("./staging002ExpiredBulkRetry");
+const {renewExpiredPending002}=require("./staging002PendingOnlyRenew");
 const {summarizeStaging002Eligibility}=require("./staging002EligibilitySummary");
 const {fixtureSummary,provisionFixtures}=require("./staging002TestVolunteerProvisioning");
 const {verifyStaging002BulkAcceptance}=require("./staging002BulkAcceptanceVerifier");
@@ -432,6 +433,29 @@ function makeApp({authClient = auth, firestore = db, worker, env = process.env} 
   // during the 3-minute offer deadline. No real-case requests are accepted.
   // Separate TEST-ONLY expired batch retry. Not the legacy single-offer
   // reissue path; explicitly confirmed by approved staging Admin only.
+  // STAGING QA ONLY: extend ONE expired pending fictional Volunteer invitation
+  // without touching the already accepted task. No real incident dispatch.
+  // Requires approved staging Admin + full isolated/test defense feature gates.
+  app.post("/api/admin/emergency-auto/e2e-002/renew-pending",
+    requireStagingAdmin,requireActivation,async(request,response)=>{
+      if(!stagingServiceAccountMatches||!bulk002Enabled||!allVolunteerDefenseMode)
+        return response.status(503).json({ok:false,error:"isolated_defense_mode_required"});
+      if(request.body?.caseId!==E2E_CASE_ID ||
+         request.body?.confirmPendingRenewal!==true ||
+         ![1,2,3].includes(request.body?.volunteerSlot))
+        return response.status(400).json({ok:false,error:"explicit_fixed_fictional_slot_required"});
+      try{
+        const result=await renewExpiredPending002(firestore,
+          response.locals.stagingAdminUid,request.body.volunteerSlot);
+        response.set("Cache-Control","no-store");
+        response.status(result.status==="blocked"?409:200)
+          .json({ok:result.status!=="blocked",...result});
+      }catch(error){
+        console.warn("Isolated staging pending-offer renewal unavailable",
+          String(error?.code||"unknown").slice(0,60));
+        response.status(503).json({ok:false,error:"staging_pending_renewal_unavailable"});
+      }
+    });
   app.post("/api/admin/emergency-auto/e2e-002/bulk-reissue",
     requireStagingAdmin,requireActivation,async(request,response)=>{
       if(!stagingServiceAccountMatches||!bulk002Enabled)
