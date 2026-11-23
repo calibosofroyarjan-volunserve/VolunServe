@@ -257,8 +257,8 @@ const capacityChoices = [
 type ProposalWordField = "title" | "description" | "volunteerTasks" | "otherRole" | "whatToBring";
 const PROPOSAL_WORD_LIMITS: Record<ProposalWordField, { label: string; min: number; max: number; minChars: number; maxChars: number }> = {
   title: { label: "Event title", min: 2, max: 15, minChars: 5, maxChars: 100 },
-  description: { label: "Description", min: 20, max: 200, minChars: 20, maxChars: 1500 },
-  volunteerTasks: { label: "Volunteer tasks", min: 8, max: 150, minChars: 12, maxChars: 1200 },
+  description: { label: "Description", min: 5, max: 200, minChars: 5, maxChars: 1500 },
+  volunteerTasks: { label: "Volunteer tasks", min: 3, max: 150, minChars: 5, maxChars: 1200 },
   otherRole: { label: "Other role / occupation", min: 0, max: 12, minChars: 0, maxChars: 80 },
   whatToBring: { label: "What to bring", min: 0, max: 60, minChars: 0, maxChars: 500 },
 };
