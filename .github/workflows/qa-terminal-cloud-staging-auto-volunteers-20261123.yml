@@ -1,0 +1,56 @@
+name: Terminal Cloud Staging Volunteer E2E — GET only, NO DEPLOY
+on:
+  push:
+    branches:
+      - qa/terminal-cloud-staging-automatic-volunteers-20261123
+
+permissions:
+  contents: read
+
+jobs:
+  cloud-staging-smoke:
+    if: github.repository == 'calibosofroyarjan-volunserve/VolunServe'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 14
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Guard exact three new QA-only files, no app/server/rules changes
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --name-status 4b68587ee6bd6765e9aa4619a62bcbb632924957 HEAD >/tmp/cloud-scope
+          test "$(wc -l </tmp/cloud-scope)" -eq 3
+          while IFS="$(printf '\t')" read -r state file; do
+            case "$state:$file" in
+              "A:scripts/test-staging-auto-volunteers-cloud-20261123.ps1"|"A:scripts/check-staging-auto-volunteer-public-cloud-20261123.cjs"|"A:.github/workflows/qa-terminal-cloud-staging-auto-volunteers-20261123.yml") ;;
+              *) echo "BLOCKED: unexpected service/code change $state $file"; exit 1 ;;
+            esac
+          done </tmp/cloud-scope
+          test -z "$(git diff --name-only 4b68587ee6bd6765e9aa4619a62bcbb632924957 HEAD -- backend functions firestore.rules app)"
+          ! grep -Eiq '(GCLOUD_PROJECT=volunserve-3aa5b|volunserve\.com/api/)' scripts/test-staging-auto-volunteers-cloud-20261123.ps1
+          ! grep -Eiq 'method:[[:space:]]*["\x27](POST|PUT|PATCH|DELETE)' scripts/check-staging-auto-volunteer-public-cloud-20261123.cjs
+      - name: Verify PowerShell terminal harness parses without executing any auth
+        shell: pwsh
+        run: |
+          $tokens=$null
+          $errors=$null
+          $path="scripts/test-staging-auto-volunteers-cloud-20261123.ps1"
+          [System.Management.Automation.Language.Parser]::ParseFile($path,[ref]$tokens,[ref]$errors) | Out-Null
+          if ($errors.Count -gt 0) {
+            $errors | ForEach-Object { Write-Error ("PowerShell parser failed at line "+$_.Extent.StartLineNumber) }
+            exit 1
+          }
+          Write-Host "PASS: Windows PowerShell terminal script parses. No credentials or network calls executed."
+      - name: Probe ACTUAL deployed staging via public READ-ONLY HTTP GETs
+        run: |
+          node --check scripts/check-staging-auto-volunteer-public-cloud-20261123.cjs
+          node --test --test-concurrency=1 scripts/check-staging-auto-volunteer-public-cloud-20261123.cjs
+      - name: Staging and production remain unchanged
+        run: |
+          echo "GET-only CI. No Firebase Auth sign-in, POST, real emergency or Render deployment."
+          echo "Interactive PowerShell harness asks for local staging credentials without storing or logging them."
