@@ -98,3 +98,22 @@ test("face-score-only submission cannot obtain Verified access",async()=>{
  });
  assert.equal(out.eligible,false);
 });
+
+
+test("real submission route records eligibility but cannot auto-promote a Resident",()=>{
+ const fs=require("node:fs");
+ const source=fs.readFileSync("backend/server.js","utf8");
+ const start=source.indexOf('["/api/identity/verify", "/api/identity/verify-with-evidence"]');
+ const end=source.indexOf('function identityAdminTimestampIso',start);
+ assert.ok(start>0 && end>start, "identity submit boundary is present");
+ const route=source.slice(start,end);
+ assert.match(route,/await assessAutomaticIdentityApproval\(/);
+ assert.match(route,/automaticVerificationEligible: automaticApproval\.eligible/);
+ assert.match(route,/automaticVerificationReason: automaticApproval\.reason/);
+ assert.match(route,/identityVerified:\s*false/);
+ assert.doesNotMatch(route,/identityVerified:\s*true/);
+ assert.match(route,/requiresPrivateEvidence/);
+ assert.match(route,/db\.runTransaction/);
+ assert.doesNotMatch(route,/issuerValidator:\s*aiResult/);
+ assert.doesNotMatch(route,/padValidator:\s*aiResult/);
+});
