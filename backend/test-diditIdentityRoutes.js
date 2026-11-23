@@ -16,7 +16,7 @@ assert.equal(evaluateDiditDecision({
 }).decision, "review", "no live face check must block automatic verification");
 assert.equal(evaluateDiditDecision({
   ...approved, face_matches: [{ status: "Declined" }],
-}).decision, "review", "mismatched face must block approval");
+}).decision, "declined", "mismatched face must block approval");
 assert.equal(evaluateDiditDecision({
   ...approved, status: "In Review",
 }).review, true, "review is not approval");
@@ -25,6 +25,7 @@ assert.equal(evaluateDiditDecision({
 }).decision, "declined", "unsupported documents must not auto-verify");
 assert.equal(evaluateDiditDecision({ status: "Declined" }).decision, "declined", "first decline should allow retries");
 assert.equal(evaluateDiditDecision({ status: "In Progress" }).decision, "processing");
+assert.equal(evaluateDiditDecision({ status: "Inconclusive" }).review, true);
 assert.equal(evaluateDiditDecision({ status: "Expired" }).decision, "failed");
 assert.equal(JSON.stringify(canonicalizeJson({ b: 2, a: { z: 3, x: "José" } })),
   '{"a":{"x":"José","z":3},"b":2}', "sort JSON keys for signed events");

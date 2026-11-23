@@ -82,7 +82,12 @@ function evaluateDiditDecision(result) {
   if (normalized === "approved" && requiredChecksPassed) {
     return { providerStatus, decision: "approved", review: false };
   }
-  if (normalized === "approved" || normalized === "in review") {
+  const declinedCheck = ["id_verifications", "liveness_checks", "face_matches"].some(key =>
+    Array.isArray(result?.[key]) && result[key].some(item => normalize(item?.status) === "declined"));
+  if (normalized === "approved" && declinedCheck) {
+    return { providerStatus, decision: "declined", review: false };
+  }
+  if (["approved", "in review", "needs review", "inconclusive"].includes(normalized)) {
     return { providerStatus, decision: "review", review: true };
   }
   if (normalized === "declined") {
