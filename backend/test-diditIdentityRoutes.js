@@ -6,7 +6,7 @@ const crypto = require("node:crypto");
 const approved = {
   session_kind: "user",
   status: "Approved",
-  id_verifications: [{ status: "Approved" }],
+  id_verifications: [{ status: "Approved", issuing_state: "PHL", document_type: "Identity Card" }],
   liveness_checks: [{ status: "Approved" }],
   face_matches: [{ status: "Approved" }],
 };
@@ -20,6 +20,9 @@ assert.equal(evaluateDiditDecision({
 assert.equal(evaluateDiditDecision({
   ...approved, status: "In Review",
 }).review, true, "review is not approval");
+assert.equal(evaluateDiditDecision({
+  ...approved, id_verifications: [{ status: "Approved", issuing_state: "PHL", document_type: "Other" }],
+}).decision, "declined", "unsupported documents must not auto-verify");
 assert.equal(evaluateDiditDecision({ status: "Declined" }).decision, "declined", "first decline should allow retries");
 assert.equal(evaluateDiditDecision({ status: "In Progress" }).decision, "processing");
 assert.equal(evaluateDiditDecision({ status: "Expired" }).decision, "failed");
