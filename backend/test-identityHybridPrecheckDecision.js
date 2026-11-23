@@ -41,8 +41,18 @@ test("explicit different account name never queues",()=>{
  assert.equal(classifyHybridDocumentPrecheck({screening:s,aiOutcome:"review"}).decision,"profile_mismatch");
  assert.equal(classifyHybridDocumentPrecheck({screening:s,aiOutcome:"pass"}).outcome,"retry");
 });
-test("missing account name cannot pass directly to face",()=>{
+test("clear recognized National ID with OCR-inconclusive name can enter face, NEVER Verified",()=>{
  const s=screening({profileNameCheck:"inconclusive"});
+ assert.deepEqual(classifyHybridDocumentPrecheck({screening:s,aiOutcome:"pass"}),
+   {outcome:"pass",decision:"ready_for_face_scan",reviewTrack:"none"});
+ // Optical character recognition misses words, not legal ID issuance.
+ assert.equal(classifyHybridDocumentPrecheck({screening:s,aiOutcome:"retry"}).outcome,"retry");
+ assert.equal(classifyHybridDocumentPrecheck({screening:screening({
+   profileNameCheck:"inconclusive",imageQualityStatus:"low",
+ }),aiOutcome:"pass"}).outcome,"retry");
+});
+test("missing saved account name remains blocked from automatic face stage",()=>{
+ const s=screening({profileNameCheck:"not_checked"});
  assert.equal(classifyHybridDocumentPrecheck({screening:s,aiOutcome:"pass"}).outcome,"retry");
 });
 test("unreadable reverse or no back cannot queue manual review",()=>{
