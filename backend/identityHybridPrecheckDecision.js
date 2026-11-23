@@ -22,7 +22,9 @@ function classifyHybridDocumentPrecheck({ screening, aiOutcome } = {}) {
   // read a name, but this is never an automatic Verified Resident decision.
   // Confident name conflicts and absent account profile names remain blocked.
   const readableMatchingNationalName = screening?.declaredIdType !== "national_id" ||
-    ["possible_match","inconclusive"].includes(screening?.profileNameCheck);
+    screening?.profileNameCheck === "possible_match" ||
+    (screening?.profileNameCheck === "inconclusive" &&
+      screening?.imageQualityStatus === "adequate");
   if (unsupported || typeMismatch || invalidSides) {
     return {outcome:"retry",decision:"rescan_required",reviewTrack:"none"};
   }
