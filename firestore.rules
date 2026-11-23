@@ -2333,6 +2333,42 @@ service cloud.firestore {
             'in_progress',
             'resolved'
           ]
+        )
+        // Automatic offer recipients must see case details to decide
+        // Accept/Decline. Only the specifically invited, authenticated
+        // Volunteer can read it. A forged client-side invitation cannot
+        // satisfy this rule because assignment CREATE remains Admin-only.
+        || (
+          isVolunteer()
+          && resource.data.status in [
+            'assigned',
+            'in_progress',
+            'resolved'
+          ]
+          && resource.data.get('autoVolunteerDispatch', {}).get(
+            'origin', ''
+          ) == 'automatic_all_volunteers_no_barangay'
+          && exists(
+            /databases/$(database)/documents/responseAssignments/$(caseId + '_' + request.auth.uid)
+          )
+          && get(
+            /databases/$(database)/documents/responseAssignments/$(caseId + '_' + request.auth.uid)
+          ).data.caseId == caseId
+          && get(
+            /databases/$(database)/documents/responseAssignments/$(caseId + '_' + request.auth.uid)
+          ).data.volunteerId == request.auth.uid
+          && get(
+            /databases/$(database)/documents/responseAssignments/$(caseId + '_' + request.auth.uid)
+          ).data.get('offerMode', '') == 'automatic_all_volunteers_no_barangay'
+          && get(
+            /databases/$(database)/documents/responseAssignments/$(caseId + '_' + request.auth.uid)
+          ).data.status in [
+            'offered',
+            'accepted',
+            'responding',
+            'on_site',
+            'completed'
+          ]
         );
       allow update: if isResident()
         && resource.data.reporterUid == request.auth.uid
