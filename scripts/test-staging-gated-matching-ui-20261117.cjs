@@ -134,11 +134,28 @@ checks++;
 // Verify exact new/changed paths only; not even a config/rules file touched.
 const diff=cp.execFileSync("git",["diff","--name-status","--no-renames",BASE,"HEAD"],{encoding:"utf8"});
 const entries=diff.split("\n").filter(Boolean).map(line=>line.split("\t"));
-assert.equal(entries.length,ui.length+additions.size+2);checks++;
+// Staging QA: exact additional notification UI and no-deploy CI workflow.
+// Preserve all earlier production-derived lines and hard block config/rules.
+const extraStaging=new Map([
+ ["app/(tabs)/notifications.tsx","M"],
+ [".github/workflows/qa-staging-web-resident-auto-demo-20261123.yml","A"],
+ ["scripts/test-staging-gated-matching-ui-20261117.cjs","M"],
+]);
+assert.equal(entries.length,ui.length+additions.size+2+extraStaging.size);checks++;
 for(const [status,path] of entries){
  assert.ok((status==="M" && ui.includes(path))||
    (status==="A" && additions.has(path))||
-   (status==="M" && (path===baselineSidebar || path===baselineDonationSidebar)),
-  "Not an approved additive UI change: "+status+" "+path);checks++;
+   (status==="M" && (path===baselineSidebar || path===baselineDonationSidebar))||
+   extraStaging.get(path)===status,
+  "Not an approved additive staging UI change: "+status+" "+path);checks++;
 }
+const nOld=original("app/(tabs)/notifications.tsx").split("\n");
+const nNew=fs.readFileSync("app/(tabs)/notifications.tsx","utf8").split("\n");
+let n=0;for(const line of nNew)if(line===nOld[n])n++;
+assert.equal(n,nOld.length,"Existing Notifications screen lines must be preserved");checks++;
+const notificationUI=nNew.join("\n");
+assert.match(notificationUI,/canRespondFromNotification/);checks++;
+assert.match(notificationUI,/respondToAutoVolunteerInvitation/);checks++;
+assert.match(admin,/Automatic Volunteer Response Monitor/);checks++;
+
 console.log("PASS: "+checks+" UI preview safety assertions; original live-derived UI lines preserved verbatim; no original modules deleted, rules changed, backend started or production release.");
