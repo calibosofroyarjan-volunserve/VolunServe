@@ -3,6 +3,9 @@ on:
   push:
     branches:
       - feat/render-emergency-auto-invite-no-blaze-20261123
+  pull_request:
+    branches:
+      - backend-live-protected
 
 permissions:
   contents: read
