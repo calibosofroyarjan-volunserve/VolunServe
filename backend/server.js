@@ -5059,7 +5059,9 @@ app.post(
           ? "The name read from the ID appears different from this account. Use your own ID or ask Admin to check your saved profile. OCR mistakes are possible."
           : "The ID birth date may differ from the saved profile. Retake or request Admin profile correction."
         : categorized.outcome === "pass"
-          ? "ID text and profile name appear consistent. Continue to face comparison; no government-ID authenticity or liveness validation is implied."
+          ? screening.profileNameCheck === "inconclusive"
+            ? "National ID type recognized; OCR could not confirm printed name. Continue to face comparison, then independent Admin must check the actual ID name and portrait. No automatic Verified status."
+            : "ID text and profile name appear consistent. Continue to face comparison; no government-ID authenticity or liveness validation is implied."
           : categorized.outcome === "review"
             ? "Your National ID scan is unclear. A pending Admin case was created automatically. Admin can request a clearer ID scan; no selfie was collected and no face attempt was used."
             : warnings.includes("school_id_not_supported")
