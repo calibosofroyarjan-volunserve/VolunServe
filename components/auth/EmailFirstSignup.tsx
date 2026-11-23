@@ -906,7 +906,7 @@ export default function EmailFirstSignup() {
                   error={(showErrors || !!birth) && (age === null || age < 18 || age > 100)
                     ? "Select a valid birth date (ages 18–100)." : null}
                 />
-                {
+                {(
                   <Pressable
                     accessibilityRole="checkbox"
                     accessibilityState={{checked: consent}}
