@@ -262,7 +262,9 @@ jobs:
             const created=await api(access,'projects/volunserve-3aa5b/rulesets','POST',{
               source:{files:[{name:'firestore.rules',content:text}]}
             });
-            assert(/^projects\\/volunserve-3aa5b\\/rulesets\\/[A-Za-z0-9_-]+$/.test(created.name||''),
+            assert(typeof created.name==='string' &&
+              created.name.startsWith('projects/volunserve-3aa5b/rulesets/') &&
+              /^[A-Za-z0-9_-]+$/.test(created.name.slice('projects/volunserve-3aa5b/rulesets/'.length)),
               'BLOCKED unexpected created Ruleset name');
             // Recheck active release again before changing pointer.
             const latest=await api(access,releaseName);
@@ -275,7 +277,9 @@ jobs:
             const confirmation=await api(access,releaseName);
             assert.equal(confirmation.rulesetName,created.name,'BLOCKED live Rules release not confirmed');
             const deployed=await api(access,created.name);
-            const deployedText=(deployed.source?.files||[]).map(x=>x.content).join('\\n');
+            const deployedFiles=deployed.source?.files||[];
+            assert.equal(deployedFiles.length,1,'BLOCKED deployed Rules file count differs');
+            const deployedText=deployedFiles[0].content;
             assert.equal(hash(deployedText),before.patchedSha,'BLOCKED deployed Rules content differs');
             console.log('PASS Firebase Rules REST PATCH on existing cloud.firestore release');
             console.log('PASS deployed active Rules match exact tested single-clause patch');
