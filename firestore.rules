@@ -2210,9 +2210,6 @@ service cloud.firestore {
         // keyed by Volunteer UID, and deleted when that Volunteer Declines.
         || (
           isVolunteer()
-          && resource.data.get('autoVolunteerDispatch', {}).get(
-            'origin', ''
-          ) == 'render_resident_created_all_volunteers'
           && get(
             /databases/$(database)/documents/autoVolunteerReservations/$(request.auth.uid)
           ).data.caseId == caseId
