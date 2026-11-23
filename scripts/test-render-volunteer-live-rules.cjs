@@ -29,11 +29,13 @@ test("Only exact Render-invited approved Volunteer may read their own pending in
       for(const uid of [a,b]){
         await setDoc(doc(db,"users",uid),{
           role:"volunteer",status:"approved",activeMode:"volunteer",
-          volunteerAccess:true,volunteerStatus:"approved",identityVerified:true
+          volunteerAccess:true,volunteerStatus:"approved",identityVerified:true,
+          email:uid+"@example.com"
         });
       }
       await setDoc(doc(db,"users","fictional_resident"),{
-        role:"resident",status:"approved",residentAccess:true,activeMode:"resident"
+        role:"resident",status:"approved",residentAccess:true,
+        activeMode:"resident",email:"fictional_resident@example.com"
       });
       await setDoc(doc(db,"disasterCases",id),{
         reporterUid:"fictional_resident",status:"reported",
@@ -44,9 +46,12 @@ test("Only exact Render-invited approved Volunteer may read their own pending in
         caseId:id,volunteerId:a,offerMode:origin,status:"offered"
       });
     });
-    const invited=env.authenticatedContext(a).firestore();
-    const notInvited=env.authenticatedContext(b).firestore();
-    const resident=env.authenticatedContext("fictional_resident").firestore();
+    const authContext=uid=>env.authenticatedContext(uid,{
+      email:uid+"@example.com",email_verified:true
+    }).firestore();
+    const invited=authContext(a);
+    const notInvited=authContext(b);
+    const resident=authContext("fictional_resident");
     assert.equal((await assertSucceeds(getDoc(doc(invited,"disasterCases",id)))).exists(),true);
     await assertFails(getDoc(doc(notInvited,"disasterCases",id)));
     assert.equal((await assertSucceeds(getDoc(doc(resident,"disasterCases",id)))).exists(),true);
