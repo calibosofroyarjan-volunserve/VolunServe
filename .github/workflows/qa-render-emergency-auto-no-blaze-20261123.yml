@@ -1,0 +1,39 @@
+name: Render Emergency Auto Invites No Blaze (QA only / NO DEPLOY)
+on:
+  push:
+    branches:
+      - feat/render-emergency-auto-invite-no-blaze-20261123
+
+permissions:
+  contents: read
+
+jobs:
+  safe-render:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            backend/package-lock.json
+      - name: Dependencies
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          npm ci --prefix backend --ignore-scripts --no-audit --no-fund
+      - name: Render backend syntax, gating and functional mocked-Firestore tests
+        run: |
+          node --check backend/server.js
+          node --check backend/renderEmergencyAutoInvites.js
+          node --test backend/test-renderEmergencyAutoInvites.cjs
+      - name: Existing production backend certificate and Auth regressions
+        run: |
+          node --test backend/test-communityCertificateAutoSync.js
+          node --test backend/tests/verifiedFirebaseToken.test.js
+      - name: TypeScript web/mobile compilation
+        run: npx tsc --noEmit --pretty false
+      - name: Explicitly NO Firebase/Render/live deployment
+        run: echo "QA only. Auto-invites remain OFF unless approved service & app flags are enabled."
