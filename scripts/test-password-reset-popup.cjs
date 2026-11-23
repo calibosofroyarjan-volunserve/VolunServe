@@ -21,24 +21,8 @@ for (const path of ["app/login.web.tsx", "app/login.tsx"]) {
 }
 
 const admin = fs.readFileSync("app/admin-login.tsx", "utf8");
-const residentWeb = fs.readFileSync("app/login.web.tsx", "utf8");
-const residentMobile = fs.readFileSync("app/login.tsx", "utf8");
-for (const [path, source] of [
-  ["app/admin-login.tsx", admin],
-  ["app/login.web.tsx", residentWeb],
-  ["app/login.tsx", residentMobile],
-]) {
-  assert(source.includes('import PasswordResetDialog from "../components/auth/PasswordResetDialog"'),
-    path + ": shared reset dialog must remain imported");
-  assert(source.includes("setResetOpen(true)") && source.includes("visible={resetOpen}"),
-    path + ": clicking Forgot password must show the popup");
-  assert(source.includes("onClose={() => setResetOpen(false)}"),
-    path + ": popup must be closeable");
-  assert(!source.includes("sendPasswordResetEmail("),
-    path + ": reset must never be sent before the popup submission");
-}
-assert(admin.includes('audience="admin"') && admin.includes("onPress={openPasswordReset}"),
-  "LGU/System Admin needs its own branded reset form and click handler");
+assert(admin.includes('<Redirect href="/login"'),
+  "Legacy staff bookmarks must open the unified login with password reset");
 assert(modal.includes('styles.webOverlay') && modal.includes('position: "fixed"') &&
        modal.includes("zIndex: 2147483647"),
   "Web popup must be fixed above login shell, not hidden by scrolling");
