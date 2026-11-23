@@ -1,0 +1,65 @@
+name: Audit ACTIVE Firebase Rules before Render Invite Release (READ ONLY)
+on:
+  push:
+    branches: [release/live-render-volunteer-auto-20261123]
+    paths: [.github/workflows/audit-active-firestore-rules-render-20261123.yml]
+permissions:
+  contents: read
+jobs:
+  read-only-active-rules:
+    if: github.repository == 'calibosofroyarjan-volunserve/VolunServe'
+    environment: production
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    env:
+      FIREBASE_SA: ${{ secrets.VOLUNSERVE_PRODUCTION_HOSTING_SERVICE_ACCOUNT || secrets.FIREBASE_SERVICE_ACCOUNT_VOLUNSERVE_3AA5B || secrets.FIREBASE_SERVICE_ACCOUNT }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+      - name: Get ACTIVE Firestore rules fingerprint (NO write)
+        run: |
+          node <<'NODE'
+          const fs=require('fs'),crypto=require('crypto'),assert=require('assert/strict');
+          const sa=JSON.parse(process.env.FIREBASE_SA||'{}');
+          assert.equal(sa.project_id,'volunserve-3aa5b');
+          assert.equal(sa.type,'service_account');
+          async function token(){
+            const now=Math.floor(Date.now()/1000);
+            const encode=x=>Buffer.from(JSON.stringify(x)).toString('base64url');
+            const jwt=encode({alg:'RS256',typ:'JWT'})+'.'+encode({
+              iss:sa.client_email,scope:'https://www.googleapis.com/auth/cloud-platform',
+              aud:'https://oauth2.googleapis.com/token',iat:now,exp:now+1800});
+            const signature=crypto.sign('RSA-SHA256',Buffer.from(jwt),sa.private_key).toString('base64url');
+            const r=await fetch('https://oauth2.googleapis.com/token',{method:'POST',
+              headers:{'Content-Type':'application/x-www-form-urlencoded'},
+              body:new URLSearchParams({grant_type:'urn:ietf:params:oauth:grant-type:jwt-bearer',assertion:jwt+'.'+signature}),
+              signal:AbortSignal.timeout(15000)});
+            assert(r.ok,'OAuth HTTP '+r.status);
+            return (await r.json()).access_token;
+          }
+          async function main(){
+            const access=await token();
+            const get=async path=>{
+              const r=await fetch('https://firebaserules.googleapis.com/v1/'+path,{
+                headers:{Authorization:'Bearer '+access},signal:AbortSignal.timeout(20000)});
+              assert(r.ok,'Rules API GET '+path+' HTTP '+r.status);
+              return r.json();
+            };
+            const release=await get('projects/volunserve-3aa5b/releases/cloud.firestore');
+            const ruleset=await get(release.rulesetName);
+            const content=(ruleset.source?.files||[]).filter(f=>f.name==='firestore.rules'||f.name==='cloud.firestore').map(f=>f.content).join('\n');
+            assert(content.length>100000,'Active ruleset incomplete');
+            const hash=x=>crypto.createHash('sha256').update(x).digest('hex');
+            const candidate=fs.readFileSync('firestore.rules','utf8');
+            const previous=process.env.PREVIOUS_RULES_SHA256||'';
+            console.log('ACTIVE_RULESET='+release.rulesetName);
+            console.log('ACTIVE_RULES_SHA256='+hash(content));
+            console.log('CANDIDATE_RULES_SHA256='+hash(candidate));
+            console.log('ACTIVE_RULES_LENGTH='+content.length);
+            console.log('CANDIDATE_RULES_LENGTH='+candidate.length);
+            console.log('Render invited-only clause deployed already? '+content.includes("render_resident_created_all_volunteers"));
+            console.log('READ ONLY audit completed.');
+          }
+          main().catch(e=>{console.error('RULES_AUDIT_BLOCKED:',e.message);process.exit(1)});
+          NODE
