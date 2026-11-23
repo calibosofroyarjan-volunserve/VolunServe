@@ -245,17 +245,27 @@ export function ReferenceHistory({ incident, assignments, formatDate }: {
 
 
 export function ReferenceVolunteerMatching({ incident, verificationStatus, caseBarangay,
-  eligibleCount, activeAssignments, onCancelAssignment }: {
+  eligibleCount, activeAssignments, autoDispatch, onCancelAssignment }: {
   incident: AdminCaseView;
   verificationStatus: string;
   caseBarangay: string;
   eligibleCount: number;
   activeAssignments: AdminAssignmentView[];
+  autoDispatch?: { state?: string; wave?: number; note?: string; attemptedCount?: number };
   onCancelAssignment?: (assignment: AdminAssignmentView) => void;
 }) {
   const ready = verificationStatus === "validated" &&
     ["validated", "assigned", "in_progress"].includes(incident.status);
   const taskStatus = responseLabel(activeAssignments);
+  const autoState = String(autoDispatch?.state || "");
+  const activeWave = Number(autoDispatch?.wave || 0);
+  const autoRunning = ["ready", "waiting", "accepted"].includes(autoState);
+  const summary = autoState === "waiting"
+    ? `Automatic Wave ${activeWave} — offer sent; awaiting Volunteer acceptance`
+    : autoState === "accepted" ? "Volunteer accepted the automatic offer"
+    : autoState === "needs_admin" ? "Automatic matching paused — Admin review required"
+    : autoState === "ready" ? "Checking the next qualified Volunteer automatically"
+    : "Automatic matching is not active for this case.";
   return <View style={styles.page}>
     <View style={styles.matchHeading}>
       <View style={styles.grow}>
@@ -264,9 +274,9 @@ export function ReferenceVolunteerMatching({ incident, verificationStatus, caseB
       <View style={styles.matchBanner}>
         <Text style={styles.matchBannerTitle}>◇ Three-wave automatic matching</Text>
         <Text style={styles.matchBannerSub}>
-          {ready
-            ? "Planned workflow — automation has not yet been enabled. Existing recorded offers are shown below."
-            : "Starts only after Admin validation. No volunteer has been automatically notified by this design."}
+          {autoState ? summary : ready
+            ? "Automatic matching has not been started for this case. Existing manual offers remain available."
+            : "Admin validation is required before any Volunteer offer can be sent."}
         </Text>
       </View>
     </View>
@@ -297,12 +307,17 @@ export function ReferenceVolunteerMatching({ incident, verificationStatus, caseB
       </View>
     </View>
     <Card>
-      <Heading icon="▤" title="Matching Waves" sub="Wave progression will require verified server-side automation; this page does not send offers itself." />
+      <Heading icon="▤" title="Matching Waves" sub={autoRunning
+        ? "This information comes from the saved server-side matching state. Volunteers must accept offers."
+        : "Server-side matching requires activation and verified nearby barangay mapping."} />
       <View style={styles.waveRow}>
         {[
-          ["01", "Same Barangay", caseBarangay || "Incident barangay", "First matching group"],
-          ["02", "Nearby Barangays", "Adjacent SJDM areas", "Not configured"],
-          ["03", "SJDM Citywide", "Other SJDM barangays", "Not configured"],
+          ["01", "Same Barangay", caseBarangay || "Incident barangay",
+            autoRunning && activeWave === 1 ? summary : "First matching group"],
+          ["02", "Nearby Barangays", "Verified adjacent SJDM areas",
+            autoRunning && activeWave === 2 ? summary : "Requires verified adjacency"],
+          ["03", "SJDM Citywide", "Other SJDM barangays",
+            autoRunning && activeWave === 3 ? summary : "After earlier qualified waves"],
         ].map(([n, title, area, status]) =>
           <View key={n} style={styles.waveTile}>
             <Text style={styles.waveNumber}>{n}</Text>
@@ -319,15 +334,21 @@ export function ReferenceVolunteerMatching({ incident, verificationStatus, caseB
             <Text style={styles.assignedEmptyIcon}>♧</Text>
             <Text style={styles.emptyTitle}>
               {!ready ? "Awaiting Admin validation" :
+                autoState === "needs_admin" ? "Admin review required" :
+                autoState === "ready" ? "Finding the next qualified Volunteer" :
                 eligibleCount === 0 ? "No eligible local Volunteers found" :
                 "No Volunteer assigned yet"}
             </Text>
             <Text style={styles.muted}>
               {!ready
                 ? "Validate the case before sending a Volunteer task offer."
-                : eligibleCount === 0
-                  ? "No approved, qualified Volunteers currently match this incident barangay. Nearby and citywide automatic matching is not active yet; escalate urgent needs to official services."
-                  : "Qualified local Volunteers are available below. An offer requires Volunteer acceptance before the response begins."}
+                : autoState === "needs_admin"
+                  ? "Review the matching status and contact official emergency services immediately when needed."
+                  : autoRunning
+                    ? summary
+                    : eligibleCount === 0
+                      ? "No approved local Volunteers match this incident barangay. Check eligibility validation and official emergency escalation."
+                      : "Qualified local Volunteers are available. An offer requires Volunteer acceptance before the response begins."}
             </Text>
           </View>
         : activeAssignments.map((x) =>

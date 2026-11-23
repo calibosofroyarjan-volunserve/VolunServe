@@ -25,7 +25,10 @@ assert(admin.includes('reviewVerification(incident, "validate")'));
 assert(admin.includes('Automatically publish a public advisory when I validate'));
 assert(admin.includes('["high", "critical"].includes(incident.severity)'));
 assert(admin.includes("publicImpactConfirmed[incident.id] === true"));
-assert(admin.includes("safePublicAdvisoryBarangay(publicImpactBarangays[incident.id])"));
+assert(admin.includes("safePublicAdvisoryBarangay(verifiedIncidentBarangay)"));
+assert(admin.includes("basePatch.incidentBarangay = verifiedIncidentBarangay"));
+assert(!admin.includes("data.barangay ||\n              data.reporterBarangay"));
+
 assert(admin.includes("publishVerifiedCommunityAdvisory({"));
 assert(!admin.includes("Create Public Advisory in Announcements"));
 assert(!admin.includes('collection(db, "announcements")'));

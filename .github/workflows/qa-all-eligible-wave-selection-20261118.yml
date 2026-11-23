@@ -1,0 +1,41 @@
+name: All eligible Volunteer wave planner - staging only
+on:
+  pull_request:
+    branches:
+      - feat/emergency-auto-dispatch-server-staging-20261115
+    paths:
+      - "functions/emergencyAllEligibleWavePlanner.js"
+      - "backend/test-all-eligible-wave-planner.cjs"
+      - "backend/test-stagingFreshEndToEnd.cjs"
+      - "backend/emergencyAutoDispatchStagingServer.js"
+      - "backend/stagingBulkVolunteerOffers.js"
+      - "backend/stagingBulkWaveAdvance.js"
+      - "backend/stagingAdminLogin.html"
+      - "backend/stagingVolunteerLogin.html"
+      - ".github/workflows/qa-all-eligible-wave-selection-20261118.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  planner-tests:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Check syntax
+        run: |
+          node --check functions/emergencyAllEligibleWavePlanner.js
+          node --check backend/stagingBulkVolunteerOffers.js
+          node --check backend/stagingBulkWaveAdvance.js
+          node --check backend/emergencyAutoDispatchStagingServer.js
+      - name: Verify all-eligible selection without Firestore
+        run: node --test backend/test-all-eligible-wave-planner.cjs
+      - name: Install backend locked dependencies
+        run: npm ci --prefix backend --no-audit --no-fund
+      - name: Check isolated staging endpoint tests
+        run: node --test backend/test-stagingFreshEndToEnd.cjs
+      - name: Confirm no deployment
+        run: echo "NO FIRESTORE WRITES OR PRODUCTION DISPATCH"

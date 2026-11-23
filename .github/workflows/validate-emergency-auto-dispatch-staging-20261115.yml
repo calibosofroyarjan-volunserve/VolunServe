@@ -1,0 +1,48 @@
+name: Validate automatic Volunteer response engine (NO DEPLOY)
+on:
+  push:
+    branches:
+      - feat/emergency-auto-dispatch-server-staging-20261115
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Firebase Functions installed from lockfile
+        run: npm ci --prefix functions --no-audit --no-fund
+      - name: Syntax and activation gate
+        run: |
+          node --check functions/index.js
+          node --check functions/emergencyAutoDispatchCore.js
+          node --check functions/emergencyVolunteerWavePlanner.js
+          node -e "const s=require('fs').readFileSync('functions/index.js','utf8');if(!s.includes('process.env.VOLUNSERVE_AUTO_VOLUNTEER_DISPATCH_ENABLED === \"true\"'))process.exit(1)"
+      - name: Real automatic matching scenarios
+        run: |
+          node scripts/test-automatic-emergency-dispatch-20261115.cjs
+          node scripts/test-automatic-volunteer-responder-lock-20261115.cjs
+          node scripts/test-emergency-volunteer-wave-planner-20261115.cjs
+          node scripts/test-admin-emergency-ui-consistency-20261115.cjs
+          node scripts/test-emergency-announcement-advisory-link.cjs
+          node scripts/test-admin-volunteer-authorization.cjs
+      - name: Install Render backend dependencies
+        run: npm ci --prefix backend --no-audit --no-fund
+      - name: Verify Render paid-worker gate and no historical unexpected dispatch
+        run: |
+          node --check backend/server.js
+          node --check backend/emergencyAutoDispatchWorker.js
+          node --test backend/test-emergencyAutoDispatchWorker.cjs backend/test-emergencyAutoDispatchStagingServer.cjs
+      - name: Install app
+        run: npm ci --no-audit --no-fund
+      - name: Compile and export
+        run: |
+          npx tsc --noEmit --incremental false
+          npx expo export --platform web --clear

@@ -11546,6 +11546,64 @@ const { installPublicAssistanceAppeals } = require("./publicAssistanceAppeals");
 installPublicAssistanceAppeals({
   app, db, FieldValue, requireFirebaseUser, requireOperationalAdmin, cleanText, makeHttpError,
 });
+// Automatic Volunteer matching: always-on worker or a strictly isolated staging
+// Admin-triggered one-shot. Free Render NEVER runs the background worker.
+const {createRenderAutoDispatchWorker} = require("./emergencyAutoDispatchWorker");
+const emergencyAutoWorker = createRenderAutoDispatchWorker({db, logger:console});
+
+function approvedAutomaticResponse(request,response,next) {
+  if (emergencyAutoWorker.config.ready || emergencyAutoWorker.config.onDemandReady) return next();
+  response.status(503).json({
+    ok:false, error:"automatic_matching_unavailable",
+    message:"Matching is disabled. Use a verified isolated staging project for Admin on-demand matching, or a reviewed always-on backend. Manual Admin coordination remains available.",
+  });
+}
+app.get("/api/admin/emergency-auto/status",
+  requireFirebaseUser, requireOperationalAdmin, (request,response) => {
+    response.json({
+      ok:true, workerEnabled:emergencyAutoWorker.config.ready,
+      workerMode:emergencyAutoWorker.config.ready ? "render_always_on" :
+        emergencyAutoWorker.config.onDemandReady ? "staging_admin_on_demand_only" : "disabled",
+      onDemandEnabled:emergencyAutoWorker.config.onDemandReady,
+      activationReady:emergencyAutoWorker.config.ready || emergencyAutoWorker.config.onDemandReady,
+      reasons:emergencyAutoWorker.config.reasons,
+    });
+  });
+app.post("/api/admin/emergency-auto/start",
+  requireFirebaseUser, requireOperationalAdmin, approvedAutomaticResponse,
+  async(request,response) => {
+    try {
+      const caseId=cleanText(request.body?.caseId,160);
+      if (!/^[A-Za-z0-9_-]{1,160}$/.test(caseId)) {
+        throw makeHttpError(400,"invalid_case_id","A valid Emergency Report ID is required");
+      }
+      const result=await emergencyAutoWorker.requestStart(caseId);
+      response.json({ok:true,...result});
+    } catch(error) {
+      response.status(Number(error?.statusCode)||409).json({
+        ok:false,error:cleanText(error?.code||"emergency_auto_match_blocked",100),
+        message:cleanText(error?.message||"Automatic matching could not start",450),
+      });
+    }
+  });
+app.post("/api/admin/emergency-auto/disable",
+  requireFirebaseUser, requireOperationalAdmin, approvedAutomaticResponse,
+  async(request,response) => {
+    try {
+      const caseId=cleanText(request.body?.caseId,160);
+      if (!/^[A-Za-z0-9_-]{1,160}$/.test(caseId)) {
+        throw makeHttpError(400,"invalid_case_id","A valid Emergency Report ID is required");
+      }
+      const result=await emergencyAutoWorker.requestDisable(caseId);
+      response.json({ok:true,...result});
+    } catch(error) {
+      response.status(Number(error?.statusCode)||409).json({
+        ok:false,error:cleanText(error?.code||"emergency_auto_disable_blocked",100),
+        message:cleanText(error?.message||"Cannot disable an accepted Volunteer response",450),
+      });
+    }
+  });
+
 // Automatic, idempotent recovery for eligible completed event certificates.
 // Does not change attendance, roles, certificates that already exist, or rules.
 startCommunityCertificateAutoSync({db,reconcile:reconcileCommunityEventCertificates});
@@ -11561,5 +11619,6 @@ app.listen(
     console.log(
       `VolunServe backend listening on port ${port}`,
     );
+    emergencyAutoWorker.start();
   },
 );

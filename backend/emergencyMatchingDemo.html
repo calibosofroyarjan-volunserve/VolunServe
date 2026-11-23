@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>VolunServe • Emergency Volunteer Matching — Staging Demo</title>
+<style>
+:root{color-scheme:light;font:15px/1.5 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;color:#182b3a;background:#f4f8f7}
+*{box-sizing:border-box}body{margin:0;min-height:100vh}.shell{max-width:1060px;margin:auto;padding:26px 22px 55px}
+.top{display:flex;justify-content:space-between;align-items:center;gap:20px;margin-bottom:20px}.brand{font-weight:850;font-size:21px;color:#075d49;letter-spacing:-.4px}.brand small{display:block;font-weight:500;font-size:12px;color:#667d83;letter-spacing:0}
+.pill{font-size:12px;display:inline-flex;border:1px solid #badacc;border-radius:100px;background:#e9f6ef;color:#096249;font-weight:750;padding:5px 11px;white-space:nowrap}
+.hero{padding:29px 32px;background:#123b34;color:white;border-radius:20px;box-shadow:0 10px 25px #063d3012}.eyebrow{font-weight:700;letter-spacing:1.1px;text-transform:uppercase;font-size:11px;color:#a4dcc8}.hero h1{margin:8px 0 12px;font-size:clamp(23px,3vw,34px);line-height:1.2}.hero p{margin:0;max-width:700px;color:#d8e9e4}
+.warning{margin-top:16px;padding:13px 17px;border:1px solid #e3c88c;background:#fff9e8;border-radius:12px;font-size:13px;color:#6f4c08}
+.cols{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(270px,1fr);gap:19px;margin-top:20px}
+.panel{background:white;border:1px solid #dce9e5;border-radius:17px;padding:22px;box-shadow:0 4px 14px #0d3e3105}
+.panel h2{font-size:17px;margin:0 0 12px;letter-spacing:-.2px}.muted{color:#677985;font-size:13px}.info{display:grid;grid-template-columns:1fr 1fr;gap:13px;margin:15px 0}
+.info>div{background:#f5f9f8;border:1px solid #e6eeec;border-radius:11px;padding:12px}.info small{display:block;color:#687d82;font-size:12px}.info strong{display:block;font-size:14px;margin-top:3px}
+.track{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;margin:18px 0 23px}.step{padding-top:10px;border-top:4px solid #dce5e3;font-size:12px;font-weight:650;color:#73878a}.step.active{border-color:#118669;color:#0a634e}.step.done{border-color:#6bb49b;color:#31544b}
+.status{padding:17px;background:#f1f7f5;border:1px solid #d9e9e2;border-radius:12px;min-height:126px}.status strong{font-size:17px;display:block;margin-bottom:5px}.status p{margin:0;font-size:13px;color:#435c5f}
+.buttons{display:flex;flex-wrap:wrap;gap:9px;margin-top:17px}
+button{border:0;border-radius:9px;font:inherit;padding:11px 15px;font-size:13px;font-weight:750;cursor:pointer;background:#087b61;color:white}
+button.secondary{background:#f1f5f4;color:#285448;border:1px solid #cfded8}button.danger{background:#ae462f}
+button:disabled{opacity:.4;cursor:not-allowed}button:focus-visible,a:focus-visible{outline:3px solid #4cad92;outline-offset:2px}
+.person{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 0;border-top:1px solid #edf2f0}.person:first-of-type{border-top:0}
+.person .name{font-weight:750;font-size:14px}.person small{display:block;color:#667b7c}.tag{font-size:11px;padding:3px 8px;border-radius:7px;background:#edf2f1;color:#315b53;white-space:nowrap;font-weight:750}
+.tag.active{background:#ddf4ea;color:#087559}.tag.block{background:#fff1ed;color:#a1452f}
+.log{padding:0;margin:12px 0 0;list-style:none}.log li{font-size:12px;border-left:2px solid #b7d6cb;padding:7px 0 7px 12px;color:#48625f}
+.footer{font-size:12px;color:#68807e;margin-top:18px}
+@media(max-width:760px){.cols{grid-template-columns:1fr}.panel{padding:17px}.hero{padding:24px}.top{align-items:flex-start}.info{grid-template-columns:1fr 1fr}.shell{padding:17px 14px 35px}}
+</style>
+</head>
+<body>
+<main class="shell">
+  <div class="top">
+    <div class="brand">VolunServe <small>Community volunteering management system</small></div>
+    <div class="pill">SYNTHETIC STAGING DEMO</div>
+  </div>
+  <header class="hero">
+    <div class="eyebrow">Emergency Reports · Automatic Volunteer Matching</div>
+    <h1>See how an approved report finds a qualified Volunteer.</h1>
+    <p>Try the matching flow with fictional volunteers. The same eligibility planner used by the staging source generates this example; offers and acceptance here are simulated in this browser.</p>
+  </header>
+  <aside class="warning"><strong>Testing only.</strong> No real reports, Firestore writes, calls, push alerts, live GPS, or official dispatch. Render Free can sleep, so real on-demand matching is not a substitute for emergency response. For immediate emergencies, contact local official responders or 911.</aside>
+  <section class="cols">
+    <article class="panel">
+      <h2>Simulated incident</h2>
+      <div class="info">
+        <div><small>Report</small><strong id="case-title">Synthetic flooding case</strong></div>
+        <div><small>Actual incident barangay</small><strong id="case-barangay">Bagong Buhay I</strong></div>
+        <div><small>Required skill</small><strong>First Aid</strong></div>
+        <div><small>Matching mode</small><strong>Admin-validated · On-demand</strong></div>
+      </div>
+      <div class="track" aria-label="Simulated response phases">
+        <div class="step" id="phase0">Review</div>
+        <div class="step" id="phase1">Offer</div>
+        <div class="step" id="phase2">Acceptance</div>
+        <div class="step" id="phase3">Follow-up</div>
+      </div>
+      <div class="status" aria-live="polite">
+        <strong id="status-heading">Ready for a simulated Admin validation</strong>
+        <p id="status-description">Select “Validate & match” to send the first synthetic offer.</p>
+      </div>
+      <div class="buttons">
+        <button id="validate">Validate &amp; match</button>
+        <button id="decline" class="danger" disabled>Decline / simulate timeout</button>
+        <button id="accept" disabled>Volunteer accepts</button>
+        <button id="reset" class="secondary">Reset demo</button>
+      </div>
+    </article>
+    <aside class="panel">
+      <h2>Volunteer eligibility</h2>
+      <p class="muted">Wave 1 = same barangay; Wave 2 requires independently verified adjacency; otherwise fallback to Wave 3 (remaining SJDM).</p>
+      <div id="volunteers" aria-live="polite"><p class="muted">Loading synthetic roster…</p></div>
+      <h2 style="margin-top:22px">Simulated activity</h2>
+      <ol class="log" id="history"><li>No task offers yet.</li></ol>
+    </aside>
+  </section>
+  <p class="footer">VolunServe staging · synthetic data only · no real Volunteer receives anything · production volunserve.com is unchanged.</p>
+</main>
+<script>
+(() => {
+  "use strict";
+  const $=(id)=>document.getElementById(id);
+  let people=[], queue=[], pointer=-1, phase="ready", activity=[];
+  function note(message){activity.unshift(message);$("history").replaceChildren(...activity.slice(0,6).map(message=>{
+    const li=document.createElement("li");li.textContent=message;return li;
+  }));}
+  function redraw(){
+    const selected=queue[pointer];
+    const area=$("volunteers");area.replaceChildren();
+    people.forEach(v=>{
+      const row=document.createElement("div");row.className="person";
+      const group=document.createElement("div"),name=document.createElement("div"),detail=document.createElement("small"),tag=document.createElement("span");
+      name.className="name";name.textContent=v.name;detail.textContent=v.barangay+" · "+(v.eligible?"Qualified":"Not eligible");
+      tag.className="tag"+(!v.eligible?" block":selected?.uid===v.uid&&phase==="waiting"?" active":"");
+      tag.textContent=v.eligible?"Wave "+v.wave:"Excluded";
+      group.append(name,detail);row.append(group,tag);area.append(row);
+    });
+    $("validate").disabled=phase!=="ready";
+    $("decline").disabled=phase!=="waiting";
+    $("accept").disabled=phase!=="waiting";
+    for(let i=0;i<4;i++){
+      const s=$("phase"+i);s.className="step"+(phase==="ready"?(i===0?" active":""):
+        phase==="waiting"?(i===1?" active":i===0?" done":""):
+        phase==="accepted"?(i===2?" active":i<2?" done":""):
+        phase==="none"?(i===3?" active":i<3?" done":""):"");
+    }
+    let heading="Ready for a simulated Admin validation",desc="Select “Validate & match” to send the first synthetic offer.";
+    if(phase==="waiting"){heading="Wave "+selected.wave+" · Offer sent to "+selected.name;
+      desc="Awaiting this fictional Volunteer’s acceptance. Decline or simulate a timeout to try the next eligible Volunteer. No real notification is sent.";}
+    if(phase==="accepted"){heading=selected.name+" accepted the simulated task";
+      desc="Matching stops on acceptance. Actual response tracking would only start when the Volunteer chooses Start Response in the real app.";}
+    if(phase==="none"){heading="No more eligible test Volunteers";
+      desc="Admin review and official emergency-service escalation are required; the app does not dispatch official responders.";}
+    $("status-heading").textContent=heading;$("status-description").textContent=desc;
+  }
+  function offer(){pointer++;if(pointer<queue.length){phase="waiting";note("Wave "+queue[pointer].wave+": offered to "+queue[pointer].name);}
+    else{phase="none";note("No qualified Volunteer accepted. Admin review required.");}
+    redraw();}
+  $("validate").onclick=()=>{if(phase==="ready"){note("Admin validated fictional emergency report.");offer();}};
+  $("decline").onclick=()=>{if(phase==="waiting"){note(queue[pointer].name+" did not accept; searching next candidate.");offer();}};
+  $("accept").onclick=()=>{if(phase==="waiting"){phase="accepted";note(queue[pointer].name+" accepted; stop matching.");redraw();}};
+  $("reset").onclick=()=>{pointer=-1;phase="ready";activity=[];note("Demo reset.");redraw();};
+  fetch("/demo-data",{cache:"no-store"}).then(async r=>{if(!r.ok)throw Error("Demo data unavailable");return r.json();})
+    .then(data=>{
+      if(data.mode!=="synthetic"||!Array.isArray(data.reviewed))throw Error("Invalid synthetic data");
+      people=data.reviewed;
+      queue=data.reviewed.filter(v=>v.eligible).sort((a,b)=>a.wave-b.wave||a.uid.localeCompare(b.uid));
+      $("case-title").textContent=data.caseTitle;
+      $("case-barangay").textContent=data.caseBarangay;
+      redraw();
+    }).catch(()=>{$("status-heading").textContent="Demo unavailable";
+      $("status-description").textContent="The synthetic data could not load. Review staging service logs.";
+      $("validate").disabled=true;$("volunteers").textContent="Synthetic demo data unavailable.";});
+})();
+</script>
+</body>
+</html>

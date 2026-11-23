@@ -1,0 +1,33 @@
+name: Staging Admin and Volunteer bulk client integration - NO DEPLOY
+on:
+  pull_request:
+    branches:
+      - feat/emergency-auto-dispatch-server-staging-20261115
+    paths:
+      - "lib/stagingBulkVolunteerClient.ts"
+      - "app/(admin)/admin-cases.tsx"
+      - "app/(tabs)/volunteer.web.tsx"
+      - "app/(tabs)/volunteer.tsx"
+      - "scripts/test-staging-bulk-client-integration-20261119.cjs"
+      - ".github/workflows/qa-staging-bulk-client-integration-20261119.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  client-integration-no-deploy:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - name: Install locked frontend dependencies without lifecycle scripts
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Type-check staging bridge source without deploying
+        run: ./node_modules/.bin/tsc --noEmit --strict --skipLibCheck --target es2022 --lib es2022,dom --moduleResolution node lib/stagingBulkVolunteerClient.ts
+      - name: Exercise Admin/Volunteer staging server bridge under mock auth
+        run: node --test scripts/test-staging-bulk-client-integration-20261119.cjs
+      - name: Confirm no Firebase or production deployment
+        run: echo "ZERO LIVE OR STAGING FIREBASE WRITES. NO DEPLOYMENT."

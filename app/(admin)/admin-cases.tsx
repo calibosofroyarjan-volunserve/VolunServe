@@ -1,5 +1,6 @@
 import { useRouter } from "expo-router";
 import { getAuth } from "firebase/auth";
+import { getFunctions, httpsCallable } from "firebase/functions";
 import {
   arrayRemove,
   arrayUnion,
@@ -39,12 +40,20 @@ import {
 } from "react-native";
 
 import { db } from "../../lib/firebase";
+import { ensureStagingBulkOffersAfterAdminValidation, STAGING_BULK_CASE_ID } from "../../lib/stagingBulkVolunteerClient";
 import { safePublicAdvisoryBarangay } from "../../lib/emergencyPublicAdvisory";
 import { SJDM_BARANGAYS } from "../../constants/sjdmBarangays";
 import { VolunteerEligibilityValidation } from "../../components/admin/VolunteerEligibilityValidation";
 import { publishVerifiedCommunityAdvisory } from "../../lib/publishVerifiedCommunityAdvisory";
 
 const BACKEND_URL = "https://volunserve.onrender.com";
+const AUTOMATIC_VOLUNTEER_RUNTIME_ENABLED = process.env.EXPO_PUBLIC_AUTO_VOLUNTEER_DISPATCH_ENABLED === "true";
+const AUTOMATIC_VOLUNTEER_PROVIDER = process.env.EXPO_PUBLIC_AUTO_VOLUNTEER_MATCH_PROVIDER === "render" ? "render" : "firebase";
+// Only the explicitly enabled staging build uses the Free staging API.
+// Never silently send staging task offers to the protected production backend.
+const AUTOMATIC_VOLUNTEER_STAGING_ONLY = process.env.EXPO_PUBLIC_AUTO_VOLUNTEER_STAGING_ONLY === "true";
+const AUTOMATIC_VOLUNTEER_BACKEND_URL = AUTOMATIC_VOLUNTEER_STAGING_ONLY
+  ? "https://volunserve-emergency-match-staging-free.onrender.com" : BACKEND_URL;
 
 type Severity = "low" | "medium" | "high" | "critical";
 type CaseStatus =
@@ -135,6 +144,9 @@ interface DisasterCase {
   activeVolunteerSupportUid?: string;
   activeVolunteerSupportName?: string;
   activeVolunteerSupportAssignmentId?: string;
+  autoVolunteerDispatch?: {
+    state?: string; wave?: number; note?: string; attemptedCount?: number;
+  };
 
   // Legacy compatibility fields from the older Volunteer-as-primary design.
   activeResponderUid?: string;
@@ -179,6 +191,7 @@ type VolunteerProfile = {
   identityVerified?: boolean;
   identityStatus?: string;
   applicationApproved?: boolean;
+  serverReady?: boolean;
 };
 
 type ResponseAssignment = {
@@ -456,7 +469,9 @@ const barangayDisplay = (value?: string) => {
 };
 
 const caseBarangayValue = (incident: DisasterCase) =>
-  String(incident.incidentBarangay || incident.reporterBarangay || "").trim();
+  // The report's GPS incident location must be confirmed by Admin first.
+  // A reporter may live in a different barangay from the emergency.
+  String(incident.incidentBarangay || "").trim();
 
 const firstIncidentImage = (attachments?: Attachment[]) => {
   if (!Array.isArray(attachments)) return "";
@@ -607,7 +622,7 @@ export default function AdminCases() {
   const [notes, setNotes] = useState<Record<string, string>>({});
   const [reviewReasons, setReviewReasons] = useState<Record<string, string>>({});
   const [publicImpactConfirmed, setPublicImpactConfirmed] = useState<Record<string, boolean>>({});
-  const [publicImpactBarangays, setPublicImpactBarangays] = useState<Record<string, string>>({});
+  const [confirmedResponseBarangays, setConfirmedResponseBarangays] = useState<Record<string, string>>({});
   const [assignmentCaseId, setAssignmentCaseId] = useState("");
   const [skillFilter, setSkillFilter] = useState("");
   const [availabilityFilter, setAvailabilityFilter] = useState("");
@@ -973,7 +988,6 @@ export default function AdminCases() {
               data.incidentBarangay ||
               data.emergencyBarangay ||
               data.barangay ||
-              data.reporterBarangay ||
               "",
             reporterAddress: data.reporterAddress || "",
             contactNumber: data.contactNumber || "",
@@ -1022,6 +1036,7 @@ export default function AdminCases() {
             activeVolunteerSupportName: data.activeVolunteerSupportName || "",
             activeVolunteerSupportAssignmentId:
               data.activeVolunteerSupportAssignmentId || "",
+            autoVolunteerDispatch: data.autoVolunteerDispatch || undefined,
             activeResponderUid: data.activeResponderUid || "",
             activeResponderName: data.activeResponderName || "",
             activeResponderAssignmentId: data.activeResponderAssignmentId || "",
@@ -1182,6 +1197,15 @@ export default function AdminCases() {
                   .trim()
                   .toLowerCase(),
                 applicationApproved: true,
+                // Mirrors the existing responseAssignments create security rule.
+                // A legacy approved application alone is NOT sufficient to dispatch.
+                serverReady:
+                  String(userData.status || "").toLowerCase() === "approved" &&
+                  ["resident", "volunteer"].includes(String(userData.role || "").toLowerCase()) &&
+                  userData.volunteerAccess === true &&
+                  String(userData.volunteerStatus || "").toLowerCase() === "approved" &&
+                  (userData.identityVerified === true ||
+                   String(userData.identityStatus || "").toLowerCase() === "verified"),
               } as VolunteerProfile;
             })
           );
@@ -1676,6 +1700,11 @@ export default function AdminCases() {
       Boolean(volunteerBarangay) &&
       caseBarangay === volunteerBarangay;
 
+    if (!volunteer.serverReady) {
+      return { eligible: false,
+        reason: "Volunteer account must have approved profile, confirmed Volunteer access and verified identity before a secure task offer",
+        skillMatches };
+    }
     if (reporterIsVolunteer) {
       return { eligible: false, reason: "Reporter cannot respond to own case", skillMatches };
     }
@@ -1765,6 +1794,146 @@ export default function AdminCases() {
       });
   };
 
+  const requestAutomaticMatching = async (
+    incident: DisasterCase, action: "start" | "disable", quiet = false
+  ): Promise<boolean> => {
+    if (!AUTOMATIC_VOLUNTEER_RUNTIME_ENABLED) return false;
+    // A staging build must never use a production Firebase token or project.
+    // This guard is independent of server-side project isolation and fails closed.
+    if (AUTOMATIC_VOLUNTEER_STAGING_ONLY) {
+      const selectedProject = String(process.env.EXPO_PUBLIC_AUTO_VOLUNTEER_STAGING_PROJECT_ID || "").trim();
+      const authProject = String(getAuth().app.options.projectId || "").trim();
+      if (AUTOMATIC_VOLUNTEER_PROVIDER !== "render" ||
+          !selectedProject || selectedProject === "volunserve-3aa5b" ||
+          authProject !== selectedProject) {
+        if (!quiet) Alert.alert("Isolated Staging Required",
+          "Volunteer auto-matching is disabled until this test build uses a separately verified Firebase staging project.");
+        return false;
+      }
+    }
+    const user = getAuth().currentUser;
+    if (!user) {
+      if (!quiet) Alert.alert("Session Expired", "Sign in as an approved Admin.");
+      return false;
+    }
+    if (action === "start" && !incident.incidentBarangay) {
+      if (!quiet) {
+        Alert.alert("Confirm Incident Barangay First",
+          "Open Evidence and save the actual emergency barangay before starting automatic matching.");
+        setDetailTab("evidence");
+      }
+      return false;
+    }
+    setBusyKey("auto_" + incident.id);
+    try {
+      if (AUTOMATIC_VOLUNTEER_STAGING_ONLY &&
+          incident.id === STAGING_BULK_CASE_ID) {
+        if (action !== "start") {
+          throw new Error(
+            "Fictional batch test control cannot disable active responder offers. Use isolated staging Admin review.",
+          );
+        }
+        const outcome = await ensureStagingBulkOffersAfterAdminValidation(
+          incident.id, String(getAuth().app.options.projectId || ""), user,
+        );
+        if (!quiet) {
+          Alert.alert(
+            "Fictional Bulk Offers",
+            outcome.status === "already_started"
+              ? "Existing staging offers preserved. No duplicate tasks were sent."
+              : `Staging server offered Wave ${outcome.wave || "?"} to ${outcome.offered || 0} eligible Volunteers. Each must Accept/Decline separately.`,
+          );
+        }
+        return true;
+      }
+      if (AUTOMATIC_VOLUNTEER_PROVIDER === "render") {
+        const token = await user.getIdToken();
+        const response = await fetch(
+          `${AUTOMATIC_VOLUNTEER_BACKEND_URL}/api/admin/emergency-auto/${action}`,
+          { method: "POST", headers: {
+              Authorization: `Bearer ${token}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({caseId:incident.id}),
+          },
+        );
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok || payload.ok !== true) {
+          throw new Error(payload.message || "Server-side matching is unavailable.");
+        }
+      } else {
+        const functions = getFunctions(getAuth().app, "us-central1");
+        const fn = httpsCallable(functions, action === "start"
+          ? "startAutomaticEmergencyVolunteerMatching"
+          : "disableAutomaticEmergencyVolunteerMatching");
+        await fn({caseId:incident.id});
+      }
+      if (!quiet) {
+        Alert.alert(action === "start" ? "Automatic Matching Checked" : "Automatic Matching Disabled",
+          action === "start"
+            ? "The server checked eligible Volunteers. Review the saved matching status and do not assume anyone has accepted yet."
+            : "Unaccepted offers have been cancelled where possible. Manual case coordination is available again.");
+      }
+      return true;
+    } catch (error) {
+      if (quiet) console.warn("Admin-validated case: automatic Volunteer matching did not complete", error);
+      else Alert.alert("Matching Action Not Completed",
+        error instanceof Error ? error.message : "Confirm the Functions deployment and Admin authorization.");
+      return false;
+    } finally {
+      setBusyKey("");
+    }
+  };
+
+  const saveConfirmedIncidentBarangay = async (incident: DisasterCase) => {
+    const adminUser = getAuth().currentUser;
+    if (!adminUser) {
+      Alert.alert("Sign in required", "An approved Admin session is required.");
+      return;
+    }
+    const selected = String(confirmedResponseBarangays[incident.id] || incident.incidentBarangay || "");
+    const exact = SJDM_BARANGAYS.find((name) =>
+      normalizeBarangay(name) === normalizeBarangay(selected)) || "";
+    if (!exact) {
+      Alert.alert("Actual Incident Barangay Required",
+        "Choose the official SJDM barangay supported by the emergency GPS pin. Do not use the reporter's home barangay.");
+      return;
+    }
+    try {
+      await runTransaction(db, async (transaction) => {
+        const caseRef = doc(db, "disasterCases", incident.id);
+        const snapshot = await transaction.get(caseRef);
+        if (!snapshot.exists()) throw new Error("Emergency case no longer exists.");
+        const current: any = snapshot.data();
+        if (String(current.verificationStatus || "") !== "validated") {
+          throw new Error("Validate this report before confirming its operational response barangay.");
+        }
+        if (current.activeVolunteerSupportAssignmentId ||
+            ["waiting", "ready", "accepted"].includes(
+              String(current.autoVolunteerDispatch?.state || ""),
+            )) {
+          throw new Error("An active Volunteer task prevents changing this location. Resolve the assignment through authorized Admin controls.");
+        }
+        transaction.update(caseRef, {
+          incidentBarangay: exact,
+          updatedAt: serverTimestamp(),
+        });
+        transaction.set(doc(collection(db, "adminActivityLogs")), {
+          action: "Incident Barangay Confirmed",
+          caseId: incident.id,
+          incidentBarangay: exact,
+          performedBy: adminUser.uid,
+          timestamp: serverTimestamp(),
+        });
+      });
+      Alert.alert("Incident Location Confirmed",
+        "The actual incident barangay is saved for secure Volunteer matching.");
+    } catch (error) {
+      Alert.alert("Unable to Confirm Incident Barangay",
+        error instanceof Error ? error.message : "Please review this case again.");
+    }
+  };
+
   const reviewVerification = async (
     incident: DisasterCase,
     action: "validate" | "request_more_evidence" | "reject"
@@ -1802,11 +1971,22 @@ export default function AdminCases() {
       return;
     }
 
+    const desiredIncidentBarangay = String(
+      confirmedResponseBarangays[incident.id] || incident.incidentBarangay || ""
+    ).trim();
+    const verifiedIncidentBarangay = SJDM_BARANGAYS.find(
+      (name) => normalizeBarangay(name) === normalizeBarangay(desiredIncidentBarangay)
+    ) || "";
+    if (action === "validate" && !verifiedIncidentBarangay) {
+      Alert.alert("Incident Barangay Required",
+        "Confirm the ACTUAL emergency location from the GPS pin and evidence. The reporter's home barangay cannot be used automatically for Volunteer matching.");
+      return;
+    }
     const publicImpact = action === "validate" &&
       ["high", "critical"].includes(incident.severity) &&
       publicImpactConfirmed[incident.id] === true;
     const confirmedIncidentBarangay = publicImpact
-      ? safePublicAdvisoryBarangay(publicImpactBarangays[incident.id]) : null;
+      ? safePublicAdvisoryBarangay(verifiedIncidentBarangay) : null;
 
     if (publicImpact && !confirmedIncidentBarangay) {
       Alert.alert("Confirm Incident Barangay",
@@ -1851,6 +2031,8 @@ export default function AdminCases() {
         if (action === "validate") {
           basePatch.status = "validated";
           basePatch.verificationStatus = "validated";
+          // Actual incident barangay confirmed by Admin (not resident home).
+          basePatch.incidentBarangay = verifiedIncidentBarangay;
           basePatch.evidenceReviewStatus = "approved";
           basePatch.validatedAt = serverTimestamp();
           basePatch.validatedBy = adminUser.uid;
@@ -1916,6 +2098,21 @@ export default function AdminCases() {
       });
 
       if (action === "validate") {
+        // After the Admin's successful Firestore validation transaction,
+        // automatically ask the authenticated server to find the first
+        // qualified Volunteer. On a sleeping Free service this may fail, so
+        // validation must succeed independently and manual coordination remains.
+        let volunteerMessage = "Volunteer offers remain under Admin coordination.";
+        if (AUTOMATIC_VOLUNTEER_RUNTIME_ENABLED) {
+          const matchingChecked = await requestAutomaticMatching(
+            { ...incident, incidentBarangay: verifiedIncidentBarangay }, "start", true,
+          );
+          volunteerMessage = matchingChecked
+            ? AUTOMATIC_VOLUNTEER_STAGING_ONLY && incident.id === STAGING_BULK_CASE_ID
+              ? "The isolated staging server checked all-eligible offers for the fictional test. Volunteers must Accept/Decline individually; no real response started."
+              : "The server checked automatic Volunteer matching. Check the saved offer status; nobody is assigned until they accept."
+            : "Automatic matching was unavailable. Use the Admin Volunteer Matching tab to retry or coordinate manually.";
+        }
         // Publishing is separate, so an Announcements permission error cannot
         // undo successful emergency validation or delay Volunteer offers.
         let advisoryMessage = "No public advisory requested; the emergency report remains private.";
@@ -1937,7 +2134,7 @@ export default function AdminCases() {
           }
         }
         Alert.alert("Request Validated",
-          "The case is now eligible for Volunteer offers. " + advisoryMessage);
+          volunteerMessage + " " + advisoryMessage);
       } else if (action === "request_more_evidence") {
         Alert.alert(
           "Resident Notified",
@@ -3034,6 +3231,11 @@ export default function AdminCases() {
 
         const currentCase: any = caseSnapshot.data();
         const currentVolunteer: any = volunteerSnapshot.data();
+        if (["waiting", "ready", "accepted"].includes(
+          String(currentCase.autoVolunteerDispatch?.state || ""),
+        )) {
+          throw new Error("Automatic Volunteer matching is managing this case. Manual offers are blocked to prevent duplicate tasks.");
+        }
 
         const currentCaseBarangayRaw = String(
           currentCase.incidentBarangay ||
@@ -4442,6 +4644,52 @@ export default function AdminCases() {
 
                   </View>
                   <View style={styles.referenceEvidenceNotes}>
+                    <Text style={styles.referenceEvidenceColumnTitle}>⌖  Actual Incident Barangay</Text>
+                    <Text style={styles.referenceEvidenceColumnSub}>
+                      Confirm the emergency GPS location; do not assume the Resident's home barangay.
+                      Required for automatic Volunteer matching.
+                    </Text>
+                    <TextInput
+                      style={styles.input}
+                      value={confirmedResponseBarangays[incident.id] ?? incident.incidentBarangay ?? ""}
+                      placeholder="Search SJDM incident barangay"
+                      onChangeText={(value) => setConfirmedResponseBarangays((current) => ({
+                        ...current, [incident.id]: value,
+                      }))}
+                      editable={verificationStatus !== "rejected"}
+                    />
+                    {verificationStatus === "validated" &&
+                      !["waiting", "ready", "accepted"].includes(
+                        String(incident.autoVolunteerDispatch?.state || ""),
+                      ) && (
+                      <TouchableOpacity accessibilityRole="button"
+                        onPress={() => saveConfirmedIncidentBarangay(incident)}
+                        style={{ alignSelf: "flex-start", borderWidth: 1,
+                          borderColor: "#A8D4C9", backgroundColor: "#EAF7F1",
+                          borderRadius: 9, paddingHorizontal: 14, paddingVertical: 10,
+                          marginTop: 5 }}>
+                        <Text style={{ color: "#116B51", fontSize: 12, fontWeight: "800" }}>
+                          ✓ Confirm Actual Incident Barangay
+                        </Text>
+                      </TouchableOpacity>
+                    )}
+                    {!!confirmedResponseBarangays[incident.id] &&
+                      !SJDM_BARANGAYS.some((value) => normalizeBarangay(value) ===
+                        normalizeBarangay(confirmedResponseBarangays[incident.id])) ? (
+                      <View style={{ borderWidth: 1, borderColor: "#DEE8E7", borderRadius: 10 }}>
+                        {SJDM_BARANGAYS.filter((name) => name.toLowerCase().includes(
+                          confirmedResponseBarangays[incident.id].trim().toLowerCase()
+                        )).slice(0, 5).map((name) => (
+                          <TouchableOpacity key={name} accessibilityRole="button"
+                            onPress={() => setConfirmedResponseBarangays((current) => ({
+                              ...current, [incident.id]: name,
+                            }))}
+                            style={{ padding: 10, borderBottomWidth: 1, borderColor: "#E3EBF0" }}>
+                            <Text style={{ color: "#143C32", fontSize: 12 }}>{name}</Text>
+                          </TouchableOpacity>
+                        ))}
+                      </View>
+                    ) : null}
                     <Text style={styles.referenceEvidenceColumnTitle}>▤  Review Notes (Optional)</Text>
                     <Text style={styles.referenceEvidenceColumnSub}>Record observations or explain a request or rejection.</Text>
                 {verificationStatus !== "validated" &&
@@ -4487,38 +4735,10 @@ export default function AdminCases() {
                             </Text>
                           </TouchableOpacity>
                           {publicImpactConfirmed[incident.id] ? (
-                            <View>
-                              <Text style={styles.controlLabel}>Confirm actual incident barangay in SJDM</Text>
-                              <TextInput
-                                style={styles.input}
-                                value={publicImpactBarangays[incident.id] || ""}
-                                onChangeText={value => setPublicImpactBarangays(current => ({
-                                  ...current, [incident.id]: value.slice(0, 70),
-                                }))}
-                                placeholder="Type an official incident barangay"
-                                placeholderTextColor="#64748B"
-                                maxLength={70}
-                              />
-                              {publicImpactBarangays[incident.id]?.trim().length >= 2 &&
-                               !safePublicAdvisoryBarangay(publicImpactBarangays[incident.id]) ? (
-                                <View style={{ borderWidth: 1, borderColor: "#D5E9E1", borderRadius: 8 }}>
-                                  {SJDM_BARANGAYS.filter(name => name.toLowerCase().includes(
-                                    String(publicImpactBarangays[incident.id] || "").trim().toLowerCase()
-                                  )).slice(0, 6).map(name => (
-                                    <TouchableOpacity key={name} accessibilityRole="button"
-                                      onPress={() => setPublicImpactBarangays(current => ({
-                                        ...current, [incident.id]: name,
-                                      }))}
-                                      style={{ padding: 10, borderBottomWidth: 1, borderBottomColor: "#E9F1EE" }}>
-                                      <Text style={{ color: "#173D32" }}>{name}</Text>
-                                    </TouchableOpacity>
-                                  ))}
-                                </View>
-                              ) : null}
-                              <Text style={{ color: "#516A65", fontSize: 11, marginTop: 8 }}>
-                                Check the actual incident location; do not use the reporter's home barangay. If unsure, uncheck public warning and validate privately.
-                              </Text>
-                            </View>
+                            <Text style={{ color: "#516A65", fontSize: 11, marginTop: 6 }}>
+                              Any public advisory uses the actual confirmed incident barangay above.
+                              No personal details, photos or GPS coordinates will be published.
+                            </Text>
                           ) : null}
                         </View>
                       ) : null}
@@ -5691,6 +5911,7 @@ export default function AdminCases() {
                   caseBarangay={barangayDisplay(caseBarangayValue(incident))}
                   eligibleCount={eligibleVolunteerCount}
                   activeAssignments={activeAssignments}
+                  autoDispatch={incident.autoVolunteerDispatch}
                   onCancelAssignment={(item) => {
                     const savedAssignment = activeAssignments.find(
                       (assignment) => assignment.id === item.id,
@@ -5723,9 +5944,50 @@ export default function AdminCases() {
                   isValidated={dispatchReady}
                 />
               )}
+              {detailTab === "personnel" && AUTOMATIC_VOLUNTEER_RUNTIME_ENABLED &&
+                dispatchReady && (
+                <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 9, paddingHorizontal: 18 }}>
+                  {(!incident.autoVolunteerDispatch?.state ||
+                    ["needs_admin", "disabled"].includes(String(incident.autoVolunteerDispatch.state)) ||
+                    (AUTOMATIC_VOLUNTEER_STAGING_ONLY &&
+                      incident.autoVolunteerDispatch?.state === "waiting")) && (
+                    <TouchableOpacity accessibilityRole="button"
+                      disabled={busyKey === "auto_" + incident.id}
+                      onPress={() => requestAutomaticMatching(incident, "start")}
+                      style={{ borderRadius: 9, backgroundColor: "#1479BE", padding: 11 }}>
+                      <Text style={{ color: "#FFFFFF", fontSize: 12, fontWeight: "800" }}>
+                        {AUTOMATIC_VOLUNTEER_STAGING_ONLY && incident.autoVolunteerDispatch?.state === "waiting"
+                          ? "Check / Advance Pending Offer" : "Start / Retry Automatic Matching"}
+                      </Text>
+                    </TouchableOpacity>
+                  )}
+                  {["waiting", "ready"].includes(
+                    String(incident.autoVolunteerDispatch?.state || "")) && (
+                    <TouchableOpacity accessibilityRole="button"
+                      disabled={busyKey === "auto_" + incident.id}
+                      onPress={() => requestAutomaticMatching(incident, "disable")}
+                      style={{ borderRadius: 9, borderWidth: 1,
+                        borderColor: "#B9C9DC", padding: 11 }}>
+                      <Text style={{ color: "#375775", fontSize: 12, fontWeight: "800" }}>
+                        Disable Matching (Admin Override)
+                      </Text>
+                    </TouchableOpacity>
+                  )}
+                  {AUTOMATIC_VOLUNTEER_STAGING_ONLY && (
+                    <Text style={{ color: "#875600", fontSize: 12, lineHeight: 18, width: "100%" }}>
+                      Free staging only: the server may sleep, so pending offers and timeout retries
+                      are not continuously monitored. Admin must check the case and contact official
+                      emergency services for urgent incidents.
+                    </Text>
+                  )}
+                </View>
+              )}
               {detailTab === "personnel" && dispatchReady &&
                 ["validated", "assigned", "in_progress"].includes(incident.status) &&
-                eligibleVolunteerCount > 0 && volunteerSupportAvailable && (
+                eligibleVolunteerCount > 0 && volunteerSupportAvailable &&
+                !["waiting", "ready", "accepted"].includes(
+                  String(incident.autoVolunteerDispatch?.state || ""),
+                ) && (
                 <View style={styles.personnelReferenceLayout}>
                   <View style={styles.personnelCleanCard}>
                     <View style={styles.personnelCleanHeader}>
