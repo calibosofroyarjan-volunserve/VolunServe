@@ -1,0 +1,160 @@
+#!/usr/bin/env node
+"use strict";
+/**
+ * Test that the only changes to existing live-derived UI are additive
+ * staging-gated preview lines. No deleted or rewritten existing source lines,
+ * Firestore policy edits, backend registration or live dispatch changes.
+ */
+const assert=require("node:assert/strict");
+const cp=require("node:child_process");
+const fs=require("node:fs");
+const BASE="fa0f39613b22e519b6790ad637319385ec2d5aa5";
+const ui=[
+ "app/(admin)/admin-cases.tsx",
+ "app/(tabs)/volunteer.web.tsx",
+ "app/(tabs)/volunteer.tsx",
+];
+const baselineSidebar="scripts/test-resident-volunteer-sidebar.cjs";
+const baselineDonationSidebar="scripts/test-volunteer-donations-sidebar-removal.cjs";
+const additions=new Set([
+ "components/admin/AutoVolunteerMatchPreview.tsx",
+ "lib/automaticVolunteerMatchPreview.ts",
+ "scripts/test-staging-gated-matching-ui-20261117.cjs",
+ "scripts/test-legacy-module-blobs-20261117.cjs",
+ "scripts/test-public-staging-browser-20261117.cjs",
+ "scripts/test-staging-validation-auto-offer-20261117.cjs",
+ ".github/workflows/validate-staging-gated-matching-ui-20261117.yml",
+ "docs/STAGING_GATED_MATCHING_UI_REVIEW_20261117.md",
+ // PR #607: separately reviewed staging-only files. The strict assertion
+ // that EVERY original live-derived UI line is preserved remains unchanged.
+ "lib/stagingBulkVolunteerClient.ts",
+ "scripts/test-staging-bulk-client-integration-20261119.cjs",
+ "scripts/guard-volunteer-staging-web-release-20261119.cjs",
+ "scripts/test-volunteer-staging-web-release-guard-20261119.cjs",
+ ".github/workflows/qa-staging-ui-bulk-volunteer-002-20261119.yml",
+]);
+// Render checks out staging deploys with shallow history. Recover the exact
+// public review baseline from its named branch, rather than skipping checks.
+// Full GitHub CI already has this commit and never needs a network fetch.
+let baselineFetched=false;
+function original(path){
+  try{
+    return cp.execFileSync("git",["show",BASE+":"+path],{encoding:"utf8",stdio:["ignore","pipe","pipe"]});
+  }catch(firstError){
+    if(!baselineFetched){
+      cp.execFileSync("git",[
+        "fetch","--no-tags",
+        "https://github.com/calibosofroyarjan-volunserve/VolunServe.git",
+        "refs/heads/feat/live-derived-additive-volunteer-matching-20261117"
+      ],{encoding:"utf8",stdio:["ignore","pipe","pipe"]});
+      baselineFetched=true;
+    }
+    // Still fail closed if the pinned commit's tree cannot be verified.
+    return cp.execFileSync("git",["show",BASE+":"+path],{encoding:"utf8"});
+  }
+}
+function includesAllOriginalLines(path){
+ const older=original(path).split("\n"),latest=fs.readFileSync(path,"utf8").split("\n");
+ let j=0;
+ for(const line of latest)if(line===older[j])j++;
+ assert.equal(j,older.length,"Existing code modified or removed in "+path);
+}
+let checks=0;
+for(const path of ui){
+ includesAllOriginalLines(path);checks++;
+ const newer=fs.readFileSync(path,"utf8");
+ assert.match(newer,/automaticVolunteerMatchPreview/);checks++;
+ const before=original(path);
+ for(const existing of [
+  "transitionAssignment",
+  "responseAssignments",
+  "responding",
+  "on_site",
+  "completed",
+ ]){
+  if(!before.includes(existing))continue;
+  assert.ok(newer.includes(existing),path+" lost "+existing);checks++;
+ }
+}
+const admin=fs.readFileSync(ui[0],"utf8");
+assert.match(admin,/AutoVolunteerMatchPreview/);checks++;
+assert.match(admin,/detailTab === "personnel"/);checks++;
+assert.match(admin,/approvedVolunteers=\{approvedVolunteers\}/);checks++;
+assert.match(admin,/assignments=\{assignments\}/);checks++;
+const component=fs.readFileSync("components/admin/AutoVolunteerMatchPreview.tsx","utf8");
+assert.match(component,/collection\(db, "responderLocks"\)/);checks++;
+assert.match(component,/if \(!AUTO_VOLUNTEER_MATCH_UI_PREVIEW \|\| !authorized\) return/);checks++;
+assert.match(component,/setLocks\(undefined\)/);checks++;
+assert.ok(!/transaction\.|runTransaction|setDoc|updateDoc|deleteDoc|addDoc/.test(component),
+  "Preview must never write Firestore");checks++;
+const gate=fs.readFileSync("lib/automaticVolunteerMatchPreview.ts","utf8");
+for(const condition of ["usingStagingFirebase","volunserve-volunteer-staging",
+ "EXPO_PUBLIC_VOLUNSERVE_AUTO_MATCH_UI_PREVIEW","status: \"disabled\"",
+ "staging_only_feature_gate"]){
+ assert.ok(gate.includes(condition),"Missing fail-closed condition "+condition);checks++;
+}
+assert.ok(!gate.includes("isStagingAutoMatchedTask")||
+  (fs.readFileSync(ui[1],"utf8").includes("isStagingAutoMatchedTask")&&
+   fs.readFileSync(ui[2],"utf8").includes("isStagingAutoMatchedTask")));
+checks++;
+// Only acceptable baseline regression update: require the already-live
+// Certificate tab and preserve the prior no-duplicate modules assertions.
+const oldSidebar=original(baselineSidebar);
+const stale=` assert.deepEqual(found,["index","volunteer","community-events"]);
+ assert.match(menuText,/label:"Emergency Tasks"/);
+ assert.doesNotMatch(menuText,/My Progress|Volunteer Tasks|Notifications|Announcements|Certificates|My Profile/);`;
+const current=` // The published Hosting source already has a dedicated My Certificates tab.
+ // Preserve it; do not strip a live feature to satisfy this older regression.
+ assert.deepEqual(found,["index","volunteer","community-events","certificate"]);
+ assert.match(menuText,/label:"Emergency Tasks"/);
+ assert.match(menuText,/name:"certificate",label:"My Certificates"/);
+ assert.doesNotMatch(menuText,/My Progress|Volunteer Tasks|Notifications|Announcements|My Profile/);`;
+assert.ok(oldSidebar.includes(stale),"Unknown original sidebar expectations");
+assert.equal(fs.readFileSync(baselineSidebar,"utf8"),oldSidebar.replace(stale,current),
+ "BLOCKED: sidebar regression changed beyond approved live-certificate assertion");
+checks++;
+const oldDonation=original(baselineDonationSidebar);
+const removedOnly=`test("Volunteer desktop and mobile menus contain only three scope-focused modules",()=>{
+  for(const menu of ["volunteerDesktopTabs","volunteerMobileTabs"]) {
+    assert.deepEqual(names(menu),["index","volunteer","community-events"]);
+  }
+});`;
+const accepted=`test("Volunteer menus preserve live My Certificates desktop tab without restoring Donations",()=>{
+  assert.deepEqual(names("volunteerDesktopTabs"),["index","volunteer","community-events","certificate"]);
+  assert.deepEqual(names("volunteerMobileTabs"),["index","volunteer","community-events"]);
+  assert.ok(!names("volunteerDesktopTabs").includes("donation"));
+  assert.ok(!names("volunteerMobileTabs").includes("donation"));
+  assert.match(tabs,/name:"certificate",label:"My Certificates"/);
+});`;
+assert.ok(oldDonation.includes(removedOnly),"Unknown original donation-sidebar expectations");
+assert.equal(fs.readFileSync(baselineDonationSidebar,"utf8"),
+ oldDonation.replace(removedOnly,accepted),
+ "BLOCKED: donation-sidebar test changed beyond approved live-Certificates assertion");
+checks++;
+// Verify exact new/changed paths only; not even a config/rules file touched.
+const diff=cp.execFileSync("git",["diff","--name-status","--no-renames",BASE,"HEAD"],{encoding:"utf8"});
+const entries=diff.split("\n").filter(Boolean).map(line=>line.split("\t"));
+// Staging QA: exact additional notification UI and no-deploy CI workflow.
+// Preserve all earlier production-derived lines and hard block config/rules.
+const extraStaging=new Map([
+ ["app/(tabs)/notifications.tsx","M"],
+ [".github/workflows/qa-staging-web-resident-auto-demo-20261123.yml","A"],
+]);
+assert.equal(entries.length,ui.length+additions.size+2+extraStaging.size);checks++;
+for(const [status,path] of entries){
+ assert.ok((status==="M" && ui.includes(path))||
+   (status==="A" && additions.has(path))||
+   (status==="M" && (path===baselineSidebar || path===baselineDonationSidebar))||
+   extraStaging.get(path)===status,
+  "Not an approved additive staging UI change: "+status+" "+path);checks++;
+}
+const nOld=original("app/(tabs)/notifications.tsx").split("\n");
+const nNew=fs.readFileSync("app/(tabs)/notifications.tsx","utf8").split("\n");
+let n=0;for(const line of nNew)if(line===nOld[n])n++;
+assert.equal(n,nOld.length,"Existing Notifications screen lines must be preserved");checks++;
+const notificationUI=nNew.join("\n");
+assert.match(notificationUI,/canRespondFromNotification/);checks++;
+assert.match(notificationUI,/respondToAutoVolunteerInvitation/);checks++;
+assert.match(admin,/Automatic Volunteer Response Monitor/);checks++;
+
+console.log("PASS: "+checks+" UI preview safety assertions; original live-derived UI lines preserved verbatim; no original modules deleted, rules changed, backend started or production release.");

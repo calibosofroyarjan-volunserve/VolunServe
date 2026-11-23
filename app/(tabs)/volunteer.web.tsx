@@ -1,6 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { Redirect, useRouter } from "expo-router";
+import { getAuth } from "firebase/auth";
 import {
   collection,
   doc,
@@ -24,12 +25,14 @@ import {
 } from "react-native";
 
 import { db } from "../../lib/firebase";
+import { isStagingBulkAssignment, respondToStagingBulkOffer } from "../../lib/stagingBulkVolunteerClient";
 import {
   activeModeForProfile,
   hasVolunteerAccess,
   isApprovedProfile,
 } from "../../lib/firebaseAuth";
 import { useUserSession } from "../../lib/useUserSession";
+import { isStagingAutoMatchedTask } from "../../lib/automaticVolunteerMatchPreview";
 
 type AssignmentStatus =
   | "offered"
@@ -49,6 +52,9 @@ type ResponseAssignment = {
   volunteerName?: string;
   status?: AssignmentStatus;
   createdBy?: string;
+  offerMode?: string;
+  wave?: number;
+  expiresAtMs?: number;
   createdAt?: any;
   updatedAt?: any;
   responseStartedAt?: any;
@@ -480,6 +486,45 @@ export default function VolunteerTasksWeb() {
     next: "accepted" | "declined" | "responding" | "on_site" | "completed",
   ) => {
     if (!user || !profile || busyId) return;
+
+    // Fixed fictional 002 is exclusively backend-owned. Never fall through
+    // to the legacy client-side Firestore transaction after any error.
+    if (isStagingBulkAssignment(assignment)) {
+      try {
+        setBusyId(assignment.id);
+        setError("");
+        if (next !== "accepted" && next !== "declined") {
+          throw new Error("Fictional staging offers support Accept/Decline only.");
+        }
+        const auth = getAuth();
+        const signedIn = auth.currentUser;
+        if (!signedIn || signedIn.uid !== user.uid) {
+          throw new Error("Sign in with your isolated staging Volunteer test account.");
+        }
+        await respondToStagingBulkOffer(
+          assignment, next, user.uid, String(auth.app.options.projectId || ""), signedIn,
+        );
+        showMessage(
+          next === "accepted" ? "Fictional offer accepted" : "Fictional offer declined",
+          "Saved by the isolated staging server. No real emergency response started.",
+        );
+        if (next === "accepted") setFilter("active");
+      } catch (problem) {
+        setError(problem instanceof Error ? problem.message : "Staging offer response unavailable.");
+      } finally {
+        setBusyId("");
+      }
+      return;
+    }
+
+
+    // Never accept/decline staged auto offers via an unchecked legacy write.
+    // The validated staging portal checks expiry and ownership server-side.
+    if (isStagingAutoMatchedTask(assignment) &&
+        (next === "accepted" || next === "declined")) {
+      setError("Staging auto-matched offers require the verified staging Volunteer task page. Manual task controls are unchanged.");
+      return;
+    }
 
     const allowedPrevious: Record<string, string> = {
       accepted: "offered",
@@ -1056,6 +1101,43 @@ export default function VolunteerTasksWeb() {
                 </View>
 
                 <View style={[styles.actionsColumn, compact && styles.actionsColumnCompact, mobile && styles.actionsColumnMobile]}>
+                  {isStagingBulkAssignment(assignment) ? (
+                    <>
+                      <Text style={styles.metaLabel}>
+                        FICTIONAL STAGING OFFER · Wave {assignment.wave || "?"} · Accept/Decline only
+                      </Text>
+                      {offered && (
+                        <>
+                          <TouchableOpacity
+                            style={[styles.acceptButton, busy && styles.buttonDisabled]}
+                            disabled={busy}
+                            onPress={() => transitionAssignment(assignment, "accepted")}
+                          >
+                            <Ionicons name="checkmark" size={20} color="#ffffff" />
+                            <Text style={styles.acceptButtonText}>Accept Fictional Offer</Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            style={[styles.declineButton, busy && styles.buttonDisabled]}
+                            disabled={busy}
+                            onPress={() => transitionAssignment(assignment, "declined")}
+                          >
+                            <Ionicons name="close" size={20} color="#123047" />
+                            <Text style={styles.declineButtonText}>Decline Fictional Offer</Text>
+                          </TouchableOpacity>
+                        </>
+                      )}
+                      {status === "accepted" && (
+                        <Text style={styles.metaLabel}>Staging acceptance recorded. Real response tracking disabled.</Text>
+                      )}
+                    </>
+                  ) : (
+                    <>
+                  {isStagingAutoMatchedTask(assignment) && (
+                    <Text style={{ color: "#0f766e", fontSize: 11, marginBottom: 9, fontWeight: "700" }}>
+                      STAGING AUTO-MATCH PREVIEW ONLY — Respond through the verified staging Volunteer portal.
+                      Existing manual assignments are unchanged.
+                    </Text>
+                  )}
                   {offered && (
                     <>
                       <TouchableOpacity
@@ -1159,6 +1241,8 @@ export default function VolunteerTasksWeb() {
                       <Ionicons name="remove-circle-outline" size={20} color="#64748b" />
                       <Text style={styles.inactiveBoxText}>{statusLabel(status)}</Text>
                     </View>
+                  )}
+                    </>
                   )}
                 </View>
               </View>
