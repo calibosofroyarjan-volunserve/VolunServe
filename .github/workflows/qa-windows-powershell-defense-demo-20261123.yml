@@ -22,14 +22,16 @@ jobs:
         shell: pwsh
         run: |
           $base="46c99a3378bb057b0a48095c85b931ce95a3e061"
-          $changed=@(git diff --name-status $base HEAD)
+          # Git's --name-status separators vary on Windows runners.
+          # Compare exact file paths, never whitespace-normalized status rows.
+          $changed=@(git diff --name-only $base HEAD)
           if($changed.Count -ne 2) { throw "Expected exactly script + QA workflow" }
           $expected=@(
-            "M" + [char]9 + "scripts/test-staging-auto-volunteers-cloud-20261123.ps1",
-            "A" + [char]9 + ".github/workflows/qa-windows-powershell-defense-demo-20261123.yml"
+            "scripts/test-staging-auto-volunteers-cloud-20261123.ps1",
+            ".github/workflows/qa-windows-powershell-defense-demo-20261123.yml"
           )
-          foreach($line in $changed) {
-            if($line -notin $expected) { throw "Unexpected change: $line" }
+          foreach($file in $changed) {
+            if($file -notin $expected) { throw "Unexpected change: $file" }
           }
           Write-Host "PASS: only PowerShell demo and QA workflow, no app/backend/functions/rules changes."
       - name: Install staging backend dependencies
