@@ -64,8 +64,11 @@ function evaluateDiditDecision(result) {
   if (normalized === "approved" && requiredChecksPassed) {
     return { providerStatus, decision: "approved", review: false };
   }
-  if (normalized === "approved" || normalized === "in review" || normalized === "declined") {
+  if (normalized === "approved" || normalized === "in review") {
     return { providerStatus, decision: "review", review: true };
+  }
+  if (normalized === "declined") {
+    return { providerStatus, decision: "declined", review: false };
   }
   if (normalized === "expired" || normalized === "cancelled") {
     return { providerStatus, decision: "failed", review: false };
@@ -121,10 +124,7 @@ function registerDiditIdentityRoutes(app, { db, FieldValue, requireFirebaseUser 
       process.env.DIDIT_AUTO_VERIFY_ENABLED === "true";
     const isLiveResponse = String(remote?.environment || "live").toLowerCase() === "live";
     const isApproved = decision.decision === "approved" && liveAllowed && isLiveResponse;
-    const requiresReview = liveAllowed && (decision.review || (decision.decision === "approved" && !isApproved));
-    const identityStatus = isApproved ? "verified" :
-      decision.decision === "failed" ? "failed" : "pending";
-
+    
     return db.runTransaction(async (transaction) => {
       const [freshUser, freshVerification] = await Promise.all([
         transaction.get(user(uid)), transaction.get(verification(uid)),
@@ -135,6 +135,15 @@ function registerDiditIdentityRoutes(app, { db, FieldValue, requireFirebaseUser 
       }
       const profile = freshUser.data() || {};
       const entry = freshVerification.data() || {};
+      const priorFailures = Math.min(3, Math.max(0, Number(entry.diditFailedAttempts) || 0));
+      const newlyDeclined = decision.decision === "declined" &&
+        entry.lastCountedDiditSessionId !== sessionId;
+      const failedAttempts = newlyDeclined ? Math.min(3, priorFailures + 1) : priorFailures;
+      const requiresReview = liveAllowed && (decision.review ||
+        (decision.decision === "approved" && !isApproved) ||
+        (decision.decision === "declined" && failedAttempts >= 3));
+      const identityStatus = isApproved ? "verified" : requiresReview ? "pending" :
+        ["declined", "failed"].includes(decision.decision) ? "failed" : "pending";
       const reviewedAt = entry.reviewedAt?.toMillis?.() || 0;
       const startedAt = entry.sessionRequestedAt?.toMillis?.() || 0;
       if (reviewedAt && startedAt && reviewedAt > startedAt) {
@@ -156,11 +165,14 @@ function registerDiditIdentityRoutes(app, { db, FieldValue, requireFirebaseUser 
         providerStatus: decision.providerStatus,
         status: identityStatus,
         aiDecision: isApproved ? "verified" : requiresReview ? "manual_review" : decision.decision,
+        diditFailedAttempts: failedAttempts,
+        aiAttemptCount: failedAttempts,
+        ...(newlyDeclined ? { lastCountedDiditSessionId: sessionId } : {}),
         requiresManualReview: requiresReview,
         message: isApproved ? "Identity verification completed successfully." :
           !liveAllowed && decision.decision === "approved" ? "Sandbox test passed; production verification is not enabled." :
           requiresReview ? "Verification requires Admin review." :
-          identityStatus === "failed" ? "Verification expired. Please start again." :
+          identityStatus === "failed" ? "Verification was declined or expired. You may retry up to three times." :
           "Verification is still in progress.",
         updatedAt: FieldValue.serverTimestamp(),
       }, { merge: true });
@@ -178,7 +190,8 @@ function registerDiditIdentityRoutes(app, { db, FieldValue, requireFirebaseUser 
         updatedAt: FieldValue.serverTimestamp(),
       }, { merge: true });
       return { ok: true, identityStatus, providerStatus: decision.providerStatus,
-        requiresManualReview: requiresReview, sandbox: !liveAllowed };
+        requiresManualReview: requiresReview, failedAttempts,
+        attemptsRemaining: Math.max(0, 3 - failedAttempts), sandbox: !liveAllowed };
     });
   }
 
