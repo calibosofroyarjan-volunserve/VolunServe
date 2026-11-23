@@ -3,6 +3,7 @@ on:
   push:
     branches:
       - qa/actual-firebase-auto-invite-auth-firestore-e2e-20261123
+      - feat/live-emergency-auto-invite-approval-guarded-20261123
   pull_request:
     branches:
       - feat/live-emergency-auto-invite-approval-guarded-20261123
@@ -39,21 +40,21 @@ jobs:
         with:
           distribution: temurin
           java-version: "21"
-      - name: Check exactly 2 NEW emulator test and workflow files, no production changes
+      - name: Check all 8 integrated source and QA files, no unrelated production changes
         shell: bash
         run: |
           set -euo pipefail
-          git diff --name-status 45f563c056e524f340889017f20bf94ea145d1c3 HEAD > /tmp/scope
-          test "$(wc -l </tmp/scope)" -eq 2
+          git diff --name-status a1c66af149b6a16d3ae4d3ab8ae3551c9bc06782 HEAD > /tmp/scope
+          test "$(wc -l </tmp/scope)" -eq 8
           while IFS="$(printf '\t')" read -r st file; do
             case "$st:$file" in
-              "A:functions/test-emergencySimpleAutoInviteRealEmulator.cjs"|"A:.github/workflows/verify-real-firebase-auto-invite-auth-e2e-20261123.yml") ;;
+              "A:functions/test-emergencySimpleAutoInviteRealEmulator.cjs"|"A:.github/workflows/verify-real-firebase-auto-invite-auth-e2e-20261123.yml"|"A:functions/emergencySimpleAutoInvite.js"|"A:functions/test-emergencySimpleAutoInvite.cjs"|"M:functions/index.js"|"M:app/(tabs)/volunteer.web.tsx"|"M:app/(tabs)/volunteer.tsx"|"A:.github/workflows/verify-guarded-live-auto-volunteer-integration-20261123.yml") ;;
               *) echo "REFUSED scope: $st $file"; exit 1 ;;
             esac
           done </tmp/scope
           test "$VOLUNSERVE_SIMPLE_AUTO_INVITES_PRODUCTION_APPROVED" = false
           test "$GCLOUD_PROJECT" = demo-volunserve-simple-invites
-          test -z "$(git diff --name-only 45f563c056e524f340889017f20bf94ea145d1c3 HEAD -- functions/index.js functions/emergencySimpleAutoInvite.js firestore.rules backend/server.js)"
+          test -z "$(git diff --name-only a1c66af149b6a16d3ae4d3ab8ae3551c9bc06782 HEAD -- firestore.rules backend/server.js app/'(admin)'/admin-cases.tsx)"
       - name: Install pinned Firebase emulator and test SDKs
         run: |
           npm ci --ignore-scripts --no-audit --no-fund
