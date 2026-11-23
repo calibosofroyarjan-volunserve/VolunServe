@@ -59,13 +59,13 @@ function makeResidentSubmissionDemoHandler({db,FieldValue,env=process.env}={}){
     let cursor=null;
     do{
       let q=db.collection("volunteerApplications")
-        .where("status","==","approved").orderBy("__name__").limit(PAGE_SIZE);
+        .orderBy("__name__").limit(PAGE_SIZE);
       if(cursor)q=q.startAfter(cursor);
       const page=await q.get();
       for(const s of page.docs){
         const candidate=s.data()||{};
         const uid=String(candidate.uid||candidate.userId||candidate.volunteerId||s.id);
-        if(UID.test(uid)&&uid!==submitted.reporterUid)
+        if(candidate.status==="approved" && UID.test(uid)&&uid!==submitted.reporterUid)
           roster.push({uid});
       }
       cursor=page.size===PAGE_SIZE?page.docs[page.docs.length-1]:null;
