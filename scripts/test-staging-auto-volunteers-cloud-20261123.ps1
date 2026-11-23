@@ -1,13 +1,34 @@
-# VolunServe isolated FICTIONAL staging — terminal Cloud Auth E2E.
+# VolunServe isolated FICTIONAL staging - terminal Cloud Auth E2E.
 # Default mode is READ-ONLY. No production Firestore/Render, no resets.
 # Do not paste passwords, ID tokens, or real personal data in chat.
 param(
   [ValidateSet(0,1,2,3)]
   [int]$VolunteerSlot = 0,
-  [switch]$AllowFictionalWrites
+  [switch]$AllowFictionalWrites,
+  [switch]$DemoOnly
 )
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
+
+# Fast final-defense demonstration (LOCAL FICTIONAL DATA).
+# It executes the actual staging batch invitation/Accept/Decline module
+# against the audited transactional in-memory test harness, and DOES NOT
+# sign into cloud Firebase or create real notifications or assignments.
+if ($DemoOnly) {
+  $testPath = Join-Path $PSScriptRoot "..\\backend\\test-stagingAllVolunteerDefense.cjs"
+  if (-not (Test-Path -LiteralPath $testPath)) {
+    throw "Missing local fictional test harness. Re-fetch staging branch."
+  }
+  Write-Host "AUTOMATIC VOLUNTEER: LOCAL FICTIONAL DEFENSE DEMO" -ForegroundColor Cyan
+  Write-Host "Admin validates -> 3 independent invites -> 2 Accept, 1 Decline -> No duplicates" -ForegroundColor Cyan
+  Write-Host "Testing real staging backend logic with IN-MEMORY FICTIONAL Firestore only." -ForegroundColor Yellow
+  node --test $testPath
+  if ($LASTEXITCODE -ne 0) {
+    throw "Automatic invitation defense demo tests FAILED."
+  }
+  Write-Host "SUCCESS: Local fictional automatic invitation flow demonstrated (not cloud/live)." -ForegroundColor Green
+  return
+}
 
 $Base = "https://volunserve-emergency-match-staging-free.onrender.com"
 $Project = "volunserve-volunteer-staging"
@@ -82,7 +103,7 @@ function ConfirmFictionalAction([string]$Prompt, [string]$Expected) {
   Write-Host $Prompt -ForegroundColor Yellow
   return (Read-Host "Type $Expected to proceed") -ceq $Expected
 }
-Write-Host "VolunServe — ISOLATED STAGING CLOUD E2E (no-barangay)" -ForegroundColor Cyan
+Write-Host "VolunServe - ISOLATED STAGING CLOUD E2E (no-barangay)" -ForegroundColor Cyan
 Write-Host "Fixed fictional case: $FixedCase | Production is NEVER targeted."
 if (-not $AllowFictionalWrites) {
   Write-Host "READ-ONLY MODE: No accounts, tasks, notifications or Firestore records will be changed." -ForegroundColor Cyan
