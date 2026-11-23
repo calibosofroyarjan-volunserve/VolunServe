@@ -2369,6 +2369,35 @@ service cloud.firestore {
             'on_site',
             'completed'
           ]
+        )
+        // Render-only automatic invites after Resident submission. Only the
+        // exact authenticated recipient with server-created assignment can
+        // view the case; the original Admin validation remains pending.
+        || (
+          isVolunteer()
+          && resource.data.status in [
+            'reported', 'validated', 'assigned', 'in_progress'
+          ]
+          && resource.data.get('autoVolunteerDispatch', {}).get(
+            'origin', ''
+          ) == 'render_resident_created_all_volunteers'
+          && exists(
+            /databases/$(database)/documents/responseAssignments/$(caseId + '_' + request.auth.uid)
+          )
+          && get(
+            /databases/$(database)/documents/responseAssignments/$(caseId + '_' + request.auth.uid)
+          ).data.caseId == caseId
+          && get(
+            /databases/$(database)/documents/responseAssignments/$(caseId + '_' + request.auth.uid)
+          ).data.volunteerId == request.auth.uid
+          && get(
+            /databases/$(database)/documents/responseAssignments/$(caseId + '_' + request.auth.uid)
+          ).data.get('offerMode', '') == 'render_resident_created_all_volunteers'
+          && get(
+            /databases/$(database)/documents/responseAssignments/$(caseId + '_' + request.auth.uid)
+          ).data.status in [
+            'offered', 'accepted', 'responding', 'on_site', 'completed'
+          ]
         );
       allow update: if isResident()
         && resource.data.reporterUid == request.auth.uid
