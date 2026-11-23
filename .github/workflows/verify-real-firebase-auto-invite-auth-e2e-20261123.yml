@@ -1,0 +1,91 @@
+name: Real Firebase Auth+Firestore+Functions E2E — Auto Volunteer, NO DEPLOY
+on:
+  push:
+    branches:
+      - qa/actual-firebase-auto-invite-auth-firestore-e2e-20261123
+  pull_request:
+    branches:
+      - feat/live-emergency-auto-invite-approval-guarded-20261123
+permissions:
+  contents: read
+jobs:
+  actual-emulator:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    env:
+      CI: "true"
+      GCLOUD_PROJECT: demo-volunserve-simple-invites
+      GOOGLE_CLOUD_PROJECT: demo-volunserve-simple-invites
+      FIRESTORE_EMULATOR_HOST: 127.0.0.1:8080
+      FIREBASE_AUTH_EMULATOR_HOST: 127.0.0.1:9099
+      FUNCTIONS_EMULATOR: "true"
+      VOLUNSERVE_SIMPLE_AUTO_INVITES_ENABLED: "true"
+      VOLUNSERVE_SIMPLE_AUTO_INVITES_PROJECT_ID: demo-volunserve-simple-invites
+      VOLUNSERVE_SIMPLE_AUTO_INVITES_PRODUCTION_APPROVED: "false"
+      FIREBASE_CLI_DISABLE_TELEMETRY: "1"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            backend/package-lock.json
+            functions/package-lock.json
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - name: Check exactly 2 NEW emulator test and workflow files, no production changes
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --name-status 45f563c056e524f340889017f20bf94ea145d1c3 HEAD > /tmp/scope
+          test "$(wc -l </tmp/scope)" -eq 2
+          while IFS="$(printf '\t')" read -r st file; do
+            case "$st:$file" in
+              "A:functions/test-emergencySimpleAutoInviteRealEmulator.cjs"|"A:.github/workflows/verify-real-firebase-auto-invite-auth-e2e-20261123.yml") ;;
+              *) echo "REFUSED scope: $st $file"; exit 1 ;;
+            esac
+          done </tmp/scope
+          test "$VOLUNSERVE_SIMPLE_AUTO_INVITES_PRODUCTION_APPROVED" = false
+          test "$GCLOUD_PROJECT" = demo-volunserve-simple-invites
+          test -z "$(git diff --name-only 45f563c056e524f340889017f20bf94ea145d1c3 HEAD -- functions/index.js functions/emergencySimpleAutoInvite.js firestore.rules backend/server.js)"
+      - name: Install pinned Firebase emulator and test SDKs
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          npm ci --prefix functions --ignore-scripts --no-audit --no-fund
+          npm ci --prefix backend --ignore-scripts --no-audit --no-fund
+      - name: Static and fake-data regression preflight
+        run: |
+          node --check functions/index.js
+          node --check functions/emergencySimpleAutoInvite.js
+          node --check functions/test-emergencySimpleAutoInviteRealEmulator.cjs
+          node --test functions/test-emergencySimpleAutoInvite.cjs
+      - name: Enable the demo-only Firebase Functions runtime (not committed)
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > functions/.env.local <<'DEMO'
+          VOLUNSERVE_SIMPLE_AUTO_INVITES_ENABLED=true
+          VOLUNSERVE_SIMPLE_AUTO_INVITES_PROJECT_ID=demo-volunserve-simple-invites
+          VOLUNSERVE_SIMPLE_AUTO_INVITES_PRODUCTION_APPROVED=false
+          DEMO
+          node - <<'NODE'
+          const assert=require("node:assert/strict");
+          const m=require("./functions/index.js");
+          assert.ok(m.autoInviteApprovedEmergencyVolunteers);
+          assert.ok(m.respondToAutoVolunteerInvitation);
+          console.log("PASS: Admin Firestore approval and authenticated Volunteer Callable registered");
+          NODE
+      - name: Actual Auth Admin approval, Firestore listener and three callable decisions
+        shell: bash
+        run: |
+          set -euo pipefail
+          ./node_modules/.bin/firebase emulators:exec --project demo-volunserve-simple-invites --only auth,firestore,functions "node --test --test-concurrency=1 functions/test-emergencySimpleAutoInviteRealEmulator.cjs"
+      - name: NO REAL FIREBASE / NO RENDER / NO LIVE DEPLOY
+        run: |
+          echo "All activity isolated in Firebase Emulators for demo-volunserve-simple-invites. No live accounts, notifications or official emergencies touched."
