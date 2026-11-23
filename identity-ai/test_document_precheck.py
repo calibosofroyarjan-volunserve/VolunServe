@@ -122,6 +122,44 @@ class DocumentPrecheckTests(unittest.IsolatedAsyncioTestCase):
                          "not_checked")
         self.assertFalse(result["authenticityVerified"])
 
+    async def test_recognized_id_with_inconclusive_ocr_name_can_scan_face_not_verify(self):
+        # Simulate real OCR that recognizes the card but cannot read printed
+        # name fields. This is not an assertion of document authenticity.
+        screened = {
+            "status": "text_consistent_unverified",
+            "declaredIdType": "national_id",
+            "detectedIdType": "national_id",
+            "imageQualityStatus": "adequate",
+            "profileNameCheck": "inconclusive",
+            "profileBirthDateCheck": "not_checked",
+            "warningCodes": [],
+            "backSideProvided": True,
+            "backSideScreened": True,
+        }
+        with patch("main.screen_government_id", return_value=screened):
+            result = await self.run_check(back=self.back)
+        self.assertEqual(result["outcome"], "pass")
+        self.assertFalse(result["authenticityVerified"])
+        self.assertFalse(result["livenessVerified"])
+        self.assertIn("Admin", result["message"])
+        self.assertEqual(result["documentScreening"]["profileNameCheck"], "inconclusive")
+
+    async def test_missing_profile_name_still_blocks_face_stage(self):
+        screened = {
+            "status": "text_consistent_unverified",
+            "declaredIdType": "national_id",
+            "detectedIdType": "national_id",
+            "imageQualityStatus": "adequate",
+            "profileNameCheck": "not_checked",
+            "warningCodes": [],
+            "backSideProvided": True,
+            "backSideScreened": True,
+        }
+        with patch("main.screen_government_id", return_value=screened):
+            result = await self.run_check(back=self.back)
+        self.assertEqual(result["outcome"], "retry")
+        self.assertFalse(result["authenticityVerified"])
+
     async def test_reversed_sides_prevent_face_stage(self):
         result = await self.run_check(front=self.back, back=self.front)
         self.assertEqual(result["outcome"], "retry")

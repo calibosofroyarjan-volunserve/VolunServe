@@ -150,12 +150,14 @@ class SyntheticNamePrecheckTests(unittest.IsolatedAsyncioTestCase):
         for forbidden in ("MATEO", "MUNSAYAC", "SAMPLE", "TEST"):
             self.assertNotIn(forbidden, repr(result).upper())
 
-    async def test_unreadable_account_name_prevents_face_scan(self):
+    async def test_unreadable_printed_name_allows_comparison_only_with_admin_review(self):
         result = await self.check("MATEO", "MUNSAYAC",
                                   front_text="PHILIPPINE IDENTIFICATION CARD")
-        self.assertEqual(result["outcome"], "retry")
+        self.assertEqual(result["outcome"], "pass")
         self.assertEqual(result["documentScreening"]["profileNameCheck"], "inconclusive")
-        self.assertIn("could not be confirmed", result["message"])
+        self.assertIn("LGU/Admin", result["message"])
+        self.assertFalse(result["authenticityVerified"])
+        self.assertFalse(result["livenessVerified"])
 
     async def test_matching_account_can_continue_to_face_scan_but_not_auto_verify(self):
         result = await self.check("TEST", "SAMPLE")
