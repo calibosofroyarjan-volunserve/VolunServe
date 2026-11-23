@@ -100,7 +100,7 @@ interface DisasterCase {
 
   verificationStatus?: VerificationStatus;
   evidenceReviewStatus?: string;
-  autoVolunteerDispatch?: {state?:string;wave?:number;attemptedCount?:number};
+  autoVolunteerDispatch?: {origin?:string;state?:string;wave?:number;attemptedCount?:number};
   verification?: {
     accountApproved?: boolean;
     reporterTrust?: string;
@@ -131,6 +131,7 @@ interface DisasterCase {
   requiredVolunteers?: number;
   assignedVolunteersCount?: number;
   assignedVolunteerIds?: string[];
+
 
   // Optional Volunteer support is tracked separately from the official LGU responder.
   activeVolunteerSupportUid?: string;
@@ -183,6 +184,7 @@ type VolunteerProfile = {
 };
 
 type ResponseAssignment = {
+  offerMode?: string;
   id: string;
   caseId: string;
   volunteerId: string;
@@ -1001,7 +1003,7 @@ export default function AdminCases() {
                 ? "validated"
                 : "pending_verification"),
             evidenceReviewStatus: data.evidenceReviewStatus || "",
-            autoVolunteerDispatch: data.autoVolunteerDispatch || undefined,
+
             verification:
               data.verification && typeof data.verification === "object"
                 ? data.verification
@@ -1021,6 +1023,7 @@ export default function AdminCases() {
             attachments: Array.isArray(data.attachments) ? data.attachments : [],
 
             requiredVolunteers: Number(data.requiredVolunteers || 0),
+            autoVolunteerDispatch: data.autoVolunteerDispatch || undefined,
             assignedVolunteersCount: Number(data.assignedVolunteersCount || 0),
             assignedVolunteerIds: Array.isArray(data.assignedVolunteerIds)
               ? data.assignedVolunteerIds
@@ -1253,6 +1256,7 @@ export default function AdminCases() {
             status: data.status || "offered",
             createdAt: data.createdAt,
             updatedAt: data.updatedAt,
+            offerMode: String(data.offerMode || ""),
             createdBy: String(data.createdBy || ""),
             barangay: String(data.barangay || ""),
             acceptedAt: data.acceptedAt,
@@ -2950,6 +2954,11 @@ export default function AdminCases() {
     incident: DisasterCase,
     volunteer: VolunteerProfile
   ) => {
+    if (incident.autoVolunteerDispatch?.origin === "render_resident_created_all_volunteers") {
+      Alert.alert("Automatic Volunteer Invitations",
+        "Render sent the invitations automatically. Admin monitors Volunteer decisions; do not assign manually.");
+      return;
+    }
     const auth = getAuth();
     const adminUser = auth.currentUser;
 
@@ -3323,6 +3332,12 @@ export default function AdminCases() {
   };
 
   const cancelAssignment = async (assignment: ResponseAssignment) => {
+    if (cases.some(item => item.id === assignment.caseId &&
+      item.autoVolunteerDispatch?.origin === "render_resident_created_all_volunteers")) {
+      Alert.alert("Automatic Invitation Monitor",
+        "Volunteer invitation decisions are handled by the assigned Volunteers.");
+      return;
+    }
     try {
       const assignmentRef = doc(
         db,
@@ -3934,6 +3949,28 @@ export default function AdminCases() {
 
           return (
             <View key={incident.id} style={styles.caseCard}>
+              {incident.autoVolunteerDispatch?.origin === "render_resident_created_all_volunteers" && (
+                <View style={styles.renderAutoMonitor}>
+                  <Text style={styles.renderAutoMonitorTitle}>Automatic Volunteer Response Monitor</Text>
+                  <Text style={styles.renderAutoMonitorSummary}>
+                    {incidentAssignments.length} Invited  •  {incidentAssignments.filter(item =>
+                      ["accepted", "responding", "on_site", "completed"].includes(item.status)).length} Accepted
+                    {"  •  "}{incidentAssignments.filter(item => item.status === "declined").length} Declined
+                    {"  •  "}{incidentAssignments.filter(item => item.status === "offered").length} Pending
+                  </Text>
+                  {pageFive(incidentAssignments, activeAssignmentPage).map(item => (
+                    <View key={item.id} style={styles.renderAutoMonitorRow}>
+                      <Text style={styles.renderAutoMonitorName}>{item.volunteerName || "Volunteer"}</Text>
+                      <Text style={styles.renderAutoMonitorStatus}>{String(item.status).toUpperCase()}</Text>
+                    </View>
+                  ))}
+                  <ListPagination page={activeAssignmentPage}
+                    total={incidentAssignments.length} pageSize={5} onChange={setActiveAssignmentPage} />
+                  <Text style={styles.renderAutoMonitorHelp}>
+                    Invitations follow Resident submission. Admin verification is still required; Volunteer responses are independent.
+                  </Text>
+                </View>
+              )}
               <View
                 style={[
                   styles.caseMain,
@@ -10900,6 +10937,16 @@ const styles = StyleSheet.create({
     lineHeight: 14,
     fontWeight: "700",
   },
+
+  renderAutoMonitor: { backgroundColor: "#F4FAF6", borderColor: "#CDE9D7",
+    borderWidth: 1, borderRadius: 14, padding: 15, gap: 9, marginBottom: 12 },
+  renderAutoMonitorTitle: { color: "#075D47", fontSize: 13, fontWeight: "900" },
+  renderAutoMonitorSummary: { color: "#174C3C", fontSize: 12, fontWeight: "800" },
+  renderAutoMonitorRow: { flexDirection: "row", justifyContent: "space-between",
+    borderBottomWidth: 1, borderBottomColor: "#DCEFE2", paddingVertical: 7, gap: 9 },
+  renderAutoMonitorName: { color: "#16483A", fontSize: 12, fontWeight: "700", flex: 1 },
+  renderAutoMonitorStatus: { color: "#087D60", fontSize: 11, fontWeight: "800" },
+  renderAutoMonitorHelp: { color: "#527967", fontSize: 11, marginTop: 2 },
 
   emptyCard: {
     backgroundColor: "#ffffff",

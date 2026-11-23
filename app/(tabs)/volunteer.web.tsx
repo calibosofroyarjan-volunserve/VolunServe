@@ -1,3 +1,4 @@
+import {RENDER_EMERGENCY_ORIGIN, respondRenderEmergencyAuto} from "../../lib/renderEmergencyAuto";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { Redirect, useRouter } from "expo-router";
@@ -42,6 +43,7 @@ type AssignmentStatus =
   | string;
 
 type ResponseAssignment = {
+  offerMode?: string;
   id: string;
   caseId?: string;
   caseTitle?: string;
@@ -538,6 +540,20 @@ export default function VolunteerTasksWeb() {
     try {
       setBusyId(assignment.id);
       setError("");
+
+      // Render service handles Resident-submitted automatic invitations.
+      // Firebase Cloud Functions remain unused for this offer mode.
+      if ((next === "accepted" || next === "declined") &&
+          assignment.offerMode === RENDER_EMERGENCY_ORIGIN) {
+        if (!assignment.caseId) throw Error("Emergency case is missing.");
+        const outcome = await respondRenderEmergencyAuto(assignment.caseId, next);
+        if (![next, "already_" + next].includes(String(outcome.status || "")))
+          throw Error("Render did not confirm this Volunteer decision.");
+        showMessage(next === "accepted" ? "Assignment accepted" : "Assignment declined",
+          "Your automatic invitation response was saved.");
+        if (next === "accepted") setFilter("active");
+        return;
+      }
 
       await runTransaction(db, async (transaction) => {
         const assignmentRef = doc(db, "responseAssignments", assignment.id);

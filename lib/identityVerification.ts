@@ -216,7 +216,7 @@ export type SubmitIdentityVerificationInput = {
 
 const FALLBACK_BACKEND_URL = "https://volunserve.onrender.com";
 
-function getBackendBaseUrl() {
+export function getBackendBaseUrl() {
   // The separate Python AI service is private; clients use the Node backend.
   // A staging build must NEVER silently send ID or selfie images to production.
   const staging = process.env.EXPO_PUBLIC_VOLUNSERVE_ENV === "staging";

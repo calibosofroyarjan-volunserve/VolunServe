@@ -1,3 +1,4 @@
+import DiditVerificationPage, { diditAvailable } from "./identity-didit";
 import DocumentScreeningSummary from "../components/identity/DocumentScreeningSummary";
 import type { DocumentScreening } from "../lib/identityVerification";
 import { Ionicons } from "@expo/vector-icons";
@@ -160,7 +161,7 @@ async function mediaFromCameraUri(
   };
 }
 
-export default function IdentityVerification() {
+function LegacyIdentityVerification() {
   const router = useRouter();
 
   const cameraRef =
@@ -3881,3 +3882,11 @@ const styles =
         "900",
     },
   });
+
+
+// Opt-in launch switch; old verification stays unchanged until Didit is tested.
+export default function IdentityVerification() {
+  return diditAvailable
+    ? <DiditVerificationPage />
+    : <LegacyIdentityVerification />;
+}

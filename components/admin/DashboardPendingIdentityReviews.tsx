@@ -1,3 +1,4 @@
+import { getBackendBaseUrl } from "../../lib/identityVerification";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { useRouter } from "expo-router";
 import React, { useCallback, useEffect, useState } from "react";
@@ -13,7 +14,7 @@ type PendingIdentity = {
   manualReviewDecision?: string;
   resident?: { fullName?: string; email?: string; barangay?: string; };
 };
-const API = "https://volunserve.onrender.com/api/admin/identity/reviews";
+const api = () => (process.env.EXPO_PUBLIC_VOLUNSERVE_ENV === "staging" ? getBackendBaseUrl() : "https://volunserve.onrender.com") + "/api/admin/identity/reviews";
 const PAGE_SIZE = 5;
 const pendingReview = (item: PendingIdentity) =>
   item.requiresManualReview === true && item.status === "pending" &&
@@ -31,7 +32,7 @@ export default function DashboardPendingIdentityReviews() {
     setLoading(true); setError("");
     try {
       const token = await user.getIdToken();
-      const res = await fetch(API, { headers: { Authorization: `Bearer ${token}` } });
+      const res = await fetch(api(), { headers: { Authorization: `Bearer ${token}` } });
       const body = await res.json().catch(() => null);
       if (!res.ok || !body?.ok) throw new Error(body?.message || "Identity reviews unavailable.");
       const rows = Array.isArray(body.items) ? body.items as PendingIdentity[] : [];

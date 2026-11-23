@@ -5,6 +5,7 @@ const read = path => fs.readFileSync(path, "utf8");
 const nav = read("app/(admin)/_layout.tsx");
 const command = read("app/(admin)/command-center.tsx");
 const cases = read("app/(admin)/admin-cases.tsx");
+const matching = read("components/admin/EmergencyFiveTabDesign.tsx");
 const duty = read("app/(admin)/lgu-attendance.tsx");
 const staff = read("app/(admin)/lgu-members.tsx");
 for (const removed of ['label: "LGU Personnel"', 'label: "LGU Attendance"']) {
@@ -37,8 +38,8 @@ assert(cases.includes('scrollbarWidth: "thin"') &&
   "Emergency case workspace must visibly scroll as needed");
 assert(!cases.includes("Google Maps ↗") &&
   !cases.includes("https://www.google.com/maps/search/") &&
-  cases.includes("Open Live Map") &&
-  cases.includes('detailTab === "map"'),
+  matching.includes("Open Emergency Response Map") &&
+  cases.includes('/(admin)/admin-live-map?caseId=${encodeURIComponent(incident.id)}'),
   "Retire external Google Maps button but keep secure embedded Emergency Live Map");
 assert(cases.includes("approvedApplications") &&
   cases.includes('String(data.status || "").toLowerCase() === "approved"') &&
@@ -47,8 +48,8 @@ assert(cases.includes("approvedApplications") &&
 assert(cases.includes("return !isReporter && skillSearchMatch && availabilityMatch;") &&
   !cases.includes('reason: "Currently unavailable / off duty"') &&
   cases.includes("offline ? \"Offline · offer allowed\"") &&
-  cases.includes('pageFive(volunteerCandidates, volunteerPage)'),
-  "All approved Volunteers must be visible and offline status must not prohibit offers");
+  cases.includes('pageFive(eligibleVolunteerCandidates, volunteerPage)'),
+  "Eligible approved Volunteers must be visible and offline status must not prohibit offers");
 assert(cases.includes("runTransaction(db, async (transaction)") &&
   cases.includes("responderLockSnapshot.exists()") &&
   cases.includes("hasCurrentSkillMatch") &&
@@ -62,12 +63,13 @@ assert(cases.includes('currentVolunteerBarangay !== currentCaseBarangay') &&
   cases.includes("!caseOpenForSupport"),
   "Maintain local eligibility and case verification; do not promise unrestricted dispatch");
 assert(!cases.includes("pageFive(onDutyPersonnel") &&
-  cases.includes("pageFive(volunteerCandidates") &&
-  cases.includes("pageFive(activeAssignments") &&
+  cases.includes("pageFive(eligibleVolunteerCandidates") &&
+  cases.includes("activeAssignments={activeAssignments}") &&
+  matching.includes("offers.slice((page - 1) * 5, page * 5)") &&
   cases.includes("pageFive(videoEvidence"),
   "Only Volunteer assignment and existing Emergency lists must retain pagination");
-assert(cases.includes('["personnel", "Volunteer Assignment"]') &&
-  cases.includes("Volunteer Task Assignment") &&
+assert(cases.includes('["personnel", "Volunteers"]') &&
+  matching.includes("Automatic Volunteer Assignment") &&
   !cases.includes('onPress={() => void assignLguPersonnelToCase(incident, personnel)}') &&
   !cases.includes('<Text style={styles.personnelCleanTitle}>LGU Primary Responder</Text>') &&
   cases.includes('["accepted", "responding", "on_site"].includes(String(item.status))') &&

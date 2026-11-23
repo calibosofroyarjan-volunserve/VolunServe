@@ -1,3 +1,4 @@
+import { getBackendBaseUrl } from "../../lib/identityVerification";
 import { Ionicons } from "@expo/vector-icons";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useLocalSearchParams } from "expo-router";
@@ -22,13 +23,14 @@ import {
 
 import { useUserSession } from "../../lib/useUserSession";
 
-const BACKEND_URL = "https://volunserve.onrender.com";
+const adminBase = () => process.env.EXPO_PUBLIC_VOLUNSERVE_ENV === "staging" ? getBackendBaseUrl() : "https://volunserve.onrender.com";
 
 type ReviewFilter = "pending" | "verified" | "retry_required" | "rejected" | "all";
 
 type IdentityReview = {
   uid: string;
   verificationId?: string;
+  diditSummary?: string;
   verificationMethod?: string;
   status?: string;
   identityStatus?: string;
@@ -168,7 +170,7 @@ export default function IdentityReviewsAdmin() {
 
       const token = await user.getIdToken(true);
       const response = await fetch(
-        `${BACKEND_URL}/api/admin/identity/reviews`,
+        `${adminBase()}/api/admin/identity/reviews`,
         {
           method: "GET",
           headers: {
@@ -340,7 +342,7 @@ export default function IdentityReviewsAdmin() {
 
       const token = await user.getIdToken(true);
       const response = await fetch(
-        `${BACKEND_URL}/api/admin/identity/reviews/${encodeURIComponent(
+        `${adminBase()}/api/admin/identity/reviews/${encodeURIComponent(
           selected.uid,
         )}/decision`,
         {
@@ -691,7 +693,7 @@ function ReviewDetail({
       try {
         const token = await viewer.getIdToken(true);
         const response = await fetch(
-          `${BACKEND_URL}/api/admin/identity/reviews/${encodeURIComponent(item.uid)}/evidence`,
+          `${adminBase()}/api/admin/identity/reviews/${encodeURIComponent(item.uid)}/evidence`,
           { headers: { Authorization: `Bearer ${token}` } },
         );
         const body = await response.json().catch(() => null);
@@ -1046,6 +1048,7 @@ function ReviewDetail({
             <InfoLine label="Submitted" value={formatDate(item.lastSubmissionAt || item.createdAt)} />
             <InfoLine label="AI decision" value={item.aiDecision || "—"} />
             <InfoLine label="Status" value={item.status || "—"} />
+            {item.diditSummary && <InfoLine label="Sandbox checks" value={item.diditSummary} />}
             <DocumentScreeningSummary screening={item.documentScreening} />
           </View>
         ) : activeTab === "audit" ? (

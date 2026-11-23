@@ -33,6 +33,7 @@ import MapView, {
 } from "react-native-maps";
 
 import { db } from "../lib/firebase";
+import {renderEmergencyEnabled, requestRenderEmergencyAuto} from "../lib/renderEmergencyAuto";
 import {
   isApprovedProfile,
 } from "../lib/firebaseAuth";
@@ -1281,13 +1282,25 @@ export default function DisasterResponse() {
         }
       );
 
+      let invitationConfirmation = "";
+      if (renderEmergencyEnabled()) {
+        try {
+          setProgress("Inviting eligible Volunteers...");
+          const dispatch = await requestRenderEmergencyAuto(caseId);
+          invitationConfirmation = "\n\nAutomatic Volunteer invitations: " +
+            Number(dispatch.offered || 0) + " offered.";
+        } catch (error) {
+          console.warn("Render invitations not confirmed", error);
+          invitationConfirmation = "\n\nReport saved; automatic invitations could not be confirmed. Admin can check its status.";
+        }
+      }
       Alert.alert(
         "Emergency Report Submitted",
         `${
           identityVerified
             ? "Your Verified Resident report"
             : "Your Basic Account report"
-        } was submitted for Admin verification.\n\nReference: ${caseId}`
+        } was submitted for Admin verification.\n\nReference: ${caseId}${invitationConfirmation}`
       );
 
       resetForm();

@@ -1,3 +1,5 @@
+import ListPagination from "../ui/ListPagination";
+import { RENDER_EMERGENCY_ORIGIN } from "../../lib/renderEmergencyAuto";
 import React from "react";
 import { Platform, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 
@@ -46,6 +48,7 @@ export interface AdminAssignmentView {
   createdAt?: any;
   updatedAt?: any;
   createdBy?: string;
+  offerMode?: string;
   barangay?: string;
   acceptedAt?: any;
   declinedAt?: any;
@@ -308,10 +311,14 @@ export function ReferenceVolunteerMatching({ incident, verificationStatus, caseB
   onCancelAssignment?: (assignment: AdminAssignmentView) => void;
 }) {
   const offers=allAssignments.length ? allAssignments : activeAssignments;
+  const [offerPage, setOfferPage] = React.useState(1);
+  React.useEffect(() => setOfferPage(1), [incident.id]);
+  const page = Math.min(offerPage, Math.max(1, Math.ceil(offers.length / 5)));
+  const isAutomatic = (task: AdminAssignmentView) => task.offerMode === RENDER_EMERGENCY_ORIGIN || task.createdBy === "automatic_matching_engine";
   const pending=offers.filter(x=>x.status==="offered").length;
   const accepted=offers.filter(x=>["accepted","responding","on_site","completed"].includes(x.status)).length;
   const declined=offers.filter(x=>x.status==="declined").length;
-  const autoOffers=offers.filter(x=>x.createdBy==="automatic_matching_engine").length;
+  const autoOffers=offers.filter(isAutomatic).length;
   const autoActive=automaticStatus && !["disabled","off","needs_admin"].includes(automaticStatus);
   const ready=verificationStatus==="validated" && ["validated","assigned","in_progress"].includes(incident.status);
   return <View style={styles.page}>
@@ -384,7 +391,8 @@ export function ReferenceVolunteerMatching({ incident, verificationStatus, caseB
             <Text style={[styles.volunteerHeadText,{flex:1.1}]}>STATUS</Text>
             <Text style={[styles.volunteerHeadText,{flex:1}]}>ACTION</Text>
           </View>
-          {offers.map(x=><View key={x.id} style={styles.volunteerTableRow}>
+          <ListPagination page={page} total={offers.length} pageSize={5} onChange={setOfferPage} />
+          {offers.slice((page - 1) * 5, page * 5).map(x=><View key={x.id} style={styles.volunteerTableRow}>
             <View style={styles.volunteerTablePerson}>
               <View style={styles.volAvatar}>
                 <Text style={styles.volAvatarText}>{(x.volunteerName||"V").slice(0,1).toUpperCase()}</Text>
@@ -395,7 +403,7 @@ export function ReferenceVolunteerMatching({ incident, verificationStatus, caseB
               </View>
             </View>
             <Text style={[styles.volunteerCell,{flex:1.5}]}>
-              {x.createdBy==="automatic_matching_engine" ? "Automatic offer" : "Recorded task"}
+              {isAutomatic(x) ? "Automatic offer" : "Recorded task"}
             </Text>
             <View style={[styles.volunteerStatus,
               x.status==="declined"?styles.redTint:

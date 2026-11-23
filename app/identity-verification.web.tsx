@@ -1,3 +1,4 @@
+import DiditVerificationPage, { diditAvailable } from "./identity-didit";
 import DocumentScreeningSummary from "../components/identity/DocumentScreeningSummary";
 import ResidentDesktopActions from "../components/layout/ResidentDesktopActions";
 import type { DocumentScreening } from "../lib/identityVerification";
@@ -236,7 +237,7 @@ function scanCopy(scanState: ScanState) {
   }
 }
 
-export default function IdentityVerificationWeb() {
+function LegacyIdentityVerificationWeb() {
   const router = useRouter();
   const { width: viewportWidth } = useWindowDimensions();
   const desktopIdentityShell = viewportWidth >= 1040;
@@ -3533,3 +3534,11 @@ const styles = StyleSheet.create({
     fontWeight: "900",
   },
 });
+
+
+// Opt-in launch switch; old verification stays unchanged until Didit is tested.
+export default function IdentityVerificationWeb() {
+  return diditAvailable
+    ? <DiditVerificationPage />
+    : <LegacyIdentityVerificationWeb />;
+}
