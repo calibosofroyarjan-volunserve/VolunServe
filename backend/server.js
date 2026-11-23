@@ -8281,8 +8281,8 @@ app.post(
       }
 
       const title = communityEventWordText(input.title, "Title", 2, 15, 5, 100);
-      const description = communityEventWordText(input.description, "Description", 20, 200, 20, 1500);
-      const volunteerTasks = communityEventWordText(input.volunteerTasks, "Volunteer tasks", 8, 150, 12, 1200);
+      const description = communityEventWordText(input.description, "Description", 5, 200, 5, 1500);
+      const volunteerTasks = communityEventWordText(input.volunteerTasks, "Volunteer tasks", 3, 150, 5, 1200);
       const barangay = communityEventText(input.barangay, "Barangay", 1, 90);
       const location = communityEventText(input.location, "Location", 1, 150);
       const category = communityEventText(input.category, "Category", 1, 80);
