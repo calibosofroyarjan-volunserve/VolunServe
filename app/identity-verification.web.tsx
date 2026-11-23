@@ -2482,7 +2482,7 @@ function AiVerificationStep({
         </Text>
         <Text style={styles.aiText}>
           Checking image quality, detecting facial landmarks,
-          and calculating the private 1-to-1 match score.
+          and performing a private 1-to-1 face comparison.
         </Text>
 
         <View style={styles.progressTrack}>
