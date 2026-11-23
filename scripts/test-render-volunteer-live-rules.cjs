@@ -4,7 +4,7 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const {initializeTestEnvironment,assertSucceeds,assertFails}=
   require("@firebase/rules-unit-testing");
-const {doc,setDoc,getDoc}=require("firebase/firestore");
+const {doc,setDoc,getDoc,deleteDoc}=require("firebase/firestore");
 
 const PROJECT="demo-volunserve-live-render-rules";
 if(process.env.FIRESTORE_EMULATOR_HOST!=="127.0.0.1:8080"||
@@ -45,6 +45,9 @@ test("Only exact Render-invited approved Volunteer may read their own pending in
       await setDoc(doc(db,"responseAssignments",id+"_"+a),{
         caseId:id,volunteerId:a,offerMode:origin,status:"offered"
       });
+      await setDoc(doc(db,"autoVolunteerReservations",a),{
+        uid:a,caseId:id,origin,assignmentId:id+"_"+a
+      });
     });
     const authContext=uid=>env.authenticatedContext(uid,{
       email:uid+"@example.com",email_verified:true
@@ -59,6 +62,7 @@ test("Only exact Render-invited approved Volunteer may read their own pending in
       await setDoc(doc(context.firestore(),"responseAssignments",id+"_"+a),{
         caseId:id,volunteerId:a,offerMode:origin,status:"declined"
       });
+      await deleteDoc(doc(context.firestore(),"autoVolunteerReservations",a));
     });
     await assertFails(getDoc(doc(invited,"disasterCases",id)));
   }finally{
