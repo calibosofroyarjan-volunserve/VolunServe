@@ -14,7 +14,18 @@ class Ref{
 }
 class DB{
   constructor(){this.docs=new Map()}
-  collection(name){return {doc:id=>this.doc(name+"/"+id)}}
+  collection(name){
+    return {doc:id=>this.doc(name+"/"+id),
+      where:(field,op,value)=>{
+        assert.equal(op,"==");
+        return {limit:()=>({get:async()=>{
+          const docs=[...this.docs.entries()]
+            .filter(([p,d])=>p.startsWith(name+"/")&&d[field]===value)
+            .map(([p])=>new Snapshot(this,p));
+          return {docs,size:docs.length,empty:docs.length===0};
+        }})};
+      }};
+  }
   doc(p){return new Ref(this,p)}
   put(p,data){this.docs.set(p,data)}
   get(p){return this.docs.get(p)}
