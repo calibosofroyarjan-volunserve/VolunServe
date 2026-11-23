@@ -56,10 +56,23 @@ function evaluateDiditDecision(result) {
   const hasPassed = (key) => Array.isArray(result?.[key]) &&
     result[key].length > 0 &&
     result[key].every((item) => String(item?.status || "").toLowerCase() === "approved");
+  // A passing selfie cannot substitute for a supported government ID.
+  // The workflow MUST also restrict country and document families using
+  // OCR.documents_allowed; exact card variants need issuer-specific review.
+  const permittedIdentityFamilies = new Set([
+    "Passport", "Identity Card", "Driver\'s License",
+  ]);
+  const documentsAllowed = Array.isArray(result?.id_verifications) &&
+    result.id_verifications.length > 0 &&
+    result.id_verifications.every((record) =>
+      record?.issuing_state === "PHL" &&
+      permittedIdentityFamilies.has(String(record?.document_type || "")),
+    );
   const requiredChecksPassed =
     hasPassed("id_verifications") &&
     hasPassed("liveness_checks") &&
-    hasPassed("face_matches");
+    hasPassed("face_matches") &&
+    documentsAllowed;
   // This must also be restricted to approved, supported ID types in the Didit workflow.
   if (normalized === "approved" && requiredChecksPassed) {
     return { providerStatus, decision: "approved", review: false };
