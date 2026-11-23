@@ -1,0 +1,56 @@
+name: Staging web Resident auto invites UI (NO DEPLOY)
+on:
+  push:
+    branches:
+      - qa/staging-web-resident-auto-demo-20261123
+
+permissions:
+  contents: read
+
+jobs:
+  staging-ui:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install dependencies (no deploy)
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Existing staging UI and Firebase isolation regression
+        run: |
+          node scripts/test-staging-gated-matching-ui-20261117.cjs
+          node --test scripts/test-staging-validation-auto-offer-20261117.cjs
+          npx tsc --noEmit --pretty false
+      - name: Verify new Notifications and read-only Admin monitor
+        run: |
+          node - <<'NODE'
+          const fs=require('node:fs'),assert=require('node:assert/strict');
+          const notifications=fs.readFileSync('app/(tabs)/notifications.tsx','utf8');
+          const admin=fs.readFileSync('app/(admin)/admin-cases.tsx','utf8');
+          assert.match(notifications,/canRespondFromNotification/);
+          assert.match(notifications,/respondToAutoVolunteerInvitation/);
+          assert.match(notifications,/automatic_resident_submission_demo/);
+          assert.match(admin,/Automatic Volunteer Response Monitor/);
+          assert.match(admin,/autoVolunteerDispatch\?\.origin/);
+          assert.match(admin,/No Admin Assign button needed/);
+          console.log('PASS: Staging UI has Notification Accept/Decline and Admin read-only monitor.');
+          NODE
+      - name: Export staging UI (nonproduction local artifact only)
+        env:
+          EXPO_PUBLIC_VOLUNSERVE_ENV: staging
+          EXPO_PUBLIC_FIREBASE_PROJECT_ID: volunserve-volunteer-staging
+          EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN: volunserve-volunteer-staging.firebaseapp.com
+          EXPO_PUBLIC_FIREBASE_API_KEY: AIzaSyCGS-VySgPPEcqgKH0tBqQCZX_YYhJFuuM
+          EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET: volunserve-volunteer-staging.firebasestorage.app
+          EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID: "000000000000"
+          EXPO_PUBLIC_FIREBASE_APP_ID: "1:000000000000:web:fictionalstaging"
+        run: |
+          npx expo export --platform web --output-dir dist
+          if grep -lr 'volunserve-3aa5b\.firebaseapp\.com' dist >/dev/null; then echo 'Unexpected production endpoint in staging bundle'; exit 1; fi
+      - name: Confirm no deployment
+        run: echo 'No Render, Firebase or production deployment triggered'
