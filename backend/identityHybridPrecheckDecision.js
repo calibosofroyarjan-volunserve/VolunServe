@@ -18,8 +18,11 @@ function classifyHybridDocumentPrecheck({ screening, aiOutcome } = {}) {
     "document_front_back_swapped", "document_front_side_conflict",
     "document_back_looks_like_front",
   ].includes(code));
+  // A clear recognized National ID can enter face comparison if OCR cannot
+  // read a name, but this is never an automatic Verified Resident decision.
+  // Confident name conflicts and absent account profile names remain blocked.
   const readableMatchingNationalName = screening?.declaredIdType !== "national_id" ||
-    screening?.profileNameCheck === "possible_match";
+    ["possible_match","inconclusive"].includes(screening?.profileNameCheck);
   if (unsupported || typeMismatch || invalidSides) {
     return {outcome:"retry",decision:"rescan_required",reviewTrack:"none"};
   }
