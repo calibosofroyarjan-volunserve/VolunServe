@@ -30,7 +30,7 @@ jobs:
       PROJECT: volunserve-3aa5b
       SITE: volunserve-3aa5b
       BASE_SHA: 0b14cd87e57dae72072942894b2b3d3137ac7a16
-      SOURCE_SHA: 69bc0df6fb5902b9000fc77227220eb1d0d173db
+      SOURCE_SHA: b4ad1c77b21c9ca6afc4d2b02290548615d8e442
       EXPECTED_ACTIVE_RULES_SHA256: bbe6d3c1184ea6e7dcae253e56c34271acfb8260fd853614810aafcc550b8ed7
     steps:
       - name: Checkout protected production controller
@@ -44,7 +44,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           path: site
-          ref: 69bc0df6fb5902b9000fc77227220eb1d0d173db
+          ref: b4ad1c77b21c9ca6afc4d2b02290548615d8e442
           fetch-depth: 0
           submodules: false
       - name: Verify source scope, intact Signup and unchanged public Hosting
@@ -148,7 +148,7 @@ jobs:
               'BLOCKED Render clause already deployed: inspect before retry');
             const candidate=fs.readFileSync('firestore.rules','utf8');
             const readCandidate=readExpression(candidate);
-            const start=readCandidate.indexOf('        // Read-only Render invitation: the reservation is server-owned,');
+            const start=readCandidate.indexOf('        // Server-owned reservation; withdrawn on Decline.');
             assert(start>0,'BLOCKED tested Render read clause missing');
             const addition=readCandidate.slice(start);
             assert(addition.includes('autoVolunteerReservations')&&
