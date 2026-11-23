@@ -906,7 +906,7 @@ export default function EmailFirstSignup() {
                   error={(showErrors || !!birth) && (age === null || age < 18 || age > 100)
                     ? "Select a valid birth date (ages 18–100)." : null}
                 />
-                {googleSignupSession && (
+                {
                   <Pressable
                     accessibilityRole="checkbox"
                     accessibilityState={{checked: consent}}
@@ -919,11 +919,11 @@ export default function EmailFirstSignup() {
                     </Text>
                   </Pressable>
                 )}
-                {googleSignupSession && showErrors && !consent &&
+                {showErrors && !consent &&
                   <Text style={styles.error}>Agree to the Terms and Privacy Notice to continue.</Text>}
                 {checkButton("Continue to Address & Profile", () => {
                   setShowErrors(true);
-                  if (googleSignupSession && !consent) {
+                  if (!consent) {
                     setError("Please agree to the Terms and Privacy Notice first.");
                     return;
                   }
