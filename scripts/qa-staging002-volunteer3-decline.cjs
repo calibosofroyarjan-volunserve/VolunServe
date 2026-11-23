@@ -61,7 +61,13 @@ async function signIn(auth,uid){
     method:"POST",headers:{"Content-Type":"application/json"},
     body:JSON.stringify({token:ticket,returnSecureToken:true})
   });
-  if(!response.idToken||response.localId!==uid)fail("Staging Firebase Auth custom sign-in did not match expected UID");
+  // signInWithCustomToken may omit localId. Verify the returned ID token
+  // cryptographically with the SAME isolated staging Firebase Admin client.
+  if(!response.idToken)fail("Staging custom sign-in did not return an ID token");
+  const decoded=await auth.verifyIdToken(response.idToken,true);
+  if(decoded?.uid!==uid||decoded?.aud!==PROJECT||
+     decoded?.iss!=="https://securetoken.google.com/"+PROJECT)
+    fail("Verified isolated staging Firebase session does not match expected UID/project");
   return response.idToken;
 }
 async function snapshot(db){
