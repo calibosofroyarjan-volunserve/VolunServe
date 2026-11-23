@@ -2347,7 +2347,7 @@ service cloud.firestore {
           ]
           && resource.data.get('autoVolunteerDispatch', {}).get(
             'origin', ''
-          ) == 'automatic_all_volunteers_no_barangay'
+          ) in ['automatic_all_volunteers_no_barangay', 'automatic_resident_submission_demo']
           && exists(
             /databases/$(database)/documents/responseAssignments/$(caseId + '_' + request.auth.uid)
           )
@@ -2359,7 +2359,7 @@ service cloud.firestore {
           ).data.volunteerId == request.auth.uid
           && get(
             /databases/$(database)/documents/responseAssignments/$(caseId + '_' + request.auth.uid)
-          ).data.get('offerMode', '') == 'automatic_all_volunteers_no_barangay'
+          ).data.get('offerMode', '') == resource.data.get('autoVolunteerDispatch', {}).get('origin', '')
           && get(
             /databases/$(database)/documents/responseAssignments/$(caseId + '_' + request.auth.uid)
           ).data.status in [
