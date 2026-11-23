@@ -1337,6 +1337,60 @@ jobs:
             }
             // END PINNED IDENTITY UI CONTROLLER DIFF-REPAIR GATE
 
+            // BEGIN PINNED SIGNUP CONSENT HOTFIX HOSTING-ONLY GATE
+            {
+              const controller=".github/workflows/release-signup-consent-step3-20261123.yml";
+              const verifier=".github/workflows/verify-reconciled-hosting-source-no-deploy-20261111.yml";
+              const changed=git("diff","--name-status","--no-renames",liveBase,commit)
+                .split("\n").filter(Boolean).sort();
+              if(changed.length===2 &&
+                changed.includes("A\t"+controller) &&
+                changed.includes("M\t"+verifier)){
+                const published="59f9badf16207da84a877dff9c2f87f2756e4854";
+                const source="0b14cd87e57dae72072942894b2b3d3137ac7a16";
+                assert.equal(liveBase,"aa04c7af849496a2416411576f8c7195a5951295",
+                  "BLOCKED protected branch changed after Signup release review");
+                assert.equal(marker.revision,published,
+                  "BLOCKED Hosting version moved since Signup fix review");
+                assert.equal(blob(liveBase,verifier), "58bc18ed52f8a2cc9f606b9b1c55920390aa5eb1",
+                  "BLOCKED existing protected verifier changed");
+                assert.equal(blob(commit,controller),"032353cb3aa24148fa442cc1f77675a8a7eadb2a",
+                  "BLOCKED reviewed Signup release controller changed");
+                assert.equal(git("ls-remote","--heads","origin",
+                  "fix/live-signup-consent-step3-for-email-20261123").split(/\s+/)[0],
+                  source,"BLOCKED Signup source branch changed");
+                git("merge-base","--is-ancestor",published,source);
+                assert.deepEqual(git("diff","--name-status","--no-renames",published,source)
+                  .split("\n").filter(Boolean),[
+                  "M\tcomponents/auth/EmailFirstSignup.tsx"
+                ],"BLOCKED Signup source includes unrelated changes");
+                const prior=git("show",liveBase+":"+verifier);
+                const updated=git("show",commit+":"+verifier);
+                const begin="            // BEGIN PINNED SIGNUP CONSENT HOTFIX HOSTING-ONLY GATE\n";
+                const endMark="            // END PINNED SIGNUP CONSENT HOTFIX HOSTING-ONLY GATE\n";
+                const first=updated.indexOf(begin);
+                const last=updated.indexOf(endMark,first);
+                assert(first>=0 && last>first,"BLOCKED Signup release verifier marker missing");
+                assert.equal(updated[last+endMark.length],"\n",
+                  "BLOCKED Signup release verifier separator changed");
+                assert.equal(updated.slice(0,first)+updated.slice(last+endMark.length+1),prior,
+                  "BLOCKED existing protected verifier changed outside scoped Signup gate");
+                for(const file of ["package.json","package-lock.json","app.json","firebase.json",
+                  ".firebaserc","firestore.rules","storage.rules","functions/index.js",
+                  "lib/firebase.ts","backend/server.js","scripts/guard-live-protected-release.cjs"]){
+                  const old=git("ls-tree","--name-only",liveBase,"--",file);
+                  const cur=git("ls-tree","--name-only",commit,"--",file);
+                  assert.equal(cur,old,"BLOCKED protected file unexpectedly changed: "+file);
+                  if(old)assert.equal(blob(commit,file),blob(liveBase,file),
+                    "BLOCKED security or backend file changed: "+file);
+                }
+                console.log("PASS reviewed one-file signup consent release controller only");
+                console.log("NO DEPLOY at PR check; the protected push controller verifies and deploys Hosting only");
+                return;
+              }
+            }
+            // END PINNED SIGNUP CONSENT HOTFIX HOSTING-ONLY GATE
+
             assert.equal(marker.revision,liveBase,
               "BLOCKED: protected base and production differ; reconcile FIRST");
             const text=git("diff","--name-status","--no-renames",liveBase,commit);
