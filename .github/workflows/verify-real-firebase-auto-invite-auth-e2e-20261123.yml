@@ -40,21 +40,21 @@ jobs:
         with:
           distribution: temurin
           java-version: "21"
-      - name: Check all 8 integrated source and QA files, no unrelated production changes
+      - name: Check all 10 integrated source and QA files, no unrelated production changes
         shell: bash
         run: |
           set -euo pipefail
           git diff --name-status a1c66af149b6a16d3ae4d3ab8ae3551c9bc06782 HEAD > /tmp/scope
-          test "$(wc -l </tmp/scope)" -eq 8
+          test "$(wc -l </tmp/scope)" -eq 10
           while IFS="$(printf '\t')" read -r st file; do
             case "$st:$file" in
-              "A:functions/test-emergencySimpleAutoInviteRealEmulator.cjs"|"A:.github/workflows/verify-real-firebase-auto-invite-auth-e2e-20261123.yml"|"A:functions/emergencySimpleAutoInvite.js"|"A:functions/test-emergencySimpleAutoInvite.cjs"|"M:functions/index.js"|"M:app/(tabs)/volunteer.web.tsx"|"M:app/(tabs)/volunteer.tsx"|"A:.github/workflows/verify-guarded-live-auto-volunteer-integration-20261123.yml") ;;
+              "A:functions/test-emergencySimpleAutoInviteRealEmulator.cjs"|"A:.github/workflows/verify-real-firebase-auto-invite-auth-e2e-20261123.yml"|"A:functions/emergencySimpleAutoInvite.js"|"A:functions/test-emergencySimpleAutoInvite.cjs"|"M:functions/index.js"|"M:app/(tabs)/volunteer.web.tsx"|"M:app/(tabs)/volunteer.tsx"|"A:.github/workflows/verify-guarded-live-auto-volunteer-integration-20261123.yml"|"M:firestore.rules"|"A:.github/workflows/qa-automatic-invite-case-read-rules-20261123.yml") ;;
               *) echo "REFUSED scope: $st $file"; exit 1 ;;
             esac
           done </tmp/scope
           test "$VOLUNSERVE_SIMPLE_AUTO_INVITES_PRODUCTION_APPROVED" = false
           test "$GCLOUD_PROJECT" = demo-volunserve-simple-invites
-          test -z "$(git diff --name-only a1c66af149b6a16d3ae4d3ab8ae3551c9bc06782 HEAD -- firestore.rules backend/server.js app/'(admin)'/admin-cases.tsx)"
+          test -z "$(git diff --name-only a1c66af149b6a16d3ae4d3ab8ae3551c9bc06782 HEAD -- backend/server.js app/'(admin)'/admin-cases.tsx)"
       - name: Install pinned Firebase emulator and test SDKs
         run: |
           npm ci --ignore-scripts --no-audit --no-fund
