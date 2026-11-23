@@ -479,9 +479,10 @@ export default function IdentityReviewsAdmin() {
                 <Ionicons name="document-text-outline" size={28} color="#08765A" />
                 <View style={styles.flexOne}>
                   <Text style={styles.premiumReviewTitle}>Identity Review Details</Text>
-                  <Text style={styles.premiumReviewSubtitle} numberOfLines={2}>
-                    Verification ID: {selected.verificationId || "Not available"}
-                  </Text>
+                  <View style={styles.verificationHeaderLine}>
+                    <Text style={styles.premiumReviewSubtitle}>Verification ID</Text>
+                    <VerificationIdValue id={selected.verificationId} />
+                  </View>
                 </View>
               </View>
               <StatusChip bucket={reviewBucket(selected)} />
@@ -775,7 +776,7 @@ function ReviewDetail({
           <InfoLine label="Account Type" value={item.identityVerified === true ? "Verified Resident" : "Basic Resident"} />
           <InfoLine label="Barangay" value={item.resident?.barangay || "Not set"} />
           <InfoLine label="Submitted" value={formatDate(item.lastSubmissionAt || item.createdAt)} />
-          <InfoLine label="Verification ID" value={item.verificationId || "Not available"} />
+          <VerificationIdLine id={item.verificationId} />
         </View>
 
         <View style={styles.premiumCard}>
@@ -1041,7 +1042,7 @@ function ReviewDetail({
               <Text style={styles.premiumCardTitle}>Details &amp; History</Text>
             </View>
             <InfoLine label="Resident" value={item.resident?.fullName || "—"} />
-            <InfoLine label="Verification ID" value={item.verificationId || "—"} />
+            <VerificationIdLine id={item.verificationId} />
             <InfoLine label="Submitted" value={formatDate(item.lastSubmissionAt || item.createdAt)} />
             <InfoLine label="AI decision" value={item.aiDecision || "—"} />
             <InfoLine label="Status" value={item.status || "—"} />
@@ -1093,6 +1094,107 @@ function SectionTitle({
     <View style={styles.sectionTitleRow}>
       <Ionicons name={icon} size={19} color="#4F46E5" />
       <Text style={styles.sectionTitle}>{title}</Text>
+    </View>
+  );
+}
+
+function shortVerificationId(id?: string) {
+  const value = String(id || "").trim();
+  return value ? "…" + value.slice(-10) : "Not available";
+}
+
+// Only the display is shortened. The complete immutable backend identifier
+// remains available for authorized Admin review, support and audit records.
+function VerificationIdValue({ id }: { id?: string }) {
+  const [showFull, setShowFull] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const fullId = String(id || "").trim();
+
+  const copyFullId = async () => {
+    if (!fullId) return;
+    try {
+      if (Platform.OS === "web" && typeof navigator !== "undefined" &&
+          navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(fullId);
+        setCopied(true);
+      } else {
+        // Native browsers without Clipboard API can select the original
+        // text from the details dialog instead of losing the full ID.
+        setShowFull(true);
+      }
+    } catch {
+      setShowFull(true);
+    }
+  };
+
+  return (
+    <>
+      <View style={styles.verificationValueWrap}>
+        <TouchableOpacity
+          accessibilityRole="button"
+          accessibilityLabel="View complete verification ID"
+          onPress={() => setShowFull(true)}
+          style={styles.verificationShortButton}
+        >
+          <Text style={styles.verificationShortText} numberOfLines={1} ellipsizeMode="middle">
+            {shortVerificationId(fullId)}
+          </Text>
+        </TouchableOpacity>
+        {fullId ? (
+          <TouchableOpacity
+            accessibilityRole="button"
+            accessibilityLabel="Copy complete verification ID"
+            onPress={() => void copyFullId()}
+            style={styles.verificationCopyButton}
+          >
+            <Ionicons name={copied ? "checkmark-outline" : "copy-outline"}
+              color="#08765A" size={16} />
+          </TouchableOpacity>
+        ) : null}
+      </View>
+      <Modal visible={showFull} transparent animationType="fade"
+        onRequestClose={() => setShowFull(false)}>
+        <View style={styles.verificationModalOverlay}>
+          <View style={styles.verificationModalCard}>
+            <View style={styles.verificationModalTitleRow}>
+              <Ionicons name="finger-print-outline" size={20} color="#08765A" />
+              <Text style={styles.verificationModalTitle}>Full Verification ID</Text>
+            </View>
+            <Text style={styles.verificationModalHint}>
+              This is the original system reference. The shortened label on the page
+              does not change the stored ID.
+            </Text>
+            <Text style={styles.verificationModalFullId} selectable>
+              {fullId || "Not available"}
+            </Text>
+            <View style={styles.verificationModalActions}>
+              <TouchableOpacity style={styles.verificationModalClose}
+                accessibilityRole="button" onPress={() => setShowFull(false)}>
+                <Text style={styles.verificationModalCloseText}>Close</Text>
+              </TouchableOpacity>
+              {fullId && Platform.OS === "web" ? (
+                <TouchableOpacity style={styles.verificationModalCopy}
+                  accessibilityRole="button" onPress={() => void copyFullId()}>
+                  <Ionicons name={copied ? "checkmark-outline" : "copy-outline"}
+                    color="#FFFFFF" size={16} />
+                  <Text style={styles.verificationModalCopyText}>
+                    {copied ? "Copied" : "Copy full ID"}
+                  </Text>
+                </TouchableOpacity>
+              ) : null}
+            </View>
+          </View>
+        </View>
+      </Modal>
+    </>
+  );
+}
+
+function VerificationIdLine({ id }: { id?: string }) {
+  return (
+    <View style={styles.infoLine}>
+      <Text style={styles.infoLabel}>Verification ID</Text>
+      <VerificationIdValue id={id} />
     </View>
   );
 }
@@ -1519,6 +1621,8 @@ const styles = StyleSheet.create({
   },
   infoValue: {
     flex: 1,
+    minWidth: 0,
+    flexShrink: 1,
     color: "#173D32",
     fontSize: 12,
     fontWeight: "700",
@@ -1778,6 +1882,68 @@ const styles = StyleSheet.create({
   premiumReviewTitle: {
     fontWeight: "800", fontSize: 20, lineHeight: 25, color: "#102B26", letterSpacing: -0.4,
   },
+  verificationHeaderLine: {
+    flexDirection: "row", alignItems: "center", gap: 7, minWidth: 0, marginTop: 4,
+  },
+  verificationValueWrap: {
+    flex: 1, minWidth: 0, flexShrink: 1, flexDirection: "row",
+    alignItems: "center", justifyContent: "flex-end", gap: 5,
+  },
+  verificationShortButton: {
+    flexShrink: 1, minWidth: 0, borderRadius: 7,
+    backgroundColor: "#F1F8F4", paddingHorizontal: 7, paddingVertical: 5,
+  },
+  verificationShortText: {
+    fontSize: 11.5, fontWeight: "700", lineHeight: 17, color: "#185D49",
+  },
+  verificationCopyButton: {
+    flexShrink: 0, width: 29, height: 29, borderRadius: 8,
+    alignItems: "center", justifyContent: "center",
+    borderWidth: 1, borderColor: "#D7E9DD", backgroundColor: "#FFFFFF",
+  },
+  verificationModalOverlay: {
+    flex: 1, justifyContent: "center", alignItems: "center",
+    padding: 20, backgroundColor: "rgba(12, 35, 27, 0.54)",
+  },
+  verificationModalCard: {
+    width: "100%", maxWidth: 500, borderRadius: 16,
+    backgroundColor: "#FFFFFF", padding: 22,
+  },
+  verificationModalTitleRow: {
+    flexDirection: "row", alignItems: "center", gap: 9,
+  },
+  verificationModalTitle: {
+    fontSize: 17, lineHeight: 23, fontWeight: "800", color: "#102B26",
+  },
+  verificationModalHint: {
+    fontSize: 12, lineHeight: 18, color: "#64748B", marginTop: 12,
+  },
+  verificationModalFullId: {
+    fontSize: 12.5, lineHeight: 20, color: "#153B30",
+    backgroundColor: "#F4F8F6", borderColor: "#DCE9E2",
+    borderWidth: 1, borderRadius: 9, padding: 12, marginTop: 12,
+    overflow: "hidden",
+  },
+  verificationModalActions: {
+    flexDirection: "row", justifyContent: "flex-end", flexWrap: "wrap",
+    gap: 10, marginTop: 20,
+  },
+  verificationModalClose: {
+    paddingHorizontal: 16, minHeight: 42, justifyContent: "center",
+    borderRadius: 9, borderWidth: 1, borderColor: "#D4E3DA",
+  },
+  verificationModalCloseText: {
+    fontSize: 12.5, fontWeight: "700", color: "#40584A",
+  },
+  verificationModalCopy: {
+    flexDirection: "row", alignItems: "center", justifyContent: "center",
+    gap: 7, paddingHorizontal: 15, minHeight: 42,
+    borderRadius: 9, backgroundColor: "#08765A",
+  },
+  verificationModalCopyText: {
+    fontSize: 12.5, fontWeight: "700", color: "#FFFFFF",
+  },
+
   premiumReviewSubtitle: { fontSize: 11, lineHeight: 16, color: "#64748B", marginTop: 3 },
   premiumDetailColumns: { flexDirection: "row", alignItems: "flex-start", gap: 16 },
   premiumDetailStack: { flexDirection: "column" },
