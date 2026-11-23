@@ -1,3 +1,4 @@
+import { getBackendBaseUrl } from "../../lib/identityVerification";
 import { volunserveTypography as vsType } from "../../constants/volunserveLiveUi";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { useRouter } from "expo-router";
@@ -14,7 +15,7 @@ type PendingIdentity = {
   manualReviewDecision?: string;
   resident?: { fullName?: string; email?: string; barangay?: string; };
 };
-const API = "https://volunserve.onrender.com/api/admin/identity/reviews";
+const API = getBackendBaseUrl() + "/api/admin/identity/reviews";
 const PAGE_SIZE = 5;
 const pendingReview = (item: PendingIdentity) =>
   item.requiresManualReview === true && item.status === "pending" &&

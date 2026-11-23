@@ -1,3 +1,4 @@
+import { getBackendBaseUrl } from "../../lib/identityVerification";
 import { volunserveTypography as vsType } from "../../constants/volunserveLiveUi";
 import { liveUi as designUi } from "../../constants/volunserveLiveUi";
 import { Ionicons } from "@expo/vector-icons";
@@ -22,13 +23,14 @@ import {
 
 import { useUserSession } from "../../lib/useUserSession";
 
-const BACKEND_URL = "https://volunserve.onrender.com";
+const BACKEND_URL = getBackendBaseUrl();
 
 type ReviewFilter = "pending" | "verified" | "retry_required" | "all";
 
 type IdentityReview = {
   uid: string;
   verificationId?: string;
+  diditSummary?: string;
   status?: string;
   identityStatus?: string;
   identityVerified?: boolean;
@@ -758,7 +760,7 @@ function ReviewDetail({
         </Text>
       </View>
 
-      <DocumentScreeningSummary screening={item.documentScreening} />
+      {item.diditSummary ? <Text style={styles.aiMessageText}>{item.diditSummary}</Text> : <DocumentScreeningSummary screening={item.documentScreening} />}
 
       <InfoLine
         label="Verification ID"

@@ -87,9 +87,13 @@ export type SubmitIdentityVerificationInput = {
 
 const FALLBACK_BACKEND_URL = "https://volunserve.onrender.com";
 
-function getBackendBaseUrl() {
+export function getBackendBaseUrl() {
   // The Resident app must always call the main VolunServe backend.
   // The separate AI service is private and is reached only server-to-server.
+  if (process.env.EXPO_PUBLIC_VOLUNSERVE_FIREBASE_TARGET === "staging") {
+    // Staging auth tokens must only reach the dedicated staging backend.
+    return "https://volunserve-backend-staging.onrender.com";
+  }
   let value =
     process.env.EXPO_PUBLIC_IDENTITY_VERIFICATION_API_URL?.trim() ||
     FALLBACK_BACKEND_URL;

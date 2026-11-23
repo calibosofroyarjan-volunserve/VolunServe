@@ -6,7 +6,7 @@ const crypto = require("node:crypto");
 const approved = {
   session_kind: "user",
   status: "Approved",
-  id_verifications: [{ status: "Approved", issuing_state: "PHL", document_type: "Identity Card" }],
+  id_verifications: [{ status: "Approved", issuing_state: "PHL", document_type: "Identity Card", document_subtype: "UMID card" }],
   liveness_checks: [{ status: "Approved" }],
   face_matches: [{ status: "Approved" }],
 };
@@ -32,6 +32,7 @@ assert.equal(JSON.stringify(canonicalizeJson({ b: 2, a: { z: 3, x: "José" } }))
 process.env.DIDIT_WEBHOOK_SECRET = "didit-secret-for-unit-test-only";
 const body = { status: "Approved", event_id: "event-id", vendor_data: "abc", session_id: "session-id" };
 const timestamp = String(Math.floor(Date.now() / 1000));
+body.timestamp = Number(timestamp);
 const signature = crypto.createHmac("sha256", process.env.DIDIT_WEBHOOK_SECRET)
   .update(JSON.stringify(canonicalizeJson(body))).digest("hex");
 const request = { body, headers: { "x-timestamp": timestamp, "x-signature-v2": signature } };

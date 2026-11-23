@@ -1,4 +1,4 @@
-import DiditVerificationPage from "./identity-didit";
+import DiditVerificationPage, { diditAvailable } from "./identity-didit";
 import { liveUi as designUi } from "../constants/volunserveLiveUi";
 import DocumentScreeningSummary from "../components/identity/DocumentScreeningSummary";
 import type { DocumentScreening } from "../lib/identityVerification";
@@ -2930,7 +2930,7 @@ const styles = StyleSheet.create({
 
 // Opt-in launch switch; old verification stays unchanged until Didit is tested.
 export default function IdentityVerificationWeb() {
-  return process.env.EXPO_PUBLIC_DIDIT_ENABLED === "true"
+  return diditAvailable
     ? <DiditVerificationPage />
     : <LegacyIdentityVerificationWeb />;
 }

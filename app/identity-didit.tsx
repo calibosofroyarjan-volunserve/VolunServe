@@ -2,8 +2,11 @@ import React, { useCallback, useEffect, useState } from "react";
 import { ActivityIndicator, AppState, Linking, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { auth } from "../lib/firebase";
 
-const API_BASE = (process.env.EXPO_PUBLIC_IDENTITY_VERIFICATION_API_URL ||
-  "https://volunserve.onrender.com").replace(/\/api\/identity\/(verify|status)\/?$/, "").replace(/\/+$/, "");
+import { getBackendBaseUrl } from "../lib/identityVerification";
+import { volunserveTypography } from "../constants/volunserveLiveUi";
+
+export const diditAvailable = process.env.EXPO_PUBLIC_DIDIT_ENABLED === "true" &&
+  process.env.EXPO_PUBLIC_VOLUNSERVE_FIREBASE_TARGET === "staging";
 
 type VerificationState = {
   identityStatus?: "basic" | "pending" | "verified" | "failed";
@@ -13,10 +16,11 @@ type VerificationState = {
 };
 
 async function authenticatedRequest(path: string, method: "GET" | "POST" = "GET") {
+  if (!diditAvailable) throw new Error("Sandbox verification is disabled.");
   const resident = auth.currentUser;
   if (!resident) throw new Error("Sign in to VolunServe to verify your identity.");
   const token = await resident.getIdToken();
-  const response = await fetch(API_BASE + path, {
+  const response = await fetch(getBackendBaseUrl() + path, {
     method,
     headers: { Authorization: "Bearer " + token, Accept: "application/json" },
   });
@@ -38,7 +42,7 @@ export default function DiditVerificationPage() {
   const [errorMessage, setErrorMessage] = useState("");
 
   const refresh = useCallback(async () => {
-    if (!auth.currentUser) return;
+    if (!diditAvailable || !auth.currentUser) return;
     setRefreshing(true);
     try {
       const result = await authenticatedRequest("/api/identity/didit/sync");
@@ -62,7 +66,7 @@ export default function DiditVerificationPage() {
   }, [refresh]);
 
   async function start() {
-    if (!consent || busy) return;
+    if ((!consent && (!hasSession || state?.identityStatus === "failed")) || busy) return;
     setBusy(true);
     setErrorMessage("");
     try {
@@ -86,12 +90,13 @@ export default function DiditVerificationPage() {
 
   const approved = state?.identityStatus === "verified";
   const manual = state?.requiresManualReview === true;
-  const status = approved ? "Verified Resident" : manual ? "Pending Admin Review" :
+  const failed = state?.identityStatus === "failed";
+  const status = approved ? "Verified Resident" : manual ? "Needs Review" : failed ? "Verification failed" :
     hasSession ? "Verification in progress" : "Ready to verify";
   const description = approved
     ? "Your identity has been verified in VolunServe."
     : manual ? "Our Admin team needs to review the verification result."
-    : hasSession ? "Complete the secure identity checks, then return to this screen."
+    : failed ? "You may start a new verification attempt." : hasSession ? "Complete the secure identity checks, then return to this screen."
     : "Verify a valid government ID and complete a live face check.";
 
   return (
@@ -105,8 +110,8 @@ export default function DiditVerificationPage() {
         <Text style={styles.sectionTitle}>{status}</Text>
         <Text style={styles.description}>{description}</Text>
         {state?.providerStatus ? <Text style={styles.provider}>Verification status: {state.providerStatus}</Text> : null}
-        {state?.sandbox ? <Text style={styles.warning}>Sandbox results cannot grant Verified Resident access.</Text> : null}
-        {!approved && !hasSession ? (
+        {state?.sandbox ? <Text style={styles.warning}>Sandbox simulation for a test resident.</Text> : null}
+        {!approved && !manual && (!hasSession || failed) ? (
           <>
             <View style={styles.step}><Text style={styles.stepText}>1. Present your government-issued ID</Text></View>
             <View style={styles.step}><Text style={styles.stepText}>2. Complete the live face and liveness checks</Text></View>
@@ -124,6 +129,11 @@ export default function DiditVerificationPage() {
             {refreshing ? <ActivityIndicator color="white" /> : <Text style={styles.buttonText}>Refresh Verification Status</Text>}
           </TouchableOpacity>
         ) : null}
+        {hasSession && !manual && !approved && !failed ? (
+          <TouchableOpacity style={styles.button} disabled={busy} onPress={() => void start()}>
+            <Text style={styles.buttonText}>Resume Verification</Text>
+          </TouchableOpacity>
+        ) : null}
         {errorMessage ? <Text style={styles.error}>{errorMessage}</Text> : null}
       </View>
       <Text style={styles.footer}>Verification is processed securely. VolunServe receives the result and does not store raw biometric images in this form.</Text>
@@ -136,8 +146,8 @@ const styles = StyleSheet.create({
   content: { flexGrow: 1, paddingHorizontal: 20, paddingVertical: 32, alignItems: "center" },
   header: { width: "100%", maxWidth: 640, marginBottom: 22 },
   eyebrow: { color: "#0F766E", fontWeight: "800", fontSize: 12, letterSpacing: 2 },
-  heading: { color: "#0F2F5A", fontSize: 28, fontWeight: "800", marginTop: 6 },
-  subheading: { color: "#64748B", marginTop: 7, fontSize: 14 },
+  heading: { fontFamily: volunserveTypography.family, color: "#0F2F5A", fontSize: 28, fontWeight: "800", marginTop: 6 },
+  subheading: { fontFamily: volunserveTypography.family, color: "#64748B", marginTop: 7, fontSize: 14 },
   card: { width: "100%", maxWidth: 640, backgroundColor: "#FFF", borderRadius: 18, padding: 24, borderWidth: 1, borderColor: "#E2E8F0" },
   sectionTitle: { color: "#0F2F5A", fontSize: 20, fontWeight: "800", marginBottom: 8 },
   description: { color: "#475569", lineHeight: 22, fontSize: 14, marginBottom: 12 },

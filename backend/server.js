@@ -5248,6 +5248,7 @@ function identityAdminReviewPayload(verificationSnapshot, userSnapshot) {
   return {
     uid,
     verificationId: cleanText(verification.verificationId || "", 200),
+    diditSummary: verification.provider === "didit" ? cleanText(verification.diditSummary || "", 450) : "",
     verificationMethod: cleanText(verification.verificationMethod || "", 80),
     status: normalizeIdentityStatus(
       verification.status || profile.identityStatus || "basic",
