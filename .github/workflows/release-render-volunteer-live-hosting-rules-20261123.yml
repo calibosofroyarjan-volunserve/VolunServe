@@ -160,7 +160,8 @@ jobs:
             const patched=active.replace(readActive,patchedRead);
             assert.equal(patched.length,active.length-ending.length+'        )\n'.length+addition.length,
               'BLOCKED unrelated Rules content modified');
-            assert(patched.includes('render_resident_created_all_volunteers'));
+            assert(patched.includes('/autoVolunteerReservations/$(request.auth.uid)'),
+              'BLOCKED compact server-owned invitation reservation lookup not patched');
             const dir=process.env.RUNNER_TEMP;
             fs.writeFileSync(path.join(dir,'render-active-rules-original.txt'),active,{mode:0o600});
             fs.writeFileSync(path.join(dir,'render-active-rules-revision.json'),JSON.stringify({
