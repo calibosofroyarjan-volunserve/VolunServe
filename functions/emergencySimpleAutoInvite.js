@@ -110,7 +110,7 @@ function makeApprovedCaseAutoInviteHandler({db,FieldValue,env=process.env,clock=
         tx.create(t.assignmentRef,{caseId,volunteerId:t.uid,
           volunteerName:String(user.fullName||"Volunteer").trim().slice(0,120)||"Volunteer",
           caseTitle:String(c.title||"Emergency Report").trim().slice(0,120),
-          status:"offered",createdBy:after.validatedBy,
+          status:"offered",offerMode:ORIGIN,createdBy:after.validatedBy,
           createdAt:stamp,updatedAt:stamp});
         tx.create(t.notificationRef,{
           userId:t.uid,audience:"volunteer",type:"response_assignment",
@@ -126,4 +126,79 @@ function makeApprovedCaseAutoInviteHandler({db,FieldValue,env=process.env,clock=
     },{maxAttempts:5});
   };
 }
-module.exports={dispatchEnabled,approvedTransition,volunteerAllowed,makeApprovedCaseAutoInviteHandler};
+
+// Server-authoritative Accept/Decline exclusively for the NEW automatic offers.
+// Existing manual tasks keep their exact old Firebase client workflow.
+function makeAutoVolunteerDecisionHandler({db,FieldValue,env=process.env}={}){
+  if(!db||!FieldValue?.serverTimestamp)throw Error("Firestore dependencies required");
+  return async ({uid,caseId,decision}={})=>{
+    if(!dispatchEnabled(env))return result("disabled","explicit_feature_gate_off");
+    if(!UID.test(String(uid||""))||!UID.test(String(caseId||""))||
+      !["accepted","declined"].includes(decision))
+      return result("blocked","invalid_volunteer_case_or_decision");
+    const assignmentId=caseId+"_"+uid;
+    const cRef=ref(db,"disasterCases",caseId);
+    const taskRef=ref(db,"responseAssignments",assignmentId);
+    const reserveRef=ref(db,"autoVolunteerReservations",uid);
+    const lockRef=ref(db,"responderLocks",uid);
+    const batchRef=ref(db,"emergencyAutoDispatchBatches",caseId);
+    const userRef=ref(db,"users",uid);
+    const appRef=ref(db,"volunteerApplications",uid);
+    const originalRef=ref(db,"notifications","auto_response_"+assignmentId);
+    const outcomeRef=ref(db,"notifications","auto_decision_"+assignmentId);
+    const auditRef=ref(db,"adminActivityLogs","auto_decision_"+assignmentId);
+    return db.runTransaction(async tx=>{
+      const [cSnap,task,reserve,lock,batch,user,app,original,outcome,audit]=
+        await Promise.all([cRef,taskRef,reserveRef,lockRef,batchRef,
+          userRef,appRef,originalRef,outcomeRef,auditRef].map(r=>tx.get(r)));
+      const c=cSnap.data()||{},t=task.data()||{},b=batch.data()||{};
+      if(!cSnap.exists||!task.exists||!batch.exists||
+        b.origin!==ORIGIN||c.autoVolunteerDispatch?.origin!==ORIGIN||
+        t.offerMode!==ORIGIN||t.caseId!==caseId||t.volunteerId!==uid)
+        return result("blocked","not_owned_automatic_invitation");
+      if(t.status===decision)return result("already_"+decision);
+      if(t.status!=="offered"||!["waiting","supported"].includes(b.status)||
+        !["validated","assigned","in_progress"].includes(c.status)||
+        c.dispatchBlocked===true||c.closedAt||c.resolvedAt)
+        return result("blocked","offer_no_longer_pending");
+      if(!user.exists||!app.exists||
+        !volunteerAllowed(c,uid,app.data(),user.data(),[]))
+        return result("blocked","volunteer_access_revoked");
+      if(!reserve.exists||reserve.data()?.assignmentId!==assignmentId||
+        reserve.data()?.caseId!==caseId||lock.exists||
+        !original.exists||original.data()?.userId!==uid||
+        outcome.exists||audit.exists)
+        return result("blocked","reservation_or_notification_conflict");
+      const recipient=decision==="accepted"?c.reporterUid:c.validatedBy;
+      if(!UID.test(String(recipient||""))||recipient===uid)
+        return result("blocked","invalid_notification_recipient");
+      const stamp=FieldValue.serverTimestamp();
+      tx.update(taskRef,{status:decision,updatedAt:stamp});
+      if(decision==="accepted"){
+        tx.create(lockRef,{responderUid:uid,assignmentId,caseId,
+          status:"accepted",updatedAt:stamp});
+        tx.update(batchRef,{status:"supported",updatedAt:stamp});
+        tx.update(cRef,{"autoVolunteerDispatch.state":"supported",
+          "autoVolunteerDispatch.updatedAt":stamp,updatedAt:stamp});
+      }else{
+        tx.delete(reserveRef);
+      }
+      tx.create(outcomeRef,{userId:recipient,
+        audience:decision==="accepted"?"resident":"admin",
+        type:decision==="accepted"?"resident_response_update":
+          "emergency_dispatch_escalation",
+        caseId,assignmentId,responderId:uid,
+        title:decision==="accepted"?"Volunteer accepted":"Volunteer declined",
+        message:decision==="accepted"?
+          "A Volunteer accepted the emergency support request.":
+          "One Volunteer declined an emergency support request.",
+        status:decision,read:false,createdAt:stamp});
+      tx.create(auditRef,{action:decision==="accepted"?
+        "Automatic Volunteer Accepted":"Automatic Volunteer Declined",
+        caseId,volunteerUid:uid,performedBy:uid,timestamp:stamp});
+      return result(decision,null,{caseId});
+    },{maxAttempts:5});
+  };
+}
+
+module.exports={dispatchEnabled,approvedTransition,volunteerAllowed,makeApprovedCaseAutoInviteHandler,makeAutoVolunteerDecisionHandler};
