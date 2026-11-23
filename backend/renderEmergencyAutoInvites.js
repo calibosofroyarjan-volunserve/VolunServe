@@ -28,8 +28,13 @@ function config(env=process.env){
   const isStage=project==="volunserve-volunteer-staging";
   const isProduction=project==="volunserve-3aa5b"&&
     env.VOLUNSERVE_RENDER_AUTO_PRODUCTION_APPROVED==="true";
+  const emulator=project==="demo-volunserve-simple-invites"&&
+    env.FIRESTORE_EMULATOR_HOST==="127.0.0.1:8080"&&
+    env.FIREBASE_AUTH_EMULATOR_HOST==="127.0.0.1:9099"&&
+    env.VOLUNSERVE_RENDER_AUTO_EMULATOR_APPROVED==="true";
   return {enabled:env.VOLUNSERVE_RENDER_AUTO_ENABLED==="true"&&
-    approvedProject&&(isStage||isProduction),project,isStage,isProduction};
+    approvedProject&&(isStage||isProduction||emulator),
+    project,isStage,isProduction,emulator};
 }
 function isRecentSubmission(c,uid,now,{staging=false}={}){
   const created=c?.createdAt?.toMillis?.();
