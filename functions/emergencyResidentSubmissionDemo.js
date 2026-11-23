@@ -83,16 +83,18 @@ function makeResidentSubmissionDemoHandler({db,FieldValue,env=process.env}={}){
       if(!c.exists)return response("blocked",{reason:"case_removed"});
       const data=c.data()||{};
       if(b.exists){
-        return b.data()?.origin===ORIGIN&&
-          ["dispatching","waiting","supported"].includes(b.data()?.status)?
-          response("resume"):response("blocked",{reason:"conflicting_dispatch"});
+        if(b.data()?.origin!==ORIGIN)
+          return response("blocked",{reason:"conflicting_dispatch"});
+        if(b.data()?.fanoutComplete===true)return response("already_started");
+        return ["dispatching","waiting","supported"].includes(b.data()?.status)?
+          response("resume"):response("blocked",{reason:"unexpected_batch_state"});
       }
       if(legacy.exists||data.autoVolunteerDispatch?.state||
          !demoIncidentAllowed(data,env))
         return response("blocked",{reason:"case_changed_or_previously_dispatched"});
       const stamp=FieldValue.serverTimestamp();
       tx.create(batchRef,{caseId,status:"dispatching",origin:ORIGIN,
-        wave:1,volunteerCount:0,createdAt:stamp});
+        wave:1,volunteerCount:0,fanoutComplete:false,createdAt:stamp});
       tx.update(caseRef,{
         status:"assigned",dispatchBlocked:false,
         autoVolunteerDispatch:{state:"dispatching",origin:ORIGIN,
@@ -155,7 +157,7 @@ function makeResidentSubmissionDemoHandler({db,FieldValue,env=process.env}={}){
       // Never downgrade supported state if a Volunteer accepted quickly.
       const state=b.data()?.status==="supported"?"supported":
         total?"waiting":"no_eligible_volunteers";
-      tx.update(batchRef,{status:state,volunteerCount:total,updatedAt:stamp});
+      tx.update(batchRef,{status:state,volunteerCount:total,fanoutComplete:true,updatedAt:stamp});
       tx.update(caseRef,{
         "autoVolunteerDispatch.state":state,
         "autoVolunteerDispatch.attemptedCount":total,
