@@ -11,6 +11,7 @@ const {
 const { reconcileCommunityEventCertificates } = require("./communityCertificates");
 const { combineApprovedBudget } = require("./assistanceDonationBudget");
 const { probeIdentityAiReadiness } = require("./identityAiReadiness");
+const { registerDiditIdentityRoutes } = require("./diditIdentityRoutes");
 const {isVerifiedFirebaseToken, isCompletedVolunServeProfile} = require("./verifiedFirebaseToken");
 const {
   getProfileRole,
@@ -4998,6 +4999,10 @@ app.get(
     }
   },
 );
+// New Didit flow is isolated behind explicit environment flags.
+// Legacy verification remains available until sandbox and live tests pass.
+registerDiditIdentityRoutes(app, { db, FieldValue, requireFirebaseUser });
+
 app.post(
   "/api/identity/verify",
   requireFirebaseUser,
