@@ -1,0 +1,54 @@
+name: Defense fast mode all approved Volunteers - STAGING ONLY
+on:
+  push:
+    branches:
+      - fix/staging-all-approved-volunteers-any-barangay-20261123
+  pull_request:
+    branches:
+      - feat/emergency-auto-dispatch-server-staging-20261115
+permissions:
+  contents: read
+jobs:
+  staging-all-volunteers:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      VOLUNSERVE_AUTO_VOLUNTEER_DISPATCH: disabled
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - name: Strict five-file staging-only scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --name-status 5b65255e4ca094de67ac995cdd42b630d0d4d6a6 HEAD >/tmp/defense-scope
+          test "$(wc -l </tmp/defense-scope)" -eq 5
+          while IFS="$(printf '\t')" read -r state file; do
+            case "$state:$file" in
+              "M:backend/emergencyAutoDispatchStagingServer.js"|"M:backend/stagingBulkVolunteerOffers.js"|"A:backend/stagingAllVolunteerDefensePlanner.js"|"A:backend/test-stagingAllVolunteerDefense.cjs"|"A:.github/workflows/verify-staging-all-volunteers-defense-20261123.yml") ;;
+              *) echo "BLOCKED non-staging change: $state $file"; exit 1 ;;
+            esac
+          done </tmp/defense-scope
+          test -z "$(git diff --name-only 5b65255e4ca094de67ac995cdd42b630d0d4d6a6 HEAD -- backend/server.js functions/index.js)"
+          test "$VOLUNSERVE_AUTO_VOLUNTEER_DISPATCH" = disabled
+      - name: Install backend dependencies
+        run: npm ci --prefix backend --ignore-scripts --no-audit --no-fund
+      - name: Syntax checks
+        run: |
+          node --check backend/stagingAllVolunteerDefensePlanner.js
+          node --check backend/stagingBulkVolunteerOffers.js
+          node --check backend/emergencyAutoDispatchStagingServer.js
+          node --check backend/test-stagingAllVolunteerDefense.cjs
+      - name: Actual in-memory Firestore offers, Accept/Decline, and regression suites
+        run: |
+          node --test backend/test-stagingAllVolunteerDefense.cjs backend/test-stagingAutoInviteAfterValidation.cjs backend/test-stagingFreshEndToEnd.cjs backend/test-staging002BulkAcceptanceVerifier.cjs backend/test-staging002WaveStopVerification.cjs
+      - name: Production backend regression
+        run: npm run check --prefix backend
+      - name: Never touch production data or deploy
+        run: echo "Staging fixed-fictional case 002 only. No production imports, Rules, Cloud Functions or real Volunteer notifications."

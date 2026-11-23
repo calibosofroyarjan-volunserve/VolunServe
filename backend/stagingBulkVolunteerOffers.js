@@ -9,6 +9,7 @@ const {Timestamp}=require("firebase-admin/firestore");
 const {deadlineMs,toIso}=require("./staging002OfferDeadline");
 const {chooseAllEligibleWave}=require("../functions/emergencyAllEligibleWavePlanner");
 const {validateVolunteer}=require("../functions/emergencyVolunteerWavePlanner");
+const {chooseDefenseAllVolunteers,validateDefenseVolunteer}=require("./stagingAllVolunteerDefensePlanner");
 const known=require("../functions/sjdmBarangays.json");
 const {E2E_CASE_ID,recognizedStagingCase}=require("./stagingVolunteerTask");
 const CASE_ID=E2E_CASE_ID;
@@ -24,7 +25,7 @@ const lockRef=(db,uid)=>db.collection("responderLocks").doc(uid);
 const userRef=(db,uid)=>db.collection("users").doc(uid);
 const noteRef=(db,uid)=>db.collection("notifications").doc("auto_response_"+CASE_ID+"_"+uid);
 const auditRef=(db,uid)=>db.collection("adminActivityLogs").doc("auto_offer_"+CASE_ID+"_"+uid);
-async function startBatchOffers(db,adminUid,now=Date.now()){
+async function startBatchOffers(db,adminUid,now=Date.now(),{allAvailableNoBarangay=false}={}){
   if(!uidOK(adminUid))return fail("approved_staging_admin_required");
   const caseSnap=await caseRef(db).get();
   if(!caseSnap.exists||!recognizedStagingCase(caseSnap.data(),CASE_ID))
@@ -61,11 +62,16 @@ async function startBatchOffers(db,adminUid,now=Date.now()){
     const person=await userRef(db,uid).get();
     return {uid,application:data,applicationRef:app.ref,user:person.exists?person.data()||{}:{}};
   }));
-  const plan=chooseAllEligibleWave(incident,roster.filter(Boolean),{
-    knownBarangays:known,neighborsByBarangay:neighbors,
-    activeAssignments:busy.docs.map(s=>s.data()),
-    existingAssignments:caseAssignments.docs.map(s=>s.data())
-  });
+  const activeAssignments=busy.docs.map(s=>s.data());
+  // Explicit staging-defense opt-in only; all approved+verified AVAILABLE
+  // fictional Volunteers are invited regardless of barangay or skills.
+  const plan=allAvailableNoBarangay===true?
+    chooseDefenseAllVolunteers(incident,roster.filter(Boolean),{activeAssignments}):
+    chooseAllEligibleWave(incident,roster.filter(Boolean),{
+      knownBarangays:known,neighborsByBarangay:neighbors,
+      activeAssignments,
+      existingAssignments:caseAssignments.docs.map(s=>s.data())
+    });
   if(plan.action!=="offer_all")return fail(plan.action);
   const targets=plan.volunteers;
   const applicationRefs=new Map(roster.filter(Boolean).map(x=>[x.uid,x.applicationRef]));
@@ -95,10 +101,11 @@ async function startBatchOffers(db,adminUid,now=Date.now()){
       if(a.exists||reservation.exists||lock.exists||notice.exists||audit.exists||
          !user.exists||!application.exists)
         return fail("candidate_busy_or_conflicting_records");
-      const valid=validateVolunteer(live,{
-        uid,user:user.data(),application:application.data()
-      },{knownBarangays:known,neighborsByBarangay:neighbors,
-        activeAssignments:busy.docs.map(d=>d.data())});
+      const candidate={uid,user:user.data(),application:application.data()};
+      const valid=allAvailableNoBarangay===true?
+        validateDefenseVolunteer(live,candidate,{activeAssignments}):
+        validateVolunteer(live,candidate,{knownBarangays:known,
+          neighborsByBarangay:neighbors,activeAssignments});
       if(!valid.eligible||valid.wave!==plan.wave)
         return fail("candidate_no_longer_eligible");
       changes.push({uid,name:String(user.data().fullName||
@@ -139,6 +146,7 @@ async function startBatchOffers(db,adminUid,now=Date.now()){
         updatedAt:stamp},
       updatedAt:stamp});
     return {status:"offered",wave:plan.wave,offered:targets.length,
+      ...(allAvailableNoBarangay===true?{scope:"all_approved_available_test_volunteers"}:{}),
       expiresAtMs,fullWaveAtomic:true};
   });
 }
