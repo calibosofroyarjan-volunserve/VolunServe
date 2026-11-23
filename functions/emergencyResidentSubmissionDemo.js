@@ -36,11 +36,17 @@ function demoIncidentAllowed(data,env=process.env){
   const project=String(env.GCLOUD_PROJECT||env.GOOGLE_CLOUD_PROJECT||"");
   // Staging requires an explicit non-real synthetic fixture; the emulator
   // itself is entirely fictional and can use the normal Resident create form.
-  return project==="demo-volunserve-simple-invites" ||
-    (project==="volunserve-volunteer-staging"&&
-     data.testOnly===true&&data.dispatchBlocked===true&&
-     data.source==="staging_synthetic_e2e"&&
-     data.title.startsWith("TEST ONLY"));
+  if(project==="demo-volunserve-simple-invites")return true;
+  // An isolated staging Resident may submit a deliberately labeled fictional
+  // TEST ONLY report with the existing real Resident form fields. NEVER allow
+  // normal real reports or unmarked records to trigger a demo invitation.
+  if(project!=="volunserve-volunteer-staging" ||
+     !data.title.startsWith("TEST ONLY - "))return false;
+  return (data.testOnly===true && data.dispatchBlocked===true &&
+          data.source==="staging_synthetic_e2e") ||
+         (data.source==="resident_emergency_assistance" &&
+          data.requestKind==="emergency_assistance" &&
+          data.severity==="low" && data.dispatchBlocked!==false);
 }
 
 function makeResidentSubmissionDemoHandler({db,FieldValue,env=process.env}={}){
