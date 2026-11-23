@@ -1,0 +1,64 @@
+name: QA Hide Facial Similarity Score In UI (NO DEPLOY)
+on:
+  push:
+    branches: [fix/live-hide-face-scores-20261123]
+permissions:
+  contents: read
+jobs:
+  ui-security-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      CI: 'true'
+      EXPO_NO_TELEMETRY: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Assert only 3 UI files changed and face verification remains intact
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const assert=require('node:assert/strict'),fs=require('fs'),cp=require('child_process');
+          const base='36f27162c7bd09ed7ef377c38dbc5f4b8be08959';
+          const actual=cp.execFileSync('git',['diff','--name-only',base,'HEAD'],{encoding:'utf8'}).trim().split('\n').sort();
+          assert.deepEqual(actual,[
+            '.github/workflows/qa-hide-face-score-ui-20261123.yml',
+            'app/(admin)/identity-reviews.tsx',
+            'app/identity-verification.web.tsx',
+            'app/identity-verification.tsx'
+          ].sort());
+          const review=fs.readFileSync('app/(admin)/identity-reviews.tsx','utf8');
+          assert(review.includes('faceComparisonCompleted'));
+          assert(review.includes('Compared — Admin review required'));
+          assert(review.includes('Not evaluated'));
+          assert(!review.includes('(item.matchScore * 100)'));
+          assert(!review.includes('preliminary similarity'));
+          for(const gate of [
+            'issuerReviewAttested',
+            'onReject={() => void saveDecision("reject")}',
+            'selected.reviewTrack === "blurry_id_review"',
+            'premiumEvidenceTiles',
+            '/api/admin/identity/reviews/',
+            '<VerificationIdLine id={item.verificationId} />'
+          ]) assert(review.includes(gate),'Missing identity Admin safeguard: '+gate);
+          for(const file of ['app/identity-verification.web.tsx','app/identity-verification.tsx']){
+            const src=fs.readFileSync(file,'utf8');
+            assert(!src.includes('match score.'),'Visible numeric result copy still present: '+file);
+            assert(src.includes('matchScore:') || src.includes('matchScore:'),'Internal face result mapping lost: '+file);
+          }
+          console.log('PASS no visible numeric face score, unchanged internal result handling and narrow UI scope');
+          NODE
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+      - name: TypeScript check
+        run: npx tsc --noEmit --incremental false
+      - name: Static Expo web build (no deploy)
+        run: npx expo export --platform web --clear
+      - name: No production writes
+        run: echo 'No Firebase, backend or private data accessed.'
