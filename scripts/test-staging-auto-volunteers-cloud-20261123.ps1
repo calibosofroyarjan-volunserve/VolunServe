@@ -1,4 +1,4 @@
-# VolunServe isolated FICTIONAL staging — terminal Cloud Auth E2E.
+# VolunServe isolated FICTIONAL staging - terminal Cloud Auth E2E.
 # Default mode is READ-ONLY. No production Firestore/Render, no resets.
 # Do not paste passwords, ID tokens, or real personal data in chat.
 param(
@@ -82,7 +82,7 @@ function ConfirmFictionalAction([string]$Prompt, [string]$Expected) {
   Write-Host $Prompt -ForegroundColor Yellow
   return (Read-Host "Type $Expected to proceed") -ceq $Expected
 }
-Write-Host "VolunServe — ISOLATED STAGING CLOUD E2E (no-barangay)" -ForegroundColor Cyan
+Write-Host "VolunServe - ISOLATED STAGING CLOUD E2E (no-barangay)" -ForegroundColor Cyan
 Write-Host "Fixed fictional case: $FixedCase | Production is NEVER targeted."
 if (-not $AllowFictionalWrites) {
   Write-Host "READ-ONLY MODE: No accounts, tasks, notifications or Firestore records will be changed." -ForegroundColor Cyan
