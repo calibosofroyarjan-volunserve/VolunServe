@@ -26,19 +26,19 @@ jobs:
             package-lock.json
             functions/package-lock.json
             backend/package-lock.json
-      - name: Eight-file guarded integration + actual emulator QA allowlist
+      - name: Ten-file guarded integration + invited-only Firestore Rules allowlist
         shell: bash
         run: |
           set -euo pipefail
           git diff --name-status a1c66af149b6a16d3ae4d3ab8ae3551c9bc06782 HEAD >/tmp/scope
-          test "$(wc -l </tmp/scope)" -eq 8
+          test "$(wc -l </tmp/scope)" -eq 10
           while IFS="$(printf '\t')" read -r st file; do
             case "$st:$file" in
-              "A:functions/emergencySimpleAutoInvite.js"|"A:functions/test-emergencySimpleAutoInvite.cjs"|"M:functions/index.js"|"M:app/(tabs)/volunteer.web.tsx"|"M:app/(tabs)/volunteer.tsx"|"A:.github/workflows/verify-guarded-live-auto-volunteer-integration-20261123.yml"|"A:functions/test-emergencySimpleAutoInviteRealEmulator.cjs"|"A:.github/workflows/verify-real-firebase-auto-invite-auth-e2e-20261123.yml") ;;
+              "A:functions/emergencySimpleAutoInvite.js"|"A:functions/test-emergencySimpleAutoInvite.cjs"|"M:functions/index.js"|"M:app/(tabs)/volunteer.web.tsx"|"M:app/(tabs)/volunteer.tsx"|"A:.github/workflows/verify-guarded-live-auto-volunteer-integration-20261123.yml"|"A:functions/test-emergencySimpleAutoInviteRealEmulator.cjs"|"A:.github/workflows/verify-real-firebase-auto-invite-auth-e2e-20261123.yml"|"M:firestore.rules"|"A:.github/workflows/qa-automatic-invite-case-read-rules-20261123.yml") ;;
               *) echo "BLOCKED: unrelated production file $st $file"; exit 1 ;;
             esac
           done </tmp/scope
-          test -z "$(git diff --name-only a1c66af149b6a16d3ae4d3ab8ae3551c9bc06782 HEAD -- backend/server.js firestore.rules app/'(admin)'/admin-cases.tsx)"
+          test -z "$(git diff --name-only a1c66af149b6a16d3ae4d3ab8ae3551c9bc06782 HEAD -- backend/server.js app/'(admin)'/admin-cases.tsx)"
       - name: Install pinned dependencies
         run: |
           npm ci --ignore-scripts --no-audit --no-fund
