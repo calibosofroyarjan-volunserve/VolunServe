@@ -6,6 +6,9 @@ param(
   [int]$VolunteerSlot = 0,
   [switch]$AllowFictionalWrites,
   [switch]$RenewExpiredPending,
+  [switch]$QuickAccept,
+  [string]$AdminEmail = "",
+  [string]$VolunteerPassword = "",
   [switch]$DemoOnly
 )
 Set-StrictMode -Version Latest
@@ -69,10 +72,10 @@ function CloudPost([string]$Path, [string]$Token, [hashtable]$Body) {
     "Cache-Control" = "no-store"
   } -Body ($Body | ConvertTo-Json -Compress) -ContentType "application/json" -TimeoutSec 60
 }
-function GetStagingToken([string]$Role, [string]$DefaultEmail = "") {
+function GetStagingToken([string]$Role, [string]$DefaultEmail = "", [string]$ProvidedPassword = "") {
   # Exact pre-registered fictional Volunteer slots do not need email typing.
   # Admin email is never hardcoded or copied from private user data.
-  if ($DefaultEmail -and $Role -like "Volunteer *") {
+  if ($DefaultEmail -and ($Role -like "Volunteer *" -or $Role -eq "Admin")) {
     $email = $DefaultEmail
     Write-Host ("{0} fixed fictional staging email: {1}" -f $Role,$email) -ForegroundColor Cyan
   } else {
@@ -83,7 +86,13 @@ function GetStagingToken([string]$Role, [string]$DefaultEmail = "") {
   if (-not $email -or $email -notmatch '^[^@\s]+@[^@\s]+$') {
     Fail "A valid isolated staging Firebase email is required."
   }
-  $secure = Read-Host "$Role password (hidden; never share)" -AsSecureString
+  $secure = if ($ProvidedPassword) {
+    # Local fictional QA only; passing a password on command line can expose it
+    # in terminal history/process arguments. Never put credentials in Git.
+    ConvertTo-SecureString -String $ProvidedPassword -AsPlainText -Force
+  } else {
+    Read-Host "$Role password (hidden; never share)" -AsSecureString
+  }
   $pointer = [IntPtr]::Zero
   $plaintext = $null
   try {
@@ -149,7 +158,10 @@ if ($health.service -ne "volunserve-emergency-matching-staging" -or
   Fail "Staging health/project isolation is not verified. No login or writes attempted."
 }
 Write-Host "Render staging and isolated Firebase connection: PASS" -ForegroundColor Green
-$adminToken = GetStagingToken "Admin"
+if ($QuickAccept -and (-not $AllowFictionalWrites -or -not $RenewExpiredPending -or $VolunteerSlot -notin @(1,2,3))) {
+  Fail "QuickAccept only works for explicit fictional -AllowFictionalWrites -RenewExpiredPending and -VolunteerSlot 1/2/3."
+}
+$adminToken = GetStagingToken "Admin" $AdminEmail
 $preflight = CloudGet "/api/admin/emergency-auto/e2e-002/preflight" $adminToken
 Write-Host ("Fictional report: " + [string]$preflight.status)
 $batch = CloudGet "/api/admin/emergency-auto/e2e-002/bulk-status" $adminToken
@@ -200,7 +212,12 @@ if ($RenewExpiredPending) {
   if ($batch.status -ne "waiting" -or [int]$batch.accepted -lt 1) {
     Fail "Renewal requires the fixed fictional waiting batch with an existing accepted task."
   }
-  $ok = ConfirmFictionalAction "Renew ONLY an expired, still-pending offer for fictional Volunteer ${VolunteerSlot}? Existing accepted offers will not change." ("RENEW-002-" + $VolunteerSlot)
+  $ok = if ($QuickAccept) {
+    Write-Host ("Quick test: renewing ONLY expired fictional Volunteer slot {0}; accepted assignment preserved." -f $VolunteerSlot) -ForegroundColor Cyan
+    $true
+  } else {
+    ConfirmFictionalAction "Renew ONLY an expired, still-pending offer for fictional Volunteer ${VolunteerSlot}? Existing accepted offers will not change." ("RENEW-002-" + $VolunteerSlot)
+  }
   if ($ok) {
     $renewed = CloudPost "/api/admin/emergency-auto/e2e-002/renew-pending" $adminToken @{
       caseId = $FixedCase
@@ -214,14 +231,22 @@ if ($RenewExpiredPending) {
   }
 }
 if ($VolunteerSlot -ne 0) {
-  $volunteerToken = GetStagingToken ("Volunteer " + $VolunteerSlot) $FixedVolunteerEmail[$VolunteerSlot]
+  $volunteerToken = GetStagingToken ("Volunteer " + $VolunteerSlot) $FixedVolunteerEmail[$VolunteerSlot] $VolunteerPassword
   $task = CloudGet "/api/staging/volunteer/e2e-002/bulk-task" $volunteerToken
   Write-Host ("Volunteer {0} invitation: {1}; canRespond={2}" -f $VolunteerSlot,$task.status,$task.canRespond) -ForegroundColor Cyan
   if ($AllowFictionalWrites -and $task.status -eq "offered" -and $task.canRespond -eq $true) {
-    $choice = Read-Host "Optional: type ACCEPT or DECLINE to decide YOUR OWN fictional offer, or Enter to skip"
-    $choice = $choice.Trim().ToUpperInvariant()
+    $choice = if ($QuickAccept) {
+      Write-Host "Quick test: ACCEPT only the authenticated fictional Volunteer invitation." -ForegroundColor Cyan
+      "ACCEPT"
+    } else {
+      (Read-Host "Optional: type ACCEPT or DECLINE to decide YOUR OWN fictional offer, or Enter to skip").Trim().ToUpperInvariant()
+    }
     if ($choice -in @("ACCEPT","DECLINE")) {
-      $confirm = ConfirmFictionalAction "This changes only YOUR OWN fixed fictional staging invitation." ("$choice-002")
+      $confirm = if ($QuickAccept) {
+        $true
+      } else {
+        ConfirmFictionalAction "This changes only YOUR OWN fixed fictional staging invitation." ("$choice-002")
+      }
       if ($confirm) {
         $decision = if ($choice -eq "ACCEPT") { "accepted" } else { "declined" }
         $outcome = CloudPost "/api/staging/volunteer/e2e-002/bulk-respond" $volunteerToken @{
