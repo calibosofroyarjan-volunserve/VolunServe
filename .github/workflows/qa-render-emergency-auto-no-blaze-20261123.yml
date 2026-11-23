@@ -33,9 +33,10 @@ jobs:
           node --check backend/renderEmergencyAutoInvites.js
           node --test backend/test-renderEmergencyAutoInvites.cjs
       - name: Existing production backend certificate and Auth regressions
+        working-directory: backend
         run: |
-          node --test backend/test-communityCertificateAutoSync.js
-          node --test backend/tests/verifiedFirebaseToken.test.js
+          node --test test-communityCertificateAutoSync.js
+          node --test tests/verifiedFirebaseToken.test.js
       - name: TypeScript web/mobile compilation
         run: npx tsc --noEmit --pretty false
       - name: Explicitly NO Firebase/Render/live deployment
