@@ -1,0 +1,67 @@
+name: Validate Live-Derived Render Volunteer Invite Hosting and Rules (NO DEPLOY)
+on:
+  push:
+    branches:
+      - release/live-render-volunteer-auto-20261123
+permissions:
+  contents: read
+concurrency:
+  group: qa-live-render-volunteer-auto-20261123
+  cancel-in-progress: true
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    env:
+      CI: "true"
+      EXPO_NO_TELEMETRY: "1"
+      EXPO_PUBLIC_VOLUNSERVE_ENV: production
+      EXPO_PUBLIC_RENDER_EMERGENCY_AUTO_ENABLED: "true"
+      EXPO_PUBLIC_IDENTITY_VERIFICATION_API_URL: https://volunserve.onrender.com
+      GCLOUD_PROJECT: demo-volunserve-live-render-rules
+      FIRESTORE_EMULATOR_HOST: 127.0.0.1:8080
+      FIREBASE_CLI_DISABLE_TELEMETRY: "1"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: false
+      - name: Require exact currently published source as ancestor
+        run: |
+          git merge-base --is-ancestor 0b14cd87e57dae72072942894b2b3d3137ac7a16 HEAD
+          test -f components/auth/EmailFirstSignup.tsx
+          test -f lib/renderEmergencyAuto.ts
+          test -f scripts/test-render-volunteer-live-rules.cjs
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - name: Install exact dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Firestore Rules actual emulator authorization
+        run: npx firebase-tools emulators:exec --project demo-volunserve-live-render-rules --only firestore "node --test scripts/test-render-volunteer-live-rules.cjs"
+      - name: TypeScript web/mobile
+        run: npx tsc --noEmit --incremental false
+      - name: Export production website without touching Hosting
+        run: |
+          npx expo export --platform web --clear
+          node scripts/verify-hosting-release.cjs
+      - name: Verify branded Signup and Render source linked in output
+        run: |
+          test -f dist/volunserve-release.json
+          node - <<'NODE'
+          const assert=require('node:assert/strict'),fs=require('fs');
+          const marker=JSON.parse(fs.readFileSync('dist/volunserve-release.json','utf8'));
+          assert.equal(marker.firebaseProject,'volunserve-3aa5b');
+          assert.equal(marker.revision,process.env.GITHUB_SHA);
+          assert(fs.readFileSync('components/DisasterResponse.web.tsx','utf8').includes('requestRenderEmergencyAuto'));
+          assert(fs.readFileSync('app/(tabs)/notifications.tsx','utf8').includes('respondRenderEmergencyAuto'));
+          assert(fs.readFileSync('components/auth/EmailFirstSignup.tsx','utf8').includes('if (!consent) {'));
+          console.log('PASS: live-derived Signup remains guarded; Render invitation sources compile');
+          NODE
+      - name: NO PRODUCTION DEPLOYMENT
+        run: echo "QA only. No Firestore writes, no live Hosting deploy, no Render activation."
