@@ -177,6 +177,10 @@ jobs:
           NODE
       - name: Real Firestore Rules emulator authorization test on PATCHED active source
         working-directory: site
+        env:
+          # The emulator MUST NOT inherit production credentials from prior step.
+          GOOGLE_APPLICATION_CREDENTIALS: ""
+          FIREBASE_SERVICE_ACCOUNT_JSON: ""
         run: |
           npx firebase-tools emulators:exec --project demo-volunserve-live-render-rules --only firestore "node --test scripts/test-render-volunteer-live-rules.cjs"
       - name: TypeScript and exact production web export
