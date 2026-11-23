@@ -86,7 +86,13 @@ function makeEngine({db,FieldValue,env=process.env,clock=()=>Date.now()}={}){
     const batchRef=ref(db,"emergencyAutoDispatchBatches",caseId);
     const legacyRef=ref(db,"emergencyAutoDispatch",caseId);
     const initial=await caseRef.get();
-    if(!initial.exists||!isRecentSubmission(initial.data(),uid,clock(),{staging:gate.isStage}))
+    const initialData=initial.data()||{};
+    const canResume=initial.exists &&
+      initialData.reporterUid===uid &&
+      initialData.autoVolunteerDispatch?.origin===ORIGIN &&
+      !initialData.closedAt && !initialData.resolvedAt;
+    if(!initial.exists||
+       (!canResume&&!isRecentSubmission(initialData,uid,clock(),{staging:gate.isStage})))
       return result("blocked","report_not_eligible");
     const roster=await approvedRoster(db);
     // Claim once; a repeated request on a completed batch is a safe no-op.
@@ -109,7 +115,9 @@ function makeEngine({db,FieldValue,env=process.env,clock=()=>Date.now()}={}){
       tx.create(batchRef,{caseId,origin:ORIGIN,status:"dispatching",
         completed:false,volunteerCount:0,reporterUid:uid,leaseAt:stamp(),
         createdAt:stamp()});
-      tx.update(caseRef,{status:"assigned",
+      // Keep report.status="reported" and verificationStatus pending so
+      // existing Admin Validate Report workflow and security rules still work.
+      tx.update(caseRef,{
         autoVolunteerDispatch:{origin:ORIGIN,state:"dispatching",
           attemptedCount:0,updatedAt:stamp()},updatedAt:stamp()});
       return result("claimed");
