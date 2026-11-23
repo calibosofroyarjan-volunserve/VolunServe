@@ -25,6 +25,7 @@ const {
 } = require("./selectedIdPolicy");
 const { reviewIssuerEvidence } = require("./identityIssuerReviewPolicy");
 const { classifyHybridDocumentPrecheck } = require("./identityHybridPrecheckDecision");
+const { assessAutomaticIdentityApproval } = require("./identityAutoApprovalGateway");
 const {
   parseConsentedIdentityEvidence,
   uploadIdentityEvidence,
@@ -5472,6 +5473,28 @@ app.post(
       const verificationId = cleanText(
         aiResult?.verificationId || `identity_${uid}_${Date.now()}`, 200,
       );
+      // Fail-closed automatic identity readiness. The face landmark score is
+      // NOT calibrated to probability and the current AI still lacks validated
+      // PAD/liveness and independent government issuer authentication.
+      // No issuerValidator/padValidator are connected to production yet.
+      // The gateway automatically records why the Resident needs Admin review,
+      // without granting new account privileges or accepting client proof flags.
+      const automaticApproval = await assessAutomaticIdentityApproval({
+        screening: documentScreening,
+        face: {
+          result: "not_validated",
+          algorithmValidated: false,
+          calibrationValidated: false,
+          samePersonAssertion: false,
+          verificationId,
+        },
+        attempt: {
+          uid,
+          verificationId,
+          freshCapture: false,
+          consentedEvidenceAvailable: Boolean(newEvidenceAssets),
+        },
+      });
 
       const outcome = await db.runTransaction(async (transaction) => {
         const [userSnapshot, verificationSnapshot, evidenceSnapshot] = await Promise.all([
@@ -5547,6 +5570,10 @@ app.post(
           reviewedByName: FieldValue.delete(),
           matchScore,
           livenessScore,
+          // This records assessment only. Until independent provider
+          // validators are integrated, any face match remains Pending.
+          automaticVerificationEligible: automaticApproval.eligible,
+          automaticVerificationReason: automaticApproval.reason,
           documentScreening,
           reviewTrack: finalReviewTrack,
           // Public reviews expose only availability; actual Cloudinary IDs live
@@ -5611,6 +5638,8 @@ app.post(
         return {
           ok: true, status: result.status, verificationId, decision,
           matchScore, livenessScore, documentScreening, reviewTrack: finalReviewTrack, message: resultMessage,
+          automaticVerificationEligible: automaticApproval.eligible,
+          automaticVerificationReason: automaticApproval.reason,
           attemptCount, maxAttempts: MAX_IDENTITY_AI_ATTEMPTS,
           attemptsRemaining: MAX_IDENTITY_AI_ATTEMPTS - attemptCount,
           requiresManualReview: result.requiresManualReview,
