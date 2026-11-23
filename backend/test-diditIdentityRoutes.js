@@ -20,6 +20,7 @@ assert.equal(evaluateDiditDecision({
 assert.equal(evaluateDiditDecision({
   ...approved, status: "In Review",
 }).review, true, "review is not approval");
+assert.equal(evaluateDiditDecision({ status: "Declined" }).decision, "declined", "first decline should allow retries");
 assert.equal(evaluateDiditDecision({ status: "In Progress" }).decision, "processing");
 assert.equal(evaluateDiditDecision({ status: "Expired" }).decision, "failed");
 assert.equal(JSON.stringify(canonicalizeJson({ b: 2, a: { z: 3, x: "José" } })),
