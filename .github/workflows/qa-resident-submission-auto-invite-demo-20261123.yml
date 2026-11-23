@@ -51,6 +51,7 @@ jobs:
           node --check functions/emergencyResidentSubmissionDemo.js
           node --check functions/test-emergencyResidentSubmissionDemoRealEmulator.cjs
           node --test functions/test-emergencySimpleAutoInvite.cjs
+          node --test functions/test-emergencyResidentSubmissionDemoGates.cjs
           npx tsc --noEmit --incremental false
       - name: Isolated Firebase Functions emulator flags (never production)
         shell: bash
