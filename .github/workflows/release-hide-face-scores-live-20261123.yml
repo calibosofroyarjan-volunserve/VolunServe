@@ -1,0 +1,195 @@
+# One-time Firebase Hosting-only revision-pinned deploy, with immutable rollback.
+# The diverged live-protected application tree is NEVER built or published.
+name: Release No-Numeric-Face-Score Identity Reviews (Hosting Only)
+on:
+  push:
+    branches: [live-protected]
+    paths:
+      - '.github/workflows/release-hide-face-scores-live-20261123.yml'
+permissions:
+  contents: read
+concurrency:
+  group: volunserve-production-hosting-release
+  cancel-in-progress: false
+jobs:
+  publish:
+    if: github.repository == 'calibosofroyarjan-volunserve/VolunServe' && github.ref == 'refs/heads/live-protected'
+    environment: production
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      CI: 'true'
+      EXPO_NO_TELEMETRY: '1'
+      EXPO_PUBLIC_VOLUNSERVE_ENV: production
+      EXPO_PUBLIC_IDENTITY_VERIFICATION_API_URL: https://volunserve.onrender.com
+      PROJECT: volunserve-3aa5b
+      SITE: volunserve-3aa5b
+      BASE_SHA: 36f27162c7bd09ed7ef377c38dbc5f4b8be08959
+      EXPECTED_LIVE: 36f27162c7bd09ed7ef377c38dbc5f4b8be08959
+      SOURCE_SHA: f4fe45080571265df1321560f0f4d98a80628f00
+    steps:
+      - name: Checkout protected workflow controller ONLY
+        uses: actions/checkout@v4
+        with:
+          path: controller
+          ref: "${{ github.sha }}"
+          fetch-depth: 0
+          submodules: false
+      - name: Checkout pinned reviewed, published-derived website
+        uses: actions/checkout@v4
+        with:
+          path: site
+          ref: f4fe45080571265df1321560f0f4d98a80628f00
+          fetch-depth: 0
+          submodules: false
+      - name: Fail closed if live site moved or code scope includes old modules
+        working-directory: site
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const assert=require('node:assert/strict');
+          const cp=require('node:child_process'),fs=require('node:fs');
+          const git=(...args)=>cp.execFileSync('git',args,{encoding:'utf8'}).trim();
+          (async()=>{
+            const base=process.env.BASE_SHA,source=process.env.SOURCE_SHA;
+            const path='.github/workflows/release-hide-face-scores-live-20261123.yml';
+            assert.equal(git('rev-parse','HEAD'),source);
+            cp.execFileSync('git',['merge-base','--is-ancestor',base,source]);
+            assert.equal(git('ls-remote','--heads','origin',
+              'fix/live-hide-face-scores-20261123').split(/\s+/)[0],source,
+              'BLOCKED website branch changed since approval');
+            assert.equal(git('ls-remote','--heads','origin','live-protected').split(/\s+/)[0],
+              process.env.GITHUB_SHA,'BLOCKED release controller changed');
+            assert.deepEqual(
+              git('-C','../controller','diff','--name-status','HEAD^','HEAD')
+                .split('\n').filter(Boolean),
+              ['A\t'+path],
+              'BLOCKED protected branch contains unrelated files'
+            );
+            assert.deepEqual(
+              git('diff','--name-status','--no-renames',base,source)
+                .split('\n').filter(Boolean).sort(),
+              [
+                'A\t.github/workflows/qa-hide-face-score-ui-20261123.yml',
+                'M\tapp/(admin)/identity-reviews.tsx',
+                'M\tapp/identity-verification.tsx',
+                'M\tapp/identity-verification.web.tsx'
+              ].sort(),
+              'BLOCKED outdated/cross-module changes included'
+            );
+            assert.equal(JSON.parse(fs.readFileSync('.firebaserc','utf8')).projects.default,
+              process.env.PROJECT);
+            const ui=fs.readFileSync('app/(admin)/identity-reviews.tsx','utf8');
+            for(const guard of [
+              'faceComparisonCompleted',
+              'Compared — Admin review required',
+              'shortVerificationId(fullId)',
+              'navigator.clipboard.writeText(fullId)',
+              '<VerificationIdLine id={item.verificationId} />',
+              'onReject={() => void saveDecision("reject")}',
+              'issuerReviewAttested',
+              'premiumEvidenceTiles',
+              'premiumDetailColumns'
+            ]) assert(ui.includes(guard),'BLOCKED expected secure review or UI guard missing: '+guard);
+            assert(!ui.includes('(item.matchScore * 100)'),'BLOCKED numeric face-score display detected');
+            for(const uiPath of ['app/identity-verification.web.tsx','app/identity-verification.tsx']){
+              const page=fs.readFileSync(uiPath,'utf8');
+              assert(!page.includes('calculating a private match score.'),'BLOCKED numeric progress copy');
+              assert(!page.includes('calculating the private 1-to-1 match score.'),'BLOCKED numeric progress copy');
+            }
+            const live=await fetch('https://volunserve.com/volunserve-release.json?preflight='+Date.now(),
+              {headers:{'Cache-Control':'no-cache'},signal:AbortSignal.timeout(15000)});
+            assert(live.ok,'BLOCKED production release marker inaccessible');
+            const marker=await live.json();
+            assert.equal(marker.app,'VolunServe');
+            assert.equal(marker.firebaseProject,process.env.PROJECT);
+            assert.equal(marker.revision,base,'BLOCKED live Hosting revision drift');
+            console.log('PASS narrow source scope, baseline, review security and original ID preserved');
+          })().catch(e=>{console.error(e.message);process.exitCode=1});
+          NODE
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: site/package-lock.json
+      - name: Install exact dependencies, typecheck and build without data writes
+        working-directory: site
+        run: |
+          set -euo pipefail
+          npm ci --no-audit --no-fund
+          npx tsc --noEmit --incremental false
+          npx expo export --platform web --clear
+          env -u GITHUB_SHA node scripts/verify-hosting-release.cjs
+          node <<'NODE'
+          const assert=require('node:assert/strict'),fs=require('fs');
+          const marker=JSON.parse(fs.readFileSync('dist/volunserve-release.json','utf8'));
+          assert.equal(marker.revision,process.env.SOURCE_SHA);
+          assert.equal(marker.firebaseProject,process.env.PROJECT);
+          console.log('PASS compiled exact approved revision');
+          NODE
+      - name: Verify production credential and recheck live revision before upload
+        working-directory: site
+        env:
+          FIREBASE_SA: "${{ secrets.VOLUNSERVE_PRODUCTION_HOSTING_SERVICE_ACCOUNT }}"
+        run: |
+          set -euo pipefail
+          test -n "$FIREBASE_SA" || { echo 'BLOCKED: Firebase Hosting credential missing'; exit 1; }
+          node <<'NODE'
+          const assert=require('node:assert/strict'),fs=require('fs');
+          (async()=>{
+            const sa=JSON.parse(process.env.FIREBASE_SA);
+            assert.equal(sa.type,'service_account');
+            assert.equal(sa.project_id,process.env.PROJECT);
+            assert(sa.private_key && sa.client_email);
+            const live=await fetch('https://volunserve.com/volunserve-release.json?before='+Date.now(),
+              {headers:{'Cache-Control':'no-cache'},signal:AbortSignal.timeout(15000)});
+            assert(live.ok);
+            assert.equal((await live.json()).revision,process.env.EXPECTED_LIVE,
+              'BLOCKED published Hosting changed during build');
+            fs.writeFileSync(process.env.RUNNER_TEMP+'/identity-ref-hosting-key.json',
+              process.env.FIREBASE_SA,{mode:0o600});
+          })().catch(e=>{console.error(e.message);process.exitCode=1});
+          NODE
+          echo "GOOGLE_APPLICATION_CREDENTIALS=$RUNNER_TEMP/identity-ref-hosting-key.json" >> "$GITHUB_ENV"
+      - name: Snapshot immutable currently published Hosting version
+        id: backup
+        working-directory: site
+        run: |
+          set -euo pipefail
+          VOLUNSERVE_HOSTING_URL=https://volunserve.com VOLUNSERVE_EXPECTED_SHA="$EXPECTED_LIVE" node scripts/check-live-hosting.cjs
+          node ../controller/.github/scripts/hosting-live-release-snapshot-20261122.cjs snapshot
+      - name: Publish ONLY approved static Firebase Hosting artifact
+        id: publish
+        uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          firebaseServiceAccount: "${{ secrets.VOLUNSERVE_PRODUCTION_HOSTING_SERVICE_ACCOUNT }}"
+          projectId: volunserve-3aa5b
+          channelId: live
+          entryPoint: ./site
+      - name: Confirm live Hosting revision and identity review route
+        id: confirm
+        working-directory: site
+        env:
+          VOLUNSERVE_HOSTING_URL: https://volunserve.com
+          VOLUNSERVE_EXPECTED_SHA: f4fe45080571265df1321560f0f4d98a80628f00
+        run: |
+          set -euo pipefail
+          for attempt in 1 2 3 4 5 6; do
+            if node scripts/check-live-hosting.cjs; then
+              node -e "(async()=>{const r=await fetch('https://volunserve.com/identity-reviews');if(!r.ok || !(r.headers.get('content-type')||'').includes('html'))throw Error('Identity Reviews route not ready');console.log('PASS live Identity Reviews route')})().catch(e=>{console.error(e);process.exitCode=1})"
+              exit 0
+            fi
+            sleep 10
+          done
+          echo 'BLOCKED updated Hosting version not confirmed'
+          exit 1
+      - name: Rollback only if published version fails verification
+        if: failure() && steps.backup.outcome == 'success' && steps.publish.outcome != 'skipped'
+        working-directory: site
+        run: |
+          set -euo pipefail
+          node ../controller/.github/scripts/hosting-live-release-snapshot-20261122.cjs restore
+          VOLUNSERVE_HOSTING_URL=https://volunserve.com VOLUNSERVE_EXPECTED_SHA="$EXPECTED_LIVE" node scripts/check-live-hosting.cjs
+      - name: Remove temporary Hosting credential
+        if: always()
+        run: rm -f "$RUNNER_TEMP/identity-ref-hosting-key.json"
