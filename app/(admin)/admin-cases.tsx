@@ -100,7 +100,7 @@ interface DisasterCase {
 
   verificationStatus?: VerificationStatus;
   evidenceReviewStatus?: string;
-  autoVolunteerDispatch?: {state?:string;wave?:number;attemptedCount?:number};
+  autoVolunteerDispatch?: {origin?:string;state?:string;wave?:number;attemptedCount?:number};
   verification?: {
     accountApproved?: boolean;
     reporterTrust?: string;
@@ -2950,6 +2950,11 @@ export default function AdminCases() {
     incident: DisasterCase,
     volunteer: VolunteerProfile
   ) => {
+    if (incident.autoVolunteerDispatch?.origin === "render_resident_created_all_volunteers") {
+      Alert.alert("Automatic Volunteer Invitations",
+        "Render already sent independent invitations. Monitor the responses below instead of manually duplicating assignments.");
+      return;
+    }
     const auth = getAuth();
     const adminUser = auth.currentUser;
 
@@ -3323,6 +3328,12 @@ export default function AdminCases() {
   };
 
   const cancelAssignment = async (assignment: ResponseAssignment) => {
+    if (cases.some(entry => entry.id === assignment.caseId &&
+      entry.autoVolunteerDispatch?.origin === "render_resident_created_all_volunteers")) {
+      Alert.alert("Automatic Invitation Monitor",
+        "Volunteer invitation responses are handled by the invited Volunteers.");
+      return;
+    }
     try {
       const assignmentRef = doc(
         db,
@@ -3934,6 +3945,29 @@ export default function AdminCases() {
 
           return (
             <View key={incident.id} style={styles.caseCard}>
+              {incident.autoVolunteerDispatch?.origin === "render_resident_created_all_volunteers" && (
+                <View style={styles.renderAutoMonitor}>
+                  <Text style={styles.renderAutoMonitorTitle}>Automatic Volunteer Invitations</Text>
+                  <Text style={styles.renderAutoMonitorSummary}>
+                    {incidentAssignments.length} Invited  •  {incidentAssignments.filter(x =>
+                      ["accepted","responding","on_site","completed"].includes(x.status)).length} Accepted
+                    {"  •  "}{incidentAssignments.filter(x => x.status === "declined").length} Declined
+                    {"  •  "}{incidentAssignments.filter(x => x.status === "offered").length} Pending
+                  </Text>
+                  {pageFive(incidentAssignments, activeAssignmentPage).map(item => (
+                    <View key={item.id} style={styles.renderAutoMonitorRow}>
+                      <Text style={styles.renderAutoMonitorName}>{item.volunteerName || "Volunteer"}</Text>
+                      <Text style={styles.renderAutoMonitorStatus}>{String(item.status).toUpperCase()}</Text>
+                    </View>
+                  ))}
+                  <ListPagination page={activeAssignmentPage}
+                    total={incidentAssignments.length} pageSize={5}
+                    onChange={setActiveAssignmentPage} />
+                  <Text style={styles.renderAutoMonitorHelp}>
+                    Invitations are automatic after submission. Admin validation remains required.
+                  </Text>
+                </View>
+              )}
               <View
                 style={[
                   styles.caseMain,
@@ -10900,6 +10934,16 @@ const styles = StyleSheet.create({
     lineHeight: 14,
     fontWeight: "700",
   },
+
+  renderAutoMonitor: { backgroundColor: "#F4FAF6", borderColor: "#CDE9D7",
+    borderWidth: 1, borderRadius: 14, padding: 15, gap: 9, marginBottom: 12 },
+  renderAutoMonitorTitle: { color: "#075D47", fontSize: 13, fontWeight: "900" },
+  renderAutoMonitorSummary: { color: "#174C3C", fontSize: 12, fontWeight: "800" },
+  renderAutoMonitorRow: { flexDirection: "row", justifyContent: "space-between",
+    borderBottomWidth: 1, borderBottomColor: "#DCEFE2", paddingVertical: 7, gap: 9 },
+  renderAutoMonitorName: { color: "#16483A", fontSize: 12, fontWeight: "700", flex: 1 },
+  renderAutoMonitorStatus: { color: "#087D60", fontSize: 11, fontWeight: "800" },
+  renderAutoMonitorHelp: { color: "#527967", fontSize: 11, marginTop: 2 },
 
   emptyCard: {
     backgroundColor: "#ffffff",
