@@ -53,4 +53,5 @@ jobs:
           powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\test-staging-auto-volunteers-cloud-20261123.ps1 -DemoOnly
           if($LASTEXITCODE -ne 0) { throw "Windows PowerShell local defense demo did not pass" }
       - name: Fixed fictional staging test only; no cloud credentials or deployment
-        run: echo "PASS: 3 fictional auto offers, 2 Accept/1 Decline and duplicate protections. No production access."
+        run: |
+          echo "PASS: 3 fictional auto offers, 2 Accept/1 Decline and duplicate protections. No production access."
