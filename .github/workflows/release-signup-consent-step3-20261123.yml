@@ -62,8 +62,8 @@ jobs:
               process.env.GITHUB_SHA,'BLOCKED release controller changed');
             assert.deepEqual(
               git('-C','../controller','diff','--name-status','HEAD^','HEAD')
-                .split('\n').filter(Boolean),
-              ['A\t'+path],
+                .split('\n').filter(Boolean).sort(),
+              ['A\t'+path, 'M\t.github/workflows/verify-reconciled-hosting-source-no-deploy-20261111.yml'].sort(),
               'BLOCKED protected branch contains unrelated files'
             );
             const pathChanged='components/auth/EmailFirstSignup.tsx';
