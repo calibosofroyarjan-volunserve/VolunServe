@@ -35,6 +35,7 @@ jobs:
           expected=sorted([
             "M\tidentity-ai/main.py",
             "M\tidentity-ai/test_document_precheck.py",
+            "M\tidentity-ai/test_mild_blur_ocr_name_gate_20261122.py",
             "A\t.github/workflows/qa-ocr-inconclusive-face-20261123.yml",
           ])
           assert actual==expected,(actual,expected)
