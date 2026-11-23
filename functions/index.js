@@ -2732,3 +2732,23 @@ exports.deliverAndroidPushForNotification = onDocumentCreated(
       }
     },
 );
+
+
+// Approved Admin Emergency Report -> Volunteer Invitations (DEFAULT OFF).
+// Actual normal Admin verification writes to disasterCases automatically
+// invoke this trigger. The existing Volunteer web/mobile dashboards already
+// read responseAssignments and allow each owner to Accept or Decline.
+// No geography or skills matching in this deliberately simple opt-in version.
+// IMPORTANT: releasing Cloud Functions alone never turns it on; a separate
+// explicitly reviewed project+production approval env gate is required.
+const {makeApprovedCaseAutoInviteHandler} =
+    require("./emergencySimpleAutoInvite");
+exports.autoInviteApprovedEmergencyVolunteers = onDocumentUpdated(
+    {
+      document: "disasterCases/{caseId}",
+      retry: true,
+      timeoutSeconds: 60,
+      maxInstances: 2,
+    },
+    makeApprovedCaseAutoInviteHandler({db: getFirestore(), FieldValue}),
+);
