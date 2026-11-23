@@ -1,0 +1,261 @@
+# Guarded production release. Merge this controller only after candidate QA passes.
+# Uses the exact current published website and PATCHES THE ACTIVE Firestore rules
+# instead of overwriting them with an older checkout. No Cloud Functions/Blaze.
+name: Publish Render Volunteer Invites (Hosting + Active Rules Only)
+on:
+  push:
+    branches: [live-protected]
+    paths: [.github/workflows/release-render-volunteer-live-hosting-rules-20261123.yml]
+permissions:
+  contents: read
+concurrency:
+  group: volunserve-production-hosting-release
+  cancel-in-progress: false
+jobs:
+  verified-release:
+    if: github.repository == 'calibosofroyarjan-volunserve/VolunServe' && github.ref == 'refs/heads/live-protected'
+    environment: production
+    runs-on: ubuntu-24.04
+    timeout-minutes: 65
+    env:
+      CI: "true"
+      EXPO_NO_TELEMETRY: "1"
+      EXPO_PUBLIC_VOLUNSERVE_ENV: production
+      EXPO_PUBLIC_IDENTITY_VERIFICATION_API_URL: https://volunserve.onrender.com
+      EXPO_PUBLIC_VOLUNSERVE_BACKEND_URL: https://volunserve.onrender.com
+      EXPO_PUBLIC_RENDER_EMERGENCY_AUTO_ENABLED: "true"
+      FIREBASE_CLI_DISABLE_TELEMETRY: "1"
+      GCLOUD_PROJECT: demo-volunserve-live-render-rules
+      FIRESTORE_EMULATOR_HOST: 127.0.0.1:8080
+      PROJECT: volunserve-3aa5b
+      SITE: volunserve-3aa5b
+      BASE_SHA: 0b14cd87e57dae72072942894b2b3d3137ac7a16
+      SOURCE_SHA: 3e1c5e223029fb8a519bcad288c3e955aa06378a
+      EXPECTED_ACTIVE_RULES_SHA256: bbe6d3c1184ea6e7dcae253e56c34271acfb8260fd853614810aafcc550b8ed7
+    steps:
+      - name: Checkout protected production controller
+        uses: actions/checkout@v4
+        with:
+          path: controller
+          ref: "${{ github.sha }}"
+          fetch-depth: 0
+          submodules: false
+      - name: Checkout immutable current-live-derived approved website
+        uses: actions/checkout@v4
+        with:
+          path: site
+          ref: 3e1c5e223029fb8a519bcad288c3e955aa06378a
+          fetch-depth: 0
+          submodules: false
+      - name: Verify source scope, intact Signup and unchanged public Hosting
+        working-directory: site
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const assert=require('node:assert/strict'),fs=require('node:fs'),cp=require('node:child_process');
+          const git=(...args)=>cp.execFileSync('git',args,{encoding:'utf8'}).trim();
+          (async()=>{
+            assert.equal(git('rev-parse','HEAD'),process.env.SOURCE_SHA);
+            cp.execFileSync('git',['merge-base','--is-ancestor',process.env.BASE_SHA,process.env.SOURCE_SHA]);
+            const allowed=[
+              '.github/workflows/audit-active-firestore-rules-render-20261123.yml',
+              '.github/workflows/qa-live-render-volunteer-release-20261123.yml',
+              'app/(admin)/admin-cases.tsx',
+              'app/(tabs)/notifications.tsx',
+              'app/(tabs)/volunteer.tsx','app/(tabs)/volunteer.web.tsx',
+              'components/DisasterResponse.native.tsx',
+              'components/DisasterResponse.web.tsx',
+              'firestore.rules','lib/renderEmergencyAuto.ts',
+              'scripts/test-render-volunteer-live-rules.cjs'
+            ].sort();
+            const changed=git('diff','--name-only',process.env.BASE_SHA,process.env.SOURCE_SHA)
+              .split('\n').filter(Boolean).sort();
+            assert.deepEqual(changed,allowed,'BLOCKED unrelated production website source change');
+            const consent=fs.readFileSync('components/auth/EmailFirstSignup.tsx','utf8');
+            assert(consent.includes('if (!consent) {'),'BLOCKED newer signup consent fix missing');
+            const u=new URL('https://volunserve.com/volunserve-release.json');
+            u.searchParams.set('release_preflight',Date.now());
+            const response=await fetch(u,{headers:{'Cache-Control':'no-cache'},signal:AbortSignal.timeout(15000)});
+            assert(response.ok,'BLOCKED live Hosting revision unavailable');
+            const marker=await response.json();
+            assert.equal(marker.firebaseProject,process.env.PROJECT);
+            assert.equal(marker.revision,process.env.BASE_SHA,'BLOCKED newer Hosting release found; never roll back');
+            console.log('PASS latest production Hosting baseline; Signup fix intact; 11 reviewed paths only.');
+          })().catch(e=>{console.error(e.message);process.exit(1)});
+          NODE
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: site/package-lock.json
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - name: Install exact published-derived dependencies
+        working-directory: site
+        run: npm ci --no-audit --no-fund
+      - name: Read CURRENT deployed Firestore Rules and insert ONLY invited-Volunteer clause
+        working-directory: site
+        env:
+          FIREBASE_SA: "${{ secrets.VOLUNSERVE_PRODUCTION_HOSTING_SERVICE_ACCOUNT || secrets.FIREBASE_SERVICE_ACCOUNT_VOLUNSERVE_3AA5B || secrets.FIREBASE_SERVICE_ACCOUNT }}"
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const fs=require('node:fs'),crypto=require('node:crypto'),assert=require('node:assert/strict'),path=require('node:path');
+          const sa=JSON.parse(process.env.FIREBASE_SA||'{}');
+          assert.equal(sa.project_id,'volunserve-3aa5b');assert.equal(sa.type,'service_account');
+          const encode=x=>Buffer.from(JSON.stringify(x)).toString('base64url');
+          async function getAccessToken(){
+            const now=Math.floor(Date.now()/1000);
+            const jwt=encode({alg:'RS256',typ:'JWT'})+'.'+encode({iss:sa.client_email,
+              scope:'https://www.googleapis.com/auth/cloud-platform',
+              aud:'https://oauth2.googleapis.com/token',iat:now,exp:now+1800});
+            const signature=crypto.sign('RSA-SHA256',Buffer.from(jwt),sa.private_key).toString('base64url');
+            const response=await fetch('https://oauth2.googleapis.com/token',{method:'POST',
+              headers:{'Content-Type':'application/x-www-form-urlencoded'},
+              body:new URLSearchParams({grant_type:'urn:ietf:params:oauth:grant-type:jwt-bearer',assertion:jwt+'.'+signature}),
+              signal:AbortSignal.timeout(15000)});
+            assert(response.ok,'BLOCKED OAuth HTTP '+response.status);
+            return (await response.json()).access_token;
+          }
+          async function get(path,token){
+            const response=await fetch('https://firebaserules.googleapis.com/v1/'+path,{
+              headers:{Authorization:'Bearer '+token},signal:AbortSignal.timeout(20000)});
+            assert(response.ok,'BLOCKED read-only Rules API HTTP '+response.status);
+            return response.json();
+          }
+          const hash=s=>crypto.createHash('sha256').update(s).digest('hex');
+          function readExpression(source){
+            const section=source.indexOf('match /disasterCases/{caseId}');
+            assert(section>=0,'BLOCKED no disasterCases match in active rules');
+            const start=source.indexOf('      allow read: if',section);
+            const end=source.indexOf('      allow update: if isResident()',start);
+            assert(start>section&&end>start&&end-start<7000,'BLOCKED ambiguous incident read rule');
+            return source.slice(start,end);
+          }
+          (async()=>{
+            const token=await getAccessToken();
+            const release=await get('projects/volunserve-3aa5b/releases/cloud.firestore',token);
+            const rs=await get(release.rulesetName,token);
+            const contents=rs.source?.files||[];
+            assert.equal(contents.length,1,'BLOCKED unexpected multi-file live ruleset');
+            const active=contents[0].content;
+            assert(typeof active==='string'&&active.length>150000);
+            assert.equal(hash(active),process.env.EXPECTED_ACTIVE_RULES_SHA256,
+              'BLOCKED active Firestore Rules changed since read-only audit');
+            assert(!active.includes('render_resident_created_all_volunteers'),
+              'BLOCKED Render clause already deployed: inspect before retry');
+            const candidate=fs.readFileSync('firestore.rules','utf8');
+            const readCandidate=readExpression(candidate);
+            const start=readCandidate.indexOf('        // Read-only details for exact Render-invited Volunteer.');
+            assert(start>0,'BLOCKED tested Render read clause missing');
+            const addition=readCandidate.slice(start);
+            assert(addition.includes('render_resident_created_all_volunteers')&&
+              addition.endsWith('        );\n'),'BLOCKED malformed tested clause');
+            const readActive=readExpression(active);
+            const ending='        );\n';
+            assert(readActive.endsWith(ending),'BLOCKED active incident read syntax differs');
+            const patchedRead=readActive.slice(0,-ending.length)+'        )\n'+addition;
+            const patched=active.replace(readActive,patchedRead);
+            assert.equal(patched.length,active.length-ending.length+'        )\n'.length+addition.length,
+              'BLOCKED unrelated Rules content modified');
+            assert(patched.includes('render_resident_created_all_volunteers'));
+            const dir=process.env.RUNNER_TEMP;
+            fs.writeFileSync(path.join(dir,'render-active-rules-original.txt'),active,{mode:0o600});
+            fs.writeFileSync(path.join(dir,'render-active-rules-revision.json'),JSON.stringify({
+              ruleset:release.rulesetName,originalSha:hash(active),patchedSha:hash(patched)
+            }));
+            fs.writeFileSync('firestore.rules',patched);
+            const keyPath=path.join(dir,'render-production-firebase-sa.json');
+            fs.writeFileSync(keyPath,process.env.FIREBASE_SA,{mode:0o600});
+            fs.appendFileSync(process.env.GITHUB_ENV,'GOOGLE_APPLICATION_CREDENTIALS='+keyPath+'\n');
+            console.log('PASS ACTIVE production rules preserved, adding ONLY one invited-only clause.');
+            console.log('ACTIVE_RULESET='+release.rulesetName);
+            console.log('PATCHED_RULES_SHA256='+hash(patched));
+          })().catch(e=>{console.error(e.message);process.exit(1)});
+          NODE
+      - name: Real Firestore Rules emulator authorization test on PATCHED active source
+        working-directory: site
+        run: |
+          npx firebase-tools emulators:exec --project demo-volunserve-live-render-rules --only firestore "node --test scripts/test-render-volunteer-live-rules.cjs"
+      - name: TypeScript and exact production web export
+        working-directory: site
+        run: |
+          set -euo pipefail
+          npx tsc --noEmit --incremental false
+          npx expo export --platform web --clear
+          env -u GITHUB_SHA node scripts/verify-hosting-release.cjs
+          node - <<'NODE'
+          const assert=require('node:assert/strict'),fs=require('node:fs');
+          const marker=JSON.parse(fs.readFileSync('dist/volunserve-release.json','utf8'));
+          assert.equal(marker.revision,process.env.SOURCE_SHA);
+          assert.equal(marker.firebaseProject,process.env.PROJECT);
+          console.log('PASS production website build at pinned exact source SHA');
+          NODE
+      - name: Recheck ACTIVE Rules revision before write, then deploy Rules ONLY
+        working-directory: site
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const assert=require('node:assert/strict'),fs=require('node:fs'),crypto=require('node:crypto');
+          const sa=JSON.parse(fs.readFileSync(process.env.GOOGLE_APPLICATION_CREDENTIALS,'utf8'));
+          const enc=v=>Buffer.from(JSON.stringify(v)).toString('base64url');
+          (async()=>{
+            const now=Math.floor(Date.now()/1000);
+            const jwt=enc({alg:'RS256',typ:'JWT'})+'.'+enc({iss:sa.client_email,
+              scope:'https://www.googleapis.com/auth/cloud-platform',aud:'https://oauth2.googleapis.com/token',iat:now,exp:now+1800});
+            const r=await fetch('https://oauth2.googleapis.com/token',{method:'POST',
+              headers:{'Content-Type':'application/x-www-form-urlencoded'},
+              body:new URLSearchParams({grant_type:'urn:ietf:params:oauth:grant-type:jwt-bearer',assertion:jwt+'.'+crypto.sign('RSA-SHA256',Buffer.from(jwt),sa.private_key).toString('base64url')}),
+              signal:AbortSignal.timeout(15000)});
+            assert(r.ok);const token=(await r.json()).access_token;
+            const q=await fetch('https://firebaserules.googleapis.com/v1/projects/volunserve-3aa5b/releases/cloud.firestore',{
+              headers:{Authorization:'Bearer '+token},signal:AbortSignal.timeout(15000)});
+            assert(q.ok);const active=await q.json();
+            const previous=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+'/render-active-rules-revision.json','utf8'));
+            assert.equal(active.rulesetName,previous.ruleset,'BLOCKED Firestore rules changed during build');
+            console.log('PASS unchanged active Rules release before guarded deployment');
+          })().catch(e=>{console.error(e.message);process.exit(1)});
+          NODE
+          npx firebase-tools deploy --only firestore:rules --project volunserve-3aa5b --non-interactive
+      - name: Snapshot current LIVE Hosting immutable version for rollback
+        working-directory: site
+        run: |
+          set -euo pipefail
+          node ../controller/.github/scripts/hosting-live-release-snapshot-20261122.cjs snapshot
+      - name: Publish current-live-derived web Hosting ONLY; never backend/Functions/Storage
+        working-directory: site
+        run: |
+          set -euo pipefail
+          npx firebase-tools deploy --only hosting --project volunserve-3aa5b --non-interactive
+      - name: Verify exact revision at custom domain
+        working-directory: site
+        run: |
+          set -euo pipefail
+          VOLUNSERVE_HOSTING_URL=https://volunserve.com VOLUNSERVE_EXPECTED_SHA="$SOURCE_SHA" node scripts/check-live-hosting.cjs
+          node - <<'NODE'
+          const assert=require('node:assert/strict');
+          (async()=>{
+            for(let i=0;i<10;i++){
+              try{
+                const r=await fetch('https://volunserve.com/volunserve-release.json?render_live='+Date.now(),{
+                  headers:{'Cache-Control':'no-cache'},signal:AbortSignal.timeout(12000)});
+                if(r.ok){
+                  const v=await r.json();
+                  if(v.revision===process.env.SOURCE_SHA){
+                    console.log('PASS live VolunServe Hosting revision '+v.revision);
+                    return;
+                  }
+                }
+              }catch(e){}
+              await new Promise(resolve=>setTimeout(resolve,4000));
+            }
+            throw Error('BLOCKED new Hosting revision not confirmed');
+          })().catch(e=>{console.error(e.message);process.exit(1)});
+          NODE
+      - name: Remove temporary Firebase service account key
+        if: always()
+        run: |
+          rm -f "$RUNNER_TEMP/render-production-firebase-sa.json"
+          echo "Scoped Hosting and Rules workflow finished."
