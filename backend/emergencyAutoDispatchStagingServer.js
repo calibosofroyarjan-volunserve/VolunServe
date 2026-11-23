@@ -438,8 +438,8 @@ function makeApp({authClient = auth, firestore = db, worker, env = process.env} 
   // Requires approved staging Admin + full isolated/test defense feature gates.
   app.post("/api/admin/emergency-auto/e2e-002/renew-pending",
     requireStagingAdmin,requireActivation,async(request,response)=>{
-      if(!stagingServiceAccountMatches||!bulk002Enabled||!allVolunteerDefenseMode)
-        return response.status(503).json({ok:false,error:"isolated_defense_mode_required"});
+      if(!stagingServiceAccountMatches||!bulk002Enabled)
+        return response.status(503).json({ok:false,error:"isolated_bulk_staging_disabled"});
       if(request.body?.caseId!==E2E_CASE_ID ||
          request.body?.confirmPendingRenewal!==true ||
          ![1,2,3].includes(request.body?.volunteerSlot))
