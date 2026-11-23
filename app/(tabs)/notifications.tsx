@@ -5,7 +5,8 @@ import { httpsCallable } from "firebase/functions";
 import { collection, doc, onSnapshot, query, updateDoc, where } from "firebase/firestore";
 import React, { useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
-import { auth, db, functions } from "../../lib/firebase";
+import { auth, db } from "../../lib/firebase";
+import { functions } from "../../lib/firebase";
 import { useAnnouncementAlerts } from "../../lib/announcementAlerts";
 import { enableAndroidPhoneAlerts, disableAndroidPhoneAlerts } from "../../lib/androidNativePush";
 
