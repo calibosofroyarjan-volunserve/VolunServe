@@ -99,7 +99,11 @@ async function main(){
   const app=initializeApp({credential:cert(credential),projectId:PROJECT},"qa-volunteer3-decline");
   try {
     const auth=getAuth(app),db=getFirestore(app);
-    const health=await request(API+"/health");
+    let health=await request(API+"/health");
+    for(let attempt=0;attempt<12&&health.stagingFirestoreReadStatus==="checking";attempt++){
+      await new Promise(resolve=>setTimeout(resolve,1500));
+      health=await request(API+"/health");
+    }
     if(health.service!=="volunserve-emergency-matching-staging"||
        health.stagingServiceAccountMatches!==true||
        health.stagingFirestoreReadStatus!=="verified"||
