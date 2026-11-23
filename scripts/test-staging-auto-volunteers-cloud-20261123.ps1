@@ -5,6 +5,7 @@ param(
   [ValidateSet(0,1,2,3)]
   [int]$VolunteerSlot = 0,
   [switch]$AllowFictionalWrites,
+  [switch]$RenewExpiredPending,
   [switch]$DemoOnly
 )
 Set-StrictMode -Version Latest
@@ -56,6 +57,7 @@ function CloudPost([string]$Path, [string]$Token, [hashtable]$Body) {
   $allowlisted = @(
     "/api/admin/emergency-auto/e2e-002/create",
     "/api/admin/emergency-auto/e2e-002/validate",
+    "/api/admin/emergency-auto/e2e-002/renew-pending",
     "/api/staging/volunteer/e2e-002/bulk-respond"
   )
   if ($Path -notin $allowlisted) { Fail "Forbidden staging mutation path." }
@@ -164,6 +166,28 @@ if ($batch.status -ne "not_started") {
     Write-Host ("Independent acceptance verifier: " + [string]$verified.status)
   } catch {
     Write-Host "Independent verifier not yet conclusive; current accepted-task state preserved." -ForegroundColor Yellow
+  }
+}
+# Explicit optional renewal for ONE expired, still-pending fictional invitation.
+# Preserves accepted/declined offers and never creates another assignment.
+if ($RenewExpiredPending) {
+  if (-not $AllowFictionalWrites -or $VolunteerSlot -notin @(1,2,3)) {
+    Fail "Renewal requires -VolunteerSlot 1/2/3 and -AllowFictionalWrites."
+  }
+  if ($batch.status -ne "waiting" -or [int]$batch.accepted -lt 1) {
+    Fail "Renewal requires the fixed fictional waiting batch with an existing accepted task."
+  }
+  $ok = ConfirmFictionalAction "Renew ONLY an expired, still-pending offer for fictional Volunteer $VolunteerSlot? Existing accepted offers will not change." ("RENEW-002-" + $VolunteerSlot)
+  if ($ok) {
+    $renewed = CloudPost "/api/admin/emergency-auto/e2e-002/renew-pending" $adminToken @{
+      caseId = $FixedCase
+      volunteerSlot = $VolunteerSlot
+      confirmPendingRenewal = $true
+    }
+    Write-Host ("Staging pending-only renewal: " + [string]$renewed.status) -ForegroundColor Green
+    if ($renewed.status -ne "renewed") { Fail "Staging pending-only renewal did not complete." }
+  } else {
+    Write-Host "Renewal skipped. This is read-only for Volunteer task status." -ForegroundColor Yellow
   }
 }
 if ($VolunteerSlot -ne 0) {
