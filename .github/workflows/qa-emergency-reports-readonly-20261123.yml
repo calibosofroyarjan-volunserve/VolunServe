@@ -1,0 +1,54 @@
+# Read-only static/code contract checks. No Firebase credentials, no deploy, no API writes.
+name: QA Emergency Reports Read-Only (2026-11-23)
+on:
+  push:
+    branches: ['qa/emergency-reports-readonly-20261123']
+    paths:
+      - '.github/workflows/qa-emergency-reports-readonly-20261123.yml'
+permissions:
+  contents: read
+jobs:
+  emergency-report-contract-checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      CI: 'true'
+      EXPO_NO_TELEMETRY: '1'
+    steps:
+      - name: Checkout pinned read-only QA source
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+      - name: Guard exact published-derived QA source
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD^)" = "59f9badf16207da84a877dff9c2f87f2756e4854"
+          test "$(git diff --name-only HEAD^ HEAD)" = ".github/workflows/qa-emergency-reports-readonly-20261123.yml"
+          test -f 'components/DisasterResponse.web.tsx'
+          test -f 'app/(tabs)/disaster-response.tsx'
+          echo 'PASS QA source and one-file-only workflow'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+      - name: Install locked dependencies without package scripts
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Resident emergency reporting source and tab contracts
+        run: |
+          node scripts/test-clean-emergency-report-header.cjs
+          node scripts/test-embedded-emergency-map-navigation.cjs
+      - name: Admin report review, response map and assignment UX contracts
+        run: |
+          node scripts/test-admin-emergency-master-detail-20261118.cjs
+          node scripts/test-admin-emergency-ui-consistency-20261115.cjs
+          node scripts/test-admin-focused-response-map-20261115.cjs
+          node scripts/test-admin-response-workspace-ux.cjs
+          node scripts/test-unified-admin-dashboard-and-emergency-pagination.cjs
+      - name: Volunteer eligibility and dispatch wave planner logic
+        run: |
+          node scripts/test-emergency-volunteer-wave-planner-20261115.cjs
+          node scripts/test-admin-volunteer-authorization.cjs
+      - name: Resident/Volunteer portal and route compatibility
+        run: |
+          node scripts/test-portal-resident-volunteer-ui-flow.cjs
+          node scripts/test-route-entrypoints.cjs
