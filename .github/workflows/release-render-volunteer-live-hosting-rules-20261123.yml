@@ -222,7 +222,69 @@ jobs:
             console.log('PASS unchanged active Rules release before guarded deployment');
           })().catch(e=>{console.error(e.message);process.exit(1)});
           NODE
-          npx firebase-tools deploy --only firestore:rules --project volunserve-3aa5b --non-interactive
+          # Firebase CLI attempted releases.create on an EXISTING release and got HTTP 409.
+          # Use the documented Firebase Rules REST rulesets.create + releases.patch.
+          # Preserve original ACTIVE Rules, changing ONLY the previously tested clause.
+          node <<'NODE'
+          const fs=require('node:fs'),crypto=require('node:crypto'),assert=require('node:assert/strict');
+          const sa=JSON.parse(fs.readFileSync(process.env.GOOGLE_APPLICATION_CREDENTIALS,'utf8'));
+          assert.equal(sa.project_id,'volunserve-3aa5b');
+          const before=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+'/render-active-rules-revision.json','utf8'));
+          const text=fs.readFileSync('firestore.rules','utf8');
+          const hash=s=>crypto.createHash('sha256').update(s).digest('hex');
+          assert.equal(hash(text),before.patchedSha,'BLOCKED patched Rules file changed after emulator QA');
+          const encode=v=>Buffer.from(JSON.stringify(v)).toString('base64url');
+          async function token(){
+            const now=Math.floor(Date.now()/1000);
+            const jwt=encode({alg:'RS256',typ:'JWT'})+'.'+encode({iss:sa.client_email,
+              scope:'https://www.googleapis.com/auth/cloud-platform',
+              aud:'https://oauth2.googleapis.com/token',iat:now,exp:now+1800});
+            const signature=crypto.sign('RSA-SHA256',Buffer.from(jwt),sa.private_key).toString('base64url');
+            const r=await fetch('https://oauth2.googleapis.com/token',{
+              method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},
+              body:new URLSearchParams({grant_type:'urn:ietf:params:oauth:grant-type:jwt-bearer',assertion:jwt+'.'+signature}),
+              signal:AbortSignal.timeout(15000)});
+            assert(r.ok,'OAuth HTTP '+r.status);return (await r.json()).access_token;
+          }
+          async function api(access,route,method='GET',body){
+            const r=await fetch('https://firebaserules.googleapis.com/v1/'+route,{
+              method,headers:{Authorization:'Bearer '+access,'Content-Type':'application/json'},
+              body:body==null?undefined:JSON.stringify(body),signal:AbortSignal.timeout(30000)});
+            if(!r.ok)throw Error('Firebase Rules REST '+method+' '+route+' HTTP '+r.status+
+              ' (no credential material logged)');
+            return r.json();
+          }
+          (async()=>{
+            const access=await token();
+            const releaseName='projects/volunserve-3aa5b/releases/cloud.firestore';
+            const current=await api(access,releaseName);
+            assert.equal(current.rulesetName,before.ruleset,'BLOCKED Rules changed before PATCH');
+            const created=await api(access,'projects/volunserve-3aa5b/rulesets','POST',{
+              source:{files:[{name:'firestore.rules',content:text}]}
+            });
+            assert(typeof created.name==='string' &&
+              created.name.startsWith('projects/volunserve-3aa5b/rulesets/') &&
+              /^[A-Za-z0-9_-]+$/.test(created.name.slice('projects/volunserve-3aa5b/rulesets/'.length)),
+              'BLOCKED unexpected created Ruleset name');
+            // Recheck active release again before changing pointer.
+            const latest=await api(access,releaseName);
+            assert.equal(latest.rulesetName,before.ruleset,'BLOCKED concurrent active Rules release');
+            const updated=await api(access,releaseName,'PATCH',{
+              release:{name:releaseName,rulesetName:created.name},
+              updateMask:'rulesetName'
+            });
+            assert.equal(updated.rulesetName,created.name,'BLOCKED Rules PATCH response mismatch');
+            const confirmation=await api(access,releaseName);
+            assert.equal(confirmation.rulesetName,created.name,'BLOCKED live Rules release not confirmed');
+            const deployed=await api(access,created.name);
+            const deployedFiles=deployed.source?.files||[];
+            assert.equal(deployedFiles.length,1,'BLOCKED deployed Rules file count differs');
+            const deployedText=deployedFiles[0].content;
+            assert.equal(hash(deployedText),before.patchedSha,'BLOCKED deployed Rules content differs');
+            console.log('PASS Firebase Rules REST PATCH on existing cloud.firestore release');
+            console.log('PASS deployed active Rules match exact tested single-clause patch');
+          })().catch(e=>{console.error(e.message);process.exit(1)});
+          NODE
       - name: Snapshot current LIVE Hosting immutable version for rollback
         working-directory: site
         run: |
