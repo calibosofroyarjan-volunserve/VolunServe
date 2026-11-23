@@ -18,7 +18,7 @@ jobs:
       - name: Checkout pinned read-only QA source
         uses: actions/checkout@v4
         with:
-          fetch-depth: 3
+          fetch-depth: 4
       - name: Guard exact published-derived QA source
         run: |
           set -euo pipefail
@@ -38,13 +38,13 @@ jobs:
           node scripts/test-clean-emergency-report-header.cjs
           node scripts/test-embedded-emergency-map-navigation.cjs
       - name: Admin report review, response map and assignment UX contracts
-        continue-on-error: true # Report known exact-copy assertion failure; continue other contract tests.
+        continue-on-error: true # Known old exact-copy assertion may fail; all other Admin checks run first.
         run: |
           node scripts/test-admin-emergency-master-detail-20261118.cjs
-          node scripts/test-admin-emergency-ui-consistency-20261115.cjs
           node scripts/test-admin-focused-response-map-20261115.cjs
           node scripts/test-admin-response-workspace-ux.cjs
           node scripts/test-unified-admin-dashboard-and-emergency-pagination.cjs
+          node scripts/test-admin-emergency-ui-consistency-20261115.cjs
       - name: Volunteer eligibility and dispatch wave planner logic
         run: |
           node scripts/test-emergency-volunteer-wave-planner-20261115.cjs
