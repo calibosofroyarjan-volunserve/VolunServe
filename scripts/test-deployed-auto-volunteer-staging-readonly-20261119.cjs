@@ -14,7 +14,8 @@ const sleep=ms=>new Promise(resolve=>setTimeout(resolve,ms));
 
 async function get(origin,pathname,{maxAttempts=5}={}){
   assert.ok([BACKEND,UI].includes(origin),"Only the two known staging origins");
-  assert.match(pathname,/^\/[A-Za-z0-9/_-]*$/,"Only fixed read-only paths");
+  assert.match(pathname,/^\/[A-Za-z0-9/_.-]*$/,"Only fixed read-only paths");
+  assert.ok(!pathname.includes(".."),"No traversal");
   let last;
   for(let attempt=1;attempt<=maxAttempts;attempt++){
     try{
@@ -87,20 +88,20 @@ async function run(){
   assert.equal(ui.status,200,"Deployed staging UI must serve HTTP 200");
   assert.match(ui.type,/html/);
   assert.match(ui.body,/<html\b/i,"Staging UI did not return HTML");
-  assert.match(ui.body,/<script\\b/i,"Staging UI bundle entrypoint missing");
+  assert.match(ui.body,/<script\b/i,"Staging UI bundle entrypoint missing");
   passed("Deployed staging Admin/Volunteer web entrypoint served");
 
   // Verify that this ALREADY DEPLOYED UI contains the exact fictional
   // browser bridge and isolated Firebase project. Only public same-origin
   // script assets are read: no login, POST, or project credentials.
-  const assetSources=[...ui.body.matchAll(/<script\\b[^>]*\\bsrc=["']([^"']+\\.js(?:\\?[^"']*)?)["'][^>]*>/gi)]
+  const assetSources=[...ui.body.matchAll(/<script\b[^>]*\bsrc=["']([^"']+\.js(?:\?[^"']*)?)["'][^>]*>/gi)]
     .map(m=>m[1]);
   assert.ok(assetSources.length>0,"Staging HTML has no JavaScript assets");
   let hasFixture=false,hasStageProject=false;
   for(const asset of assetSources.slice(0,16)){
     const target=new URL(asset,UI);
     assert.equal(target.origin,UI,"All bundle reads must stay on staging UI origin");
-    assert.match(target.pathname,/^\\/[a-zA-Z0-9/_\\.-]*$/);
+    assert.match(target.pathname,/^\/[a-zA-Z0-9/_.-]*$/);
     assert.ok(!target.pathname.includes(".."),"Unsafe script path");
     const response=await get(UI,target.pathname,{maxAttempts:2});
     assert.equal(response.status,200,"Staging bundle asset is unavailable");
