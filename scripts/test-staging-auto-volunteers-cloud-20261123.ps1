@@ -88,6 +88,13 @@ if (-not $AllowFictionalWrites) {
   Write-Host "READ-ONLY MODE: No accounts, tasks, notifications or Firestore records will be changed." -ForegroundColor Cyan
 }
 $health = CloudGet "/health"
+# Render Free may initially say 'checking' while its Firestore probe warms.
+# Always recheck project isolation and enablement before any Auth or writes.
+for ($attempt = 0; $attempt -lt 20 -and
+    $health.stagingFirestoreReadStatus -eq "checking"; $attempt++) {
+  Start-Sleep -Seconds 2
+  $health = CloudGet "/health"
+}
 if ($health.service -ne "volunserve-emergency-matching-staging" -or
     $health.stagingServiceAccountMatches -ne $true -or
     $health.stagingFirestoreReadStatus -ne "verified" -or
