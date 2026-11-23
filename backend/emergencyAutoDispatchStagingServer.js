@@ -66,6 +66,12 @@ function makeApp({authClient = auth, firestore = db, worker, env = process.env} 
   // Never reads user data, creates accounts, changes Firestore or enables offers.
   // Does not block HTTP startup if Firebase is temporarily unavailable.
   const stagingServiceAccountMatches = verifiedStagingProject(env);
+  // Emergency DEFENSE ONLY: all approved and available fictional Volunteers
+  // get their own independent Accept/Decline offer. No barangay/skill
+  // matching; NEVER active for real reports or on production backend.
+  const allVolunteerDefenseMode=stagingServiceAccountMatches &&
+    bulk002OnValidation &&
+    env.VOLUNSERVE_STAGING_E2E_002_ALL_VOLUNTEERS_NO_BARANGAY==="enabled";
   // OFF by default; fixed fictional 002 only, on the isolated staging Firebase.
   // Render Free may sleep: this is a staging QA timer, not 24/7 dispatch.
   const autoWaves002=stagingServiceAccountMatches&&bulk002OnValidation&&
@@ -411,7 +417,9 @@ function makeApp({authClient = auth, firestore = db, worker, env = process.env} 
          request.body?.confirmAllEligibleTestOffers!==true)
         return response.status(400).json({ok:false,error:"explicit_bulk_test_confirmation_required"});
       try{
-        const result=await startBatchOffers(firestore,response.locals.stagingAdminUid);
+        const result=await startBatchOffers(
+          firestore,response.locals.stagingAdminUid,Date.now(),
+          {allAvailableNoBarangay:allVolunteerDefenseMode});
         response.set("Cache-Control","no-store");
         response.status(result.status==="blocked"?409:200).json({
           ok:result.status!=="blocked",...result});
@@ -703,7 +711,8 @@ function makeApp({authClient = auth, firestore = db, worker, env = process.env} 
         })){
           try{
             automaticOffers=await startBatchOffers(
-              firestore,response.locals.stagingAdminUid);
+              firestore,response.locals.stagingAdminUid,Date.now(),
+              {allAvailableNoBarangay:allVolunteerDefenseMode});
           }catch(error){
             console.warn("Isolated 002 automatic fanout needs review",
               String(error?.code||"unknown").slice(0,70));
