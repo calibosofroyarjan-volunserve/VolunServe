@@ -720,9 +720,14 @@ function ReviewDetail({
     item.documentScreening?.declaredIdType === item.documentScreening?.detectedIdType;
   const cannotApprove = blurry || !recognized ||
     item.verificationMethod === "volunserve_ai_ocr_manual_review";
-  const faceScore = typeof item.matchScore === "number" &&
-    Number.isFinite(item.matchScore) && item.matchScore >= 0 && item.matchScore <= 1
-    ? (item.matchScore * 100).toFixed(1) + "%" : "Not evaluated";
+  // Numerical match confidence remains internal to the verification engine.
+  // The UI must never present an uncalibrated score as identity proof.
+  const faceComparisonCompleted =
+    item.verificationMethod !== "volunserve_ai_ocr_manual_review" &&
+    typeof item.matchScore === "number" && Number.isFinite(item.matchScore);
+  const faceComparisonResult = faceComparisonCompleted
+    ? "Compared — Admin review required"
+    : "Not evaluated";
   const declaredIdLabel = item.documentScreening?.declaredIdType === "national_id"
     ? "Philippine National ID" :
     String(item.documentScreening?.declaredIdType || "Unspecified").replace(/_/g, " ");
@@ -749,8 +754,8 @@ function ReviewDetail({
     },
     {
       name:"Face matching",
-      value:faceScore === "Not evaluated" ? "Not yet evaluated" :
-        faceScore + " preliminary similarity",
+      value:faceComparisonCompleted ? "Comparison completed — Admin review" :
+        "Not yet evaluated",
       ok:false,
       warning:false,
     },
@@ -785,8 +790,10 @@ function ReviewDetail({
             <Text style={styles.premiumCardTitle}>AI Verification Result</Text>
           </View>
           <View style={styles.premiumFaceResult}>
-            <Text style={styles.premiumFaceValue}>{faceScore}</Text>
-            <Text style={styles.premiumSubCopy}>Preliminary face similarity; not identity proof.</Text>
+            <Text style={styles.premiumFaceValue}>{faceComparisonResult}</Text>
+            <Text style={styles.premiumSubCopy}>
+              Face comparison is preliminary; independent LGU/Admin validation is required.
+            </Text>
           </View>
           <View style={styles.premiumResultRow}>
             <Text style={styles.premiumResultLabel}>ID Quality</Text>
