@@ -29,7 +29,7 @@ function demoEnabled(env=process.env){
 function demoIncidentAllowed(data,env=process.env){
   if(!data||data.status!=="reported"||
      !["pending_verification","pending"].includes(data.verificationStatus)||
-     data.dispatchBlocked!==true||
+     data.dispatchBlocked===false||
      !UID.test(String(data.reporterUid||""))||
      typeof data.title!=="string"||!data.title.trim()||
      data.resolvedAt||data.closedAt)return false;
@@ -38,7 +38,7 @@ function demoIncidentAllowed(data,env=process.env){
   // itself is entirely fictional and can use the normal Resident create form.
   return project==="demo-volunserve-simple-invites" ||
     (project==="volunserve-volunteer-staging"&&
-     data.testOnly===true&&
+     data.testOnly===true&&data.dispatchBlocked===true&&
      data.source==="staging_synthetic_e2e"&&
      data.title.startsWith("TEST ONLY"));
 }
