@@ -192,6 +192,28 @@ test("Paginated Resident submission reaches ALL 43+ available fictional Voluntee
   .where("caseId","==",CASE_B).get();
  assert.ok(count.size>=43,"Notification inbox must reach each eligible Volunteer");
 });
+test("Repeated Resident creation event never invites newly eligible users to an ALREADY completed batch",async()=>{
+ const {makeResidentSubmissionDemoHandler} =
+  require("./emergencyResidentSubmissionDemo");
+ const before=await offers(CASE_A);
+ const notificationsBefore=await db.collection("notifications")
+  .where("caseId","==",CASE_A).get();
+ const oldCase=await ref("disasterCases",CASE_A).get();
+ assert.equal((await ref("emergencyAutoDispatchBatches",CASE_A).get()).data().fanoutComplete,true);
+ const handler=makeResidentSubmissionDemoHandler({db,FieldValue,env:process.env});
+ const result=await handler({
+  params:{caseId:CASE_A},
+  data:{data:()=>({...reportPayload(),
+    createdAt:oldCase.data().createdAt,
+    updatedAt:oldCase.data().createdAt})}
+ });
+ assert.equal(result.status,"already_started");
+ const after=await offers(CASE_A);
+ assert.equal(after.length,before.length);
+ const notificationsAfter=await db.collection("notifications")
+  .where("caseId","==",CASE_A).get();
+ assert.equal(notificationsAfter.size,notificationsBefore.size);
+});
 test.after(async()=>{
  await Promise.all(clients.map(deleteClient));
  await deleteApp(app);
