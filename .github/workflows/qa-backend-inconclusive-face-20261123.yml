@@ -1,0 +1,42 @@
+name: QA Inconclusive Name Face Comparison Backend (NO DEPLOY)
+on:
+  push:
+    branches: [fix/backend-face-on-inconclusive-20261123]
+permissions:
+  contents: read
+jobs:
+  backend-policy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Check narrow scope and syntax
+        run: |
+          set -euo pipefail
+          git diff --name-status 6e83faec16131eaa0005680a204d21ef4725cd48 HEAD
+          node --check backend/identityHybridPrecheckDecision.js
+          node --check backend/test-identityHybridPrecheckDecision.js
+          node - <<'NODE'
+          const {execFileSync}=require('node:child_process'), assert=require('node:assert/strict');
+          const changed=execFileSync('git',['diff','--name-only','6e83faec16131eaa0005680a204d21ef4725cd48','HEAD'],{encoding:'utf8'}).trim().split('\n').sort();
+          assert.deepEqual(changed,[
+            '.github/workflows/qa-backend-inconclusive-face-20261123.yml',
+            'backend/identityHybridPrecheckDecision.js',
+            'backend/server.js',
+            'backend/test-identityHybridPrecheckDecision.js'
+          ].sort());
+          NODE
+      - name: Test OCR-inconclusive and existing identity security gates
+        run: |
+          (cd backend && node --test test-identityHybridPrecheckDecision.js)
+          (cd backend && node --test test-identityIssuerReviewPolicy.js)
+          node --test backend/test-identity-final-admin-only.js
+          node --test backend/test-identity-three-attempt-review.js
+      - name: No deployment
+        run: |
+          echo 'No Render, Firebase, or real resident data changes.'
