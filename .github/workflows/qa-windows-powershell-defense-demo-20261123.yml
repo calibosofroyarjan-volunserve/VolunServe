@@ -1,0 +1,56 @@
+name: Defense PowerShell 5.1 Auto Volunteer Demo - Windows NO DEPLOY
+on:
+  push:
+    branches:
+      - fix/staging-powershell-5-encoding-defensedemo-20261123
+
+permissions:
+  contents: read
+
+jobs:
+  windows-terminal-demo:
+    runs-on: windows-2022
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Strict no-production-change allowlist
+        shell: pwsh
+        run: |
+          $base="46c99a3378bb057b0a48095c85b931ce95a3e061"
+          $changed=@(git diff --name-status $base HEAD)
+          if($changed.Count -ne 2) { throw "Expected exactly script + QA workflow" }
+          $expected=@(
+            "M" + [char]9 + "scripts/test-staging-auto-volunteers-cloud-20261123.ps1",
+            "A" + [char]9 + ".github/workflows/qa-windows-powershell-defense-demo-20261123.yml"
+          )
+          foreach($line in $changed) {
+            if($line -notin $expected) { throw "Unexpected change: $line" }
+          }
+          Write-Host "PASS: only PowerShell demo and QA workflow, no app/backend/functions/rules changes."
+      - name: Install staging backend dependencies
+        run: npm ci --prefix backend --ignore-scripts --no-audit --no-fund
+      - name: Windows PowerShell 5.1 source decoding and parser
+        shell: powershell
+        run: |
+          $path="scripts/test-staging-auto-volunteers-cloud-20261123.ps1"
+          $bytes=[System.IO.File]::ReadAllBytes((Resolve-Path $path).Path)
+          foreach($b in $bytes) {
+            if($b -gt 127) { throw "Non-ASCII byte in WinPS 5.1 terminal script" }
+          }
+          $tokens=$null
+          $errors=$null
+          [System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path $path).Path,[ref]$tokens,[ref]$errors) | Out-Null
+          if($errors.Count -gt 0) { $errors | ForEach-Object { Write-Error $_.Message }; exit 1 }
+          Write-Host "PASS ASCII Windows PowerShell 5.1 syntax and source decoding."
+      - name: ACTUALLY execute one-command local fictional auto invitation demo on Windows PowerShell 5.1
+        shell: powershell
+        run: |
+          powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\test-staging-auto-volunteers-cloud-20261123.ps1 -DemoOnly
+          if($LASTEXITCODE -ne 0) { throw "Windows PowerShell local defense demo did not pass" }
+      - name: Fixed fictional staging test only; no cloud credentials or deployment
+        run: echo "PASS: 3 fictional auto offers, 2 Accept/1 Decline and duplicate protections. No production access."
