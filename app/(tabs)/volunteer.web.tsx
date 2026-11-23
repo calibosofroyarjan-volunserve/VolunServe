@@ -25,6 +25,7 @@ import {
 
 import { db, functions } from "../../lib/firebase";
 import { httpsCallable } from "firebase/functions";
+import {RENDER_EMERGENCY_ORIGIN, respondRenderEmergencyAuto} from "../../lib/renderEmergencyAuto";
 import {
   activeModeForProfile,
   hasVolunteerAccess,
@@ -540,6 +541,20 @@ export default function VolunteerTasksWeb() {
     try {
       setBusyId(assignment.id);
       setError("");
+
+      // Render service handles Resident-submitted automatic invitations.
+      // Firebase Cloud Functions remain unused for this offer mode.
+      if ((next === "accepted" || next === "declined") &&
+          assignment.offerMode === RENDER_EMERGENCY_ORIGIN) {
+        if (!assignment.caseId) throw Error("Emergency case is missing.");
+        const outcome = await respondRenderEmergencyAuto(assignment.caseId, next);
+        if (![next, "already_" + next].includes(String(outcome.status || "")))
+          throw Error("Render did not confirm this Volunteer decision.");
+        showMessage(next === "accepted" ? "Assignment accepted" : "Assignment declined",
+          "Your automatic invitation response was saved.");
+        if (next === "accepted") setFilter("active");
+        return;
+      }
 
       // Only the NEW automatic offers use the secure callable. Existing
       // manual tasks keep their exact original Firestore transaction flow.
