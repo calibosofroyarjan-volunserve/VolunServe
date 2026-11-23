@@ -177,7 +177,7 @@ if ($RenewExpiredPending) {
   if ($batch.status -ne "waiting" -or [int]$batch.accepted -lt 1) {
     Fail "Renewal requires the fixed fictional waiting batch with an existing accepted task."
   }
-  $ok = ConfirmFictionalAction "Renew ONLY an expired, still-pending offer for fictional Volunteer $VolunteerSlot? Existing accepted offers will not change." ("RENEW-002-" + $VolunteerSlot)
+  $ok = ConfirmFictionalAction "Renew ONLY an expired, still-pending offer for fictional Volunteer ${VolunteerSlot}? Existing accepted offers will not change." ("RENEW-002-" + $VolunteerSlot)
   if ($ok) {
     $renewed = CloudPost "/api/admin/emergency-auto/e2e-002/renew-pending" $adminToken @{
       caseId = $FixedCase
