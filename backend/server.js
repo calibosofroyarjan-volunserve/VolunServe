@@ -11534,6 +11534,25 @@ app.post(
     }
   },
 );
+// Server-owned geofenced self attendance. No client-provided UID or timestamp is written.
+app.post(
+  "/api/community-events/attendance/record",
+  requireFirebaseUser,
+  async (request, response) => {
+    try {
+      const result = await require("./communityAttendanceGeofence").recordGeofencedAttendance({
+        db, FieldValue, uid:request.firebaseUser.uid, email:request.firebaseUser.email,
+        eventId:request.body?.eventId, action:request.body?.action, location:request.body?.location,
+      });
+      response.status(200).json({ok:true,...result});
+    } catch (error) {
+      const status=Number(error?.statusCode) || 500;
+      response.status(status).json({ok:false,error:status===500?"attendance_failed":error.code,
+        message:status===500?"Unable to record attendance. Please try again.":error.message});
+    }
+  },
+);
+
 // Community Event certificate reconciliation for Spark + Render.
 // Firebase Admin is the only writer: all existing Firestore rules and
 // existing certificate records remain unchanged.
