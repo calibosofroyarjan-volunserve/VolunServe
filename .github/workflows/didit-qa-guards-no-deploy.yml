@@ -1,0 +1,33 @@
+name: Didit isolated QA guards (NO DEPLOY)
+
+on:
+  push:
+    branches:
+      - fix/didit-isolated-qa-20261124
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  didit-qa-guard:
+    name: Security guards and source syntax (read-only)
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Checkout test branch
+        uses: actions/checkout@v4
+      - name: Set up Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Syntax-check Didit backend (no credentials)
+        run: |
+          node --check backend/diditIdentityRoutes.js
+          node --check backend/firebaseAdmin.js
+          node --check backend/stagingFirebaseIsolationPolicy.js
+          node --check backend/test-didit-qa-isolation.cjs
+      - name: Verify sandbox QA project cannot access production
+        run: node backend/test-didit-qa-isolation.cjs
+      - name: Didit decision and signature checks
+        run: node backend/test-diditIdentityRoutes.js
