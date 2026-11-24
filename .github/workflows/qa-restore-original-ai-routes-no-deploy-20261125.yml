@@ -1,0 +1,57 @@
+name: Restore original VolunServe AI routes (NO DEPLOY)
+on:
+  push:
+    branches:
+      - restore/original-ai-evidence-routes-live-20261125
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  original-ai-routes-only:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Require original production baseline and prohibit unrelated changed files
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin live-protected:refs/remotes/origin/live-protected
+          git merge-base --is-ancestor origin/live-protected HEAD || {
+            echo "::error::Candidate is not based on the protected source"; exit 1;
+          }
+          git diff --name-only origin/live-protected...HEAD > /tmp/changed.txt
+          cat /tmp/changed.txt
+          while IFS= read -r path; do
+            case "$path" in
+              backend/server.js|backend/selectedIdPolicy.js|backend/identityIssuerReviewPolicy.js|backend/identityHybridPrecheckDecision.js|backend/identityPrivateEvidence.js|backend/test-identityPrivateEvidence.js|backend/test-identityHybridPrecheckDecision.js|backend/test-identityIssuerReviewPolicy.js|backend/test-identity-final-admin-only.js|backend/test-identity-review-reject.js|backend/test-identity-three-attempt-review.js|backend/test-identityPrecheckCors.js|identity-ai/main.py|identity-ai/strict_document_screening.py|identity-ai/profile_consistency.py|identity-ai/face_preflight_policy.py|identity-ai/passport_mrz_shadow.py|identity-ai/test_strict_document_screening.py|identity-ai/test_profile_consistency.py|identity-ai/test_face_preflight_policy.py|identity-ai/test_passport_mrz_shadow.py|backend/test-restore-original-ai-boundary.cjs|.github/workflows/qa-restore-original-ai-routes-no-deploy-20261125.yml) ;;
+              *) echo "::error file=$path::Unexpected or outdated file in restoration"; exit 1 ;;
+            esac
+          done < /tmp/changed.txt
+          git diff --exit-code origin/live-protected...HEAD -- app/ firebase.json firestore.rules functions/ components/ lib/ backend/communitySocial.js backend/communityCertificates.js || {
+            echo "::error::Nonidentity live application files changed"; exit 1;
+          }
+      - name: Verify original face matcher bytes and backend route boundaries
+        run: node --test backend/test-restore-original-ai-boundary.cjs
+      - name: Check syntax of restored existing Node and Python handlers
+        run: |
+          node --check backend/server.js
+          python -m py_compile identity-ai/main.py identity-ai/strict_document_screening.py identity-ai/profile_consistency.py identity-ai/face_preflight_policy.py identity-ai/passport_mrz_shadow.py
+      - name: Run historical document, face policy and privacy unit tests
+        run: |
+          python -m unittest discover -s identity-ai -p 'test_strict_document_screening.py' -v
+          python -m unittest discover -s identity-ai -p 'test_profile_consistency.py' -v
+          python -m unittest discover -s identity-ai -p 'test_face_preflight_policy.py' -v
+          python -m unittest discover -s identity-ai -p 'test_passport_mrz_shadow.py' -v
+          node --test backend/test-identityPrivateEvidence.js backend/test-identityHybridPrecheckDecision.js backend/test-identityIssuerReviewPolicy.js
+          node --test backend/test-identity-final-admin-only.js backend/test-identity-review-reject.js backend/test-identity-three-attempt-review.js backend/test-identityPrecheckCors.js
+      - name: Confirm no release or live services were touched
+        run: echo "NO DEPLOY / NO PRODUCTION DATA CHANGES. Synthetic and source checks only."
