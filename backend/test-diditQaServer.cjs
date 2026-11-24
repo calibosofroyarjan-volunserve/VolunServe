@@ -179,3 +179,30 @@ test("Live-site presentation session requires allowlisted signed-in account and 
     assert.equal(old.status,503);
   });
 });
+
+
+test("Disabled presentation exposes an actionable CORS error, not a browser network failure", async () => {
+  const config={...clean, DIDIT_INTEGRATION_ENABLED:"false",
+    DIDIT_PRESENTATION_ENABLED:"true", DIDIT_PRESENTATION_ALLOWED_UIDS:""};
+  await runServer(createQaApp(config), async url => {
+    const base=url+"/api/demo/didit/start";
+    const preflight=await fetch(base,{method:"OPTIONS",headers:{
+      Origin:"https://volunserve.com",
+      "Access-Control-Request-Method":"POST",
+      "Access-Control-Request-Headers":"authorization,content-type",
+    }});
+    assert.equal(preflight.status,204);
+    assert.equal(preflight.headers.get("access-control-allow-origin"),"https://volunserve.com");
+    const blocked=await fetch(base,{method:"POST",headers:{
+      Origin:"https://volunserve.com","Content-Type":"application/json",
+    },body:JSON.stringify({consent:true})});
+    assert.equal(blocked.status,503);
+    assert.equal(blocked.headers.get("access-control-allow-origin"),"https://volunserve.com");
+    assert.equal((await blocked.json()).error,"presentation_demo_disabled");
+    const attack=await fetch(base,{method:"OPTIONS",headers:{
+      Origin:"https://attacker.example","Access-Control-Request-Method":"POST",
+    }});
+    assert.equal(attack.status,403);
+    assert.equal(attack.headers.get("access-control-allow-origin"),null);
+  });
+});
