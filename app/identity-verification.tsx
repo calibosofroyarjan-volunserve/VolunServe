@@ -810,6 +810,21 @@ export default function IdentityVerification() {
         </Text>
       </View>
 
+      {process.env.EXPO_PUBLIC_DIDIT_LIVE_ENABLED === "true" ? (
+        <TouchableOpacity
+          accessibilityRole="button"
+          onPress={() => router.push("/identity-didit")}
+          style={{ backgroundColor: COLORS.tealDark, borderRadius: 12, padding: 17, marginBottom: 18 }}
+        >
+          <Text style={{ color: COLORS.white, fontSize: 16, fontWeight: "800", textAlign: "center" }}>
+            Verify with Didit Live
+          </Text>
+          <Text style={{ color: COLORS.white, opacity: 0.9, fontSize: 12, marginTop: 4, textAlign: "center" }}>
+            Government ID, face match and liveness verification
+          </Text>
+        </TouchableOpacity>
+      ) : null}
+
       <WizardProgress
         step={
           step

@@ -1,0 +1,23 @@
+name: Didit Live web candidate (NO DEPLOY)
+on:
+  pull_request:
+    branches: [live-protected]
+    paths:
+      - app/identity-didit.tsx
+      - app/identity-verification.tsx
+      - .github/workflows/didit-live-web-candidate.yml
+permissions:
+  contents: read
+jobs:
+  typecheck:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - run: npx tsc --noEmit --pretty false
+      - run: echo "No production deployment is performed."
