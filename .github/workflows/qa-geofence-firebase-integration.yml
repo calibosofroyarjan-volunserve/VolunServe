@@ -35,5 +35,9 @@ jobs:
         run: |
           unset GOOGLE_APPLICATION_CREDENTIALS
           npx firebase-tools emulators:exec --only firestore --project demo-volunserve "node backend/test-geofence-firebase-certificate-integration.cjs"
+      - name: Actual Express endpoint with isolated Firebase Auth tokens
+        run: |
+          unset GOOGLE_APPLICATION_CREDENTIALS FIREBASE_SERVICE_ACCOUNT_JSON
+          npx firebase-tools emulators:exec --only auth,firestore --project demo-volunserve "node backend/test-geofence-auth-http-emulator.cjs"
       - name: Existing certificate regression
         run: node --test backend/test-communityCertificateIssuance.js backend/test-communityCertificateEligibility.js backend/test-communityCertificateLiveTemporary.js
