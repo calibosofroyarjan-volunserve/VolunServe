@@ -178,8 +178,15 @@ def combine_document_sides(front: dict, back: dict | None, *, duplicate: bool = 
         result["status"] = "inconclusive"
         warning_codes.append("document_back_type_conflict")
     elif back.get("status") == "inconclusive":
-        result["status"] = "inconclusive"
-        warning_codes.append("document_back_evidence_inconclusive")
+        # Most physical ID back faces contain QR/issuance details rather than
+        # the front heading. Unrecognized back text alone is not fraud. The
+        # caller must independently check image clarity and require Admin
+        # final review, but it can proceed to non-decisional face comparison.
+        if back.get("warningCodes") == ["document_type_not_recognized"]:
+            result["backTypeRecognized"] = False
+        else:
+            result["status"] = "inconclusive"
+            warning_codes.append("document_back_evidence_inconclusive")
 
     result["warningCodes"] = list(dict.fromkeys(warning_codes))[:4]
     result["authenticityVerified"] = False
