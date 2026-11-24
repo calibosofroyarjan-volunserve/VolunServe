@@ -712,6 +712,9 @@ function normalizeIdDocumentScreening(value) {
     "document_type_not_recognized",
     "multiple_document_type_signals",
     "non_government_id_detected",
+    "document_back_evidence_inconclusive",
+    "document_back_type_conflict",
+    "document_front_back_duplicate",
     "ocr_unavailable",
   ];
   const declared = String(value?.declaredIdType || "");
@@ -725,6 +728,8 @@ function normalizeIdDocumentScreening(value) {
     authenticityVerified: false, // Keyword OCR is NOT an issuance registry.
     livenessVerified: false, // Still image is NOT a liveness proof.
     manualReviewRequired: true,
+    backSideProvided: value?.backSideProvided === true,
+    backSideScreened: value?.backSideScreened === true,
     warningCodes: Array.isArray(value?.warningCodes)
       ? value.warningCodes.filter(code => warnings.includes(code)).slice(0, 4)
       : ["ocr_unavailable"],
