@@ -23,11 +23,14 @@ export function identityEnvironmentTarget(input: IdentityEnvironmentInput): "sta
     throw new Error("Firebase identity target is unknown. Requests are blocked.");
   }
 
+  const qaProject = projectId === "volunserve-didit-qa";
+  const qaAllowed = qaProject && process.env.EXPO_PUBLIC_DIDIT_QA_MODE === "true";
   const stagingRequested = runtime === "staging" ||
-    target === "staging" || projectId === "volunserve-full-staging";
+    target === "staging" || projectId === "volunserve-full-staging" || qaProject;
   if (stagingRequested) {
     if (runtime === "production" || target !== "staging" ||
-        projectId !== "volunserve-full-staging") {
+        (!qaAllowed && projectId !== "volunserve-full-staging") ||
+        (qaProject && !qaAllowed)) {
       throw new Error("Staging identity setup is inconsistent. No identity request was sent.");
     }
     return "staging";
@@ -40,6 +43,10 @@ export function identityEnvironmentTarget(input: IdentityEnvironmentInput): "sta
 }
 
 export function identityAdminApiBaseUrl(input: IdentityEnvironmentInput): string {
+  // QA Resident testing must never reuse the existing staging Admin backend.
+  if (input.projectId === "volunserve-didit-qa") {
+    throw new Error("Didit QA does not enable Admin API access to existing staging records.");
+  }
   return identityEnvironmentTarget(input) === "staging"
     ? "https://volunserve-backend-staging.onrender.com"
     : "https://volunserve.onrender.com";
