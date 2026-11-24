@@ -25,9 +25,11 @@ jobs:
           test -f scripts/test-community-attendance-geofence-rules.cjs
           echo "PASS source is available and reviewed attendance restriction is present."
           echo "Protected production environment approval remains required for reading current rules."
+  # PR merge refs are intentionally not eligible for the protected audit.
+  # Run only on the named branch push, subject to the existing production environment policy.
   read-only-active-rules:
     needs: preflight
-    if: github.repository == 'calibosofroyarjan-volunserve/VolunServe' && (github.event_name == 'push' || (github.event.pull_request.head.repo.full_name == github.repository && github.head_ref == 'qa/geofence-live-rules-audit-20261124'))
+    if: github.repository == 'calibosofroyarjan-volunserve/VolunServe' && github.event_name == 'push' && github.ref == 'refs/heads/qa/geofence-live-rules-audit-20261124'
     environment: production
     runs-on: ubuntu-24.04
     timeout-minutes: 20
