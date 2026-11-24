@@ -55,6 +55,11 @@ export const usingFirebaseEmulators =
  * to the production project when its separate Firebase environment is missing.
  * These are Firebase's public WEB config fields, not service-account secrets.
  */
+// This QA branch must never build against live Firebase.
+if (process.env.EXPO_PUBLIC_VOLUNSERVE_ENV !== "staging" ||
+    process.env.EXPO_PUBLIC_VOLUNSERVE_FIREBASE_TARGET !== "staging") {
+  throw new Error("Geofence QA: staging environment required.");
+}
 const firebaseTarget = process.env.EXPO_PUBLIC_VOLUNSERVE_FIREBASE_TARGET || "production";
 if (firebaseTarget !== "production" && firebaseTarget !== "staging") {
   throw new Error("Invalid Firebase target. Choose explicit 'staging' or 'production'.");
