@@ -11,6 +11,7 @@ on:
       - 'components/identity/DocumentScreeningSummary.tsx'
       - 'identity-ai/document_screening.py'
       - 'identity-ai/main.py'
+      - 'identity-ai/test_document_precheck_contract.py'
       - 'backend/test-identity-optional-back-contract.cjs'
       - 'identity-ai/test_document_screening.py'
       - 'lib/identityVerification.ts'
@@ -41,7 +42,7 @@ jobs:
           cat /tmp/identity-changed.txt
           while IFS= read -r path; do
             case "$path" in
-              app/identity-verification.web.tsx|backend/server.js|components/identity/DocumentScreeningSummary.tsx|identity-ai/document_screening.py|identity-ai/main.py|identity-ai/test_document_screening.py|backend/test-identity-optional-back-contract.cjs|lib/identityVerification.ts|scripts/test-unified-identity-ai-government-id-screening.cjs|.github/workflows/qa-reject-school-ids-20261125.yml|.github/workflows/qa-live-baseline-identity-only-20261125.yml) ;;
+              app/identity-verification.web.tsx|backend/server.js|components/identity/DocumentScreeningSummary.tsx|identity-ai/document_screening.py|identity-ai/main.py|identity-ai/test_document_precheck_contract.py|identity-ai/test_document_screening.py|backend/test-identity-optional-back-contract.cjs|lib/identityVerification.ts|scripts/test-unified-identity-ai-government-id-screening.cjs|.github/workflows/qa-reject-school-ids-20261125.yml|.github/workflows/qa-live-baseline-identity-only-20261125.yml) ;;
               *) echo "::error file=$path::Unrelated or outdated file cannot be copied into VolunServe live identity change."; exit 1 ;;
             esac
           done < /tmp/identity-changed.txt
@@ -62,6 +63,8 @@ jobs:
           }
           assert(web.includes("Results display without percentages."));
           assert(web.includes("Front of National ID") && web.includes("Back of National ID"),"Both UI ID sides required");
+          assert(web.includes("Check ID, then Face Scan"),"ID precheck must be wired before original face scan");
+          assert(api.includes('"/api/identity/document/precheck"'),"No authenticated ID precheck backend route");
           assert(web.includes("const detectLoop = useCallback"),"Original face capture must remain intact");
           assert(!web.includes("movementRef"),"Unexpected new movement/liveness challenge");
           assert(!web.includes("Didit"),"Deprecated Didit component reintroduced");
@@ -73,6 +76,7 @@ jobs:
       - name: Verify backend and document classification syntax
         run: |
           python -m unittest discover -s identity-ai -p test_document_screening.py -v
+          python -m unittest discover -s identity-ai -p test_document_precheck_contract.py -v
           python -m py_compile identity-ai/document_screening.py identity-ai/main.py
           node --check backend/server.js
           node --test backend/test-identity-optional-back-contract.cjs
