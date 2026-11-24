@@ -55,6 +55,12 @@ function getServiceAccount() {
 function getFirebaseApp() {
   const serviceAccount =
     getServiceAccount();
+  // This QA branch never initializes Firebase with default/live credentials.
+  if (process.env.VOLUNSERVE_DEPLOYMENT_ENV !== "staging" ||
+      process.env.VOLUNSERVE_STAGING_STRICT !== "true" ||
+      !serviceAccount || serviceAccount.project_id === "volunserve-3aa5b") {
+    throw new Error("Geofence QA: isolated staging credentials required.");
+  }
 
   // Enforce staging isolation BEFORE initializing or reusing Firebase Admin.
   // A missing/mismatched staging project ID is a startup-blocking error.
