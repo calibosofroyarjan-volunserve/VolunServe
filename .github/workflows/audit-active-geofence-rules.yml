@@ -52,6 +52,8 @@ jobs:
           const sa=JSON.parse(process.env.FIREBASE_SA);
           assert.equal(sa.project_id,'volunserve-3aa5b');
           assert.equal(sa.type,'service_account');
+          assert(/^[a-z0-9-]+@volunserve-3aa5b\.iam\.gserviceaccount\.com$/.test(sa.client_email),'Unexpected service account principal');
+          console.log('READONLY_PRINCIPAL='+sa.client_email);
           async function token(){
             const now=Math.floor(Date.now()/1000);
             const encode=x=>Buffer.from(JSON.stringify(x)).toString('base64url');
@@ -71,7 +73,7 @@ jobs:
             const get=async path=>{
               const r=await fetch('https://firebaserules.googleapis.com/v1/'+path,{
                 headers:{Authorization:'Bearer '+access},signal:AbortSignal.timeout(20000)});
-              assert(r.ok,'Rules API GET '+path+' HTTP '+r.status);
+              if(!r.ok){const body=await r.json().catch(()=>({})); const reason=(body.error?.details||[]).map(d=>String(d.reason||'')).filter(x=>/^[A-Z_]+$/.test(x)).join(','); throw Error('Rules API GET '+path+' HTTP '+r.status+' '+(body.error?.status||'')+' '+reason); }
               return r.json();
             };
             const release=await get('projects/volunserve-3aa5b/releases/cloud.firestore');
