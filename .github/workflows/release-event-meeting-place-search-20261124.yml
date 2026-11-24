@@ -1,0 +1,121 @@
+name: Release SJDM meeting place search (guarded Hosting only)
+on:
+  push:
+    branches: [live-protected]
+    paths: ['.github/workflows/release-event-meeting-place-search-20261124.yml']
+permissions:
+  contents: read
+concurrency:
+  group: volunserve-production-hosting-release
+  cancel-in-progress: false
+jobs:
+  publish:
+    if: github.repository == 'calibosofroyarjan-volunserve/VolunServe' && github.ref == 'refs/heads/live-protected'
+    runs-on: ubuntu-24.04
+    environment: production
+    timeout-minutes: 45
+    env:
+      CI: 'true'
+      EXPO_NO_TELEMETRY: '1'
+      EXPO_PUBLIC_VOLUNSERVE_ENV: production
+      EXPO_PUBLIC_IDENTITY_VERIFICATION_API_URL: https://volunserve.onrender.com
+      PROJECT: volunserve-3aa5b
+      SITE: volunserve-3aa5b
+      BASE_SHA: 1b71f233d1ce5697464a14b3b41e45fc241b0840
+      SOURCE_SHA: 5af28d279618dacd5eab518e5e0d52259eae8844
+    steps:
+      - name: Fetch exact controller and approved site without submodule traversal
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CONTROLLER_SHA: ${{ github.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          origin="https://github.com/$GITHUB_REPOSITORY.git"
+          auth="$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)"
+          echo "::add-mask::$auth"
+          for pair in "controller:$CONTROLLER_SHA" "site:$SOURCE_SHA"; do
+            dir="${pair%%:*}"
+            sha="${pair#*:}"
+            [[ "$sha" =~ ^[a-f0-9]{40}$ ]]
+            git init -q "$dir"
+            git -C "$dir" remote add origin "$origin"
+            git -C "$dir" -c "http.https://github.com/.extraheader=AUTHORIZATION: basic $auth" -c fetch.recurseSubmodules=false fetch --no-tags --no-recurse-submodules origin "$sha"
+            git -C "$dir" -c submodule.recurse=false checkout --detach "$sha"
+            test "$(git -C "$dir" rev-parse HEAD)" = "$sha"
+          done
+          unset auth GH_TOKEN
+          echo 'PASS exact sources checked out without touching repository submodules or persisting credentials'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify precise live-derived source and additive Render route
+        working-directory: site
+        run: |
+          node <<'NODE'
+          const assert=require('node:assert/strict'),fs=require('node:fs'),cp=require('node:child_process');
+          const git=(...a)=>cp.execFileSync('git',a,{encoding:'utf8'}).trim();
+          (async()=>{
+            assert.equal(git('rev-parse','HEAD'),process.env.SOURCE_SHA);
+            cp.execFileSync('git',['merge-base','--is-ancestor',process.env.BASE_SHA,process.env.SOURCE_SHA]);
+            assert.deepEqual(git('diff','--name-only',process.env.BASE_SHA,process.env.SOURCE_SHA).split('\n').sort(),[
+              '.github/workflows/qa-event-meeting-place-search-20261124.yml','components/CommunityEventPinPicker.web.tsx','components/InteractiveEventPinMap.web.tsx','constants/sjdmMeetingPlaces.json','lib/meetingPlaceSearch.ts','scripts/import-sjdm-meeting-places.cjs','scripts/test-event-meeting-place-search.cjs'
+            ].sort());
+            assert.equal(JSON.parse(fs.readFileSync('.firebaserc','utf8')).projects.default,process.env.PROJECT);
+            assert(fs.readFileSync('components/auth/EmailFirstSignup.tsx','utf8').includes('if (!consent) {'));
+            const r=await fetch('https://volunserve.com/volunserve-release.json?geofence='+Date.now(),{headers:{'Cache-Control':'no-cache'},signal:AbortSignal.timeout(15000)});
+            assert(r.ok);const m=await r.json();assert.equal(m.firebaseProject,process.env.PROJECT);assert.equal(m.revision,process.env.BASE_SHA);
+            const b=await fetch('https://volunserve.onrender.com/api/community-events/attendance/record',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}',signal:AbortSignal.timeout(90000)});
+            assert.equal(b.status,401,'BLOCKED backend route not ready or authentication gate not working');
+            assert.equal((await b.json()).error,'unauthenticated');
+            console.log('PASS exact current website baseline, 7 reviewed map-search paths, protected live Render route');
+          })().catch(e=>{console.error(e.message);process.exit(1)});
+          NODE
+      - name: Build website from exact approved source without production credentials
+        working-directory: site
+        run: |
+          npm ci --no-audit --no-fund
+          node scripts/test-event-meeting-place-search.cjs
+          node -e "const a=require('node:assert/strict'),p=require('./constants/sjdmMeetingPlaces.json');a.equal(p.length,2046)"
+          node --experimental-strip-types --test scripts/test-attendance-gps-retry.cjs
+          npx tsc --noEmit --incremental false
+          npx expo export --platform web --clear
+          env -u GITHUB_SHA node scripts/verify-hosting-release.cjs
+          node -e "const a=require('assert/strict'),m=require('./dist/volunserve-release.json');a.equal(m.revision,process.env.SOURCE_SHA);a.equal(m.firebaseProject,process.env.PROJECT)"
+      - name: Save exact immutable live Hosting version before publication
+        id: backup
+        working-directory: site
+        env:
+          FIREBASE_SA: ${{ secrets.VOLUNSERVE_PRODUCTION_HOSTING_SERVICE_ACCOUNT }}
+        run: |
+          node -e "const fs=require('fs'),a=require('assert/strict'),s=JSON.parse(process.env.FIREBASE_SA);a.equal(s.project_id,process.env.PROJECT);a.equal(s.type,'service_account');fs.writeFileSync(process.env.RUNNER_TEMP+'/geofence-hosting-key.json',process.env.FIREBASE_SA,{mode:0o600})"
+          GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/geofence-hosting-key.json" node ../controller/.github/scripts/hosting-live-release-snapshot-20261122.cjs snapshot
+      - name: Publish only static Hosting from pinned candidate
+        id: publish
+        uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          firebaseServiceAccount: ${{ secrets.VOLUNSERVE_PRODUCTION_HOSTING_SERVICE_ACCOUNT }}
+          projectId: volunserve-3aa5b
+          channelId: live
+          entryPoint: ./site
+      - name: Verify new website revision
+        working-directory: site
+        env:
+          VOLUNSERVE_HOSTING_URL: https://volunserve.com
+          VOLUNSERVE_EXPECTED_SHA: 5af28d279618dacd5eab518e5e0d52259eae8844
+        run: |
+          for attempt in 1 2 3 4 5 6; do
+            if node scripts/check-live-hosting.cjs; then exit 0; fi
+            sleep 10
+          done
+          exit 1
+      - name: Restore exact previous Hosting on release failure
+        if: failure() && steps.backup.outcome == 'success' && steps.publish.outcome != 'skipped'
+        working-directory: site
+        env:
+          FIREBASE_SA: ${{ secrets.VOLUNSERVE_PRODUCTION_HOSTING_SERVICE_ACCOUNT }}
+        run: |
+          GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/geofence-hosting-key.json" node ../controller/.github/scripts/hosting-live-release-snapshot-20261122.cjs restore
+      - name: Remove temporary credential
+        if: always()
+        run: rm -f "$RUNNER_TEMP/geofence-hosting-key.json"
