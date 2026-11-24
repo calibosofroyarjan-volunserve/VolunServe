@@ -58,7 +58,8 @@ function getFirebaseApp() {
   // This QA branch never initializes Firebase with default/live credentials.
   if (process.env.VOLUNSERVE_DEPLOYMENT_ENV !== "staging" ||
       process.env.VOLUNSERVE_STAGING_STRICT !== "true" ||
-      !serviceAccount || serviceAccount.project_id === "volunserve-3aa5b") {
+      !serviceAccount || serviceAccount.project_id !== "volunserve-geofencing-staging" ||
+      process.env.VOLUNSERVE_STAGING_FIREBASE_PROJECT_ID !== "volunserve-geofencing-staging") {
     throw new Error("Geofence QA: isolated staging credentials required.");
   }
 
