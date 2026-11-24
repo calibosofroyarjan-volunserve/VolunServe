@@ -27,10 +27,16 @@ jobs:
           node --check backend/firebaseAdmin.js
           node --check backend/stagingFirebaseIsolationPolicy.js
           node --check backend/test-didit-qa-isolation.cjs
+          node --check backend/diditQaServer.cjs
+          node --check backend/test-diditQaServer.cjs
       - name: Verify sandbox QA project cannot access production
         run: node backend/test-didit-qa-isolation.cjs
       - name: Didit decision and signature checks
         run: node backend/test-diditIdentityRoutes.js
+      - name: Install backend dependencies without hooks
+        run: npm ci --prefix backend --ignore-scripts --no-audit --no-fund
+      - name: Isolated QA gateway request and CORS tests
+        run: node --test backend/test-diditQaServer.cjs
 
   frontend-typecheck:
     name: TypeScript compatibility (NO DEPLOY)
