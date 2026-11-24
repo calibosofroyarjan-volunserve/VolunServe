@@ -93,13 +93,44 @@ def _document_signals(text: str) -> set[str]:
     return found
 
 
+def _non_government_id_signal(text: str) -> bool:
+    """Look for explicit student/school or private employee ID markings.
+
+    A school or employer name on its own is insufficient evidence, since it
+    could also appear in unrelated text. Do not accept the user's dropdown
+    selection as evidence of a government-issued document.
+    """
+    t = _normalized(text)
+    if any(_contains(t, phrase) for phrase in (
+        "SCHOOL ID", "STUDENT ID", "STUDENT IDENTIFICATION CARD",
+        "PUPIL ID", "STUDENT CARD", "STUDENT ID NUMBER",
+        "COMPANY ID", "EMPLOYEE ID", "EMPLOYEE IDENTIFICATION CARD",
+        "STAFF ID",
+    )):
+        return True
+    school = any(_contains(t, phrase) for phrase in (
+        "SCHOOL", "COLLEGE", "UNIVERSITY", "ACADEMY",
+    ))
+    student = any(_contains(t, phrase) for phrase in (
+        "STUDENT NUMBER", "STUDENT NO", "STUDENT ID NO",
+        "STUDENT IDENTIFICATION", "GRADE LEVEL",
+    ))
+    return school and student
+
+
 def assess_document_text(declared_type: str, ocr_text: str) -> dict:
     """Return strictly sanitized type screening, never an identity verdict."""
     if declared_type not in SUPPORTED:
         raise ValueError("Unsupported government ID type.")
     found = _document_signals(ocr_text)
-    detected = next(iter(found)) if len(found) == 1 else None
-    if len(found) > 1:
+    unsupported_id = _non_government_id_signal(ocr_text)
+    detected = next(iter(found)) if len(found) == 1 and not unsupported_id else None
+    if unsupported_id and found:
+        # Conflicting text may be an OCR error: require review, never approve.
+        status, warning = "inconclusive", "multiple_document_type_signals"
+    elif unsupported_id:
+        status, warning = "mismatch", "non_government_id_detected"
+    elif len(found) > 1:
         status, warning = "inconclusive", "multiple_document_type_signals"
     elif detected is None:
         status, warning = "inconclusive", "document_type_not_recognized"
