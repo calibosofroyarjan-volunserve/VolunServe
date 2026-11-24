@@ -42,7 +42,7 @@ function validateLocation(event, location, now = Date.now()) {
   // Do not store raw volunteer coordinates. Accuracy is a device-reported estimate.
   return {radiusMeters:RADIUS_METERS,distanceMeters:Math.round(distance),accuracyMeters:Math.round(location.accuracy)};
 }
-async function recordGeofencedAttendance({db,FieldValue,uid,eventId,action,location}) {
+async function recordGeofencedAttendance({db,FieldValue,uid,email,eventId,action,location}) {
   if (typeof eventId !== "string" || !/^[A-Za-z0-9_-]{1,160}$/.test(eventId) ||
       !["check-in","check-out"].includes(action)) {
     throw fail(400,"invalid_attendance_request","Invalid event or attendance action.");
@@ -54,7 +54,8 @@ async function recordGeofencedAttendance({db,FieldValue,uid,eventId,action,locat
     const [es,ps,us]=await Promise.all([tx.get(eventRef),tx.get(participantRef),tx.get(profileRef)]);
     if (!es.exists || !ps.exists || !us.exists) throw fail(404,"attendance_not_found","Event or participation record not found.");
     const event=es.data(), attendance=ps.data(), volunteer=us.data();
-    if (!["resident","volunteer"].includes(volunteer.role) || volunteer.status!=="approved" ||
+    if (typeof email !== "string" || !email || volunteer.email !== email ||
+        !["resident","volunteer"].includes(volunteer.role) || volunteer.status!=="approved" ||
         volunteer.volunteerAccess!==true || volunteer.volunteerStatus!=="approved" ||
         volunteer.adminStatus==="suspended" || volunteer.activeMode!=="volunteer") {
       throw fail(403,"volunteer_required","Switch to an approved Volunteer account.");
