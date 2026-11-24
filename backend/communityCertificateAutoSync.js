@@ -6,10 +6,18 @@
  * an eligible completed event if the Admin browser closed before the sync.
  * Does NOT modify attendance or existing certificates.
  */
-function createCommunityCertificateAutoSync({ db, reconcile, logger = console }) {
+const RECOVERY_INTERVAL_MS = 30 * 60 * 1000;
+const QUOTA_COOLDOWN_MS = 30 * 60 * 1000;
+function quotaExhausted(error) {
+  return Number(error?.code) === 8 || /RESOURCE_EXHAUSTED|quota exceeded/i.test(String(error?.message || error));
+}
+
+function createCommunityCertificateAutoSync({ db, reconcile, logger = console, now = Date.now }) {
   let running = false;
+  let quotaBlockedUntil = 0;
   async function runOnce() {
     if (running) return { skipped: "already_running" };
+    if (now() < quotaBlockedUntil) return { skipped: "quota_cooldown" };
     running = true;
     const summary = { reviewed: 0, issued: 0, failed: 0 };
     try {
@@ -29,6 +37,11 @@ function createCommunityCertificateAutoSync({ db, reconcile, logger = console })
           else summary.failed++;
         } catch (error) {
           summary.failed++;
+          if (quotaExhausted(error)) {
+            quotaBlockedUntil = now() + QUOTA_COOLDOWN_MS;
+            logger.warn("[Community certificates] quota exhausted; postponing background recovery");
+            break;
+          }
           logger.warn("[Community certificates] automatic retry failed", {
             eventId:item.id, message:String(error?.message || error).slice(0,150),
           });
@@ -39,6 +52,7 @@ function createCommunityCertificateAutoSync({ db, reconcile, logger = console })
       }
       return summary;
     } catch (error) {
+      if (quotaExhausted(error)) quotaBlockedUntil = now() + QUOTA_COOLDOWN_MS;
       logger.warn("[Community certificates] background scan unavailable", String(error?.message || error).slice(0,150));
       return {...summary, failed: summary.failed + 1};
     } finally {
@@ -48,7 +62,7 @@ function createCommunityCertificateAutoSync({ db, reconcile, logger = console })
   return {runOnce};
 }
 
-function startCommunityCertificateAutoSync({db,reconcile,logger=console,initialDelayMs=45000,intervalMs=300000}) {
+function startCommunityCertificateAutoSync({db,reconcile,logger=console,initialDelayMs=45000,intervalMs=RECOVERY_INTERVAL_MS}) {
   const runner = createCommunityCertificateAutoSync({db,reconcile,logger});
   const kickoff = setTimeout(() => void runner.runOnce(),initialDelayMs);
   const repeating = setInterval(() => void runner.runOnce(),intervalMs);
@@ -57,4 +71,4 @@ function startCommunityCertificateAutoSync({db,reconcile,logger=console,initialD
   return {stop(){clearTimeout(kickoff);clearInterval(repeating);},runOnce:runner.runOnce};
 }
 
-module.exports={createCommunityCertificateAutoSync,startCommunityCertificateAutoSync};
+module.exports={createCommunityCertificateAutoSync,startCommunityCertificateAutoSync,RECOVERY_INTERVAL_MS,QUOTA_COOLDOWN_MS};
