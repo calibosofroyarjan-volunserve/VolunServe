@@ -1,0 +1,39 @@
+name: Check exact-live Didit Sandbox video route (NO DEPLOY)
+on:
+  push:
+    branches: [release/didit-sandbox-video-additive-live-20261124]
+permissions:
+  contents: read
+jobs:
+  exact-live-qa:
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm ci --no-audit --no-fund
+      - run: npx tsc --noEmit --incremental false
+      - run: |
+          node - <<'NODE'
+          const fs=require("node:fs"),a=require("node:assert/strict");
+          const code=fs.readFileSync("app/identity-didit-demo.tsx","utf8");
+          a(code.includes('EXPO_PUBLIC_DIDIT_PRESENTATION_ENABLED === "true"'));
+          a(!/from\s+["']firebase\/firestore/.test(code));
+          a(!/setDoc|updateDoc|deleteDoc/.test(code));
+          a(code.includes("volunserve-didit-qa-backend.onrender.com"));
+          a(code.includes("simulated"));
+          console.log("PASS: demo only, no Firebase production writes");
+          NODE
+      - run: |
+          EXPO_PUBLIC_DIDIT_PRESENTATION_ENABLED=true EXPO_PUBLIC_VOLUNSERVE_FIREBASE_TARGET=production \
+            EXPO_PUBLIC_VOLUNSERVE_ENV=production \
+            EXPO_PUBLIC_IDENTITY_VERIFICATION_API_URL=https://volunserve.onrender.com \
+            npx expo export --platform web --clear
+          env -u GITHUB_SHA node scripts/verify-hosting-release.cjs
+          test -f dist/identity-didit-demo.html || echo "Expo route may use a rewrite; verify route in hosting smoke test."
+      - run: echo "No deployment. Exact live-source candidate tested."
