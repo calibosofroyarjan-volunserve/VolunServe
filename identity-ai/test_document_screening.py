@@ -162,13 +162,22 @@ class GovernmentIdScreeningTests(unittest.TestCase):
         self.assertTrue(merged["backSideScreened"])
         self.assertFalse(merged["authenticityVerified"])
 
-    def test_ocr_back_inconclusive_is_not_confident_pass(self):
+    def test_unrecognized_back_text_does_not_require_front_heading(self):
         front = assess_document_text("national_id", "PHILIPPINE IDENTIFICATION CARD")
         back = assess_document_text("national_id", "BLOOD TYPE O DATE OF ISSUE")
         merged = combine_document_sides(front, back)
+        # A National ID reverse can have QR / issuance text, not the front header.
+        # Quality is independently checked by the private precheck route.
+        self.assertEqual(merged["status"], "text_consistent_unverified")
+        self.assertEqual(merged["backTypeRecognized"], False)
+        self.assertTrue(merged["manualReviewRequired"])
+        self.assertFalse(merged["authenticityVerified"])
+
+    def test_back_ocr_outage_is_inconclusive(self):
+        front = assess_document_text("national_id", "PHILIPPINE IDENTIFICATION CARD")
+        merged = combine_document_sides(front, document_ocr_unavailable("national_id"))
         self.assertEqual(merged["status"], "inconclusive")
         self.assertIn("document_back_evidence_inconclusive", merged["warningCodes"])
-        self.assertTrue(merged["manualReviewRequired"])
 
     def test_two_different_government_types_need_review(self):
         front = assess_document_text("national_id", "PHILIPPINE IDENTIFICATION CARD")
