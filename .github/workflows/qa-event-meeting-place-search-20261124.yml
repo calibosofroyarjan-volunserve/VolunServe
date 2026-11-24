@@ -27,9 +27,11 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - name: Import only named public OSM features in SJDM
-        run: node scripts/import-sjdm-meeting-places.cjs
       - run: npm ci --no-audit --no-fund
+      - name: Install temporary vector-tile decoder (QA runner only)
+        run: npm install --no-save --package-lock=false --ignore-scripts --no-audit --no-fund @mapbox/vector-tile@2.0.4 pbf@4.0.1
+      - name: Import only named public features from existing OpenFreeMap tiles
+        run: node scripts/import-sjdm-meeting-places.cjs
       - name: Verify real indexed place search and existing GPS acquisition
         run: |
           node scripts/test-event-meeting-place-search.cjs
