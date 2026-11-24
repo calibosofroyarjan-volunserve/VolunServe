@@ -93,6 +93,19 @@ export type SubmitIdentityVerificationInput = {
   selfie: CapturedIdentityMedia;
 };
 
+export type PrecheckIdentityDocumentInput = {
+  idType: IdentityDocumentType;
+  idDocument: CapturedIdentityMedia;
+  idBackDocument?: CapturedIdentityMedia | null;
+  consent: true;
+};
+
+export type PrecheckIdentityDocumentResult = {
+  outcome: "pass" | "retry" | "rejected";
+  documentScreening: DocumentScreening;
+  message: string;
+};
+
 const FALLBACK_BACKEND_URL = "https://volunserve.onrender.com";
 
 function getBackendBaseUrl() {
@@ -297,6 +310,60 @@ export async function checkIdentityEngineReady(): Promise<void> {
  * own Python/OpenCV face-verification service. No third-party identity
  * verification provider is used here.
  */
+/**
+ * Consent-required, non-decisional OCR check before starting the selfie camera.
+ * No face upload, no AI attempt consumed and no identity role changes.
+ */
+export async function precheckIdentityDocument(
+  input: PrecheckIdentityDocumentInput,
+): Promise<PrecheckIdentityDocumentResult> {
+  if (!input || input.consent !== true) {
+    throw new Error("Consent is required before screening the ID photos.");
+  }
+  validateMedia(input.idDocument, "Government ID front image");
+  if (input.idType !== "passport") {
+    if (!input.idBackDocument) {
+      throw new Error("Scan the front and back of your government ID.");
+    }
+    validateMedia(input.idBackDocument, "Government ID back image");
+  } else if (input.idBackDocument) {
+    throw new Error("Use only the passport bio page.");
+  }
+  const user = await getAuthenticatedUser();
+  const token = await user.getIdToken(true);
+  const formData = new FormData();
+  formData.append("idType", input.idType);
+  formData.append("consent", "true");
+  appendMedia(formData, "idDocument", input.idDocument);
+  if (input.idBackDocument) {
+    appendMedia(formData, "idBackDocument", input.idBackDocument);
+  }
+  const response = await fetchWithTimeout(
+    `${getBackendBaseUrl()}/api/identity/document/precheck`,
+    {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}` },
+      body: formData,
+    },
+    65000,
+  );
+  const body = await readResponseBody(response);
+  if (!response.ok || body?.ok !== true) {
+    throw new Error(
+      getResponseMessage(body, "ID screening is unavailable. No face verification was started."),
+    );
+  }
+  const screening = parseDocumentScreening(body?.documentScreening);
+  if (!screening || !["pass", "retry", "rejected"].includes(body?.outcome)) {
+    throw new Error("The ID screening service returned an invalid result. Please retry.");
+  }
+  return {
+    outcome: body.outcome,
+    documentScreening: screening,
+    message: String(body.message || "ID screening completed.").slice(0, 240),
+  };
+}
+
 export const submitIdentityVerification = async (
   input: SubmitIdentityVerificationInput,
 ): Promise<IdentityVerificationResult> => {
