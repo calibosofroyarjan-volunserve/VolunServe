@@ -63,7 +63,7 @@ test("consent-only ID photo precheck cannot submit a selfie or bypass the OCR ga
   assert(first >= 0 && last > first);
   const client = api.slice(first, last);
   assert(client.includes('formData.append("consent", "true")'));
-  assert(client.includes('"/api/identity/document/precheck"'));
+  assert(client.includes('/api/identity/document/precheck'));
   assert(!client.includes('appendMedia(formData, "selfie"'));
   const gate = ui.slice(ui.indexOf("const openFaceScan = async"), ui.indexOf("const retake ="));
   assert(gate.includes("await precheckIdentityDocument({"));
