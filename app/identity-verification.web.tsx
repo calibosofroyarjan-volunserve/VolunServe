@@ -1,3 +1,4 @@
+import DiditSandboxInline from "../components/identity/DiditSandboxInline";
 import DocumentScreeningSummary from "../components/identity/DocumentScreeningSummary";
 import ResidentDesktopActions from "../components/layout/ResidentDesktopActions";
 import type { DocumentScreening } from "../lib/identityVerification";
@@ -1579,6 +1580,8 @@ export default function IdentityVerificationWeb() {
           upgrade your account and access additional features.
         </Text>
       </View>
+
+      <DiditSandboxInline />
 
       <WizardProgress step={step} />
 
