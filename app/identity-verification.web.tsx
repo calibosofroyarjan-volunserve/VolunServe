@@ -1949,8 +1949,8 @@ function AiVerificationStep({
           Comparing faces...
         </Text>
         <Text style={styles.aiText}>
-          Checking image quality, detecting facial landmarks,
-          and calculating the private 1-to-1 match score.
+          Checking image quality and comparing the face in the
+          government ID with the selfie. Results display without percentages.
         </Text>
 
         <View style={styles.progressTrack}>
