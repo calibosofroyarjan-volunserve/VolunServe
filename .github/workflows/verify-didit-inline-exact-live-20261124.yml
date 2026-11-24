@@ -1,0 +1,51 @@
+name: Verify Didit inline on exact published VolunServe (NO DEPLOY)
+on:
+  push:
+    branches: [release/didit-sandbox-inline-live-20261124]
+permissions:
+  contents: read
+jobs:
+  typecheck-export:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      EXPO_PUBLIC_DIDIT_PRESENTATION_ENABLED: 'true'
+      EXPO_PUBLIC_VOLUNSERVE_FIREBASE_TARGET: production
+      EXPO_PUBLIC_VOLUNSERVE_ENV: production
+      EXPO_PUBLIC_IDENTITY_VERIFICATION_API_URL: https://volunserve.onrender.com
+      CI: 'true'
+      EXPO_NO_TELEMETRY: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm ci --no-audit --no-fund
+      - run: npx tsc --noEmit --incremental false
+      - name: Confirm production safety/iframe-less integration and exact source scope
+        run: |
+          node <<'NODE'
+          const fs=require("node:fs"),a=require("node:assert/strict"),cp=require("node:child_process");
+          const main=fs.readFileSync("app/identity-verification.web.tsx","utf8");
+          const demo=fs.readFileSync("components/identity/DiditSandboxInline.web.tsx","utf8");
+          a(main.includes("<DiditSandboxInline />"),"Didit missing from real verification page");
+          a(main.includes("<WizardProgress step={step} />"),"Existing ID verification removed");
+          a(demo.includes("volunserve-didit-qa-backend.onrender.com"));
+          a(demo.includes("EXPO_PUBLIC_DIDIT_PRESENTATION_ENABLED"));
+          a(!/firebase\/firestore|setDoc|updateDoc|deleteDoc/.test(demo));
+          const changed=cp.execFileSync("git",["diff","--name-only","9264fe2ad8b958508c7e0dc35a16f4121f57a0f4","HEAD"],{encoding:"utf8"}).trim().split("\n").sort();
+          a.deepEqual(changed,[
+            ".github/workflows/verify-didit-inline-exact-live-20261124.yml",
+            "app/identity-verification.web.tsx",
+            "components/identity/DiditSandboxInline.web.tsx"
+          ].sort());
+          console.log("PASS: in-page Didit, preserved original flow, no Firestore writes, exact published site source");
+          NODE
+      - run: |
+          npx expo export --platform web --clear
+          env -u GITHUB_SHA node scripts/verify-hosting-release.cjs
+          test -f dist/identity-verification.html
+      - run: echo "No Firebase Hosting or production backend deploy performed."
