@@ -1,6 +1,6 @@
 import unittest
 
-from document_screening import assess_document_text, document_ocr_unavailable
+from document_screening import assess_document_text, document_ocr_unavailable, combine_document_sides
 
 
 class GovernmentIdScreeningTests(unittest.TestCase):
@@ -142,6 +142,54 @@ class GovernmentIdScreeningTests(unittest.TestCase):
             "national_id", "PHILIPPINE IDENTIFICATION CARD University of Sample")
         self.assertEqual(result["status"], "text_consistent_unverified")
         self.assertEqual(result["detectedIdType"], "national_id")
+
+    def test_front_only_old_clients_remain_compatible(self):
+        front = assess_document_text("national_id", "PHILIPPINE IDENTIFICATION CARD")
+        merged = combine_document_sides(front, None)
+        self.assertEqual(merged["status"], front["status"])
+        self.assertEqual(merged["warningCodes"], front["warningCodes"])
+        self.assertFalse(merged["backSideProvided"])
+        self.assertFalse(merged["backSideScreened"])
+
+    def test_school_id_on_back_rejects_even_with_good_front(self):
+        front = assess_document_text("national_id", "PHILIPPINE IDENTIFICATION CARD")
+        back = assess_document_text("national_id", "STI SCHOOL ID STUDENT NUMBER 0001")
+        merged = combine_document_sides(front, back)
+        self.assertEqual(merged["status"], "mismatch")
+        self.assertIn("non_government_id_detected", merged["warningCodes"])
+        self.assertIsNone(merged["detectedIdType"])
+        self.assertTrue(merged["backSideProvided"])
+        self.assertTrue(merged["backSideScreened"])
+        self.assertFalse(merged["authenticityVerified"])
+
+    def test_ocr_back_inconclusive_is_not_confident_pass(self):
+        front = assess_document_text("national_id", "PHILIPPINE IDENTIFICATION CARD")
+        back = assess_document_text("national_id", "BLOOD TYPE O DATE OF ISSUE")
+        merged = combine_document_sides(front, back)
+        self.assertEqual(merged["status"], "inconclusive")
+        self.assertIn("document_back_evidence_inconclusive", merged["warningCodes"])
+        self.assertTrue(merged["manualReviewRequired"])
+
+    def test_two_different_government_types_need_review(self):
+        front = assess_document_text("national_id", "PHILIPPINE IDENTIFICATION CARD")
+        back = assess_document_text("national_id", "DRIVER'S LICENSE")
+        merged = combine_document_sides(front, back)
+        self.assertEqual(merged["status"], "inconclusive")
+        self.assertIn("document_back_type_conflict", merged["warningCodes"])
+        self.assertFalse(merged["authenticityVerified"])
+
+    def test_exact_duplicate_front_back_never_passes(self):
+        front = assess_document_text("national_id", "PHILIPPINE IDENTIFICATION CARD")
+        merged = combine_document_sides(front, dict(front), duplicate=True)
+        self.assertEqual(merged["status"], "inconclusive")
+        self.assertIn("document_front_back_duplicate", merged["warningCodes"])
+
+    def test_unavailable_back_ocr_never_proves_id(self):
+        front = assess_document_text("national_id", "PHILIPPINE IDENTIFICATION CARD")
+        merged = combine_document_sides(front, document_ocr_unavailable("national_id"))
+        self.assertEqual(merged["status"], "inconclusive")
+        self.assertFalse(merged["backSideScreened"])
+        self.assertFalse(merged["livenessVerified"])
 
     def test_unsupported_id_type_rejected(self):
         with self.assertRaises(ValueError):
