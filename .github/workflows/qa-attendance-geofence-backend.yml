@@ -7,10 +7,13 @@ on:
       - 'backend/communityAttendanceGeofence.js'
       - 'backend/test-communityAttendanceGeofence.js'
       - 'backend/server.js'
+  pull_request:
+    branches: [review-base/attendance-geofence-backend-20261124]
 permissions:
   contents: read
 jobs:
   qa:
+    if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     env:
