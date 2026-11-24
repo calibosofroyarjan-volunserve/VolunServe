@@ -1,0 +1,32 @@
+name: QA GPS Retry (NO DEPLOY)
+on:
+  push:
+    branches: [fix/attendance-gps-retry-20261124]
+  pull_request:
+    branches: [feature/attendance-geofence-web-20261124]
+permissions:
+  contents: read
+jobs:
+  qa:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      CI: 'true'
+      EXPO_NO_TELEMETRY: '1'
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Extract exact candidate
+        run: |
+          curl --fail --silent --show-error --location --retry 3 -H "Authorization: Bearer $GH_TOKEN" "https://api.github.com/repos/$GITHUB_REPOSITORY/tarball/$GITHUB_SHA" -o "$RUNNER_TEMP/source.tar.gz"
+          tar -xzf "$RUNNER_TEMP/source.tar.gz" --strip-components=1 -C "$GITHUB_WORKSPACE"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: GPS acquisition tests
+        run: node --experimental-strip-types --test scripts/test-attendance-gps-retry.cjs
+      - run: npm ci --no-audit --no-fund
+      - name: Verify frontend compatibility
+        run: |
+          npx tsc --noEmit --incremental false
+          npx expo export --platform web --clear
+      - run: echo 'No production writes or deploy.'
