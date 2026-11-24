@@ -59,20 +59,22 @@ async function retrieveDiditDecision(sessionId) {
   }
 }
 
-function compactName(value) {
-  return String(value || "").normalize("NFKD").replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase().replace(/[^a-z0-9]/g, "");
+function nameTokens(value) {
+  return String(value || "").normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "").toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ").trim().split(/\s+/).filter(Boolean);
 }
 function idMatchesResident(document, profile) {
-  const first = compactName(profile?.firstName);
-  const last = compactName(profile?.lastName);
-  const full = compactName(document?.full_name);
+  const first = nameTokens(profile?.firstName);
+  const last = nameTokens(profile?.lastName);
+  const full = new Set(nameTokens(document?.full_name));
   const expectedDob = String(profile?.dateOfBirth || "").slice(0, 10);
   const idDob = String(document?.date_of_birth || "").slice(0, 10);
-  // No automatic privilege grant on incomplete or mismatched identity evidence.
-  return first.length >= 2 && last.length >= 2 && full.includes(first) &&
-    full.includes(last) && /^\d{4}-\d{2}-\d{2}$/.test(expectedDob) &&
-    expectedDob === idDob;
+  // Exact name tokens: "Ann" must never be considered equal to "Joanne".
+  // Missing DOB and any ambiguity always require human review.
+  return first.length > 0 && last.length > 0 &&
+    [...first, ...last].every(token => token.length >= 2 && full.has(token)) &&
+    /^\d{4}-\d{2}-\d{2}$/.test(expectedDob) && expectedDob === idDob;
 }
 function classifyLiveDocument(doc) {
   const normalize = value => String(value || "").toLowerCase().replace(/[_-]/g, " ").trim();
