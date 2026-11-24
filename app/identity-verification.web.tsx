@@ -1,5 +1,5 @@
-import { liveUi as designUi } from "../constants/volunserveLiveUi";
 import DocumentScreeningSummary from "../components/identity/DocumentScreeningSummary";
+import ResidentDesktopActions from "../components/layout/ResidentDesktopActions";
 import type { DocumentScreening } from "../lib/identityVerification";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
@@ -20,11 +20,10 @@ import {
     Text,
     TouchableOpacity,
     View,
+    useWindowDimensions,
 } from "react-native";
 
-import { auth, db } from "../lib/firebase";
-import { identityEnvironmentTarget } from "../lib/identityEnvironmentTarget";
-import { waitForCameraPreview } from "../lib/identityCameraPreview";
+import { db } from "../lib/firebase";
 import {
     getIdentityStatus,
     onAuthChange,
@@ -83,10 +82,6 @@ type ScanState =
   | "too_close"
   | "off_center"
   | "hold_still"
-  | "challenge_center"
-  | "challenge_left"
-  | "challenge_right"
-  | "challenge_return"
   | "ready"
   | "captured";
 
@@ -97,8 +92,6 @@ type LiveChecks = {
   distanceGood: boolean;
   stable: boolean;
 };
-
-type MovementCheck = { direction: "left" | "right"; stage: "center" | "move" | "return" | "complete"; since: number | null };
 
 const EMPTY_CHECKS: LiveChecks = {
   faceDetected: false,
@@ -145,7 +138,7 @@ function scanCopy(scanState: ScanState) {
     case "loading":
       return {
         title: "Starting secure face scan...",
-        text: "Waiting for visible camera frames, then loading the face detector. Camera access alone is not enough.",
+        text: "Opening your webcam and loading the on-device face detector.",
         color: COLORS.blue,
       };
     case "camera_error":
@@ -202,14 +195,6 @@ function scanCopy(scanState: ScanState) {
         text: "Move your face toward the center of the oval.",
         color: COLORS.warning,
       };
-    case "challenge_center":
-      return { title: "Start in the center", text: "Center your face briefly before the movement prompt.", color: COLORS.blue };
-    case "challenge_left":
-      return { title: "Move left on screen", text: "Move your face toward the LEFT side of the mirrored preview.", color: COLORS.blue };
-    case "challenge_right":
-      return { title: "Move right on screen", text: "Move your face toward the RIGHT side of the mirrored preview.", color: COLORS.blue };
-    case "challenge_return":
-      return { title: "Return to the center", text: "Come back to the oval and hold still for the final selfie.", color: COLORS.blue };
     case "hold_still":
       return {
         title: "Face detected — hold still",
@@ -239,6 +224,8 @@ function scanCopy(scanState: ScanState) {
 
 export default function IdentityVerificationWeb() {
   const router = useRouter();
+  const { width: viewportWidth } = useWindowDimensions();
+  const desktopIdentityShell = viewportWidth >= 1040;
 
   const videoRef = useRef<any>(null);
   const idVideoRef = useRef<HTMLVideoElement | null>(null);
@@ -255,7 +242,6 @@ export default function IdentityVerificationWeb() {
   const visionModuleRef = useRef<any>(null);
   const animationRef = useRef<number | null>(null);
   const stableSinceRef = useRef<number | null>(null);
-  const movementRef = useRef<MovementCheck>({ direction: "left", stage: "center", since: null });
   const lastDetectAtRef = useRef(0);
   const captureLockRef = useRef(false);
   const cameraStartingRef = useRef(false);
@@ -279,6 +265,7 @@ export default function IdentityVerificationWeb() {
   const [documentChecking, setDocumentChecking] = useState(false);
   const [documentPrecheckMessage, setDocumentPrecheckMessage] = useState("");
   const [documentPrecheckOutcome, setDocumentPrecheckOutcome] = useState<"pass" | "review" | "retry" | null>(null);
+  const [documentPrecheckScreening, setDocumentPrecheckScreening] = useState<DocumentScreening | null>(null);
   useEffect(() => () => {
     // An in-flight OCR response cannot reopen the selfie screen after navigation.
     documentPrecheckRevisionRef.current += 1;
@@ -305,7 +292,6 @@ export default function IdentityVerificationWeb() {
   const [scanProgress, setScanProgress] = useState(0);
   const [liveChecks, setLiveChecks] =
     useState<LiveChecks>(EMPTY_CHECKS);
-  const [movementCompleted, setMovementCompleted] = useState(false);
   const [cameraError, setCameraError] = useState("");
 
   useEffect(() => {
@@ -394,20 +380,6 @@ export default function IdentityVerificationWeb() {
       "Government ID",
     [idType],
   );
-
-  // Optional isolated local preview only; never enable production ID/media
-  // uploads, FaceMatch auto-approval, or unvalidated liveness.
-  const canOpenLocalFaceDemo = (() => {
-    try {
-      return identityEnvironmentTarget({
-        runtimeEnv: process.env.EXPO_PUBLIC_VOLUNSERVE_ENV,
-        firebaseTarget: process.env.EXPO_PUBLIC_VOLUNSERVE_FIREBASE_TARGET,
-        projectId: auth.app.options.projectId,
-      }) === "staging";
-    } catch {
-      return false;
-    }
-  })();
 
   const stopCamera = useCallback(() => {
     // Cancel any deferred camera start when navigating back or unmounting.
@@ -523,7 +495,8 @@ export default function IdentityVerificationWeb() {
         idStreamRef.current = stream;
         const element = idVideoRef.current;
         if (!element) throw new Error("Unable to initialize the ID camera preview.");
-        await waitForCameraPreview(element, stream);
+        element.srcObject = stream;
+        await element.play();
         if (!cancelled) setIdCameraReady(true);
       } catch (error: any) {
         if (!cancelled) {
@@ -543,21 +516,10 @@ export default function IdentityVerificationWeb() {
     };
   }, [idCameraOpen, stopIdCamera]);
 
-  const chooseIdDocument = async (side: "front" | "back") => {
-    // Check the actual private upload permission before even opening an ID
-    // camera. An AI engine can be healthy while staging uploads remain HTTP 423.
-    // Do not ask the Resident to photograph a sensitive government ID in
-    // that case, and do not consume a verification attempt.
-    try {
-      await checkIdentityEngineReady();
-    } catch (error: any) {
-      const reason = String(error?.message || "Identity media submission is unavailable.");
-      setDocumentPrecheckMessage(reason);
-      setLocalMessage(reason);
-      return;
-    }
+  const chooseIdDocument = (side: "front" | "back") => {
     documentPrecheckRevisionRef.current += 1;
     setDocumentPrecheckOutcome(null);
+    setDocumentPrecheckScreening(null);
     setDocumentPrecheckMessage("");
     idCameraSessionRef.current += 1;
     setIdCameraSide(side);
@@ -567,6 +529,54 @@ export default function IdentityVerificationWeb() {
     setIdAutoProgress(0);
     idAutoFramesRef.current = { previous: null, steadySince: null };
     setIdCameraOpen(true);
+  };
+
+  // Keep file media in browser memory until consented OCR precheck.
+  // Uploaded images never bypass independent OCR and LGU/Admin review.
+  const chooseIdFile = (side: "front" | "back") => {
+    if (idCameraOpen) return;
+    const session = idCameraSessionRef.current;
+    const picker = document.createElement("input");
+    picker.type = "file";
+    picker.accept = "image/jpeg,image/png,image/webp";
+    picker.onchange = () => {
+      const file = picker.files?.[0];
+      if (!file) return;
+      if (!["image/jpeg", "image/png", "image/webp"].includes(file.type) ||
+          file.size > 10 * 1024 * 1024 || file.size < 1024) {
+        setDocumentPrecheckOutcome("retry");
+        setDocumentPrecheckMessage("Choose a clear JPG, PNG, or WebP photo under 10 MB.");
+        return;
+      }
+      const uri = URL.createObjectURL(file);
+      const preview = new window.Image();
+      preview.onload = () => {
+        if (session !== idCameraSessionRef.current) {
+          URL.revokeObjectURL(uri);
+          return;
+        }
+        if (preview.naturalWidth < 320 || preview.naturalHeight < 200) {
+          URL.revokeObjectURL(uri);
+          setDocumentPrecheckOutcome("retry");
+          setDocumentPrecheckMessage("The image is too small. Use a clear, higher-resolution photo.");
+          return;
+        }
+        documentPrecheckRevisionRef.current += 1;
+        setDocumentPrecheckOutcome(null);
+    setDocumentPrecheckScreening(null);
+        setDocumentPrecheckMessage("");
+        const media: CapturedIdentityMedia = { uri, name: file.name, type: file.type, file };
+        if (side === "front") setIdDocument(media);
+        else setIdBackDocument(media);
+      };
+      preview.onerror = () => {
+        URL.revokeObjectURL(uri);
+        setDocumentPrecheckOutcome("retry");
+        setDocumentPrecheckMessage("Unable to open this image. Select another photo.");
+      };
+      preview.src = uri;
+    };
+    picker.click();
   };
 
   const captureIdDocument = async () => {
@@ -601,6 +611,7 @@ export default function IdentityVerificationWeb() {
       const media: CapturedIdentityMedia = { uri: URL.createObjectURL(blob), name, type: "image/jpeg", file };
       documentPrecheckRevisionRef.current += 1;
       setDocumentPrecheckOutcome(null);
+    setDocumentPrecheckScreening(null);
       setDocumentPrecheckMessage("");
       if (captureSide === "front") {
         setIdDocument(media);
@@ -686,12 +697,14 @@ export default function IdentityVerificationWeb() {
   const discardIdDocument = () => {
     documentPrecheckRevisionRef.current += 1;
     setDocumentPrecheckOutcome(null);
+    setDocumentPrecheckScreening(null);
     setDocumentPrecheckMessage("");
     setIdDocument(null);
   };
   const discardIdBackDocument = () => {
     documentPrecheckRevisionRef.current += 1;
     setDocumentPrecheckOutcome(null);
+    setDocumentPrecheckScreening(null);
     setDocumentPrecheckMessage("");
     setIdBackDocument(null);
   };
@@ -882,17 +895,11 @@ export default function IdentityVerificationWeb() {
           const oneFace = detections.length === 1;
 
           if (!faceDetected) {
-            movementRef.current.stage = "center";
-            movementRef.current.since = null;
-            setMovementCompleted(false);
             stableSinceRef.current = null;
             setScanProgress(0);
             setLiveChecks(EMPTY_CHECKS);
             setScanState("no_face");
           } else if (!oneFace) {
-            movementRef.current.stage = "center";
-            movementRef.current.since = null;
-            setMovementCompleted(false);
             stableSinceRef.current = null;
             setScanProgress(0);
             setLiveChecks({
@@ -910,9 +917,6 @@ export default function IdentityVerificationWeb() {
             const videoHeight = video.videoHeight || 1;
 
             if (!box) {
-              movementRef.current.stage = "center";
-              movementRef.current.since = null;
-              setMovementCompleted(false);
               stableSinceRef.current = null;
               setScanProgress(0);
               setLiveChecks({
@@ -951,9 +955,6 @@ export default function IdentityVerificationWeb() {
                 !tooClose;
 
               if (!distanceGood) {
-                movementRef.current.stage = "center";
-                movementRef.current.since = null;
-                setMovementCompleted(false);
                 stableSinceRef.current = null;
                 setScanProgress(0);
                 setLiveChecks({
@@ -966,35 +967,6 @@ export default function IdentityVerificationWeb() {
                 setScanState(
                   tooFar ? "too_far" : "too_close",
                 );
-              } else if (movementRef.current.stage !== "complete") {
-                // Camera-motion prompt only: replay or moved photo may still pass.
-                // Never treat this as validated liveness or presentation-attack detection.
-                const movement = movementRef.current;
-                const displayOffset = 0.5 - centerX / videoWidth; // mirrored preview
-                const onSide = movement.direction === "left"
-                  ? displayOffset <= -0.15 : displayOffset >= 0.15;
-                const qualifies = movement.stage === "move" ? onSide : centered;
-                if (!qualifies) {
-                  movement.since = null;
-                } else {
-                  if (movement.since === null) movement.since = now;
-                  const held = now - movement.since;
-                  if (movement.stage === "center" && held >= 550) {
-                    movement.stage = "move"; movement.since = null;
-                  } else if (movement.stage === "move" && held >= 400) {
-                    movement.stage = "return"; movement.since = null;
-                  } else if (movement.stage === "return" && held >= 650) {
-                    movement.stage = "complete"; movement.since = null;
-                    setMovementCompleted(true);
-                  }
-                }
-                stableSinceRef.current = null;
-                setScanProgress(0);
-                setLiveChecks({ faceDetected: true, oneFace: true, centered, distanceGood: true, stable: false });
-                setScanState(movement.stage === "center" ? "challenge_center"
-                  : movement.stage === "move"
-                    ? movement.direction === "left" ? "challenge_left" : "challenge_right"
-                    : "challenge_return");
               } else if (!centered) {
                 stableSinceRef.current = null;
                 setScanProgress(0);
@@ -1063,8 +1035,6 @@ export default function IdentityVerificationWeb() {
     captureLockRef.current = false;
     stableSinceRef.current = null;
     // Randomized motion guidance, not validated anti-spoofing.
-    movementRef.current = { direction: Math.random() < 0.5 ? "left" : "right", stage: "center", since: null };
-    setMovementCompleted(false);
 
     let stream: MediaStream | null = null;
     let phase: "camera" | "preview" | "detector" = "camera";
@@ -1102,15 +1072,16 @@ export default function IdentityVerificationWeb() {
       phase = "preview";
       const video = videoRef.current as HTMLVideoElement | null;
       if (!video) throw new Error("Webcam preview element was not mounted.");
-      await waitForCameraPreview(video, stream);
+      video.srcObject = stream;
+      video.muted = true;
+      video.playsInline = true;
+      await video.play();
       if (requestId !== cameraRequestRef.current) return;
-      // Reveal visible live pixels immediately, before the MediaPipe bundle
-      // loads; a slow detector must never hide a working camera behind
-      // the full-screen "Allow Camera" overlay.
-      setCameraActive(true);
+
       phase = "detector";
       await ensureDetector();
       if (requestId !== cameraRequestRef.current) return;
+      setCameraActive(true);
       setScanState("no_face");
       detectLoop();
     } catch (error: any) {
@@ -1159,6 +1130,7 @@ export default function IdentityVerificationWeb() {
     const revision = documentPrecheckRevisionRef.current;
     setDocumentChecking(true);
     setDocumentPrecheckOutcome(null);
+    setDocumentPrecheckScreening(null);
     setDocumentPrecheckMessage("Checking the selected ID type, front/back arrangement and image quality...");
     try {
       await checkIdentityEngineReady();
@@ -1170,10 +1142,37 @@ export default function IdentityVerificationWeb() {
       });
       if (revision !== documentPrecheckRevisionRef.current) return;
       setDocumentPrecheckOutcome(result.outcome);
+      setDocumentPrecheckScreening(result.documentScreening || null);
       setDocumentPrecheckMessage(result.message);
       if (result.outcome === "retry") return;
-      // PASS is preliminary OCR plausibility; REVIEW is a blurry-National-ID
-      // human rescan case. Neither authenticates an ID or establishes liveness.
+      if (result.outcome === "review") {
+        // A pending queue entry must be persisted by the authenticated
+        // backend BEFORE we display a success state. The ID-only review never
+        // starts a face camera or consumes one of the three face attempts.
+        setSelfie(null);
+        stopCamera();
+        if (result.status === "pending") {
+          setSubmittedIdPreviewUri(idDocument.uri);
+          setStatusResult({
+            identityStatus: "pending",
+            identityVerified: false,
+            verificationId: result.verificationId,
+            decision: result.decision,
+            documentScreening: result.documentScreening,
+            message: result.message,
+          });
+          setLocalMessage(result.message);
+          setStep(3);
+        } else {
+          setDocumentPrecheckMessage(
+            "The scan needs Admin review, but a pending record was not confirmed. Check your status before retrying. No face scan was started.",
+          );
+        }
+        return;
+      }
+      // PASS allows only the original ID-to-selfie face comparison.
+      // OCR and face matching alone cannot authenticate government IDs
+      // or authorize automatic Verified Resident roles.
       setSelfie(null);
       stopCamera();
       setStep(2);
@@ -1199,7 +1198,6 @@ export default function IdentityVerificationWeb() {
     }
 
     setSelfie(null);
-    setMovementCompleted(false);
     setScanProgress(0);
     setLiveChecks(EMPTY_CHECKS);
     setScanState("idle");
@@ -1376,9 +1374,7 @@ export default function IdentityVerificationWeb() {
     return (
       <StatusScreen
         icon="alert-circle-outline"
-        title={statusResult?.decision === "rejected"
-          ? "Identity Submission Rejected"
-          : "Verification Attempt Failed"}
+        title="Verification Attempt Failed"
         message={
           localMessage ||
           statusResult?.message ||
@@ -1386,14 +1382,10 @@ export default function IdentityVerificationWeb() {
         }
         background={COLORS.dangerBg}
         color={COLORS.danger}
-        badge={statusResult?.decision === "rejected"
-          ? "Rejected · Not Verified"
-          : "Failed · Retry Allowed"}
+        badge="Failed · Retry Allowed"
         idPreviewUri={submittedIdPreviewUri}
         idPreviewLabel={selectedIdLabel}
-        primaryLabel={statusResult?.decision === "rejected"
-          ? "Submit New Application"
-          : "Try Verification Again"}
+        primaryLabel="Try Verification Again"
         primaryAction={() => {
           stopCamera();
           if (selfie?.uri?.startsWith("blob:")) {
@@ -1471,11 +1463,15 @@ export default function IdentityVerificationWeb() {
   const copy = scanCopy(scanState);
 
   return (
-    <ScrollView
-      style={styles.screen}
-      contentContainerStyle={styles.page}
-      showsVerticalScrollIndicator={false}
-    >
+    <View style={styles.identityShell}>
+      {desktopIdentityShell ? <IdentityDesktopSidebar /> : null}
+      <View style={styles.identityMain}>
+        {desktopIdentityShell ? <ResidentDesktopActions /> : null}
+        <ScrollView
+          style={styles.screen}
+          contentContainerStyle={styles.page}
+          showsVerticalScrollIndicator
+        >
       <View style={styles.topBar}>
         <TouchableOpacity
           style={styles.backButton}
@@ -1519,35 +1515,10 @@ export default function IdentityVerificationWeb() {
           Become a Verified Resident
         </Text>
         <Text style={styles.subtitle}>
-          Government ID + real-time face detection + private
-          1-to-1 AI face comparison.
+          Verify your identity using a government-issued ID and a face scan to
+          upgrade your account and access additional features.
         </Text>
-        {canOpenLocalFaceDemo ? (
-          <TouchableOpacity
-            accessibilityRole="button"
-            onPress={() => router.push("/identity-face-demo" as any)}
-            style={{ alignSelf: "flex-start", paddingVertical: 10, paddingHorizontal: 12,
-              marginTop: 8, backgroundColor: "#EFF6FF", borderRadius: 10 }}
-          >
-            <Text style={{ color: "#1D4ED8", fontSize: 12, fontWeight: "700" }}>
-              Try private face detector demo (no ID or selfie uploads)
-            </Text>
-          </TouchableOpacity>
-        ) : null}
       </View>
-
-      <TouchableOpacity
-        accessibilityRole="button"
-        onPress={() => router.push("/identity-manual-review" as any)}
-        style={{backgroundColor:"#ECFDF5",borderRadius:11,borderWidth:1,
-          borderColor:"#A7F3D0",padding:13,marginVertical:12,
-          alignSelf:"stretch",flexDirection:"row",alignItems:"center",gap:9}}
-      >
-        <Ionicons name="people-outline" size={21} color="#047857" />
-        <Text style={{color:"#065F46",fontWeight:"700",fontSize:13,flex:1}}>
-          Cannot complete camera/ID scan? Request an in-person LGU review (no photo upload)
-        </Text>
-      </TouchableOpacity>
 
       <WizardProgress step={step} />
 
@@ -1577,6 +1548,7 @@ export default function IdentityVerificationWeb() {
           idCanvasRef={idCanvasRef}
           onPick={() => chooseIdDocument("front")}
           onPickBack={() => chooseIdDocument("back")}
+          onUploadFile={chooseIdFile}
           onCapture={() => void captureIdDocument()}
           onCancel={() => {
             idCameraSessionRef.current += 1;
@@ -1588,6 +1560,7 @@ export default function IdentityVerificationWeb() {
             if (!allowed) {
               documentPrecheckRevisionRef.current += 1;
               setDocumentPrecheckOutcome(null);
+    setDocumentPrecheckScreening(null);
               setDocumentPrecheckMessage("");
             }
             setDocumentConsent(allowed);
@@ -1595,6 +1568,7 @@ export default function IdentityVerificationWeb() {
           documentChecking={documentChecking}
           documentPrecheckMessage={documentPrecheckMessage}
           documentPrecheckOutcome={documentPrecheckOutcome}
+          documentPrecheckScreening={documentPrecheckScreening}
           onRemove={discardIdDocument}
           onRemoveBack={discardIdBackDocument}
         />
@@ -1619,11 +1593,27 @@ export default function IdentityVerificationWeb() {
                 Real-time Face Scan
               </Text>
               <Text style={styles.stepSubtitle}>
-                VolunServe checks camera alignment, asks for a random sideways movement, then captures a still selfie. This is not validated anti-spoofing.
+                VolunServe detects one centered face, waits for a steady camera frame, and captures a selfie for ID-to-selfie face comparison.
               </Text>
             </View>
           </View>
 
+          {documentPrecheckScreening && documentPrecheckOutcome === "pass" ? (
+            <View style={styles.idScanStepSuccess} accessibilityLabel="Completed preliminary document scan">
+              <Ionicons name="checkmark-circle" size={18} color="#13724F" />
+              <Text style={styles.idScanStepSuccessText}>National ID text readable</Text>
+              <Text style={styles.idScanStepSeparator}>•</Text>
+              <Ionicons
+                name={documentPrecheckScreening.profileNameCheck === "possible_match" ? "checkmark-circle" : "help-circle-outline"}
+                size={18}
+                color={documentPrecheckScreening.profileNameCheck === "possible_match" ? "#13724F" : "#7B8993"}
+              />
+              <Text style={styles.idScanStepSuccessText}>
+                {documentPrecheckScreening.profileNameCheck === "possible_match" ?
+                  "Name appears to match" : "Name not clear yet"}
+              </Text>
+            </View>
+          ) : null}
           <View style={styles.scanGrid}>
             <View style={styles.cameraCard}>
               {selfie ? (
@@ -1771,10 +1761,6 @@ export default function IdentityVerificationWeb() {
                 passed={liveChecks.stable}
                 label="Face held still"
               />
-              <LiveCheck
-                passed={movementCompleted}
-                label="Movement prompt completed (not proof of liveness)"
-              />
 
               <View style={styles.guidanceCard}>
                 <Text
@@ -1797,9 +1783,8 @@ export default function IdentityVerificationWeb() {
                   color="#475569"
                 />
                 <Text style={styles.truthText}>
-                  This is real-time face detection and auto-capture.
-                  It is not the same as bank-grade liveness or
-                  anti-spoofing.
+                  This captures a still selfie for face comparison.
+                  It does not establish liveness or prevent spoofing.
                 </Text>
               </View>
             </View>
@@ -1930,13 +1915,61 @@ export default function IdentityVerificationWeb() {
           color={COLORS.tealDark}
         />
         <Text style={styles.privacyNoteText}>
-          Live face detection runs in your browser. Only
-          the captured verification image is submitted to
-          the VolunServe backend for the ID-to-selfie
-          comparison.
+          Your ID images are processed privately for identity screening. A face comparison
+          does not prove ID authenticity or liveness; final verification requires independent Admin review.
         </Text>
       </View>
-    </ScrollView>
+        </ScrollView>
+      </View>
+    </View>
+  );
+}
+
+function IdentityDesktopSidebar() {
+  const router = useRouter();
+  const navigation = [
+    { label: "Home", icon: "home-outline", href: "/(tabs)" },
+    { label: "Emergency Reports", icon: "alert-circle-outline", href: "/(tabs)/disaster-response" },
+    { label: "Request Assistance", icon: "hand-left-outline", href: "/(tabs)/resident" },
+    { label: "Community Events", icon: "calendar-outline", href: "/(tabs)/community-events" },
+    { label: "Donations", icon: "heart-outline", href: "/(tabs)/donation" },
+  ];
+  return (
+    <View style={styles.identitySidebar}>
+      <View style={styles.identitySidebarBrand}>
+        <Image source={require("../assets/images/logo.png")} style={styles.identitySidebarLogo} resizeMode="contain" />
+        <View>
+          <Text style={styles.identitySidebarBrandName}>VolunServe</Text>
+          <Text style={styles.identitySidebarBrandSub}>CITY OF SAN JOSE DEL MONTE</Text>
+        </View>
+      </View>
+      <Text style={styles.identitySidebarSection}>RESIDENT SERVICES</Text>
+      <View style={styles.identitySidebarNav}>
+        {navigation.map((item) => (
+          <TouchableOpacity
+            key={item.label}
+            accessibilityRole="button"
+            onPress={() => router.push(item.href as any)}
+            style={[styles.identitySidebarItem, item.label === "Home" && styles.identitySidebarItemActive]}
+          >
+            <View style={styles.identitySidebarIcon}>
+              <Ionicons name={item.icon as any} color="#ECFDF5" size={21} />
+            </View>
+            <Text style={styles.identitySidebarItemText}>{item.label}</Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+      <View style={styles.identitySidebarBottom}>
+        <TouchableOpacity
+          accessibilityRole="button"
+          onPress={() => router.push("/(tabs)/volunteer-application" as any)}
+          style={styles.identitySidebarItem}
+        >
+          <Ionicons name="people-outline" color="#ECFDF5" size={21} />
+          <Text style={styles.identitySidebarItemText}>Apply as Volunteer</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
   );
 }
 
@@ -1992,7 +2025,7 @@ function WizardProgress({
 
         return (
           <React.Fragment key={item.number}>
-            <View style={styles.progressItem}>
+            <View style={[styles.progressItem, active && styles.progressItemActive]}>
               <View
                 style={[
                   styles.progressCircle,
@@ -2059,6 +2092,7 @@ function UploadIdStep({
   idCanvasRef,
   onPick,
   onPickBack,
+  onUploadFile,
   onCapture,
   onCancel,
   onNext,
@@ -2067,6 +2101,7 @@ function UploadIdStep({
   documentChecking,
   documentPrecheckMessage,
   documentPrecheckOutcome,
+  documentPrecheckScreening,
   onRemove,
   onRemoveBack,
 }: {
@@ -2085,6 +2120,7 @@ function UploadIdStep({
   idCanvasRef: React.MutableRefObject<HTMLCanvasElement | null>;
   onPick: () => void;
   onPickBack: () => void;
+  onUploadFile: (side: "front" | "back") => void;
   onCapture: () => void;
   onCancel: () => void;
   onNext: () => void;
@@ -2093,83 +2129,67 @@ function UploadIdStep({
   documentChecking: boolean;
   documentPrecheckMessage: string;
   documentPrecheckOutcome: "pass" | "review" | "retry" | null;
+  documentPrecheckScreening: DocumentScreening | null;
   onRemove: () => void;
   onRemoveBack: () => void;
 }) {
+  const { width: windowWidth } = useWindowDimensions();
+  const compactDesktop = windowWidth >= 1280;
+  const [idTypeDropdownOpen, setIdTypeDropdownOpen] = useState(false);
   return (
     <View style={styles.stepCard}>
       <View style={styles.stepHeader}>
         <View style={styles.stepHeaderNumber}>
-          <Text style={styles.stepHeaderNumberText}>
-            1
-          </Text>
+          <Ionicons name="card-outline" size={23} color="#006C47" />
         </View>
         <View style={styles.stepHeaderCopy}>
-          <Text style={styles.stepTitle}>
-            Scan Government ID
-          </Text>
+          <Text style={styles.stepTitle}>Government ID Details</Text>
           <Text style={styles.stepSubtitle}>
-            Scan your physical government ID. Put the portrait/front in Front and the reverse in Back. Auto-capture checks steadiness, not which side is shown; OCR checks orientation after submission.
+            Select your government-issued ID and provide clear photos of the front and back.
           </Text>
         </View>
       </View>
 
-      <Text style={styles.fieldLabel}>
-        ID Type
-      </Text>
-
-      <View style={styles.idTypeGrid}>
-        {ID_TYPES.map((item) => {
-          const selected = idType === item.value;
-
-          return (
+      <View style={styles.idSelectorRow}>
+        <Text style={styles.fieldLabel}>ID Type</Text>
+        <View style={styles.idSelectorControl}>
+          <TouchableOpacity
+            accessibilityRole="button"
+            accessibilityLabel="Choose government ID type"
+            accessibilityState={{ expanded: idTypeDropdownOpen }}
+            style={styles.idTypeSelect}
+            onPress={() => setIdTypeDropdownOpen(open => !open)}
+          >
+            <Ionicons name="card-outline" size={21} color="#086642" />
+            <Text style={styles.idTypeSelectText}>
+              <Text style={styles.idTypeSelectStrong}>National ID</Text> (Philippine Identification System)
+            </Text>
+            <Ionicons name={idTypeDropdownOpen ? "chevron-up" : "chevron-down"} size={20} color="#123B33" />
+          </TouchableOpacity>
+          {idTypeDropdownOpen ? (
             <TouchableOpacity
-              key={item.value}
-              style={[
-                styles.idTypeButton,
-                selected && styles.idTypeButtonActive,
-              ]}
-              onPress={() => setIdType(item.value)}
+              accessibilityRole="button"
+              accessibilityLabel="Select National ID"
+              style={styles.idTypeDropdownOption}
+              onPress={() => { setIdType("national_id"); setIdTypeDropdownOpen(false); }}
             >
-              <Ionicons
-                name={
-                  selected
-                    ? "checkmark-circle"
-                    : "card-outline"
-                }
-                size={18}
-                color={
-                  selected
-                    ? COLORS.blue
-                    : "#64748B"
-                }
-              />
-              <View style={styles.idTypeCopy}>
-                <Text
-                  style={[
-                    styles.idTypeLabel,
-                    selected && styles.idTypeLabelActive,
-                  ]}
-                >
-                  {item.label}
-                </Text>
-                <Text style={styles.idTypeHelper}>
-                  {item.helper}
-                </Text>
+              <Ionicons name="checkmark-circle" size={19} color="#06764D" />
+              <View>
+                <Text style={styles.idTypeOptionText}>National ID</Text>
+                <Text style={styles.idTypeOptionHelper}>Currently available for identity verification testing</Text>
               </View>
             </TouchableOpacity>
-          );
-        })}
+          ) : null}
+        </View>
       </View>
-
+      <View style={[styles.idCaptureGrid, compactDesktop && styles.idCaptureGridDesktop]}>
       {([
         { side: "front" as const, label: "Front of ID", media: idDocument, open: onPick, remove: onRemove },
         ...(idType === "passport" ? [] : [
           { side: "back" as const, label: "Back of ID", media: idBackDocument, open: onPickBack, remove: onRemoveBack },
         ]),
       ]).map(({ side, label, media, open, remove }) => (
-        <View key={side}>
-          <Text style={styles.fieldLabel}>{label}</Text>
+        <View key={side} style={[styles.idCapturePanel, compactDesktop && styles.idCapturePanelDesktop]}>
           {media ? (
             <View style={styles.mediaPreviewCard}>
               <Image
@@ -2229,22 +2249,35 @@ function UploadIdStep({
               </View>
             </View>
           ) : (
-            <TouchableOpacity
-              style={styles.uploadZone}
-              onPress={open}
-              disabled={cameraOpen}
-            >
-              <View style={styles.uploadIcon}>
-                <Ionicons name="camera-outline" size={29} color={COLORS.blue} />
+            <View style={styles.idCaptureEmpty}>
+              <View style={styles.idCaptureGlyph}>
+                <Ionicons name={side === "front" ? "person-outline" : "barcode-outline"} size={31} color="#16865D" />
               </View>
-              <Text style={styles.uploadTitle}>Open Camera — {label}</Text>
-              <Text style={styles.uploadText}>
-                The camera may capture the wrong side. Review the preview, then tap Check ID: the AI will screen the ID type and front/back layout before you enter the face scan. This is not proof of authenticity.
+              <Text style={styles.idCaptureTitle}>
+                {side === "front" ? "Front of National ID" : "Back of National ID"}
               </Text>
-            </TouchableOpacity>
+              <Text style={styles.idCaptureHint}>
+                Upload or capture the {side === "front" ? "front" : "back"} side of your National ID.
+              </Text>
+              <View style={styles.idCaptureActions}>
+                <TouchableOpacity accessibilityRole="button"
+                  style={[styles.idCaptureCameraButton, cameraOpen && styles.disabledButton]}
+                  disabled={cameraOpen} onPress={open}>
+                  <Ionicons name="camera-outline" size={20} color="#FFFFFF" />
+                  <Text style={styles.idCaptureCameraText}>Open Camera</Text>
+                </TouchableOpacity>
+                <TouchableOpacity accessibilityRole="button"
+                  style={[styles.idCaptureUploadButton, cameraOpen && styles.disabledButton]}
+                  disabled={cameraOpen} onPress={() => onUploadFile(side)}>
+                  <Ionicons name="cloud-upload-outline" size={20} color="#1B354A" />
+                  <Text style={styles.idCaptureUploadText}>Upload File</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
           )}
         </View>
       ))}
+      </View>
 
       <TouchableOpacity
         accessibilityRole="checkbox"
@@ -2256,11 +2289,53 @@ function UploadIdStep({
           {documentConsent ? <Ionicons name="checkmark" color="#FFFFFF" size={15} /> : null}
         </View>
         <Text style={styles.consentText}>
-          I agree to securely submit my ID front/back images for a preliminary OCR
-          scan before the selfie. No selfie is uploaded at this stage.
-          The check does not confirm government issuance.
+          I agree to securely submit my National ID (front and back) for preliminary
+          OCR screening before the face scan. No selfie is uploaded at this stage.
+          Screening does not confirm that the ID is authentic.
         </Text>
       </TouchableOpacity>
+      {documentPrecheckScreening ? (
+        <View style={styles.idScanResults} accessibilityLabel="Preliminary National ID scan results">
+          <View style={styles.idScanResultsTitleRow}>
+            <Ionicons name="scan-outline" size={17} color="#176847" />
+            <Text style={styles.idScanResultsTitle}>ID scan results</Text>
+            <Text style={styles.idScanResultsSubtitle}>Preliminary OCR only</Text>
+          </View>
+          {([
+            {
+              label: "National ID text",
+              state: documentPrecheckScreening.status === "text_consistent_unverified" &&
+                documentPrecheckScreening.detectedIdType === "national_id" ? "pass" : "retry",
+              message: documentPrecheckScreening.status === "text_consistent_unverified" &&
+                documentPrecheckScreening.detectedIdType === "national_id" ? "Text readable" : "Please scan again",
+            },
+            {
+              label: "Account name",
+              state: documentPrecheckScreening.profileNameCheck === "possible_match" ? "pass" :
+                documentPrecheckScreening.profileNameCheck === "possible_conflict" ? "retry" : "neutral",
+              message: documentPrecheckScreening.profileNameCheck === "possible_match" ? "Name appears to match" :
+                documentPrecheckScreening.profileNameCheck === "possible_conflict" ? "Please check the name" : "Not clear yet",
+            },
+          ] as const).map((check) => (
+            <View key={check.label} style={styles.idScanResultRow}>
+              <Ionicons
+                name={check.state === "pass" ? "checkmark-circle" :
+                  check.state === "retry" ? "refresh-circle" : "help-circle-outline"}
+                size={19}
+                color={check.state === "pass" ? "#12805A" :
+                  check.state === "retry" ? "#B64D44" : "#7B8993"}
+              />
+              <Text style={styles.idScanResultLabel}>{check.label}</Text>
+              <Text style={[
+                styles.idScanResultValue,
+                check.state === "pass" ? styles.idScanResultSuccess :
+                  check.state === "retry" ? styles.idScanResultRetry : styles.idScanResultNeutral,
+              ]}>{check.message}</Text>
+            </View>
+          ))}
+          <Text style={styles.idScanDisclaimer}>These are reading hints, not proof that the ID is authentic. Admin approval is still required.</Text>
+        </View>
+      ) : null}
       {documentPrecheckMessage ? (
         <View style={styles.truthNote} accessibilityRole="alert">
           <Ionicons
@@ -2275,9 +2350,9 @@ function UploadIdStep({
         <TouchableOpacity
           style={[
             styles.nextButton,
-            (!idDocument || (idType !== "passport" && !idBackDocument) || documentChecking) && styles.disabledButton,
+            (!idDocument || (idType !== "passport" && !idBackDocument) || !documentConsent || documentChecking) && styles.disabledButton,
           ]}
-          disabled={!idDocument || (idType !== "passport" && !idBackDocument) || documentChecking}
+          disabled={!idDocument || (idType !== "passport" && !idBackDocument) || !documentConsent || documentChecking}
           onPress={onNext}
         >
           <Text style={styles.nextButtonText}>
@@ -2340,8 +2415,8 @@ function AiVerificationStep({
           Comparing faces...
         </Text>
         <Text style={styles.aiText}>
-          Checking image quality, detecting facial landmarks,
-          and calculating the private 1-to-1 match score.
+          Checking image quality and comparing the government ID portrait
+          with the selfie. The result is shown without percentages.
         </Text>
 
         <View style={styles.progressTrack}>
@@ -2483,17 +2558,55 @@ function StatusScreen({
 }
 
 const styles = StyleSheet.create({
+  identityShell: { flex: 1, flexDirection: "row", backgroundColor: "#F6F9FC" },
+  identityMain: { flex: 1, minWidth: 0, backgroundColor: "#F6F9FC" },
+  identitySidebar: {
+    width: 268, minHeight: "100%", paddingHorizontal: 18, paddingTop: 24,
+    paddingBottom: 22, backgroundColor: "#0B3F34", borderRightWidth: 1, borderRightColor: "#125844",
+  },
+  identitySidebarBrand: { flexDirection: "row", alignItems: "center", gap: 11, paddingHorizontal: 4 },
+  identitySidebarLogo: { width: 49, height: 49, borderRadius: 25, backgroundColor: "#E8F8F5" },
+  identitySidebarBrandName: { color: "#FFFFFF", fontSize: 22, fontWeight: "800" },
+  identitySidebarBrandSub: { color: "#C1ECE0", fontSize: 8.7, fontWeight: "700", marginTop: 2 },
+  identitySidebarSection: { marginTop: 32, marginBottom: 13, color: "#B1E6DA", fontSize: 11, fontWeight: "800", letterSpacing: 1.4 },
+  identitySidebarNav: { gap: 8 },
+  identitySidebarItem: { minHeight: 49, borderRadius: 12, paddingHorizontal: 9, alignItems: "center", flexDirection: "row", gap: 12 },
+  identitySidebarItemActive: { backgroundColor: "#147D61" },
+  identitySidebarIcon: { width: 36, height: 36, alignItems: "center", justifyContent: "center", borderRadius: 11, backgroundColor: "#075A4B" },
+  identitySidebarItemText: { color: "#FFFFFF", fontSize: 13, fontWeight: "700", flexShrink: 1 },
+  identitySidebarBottom: { marginTop: "auto", paddingTop: 20, borderTopWidth: 1, borderTopColor: "#2A6356" },
+  idSelectorRow: { flexDirection: "row", alignItems: "flex-start", gap: 15, marginTop: 12, marginBottom: 20 },
+  idSelectorControl: { flex: 1, minWidth: 0 },
+  idTypeSelect: { minHeight: 48, borderWidth: 1.5, borderColor: "#0E8A5D", backgroundColor: "#FFFFFF", flexDirection: "row", gap: 12, borderRadius: 10, alignItems: "center", paddingHorizontal: 14 },
+  idTypeSelectText: { flex: 1, color: "#152937", fontSize: 13, fontWeight: "500" },
+  idTypeSelectStrong: { color: "#121E2B", fontSize: 13, fontWeight: "800" },
+  idTypeDropdownOption: { minHeight: 58, paddingHorizontal: 15, flexDirection: "row", gap: 12, alignItems: "center", backgroundColor: "#F0FBF4", borderWidth: 1, borderColor: "#B1DDC8", borderRadius: 10, marginTop: 5 },
+  idTypeOptionText: { color: "#174333", fontSize: 13, fontWeight: "800" },
+  idTypeOptionHelper: { color: "#567468", fontSize: 11, marginTop: 3 },
+  idCaptureGrid: { flexDirection: "column", gap: 16 },
+  idCaptureGridDesktop: { flexDirection: "row", gap: 18, alignItems: "stretch" },
+  idCapturePanel: { width: "100%", minWidth: 0 },
+  idCapturePanelDesktop: { flex: 1, width: 0 },
+  idCaptureEmpty: { minHeight: 205, padding: 19, borderWidth: 1, borderColor: "#D7E3E9", borderRadius: 15, backgroundColor: "#F6FAFB", alignItems: "center", justifyContent: "center" },
+  idCaptureGlyph: { width: 64, height: 48, borderWidth: 1.5, borderColor: "#158257", borderRadius: 10, alignItems: "center", justifyContent: "center", marginBottom: 8 },
+  idCaptureTitle: { color: "#132230", fontSize: 16, fontWeight: "800", textAlign: "center" },
+  idCaptureHint: { color: "#63778A", fontSize: 11.5, marginTop: 4, marginBottom: 14, textAlign: "center" },
+  idCaptureActions: { width: "100%", flexDirection: "row", justifyContent: "center", flexWrap: "wrap", gap: 12 },
+  idCaptureCameraButton: { flexGrow: 1, minWidth: 150, maxWidth: 220, height: 45, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, paddingHorizontal: 12, borderRadius: 10, backgroundColor: "#006442" },
+  idCaptureCameraText: { color: "#FFFFFF", fontSize: 12.5, fontWeight: "800" },
+  idCaptureUploadButton: { flexGrow: 1, minWidth: 145, maxWidth: 200, height: 45, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, paddingHorizontal: 12, borderRadius: 10, backgroundColor: "#FFFFFF", borderWidth: 1, borderColor: "#C8D5DF" },
+  idCaptureUploadText: { color: "#203040", fontSize: 12.5, fontWeight: "800" },
   screen: {
     flex: 1,
     backgroundColor: COLORS.bg,
   },
   page: {
     width: "100%",
-    maxWidth: 1080,
+    maxWidth: 1380,
     alignSelf: "center",
     paddingHorizontal: 24,
-    paddingTop: 24,
-    paddingBottom: 70,
+    paddingTop: 22,
+    paddingBottom: 55,
   },
   centered: {
     flex: 1,
@@ -2558,20 +2671,18 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
   },
   title: {
-    lineHeight: designUi.type.page.lineHeight,
     marginTop: 5,
     color: COLORS.navy,
-    fontSize: designUi.type.page.fontSize,
-    fontWeight: designUi.type.page.fontWeight,
+    fontSize: 29,
+    fontWeight: "900",
     letterSpacing: -0.4,
   },
   subtitle: {
-    fontWeight: designUi.type.body.fontWeight,
     marginTop: 6,
     maxWidth: 760,
     color: COLORS.muted,
-    fontSize: designUi.type.body.fontSize,
-    lineHeight: designUi.type.body.lineHeight,
+    fontSize: 13,
+    lineHeight: 20,
   },
   progressCard: {
     width: "100%",
@@ -2589,8 +2700,15 @@ const styles = StyleSheet.create({
   },
   progressItem: {
     alignItems: "center",
-    minWidth: 100,
+    justifyContent: "center",
+    flexDirection: "row",
+    minWidth: 132,
+    gap: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 999,
   },
+  progressItemActive: { backgroundColor: "#007E57" },
   progressCircle: {
     width: 33,
     height: 33,
@@ -2602,8 +2720,8 @@ const styles = StyleSheet.create({
     borderColor: "#CBD5E1",
   },
   progressCircleActive: {
-    backgroundColor: COLORS.blue,
-    borderColor: COLORS.blue,
+    backgroundColor: "#006C49",
+    borderColor: "#B7EFD7",
   },
   progressNumber: {
     color: "#64748B",
@@ -2614,25 +2732,25 @@ const styles = StyleSheet.create({
     color: "#FFFFFF",
   },
   progressLabel: {
-    marginTop: 6,
-    color: "#64748B",
-    fontSize: 10,
-    fontWeight: "800",
+    color: "#475569",
+    fontSize: 12,
+    fontWeight: "700",
     textAlign: "center",
   },
   progressLabelActive: {
-    color: COLORS.blue,
+    color: "#FFFFFF",
+    fontWeight: "800",
   },
   progressLine: {
     flex: 1,
     height: 2,
     maxWidth: 150,
     marginHorizontal: 8,
-    marginBottom: 22,
-    backgroundColor: "#E2E8F0",
+    marginBottom: 0,
+    backgroundColor: "#D1DEE4",
   },
   progressLineActive: {
-    backgroundColor: COLORS.blue,
+    backgroundColor: "#008859",
   },
   stepCard: {
     padding: 22,
@@ -2656,12 +2774,12 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   stepHeaderNumber: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 46,
+    height: 46,
+    borderRadius: 12,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: COLORS.blue,
+    backgroundColor: "#E3F7EB",
   },
   stepHeaderNumberText: {
     color: "#FFFFFF",
@@ -2672,25 +2790,23 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   stepTitle: {
-    lineHeight: designUi.type.section.lineHeight,
-    color: COLORS.navy,
-    fontSize: designUi.type.section.fontSize,
-    fontWeight: designUi.type.section.fontWeight,
+    color: "#172332",
+    fontSize: 19,
+    fontWeight: "800",
   },
   stepSubtitle: {
-    fontWeight: designUi.type.body.fontWeight,
     marginTop: 4,
-    color: COLORS.muted,
-    fontSize: designUi.type.body.fontSize,
-    lineHeight: designUi.type.body.lineHeight,
+    color: "#5F7485",
+    fontSize: 12.5,
+    lineHeight: 19,
   },
   fieldLabel: {
-    lineHeight: designUi.type.label.lineHeight,
-    marginTop: 2,
+    minWidth: 105,
+    marginTop: 13,
     marginBottom: 8,
-    color: "#334155",
-    fontSize: designUi.type.label.fontSize,
-    fontWeight: designUi.type.label.fontWeight,
+    color: "#203139",
+    fontSize: 12.5,
+    fontWeight: "800",
   },
   idTypeGrid: {
     flexDirection: "row",
@@ -2825,7 +2941,7 @@ const styles = StyleSheet.create({
     gap: 8,
     paddingHorizontal: 18,
     borderRadius: 11,
-    backgroundColor: COLORS.blue,
+    backgroundColor: "#006442",
   },
   nextButtonText: {
     color: "#FFFFFF",
@@ -2965,11 +3081,10 @@ const styles = StyleSheet.create({
     borderColor: COLORS.border,
   },
   requirementsTitle: {
-    lineHeight: designUi.type.section.lineHeight,
     marginBottom: 10,
     color: COLORS.navy,
-    fontSize: designUi.type.section.fontSize,
-    fontWeight: designUi.type.section.fontWeight,
+    fontSize: 12.5,
+    fontWeight: "900",
   },
   requirementRow: {
     minHeight: 38,
@@ -3015,6 +3130,29 @@ const styles = StyleSheet.create({
     fontSize: 9.5,
     lineHeight: 14,
   },
+  idScanStepSuccess: {
+    flexDirection: "row", flexWrap: "wrap", alignItems: "center",
+    gap: 8, paddingVertical: 10, paddingHorizontal: 14,
+    backgroundColor: "#F1FBF5", borderRadius: 12,
+    borderColor: "#D3EADD", borderWidth: 1, marginBottom: 13,
+  },
+  idScanStepSuccessText: { fontSize: 11.5, color: "#176348", fontWeight: "700" },
+  idScanStepSeparator: { fontSize: 11, color: "#98B0A4" },
+  idScanResults: {
+    marginTop: 12, padding: 13, borderRadius: 12,
+    borderWidth: 1, borderColor: "#DCE9E3", backgroundColor: "#F7FBF8",
+    gap: 9,
+  },
+  idScanResultsTitleRow: { flexDirection: "row", alignItems: "center", gap: 8 },
+  idScanResultsTitle: { color: "#183F35", fontSize: 13, fontWeight: "800" },
+  idScanResultsSubtitle: { marginLeft: "auto", color: "#688278", fontSize: 10.5 },
+  idScanResultRow: { flexDirection: "row", alignItems: "center", gap: 9, minHeight: 28 },
+  idScanResultLabel: { color: "#29483D", fontSize: 12, fontWeight: "600", flex: 1 },
+  idScanResultValue: { fontSize: 11.5, fontWeight: "800", textAlign: "right", flexShrink: 1 },
+  idScanResultSuccess: { color: "#13724F" },
+  idScanResultRetry: { color: "#A8443B" },
+  idScanResultNeutral: { color: "#6D7F8C" },
+  idScanDisclaimer: { color: "#698078", fontSize: 10, lineHeight: 15 },
   truthNote: {
     marginTop: 10,
     flexDirection: "row",
@@ -3282,11 +3420,10 @@ const styles = StyleSheet.create({
     fontWeight: "900",
   },
   statusTitle: {
-    lineHeight: designUi.type.section.lineHeight,
     marginTop: 14,
     color: COLORS.navy,
-    fontSize: designUi.type.section.fontSize,
-    fontWeight: designUi.type.section.fontWeight,
+    fontSize: 24,
+    fontWeight: "900",
     textAlign: "center",
   },
   statusMessage: {
