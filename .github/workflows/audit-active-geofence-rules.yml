@@ -25,6 +25,7 @@ jobs:
           test -f scripts/test-community-attendance-geofence-rules.cjs
           echo "PASS source is available and reviewed attendance restriction is present."
           echo "Protected production environment approval remains required for reading current rules."
+  # Authorized named-branch push audit after owner confirmed the exact branch rule.
   # PR merge refs are intentionally not eligible for the protected audit.
   # Run only on the named branch push, subject to the existing production environment policy.
   read-only-active-rules:
