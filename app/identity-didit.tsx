@@ -5,8 +5,29 @@ import { auth, firebaseConfig } from "../lib/firebase";
 import { getBackendBaseUrl } from "../lib/identityVerification";
 
 
+const diditQaMode = process.env.EXPO_PUBLIC_DIDIT_QA_MODE === "true";
 export const diditAvailable = process.env.EXPO_PUBLIC_DIDIT_ENABLED === "true" &&
-  process.env.EXPO_PUBLIC_VOLUNSERVE_FIREBASE_TARGET === "staging" && firebaseConfig.projectId === "volunserve-full-staging";
+  process.env.EXPO_PUBLIC_VOLUNSERVE_FIREBASE_TARGET === "staging" &&
+  process.env.EXPO_PUBLIC_VOLUNSERVE_ENV === "staging" &&
+  (diditQaMode ? firebaseConfig.projectId === "volunserve-didit-qa" :
+    firebaseConfig.projectId === "volunserve-full-staging");
+
+// QA must never transmit a Firebase ID token to the existing staging or
+// production backend. Only a separately named Didit QA Render service is valid.
+function getDiditBackendBaseUrl() {
+  if (!diditQaMode) return getBackendBaseUrl();
+  const configured = String(process.env.EXPO_PUBLIC_DIDIT_QA_BACKEND_URL || "").trim();
+  let url: URL;
+  try { url = new URL(configured); }
+  catch { throw new Error("The isolated Didit QA backend URL is required."); }
+  const isolatedHost = /^volunserve(?:-[a-z0-9]+)*-qa(?:-[a-z0-9]+)*[.]onrender[.]com$/;
+  if (url.protocol !== "https:" || !isolatedHost.test(url.hostname) ||
+      (url.pathname !== "/" && url.pathname !== "") || url.search || url.hash ||
+      url.username || url.password) {
+    throw new Error("Didit QA refuses to send Firebase credentials to a non-QA backend.");
+  }
+  return url.origin;
+}
 
 type VerificationState = {
   identityStatus?: "basic" | "pending" | "verified" | "failed";
@@ -20,7 +41,7 @@ async function authenticatedRequest(path: string, method: "GET" | "POST" = "GET"
   const resident = auth.currentUser;
   if (!resident) throw new Error("Sign in to VolunServe to verify your identity.");
   const token = await resident.getIdToken();
-  const response = await fetch(getBackendBaseUrl() + path, {
+  const response = await fetch(getDiditBackendBaseUrl() + path, {
     method,
     headers: { Authorization: "Bearer " + token, Accept: "application/json" },
   });
