@@ -1,0 +1,61 @@
+name: QA original face scan + government ID front/back UI (NO DEPLOY)
+on:
+  push:
+    branches: ['integration/identity-original-face-ui-20261125']
+    paths:
+      - 'app/identity-verification.web.tsx'
+      - 'identity-ai/**'
+      - 'backend/server.js'
+      - 'lib/identityVerification.ts'
+      - '.github/workflows/qa-integrated-original-identity-ui-20261125.yml'
+permissions:
+  contents: read
+jobs:
+  guard-and-screening:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Verify unchanged visual controls and actual precheck route
+        run: |
+          node <<'NODE'
+          const a=require("node:assert/strict"),fs=require("node:fs");
+          const ui=fs.readFileSync("app/identity-verification.web.tsx","utf8");
+          const api=fs.readFileSync("backend/server.js","utf8");
+          const py=fs.readFileSync("identity-ai/main.py","utf8");
+          const ids=fs.readFileSync("identity-ai/document_screening.py","utf8");
+          for(const marker of ["Government ID Details","Front of National ID","Back of National ID",
+            "Check ID, then Face Scan","precheckIdentityDocument({","submitIdentityVerification({",
+            "void captureFrame();","setSelfie({","setScanState(\"hold_still\")"]) {
+            a(ui.includes(marker),"Missing UI/flow: "+marker);
+          }
+          for(const removed of ["movementRef","movementCompleted","challenge_left","challenge_right"]) {
+            a(!ui.includes(removed),"Obsolete movement remains: "+removed);
+          }
+          a(api.includes('"/api/identity/document/precheck"'),"Backend ID precheck endpoint missing");
+          a(py.includes('"/document/precheck"'),"AI OCR precheck endpoint missing");
+          a(ids.includes('"school_id_not_supported"'),"School ID rejection missing");
+          a(py.includes('"school_id_not_supported"'),"Python precheck missing school rejection handling");
+          a(api.includes('"school_id_not_supported"'),"Backend precheck missing school rejection handling");
+          console.log("PASS UI preserved, old face capture restored, OCR and School ID rejection routes present");
+          NODE
+      - name: Validate document type / school ID regression tests
+        run: |
+          python -m unittest discover -s identity-ai -p 'test_document_screening.py' -v
+          python -m py_compile identity-ai/main.py identity-ai/document_screening.py
+          node --check backend/server.js
+  web-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - run: npx tsc --noEmit --incremental false
+      - run: npx expo export --platform web
