@@ -1,0 +1,85 @@
+name: Audit ACTIVE Firebase Rules before Geofence Release (READ ONLY)
+on:
+  pull_request:
+    branches: [review-base/attendance-geofence-web-20261124]
+    paths: ['.github/workflows/audit-active-geofence-rules.yml']
+permissions:
+  contents: read
+jobs:
+  read-only-active-rules:
+    if: github.repository == 'calibosofroyarjan-volunserve/VolunServe' && github.event.pull_request.head.repo.full_name == github.repository && github.head_ref == 'qa/geofence-live-rules-audit-20261124'
+    environment: production
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+          ref: ${{ github.event.pull_request.head.sha }}
+      - name: Get ACTIVE Firestore rules fingerprint and patch exact attendance clause (NO write)
+        env:
+          FIREBASE_SA: ${{ secrets.VOLUNSERVE_PRODUCTION_HOSTING_SERVICE_ACCOUNT || secrets.FIREBASE_SERVICE_ACCOUNT_VOLUNSERVE_3AA5B || secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: |
+          node <<'NODE'
+          const fs=require('fs'),crypto=require('crypto'),assert=require('assert/strict');
+          const sa=JSON.parse(process.env.FIREBASE_SA||'{}');
+          assert.equal(sa.project_id,'volunserve-3aa5b');
+          assert.equal(sa.type,'service_account');
+          async function token(){
+            const now=Math.floor(Date.now()/1000);
+            const encode=x=>Buffer.from(JSON.stringify(x)).toString('base64url');
+            const jwt=encode({alg:'RS256',typ:'JWT'})+'.'+encode({
+              iss:sa.client_email,scope:'https://www.googleapis.com/auth/cloud-platform',
+              aud:'https://oauth2.googleapis.com/token',iat:now,exp:now+1800});
+            const signature=crypto.sign('RSA-SHA256',Buffer.from(jwt),sa.private_key).toString('base64url');
+            const r=await fetch('https://oauth2.googleapis.com/token',{method:'POST',
+              headers:{'Content-Type':'application/x-www-form-urlencoded'},
+              body:new URLSearchParams({grant_type:'urn:ietf:params:oauth:grant-type:jwt-bearer',assertion:jwt+'.'+signature}),
+              signal:AbortSignal.timeout(15000)});
+            assert(r.ok,'OAuth HTTP '+r.status);
+            return (await r.json()).access_token;
+          }
+          async function main(){
+            const access=await token();
+            const get=async path=>{
+              const r=await fetch('https://firebaserules.googleapis.com/v1/'+path,{
+                headers:{Authorization:'Bearer '+access},signal:AbortSignal.timeout(20000)});
+              assert(r.ok,'Rules API GET '+path+' HTTP '+r.status);
+              return r.json();
+            };
+            const release=await get('projects/volunserve-3aa5b/releases/cloud.firestore');
+            const ruleset=await get(release.rulesetName);
+            const content=(ruleset.source?.files||[]).filter(f=>f.name==='firestore.rules'||f.name==='cloud.firestore').map(f=>f.content).join('\n');
+            assert(content.length>100000,'Active ruleset incomplete');
+            const hash=x=>crypto.createHash('sha256').update(x).digest('hex');
+            const candidate=fs.readFileSync('firestore.rules','utf8');
+            const previous=process.env.PREVIOUS_RULES_SHA256||'';
+            console.log('ACTIVE_RULESET='+release.rulesetName);
+            console.log('ACTIVE_RULES_SHA256='+hash(content));
+            console.log('CANDIDATE_RULES_SHA256='+hash(candidate));
+            console.log('ACTIVE_RULES_LENGTH='+content.length);
+            console.log('CANDIDATE_RULES_LENGTH='+candidate.length);
+            console.log('Render invited-only clause deployed already? '+content.includes("render_resident_created_all_volunteers"));
+            const old="                && eventAfter().participantsCount == eventBefore().participantsCount + 1\n                && eventAfter().participantsCount <= eventBefore().capacity\n              )\n              ||\n              (\n                // Volunteer Time In/Out, cannot self-verify.\n                resource.data.status == 'joined'\n                && resource.data.attendanceVerified == false\n                && request.resource.data.attendanceVerified == false\n                && request.resource.data.diff(resource.data)\n                  .affectedKeys().hasOnly([\n                    'checkedInAt', 'checkedOutAt', 'updatedAt'\n                  ])\n                && request.resource.data.updatedAt == request.time\n                && eventBefore().status == 'active'\n                && (\n                  (\n                    resource.data.checkedInAt == null\n                    && resource.data.checkedOutAt == null\n                    && request.resource.data.checkedInAt == request.time\n                    && request.resource.data.checkedOutAt == null\n                  )\n                  ||\n                  (\n                    resource.data.checkedInAt is timestamp\n                    && resource.data.checkedOutAt == null\n                    && request.resource.data.checkedInAt == resource.data.checkedInAt\n                    && request.resource.data.checkedOutAt == request.time\n                  )\n                )\n              )\n            )\n          )\n          ||";
+            const next="                && eventAfter().participantsCount == eventBefore().participantsCount + 1\n                && eventAfter().participantsCount <= eventBefore().capacity\n              )\n              // Self attendance is written only by the authenticated Render backend.\n\n            )\n          )\n          ||";
+            assert.equal(content.split(old).length,2,'BLOCKED active attendance clause differs from reviewed baseline');
+            const patched=content.replace(old,next);
+            assert.equal(patched.replace(next,old),content,'BLOCKED unrelated rules changes');
+            fs.writeFileSync('firestore.rules',patched,{mode:0o600});
+            console.log('PATCHED_RULES_SHA256='+hash(patched));
+            console.log('READ ONLY audit completed; candidate exists only on temporary runner.');
+          }
+          main().catch(e=>{console.error('RULES_AUDIT_BLOCKED:',e.message);process.exit(1)});
+          NODE
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - run: npm ci --no-audit --no-fund
+      - name: Run attendance security tests on patched active rules in demo emulator
+        run: |
+          unset GOOGLE_APPLICATION_CREDENTIALS FIREBASE_SERVICE_ACCOUNT_JSON
+          npx firebase-tools emulators:exec --project demo-volunserve --only firestore "node --test scripts/test-community-attendance-geofence-rules.cjs"
