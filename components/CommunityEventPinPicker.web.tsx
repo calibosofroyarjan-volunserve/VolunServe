@@ -2,6 +2,8 @@ import React, { useEffect, useRef, useState } from "react";
 import { Linking, Pressable, Text, TextInput, View } from "react-native";
 import InteractiveEventPinMap from "./InteractiveEventPinMap.web";
 import { lookUpEventVenue } from "../lib/eventVenueLookup";
+import meetingPlaces from "../constants/sjdmMeetingPlaces.json";
+import { searchMeetingPlaces, nearestMeetingPlace, type MeetingPlace } from "../lib/meetingPlaceSearch";
 import { SJDM_REFERENCE_GEOMETRY } from "../constants/sjdmBoundaryReference";
 import { insideSjdmBoundary, sjdmOutsideMask, type SjdmBoundary } from "../lib/sjdmMapBoundary";
 
@@ -92,6 +94,15 @@ export default function CommunityEventPinPicker({ latitude, longitude, barangay 
   const lastValidPinRef = useRef<Venue | null>(draft);
   lastValidPinRef.current = draft;
   const [manual, setManual] = useState("");
+  const [placeQuery, setPlaceQuery] = useState("");
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [selectedPlace, setSelectedPlace] = useState<MeetingPlace | null>(null);
+  const [gpsBusy, setGpsBusy] = useState(false);
+  const explicitPinRef = useRef(false);
+  const gpsRequestRef = useRef(0);
+  const results = searchOpen ? searchMeetingPlaces(meetingPlaces, placeQuery) : [];
+  const nearby = draft ? nearestMeetingPlace(meetingPlaces, draft.latitude, draft.longitude) : undefined;
+  useEffect(() => () => { gpsRequestRef.current++; }, []);
   const [manualOpen, setManualOpen] = useState(false);
   const [lookupState, setLookupState] = useState<"idle" | "searching" | "found" | "unavailable">("idle");
   const [message, setMessage] = useState("");
@@ -118,6 +129,10 @@ export default function CommunityEventPinPicker({ latitude, longitude, barangay 
       setMessage("Outside San Jose del Monte border. Piliin lamang ang meeting point sa loob ng berdeng SJDM outline.");
       return false;
     }
+    explicitPinRef.current = true;
+    gpsRequestRef.current++;
+    setGpsBusy(false);
+    setSelectedPlace(null);
     const next = tidy(lat, lng);
     setDraft(next);
     lastValidPinRef.current = next;
@@ -129,7 +144,7 @@ export default function CommunityEventPinPicker({ latitude, longitude, barangay 
   // Resolve the named event venue, not the proposing Resident's current position.
   // The result remains unconfirmed until the Resident verifies its map pin.
   useEffect(() => {
-    if (!barangay.trim() || !venue.trim()) {
+    if (explicitPinRef.current || savedRef.current || !barangay.trim() || !venue.trim()) {
       setLookupState("idle");
       return;
     }
@@ -137,7 +152,7 @@ export default function CommunityEventPinPicker({ latitude, longitude, barangay 
     setLookupState("searching");
     const task = setTimeout(() => {
       void lookUpEventVenue(barangay, venue, controller.signal).then(result => {
-        if (controller.signal.aborted) return;
+        if (controller.signal.aborted || explicitPinRef.current || savedRef.current) { setLookupState("idle"); return; }
         if (result.status === "found" && validVenue(result.point.latitude, result.point.longitude)) {
           setDraft(result.point);
           setLookupState("found");
@@ -242,10 +257,19 @@ export default function CommunityEventPinPicker({ latitude, longitude, barangay 
   const locate = () => {
     const geo = (globalThis as any).navigator?.geolocation;
     if (!geo) { setMessage("GPS unavailable. Tap the map to select the venue, or enter coordinates."); return; }
+    explicitPinRef.current = true;
+    const request = ++gpsRequestRef.current;
+    setGpsBusy(true);
     setMessage("Requesting current device location...");
     geo.getCurrentPosition(
-      (result: any) => pick(result.coords.latitude, result.coords.longitude),
-      () => setMessage("Device location unavailable. Tap the map to select the actual event meeting point."),
+      (result: any) => {
+        if (request !== gpsRequestRef.current) return;
+        setGpsBusy(false);
+        if (!pick(result.coords.latitude, result.coords.longitude)) return;
+        const accuracy = result.coords.accuracy;
+        setMessage("Device location selected" + (Number.isFinite(accuracy) ? " (estimated accuracy " + Math.round(accuracy) + " m)" : "") + ". Verify the pin and drag if needed before confirming. This does not record attendance.");
+      },
+      () => { if(request !== gpsRequestRef.current) return; setGpsBusy(false); setMessage("Device location unavailable. Allow location permission, or search and select the actual event meeting point."); },
       {enableHighAccuracy:true,timeout:15000,maximumAge:0},
     );
   };
@@ -293,6 +317,18 @@ export default function CommunityEventPinPicker({ latitude, longitude, barangay 
         }}>SAN JOSE DEL MONTE</Text>
       </View>
 
+      <View style={{gap:8,marginBottom:12}}>
+        <Text style={{...title,fontSize:12}}>Search a place, school, street or landmark in SJDM</Text>
+        <View style={{flexDirection:"row",flexWrap:"wrap",gap:8}}>
+          <TextInput value={placeQuery} onChangeText={value=>{setPlaceQuery(value);setSearchOpen(true);}} onSubmitEditing={()=>setSearchOpen(true)} placeholder="e.g. STI, barangay hall, Quirino Highway" placeholderTextColor="#80978A" accessibilityLabel="Search event meeting place" style={{flexGrow:1,flexBasis:240,minWidth:150,borderWidth:1,borderColor:"#C9DDD1",borderRadius:9,padding:11,color:"#163F32",backgroundColor:"#FFFFFF",fontSize:13}} />
+          <Pressable accessibilityRole="button" onPress={()=>setSearchOpen(true)} style={button}><Text style={buttonText}>Search</Text></Pressable>
+          <Pressable accessibilityRole="button" disabled={gpsBusy} onPress={locate} style={{...button,backgroundColor:gpsBusy?"#9BC8B6":"#FFFFFF",borderWidth:1,borderColor:"#D1E4D9"}}><Text style={{...buttonText,color:"#245F4C"}}>{gpsBusy?"Getting GPS...":"Use My GPS Location"}</Text></Pressable>
+        </View>
+        {searchOpen && placeQuery.trim().length>=2 && <View style={{borderWidth:1,borderColor:"#D6E5D9",borderRadius:9,backgroundColor:"#FFFFFF",padding:8,gap:5}}>
+          {results.length?results.map((p,i)=><Pressable key={p.name+"-"+i} accessibilityRole="button" onPress={()=>{if(pick(p.latitude,p.longitude)){setSelectedPlace(p);setPlaceQuery(p.name);setSearchOpen(false);}}} style={{padding:9,borderBottomWidth:1,borderBottomColor:"#E7EFE9"}}><Text style={{...title,fontSize:13}}>{p.name}</Text>{p.detail?<Text style={{fontSize:11,color:"#607F6E"}}>{p.detail}</Text>:null}</Pressable>):<Text style={{fontSize:12,color:"#607F6E",padding:8}}>No mapped place matched. Try a landmark or street name, or tap the map.</Text>}
+          <Text style={{fontSize:10,color:"#607F6E"}}>Place data: © OpenStreetMap contributors. Coverage is limited to mapped places.</Text>
+        </View>}
+      </View>
       {lookupState === "searching" && <Text style={{ fontSize: 11, color: "#356C56", marginBottom: 8 }}>Finding the selected venue on the map…</Text>}
       <View style={{ borderRadius: 12, overflow: "hidden", borderWidth: 1, borderColor: "#D6E5D9" }}>
         {GOOGLE_JS_KEY ? React.createElement("div" as any, {
@@ -369,6 +405,7 @@ export default function CommunityEventPinPicker({ latitude, longitude, barangay 
             {confirmed ? "Meeting point confirmed" :
               draft ? "Pin selected — confirm below" : "Select an event pin on the map"}
           </Text>
+          {draft && (selectedPlace || nearby) ? <Text style={{fontSize:12,color:"#245F4C",marginTop:4}}>{selectedPlace ? selectedPlace.name : "Near "+nearby?.name}{selectedPlace?.detail ? " · "+selectedPlace.detail : ""}</Text> : draft ? <Text style={{fontSize:11,color:"#607F6E",marginTop:4}}>Exact address not mapped. Verify the meeting point manually.</Text> : null}
           {draft && (
             <Text selectable style={{ fontSize: 11, color: "#607F6E", marginTop: 4 }}>
               {draft.latitude.toFixed(6)}, {draft.longitude.toFixed(6)}
