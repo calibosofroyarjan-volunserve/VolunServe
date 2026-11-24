@@ -1,0 +1,90 @@
+name: Live baseline identity-only source guard (NO DEPLOY)
+on:
+  push:
+    branches:
+      - safe/identity-original-ui-live-base-20261125
+  pull_request:
+    branches: [live-protected]
+    paths:
+      - 'app/identity-verification.web.tsx'
+      - 'backend/server.js'
+      - 'components/identity/DocumentScreeningSummary.tsx'
+      - 'identity-ai/document_screening.py'
+      - 'identity-ai/test_document_screening.py'
+      - 'lib/identityVerification.ts'
+      - 'scripts/test-unified-identity-ai-government-id-screening.cjs'
+      - '.github/workflows/qa-live-baseline-identity-only-20261125.yml'
+permissions:
+  contents: read
+jobs:
+  protect-live-files:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Block outdated staging files and unrelated production modules
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin live-protected:refs/remotes/origin/live-protected
+          # This must remain a patch on top of the current protected production baseline,
+          # never a replacement by a diverged 200+-file staging branch.
+          git merge-base --is-ancestor origin/live-protected HEAD || {
+            echo "::error::Branch diverged from live-protected: rebase and revalidate, do not deploy."
+            exit 1
+          }
+          git diff --name-only origin/live-protected...HEAD > /tmp/identity-changed.txt
+          cat /tmp/identity-changed.txt
+          while IFS= read -r path; do
+            case "$path" in
+              app/identity-verification.web.tsx|backend/server.js|components/identity/DocumentScreeningSummary.tsx|identity-ai/document_screening.py|identity-ai/test_document_screening.py|lib/identityVerification.ts|scripts/test-unified-identity-ai-government-id-screening.cjs|.github/workflows/qa-reject-school-ids-20261125.yml|.github/workflows/qa-live-baseline-identity-only-20261125.yml) ;;
+              *) echo "::error file=$path::Unrelated or outdated file cannot be copied into VolunServe live identity change."; exit 1 ;;
+            esac
+          done < /tmp/identity-changed.txt
+          test -s /tmp/identity-changed.txt
+          if grep -E '^(firestore.rules|firebase.json|app/signup.tsx|app/\\(tabs\\)/|app/\\(admin\\)/|components/donations/|components/emergency/|functions/)' /tmp/identity-changed.txt; then
+            echo "::error::Critical live modules must be unchanged."
+            exit 1
+          fi
+          echo 'PASS: only explicitly allowlisted, live-based identity files changed.'
+      - name: Original face scan must be retained
+        run: |
+          node <<'NODE'
+          const fs=require("node:fs"),assert=require("node:assert/strict");
+          const web=fs.readFileSync("app/identity-verification.web.tsx","utf8");
+          const api=fs.readFileSync("backend/server.js","utf8");
+          for(const marker of ["const detectLoop = useCallback","const captureFrame = useCallback","const startCamera = async","const openFaceScan = async","submitIdentityVerification({"]) {
+            assert(web.includes(marker),"Protected original face-scan flow changed: "+marker);
+          }
+          assert(web.includes("Results display without percentages."));
+          assert(!web.includes("movementRef"),"Unexpected new movement/liveness challenge");
+          assert(!web.includes("Didit"),"Deprecated Didit component reintroduced");
+          for(const route of ['"/api/identity/engine-health"','"/api/identity/status"','"/api/identity/verify"']){
+            assert(api.includes(route),"Existing live identity route missing: "+route);
+          }
+          console.log("PASS existing live ID/selfie engine and authorized endpoints preserved");
+          NODE
+      - name: Verify backend and document classification syntax
+        run: |
+          python -m unittest discover -s identity-ai -p test_document_screening.py -v
+          python -m py_compile identity-ai/document_screening.py
+          node --check backend/server.js
+          node scripts/test-unified-identity-ai-government-id-screening.cjs
+  compile-live-baseline:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install exact dependency lockfile without deployment
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Typecheck restored original Resident identity flow
+        run: npx tsc --noEmit --incremental false
+      - name: Compile only, never publish
+        run: npx expo export --platform web
