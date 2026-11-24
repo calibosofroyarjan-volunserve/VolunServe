@@ -1146,28 +1146,14 @@ export default function IdentityVerificationWeb() {
       setDocumentPrecheckMessage(result.message);
       if (result.outcome === "retry") return;
       if (result.outcome === "review") {
-        // A pending queue entry must be persisted by the authenticated
-        // backend BEFORE we display a success state. The ID-only review never
-        // starts a face camera or consumes one of the three face attempts.
+        // The staging precheck does not create an Admin review record.
+        // Do not pretend the account is pending or skip the ID gate.
+        // The Resident can retry a clearer scan or contact Admin for review.
         setSelfie(null);
         stopCamera();
-        if (result.status === "pending") {
-          setSubmittedIdPreviewUri(idDocument.uri);
-          setStatusResult({
-            identityStatus: "pending",
-            identityVerified: false,
-            verificationId: result.verificationId,
-            decision: result.decision,
-            documentScreening: result.documentScreening,
-            message: result.message,
-          });
-          setLocalMessage(result.message);
-          setStep(3);
-        } else {
-          setDocumentPrecheckMessage(
-            "The scan needs Admin review, but a pending record was not confirmed. Check your status before retrying. No face scan was started.",
-          );
-        }
+        setDocumentPrecheckMessage(
+          result.message || "This document requires a clearer scan or independent Admin review. No face scan was started.",
+        );
         return;
       }
       // PASS allows only the original ID-to-selfie face comparison.
@@ -2312,9 +2298,9 @@ function UploadIdStep({
             {
               label: "Account name",
               state: documentPrecheckScreening.profileNameCheck === "possible_match" ? "pass" :
-                documentPrecheckScreening.profileNameCheck === "possible_conflict" ? "retry" : "neutral",
+                "neutral",
               message: documentPrecheckScreening.profileNameCheck === "possible_match" ? "Name appears to match" :
-                documentPrecheckScreening.profileNameCheck === "possible_conflict" ? "Please check the name" : "Not clear yet",
+                "Not confirmed by OCR",
             },
           ] as const).map((check) => (
             <View key={check.label} style={styles.idScanResultRow}>
