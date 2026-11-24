@@ -1,8 +1,8 @@
 name: Import SJDM public place index and QA (NO DEPLOY)
 on:
-  push:
-    branches: [fix/event-meeting-point-search-20261124]
-    paths: ['.github/workflows/qa-event-meeting-place-search-20261124.yml']
+  pull_request:
+    branches: [fix/admin-attendance-remove-role-20261124]
+    types: [opened, synchronize, reopened]
 permissions:
   contents: write
 concurrency:
@@ -10,18 +10,19 @@ concurrency:
   cancel-in-progress: false
 jobs:
   qa:
-    if: github.repository == 'calibosofroyarjan-volunserve/VolunServe' && github.ref == 'refs/heads/fix/event-meeting-point-search-20261124'
+    if: github.repository == 'calibosofroyarjan-volunserve/VolunServe' && github.event.pull_request.head.repo.full_name == github.repository && github.head_ref == 'fix/event-meeting-point-search-20261124'
     runs-on: ubuntu-24.04
     timeout-minutes: 25
     env:
       CI: 'true'
       EXPO_NO_TELEMETRY: '1'
+      SOURCE_SHA: ${{ github.event.pull_request.head.sha }}
     steps:
       - name: Extract exact candidate without submodules
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          curl --fail --silent --show-error --location --retry 3 -H "Authorization: Bearer $GH_TOKEN" "https://api.github.com/repos/$GITHUB_REPOSITORY/tarball/$GITHUB_SHA" -o "$RUNNER_TEMP/source.tar.gz"
+          curl --fail --silent --show-error --location --retry 3 -H "Authorization: Bearer $GH_TOKEN" "https://api.github.com/repos/$GITHUB_REPOSITORY/tarball/$SOURCE_SHA" -o "$RUNNER_TEMP/source.tar.gz"
           tar -xzf "$RUNNER_TEMP/source.tar.gz" --strip-components=1 -C "$GITHUB_WORKSPACE"
       - uses: actions/setup-node@v4
         with:
@@ -47,7 +48,7 @@ jobs:
           const headers={Authorization:'Bearer '+process.env.GH_TOKEN,Accept:'application/vnd.github+json','Content-Type':'application/json'};
           (async()=>{
             const ref=await fetch(root+'/git/ref/heads/'+branch,{headers});a(ref.ok);
-            a.equal((await ref.json()).object.sha,process.env.GITHUB_SHA,'Candidate branch changed; do not overwrite');
+            a.equal((await ref.json()).object.sha,process.env.SOURCE_SHA,'Candidate branch changed; do not overwrite');
             const old=await fetch(root+'/contents/'+path+'?ref='+branch,{headers});a(old.ok);
             const sha=(await old.json()).sha;
             const data=fs.readFileSync(path);a(data.length<3000000);
