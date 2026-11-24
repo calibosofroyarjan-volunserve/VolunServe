@@ -9,6 +9,9 @@ on:
       - 'lib/identityVerification.ts'
       - 'lib/communitySocial.ts'
       - 'backend/test-community-social-environment.cjs'
+      - 'backend/test-identity-emulator-auth-e2e.cjs'
+      - 'backend/test-staging-identity-acceptance-e2e.cjs'
+      - 'backend/identity-e2e-emulators.json'
       - 'components/layout/**'
       - '.github/workflows/qa-integrated-original-identity-ui-20261125.yml'
 permissions:
@@ -65,3 +68,48 @@ jobs:
         run: node --test backend/test-community-social-environment.cjs
       - run: npx tsc --noEmit --incremental false
       - run: npx expo export --platform web
+
+  isolated-auth-and-review:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      CI: 'true'
+      GCLOUD_PROJECT: demo-volunserve-identity-e2e
+      FIREBASE_AUTH_EMULATOR_HOST: 127.0.0.1:9099
+      FIRESTORE_EMULATOR_HOST: 127.0.0.1:8080
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Install locked isolated test SDKs without lifecycle scripts
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          npm ci --prefix backend --ignore-scripts --no-audit --no-fund
+      - name: Assert no cloud Firebase targets or production media uploads
+        run: |
+          test "$GCLOUD_PROJECT" = "demo-volunserve-identity-e2e"
+          grep -Fq 'const STAGING_IDENTITY_MEDIA_UPLOADS_ENABLED = false' backend/server.js
+          node --check backend/test-identity-emulator-auth-e2e.cjs
+          node --check backend/server.js
+      - name: Authenticated synthetic Resident to Admin via local Firebase emulators
+        run: |
+          npx --no-install firebase emulators:exec \
+            --config backend/identity-e2e-emulators.json \
+            --only auth,firestore \
+            --project demo-volunserve-identity-e2e \
+            "node --test backend/test-identity-emulator-auth-e2e.cjs"
+      - name: Test status, rejection, approval and attempts against actual route code
+        run: |
+          node --test backend/test-staging-identity-acceptance-e2e.cjs
+          node --test backend/test-staging-admin-review-ui-contract.cjs
+          node --test backend/test-identity-media-capability-preflight.cjs
+      - name: Explain limits and forbid deployment
+        run: |
+          echo "NO DEPLOY; only fabricated identity records in ephemeral Firebase Auth/Firestore emulators."
+          echo "A passing test does not prove hosted service integration, ID authenticity, anti-spoofing, or automatic Verified Resident."
