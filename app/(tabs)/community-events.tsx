@@ -41,6 +41,7 @@ import {
   hasVolunteerAccess,
 } from "../../lib/firebaseAuth";
 import { useUserSession } from "../../lib/useUserSession";
+import { getBrowserAttendanceLocation, type AttendanceLocation } from "../../lib/attendanceLocationRetry";
 import { canVolunteerJoinEvent, eventScheduleHasPassed } from "../../lib/communityEventJoinWindow";
 
 // Matches the screen's already loaded EventInter font; no new modules or font assets.
@@ -61,19 +62,11 @@ type Category =
 type Section = "explore" | "mine" | "propose";
 type EventListFilter = "all" | "new" | "upcoming" | "active" | "completed";
 type SelfAttendanceAction = "check-in" | "check-out";
-type AttendanceLocation = {latitude:number; longitude:number; accuracy:number | null; timestamp:number};
-async function getFreshAttendanceLocation(): Promise<AttendanceLocation> {
+async function getFreshAttendanceLocation(onAttempt:(attempt:number,total:number)=>void): Promise<AttendanceLocation> {
   if (Platform.OS === "web") {
     const geolocation = (globalThis as any).navigator?.geolocation;
     if (!geolocation) throw new Error("Location is unavailable. Enable GPS on a supported device.");
-    return new Promise((resolve, reject) => geolocation.getCurrentPosition(
-      (position: {coords:{latitude:number;longitude:number;accuracy:number};timestamp:number}) =>
-        resolve({latitude:position.coords.latitude,longitude:position.coords.longitude,accuracy:position.coords.accuracy,timestamp:position.timestamp}),
-      (error: {code:number}) => reject(new Error(error.code === 1
-        ? "Allow location permission to record attendance."
-        : "Unable to obtain a fresh GPS location. Enable GPS and try again.")),
-      {enableHighAccuracy:true,maximumAge:0,timeout:20000}
-    ));
+    return getBrowserAttendanceLocation(geolocation,onAttempt);
   }
   const Location = await import("expo-location");
   const permission = await Location.requestForegroundPermissionsAsync();
@@ -959,6 +952,7 @@ export default function CommunityEventsScreen() {
 
   // Volunteer self attendance (web first). Admin alone verifies participation.
   const [attendanceBusy, setAttendanceBusy] = useState("");
+  const [attendanceGpsProgress, setAttendanceGpsProgress] = useState("");
   const [attendanceConfirmation, setAttendanceConfirmation] = useState<{
     eventId: string;
     action: SelfAttendanceAction;
@@ -1859,7 +1853,9 @@ export default function CommunityEventsScreen() {
 
     try {
       const token = await user.getIdToken();
-      const location = await getFreshAttendanceLocation();
+      const location = await getFreshAttendanceLocation((attempt,total) =>
+        setAttendanceGpsProgress(`Checking GPS (${attempt}/${total})...`));
+      setAttendanceGpsProgress("");
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), 20000);
       try {
@@ -1894,6 +1890,7 @@ export default function CommunityEventsScreen() {
         message: errorText(error),
       });
     } finally {
+      setAttendanceGpsProgress("");
       setAttendanceBusy("");
     }
   };
@@ -2197,7 +2194,7 @@ export default function CommunityEventsScreen() {
                   <View style={styles.webAttendanceConfirmButtons}>
                     <Pressable onPress={() => setAttendanceConfirmation(null)} style={styles.webAttendanceCancelButton}><Text style={styles.webAttendanceCancelText}>Cancel</Text></Pressable>
                     <Pressable disabled={!!attendanceBusy} onPress={() => void recordSelfAttendance(event, attendanceConfirmation.action)} style={styles.webAttendanceActionButton}>
-                      <Text style={styles.webAttendanceActionButtonText}>{attendanceBusy ? "Saving..." : "Confirm"}</Text>
+                      <Text style={styles.webAttendanceActionButtonText}>{attendanceBusy ? (attendanceGpsProgress || "Saving...") : "Confirm"}</Text>
                     </Pressable>
                   </View>
                 </View>
@@ -2206,7 +2203,7 @@ export default function CommunityEventsScreen() {
                   onPress={() => setAttendanceConfirmation({ eventId: event.id, action: participation?.checkedInAt ? "check-out" : "check-in" })}
                   style={styles.webAttendanceActionButton}>
                   <Ionicons name={participation?.checkedInAt ? "log-out-outline" : "log-in-outline"} size={18} color="white" />
-                  <Text style={styles.webAttendanceActionButtonText}>{attendanceBusy ? "Saving..." : participation?.checkedInAt ? "Time Out" : "Time In"}</Text>
+                  <Text style={styles.webAttendanceActionButtonText}>{attendanceBusy ? (attendanceGpsProgress || "Saving...") : participation?.checkedInAt ? "Time Out" : "Time In"}</Text>
                 </Pressable>
               )
             )}
@@ -2838,7 +2835,7 @@ export default function CommunityEventsScreen() {
                           >
                             {attendanceBusy ? <ActivityIndicator color="white" size="small" /> : <Ionicons name={selectedParticipation?.checkedInAt ? "log-out-outline" : "log-in-outline"} size={19} color="white" />}
                             <Text style={styles.webAttendanceActionButtonText}>
-                              {attendanceBusy ? "Saving..." : selectedParticipation?.checkedInAt ? "Time Out" : "Time In"}
+                              {attendanceBusy ? (attendanceGpsProgress || "Saving...") : selectedParticipation?.checkedInAt ? "Time Out" : "Time In"}
                             </Text>
                           </Pressable>
                         )}
