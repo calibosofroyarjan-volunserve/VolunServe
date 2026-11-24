@@ -7,6 +7,9 @@ on:
       - 'identity-ai/**'
       - 'backend/server.js'
       - 'lib/identityVerification.ts'
+      - 'lib/communitySocial.ts'
+      - 'backend/test-community-social-environment.cjs'
+      - 'components/layout/**'
       - '.github/workflows/qa-integrated-original-identity-ui-20261125.yml'
 permissions:
   contents: read
@@ -58,5 +61,7 @@ jobs:
           node-version: '22'
           cache: npm
       - run: npm ci --no-audit --no-fund
+      - name: Confirm restored chat header cannot leak staging credentials to production
+        run: node --test backend/test-community-social-environment.cjs
       - run: npx tsc --noEmit --incremental false
       - run: npx expo export --platform web
