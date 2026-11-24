@@ -241,6 +241,9 @@ export default function IdentityVerificationWeb() {
     useState<IdentityDocumentType>("national_id");
   const [idDocument, setIdDocument] =
     useState<CapturedIdentityMedia | null>(null);
+  const [idBackDocument, setIdBackDocument] =
+    useState<CapturedIdentityMedia | null>(null);
+  const [idCameraSide, setIdCameraSide] = useState<"front" | "back">("front");
   const [selfie, setSelfie] =
     useState<CapturedIdentityMedia | null>(null);
 
@@ -317,6 +320,13 @@ export default function IdentityVerificationWeb() {
       if (uri?.startsWith("blob:")) URL.revokeObjectURL(uri);
     };
   }, [idDocument?.uri]);
+
+  useEffect(() => {
+    const uri = idBackDocument?.uri;
+    return () => {
+      if (uri?.startsWith("blob:")) URL.revokeObjectURL(uri);
+    };
+  }, [idBackDocument?.uri]);
 
   const identityStatus = getIdentityStatus(profile);
   const currentIdentityStatus =
@@ -462,7 +472,9 @@ export default function IdentityVerificationWeb() {
     };
   }, [idCameraOpen, stopIdCamera]);
 
-  const chooseIdDocument = () => {
+  const chooseIdDocument = (side: "front" | "back") => {
+    if (idCameraOpen) return;
+    setIdCameraSide(side);
     setIdCameraReady(false);
     setIdCameraError("");
     setIdCameraOpen(true);
@@ -485,10 +497,14 @@ export default function IdentityVerificationWeb() {
           0.92,
         );
       });
-      const name = `government-id-camera-${Date.now()}.jpg`;
+      const name = `government-id-${idCameraSide}-${Date.now()}.jpg`;
       const file = new File([blob], name, { type: "image/jpeg" });
-      if (idDocument?.uri.startsWith("blob:")) URL.revokeObjectURL(idDocument.uri);
-      setIdDocument({ uri: URL.createObjectURL(blob), name, type: "image/jpeg", file });
+      const media = { uri: URL.createObjectURL(blob), name, type: "image/jpeg", file };
+      if (idCameraSide === "back") {
+        setIdBackDocument(media);
+      } else {
+        setIdDocument(media);
+      }
       setLocalMessage("");
       setIdCameraOpen(false);
     } catch (error: any) {
@@ -496,9 +512,19 @@ export default function IdentityVerificationWeb() {
     }
   };
 
-  const discardIdDocument = () => {
-    if (idDocument?.uri.startsWith("blob:")) URL.revokeObjectURL(idDocument.uri);
+  const discardIdDocument = (side: "front" | "back") => {
+    if (side === "back") setIdBackDocument(null);
+    else setIdDocument(null);
+    // The blob URL is revoked by the corresponding effect cleanup.
+  };
+
+  const changeIdType = (next: IdentityDocumentType) => {
+    if (idType === next) return;
+    setIdType(next);
     setIdDocument(null);
+    setIdBackDocument(null);
+    setIdCameraOpen(false);
+    setLocalMessage("");
   };
 
   const ensureDetector = async () => {
@@ -899,6 +925,10 @@ export default function IdentityVerificationWeb() {
   };
 
   const openFaceScan = async () => {
+    if (idType !== "passport" && !idBackDocument) {
+      setLocalMessage("Scan the front and back of your government ID before continuing.");
+      return;
+    }
     if (!idDocument) {
       Alert.alert(
         "Government ID Required",
@@ -975,6 +1005,7 @@ export default function IdentityVerificationWeb() {
         await submitIdentityVerification({
           idType,
           idDocument,
+          idBackDocument: idType === "passport" ? null : idBackDocument,
           selfie,
         });
 
@@ -1234,8 +1265,10 @@ export default function IdentityVerificationWeb() {
       {step === 1 ? (
         <UploadIdStep
           idType={idType}
-          setIdType={setIdType}
+          setIdType={changeIdType}
           idDocument={idDocument}
+          idBackDocument={idBackDocument}
+          idCameraSide={idCameraSide}
           selectedIdLabel={selectedIdLabel}
           cameraOpen={idCameraOpen}
           cameraReady={idCameraReady}
