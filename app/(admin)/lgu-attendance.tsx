@@ -1,14 +1,12 @@
-import { volunserveTypography as vsType } from "../../constants/volunserveLiveUi";
-import { liveUi as designUi } from "../../constants/volunserveLiveUi";
+import { getSafeVolunServeBackendBaseUrl } from "../../lib/stagingExpoServiceIsolation";
 import AdminReviewHero from "../../components/admin/AdminReviewHero";
-import { useLocalSearchParams } from "expo-router";
-import { LguPersonnelPanel } from "./lgu-members";
+import { Redirect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import ListPagination from "../../components/ui/ListPagination";
 import { useUserSession } from "../../lib/useUserSession";
-const BACKEND_URL = "https://volunserve.onrender.com";
+const BACKEND_URL = getSafeVolunServeBackendBaseUrl();
 type Personnel = {
   uid: string;
   fullName: string;
@@ -391,29 +389,29 @@ const styles = StyleSheet.create({
   content: { padding: 24, paddingBottom: 40 },
   header: { flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", gap: 20, marginBottom: 18 },
   headerCopy: { flex: 1, minWidth: 0 },
-  eyebrow: { color: "#0F766E", fontSize: vsType.size.micro, fontFamily: vsType.family, fontWeight: "800", letterSpacing: 1.2 },
-  title: { marginTop: 4, color: "#173D32", fontSize: designUi.type.page.fontSize, fontWeight: designUi.type.page.fontWeight, lineHeight: designUi.type.page.lineHeight,},
-  subtitle: { marginTop: 6, color: "#64748B", fontSize: designUi.type.body.fontSize, lineHeight: designUi.type.body.lineHeight, maxWidth: 790, fontWeight: designUi.type.body.fontWeight,},
+  eyebrow: { color: "#0F766E", fontSize: 10, fontWeight: "900", letterSpacing: 1.2 },
+  title: { marginTop: 4, color: "#173D32", fontSize: 29, fontWeight: "700" },
+  subtitle: { marginTop: 6, color: "#64748B", fontSize: 13.5, lineHeight: 20, maxWidth: 790 },
   refreshButton: { minHeight: 40, paddingHorizontal: 13, borderRadius: 9, borderWidth: 1, borderColor: "#CBD5E1", backgroundColor: "#FFFFFF", flexDirection: "row", alignItems: "center", gap: 6 },
-  refreshText: { color: "#334155", fontSize: vsType.size.meta, fontFamily: vsType.family, fontWeight: "800" },
+  refreshText: { color: "#334155", fontSize: 12, fontWeight: "800" },
   statsRow: { flexDirection: "row", gap: 10, marginBottom: 14 },
   statCard: { flex: 1, minHeight: 78, paddingHorizontal: 16, paddingVertical: 13, borderRadius: 12, borderWidth: 1, borderColor: "#E2E8F0", backgroundColor: "#FFFFFF" },
-  statValue: { color: "#0F172A", fontSize: vsType.size.titleSmall, fontFamily: vsType.family, fontWeight: "800" },
-  statLabel: { marginTop: 4, color: "#64748B", fontSize: designUi.type.label.fontSize, fontWeight: designUi.type.label.fontWeight, lineHeight: designUi.type.label.lineHeight,},
+  statValue: { color: "#0F172A", fontSize: 22, fontWeight: "900" },
+  statLabel: { marginTop: 4, color: "#64748B", fontSize: 11.5, fontWeight: "700" },
   toolbar: { minHeight: 58, padding: 10, marginBottom: 12, borderRadius: 12, borderWidth: 1, borderColor: "#E2E8F0", backgroundColor: "#FFFFFF", flexDirection: "row", alignItems: "center", gap: 10 },
   searchBox: { flex: 1, minHeight: 38, borderRadius: 9, borderWidth: 1, borderColor: "#E2E8F0", backgroundColor: "#F8FAFC", flexDirection: "row", alignItems: "center", paddingHorizontal: 11, gap: 8 },
-  searchInput: { flex: 1, color: "#0F172A", fontSize: vsType.size.label, fontFamily: vsType.family, outlineStyle: "none" } as any,
+  searchInput: { flex: 1, color: "#0F172A", fontSize: 12.5, outlineStyle: "none" } as any,
   filters: { flexDirection: "row", gap: 6 },
   filterButton: { minHeight: 34, paddingHorizontal: 11, borderRadius: 999, borderWidth: 1, borderColor: "#CBD5E1", alignItems: "center", justifyContent: "center", backgroundColor: "#FFFFFF" },
   filterButtonActive: { borderColor: "#0F766E", backgroundColor: "#0F766E" },
-  filterText: { color: "#475569", fontSize: designUi.type.label.fontSize, fontWeight: designUi.type.label.fontWeight, lineHeight: designUi.type.label.lineHeight,},
+  filterText: { color: "#475569", fontSize: 10.5, fontWeight: "900" },
   filterTextActive: { color: "#FFFFFF" },
   errorBanner: { marginBottom: 12, paddingHorizontal: 12, paddingVertical: 10, borderRadius: 9, borderWidth: 1, borderColor: "#FECACA", backgroundColor: "#FEF2F2", flexDirection: "row", alignItems: "center", gap: 8 },
-  errorText: { flex: 1, color: "#991B1B", fontSize: vsType.size.meta, fontFamily: vsType.family, lineHeight: 18, fontWeight: "600" },
+  errorText: { flex: 1, color: "#991B1B", fontSize: 12, lineHeight: 18, fontWeight: "600" },
   tableCard: { borderRadius: 13, borderWidth: 1, borderColor: "#E2E8F0", backgroundColor: "#FFFFFF", overflow: "hidden" },
   tableHeader: { minHeight: 42, paddingHorizontal: 14, flexDirection: "row", alignItems: "center", backgroundColor: "#F8FAFC", borderBottomWidth: 1, borderBottomColor: "#E2E8F0" },
   tableRow: { minHeight: 66, paddingHorizontal: 14, flexDirection: "row", alignItems: "center", borderBottomWidth: 1, borderBottomColor: "#EEF2F7" },
-  th: { color: "#7C8AA0", fontSize: vsType.size.micro, fontFamily: vsType.family, fontWeight: "800", letterSpacing: 0.6 },
+  th: { color: "#7C8AA0", fontSize: 9.5, fontWeight: "900", letterSpacing: 0.6 },
   cell: { paddingRight: 10, justifyContent: "center" },
   colName: { width: "20%", flexDirection: "row", alignItems: "center" },
   colDepartment: { width: "19%" },
@@ -423,27 +421,27 @@ const styles = StyleSheet.create({
   colDuration: { width: "14%" },
   colCase: { width: "15%" },
   avatar: { width: 34, height: 34, borderRadius: 17, backgroundColor: "#DBEAFE", alignItems: "center", justifyContent: "center", marginRight: 9 },
-  avatarText: { color: "#1D4ED8", fontSize: vsType.size.caption, fontFamily: vsType.family, fontWeight: "800" },
+  avatarText: { color: "#1D4ED8", fontSize: 10.5, fontWeight: "900" },
   nameCopy: { flex: 1, minWidth: 0 },
   nameLine: { flexDirection: "row", alignItems: "center", gap: 6 },
-  name: { flexShrink: 1, color: "#0F172A", fontSize: vsType.size.label, fontFamily: vsType.family, fontWeight: "800" },
-  employeeId: { marginTop: 3, color: "#94A3B8", fontSize: vsType.size.caption, fontFamily: vsType.family },
+  name: { flexShrink: 1, color: "#0F172A", fontSize: 12.5, fontWeight: "900" },
+  employeeId: { marginTop: 3, color: "#94A3B8", fontSize: 10.5 },
   testBadge: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 999, backgroundColor: "#EEF2FF" },
-  testBadgeText: { color: "#4F46E5", fontSize: vsType.size.micro, fontFamily: vsType.family, fontWeight: "800" },
-  bodyStrong: { color: "#334155", fontSize: vsType.size.meta, fontFamily: vsType.family, fontWeight: "800" },
-  bodyMuted: { marginTop: 3, color: "#94A3B8", fontSize: vsType.size.caption, fontFamily: vsType.family },
-  caseActive: { color: "#C2410C", fontSize: vsType.size.caption, fontFamily: vsType.family, fontWeight: "800" },
+  testBadgeText: { color: "#4F46E5", fontSize: 8.5, fontWeight: "900" },
+  bodyStrong: { color: "#334155", fontSize: 11.5, fontWeight: "800" },
+  bodyMuted: { marginTop: 3, color: "#94A3B8", fontSize: 10.5 },
+  caseActive: { color: "#C2410C", fontSize: 10.5, fontWeight: "900" },
   successChip: { alignSelf: "flex-start", paddingHorizontal: 8, paddingVertical: 4, borderRadius: 999, backgroundColor: "#ECFDF5" },
-  successChipText: { color: "#047857", fontSize: vsType.size.micro, fontFamily: vsType.family, fontWeight: "800" },
+  successChipText: { color: "#047857", fontSize: 9.5, fontWeight: "900" },
   infoChip: { alignSelf: "flex-start", paddingHorizontal: 8, paddingVertical: 4, borderRadius: 999, backgroundColor: "#EFF6FF" },
-  infoChipText: { color: "#1D4ED8", fontSize: vsType.size.micro, fontFamily: vsType.family, fontWeight: "800" },
+  infoChipText: { color: "#1D4ED8", fontSize: 9.5, fontWeight: "900" },
   neutralChip: { alignSelf: "flex-start", paddingHorizontal: 8, paddingVertical: 4, borderRadius: 999, backgroundColor: "#F1F5F9" },
-  neutralChipText: { color: "#64748B", fontSize: vsType.size.micro, fontFamily: vsType.family, fontWeight: "800" },
+  neutralChipText: { color: "#64748B", fontSize: 9.5, fontWeight: "900" },
   warningChip: { alignSelf: "flex-start", paddingHorizontal: 8, paddingVertical: 4, borderRadius: 999, backgroundColor: "#FFF7ED" },
-  warningChipText: { color: "#C2410C", fontSize: vsType.size.micro, fontFamily: vsType.family, fontWeight: "800" },
+  warningChipText: { color: "#C2410C", fontSize: 9.5, fontWeight: "900" },
   emptyState: { minHeight: 220, alignItems: "center", justifyContent: "center", padding: 24 },
-  emptyTitle: { marginTop: 8, color: "#334155", fontSize: designUi.type.section.fontSize, fontWeight: designUi.type.section.fontWeight, lineHeight: designUi.type.section.lineHeight,},
-  emptyText: { marginTop: 6, color: "#94A3B8", fontSize: designUi.type.body.fontSize, textAlign: "center", lineHeight: designUi.type.body.lineHeight, fontWeight: designUi.type.body.fontWeight,},
+  emptyTitle: { marginTop: 8, color: "#334155", fontSize: 14, fontWeight: "900" },
+  emptyText: { marginTop: 6, color: "#94A3B8", fontSize: 12, textAlign: "center" },
   historySection: {
     marginTop: 18,
   },
@@ -456,19 +454,20 @@ const styles = StyleSheet.create({
   },
   historyEyebrow: {
     color: "#0F766E",
-    fontSize: vsType.size.micro, fontFamily: vsType.family,
-    fontWeight: "800",
+    fontSize: 9.5,
+    fontWeight: "900",
     letterSpacing: 1,
   },
   historyTitle: {
     marginTop: 3,
     color: "#0F172A",
-    fontSize: designUi.type.section.fontSize,
-    fontWeight: designUi.type.section.fontWeight, lineHeight: designUi.type.section.lineHeight,},
+    fontSize: 18,
+    fontWeight: "900",
+  },
   historySubtitle: {
     marginTop: 3,
     color: "#64748B",
-    fontSize: vsType.size.meta, fontFamily: vsType.family,
+    fontSize: 11.5,
     lineHeight: 17,
   },
   historyCountChip: {
@@ -479,8 +478,8 @@ const styles = StyleSheet.create({
   },
   historyCountText: {
     color: "#047857",
-    fontSize: vsType.size.micro, fontFamily: vsType.family,
-    fontWeight: "800",
+    fontSize: 10,
+    fontWeight: "900",
   },
   historyTableCard: {
     borderRadius: 13,
@@ -534,8 +533,8 @@ const styles = StyleSheet.create({
   },
   historyAvatarText: {
     color: "#0369A1",
-    fontSize: vsType.size.micro, fontFamily: vsType.family,
-    fontWeight: "800",
+    fontSize: 9.5,
+    fontWeight: "900",
   },
   historyEmpty: {
     minHeight: 160,
@@ -544,45 +543,15 @@ const styles = StyleSheet.create({
     padding: 24,
   },
   noteCard: { marginTop: 12, padding: 12, borderRadius: 10, borderWidth: 1, borderColor: "#BFDBFE", backgroundColor: "#EFF6FF", flexDirection: "row", alignItems: "flex-start", gap: 8 },
-  noteText: { flex: 1, color: "#1E40AF", fontSize: designUi.type.body.fontSize, lineHeight: designUi.type.body.lineHeight, fontWeight: designUi.type.body.fontWeight},
+  noteText: { flex: 1, color: "#1E40AF", fontSize: 11.5, lineHeight: 17, fontWeight: "600" },
 });
 
-/** One LGU workspace for staff and duty records; separate backend contracts stay intact. */
+/**
+ * Retired LGU Operations page: keep the legacy route safe for bookmarks,
+ * but never render staff duty/attendance management in the final Admin UI.
+ * The historical panels/data API are left unchanged for a separate reviewed
+ * migration; do not delete shared Firestore rules from this Hosting-only change.
+ */
 export default function LguOperationsWorkspace() {
-  const { section } = useLocalSearchParams<{ section?: string }>();
-  const [selected, setSelected] = useState<"attendance" | "personnel">(
-    section === "personnel" ? "personnel" : "attendance"
-  );
-  useEffect(() => {
-    if (section === "personnel" || section === "attendance") setSelected(section);
-  }, [section]);
-  return <View style={{ flex: 1, minHeight: 0, backgroundColor: "#F6F8F7" }}>
-    <View style={{
-      flexDirection: "row", alignItems: "center", paddingHorizontal: 18,
-      paddingTop: 10, paddingBottom: 6, gap: 8, backgroundColor: "#FFFFFF",
-      borderBottomWidth: 1, borderBottomColor: "#DAE6DE",
-    }}>
-      {([
-        { id: "attendance" as const, title: "Duty & Attendance", icon: "time-outline" as const },
-        { id: "personnel" as const, title: "Personnel Accounts", icon: "people-outline" as const },
-      ]).map(tab => (
-        <TouchableOpacity key={tab.id} accessibilityRole="tab"
-          accessibilityState={{ selected: selected === tab.id }}
-          onPress={() => setSelected(tab.id)}
-          style={{
-            minHeight: 41, flexDirection: "row", justifyContent: "center",
-            alignItems: "center", gap: 7, flex: 1,
-            borderRadius: 8, borderWidth: 1,
-            borderColor: selected === tab.id ? "#B5DCCD" : "#E4EAE6",
-            backgroundColor: selected === tab.id ? "#E8F5EE" : "#FFFFFF",
-          }}>
-          <Ionicons name={tab.icon} size={16} color="#176B52" />
-          <Text style={{ fontSize: vsType.size.meta, fontFamily: vsType.family, fontWeight: selected === tab.id ? "800" : "600", color: "#174936" }}>
-            {tab.title}
-          </Text>
-        </TouchableOpacity>
-      ))}
-    </View>
-    {selected === "attendance" ? <LguAttendancePanel /> : <LguPersonnelPanel />}
-  </View>;
+  return <Redirect href="/(admin)/admin-cases" />;
 }

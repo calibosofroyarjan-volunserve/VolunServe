@@ -17,26 +17,37 @@ async function main() {
   await env.clearFirestore();
   await env.withSecurityRulesDisabled(async context=>{
    const db=context.firestore();
-   await db.doc("users/financial-admin").set({role:"admin",status:"approved"});
-   await db.doc("users/system-programmer").set({role:"superadmin",status:"approved"});
+   await db.doc("users/financial-admin").set({role:"admin",status:"approved",
+    email:"financial-admin@example.org"});
+   await db.doc("users/system-programmer").set({role:"superadmin",status:"approved",
+    email:"system-programmer@example.org"});
    await db.doc("users/financial-donor").set({
-    role:"resident",status:"approved",residentAccess:true,activeMode:"resident"});
+    role:"resident",status:"approved",residentAccess:true,activeMode:"resident",
+    email:"financial-donor@example.org"});
    await db.doc("users/other-financial-donor").set({
-    role:"resident",status:"approved",residentAccess:true,activeMode:"resident"});
+    role:"resident",status:"approved",residentAccess:true,activeMode:"resident",
+    email:"other-financial-donor@example.org"});
    await db.doc("donationCampaigns/test-campaign").set({title:"Test Campaign",status:"published"});
    await db.doc("donations/test-receipt").set({
      donorUid:"financial-donor",campaignId:"test-campaign",status:"received"});
    await db.doc("donations/test-receipt/logs/test-audit").set({type:"verified",amount:1});
   });
-  const admin=env.authenticatedContext("financial-admin").firestore();
-  const superadmin=env.authenticatedContext("system-programmer").firestore();
-  const donor=env.authenticatedContext("financial-donor").firestore();
-  const outsider=env.authenticatedContext("other-financial-donor").firestore();
+  const admin=env.authenticatedContext("financial-admin",{
+    email:"financial-admin@example.org",email_verified:true}).firestore();
+  const superadmin=env.authenticatedContext("system-programmer",{
+    email:"system-programmer@example.org",email_verified:true}).firestore();
+  const donor=env.authenticatedContext("financial-donor",{
+    email:"financial-donor@example.org",email_verified:true}).firestore();
+  const outsider=env.authenticatedContext("other-financial-donor",{
+    email:"other-financial-donor@example.org",email_verified:true}).firestore();
+  const unverifiedAdmin=env.authenticatedContext("financial-admin",{
+    email:"financial-admin@example.org",email_verified:false}).firestore();
   const campaign="donationCampaigns/test-campaign",receipt="donations/test-receipt";
   await assertSucceeds(admin.doc(campaign).get());
   await assertSucceeds(admin.doc(receipt).get());
   await assertSucceeds(admin.doc(receipt+"/logs/test-audit").get());
-  console.log("PASS approved LGU Admin reads campaign, donation, and audit");
+  await assertFails(unverifiedAdmin.doc(receipt).get());
+  console.log("PASS verified approved LGU Admin reads campaign/receipt/audit; unverified email denied");
   await assertFails(superadmin.doc(campaign).get());
   await assertFails(superadmin.doc(receipt).get());
   await assertFails(superadmin.doc(receipt+"/logs/test-audit").get());

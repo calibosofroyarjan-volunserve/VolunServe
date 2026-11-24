@@ -1,3 +1,4 @@
+import { getSafeVolunServeBackendBaseUrl, blockExternalCheckoutDuringStaging } from "../../lib/stagingExpoServiceIsolation";
 import { volunserveTypography as vsType } from "../../constants/volunserveLiveUi";
 import { liveUi as designUi } from "../../constants/volunserveLiveUi";
 import Ionicons from "@expo/vector-icons/Ionicons";
@@ -178,7 +179,7 @@ const COMMUNITY_KEYWORDS = [
   "wheelchair",
 ];
 
-const PAYMONGO_BACKEND_URL = "https://volunserve.onrender.com";
+const PAYMONGO_BACKEND_URL = getSafeVolunServeBackendBaseUrl();
 
 const sanitizeMoneyInput = (value: string) => {
   const cleaned = value.replace(/[^0-9.]/g, "");
@@ -725,6 +726,7 @@ export default function Donation() {
 
       const firebaseToken = await user.getIdToken();
 
+      blockExternalCheckoutDuringStaging(); // Before initiating a donation payment session.
       const response = await fetch(`${PAYMONGO_BACKEND_URL}/api/paymongo/checkout-session`, {
         method: "POST",
         headers: {

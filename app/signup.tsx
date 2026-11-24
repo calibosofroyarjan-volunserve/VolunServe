@@ -1,6 +1,7 @@
 import { volunserveTypography as vsType } from "../constants/volunserveLiveUi";
 import { liveUi as designUi } from "../constants/volunserveLiveUi";
 import EmailFirstSignup from "../components/auth/EmailFirstSignup";
+import { communitySocialRequest } from "../lib/communitySocial";
 import { userFacingError } from "../lib/userFacingError";
 import { EMAIL_FIRST_SIGNUP_ENABLED } from "../lib/signupFeature";
 import { getRegistrationEmailError } from "../lib/registrationEmailPolicy";
@@ -59,6 +60,7 @@ type FormState = {
   password: string;
   confirmPassword: string;
   acceptTerms: boolean;
+  directoryConsent: boolean;
   confirmReview: boolean;
 };
 
@@ -414,9 +416,9 @@ function TermsModal({ visible, onClose }: { visible: boolean; onClose: () => voi
           <Text style={styles.termsH1}>VolunServe Registration Terms</Text>
           <Text style={styles.termsP}>By registering, you confirm the information you provide is accurate and complete. Your Basic Resident Account becomes active after successful registration. Identity Verification is a separate trust step for protected Resident and Volunteer services.</Text>
           <Text style={styles.termsH2}>Data Privacy</Text>
-          <Text style={styles.termsP}>We collect your personal data including name, contact information, and address to support community services and account management. If you later use Identity Verification, verification evidence is handled as private data and must only be used for the verification process.</Text>
+          <Text style={styles.termsP}>Your name and approved Resident/Volunteer role appear automatically in the member directory for signed-in approved members. Your phone, home address and identity evidence remain private. Profile photo, online status and Last Seen have separate optional settings. Private chat is available by default to approved members, even while offline; you may pause messages, block or report contact.</Text>
           <Text style={styles.termsH2}>Consent</Text>
-          <Text style={styles.termsP}>You consent to secure processing of your registration data for VolunServe services and communication. Identity Verification and the Volunteer Application are separate steps after account creation.</Text>
+          <Text style={styles.termsP}>By registering, you acknowledge basic name and role visibility among approved signed-in members. Sharing your profile photo is optional. Identity Verification and Volunteer Applications remain separate; contact an administrator about privacy concerns or corrections.</Text>
           <Text style={styles.termsH2}>Security</Text>
           <Text style={styles.termsP}>Use a strong password. Do not share your login credentials. Suspicious activity may result in account review.</Text>
           <View style={{ height: 24 }} />
@@ -460,6 +462,7 @@ function LegacySignup() {
     password: "",
     confirmPassword: "",
     acceptTerms: false,
+    directoryConsent: false,
     confirmReview: false,
   });
 
@@ -664,6 +667,11 @@ function LegacySignup() {
         firstName: formData.firstName.trim(),
         middleName: formData.middleName.trim(),
         age: validation.ageNumber,
+        dateOfBirth: formData.dateOfBirth
+          ? [formData.dateOfBirth.getFullYear(),
+              String(formData.dateOfBirth.getMonth() + 1).padStart(2, "0"),
+              String(formData.dateOfBirth.getDate()).padStart(2, "0")].join("-")
+          : undefined,
         email: formData.email.trim().toLowerCase(),
         password: formData.password,
         authProvider: googleBound ? "google" : "email",
@@ -677,6 +685,11 @@ function LegacySignup() {
         occupationOther: formData.occupationOther || "",
       });
 
+      // Directory visibility requires separate consent; registration remains valid even if offline.
+      if(registeredUser.emailVerified && formData.directoryConsent){
+        void communitySocialRequest("/api/community/directory/preferences","POST",{directoryListed:true})
+          .catch(()=>{/* Member can join from the Community Members screen. */});
+      }
       Alert.alert(
         registeredUser.emailVerified ? "Basic Account Created" : "Verify Your Email",
         googleBound
@@ -981,6 +994,7 @@ function LegacySignup() {
               <SectionTitle title="Compliance & Data Privacy" subtitle="Review and confirm before submitting your registration." />
 
               <CheckRow label="I confirm the details I provided are final and correct." checked={formData.confirmReview} onPress={() => updateField("confirmReview", !formData.confirmReview)} />
+              <CheckRow label="Optional: show my profile photo to signed-in Community Members. My name and role are listed automatically; contact details and online status remain private." checked={formData.directoryConsent} onPress={() => updateField("directoryConsent", !formData.directoryConsent)} />
 
             </View>
           )}

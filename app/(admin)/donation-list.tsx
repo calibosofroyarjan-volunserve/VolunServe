@@ -1,6 +1,4 @@
-import { volunserveTypography as vsType } from "../../constants/volunserveLiveUi";
-import { liveUi as designUi } from "../../constants/volunserveLiveUi";
-import AdminReviewHero from "../../components/admin/AdminReviewHero";
+import { getSafeVolunServeBackendBaseUrl, blockProductionEvidenceUploadDuringStaging } from "../../lib/stagingExpoServiceIsolation";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import * as ImagePicker from "expo-image-picker";
 import { Redirect, useLocalSearchParams, useRouter } from "expo-router";
@@ -20,6 +18,7 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  useWindowDimensions,
   TextInput,
   TouchableOpacity,
   View
@@ -29,6 +28,7 @@ import { db } from "../../lib/firebase";
 import ListPagination from "../../components/ui/ListPagination";
 import { isApprovedProfile } from "../../lib/firebaseAuth";
 import { useUserSession } from "../../lib/useUserSession";
+import { publishModuleAnnouncement } from "../../lib/publishModuleAnnouncement";
 
 type NeedAssessmentStatus =
   | "verified"
@@ -87,6 +87,10 @@ type AssistanceCampaignSource = {
   id: string;
   requestId?: string;
   requesterBarangay?: string;
+  requesterName?: string;
+  beneficiaryName?: string;
+  requesterAddress?: string;
+  contactNumber?: string;
   category?: string;
   categoryLabel?: string;
   title?: string;
@@ -222,7 +226,18 @@ const sanitizeMoneyInput = (value: string) => {
   return `${safeWhole}.${decimal}`;
 };
 
-const SECURE_DONATION_BACKEND = "https://volunserve.onrender.com";
+const SECURE_DONATION_BACKEND = getSafeVolunServeBackendBaseUrl();
+
+// React Native Web does not implement Alert.alert. Keep validation and
+// outcome feedback visible on web without changing native mobile behavior.
+const showDonationAlert = (title: string, message: string) => {
+  if (Platform.OS === "web" && typeof (globalThis as any).alert === "function") {
+    (globalThis as any).alert(`${title}\n\n${message}`);
+    return;
+  }
+  Alert.alert(title, message);
+};
+
 const CLOUDINARY_CLOUD_NAME = "netjawtz";
 const CLOUDINARY_UPLOAD_PRESET = "volunserve_evidence";
 const CLOUDINARY_UPLOAD_URL =
@@ -247,22 +262,43 @@ const communityGeneralArea = (source?: AssistanceCampaignSource | null) => {
   return `${barangay}, City of San Jose del Monte, Bulacan`;
 };
 
+// The Resident's title and description are used for the Admin draft.
+// Known personal details are redacted, and publication requires human approval.
+const privacySafeResidentDraft = (
+  value: string | undefined, source?: AssistanceCampaignSource | null,
+) => {
+  let result = String(value || "").trim();
+  for (const detail of [source?.requesterName,source?.beneficiaryName,source?.requesterAddress,source?.contactNumber]) {
+    const clean=String(detail || "").trim();
+    if (clean.length < 4) continue;
+    const escaped=clean.replace(/[-\/\\^$*+?.()|[\]{}]/g,"\\$&");
+    result=result.replace(new RegExp(escaped,"gi"),"[private information]");
+  }
+  return result
+    .replace(/\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi,"[private email]")
+    .replace(/(?:\+63|0)9\d{9}\b/g,"[private contact]")
+    .replace(/\b\d{3,4}[\s-]?\d{3}[\s-]?\d{4}\b/g,"[private contact]")
+    .replace(/\s{2,}/g," ")
+    .trim();
+};
 const defaultCommunityCampaignTitle = (source?: AssistanceCampaignSource | null) => {
-  const label = String(source?.categoryLabel || source?.category || "Community Assistance").trim();
-  return `${normalizeCategoryLabel(label)} Support`;
+  const residentTitle=privacySafeResidentDraft(source?.title,source).slice(0,160);
+  return residentTitle.length >= 5
+    ? residentTitle
+    : normalizeCategoryLabel(source?.categoryLabel || source?.category) + " Assistance";
 };
-
 const defaultCommunityCampaignDescription = (source?: AssistanceCampaignSource | null) => {
-  const label = normalizeCategoryLabel(source?.categoryLabel || source?.category);
-  const area = communityGeneralArea(source);
-  return `Support an LGU-verified ${label.toLowerCase()} need in ${area}. The beneficiary's identity, exact home address, contact details, and private supporting records are not published.`;
+  const residentDescription=privacySafeResidentDraft(source?.description,source).slice(0,1050);
+  const publicArea=communityGeneralArea(source);
+  if (residentDescription.length >= 30) return residentDescription;
+  if (residentDescription.length > 0) {
+    return residentDescription + " This assistance request was reviewed by the LGU in " + publicArea + ".";
+  }
+  return "Support an LGU-approved assistance request in " + publicArea +
+    ". Private beneficiary details and supporting records are not published.";
 };
-
-const defaultCommunityPublicStory = (source?: AssistanceCampaignSource | null) => {
-  const label = normalizeCategoryLabel(source?.categoryLabel || source?.category);
-  const area = communityGeneralArea(source);
-  return `The LGU verified a legitimate ${label.toLowerCase()} need in ${area} and confirmed that available LGU or partner resources cannot fully cover the remaining requirement. Public support is limited to the verified shortage, while beneficiary identity and private case information remain protected.`;
-};
+const defaultCommunityPublicStory = (source?: AssistanceCampaignSource | null) =>
+  defaultCommunityCampaignDescription(source);
 
 const campaignGroupLabel = (campaign?: DonationCampaign) =>
   String(campaign?.campaignGroup || "") === "community_needs_help"
@@ -400,6 +436,7 @@ const normalizeReference = (value?: string) =>
 
 export default function DonationAdministration() {
   const router = useRouter();
+  const { width: windowWidth } = useWindowDimensions();
   const params = useLocalSearchParams<{
     assessmentId?: string | string[];
     assistanceRequestId?: string | string[];
@@ -421,6 +458,9 @@ export default function DonationAdministration() {
   const [activeView, setActiveView] = useState<AdminDonationView>("campaigns");
   const [showReviewedHistory, setShowReviewedHistory] = useState(false);
   const [campaignPage,setCampaignPage] = useState(1);
+  const [campaignSearch,setCampaignSearch] = useState("");
+  const [campaignStatusFilter,setCampaignStatusFilter] = useState<"all"|"published"|"closed">("all");
+  const [showLegacyCampaigns,setShowLegacyCampaigns] = useState(false);
   const [pendingPage,setPendingPage] = useState(1);
   const [historyPage,setHistoryPage] = useState(1);
 
@@ -432,6 +472,7 @@ export default function DonationAdministration() {
   const [assistanceSourceReady, setAssistanceSourceReady] = useState(false);
   const [dataReady, setDataReady] = useState(false);
   const [error, setError] = useState("");
+  const [failedCampaignAnnouncementId, setFailedCampaignAnnouncementId] = useState("");
   const [busyKey, setBusyKey] = useState("");
 
   const scrollRef = useRef<ScrollView | null>(null);
@@ -454,6 +495,8 @@ export default function DonationAdministration() {
   const [sourceCase, setSourceCase] = useState<SourceCase | null>(null);
   const [sourceCaseLoading, setSourceCaseLoading] = useState(false);
   const [publicStory, setPublicStory] = useState("");
+  const [residentStoryPrivacyReviewed, setResidentStoryPrivacyReviewed] = useState(false);
+  const assistedDraftInitializedRef = useRef("");
   const [publicLocationLabel, setPublicLocationLabel] = useState("");
   const [publicIncidentType, setPublicIncidentType] = useState("");
   const [publicSeverity, setPublicSeverity] = useState("");
@@ -755,8 +798,25 @@ export default function DonationAdministration() {
     [donations],
   );
 
-  const campaignCurrent = Math.max(1, Math.min(campaignPage, Math.max(1,Math.ceil(campaigns.length / 5))));
-  const pagedCampaigns = campaigns.slice((campaignCurrent - 1) * 5,campaignCurrent * 5);
+  // Archived campaigns remain intact in Firestore, donation audit, and public campaign history.
+  const isLegacyCampaign = (campaign: DonationCampaign) =>
+    !String(campaign.sourceAssistanceRequestId || "").trim() &&
+    String(campaign.sourceType || "") !== "community_assistance_request";
+  const legacyCampaignCount = campaigns.filter(isLegacyCampaign).length;
+  const currentCampaignCount = campaigns.length - legacyCampaignCount;
+  const filteredCampaigns = campaigns.filter(campaign => {
+    if (!showLegacyCampaigns && isLegacyCampaign(campaign)) return false;
+    if (campaignStatusFilter !== "all" && campaign.status !== campaignStatusFilter) return false;
+    const haystack = [
+      campaign.title, campaign.generalArea, campaign.publicLocationLabel,
+      ...(campaign.barangays || []),
+    ].map(item => String(item || "").toLowerCase()).join(" ");
+    return haystack.includes(campaignSearch.trim().toLowerCase());
+  });
+  const campaignCurrent = Math.max(1, Math.min(campaignPage,
+    Math.max(1,Math.ceil(filteredCampaigns.length / 5))));
+  const pagedCampaigns = filteredCampaigns.slice(
+    (campaignCurrent - 1) * 5,campaignCurrent * 5);
   const pendingCurrent = Math.max(1, Math.min(pendingPage, Math.max(1,Math.ceil(pendingDonations.length / 5))));
   const pagedPending = pendingDonations.slice((pendingCurrent - 1) * 5,pendingCurrent * 5);
   const reviewedDonations = useMemo(
@@ -868,9 +928,8 @@ export default function DonationAdministration() {
       ).trim();
 
     if (
-      residentPhoto.startsWith(
-        "https://",
-      )
+      residentPhoto.startsWith("https://") &&
+      assistanceSource.publicCampaignPhotoConsent === true
     ) {
       setSelectedPublicPhotoUrls(
         (current) =>
@@ -976,9 +1035,16 @@ export default function DonationAdministration() {
 
     setActiveView("campaigns");
     setAssessmentId(assistanceSource.id);
-    setShowCampaignForm(false);
+    if (assistedDraftInitializedRef.current !== assistanceSource.id) {
+      // The approved Assistance action opens the final campaign editor directly.
+      // This never publishes until the LGU Admin explicitly confirms.
+      setShowCampaignForm(!existing && assistanceSourceIsEligible(assistanceSource));
+    }
 
-    if (!existing && assistanceSourceIsEligible(assistanceSource)) {
+    if (!existing && assistanceSourceIsEligible(assistanceSource) &&
+        assistedDraftInitializedRef.current !== assistanceSource.id) {
+      assistedDraftInitializedRef.current = assistanceSource.id;
+      setResidentStoryPrivacyReviewed(false);
       setCampaignTitle(defaultCommunityCampaignTitle(assistanceSource));
       setCampaignDescription(defaultCommunityCampaignDescription(assistanceSource));
       setPublicStory(defaultCommunityPublicStory(assistanceSource));
@@ -1035,7 +1101,7 @@ export default function DonationAdministration() {
     const cleanUrl = String(url || "").trim();
 
     if (!cleanUrl.startsWith("https://")) {
-      Alert.alert("Invalid Proof Link", "This proof link is not valid.");
+      showDonationAlert("Invalid Proof Link", "This proof link is not valid.");
       return;
     }
 
@@ -1047,7 +1113,7 @@ export default function DonationAdministration() {
 
       await Linking.openURL(cleanUrl);
     } catch (problem) {
-      Alert.alert(
+      showDonationAlert(
         "Unable to Open Proof",
         problem instanceof Error
           ? problem.message
@@ -1069,6 +1135,8 @@ export default function DonationAdministration() {
     setHandoffAddress("");
     setHandoffNotes("");
     setPublicStory("");
+    setResidentStoryPrivacyReviewed(false);
+    assistedDraftInitializedRef.current = "";
     setPublicLocationLabel("");
     setPublicIncidentType("");
     setPublicSeverity("");
@@ -1099,7 +1167,7 @@ export default function DonationAdministration() {
       }
 
       if (current.length >= 5) {
-        Alert.alert(
+        showDonationAlert(
           "Public Photo Limit",
           "Select up to 5 privacy-safe photos for the public campaign.",
         );
@@ -1113,6 +1181,7 @@ export default function DonationAdministration() {
   const uploadPublicCampaignPhoto = async (
     asset: ImagePicker.ImagePickerAsset,
   ) => {
+    blockProductionEvidenceUploadDuringStaging();
     const fileName =
       asset.fileName ||
       asset.uri.split("/").pop()?.split("?")[0] ||
@@ -1157,7 +1226,7 @@ export default function DonationAdministration() {
   const chooseAndUploadPublicCampaignPhoto = async () => {
     if (publicPhotoUploading || selectedPublicPhotoUrls.length >= 5) {
       if (selectedPublicPhotoUrls.length >= 5) {
-        Alert.alert(
+        showDonationAlert(
           "Public Photo Limit",
           "A campaign may publish up to 5 LGU-approved public photos.",
         );
@@ -1168,7 +1237,7 @@ export default function DonationAdministration() {
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
 
     if (!permission.granted) {
-      Alert.alert(
+      showDonationAlert(
         "Gallery Permission",
         "Allow photo library access so the Admin can add a separate privacy-safe public campaign photo.",
       );
@@ -1188,7 +1257,7 @@ export default function DonationAdministration() {
       typeof asset.fileSize === "number" &&
       asset.fileSize > MAX_PUBLIC_CAMPAIGN_PHOTO_BYTES
     ) {
-      Alert.alert("Photo Too Large", "Use a public campaign photo smaller than 10 MB.");
+      showDonationAlert("Photo Too Large", "Use a public campaign photo smaller than 10 MB.");
       return;
     }
 
@@ -1202,13 +1271,14 @@ export default function DonationAdministration() {
         Array.from(new Set([...current, publicUrl])).slice(0, 5),
       );
       setPublicPhotoUploadStatus("Public campaign photo uploaded.");
+      setResidentStoryPrivacyReviewed(false);
     } catch (problem) {
       const message =
         problem instanceof Error
           ? problem.message
           : "Unable to upload the public campaign photo.";
       setPublicPhotoUploadStatus("");
-      Alert.alert("Photo Upload Failed", message);
+      showDonationAlert("Photo Upload Failed", message);
     } finally {
       setPublicPhotoUploading(false);
     }
@@ -1239,7 +1309,7 @@ export default function DonationAdministration() {
       );
 
       setPublicPhotoUploadStatus("Public campaign photos saved.");
-      Alert.alert(
+      showDonationAlert(
         "Public Photos Saved",
         "The Resident Donation page will now use these LGU-approved campaign photos.",
       );
@@ -1249,7 +1319,7 @@ export default function DonationAdministration() {
           ? problem.message
           : "Unable to save the public campaign photos.";
       setError(message);
-      Alert.alert("Photo Save Failed", message);
+      showDonationAlert("Photo Save Failed", message);
     } finally {
       setBusyKey("");
     }
@@ -1289,8 +1359,20 @@ export default function DonationAdministration() {
   const createCampaign = async () => {
     if (!user || !isAdmin || busyKey) return;
 
+    // The current protected backend requires a photo originally submitted
+    // with the Resident's explicit public-campaign consent. An Admin-uploaded
+    // cover is supplementary; it cannot replace Resident consent.
+    if (openedFromAssistance && assistanceSourceReady && assistanceSource &&
+        (assistanceSource.publicCampaignPhotoConsent !== true ||
+         !String(assistanceSource.publicCampaignPhotoUrl || "").startsWith("https://"))) {
+      const message = "The verified request has no Resident-consented public photo. An Admin-uploaded image cannot replace that consent. Ask the Resident to submit a new request with a public campaign photo and consent.";
+      setError(message);
+      showDonationAlert("Resident Photo Consent Required", message);
+      return;
+    }
+
     if (!openedFromAssistance) {
-      Alert.alert(
+      showDonationAlert(
         "Verified Assistance Request Required",
         "New donation campaigns must begin from an LGU-verified Request Assistance with documented uncovered costs.",
       );
@@ -1299,7 +1381,7 @@ export default function DonationAdministration() {
 
     if (openedFromAssistance) {
       if (!assistanceSourceReady || !assistanceSource) {
-        Alert.alert(
+        showDonationAlert(
           "Verified Assistance Request Required",
           "The selected Assistance Request could not be loaded.",
         );
@@ -1307,7 +1389,7 @@ export default function DonationAdministration() {
       }
 
       if (!assistanceSourceIsEligible(assistanceSource)) {
-        Alert.alert(
+        showDonationAlert(
           "Donation Support Not Available",
           "This Assistance Request must be finally verified and have Donation Support Needed with a verified remaining shortage.",
         );
@@ -1318,7 +1400,7 @@ export default function DonationAdministration() {
         !String(assistanceSource.assignedLocationName || "").trim() ||
         !String(assistanceSource.assignedLocationAddress || "").trim()
       ) {
-        Alert.alert(
+        showDonationAlert(
           "Official Location Required",
           "Return to Assistance Requests and save the LGU-approved public service location first.",
         );
@@ -1326,7 +1408,7 @@ export default function DonationAdministration() {
       }
     } else {
       if (!selectedAssessment || selectedAssessment.id !== requestedAssessmentId) {
-        Alert.alert(
+        showDonationAlert(
           "Verified Relief Need Required",
           "Return to Relief Operations and open Donation Support from the exact relief need that has a confirmed shortage.",
         );
@@ -1334,7 +1416,7 @@ export default function DonationAdministration() {
       }
 
       if (!selectedAssessmentActive) {
-        Alert.alert(
+        showDonationAlert(
           "Relief Need No Longer Active",
           "This relief need is already fulfilled or closed, so a new donation campaign cannot be published.",
         );
@@ -1343,10 +1425,17 @@ export default function DonationAdministration() {
     }
 
     if (selectedPublishedCampaign) {
-      Alert.alert(
+      showDonationAlert(
         "Campaign Already Active",
         "Close the existing campaign for this verified source before publishing another one.",
       );
+      return;
+    }
+
+    if (openedFromAssistance && !residentStoryPrivacyReviewed) {
+      const message="Review the resident-derived title, story and campaign photo, then confirm that private information has been removed before publishing.";
+      setError(message);
+      showDonationAlert("Privacy Review Required",message);
       return;
     }
 
@@ -1361,12 +1450,12 @@ export default function DonationAdministration() {
     const severityLabel = publicSeverity.trim();
 
     if (title.length < 5) {
-      Alert.alert("Campaign Title", "Enter a clear campaign title.");
+      showDonationAlert("Campaign Title", "Enter a clear campaign title.");
       return;
     }
 
     if (description.length < 15) {
-      Alert.alert(
+      showDonationAlert(
         "Campaign Description",
         "Describe the verified need clearly without exposing private beneficiary details.",
       );
@@ -1374,7 +1463,7 @@ export default function DonationAdministration() {
     }
 
     if (story.length < 30) {
-      Alert.alert(
+      showDonationAlert(
         "Verified Situation Required",
         "Write a short privacy-safe public story explaining the verified situation and why support is needed.",
       );
@@ -1382,7 +1471,7 @@ export default function DonationAdministration() {
     }
 
     if (publicLocation.length < 3) {
-      Alert.alert(
+      showDonationAlert(
         "Public Location Required",
         "Use only an approximate public area. Never publish the beneficiary's exact home address.",
       );
@@ -1390,7 +1479,7 @@ export default function DonationAdministration() {
     }
 
     if (incidentType.length < 2 || severityLabel.length < 2) {
-      Alert.alert(
+      showDonationAlert(
         "Public Case Details",
         "Confirm the public category and LGU-assessed priority before publishing.",
       );
@@ -1401,7 +1490,7 @@ export default function DonationAdministration() {
       openedFromAssistance &&
       selectedPublicPhotoUrls.length < 1
     ) {
-      Alert.alert(
+      showDonationAlert(
         "Public Campaign Photo Required",
         "A Community Needs campaign needs at least one LGU-approved public photo before it can be published.",
       );
@@ -1409,7 +1498,7 @@ export default function DonationAdministration() {
     }
 
     if (!Number.isFinite(numericMonetaryGoal) || numericMonetaryGoal <= 0) {
-      Alert.alert(
+      showDonationAlert(
         "Funding Goal Required",
         "Enter the verified monetary amount still needed for this campaign.",
       );
@@ -1422,7 +1511,7 @@ export default function DonationAdministration() {
         numericMonetaryGoal - Number(assistanceSource?.remainingAmount || 0),
       ) > 0.009
     ) {
-      Alert.alert(
+      showDonationAlert(
         "Verified Funding Goal",
         `For a Community Assistance campaign, the funding goal must match the verified remaining unmet amount: ${money(
           Number(assistanceSource?.remainingAmount || 0),
@@ -1432,7 +1521,7 @@ export default function DonationAdministration() {
     }
 
     if (moneyLabel.length < 3 || moneyInstructions.length < 10) {
-      Alert.alert(
+      showDonationAlert(
         "Official LGU Channel Required",
         "Enter the official LGU monetary channel and clear payment or receipt instructions.",
       );
@@ -1443,7 +1532,7 @@ export default function DonationAdministration() {
       !openedFromAssistance &&
       (handoffLocationName.trim().length < 3 || handoffAddress.trim().length < 5)
     ) {
-      Alert.alert(
+      showDonationAlert(
         "Official Public Location Required",
         "Set the LGU-approved public service or coordination point before publishing this disaster campaign.",
       );
@@ -1456,7 +1545,7 @@ export default function DonationAdministration() {
       setBusyKey("create_campaign");
       setError("");
 
-      await secureAdminPost("/api/admin/donations/campaigns", {
+      const published = await secureAdminPost("/api/admin/donations/campaigns", {
         sourceType: openedFromAssistance
           ? "community_assistance_request"
           : "disaster_relief_need",
@@ -1481,17 +1570,40 @@ export default function DonationAdministration() {
       });
 
       setShowCampaignForm(false);
-      Alert.alert(
-        "Campaign Published",
-        openedFromAssistance
-          ? "The verified Community Assistance campaign is now active. Only privacy-safe campaign information and the LGU-approved public location are exposed to donors."
-          : "The disaster relief campaign is now active. Residents can donate through the official LGU monetary channel.",
-      );
+      const publishedCampaignId = typeof published?.campaignId === "string"
+        ? published.campaignId : "";
+      if (!publishedCampaignId) {
+        setError("Campaign published, but campaign ID was not returned. No public announcement was sent. Check the campaign register.");
+        showDonationAlert("Campaign Published — Announcement Pending",
+          "The campaign was created, but its announcement could not be verified. Check the campaign register before retrying.");
+      } else {
+        try {
+          const outcome = await publishModuleAnnouncement({
+            kind: "donation", sourceId: publishedCampaignId, adminUid: user.uid,
+          });
+          if (outcome === "published" || outcome === "already_published") {
+            setFailedCampaignAnnouncementId("");
+            showDonationAlert("Campaign Published and Announced",
+              "The verified campaign is live. A generic notice was automatically posted in Community Updates without beneficiary or donor information.");
+          } else {
+            setFailedCampaignAnnouncementId(publishedCampaignId);
+            setError("Campaign published, but its public announcement was not posted. Use Retry Announcement; no donation or campaign payment was changed.");
+            showDonationAlert("Campaign Published — Announcement Pending",
+              "The donation campaign is live, but its public announcement is still pending.");
+          }
+        } catch (noticeError) {
+          console.error("Published Donation Campaign announcement failed:", noticeError);
+          setFailedCampaignAnnouncementId(publishedCampaignId);
+          setError("Campaign published successfully, but the public announcement failed. Use Retry Announcement below. Do not create another campaign.");
+          showDonationAlert("Campaign Published — Announcement Failed",
+            "The campaign is live. Its public announcement was not posted; payments and donor records are unchanged.");
+        }
+      }
     } catch (problem) {
       const message =
         problem instanceof Error ? problem.message : "Unable to create the campaign.";
       setError(message);
-      Alert.alert("Campaign Failed", message);
+      showDonationAlert("Campaign Failed", message);
     } finally {
       setBusyKey("");
     }
@@ -1534,7 +1646,7 @@ export default function DonationAdministration() {
 
     const numericGoal = Number(draft.monetaryGoal);
     if (!Number.isFinite(numericGoal) || numericGoal <= 0) {
-      Alert.alert("Funding Goal Required", "Enter the verified monetary goal.");
+      showDonationAlert("Funding Goal Required", "Enter the verified monetary goal.");
       return;
     }
 
@@ -1542,7 +1654,7 @@ export default function DonationAdministration() {
       draft.handoffLocationName.trim().length < 3 ||
       draft.handoffAddress.trim().length < 5
     ) {
-      Alert.alert(
+      showDonationAlert(
         "Official Public Location Required",
         "Enter the LGU-approved public service location name and address.",
       );
@@ -1563,7 +1675,7 @@ export default function DonationAdministration() {
         },
       );
 
-      Alert.alert(
+      showDonationAlert(
         "Campaign Setup Updated",
         "The verified goal and LGU-approved public location are now available on the Resident Donation page.",
       );
@@ -1573,7 +1685,7 @@ export default function DonationAdministration() {
           ? problem.message
           : "Unable to update the campaign public setup.";
       setError(message);
-      Alert.alert("Update Failed", message);
+      showDonationAlert("Update Failed", message);
     } finally {
       setBusyKey("");
     }
@@ -1590,12 +1702,12 @@ export default function DonationAdministration() {
         `/api/admin/donations/campaigns/${encodeURIComponent(campaign.id)}/close`,
       );
 
-      Alert.alert("Campaign Closed", "New donor submissions are now disabled.");
+      showDonationAlert("Campaign Closed", "New donor submissions are now disabled.");
     } catch (problem) {
       const message =
         problem instanceof Error ? problem.message : "Unable to close the campaign.";
       setError(message);
-      Alert.alert("Close Failed", message);
+      showDonationAlert("Close Failed", message);
     } finally {
       setBusyKey("");
     }
@@ -1612,7 +1724,7 @@ export default function DonationAdministration() {
     const actual = Number(form.actualValue);
 
     if (!Number.isFinite(actual) || actual <= 0) {
-      Alert.alert(
+      showDonationAlert(
         "Actual Receipt Required",
         "Enter the actual monetary amount confirmed by the LGU.",
       );
@@ -1635,7 +1747,7 @@ export default function DonationAdministration() {
         return next;
       });
 
-      Alert.alert(
+      showDonationAlert(
         "Donation Verified",
         "The confirmed amount was added to the campaign funding progress.",
       );
@@ -1643,7 +1755,7 @@ export default function DonationAdministration() {
       const message =
         problem instanceof Error ? problem.message : "Unable to verify the donation.";
       setError(message);
-      Alert.alert("Verification Failed", message);
+      showDonationAlert("Verification Failed", message);
     } finally {
       setBusyKey("");
     }
@@ -1654,7 +1766,7 @@ export default function DonationAdministration() {
 
     const reason = (verificationForms[donation.id]?.rejectionReason || "").trim();
     if (reason.length < 5) {
-      Alert.alert("Reason Required", "Enter a clear rejection reason.");
+      showDonationAlert("Reason Required", "Enter a clear rejection reason.");
       return;
     }
 
@@ -1673,12 +1785,12 @@ export default function DonationAdministration() {
         return next;
       });
 
-      Alert.alert("Donation Rejected", "The submission was not counted as LGU resources.");
+      showDonationAlert("Donation Rejected", "The submission was not counted as LGU resources.");
     } catch (problem) {
       const message =
         problem instanceof Error ? problem.message : "Unable to reject this donation.";
       setError(message);
-      Alert.alert("Rejection Failed", message);
+      showDonationAlert("Rejection Failed", message);
     } finally {
       setBusyKey("");
     }
@@ -1733,11 +1845,14 @@ export default function DonationAdministration() {
       contentContainerStyle={styles.container}
       showsVerticalScrollIndicator
     >
-      <AdminReviewHero eyebrow="LGU OPERATIONS / DONATIONS & FUNDS" title="Donation Management" subtitle="Review LGU-approved assistance campaigns, verified receipts, and donor transaction history. Only authorized Admin staff release funds." icon="heart-outline" tag="LGU FUND OVERSIGHT" />
+      <View style={styles.donationPageHeader}>
+        <Text style={styles.donationPageTitle}>Donation Management</Text>
+        <Text style={styles.donationPageSubtitle}>Campaigns, verified donations, and funding records.</Text>
+      </View>
       {openedFromAssistance && (
-        <TouchableOpacity style={styles.backButton} accessibilityLabel="Back to Assistance Requests" onPress={() => router.push(sourceBackPath as any)}>
+        <TouchableOpacity style={[styles.backButton, { width: "auto", minWidth: 184, height: 42, paddingHorizontal: 13, flexDirection: "row", gap: 8, alignSelf: "flex-start" }]} accessibilityLabel="Back to Assistance Requests" onPress={() => router.push(sourceBackPath as any)}>
           <Ionicons name="arrow-back" size={18} color="#334155" />
-          <Text style={styles.subtitle}>{sourceBackLabel}</Text>
+          <Text style={[styles.subtitle, { marginTop: 0 }]}>{sourceBackLabel}</Text>
         </TouchableOpacity>
       )}
 
@@ -1746,6 +1861,40 @@ export default function DonationAdministration() {
           <Ionicons name="warning-outline" size={18} color="#B42318" />
           <Text style={styles.errorText}>{error}</Text>
         </View>
+      )}
+      {!!failedCampaignAnnouncementId && (
+        <TouchableOpacity
+          accessibilityRole="button"
+          disabled={Boolean(busyKey)}
+          style={{ backgroundColor: "#EAF7F2", borderRadius: 10, padding: 12, marginBottom: 12 }}
+          onPress={async () => {
+            if (!user || !isAdmin || busyKey) return;
+            setBusyKey("retry_campaign_announcement");
+            try {
+              const outcome = await publishModuleAnnouncement({
+                kind: "donation",
+                sourceId: failedCampaignAnnouncementId,
+                adminUid: user.uid,
+              });
+              if (outcome === "not_eligible") {
+                setError("Announcement not posted: campaign is no longer published and eligible.");
+              } else {
+                setFailedCampaignAnnouncementId("");
+                setError("");
+                showDonationAlert("Announcement Published",
+                  "Community Updates now contains the campaign notice. No duplicate was created.");
+              }
+            } catch (noticeError) {
+              setError("Announcement retry failed. The existing donation campaign remains unchanged.");
+            } finally {
+              setBusyKey("");
+            }
+          }}
+        >
+          <Text style={{ color: "#087C61", fontWeight: "700" }}>
+            Retry Public Campaign Announcement (do not recreate the campaign)
+          </Text>
+        </TouchableOpacity>
       )}
 
       <View style={styles.viewTabs}>
@@ -1762,7 +1911,7 @@ export default function DonationAdministration() {
             Campaigns
           </Text>
           <View style={styles.tabCountBadge}>
-            <Text style={styles.tabCountText}>{publishedCampaigns.length}</Text>
+            <Text style={styles.tabCountText}>{currentCampaignCount}</Text>
           </View>
         </TouchableOpacity>
 
@@ -1786,38 +1935,23 @@ export default function DonationAdministration() {
 
       {activeView === "campaigns" ? (
         <>
-          <View style={styles.sectionTopRow}>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.sectionEyebrow}>DONATION SUPPORT</Text>
-              <Text style={styles.sectionTitle}>Campaign Operations</Text>
-              <Text style={styles.helperText}>
-                New fundraising campaigns begin in Request Assistance, after a strict LGU review and confirmation of actual unmet expenses. Existing historical campaigns remain available.
-              </Text>
-            </View>
-          </View>
-
           {sourceLoading ? (
             <View style={styles.emptyCard}>
               <ActivityIndicator color="#0F766E" />
               <Text style={styles.emptyText}>Loading donation campaign records...</Text>
             </View>
           ) : !openedFromVerifiedSource ? (
-            <View style={styles.gateCard}>
-              <View style={styles.gateIcon}>
-                <Ionicons name="shield-checkmark-outline" size={24} color="#0F766E" />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.gateTitle}>Start with an approved Assistance Request</Text>
-                <Text style={styles.gateText}>
-                  Open Request Assistance, review the resident identity, supporting evidence and actual costs, then approve Donation Support Needed. This protects donors and residents from unverified campaigns.
-                </Text>
+            <View style={styles.campaignStartRow}>
+              <View style={{flex:1,minWidth:210,gap:3}}>
+                <Text style={styles.campaignStartTitle}>New donation campaign</Text>
+                <Text style={styles.campaignStartHint}>Start from an approved assistance request.</Text>
               </View>
               <TouchableOpacity
-                style={styles.gateButton}
+                style={styles.campaignStartButton}
                 onPress={() => router.push(sourceBackPath as any)}
               >
-                <Text style={styles.gateButtonText}>Open Assistance Requests</Text>
-                <Ionicons name="arrow-forward" size={15} color="#FFFFFF" />
+                <Text style={styles.campaignStartButtonText}>Open Assistance Requests</Text>
+                <Ionicons name="arrow-forward-outline" size={15} color="#FFFFFF" />
               </TouchableOpacity>
             </View>
           ) : openedFromRelief && !openedFromAssistance && !selectedPublishedCampaign ? (
@@ -1826,11 +1960,8 @@ export default function DonationAdministration() {
                 <Ionicons name="shield-checkmark-outline" size={23} color="#0F766E"/>
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={styles.gateTitle}>Use verified Assistance Requests for new campaigns</Text>
-                <Text style={styles.gateText}>
-                  This older relief-source path remains accessible for historical records.
-                  New fundraising campaigns now start in the strict Request Assistance review workflow.
-                </Text>
+                <Text style={styles.gateTitle}>Use an approved assistance request</Text>
+                <Text style={styles.gateText}>Older relief records are available in Historical.</Text>
               </View>
               <TouchableOpacity style={styles.gateButton}
                 onPress={() => router.push("/assistance-requests" as any)}>
@@ -2059,6 +2190,212 @@ export default function DonationAdministration() {
               >
                 <Text style={styles.gateButtonText}>{sourceBackLabel}</Text>
               </TouchableOpacity>
+            </View>
+          ) : openedFromAssistance && showCampaignForm ? (
+            <View style={[styles.formCard,{gap:20,padding:22}]}
+              onLayout={(event)=>setCampaignFormY(event.nativeEvent.layout.y)}>
+              <View style={{flexDirection:"row",justifyContent:"space-between",
+                flexWrap:"wrap",alignItems:"center",gap:12,paddingBottom:15,
+                borderBottomWidth:1,borderBottomColor:"#E2EBE7"}}>
+                <View style={{flexDirection:"row",alignItems:"center",gap:12}}>
+                  <View style={{width:42,height:42,borderRadius:12,backgroundColor:"#E1F5E9",
+                    alignItems:"center",justifyContent:"center"}}>
+                    <Ionicons name="megaphone-outline" size={23} color="#047857"/>
+                  </View>
+                  <View style={{gap:5}}>
+                    <Text style={{fontSize:21,fontWeight:"800",color:"#133328"}}>
+                      Publish Donation Campaign
+                    </Text>
+                    <Text style={{fontSize:12,color:"#65796E",lineHeight:18}}>
+                      Review the Resident's story, confirm the campaign details, then publish.
+                    </Text>
+                  </View>
+                </View>
+                <View style={{flexDirection:"row",alignItems:"center",gap:7,
+                  borderRadius:99,backgroundColor:"#DCFCE7",paddingHorizontal:13,paddingVertical:9}}>
+                  <Ionicons name="checkmark-circle" size={15} color="#047857"/>
+                  <Text style={{fontSize:12,fontWeight:"800",color:"#047857"}}>Approved Request</Text>
+                </View>
+              </View>
+              <View style={{flexDirection:"row",flexWrap:"wrap",gap:22,alignItems:"flex-start"}}>
+                <View style={{flex:1.6,minWidth:300,gap:18}}>
+                  <View style={{gap:8}}>
+                    <View style={{flexDirection:"row",alignItems:"center",gap:9}}>
+                      <Text style={{color:"#25493A",fontSize:12,fontWeight:"800"}}>Campaign Title *</Text>
+                      <Text style={{fontSize:10,fontWeight:"800",color:"#047857"}}>FROM RESIDENT</Text>
+                    </View>
+                    <TextInput style={[styles.input,styles.campaignEditorInput]} value={campaignTitle}
+                      onChangeText={v=>{setCampaignTitle(v);setResidentStoryPrivacyReviewed(false);}}
+                      placeholder="Title from the Resident's request"
+                      placeholderTextColor="#94A3B8" maxLength={160}/>
+                  </View>
+                  <View style={{gap:8}}>
+                    <View style={{flexDirection:"row",alignItems:"center",gap:9}}>
+                      <Text style={{color:"#25493A",fontSize:12,fontWeight:"800"}}>Campaign Story *</Text>
+                      <Text style={{fontSize:10,fontWeight:"800",color:"#047857"}}>FROM RESIDENT</Text>
+                    </View>
+                    <TextInput style={[styles.input,styles.multiline,styles.campaignEditorInput,{minHeight:126}]}
+                      multiline maxLength={1200} value={publicStory}
+                      onChangeText={v=>{setPublicStory(v);setCampaignDescription(v);
+                        setResidentStoryPrivacyReviewed(false);}}
+                      placeholder="Story from the Resident's description"
+                      placeholderTextColor="#94A3B8"/>
+                    <Text style={{fontSize:11,color:"#64748B",lineHeight:17}}>
+                      Automatically based on the submitted request. Edit before publishing if it contains a name, private medical details, contact, or home address.
+                    </Text>
+                  </View>
+                  <View style={{flexDirection:"row",flexWrap:"wrap",gap:14}}>
+                    <View style={{flex:1,minWidth:150,gap:8}}>
+                      <Text style={{color:"#25493A",fontSize:12,fontWeight:"800"}}>Donation Target (PHP)</Text>
+                      <View style={{backgroundColor:"#F7FAF8",borderWidth:1,borderColor:"#DCE8E1",
+                        borderRadius:10,paddingVertical:14,paddingHorizontal:13}}>
+                        <Text style={{fontWeight:"800",fontSize:14,color:"#123B29"}}>
+                          {money(Number(assistanceSource?.remainingAmount || 0))}
+                        </Text>
+                      </View>
+                    </View>
+                    <View style={{flex:1,minWidth:150,gap:8}}>
+                      <Text style={{color:"#25493A",fontSize:12,fontWeight:"800"}}>Campaign Cover</Text>
+                      <TouchableOpacity onPress={()=>void chooseAndUploadPublicCampaignPhoto()}
+                        disabled={publicPhotoUploading || selectedPublicPhotoUrls.length>=5}
+                        style={{flexDirection:"row",gap:8,alignItems:"center",
+                          borderWidth:1,borderColor:"#D4E6DB",backgroundColor:"#F7FAF8",
+                          borderRadius:10,paddingHorizontal:13,paddingVertical:14}}>
+                        <Ionicons name="image-outline" color="#047857" size={17}/>
+                        <Text style={{fontSize:12,fontWeight:"700",color:"#047857"}}>
+                          {publicPhotoUploading?"Uploading...":"Upload Image"}
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                  {assistanceSource && (
+                    <View style={{
+                      flexDirection:"row",gap:9,alignItems:"flex-start",padding:13,
+                      borderRadius:10,borderWidth:1,
+                      borderColor:assistanceSource.publicCampaignPhotoConsent === true &&
+                        String(assistanceSource.publicCampaignPhotoUrl || "").startsWith("https://")
+                        ? "#CDE9D7" : "#FDE68A",
+                      backgroundColor:assistanceSource.publicCampaignPhotoConsent === true &&
+                        String(assistanceSource.publicCampaignPhotoUrl || "").startsWith("https://")
+                        ? "#F0FDF4" : "#FFFBEB",
+                    }}>
+                      <Ionicons name="shield-checkmark-outline" size={17}
+                        color={assistanceSource.publicCampaignPhotoConsent === true &&
+                          String(assistanceSource.publicCampaignPhotoUrl || "").startsWith("https://")
+                          ? "#047857" : "#B45309"}/>
+                      <Text style={{
+                        flex:1,fontSize:11.5,lineHeight:18,color:"#365345",
+                      }}>
+                        {assistanceSource.publicCampaignPhotoConsent === true &&
+                         String(assistanceSource.publicCampaignPhotoUrl || "").startsWith("https://")
+                          ? "Resident-consented public campaign photo confirmed. You may add other privacy-safe LGU-approved images."
+                          : "Resident photo consent is missing on this request. The backend cannot publish this campaign. An Admin-uploaded photo alone is insufficient; request a new Resident submission with consent."}
+                      </Text>
+                    </View>
+                  )}
+                  {selectedPublicPhotoUrls.length>0 && (
+                    <View style={{gap:9}}>
+                      <Text style={{fontSize:12,fontWeight:"700",color:"#25493A"}}>
+                        Public campaign photo ({selectedPublicPhotoUrls.length})
+                      </Text>
+                      <View style={{flexDirection:"row",flexWrap:"wrap",gap:11}}>
+                        {selectedPublicPhotoUrls.map(url=>(
+                          <View key={url} style={{gap:6}}>
+                            <Image source={{uri:url}} style={{width:100,height:70,borderRadius:9}}/>
+                            <TouchableOpacity onPress={()=>{removePublicCampaignPhoto(url);
+                              setResidentStoryPrivacyReviewed(false);}}>
+                              <Text style={{fontSize:11,color:"#B91C1C",fontWeight:"700"}}>Remove</Text>
+                            </TouchableOpacity>
+                          </View>
+                        ))}
+                      </View>
+                    </View>
+                  )}
+                  {!!publicPhotoUploadStatus && (
+                    <Text style={{fontSize:11,color:"#047857"}}>{publicPhotoUploadStatus}</Text>
+                  )}
+                  <View style={{gap:8}}>
+                    <Text style={{color:"#25493A",fontSize:12,fontWeight:"800"}}>Assistance Office</Text>
+                    <View style={{borderWidth:1,borderColor:"#DCE8E1",backgroundColor:"#F8FAF9",
+                      padding:14,borderRadius:10,gap:4}}>
+                      <Text style={{fontSize:13,color:"#244438",fontWeight:"700"}}>
+                        {handoffLocationName || "Public office not set"}
+                      </Text>
+                      <Text style={{fontSize:12,color:"#64748B"}}>
+                        {handoffAddress || "Return to Assistance Requests to set the public office."}
+                      </Text>
+                    </View>
+                  </View>
+                </View>
+                <View style={{flex:1,minWidth:290,gap:16}}>
+                  <View style={{backgroundColor:"#F4F9F6",borderWidth:1,
+                    borderColor:"#E0ECE5",borderRadius:11,padding:16,gap:12}}>
+                    <View style={{flexDirection:"row",alignItems:"center",gap:8}}>
+                      <Ionicons name="document-text-outline" size={18} color="#047857"/>
+                      <Text style={{fontSize:15,fontWeight:"800",color:"#123B29"}}>Campaign Summary</Text>
+                    </View>
+                    {[
+                      ["Request ID",assistanceSource?.requestId || assistanceSource?.id || "—"],
+                      ["Category",normalizeCategoryLabel(assistanceSource?.categoryLabel || assistanceSource?.category)],
+                      ["Donation Target",money(Number(assistanceSource?.remainingAmount || 0))],
+                    ].map(([label,value])=>(
+                      <View key={label} style={{gap:4,borderBottomWidth:1,
+                        borderBottomColor:"#E4EEE7",paddingBottom:10}}>
+                        <Text style={{color:"#71857A",fontSize:11,fontWeight:"700"}}>{label}</Text>
+                        <Text style={{fontSize:13,fontWeight:"700",color:"#234436"}}>{value}</Text>
+                      </View>
+                    ))}
+                  </View>
+                  <View style={{gap:11}}>
+                    <Text style={{fontWeight:"800",color:"#25493A",fontSize:13}}>Official Donation Channel</Text>
+                    <Text style={styles.campaignEditorLabel}>Collection Channel</Text>
+                    <TextInput value={officialChannelLabel} onChangeText={setOfficialChannelLabel}
+                      placeholder="Official collection channel"
+                      placeholderTextColor="#94A3B8" style={[styles.input,styles.campaignEditorInput]} maxLength={160}/>
+                    <Text style={styles.campaignEditorLabel}>Payment and Receipt Instructions</Text>
+                    <TextInput value={officialChannelInstructions}
+                      onChangeText={setOfficialChannelInstructions}
+                      placeholder="How donors pay and receive a receipt"
+                      placeholderTextColor="#94A3B8"
+                      style={[styles.input,styles.multilineSmall,styles.campaignEditorInput]} multiline maxLength={1000}/>
+                    <Text style={{fontSize:11,color:"#64748B",lineHeight:17}}>
+                      Enter your authorized LGU payment details. Never use a personal account.
+                    </Text>
+                  </View>
+                </View>
+              </View>
+              <TouchableOpacity accessibilityRole="checkbox"
+                accessibilityState={{checked:residentStoryPrivacyReviewed}}
+                onPress={()=>setResidentStoryPrivacyReviewed(value=>!value)}
+                style={{flexDirection:"row",alignItems:"flex-start",gap:11,
+                  padding:15,borderRadius:12,borderWidth:1,borderColor:"#CCE6D6",
+                  backgroundColor:"#F3FBF6"}}>
+                <Ionicons name={residentStoryPrivacyReviewed?"checkbox":"square-outline"}
+                  color="#047857" size={21}/>
+                <Text style={{flex:1,color:"#25503D",fontSize:12,lineHeight:18}}>
+                  I reviewed the public title, story and photo and confirmed that they do not expose private resident information or medical documents.
+                </Text>
+              </TouchableOpacity>
+              {!!error && (
+                <Text style={{color:"#B42318",fontSize:12}}>{error}</Text>
+              )}
+              <View style={{flexDirection:"row",justifyContent:"flex-end",flexWrap:"wrap",gap:12,
+                borderTopWidth:1,borderColor:"#E6ECE8",paddingTop:17}}>
+                <TouchableOpacity onPress={()=>setShowCampaignForm(false)}
+                  style={{borderRadius:10,borderWidth:1,borderColor:"#CBD5D1",paddingHorizontal:25,
+                    paddingVertical:14,justifyContent:"center"}}>
+                  <Text style={{fontSize:12,fontWeight:"800",color:"#42584F"}}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity onPress={()=>void createCampaign()}
+                  disabled={busyKey==="create_campaign"}
+                  style={{borderRadius:10,backgroundColor:"#006A42",minHeight:46,
+                    paddingHorizontal:25,flexDirection:"row",justifyContent:"center",
+                    alignItems:"center",gap:8,opacity:busyKey==="create_campaign"?0.5:1}}>
+                  {busyKey==="create_campaign" ? <ActivityIndicator color="#FFFFFF"/> :
+                    <Ionicons name="megaphone-outline" size={18} color="#FFFFFF"/>}
+                  <Text style={{fontSize:13,fontWeight:"800",color:"#FFFFFF"}}>Publish Campaign</Text>
+                </TouchableOpacity>
+              </View>
             </View>
           ) : showCampaignForm ? (
             <View
@@ -2744,22 +3081,54 @@ export default function DonationAdministration() {
             </View>
           )}
 
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionEyebrow}>AUDIT & MONITORING</Text>
-            <Text style={styles.sectionTitle}>Campaign Records</Text>
-            <Text style={styles.helperText}>
-              Active and past campaigns remain visible for LGU monitoring. Each campaign keeps its verified source, category, funding goal, handoff location, and receipt history.
-            </Text>
+          <View style={styles.campaignRecordsHeader}>
+            <View style={{flex:1,minWidth:255}}>
+              <Text style={styles.recordSectionTitle}>Campaign Records</Text>
+            </View>
+            <View style={styles.campaignFilters}>
+              <View style={styles.campaignSearchBox}>
+                <Ionicons name="search-outline" size={17} color="#64748B"/>
+                <TextInput value={campaignSearch}
+                  onChangeText={value=>{setCampaignSearch(value);setCampaignPage(1);}}
+                  placeholder="Search campaigns"
+                  placeholderTextColor="#94A3B8"
+                  style={styles.campaignSearchInput}/>
+              </View>
+              <View style={styles.campaignStatusActions}>
+                {(["all","published","closed"] as const).map(status=>(
+                  <TouchableOpacity key={status} accessibilityRole="button"
+                    onPress={()=>{setCampaignStatusFilter(status);setCampaignPage(1);}}
+                    style={[styles.campaignStatusChoice,
+                      campaignStatusFilter===status && styles.campaignStatusChoiceActive]}>
+                    <Text style={[styles.campaignStatusChoiceText,
+                      campaignStatusFilter===status && styles.campaignStatusChoiceTextActive]}>
+                      {status==="all"?"All":status==="published"?"Published":"Closed"}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+          </View>
+          <View style={styles.campaignRecordToolbar}>
+            {legacyCampaignCount>0 && (
+              <TouchableOpacity accessibilityRole="button"
+                onPress={()=>{setShowLegacyCampaigns(v=>!v);setCampaignPage(1);}}
+                style={styles.campaignArchiveToggle}>
+                <Ionicons name={showLegacyCampaigns?"eye-off-outline":"archive-outline"}
+                  size={15} color="#087C61"/>
+                <Text style={styles.campaignArchiveToggleText}>
+                  {showLegacyCampaigns?"Hide historical":"Historical"} ({legacyCampaignCount})
+                </Text>
+              </TouchableOpacity>
+            )}
           </View>
 
-          <ListPagination page={campaignCurrent} total={campaigns.length} pageSize={5} onChange={setCampaignPage} />
-          {campaigns.length === 0 ? (
+          <ListPagination page={campaignCurrent} total={filteredCampaigns.length} pageSize={5} onChange={setCampaignPage} />
+          {filteredCampaigns.length === 0 ? (
             <View style={styles.emptyCard}>
-              <Ionicons name="megaphone-outline" size={30} color="#94A3B8" />
-              <Text style={styles.emptyTitle}>No donation campaigns yet</Text>
-              <Text style={styles.emptyText}>
-                A campaign will appear here only after the LGU opens Donation Support for a verified resource shortage.
-              </Text>
+              <Ionicons name="search-outline" size={24} color="#94A3B8" />
+              <Text style={styles.emptyTitle}>No matching campaigns</Text>
+              <Text style={styles.emptyText}>Adjust filters or open Historical.</Text>
             </View>
           ) : (
             <View style={styles.cardList}>
@@ -2773,73 +3142,41 @@ export default function DonationAdministration() {
                   .reduce((sum, item) => sum + Number(item.actualAmountReceived || 0), 0);
 
                 return (
-                  <View key={campaign.id} style={styles.campaignCard}>
-                    <View style={styles.cardHeaderRow}>
-                      <View style={{ flex: 1 }}>
-                        <Text style={styles.cardTitle}>{campaign.title || "Donation Campaign"}</Text>
-                        <View style={styles.recordBadgeRow}>
-                          <View
-                            style={[
-                              styles.recordGroupBadge,
-                              String(campaign.campaignGroup || "") === "community_needs_help"
-                                ? styles.recordGroupBadgeCommunity
-                                : styles.recordGroupBadgeDisaster,
-                            ]}
-                          >
-                            <Text
-                              style={[
-                                styles.recordGroupBadgeText,
-                                String(campaign.campaignGroup || "") === "community_needs_help"
-                                  ? styles.recordGroupBadgeTextCommunity
-                                  : styles.recordGroupBadgeTextDisaster,
-                              ]}
-                            >
-                              {campaignGroupLabel(campaign).toUpperCase()}
-                            </Text>
-                          </View>
-                          <View style={styles.recordCategoryBadge}>
-                            <Text style={styles.recordCategoryBadgeText}>
-                              {campaignCategoryLabel(campaign).toUpperCase()}
-                            </Text>
-                          </View>
-                        </View>
-                        <Text style={styles.cardMeta}>
-                          {campaign.generalArea ||
-                            campaign.publicLocationLabel ||
-                            (campaign.barangays || []).join(" · ") ||
-                            "Verified support area"}
+                  <View key={campaign.id} style={[styles.campaignCard,{width:windowWidth>=1250?"49%":"100%"}]}>
+                    <View style={styles.recordHeader}>
+                      <View style={{flex:1,minWidth:0,gap:5}}>
+                        <Text style={styles.recordTitle}>{campaign.title || "Donation Campaign"}</Text>
+                        <Text style={styles.recordCategory}>{campaignCategoryLabel(campaign)}</Text>
+                      </View>
+                      <View style={[styles.recordStatus,
+                        campaign.status === "published" && styles.recordStatusPublished]}>
+                        <Text style={[styles.recordStatusText,
+                          campaign.status === "published" && styles.recordStatusPublishedText]}>
+                          {campaign.status === "published" ? "Published" : statusLabel(campaign.status)}
                         </Text>
                       </View>
-                      <View
-                        style={[
-                          styles.statusBadge,
-                          campaign.status === "published" ? styles.statusPublished : styles.statusClosed,
-                        ]}
-                      >
-                        <Text style={styles.statusText}>{statusLabel(campaign.status)}</Text>
-                      </View>
+                    </View>
+                    <View style={styles.recordLocation}>
+                      <Ionicons name="location-outline" size={14} color="#6B7A86"/>
+                      <Text style={styles.recordLocationText} numberOfLines={2}>
+                        {campaign.publicLocationLabel || campaign.generalArea ||
+                          (campaign.barangays || []).join(" · ") || "San Jose del Monte"}
+                      </Text>
                     </View>
 
-                    {!!campaign.publicLocationLabel && (
-                      <View style={styles.recordPublicLine}>
-                        <Ionicons name="location-outline" size={14} color="#0F766E" />
-                        <Text style={styles.recordPublicText}>{campaign.publicLocationLabel}</Text>
-                      </View>
-                    )}
-
-                    <View style={styles.campaignMetrics}>
-                      <CompactMetric label="Submissions" value={String(campaignDonations.length)} />
-                      <CompactMetric label="Verified" value={String(receivedCampaignDonations.length)} />
-                      <CompactMetric label="Monetary" value={money(verifiedMoney)} />
+                    <View style={styles.recordMetricRow}>
+                      <RecordMetric label="Submissions" value={String(campaignDonations.length)} />
+                      <RecordMetric label="Verified" value={String(receivedCampaignDonations.length)} />
+                      <RecordMetric label="Received" value={money(verifiedMoney)} />
                       {Number(campaign.monetaryGoal || 0) > 0 && (
-                        <CompactMetric label="Goal" value={money(Number(campaign.monetaryGoal || 0))} />
+                        <RecordMetric label="Goal" value={money(Number(campaign.monetaryGoal || 0))} />
                       )}
                     </View>
 
                     {Number(campaign.monetaryGoal || 0) > 0 && (
-                      <View style={styles.recordProgressBox}>
+                      <View style={styles.recordProgressPlain}>
                         <View style={styles.recordProgressTop}>
-                          <Text style={styles.recordProgressLabel}>Verified funding progress</Text>
+                          <Text style={styles.recordProgressLabel}>Funding progress</Text>
                           <Text style={styles.recordProgressValue}>
                             {Math.min(
                               100,
@@ -2973,17 +3310,21 @@ export default function DonationAdministration() {
                       )}
 
 
-                    <Text style={styles.cardMeta}>Created: {formatDate(campaign.createdAt)}</Text>
-
-                    {campaign.status === "published" && (
-                      <TouchableOpacity
-                        style={styles.closeCampaignButton}
-                        disabled={busyKey === `close_${campaign.id}`}
-                        onPress={() => void closeCampaign(campaign)}
-                      >
-                        <Text style={styles.closeCampaignText}>Close Campaign</Text>
-                      </TouchableOpacity>
-                    )}
+                    <View style={styles.campaignCardFooter}>
+                      <View style={{flexDirection:"row",alignItems:"center",gap:6}}>
+                        <Ionicons name="calendar-outline" size={14} color="#64748B"/>
+                        <Text style={styles.recordDate}>{formatDate(campaign.createdAt)}</Text>
+                      </View>
+                      {campaign.status === "published" && (
+                        <TouchableOpacity
+                          style={[styles.closeCampaignButton,{marginTop:0}]}
+                          disabled={busyKey === `close_${campaign.id}`}
+                          onPress={() => void closeCampaign(campaign)}
+                        >
+                          <Text style={styles.closeCampaignText}>Close Campaign</Text>
+                        </TouchableOpacity>
+                      )}
+                    </View>
                   </View>
                 );
               })}
@@ -3310,6 +3651,16 @@ function CompactMetric({ label, value }: { label: string; value: string }) {
   );
 }
 
+// Donation Records only: plain metrics, not four individual colored boxes.
+function RecordMetric({ label, value }: { label: string; value: string }) {
+  return (
+    <View style={styles.recordMetricItem}>
+      <Text style={styles.recordMetricLabel}>{label}</Text>
+      <Text style={styles.recordMetricValue}>{value}</Text>
+    </View>
+  );
+}
+
 function EmbeddedGoogleMapPreview({
   url,
   locationName,
@@ -3415,9 +3766,9 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFFFF",
   },
   headerTextWrap: { flex: 1 },
-  eyebrow: { color: "#0F766E", fontSize: vsType.size.micro, fontFamily: vsType.family, fontWeight: "800", letterSpacing: 1 },
-  title: { marginTop: 3, color: "#173D32", fontSize: designUi.type.page.fontSize, fontWeight: designUi.type.page.fontWeight, lineHeight: designUi.type.page.lineHeight,},
-  subtitle: { marginTop: 5, maxWidth: 780, color: "#64748B", fontSize: designUi.type.body.fontSize, lineHeight: designUi.type.body.lineHeight, fontWeight: designUi.type.body.fontWeight,},
+  eyebrow: { color: "#0F766E", fontSize: 9, fontWeight: "900", letterSpacing: 1 },
+  title: { marginTop: 3, color: "#173D32", fontSize: 27, fontWeight: "700" },
+  subtitle: { marginTop: 5, maxWidth: 780, color: "#64748B", fontSize: 12, lineHeight: 18 },
   flowCard: {
     flexDirection: "row",
     flexWrap: "wrap",
@@ -3439,9 +3790,9 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     backgroundColor: "#E8F5F1",
   },
-  flowNumberText: { color: "#0F766E", fontSize: vsType.size.caption, fontFamily: vsType.family, fontWeight: "800" },
-  flowTitle: { color: "#0F172A", fontSize: vsType.size.caption, fontFamily: vsType.family, fontWeight: "800" },
-  flowText: { marginTop: 2, color: "#64748B", fontSize: vsType.size.micro, fontFamily: vsType.family, lineHeight: 14 },
+  flowNumberText: { color: "#0F766E", fontSize: 11, fontWeight: "900" },
+  flowTitle: { color: "#0F172A", fontSize: 10.5, fontWeight: "900" },
+  flowText: { marginTop: 2, color: "#64748B", fontSize: 9.5, lineHeight: 14 },
   errorBox: {
     flexDirection: "row",
     alignItems: "center",
@@ -3453,40 +3804,23 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     backgroundColor: "#FFF1F0",
   },
-  errorText: { flex: 1, color: "#B42318", fontSize: vsType.size.caption, fontFamily: vsType.family, fontWeight: "700" },
+  errorText: { flex: 1, color: "#B42318", fontSize: 11, fontWeight: "700" },
   viewTabs: {
-    flexDirection: "row",
-    gap: 8,
-    padding: 5,
-    marginBottom: 18,
-    borderWidth: 1,
-    borderColor: "#DFE7EE",
-    borderRadius: 12,
-    backgroundColor: "#FFFFFF",
+    flexDirection:"row",gap:20,marginBottom:18,
+    borderBottomWidth:1,borderBottomColor:"#DDE4E1",
+    backgroundColor:"#FFFFFF",
   },
   viewTab: {
-    flex: 1,
-    minHeight: 42,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 7,
-    borderRadius: 9,
+    minHeight:46,paddingHorizontal:4,
+    flexDirection:"row",alignItems:"center",justifyContent:"center",
+    gap:7,borderBottomWidth:2,borderBottomColor:"transparent",
   },
-  viewTabActive: { backgroundColor: "#ECFDF5" },
-  viewTabText: { color: "#64748B", fontSize: vsType.size.caption, fontFamily: vsType.family, fontWeight: "800" },
-  viewTabTextActive: { color: "#0F766E" },
-  tabCountBadge: {
-    minWidth: 22,
-    height: 22,
-    alignItems: "center",
-    justifyContent: "center",
-    paddingHorizontal: 6,
-    borderRadius: 999,
-    backgroundColor: "#E2E8F0",
-  },
-  pendingCountBadge: { backgroundColor: "#FDE68A" },
-  tabCountText: { color: "#334155", fontSize: vsType.size.micro, fontFamily: vsType.family, fontWeight: "800" },
+  viewTabActive: {borderBottomColor:"#006647"},
+  viewTabText: {color:"#64748B",fontSize:13,fontWeight:"500"},
+  viewTabTextActive: {color:"#064E3B",fontWeight:"700"},
+  tabCountBadge: {minWidth:20,alignItems:"center",justifyContent:"center"},
+  pendingCountBadge: {},
+  tabCountText: {color:"#64748B",fontSize:12,fontWeight:"600"},
   sectionTopRow: {
     flexDirection: "row",
     alignItems: "flex-start",
@@ -3495,9 +3829,9 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   sectionHeader: { marginTop: 24, marginBottom: 10 },
-  sectionEyebrow: { color: "#0F766E", fontSize: vsType.size.micro, fontFamily: vsType.family, fontWeight: "800", letterSpacing: 0.8 },
-  sectionTitle: { marginTop: 2, color: "#0F172A", fontSize: designUi.type.section.fontSize, fontWeight: designUi.type.section.fontWeight, lineHeight: designUi.type.section.lineHeight,},
-  helperText: { marginTop: 5, maxWidth: 780, color: "#64748B", fontSize: designUi.type.body.fontSize, lineHeight: designUi.type.body.lineHeight, fontWeight: designUi.type.body.fontWeight,},
+  sectionEyebrow: { color: "#0F766E", fontSize: 9, fontWeight: "900", letterSpacing: 0.8 },
+  sectionTitle: { marginTop: 2, color: "#0F172A", fontSize: 17, fontWeight: "900" },
+  helperText: { marginTop: 5, maxWidth: 780, color: "#64748B", fontSize: 10.5, lineHeight: 16 },
   primaryButton: {
     minHeight: 42,
     flexDirection: "row",
@@ -3508,7 +3842,7 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     backgroundColor: "#0F766E",
   },
-  primaryButtonText: { color: "#FFFFFF", fontSize: vsType.size.caption, fontFamily: vsType.family, fontWeight: "800" },
+  primaryButtonText: { color: "#FFFFFF", fontSize: 10.5, fontWeight: "900" },
   formCard: {
     padding: 18,
     marginBottom: 22,
@@ -3526,9 +3860,9 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     backgroundColor: "#0F766E",
   },
-  stepBadgeText: { color: "#FFFFFF", fontSize: vsType.size.caption, fontFamily: vsType.family, fontWeight: "800" },
-  formTitle: { color: "#0F172A", fontSize: designUi.type.section.fontSize, fontWeight: designUi.type.section.fontWeight, lineHeight: designUi.type.section.lineHeight,},
-  formSubtitle: { marginTop: 2, color: "#64748B", fontSize: designUi.type.body.fontSize, lineHeight: designUi.type.body.lineHeight, fontWeight: designUi.type.body.fontWeight,},
+  stepBadgeText: { color: "#FFFFFF", fontSize: 11, fontWeight: "900" },
+  formTitle: { color: "#0F172A", fontSize: 13, fontWeight: "900" },
+  formSubtitle: { marginTop: 2, color: "#64748B", fontSize: 10, lineHeight: 15 },
   formDivider: { height: 1, marginVertical: 18, backgroundColor: "#E2E8F0" },
   selectedSourceCard: {
     flexDirection: "row",
@@ -3549,9 +3883,9 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     backgroundColor: "#FFFFFF",
   },
-  selectedSourceLabel: { color: "#0F766E", fontSize: vsType.size.micro, fontFamily: vsType.family, fontWeight: "800", textTransform: "uppercase" },
-  selectedSourceTitle: { marginTop: 2, color: "#0F172A", fontSize: vsType.size.label, fontFamily: vsType.family, fontWeight: "800" },
-  selectedSourceMeta: { marginTop: 2, color: "#64748B", fontSize: designUi.type.meta.fontSize, lineHeight: designUi.type.meta.lineHeight, fontWeight: designUi.type.meta.fontWeight,},
+  selectedSourceLabel: { color: "#0F766E", fontSize: 8.5, fontWeight: "900", textTransform: "uppercase" },
+  selectedSourceTitle: { marginTop: 2, color: "#0F172A", fontSize: 13, fontWeight: "900" },
+  selectedSourceMeta: { marginTop: 2, color: "#64748B", fontSize: 9.5 },
   needChoiceList: { marginTop: 12, gap: 8 },
   needChoice: {
     flexDirection: "row",
@@ -3565,14 +3899,14 @@ const styles = StyleSheet.create({
   },
   needChoiceActive: { borderColor: "#0F766E", backgroundColor: "#ECFDF5" },
   needChoiceDisabled: { opacity: 0.55 },
-  needChoiceTitle: { color: "#334155", fontSize: vsType.size.caption, fontFamily: vsType.family, fontWeight: "800" },
+  needChoiceTitle: { color: "#334155", fontSize: 11, fontWeight: "900" },
   needChoiceTitleActive: { color: "#0F766E" },
-  needChoiceMeta: { marginTop: 2, color: "#64748B", fontSize: vsType.size.micro, fontFamily: vsType.family },
-  needChoiceStatus: { color: "#0F766E", fontSize: vsType.size.micro, fontFamily: vsType.family, fontWeight: "800" },
-  needChoiceStatusMuted: { color: "#64748B", fontSize: vsType.size.micro, fontFamily: vsType.family, fontWeight: "800" },
+  needChoiceMeta: { marginTop: 2, color: "#64748B", fontSize: 9.5 },
+  needChoiceStatus: { color: "#0F766E", fontSize: 8.5, fontWeight: "900" },
+  needChoiceStatusMuted: { color: "#64748B", fontSize: 8.5, fontWeight: "900" },
   inlineEmpty: { alignItems: "center", padding: 18 },
-  inlineEmptyTitle: { marginTop: 5, color: "#334155", fontSize: vsType.size.caption, fontFamily: vsType.family, fontWeight: "800" },
-  inlineEmptyText: { marginTop: 3, color: "#64748B", fontSize: vsType.size.micro, fontFamily: vsType.family, textAlign: "center" },
+  inlineEmptyTitle: { marginTop: 5, color: "#334155", fontSize: 11, fontWeight: "900" },
+  inlineEmptyText: { marginTop: 3, color: "#64748B", fontSize: 9.5, textAlign: "center" },
   needSummaryCard: {
     marginTop: 14,
     padding: 14,
@@ -3582,89 +3916,136 @@ const styles = StyleSheet.create({
     backgroundColor: "#F8FAFC",
   },
   needSummaryHeader: { flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", gap: 10 },
-  needSummaryEyebrow: { color: "#64748B", fontSize: vsType.size.micro, fontFamily: vsType.family, fontWeight: "800", letterSpacing: 0.6 },
-  needSummaryTitle: { marginTop: 2, color: "#0F172A", fontSize: vsType.size.body, fontFamily: vsType.family, fontWeight: "800" },
+  needSummaryEyebrow: { color: "#64748B", fontSize: 8.5, fontWeight: "900", letterSpacing: 0.6 },
+  needSummaryTitle: { marginTop: 2, color: "#0F172A", fontSize: 14, fontWeight: "900" },
   verifiedBadge: { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 8, paddingVertical: 5, borderRadius: 999, backgroundColor: "#DCFCE7" },
-  verifiedBadgeText: { color: "#15803D", fontSize: vsType.size.micro, fontFamily: vsType.family, fontWeight: "800" },
+  verifiedBadgeText: { color: "#15803D", fontSize: 8, fontWeight: "900" },
   needStatsRow: { flexDirection: "row", gap: 8, marginTop: 10 },
   miniStat: { flex: 1, padding: 9, borderRadius: 9, backgroundColor: "#FFFFFF" },
-  miniStatValue: { color: "#0F172A", fontSize: vsType.size.card, fontFamily: vsType.family, fontWeight: "800" },
-  miniStatLabel: { marginTop: 1, color: "#64748B", fontSize: vsType.size.micro, fontFamily: vsType.family, fontWeight: "800" },
+  miniStatValue: { color: "#0F172A", fontSize: 16, fontWeight: "900" },
+  miniStatLabel: { marginTop: 1, color: "#64748B", fontSize: 8.5, fontWeight: "800" },
   needTagsWrap: { flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 10 },
   needTag: { paddingHorizontal: 8, paddingVertical: 5, borderRadius: 999, backgroundColor: "#E8F5F1" },
-  needTagText: { color: "#0F766E", fontSize: vsType.size.micro, fontFamily: vsType.family, fontWeight: "800" },
-  otherNeedText: { marginTop: 9, color: "#475569", fontSize: vsType.size.micro, fontFamily: vsType.family, lineHeight: 14 },
+  needTagText: { color: "#0F766E", fontSize: 8.5, fontWeight: "800" },
+  otherNeedText: { marginTop: 9, color: "#475569", fontSize: 9.5, lineHeight: 14 },
   warningNotice: { flexDirection: "row", gap: 8, marginTop: 14, padding: 11, borderWidth: 1, borderColor: "#F3D58A", borderRadius: 10, backgroundColor: "#FFF9E8" },
-  warningNoticeText: { flex: 1, color: "#7A5A00", fontSize: vsType.size.micro, fontFamily: vsType.family, lineHeight: 15 },
-  label: { marginTop: 12, marginBottom: 5, color: "#334155", fontSize: vsType.size.caption, fontFamily: vsType.family, fontWeight: "800" },
-  input: { minHeight: 42, paddingHorizontal: 11, paddingVertical: 9, borderWidth: 1, borderColor: "#D9E1E8", borderRadius: 9, backgroundColor: "#FFFFFF", color: "#0F172A", fontSize: vsType.size.meta, fontFamily: vsType.family },
+  warningNoticeText: { flex: 1, color: "#7A5A00", fontSize: 9.5, lineHeight: 15 },
+  label: { marginTop: 12, marginBottom: 5, color: "#334155", fontSize: 10.5, fontWeight: "900" },
+  campaignEditorInput: { minHeight:44,fontSize:13,lineHeight:19,paddingHorizontal:12,paddingVertical:11 },
+  campaignEditorLabel: { color:"#25493A",fontSize:11,fontWeight:"700",marginBottom:-4 },
+  input: { minHeight: 42, paddingHorizontal: 11, paddingVertical: 9, borderWidth: 1, borderColor: "#D9E1E8", borderRadius: 9, backgroundColor: "#FFFFFF", color: "#0F172A", fontSize: 11.5 },
   multiline: { minHeight: 92, textAlignVertical: "top" },
   multilineSmall: { minHeight: 70, textAlignVertical: "top" },
   toggleRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   toggleChoice: { minHeight: 38, flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 12, borderWidth: 1, borderColor: "#D5DDE5", borderRadius: 9, backgroundColor: "#FFFFFF" },
   toggleChoiceActive: { borderColor: "#A7DCCE", backgroundColor: "#ECFDF5" },
-  toggleChoiceText: { color: "#64748B", fontSize: vsType.size.caption, fontFamily: vsType.family, fontWeight: "800" },
+  toggleChoiceText: { color: "#64748B", fontSize: 10.5, fontWeight: "800" },
   toggleChoiceTextActive: { color: "#0F766E" },
   subFormCard: { marginTop: 12, padding: 12, borderWidth: 1, borderColor: "#E2E8F0", borderRadius: 10, backgroundColor: "#FBFCFD" },
   subFormHeader: { flexDirection: "row", alignItems: "center", gap: 7 },
-  subFormTitle: { color: "#0F172A", fontSize: vsType.size.caption, fontFamily: vsType.family, fontWeight: "800" },
+  subFormTitle: { color: "#0F172A", fontSize: 11, fontWeight: "900" },
   noticeBox: { marginTop: 13, flexDirection: "row", alignItems: "flex-start", gap: 8, padding: 11, borderWidth: 1, borderColor: "#CFE9E2", borderRadius: 10, backgroundColor: "#F3FAF8" },
-  noticeText: { flex: 1, color: "#49646F", fontSize: vsType.size.micro, fontFamily: vsType.family, lineHeight: 15 },
+  noticeText: { flex: 1, color: "#49646F", fontSize: 10, lineHeight: 15 },
   publishButton: { marginTop: 14, minHeight: 44, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 7, borderRadius: 10, backgroundColor: "#0F766E" },
-  publishButtonText: { color: "#FFFFFF", fontSize: vsType.size.caption, fontFamily: vsType.family, fontWeight: "800" },
-  cardList: { gap: 9 },
-  campaignCard: { padding: 15, borderWidth: 1, borderColor: "#DFE7EE", borderRadius: 12, backgroundColor: "#FFFFFF" },
+  publishButtonText: { color: "#FFFFFF", fontSize: 11, fontWeight: "900" },
+  donationPageHeader: {
+    paddingTop:4,paddingBottom:16,marginBottom:6,
+    borderBottomWidth:1,borderBottomColor:"#E5EBE8",
+  },
+  donationPageTitle: {fontSize:25,fontWeight:"700",lineHeight:33,color:"#152520"},
+  donationPageSubtitle: {fontSize:13,fontWeight:"400",lineHeight:20,color:"#64748B",marginTop:3},
+  campaignStartRow: {
+    flexDirection:"row",flexWrap:"wrap",alignItems:"center",gap:14,
+    marginBottom:20,paddingHorizontal:16,paddingVertical:14,
+    borderWidth:1,borderColor:"#DBE5DF",borderRadius:9,backgroundColor:"#FFFFFF",
+  },
+  campaignStartTitle: {fontSize:14,fontWeight:"600",color:"#24332D"},
+  campaignStartHint: {fontSize:12,fontWeight:"400",color:"#64748B",lineHeight:18},
+  campaignStartButton: {
+    flexDirection:"row",alignItems:"center",justifyContent:"center",gap:7,
+    minHeight:40,paddingHorizontal:14,borderRadius:7,backgroundColor:"#065F46",
+  },
+  campaignStartButtonText: {fontSize:12,fontWeight:"600",color:"#FFFFFF"},
+  recordSectionTitle: {fontSize:18,fontWeight:"600",color:"#1F2937",lineHeight:24},
+  campaignRecordsHeader: {
+    marginTop:18,marginBottom:12,flexDirection:"row",alignItems:"center",
+    justifyContent:"space-between",flexWrap:"wrap",gap:16,
+  },
+  campaignFilters: {flexDirection:"row",alignItems:"center",flexWrap:"wrap",gap:10},
+  campaignSearchBox: {minWidth:240,flexGrow:1,flexDirection:"row",
+    alignItems:"center",gap:8,backgroundColor:"#FFFFFF",borderWidth:1,
+    borderColor:"#DBE3DF",borderRadius:8,minHeight:40,paddingHorizontal:12},
+  campaignSearchInput: {flex:1,fontSize:12.5,color:"#233D33",paddingVertical:8,minWidth:150},
+  campaignStatusActions: {flexDirection:"row",gap:4,alignItems:"center",
+    borderWidth:1,borderColor:"#DCE6E2",borderRadius:9,padding:4,backgroundColor:"#FFFFFF"},
+  campaignStatusChoice: {paddingHorizontal:11,paddingVertical:8,borderRadius:7},
+  campaignStatusChoiceActive: {backgroundColor:"#F1F5F3"},
+  campaignStatusChoiceText: {color:"#64748B",fontSize:12,fontWeight:"500"},
+  campaignStatusChoiceTextActive: {color:"#006A42"},
+  campaignRecordToolbar: {marginBottom:4,flexDirection:"row",
+    justifyContent:"flex-end",flexWrap:"wrap",alignItems:"center",gap:9},
+  campaignRecordCount: {fontSize:11.5,color:"#49645B",fontWeight:"600"},
+  campaignArchiveToggle: {flexDirection:"row",alignItems:"center",
+    gap:5,paddingHorizontal:8,paddingVertical:6,borderRadius:7},
+  campaignArchiveToggleText: {color:"#087C61",fontSize:11,fontWeight:"700"},
+  campaignRecordIcon: {height:42,width:42,borderRadius:11,backgroundColor:"#E9F7EF",
+    alignItems:"center",justifyContent:"center"},
+  campaignCardFooter: {marginTop:14,paddingTop:12,borderTopColor:"#E8ECEA",
+    borderTopWidth:1,flexDirection:"row",justifyContent:"space-between",
+    flexWrap:"wrap",alignItems:"center",gap:8},
+  cardList: {flexDirection:"row",flexWrap:"wrap",justifyContent:"space-between",alignItems:"flex-start",rowGap:16,columnGap:12},
+  campaignCard: { padding: 20, borderWidth: 1, borderColor: "#DFE6E2", borderRadius: 10, backgroundColor: "#FFFFFF" },
   donationCard: { padding: 15, borderWidth: 1, borderColor: "#DFE7EE", borderRadius: 12, backgroundColor: "#FFFFFF" },
   historyCard: { padding: 13, borderWidth: 1, borderColor: "#E2E8F0", borderRadius: 11, backgroundColor: "#FFFFFF" },
   cardHeaderRow: { flexDirection: "row", alignItems: "flex-start", gap: 10 },
-  cardTitle: { color: "#0F172A", fontSize: vsType.size.body, fontFamily: vsType.family, fontWeight: "800" },
-  cardMeta: { marginTop: 3, color: "#64748B", fontSize: vsType.size.micro, fontFamily: vsType.family, lineHeight: 14 },
-  cardDescription: { marginTop: 9, color: "#475569", fontSize: vsType.size.caption, fontFamily: vsType.family, lineHeight: 16 },
+  cardTitle: { color: "#0F172A", fontSize: 15, fontWeight: "800", lineHeight: 21 },
+  cardMeta: { marginTop: 4, color: "#64748B", fontSize: 11, lineHeight: 16 },
+  cardDescription: { marginTop: 9, color: "#475569", fontSize: 10.5, lineHeight: 16 },
   statusBadge: { paddingHorizontal: 8, paddingVertical: 5, borderRadius: 999 },
   statusPublished: { backgroundColor: "#15803D" },
   statusClosed: { backgroundColor: "#475569" },
   statusPending: { backgroundColor: "#B7791F" },
   statusReceived: { backgroundColor: "#15803D" },
   statusRejected: { backgroundColor: "#B42318" },
-  statusText: { color: "#FFFFFF", fontSize: vsType.size.micro, fontFamily: vsType.family, fontWeight: "800" },
+  statusText: { color: "#FFFFFF", fontSize: 10, fontWeight: "800" },
   campaignMetrics: { flexDirection: "row", flexWrap: "wrap", gap: 7, marginTop: 10 },
-  compactMetric: { minWidth: 120, padding: 8, borderRadius: 8, backgroundColor: "#F8FAFC" },
-  compactMetricLabel: { color: "#94A3B8", fontSize: vsType.size.micro, fontFamily: vsType.family, fontWeight: "800", textTransform: "uppercase" },
-  compactMetricValue: { marginTop: 2, color: "#334155", fontSize: vsType.size.micro, fontFamily: vsType.family, fontWeight: "800" },
+  compactMetric: { flexGrow:1,flexBasis:100,minWidth:95,padding:11,borderRadius:8,backgroundColor:"#F6F9F7" },
+  compactMetricLabel: { color: "#6B7F74", fontSize: 10, fontWeight: "700", textTransform: "uppercase" },
+  compactMetricValue: { marginTop: 4, color: "#233D33", fontSize: 13, fontWeight: "800" },
   closeCampaignButton: { alignSelf: "flex-start", marginTop: 10, paddingHorizontal: 11, paddingVertical: 7, borderWidth: 1, borderColor: "#CBD5E1", borderRadius: 8, backgroundColor: "#F8FAFC" },
-  closeCampaignText: { color: "#475569", fontSize: vsType.size.micro, fontFamily: vsType.family, fontWeight: "800" },
+  closeCampaignText: {color:"#334155",fontSize:12,fontWeight:"600"},
   summaryRow: { flexDirection: "row", flexWrap: "wrap", gap: 9, marginBottom: 16 },
   summaryCard: { flexGrow: 1, flexBasis: 180, minWidth: 160, padding: 12, borderWidth: 1, borderColor: "#DFE7EE", borderRadius: 11, backgroundColor: "#FFFFFF" },
-  summaryValue: { color: "#0F172A", fontSize: vsType.size.subheading, fontFamily: vsType.family, fontWeight: "800" },
-  summaryLabel: { marginTop: 2, color: "#64748B", fontSize: vsType.size.micro, fontFamily: vsType.family, fontWeight: "800" },
+  summaryValue: { color: "#0F172A", fontSize: 20, fontWeight: "900" },
+  summaryLabel: { marginTop: 2, color: "#64748B", fontSize: 9.5, fontWeight: "800" },
   donationInfoGrid: { flexDirection: "row", flexWrap: "wrap", gap: 7, marginTop: 10 },
   infoCell: { flexGrow: 1, flexBasis: 150, minWidth: 135, padding: 8, borderRadius: 8, backgroundColor: "#F8FAFC" },
-  infoLabel: { color: "#94A3B8", fontSize: vsType.size.micro, fontFamily: vsType.family, fontWeight: "800", textTransform: "uppercase" },
-  infoValue: { marginTop: 3, color: "#334155", fontSize: vsType.size.micro, fontFamily: vsType.family, fontWeight: "800" },
-  detailLine: { marginTop: 8, color: "#475569", fontSize: vsType.size.micro, fontFamily: vsType.family, lineHeight: 15 },
+  infoLabel: { color: "#94A3B8", fontSize: 7.5, fontWeight: "900", textTransform: "uppercase" },
+  infoValue: { marginTop: 3, color: "#334155", fontSize: 10, fontWeight: "800" },
+  detailLine: { marginTop: 8, color: "#475569", fontSize: 10, lineHeight: 15 },
   proofBox: { marginTop: 11, padding: 11, borderWidth: 1, borderColor: "#E2E8F0", borderRadius: 10, backgroundColor: "#FBFCFD" },
   proofHeader: { flexDirection: "row", alignItems: "flex-start", gap: 8 },
-  proofTitle: { color: "#0F172A", fontSize: vsType.size.caption, fontFamily: vsType.family, fontWeight: "800" },
-  proofHint: { marginTop: 2, color: "#64748B", fontSize: vsType.size.micro, fontFamily: vsType.family, lineHeight: 13 },
-  proofCountText: { color: "#64748B", fontSize: vsType.size.micro, fontFamily: vsType.family, fontWeight: "800" },
+  proofTitle: { color: "#0F172A", fontSize: 10.5, fontWeight: "900" },
+  proofHint: { marginTop: 2, color: "#64748B", fontSize: 9, lineHeight: 13 },
+  proofCountText: { color: "#64748B", fontSize: 8, fontWeight: "900" },
   proofGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 9 },
   proofCard: { width: 150, overflow: "hidden", borderWidth: 1, borderColor: "#DDE5EC", borderRadius: 9, backgroundColor: "#FFFFFF" },
   proofImage: { width: "100%", height: 92, backgroundColor: "#E2E8F0" },
-  proofActionText: { padding: 7, color: "#0F766E", fontSize: vsType.size.micro, fontFamily: vsType.family, fontWeight: "800" },
-  noProofText: { marginTop: 8, color: "#64748B", fontSize: vsType.size.micro, fontFamily: vsType.family, lineHeight: 14 },
+  proofActionText: { padding: 7, color: "#0F766E", fontSize: 8.5, fontWeight: "900" },
+  noProofText: { marginTop: 8, color: "#64748B", fontSize: 9, lineHeight: 14 },
   reviewPanel: { marginTop: 12, padding: 12, borderWidth: 1, borderColor: "#DDE5EC", borderRadius: 10, backgroundColor: "#FBFCFD" },
-  reviewTitle: { color: "#0F172A", fontSize: vsType.size.meta, fontFamily: vsType.family, fontWeight: "800" },
-  reviewHelp: { marginTop: 3, color: "#64748B", fontSize: vsType.size.micro, fontFamily: vsType.family, lineHeight: 14 },
+  reviewTitle: { color: "#0F172A", fontSize: 11.5, fontWeight: "900" },
+  reviewHelp: { marginTop: 3, color: "#64748B", fontSize: 9.5, lineHeight: 14 },
   verifyButton: { marginTop: 11, minHeight: 40, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingHorizontal: 13, borderRadius: 9, backgroundColor: "#15803D" },
-  verifyButtonText: { color: "#FFFFFF", fontSize: vsType.size.micro, fontFamily: vsType.family, fontWeight: "800" },
+  verifyButtonText: { color: "#FFFFFF", fontSize: 10, fontWeight: "900" },
   rejectDivider: { height: 1, marginTop: 14, backgroundColor: "#E2E8F0" },
   rejectButton: { alignSelf: "flex-start", marginTop: 8, paddingHorizontal: 12, paddingVertical: 8, borderWidth: 1, borderColor: "#F2C7C2", borderRadius: 9, backgroundColor: "#FFF1F0" },
-  rejectButtonText: { color: "#B42318", fontSize: vsType.size.micro, fontFamily: vsType.family, fontWeight: "800" },
-  historySuccessText: { marginTop: 6, color: "#15803D", fontSize: vsType.size.micro, fontFamily: vsType.family, fontWeight: "700" },
-  historyRejectedText: { marginTop: 6, color: "#B42318", fontSize: vsType.size.micro, fontFamily: vsType.family, fontWeight: "700" },
+  rejectButtonText: { color: "#B42318", fontSize: 9.5, fontWeight: "900" },
+  historySuccessText: { marginTop: 6, color: "#15803D", fontSize: 9.5, fontWeight: "700" },
+  historyRejectedText: { marginTop: 6, color: "#B42318", fontSize: 9.5, fontWeight: "700" },
   emptyCard: { minHeight: 130, alignItems: "center", justifyContent: "center", padding: 22, borderWidth: 1, borderColor: "#DFE7EE", borderRadius: 12, backgroundColor: "#FFFFFF" },
-  emptyTitle: { marginTop: 8, color: "#0F172A", fontSize: vsType.size.label, fontFamily: vsType.family, fontWeight: "800" },
-  emptyText: { marginTop: 4, maxWidth: 620, color: "#64748B", fontSize: vsType.size.caption, fontFamily: vsType.family, textAlign: "center", lineHeight: 16 },
+  emptyTitle: { marginTop: 8, color: "#0F172A", fontSize: 13, fontWeight: "900" },
+  emptyText: { marginTop: 4, maxWidth: 620, color: "#64748B", fontSize: 10.5, textAlign: "center", lineHeight: 16 },
 
   nextActionCard: {
     flexDirection: "row",
@@ -3688,21 +4069,21 @@ const styles = StyleSheet.create({
   nextActionBody: { flex: 1, minWidth: 180 },
   nextActionEyebrow: {
     color: "#0F766E",
-    fontSize: vsType.size.micro, fontFamily: vsType.family,
-    fontWeight: "800",
+    fontSize: 8.5,
+    fontWeight: "900",
     letterSpacing: 0.8,
   },
   nextActionTitle: {
     marginTop: 2,
     color: "#0F172A",
-    fontSize: vsType.size.label, fontFamily: vsType.family,
-    fontWeight: "800",
+    fontSize: 13,
+    fontWeight: "900",
   },
   nextActionText: {
     marginTop: 3,
     maxWidth: 760,
     color: "#64748B",
-    fontSize: vsType.size.micro, fontFamily: vsType.family,
+    fontSize: 9.5,
     lineHeight: 14,
   },
   nextActionButton: {
@@ -3717,8 +4098,8 @@ const styles = StyleSheet.create({
   },
   nextActionButtonText: {
     color: "#FFFFFF",
-    fontSize: vsType.size.micro, fontFamily: vsType.family,
-    fontWeight: "800",
+    fontSize: 9.5,
+    fontWeight: "900",
   },
 
   historyHeaderRow: {
@@ -3742,8 +4123,8 @@ const styles = StyleSheet.create({
   },
   historyToggleText: {
     color: "#475569",
-    fontSize: vsType.size.micro, fontFamily: vsType.family,
-    fontWeight: "800",
+    fontSize: 9.5,
+    fontWeight: "900",
   },
   historyCollapsedCard: {
     flexDirection: "row",
@@ -3758,7 +4139,7 @@ const styles = StyleSheet.create({
   historyCollapsedText: {
     flex: 1,
     color: "#64748B",
-    fontSize: vsType.size.micro, fontFamily: vsType.family,
+    fontSize: 9.5,
     lineHeight: 14,
   },
 
@@ -3782,8 +4163,8 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     backgroundColor: "#ECFDF5",
   },
-  gateTitle: { color: "#0F172A", fontSize: vsType.size.label, fontFamily: vsType.family, fontWeight: "800" },
-  gateText: { marginTop: 3, maxWidth: 720, color: "#64748B", fontSize: vsType.size.micro, fontFamily: vsType.family, lineHeight: 15 },
+  gateTitle: { color: "#0F172A", fontSize: 13, fontWeight: "900" },
+  gateText: { marginTop: 3, maxWidth: 720, color: "#64748B", fontSize: 10, lineHeight: 15 },
   gateButton: {
     minHeight: 38,
     flexDirection: "row",
@@ -3794,7 +4175,7 @@ const styles = StyleSheet.create({
     borderRadius: 9,
     backgroundColor: "#0F766E",
   },
-  gateButtonText: { color: "#FFFFFF", fontSize: vsType.size.micro, fontFamily: vsType.family, fontWeight: "800" },
+  gateButtonText: { color: "#FFFFFF", fontSize: 9.5, fontWeight: "900" },
   shortageCard: {
     flexDirection: "row",
     alignItems: "flex-start",
@@ -3806,15 +4187,15 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     backgroundColor: "#FFF9E8",
   },
-  shortageTitle: { color: "#7A5A00", fontSize: vsType.size.micro, fontFamily: vsType.family, fontWeight: "800", letterSpacing: 0.4 },
-  shortageText: { marginTop: 2, color: "#7A5A00", fontSize: vsType.size.micro, fontFamily: vsType.family, lineHeight: 15 },
+  shortageTitle: { color: "#7A5A00", fontSize: 9, fontWeight: "900", letterSpacing: 0.4 },
+  shortageText: { marginTop: 2, color: "#7A5A00", fontSize: 9.5, lineHeight: 15 },
   scopeBadge: {
     paddingHorizontal: 8,
     paddingVertical: 5,
     borderRadius: 999,
     backgroundColor: "#E8F5F1",
   },
-  scopeBadgeText: { color: "#0F766E", fontSize: vsType.size.micro, fontFamily: vsType.family, fontWeight: "800" },
+  scopeBadgeText: { color: "#0F766E", fontSize: 8, fontWeight: "900" },
   activeCampaignFocus: {
     padding: 17,
     marginBottom: 20,
@@ -3842,7 +4223,7 @@ const styles = StyleSheet.create({
     borderRadius: 9,
     backgroundColor: "#FFFFFF",
   },
-  secondaryButtonText: { color: "#475569", fontSize: vsType.size.micro, fontFamily: vsType.family, fontWeight: "800" },
+  secondaryButtonText: { color: "#475569", fontSize: 9.5, fontWeight: "900" },
 
   publicPresentationCard: {
     marginTop: 12,
@@ -3861,18 +4242,18 @@ const styles = StyleSheet.create({
     borderRadius: 9,
     backgroundColor: "#F3FAF8",
   },
-  publicFactLabel: { color: "#0F766E", fontSize: vsType.size.micro, fontFamily: vsType.family, fontWeight: "800", letterSpacing: 0.5 },
-  publicFactValue: { marginTop: 3, color: "#0F172A", fontSize: vsType.size.caption, fontFamily: vsType.family, fontWeight: "800" },
-  privacyHelper: { marginTop: 5, color: "#64748B", fontSize: vsType.size.micro, fontFamily: vsType.family, lineHeight: 14 },
+  publicFactLabel: { color: "#0F766E", fontSize: 7.5, fontWeight: "900", letterSpacing: 0.5 },
+  publicFactValue: { marginTop: 3, color: "#0F172A", fontSize: 10.5, fontWeight: "900" },
+  privacyHelper: { marginTop: 5, color: "#64748B", fontSize: 9, lineHeight: 14 },
   publicNeedsBox: {
     marginTop: 12,
     padding: 11,
     borderRadius: 10,
     backgroundColor: "#F8FAFC",
   },
-  publicNeedsTitle: { color: "#0F172A", fontSize: vsType.size.caption, fontFamily: vsType.family, fontWeight: "800" },
-  publicNeedsText: { marginTop: 3, color: "#64748B", fontSize: vsType.size.micro, fontFamily: vsType.family, lineHeight: 14 },
-  publicNeedsEmpty: { color: "#64748B", fontSize: vsType.size.micro, fontFamily: vsType.family, fontStyle: "italic" },
+  publicNeedsTitle: { color: "#0F172A", fontSize: 10.5, fontWeight: "900" },
+  publicNeedsText: { marginTop: 3, color: "#64748B", fontSize: 9, lineHeight: 14 },
+  publicNeedsEmpty: { color: "#64748B", fontSize: 9, fontStyle: "italic" },
   photoSectionHeader: {
     flexDirection: "row",
     alignItems: "flex-end",
@@ -3889,7 +4270,7 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     backgroundColor: "#E7F6F2",
   },
-  photoCountText: { color: "#0F766E", fontSize: vsType.size.micro, fontFamily: vsType.family, fontWeight: "800" },
+  photoCountText: { color: "#0F766E", fontSize: 8.5, fontWeight: "900" },
   photoLoadingBox: {
     minHeight: 74,
     flexDirection: "row",
@@ -3902,7 +4283,7 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     backgroundColor: "#FFFFFF",
   },
-  photoLoadingText: { color: "#64748B", fontSize: vsType.size.micro, fontFamily: vsType.family, fontWeight: "700" },
+  photoLoadingText: { color: "#64748B", fontSize: 9.5, fontWeight: "700" },
   publicPhotoGrid: { flexDirection: "row", flexWrap: "wrap", gap: 9, marginTop: 9 },
   publicPhotoCard: {
     width: 160,
@@ -3915,8 +4296,8 @@ const styles = StyleSheet.create({
   publicPhotoCardSelected: { borderColor: "#0F766E", backgroundColor: "#F0FDFA" },
   publicPhotoImage: { width: "100%", height: 100, backgroundColor: "#E2E8F0" },
   publicPhotoFooter: { flexDirection: "row", alignItems: "center", gap: 5, padding: 8 },
-  publicPhotoText: { flex: 1, color: "#64748B", fontSize: vsType.size.micro, fontFamily: vsType.family, fontWeight: "800" },
-  publicPhotoTextSelected: { color: "#0F766E", fontWeight: "800" },
+  publicPhotoText: { flex: 1, color: "#64748B", fontSize: 8.5, fontWeight: "800" },
+  publicPhotoTextSelected: { color: "#0F766E", fontWeight: "900" },
   noPublicPhotoBox: {
     flexDirection: "row",
     alignItems: "center",
@@ -3928,7 +4309,7 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     backgroundColor: "#FFFFFF",
   },
-  noPublicPhotoText: { flex: 1, color: "#64748B", fontSize: vsType.size.micro, fontFamily: vsType.family, lineHeight: 14 },
+  noPublicPhotoText: { flex: 1, color: "#64748B", fontSize: 9.5, lineHeight: 14 },
   publicPhotoUploadPanel: {
     marginTop: 9,
     padding: 12,
@@ -3952,13 +4333,13 @@ const styles = StyleSheet.create({
   },
   publicPhotoUploadTitle: {
     color: "#0F172A",
-    fontSize: vsType.size.caption, fontFamily: vsType.family,
-    fontWeight: "800",
+    fontSize: 10.5,
+    fontWeight: "900",
   },
   publicPhotoUploadText: {
     marginTop: 3,
     color: "#64748B",
-    fontSize: vsType.size.micro, fontFamily: vsType.family,
+    fontSize: 9,
     lineHeight: 14,
   },
   publicPhotoUploadButton: {
@@ -3973,13 +4354,13 @@ const styles = StyleSheet.create({
   },
   publicPhotoUploadButtonText: {
     color: "#FFFFFF",
-    fontSize: vsType.size.micro, fontFamily: vsType.family,
-    fontWeight: "800",
+    fontSize: 9.2,
+    fontWeight: "900",
   },
   publicPhotoUploadStatus: {
     marginTop: 8,
     color: "#4F46E5",
-    fontSize: vsType.size.micro, fontFamily: vsType.family,
+    fontSize: 8.8,
     fontWeight: "800",
   },
   uploadedPublicPhotoGrid: {
@@ -4022,7 +4403,7 @@ const styles = StyleSheet.create({
   },
   uploadedPublicPhotoLabelText: {
     color: "#475569",
-    fontSize: vsType.size.micro, fontFamily: vsType.family,
+    fontSize: 8.3,
     fontWeight: "800",
   },
   activePublicPhotosCard: {
@@ -4048,13 +4429,13 @@ const styles = StyleSheet.create({
   },
   activePublicPhotosTitle: {
     color: "#0F172A",
-    fontSize: vsType.size.caption, fontFamily: vsType.family,
-    fontWeight: "800",
+    fontSize: 10.5,
+    fontWeight: "900",
   },
   activePublicPhotosText: {
     marginTop: 3,
     color: "#64748B",
-    fontSize: vsType.size.micro, fontFamily: vsType.family,
+    fontSize: 9,
     lineHeight: 14,
   },
   activePublicPhotoActions: {
@@ -4077,8 +4458,8 @@ const styles = StyleSheet.create({
   },
   savePublicPhotosButtonText: {
     color: "#4F46E5",
-    fontSize: vsType.size.micro, fontFamily: vsType.family,
-    fontWeight: "800",
+    fontSize: 9.2,
+    fontWeight: "900",
   },
   disabledButton: {
     opacity: 0.55,
@@ -4093,14 +4474,14 @@ const styles = StyleSheet.create({
     backgroundColor: "#F7FCFA",
   },
   publicPreviewHeader: { flexDirection: "row", alignItems: "flex-start", gap: 10 },
-  publicPreviewEyebrow: { color: "#0F766E", fontSize: vsType.size.micro, fontFamily: vsType.family, fontWeight: "800", letterSpacing: 0.6 },
-  publicPreviewTitle: { marginTop: 3, color: "#0F172A", fontSize: vsType.size.label, fontFamily: vsType.family, fontWeight: "800" },
-  publicPreviewLocation: { marginTop: 3, color: "#0F766E", fontSize: vsType.size.micro, fontFamily: vsType.family, fontWeight: "800" },
-  publicPreviewStory: { marginTop: 9, color: "#475569", fontSize: vsType.size.micro, fontFamily: vsType.family, lineHeight: 15 },
-  publicPreviewMeta: { marginTop: 8, color: "#64748B", fontSize: vsType.size.micro, fontFamily: vsType.family, fontWeight: "800" },
+  publicPreviewEyebrow: { color: "#0F766E", fontSize: 7.8, fontWeight: "900", letterSpacing: 0.6 },
+  publicPreviewTitle: { marginTop: 3, color: "#0F172A", fontSize: 12.5, fontWeight: "900" },
+  publicPreviewLocation: { marginTop: 3, color: "#0F766E", fontSize: 9.5, fontWeight: "800" },
+  publicPreviewStory: { marginTop: 9, color: "#475569", fontSize: 10, lineHeight: 15 },
+  publicPreviewMeta: { marginTop: 8, color: "#64748B", fontSize: 8.8, fontWeight: "800" },
   recordPublicLine: { flexDirection: "row", alignItems: "center", gap: 5, marginTop: 8 },
-  recordPublicText: { color: "#0F766E", fontSize: vsType.size.micro, fontFamily: vsType.family, fontWeight: "800" },
-  recordPublicStory: { marginTop: 5, color: "#64748B", fontSize: vsType.size.micro, fontFamily: vsType.family, lineHeight: 14 },
+  recordPublicText: { color: "#0F766E", fontSize: 11, fontWeight: "700" },
+  recordPublicStory: { marginTop: 5, color: "#64748B", fontSize: 9.2, lineHeight: 14 },
 
   handoffSetupCard: {
     borderColor: "#BFE1D7",
@@ -4109,7 +4490,7 @@ const styles = StyleSheet.create({
   handoffHelper: {
     marginTop: 2,
     color: "#64748B",
-    fontSize: vsType.size.micro, fontFamily: vsType.family,
+    fontSize: 9.5,
     lineHeight: 14,
   },
   consentNotice: {
@@ -4126,7 +4507,7 @@ const styles = StyleSheet.create({
   consentNoticeText: {
     flex: 1,
     color: "#7A5A00",
-    fontSize: vsType.size.micro, fontFamily: vsType.family,
+    fontSize: 9.2,
     lineHeight: 14,
   },
   handoffGrid: {
@@ -4163,8 +4544,8 @@ const styles = StyleSheet.create({
   },
   handoffMiniTitle: {
     color: "#0F172A",
-    fontSize: vsType.size.caption, fontFamily: vsType.family,
-    fontWeight: "800",
+    fontSize: 10.5,
+    fontWeight: "900",
   },
   mapPrivacyStrip: {
     flexDirection: "row",
@@ -4178,7 +4559,7 @@ const styles = StyleSheet.create({
   mapPrivacyText: {
     flex: 1,
     color: "#49646F",
-    fontSize: vsType.size.micro, fontFamily: vsType.family,
+    fontSize: 8.8,
     lineHeight: 13,
   },
   mapPreviewPlaceholder: {
@@ -4203,15 +4584,15 @@ const styles = StyleSheet.create({
   mapPreviewPlaceholderTitle: {
     marginTop: 9,
     color: "#0F172A",
-    fontSize: vsType.size.caption, fontFamily: vsType.family,
-    fontWeight: "800",
+    fontSize: 11,
+    fontWeight: "900",
     textAlign: "center",
   },
   mapPreviewPlaceholderText: {
     marginTop: 4,
     maxWidth: 330,
     color: "#64748B",
-    fontSize: vsType.size.micro, fontFamily: vsType.family,
+    fontSize: 9,
     lineHeight: 14,
     textAlign: "center",
   },
@@ -4239,8 +4620,8 @@ const styles = StyleSheet.create({
   },
   mapReadOnlyText: {
     color: "#0F766E",
-    fontSize: vsType.size.micro, fontFamily: vsType.family,
-    fontWeight: "800",
+    fontSize: 8,
+    fontWeight: "900",
   },
   selectField: {
     minHeight: 44,
@@ -4260,7 +4641,7 @@ const styles = StyleSheet.create({
   },
   selectFieldText: {
     color: "#0F172A",
-    fontSize: vsType.size.caption, fontFamily: vsType.family,
+    fontSize: 10.5,
     fontWeight: "800",
   },
   selectFieldPlaceholder: {
@@ -4270,7 +4651,7 @@ const styles = StyleSheet.create({
   selectFieldHelper: {
     marginTop: 2,
     color: "#64748B",
-    fontSize: vsType.size.micro, fontFamily: vsType.family,
+    fontSize: 8.3,
     lineHeight: 12,
   },
   modalOverlay: {
@@ -4299,15 +4680,15 @@ const styles = StyleSheet.create({
   },
   selectModalEyebrow: {
     color: "#0F766E",
-    fontSize: vsType.size.micro, fontFamily: vsType.family,
-    fontWeight: "800",
+    fontSize: 7.8,
+    fontWeight: "900",
     letterSpacing: 0.7,
   },
   selectModalTitle: {
     marginTop: 2,
     color: "#0F172A",
-    fontSize: vsType.size.label, fontFamily: vsType.family,
-    fontWeight: "800",
+    fontSize: 13,
+    fontWeight: "900",
   },
   modalCloseButton: {
     width: 34,
@@ -4337,8 +4718,8 @@ const styles = StyleSheet.create({
   },
   selectOptionText: {
     color: "#334155",
-    fontSize: vsType.size.caption, fontFamily: vsType.family,
-    fontWeight: "800",
+    fontSize: 10.5,
+    fontWeight: "900",
   },
   selectOptionTextActive: {
     color: "#0F766E",
@@ -4346,7 +4727,7 @@ const styles = StyleSheet.create({
   selectOptionHelper: {
     marginTop: 2,
     color: "#64748B",
-    fontSize: vsType.size.micro, fontFamily: vsType.family,
+    fontSize: 8.7,
     lineHeight: 13,
   },
   selectEmptyBox: {
@@ -4356,7 +4737,7 @@ const styles = StyleSheet.create({
   },
   selectEmptyText: {
     color: "#64748B",
-    fontSize: vsType.size.micro, fontFamily: vsType.family,
+    fontSize: 9.5,
   },
   previewHandoffBox: {
     flexDirection: "row",
@@ -4371,20 +4752,20 @@ const styles = StyleSheet.create({
   },
   previewHandoffLabel: {
     color: "#0F766E",
-    fontSize: vsType.size.micro, fontFamily: vsType.family,
-    fontWeight: "800",
+    fontSize: 7.6,
+    fontWeight: "900",
     letterSpacing: 0.5,
   },
   previewHandoffTitle: {
     marginTop: 2,
     color: "#0F172A",
-    fontSize: vsType.size.caption, fontFamily: vsType.family,
-    fontWeight: "800",
+    fontSize: 10.5,
+    fontWeight: "900",
   },
   previewHandoffAddress: {
     marginTop: 2,
     color: "#64748B",
-    fontSize: vsType.size.micro, fontFamily: vsType.family,
+    fontSize: 8.8,
     lineHeight: 13,
   },
   activeHandoffStrip: {
@@ -4400,20 +4781,20 @@ const styles = StyleSheet.create({
   },
   activeHandoffLabel: {
     color: "#0F766E",
-    fontSize: vsType.size.micro, fontFamily: vsType.family,
-    fontWeight: "800",
+    fontSize: 7.5,
+    fontWeight: "900",
     letterSpacing: 0.5,
   },
   activeHandoffTitle: {
     marginTop: 2,
     color: "#0F172A",
-    fontSize: vsType.size.micro, fontFamily: vsType.family,
-    fontWeight: "800",
+    fontSize: 10.2,
+    fontWeight: "900",
   },
   activeHandoffAddress: {
     marginTop: 2,
     color: "#64748B",
-    fontSize: vsType.size.micro, fontFamily: vsType.family,
+    fontSize: 8.8,
     lineHeight: 13,
   },
 
@@ -4432,8 +4813,8 @@ const styles = StyleSheet.create({
   },
   disasterGroupBadgeText: {
     color: "#B45309",
-    fontSize: vsType.size.micro, fontFamily: vsType.family,
-    fontWeight: "800",
+    fontSize: 7.5,
+    fontWeight: "900",
     letterSpacing: 0.35,
   },
   fundingGoalCard: {
@@ -4460,13 +4841,13 @@ const styles = StyleSheet.create({
   },
   fundingGoalTitle: {
     color: "#0F172A",
-    fontSize: vsType.size.caption, fontFamily: vsType.family,
-    fontWeight: "800",
+    fontSize: 10.8,
+    fontWeight: "900",
   },
   fundingGoalText: {
     marginTop: 2,
     color: "#64748B",
-    fontSize: vsType.size.micro, fontFamily: vsType.family,
+    fontSize: 8.8,
     lineHeight: 13,
   },
   previewGroupPill: {
@@ -4482,8 +4863,8 @@ const styles = StyleSheet.create({
   },
   previewGroupPillText: {
     color: "#B45309",
-    fontSize: vsType.size.micro, fontFamily: vsType.family,
-    fontWeight: "800",
+    fontSize: 7.5,
+    fontWeight: "900",
     letterSpacing: 0.4,
   },
   previewFundingBox: {
@@ -4501,21 +4882,21 @@ const styles = StyleSheet.create({
   },
   previewFundingLabel: {
     color: "#0F766E",
-    fontSize: vsType.size.micro, fontFamily: vsType.family,
-    fontWeight: "800",
+    fontSize: 7.5,
+    fontWeight: "900",
     letterSpacing: 0.5,
   },
   previewFundingValue: {
     marginTop: 2,
     color: "#0F172A",
-    fontSize: vsType.size.label, fontFamily: vsType.family,
-    fontWeight: "800",
+    fontSize: 13,
+    fontWeight: "900",
   },
   previewFundingNote: {
     flexGrow: 1,
     flexBasis: 240,
     color: "#64748B",
-    fontSize: vsType.size.micro, fontFamily: vsType.family,
+    fontSize: 8.8,
     lineHeight: 13,
   },
   recordBadgeRow: {
@@ -4537,9 +4918,9 @@ const styles = StyleSheet.create({
     backgroundColor: "#EFF6FF",
   },
   recordGroupBadgeText: {
-    fontSize: vsType.size.micro, fontFamily: vsType.family,
+    fontSize: 9.5,
     fontWeight: "800",
-    letterSpacing: 0.3,
+    letterSpacing: 0.15,
   },
   recordGroupBadgeTextDisaster: {
     color: "#B45309",
@@ -4555,41 +4936,36 @@ const styles = StyleSheet.create({
   },
   recordCategoryBadgeText: {
     color: "#475569",
-    fontSize: vsType.size.micro, fontFamily: vsType.family,
+    fontSize: 9.5,
     fontWeight: "800",
-    letterSpacing: 0.3,
+    letterSpacing: 0.15,
   },
-  recordProgressBox: {
-    marginTop: 10,
-    padding: 10,
-    borderWidth: 1,
-    borderColor: "#DCE8E5",
-    borderRadius: 9,
-    backgroundColor: "#F8FCFB",
-  },
+  recordHeader: {flexDirection:"row",gap:12,alignItems:"flex-start",justifyContent:"space-between"},
+  recordTitle: {fontSize:16,fontWeight:"700",lineHeight:22,color:"#1F2937"},
+  recordCategory: {fontSize:12,fontWeight:"400",lineHeight:17,color:"#6B7280"},
+  recordStatus: {borderRadius:6,paddingHorizontal:8,paddingVertical:5,backgroundColor:"#F1F3F5"},
+  recordStatusPublished: {backgroundColor:"#EAF5EF"},
+  recordStatusText: {fontSize:11,fontWeight:"600",color:"#64748B"},
+  recordStatusPublishedText: {color:"#166534"},
+  recordLocation: {flexDirection:"row",gap:6,alignItems:"flex-start",marginTop:11},
+  recordLocationText: {fontSize:12,fontWeight:"400",lineHeight:17,color:"#64748B",flex:1},
+  recordMetricRow: {flexDirection:"row",flexWrap:"wrap",gap:8,marginTop:16,
+    paddingVertical:12,borderTopWidth:1,borderBottomWidth:1,borderColor:"#EDF0EE"},
+  recordMetricItem: {flexGrow:1,flexBasis:100,minWidth:94,gap:5},
+  recordMetricLabel: {fontSize:11,fontWeight:"400",color:"#6B7280"},
+  recordMetricValue: {fontSize:13,fontWeight:"600",color:"#172B22"},
+  recordProgressPlain: {marginTop:13},
+  recordDate: {fontSize:11,fontWeight:"400",color:"#6B7280"},
   recordProgressTop: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
     gap: 10,
   },
-  recordProgressLabel: {
-    color: "#475569",
-    fontSize: vsType.size.micro, fontFamily: vsType.family,
-    fontWeight: "800",
-  },
-  recordProgressValue: {
-    color: "#0F766E",
-    fontSize: vsType.size.micro, fontFamily: vsType.family,
-    fontWeight: "800",
-  },
-  recordProgressTrack: {
-    height: 7,
-    overflow: "hidden",
-    marginTop: 7,
-    borderRadius: 999,
-    backgroundColor: "#E2E8F0",
-  },
+  recordProgressLabel: {color:"#64748B",fontSize:11,fontWeight:"500"},
+  recordProgressValue: {color:"#166534",fontSize:12,fontWeight:"600"},
+  recordProgressTrack: {height:5,overflow:"hidden",marginTop:8,
+    borderRadius:999,backgroundColor:"#E7ECEA"},
   recordProgressFill: {
     height: "100%",
     borderRadius: 999,

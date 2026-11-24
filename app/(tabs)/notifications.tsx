@@ -1,12 +1,13 @@
-import { volunserveTypography as vsType } from "../../constants/volunserveLiveUi";
-import { liveUi as designUi } from "../../constants/volunserveLiveUi";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { onAuthStateChanged } from "firebase/auth";
+import { httpsCallable } from "firebase/functions";
 import { collection, doc, onSnapshot, query, updateDoc, where } from "firebase/firestore";
 import React, { useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { auth, db } from "../../lib/firebase";
+import { functions } from "../../lib/firebase";
+import {RENDER_EMERGENCY_ORIGIN,respondRenderEmergencyAuto} from "../../lib/renderEmergencyAuto";
 import { useAnnouncementAlerts } from "../../lib/announcementAlerts";
 import { enableAndroidPhoneAlerts, disableAndroidPhoneAlerts } from "../../lib/androidNativePush";
 
@@ -16,6 +17,8 @@ type NotificationItem = {
   title: string;
   message: string;
   type?: string;
+  caseId?: string;
+  assignmentId?: string;
   read?: boolean;
   createdAt?: any;
 };
@@ -50,12 +53,17 @@ export default function NotificationsScreen() {
   const [page, setPage] = useState(1);
   const [updating, setUpdating] = useState(false);
   const [pushBusy, setPushBusy] = useState(false);
+  const [decisionBusy, setDecisionBusy] = useState("");
+  const [autoTaskStatuses, setAutoTaskStatuses] = useState<
+    Record<string, { status: string; offerMode: string; caseId: string }>
+  >({});
   const [phoneStatus, setPhoneStatus] = useState("");
   const [phoneEnabled, setPhoneEnabled] = useState(false);
 
   useEffect(() => onAuthStateChanged(auth, user => {
     setUid(user?.uid ?? null);
     setNotifications([]);
+    setAutoTaskStatuses({});
     setError("");
     setPhoneStatus("");
     setPhoneEnabled(false);
@@ -76,6 +84,61 @@ export default function NotificationsScreen() {
       setError("Could not load notifications. Check your connection and try again.");
     });
   }, [uid]);
+
+  // Both Notification and Volunteer Task buttons use the SAME Firestore offer.
+  useEffect(() => {
+    if (!uid) return;
+    const q = query(collection(db, "responseAssignments"),
+      where("volunteerId", "==", uid));
+    return onSnapshot(q, snapshot => {
+      const next: Record<string, { status: string; offerMode: string; caseId: string }> = {};
+      snapshot.docs.forEach(d => {
+        const task = d.data();
+        next[d.id] = {
+          status: String(task.status || ""),
+          offerMode: String(task.offerMode || ""),
+          caseId: String(task.caseId || ""),
+        };
+      });
+      setAutoTaskStatuses(next);
+    }, () => setAutoTaskStatuses({}));
+  }, [uid]);
+
+  const canRespondFromNotification = (item: NotificationItem) => {
+    if (!uid || item.userId !== uid || item.type !== "response_assignment" ||
+        !item.caseId || !item.assignmentId ||
+        item.assignmentId !== item.caseId + "_" + uid ||
+        item.id !== "auto_response_" + item.assignmentId) return false;
+    const task = autoTaskStatuses[item.assignmentId];
+    return task?.status === "offered" && task.caseId === item.caseId &&
+      ["automatic_all_volunteers_no_barangay",
+        "automatic_resident_submission_demo",
+        RENDER_EMERGENCY_ORIGIN].includes(task.offerMode);
+  };
+
+  const respondFromNotification = async (
+    item: NotificationItem, decision: "accepted" | "declined"
+  ) => {
+    if (!auth.currentUser || auth.currentUser.uid !== uid ||
+        !canRespondFromNotification(item) || decisionBusy) return;
+    setDecisionBusy(item.id);
+    setError("");
+    try {
+      const task=autoTaskStatuses[item.assignmentId || ""];
+      if (task?.offerMode===RENDER_EMERGENCY_ORIGIN) {
+        const result=await respondRenderEmergencyAuto(item.caseId!,decision);
+        if (![decision,"already_"+decision].includes(String(result.status || "")))
+          throw Error("Render did not confirm the Volunteer decision.");
+      } else {
+        const decide=httpsCallable(functions,"respondToAutoVolunteerInvitation");
+        await decide({caseId:item.caseId,decision});
+      }
+    } catch {
+      setError("Invitation response failed. Open Volunteer Tasks and try again.");
+    } finally {
+      setDecisionBusy("");
+    }
+  };
 
   const combined = useMemo(() => [...notifications, ...announcementAlerts].sort((a, b) => timestamp(b.createdAt) - timestamp(a.createdAt)), [notifications, announcementAlerts]);
   const unread = useMemo(() => combined.filter(item => !item.read).length, [combined]);
@@ -196,6 +259,26 @@ export default function NotificationsScreen() {
               </View>
               <Text style={styles.category}>{categoryOf(item)} • {timestamp(item.createdAt) ? new Date(timestamp(item.createdAt)).toLocaleString() : "Just now"}</Text>
               <Text style={styles.message}>{item.message || "You have a new update."}</Text>
+               {canRespondFromNotification(item) && (
+                 <View style={styles.emergencyDecisionRow}>
+                   <TouchableOpacity accessibilityRole="button"
+                     accessibilityLabel="Accept this automatic emergency invitation"
+                     disabled={!!decisionBusy}
+                     style={[styles.decisionAccept, !!decisionBusy && styles.disabled]}
+                     onPress={() => void respondFromNotification(item, "accepted")}>
+                     <Text style={styles.decisionAcceptText}>
+                       {decisionBusy === item.id ? "Updating…" : "Accept"}
+                     </Text>
+                   </TouchableOpacity>
+                   <TouchableOpacity accessibilityRole="button"
+                     accessibilityLabel="Decline this automatic emergency invitation"
+                     disabled={!!decisionBusy}
+                     style={[styles.decisionDecline, !!decisionBusy && styles.disabled]}
+                     onPress={() => void respondFromNotification(item, "declined")}>
+                     <Text style={styles.decisionDeclineText}>Decline</Text>
+                   </TouchableOpacity>
+                 </View>
+               )}
               {!item.read && <TouchableOpacity disabled={updating} accessibilityRole="button"
                 style={styles.readButton} onPress={() => void markAsRead([item.id])}>
                 <Text style={styles.readText}>Mark as read</Text><Ionicons name="checkmark" size={15} color="#087D60"/>
@@ -221,53 +304,58 @@ const styles = StyleSheet.create({
   heroDecor: { position: "absolute", right: -16, top: -25, opacity: 0.95 },
   headingIcon: { backgroundColor: "#ffffff25", borderRadius: 15, padding: 13 },
   headingText: { flex: 1 },
-  kicker: { color: "#C4F4DE", fontSize: vsType.size.micro, fontFamily: vsType.family, fontWeight: "800", letterSpacing: 1.4 },
-  title: { color: "#FFFFFF", fontSize: designUi.type.page.fontSize, fontWeight: designUi.type.page.fontWeight, marginTop: 3, lineHeight: designUi.type.page.lineHeight,},
-  subtitle: { color: "#E4FAEB", fontSize: designUi.type.body.fontSize, marginTop: 4, lineHeight: designUi.type.body.lineHeight, fontWeight: designUi.type.body.fontWeight,},
+  kicker: { color: "#C4F4DE", fontSize: 10, fontWeight: "800", letterSpacing: 1.4 },
+  title: { color: "#FFFFFF", fontSize: 26, fontWeight: "900", marginTop: 3 },
+  subtitle: { color: "#E4FAEB", fontSize: 12, marginTop: 4, lineHeight: 18 },
   summary: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: 10, backgroundColor: "#FFFFFF", padding: 17, marginTop: 16, borderRadius: 15, borderWidth: 1, borderColor: "#DCEAE1" },
-  metric: { fontSize: vsType.size.page, fontFamily: vsType.family, fontWeight: "800", color: "#0D7557", borderRadius: 15,},
-  metricLabel: { fontSize: designUi.type.label.fontSize, color: "#5C7B6B", fontWeight: designUi.type.label.fontWeight, lineHeight: designUi.type.label.lineHeight,},
+  metric: { fontSize: 27, fontWeight: "900", color: "#0D7557" },
+  metricLabel: { fontSize: 11, color: "#5C7B6B", fontWeight: "700" },
   markAll: { flexDirection: "row", alignItems: "center", padding: 10, borderRadius: 10, backgroundColor: "#E8F7EE", gap: 5 },
-  markAllText: { color: "#087D60", fontSize: vsType.size.meta, fontFamily: vsType.family, fontWeight: "800" },
+  markAllText: { color: "#087D60", fontSize: 12, fontWeight: "800" },
   disabled: { opacity: 0.35 },
   phoneCard: { backgroundColor: "#FFFFFF", borderWidth: 1, borderColor: "#CEE8DA", borderRadius: 17, padding: 16, marginTop: 14, flexDirection: "row", alignItems: "flex-start", gap: 12 },
   phoneIcon: { backgroundColor: "#E7F7EE", padding: 11, borderRadius: 12 },
   phoneContent: { flex: 1, gap: 7 },
-  phoneTitle: { color: "#164A35", fontSize: vsType.size.body, fontFamily: vsType.family, fontWeight: "800" },
-  phoneDescription: { color: "#628273", fontSize: vsType.size.meta, fontFamily: vsType.family, lineHeight: 18 },
-  phoneStatus: { color: "#376754", fontSize: vsType.size.meta, fontFamily: vsType.family, fontWeight: "700" },
+  phoneTitle: { color: "#164A35", fontSize: 14, fontWeight: "900" },
+  phoneDescription: { color: "#628273", fontSize: 12, lineHeight: 18 },
+  phoneStatus: { color: "#376754", fontSize: 12, fontWeight: "700" },
   phoneActions: { flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 8, marginTop: 5 },
   phoneButton: { flexDirection: "row", gap: 8, alignItems: "center", backgroundColor: "#0D7557", paddingHorizontal: 14, paddingVertical: 11, borderRadius: 10 },
-  phoneButtonText: { color: "#FFFFFF", fontSize: vsType.size.meta, fontFamily: vsType.family, fontWeight: "800" },
+  phoneButtonText: { color: "#FFFFFF", fontSize: 12, fontWeight: "800" },
   phoneOffButton: { borderRadius: 10, borderWidth: 1, borderColor: "#D5E6DC", paddingHorizontal: 12, paddingVertical: 10 },
-  phoneOffText: { color: "#477362", fontWeight: "800", fontSize: vsType.size.meta, fontFamily: vsType.family },
+  phoneOffText: { color: "#477362", fontWeight: "800", fontSize: 12 },
   filterScroll: { marginTop: 17, maxHeight: 48 },
   filters: { gap: 8, paddingBottom: 8 },
   filterPill: { paddingHorizontal: 14, paddingVertical: 9, backgroundColor: "#FFFFFF", borderRadius: 999, borderColor: "#D9E8DF", borderWidth: 1 },
   filterActive: { backgroundColor: "#0D7557", borderColor: "#0D7557" },
-  filterLabel: { color: "#416959", fontSize: vsType.size.meta, fontFamily: vsType.family, fontWeight: "800" },
+  filterLabel: { color: "#416959", fontSize: 12, fontWeight: "800" },
   filterLabelActive: { color: "#FFFFFF" },
-  resultCount: { color: "#6B8676", fontSize: vsType.size.meta, fontFamily: vsType.family, marginTop: 12, marginBottom: 10, fontWeight: "600" },
-  card: { backgroundColor: "#FFFFFF", borderRadius: 16, borderWidth: 1, borderColor: "#DFEAE3", marginBottom: 11, padding: 16 },
+  resultCount: { color: "#6B8676", fontSize: 12, marginTop: 12, marginBottom: 10, fontWeight: "600" },
+  card: { backgroundColor: "#FFFFFF", borderRadius: 14, borderWidth: 1, borderColor: "#DFEAE3", marginBottom: 11, padding: 16 },
   unreadCard: { borderColor: "#92D1B1", backgroundColor: "#FBFFFC" },
   cardTop: { flexDirection: "row", gap: 12, alignItems: "flex-start" },
   typeIcon: { borderRadius: 12, backgroundColor: "#ECF7F0", padding: 10 },
   typeIconUnread: { backgroundColor: "#D9F3E3" },
   cardContent: { flex: 1 },
   titleRow: { flexDirection: "row", alignItems: "flex-start", gap: 7 },
-  cardTitle: { color: "#173F31", fontSize: designUi.type.card.fontSize, fontWeight: designUi.type.card.fontWeight, flex: 1, lineHeight: designUi.type.card.lineHeight,},
+  cardTitle: { color: "#173F31", fontSize: 14, fontWeight: "900", flex: 1 },
   newDot: { width: 8, height: 8, borderRadius: 99, backgroundColor: "#0E9B6D", marginTop: 5 },
-  category: { color: "#6D887A", fontSize: vsType.size.caption, fontFamily: vsType.family, marginTop: 5, fontWeight: "700" },
-  message: { color: "#435F51", fontSize: vsType.size.label, fontFamily: vsType.family, marginTop: 10, lineHeight: 20 },
-  readButton: { flexDirection: "row", alignItems: "center", alignSelf: "flex-start", marginTop: 11, gap: 4, padding: 5, minHeight: 44,},
-  readText: { color: "#087D60", fontWeight: "800", fontSize: vsType.size.meta, fontFamily: vsType.family },
+  category: { color: "#6D887A", fontSize: 11, marginTop: 5, fontWeight: "700" },
+  message: { color: "#435F51", fontSize: 13, marginTop: 10, lineHeight: 20 },
+  emergencyDecisionRow: { flexDirection: "row", flexWrap: "wrap", gap: 9, marginTop: 11 },
+  decisionAccept: { backgroundColor: "#087D60", borderRadius: 9, paddingVertical: 10, paddingHorizontal: 18 },
+  decisionAcceptText: { color: "#FFFFFF", fontWeight: "800", fontSize: 12 },
+  decisionDecline: { backgroundColor: "#FFF2EF", borderColor: "#D5B0AA", borderWidth: 1, borderRadius: 9, paddingVertical: 10, paddingHorizontal: 18 },
+  decisionDeclineText: { color: "#9B3F33", fontWeight: "800", fontSize: 12 },
+  readButton: { flexDirection: "row", alignItems: "center", alignSelf: "flex-start", marginTop: 11, gap: 4, padding: 5 },
+  readText: { color: "#087D60", fontWeight: "800", fontSize: 12 },
   pagination: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 12, gap: 6 },
   pageButton: { backgroundColor: "#E9F4ED", paddingHorizontal: 14, paddingVertical: 10, borderRadius: 9 },
-  pageText: { color: "#0D7557", fontWeight: "800", fontSize: vsType.size.meta, fontFamily: vsType.family },
-  pageCount: { color: "#4F7061", fontWeight: "700", fontSize: vsType.size.meta, fontFamily: vsType.family },
-  error: { marginTop: 12, padding: 12, color: "#9D3535", backgroundColor: "#FFF0EE", borderRadius: 10, fontSize: vsType.size.meta, fontFamily: vsType.family },
+  pageText: { color: "#0D7557", fontWeight: "800", fontSize: 12 },
+  pageCount: { color: "#4F7061", fontWeight: "700", fontSize: 12 },
+  error: { marginTop: 12, padding: 12, color: "#9D3535", backgroundColor: "#FFF0EE", borderRadius: 10, fontSize: 12 },
   state: { backgroundColor: "#FFFFFF", marginTop: 12, borderRadius: 16, alignItems: "center", gap: 9, padding: 35, borderWidth: 1, borderColor: "#E0EBE4" },
   center: { flex: 1, justifyContent: "center", alignItems: "center", padding: 25, gap: 10, backgroundColor: "#F3F8F5" },
-  emptyTitle: { color: "#214C3A", fontSize: designUi.type.section.fontSize, fontWeight: designUi.type.section.fontWeight, textAlign: "center", lineHeight: designUi.type.section.lineHeight,},
-  emptyText: { color: "#6B8577", fontSize: designUi.type.body.fontSize, textAlign: "center", lineHeight: designUi.type.body.lineHeight, fontWeight: designUi.type.body.fontWeight,},
+  emptyTitle: { color: "#214C3A", fontSize: 15, fontWeight: "900", textAlign: "center" },
+  emptyText: { color: "#6B8577", fontSize: 12, textAlign: "center", lineHeight: 18 },
 });

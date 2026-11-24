@@ -17,8 +17,11 @@ const staff = read("app/admin-request.tsx");
 for (const [name, condition] of [
   ["LGU new applicant rejects disposable email before UID creation", staff.includes("getRegistrationEmailError(email)") && staff.indexOf("getRegistrationEmailError(email)") < staff.indexOf("createUserWithEmailAndPassword(candidateAuth")],
   ["Guest URL gates on Firebase Auth resolution", publicLayout.includes("onAuthStateChanged(auth")],
-  ["Guest URL signs out an inherited account session", publicLayout.includes("void signOut(auth)")],
-  ["Guest URL shows preview only after confirmed signout", publicLayout.includes("!ready || auth.currentUser")],
+  ["Guest URL preserves inherited account session and routes back to login guard",
+    !publicLayout.includes("void signOut(auth)") &&
+    !publicLayout.includes("await signOut(auth)") &&
+    publicLayout.includes('router.replace("/login")')],
+  ["Guest URL shows preview only after confirmed signed-out state", publicLayout.includes("!ready || auth.currentUser")],
   ["Guest URL has no anonymous sign-in", !publicLayout.includes("signInAnonymously")],
   ["Guest URL has no profile creation", !publicLayout.includes("setDoc(")],
   ["Guest UI has no misleading 'Guest account menu'", !guest.includes('accessibilityLabel="Guest account menu"')],

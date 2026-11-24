@@ -1,10 +1,9 @@
-import { volunserveTypography as vsType } from "../../constants/volunserveLiveUi";
-import { liveUi as designUi } from "../../constants/volunserveLiveUi";
 import AdminReviewHero from "../../components/admin/AdminReviewHero";
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 
 import {
   ActivityIndicator,
+  Alert,
   ScrollView,
   StyleSheet,
   Text,
@@ -15,12 +14,15 @@ import {
 
 import {
   Redirect,
+  useLocalSearchParams,
   type Href,
 } from "expo-router";
 
 import {
   addDoc,
   collection,
+  doc,
+  getDoc,
   serverTimestamp,
 } from "firebase/firestore";
 
@@ -31,6 +33,11 @@ import {
 import {
   useUserSession,
 } from "../../lib/useUserSession";
+import {
+  buildPublicEmergencyAdvisory, canPreparePublicEmergencyAdvisory,
+  safePublicAdvisoryBarangay,
+} from "../../lib/emergencyPublicAdvisory";
+import { SJDM_BARANGAYS } from "../../constants/sjdmBarangays";
 
 export default function CreateAnnouncement() {
   const {
@@ -38,6 +45,11 @@ export default function CreateAnnouncement() {
     user,
     profile,
   } = useUserSession();
+
+  const params = useLocalSearchParams<{ incidentId?: string }>();
+  const incidentId = typeof params.incidentId === "string"
+    ? params.incidentId.trim() : "";
+  const role = typeof profile?.role === "string" ? profile.role.toLowerCase() : "";
 
   const [title, setTitle] = useState("");
   const [message, setMessage] = useState("");
@@ -49,9 +61,61 @@ export default function CreateAnnouncement() {
     { label: "Public Service Advisory", title: "Public Service Advisory", body: "Please review the latest official community service advisory and follow instructions from authorized personnel." },
   ];
 
-  const [formNotice, setFormNotice] = useState<{kind: "error" | "success"; text: string} | null>(null);
-  const [submitting, setSubmitting] =
-    useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [advisoryLoading, setAdvisoryLoading] = useState(false);
+  const [advisoryError, setAdvisoryError] = useState("");
+  const [advisorySourceValidated, setAdvisorySourceValidated] = useState(false);
+  const [advisorySourceSeverity, setAdvisorySourceSeverity] = useState("normal");
+  const [advisoryBarangay, setAdvisoryBarangay] = useState("");
+  const [advisoryPriority, setAdvisoryPriority] = useState<"normal" | "urgent">("normal");
+  const [advisoryReviewed, setAdvisoryReviewed] = useState(false);
+
+  // The emergency ID is an Admin-only route parameter. Never copy raw
+  // report text, reporter information, photo URLs or exact coordinates.
+  useEffect(() => {
+    if (!incidentId || loading || !user || role !== "admin") return;
+    let current = true;
+    setAdvisoryLoading(true);
+    setAdvisorySourceValidated(false);
+    setAdvisoryError("");
+    setAdvisoryReviewed(false);
+    getDoc(doc(db, "disasterCases", incidentId))
+      .then(snapshot => {
+        if (!current) return;
+        const caseData = snapshot.exists() ? snapshot.data() : null;
+        if (!canPreparePublicEmergencyAdvisory(caseData)) {
+          setAdvisoryBarangay("");
+          setAdvisoryError("This report is not currently validated for a public advisory. Review the active case in Emergency Reports.");
+          return;
+        }
+        setAdvisorySourceValidated(true);
+        setAdvisorySourceSeverity(String(caseData?.severity || "normal"));
+        const draft = buildPublicEmergencyAdvisory(caseData);
+        if (draft) {
+          setTitle(draft.title);
+          setMessage(draft.message);
+          setCustomAnnouncement(false);
+          setAdvisoryPriority(draft.priority);
+          setAdvisoryBarangay(draft.barangay);
+        } else {
+          // Never infer incident location from reporter's home barangay.
+          setTitle("");
+          setMessage("");
+          setAdvisoryBarangay("");
+          setAdvisoryPriority(["high", "critical"].includes(String(caseData?.severity || ""))
+            ? "urgent" : "normal");
+        }
+      })
+      .catch(() => {
+        if (current) {
+          setAdvisoryBarangay("");
+          setAdvisoryError("Unable to verify the emergency report. No public advisory may be published from this case.");
+        }
+      })
+      .finally(() => { if (current) setAdvisoryLoading(false); });
+    return () => { current = false; };
+  }, [incidentId, loading, role, user?.uid]);
+
 
   if (loading) {
     return (
@@ -75,11 +139,6 @@ export default function CreateAnnouncement() {
       />
     );
   }
-
-  const role =
-    typeof profile?.role === "string"
-      ? profile.role.toLowerCase()
-      : "";
 
   /*
    * ADMIN ONLY
@@ -110,22 +169,45 @@ export default function CreateAnnouncement() {
   const handleSubmit = async () => {
     const cleanTitle = title.trim();
     const cleanMessage = message.trim();
-    setFormNotice(null);
 
     if (cleanTitle.length < 3) {
-      setFormNotice({ kind: "error", text: "Title is required (at least 3 characters)." });
+      Alert.alert(
+        "Invalid Title",
+        "Please enter a clear announcement title."
+      );
 
       return;
     }
 
     if (cleanMessage.length < 10) {
-      setFormNotice({ kind: "error", text: "Message is required (at least 10 characters)." });
+      Alert.alert(
+        "Invalid Message",
+        "Write at least 10 characters so the announcement meets the official publishing rules."
+      );
 
+      return;
+    }
+
+    if (incidentId && (advisoryLoading || advisoryError || !advisorySourceValidated ||
+        !safePublicAdvisoryBarangay(advisoryBarangay) || !advisoryReviewed)) {
+      Alert.alert("Public Advisory Review Required",
+        "Only validated cases with an official SJDM incident barangay may be shared. Review the message and confirm that no personal or exact-location details are included.");
       return;
     }
 
     try {
       setSubmitting(true);
+
+      if (incidentId) {
+        // Re-check current verification just before publication. A link to
+        // Announcements is not an authorization to publish unverified cases.
+        const latest = await getDoc(doc(db, "disasterCases", incidentId));
+        const refreshed = latest.exists()
+          ? buildPublicEmergencyAdvisory(latest.data(), advisoryBarangay) : null;
+        if (!refreshed || refreshed.barangay !== safePublicAdvisoryBarangay(advisoryBarangay)) {
+          throw new Error("Case verification or incident barangay changed. Return to Emergency Reports and review this advisory again.");
+        }
+      }
 
       await addDoc(
         collection(db, "announcements"),
@@ -136,7 +218,7 @@ export default function CreateAnnouncement() {
 
           audience: "all",
 
-          priority: "normal",
+          priority: incidentId ? advisoryPriority : "normal",
 
           /*
            * Publish immediately.
@@ -159,15 +241,23 @@ export default function CreateAnnouncement() {
 
       setTitle("");
       setMessage("");
+      setAdvisoryReviewed(false);
 
-      setFormNotice({ kind: "success", text: "Announcement published successfully. Residents and volunteers can now see it in Community Updates and Notifications." });
+      Alert.alert(
+        "Announcement Posted",
+        "Published to all residents and volunteers."
+      );
     } catch (error: any) {
       console.error(
         "Create announcement error:",
         error
       );
 
-      setFormNotice({ kind: "error", text: error?.code === "permission-denied" ? "Publishing was blocked by account permissions. Please contact an administrator." : (error?.message || "The announcement could not be published. Please try again.") });
+      Alert.alert(
+        "Unable to Post",
+        error?.message ||
+          "The announcement could not be published."
+      );
     } finally {
       setSubmitting(false);
     }
@@ -178,7 +268,88 @@ export default function CreateAnnouncement() {
       style={styles.screen}
       contentContainerStyle={styles.content}
     >
-      <AdminReviewHero eyebrow="LGU OPERATIONS / COMMUNICATION & REPORTS" title="Announcements" subtitle="Prepare and publish authorized operational notices to residents and volunteers across VolunServe." icon="megaphone-outline" tag="COMMUNITY-WIDE" />
+      <AdminReviewHero eyebrow="ADMIN WORKSPACE / COMMUNITY UPDATES" title="Announcements" subtitle="Admin reviews and publishes public notices to Residents and Volunteers. Emergency reports remain private." icon="megaphone-outline" tag="COMMUNITY-WIDE" />
+
+      {incidentId ? (
+        <View style={styles.scopeCard}>
+          <Text style={styles.scopeLabel}>VERIFIED EMERGENCY → PUBLIC ADVISORY</Text>
+          <Text style={styles.scopeHelp}>
+            {advisoryLoading
+              ? "Checking the report before preparing a public draft…"
+              : advisoryError || (advisoryBarangay
+                ? `Draft for Barangay ${advisoryBarangay}. Admin review is required before publishing.`
+                : "Confirm the actual incident barangay below. Never assume the reporter's home barangay is the emergency location.")}
+          </Text>
+          <Text style={styles.scopeHelp}>
+            Never publish resident names, contact information, private photos, house addresses, or GPS pins. A public advisory does not mean official responders have been dispatched.
+          </Text>
+          {!advisoryLoading && !advisoryError && advisorySourceValidated ? (
+            <View style={{ marginTop: 12, marginBottom: 6 }}>
+              <Text style={styles.inputLabel}>CONFIRM ACTUAL INCIDENT BARANGAY</Text>
+              <TextInput
+                style={styles.input}
+                value={advisoryBarangay}
+                onChangeText={value => {
+                  const next = value.slice(0, 70);
+                  setAdvisoryBarangay(next);
+                  setAdvisoryReviewed(false);
+                  const draft = buildPublicEmergencyAdvisory({
+                    verificationStatus: "validated", status: "validated",
+                    severity: advisorySourceSeverity,
+                  }, next);
+                  setTitle(draft?.title || "");
+                  setMessage(draft?.message || "");
+                }}
+                placeholder="Type barangay from the official SJDM list"
+                placeholderTextColor="#64748B"
+                maxLength={70}
+              />
+              {advisoryBarangay.trim().length >= 2 &&
+                !safePublicAdvisoryBarangay(advisoryBarangay) ? (
+                <View style={{ borderWidth: 1, borderColor: "#DBE9E3", borderRadius: 8 }}>
+                  {SJDM_BARANGAYS.filter(name =>
+                    name.toLowerCase().includes(advisoryBarangay.trim().toLowerCase())
+                  ).slice(0, 5).map(name => (
+                    <TouchableOpacity key={name} accessibilityRole="button"
+                      onPress={() => {
+                        const draft = buildPublicEmergencyAdvisory({
+                          verificationStatus: "validated", status: "validated",
+                          severity: advisorySourceSeverity,
+                        }, name);
+                        if (!draft) return;
+                        setAdvisoryBarangay(draft.barangay);
+                        setTitle(draft.title);
+                        setMessage(draft.message);
+                        setAdvisoryReviewed(false);
+                      }}
+                      style={{ padding: 10, borderBottomWidth: 1, borderBottomColor: "#EDF3EF" }}
+                    >
+                      <Text style={{ color: "#173D32" }}>{name}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              ) : null}
+              <Text style={styles.scopeHelp}>
+                Use the actual incident location, not the reporter's registered barangay.
+              </Text>
+            </View>
+          ) : null}
+          {!advisoryLoading && !advisoryError && advisorySourceValidated &&
+            safePublicAdvisoryBarangay(advisoryBarangay) ? (
+            <TouchableOpacity
+              accessibilityRole="checkbox"
+              accessibilityState={{ checked: advisoryReviewed }}
+              accessibilityLabel="Confirm public advisory contains no private report details"
+              onPress={() => setAdvisoryReviewed(value => !value)}
+              style={{ paddingVertical: 11 }}
+            >
+              <Text style={{ color: "#173D32", fontWeight: "700" }}>
+                {advisoryReviewed ? "☑" : "☐"} I checked the advisory for accuracy and private information.
+              </Text>
+            </TouchableOpacity>
+          ) : null}
+        </View>
+      ) : null}
 
       <View style={styles.formCard}>
         <Text style={styles.inputLabel}>ANNOUNCEMENT TYPE</Text>
@@ -203,7 +374,7 @@ export default function CreateAnnouncement() {
         <TextInput
           style={styles.input}
           value={title}
-          onChangeText={value => { setTitle(value); if (formNotice) setFormNotice(null); }}
+          onChangeText={setTitle}
           placeholder="Announcement title"
           placeholderTextColor="#94A3B8"
           maxLength={120}
@@ -219,7 +390,7 @@ export default function CreateAnnouncement() {
             styles.messageInput,
           ]}
           value={message}
-          onChangeText={value => { setMessage(value); if (formNotice) setFormNotice(null); }}
+          onChangeText={setMessage}
           placeholder="Write the announcement..."
           placeholderTextColor="#94A3B8"
           multiline
@@ -231,19 +402,17 @@ export default function CreateAnnouncement() {
           {message.length}/2000
         </Text>
 
-        {formNotice ? (
-          <View accessibilityRole="alert" style={[styles.notice, formNotice.kind === "success" ? styles.noticeSuccess : styles.noticeError]}>
-            <Text style={styles.noticeText}>{formNotice.text}</Text>
-          </View>
-        ) : null}
-
         <TouchableOpacity
           style={[
             styles.submitButton,
-            submitting &&
+            (submitting || (Boolean(incidentId) &&
+              (advisoryLoading || Boolean(advisoryError) || !advisorySourceValidated ||
+              !safePublicAdvisoryBarangay(advisoryBarangay) || !advisoryReviewed))) &&
               styles.submitButtonDisabled,
           ]}
-          disabled={submitting}
+          disabled={submitting || (Boolean(incidentId) &&
+            (advisoryLoading || Boolean(advisoryError) || !advisorySourceValidated ||
+              !safePublicAdvisoryBarangay(advisoryBarangay) || !advisoryReviewed))}
           onPress={handleSubmit}
         >
           {submitting ? (
@@ -293,49 +462,52 @@ const styles = StyleSheet.create({
 
   eyebrow: {
     color: "#23765F",
-    fontSize: vsType.size.caption, fontFamily: vsType.family,
-    fontWeight: "800",
+    fontSize: 11,
+    fontWeight: "900",
     letterSpacing: 1.3,
   },
 
   title: {
     color: "#173D32",
-    fontSize: designUi.type.page.fontSize,
-    fontWeight: designUi.type.page.fontWeight,
-    marginTop: 5, lineHeight: designUi.type.page.lineHeight,},
+    fontSize: 30,
+    fontWeight: "700",
+    marginTop: 5,
+  },
 
   subtitle: {
     color: "#64748B",
-    fontSize: designUi.type.body.fontSize,
-    lineHeight: designUi.type.body.lineHeight,
+    fontSize: 14,
+    lineHeight: 21,
     marginTop: 6,
-    marginBottom: 20, fontWeight: designUi.type.body.fontWeight,},
+    marginBottom: 20,
+  },
 
   scopeCard: {
     backgroundColor: "#EAF8F6",
     borderWidth: 1,
     borderColor: "#C7EAE5",
-    borderRadius: 16,
+    borderRadius: 9,
     padding: 16,
     marginBottom: 16,
   },
 
   scopeLabel: {
     color: "#087F78",
-    fontSize: designUi.type.label.fontSize,
-    fontWeight: designUi.type.label.fontWeight,
-    letterSpacing: 1, lineHeight: designUi.type.label.lineHeight,},
+    fontSize: 10,
+    fontWeight: "900",
+    letterSpacing: 1,
+  },
 
   scopeValue: {
     color: "#173D32",
-    fontSize: vsType.size.section, fontFamily: vsType.family,
-    fontWeight: "800",
+    fontSize: 18,
+    fontWeight: "900",
     marginTop: 5,
   },
 
   scopeHelp: {
     color: "#587174",
-    fontSize: vsType.size.meta, fontFamily: vsType.family,
+    fontSize: 12,
     lineHeight: 18,
     marginTop: 5,
   },
@@ -344,28 +516,29 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFFFF",
     borderWidth: 1,
     borderColor: "#E2E8F0",
-    borderRadius: 17,
+    borderRadius: 9,
     padding: 20,
   },
 
   inputLabel: {
     color: "#475569",
-    fontSize: designUi.type.label.fontSize,
-    fontWeight: designUi.type.label.fontWeight,
+    fontSize: 10,
+    fontWeight: "900",
     letterSpacing: 0.9,
     marginBottom: 7,
-    marginTop: 6, lineHeight: designUi.type.label.lineHeight,},
+    marginTop: 6,
+  },
 
   input: {
     width: "100%",
-    minHeight: 46,
+    minHeight: 48,
     borderWidth: 1,
     borderColor: "#CBD5E1",
     backgroundColor: "#FFFFFF",
-    borderRadius: 11,
+    borderRadius: 10,
     paddingHorizontal: 13,
     paddingVertical: 11,
-    fontSize: vsType.size.body, fontFamily: vsType.family,
+    fontSize: 14,
     color: "#1E293B",
     marginBottom: 14,
   },
@@ -376,17 +549,13 @@ const styles = StyleSheet.create({
 
   characterCount: {
     color: "#94A3B8",
-    fontSize: vsType.size.caption, fontFamily: vsType.family,
+    fontSize: 11,
     fontWeight: "700",
     textAlign: "right",
     marginTop: -8,
     marginBottom: 15,
   },
 
-  notice: { borderWidth: 1, borderRadius: 9, padding: 13, marginBottom: 14 },
-  noticeError: { backgroundColor: "#FEF2F2", borderColor: "#FECACA" },
-  noticeSuccess: { backgroundColor: "#ECFDF5", borderColor: "#A7F3D0" },
-  noticeText: { color: "#163F34", fontSize: designUi.type.body.fontSize, fontWeight: designUi.type.body.fontWeight, lineHeight: designUi.type.body.lineHeight,},
   submitButton: {
     minHeight: 48,
     backgroundColor: "#087F78",
@@ -402,13 +571,13 @@ const styles = StyleSheet.create({
 
   submitText: {
     color: "#FFFFFF",
-    fontSize: vsType.size.body, fontFamily: vsType.family,
-    fontWeight: "800",
+    fontSize: 14,
+    fontWeight: "900",
   },
 
   noteCard: {
     marginTop: 16,
-    borderRadius: 15,
+    borderRadius: 8,
     backgroundColor: "#F8FAFC",
     borderWidth: 1,
     borderColor: "#E2E8F0",
@@ -417,12 +586,14 @@ const styles = StyleSheet.create({
 
   noteTitle: {
     color: "#334155",
-    fontSize: designUi.type.section.fontSize,
-    fontWeight: designUi.type.section.fontWeight, lineHeight: designUi.type.section.lineHeight,},
+    fontSize: 13,
+    fontWeight: "900",
+  },
 
   noteText: {
     color: "#64748B",
-    fontSize: designUi.type.body.fontSize,
-    lineHeight: designUi.type.body.lineHeight,
-    marginTop: 4, fontWeight: designUi.type.body.fontWeight,},
+    fontSize: 12,
+    lineHeight: 18,
+    marginTop: 4,
+  },
 });

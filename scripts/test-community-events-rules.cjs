@@ -55,9 +55,17 @@ function skip(name) {
   console.log("SKIP " + name + " (dependency failed)");
 }
 
+function fixtureEmail(uid) {
+  return uid + "@example.invalid";
+}
+
+function verifiedSession(env, uid) {
+  return env.authenticatedContext(uid, { email: fixtureEmail(uid), email_verified: true }).firestore();
+}
+
 function residentProfile(uid) {
   return {
-    uid, email: uid + "@gmail.com", role: "resident", status: "approved",
+    uid, email: fixtureEmail(uid), role: "resident", status: "approved",
     residentAccess: true, activeMode: "resident",
     volunteerAccess: false, volunteerStatus: "not_applied",
     fullName: "Example Resident",
@@ -121,11 +129,11 @@ async function main() {
       await db.doc("users/" + superAdminUid).set({uid:superAdminUid,role:"superadmin",status:"approved",fullName:"System Programmer"});
     });
 
-    const resident = env.authenticatedContext(residentUid,{email:residentUid+"@gmail.com",email_verified:true}).firestore();
-    const volunteer = env.authenticatedContext(volunteerUid,{email:volunteerUid+"@gmail.com",email_verified:true}).firestore();
-    const admin = env.authenticatedContext(adminUid,{email:adminUid+"@gmail.com",email_verified:true}).firestore();
-    const superAdmin = env.authenticatedContext(superAdminUid,{email:superAdminUid+"@gmail.com",email_verified:true}).firestore();
-    const other = env.authenticatedContext(otherUid,{email:otherUid+"@gmail.com",email_verified:true}).firestore();
+    const resident = verifiedSession(env, residentUid);
+    const volunteer = verifiedSession(env, volunteerUid);
+    const admin = verifiedSession(env, adminUid);
+    const superAdmin = verifiedSession(env, superAdminUid);
+    const other = verifiedSession(env, otherUid);
     const anonymous = env.unauthenticatedContext().firestore();
 
     const proposalRef = resident.doc("communityEventProposals/" + eventId);
@@ -141,7 +149,16 @@ async function main() {
         ...proposalPayload(), title: "No",
       }), true);
 
-    const submitted = await check("VERIFIED RESIDENT SUBMITS VALID PROPOSAL", () =>
+    for (const [label, claims] of [
+      ["Unverified email", { email: fixtureEmail(residentUid), email_verified: false }],
+      ["Mismatched profile email", { email: fixtureEmail(otherUid), email_verified: true }],
+    ]) {
+      const session = env.authenticatedContext(residentUid, claims).firestore();
+      await check(label + " cannot submit a proposal", () =>
+        session.doc("communityEventProposals/" + eventId).set(proposalPayload()), true);
+    }
+
+    const submitted = await check("EMAIL-VERIFIED RESIDENT SUBMITS VALID PROPOSAL", () =>
       proposalRef.set(proposalPayload()));
 
     if (submitted) {
@@ -304,8 +321,8 @@ async function main() {
           const started = await check("ADMIN STARTS EVENT", () =>
             publishedRef.update({status: "active", updatedAt: stamp()}));
           if (started) {
-            const inOK = await check("VOLUNTEER SELF TIME-IN", () =>
-              partRef.update({checkedInAt: stamp(), updatedAt: stamp()}));
+            await check("Client cannot write Time IN directly", () => partRef.update({checkedInAt: stamp(), updatedAt: stamp()}), true);
+            const inOK = await check("Server records Time IN", () => env.withSecurityRulesDisabled(ctx => ctx.firestore().doc(partRef.path).update({checkedInAt: stamp(), updatedAt: stamp()})));
             if (inOK) {
               await check("Volunteer cannot self-verify attendance", () =>
                 partRef.update({
@@ -314,8 +331,8 @@ async function main() {
                   attendanceVerifiedBy: volunteerUid,
                   updatedAt: stamp(),
                 }), true);
-              const outOK = await check("VOLUNTEER SELF TIME-OUT", () =>
-                partRef.update({checkedOutAt: stamp(), updatedAt: stamp()}));
+              await check("Client cannot write Time OUT directly", () => partRef.update({checkedOutAt: stamp(), updatedAt: stamp()}), true);
+            const outOK = await check("Server records Time OUT", () => env.withSecurityRulesDisabled(ctx => ctx.firestore().doc(partRef.path).update({checkedOutAt: stamp(), updatedAt: stamp()})));
               if (outOK) {
                 await check("ADMIN VERIFIES ATTENDANCE", () =>
                   admin.doc("communityEventParticipants/" + eventId + "_" + volunteerUid)

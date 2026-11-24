@@ -1,3 +1,4 @@
+import {getSafeVolunServeBackendBaseUrl} from "../../lib/stagingExpoServiceIsolation";
 import { volunserveTypography as vsType } from "../../constants/volunserveLiveUi";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import React, {useEffect,useState} from "react";
@@ -6,7 +7,7 @@ import {auth} from "../../lib/firebase";
 import ResidentWalletSetup from "./ResidentWalletSetup";
 import ResidentReleaseAcknowledgment from "./ResidentReleaseAcknowledgment";
 
-const API="https://volunserve.onrender.com/api/funds/my-campaigns/";
+const API=getSafeVolunServeBackendBaseUrl()+"/api/funds/my-campaigns/";
 
 /**
  * Mount the assistance wallet inside the Resident's own published campaign.

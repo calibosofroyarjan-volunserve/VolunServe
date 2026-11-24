@@ -13,11 +13,16 @@ function names(menu) {
   assert.ok(start>=0&&end>start,"Menu not found: "+menu);
   return [...tabs.slice(start,end).matchAll(/name:\s*"([^"]+)"/g)].map(x=>x[1]);
 }
-test("Volunteer desktop preserves My Certificates while mobile keeps compact service modules",()=>{
+test("Volunteer desktop keeps My Certificates while mobile remains focused",()=>{
+  // Production desktop intentionally exposes My Certificates as a separate
+  // service module. The mobile shortcuts keep just three navigation items.
   assert.deepEqual(names("volunteerDesktopTabs"),["index","volunteer","community-events","certificate"]);
   assert.deepEqual(names("volunteerMobileTabs"),["index","volunteer","community-events"]);
-  assert.ok(!names("volunteerDesktopTabs").includes("donation"));
-  assert.ok(!names("volunteerMobileTabs").includes("donation"));
+  for(const menu of ["volunteerDesktopTabs","volunteerMobileTabs"]) {
+    for(const removed of ["donation","volunteer-impact","notifications","profile","announcements"]) {
+      assert.ok(!names(menu).includes(removed),removed+" leaked into "+menu);
+    }
+  }
 });
 test("Resident donations remain accessible through Resident mode",()=>{
   assert.deepEqual(names("residentDesktopTabs"),["index","disaster-response","resident","community-events","donation"]);
@@ -30,7 +35,7 @@ test("Donation experience and existing financial records are unchanged",()=>{
     assert.ok(donate.includes(fragment),"Donation module changed or missing: "+fragment);
   }
 });
-test("Volunteer Profile continues to expose progress and certificate records",()=>{
+test("Volunteer progress and certificates remain inside Profile",()=>{
   assert.match(profile,/label:"My Progress"/);
   assert.match(profile,/key: "certificates"/);
   assert.match(profile,/<VolunteerImpact embedded \/>/);

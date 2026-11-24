@@ -1,77 +1,83 @@
-import { Stack } from "expo-router";
-import {onAuthStateChanged, signOut} from "firebase/auth";
-import {useCallback, useEffect, useState} from "react";
+import { Stack, useRouter } from "expo-router";
+import {onAuthStateChanged} from "firebase/auth";
+import {useEffect, useState} from "react";
 import {ActivityIndicator, Pressable, Text, View} from "react-native";
 import {auth} from "../../lib/firebase";
 
 /**
- * Guest is a public, account-free preview, NEVER a Firebase role or profile.
+ * Public Guest Preview is an account-free, read-only page.
  *
- * The explicit Login "Continue as Guest" button signs out first, but a user
- * can also paste /public directly. Isolate THAT entry point too so an active
- * verified, pending, or anonymous Auth session cannot ride into Guest Mode.
- * The guest navigator mounts only AFTER Firebase confirms signed-out state.
+ * IMPORTANT: Do not sign out here. An authenticated user can temporarily
+ * navigate to /public during a login/route transition. The previous
+ * onAuthStateChanged -> signOut caused a race against the root layout's
+ * approved Resident/Admin redirect and destroyed the session.
+ *
+ * Only the explicit "Continue as Guest" action on the Login screen signs out.
+ * A direct /public visit with an active Firebase session leaves this group
+ * and lets the root login/profile guard choose the authorized destination.
+ * This component never creates, links, or changes a Firebase profile.
  */
 export default function PublicLayout() {
+  const router = useRouter();
   const [ready, setReady] = useState(false);
   const [error, setError] = useState("");
-  const [retry, setRetry] = useState(0);
-
-  const clearSession = useCallback(async () => {
-    setReady(false);
-    setError("");
-    try {
-      await signOut(auth);
-    } catch {
-      setError("Guest Preview could not end your account session. Please try again.");
-    }
-  }, []);
 
   useEffect(() => {
     let active = true;
-    let clearing = false;
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       if (!active) return;
-      if (!user) {
-        clearing = false;
-        setReady(true);
-        setError("");
+      if (user) {
+        // Don't show Guest while signed in, but NEVER invalidate the session.
+        // RootLayout sends approved users from /login to their profile route,
+        // or shows normal login/profile-completion guidance if ineligible.
+        setReady(false);
+        router.replace("/login");
         return;
       }
-      if (clearing) return;
-      clearing = true;
-      setReady(false);
-      void signOut(auth).catch(() => {
-        if (active) {
-          clearing = false;
-          setError("Guest Preview could not end your account session. Please try again.");
-        }
-      });
+      setReady(true);
+      setError("");
     }, () => {
-      if (active) setError("Could not verify signed-out Guest Mode. Check your connection and try again.");
+      if (!active) return;
+      setReady(false);
+      setError("Could not check your Guest Preview session. Return to Sign In.");
     });
-    return () => {active = false; unsubscribe();};
-  }, [retry]);
+    return () => { active = false; unsubscribe(); };
+  }, [router]);
 
   if (!ready || auth.currentUser) {
-    return <View style={{flex: 1, backgroundColor: "#F6F8F7", justifyContent: "center", alignItems: "center", padding: 24}}>
-      {error ? (
-        <>
-          <Text accessibilityRole="alert" style={{color: "#991B1B", textAlign: "center", marginBottom: 14}}>{error}</Text>
-          <Pressable accessibilityRole="button" onPress={() => {
-            void clearSession().then(() => setRetry(v => v + 1));
-          }} style={{backgroundColor: "#176B52", borderRadius: 10, paddingVertical: 12, paddingHorizontal: 24}}>
-            <Text style={{color: "#FFFFFF", fontWeight: "700"}}>Retry Guest Preview</Text>
-          </Pressable>
-        </>
-      ) : (
-        <>
-          <ActivityIndicator color="#176B52" size="large"/>
-          <Text style={{color: "#17382E", marginTop: 12}}>Opening account-free Guest Preview…</Text>
-        </>
-      )}
-    </View>;
+    return (
+      <View style={{
+        flex: 1, backgroundColor: "#F6F8F7", justifyContent: "center",
+        alignItems: "center", padding: 24,
+      }}>
+        {error ? (
+          <>
+            <Text accessibilityRole="alert" style={{
+              color: "#991B1B", textAlign: "center", marginBottom: 14,
+            }}>{error}</Text>
+            <Pressable accessibilityRole="button"
+              onPress={() => router.replace("/login")}
+              style={{
+                backgroundColor: "#176B52", borderRadius: 10,
+                paddingVertical: 12, paddingHorizontal: 24,
+              }}>
+              <Text style={{color: "#FFFFFF", fontWeight: "700"}}>
+                Return to Sign In
+              </Text>
+            </Pressable>
+          </>
+        ) : (
+          <>
+            <ActivityIndicator color="#176B52" size="large" />
+            <Text style={{color: "#17382E", marginTop: 12}}>
+              Checking your session…
+            </Text>
+          </>
+        )}
+      </View>
+    );
   }
-  // No account hooks, Firebase reads/writes, or session data in guest pages.
+
+  // Only a signed-out session renders public pages. No guest account is made.
   return <Stack screenOptions={{headerShown: false}} />;
 }

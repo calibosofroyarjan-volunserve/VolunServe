@@ -1,5 +1,4 @@
-import { volunserveTypography as vsType } from "../../constants/volunserveLiveUi";
-import { liveUi as designUi } from "../../constants/volunserveLiveUi";
+import {RENDER_EMERGENCY_ORIGIN, respondRenderEmergencyAuto} from "../../lib/renderEmergencyAuto";
 import { Ionicons } from "@expo/vector-icons";
 import { Redirect, useRouter } from "expo-router";
 import {
@@ -47,6 +46,7 @@ type AssignmentStatus =
   | string;
 
 type ResponseAssignment = {
+  offerMode?: string;
   id: string;
   caseId?: string;
   caseTitle?: string;
@@ -624,6 +624,20 @@ export default function VolunteerTasks() {
     try {
       setBusyId(assignment.id);
       setError("");
+
+      // Render service handles Resident-submitted automatic invitations.
+      // Firebase Cloud Functions remain unused for this offer mode.
+      if ((next === "accepted" || next === "declined") &&
+          assignment.offerMode === RENDER_EMERGENCY_ORIGIN) {
+        if (!assignment.caseId) throw Error("Emergency case is missing.");
+        const outcome = await respondRenderEmergencyAuto(assignment.caseId, next);
+        if (![next, "already_" + next].includes(String(outcome.status || "")))
+          throw Error("Render did not confirm this Volunteer decision.");
+        Alert.alert(next === "accepted" ? "Assignment Accepted" : "Assignment Declined",
+          "Your automatic invitation response was saved.");
+        if (next === "accepted") setFilter("active");
+        return;
+      }
 
       await runTransaction(
         db,
@@ -2110,7 +2124,7 @@ const styles = StyleSheet.create({
   loadingText: {
     marginTop: 10,
     color: "#64748b",
-    fontSize: vsType.size.label, fontFamily: vsType.family,
+    fontSize: 13,
     fontWeight: "700",
   },
 
@@ -2144,22 +2158,24 @@ const styles = StyleSheet.create({
 
   eyebrow: {
     color: "#08765B",
-    fontSize: vsType.size.micro, fontFamily: vsType.family,
-    fontWeight: "800",
+    fontSize: 9,
+    fontWeight: "900",
     letterSpacing: 0.9,
   },
 
   title: {
     marginTop: 2,
     color: "#173D32",
-    fontSize: designUi.type.page.fontSize,
-    fontWeight: designUi.type.page.fontWeight, lineHeight: designUi.type.page.lineHeight,},
+    fontSize: 25,
+    fontWeight: "900",
+  },
 
   subtitle: {
     marginTop: 3,
     color: "#567D6B",
-    fontSize: designUi.type.body.fontSize,
-    lineHeight: designUi.type.body.lineHeight, fontWeight: designUi.type.body.fontWeight,},
+    fontSize: 12,
+    lineHeight: 17,
+  },
 
   liveMapButton: {
     minHeight: 46,
@@ -2174,8 +2190,8 @@ const styles = StyleSheet.create({
 
   liveMapButtonText: {
     color: "#ffffff",
-    fontSize: vsType.size.meta, fontFamily: vsType.family,
-    fontWeight: "800",
+    fontSize: 12,
+    fontWeight: "900",
   },
 
   statsRow: {
@@ -2191,21 +2207,22 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     borderWidth: 1,
     borderColor: "#e1e8ee",
-    borderRadius: 16,
+    borderRadius: 12,
     backgroundColor: "#ffffff",
   },
 
   statValue: {
     color: "#123047",
-    fontSize: vsType.size.titleSmall, fontFamily: vsType.family,
-    fontWeight: "800",
+    fontSize: 22,
+    fontWeight: "900",
   },
 
   statLabel: {
     marginTop: 2,
     color: "#64748b",
-    fontSize: designUi.type.label.fontSize,
-    fontWeight: designUi.type.label.fontWeight, lineHeight: designUi.type.label.lineHeight,},
+    fontSize: 10,
+    fontWeight: "800",
+  },
 
   filterRow: {
     gap: 7,
@@ -2229,7 +2246,7 @@ const styles = StyleSheet.create({
 
   filterText: {
     color: "#64748b",
-    fontSize: vsType.size.caption, fontFamily: vsType.family,
+    fontSize: 11,
     fontWeight: "800",
   },
 
@@ -2252,7 +2269,7 @@ const styles = StyleSheet.create({
   errorText: {
     flex: 1,
     color: "#b42318",
-    fontSize: vsType.size.meta, fontFamily: vsType.family,
+    fontSize: 11.5,
     fontWeight: "700",
   },
 
@@ -2261,7 +2278,7 @@ const styles = StyleSheet.create({
     overflow: "hidden",
     borderWidth: 1,
     borderColor: "#dfe7ee",
-    borderRadius: 16,
+    borderRadius: 15,
     backgroundColor: "#ffffff",
   },
 
@@ -2286,7 +2303,7 @@ const styles = StyleSheet.create({
   imageFallbackText: {
     marginTop: 6,
     color: "#587084",
-    fontSize: vsType.size.caption, fontFamily: vsType.family,
+    fontSize: 11,
     fontWeight: "800",
   },
 
@@ -2321,8 +2338,8 @@ const styles = StyleSheet.create({
 
   priorityText: {
     color: "#ffffff",
-    fontSize: vsType.size.micro, fontFamily: vsType.family,
-    fontWeight: "800",
+    fontSize: 9,
+    fontWeight: "900",
   },
 
   cardBody: {
@@ -2337,15 +2354,15 @@ const styles = StyleSheet.create({
 
   cardTitle: {
     color: "#10283d",
-    fontSize: designUi.type.card.fontSize,
-    lineHeight: designUi.type.card.lineHeight,
-    fontWeight: designUi.type.card.fontWeight,
+    fontSize: 17,
+    lineHeight: 22,
+    fontWeight: "900",
   },
 
   locationText: {
     marginTop: 4,
     color: "#587084",
-    fontSize: vsType.size.caption, fontFamily: vsType.family,
+    fontSize: 11,
     lineHeight: 16,
     fontWeight: "700",
   },
@@ -2378,14 +2395,14 @@ const styles = StyleSheet.create({
 
   statusText: {
     color: "#31475a",
-    fontSize: vsType.size.micro, fontFamily: vsType.family,
-    fontWeight: "800",
+    fontSize: 8.5,
+    fontWeight: "900",
   },
 
   details: {
     marginTop: 11,
     color: "#64788b",
-    fontSize: vsType.size.meta, fontFamily: vsType.family,
+    fontSize: 12,
     lineHeight: 18,
   },
 
@@ -2405,14 +2422,15 @@ const styles = StyleSheet.create({
 
   metaLabel: {
     color: "#7d8f9f",
-    fontSize: designUi.type.meta.fontSize,
-    fontWeight: designUi.type.meta.fontWeight,
-    letterSpacing: 0.4, lineHeight: designUi.type.meta.lineHeight,},
+    fontSize: 8.5,
+    fontWeight: "900",
+    letterSpacing: 0.4,
+  },
 
   metaValue: {
     marginTop: 4,
     color: "#294256",
-    fontSize: vsType.size.caption, fontFamily: vsType.family,
+    fontSize: 10.5,
     lineHeight: 15,
     fontWeight: "800",
   },
@@ -2436,8 +2454,8 @@ const styles = StyleSheet.create({
 
   primaryButtonText: {
     color: "#ffffff",
-    fontSize: vsType.size.caption, fontFamily: vsType.family,
-    fontWeight: "800",
+    fontSize: 11,
+    fontWeight: "900",
   },
 
   secondaryButton: {
@@ -2455,8 +2473,8 @@ const styles = StyleSheet.create({
 
   secondaryButtonText: {
     color: "#334155",
-    fontSize: vsType.size.caption, fontFamily: vsType.family,
-    fontWeight: "800",
+    fontSize: 11,
+    fontWeight: "900",
   },
 
   responseButton: {
@@ -2494,8 +2512,8 @@ const styles = StyleSheet.create({
 
   actionButtonText: {
     color: "#ffffff",
-    fontSize: vsType.size.caption, fontFamily: vsType.family,
-    fontWeight: "800",
+    fontSize: 11,
+    fontWeight: "900",
   },
 
   mapButton: {
@@ -2513,8 +2531,8 @@ const styles = StyleSheet.create({
 
   mapButtonText: {
     color: "#2563eb",
-    fontSize: vsType.size.caption, fontFamily: vsType.family,
-    fontWeight: "800",
+    fontSize: 11,
+    fontWeight: "900",
   },
 
   completedBox: {
@@ -2532,8 +2550,8 @@ const styles = StyleSheet.create({
   completedText: {
     flex: 1,
     color: "#16845b",
-    fontSize: vsType.size.caption, fontFamily: vsType.family,
-    fontWeight: "800",
+    fontSize: 11,
+    fontWeight: "900",
     textAlign: "center",
   },
 
@@ -2548,8 +2566,8 @@ const styles = StyleSheet.create({
 
   inactiveText: {
     color: "#64748b",
-    fontSize: vsType.size.caption, fontFamily: vsType.family,
-    fontWeight: "800",
+    fontSize: 11,
+    fontWeight: "900",
   },
 
   completionPanel: {
@@ -2563,14 +2581,15 @@ const styles = StyleSheet.create({
 
   completionTitle: {
     color: "#183448",
-    fontSize: designUi.type.section.fontSize,
-    fontWeight: designUi.type.section.fontWeight, lineHeight: designUi.type.section.lineHeight,},
+    fontSize: 15,
+    fontWeight: "900",
+  },
 
   completionHint: {
     marginTop: 3,
     marginBottom: 7,
     color: "#64748b",
-    fontSize: vsType.size.caption, fontFamily: vsType.family,
+    fontSize: 10.5,
     lineHeight: 15,
   },
 
@@ -2578,8 +2597,9 @@ const styles = StyleSheet.create({
     marginTop: 10,
     marginBottom: 6,
     color: "#334155",
-    fontSize: designUi.type.label.fontSize,
-    fontWeight: designUi.type.label.fontWeight, lineHeight: designUi.type.label.lineHeight,},
+    fontSize: 10.5,
+    fontWeight: "900",
+  },
 
   typeGrid: {
     flexDirection: "row",
@@ -2603,7 +2623,7 @@ const styles = StyleSheet.create({
 
   typeButtonText: {
     color: "#64748b",
-    fontSize: vsType.size.micro, fontFamily: vsType.family,
+    fontSize: 9.5,
     fontWeight: "800",
   },
 
@@ -2653,8 +2673,8 @@ const styles = StyleSheet.create({
 
   followUpButtonText: {
     color: "#475569",
-    fontSize: vsType.size.micro, fontFamily: vsType.family,
-    fontWeight: "800",
+    fontSize: 9.5,
+    fontWeight: "900",
     textAlign: "center",
   },
 
@@ -2671,7 +2691,7 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     backgroundColor: "#ffffff",
     color: "#183448",
-    fontSize: vsType.size.meta, fontFamily: vsType.family,
+    fontSize: 12,
   },
 
   multilineInput: {
@@ -2697,7 +2717,7 @@ const styles = StyleSheet.create({
   trustNoticeText: {
     flex: 1,
     color: "#527267",
-    fontSize: vsType.size.micro, fontFamily: vsType.family,
+    fontSize: 10,
     lineHeight: 15,
     fontWeight: "600",
   },
@@ -2731,14 +2751,16 @@ const styles = StyleSheet.create({
   emptyTitle: {
     marginTop: 10,
     color: "#183448",
-    fontSize: designUi.type.section.fontSize,
-    fontWeight: designUi.type.section.fontWeight,
-    textAlign: "center", lineHeight: designUi.type.section.lineHeight,},
+    fontSize: 15,
+    fontWeight: "900",
+    textAlign: "center",
+  },
 
   emptyText: {
     marginTop: 5,
     color: "#74889a",
-    fontSize: designUi.type.body.fontSize,
-    lineHeight: designUi.type.body.lineHeight,
-    textAlign: "center", fontWeight: designUi.type.body.fontWeight,},
+    fontSize: 11.5,
+    lineHeight: 18,
+    textAlign: "center",
+  },
 });

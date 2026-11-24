@@ -8,8 +8,15 @@ import AdminReviewHero from "../../components/admin/AdminReviewHero";
 import DocumentScreeningSummary from "../../components/identity/DocumentScreeningSummary";
 import type { DocumentScreening } from "../../lib/identityVerification";
 import {
+  adminReviewDocumentEligible,
+  adminReviewMethodEligible,
+  adminReviewStatusBucket,
+} from "../../lib/identityAdminReviewGate";
+import {
     ActivityIndicator,
     Alert,
+    Image,
+    Modal,
     ScrollView,
     Platform,
     StyleSheet,
@@ -21,32 +28,38 @@ import {
 } from "react-native";
 
 import { useUserSession } from "../../lib/useUserSession";
+import { auth } from "../../lib/firebase";
+import { identityAdminApiBaseUrl } from "../../lib/identityEnvironmentTarget";
 
-// Keep staging Admin identity review requests isolated from the production API.
-// The production URL remains unchanged for existing live builds.
-const STAGING_BACKEND_URL = "https://volunserve-backend-staging.onrender.com";
-const IS_STAGING = process.env.EXPO_PUBLIC_VOLUNSERVE_FIREBASE_TARGET === "staging";
-const BACKEND_URL = IS_STAGING
-  ? (process.env.EXPO_PUBLIC_IDENTITY_VERIFICATION_API_URL || "").trim().replace(/\/+$/, "")
-  : "https://volunserve.onrender.com";
-
-if (IS_STAGING && BACKEND_URL !== STAGING_BACKEND_URL) {
-  throw new Error("Staging Admin Identity Review blocked: staging backend URL required.");
+// Fail closed before requesting a Firebase token or contacting a Node gateway.
+// Production and staging credentials must never cross environments.
+function getReviewBackendUrl() {
+  return identityAdminApiBaseUrl({
+    runtimeEnv: process.env.EXPO_PUBLIC_VOLUNSERVE_ENV,
+    firebaseTarget: process.env.EXPO_PUBLIC_VOLUNSERVE_FIREBASE_TARGET,
+    projectId: auth.app.options.projectId,
+  });
 }
 
-type ReviewFilter = "pending" | "verified" | "retry_required" | "all";
+type ReviewFilter = "pending" | "verified" | "retry_required" | "rejected" | "all";
 
 type IdentityReview = {
   uid: string;
   verificationId?: string;
+  diditSummary?: string;
   status?: string;
   identityStatus?: string;
   identityVerified?: boolean;
+  targetEligible?: boolean;
+  evidenceAvailable?: boolean;
   aiDecision?: string;
   decision?: string;
   matchScore?: number | null;
   livenessScore?: number | null;
   documentScreening?: DocumentScreening;
+  manualReviewChannel?: string;
+  verificationMethod?: string;
+  manualIdType?: string;
   message?: string;
   requiresManualReview?: boolean;
   manualReviewDecision?: string;
@@ -70,15 +83,11 @@ type IdentityReview = {
 };
 
 const VALIDATION_METHODS = [
+  { value: "psa_national_id_qr_check", label: "PSA National ID Check (independent QR verification)", icon: "qr-code-outline" as const },
   {
     value: "in_person_lgu_validation",
     label: "In-person LGU validation",
     icon: "person-outline" as const,
-  },
-  {
-    value: "barangay_lgu_record_check",
-    label: "Barangay / LGU record check",
-    icon: "document-text-outline" as const,
   },
   {
     value: "official_document_check",
@@ -102,26 +111,19 @@ function formatDate(value?: string) {
 }
 
 function reviewBucket(item: IdentityReview): ReviewFilter {
-  if (item.requiresManualReview === true && item.status === "pending") {
-    return "pending";
+  return adminReviewStatusBucket(item);
+}
+function isNoMediaLGUReview(item: IdentityReview): boolean {
+  return item.manualReviewChannel === "lgu_in_person_no_media" &&
+    item.verificationMethod === "manual_lgu_in_person_no_media";
+}
+function reviewMethodAllowed(item: IdentityReview, method: string): boolean {
+  if (!isNoMediaLGUReview(item)) return adminReviewMethodEligible(item.documentScreening, method);
+  if (item.manualIdType === "national_id") return method === "psa_national_id_qr_check";
+  if (["drivers_license","passport","umid","prc_id"].includes(String(item.manualIdType || ""))) {
+    return method === "in_person_lgu_validation" || method === "official_document_check";
   }
-
-  if (
-    item.identityVerified === true ||
-    item.status === "verified" ||
-    item.manualReviewDecision === "verified"
-  ) {
-    return "verified";
-  }
-
-  if (
-    item.status === "failed" ||
-    item.manualReviewDecision === "retry_required"
-  ) {
-    return "retry_required";
-  }
-
-  return "all";
+  return false;
 }
 
 export default function IdentityReviewsAdmin() {
@@ -142,8 +144,11 @@ export default function IdentityReviewsAdmin() {
   const PAGE_SIZE = 5;
   const [selected, setSelected] = useState<IdentityReview | null>(null);
   const [validationMethod, setValidationMethod] = useState("");
+  const [issuerReviewAttested, setIssuerReviewAttested] = useState(false);
+  const [inPersonIdInspected, setInPersonIdInspected] = useState(false);
+  const [inPersonFaceCompared, setInPersonFaceCompared] = useState(false);
   const [notes, setNotes] = useState("");
-  const [saving, setSaving] = useState<"" | "verify" | "require_retry">("");
+  const [saving, setSaving] = useState<"" | "verify" | "require_retry" | "reject">("");
 
   const role =
     typeof profile?.role === "string"
@@ -167,9 +172,10 @@ export default function IdentityReviewsAdmin() {
       setLoading(true);
       setError("");
 
+      const backendUrl = getReviewBackendUrl();
       const token = await user.getIdToken(true);
       const response = await fetch(
-        `${BACKEND_URL}/api/admin/identity/reviews`,
+        `${backendUrl}/api/admin/identity/reviews`,
         {
           method: "GET",
           headers: {
@@ -221,6 +227,7 @@ export default function IdentityReviewsAdmin() {
       pending: 0,
       verified: 0,
       retry_required: 0,
+      rejected: 0,
       all: items.length,
     };
 
@@ -229,6 +236,7 @@ export default function IdentityReviewsAdmin() {
       if (bucket === "pending") result.pending += 1;
       if (bucket === "verified") result.verified += 1;
       if (bucket === "retry_required") result.retry_required += 1;
+      if (bucket === "rejected") result.rejected += 1;
     });
 
     return result;
@@ -264,26 +272,55 @@ export default function IdentityReviewsAdmin() {
   const openReview = (item: IdentityReview) => {
     setSelected(item);
     setValidationMethod(item.manualValidationMethod || "");
+    setIssuerReviewAttested(false);
+    setInPersonIdInspected(false);
+    setInPersonFaceCompared(false);
     setNotes(item.manualReviewNotes || "");
   };
 
   const saveDecision = async (
-    action: "verify" | "require_retry",
+    action: "verify" | "require_retry" | "reject",
   ) => {
     if (!selected || !user || saving) return;
+    if (selected.targetEligible !== true) {
+      setError("This identity review is not an eligible approved Resident or Volunteer account.");
+      return;
+    }
+    // Pending queue snapshots can turn stale while the Admin is reviewing.
+    // The server re-checks all eligibility fields inside its transaction.
+    if (reviewBucket(selected) !== "pending") {
+      Alert.alert("Review Changed",
+        "This submission is no longer pending. Refresh the queue before choosing a decision.");
+      return;
+    }
 
-    if (action === "verify" && !validationMethod) {
+    if (action === "verify" && !reviewMethodAllowed(selected, validationMethod)) {
       Alert.alert(
-        "Validation Method Required",
-        "Select how the Resident was independently validated by LGU/Admin.",
+        "Correct Independent Validation Method Required",
+        "Select a permitted independent issuer or LGU review method for this exact government ID. An earlier selection from another ID cannot be reused.",
       );
       return;
     }
 
-    if (action === "require_retry" && notes.trim().length < 5) {
+    if (action === "verify" && isNoMediaLGUReview(selected)) {
+      if (!issuerReviewAttested || !inPersonIdInspected ||
+          !inPersonFaceCompared || notes.trim().length < 25) {
+        Alert.alert("In-Person LGU Evidence Required",
+          "Inspect the original government ID, compare the person with the ID in person, complete the allowed independent document check, and record at least 25 characters of review notes. No AI evidence was collected.");
+        return;
+      }
+    } else if (action === "verify" && (
+      !issuerReviewAttested || notes.trim().length < 10 ||
+      !adminReviewDocumentEligible(selected.documentScreening)
+    )) {
+      Alert.alert("Independent ID Verification Required",
+        "Verify is disabled for unsupported ID types, unclear front/back scans, unresolved OCR warnings and profile date conflicts.");
+      return;
+    }
+    if ((action === "require_retry" || action === "reject") && notes.trim().length < 5) {
       Alert.alert(
-        "Retry Reason Required",
-        "Enter a clear reason so the Resident knows what must be corrected.",
+        "Decision Reason Required",
+        "Enter a clear reason for rejection or the required resubmission.",
       );
       return;
     }
@@ -293,7 +330,9 @@ export default function IdentityReviewsAdmin() {
       const confirmed = confirmFn(
         action === "verify"
           ? "Verify this Resident identity after independent LGU/Admin validation?"
-          : "Require this Resident to retry identity verification?",
+          : action === "reject"
+            ? "Reject this specific identity submission without verifying the Resident?"
+            : "Require this Resident to retry identity verification?",
       );
       if (!confirmed) return;
     }
@@ -301,9 +340,10 @@ export default function IdentityReviewsAdmin() {
     try {
       setSaving(action);
 
+      const backendUrl = getReviewBackendUrl();
       const token = await user.getIdToken(true);
       const response = await fetch(
-        `${BACKEND_URL}/api/admin/identity/reviews/${encodeURIComponent(
+        `${backendUrl}/api/admin/identity/reviews/${encodeURIComponent(
           selected.uid,
         )}/decision`,
         {
@@ -316,6 +356,9 @@ export default function IdentityReviewsAdmin() {
             action,
             validationMethod:
               action === "verify" ? validationMethod : "",
+            issuerReviewAttested: action === "verify" && issuerReviewAttested,
+            inPersonIdInspected: action === "verify" && isNoMediaLGUReview(selected) && inPersonIdInspected,
+            inPersonFaceCompared: action === "verify" && isNoMediaLGUReview(selected) && inPersonFaceCompared,
             notes: notes.trim(),
           }),
         },
@@ -334,15 +377,22 @@ export default function IdentityReviewsAdmin() {
       Alert.alert(
         action === "verify"
           ? "Identity Verified"
-          : "Retry Required",
+          : action === "reject"
+            ? "Submission Rejected"
+            : "Retry Required",
         body?.message ||
           (action === "verify"
             ? "The Resident is now identity verified."
-            : "The Resident must submit identity verification again."),
+            : action === "reject"
+              ? "The submission was rejected. Resident verification remains disabled."
+              : "The Resident must submit identity verification again."),
       );
 
       setSelected(null);
       setValidationMethod("");
+      setIssuerReviewAttested(false);
+      setInPersonIdInspected(false);
+      setInPersonFaceCompared(false);
       setNotes("");
       await loadReviews();
     } catch (saveError: any) {
@@ -455,6 +505,7 @@ export default function IdentityReviewsAdmin() {
               label: "Retry Required",
               count: counts.retry_required,
             },
+            { key: "rejected" as const, label: "Rejected", count: counts.rejected },
             { key: "all" as const, label: "All", count: counts.all },
           ].map((item) => {
             const active = filter === item.key;
@@ -627,11 +678,18 @@ export default function IdentityReviewsAdmin() {
                   item={selected}
                   validationMethod={validationMethod}
                   setValidationMethod={setValidationMethod}
+                  issuerReviewAttested={issuerReviewAttested}
+                  setIssuerReviewAttested={setIssuerReviewAttested}
+                  inPersonIdInspected={inPersonIdInspected}
+                  setInPersonIdInspected={setInPersonIdInspected}
+                  inPersonFaceCompared={inPersonFaceCompared}
+                  setInPersonFaceCompared={setInPersonFaceCompared}
                   notes={notes}
                   setNotes={setNotes}
                   saving={saving}
                   onVerify={() => void saveDecision("verify")}
                   onRetry={() => void saveDecision("require_retry")}
+                  onReject={() => void saveDecision("reject")}
                 />
               ) : (
                 <View style={styles.detailEmpty}>
@@ -665,7 +723,9 @@ function StatusChip({ bucket }: { bucket: ReviewFilter }) {
         ? { label: "Verified", background: "#DCFCE7", color: "#166534" }
         : bucket === "retry_required"
           ? { label: "Retry", background: "#FEE2E2", color: "#B91C1C" }
-          : { label: "Other", background: "#F1F5F9", color: "#475569" };
+          : bucket === "rejected"
+            ? { label: "Rejected", background: "#FEE2E2", color: "#991B1B" }
+            : { label: "Other", background: "#F1F5F9", color: "#475569" };
 
   return (
     <View
@@ -690,25 +750,172 @@ function ReviewDetail({
   item,
   validationMethod,
   setValidationMethod,
+  issuerReviewAttested,
+  setIssuerReviewAttested,
+  inPersonIdInspected,
+  setInPersonIdInspected,
+  inPersonFaceCompared,
+  setInPersonFaceCompared,
   notes,
   setNotes,
   saving,
   onVerify,
   onRetry,
+  onReject,
 }: {
   item: IdentityReview;
   validationMethod: string;
   setValidationMethod: (value: string) => void;
+  issuerReviewAttested: boolean;
+  setIssuerReviewAttested: (value: boolean) => void;
+  inPersonIdInspected: boolean;
+  setInPersonIdInspected: (value: boolean) => void;
+  inPersonFaceCompared: boolean;
+  setInPersonFaceCompared: (value: boolean) => void;
   notes: string;
   setNotes: (value: string) => void;
-  saving: "" | "verify" | "require_retry";
+  saving: "" | "verify" | "require_retry" | "reject";
   onVerify: () => void;
   onRetry: () => void;
+  onReject: () => void;
 }) {
+  const viewer = auth.currentUser;
+  const [evidenceUris, setEvidenceUris] = useState<{
+    front?: string | null; back?: string | null; selfie?: string | null;
+  } | null>(null);
+  const [evidenceLoading, setEvidenceLoading] = useState(false);
+  const [evidenceError, setEvidenceError] = useState("");
+  const [zoomedEvidence, setZoomedEvidence] = useState<string | null>(null);
+  const [evidenceRefresh, setEvidenceRefresh] = useState(0);
+  useEffect(() => {
+    let active = true;
+    setEvidenceUris(null);
+    setEvidenceError("");
+    setZoomedEvidence(null);
+    if (!viewer || !item.evidenceAvailable) {
+      setEvidenceLoading(false);
+      return () => { active = false; };
+    }
+    setEvidenceLoading(true);
+    void (async () => {
+      try {
+        const token = await viewer.getIdToken(true);
+        const response = await fetch(
+          `${getReviewBackendUrl()}/api/admin/identity/reviews/${encodeURIComponent(item.uid)}/evidence`,
+          { headers: { Authorization: `Bearer ${token}` } },
+        );
+        const body = await response.json().catch(() => null);
+        if (!response.ok || !body?.ok || body.verificationId !== item.verificationId) {
+          throw new Error(body?.message || "The private evidence viewer is unavailable.");
+        }
+        if (active) setEvidenceUris(body.images || null);
+      } catch (error: any) {
+        if (active) setEvidenceError(error?.message || "Unable to load protected identity photos.");
+      } finally {
+        if (active) setEvidenceLoading(false);
+      }
+    })();
+    return () => { active = false; };
+  }, [viewer, item.uid, item.verificationId, item.evidenceAvailable, evidenceRefresh]);
   const pending = reviewBucket(item) === "pending";
+  const manualNoMedia = isNoMediaLGUReview(item);
+  const nationalId = (manualNoMedia ? item.manualIdType : item.documentScreening?.declaredIdType) === "national_id";
+  const documentEligible = manualNoMedia
+    ? ["national_id","drivers_license","passport","umid","prc_id"].includes(String(item.manualIdType || ""))
+    : adminReviewDocumentEligible(item.documentScreening);
+  const canVerify = pending && item.targetEligible === true && documentEligible &&
+    reviewMethodAllowed(item, validationMethod) &&
+    (!manualNoMedia || (inPersonIdInspected && inPersonFaceCompared)) &&
+    issuerReviewAttested && notes.trim().length >= (manualNoMedia ? 25 : 10) && !saving;
+  const availableMethods = VALIDATION_METHODS.filter(method =>
+    nationalId ? method.value === "psa_national_id_qr_check"
+      : method.value !== "psa_national_id_qr_check"
+  );
 
   return (
     <View>
+          <View style={styles.premiumCardTitleRow}>
+            <Ionicons name="document-text-outline" size={21} color="#08765A" />
+            <View style={styles.flexOne}>
+              <Text style={styles.premiumCardTitle}>Submitted Identity Evidence</Text>
+              <Text style={styles.premiumSubCopy}>Review the government ID images and live selfie before a decision.</Text>
+            </View>
+            <TouchableOpacity accessibilityRole="button"
+              accessibilityLabel="Refresh secure identity images"
+              onPress={()=>setEvidenceRefresh(value=>value+1)}
+              disabled={!item.evidenceAvailable}>
+              <Ionicons name="refresh-outline" size={20}
+                color={item.evidenceAvailable ? "#08765A" : "#CBD5E1"} />
+            </TouchableOpacity>
+          </View>
+          <View style={styles.premiumEvidenceTiles}>
+            {([
+              {key:"front" as const,label:"Government ID — Front",icon:"id-card-outline" as const},
+              {key:"back" as const,label:"Government ID — Back",icon:"card-outline" as const},
+              {key:"selfie" as const,label:"Live Selfie",icon:"person-outline" as const},
+            ]).map(tile => {
+              const uri = evidenceUris?.[tile.key];
+              const notCaptured = tile.key === "selfie" &&
+                item.verificationMethod === "volunserve_ai_ocr_manual_review";
+              const description = evidenceLoading ? "Loading protected image..." :
+                evidenceError ? "Photo unavailable" : notCaptured ? "Not captured (OCR only)" :
+                item.evidenceAvailable ? "Not available" : "Not retained previously";
+              return (
+                <TouchableOpacity key={tile.key} style={styles.premiumEvidenceTile}
+                  accessibilityRole="button" disabled={!uri}
+                  accessibilityLabel={uri ? "Enlarge " + tile.label : tile.label + ": " + description}
+                  onPress={() => uri && setZoomedEvidence(uri)}>
+                  <View style={styles.premiumEvidenceImage}>
+                    {uri ? (
+                      <Image source={{uri}} resizeMode="contain"
+                        style={styles.premiumEvidencePhoto}
+                        accessibilityLabel={tile.label} />
+                    ) : (
+                      <>
+                        {evidenceLoading ? <ActivityIndicator color="#08765A" /> :
+                          <Ionicons name={tile.icon} size={28} color="#94A3B8" />}
+                        <Text style={styles.premiumMissingLabel}>{description}</Text>
+                      </>
+                    )}
+                  </View>
+                  <View style={styles.premiumEvidenceFooter}>
+                    <Text style={styles.premiumEvidenceText} numberOfLines={2}>{tile.label}</Text>
+                    <Ionicons name={uri ? "checkmark-circle" : "ellipse-outline"}
+                      size={18} color={uri ? "#08765A" : "#CBD5E1"} />
+                  </View>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+          {evidenceError || !item.evidenceAvailable ? (
+            <Text style={styles.premiumEvidenceNotice}>
+              {evidenceError || "Earlier submissions did not store private images. Ask the Resident to submit a new scan."}
+            </Text>
+          ) : item.verificationMethod === "volunserve_ai_ocr_manual_review" ? (
+            <Text style={styles.premiumEvidenceNotice}>
+              This is an ID-only OCR review. No selfie has been captured and face matching has not been performed.
+            </Text>
+          ) : (
+            <Text style={styles.premiumEvidenceNotice}>
+              Enlarge photos to review. Authorized access only; temporary links expire after 3 minutes.
+            </Text>
+          )}
+
+      <Modal visible={Boolean(zoomedEvidence)} transparent animationType="fade"
+        onRequestClose={()=>setZoomedEvidence(null)}>
+        <View style={styles.fullScreenEvidence}>
+          <TouchableOpacity style={styles.fullScreenEvidenceClose}
+            accessibilityRole="button" onPress={()=>setZoomedEvidence(null)}>
+            <Ionicons name="close-outline" size={22} color="#FFFFFF" />
+            <Text style={styles.fullScreenEvidenceCloseText}>Close photo</Text>
+          </TouchableOpacity>
+          {zoomedEvidence ? (
+            <Image source={{uri:zoomedEvidence}} resizeMode="contain"
+              style={styles.fullScreenEvidenceImage}
+              accessibilityLabel="Enlarged private identity image" />
+          ) : null}
+        </View>
+      </Modal>
       <View style={styles.detailHeader}>
         <View style={styles.detailHeaderIcon}>
           <Ionicons
@@ -768,8 +975,28 @@ function ReviewDetail({
         </Text>
       </View>
 
-      <DocumentScreeningSummary screening={item.documentScreening} />
+      {manualNoMedia ? (
+        <View style={styles.privacyNotice}>
+          <Ionicons name="shield-checkmark-outline" size={20} color="#0F766E" />
+          <Text style={styles.noticeText}>
+            No-media LGU request: {item.manualIdType || "government ID"}.
+            The Resident must present the original ID in person.
+            NO AI face match, no ID scan, no independent liveness test.
+            Verify only after physical original ID and face-to-ID inspection.
+          </Text>
+        </View>
+      ) : <DocumentScreeningSummary screening={item.documentScreening} />}
 
+      <InfoLine
+        label="Face comparison"
+        value={item.matchScore == null
+          ? "Inconclusive — no usable validated face result"
+          : "Inconclusive — preliminary similarity only (not calibrated)"}
+      />
+      <InfoLine
+        label="Liveness / anti-spoofing"
+        value="Not validated — independent verification required"
+      />
       <InfoLine
         label="Verification ID"
         value={item.verificationId || "—"}
@@ -779,6 +1006,7 @@ function ReviewDetail({
         value={formatDate(item.lastSubmissionAt || item.createdAt)}
       />
 
+      {item.diditSummary && <InfoLine label="Sandbox checks" value={item.diditSummary} />}
       {item.message ? (
         <View style={styles.aiMessage}>
           <Ionicons
@@ -803,7 +1031,7 @@ function ReviewDetail({
           </Text>
 
           <View style={styles.methodList}>
-            {VALIDATION_METHODS.map((method) => {
+            {availableMethods.map((method) => {
               const active = validationMethod === method.value;
               return (
                 <TouchableOpacity
@@ -832,8 +1060,43 @@ function ReviewDetail({
             })}
           </View>
 
+          <TouchableOpacity
+            accessibilityRole="checkbox"
+            accessibilityState={{checked: issuerReviewAttested}}
+            style={styles.methodButton}
+            onPress={() => setIssuerReviewAttested(!issuerReviewAttested)}
+          >
+            <Ionicons name={issuerReviewAttested ? "checkbox-outline" : "square-outline"} size={21} color="#0F766E" />
+            <Text style={styles.methodButtonText}>
+              I independently checked this ID and confirm the evidence. VolunServe has not verified it through an issuer API.
+            </Text>
+          </TouchableOpacity>
+          {manualNoMedia ? (
+            <>
+              <TouchableOpacity accessibilityRole="checkbox"
+                accessibilityState={{checked:inPersonIdInspected}}
+                style={styles.methodButton}
+                onPress={()=>setInPersonIdInspected(!inPersonIdInspected)}>
+                <Ionicons name={inPersonIdInspected?"checkbox-outline":"square-outline"}
+                  size={21} color="#0F766E" />
+                <Text style={styles.methodButtonText}>
+                  I personally inspected the original physical government ID.
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity accessibilityRole="checkbox"
+                accessibilityState={{checked:inPersonFaceCompared}}
+                style={styles.methodButton}
+                onPress={()=>setInPersonFaceCompared(!inPersonFaceCompared)}>
+                <Ionicons name={inPersonFaceCompared?"checkbox-outline":"square-outline"}
+                  size={21} color="#0F766E" />
+                <Text style={styles.methodButtonText}>
+                  I compared the Resident's face with the ID photo in person.
+                </Text>
+              </TouchableOpacity>
+            </>
+          ) : null}
           <Text style={styles.inputLabel}>
-            Review notes / retry reason
+            Review notes / rejection or retry reason
           </Text>
 
           <TextInput
@@ -841,19 +1104,29 @@ function ReviewDetail({
             value={notes}
             onChangeText={setNotes}
             multiline
-            placeholder="Add LGU validation notes. A retry decision requires a clear reason."
+            placeholder="Explain the independent review, rejection, or what must be resubmitted."
             placeholderTextColor="#94A3B8"
             textAlignVertical="top"
           />
 
+          {!documentEligible && !manualNoMedia ? (
+            <View style={styles.privacyNotice}>
+              <Ionicons name="alert-circle-outline" size={19} color="#A13F2B" />
+              <Text style={styles.noticeText}>
+                Verify is blocked until both required ID images are adequately
+                screened, the selected ID matches recognized text, and all OCR
+                warnings or birth-date conflicts are resolved. Request a clearer
+                rescan or independent review; OCR alone does not prove fraud.
+              </Text>
+            </View>
+          ) : null}
           <View style={styles.actionRow}>
             <TouchableOpacity
               style={[
                 styles.verifyButton,
-                (!validationMethod || !!saving) &&
-                  styles.disabledButton,
+                !canVerify && styles.disabledButton,
               ]}
-              disabled={!validationMethod || !!saving}
+              disabled={!canVerify}
               onPress={onVerify}
             >
               {saving === "verify" ? (
@@ -890,6 +1163,27 @@ function ReviewDetail({
               )}
               <Text style={styles.retryButtonText}>
                 Require Retry
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[
+                styles.retryButton,
+                (notes.trim().length < 5 || !!saving) &&
+                  styles.disabledButton,
+              ]}
+              disabled={notes.trim().length < 5 || !!saving}
+              onPress={onReject}
+              accessibilityRole="button"
+              accessibilityLabel="Reject this identity submission"
+            >
+              {saving === "reject" ? (
+                <ActivityIndicator size="small" color="#B91C1C" />
+              ) : (
+                <Ionicons name="close-circle-outline" size={19} color="#B91C1C" />
+              )}
+              <Text style={styles.retryButtonText}>
+                Reject Submission
               </Text>
             </TouchableOpacity>
           </View>
@@ -974,6 +1268,32 @@ function InfoLine({
 }
 
 const styles = StyleSheet.create({
+  fullScreenEvidence: { flex: 1, backgroundColor: "rgba(4,22,18,0.96)", padding: 16, justifyContent: "center" },
+  fullScreenEvidenceClose: { flexDirection: "row", alignItems: "center", gap: 6, alignSelf: "flex-end",
+    paddingVertical: 10, paddingHorizontal: 14 },
+  fullScreenEvidenceCloseText: { color: "#FFFFFF", fontWeight: "700", fontSize: 14 },
+  fullScreenEvidenceImage: { flex: 1, width: "100%", maxHeight: "90%" },
+  premiumCardTitle: { color: "#102B26", fontSize: 15, lineHeight: 21, fontWeight: "800" },
+  premiumCardTitleRow: { flexDirection: "row", alignItems: "center", gap: 9, marginBottom: 10 },
+  premiumEvidenceFooter: {
+    flexDirection: "row", alignItems: "center", justifyContent: "space-between",
+    gap: 7, paddingVertical: 7, paddingHorizontal: 2,
+  },
+  premiumEvidenceImage: {
+    height: 143, width: "100%", alignItems: "center", justifyContent: "center",
+    backgroundColor: "#F0F6F2", borderRadius: 7, padding: 7, gap: 8,
+  },
+  premiumEvidenceNotice: { color: "#6B7C75", fontSize: 11.5, lineHeight: 18, marginTop: 9 },
+  premiumEvidencePhoto: { width: "100%", height: "100%", borderRadius: 6 },
+  premiumEvidenceText: { flex: 1, fontSize: 11.5, lineHeight: 16, color: "#142F25", fontWeight: "700" },
+  premiumEvidenceTile: {
+    flex: 1, flexBasis: 175, minWidth: 135, borderRadius: 10, borderWidth: 1,
+    borderColor: "#DEE7E2", padding: 6, backgroundColor: "#FFFFFF",
+  },
+  premiumEvidenceTiles: { flexDirection: "row", gap: 10, flexWrap: "wrap" },
+  premiumMissingLabel: { color: "#6B8378", fontSize: 11, lineHeight: 16, textAlign: "center" },
+  premiumSubCopy: { color: "#60756B", fontSize: 12, lineHeight: 18, marginTop: 2 },
+
   screen: {
     flex: 1,
     minHeight: 0,

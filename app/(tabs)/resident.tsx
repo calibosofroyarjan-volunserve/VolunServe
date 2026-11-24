@@ -1,3 +1,4 @@
+import { getSafeVolunServeBackendBaseUrl } from "../../lib/stagingExpoServiceIsolation";
 import { volunserveTypography as vsType } from "../../constants/volunserveLiveUi";
 import { liveUi as designUi } from "../../constants/volunserveLiveUi";
 import { Ionicons } from "@expo/vector-icons";
@@ -162,7 +163,7 @@ type AssistanceRequest = {
   updatedAt?: any;
 };
 
-const ASSISTANCE_BACKEND_URL = "https://volunserve.onrender.com";
+const ASSISTANCE_BACKEND_URL = getSafeVolunServeBackendBaseUrl();
 const MAX_DOCUMENT_BYTES = 10 * 1024 * 1024;
 
 const CATEGORY_CONFIGS: CategoryConfig[] = [

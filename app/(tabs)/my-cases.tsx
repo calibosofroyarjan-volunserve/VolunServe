@@ -1,6 +1,6 @@
-import { volunserveTypography as vsType } from "../../constants/volunserveLiveUi";
-import { liveUi as designUi } from "../../constants/volunserveLiveUi";
+import { blockProductionEvidenceUploadDuringStaging } from "../../lib/stagingExpoServiceIsolation";
 import * as ImagePicker from "expo-image-picker";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import {
   collection,
@@ -140,6 +140,8 @@ type DisasterCase = {
   id: string;
 
   reporterUid?: string;
+  reporterName?: string;
+  reporterProfilePictureUrl?: string;
 
   title?: string;
   category?: string;
@@ -172,6 +174,115 @@ type DisasterCase = {
   updatedAt?: any;
 };
 
+/**
+ * Emergency-report photos only. Do not substitute resident profile photos,
+ * user avatars, or generic stock images. The report form saves ordered
+ * Cloudinary evidence in disasterCases.attachments.
+ */
+const getReportPhotoAttachments = (attachments?: EvidenceAttachment[]) => {
+  if (!Array.isArray(attachments)) return [];
+  return attachments.filter((asset) => {
+    if (!asset || typeof asset !== "object") return false;
+    if (asset.type !== "image" && !String(asset.contentType || "").startsWith("image/")) {
+      return false;
+    }
+    return typeof asset.url === "string" && /^https:\/\//i.test(asset.url.trim());
+  });
+};
+
+const reportIconName = (
+  category?: string,
+): React.ComponentProps<typeof MaterialCommunityIcons>["name"] => {
+  const value = String(category || "").toLowerCase();
+  if (value.includes("flood") || value.includes("water")) return "waves";
+  if (value.includes("fire")) return "fire";
+  if (value.includes("road") || value.includes("obstruction")) return "road-variant";
+  if (value.includes("medical")) return "medical-bag";
+  if (value.includes("home") || value.includes("structural")) return "home-outline";
+  return "alert-circle-outline";
+};
+
+function ReportPhoto({
+  url,
+  category,
+  expanded = false,
+}: {
+  url?: string;
+  category?: string;
+  expanded?: boolean;
+}) {
+  const [failed, setFailed] = useState(false);
+  useEffect(() => {
+    setFailed(false);
+  }, [url]);
+
+  const available = typeof url === "string" && url.length > 0 && !failed;
+  return (
+    <View style={expanded ? styles.reportPhotoExpanded : styles.reportPhotoThumbnail}>
+      {available ? (
+        <Image
+          source={{ uri: url }}
+          resizeMode={expanded ? "contain" : "cover"}
+          style={styles.reportPhotoImage}
+          accessibilityLabel={expanded ? "Uploaded emergency report photo" : "Emergency report photo thumbnail"}
+          onError={() => setFailed(true)}
+        />
+      ) : (
+        <View style={styles.reportPhotoPlaceholder}>
+          <MaterialCommunityIcons
+            name={reportIconName(category)}
+            size={expanded ? 34 : 27}
+            color="#176B52"
+          />
+          <Text style={styles.reportPhotoPlaceholderText}>
+            {failed ? "Photo unavailable" : "No photo"}
+          </Text>
+        </View>
+      )}
+    </View>
+  );
+}
+
+
+const initialsForPerson = (name?: string) => {
+  const words = String(name || "")
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2);
+  return words.map((word) => word.charAt(0).toLocaleUpperCase()).join("") || "VS";
+};
+
+function PersonProfileAvatar({
+  name,
+  imageUrl,
+}: {
+  name?: string;
+  imageUrl?: string;
+}) {
+  const [failed, setFailed] = useState(false);
+  useEffect(() => { setFailed(false); }, [imageUrl]);
+  const url = typeof imageUrl === "string" ? imageUrl.trim() : "";
+  const showImage = /^https:\/\//i.test(url) && !failed;
+  return (
+    <View style={styles.personAvatar}>
+      {showImage ? (
+        <Image
+          source={{ uri: url }}
+          style={styles.personAvatarPhoto}
+          resizeMode="cover"
+          accessibilityLabel={`Profile photo of ${name || "report participant"}`}
+          onError={() => setFailed(true)}
+        />
+      ) : (
+        <Text style={styles.personAvatarInitials}>
+          {initialsForPerson(name)}
+        </Text>
+      )}
+    </View>
+  );
+}
+
 type ResponseAssignment = {
   id: string;
 
@@ -179,6 +290,8 @@ type ResponseAssignment = {
 
   volunteerId?: string;
   volunteerName?: string;
+  // Optional profile photo only when safely supplied within an assigned response.
+  volunteerProfilePictureUrl?: string;
 
   caseTitle?: string;
 
@@ -434,6 +547,23 @@ export default function MyCases() {
     setError,
   ] =
     useState("");
+  // UI state only: the Firestore queries and workflows are not modified.
+  const [expandedCaseIds, setExpandedCaseIds] = useState<string[]>([]);
+  const [reportFilter, setReportFilter] = useState<"all" | "open" | "closed">("all");
+  const [reportSearch, setReportSearch] = useState("");
+  const closedStatuses = ["resolved", "closed"];
+  const openCaseCount = cases.filter(
+    (incident) => !closedStatuses.includes(String(incident.status || "")),
+  ).length;
+  const visibleCases = cases.filter((incident) => {
+    const closed = closedStatuses.includes(String(incident.status || ""));
+    if (reportFilter === "open" && closed) return false;
+    if (reportFilter === "closed" && !closed) return false;
+    const term = reportSearch.trim().toLowerCase();
+    return !term || [incident.title, incident.category, incident.location, incident.id]
+      .some((value) => String(value || "").toLowerCase().includes(term));
+  });
+
 
   const [
     busyAssignmentId,
@@ -1122,6 +1252,7 @@ export default function MyCases() {
     caseId: string,
     assets: EvidenceAsset[],
   ): Promise<EvidenceAttachment[]> => {
+    blockProductionEvidenceUploadDuringStaging();
     const attachments: EvidenceAttachment[] = [];
 
     for (let index = 0; index < assets.length; index += 1) {
@@ -1845,11 +1976,49 @@ export default function MyCases() {
               styles.subtitle
             }
           >
-            Track Admin verification, responder
-            progress, and confirm the actual
-            assistance you received.
+            Check each report's progress, follow responder updates,
+            and confirm the assistance you actually received.
           </Text>
         </View>
+      </View>
+
+      <View style={styles.reportToolbar}>
+        <View style={styles.reportToolbarHeading}>
+          <Text style={styles.reportToolbarTitle}>Your reports</Text>
+          <Text style={styles.reportToolbarCount}>
+            {cases.length} total · {openCaseCount} open · {cases.length - openCaseCount} closed
+          </Text>
+        </View>
+        <View style={styles.reportControls}>
+          <View style={styles.reportFilters}>
+            {([
+              ["all", "All reports"], ["open", "Open"], ["closed", "Closed"],
+            ] as const).map(([value, label]) => (
+              <TouchableOpacity
+                key={value}
+                accessibilityRole="button"
+                accessibilityState={{ selected: reportFilter === value }}
+                onPress={() => setReportFilter(value)}
+                style={[styles.reportFilterChip, reportFilter === value && styles.reportFilterChipActive]}
+              >
+                <Text style={[styles.reportFilterText, reportFilter === value && styles.reportFilterTextActive]}>
+                  {label}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+          <TextInput
+            accessibilityLabel="Search my reports"
+            placeholder="Search report or location"
+            placeholderTextColor="#82949C"
+            value={reportSearch}
+            onChangeText={setReportSearch}
+            style={styles.reportSearchInput}
+          />
+        </View>
+        <Text style={styles.reportShowingCount}>
+          Showing {visibleCases.length} of {cases.length} reports
+        </Text>
       </View>
 
       {!!error && (
@@ -1892,8 +2061,13 @@ export default function MyCases() {
             Assistance will appear here.
           </Text>
         </View>
+      ) : visibleCases.length === 0 ? (
+        <View style={styles.emptyCard}>
+          <Text style={styles.emptyTitle}>No matching reports</Text>
+          <Text style={styles.emptyText}>Try another search or select All reports.</Text>
+        </View>
       ) : (
-        cases.map(
+        visibleCases.map(
           (
             incident,
           ) => {
@@ -1901,6 +2075,37 @@ export default function MyCases() {
               assignmentsByCase[
                 incident.id
               ] || [];
+            const reportPhotos = getReportPhotoAttachments(incident.attachments);
+            const primaryReportPhoto = reportPhotos[0]?.url;
+            const detailsExpanded = expandedCaseIds.includes(incident.id);
+            const evidenceRequested = incident.verificationStatus === "needs_more_evidence" &&
+              incident.evidenceReviewStatus !== "resubmitted";
+            const confirmationRequired = assignments.some(
+              (assignment) => assignment.status === "completed" && !confirmations[assignment.id],
+            );
+            const actionRequired = evidenceRequested || confirmationRequired;
+            const closed = closedStatuses.includes(String(incident.status || ""));
+            const responseStarted = assignments.some((assignment) =>
+              ["accepted", "responding", "on_site"].includes(String(assignment.status || "")),
+            );
+            const nextUpdate = evidenceRequested
+              ? "Additional evidence is needed. Open this report to upload the requested photo."
+              : confirmationRequired
+                ? "A responder has completed their mission. Open this report to confirm the assistance you received."
+                : incident.verificationStatus === "needs_more_evidence"
+                  ? "Your additional evidence was sent and is waiting for Admin review."
+                  : closed
+                    ? "This case is closed. Open it to review the details and response history."
+                    : responseStarted
+                      ? "A responder accepted this task. Open the report to see their latest updates."
+                      : incident.status === "assigned"
+                        ? "Volunteer invitations have been sent. Waiting for someone to accept."
+                        : incident.status === "validated"
+                          ? "Your report is verified. Responder activity will appear when available."
+                          : incident.status === "in_progress"
+                            ? "This report is in progress. Open details to check responder information."
+                            : "Your report has been submitted. Verification updates will appear here.";
+
 
             return (
               <View
@@ -1916,6 +2121,10 @@ export default function MyCases() {
                     styles.caseTopRow
                   }
                 >
+                  <ReportPhoto
+                    url={primaryReportPhoto}
+                    category={incident.category}
+                  />
                   <View
                     style={
                       styles.caseTitleBlock
@@ -1935,17 +2144,17 @@ export default function MyCases() {
                         styles.reference
                       }
                     >
-                      Case ID:{" "}
-                      {
-                        incident.id
-                      }
+                      Report #{incident.id.slice(0, 8).toUpperCase()}
                     </Text>
                   </View>
 
                   <View
-                    style={
-                      styles.statusBadge
-                    }
+                    style={[
+                      styles.statusBadge,
+                      closed && styles.statusBadgeClosed,
+                      actionRequired && styles.statusBadgeAttention,
+                      incident.status === "in_progress" && styles.statusBadgeActive,
+                    ]}
                   >
                     <Text
                       style={
@@ -1974,7 +2183,7 @@ export default function MyCases() {
                         styles.metaLabel
                       }
                     >
-                      INCIDENT
+                      REPORT TYPE
                     </Text>
 
                     <Text
@@ -1997,7 +2206,7 @@ export default function MyCases() {
                         styles.metaLabel
                       }
                     >
-                      URGENCY
+                      PRIORITY
                     </Text>
 
                     <Text
@@ -2060,6 +2269,67 @@ export default function MyCases() {
                   </View>
                 </View>
 
+                <View style={[styles.nextUpdateBox, actionRequired && styles.nextUpdateAttention]}>
+                  <Text style={[styles.nextUpdateLabel, actionRequired && styles.nextUpdateLabelAttention]}>
+                    {actionRequired ? "ACTION NEEDED" : "CURRENT UPDATE"}
+                  </Text>
+                  <Text style={styles.nextUpdateText}>{nextUpdate}</Text>
+                </View>
+                <TouchableOpacity
+                  accessibilityRole="button"
+                  accessibilityState={{ expanded: detailsExpanded }}
+                  onPress={() => setExpandedCaseIds((previous) =>
+                    previous.includes(incident.id)
+                      ? previous.filter((id) => id !== incident.id)
+                      : [...previous, incident.id]
+                  )}
+                  style={[styles.detailsToggle, actionRequired && styles.detailsToggleAttention]}
+                >
+                  <Text style={styles.detailsToggleText}>
+                    {detailsExpanded ? "Hide report details"
+                      : actionRequired ? "Open report · Action required"
+                      : "View report details and responder updates"}
+                  </Text>
+                  <Text style={styles.detailsToggleSymbol}>{detailsExpanded ? "−" : "+"}</Text>
+                </TouchableOpacity>
+                {detailsExpanded && (
+                  <View style={styles.detailsBody}>
+                    <Text style={styles.fullReference}>Report reference: {incident.id}</Text>
+                    <View style={styles.detailsSectionHeading}>
+                      <MaterialCommunityIcons name="file-document-outline" size={20} color="#176B52" />
+                      <Text style={styles.detailsSectionTitle}>Incident information</Text>
+                    </View>
+                    <View style={styles.reportDetailsGrid}>
+                    {reportPhotos.length > 0 && (
+                      <View style={styles.reportDetailsMediaColumn}>
+                        <View style={styles.reportEvidenceSection}>
+                        <Text style={styles.infoLabel}>
+                          Uploaded report photos ({reportPhotos.length})
+                        </Text>
+                        <Text style={styles.reportEvidenceDescription}>
+                          Photos provided for this emergency report.
+                        </Text>
+                        <View style={styles.reportEvidenceGrid}>
+                          {reportPhotos.map((photo, index) => (
+                            <View
+                              key={photo.publicId || photo.path || `${incident.id}-photo-${index}`}
+                              style={styles.reportEvidenceTile}
+                            >
+                              <ReportPhoto
+                                url={photo.url}
+                                category={incident.category}
+                                expanded
+                              />
+                              <Text style={styles.reportEvidenceCaption}>
+                                Photo {index + 1}
+                              </Text>
+                            </View>
+                          ))}
+                        </View>
+                        </View>
+                      </View>
+                    )}
+                    <View style={styles.reportDetailsInformationColumn}>
                 <View
                   style={
                     styles.infoBlock
@@ -2094,7 +2364,7 @@ export default function MyCases() {
                         styles.infoLabel
                       }
                     >
-                      Situation details
+                      Situation reported
                     </Text>
 
                     <Text
@@ -2120,7 +2390,7 @@ export default function MyCases() {
                         styles.infoLabel
                       }
                     >
-                      Requested assistance
+                      Assistance requested
                     </Text>
 
                     <Text
@@ -2128,13 +2398,37 @@ export default function MyCases() {
                         styles.needsText
                       }
                     >
-                      {
-                        incident.needs
-                      }
+                      {incident.needs.replace(/\s*\|\s*/g, "\n")}
                     </Text>
                   </View>
                 )}
 
+
+                    </View>
+                    </View>
+
+                    <View style={styles.peopleSection}>
+                      <View style={styles.detailsSectionHeading}>
+                        <MaterialCommunityIcons name="account-group-outline" size={20} color="#176B52" />
+                        <Text style={styles.detailsSectionTitle}>People involved</Text>
+                      </View>
+                      <View style={styles.reporterProfileCard}>
+                        <PersonProfileAvatar
+                          name={String(profile?.fullName || incident.reporterName || "Resident")}
+                          imageUrl={String(profile?.profilePictureUrl || incident.reporterProfilePictureUrl || "")}
+                        />
+                        <View style={styles.personProfileText}>
+                          <Text style={styles.personProfileEyebrow}>REPORT SUBMITTED BY</Text>
+                          <Text style={styles.personProfileName}>
+                            {profile?.fullName || incident.reporterName || "Resident"}
+                          </Text>
+                          <Text style={styles.personProfileSubtitle}>Resident · Report owner</Text>
+                        </View>
+                        <View style={styles.personRolePill}>
+                          <Text style={styles.personRolePillText}>Resident</Text>
+                        </View>
+                      </View>
+                    </View>
                 {incident.verificationStatus ===
                   "needs_more_evidence" && (
                   <View
@@ -2372,7 +2666,10 @@ export default function MyCases() {
                       styles.sectionTitle
                     }
                   >
-                    Responder activity
+                    Volunteer responders
+                  </Text>
+                  <Text style={styles.responderSectionHelp}>
+                    Responders invited or assigned to this emergency will appear below.
                   </Text>
 
                   {assignments.length ===
@@ -2387,7 +2684,7 @@ export default function MyCases() {
                           styles.waitingTitle
                         }
                       >
-                        No responder assigned yet
+                        No volunteer responder listed yet
                       </Text>
 
                       <Text
@@ -2395,9 +2692,7 @@ export default function MyCases() {
                           styles.waitingText
                         }
                       >
-                        Admin verification and
-                        assignment will appear here
-                        once available.
+                        This section will update when an assignment is recorded for your report.
                       </Text>
                     </View>
                   ) : (
@@ -2438,30 +2733,20 @@ export default function MyCases() {
                                 styles.assignmentHeader
                               }
                             >
-                              <View
-                                style={
-                                  styles.assignmentIdentity
-                                }
-                              >
-                                <Text
-                                  style={
-                                    styles.volunteerName
-                                  }
-                                >
-                                  {assignment.volunteerName ||
-                                    "Assigned responder"}
-                                </Text>
-
-                                <Text
-                                  style={
-                                    styles.assignmentReference
-                                  }
-                                >
-                                  Assignment:{" "}
-                                  {
-                                    assignment.id
-                                  }
-                                </Text>
+                              <View style={styles.assignmentIdentityRow}>
+                                <PersonProfileAvatar
+                                  name={assignment.volunteerName || "Volunteer"}
+                                  imageUrl={assignment.volunteerProfilePictureUrl}
+                                />
+                                <View style={styles.assignmentIdentity}>
+                                  <Text style={styles.personProfileEyebrow}>VOLUNTEER RESPONDER</Text>
+                                  <Text style={styles.volunteerName}>
+                                    {assignment.volunteerName || "Assigned responder"}
+                                  </Text>
+                                  <Text style={styles.assignmentReference}>
+                                    Response ID: {assignment.id.slice(0, 12)}
+                                  </Text>
+                                </View>
                               </View>
 
                               <View
@@ -2885,6 +3170,8 @@ export default function MyCases() {
                     )
                   )}
                 </View>
+                  </View>
+                )}
               </View>
             );
           },
@@ -2920,7 +3207,7 @@ const styles =
 
     loadingText: {
       color: "#64748B",
-      fontSize: vsType.size.label, fontFamily: vsType.family,
+      fontSize: 13,
     },
 
     centerCard: {
@@ -2935,7 +3222,7 @@ const styles =
     },
 
     centerTitle: {
-      fontSize: vsType.size.subheading, fontFamily: vsType.family,
+      fontSize: 20,
       fontWeight: "800",
       color: "#102A3A",
     },
@@ -2956,7 +3243,7 @@ const styles =
 
     eyebrow: {
       color: "#07857C",
-      fontSize: vsType.size.micro, fontFamily: vsType.family,
+      fontSize: 10,
       fontWeight: "700",
       letterSpacing: 1.4,
     },
@@ -2964,16 +3251,17 @@ const styles =
     title: {
       marginTop: 6,
       color: "#173D32",
-      fontSize: designUi.type.page.fontSize,
-      lineHeight: designUi.type.page.lineHeight,
-      fontWeight: designUi.type.page.fontWeight,
+      fontSize: 28,
+      lineHeight: 36,
+      fontWeight: "700",
     },
 
     subtitle: {
       marginTop: 6,
       color: "#627785",
-      fontSize: designUi.type.body.fontSize,
-      lineHeight: designUi.type.body.lineHeight, fontWeight: designUi.type.body.fontWeight,},
+      fontSize: 14,
+      lineHeight: 21,
+    },
 
     errorBox: {
       marginBottom: 14,
@@ -2988,7 +3276,7 @@ const styles =
 
     errorText: {
       color: "#A83232",
-      fontSize: vsType.size.meta, fontFamily: vsType.family,
+      fontSize: 12,
       lineHeight: 18,
       fontWeight: "700",
     },
@@ -3006,19 +3294,21 @@ const styles =
 
     emptyTitle: {
       color: "#173748",
-      fontSize: designUi.type.section.fontSize,
-      fontWeight: designUi.type.section.fontWeight, lineHeight: designUi.type.section.lineHeight,},
+      fontSize: 17,
+      fontWeight: "800",
+    },
 
     emptyText: {
       marginTop: 6,
       color: "#64748B",
       textAlign: "center",
-      lineHeight: designUi.type.body.lineHeight, fontSize: designUi.type.body.fontSize, fontWeight: designUi.type.body.fontWeight,},
+      lineHeight: 20,
+    },
 
     caseCard: {
-      marginBottom: 18,
-      padding: 20,
-      borderRadius: 16,
+      marginBottom: 14,
+      padding: 21,
+      borderRadius: 14,
       borderWidth: 1,
       borderColor:
         "#DCE5EA",
@@ -3028,28 +3318,30 @@ const styles =
 
     caseTopRow: {
       flexDirection: "row",
-      justifyContent:
-        "space-between",
-      alignItems:
-        "flex-start",
-      gap: 12,
+      flexWrap: "wrap",
+      justifyContent: "space-between",
+      alignItems: "center",
+      gap: 13,
     },
 
     caseTitleBlock: {
-      flex: 1,
+      flexGrow: 1,
+      flexShrink: 1,
+      flexBasis: 180,
+      minWidth: 155,
     },
 
     caseTitle: {
       color: "#102A3A",
-      fontSize: designUi.type.card.fontSize,
-      lineHeight: designUi.type.card.lineHeight,
-      fontWeight: designUi.type.card.fontWeight,
+      fontSize: 18,
+      lineHeight: 24,
+      fontWeight: "900",
     },
 
     reference: {
       marginTop: 4,
       color: "#8A9AA5",
-      fontSize: vsType.size.micro, fontFamily: vsType.family,
+      fontSize: 10,
     },
 
     statusBadge: {
@@ -3065,7 +3357,7 @@ const styles =
 
     statusBadgeText: {
       color: "#08786F",
-      fontSize: vsType.size.micro, fontFamily: vsType.family,
+      fontSize: 12,
       fontWeight: "800",
     },
 
@@ -3091,15 +3383,17 @@ const styles =
 
     metaLabel: {
       color: "#91A1AD",
-      fontSize: designUi.type.meta.fontSize,
-      fontWeight: designUi.type.meta.fontWeight,
-      letterSpacing: 0.8, lineHeight: designUi.type.meta.lineHeight,},
+      fontSize: 8,
+      fontWeight: "900",
+      letterSpacing: 0.8,
+    },
 
     metaValue: {
-      marginTop: 3,
-      color: "#173748",
-      fontSize: vsType.size.caption, fontFamily: vsType.family,
-      fontWeight: "800",
+      marginTop: 4,
+      color: "#183D35",
+      fontSize: 14,
+      lineHeight: 20,
+      fontWeight: "700",
     },
 
     infoBlock: {
@@ -3107,36 +3401,23 @@ const styles =
     },
 
     infoLabel: {
-      color: "#526B79",
-      fontSize: designUi.type.label.fontSize,
-      fontWeight: designUi.type.label.fontWeight,
-      textTransform:
-        "uppercase",
-      letterSpacing: 0.5, lineHeight: designUi.type.label.lineHeight,},
+      color: "#506C65", fontSize: 12, lineHeight: 18, fontWeight: "700",
+      textTransform: "uppercase", letterSpacing: 0.35,
+    },
 
     infoText: {
-      marginTop: 4,
-      color: "#36515F",
-      fontSize: vsType.size.meta, fontFamily: vsType.family,
-      lineHeight: 18,
+      marginTop: 6, color: "#28453D", fontSize: 14,
+      lineHeight: 23,
     },
 
     needsBox: {
-      marginTop: 14,
-      padding: 12,
-      borderRadius: 10,
-      backgroundColor:
-        "#F7FAFB",
-      borderWidth: 1,
-      borderColor:
-        "#E2E9ED",
+      marginTop: 14, padding: 15, borderRadius: 11,
+      backgroundColor: "#F6F9F7", borderWidth: 1, borderColor: "#E0E9E4",
     },
 
     needsText: {
-      marginTop: 5,
-      color: "#36515F",
-      fontSize: vsType.size.caption, fontFamily: vsType.family,
-      lineHeight: 17,
+      marginTop: 7, color: "#28453D", fontSize: 14,
+      lineHeight: 23,
     },
 
     evidenceRequestCard: {
@@ -3170,23 +3451,23 @@ const styles =
 
     evidenceRequestEyebrow: {
       color: "#9A6700",
-      fontSize: vsType.size.micro, fontFamily: vsType.family,
-      fontWeight: "800",
+      fontSize: 9,
+      fontWeight: "900",
       letterSpacing: 1,
     },
 
     evidenceRequestTitle: {
       marginTop: 4,
       color: "#3F3314",
-      fontSize: vsType.size.card, fontFamily: vsType.family,
+      fontSize: 16,
       lineHeight: 22,
-      fontWeight: "800",
+      fontWeight: "900",
     },
 
     evidenceRequestText: {
       marginTop: 5,
       color: "#6F6033",
-      fontSize: vsType.size.meta, fontFamily: vsType.family,
+      fontSize: 11.5,
       lineHeight: 18,
     },
 
@@ -3201,15 +3482,15 @@ const styles =
 
     evidenceReasonLabel: {
       color: "#9A6700",
-      fontSize: vsType.size.micro, fontFamily: vsType.family,
-      fontWeight: "800",
+      fontSize: 8.5,
+      fontWeight: "900",
       letterSpacing: 0.8,
     },
 
     evidenceReasonText: {
       marginTop: 4,
       color: "#4F4529",
-      fontSize: vsType.size.meta, fontFamily: vsType.family,
+      fontSize: 12,
       lineHeight: 18,
       fontWeight: "700",
     },
@@ -3231,14 +3512,14 @@ const styles =
 
     evidenceFieldTitle: {
       color: "#263E4B",
-      fontSize: vsType.size.meta, fontFamily: vsType.family,
-      fontWeight: "800",
+      fontSize: 12,
+      fontWeight: "900",
     },
 
     evidenceFieldHelper: {
       marginTop: 3,
       color: "#778A95",
-      fontSize: vsType.size.micro, fontFamily: vsType.family,
+      fontSize: 10,
       lineHeight: 15,
     },
 
@@ -3251,8 +3532,8 @@ const styles =
 
     evidenceAddButtonText: {
       color: "#FFFFFF",
-      fontSize: vsType.size.caption, fontFamily: vsType.family,
-      fontWeight: "800",
+      fontSize: 10.5,
+      fontWeight: "900",
     },
 
     evidencePreviewGrid: {
@@ -3290,14 +3571,14 @@ const styles =
     evidencePreviewName: {
       flex: 1,
       color: "#4D6370",
-      fontSize: vsType.size.micro, fontFamily: vsType.family,
+      fontSize: 9.5,
       fontWeight: "700",
     },
 
     evidenceRemoveText: {
       color: "#B42318",
-      fontSize: vsType.size.micro, fontFamily: vsType.family,
-      fontWeight: "800",
+      fontSize: 9.5,
+      fontWeight: "900",
     },
 
     evidenceEmptyBox: {
@@ -3312,7 +3593,7 @@ const styles =
 
     evidenceEmptyText: {
       color: "#83939D",
-      fontSize: vsType.size.caption, fontFamily: vsType.family,
+      fontSize: 10.5,
     },
 
     evidenceVideoRow: {
@@ -3335,7 +3616,7 @@ const styles =
     evidenceSelectedVideo: {
       marginTop: 5,
       color: "#0B756E",
-      fontSize: vsType.size.micro, fontFamily: vsType.family,
+      fontSize: 10,
       fontWeight: "800",
     },
 
@@ -3356,8 +3637,8 @@ const styles =
 
     evidenceSecondaryButtonText: {
       color: "#0A726B",
-      fontSize: vsType.size.micro, fontFamily: vsType.family,
-      fontWeight: "800",
+      fontSize: 10,
+      fontWeight: "900",
     },
 
     evidenceTextButton: {
@@ -3368,7 +3649,7 @@ const styles =
     evidenceErrorText: {
       marginTop: 11,
       color: "#B42318",
-      fontSize: vsType.size.caption, fontFamily: vsType.family,
+      fontSize: 10.5,
       lineHeight: 16,
       fontWeight: "700",
     },
@@ -3376,7 +3657,7 @@ const styles =
     evidenceProgressText: {
       marginTop: 11,
       color: "#0B756E",
-      fontSize: vsType.size.caption, fontFamily: vsType.family,
+      fontSize: 10.5,
       lineHeight: 16,
       fontWeight: "800",
     },
@@ -3394,7 +3675,7 @@ const styles =
       flex: 1,
       minWidth: 240,
       color: "#71838E",
-      fontSize: vsType.size.micro, fontFamily: vsType.family,
+      fontSize: 9.5,
       lineHeight: 15,
     },
 
@@ -3414,95 +3695,62 @@ const styles =
 
     evidenceSubmitButtonText: {
       color: "#FFFFFF",
-      fontSize: vsType.size.caption, fontFamily: vsType.family,
-      fontWeight: "800",
+      fontSize: 10.5,
+      fontWeight: "900",
     },
 
     responderSection: {
-      marginTop: 18,
-      paddingTop: 17,
-      borderTopWidth: 1,
-      borderTopColor:
-        "#EDF1F4",
+      marginTop: 22, paddingTop: 20, borderTopWidth: 1,
+      borderTopColor: "#E6EEEA",
     },
 
     sectionTitle: {
-      marginBottom: 10,
-      color: "#173D32",
-      fontSize: designUi.type.section.fontSize,
-      fontWeight: designUi.type.section.fontWeight, lineHeight: designUi.type.section.lineHeight,},
+      marginBottom: 4, color: "#153F32", fontSize: 17,
+      lineHeight: 24, fontWeight: "700",
+    },
 
     waitingBox: {
-      padding: 13,
-      borderRadius: 10,
-      backgroundColor:
-        "#FBFCFD",
-      borderWidth: 1,
-      borderColor:
-        "#E5EBEF",
+      marginTop: 12, padding: 17, borderRadius: 11,
+      backgroundColor: "#F8FAF9", borderWidth: 1, borderColor: "#E2EAE5",
     },
 
     waitingTitle: {
-      color: "#526B79",
-      fontSize: vsType.size.meta, fontFamily: vsType.family,
-      fontWeight: "800",
+      color: "#315A4F", fontSize: 14, lineHeight: 20, fontWeight: "700",
     },
 
     waitingText: {
-      marginTop: 4,
-      color: "#7A8C97",
-      fontSize: vsType.size.caption, fontFamily: vsType.family,
-      lineHeight: 17,
+      marginTop: 6, color: "#607870", fontSize: 13, lineHeight: 20,
     },
 
     assignmentCard: {
-      marginTop: 10,
-      padding: 14,
-      borderRadius: 12,
-      borderWidth: 1,
-      borderColor:
-        "#DDE7EB",
-      backgroundColor:
-        "#FCFDFD",
+      marginTop: 12, padding: 18, borderRadius: 12, borderWidth: 1,
+      borderColor: "#E0E9E4", backgroundColor: "#FFFFFF",
     },
 
     assignmentHeader: {
-      flexDirection: "row",
-      justifyContent:
-        "space-between",
-      alignItems:
-        "flex-start",
-      gap: 10,
+      flexDirection: "row", alignItems: "center",
+      justifyContent: "space-between", flexWrap: "wrap", gap: 14,
     },
 
     assignmentIdentity: {
-      flex: 1,
+      flexGrow: 1, flexShrink: 1, minWidth: 125,
     },
 
     volunteerName: {
-      color: "#153646",
-      fontSize: vsType.size.label, fontFamily: vsType.family,
-      fontWeight: "800",
+      color: "#153E34", fontSize: 15, lineHeight: 23, fontWeight: "700",
     },
 
     assignmentReference: {
-      marginTop: 3,
-      color: "#8A9AA5",
-      fontSize: vsType.size.micro, fontFamily: vsType.family,
+      marginTop: 4, color: "#657E75", fontSize: 12, lineHeight: 18,
     },
 
     assignmentStatusBadge: {
-      paddingHorizontal: 9,
-      paddingVertical: 5,
-      borderRadius: 999,
-      backgroundColor:
-        "#EEF5F7",
+      paddingHorizontal: 11, paddingVertical: 8, borderRadius: 999,
+      borderWidth: 1, borderColor: "#D9E5DE", backgroundColor: "#EEF5F1",
     },
 
     assignmentStatusText: {
-      color: "#456171",
-      fontSize: vsType.size.micro, fontFamily: vsType.family,
-      fontWeight: "800",
+      color: "#2F6353", fontSize: 12, lineHeight: 17, fontWeight: "700",
     },
 
     contributionBox: {
@@ -3517,17 +3765,11 @@ const styles =
     },
 
     contributionType: {
-      marginTop: 4,
-      color: "#087F78",
-      fontSize: vsType.size.label, fontFamily: vsType.family,
-      fontWeight: "800",
+      marginTop: 5, color: "#176B52", fontSize: 14, lineHeight: 21, fontWeight: "700",
     },
 
     contributionMeta: {
-      marginTop: 5,
-      color: "#64748B",
-      fontSize: vsType.size.meta, fontFamily: vsType.family,
-      lineHeight: 18,
+      marginTop: 5, color: "#5B756B", fontSize: 12, lineHeight: 19,
     },
 
     secondaryButton: {
@@ -3546,7 +3788,7 @@ const styles =
 
     secondaryButtonText: {
       color: "#096C66",
-      fontSize: vsType.size.caption, fontFamily: vsType.family,
+      fontSize: 11,
       fontWeight: "800",
     },
 
@@ -3574,14 +3816,14 @@ const styles =
 
     pendingConfirmationTitle: {
       color: "#765B0A",
-      fontSize: vsType.size.meta, fontFamily: vsType.family,
-      fontWeight: "800",
+      fontSize: 12,
+      fontWeight: "900",
     },
 
     pendingConfirmationText: {
       marginTop: 4,
       color: "#806D32",
-      fontSize: vsType.size.caption, fontFamily: vsType.family,
+      fontSize: 10.5,
       lineHeight: 16,
     },
 
@@ -3598,14 +3840,14 @@ const styles =
 
     reviewTitle: {
       color: "#153646",
-      fontSize: vsType.size.body, fontFamily: vsType.family,
-      fontWeight: "800",
+      fontSize: 14,
+      fontWeight: "900",
     },
 
     reviewCopy: {
       marginTop: 5,
       color: "#647984",
-      fontSize: vsType.size.caption, fontFamily: vsType.family,
+      fontSize: 11,
       lineHeight: 17,
     },
 
@@ -3643,7 +3885,7 @@ const styles =
 
     outcomeButtonText: {
       color: "#526B79",
-      fontSize: vsType.size.caption, fontFamily: vsType.family,
+      fontSize: 10.5,
       fontWeight: "800",
     },
 
@@ -3655,7 +3897,7 @@ const styles =
       marginTop: 13,
       marginBottom: 5,
       color: "#526B79",
-      fontSize: vsType.size.caption, fontFamily: vsType.family,
+      fontSize: 10.5,
       fontWeight: "800",
     },
 
@@ -3669,13 +3911,13 @@ const styles =
       backgroundColor:
         "#FFFFFF",
       color: "#173748",
-      fontSize: vsType.size.meta, fontFamily: vsType.family,
+      fontSize: 12,
     },
 
     reviewError: {
       marginTop: 8,
       color: "#B42318",
-      fontSize: vsType.size.caption, fontFamily: vsType.family,
+      fontSize: 10.5,
       fontWeight: "700",
     },
 
@@ -3702,8 +3944,8 @@ const styles =
 
     primaryButtonText: {
       color: "#FFFFFF",
-      fontSize: vsType.size.caption, fontFamily: vsType.family,
-      fontWeight: "800",
+      fontSize: 10.5,
+      fontWeight: "900",
     },
 
     cancelButton: {
@@ -3720,7 +3962,7 @@ const styles =
 
     cancelButtonText: {
       color: "#526B79",
-      fontSize: vsType.size.caption, fontFamily: vsType.family,
+      fontSize: 10.5,
       fontWeight: "800",
     },
 
@@ -3743,23 +3985,204 @@ const styles =
     },
 
     confirmedTitle: {
-      color: "#08786F",
-      fontSize: vsType.size.meta, fontFamily: vsType.family,
-      fontWeight: "800",
+      color: "#146749", fontSize: 14, lineHeight: 21, fontWeight: "700",
     },
 
     confirmedText: {
-      marginTop: 4,
-      color: "#526B79",
-      fontSize: vsType.size.caption, fontFamily: vsType.family,
-      lineHeight: 16,
+      marginTop: 5, color: "#36574A", fontSize: 13, lineHeight: 21,
     },
 
     confirmedNote: {
-      marginTop: 7,
-      color: "#6A7E89",
-      fontSize: vsType.size.caption, fontFamily: vsType.family,
-      fontStyle: "italic",
-      lineHeight: 16,
+      marginTop: 7, color: "#4D6D5C", fontSize: 13, lineHeight: 20, fontStyle: "italic",
+    },
+    // Scoped presentation styles for the resident report tracker.
+    reportToolbar: {
+      marginBottom: 16, padding: 18, borderWidth: 1, borderColor: "#DCE6E2",
+      borderRadius: 14, backgroundColor: "#FFFFFF", gap: 12,
+    },
+    reportToolbarHeading: {
+      flexDirection: "row", alignItems: "center", justifyContent: "space-between",
+      flexWrap: "wrap", gap: 8,
+    },
+    reportToolbarTitle: {
+      color: "#183C34", fontSize: 16, fontWeight: "700",
+    },
+    reportToolbarCount: { color: "#536B69", fontSize: 13 },
+    reportControls: {
+      flexDirection: "row", alignItems: "center", justifyContent: "space-between",
+      flexWrap: "wrap", gap: 12,
+    },
+    reportFilters: { flexDirection: "row", flexWrap: "wrap", gap: 7 },
+    reportFilterChip: {
+      minHeight: 40, paddingHorizontal: 13, justifyContent: "center",
+      borderWidth: 1, borderColor: "#D8E3DF", borderRadius: 9, backgroundColor: "#FFFFFF",
+    },
+    reportFilterChipActive: { borderColor: "#176B52", backgroundColor: "#176B52" },
+    reportFilterText: {
+      color: "#526B67", fontSize: 13, fontWeight: "600",
+    },
+    reportFilterTextActive: { color: "#FFFFFF" },
+    reportSearchInput: {
+      minHeight: 42, minWidth: 205, maxWidth: 340, flexGrow: 1,
+      paddingHorizontal: 13, borderWidth: 1, borderColor: "#D8E3DF",
+      borderRadius: 9, color: "#183C34", backgroundColor: "#FAFCFB",
+      fontSize: 14,
+    },
+    reportShowingCount: { color: "#687E79", fontSize: 12 },
+    statusBadgeClosed: { backgroundColor: "#EDF1F4", borderColor: "#D8E0E6" },
+    statusBadgeActive: { backgroundColor: "#E9F3FD", borderColor: "#CDE2F5" },
+    statusBadgeAttention: { backgroundColor: "#FFF3E6", borderColor: "#F4D5B3" },
+    nextUpdateBox: {
+      marginTop: 14, paddingHorizontal: 13, paddingVertical: 11,
+      borderLeftWidth: 3, borderLeftColor: "#176B52", borderRadius: 8,
+      backgroundColor: "#F1F7F4",
+    },
+    nextUpdateAttention: { borderLeftColor: "#B86C1C", backgroundColor: "#FFF7EB" },
+    nextUpdateLabel: {
+      color: "#216F56", fontSize: 11,
+      fontWeight: "700", letterSpacing: 0.6,
+    },
+    nextUpdateLabelAttention: { color: "#97540C" },
+    nextUpdateText: {
+      marginTop: 4, color: "#304C44", fontSize: 14, lineHeight: 21,
+    },
+    detailsToggle: {
+      minHeight: 44, marginTop: 12, paddingHorizontal: 13,
+      borderWidth: 1, borderColor: "#C9DBD3", borderRadius: 9,
+      backgroundColor: "#FFFFFF", flexDirection: "row", alignItems: "center",
+      justifyContent: "space-between", gap: 12,
+    },
+    detailsToggleAttention: { borderColor: "#D7AD79" },
+    detailsToggleText: {
+      flexShrink: 1, color: "#176B52",
+      fontSize: 13, fontWeight: "700",
+    },
+    detailsToggleSymbol: {
+      color: "#176B52", fontSize: 20, fontWeight: "500",
+    },
+    detailsBody: { marginTop: 6 },
+    fullReference: {
+      marginTop: 8, marginBottom: 14,
+      color: "#697D77", fontSize: 12, lineHeight: 19,
+    },
+    reportPhotoThumbnail: {
+      width: 108,
+      height: 82,
+      borderRadius: 10,
+      overflow: "hidden",
+      backgroundColor: "#EDF4F0",
+      borderWidth: 1,
+      borderColor: "#DCE7E0",
+    },
+    reportPhotoExpanded: {
+      width: "100%",
+      height: 175,
+      borderRadius: 10,
+      overflow: "hidden",
+      backgroundColor: "#F3F6F4",
+      borderWidth: 1,
+      borderColor: "#DFE7E2",
+    },
+    reportPhotoImage: {
+      width: "100%",
+      height: "100%",
+    },
+    reportPhotoPlaceholder: {
+      flex: 1,
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 5,
+      paddingHorizontal: 5,
+    },
+    reportPhotoPlaceholderText: {
+      color: "#61746E",
+      fontSize: 10,
+      fontWeight: "600",
+      textAlign: "center",
+    },
+    reportEvidenceSection: {
+      marginTop: 8, gap: 6,
+    },
+    reportEvidenceDescription: {
+      color: "#5B756B", fontSize: 13, lineHeight: 20,
+    },
+    reportEvidenceGrid: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: 10,
+      marginTop: 6,
+    },
+    reportEvidenceTile: {
+      minWidth: 170, flexBasis: 220, flexGrow: 1, maxWidth: 370, gap: 5,
+    },
+    reportEvidenceCaption: {
+      color: "#526F63", fontSize: 12, lineHeight: 18, fontWeight: "600",
+    },
+
+    detailsSectionHeading: {
+      flexDirection: "row", alignItems: "center", gap: 9,
+      marginTop: 10, marginBottom: 12,
+    },
+    detailsSectionTitle: {
+      color: "#153E34", fontSize: 17, lineHeight: 24, fontWeight: "700",
+    },
+    reportDetailsGrid: {
+      flexDirection: "row", flexWrap: "wrap", gap: 22, alignItems: "flex-start",
+      padding: 17, borderWidth: 1, borderColor: "#E2EAE5",
+      borderRadius: 12, backgroundColor: "#FBFCFB",
+    },
+    reportDetailsMediaColumn: {
+      flexBasis: 255, minWidth: 200, flexGrow: 1, maxWidth: 400,
+    },
+    reportDetailsInformationColumn: {
+      flexBasis: 305, minWidth: 200, flexGrow: 2,
+    },
+    peopleSection: {
+      marginTop: 20, gap: 4,
+    },
+    reporterProfileCard: {
+      padding: 15, backgroundColor: "#F4F8F5",
+      borderWidth: 1, borderColor: "#DAE8DF", borderRadius: 12,
+      flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 14,
+    },
+    personAvatar: {
+      width: 52, height: 52, borderRadius: 26, backgroundColor: "#E0EEE6",
+      overflow: "hidden", alignItems: "center", justifyContent: "center",
+      borderWidth: 1, borderColor: "#C8DCD0",
+    },
+    personAvatarPhoto: {
+      width: "100%", height: "100%",
+    },
+    personAvatarInitials: {
+      color: "#176B52", fontSize: 17, fontWeight: "700",
+    },
+    personProfileText: {
+      flexGrow: 1, flexShrink: 1, minWidth: 125,
+    },
+    personProfileEyebrow: {
+      color: "#627E71", fontSize: 11, lineHeight: 16,
+      letterSpacing: 0.65, fontWeight: "700",
+    },
+    personProfileName: {
+      marginTop: 3, color: "#173E32", fontSize: 16,
+      fontWeight: "700", lineHeight: 23,
+    },
+    personProfileSubtitle: {
+      marginTop: 3, color: "#5B766B", fontSize: 12, lineHeight: 18,
+    },
+    personRolePill: {
+      paddingHorizontal: 11, paddingVertical: 6, borderRadius: 20,
+      borderWidth: 1, borderColor: "#CAE1D2", backgroundColor: "#E5F2E9",
+    },
+    personRolePillText: {
+      color: "#216B4E", fontSize: 12, fontWeight: "700",
+    },
+    assignmentIdentityRow: {
+      flexDirection: "row", alignItems: "center", flexGrow: 1,
+      flexShrink: 1, gap: 12,
+    },
+    responderSectionHelp: {
+      marginTop: 2, marginBottom: 5,
+      color: "#607870", fontSize: 13, lineHeight: 20,
     },
   });

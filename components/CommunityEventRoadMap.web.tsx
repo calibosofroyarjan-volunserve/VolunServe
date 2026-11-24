@@ -1,5 +1,10 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
+import { SJDM_REFERENCE_GEOMETRY } from "../constants/sjdmBoundaryReference";
+import {
+  boundaryBounds, insideSjdmBoundary, sjdmOutsideMask,
+  type SjdmBoundary,
+} from "../lib/sjdmMapBoundary";
 
 /**
  * Public event meeting-point map. The road route is requested only after the
@@ -18,6 +23,20 @@ type Props = {
   height?: number;
 };
 type RoadRoute = { coordinates: number[][]; distanceMeters: number; durationSeconds: number };
+
+// Reuse the local, attributed SJDM reference polygon already used by the emergency maps.
+// A rectangular viewport guard is NOT treated as the administrative city boundary.
+const SJDM_CITY: SjdmBoundary = {
+  type: "Feature",
+  properties: {
+    source: "geoBoundaries / William & Mary geoLab (simplified ADM3, CC BY 4.0)",
+    city: "City of San Jose del Monte",
+    province: "Bulacan",
+  },
+  geometry: SJDM_REFERENCE_GEOMETRY as unknown as SjdmBoundary["geometry"],
+};
+const SJDM_CITY_BOUNDS = boundaryBounds(SJDM_CITY);
+const SJDM_OUTSIDE_MASK = sjdmOutsideMask(SJDM_CITY);
 const valid = (point?: Point | null) =>
   !!point && Number.isFinite(point.latitude) && Number.isFinite(point.longitude) &&
   Math.abs(point.latitude) <= 90 && Math.abs(point.longitude) <= 180;
@@ -36,6 +55,11 @@ function mapHtml(destination: Point, origin: Point | null, route: RoadRoute | nu
     source: origin ? [origin.longitude, origin.latitude] : null,
     route: route?.coordinates || null,
     icon,
+    cityBoundary: SJDM_CITY,
+    outsideMask: SJDM_OUTSIDE_MASK,
+    cityBounds: SJDM_CITY_BOUNDS,
+    venueInCity: insideSjdmBoundary(SJDM_CITY, destination.latitude, destination.longitude),
+    sourceInCity: origin ? insideSjdmBoundary(SJDM_CITY, origin.latitude, origin.longitude) : false,
   }).replace(/</g, "\\u003c");
   return `<!doctype html>
 <html lang="en">
@@ -50,13 +74,15 @@ function mapHtml(destination: Point, origin: Point | null, route: RoadRoute | nu
     .marker span{transform:rotate(45deg);font-size:21px;line-height:1}
     .origin{width:19px;height:19px;background:#3777DE;border:4px solid white;border-radius:99px;
       box-shadow:0 0 0 8px #3777de30}
-    #credit{position:absolute;bottom:8px;left:9px;background:#ffffffef;border-radius:6px;
-      padding:5px 8px;font:11px system-ui;color:#35584b;pointer-events:none}
+    #credit{position:absolute;bottom:8px;left:9px;max-width:calc(100% - 70px);
+      background:#ffffffef;border-radius:6px;padding:5px 8px;
+      font:10px system-ui;color:#35584b;pointer-events:none;z-index:2}
     #fallback{display:none;position:absolute;inset:0;place-items:center;text-align:center;
       background:#e8f1ec;padding:18px;font:13px system-ui;color:#295848}
   </style>
 </head><body>
-  <div id="map"></div><div id="credit">OpenStreetMap / OpenFreeMap · OSRM road routing</div>
+  <div id="map"></div>
+  <div id="credit">OpenStreetMap / OpenFreeMap · SJDM boundary: geoBoundaries ADM3 (CC BY 4.0) · OSRM</div>
   <div id="fallback">Map tiles are unavailable. Use Open in Google Maps for directions.</div>
   <script src="https://unpkg.com/maplibre-gl@5/dist/maplibre-gl.js"><\/script>
   <script>
@@ -67,18 +93,26 @@ function mapHtml(destination: Point, origin: Point | null, route: RoadRoute | nu
       try {
         const map = new maplibregl.Map({
           container: "map", style: "https://tiles.openfreemap.org/styles/liberty",
-          center: data.venue, zoom: 13.8, attributionControl: true, interactive: true
+          center: [121.045, 14.813],
+          zoom: 13, attributionControl: true, interactive: true,
+          renderWorldCopies: false,
+          maxBounds: [[121.005, 14.758], [121.178, 14.877]],
+          minZoom: 11.3, maxZoom: 19
         });
-        map.addControl(new maplibregl.NavigationControl({showCompass:false}), "top-right");
-        const venue = document.createElement("div");
-        venue.className = "marker";
-        const symbol = document.createElement("span");
-        symbol.textContent = data.icon;
-        venue.appendChild(symbol);
-        new maplibregl.Marker({element:venue}).setLngLat(data.venue)
-          .setPopup(new maplibregl.Popup({offset:25}).setText("Event meeting point"))
-          .addTo(map);
-        if (data.source) {
+        // Match the Emergency Reports map controls and viewport.
+        map.addControl(new maplibregl.NavigationControl({visualizePitch:true}), "top-left");
+        if (data.venueInCity) {
+          const venue = document.createElement("div");
+          venue.className = "marker";
+          const symbol = document.createElement("span");
+          symbol.textContent = data.icon;
+          venue.appendChild(symbol);
+          new maplibregl.Marker({element:venue}).setLngLat(data.venue)
+            .setPopup(new maplibregl.Popup({offset:25}).setText("Event meeting point"))
+            .addTo(map);
+        }
+        // Outside-city GPS is never displayed on this city-only map.
+        if (data.source && data.sourceInCity) {
           const source = document.createElement("div");
           source.className = "origin";
           new maplibregl.Marker({element:source}).setLngLat(data.source)
@@ -86,6 +120,14 @@ function mapHtml(destination: Point, origin: Point | null, route: RoadRoute | nu
             .addTo(map);
         }
         map.on("load", () => {
+          map.addSource("sjdm-city-boundary", {
+            type:"geojson", data:data.cityBoundary,
+          });
+          map.addSource("sjdm-outside-mask", {
+            type:"geojson", data:data.outsideMask,
+          });
+          map.addLayer({ id:"sjdm-city-fill", type:"fill", source:"sjdm-city-boundary",
+            paint:{"fill-color":"#0d9488","fill-opacity":0.07} });
           if (data.route && data.route.length > 1) {
             map.addSource("volunserve-road-route", {
               type:"geojson", data:{type:"Feature",properties:{},
@@ -95,14 +137,17 @@ function mapHtml(destination: Point, origin: Point | null, route: RoadRoute | nu
               paint:{"line-color":"#FFFFFF","line-width":9,"line-opacity":0.93}});
             map.addLayer({id:"route",type:"line",source:"volunserve-road-route",
               paint:{"line-color":"#097D66","line-width":5}});
-            const bounds = new maplibregl.LngLatBounds();
-            for (const p of data.route) bounds.extend(p);
-            map.fitBounds(bounds,{padding:56,maxZoom:15.5,duration:0});
-          } else if (data.source) {
-            const bounds = new maplibregl.LngLatBounds();
-            bounds.extend(data.venue); bounds.extend(data.source);
-            map.fitBounds(bounds,{padding:52,maxZoom:14.5,duration:0});
           }
+          // Same SJDM outside shading and green outline as Emergency Reports:
+          // surrounding towns remain visible for context, but are greyed out.
+          // Existing route drawing and venue GPS marker remain unchanged.
+          map.addLayer({ id:"sjdm-outside-shade", type:"fill", source:"sjdm-outside-mask",
+            paint:{"fill-color":"#334155","fill-opacity":0.50} });
+          map.addLayer({ id:"sjdm-city-outline", type:"line", source:"sjdm-city-boundary",
+            paint:{"line-color":"#047857","line-width":3,"line-opacity":1} });
+          // Use the same city-wide camera view as Emergency Reports.
+          map.fitBounds([[121.013,14.767],[121.169,14.869]],
+            {padding:20,duration:0});
         });
         map.on("error", e => {
           if (e?.error?.message?.includes("style")) fallback();
@@ -192,12 +237,14 @@ export default function CommunityEventRoadMap({
           </Text>
           <Text style={styles.captionSub}>
             {status === "ready"
-              ? "OSRM estimate · no live traffic · external navigation available"
+              ? "SJDM portion shown only · OSRM estimate, no live traffic · external navigation available"
               : status === "unavailable"
                 ? "Use Open in Google Maps to navigate. Your location is not stored."
                 : status === "loading"
                   ? "Using GPS only for this route request; no Firestore write"
-                  : "Select Show Route Here for a road preview from your GPS."}
+                  : insideSjdmBoundary(SJDM_CITY, destination.latitude, destination.longitude)
+                    ? "SJDM boundary only · Select Show Route Here for road directions from your GPS."
+                    : "Published venue pin is outside the SJDM reference boundary. Ask Admin to verify its location."}
           </Text>
         </View>
         {status === "loading" && <ActivityIndicator size="small" color="#23765F" />}

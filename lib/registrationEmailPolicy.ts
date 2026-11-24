@@ -1,13 +1,40 @@
 /**
  * VolunServe registration email policy.
  *
- * Built-in denylist + DNS-validated maintained list, checked before creation
- * of a new Firebase Auth UID. A subdomain of a blocked domain is blocked too.
+ * For new registrations, allow only exact @gmail.com and @yahoo.com.
+ * Keep the historical disposable-domain screening and mailbox verification.
+ * Client-side checks alone do not prevent direct Firebase SDK requests.
  * Firebase verified email ownership is a separate requirement.
  * Unknown/new throwaway providers cannot be guaranteed to be detected without
  * additional trusted pre-registration email-risk infrastructure.
  */
 import { GENERATED_DISPOSABLE_EMAIL_DOMAINS } from "./disposableEmailDomains.generated";
+
+/** Exact registered domains for new Resident accounts. Existing logins are unchanged. */
+export const ALLOWED_NEW_SIGNUP_EMAIL_DOMAINS: ReadonlySet<string> = new Set(["gmail.com", "yahoo.com"]);
+
+/** Gmail consumer inboxes ignore dot placement in the local part.
+ * A known disposable Gmail sample must be screened in ALL dotted spellings.
+ * This is not a general disposable-Gmail detector: unknown shared inboxes
+ * cannot be identified reliably from local-part patterns alone.
+ */
+export function canonicalGmailMailbox(email: string): string | null {
+  const value = String(email || "").trim().toLowerCase();
+  const parts = value.split("@");
+  if (parts.length !== 2 || parts[1] !== "gmail.com" || !parts[0]) return null;
+  return parts[0].replace(/\./g, "") + "@gmail.com";
+}
+
+/** Exact inboxes observed in signup QA (not inferred from other Gmail names). */
+export const CONFIRMED_TEST_SHARED_GMAIL_ADDRESSES: ReadonlySet<string> = new Set([
+  "les.terbigs.antos@gmail.com",
+  "ra.gngjb.a.hmkn@gmail.com",
+  "po.p.ul.o.u.svm.b.xm.k@gmail.com",
+]);
+
+const CONFIRMED_CANONICAL_SHARED_GMAIL_INBOXES: ReadonlySet<string> = new Set(
+  Array.from(CONFIRMED_TEST_SHARED_GMAIL_ADDRESSES, email => canonicalGmailMailbox(email)!)
+);
 
 /**
  * Additional temp-mail.org provider-associated delivery domains publicly
@@ -73,7 +100,7 @@ export const TEMP_MAIL_ORG_PUBLIC_ALIASES = [
 export const KNOWN_DISPOSABLE_EMAIL_DOMAINS = new Set([
   // User-observed temporary-mail domain on the public Signup page (2026-11-11).
   // Block this exact .co domain; do NOT categorically block legitimate .co domains.
-  "en2ch.com", "en2ch.co", "ruutukf.co", "emailkeep.com", "mailinator.com", "yopmail.com", "guerrillamail.com", "guerrillamailblock.com",
+  "en2ch.com", "en2ch.co", "ruutukf.co", "emailkeep.com", "mailticking.com", "emailnator.com", "agogmail.com", "mailinator.com", "yopmail.com", "guerrillamail.com", "guerrillamailblock.com",
   "sharklasers.com", "10minutemail.com", "temp-mail.org", "tempmail.com",
   "tempmail.net", "trashmail.com", "dispostable.com", "getnada.com",
   "maildrop.cc", "minuteinbox.com", "mohmal.com", "emailondeck.com",
@@ -84,8 +111,8 @@ export const KNOWN_DISPOSABLE_EMAIL_DOMAINS = new Set([
 
 /**
  * Suggest corrections for common misspellings of known consumer providers.
- * Exact-domain matching protects legitimate country-code and private domains,
- * for example business.co, yahoo.co.uk, and yahoo.com.ph.
+ * Domain typo hints remain separate from the exact Gmail/Yahoo signup allowlist.
+ * Other domains, including .co and other .com addresses, are rejected.
  * Rejected domains are hints/heuristics, not proof of mailbox validity.
  */
 export const KNOWN_PROVIDER_TYPO_CORRECTIONS: Readonly<Record<string, string>> = Object.freeze({
@@ -142,9 +169,8 @@ export function isKnownDisposableEmail(email: string): boolean {
 export function getRegistrationEmailError(email: string): string | null {
   const value = String(email || "").trim().toLowerCase();
   if (!value) return "Email address is required. Enter an email you can verify.";
-  // Validate complete domain labels instead of accepting malformed names
-  // such as name@gmail..com or name@-gmail.com. Valid country-code TLDs
-  // (including .co) remain allowed for independent providers.
+  // Reject malformed domains before applying the exact-provider allowlist.
+  // This intentionally rejects all .co and nonapproved .com registrations.
   const parts = value.split("@");
   const local = parts[0] || "";
   const domain = parts[1] || "";
@@ -176,8 +202,25 @@ export function getRegistrationEmailError(email: string): string | null {
   if (suggestedProvider) {
     return `Check your email domain. Did you mean @${suggestedProvider}? Please correct it to continue.`;
   }
+  const canonicalGmail = canonicalGmailMailbox(value);
+  if (canonicalGmail && CONFIRMED_CANONICAL_SHARED_GMAIL_INBOXES.has(canonicalGmail)) {
+    return "This Gmail inbox was identified in temporary-email testing. All dotted variants are blocked.";
+  }
+  // Gmail usernames normally use letters, digits and optional dots.
+  // Reject highly fragmented dot placements such as x.x.xx.x.x.xx.x.
+  // This is a stricter *registration-format policy*, NOT proof of fake mail.
+  // A legitimate Gmail owner can remove unnecessary dots: the inbox is the same.
+  if (domain === "gmail.com" && !/^[a-z0-9.]+$/.test(local)) {
+    return "Gmail addresses may contain only letters, numbers and dots. Use your main Gmail address.";
+  }
+  if (domain === "gmail.com" && (local.match(/\./g) || []).length >= 4) {
+    return "Too many dots in this Gmail address. Remove unnecessary dots and use your main Gmail address.";
+  }
   if (isKnownDisposableEmail(value)) {
     return "Temporary email addresses are not accepted. Use a permanent email address.";
+  }
+  if (!ALLOWED_NEW_SIGNUP_EMAIL_DOMAINS.has(domain)) {
+    return "New VolunServe registration accepts only @gmail.com or @yahoo.com email addresses.";
   }
   return null;
 }

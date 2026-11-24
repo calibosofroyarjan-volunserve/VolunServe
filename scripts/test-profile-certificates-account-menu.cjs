@@ -14,14 +14,15 @@ function menu(id) {
  assert.ok(begin>-1&&end>begin,"missing "+id);
  return [...layout.slice(begin,end).matchAll(/name:\s*"([^"]+)"/g)].map(x=>x[1]);
 }
-test("Resident and Volunteer menus preserve desktop My Certificates and avoid duplicate account links",()=>{
+test("Resident and Volunteer sidebar menus keep only actual service modules",()=>{
  assert.deepEqual(menu("residentDesktopTabs"),["index","disaster-response","resident","community-events","donation"]);
  assert.deepEqual(menu("volunteerDesktopTabs"),["index","volunteer","community-events","certificate"]);
  for(const id of ["residentDesktopTabs","volunteerDesktopTabs","residentMobileTabs","volunteerMobileTabs"])
    for(const duplicate of ["profile","volunteer-impact"])
      assert.ok(!menu(id).includes(duplicate),duplicate+" leaked into "+id);
- for(const id of ["residentDesktopTabs","residentMobileTabs","volunteerMobileTabs"])
-   assert.ok(!menu(id).includes("certificate"),"Certificates incorrectly shown in "+id);
+ assert.ok(!menu("residentDesktopTabs").includes("certificate"));
+ assert.ok(!menu("residentMobileTabs").includes("certificate"));
+ assert.ok(!menu("volunteerMobileTabs").includes("certificate"),"Mobile sidebar uses desktop menuItems, not bottom tab shortcuts");
  assert.deepEqual(menu("residentMobileTabs"),["index","disaster-response","resident","community-events"]);
  assert.deepEqual(menu("volunteerMobileTabs"),["index","volunteer","community-events"]);
 });
@@ -35,7 +36,9 @@ test("Profile retains secure progress and certificate data",()=>{
  assert.match(profile,/label:"My Progress"/);
  assert.match(profile,/key: "certificates"/);
  assert.match(profile,/<VolunteerImpact embedded \/>/);
- assert.match(profile,/<CertificateCard/);
+ assert.match(profile,/<IssuedCertificateGallery/);
+ assert.match(profile,/<CertificatePaper/);
+ assert.match(profile,/verificationStatus===\"issued\"/);
  assert.match(profile,/volunteerAccess &&/);
  assert.match(profile,/activeTab ===\s*"certificates"/);
 });

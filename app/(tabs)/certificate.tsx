@@ -362,7 +362,7 @@ h2{font:bold 25px/1.3 Georgia,serif;color:#184552;margin:4mm 0}.event-detail{fon
 };
 
 // Shared on-screen certificate paper. Both certificate types keep their own data.
-function CertificatePaper({
+export function CertificatePaper({
   certificate,
   displayName,
 }: {
@@ -459,7 +459,7 @@ function CertificatePaper({
 
 // Dashboard thumbnail only — the original CertificatePaper and A4 printable
 // certificate above are deliberately untouched.
-function CertificateMiniPreview({
+export function CertificateMiniPreview({
   certificate,
   displayName,
 }: {

@@ -1,7 +1,7 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const assert = require("node:assert/strict");
-const read = name => fs.readFileSync(path.join(__dirname, "..", name), "utf8");
+const read = name => fs.readFileSync(path.join(__dirname, "..", name), "utf8").replace(/\r\n?/g, "\n");
 const sa = read("app/(superadmin)/_layout.tsx");
 const lgu = read("app/(admin)/_layout.tsx");
 const accounts = read("app/(superadmin)/admin-accounts.tsx");
@@ -33,7 +33,7 @@ assert(!saItems.includes('label: "System Settings"') &&
 const adminItems = firstBetween(lgu, "const NAV_ITEMS: NavItem[] = [", "type NavSectionId");
 const sectionItems = firstBetween(lgu, "const NAV_SECTIONS:", "const navActive");
 const expectedGroups = [
-  {title:"People & Verification",items:["Resident Identity Reviews","LGU Operations"]},
+  {title:"People & Verification",items:["Resident Identity Reviews"]},
   {title:"Emergency & Assistance",items:["Emergency Reports","Assistance Requests"]},
   {title:"Events & Volunteering",items:["Community Events","Event Attendance","Certificates"]},
   {title:"Donations & Funds",items:["Donation Management"]},

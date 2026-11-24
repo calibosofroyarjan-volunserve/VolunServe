@@ -1,4 +1,5 @@
 import { canResumeEmailFirstSignup } from "../lib/signupFeature";
+import { shouldLeaveGuestLanding } from "../lib/guestLandingRedirect";
 
 import { useFonts } from "expo-font";
 import AppDialogHost from "../components/ui/AppDialogHost";
@@ -163,7 +164,8 @@ export default function RootLayout() {
     const isSignupRoute =
       rootSegment === "signup";
     const isIdentityVerificationRoute =
-      rootSegment === "identity-verification";
+      rootSegment === "identity-verification" ||
+      rootSegment === "identity-manual-review";
     const isTabsRoute =
       rootSegment === "(tabs)";
     const isAdminRoute =
@@ -174,10 +176,30 @@ export default function RootLayout() {
       rootSegment === "(lgu)";
 
     /*
-     * Public Mode and certificate verification are available whether
-     * the user is signed in or not.
+     * Guest Preview must remain available without signing in. But the
+     * /public landing should not trap a valid signed-in account there.
+     * Only redirect when the authenticated account has a matching, approved
+     * backend profile. Never create or link a Guest identity here.
+     * Explicitly chosen /public/preview and signed-out Guest Mode stay public.
      */
-    if (isPublicRoute || isCertificateVerificationRoute || isAdminRequestRoute) {
+    if (isPublicRoute) {
+      if (shouldLeaveGuestLanding({
+        rootSegment,
+        childSegment,
+        authUid: authUser?.uid,
+        authEmail: authUser?.email,
+        authEmailVerified: authUser?.emailVerified === true,
+        profileRole: profile?.role,
+        profileEmail: profile?.email,
+        approvedProfile: isApprovedProfile(profile),
+        disposableEmail: !!authUser?.email &&
+          isKnownDisposableEmail(authUser.email),
+      }) && profile) {
+        router.replace(homeRouteForProfile(profile) as any);
+      }
+      return;
+    }
+    if (isCertificateVerificationRoute || isAdminRequestRoute) {
       return;
     }
 
@@ -449,6 +471,7 @@ export default function RootLayout() {
         <Stack.Screen name="admin-request" />
         <Stack.Screen name="signup" />
         <Stack.Screen name="identity-verification" />
+        <Stack.Screen name="identity-manual-review" />
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="(admin)" />
         <Stack.Screen name="(superadmin)" />

@@ -1,3 +1,4 @@
+import {getSafeVolunServeBackendBaseUrl} from "../../lib/stagingExpoServiceIsolation";
 import { volunserveTypography as vsType } from "../../constants/volunserveLiveUi";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { router } from "expo-router";
@@ -300,7 +301,7 @@ export default function DonationAdminDashboard({ mode, initialView = "overview" 
     try {
       const token = await auth.currentUser?.getIdToken();
       if (!token) throw new Error("Your session has expired. Sign in again.");
-      const response = await fetch("https://volunserve.onrender.com/api/admin/donations/alerts/sync", {
+      const response = await fetch(getSafeVolunServeBackendBaseUrl()+"/api/admin/donations/alerts/sync", {
         method: "POST",
         headers: {Authorization: "Bearer " + token, "Content-Type": "application/json"},
         body: JSON.stringify({}),

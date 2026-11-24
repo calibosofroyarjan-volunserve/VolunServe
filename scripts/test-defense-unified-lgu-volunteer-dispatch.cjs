@@ -5,22 +5,21 @@ const read = path => fs.readFileSync(path, "utf8");
 const nav = read("app/(admin)/_layout.tsx");
 const command = read("app/(admin)/command-center.tsx");
 const cases = read("app/(admin)/admin-cases.tsx");
+const matching = read("components/admin/EmergencyFiveTabDesign.tsx");
 const duty = read("app/(admin)/lgu-attendance.tsx");
 const staff = read("app/(admin)/lgu-members.tsx");
 for (const removed of ['label: "LGU Personnel"', 'label: "LGU Attendance"']) {
   assert(!nav.includes(removed), "Redundant LGU sidebar item: " + removed);
 }
-assert(nav.includes('label: "LGU Operations"') &&
-  nav.includes('labels: ["Resident Identity Reviews", "LGU Operations"]') &&
-  nav.includes('route: "/(admin)/lgu-attendance"'),
-  "Personnel and Attendance must share one authorized LGU destination");
+assert(!nav.includes('label: "LGU Operations"') &&
+  nav.includes('labels: ["Resident Identity Reviews"]') &&
+  !nav.includes('route: "/(admin)/lgu-attendance"'),
+  "Retired LGU Operations must not be available from Admin navigation");
 assert(duty.includes("export function LguAttendancePanel()") &&
   duty.includes("export default function LguOperationsWorkspace()") &&
-  duty.includes("<LguPersonnelPanel />") &&
-  duty.includes("<LguAttendancePanel />") &&
-  duty.includes('title: "Duty & Attendance"') &&
-  duty.includes('title: "Personnel Accounts"'),
-  "One LGU Operations workspace must retain both duty tracking and staff management");
+  duty.includes('<Redirect href="/(admin)/admin-cases" />') &&
+  !duty.includes("<LguPersonnelPanel />"),
+  "Legacy LGU Operations URL must redirect to Admin Emergency Reports; historical functions remain untouched");
 assert(staff.includes("export function LguPersonnelPanel()") &&
   staff.includes('href="/(admin)/lgu-attendance?section=personnel"') &&
   staff.includes("/api/admin/lgu/personnel"),
@@ -39,8 +38,8 @@ assert(cases.includes('scrollbarWidth: "thin"') &&
   "Emergency case workspace must visibly scroll as needed");
 assert(!cases.includes("Google Maps ↗") &&
   !cases.includes("https://www.google.com/maps/search/") &&
-  cases.includes("Open Live Map") &&
-  cases.includes('detailTab === "map"'),
+  matching.includes("Open Emergency Response Map") &&
+  cases.includes('/(admin)/admin-live-map?caseId=${encodeURIComponent(incident.id)}'),
   "Retire external Google Maps button but keep secure embedded Emergency Live Map");
 assert(cases.includes("approvedApplications") &&
   cases.includes('String(data.status || "").toLowerCase() === "approved"') &&
@@ -49,8 +48,8 @@ assert(cases.includes("approvedApplications") &&
 assert(cases.includes("return !isReporter && skillSearchMatch && availabilityMatch;") &&
   !cases.includes('reason: "Currently unavailable / off duty"') &&
   cases.includes("offline ? \"Offline · offer allowed\"") &&
-  cases.includes('pageFive(volunteerCandidates, volunteerPage)'),
-  "All approved Volunteers must be visible and offline status must not prohibit offers");
+  cases.includes('pageFive(eligibleVolunteerCandidates, volunteerPage)'),
+  "Eligible approved Volunteers must be visible and offline status must not prohibit offers");
 assert(cases.includes("runTransaction(db, async (transaction)") &&
   cases.includes("responderLockSnapshot.exists()") &&
   cases.includes("hasCurrentSkillMatch") &&
@@ -63,8 +62,17 @@ assert(cases.includes('currentVolunteerBarangay !== currentCaseBarangay') &&
   cases.includes("!volunteerSupportAvailable") &&
   cases.includes("!caseOpenForSupport"),
   "Maintain local eligibility and case verification; do not promise unrestricted dispatch");
-assert(cases.includes("pageFive(onDutyPersonnel") &&
-  cases.includes("pageFive(activeAssignments") &&
+assert(!cases.includes("pageFive(onDutyPersonnel") &&
+  cases.includes("pageFive(eligibleVolunteerCandidates") &&
+  cases.includes("activeAssignments={activeAssignments}") &&
+  matching.includes("offers.slice((page - 1) * 5, page * 5)") &&
   cases.includes("pageFive(videoEvidence"),
-  "Preserve secondary Emergency pagination");
-console.log("PASS unified LGU sidebar & duty page, visible scrollbars, secure live map, offline Volunteer offers and all Emergency records");
+  "Only Volunteer assignment and existing Emergency lists must retain pagination");
+assert(cases.includes('["personnel", "Volunteers"]') &&
+  matching.includes("Automatic Volunteer Assignment") &&
+  !cases.includes('onPress={() => void assignLguPersonnelToCase(incident, personnel)}') &&
+  !cases.includes('<Text style={styles.personnelCleanTitle}>LGU Primary Responder</Text>') &&
+  cases.includes('["accepted", "responding", "on_site"].includes(String(item.status))') &&
+  cases.includes("Volunteer Acceptance Required"),
+  "Admin Emergency must assign approved Volunteers only; offline offers remain pending until accepted");
+console.log("PASS retired LGU Operations UI, Volunteer-only dispatch with offline offers, protected Emergency lists and legacy rule preservation");

@@ -1,6 +1,7 @@
 import { volunserveTypography as vsType } from "../constants/volunserveLiveUi";
 import { liveUi as designUi } from "../constants/volunserveLiveUi";
 import EmailFirstSignup from "../components/auth/EmailFirstSignup";
+import { communitySocialRequest } from "../lib/communitySocial";
 import { userFacingError } from "../lib/userFacingError";
 import { EMAIL_FIRST_SIGNUP_ENABLED } from "../lib/signupFeature";
 import { getRegistrationEmailError } from "../lib/registrationEmailPolicy";
@@ -50,6 +51,7 @@ type FormState = {
   password: string;
   confirmPassword: string;
   acceptTerms: boolean;
+  directoryConsent: boolean;
   confirmReview: boolean;
 };
 
@@ -405,9 +407,9 @@ function TermsModal({ visible, onClose }: { visible: boolean; onClose: () => voi
           <Text style={styles.termsH1}>VolunServe Registration Terms</Text>
           <Text style={styles.termsP}>By registering, you confirm the information you provide is accurate and complete. Your Basic Account can be created without administrator approval. Resident verification is a separate identity-verification step.</Text>
           <Text style={styles.termsH2}>Data Privacy</Text>
-          <Text style={styles.termsP}>We collect your personal data including name, contact information, and address to support LGU service delivery, coordination, and verification. Access is restricted to authorized administrators.</Text>
+          <Text style={styles.termsP}>Your name and approved Resident/Volunteer role appear automatically in the member directory, visible only to other approved signed-in members. Your contact information, address and identity evidence stay private. Profile photo, online status and Last Seen require separate choices. Private messaging is available by default among approved members, including when offline; you can pause messages, block or report unwanted contact.</Text>
           <Text style={styles.termsH2}>Consent</Text>
-          <Text style={styles.termsP}>You consent to secure processing of your data for account registration, resident identity verification, volunteer coordination, and program communication. You may request correction of incorrect information via the administrator.</Text>
+          <Text style={styles.termsP}>By registering, you acknowledge that your basic name and role appear in the authenticated member directory. Sharing your photo is optional and requires separate agreement. Contact an administrator for privacy concerns or account data corrections.</Text>
           <Text style={styles.termsH2}>Security</Text>
           <Text style={styles.termsP}>Use a strong password. Do not share your login credentials. Suspicious activity may result in account review.</Text>
           <View style={{ height: 24 }} />
@@ -450,6 +452,7 @@ function LegacySignup() {
     password: "",
     confirmPassword: "",
     acceptTerms: false,
+    directoryConsent: false,
     confirmReview: false,
   });
 
@@ -696,6 +699,12 @@ function LegacySignup() {
         occupationSpecialization: formData.occupationSpecialization || "",
         occupationOther: formData.occupationOther || "",
       });
+
+      // Directory sharing is optional and must never block successful registration.
+      if(registeredUser.emailVerified && formData.directoryConsent) {
+        void communitySocialRequest("/api/community/directory/preferences","POST",{directoryListed:true})
+          .catch(()=>{/* The new member can retry through Community Members. */});
+      }
 
       const successTitle = registeredUser.emailVerified ? "Basic Account Created" : "Verify Your Email";
       const successMessage = googleBound
@@ -1277,6 +1286,11 @@ function LegacySignup() {
                       label="I confirm that the information provided is accurate."
                       checked={formData.confirmReview}
                       onPress={() => updateField("confirmReview", !formData.confirmReview)}
+                    />
+                    <CheckRow
+                      label="Optional: also show my profile photo to other signed-in Community Members. My name and role are listed automatically; my contact details and online status stay private."
+                      checked={formData.directoryConsent}
+                      onPress={() => updateField("directoryConsent", !formData.directoryConsent)}
                     />
                   </View>
 

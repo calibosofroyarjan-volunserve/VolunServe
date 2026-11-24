@@ -1,8 +1,7 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { collection, onSnapshot, orderBy, query, Timestamp, where } from "firebase/firestore";
+import { collection, onSnapshot, query, where } from "firebase/firestore";
 import { useEffect, useState } from "react";
 import { db } from "./firebase";
-import { usePublishedAnnouncementCutoff } from "./usePublishedAnnouncementCutoff";
 
 export type AnnouncementAlert = {
   id: string;
@@ -21,7 +20,6 @@ const keyFor = (uid: string) => `volunserve:seen-announcements:${uid}`;
  * Dismissal is stored on this device; original announcements remain unchanged.
  */
 export function useAnnouncementAlerts(uid: string | null | undefined) {
-  const cutoff = usePublishedAnnouncementCutoff();
   const [alerts, setAlerts] = useState<AnnouncementAlert[]>([]);
   const [seen, setSeen] = useState<string[]>([]);
 
@@ -42,8 +40,7 @@ export function useAnnouncementAlerts(uid: string | null | undefined) {
     if (!uid) return;
     const q = query(
       collection(db, "announcements"),
-      where("publishAt", "<=", Timestamp.fromDate(cutoff)),
-      orderBy("publishAt", "desc")
+      where("audience", "==", "all")
     );
     return onSnapshot(q, snapshot => {
       const records = snapshot.docs.flatMap(document => {
@@ -58,12 +55,16 @@ export function useAnnouncementAlerts(uid: string | null | undefined) {
           createdAt: data.publishAt || data.createdAt,
         }];
       });
+      records.sort((a, b) => {
+        const millis = (value: any) => typeof value?.toMillis === "function" ? value.toMillis() : 0;
+        return millis(b.createdAt) - millis(a.createdAt);
+      });
       setAlerts(records);
     }, error => {
       console.warn("Could not load announcement alerts", error);
       setAlerts([]);
     });
-  }, [uid, cutoff]);
+  }, [uid]);
 
   const items = alerts.map(item => ({ ...item, read: seen.includes(item.id) }));
   const markSeen = async (ids: string[]) => {

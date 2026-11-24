@@ -1,7 +1,8 @@
-import { volunserveTypography as vsType } from "../../constants/volunserveLiveUi";
-import { liveUi as designUi } from "../../constants/volunserveLiveUi";
 import { AppAlert } from "../../lib/appDialog";
 import VolunteerImpact from "./volunteer-impact";
+import { CertificatePaper } from "./certificate";
+import { IssuedCertificateGallery } from "../../components/profile/IssuedCertificateGallery";
+import type { GalleryCertificate } from "../../components/profile/IssuedCertificateGallery";
 import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { updateProfile, User } from "firebase/auth";
@@ -374,6 +375,7 @@ export default function Profile() {
     useState<
       GenericRecord[]
     >([]);
+  const [selectedIssuedCertificate,setSelectedIssuedCertificate] = useState<GalleryCertificate|null>(null);
 
   const [
     activityLoading,
@@ -1082,10 +1084,7 @@ export default function Profile() {
       key: "info",
       label: "Info",
     },
-    {
-      key: "activity",
-      label: "Activity",
-    },
+    ...(currentMode !== "volunteer" ? [{key:"activity" as const,label:"Activity"}] : []),
     ...(currentMode === "volunteer" && volunteerAccess
       ? [{key:"progress" as const,label:"My Progress"}]
       : []),
@@ -1138,11 +1137,10 @@ export default function Profile() {
           styles.profileCard
         }
       >
-        <View
-          style={
-            styles.cover
-          }
-        />
+        <View style={styles.cover}>
+          <Text style={styles.coverWatermark}>VolunServe</Text>
+          <Text style={styles.coverTagline}>CITY OF SAN JOSE DEL MONTE</Text>
+        </View>
 
         <View
           style={[
@@ -1383,123 +1381,41 @@ export default function Profile() {
         )}
       </View>
 
-      {activeTab ===
-        "info" && (
+      {activeTab === "info" && (
         <>
-          <IdentityAccessCard
-            identityStatus={
-              identityStatus
-            }
-            volunteerAccess={
-              volunteerAccess
-            }
-            volunteerStatus={
-              volunteerStatus
-            }
-            onVerify={() =>
-              router.push(
-                "/identity-verification" as any,
-              )
-            }
-            onApplyVolunteer={() =>
-              router.push(
-                "/volunteer-application" as any,
-              )
-            }
-          />
-
-          <View
-            style={[
-              styles.infoGrid,
-              compact &&
-                styles.infoGridCompact,
-            ]}
-          >
-          <View
-            style={
-              styles.sectionCard
-            }
-          >
-            <SectionHeading
-              icon="person-outline"
-              title="Personal Information"
+          {(currentMode !== "volunteer" || identityStatus !== "verified") && (
+            <IdentityAccessCard
+              identityStatus={identityStatus}
+              volunteerAccess={volunteerAccess}
+              volunteerStatus={volunteerStatus}
+              onVerify={() => router.push("/identity-verification" as any)}
+              onApplyVolunteer={() => router.push("/volunteer-application" as any)}
             />
-
-            <InfoRow
-              label="Full Name"
-              value={
-                profile.fullName
-              }
-            />
-
-            <InfoRow
-              label="Email Address"
-              value={
-                profile.email
-              }
-            />
-
-            <InfoRow
-              label="Phone Number"
-              value={
-                profile.phoneNumber
-              }
-            />
-
-            <InfoRow
-              label="Occupation"
-              value={
-                displayOccupation
-              }
-            />
-          </View>
-
-          <View
-            style={
-              styles.sectionCard
-            }
-          >
-            <SectionHeading
-              icon="location-outline"
-              title="Account Information"
-            />
-
-            <InfoRow
-              label="Current Mode"
-              value={
-                displayRole
-              }
-            />
-
-            <InfoRow label="Barangay" value={profile.barangay || "Not provided"} />
-
-            <InfoRow
-              label="Address"
-              value={
-                displayLocation
-              }
-            />
-
-            <InfoRow
-              label="Account Status"
-              value={
-                humanize(
-                  profile.status ||
-                    "approved",
-                )
-              }
-            />
-
-            <InfoRow
-              label="Date Joined"
-              value={
-                formatDate(
-                  profile.createdAt,
-                )
-              }
-              last
-            />
-          </View>
+          )}
+          <View style={[styles.detailCards,compact&&styles.detailCardsCompact]}>
+            <View style={styles.detailCard}>
+              <SectionHeading icon="person-outline" title="Personal Details"/>
+              <InfoRow label="Full Name" value={profile.fullName}/>
+              <InfoRow label="Occupation" value={displayOccupation}/>
+              <InfoRow label="Barangay" value={profile.barangay||"Not provided"}/>
+              <InfoRow label="Address" value={displayLocation} last/>
+            </View>
+            <View style={styles.detailCard}>
+              <SectionHeading icon="mail-outline" title="Contact Information"/>
+              <InfoRow label="Email Address" value={profile.email}/>
+              <InfoRow label="Phone Number" value={profile.phoneNumber} last/>
+              <View style={styles.ownerPrivacyNotice}>
+                <Ionicons name="lock-closed-outline" size={15} color="#477B6C"/>
+                <Text style={styles.ownerPrivacyText}>Only you can view and edit these contact details.</Text>
+              </View>
+            </View>
+            <View style={styles.detailCard}>
+              <SectionHeading icon="shield-checkmark-outline" title="Volunteer Status"/>
+              <InfoRow label="Identity" value={identityStatus === "verified" ? "Verified" : humanize(identityStatus)}/>
+              <InfoRow label="Volunteer Access" value={volunteerAccess?"Enabled":humanize(volunteerStatus)}/>
+              <InfoRow label="Account Status" value={humanize(profile.status||"approved")}/>
+              <InfoRow label="Date Joined" value={formatDate(profile.createdAt)} last/>
+            </View>
           </View>
         </>
       )}
@@ -1673,57 +1589,82 @@ export default function Profile() {
       )}
 
       {activeTab === "progress" && currentMode === "volunteer" && volunteerAccess && (
-        <VolunteerImpact embedded />
+        <>
+          <VolunteerImpact embedded />
+          <View style={[styles.sectionCard,{marginTop:16}]}>
+            <SectionHeading icon="checkmark-done-outline" title="Verified Volunteer Activity"/>
+            <Text style={styles.activityHint}>Verified emergency contributions are tracked separately from event attendance and certificates.</Text>
+            {activityLoading ? <InlineLoading /> : activityError ? (
+              <EmptyState icon="alert-circle-outline" title="Activity unavailable" message={activityError}/>
+            ) : volunteerActivity.length > 0 ? volunteerActivity.map(item => (
+              <ActivityCard key={item.id}
+                title={item.contributionSummary || humanize(item.contributionType) || "Verified contribution"}
+                subtitle={item.caseTitle || ("Case "+(item.caseId || "—"))}
+                status={item.status||"verified"}
+                date={item.verifiedAt||item.completedAt||item.createdAt}
+                rows={[
+                  {label:"Contribution", value:humanize(item.contributionType)},
+                  {label:"People Helped", value:String(item.peopleHelped??0)},
+                  {label:"Outcome",value:humanize(item.outcome)},
+                ]}/>
+            )) : <EmptyState icon="checkmark-done-outline" title="No verified activity yet"
+              message="Verified volunteer service will appear here after resident confirmation."/>}
+          </View>
+        </>
       )}
 
-      {activeTab ===
-        "certificates" &&
-        volunteerAccess && (
-          <View
-            style={
-              styles.sectionCard
-            }
-          >
-            <SectionHeading
-              icon="ribbon-outline"
-              title="Certificates"
-            />
-
-            {certificateLoading ? (
-              <InlineLoading />
-            ) : certificateError ? (
-              <EmptyState
-                icon="alert-circle-outline"
-                title="Certificates unavailable"
-                message={
-                  certificateError
-                }
-              />
-            ) : certificates.length >
-              0 ? (
-              certificates.map(
-                (
-                  item,
-                ) => (
-                  <CertificateCard
-                    key={
-                      item.id
-                    }
-                    item={
-                      item
-                    }
-                  />
-                ),
-              )
-            ) : (
-              <EmptyState
-                icon="ribbon-outline"
-                title="No certificates yet"
-                message="Certificates issued from verified volunteer service will appear here."
-              />
-            )}
+      {activeTab === "certificates" && volunteerAccess && (
+        <View style={styles.certificatePanel}>
+          <View style={styles.certificateHeader}>
+            <View style={{flex:1}}>
+              <SectionHeading icon="ribbon-outline" title="My Certificates"/>
+              <Text style={styles.activityHint}>
+                Your actual issued certificates from verified community events and emergency response.
+              </Text>
+            </View>
+            <View style={styles.certCounter}>
+              <Ionicons name="ribbon-outline" size={17} color="#08734D"/>
+              <Text style={styles.certCounterText}>
+                {certificates.filter(item=>item.verificationStatus==="issued").length} issued
+              </Text>
+            </View>
           </View>
-        )}
+          {certificateLoading ? <InlineLoading/> : certificateError ? (
+            <EmptyState icon="alert-circle-outline" title="Certificates unavailable" message={certificateError}/>
+          ) : (
+            <IssuedCertificateGallery
+              certificates={certificates}
+              name={profile.fullName||"Volunteer"}
+              compact={compact}
+              onView={setSelectedIssuedCertificate}
+            />
+          )}
+        </View>
+      )}
+
+      <Modal visible={!!selectedIssuedCertificate} transparent animationType="fade"
+        onRequestClose={()=>setSelectedIssuedCertificate(null)}>
+        <View style={styles.issuedPaperBackdrop}>
+          <View style={styles.issuedPaperDialog}>
+            <View style={styles.issuedPaperHeader}>
+              <View style={{flex:1}}>
+                <Text style={styles.issuedPaperHeading}>Official Issued Certificate</Text>
+                <Text style={styles.issuedPaperSubtitle}>Original VolunServe record · Read-only preview</Text>
+              </View>
+              <TouchableOpacity accessibilityRole="button" accessibilityLabel="Close certificate"
+                onPress={()=>setSelectedIssuedCertificate(null)} style={styles.issuedPaperClose}>
+                <Ionicons name="close" size={20} color="#32665B"/>
+              </TouchableOpacity>
+            </View>
+            <ScrollView contentContainerStyle={{padding:18,paddingBottom:30}} nestedScrollEnabled>
+              {selectedIssuedCertificate && (
+                <CertificatePaper certificate={selectedIssuedCertificate as any}
+                  displayName={profile.fullName||"Volunteer"}/>
+              )}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
 
       <Modal visible={editOpen} transparent animationType="fade" onRequestClose={closeProfileEditor}>
         <View style={styles.modalBackdrop}>
@@ -2816,19 +2757,41 @@ function ProfileInput({label,value,onChange,placeholder,required=false,keyboardT
 
 const styles =
   StyleSheet.create({
+    detailCards:{flexDirection:"row",alignItems:"stretch",gap:14,marginTop:4},
+    detailCardsCompact:{flexDirection:"column"},
+    detailCard:{flex:1,minWidth:0,backgroundColor:"#FFFFFF",borderWidth:1,borderColor:"#DDE9E4",
+      borderRadius:14,padding:17,gap:4},
+    ownerPrivacyNotice:{flexDirection:"row",alignItems:"flex-start",gap:7,padding:12,marginTop:15,
+      backgroundColor:"#F1F8F4",borderRadius:9},
+    ownerPrivacyText:{flex:1,fontSize:11,lineHeight:17,color:"#5B7F74"},
+    coverWatermark:{color:"#EBFFF5",fontSize:22,fontWeight:"900",textAlign:"right",
+      marginRight:22,marginTop:19,opacity:0.68},
+    coverTagline:{color:"#CCEADE",textAlign:"right",fontSize:9,fontWeight:"800",
+      letterSpacing:0.6,marginRight:22,marginTop:2},
+    activityHint:{fontSize:12,lineHeight:19,color:"#66817B",marginTop:5,marginBottom:9},
+    certificatePanel:{borderRadius:15,backgroundColor:"#FFFFFF",borderWidth:1,
+      borderColor:"#DCE9E3",padding:19,gap:13},
+    certificateHeader:{flexDirection:"row",gap:12,alignItems:"center",justifyContent:"space-between"},
+    certCounter:{backgroundColor:"#E8F8EF",borderRadius:10,paddingHorizontal:11,paddingVertical:8,
+      flexDirection:"row",alignItems:"center",gap:6},
+    certCounterText:{fontSize:11,fontWeight:"800",color:"#08734D"},
+    issuedPaperBackdrop:{flex:1,justifyContent:"center",alignItems:"center",
+      padding:16,backgroundColor:"rgba(8,32,26,0.69)"},
+    issuedPaperDialog:{width:"100%",maxWidth:720,maxHeight:"94%",borderRadius:15,
+      overflow:"hidden",backgroundColor:"#FFFFFF"},
+    issuedPaperHeader:{flexDirection:"row",alignItems:"center",gap:12,padding:17,
+      borderBottomWidth:1,borderBottomColor:"#DDE9E4"},
+    issuedPaperHeading:{fontWeight:"800",fontSize:16,color:"#143B32"},
+    issuedPaperSubtitle:{fontSize:11,color:"#66817B",marginTop:4},
+    issuedPaperClose:{width:36,height:36,borderRadius:10,backgroundColor:"#EEF6F2",
+      justifyContent:"center",alignItems:"center"},
+
     screen: {
       flex: 1,
       backgroundColor: "#F6F8F7",
     },
 
-    page: {
-      width: "100%",
-      maxWidth: 1180,
-      alignSelf: "center",
-      paddingHorizontal: 24,
-      paddingTop: 28,
-      paddingBottom: 70,
-    },
+    page: { width:"100%",maxWidth:1190,alignSelf:"center",paddingHorizontal:23,paddingTop:21,paddingBottom:64 },
 
     loadingScreen: {
       flex: 1,
@@ -2843,59 +2806,23 @@ const styles =
     loadingText: {
       marginTop: 12,
       color: "#64748B",
-      fontSize: vsType.size.label, fontFamily: vsType.family,
+      fontSize: 13,
       fontWeight: "600",
     },
 
-    pageHeading: {
-      marginBottom: 20,
-    },
+    pageHeading: { marginBottom: 18 },
 
-    pageTitle: {
-      color: "#173D32",
-      fontSize: designUi.type.page.fontSize,
-      fontWeight: designUi.type.page.fontWeight,
-      letterSpacing: -0.6, lineHeight: designUi.type.page.lineHeight,},
+    pageTitle: { color: "#173C39", fontSize: 26, fontWeight: "800", letterSpacing: -0.4, lineHeight: 34 },
 
-    pageSubtitle: {
-      marginTop: 5,
-      color: "#64748B",
-      fontSize: designUi.type.body.fontSize, lineHeight: designUi.type.body.lineHeight, fontWeight: designUi.type.body.fontWeight,},
+    pageSubtitle: { marginTop: 5, color: "#66808B", fontSize: 13, lineHeight: 20 },
 
-    profileCard: {
-      overflow: "hidden",
-      borderRadius: 18,
-      backgroundColor:
-        "#FFFFFF",
-      borderWidth: 1,
-      borderColor:
-        "#E2E8F0",
-    },
+    profileCard: { overflow: "hidden", borderRadius: 15, backgroundColor: "#FFFFFF", borderWidth: 1, borderColor: "#DAE8E3" },
 
-    cover: {
-      height: 116,
-      backgroundColor:
-        "#0B4D3C",
-    },
+    cover: { height: 115, backgroundColor: "#064D3C" },
 
-    profileHeroBody: {
-      minHeight: 150,
-      flexDirection: "row",
-      alignItems: "center",
-      paddingHorizontal: 28,
-      paddingBottom: 22,
-      gap: 20,
-    },
+    profileHeroBody: { minHeight:112,flexDirection:"row",alignItems:"center",paddingHorizontal:22,paddingBottom:15,gap:18 },
 
-    profileHeroBodyCompact: {
-      flexDirection:
-        "column",
-      alignItems:
-        "flex-start",
-      paddingHorizontal: 20,
-      paddingBottom: 22,
-      gap: 12,
-    },
+    profileHeroBodyCompact: { flexDirection: "column", alignItems: "flex-start", paddingHorizontal: 16, paddingBottom: 17, gap: 11 },
 
     avatarWrap: {
       width: 116,
@@ -2937,8 +2864,8 @@ const styles =
 
     avatarInitials: {
       color: "#087A5D",
-      fontSize: vsType.size.display, fontFamily: vsType.family,
-      fontWeight: "800",
+      fontSize: 34,
+      fontWeight: "900",
     },
 
     activeDot: {
@@ -2955,11 +2882,7 @@ const styles =
         "#FFFFFF",
     },
 
-    profileIdentity: {
-      flex: 1,
-      minWidth: 0,
-      paddingTop: 18,
-    },
+    profileIdentity: { flex: 1, minWidth: 0, paddingTop: 8 },
 
     nameRow: {
       flexDirection: "row",
@@ -2968,12 +2891,7 @@ const styles =
       gap: 10,
     },
 
-    profileName: {
-      color: "#0F172A",
-      fontSize: vsType.size.title, fontFamily: vsType.family,
-      fontWeight: "800",
-      flexShrink: 1,
-    },
+    profileName: { color: "#183C3A", fontSize: 23, fontWeight: "800", letterSpacing: -0.4, flexShrink: 1 },
 
     modeBadge: {
       minHeight: 30,
@@ -2988,75 +2906,23 @@ const styles =
 
     modeBadgeText: {
       color: "#4338CA",
-      fontSize: vsType.size.meta, fontFamily: vsType.family,
+      fontSize: 12,
       fontWeight: "800",
     },
 
-    identityLine: {
-      marginTop: 6,
-      color: "#64748B",
-      fontSize: vsType.size.label, fontFamily: vsType.family,
-    },
+    identityLine: { marginTop: 5, color: "#607D87", fontSize: 12, lineHeight: 18 },
 
-    editProfileButton: {
-      minHeight: 42,
-      flexDirection: "row",
-      alignItems: "center",
-      justifyContent:
-        "center",
-      gap: 7,
-      paddingHorizontal: 15,
-      borderRadius: 11,
-      backgroundColor:
-        "#E7F7EE",
-      borderWidth: 1,
-      borderColor:
-        "#BCE2CE",
-      marginTop: 18,
-    },
+    editProfileButton: { minHeight: 41, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 7, paddingHorizontal: 15, borderRadius: 10, backgroundColor: "#EAF7F0", borderWidth: 1, borderColor: "#BBDDD0", marginTop: 12 },
 
-    editProfileText: {
-      color: "#087A5D",
-      fontSize: vsType.size.label, fontFamily: vsType.family,
-      fontWeight: "800",
-    },
+    editProfileText: { color: "#007C66", fontSize: 12, fontWeight: "800" },
 
-    tabs: {
-      marginTop: 18,
-      marginBottom: 14,
-      flexDirection: "row",
-      alignItems: "center",
-      flexWrap: "wrap",
-      gap: 6,
-      padding: 5,
-      alignSelf:
-        "flex-start",
-      borderRadius: 12,
-      backgroundColor:
-        "#FFFFFF",
-      borderWidth: 1,
-      borderColor:
-        "#E2E8F0",
-    },
+    tabs: { marginTop:16,marginBottom:16,flexDirection:"row",flexWrap:"wrap",gap:5,padding:5,alignSelf:"flex-start",borderRadius:12,backgroundColor:"#FFFFFF",borderWidth:1,borderColor:"#DDE8E5" },
 
-    tab: {
-      minHeight: 36,
-      justifyContent:
-        "center",
-      paddingHorizontal: 17,
-      borderRadius: 9,
-    },
+    tab: { minHeight:40,justifyContent:"center",paddingHorizontal:19,borderRadius:9 },
 
-    tabActive: {
-      backgroundColor:
-        "#087A5D",
-    },
+    tabActive: { backgroundColor:"#007C62" },
 
-    tabText: {
-      color: "#475569",
-      fontSize: vsType.size.label, fontFamily: vsType.family,
-      fontWeight: "700",
-    },
+    tabText: { color: "#425A64", fontSize: 12.5, fontWeight: "700" },
 
     tabTextActive: {
       color: "#FFFFFF",
@@ -3074,17 +2940,7 @@ const styles =
         "column",
     },
 
-    identityCard: {
-      width: "100%",
-      marginBottom: 14,
-      padding: 20,
-      borderRadius: 17,
-      backgroundColor:
-        "#FFFFFF",
-      borderWidth: 1,
-      borderColor:
-        "#E2E8F0",
-    },
+    identityCard: { width: "100%", marginBottom: 14, padding: 19, borderRadius: 14, backgroundColor: "#FFFFFF", borderWidth: 1, borderColor: "#DDE9E5" },
 
     identityCardTop: {
       flexDirection: "row",
@@ -3112,22 +2968,17 @@ const styles =
 
     identityCardEyebrow: {
       color: "#6366F1",
-      fontSize: vsType.size.micro, fontFamily: vsType.family,
-      fontWeight: "800",
+      fontSize: 10,
+      fontWeight: "900",
       letterSpacing: 0.8,
     },
 
-    identityCardTitle: {
-      marginTop: 3,
-      color: "#0F172A",
-      fontSize: vsType.size.section, fontFamily: vsType.family,
-      fontWeight: "800",
-    },
+    identityCardTitle: { marginTop: 3, color: "#193C3B", fontSize: 17, fontWeight: "800" },
 
     identityCardText: {
       marginTop: 6,
       color: "#64748B",
-      fontSize: vsType.size.label, fontFamily: vsType.family,
+      fontSize: 12.5,
       lineHeight: 19,
       maxWidth: 720,
     },
@@ -3141,8 +2992,8 @@ const styles =
     },
 
     identityStatusBadgeText: {
-      fontSize: vsType.size.caption, fontFamily: vsType.family,
-      fontWeight: "800",
+      fontSize: 11,
+      fontWeight: "900",
     },
 
     identityAccessRow: {
@@ -3167,7 +3018,7 @@ const styles =
 
     accessLabel: {
       color: "#94A3B8",
-      fontSize: vsType.size.micro, fontFamily: vsType.family,
+      fontSize: 10,
       fontWeight: "800",
       textTransform:
         "uppercase",
@@ -3177,7 +3028,7 @@ const styles =
     accessValue: {
       marginTop: 4,
       color: "#0F172A",
-      fontSize: vsType.size.label, fontFamily: vsType.family,
+      fontSize: 12.5,
       fontWeight: "800",
     },
 
@@ -3204,15 +3055,15 @@ const styles =
 
     identityPrimaryButtonText: {
       color: "#FFFFFF",
-      fontSize: vsType.size.label, fontFamily: vsType.family,
-      fontWeight: "800",
+      fontSize: 12.5,
+      fontWeight: "900",
     },
 
     identityActionHint: {
       flex: 1,
       minWidth: 220,
       color: "#64748B",
-      fontSize: vsType.size.meta, fontFamily: vsType.family,
+      fontSize: 11.5,
       lineHeight: 17,
     },
 
@@ -3233,22 +3084,12 @@ const styles =
 
     identityNoticeText: {
       flex: 1,
-      fontSize: vsType.size.meta, fontFamily: vsType.family,
+      fontSize: 11.5,
       lineHeight: 17,
       fontWeight: "700",
     },
 
-    sectionCard: {
-      flex: 1,
-      width: "100%",
-      padding: 22,
-      borderRadius: 17,
-      backgroundColor:
-        "#FFFFFF",
-      borderWidth: 1,
-      borderColor:
-        "#E2E8F0",
-    },
+    sectionCard: { flex: 1, width: "100%", padding: 20, borderRadius: 14, backgroundColor: "#FFFFFF", borderWidth: 1, borderColor: "#DDE9E5" },
 
     sectionHeading: {
       flexDirection: "row",
@@ -3268,10 +3109,7 @@ const styles =
         "#EEF2FF",
     },
 
-    sectionTitle: {
-      color: "#173D32",
-      fontSize: designUi.type.section.fontSize,
-      fontWeight: designUi.type.section.fontWeight, lineHeight: designUi.type.section.lineHeight,},
+    sectionTitle: { color: "#173C3A", fontSize: 16, fontWeight: "800", letterSpacing: -0.2 },
 
     infoRow: {
       flexDirection: "row",
@@ -3293,14 +3131,14 @@ const styles =
     infoLabel: {
       width: "38%",
       color: "#64748B",
-      fontSize: vsType.size.label, fontFamily: vsType.family,
+      fontSize: 12.5,
       lineHeight: 18,
     },
 
     infoValue: {
       flex: 1,
       color: "#0F172A",
-      fontSize: vsType.size.label, fontFamily: vsType.family,
+      fontSize: 13,
       lineHeight: 19,
       fontWeight: "700",
     },
@@ -3332,14 +3170,14 @@ const styles =
 
     activityTitle: {
       color: "#0F172A",
-      fontSize: vsType.size.bodyStrong, fontFamily: vsType.family,
+      fontSize: 15,
       fontWeight: "800",
     },
 
     activitySubtitle: {
       marginTop: 4,
       color: "#64748B",
-      fontSize: vsType.size.meta, fontFamily: vsType.family,
+      fontSize: 12,
       lineHeight: 17,
     },
 
@@ -3350,8 +3188,8 @@ const styles =
     },
 
     statusBadgeText: {
-      fontSize: vsType.size.caption, fontFamily: vsType.family,
-      fontWeight: "800",
+      fontSize: 10.5,
+      fontWeight: "900",
     },
 
     activityMeta: {
@@ -3367,16 +3205,17 @@ const styles =
 
     metaLabel: {
       color: "#94A3B8",
-      fontSize: designUi.type.meta.fontSize,
-      fontWeight: designUi.type.meta.fontWeight,
+      fontSize: 10.5,
+      fontWeight: "700",
       textTransform:
         "uppercase",
-      letterSpacing: 0.45, lineHeight: designUi.type.meta.lineHeight,},
+      letterSpacing: 0.45,
+    },
 
     metaValue: {
       marginTop: 3,
       color: "#334155",
-      fontSize: vsType.size.meta, fontFamily: vsType.family,
+      fontSize: 12,
       fontWeight: "700",
     },
 
@@ -3427,13 +3266,14 @@ const styles =
 
     certificateTitle: {
       color: "#0F172A",
-      fontSize: designUi.type.card.fontSize,
-      fontWeight: designUi.type.card.fontWeight, lineHeight: designUi.type.card.lineHeight,},
+      fontSize: 15,
+      fontWeight: "900",
+    },
 
     certificateId: {
       marginTop: 4,
       color: "#64748B",
-      fontSize: vsType.size.caption, fontFamily: vsType.family,
+      fontSize: 11,
     },
 
     certificateMetrics: {
@@ -3449,16 +3289,17 @@ const styles =
 
     metricLabel: {
       color: "#94A3B8",
-      fontSize: designUi.type.label.fontSize,
-      fontWeight: designUi.type.label.fontWeight,
+      fontSize: 10,
+      fontWeight: "800",
       textTransform:
         "uppercase",
-      letterSpacing: 0.4, lineHeight: designUi.type.label.lineHeight,},
+      letterSpacing: 0.4,
+    },
 
     metricValue: {
       marginTop: 3,
       color: "#334155",
-      fontSize: vsType.size.meta, fontFamily: vsType.family,
+      fontSize: 12,
       fontWeight: "800",
     },
 
@@ -3484,17 +3325,19 @@ const styles =
 
     emptyTitle: {
       color: "#0F172A",
-      fontSize: designUi.type.section.fontSize,
-      fontWeight: designUi.type.section.fontWeight,
-      textAlign: "center", lineHeight: designUi.type.section.lineHeight,},
+      fontSize: 15,
+      fontWeight: "900",
+      textAlign: "center",
+    },
 
     emptyText: {
       marginTop: 5,
       color: "#64748B",
-      fontSize: designUi.type.body.fontSize,
-      lineHeight: designUi.type.body.lineHeight,
+      fontSize: 12.5,
+      lineHeight: 18,
       textAlign: "center",
-      maxWidth: 430, fontWeight: designUi.type.body.fontWeight,},
+      maxWidth: 430,
+    },
 
     inlineLoading: {
       minHeight: 150,
@@ -3507,7 +3350,7 @@ const styles =
 
     inlineLoadingText: {
       color: "#64748B",
-      fontSize: vsType.size.label, fontFamily: vsType.family,
+      fontSize: 12.5,
       fontWeight: "700",
     },
 
@@ -3517,7 +3360,7 @@ const styles =
     },
     modalCard: {
       width:"100%",maxWidth:660,maxHeight:"91%",
-      alignSelf:"center",borderRadius: 18,overflow:"hidden",
+      alignSelf:"center",borderRadius:18,overflow:"hidden",
       backgroundColor:"#FFFFFF",borderWidth:1,borderColor:"#CFE6D9",
       shadowColor:"#082A1C",shadowOffset:{width:0,height:12},
       shadowOpacity:0.22,shadowRadius:28,elevation:8,
@@ -3532,9 +3375,9 @@ const styles =
       alignItems:"center",justifyContent:"center",
     },
     modalHeaderCopy:{flex:1,minWidth:0},
-    modalEyebrow:{fontSize: vsType.size.micro, fontFamily: vsType.family,fontWeight: "800",letterSpacing:1.3,color:"#1A7860",marginBottom:3},
-    modalTitle:{fontSize: designUi.type.section.fontSize,fontWeight: designUi.type.section.fontWeight,color:"#0D3429",letterSpacing:-0.5, lineHeight: designUi.type.section.lineHeight,},
-    modalSubtitle:{fontSize: designUi.type.body.fontSize,color:"#537366",lineHeight: designUi.type.body.lineHeight,marginTop:3, fontWeight: designUi.type.body.fontWeight,},
+    modalEyebrow:{fontSize:10,fontWeight:"900",letterSpacing:1.3,color:"#1A7860",marginBottom:3},
+    modalTitle:{fontSize:21,fontWeight:"900",color:"#0D3429",letterSpacing:-0.5},
+    modalSubtitle:{fontSize:12,color:"#537366",lineHeight:17,marginTop:3},
     modalClose:{
       height:36,width:36,borderRadius:9,backgroundColor:"#FFFFFF",
       alignItems:"center",justifyContent:"center",borderWidth:1,borderColor:"#D9EAE0",
@@ -3544,17 +3387,17 @@ const styles =
     modalScrollContent:{paddingHorizontal:23,paddingTop:18,paddingBottom:24},
     modalSectionHeader:{flexDirection:"row",alignItems:"center",gap:9,marginBottom:13},
     sectionMarker:{width:4,height:18,borderRadius:2,backgroundColor:"#0B8868"},
-    modalSectionTitle:{fontSize: vsType.size.body, fontFamily: vsType.family,fontWeight: "800",color:"#193D31"},
-    modalHelper:{fontSize: vsType.size.caption, fontFamily: vsType.family,color:"#668276",lineHeight:16,marginBottom:12},
+    modalSectionTitle:{fontSize:14,fontWeight:"900",color:"#193D31"},
+    modalHelper:{fontSize:11,color:"#668276",lineHeight:16,marginBottom:12},
     modalDivider:{height:1,backgroundColor:"#E6EFE9",marginBottom:20,marginTop:7},
     nameGrid:{flexDirection:"row",flexWrap:"wrap",gap:11},
     nameField:{flexGrow:1,flexBasis:"29%",minWidth:145},
     inputGroup:{marginBottom:13},
-    inputLabel:{fontSize: designUi.type.label.fontSize,fontWeight: designUi.type.label.fontWeight,color:"#2C5041",marginBottom:7, lineHeight: designUi.type.label.lineHeight,},
+    inputLabel:{fontSize:12,fontWeight:"800",color:"#2C5041",marginBottom:7},
     requiredAsterisk:{color:"#D4413A"},
     input:{
-      minHeight: 46,borderRadius:10,borderColor:"#D7E6DD",borderWidth:1,
-      backgroundColor:"#FCFEFD",paddingHorizontal:12,fontSize: vsType.size.label, fontFamily: vsType.family,color:"#173A2B",
+      minHeight:45,borderRadius:10,borderColor:"#D7E6DD",borderWidth:1,
+      backgroundColor:"#FCFEFD",paddingHorizontal:12,fontSize:13,color:"#173A2B",
     },
     dropdownTrigger:{
       minHeight:46,borderRadius:10,borderColor:"#D7E6DD",borderWidth:1,
@@ -3562,7 +3405,7 @@ const styles =
       paddingHorizontal:13,justifyContent:"space-between",gap:10,
     },
     dropdownTriggerOpen:{borderColor:"#0B896C",backgroundColor:"#F1FBF6"},
-    dropdownValue:{fontSize: vsType.size.label, fontFamily: vsType.family,fontWeight:"700",color:"#214F3E",flex:1},
+    dropdownValue:{fontSize:13,fontWeight:"700",color:"#214F3E",flex:1},
     dropdownPlaceholder:{fontWeight:"500",color:"#799588"},
     dropdownPanel:{
       borderWidth:1,borderColor:"#CDE4D6",borderRadius:10,
@@ -3572,7 +3415,7 @@ const styles =
       minHeight:42,flexDirection:"row",alignItems:"center",gap:8,
       paddingHorizontal:12,backgroundColor:"#F6FBF8",borderBottomWidth:1,borderBottomColor:"#E3F0E9",
     },
-    dropdownSearchInput:{minHeight:40,flex:1,fontSize: vsType.size.meta, fontFamily: vsType.family,color:"#214A39",paddingVertical:6},
+    dropdownSearchInput:{minHeight:40,flex:1,fontSize:12,color:"#214A39",paddingVertical:6},
     dropdownOptions:{maxHeight:188},
     dropdownOption:{
       paddingHorizontal:13,paddingVertical:11,minHeight:40,
@@ -3580,26 +3423,26 @@ const styles =
       borderBottomWidth:1,borderBottomColor:"#F0F4F1",
     },
     dropdownOptionSelected:{backgroundColor:"#E6F7ED"},
-    dropdownOptionText:{flex:1,fontSize: vsType.size.meta, fontFamily: vsType.family,color:"#234B3D",fontWeight:"600"},
-    dropdownEmpty:{fontSize: vsType.size.meta, fontFamily: vsType.family,color:"#718A7B",padding:15},
+    dropdownOptionText:{flex:1,fontSize:12,color:"#234B3D",fontWeight:"600"},
+    dropdownEmpty:{fontSize:12,color:"#718A7B",padding:15},
     modalFooter:{
       backgroundColor:"#F9FCFA",borderTopWidth:1,borderTopColor:"#E0EDE5",
       paddingHorizontal:22,paddingVertical:14,flexDirection:"row",
       justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:12,
     },
-    modalFooterHint:{fontSize: vsType.size.caption, fontFamily: vsType.family,lineHeight:15,color:"#709181",flex:1,minWidth:110},
+    modalFooterHint:{fontSize:10.5,lineHeight:15,color:"#709181",flex:1,minWidth:110},
     modalActions:{flexDirection:"row",alignItems:"center",gap:9},
     cancelButton:{
       minHeight:43,justifyContent:"center",alignItems:"center",paddingHorizontal:16,
       borderRadius:9,borderWidth:1,borderColor:"#CFE1D7",backgroundColor:"#FFFFFF",
     },
-    cancelButtonText:{color:"#355C4B",fontSize: vsType.size.label, fontFamily: vsType.family,fontWeight:"800"},
+    cancelButtonText:{color:"#355C4B",fontSize:12.5,fontWeight:"800"},
     saveButton:{
-      minHeight: 46,flexDirection:"row",alignItems:"center",justifyContent:"center",gap:7,
+      minHeight:43,flexDirection:"row",alignItems:"center",justifyContent:"center",gap:7,
       paddingHorizontal:18,borderRadius:9,backgroundColor:"#087C61",
     },
     buttonSaving:{opacity:.7},
-    saveButtonText:{color:"#FFFFFF",fontSize: vsType.size.label, fontFamily: vsType.family,fontWeight: "800"},
+    saveButtonText:{color:"#FFFFFF",fontSize:12.5,fontWeight:"900"},
 
     verifyResidentCard: {
       width: "100%",
@@ -3642,14 +3485,14 @@ const styles =
 
     verifyResidentTitle: {
       color: "#0F2F5A",
-      fontSize: vsType.size.subheading, fontFamily: vsType.family,
-      fontWeight: "800",
+      fontSize: 20,
+      fontWeight: "900",
     },
 
     verifyResidentSubtitle: {
       marginTop: 5,
       color: "#475569",
-      fontSize: vsType.size.label, fontFamily: vsType.family,
+      fontSize: 12.5,
       lineHeight: 19,
       maxWidth: 640,
     },
@@ -3666,8 +3509,8 @@ const styles =
 
     verifyBasicBadgeText: {
       color: "#C2410C",
-      fontSize: vsType.size.caption, fontFamily: vsType.family,
-      fontWeight: "800",
+      fontSize: 11,
+      fontWeight: "900",
     },
 
     verifyResidentGrid: {
@@ -3690,8 +3533,8 @@ const styles =
     verifyResidentMiniTitle: {
       marginBottom: 9,
       color: "#0F2F5A",
-      fontSize: vsType.size.label, fontFamily: vsType.family,
-      fontWeight: "800",
+      fontSize: 12.5,
+      fontWeight: "900",
     },
 
     verifyBenefitRow: {
@@ -3713,7 +3556,7 @@ const styles =
     verifyBenefitText: {
       flex: 1,
       color: "#334155",
-      fontSize: vsType.size.meta, fontFamily: vsType.family,
+      fontSize: 11.5,
       fontWeight: "700",
     },
 
@@ -3735,14 +3578,14 @@ const styles =
 
     verifyStepMiniNumberText: {
       color: "#FFFFFF",
-      fontSize: vsType.size.caption, fontFamily: vsType.family,
-      fontWeight: "800",
+      fontSize: 11,
+      fontWeight: "900",
     },
 
     verifyStepMiniText: {
       flex: 1,
       color: "#334155",
-      fontSize: vsType.size.meta, fontFamily: vsType.family,
+      fontSize: 11.5,
       fontWeight: "700",
     },
 
@@ -3768,8 +3611,8 @@ const styles =
 
     verifyStartButtonText: {
       color: "#FFFFFF",
-      fontSize: vsType.size.label, fontFamily: vsType.family,
-      fontWeight: "800",
+      fontSize: 12.5,
+      fontWeight: "900",
     },
 
     verifyLearnButton: {
@@ -3789,8 +3632,8 @@ const styles =
 
     verifyLearnButtonText: {
       color: "#2563EB",
-      fontSize: vsType.size.label, fontFamily: vsType.family,
-      fontWeight: "800",
+      fontSize: 12.5,
+      fontWeight: "900",
     },
 
     verifyStateCard: {
@@ -3846,8 +3689,8 @@ const styles =
     verifyStateTitle: {
       flexShrink: 1,
       color: "#0F2F5A",
-      fontSize: vsType.size.section, fontFamily: vsType.family,
-      fontWeight: "800",
+      fontSize: 18,
+      fontWeight: "900",
     },
 
     verifyStateBadge: {
@@ -3860,14 +3703,14 @@ const styles =
     },
 
     verifyStateBadgeText: {
-      fontSize: vsType.size.caption, fontFamily: vsType.family,
-      fontWeight: "800",
+      fontSize: 10.5,
+      fontWeight: "900",
     },
 
     verifyStateText: {
       marginTop: 6,
       color: "#475569",
-      fontSize: vsType.size.meta, fontFamily: vsType.family,
+      fontSize: 12,
       lineHeight: 18,
       maxWidth: 760,
     },
@@ -3885,7 +3728,7 @@ const styles =
     verifyStateNoticeSuccessText: {
       flex: 1,
       color: "#166534",
-      fontSize: vsType.size.meta, fontFamily: vsType.family,
+      fontSize: 11.5,
       fontWeight: "700",
     },
 
@@ -3902,7 +3745,7 @@ const styles =
     verifyStateNoticeWarningText: {
       flex: 1,
       color: "#92400E",
-      fontSize: vsType.size.meta, fontFamily: vsType.family,
+      fontSize: 11.5,
       fontWeight: "700",
     },
 
@@ -3921,8 +3764,8 @@ const styles =
 
     verifyVolunteerButtonText: {
       color: "#FFFFFF",
-      fontSize: vsType.size.meta, fontFamily: vsType.family,
-      fontWeight: "800",
+      fontSize: 12,
+      fontWeight: "900",
     },
 
     verifyRetryButton: {
@@ -3942,8 +3785,8 @@ const styles =
 
     verifyRetryButtonText: {
       color: "#B91C1C",
-      fontSize: vsType.size.meta, fontFamily: vsType.family,
-      fontWeight: "800",
+      fontSize: 12,
+      fontWeight: "900",
     },
 
   });

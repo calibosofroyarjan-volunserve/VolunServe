@@ -1,3 +1,4 @@
+import { getSafeVolunServeBackendBaseUrl } from "../../lib/stagingExpoServiceIsolation";
 import { volunserveTypography as vsType } from "../../constants/volunserveLiveUi";
 import { liveUi as designUi } from "../../constants/volunserveLiveUi";
 import Ionicons from "@expo/vector-icons/Ionicons";
@@ -32,6 +33,7 @@ import {
 import { db } from "../../lib/firebase";
 import { isApprovedProfile } from "../../lib/firebaseAuth";
 import { useUserSession } from "../../lib/useUserSession";
+import { publishModuleAnnouncement } from "../../lib/publishModuleAnnouncement";
 type ProposalStatus = "pending" | "approved" | "rejected";
 type Filter = ProposalStatus | "all";
 type Proposal = {
@@ -175,6 +177,8 @@ export default function CommunityEventAdminScreen() {
   const [loadError, setLoadError] = useState("");
   const [notice, setNotice] = useState("");
   const [actionError, setActionError] = useState("");
+  const [announceImportantEvents, setAnnounceImportantEvents] = useState<Record<string, boolean>>({});
+  const [noticeFailedEventId, setNoticeFailedEventId] = useState<string | null>(null);
   const [busyId, setBusyId] = useState("");
   const [rejectId, setRejectId] = useState<string | null>(null);
   const [rejectReason, setRejectReason] = useState("");
@@ -466,9 +470,30 @@ export default function CommunityEventAdminScreen() {
           updatedAt: serverTimestamp(),
         });
       });
-      setNotice(
-        `Published successfully: ${item.title}`
-      );
+      // Public notifications are an independent best-effort step. If this fails,
+      // approved event, volunteer signup and attendance state remain unchanged.
+      if (announceImportantEvents[item.id]) {
+        try {
+          const outcome = await publishModuleAnnouncement({
+            kind: "event", sourceId: item.id, adminUid: user.uid,
+          });
+          if (outcome === "published" || outcome === "already_published") {
+            setNotice(`Event published and announced: ${item.title}`);
+            setNoticeFailedEventId(null);
+          } else {
+            setNotice(`Event published: ${item.title}`);
+            setActionError("Event is live; announcement not posted because current publication status could not be confirmed.");
+            setNoticeFailedEventId(item.id);
+          }
+        } catch (noticeError) {
+          console.error("Community Event announcement failed:", noticeError);
+          setNotice(`Event published: ${item.title}`);
+          setActionError("Event is live but the community announcement failed. Use the Retry button to publish only the announcement.");
+          setNoticeFailedEventId(item.id);
+        }
+      } else {
+        setNotice(`Published successfully: ${item.title}`);
+      }
     } catch (error) {
       setActionError(messageOf(error));
     } finally {
@@ -741,6 +766,35 @@ export default function CommunityEventAdminScreen() {
                   <Text style={styles.detailsButtonText}>View Event Details{item.status === "approved" ? " & Participants" : ""}</Text>
                   <Ionicons name="chevron-forward" size={15} color={GREEN} />
                 </Pressable>
+              {item.status === "approved" && noticeFailedEventId === item.id && (
+                <Pressable
+                  disabled={Boolean(busyId)}
+                  style={[styles.outlineButton, { alignSelf: "flex-start", marginTop: 8 }]}
+                  accessibilityRole="button"
+                  onPress={async () => {
+                    if (!user || !authorized || busyId) return;
+                    setBusyId(item.id);
+                    try {
+                      const result = await publishModuleAnnouncement({
+                        kind: "event", sourceId: item.id, adminUid: user.uid,
+                      });
+                      if (result === "not_eligible") {
+                        setActionError("This event is no longer eligible for a public announcement.");
+                      } else {
+                        setNotice("Community announcement published (no duplicates).");
+                        setActionError("");
+                        setNoticeFailedEventId(null);
+                      }
+                    } catch (error) {
+                      setActionError("Announcement retry failed. Published event remains unchanged.");
+                    } finally {
+                      setBusyId("");
+                    }
+                  }}
+                >
+                  <Text style={styles.outlineText}>Retry community announcement</Text>
+                </Pressable>
+              )}
               {item.status === "pending" && (
                 <>
                   {rejectId === item.id && (
@@ -753,6 +807,24 @@ export default function CommunityEventAdminScreen() {
                       maxLength={500}
                       style={styles.reasonInput}
                     />
+                  )}
+                  {rejectId !== item.id && (
+                    <Pressable
+                      accessibilityRole="checkbox"
+                      accessibilityState={{ checked: Boolean(announceImportantEvents[item.id]) }}
+                      disabled={Boolean(busyId)}
+                      style={{ paddingVertical: 10 }}
+                      onPress={() => setAnnounceImportantEvents(current => ({
+                        ...current, [item.id]: !current[item.id],
+                      }))}
+                    >
+                      <Text style={{ color: "#087C61", fontWeight: "700" }}>
+                        {announceImportantEvents[item.id] ? "☑" : "☐"} Important event: automatically announce after Approve & Publish
+                      </Text>
+                      <Text style={{ color: "#64798A", fontSize: 12 }}>
+                        A single public notice, without private proposal notes or participant information.
+                      </Text>
+                    </Pressable>
                   )}
                   <View style={styles.actions}>
                     {rejectId === item.id ? (
@@ -936,7 +1008,7 @@ export default function CommunityEventAdminScreen() {
                       try {
                         const authToken = await user?.getIdToken();
                         const response = await fetch(
-                          `https://volunserve.onrender.com/api/community-events/credentials/${encodeURIComponent(selectedProposal.id)}/access`,
+                          `${getSafeVolunServeBackendBaseUrl()}/api/community-events/credentials/${encodeURIComponent(selectedProposal.id)}/access`,
                           {headers:{Authorization:`Bearer ${authToken || ""}`}},
                         );
                         const body = await response.json().catch(() => null);

@@ -1,3 +1,4 @@
+import { getSafeVolunServeBackendBaseUrl } from "../../lib/stagingExpoServiceIsolation";
 import { volunserveTypography as vsType } from "../../constants/volunserveLiveUi";
 import { liveUi as designUi } from "../../constants/volunserveLiveUi";
 import Ionicons from "@expo/vector-icons/Ionicons";
@@ -86,7 +87,7 @@ type Filter =
 // Render certificate reconciliation (Spark-compatible): authenticated Admin only.
 // This never changes attendance timestamps and must run AFTER a successful
 // Firestore completion/verification transaction, not inside one.
-const CERTIFICATE_BACKEND_URL = "https://volunserve.onrender.com";
+const CERTIFICATE_BACKEND_URL = getSafeVolunServeBackendBaseUrl();
 const CERTIFICATE_SYNC_TIMEOUT_MS = 100_000;
 
 type CertificateSyncResult = {
@@ -610,7 +611,7 @@ export default function CommunityAttendanceAdmin() {
 
   const visibleVolunteers = joined.filter((person) => {
     const search = volunteerSearch.trim().toLowerCase();
-    const searchable = `${person.fullName || ""} ${person.assignedRole || person.preferredRole || ""}`.toLowerCase();
+    const searchable = (person.fullName || "").toLowerCase();
     if (search && !searchable.includes(search)) return false;
     if (attendanceFilter === "verified") return person.attendanceVerified === true;
     if (attendanceFilter === "ready") return !person.attendanceVerified && !!person.checkedInAt && !!person.checkedOutAt;
@@ -1321,9 +1322,7 @@ export default function CommunityAttendanceAdmin() {
                           </View>
                           <View style={styles.mobileRosterIdentity}>
                             <Text style={styles.personName} numberOfLines={2}>{index + 1}. {person.fullName || "Volunteer"}</Text>
-                            <Text style={styles.personSub} numberOfLines={2}>
-                              {safeText(person.assignedRole, safeText(person.preferredRole, "Role not assigned"))}
-                            </Text>
+                            <Text style={styles.personSub}>Volunteer</Text>
                           </View>
                           <View style={[styles.attendanceStatus,
                             state.kind === "verified" && styles.attendanceVerified,
@@ -1387,7 +1386,6 @@ export default function CommunityAttendanceAdmin() {
                   <View style={styles.tableHeader}>
                     <Text style={[styles.tableHeadText, styles.colNumber]}>#</Text>
                     <Text style={[styles.tableHeadText, styles.colPerson]}>Volunteer</Text>
-                    <Text style={[styles.tableHeadText, styles.colRole]}>Assigned Role</Text>
                     <Text style={[styles.tableHeadText, styles.colTime]}>Time In</Text>
                     <Text style={[styles.tableHeadText, styles.colTime]}>Time Out</Text>
                     <Text style={[styles.tableHeadText, styles.colHours]}>Hours</Text>
@@ -1416,9 +1414,6 @@ export default function CommunityAttendanceAdmin() {
                             <Text style={styles.personSub}>Volunteer</Text>
                           </View>
                         </View>
-                        <Text style={[styles.tableText, styles.colRole]} numberOfLines={2}>
-                          {safeText(person.assignedRole, safeText(person.preferredRole, "Not assigned"))}
-                        </Text>
                         <View style={styles.colTime}>
                           <Text style={styles.timeText}>{clockStamp(person.checkedInAt)}</Text>
                           {!!person.checkedInAt && <Text style={styles.timeSub}>{dateStamp(person.checkedInAt)}</Text>}
@@ -1655,14 +1650,13 @@ const styles = StyleSheet.create({
   attendanceChipActive: {backgroundColor: "#E6F6F2", borderColor: "#99D5CA"},
   attendanceChipText: {fontSize: vsType.size.caption, fontFamily: vsType.family, fontWeight: "800", color: "#5F7487"},
   attendanceChipTextActive: {color: GREEN},
-  table: {minWidth: 1100, borderWidth: 1, borderColor: "#E6ECEF", borderRadius: 11, overflow: "hidden"},
+  table: {minWidth: 980, borderWidth: 1, borderColor: "#E6ECEF", borderRadius: 11, overflow: "hidden"},
   tableHeader: {minHeight: 43, backgroundColor: "#F0F5F8", flexDirection: "row", alignItems: "center", paddingHorizontal: 10, gap: 8},
   tableHeadText: {fontSize: vsType.size.caption, fontFamily: vsType.family, fontWeight: "800", color: "#425E78"},
   tableRow: {minHeight: 52, flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 10, borderTopWidth: 1, borderTopColor: "#ECF0F2", backgroundColor: "#FFFFFF"},
   tableText: {fontSize: vsType.size.caption, fontFamily: vsType.family, color: "#526D84"},
   colNumber: {width: 21},
   colPerson: {width: 245},
-  colRole: {width: 123},
   colTime: {width: 113},
   colHours: {width: 85},
   colStatus: {width: 134},

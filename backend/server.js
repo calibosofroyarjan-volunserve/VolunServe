@@ -16,8 +16,24 @@ const {
 } = require("./communityAttendanceAutoVerify");
 const { combineApprovedBudget } = require("./assistanceDonationBudget");
 const { probeIdentityAiReadiness } = require("./identityAiReadiness");
-const { requireAdminFinalApproval } = require("./identityAiApprovalPolicy");
 const {isVerifiedFirebaseToken, isCompletedVolunServeProfile} = require("./verifiedFirebaseToken");
+const {
+  selectedIdRecognized,
+  enforceSelectedIdDecision,
+  blurryNationalIdNeedsReview,
+  classifyIdentityReviewTrack,
+} = require("./selectedIdPolicy");
+const { reviewIssuerEvidence } = require("./identityIssuerReviewPolicy");
+const { classifyHybridDocumentPrecheck } = require("./identityHybridPrecheckDecision");
+const { assessAutomaticIdentityApproval } = require("./identityAutoApprovalGateway");
+const {
+  parseConsentedIdentityEvidence,
+  uploadIdentityEvidence,
+  signedIdentityEvidence,
+  destroyIdentityEvidence,
+  identityEvidenceRetentionDate,
+  purgeExpiredIdentityEvidence,
+} = require("./identityPrivateEvidence");
 const {
   getProfileRole,
   isApprovedAccount,
@@ -45,8 +61,19 @@ const DEFAULT_ALLOWED_ORIGINS = [
   "http\://127.0.0.1:19006",
   "http\://127.0.0.1:3000",
 ];
-const IDENTITY_UPLOAD_LIMIT = "20mb";
+// Max 10MB front + 10MB back + 10MB selfie, plus multipart overhead.
+const IDENTITY_UPLOAD_LIMIT = "32mb";
 const IDENTITY_RETRY_DELAY_MS = 8000;
+const STAGING_IDENTITY_MEDIA_UPLOADS_ENABLED = false;
+function requireStagingIdentityMediaApproval(_request,response,next) {
+  if (!STAGING_IDENTITY_MEDIA_UPLOADS_ENABLED) {
+    return response.status(423).json({
+      error: "staging_identity_media_disabled",
+      message: "Staging sign-in and read-only checks are enabled. ID/selfie uploads are not approved yet.",
+    });
+  }
+  return next();
+}
 const MAX_IDENTITY_AI_ATTEMPTS = 3;
 const IDENTITY_PROCESSING_LEASE_MS = 3 * 60 * 1000;
 
@@ -58,11 +85,14 @@ function identityAttemptCount(value) {
 }
 
 function identityAttemptOutcome(decision, attempts) {
+  // Never grant Verified Resident through AI or a future provider response.
+  // A provider "verified" decision is only a candidate for independent
+  // Admin review. The authorized /api/admin/identity/reviews route is the
+  // only service flow that may mark the Resident verified.
   const requiresManualReview = decision === "manual_review" ||
     decision === "verified" ||
     (decision === "failed" && attempts >= MAX_IDENTITY_AI_ATTEMPTS);
-  const status = requiresManualReview ? "pending" : "failed";
-  return { status, requiresManualReview };
+  return { status: requiresManualReview ? "pending" : "failed", requiresManualReview };
 }
 const ASSISTANCE_EVIDENCE_UPLOAD_LIMIT = "10mb";
 const ASSISTANCE_EVIDENCE_MAX_BYTES =
@@ -279,6 +309,9 @@ app.use(
     allowedHeaders: [
       "Content-Type",
       "Authorization",
+      // Browser preflight for the consented National ID OCR POST.
+      // Without this, cross-origin requests fail as TypeError: Failed to fetch.
+      "X-VolunServe-Document-Precheck-Consent",
       "X-File-Name",
       "X-Document-Type",
       "X-Proposal-Id",
@@ -304,6 +337,9 @@ const paymongoMode = () =>
   paymongoText(process.env.PAYMONGO_MODE || "test", 20).toLowerCase() === "live"
     ? "live"
     : "test";
+if (paymongoMode() === "live" || /^sk_live_/i.test(process.env.PAYMONGO_SECRET_KEY || "")) {
+  throw new Error("Live payment credentials are blocked on this staging backend.");
+}
 const getPaymongoSecretKey = () =>
   String(process.env.PAYMONGO_SECRET_KEY || "").trim();
 const getPaymongoWebhookSecret = () =>
@@ -711,13 +747,21 @@ function normalizeAiDecision(
 function normalizeIdDocumentScreening(value) {
   // Explicit allowlist: never store OCR text, full ID numbers, names,
   // face templates, or photos in Firestore or Admin-visible JSON.
-  const types = ["national_id", "drivers_license", "passport", "other_government_id"];
-  const statuses = ["text_consistent_unverified", "mismatch", "inconclusive"];
+  const types = ["national_id", "drivers_license", "passport", "umid", "prc_id"];
+  const statuses = ["text_consistent_unverified", "mismatch", "inconclusive", "unsupported"];
   const warnings = [
     "selected_id_type_conflicts_with_ocr",
     "document_type_not_recognized",
     "multiple_document_type_signals",
     "ocr_unavailable",
+    "document_back_type_conflict",
+    "document_front_type_inconclusive",
+    "document_back_ocr_inconclusive",
+    "document_front_back_swapped",
+    "document_front_side_conflict",
+    "document_back_looks_like_front",
+    "school_id_not_supported",
+    "low_document_image_quality",
   ];
   const declared = String(value?.declaredIdType || "");
   const detected = String(value?.detectedIdType || "");
@@ -730,6 +774,23 @@ function normalizeIdDocumentScreening(value) {
     authenticityVerified: false, // Keyword OCR is NOT an issuance registry.
     livenessVerified: false, // Still image is NOT a liveness proof.
     manualReviewRequired: true,
+    backSideProvided: value?.backSideProvided === true,
+    backSideScreened: value?.backSideScreened === true,
+    imageQualityStatus: ["low", "adequate"].includes(value?.imageQualityStatus)
+      ? value.imageQualityStatus : "unknown",
+    profileNameCompared: value?.profileNameCompared === true,
+    profileNameCheck: ["possible_match", "possible_conflict", "inconclusive", "not_checked"].includes(value?.profileNameCheck)
+      ? value.profileNameCheck : "not_checked",
+    profileBirthDateCompared: value?.profileBirthDateCompared === true,
+    profileBirthDateCheck: ["possible_match", "possible_conflict", "inconclusive", "not_checked"].includes(value?.profileBirthDateCheck)
+      ? value.profileBirthDateCheck : "not_checked",
+    profileAddressCompared: value?.profileAddressCompared === true,
+    profileAddressCheck: ["possible_match", "inconclusive", "not_checked"].includes(value?.profileAddressCheck)
+      ? value.profileAddressCheck : "not_checked",
+    // This API has NO PSA registry connection or ISO-tested PAD integration.
+    // Never adopt authenticity/liveness claims forwarded by the image service.
+    issuerAuthenticityStatus: "not_verified",
+    presentationAttackStatus: "not_validated",
     warningCodes: Array.isArray(value?.warningCodes)
       ? value.warningCodes.filter(code => warnings.includes(code)).slice(0, 4)
       : ["ocr_unavailable"],
@@ -900,6 +961,9 @@ function getCloudinaryConfig() {
   };
 }
 function configureCloudinary() {
+  if (process.env.VOLUNSERVE_DEPLOYMENT_ENV === "staging") {
+    throw makeHttpError(503, "staging_media_disabled", "External media access is disabled on this staging backend.");
+  }
   const {
     cloudName,
     apiKey,
@@ -4628,6 +4692,29 @@ function getIdentityAiHeaders(
     ] =
       internalKey;
   }
+  // Trusted account profile from Firestore, never supplied by client input.
+  // Transient private HTTPS headers only; do not log or store these fields.
+  const safeNameHeader = (value) => cleanText(value, 100)
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^A-Za-z .'-]/g, "");
+  const first = safeNameHeader(request.identityExpectedName?.firstName);
+  const last = safeNameHeader(request.identityExpectedName?.lastName);
+  if (first && last) {
+    headers["X-VolunServe-Profile-First-Name"] = first;
+    headers["X-VolunServe-Profile-Last-Name"] = last;
+  }
+  // Never take identity comparison fields from the uploaded form.
+  // Only the authenticated user's trusted Firestore profile is eligible.
+  // This private backend-to-AI request must not log or persist these headers.
+  const dob = String(request.identityExpectedName?.dateOfBirth || "").trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(dob)) {
+    headers["X-VolunServe-Profile-Date-Of-Birth"] = dob;
+  }
+  const barangay = cleanText(request.identityExpectedName?.barangay || "", 80)
+    .normalize("NFKD").replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^A-Za-z0-9 .'-]/g, "");
+  if (barangay) headers["X-VolunServe-Profile-Barangay"] = barangay;
   return headers;
 }
 async function readJsonResponse(
@@ -4654,9 +4741,12 @@ async function readJsonResponse(
 }
 async function callIdentityAiService(
   request,
+  options = {},
 ) {
   const endpoint =
-    getIdentityAiEndpoint();
+    options.documentPrecheck
+      ? getIdentityAiEndpoint().replace(/\/verify$/, "/document/precheck")
+      : getIdentityAiEndpoint();
   if (!endpoint) {
     const error =
       new Error(
@@ -4726,9 +4816,11 @@ async function callIdentityAiService(
       method: "POST",
       headers: getIdentityAiHeaders(request),
       body: request.body,
-      // Release the verification lease on AI outages rather than waiting
-      // indefinitely. The frontend request times out after 65 seconds.
-      signal: AbortSignal.timeout(55000),
+      // Document-only OCR is CPU-heavy on the Render Free plan; each
+      // front/back Tesseract subprocess has a strict 40s bound.
+      // Allow this consented, zero-attempt precheck 105s; keep real
+      // face-verification requests at their original 55s lease deadline.
+      signal: AbortSignal.timeout(options.documentPrecheck ? 105000 : 55000),
     });
   } catch (error) {
     console.error("Identity AI connection failed:", error?.name || "network_error");
@@ -4875,6 +4967,287 @@ app.get(
     }
   },
 );
+// Authenticated OCR-only document precheck BEFORE webcam/selfie collection.
+// Images stay transient; only bounded rate-limit counters are stored.
+// This does not consume any of the 3 actual face-verification attempts.
+const IDENTITY_DOC_PRECHECK_COOLDOWN_MS = 8000;
+const IDENTITY_DOC_PRECHECK_DAILY_LIMIT = 30;
+app.post(
+  ["/api/identity/document/precheck", "/api/identity/document/precheck-with-evidence"],
+  requireFirebaseUser,
+  requireStagingIdentityMediaApproval,
+  express.raw({ type: "multipart/form-data", limit: "21mb" }),
+  async (request, response) => {
+    response.set("Cache-Control", "no-store");
+    const uid = request.firebaseUser.uid;
+    const precheckRequestId = crypto.randomUUID();
+    const evidenceRef = db.collection("identityPrivateEvidence").doc(uid);
+    let precheckEvidenceAssets = null;
+    let precheckPreviousAssets = null;
+    let precheckEvidenceCommitted = false;
+    try {
+      if (request.headers["x-volunserve-document-precheck-consent"] !== "true") {
+        throw makeHttpError(400, "document_precheck_consent_required",
+          "Agree to preliminary ID processing before continuing.");
+      }
+      const profile = await loadUserProfile(uid);
+      if (cleanText(profile.status || "approved", 40).toLowerCase() !== "approved") {
+        throw makeHttpError(403, "account_not_active", "Your Resident account is not active.");
+      }
+      if (profile.identityVerified === true ||
+          normalizeIdentityStatus(profile.identityStatus || "basic") === "verified") {
+        throw makeHttpError(409, "already_verified", "Your identity is already verified.");
+      }
+      const verificationRef = db.collection("identityVerifications").doc(uid);
+      const existingSnapshot = await verificationRef.get();
+      const existing = existingSnapshot.exists ? existingSnapshot.data() || {} : {};
+      // A previously queued case is idempotent: never upload another ID,
+      // run face processing or create a duplicate pending request.
+      if (existing.requiresManualReview === true &&
+          normalizeIdentityStatus(existing.status) === "pending") {
+        return response.json({
+          ok: true,
+          outcome: "review",
+          decision: "pending_admin_review",
+          status: "pending",
+          verificationId: cleanText(existing.verificationId || "", 200),
+          documentScreening: existing.documentScreening
+            ? normalizeIdDocumentScreening(existing.documentScreening) : null,
+          detectedIdType: existing.documentScreening
+            ? normalizeIdDocumentScreening(existing.documentScreening).detectedIdType : null,
+          message: "Your identity case is already pending Admin review. No new scan or verification attempt was used.",
+          authenticityVerified: false,
+          livenessVerified: false,
+          requiresManualReview: true,
+        });
+      }
+      if (!Buffer.isBuffer(request.body) || request.body.length === 0 ||
+          !String(request.headers["content-type"] || "").toLowerCase().startsWith("multipart/form-data")) {
+        throw makeHttpError(400, "missing_identity_document", "Select and capture both sides of the government ID first.");
+      }
+      // Preserve the old transient OCR path for older app versions.
+      // The new path requires explicit storage consent and retains ID scans
+      // only if the OCR result is auto-queued for an Admin; no selfie exists yet.
+      const needsPrivateIdEvidence =
+        request.path === "/api/identity/document/precheck-with-evidence";
+      const consentedIdImages = needsPrivateIdEvidence
+        ? await parseConsentedIdentityEvidence(request, {requireSelfie:false}) : null;
+      if (needsPrivateIdEvidence && !consentedIdImages)
+        throw makeHttpError(400, "document_evidence_consent_required",
+          "Please accept protected ID photo storage for Admin review.");
+      const throttleRef = db.collection("identityDocumentPrecheckThrottle").doc(uid);
+      await db.runTransaction(async transaction => {
+        const record = await transaction.get(throttleRef);
+        const saved = record.exists ? record.data() || {} : {};
+        const last = saved.lastRequestedAt?.toMillis?.() || 0;
+        const windowStart = saved.windowStartedAt?.toMillis?.() || 0;
+        const now = Date.now();
+        if (last && now - last < IDENTITY_DOC_PRECHECK_COOLDOWN_MS) {
+          throw makeHttpError(429, "document_precheck_cooldown", "Wait a few seconds before retrying the ID scan.");
+        }
+        const newWindow = !windowStart || now - windowStart >= 24 * 60 * 60 * 1000;
+        const count = newWindow ? 0 : Number(saved.requestCount) || 0;
+        if (count >= IDENTITY_DOC_PRECHECK_DAILY_LIMIT) {
+          throw makeHttpError(429, "document_precheck_limit", "ID recognition attempts are temporarily limited. Try again tomorrow or request Admin assistance.");
+        }
+        transaction.set(throttleRef, {
+          lastRequestedAt: FieldValue.serverTimestamp(),
+          windowStartedAt: newWindow ? FieldValue.serverTimestamp() : saved.windowStartedAt,
+          requestCount: count + 1,
+        }, { merge: true });
+      });
+      // Never allow client-uploaded fields to override a saved profile DOB
+      // or barangay. Compare only using trusted Firebase Admin SDK data.
+      request.identityExpectedName = {
+        firstName: profile.firstName || "",
+        lastName: profile.lastName || "",
+        dateOfBirth: profile.dateOfBirth || "",
+        barangay: profile.barangay || "",
+      };
+      // Forward only private images to our internal-key-authenticated Python AI.
+      // Never store uploads in Firestore, Storage, Cloudinary or audit logs.
+      const result = await callIdentityAiService(request, { documentPrecheck: true });
+      const screening = normalizeIdDocumentScreening(result?.documentScreening);
+      const categorized = classifyHybridDocumentPrecheck({
+        screening, aiOutcome: result?.outcome,
+      });
+      const warnings = screening.warningCodes || [];
+      const message = categorized.decision === "profile_mismatch"
+        ? screening.profileNameCheck === "possible_conflict"
+          ? "The name read from the ID appears different from this account. Use your own ID or ask Admin to check your saved profile. OCR mistakes are possible."
+          : "The ID birth date may differ from the saved profile. Retake or request Admin profile correction."
+        : categorized.outcome === "pass"
+          ? screening.profileNameCheck === "inconclusive"
+            ? "National ID type recognized; OCR could not confirm printed name. Continue to face comparison, then independent Admin must check the actual ID name and portrait. No automatic Verified status."
+            : "ID text and profile name appear consistent. Continue to face comparison; no government-ID authenticity or liveness validation is implied."
+          : categorized.outcome === "review"
+            ? "Your National ID scan is unclear. A pending Admin case was created automatically. Admin can request a clearer ID scan; no selfie was collected and no face attempt was used."
+            : warnings.includes("school_id_not_supported")
+              ? "School and employee IDs are not accepted. Retake a supported government ID."
+              : warnings.includes("document_front_back_swapped")
+                ? "ID front/back appear swapped. Retake in the correct slots."
+                : warnings.includes("document_back_looks_like_front")
+                  ? "The Back scan appears to show the Front. Retake the reverse side."
+                  : warnings.includes("document_front_side_conflict")
+                    ? "The Front scan appears to show the reverse. Retake the portrait side."
+                    : warnings.includes("ocr_unavailable")
+                      ? "ID OCR was not readable. Retake the Front with even light and less glare."
+                      : warnings.includes("document_back_ocr_inconclusive")
+                        ? "ID back text was not readable. Retake the Back."
+                        : "ID type or required account name could not be confirmed. Retake a clearer image.";
+
+      let pending = null;
+      if (categorized.outcome === "review") {
+        if (consentedIdImages) {
+          precheckEvidenceAssets = await uploadIdentityEvidence({
+            images: consentedIdImages, uid, requestId:precheckRequestId,
+            cloudinary, configureCloudinary,
+          });
+        }
+        const userRef = db.collection("users").doc(uid);
+        // One queue record per authenticated UID. Compare/write atomically
+        // against concurrent /verify and Admin decisions.
+        pending = await db.runTransaction(async (transaction) => {
+          const [userSnapshot, verificationSnapshot, evidenceSnapshot] = await Promise.all([
+            transaction.get(userRef), transaction.get(verificationRef),
+            transaction.get(evidenceRef),
+          ]);
+          if (!userSnapshot.exists) {
+            throw makeHttpError(404, "profile_not_found", "Your VolunServe profile was not found.");
+          }
+          const currentUser = userSnapshot.data() || {};
+          if (currentUser.identityVerified === true ||
+              normalizeIdentityStatus(currentUser.identityStatus || "basic") === "verified") {
+            throw makeHttpError(409, "already_verified", "Your identity is already verified.");
+          }
+          if (cleanText(currentUser.status || "approved", 40).toLowerCase() !== "approved") {
+            throw makeHttpError(403, "account_not_active", "This Resident account is not active.");
+          }
+          const current = verificationSnapshot.exists ? verificationSnapshot.data() || {} : {};
+          precheckPreviousAssets = evidenceSnapshot.exists
+            ? evidenceSnapshot.data()?.assets || null : null;
+          if (current.requiresManualReview === true &&
+              normalizeIdentityStatus(current.status) === "pending") {
+            return {verificationId: cleanText(current.verificationId || "", 200),
+              documentScreening: current.documentScreening
+                ? normalizeIdDocumentScreening(current.documentScreening) : null,
+              alreadyPending: true};
+          }
+          if (identityAttemptCount(current.aiAttemptCount) >= MAX_IDENTITY_AI_ATTEMPTS) {
+            throw makeHttpError(409, "identity_attempt_limit_reached",
+              "Three face-verification attempts were used. Request Admin help.");
+          }
+          const started = current.processingStartedAt?.toMillis?.() || 0;
+          if (current.processingRequestId && Date.now() - started >= 0 &&
+              Date.now() - started < IDENTITY_PROCESSING_LEASE_MS) {
+            throw makeHttpError(409, "identity_verification_in_progress",
+              "A face-verification attempt is still processing. Check status.");
+          }
+          const verificationId = `identity_precheck_${crypto.randomUUID()}`;
+          transaction.set(verificationRef, {
+            uid, verificationId,
+            verificationMethod: "volunserve_ai_ocr_manual_review",
+            privateEvidenceRequestId: precheckEvidenceAssets
+              ? precheckRequestId : FieldValue.delete(),
+            status: "pending",
+            aiDecision: "manual_review",
+            decision: FieldValue.delete(),
+            reviewTrack: "blurry_id_review",
+            documentScreening: screening,
+            requiresManualReview: true,
+            matchScore: null,
+            livenessScore: null,
+            message,
+            manualReviewDecision: FieldValue.delete(),
+            manualValidationMethod: FieldValue.delete(),
+            manualReviewNotes: FieldValue.delete(),
+            reviewedAt: FieldValue.delete(),
+            reviewedBy: FieldValue.delete(),
+            reviewedByName: FieldValue.delete(),
+            updatedAt: FieldValue.serverTimestamp(),
+            lastSubmissionAt: FieldValue.serverTimestamp(),
+            createdAt: current.createdAt || FieldValue.serverTimestamp(),
+          }, {merge: true});
+          if (precheckEvidenceAssets) {
+            transaction.set(evidenceRef, {
+              uid, requestId:precheckRequestId, verificationId,
+              assets:precheckEvidenceAssets,
+              storedAt:FieldValue.serverTimestamp(),
+              retentionUntil:identityEvidenceRetentionDate(),
+              purpose:"consented_ocr_admin_id_review",
+            });
+          } else if (evidenceSnapshot.exists) {
+            transaction.delete(evidenceRef);
+          }
+          transaction.set(userRef, {
+            identityStatus: "pending",
+            identityVerified: false,
+            identityVerificationMethod: "volunserve_ai_ocr_manual_review",
+            updatedAt: FieldValue.serverTimestamp(),
+          }, {merge: true});
+          return {verificationId, documentScreening: screening, alreadyPending: false};
+        });
+        if (pending.alreadyPending) {
+          if (precheckEvidenceAssets) {
+            try {
+              await destroyIdentityEvidence({
+                assets:precheckEvidenceAssets, cloudinary, configureCloudinary,
+              });
+            } catch { console.warn("Duplicate OCR ID photos require cleanup."); }
+            precheckEvidenceAssets = null;
+          }
+        } else {
+          precheckEvidenceCommitted = true;
+          if (precheckPreviousAssets) {
+            try {
+              await destroyIdentityEvidence({
+                assets:precheckPreviousAssets, cloudinary, configureCloudinary,
+              });
+            } catch { console.warn("Previous OCR ID photos require cleanup."); }
+          }
+        }
+      }
+      const responseScreening = pending?.documentScreening || screening;
+      return response.json({
+        ok: true,
+        outcome: categorized.outcome,
+        decision: categorized.decision,
+        status: pending ? "pending" : null,
+        verificationId: pending?.verificationId || null,
+        detectedIdType: responseScreening?.detectedIdType || null,
+        documentScreening: responseScreening,
+        message: pending?.alreadyPending
+          ? "Your identity case is already pending Admin review. No additional attempt was used."
+          : message,
+        authenticityVerified: false,
+        livenessVerified: false,
+      });
+    } catch (error) {
+      if (!precheckEvidenceCommitted && precheckEvidenceAssets) {
+        try {
+          await destroyIdentityEvidence({
+            assets:precheckEvidenceAssets, cloudinary, configureCloudinary,
+          });
+        } catch { console.warn("Uncommitted OCR ID photos require cleanup."); }
+      }
+      // Never log private ID bytes, OCR text or profile fields.
+      if ((error.statusCode || 500) >= 500) {
+        console.warn("ID precheck service unavailable:", error?.code || "internal_error");
+      }
+      const status = Number(error.statusCode) || 503;
+      return response.status(status).json({
+        ok: false,
+        error: cleanText(error.code || "document_precheck_failed", 100),
+        message: status >= 500
+          ? error?.code === "identity_evidence_upload_failed"
+            ? "Private ID storage is unavailable. No Admin case was created; please retry."
+            : "ID recognition is unavailable. No selfie was collected and no face verification attempt was used."
+          : cleanText(error.message || "ID recognition could not continue.", 250),
+      });
+    }
+  },
+);
+
 app.get(
   "/api/identity/status",
   requireFirebaseUser,
@@ -5008,15 +5381,20 @@ const { registerDiditIdentityRoutes } = require("./diditIdentityRoutes");
 registerDiditIdentityRoutes(app, { db, FieldValue, requireFirebaseUser });
 
 app.post(
-  "/api/identity/verify",
+  ["/api/identity/verify", "/api/identity/verify-with-evidence"],
   requireFirebaseUser,
+  requireStagingIdentityMediaApproval,
   express.raw({ type: "multipart/form-data", limit: IDENTITY_UPLOAD_LIMIT }),
   async (request, response) => {
     const uid = request.firebaseUser.uid;
     const userRef = db.collection("users").doc(uid);
     const verificationRef = db.collection("identityVerifications").doc(uid);
     const requestId = crypto.randomUUID();
+    const evidenceRef = db.collection("identityPrivateEvidence").doc(uid);
     let claimed = false;
+    let evidenceCommitted = false;
+    let newEvidenceAssets = null;
+    let previousEvidenceAssets = null;
 
     try {
       // Firestore transaction ensures concurrent requests cannot bypass the
@@ -5030,6 +5408,13 @@ app.post(
           throw makeHttpError(404, "profile_not_found", "Your VolunServe profile was not found.");
         }
         const profile = userSnapshot.data() || {};
+        // Use names authenticated by Firebase profile, never user-supplied form fields.
+        request.identityExpectedName = {
+          firstName: profile.firstName || "",
+          lastName: profile.lastName || "",
+          dateOfBirth: profile.dateOfBirth || "",
+          barangay: profile.barangay || "",
+        };
         const verification = verificationSnapshot.exists ? verificationSnapshot.data() || {} : {};
         if (cleanText(profile.status || "approved", 40).toLowerCase() !== "approved") {
           throw makeHttpError(403, "account_not_active", "This VolunServe account is not active.");
@@ -5071,24 +5456,76 @@ app.post(
       });
       claimed = true;
 
+      // New clients use a dedicated, additive route. It MUST have consented
+      // front/back/selfie evidence; never silently create another empty Admin
+      // evidence card. The existing /verify route stays compatible with old apps.
+      const requiresPrivateEvidence = request.path === "/api/identity/verify-with-evidence";
+      const parsedImages = requiresPrivateEvidence
+        ? await parseConsentedIdentityEvidence(request) : null;
+      if (requiresPrivateEvidence && !parsedImages) {
+        throw makeHttpError(400, "identity_evidence_consent_required",
+          "Please accept private photo storage for Admin review before submitting.");
+      }
       const aiResult = await callIdentityAiService(request);
+      // The existing AI and Admin decision gates remain unchanged. Secure
+      // upload happens before any Firestore AI attempt is counted.
+      const consentedImages = parsedImages || await parseConsentedIdentityEvidence(request);
+      if (consentedImages) {
+        newEvidenceAssets = await uploadIdentityEvidence({
+          images: consentedImages, uid, requestId, cloudinary, configureCloudinary,
+        });
+      }
       const documentScreening = normalizeIdDocumentScreening(aiResult?.documentScreening);
       const rawDecision = normalizeAiDecision(aiResult?.decision || aiResult?.status);
-      // OCR/face similarity is evidence for Admin, never account approval.
-      // An AI "verified" signal remains pending independent human review.
-      const decision = requireAdminFinalApproval(rawDecision);
+      // A face match cannot compensate for an unsupported, unknown or
+      // mismatched selected government ID. Only recognized, selected types
+      // can proceed to manual identity review; all others require a retry.
+      const recognizedSelectedId = selectedIdRecognized(documentScreening);
+      const decision = enforceSelectedIdDecision(
+        rawDecision, documentScreening, aiResult?.livenessImplemented === true,
+      );
+      const reviewTrack = classifyIdentityReviewTrack({
+        screening: documentScreening,
+        decision,
+        idImageQualityScore: numberOrNull(aiResult?.idImageQualityScore),
+      });
       const matchScore = numberOrNull(aiResult?.matchScore);
       const livenessScore = numberOrNull(aiResult?.livenessScore);
       const verificationId = cleanText(
         aiResult?.verificationId || `identity_${uid}_${Date.now()}`, 200,
       );
+      // Fail-closed automatic identity readiness. The face landmark score is
+      // NOT calibrated to probability and the current AI still lacks validated
+      // PAD/liveness and independent government issuer authentication.
+      // No issuerValidator/padValidator are connected to production yet.
+      // The gateway automatically records why the Resident needs Admin review,
+      // without granting new account privileges or accepting client proof flags.
+      const automaticApproval = await assessAutomaticIdentityApproval({
+        screening: documentScreening,
+        face: {
+          result: "not_validated",
+          algorithmValidated: false,
+          calibrationValidated: false,
+          samePersonAssertion: false,
+          verificationId,
+        },
+        attempt: {
+          uid,
+          verificationId,
+          freshCapture: false,
+          consentedEvidenceAvailable: Boolean(newEvidenceAssets),
+        },
+      });
 
       const outcome = await db.runTransaction(async (transaction) => {
-        const [userSnapshot, verificationSnapshot] = await Promise.all([
+        const [userSnapshot, verificationSnapshot, evidenceSnapshot] = await Promise.all([
           transaction.get(userRef),
           transaction.get(verificationRef),
+          transaction.get(evidenceRef),
         ]);
         const current = verificationSnapshot.data() || {};
+        previousEvidenceAssets = evidenceSnapshot.exists
+          ? evidenceSnapshot.data()?.assets || null : null;
         if (current.processingRequestId !== requestId) {
           throw makeHttpError(409, "identity_request_expired",
             "This attempt was superseded. Please refresh your identity status.");
@@ -5101,13 +5538,35 @@ app.post(
         const attemptCycle = Number.isSafeInteger(current.aiAttemptCycle) && current.aiAttemptCycle > 0
           ? current.aiAttemptCycle : 1;
         const result = identityAttemptOutcome(decision, attemptCount);
-        const resultMessage = result.requiresManualReview && decision === "failed"
-          ? "Three identity verification attempts were unsuccessful. Your case has been referred for Admin review."
-          : cleanText(aiResult?.message || (
-            decision === "verified" ? "Identity verification completed successfully." :
-            decision === "failed" ? "Identity verification attempt failed. Please retry with clear, valid images." :
-            "The submission requires LGU/Admin manual review."
-          ), 500);
+        // An exhausted retry cycle is a separate Admin queue reason, even
+        // if OCR already rejected the selected document. This never makes
+        // an unsupported or unrecognized ID eligible for approval.
+        const finalReviewTrack = decision === "failed" &&
+          result.requiresManualReview
+          ? "three_failed_attempts"
+          : reviewTrack;
+        const resultMessage = reviewTrack === "blurry_id_review"
+          ? "PENDING ADMIN REVIEW: Your claimed National ID scan is too blurry to identify. An Admin can request a clearer rescan; this does not verify the ID."
+          : !recognizedSelectedId
+          ? (documentScreening.warningCodes.includes("document_front_back_swapped")
+              ? "AUTO REJECTED: The ID front and back appear reversed. Scan the portrait/front in the Front slot and the reverse in the Back slot, then retry."
+              : documentScreening.warningCodes.includes("document_back_looks_like_front")
+                ? "NOT ACCEPTED: The Back scan appears to show the front of the ID. Check both sides and retake before submitting."
+                : documentScreening.warningCodes.includes("document_front_side_conflict")
+                  ? "NOT ACCEPTED: The Front scan appears to show back-side information. Retake the portrait/front of the ID."
+                  : documentScreening.status === "unsupported"
+              ? "AUTO REJECTED: School, employee, or other unsupported IDs are not accepted. Choose one of the five supported government IDs."
+              : documentScreening.status === "mismatch"
+                ? "AUTO REJECTED: The scanned ID does not match the selected government ID type. Choose the correct type and scan again."
+                : "NOT ACCEPTED: The selected government ID type could not be confirmed by OCR. Retake a clearer scan and retry.") +
+              (result.requiresManualReview ? " Maximum attempts reached; Admin can review the unsuccessful attempts but cannot approve an unsupported ID." : "")
+          : result.requiresManualReview && decision === "failed"
+            ? "Three verification attempts were unsuccessful. Your case has been referred for Admin review."
+            : cleanText(aiResult?.message || (
+              decision === "verified" ? "Identity verification completed successfully." :
+              decision === "failed" ? "Identity verification attempt failed. Please retry with clear, valid images." :
+              "The submission requires LGU/Admin manual review."
+            ), 500);
         const previousReview = current.reviewedAt || current.manualReviewDecision ? {
           previousDecision: cleanText(current.manualReviewDecision || current.decision, 80),
           previousValidationMethod: cleanText(current.manualValidationMethod, 120),
@@ -5132,7 +5591,15 @@ app.post(
           reviewedByName: FieldValue.delete(),
           matchScore,
           livenessScore,
+          // This records assessment only. Until independent provider
+          // validators are integrated, any face match remains Pending.
+          automaticVerificationEligible: automaticApproval.eligible,
+          automaticVerificationReason: automaticApproval.reason,
           documentScreening,
+          reviewTrack: finalReviewTrack,
+          // Public reviews expose only availability; actual Cloudinary IDs live
+          // exclusively in the server-only identityPrivateEvidence collection.
+          privateEvidenceRequestId: newEvidenceAssets ? requestId : FieldValue.delete(),
           message: resultMessage,
           requiresManualReview: result.requiresManualReview,
           aiAttemptCount: attemptCount,
@@ -5143,6 +5610,19 @@ app.post(
           updatedAt: FieldValue.serverTimestamp(),
           createdAt: current.createdAt || FieldValue.serverTimestamp(),
         }, { merge: true });
+
+        // Atomic metadata link: an Admin never sees a reference to media that
+        // was not saved alongside this same verification attempt.
+        if (newEvidenceAssets) {
+          transaction.set(evidenceRef, {
+            uid, requestId, verificationId, assets: newEvidenceAssets,
+            storedAt: FieldValue.serverTimestamp(),
+            retentionUntil: identityEvidenceRetentionDate(),
+            purpose: "consented_manual_identity_review",
+          });
+        } else if (evidenceSnapshot.exists) {
+          transaction.delete(evidenceRef);
+        }
 
         // Immutable attempt metadata; no ID image, selfie, or biometric media
         // is stored here. Existing Admin decision logs are never deleted.
@@ -5156,28 +5636,16 @@ app.post(
             status: result.status,
             requiresManualReview: result.requiresManualReview,
             matchScore, livenessScore,
-            documentScreening,
+            documentScreening, reviewTrack: finalReviewTrack,
             verificationMethod: "volunserve_ai",
             previousReview,
             createdAt: FieldValue.serverTimestamp(),
           },
         );
 
-        if (result.status === "verified") {
-          transaction.set(userRef, {
-            identityStatus: "verified",
-            identityVerified: true,
-            identityVerificationProvider: FieldValue.delete(),
-            identityVerificationSessionId: FieldValue.delete(),
-            identityVerificationMethod: "volunserve_ai",
-            identityVerificationStartedAt: FieldValue.serverTimestamp(),
-            identityVerifiedAt: FieldValue.serverTimestamp(),
-            identityVerifiedBy: "volunserve_ai",
-            identityFailureReason: FieldValue.delete(),
-            updatedAt: FieldValue.serverTimestamp(),
-          }, { merge: true });
-        } else {
-          transaction.set(userRef, {
+        // No AI decision, including a synthetic or future "verified"
+        // response, can write identityVerified=true to the Resident profile.
+        transaction.set(userRef, {
             identityStatus: result.status,
             identityVerified: false,
             identityVerificationProvider: FieldValue.delete(),
@@ -5188,17 +5656,38 @@ app.post(
               ? resultMessage : FieldValue.delete(),
             updatedAt: FieldValue.serverTimestamp(),
           }, { merge: true });
-        }
         return {
           ok: true, status: result.status, verificationId, decision,
-          matchScore, livenessScore, documentScreening, message: resultMessage,
+          matchScore, livenessScore, documentScreening, reviewTrack: finalReviewTrack, message: resultMessage,
+          automaticVerificationEligible: automaticApproval.eligible,
+          automaticVerificationReason: automaticApproval.reason,
           attemptCount, maxAttempts: MAX_IDENTITY_AI_ATTEMPTS,
           attemptsRemaining: MAX_IDENTITY_AI_ATTEMPTS - attemptCount,
           requiresManualReview: result.requiresManualReview,
         };
       });
+      evidenceCommitted = true;
+      // Replace prior submission media only AFTER the new transaction commits.
+      if (previousEvidenceAssets) {
+        try {
+          await destroyIdentityEvidence({
+            assets: previousEvidenceAssets, cloudinary, configureCloudinary,
+          });
+        } catch {
+          console.warn("Previous private identity evidence requires cleanup.");
+        }
+      }
       response.status(200).json(outcome);
     } catch (error) {
+      if (!evidenceCommitted && newEvidenceAssets) {
+        try {
+          await destroyIdentityEvidence({
+            assets: newEvidenceAssets, cloudinary, configureCloudinary,
+          });
+        } catch {
+          console.warn("Uncommitted identity evidence requires cleanup.");
+        }
+      }
       if (claimed) {
         // Unlock only our own attempt, never another request's lease.
         try {
@@ -5257,11 +5746,17 @@ function identityAdminReviewPayload(verificationSnapshot, userSnapshot) {
       profile.identityStatus || verification.status || "basic",
     ),
     identityVerified: profile.identityVerified === true,
+    targetEligible: userSnapshot?.exists === true &&
+      ["resident", "volunteer"].includes(getProfileRole(profile)) &&
+      profile.residentAccess === true &&
+      isApprovedAccount(profile),
     aiDecision: cleanText(verification.aiDecision || "", 80),
     decision: cleanText(verification.decision || "", 80),
     matchScore: numberOrNull(verification.matchScore),
     livenessScore: numberOrNull(verification.livenessScore),
     documentScreening: verification.documentScreening ? normalizeIdDocumentScreening(verification.documentScreening) : null,
+    reviewTrack: ["blurry_id_review", "priority_admin_review", "standard_admin_review", "three_failed_attempts"].includes(verification.reviewTrack)
+      ? verification.reviewTrack : "none",
     message: cleanText(verification.message || "", 500),
     requiresManualReview: verification.requiresManualReview === true,
     attemptCount: identityAttemptCount(verification.aiAttemptCount),
@@ -5281,6 +5776,7 @@ function identityAdminReviewPayload(verificationSnapshot, userSnapshot) {
     reviewedBy: cleanText(verification.reviewedBy || "", 200),
     reviewedByName: cleanText(verification.reviewedByName || "", 160),
     reviewedAt: identityAdminTimestampIso(verification.reviewedAt),
+    evidenceAvailable: Boolean(verification.privateEvidenceRequestId),
     createdAt: identityAdminTimestampIso(verification.createdAt),
     updatedAt: identityAdminTimestampIso(verification.updatedAt),
     lastSubmissionAt: identityAdminTimestampIso(verification.lastSubmissionAt),
@@ -5362,6 +5858,59 @@ app.get(
     }
   },
 );
+// ID media cannot be accessed via Firestore clients or the public review queue.
+// All image URLs are authenticated-delivery links expiring after three minutes.
+app.get(
+  "/api/admin/identity/reviews/:uid/evidence",
+  requireFirebaseUser,
+  requireOperationalAdmin,
+  async (request, response) => {
+    response.set("Cache-Control", "no-store, private");
+    try {
+      const uid = String(request.params?.uid || "");
+      if (!/^[A-Za-z0-9_-]{8,200}$/.test(uid))
+        throw makeHttpError(400, "invalid_identity_review_uid", "Invalid Resident reference.");
+      const [verificationSnapshot, evidenceSnapshot] = await Promise.all([
+        db.collection("identityVerifications").doc(uid).get(),
+        db.collection("identityPrivateEvidence").doc(uid).get(),
+      ]);
+      if (!verificationSnapshot.exists || !evidenceSnapshot.exists)
+        throw makeHttpError(404, "identity_evidence_not_retained",
+          "This submission has no saved ID/selfie pictures. Request a fresh submission.");
+      const verification = verificationSnapshot.data() || {};
+      const evidence = evidenceSnapshot.data() || {};
+      if (!verification.privateEvidenceRequestId ||
+          verification.privateEvidenceRequestId !== evidence.requestId ||
+          verification.verificationId !== evidence.verificationId) {
+        throw makeHttpError(404, "identity_evidence_not_retained",
+          "No evidence is available for the currently selected verification.");
+      }
+      // Even when Render has been idle, expired evidence must never be shown.
+      if (!evidence.retentionUntil ||
+          evidence.retentionUntil.toMillis() <= Date.now()) {
+        throw makeHttpError(410, "identity_evidence_expired",
+          "Private identity evidence has expired. Request a new submission if needed.");
+      }
+      const signed = signedIdentityEvidence({
+        uid, assets: evidence.assets, cloudinary, configureCloudinary,
+      });
+      // Access audit records contain no ID numbers, photographs or signed URL.
+      await db.collection("adminActivityLogs").add({
+        action: "Resident Identity Evidence Viewed",
+        residentUid: uid,
+        verificationId: evidence.verificationId,
+        performedBy: request.firebaseUser.uid,
+        timestamp: FieldValue.serverTimestamp(),
+      });
+      response.json({ok:true, uid, verificationId: evidence.verificationId, ...signed});
+    } catch (error) {
+      response.status(Number(error?.statusCode) || 500).json({
+        error: cleanText(error?.code || "identity_evidence_read_failed", 100),
+        message: cleanText(error?.message || "Identity evidence is unavailable.", 300),
+      });
+    }
+  },
+);
 app.post(
   "/api/admin/identity/reviews/:uid/decision",
   requireFirebaseUser,
@@ -5376,6 +5925,9 @@ app.post(
         request.body?.validationMethod || "",
         120,
       );
+      // User-provided JSON is not issuer authentication. Only an authorized
+      // Admin may attest to an independent manual check; this is audited.
+      const issuerReviewAttested = request.body?.issuerReviewAttested === true;
       const reviewedByName = cleanText(
         request.volunServeProfile?.fullName ||
           request.firebaseUser?.name ||
@@ -5399,12 +5951,13 @@ app.post(
       }
       if (
         action !== "verify" &&
-        action !== "require_retry"
+        action !== "require_retry" &&
+        action !== "reject"
       ) {
         throw makeHttpError(
           400,
           "invalid_identity_review_action",
-          "Choose Verify Resident or Require Retry.",
+          "Choose Verify Resident, Require Retry, or Reject Verification.",
         );
       }
       if (
@@ -5426,6 +5979,10 @@ app.post(
           "identity_retry_reason_required",
           "Enter a clear reason before requiring the Resident to retry identity verification.",
         );
+      }
+      if (action === "reject" && notes.length < 10) {
+        throw makeHttpError(400, "identity_rejection_reason_required",
+          "Enter at least 10 characters explaining why the identity submission was rejected.");
       }
       const userRef = db.collection("users").doc(targetUid);
       const verificationRef = db
@@ -5453,6 +6010,16 @@ app.post(
         }
         const profile = userSnapshot.data() || {};
         const verification = verificationSnapshot.data() || {};
+        const targetRole = getProfileRole(profile);
+        if (!["resident", "volunteer"].includes(targetRole) ||
+            profile.residentAccess !== true ||
+            !isApprovedAccount(profile)) {
+          throw makeHttpError(
+            403,
+            "identity_review_target_not_eligible",
+            "This identity review is not an approved Resident or Volunteer account.",
+          );
+        }
         const currentStatus = normalizeIdentityStatus(
           profile.identityStatus ||
             verification.status ||
@@ -5480,16 +6047,45 @@ app.post(
             "This identity verification is no longer waiting for manual review.",
           );
         }
+        if (action === "verify") {
+          // This queue entry has no selfie, retained ID image or face match.
+          // An Admin may request a rescan but cannot mark it verified.
+          if (verification.verificationMethod === "volunserve_ai_ocr_manual_review") {
+            throw makeHttpError(409, "ocr_only_review_requires_rescan",
+              "This ID-only case has no face scan or retained ID evidence. Require Retry to complete full verification.");
+          }
+          const selectedIdCheck = normalizeIdDocumentScreening(verification.documentScreening);
+          if (!selectedIdRecognized(selectedIdCheck)) {
+            throw makeHttpError(
+              409,
+              "selected_government_id_not_recognized",
+              "The selected supported government ID was not recognized. Require a new scan before approval.",
+            );
+          }
+          const evidence = reviewIssuerEvidence({
+            declaredType: selectedIdCheck.declaredIdType,
+            validationMethod,
+            confirmed: issuerReviewAttested,
+            notes,
+          });
+          if (!evidence.ok) {
+            throw makeHttpError(400, "independent_id_review_required", evidence.message);
+          }
+        }
         const commonReviewFields = {
           requiresManualReview: false,
           manualReviewDecision:
             action === "verify"
               ? "verified"
-              : "retry_required",
+              : action === "reject" ? "rejected" : "retry_required",
           manualValidationMethod:
             action === "verify"
               ? validationMethod
               : "",
+          independentAdminCheckAttested: action === "verify" && issuerReviewAttested,
+          // No official issuer integration currently exists: never
+          // mark the ID as cryptographically authentic from an Admin tick.
+          issuerApiAuthenticityVerified: false,
           manualReviewNotes: notes,
           reviewedAt: FieldValue.serverTimestamp(),
           reviewedBy: adminUid,
@@ -5550,7 +6146,7 @@ app.post(
           {
             ...commonReviewFields,
             status: "failed",
-            decision: "retry_required",
+            decision: action === "reject" ? "rejected" : "retry_required",
             message: notes,
             aiAttemptCount: 0,
             aiAttemptCycle: (Number.isSafeInteger(verification.aiAttemptCycle) && verification.aiAttemptCycle > 0
@@ -5569,7 +6165,9 @@ app.post(
           { merge: true },
         );
         transaction.set(activityRef, {
-          action: "Resident Identity Retry Required",
+          action: action === "reject"
+            ? "Resident Identity Verification Rejected"
+            : "Resident Identity Retry Required",
           residentUid: targetUid,
           verificationId: cleanText(
             verification.verificationId || "",
@@ -5588,6 +6186,7 @@ app.post(
         return {
           status: "failed",
           identityVerified: false,
+          manualReviewDecision: action === "reject" ? "rejected" : "retry_required",
         };
       });
       response.json({
@@ -5597,7 +6196,9 @@ app.post(
         message:
           action === "verify"
             ? "Resident identity verified after manual LGU/Admin validation."
-            : "The Resident must retry identity verification with clearer or corrected information.",
+            : action === "reject"
+              ? "Identity submission rejected with Admin notes. The Resident may submit a corrected application."
+              : "The Resident must retry identity verification with clearer or corrected information.",
       });
     } catch (error) {
       console.error("Identity review decision failed:", error);
@@ -11689,6 +12290,8 @@ require("./renderEmergencyAutoInvites").installRoutes({
 // Automatic, idempotent recovery for eligible completed event certificates.
 // Does not change attendance, roles, certificates that already exist, or rules.
 startCommunityCertificateAutoSync({db,reconcile:reconcileCommunityEventCertificates});
+// Isolated 30-day ID-photo retention sweep. Render may sleep between runs;
+// authorization additionally blocks expired evidence even before deletion.
 const port =
   Number(
     process.env.PORT ||

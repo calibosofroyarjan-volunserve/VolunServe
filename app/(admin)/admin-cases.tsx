@@ -1,5 +1,4 @@
-import { volunserveTypography as vsType } from "../../constants/volunserveLiveUi";
-import { liveUi as designUi } from "../../constants/volunserveLiveUi";
+import { getSafeVolunServeBackendBaseUrl } from "../../lib/stagingExpoServiceIsolation";
 import { useRouter } from "expo-router";
 import { getAuth } from "firebase/auth";
 import {
@@ -17,9 +16,15 @@ import {
   serverTimestamp,
   updateDoc,
 } from "firebase/firestore";
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import ListPagination from "../../components/ui/ListPagination";
-import AdminReviewHero from "../../components/admin/AdminReviewHero";
+import {
+  ReferenceOverview,
+  ReferenceStatus,
+  ReferenceHistory,
+  ReferenceVolunteerMatching,
+  EmergencyMapButton,
+} from "../../components/admin/EmergencyFiveTabDesign";
 import {
   Alert,
   Image,
@@ -34,11 +39,13 @@ import {
   View,
 } from "react-native";
 
-import EmergencyIncidentMap from "../../components/admin/EmergencyIncidentMap";
 import { db } from "../../lib/firebase";
-import { emergencyTaskStatusLabel } from "../../lib/emergencyTaskStatus";
+import { safePublicAdvisoryBarangay } from "../../lib/emergencyPublicAdvisory";
+import { SJDM_BARANGAYS } from "../../constants/sjdmBarangays";
+import { VolunteerEligibilityValidation } from "../../components/admin/VolunteerEligibilityValidation";
+import { publishVerifiedCommunityAdvisory } from "../../lib/publishVerifiedCommunityAdvisory";
 
-const BACKEND_URL = "https://volunserve.onrender.com";
+const BACKEND_URL = getSafeVolunServeBackendBaseUrl();
 
 type Severity = "low" | "medium" | "high" | "critical";
 type CaseStatus =
@@ -94,6 +101,7 @@ interface DisasterCase {
 
   verificationStatus?: VerificationStatus;
   evidenceReviewStatus?: string;
+  autoVolunteerDispatch?: {origin?:string;state?:string;wave?:number;attemptedCount?:number};
   verification?: {
     accountApproved?: boolean;
     reporterTrust?: string;
@@ -109,10 +117,8 @@ interface DisasterCase {
   };
 
   location: string;
-  latitude?: number | null;
-  longitude?: number | null;
-  locationSource?: "device_gps" | "manual_map" | "unknown";
-  gpsAccuracyMeters?: number | null;
+  latitude?: number;
+  longitude?: number;
   details: string;
 
   affectedPeople?: number;
@@ -126,6 +132,7 @@ interface DisasterCase {
   requiredVolunteers?: number;
   assignedVolunteersCount?: number;
   assignedVolunteerIds?: string[];
+
 
   // Optional Volunteer support is tracked separately from the official LGU responder.
   activeVolunteerSupportUid?: string;
@@ -178,24 +185,19 @@ type VolunteerProfile = {
 };
 
 type ResponseAssignment = {
+  offerMode?: string;
   id: string;
   caseId: string;
   volunteerId: string;
   volunteerName: string;
   caseTitle: string;
   status: AssignmentStatus;
-  residentConfirmationStatus?: string;
-  residentConfirmationOutcome?: string;
   createdAt?: any;
   updatedAt?: any;
-};
-
-type VolunteerInvitation = {
-  id: string;
-  caseId: string;
-  volunteerId: string;
-  status: "invited" | "accepted" | "declined";
-  createdAt?: any;
+  createdBy?: string;
+  barangay?: string;
+  acceptedAt?: any;
+  declinedAt?: any;
 };
 
 type LguPersonnelCandidate = {
@@ -570,39 +572,51 @@ const lguResponseFieldLabel = (personnel?: LguPersonnelCandidate | null) => {
 export default function AdminCases() {
   const router = useRouter();
   const { width } = useWindowDimensions();
-  // Preserve the branded two-column Admin desk on laptops while keeping
-  // readable stacked panes when sidebar + content cannot fit comfortably.
-  const compact = width < 1200;
+  const compact = width < 920;
+  const screenRef = useRef<ScrollView>(null);
 
   const [role, setRole] = useState<string | null>(null);
   const [loadingRole, setLoadingRole] = useState(true);
 
   const [cases, setCases] = useState<DisasterCase[]>([]);
   const [assignments, setAssignments] = useState<ResponseAssignment[]>([]);
-  const [invitations, setInvitations] = useState<VolunteerInvitation[]>([]);
-  const [inviteFeedback, setInviteFeedback] = useState("");
   const [fieldReports, setFieldReports] = useState<VolunteerFieldReport[]>([]);
   const [approvedVolunteers, setApprovedVolunteers] = useState<VolunteerProfile[]>(
     []
   );
+  const [volunteerDirectoryState, setVolunteerDirectoryState] = useState<"loading" | "loaded" | "error">("loading");
+  const [lguPersonnel, setLguPersonnel] = useState<LguPersonnelCandidate[]>([]);
+  const [lguPersonnelLoading, setLguPersonnelLoading] = useState(false);
+  const [lguPersonnelError, setLguPersonnelError] = useState("");
+  const [lguFieldReports, setLguFieldReports] = useState<LguFieldReport[]>([]);
+  const [lguFieldReportsLoading, setLguFieldReportsLoading] = useState(false);
+  const [lguFieldReportsError, setLguFieldReportsError] = useState("");
+  const [lguFieldReviewNotes, setLguFieldReviewNotes] = useState<
+    Record<string, string>
+  >({});
+
   const [filterStatus, setFilterStatus] = useState<CaseStatus | "all">("all");
   const [filterSeverity, setFilterSeverity] = useState<Severity | "all">("all");
-  const [filtersExpanded, setFiltersExpanded] = useState(false);
   const [caseSearch, setCaseSearch] = useState("");
   const [recordPage, setRecordPage] = useState(1);
+  const [personnelPage, setPersonnelPage] = useState(1);
   const [volunteerPage, setVolunteerPage] = useState(1);
   const [activeAssignmentPage, setActiveAssignmentPage] = useState(1);
   const [historyAssignmentPage, setHistoryAssignmentPage] = useState(1);
-  const [fieldReportPage, setFieldReportPage] = useState(1);
   const [photoPage, setPhotoPage] = useState(1);
   const [videoPage, setVideoPage] = useState(1);
   const [selectedCaseId, setSelectedCaseId] = useState("");
+  const [isCaseDetailOpen, setIsCaseDetailOpen] = useState(false);
   const [detailTab, setDetailTab] = useState<
     "overview" | "map" | "evidence" | "response" | "personnel" | "history"
   >("overview");
+  const [advancedResponseOpen, setAdvancedResponseOpen] = useState(false);
+  const focusedTab = detailTab === "evidence" || detailTab === "response";
 
   const [notes, setNotes] = useState<Record<string, string>>({});
   const [reviewReasons, setReviewReasons] = useState<Record<string, string>>({});
+  const [publicImpactConfirmed, setPublicImpactConfirmed] = useState<Record<string, boolean>>({});
+  const [publicImpactBarangays, setPublicImpactBarangays] = useState<Record<string, string>>({});
   const [assignmentCaseId, setAssignmentCaseId] = useState("");
   const [skillFilter, setSkillFilter] = useState("");
   const [availabilityFilter, setAvailabilityFilter] = useState("");
@@ -624,8 +638,278 @@ export default function AdminCases() {
     Set<string>
   >(new Set());
 
+  const loadLguPersonnel = async (silent = false) => {
+    const adminUser = getAuth().currentUser;
 
+    if (!adminUser) {
+      setLguPersonnelError("Admin session expired. Please sign in again.");
+      return;
+    }
 
+    if (!silent) {
+      setLguPersonnelLoading(true);
+    }
+
+    setLguPersonnelError("");
+
+    try {
+      const token = await adminUser.getIdToken(true);
+      const response = await fetch(`${BACKEND_URL}/api/admin/lgu/personnel`, {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: "application/json",
+        },
+      });
+
+      const raw = await response.text();
+      let payload: any = {};
+
+      if (raw) {
+        try {
+          payload = JSON.parse(raw);
+        } catch {
+          payload = {};
+        }
+      }
+
+      if (!response.ok) {
+        throw new Error(
+          payload?.message ||
+            `Unable to load LGU Personnel (status ${response.status}).`
+        );
+      }
+
+      const list = Array.isArray(payload?.personnel) ? payload.personnel : [];
+
+      setLguPersonnel(
+        list
+          .map((item: any) => ({
+            uid: String(item?.uid || ""),
+            fullName: String(item?.fullName || "LGU Personnel"),
+            email: String(item?.email || ""),
+            employeeId: String(item?.employeeId || ""),
+            department: String(item?.department || ""),
+            position: String(item?.position || ""),
+            capabilities: normalizeStringArray(item?.capabilities),
+            verificationStatus: String(item?.verificationStatus || ""),
+            employmentStatus: String(item?.employmentStatus || ""),
+            dutyStatus: String(item?.dutyStatus || "off_duty"),
+            availabilityStatus: String(
+              item?.availabilityStatus || "unavailable"
+            ),
+            shiftDate: String(item?.shiftDate || ""),
+            activeCaseId: String(item?.activeCaseId || ""),
+            activeAssignmentId: String(item?.activeAssignmentId || ""),
+            isTestAccount: item?.isTestAccount === true,
+          }))
+          .filter((item: LguPersonnelCandidate) => Boolean(item.uid))
+          .sort((a: LguPersonnelCandidate, b: LguPersonnelCandidate) => {
+            const aAvailable =
+              a.dutyStatus === "on_duty" &&
+              a.availabilityStatus === "available" &&
+              !a.activeCaseId &&
+              !a.activeAssignmentId;
+            const bAvailable =
+              b.dutyStatus === "on_duty" &&
+              b.availabilityStatus === "available" &&
+              !b.activeCaseId &&
+              !b.activeAssignmentId;
+
+            if (aAvailable !== bAvailable) {
+              return aAvailable ? -1 : 1;
+            }
+
+            return a.fullName.localeCompare(b.fullName);
+          })
+      );
+    } catch (error) {
+      console.log("LGU personnel load error:", error);
+      setLguPersonnelError(
+        error instanceof Error
+          ? error.message
+          : "Unable to load LGU Personnel."
+      );
+    } finally {
+      if (!silent) {
+        setLguPersonnelLoading(false);
+      }
+    }
+  };
+
+  const loadLguFieldReports = async (
+    caseId: string,
+    silent = false
+  ) => {
+    const adminUser = getAuth().currentUser;
+
+    if (!adminUser || !caseId) {
+      setLguFieldReports([]);
+      return;
+    }
+
+    if (!silent) {
+      setLguFieldReportsLoading(true);
+    }
+
+    setLguFieldReportsError("");
+
+    try {
+      const token = await adminUser.getIdToken(true);
+      const response = await fetch(
+        `${BACKEND_URL}/api/admin/lgu/field-reports?caseId=${encodeURIComponent(
+          caseId
+        )}`,
+        {
+          method: "GET",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            Accept: "application/json",
+          },
+        }
+      );
+
+      const raw = await response.text();
+      let payload: any = {};
+
+      if (raw) {
+        try {
+          payload = JSON.parse(raw);
+        } catch {
+          payload = {};
+        }
+      }
+
+      if (!response.ok) {
+        throw new Error(
+          payload?.message ||
+            `Unable to load official LGU field report (status ${response.status}).`
+        );
+      }
+
+      const list = Array.isArray(payload?.reports) ? payload.reports : [];
+
+      setLguFieldReports(
+        list.map((item: any) => ({
+          id: String(item?.id || item?.assignmentId || ""),
+          assignmentId: String(item?.assignmentId || ""),
+          caseId: String(item?.caseId || ""),
+          personnelUid: String(item?.personnelUid || ""),
+          personnelName: String(item?.personnelName || "LGU Responder"),
+          department: String(item?.department || ""),
+          position: String(item?.position || ""),
+          caseTitle: String(item?.caseTitle || "Emergency Case"),
+          caseCategory: String(item?.caseCategory || "Emergency"),
+          caseSeverity: String(item?.caseSeverity || ""),
+          responseLocation: String(item?.responseLocation || ""),
+          situationSummary: String(item?.situationSummary || ""),
+          actionsTaken: String(item?.actionsTaken || ""),
+          peopleAssisted: Number(item?.peopleAssisted || 0),
+          outcome: String(item?.outcome || ""),
+          remainingNeeds: String(item?.remainingNeeds || ""),
+          notes: String(item?.notes || ""),
+          adminReviewStatus: String(item?.adminReviewStatus || "pending"),
+          adminReviewNote: String(item?.adminReviewNote || ""),
+          submittedAt: String(item?.submittedAt || ""),
+          reviewedAt: String(item?.reviewedAt || ""),
+          reviewedBy: String(item?.reviewedBy || ""),
+        }))
+      );
+    } catch (error) {
+      console.log("Official LGU field report load error:", error);
+      setLguFieldReports([]);
+      setLguFieldReportsError(
+        error instanceof Error
+          ? error.message
+          : "Unable to load official LGU field report."
+      );
+    } finally {
+      if (!silent) {
+        setLguFieldReportsLoading(false);
+      }
+    }
+  };
+
+  const reviewLguFieldReport = async (report: LguFieldReport) => {
+    const adminUser = getAuth().currentUser;
+
+    if (!adminUser) {
+      Alert.alert("Session Expired", "Please sign in again.");
+      return;
+    }
+
+    const note = (
+      lguFieldReviewNotes[report.id] ??
+      report.adminReviewNote ??
+      ""
+    ).trim();
+
+    if (note.length > 1500) {
+      Alert.alert(
+        "Review Note Too Long",
+        "Admin review note must be 1500 characters or fewer."
+      );
+      return;
+    }
+
+    const busyId = `lgu_field_review_${report.id}`;
+    setBusyKey(busyId);
+
+    try {
+      const token = await adminUser.getIdToken(true);
+      const response = await fetch(
+        `${BACKEND_URL}/api/admin/lgu/field-reports/${encodeURIComponent(
+          report.id
+        )}/review`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            Accept: "application/json",
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            adminReviewNote: note,
+          }),
+        }
+      );
+
+      const raw = await response.text();
+      let payload: any = {};
+
+      if (raw) {
+        try {
+          payload = JSON.parse(raw);
+        } catch {
+          payload = {};
+        }
+      }
+
+      if (!response.ok) {
+        throw new Error(
+          payload?.message ||
+            `Unable to review official LGU field report (status ${response.status}).`
+        );
+      }
+
+      await loadLguFieldReports(report.caseId, true);
+
+      Alert.alert(
+        "LGU Field Report Reviewed",
+        "The official responder report is reviewed. You may now resolve the emergency if the case is fully handled, or keep it In Progress for follow-up."
+      );
+    } catch (error) {
+      console.log("Official LGU field report review error:", error);
+      Alert.alert(
+        "Review Failed",
+        error instanceof Error
+          ? error.message
+          : "Unable to review the official LGU field report."
+      );
+    } finally {
+      setBusyKey("");
+    }
+  };
 
   useEffect(() => {
     const loadRole = async () => {
@@ -659,6 +943,20 @@ export default function AdminCases() {
   }, [router]);
 
   const isAuthorized = role === "admin";
+
+  // The retired LGU directory is not loaded for Volunteer Assignment.
+
+  useEffect(() => {
+    if (
+      !isAuthorized ||
+      detailTab !== "response" ||
+      !selectedCaseId
+    ) {
+      return;
+    }
+
+    void loadLguFieldReports(selectedCaseId);
+  }, [isAuthorized, detailTab, selectedCaseId]);
 
   useEffect(() => {
     if (!isAuthorized) return;
@@ -706,16 +1004,15 @@ export default function AdminCases() {
                 ? "validated"
                 : "pending_verification"),
             evidenceReviewStatus: data.evidenceReviewStatus || "",
+
             verification:
               data.verification && typeof data.verification === "object"
                 ? data.verification
                 : {},
 
             location: data.location || "",
-            latitude: data.latitude === null || data.latitude === undefined || data.latitude === "" ? null : Number(data.latitude),
-            longitude: data.longitude === null || data.longitude === undefined || data.longitude === "" ? null : Number(data.longitude),
-            locationSource: data.verification?.locationSource === "device_gps" || data.verification?.locationSource === "manual_map" ? data.verification.locationSource : "unknown",
-            gpsAccuracyMeters: Number.isFinite(data.gpsAccuracyMeters) ? data.gpsAccuracyMeters : null,
+            latitude: Number(data.latitude),
+            longitude: Number(data.longitude),
             details: data.details || "",
 
             affectedPeople: Number(data.affectedPeople || 0),
@@ -727,6 +1024,7 @@ export default function AdminCases() {
             attachments: Array.isArray(data.attachments) ? data.attachments : [],
 
             requiredVolunteers: Number(data.requiredVolunteers || 0),
+            autoVolunteerDispatch: data.autoVolunteerDispatch || undefined,
             assignedVolunteersCount: Number(data.assignedVolunteersCount || 0),
             assignedVolunteerIds: Array.isArray(data.assignedVolunteerIds)
               ? data.assignedVolunteerIds
@@ -923,36 +1221,22 @@ export default function AdminCases() {
             a.fullName.localeCompare(b.fullName)
           );
           setApprovedVolunteers(visibleApprovedVolunteers);
+          setVolunteerDirectoryState("loaded");
         } catch (error) {
           console.log("Approved volunteer merge error:", error);
           setApprovedVolunteers([]);
+          setVolunteerDirectoryState("error");
         }
       },
       (error) => {
         console.log("Volunteer applications listener error:", error);
+        setVolunteerDirectoryState("error");
         Alert.alert(
           "Permission Error",
           "Unable to load approved volunteer applications."
         );
       }
     );
-  }, [isAuthorized]);
-
-  useEffect(() => {
-    if (!isAuthorized) return;
-    return onSnapshot(collection(db, "volunteerInvitations"),
-      (snapshot) => {
-        setInvitations(snapshot.docs.map((item) => ({
-          id: item.id,
-          ...(item.data() as Omit<VolunteerInvitation, "id">),
-        })));
-        setInviteFeedback("");
-      },
-      (error) => {
-        setInviteFeedback(error.code === "permission-denied"
-          ? "Invitation permissions are unavailable. Deploy the invitation-only Firestore rules."
-          : "Could not load Volunteer invitation statuses.");
-      });
   }, [isAuthorized]);
 
   useEffect(() => {
@@ -971,10 +1255,13 @@ export default function AdminCases() {
             volunteerName: data.volunteerName || "Volunteer",
             caseTitle: data.caseTitle || "Incident",
             status: data.status || "offered",
-            residentConfirmationStatus: String(data.residentConfirmationStatus || ""),
-            residentConfirmationOutcome: String(data.residentConfirmationOutcome || ""),
             createdAt: data.createdAt,
             updatedAt: data.updatedAt,
+            offerMode: String(data.offerMode || ""),
+            createdBy: String(data.createdBy || ""),
+            barangay: String(data.barangay || ""),
+            acceptedAt: data.acceptedAt,
+            declinedAt: data.declinedAt,
           };
         });
 
@@ -1129,13 +1416,19 @@ export default function AdminCases() {
 
   useEffect(() => {
     setDetailTab("overview");
+    setAdvancedResponseOpen(false);
     setAssignmentCaseId("");
+    setPersonnelPage(1);
     setVolunteerPage(1);
     setActiveAssignmentPage(1);
     setHistoryAssignmentPage(1);
     setPhotoPage(1);
     setVideoPage(1);
   }, [selectedCaseId]);
+
+  useEffect(() => {
+    screenRef.current?.scrollTo({ y: 0, animated: false });
+  }, [detailTab]);
 
   const pageFive = <T,>(rows: T[], page: number): T[] => {
     const safe = Math.max(1, Math.min(page, Math.max(1, Math.ceil(rows.length / 5))));
@@ -1355,6 +1648,15 @@ export default function AdminCases() {
       (item) => item.volunteerId === volunteer.uid
     );
 
+    const busyOnAnotherCase = assignments.some(
+      (item) =>
+        item.caseId !== incident.id &&
+        item.volunteerId === volunteer.uid &&
+        ["offered", "accepted", "responding", "on_site"].includes(
+          String(item.status)
+        )
+    );
+
     const reporterIsVolunteer =
       String(volunteer.uid || "").trim() ===
       String(incident.reporterUid || "").trim();
@@ -1367,13 +1669,12 @@ export default function AdminCases() {
       .trim()
       .toLowerCase();
 
-    const blockedSystemRole = ["admin", "superadmin", "lgu_personnel", "applicant"].includes(role);
+    const blockedSystemRole = role === "admin" || role === "superadmin";
     const explicitlyBlockedAccount =
       accountStatus === "rejected" ||
       accountStatus === "suspended" ||
       accountStatus === "disabled" ||
-      accountStatus === "deactivated" ||
-      ["rejected", "revoked"].includes(String(volunteer.volunteerStatus || "").toLowerCase());
+      accountStatus === "deactivated";
     const explicitlyRejectedIdentity =
       identityStatus === "rejected" || identityStatus === "failed";
 
@@ -1382,12 +1683,15 @@ export default function AdminCases() {
       (skill) => !String(skill).toLowerCase().includes("general volunteer")
     );
     const skillMatches = skillMatchCount(incident, volunteer);
-    const skillReviewNeeded = specializedSkills.length > 0 && skillMatches === 0;
+    const skillMatched = specializedSkills.length === 0 || skillMatches > 0;
 
-    // Any approved Volunteer can support a validated SJDM emergency,
-    // regardless of which barangay they live in. Incident barangay is kept
-    // solely for location, community records, and completion documentation.
     const caseBarangay = normalizeBarangay(caseBarangayValue(incident));
+    const volunteerBarangay = normalizeBarangay(volunteer.barangay);
+    const sameBarangay =
+      Boolean(caseBarangay) &&
+      Boolean(volunteerBarangay) &&
+      caseBarangay === volunteerBarangay;
+
     if (reporterIsVolunteer) {
       return { eligible: false, reason: "Reporter cannot respond to own case", skillMatches };
     }
@@ -1398,48 +1702,77 @@ export default function AdminCases() {
       return { eligible: false, reason: "Volunteer account is not currently eligible", skillMatches };
     }
     if (!caseBarangay) {
-      return { eligible: false, reason: "Record the incident barangay for the completion report; the Volunteer may be from any SJDM barangay", skillMatches };
+      return { eligible: false, reason: "Emergency case barangay is missing", skillMatches };
+    }
+    if (!volunteerBarangay) {
+      return { eligible: false, reason: "Volunteer profile has no barangay", skillMatches };
+    }
+    if (!sameBarangay) {
+      return {
+        eligible: false,
+        reason: `Volunteer belongs to ${volunteer.barangay || "another barangay"}`,
+        skillMatches,
+      };
     }
     if (alreadyAssigned) {
       return { eligible: false, reason: "Already assigned to this emergency", skillMatches };
     }
-    // Skill suitability is reviewed by LGU. No automatic dispatch occurs.
+    if (busyOnAnotherCase) {
+      return { eligible: false, reason: "Busy on another active emergency", skillMatches };
+    }
+    if (!skillMatched) {
+      return {
+        eligible: false,
+        reason: specializedSkills.length
+          ? `Needs matching skill: ${specializedSkills.join(", ")}`
+          : "Required skill does not match",
+        skillMatches,
+      };
+    }
     return {
       eligible: true,
-      reason: skillReviewNeeded
-        ? "Skill review needed — LGU must confirm safe support duties"
+      reason: specializedSkills.length
+        ? "Qualified Volunteer — support offer can be sent offline"
         : "Approved Volunteer — support offer can be sent offline",
       skillMatches,
     };
   };
 
   const volunteerCandidatesForCase = (incident: DisasterCase) => {
+    const caseBarangay = normalizeBarangay(caseBarangayValue(incident));
+
     return approvedVolunteers
       .filter((volunteer) => {
+        const availabilityText = volunteer.availability.join(" ").toLowerCase();
         const isReporter =
           String(volunteer.uid || "").trim() ===
           String(incident.reporterUid || "").trim();
 
-        const search = skillFilter.trim().toLowerCase();
         const skillSearchMatch =
-          !search ||
-          volunteer.fullName.toLowerCase().includes(search) ||
-          volunteer.skills.some((skill) => skill.toLowerCase().includes(search));
+          !skillFilter.trim() ||
+          volunteer.skills.some((skill) =>
+            skill.toLowerCase().includes(skillFilter.trim().toLowerCase())
+          );
+
+        const availabilityMatch =
+          !availabilityFilter.trim() ||
+          availabilityText.includes(availabilityFilter.trim().toLowerCase());
 
         // The Resident who filed this emergency must never appear in the
         // Volunteer candidate pool, even if the same account also has
         // approved Volunteer access.
-        return !isReporter && skillSearchMatch;
+        return !isReporter && skillSearchMatch && availabilityMatch;
       })
       .sort((a, b) => {
         const eligibilityA = volunteerEligibilityForCase(incident, a);
         const eligibilityB = volunteerEligibilityForCase(incident, b);
 
-        // Citywide roster: safety/eligibility and skills determine order,
-        // never the Volunteer's home barangay.
+        // Prefer local, eligible volunteers, but show approved out-of-barangay
+        // profiles as well so admins understand why a candidate is restricted.
         if (eligibilityA.eligible !== eligibilityB.eligible) {
           return eligibilityB.eligible ? 1 : -1;
         }
+
         if (eligibilityA.skillMatches !== eligibilityB.skillMatches) {
           return eligibilityB.skillMatches - eligibilityA.skillMatches;
         }
@@ -1482,6 +1815,18 @@ export default function AdminCases() {
         "Reason Required",
         "Enter a clear reason before requesting more evidence or rejecting the request."
       );
+      return;
+    }
+
+    const publicImpact = action === "validate" &&
+      ["high", "critical"].includes(incident.severity) &&
+      publicImpactConfirmed[incident.id] === true;
+    const confirmedIncidentBarangay = publicImpact
+      ? safePublicAdvisoryBarangay(publicImpactBarangays[incident.id]) : null;
+
+    if (publicImpact && !confirmedIncidentBarangay) {
+      Alert.alert("Confirm Incident Barangay",
+        "Select the actual SJDM incident barangay to automatically publish a public safety advisory. If the location is not known, switch off the public-impact option and validate the report privately.");
       return;
     }
 
@@ -1531,7 +1876,7 @@ export default function AdminCases() {
 
           notificationTitle = "Emergency report validated";
           notificationMessage =
-            "Admin approved your emergency report. A qualified Volunteer may be offered a community assistance task.";
+            "Your emergency report was verified. Admin can offer a task to an approved Volunteer, including when offline. The Volunteer must accept before responding.";
           logAction = "Emergency Request Validated";
         }
 
@@ -1587,10 +1932,28 @@ export default function AdminCases() {
       });
 
       if (action === "validate") {
-        Alert.alert(
-          "Request Validated",
-          "The case is now eligible for responder assignment."
-        );
+        // Publishing is separate, so an Announcements permission error cannot
+        // undo successful emergency validation or delay Volunteer offers.
+        let advisoryMessage = "No public advisory requested; the emergency report remains private.";
+        if (publicImpact && confirmedIncidentBarangay) {
+          try {
+            const publication = await publishVerifiedCommunityAdvisory({
+              caseId: incident.id,
+              adminUid: adminUser.uid,
+              confirmedIncidentBarangay,
+            });
+            advisoryMessage = publication === "published"
+              ? "A privacy-safe public advisory was automatically posted in Community Updates."
+              : publication === "already_published"
+                ? "An advisory for this case is already published; no duplicate created."
+                : "No advisory posted; case status or severity changed.";
+          } catch (publicationError) {
+            console.error("Automatic public advisory publication failed:", publicationError);
+            advisoryMessage = "Case validated, but the public advisory was NOT published. Review Announcements permissions separately.";
+          }
+        }
+        Alert.alert("Request Validated",
+          "The case is now eligible for Volunteer offers. " + advisoryMessage);
       } else if (action === "request_more_evidence") {
         Alert.alert(
           "Resident Notified",
@@ -1719,6 +2082,28 @@ export default function AdminCases() {
 
     const caseAssignments = activeAssignmentsForCase(incident.id);
 
+    // An offered task is not an active response until a Volunteer accepts it.
+    if (nextStatus === "in_progress" &&
+        !caseAssignments.some(item =>
+          ["accepted", "responding", "on_site"].includes(String(item.status)))) {
+      Alert.alert("Volunteer Acceptance Required",
+        "No Volunteer has accepted this emergency yet. An approved offline Volunteer may receive an offer, but the case must remain pending until one accepts.");
+      return;
+    }
+
+    if (
+      nextStatus === "resolved" &&
+      String(incident.officialLguResponseStatus || "")
+        .trim()
+        .toLowerCase() === "completed_pending_admin_review"
+    ) {
+      Alert.alert(
+        "LGU Field Report Review Required",
+        "Review the completed official LGU field report in the Response tab before resolving this emergency."
+      );
+      return;
+    }
+
     if (
       nextStatus === "resolved" &&
       caseAssignments.length > 0 &&
@@ -1728,7 +2113,7 @@ export default function AdminCases() {
     ) {
       Alert.alert(
         "Volunteer Support Still Active",
-        "Finish or cancel open Volunteer assignments before resolving the case."
+        "Finish or cancel any active Volunteer tasks before resolving the case."
       );
       return;
     }
@@ -1803,88 +2188,12 @@ export default function AdminCases() {
       Alert.alert(
         "Case Updated",
         nextStatus === "in_progress"
-          ? "The emergency case is In Progress. Review active Volunteer tasks and reports before resolving."
+          ? "Emergency case is now In Progress following Volunteer acceptance."
           : `Status changed to ${labelOfStatus(nextStatus)}.`
       );
     } catch (error) {
       console.log("Case status error:", error);
       Alert.alert("Error", "Unable to update the case status.");
-    }
-  };
-
-  // Volunteer tasks are community assistance, not an official emergency dispatch.
-  // The Admin confirms the verified work; the Volunteer cannot close a case.
-  const confirmVolunteerCompletion = async (
-    incident: DisasterCase,
-    completedAssignment: ResponseAssignment,
-  ) => {
-    const authUser = getAuth().currentUser;
-    if (!authUser) {
-      Alert.alert("Session Expired", "Please sign in again.");
-      return;
-    }
-    const busyId = `confirm_completed_${incident.id}`;
-    setBusyKey(busyId);
-    try {
-      const caseRef = doc(db, "disasterCases", incident.id);
-      const assignmentSnapshot = await getDoc(
-        doc(db, "responseAssignments", completedAssignment.id),
-      );
-      const fieldSnapshot = await getDoc(
-        doc(db, "volunteerFieldReports", completedAssignment.id),
-      );
-      const caseSnapshot = await getDoc(caseRef);
-      if (!caseSnapshot.exists()) throw new Error("The report no longer exists.");
-      const current = caseSnapshot.data();
-      if (
-        !assignmentSnapshot.exists() ||
-        assignmentSnapshot.data().caseId !== incident.id ||
-        assignmentSnapshot.data().status !== "completed"
-      ) {
-        throw new Error("The Volunteer task is not yet completed.");
-      }
-      if (!fieldSnapshot.exists() || fieldSnapshot.data().reportStatus !== "reviewed") {
-        throw new Error("Review the Volunteer's completion report before confirming.");
-      }
-      const finalAssignment = assignmentSnapshot.data();
-      if (String(finalAssignment.residentConfirmationStatus || "") !== "resident_confirmed") {
-        throw new Error("Wait for the Resident to confirm receiving assistance in My Reports.");
-      }
-      if (String(finalAssignment.residentConfirmationOutcome || "") !== "fully_helped") {
-        throw new Error("Assistance is incomplete or disputed. Keep the report open for Admin follow-up.");
-      }
-      if (assignmentsForCase(incident.id).some((item) =>
-        ["offered", "accepted", "responding", "on_site"].includes(String(item.status))
-      )) {
-        throw new Error("A Volunteer assignment is still active.");
-      }
-      const currentStatus = String(current.status || "");
-      if (!["assigned", "in_progress"].includes(currentStatus)) {
-        throw new Error("The case is already completed or is not ready for confirmation.");
-      }
-      // Respect existing Firestore transition rules; no rules or schema changes.
-      if (currentStatus === "assigned") {
-        await updateDoc(caseRef, {
-          status: "in_progress",
-          updatedAt: serverTimestamp(),
-        });
-      }
-      await updateDoc(caseRef, {
-        status: "resolved",
-        resolvedAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      });
-      Alert.alert(
-        "Completion Confirmed",
-        "The Volunteer report and Resident confirmation were reviewed. The case is Resolved and can now be closed.",
-      );
-    } catch (cause) {
-      Alert.alert(
-        "Unable to Confirm Completion",
-        cause instanceof Error ? cause.message : "Please check the report and try again.",
-      );
-    } finally {
-      setBusyKey("");
     }
   };
 
@@ -1967,7 +2276,7 @@ export default function AdminCases() {
       Alert.alert(
         action === "reviewed" ? "Field Report Reviewed" : "Field Report Dismissed",
         action === "reviewed"
-          ? "The Volunteer task update was reviewed. Admin can confirm completion once all required assistance is verified."
+          ? "The report was reviewed. LGU may now incorporate verified remaining needs into the barangay assessment."
           : "The report was dismissed and will not be used as an official barangay need assessment."
       );
     } catch (error) {
@@ -2532,14 +2841,125 @@ export default function AdminCases() {
     }
   };
 
+  const assignLguPersonnelToCase = async (
+    incident: DisasterCase,
+    personnel: LguPersonnelCandidate
+  ) => {
+    const adminUser = getAuth().currentUser;
 
-  // Direct Admin assignment creates a validated responseAssignment.
-  // Volunteers accept or decline it from the incident card in New.
-  // Historical volunteerInvitations stay in Firestore, but no new ones are issued.
+    if (!adminUser) {
+      Alert.alert("Session Expired", "Please sign in again.");
+      return;
+    }
+
+    const verificationStatus = String(
+      incident.verificationStatus || "pending_verification"
+    );
+
+    if (verificationStatus !== "validated") {
+      Alert.alert(
+        "Validate Case First",
+        "The emergency report must be validated before official LGU Personnel can be assigned."
+      );
+      return;
+    }
+
+    if (!["validated", "assigned", "in_progress"].includes(incident.status)) {
+      Alert.alert(
+        "Assignment Unavailable",
+        "This emergency case is not currently eligible for an LGU Personnel assignment."
+      );
+      return;
+    }
+
+    if (incident.activeLguResponderUid) {
+      Alert.alert(
+        "Official Responder Already Assigned",
+        `${incident.activeLguResponderName || "An LGU responder"} is already assigned to this emergency.`
+      );
+      return;
+    }
+
+    const assignable =
+      personnel.verificationStatus === "verified" &&
+      personnel.employmentStatus === "active" &&
+      personnel.dutyStatus === "on_duty" &&
+      personnel.availabilityStatus === "available" &&
+      !personnel.activeCaseId &&
+      !personnel.activeAssignmentId;
+
+    if (!assignable) {
+      Alert.alert(
+        "Personnel Not Available",
+        "Only verified LGU Personnel who are On Duty and Available with no active emergency assignment can be assigned."
+      );
+      return;
+    }
+
+    const busyId = `lgu_assign_${incident.id}_${personnel.uid}`;
+    setBusyKey(busyId);
+
+    try {
+      const token = await adminUser.getIdToken(true);
+      const response = await fetch(`${BACKEND_URL}/api/admin/lgu/assignments`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: "application/json",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          caseId: incident.id,
+          personnelUid: personnel.uid,
+        }),
+      });
+
+      const raw = await response.text();
+      let payload: any = {};
+
+      if (raw) {
+        try {
+          payload = JSON.parse(raw);
+        } catch {
+          payload = {};
+        }
+      }
+
+      if (!response.ok) {
+        throw new Error(
+          payload?.message ||
+            `Unable to assign LGU Personnel (status ${response.status}).`
+        );
+      }
+
+      await loadLguPersonnel(true);
+
+      Alert.alert(
+        "LGU Personnel Assigned",
+        `${personnel.fullName} is now the official LGU responder for this emergency. The personnel and resident were notified.`
+      );
+    } catch (error) {
+      console.log("Assign LGU Personnel error:", error);
+      Alert.alert(
+        "Assignment Failed",
+        error instanceof Error
+          ? error.message
+          : "Unable to assign this LGU Personnel."
+      );
+    } finally {
+      setBusyKey("");
+    }
+  };
+
   const assignVolunteerToCase = async (
     incident: DisasterCase,
     volunteer: VolunteerProfile
   ) => {
+    if (incident.autoVolunteerDispatch?.origin === "render_resident_created_all_volunteers") {
+      Alert.alert("Automatic Volunteer Invitations",
+        "Render sent the invitations automatically. Admin monitors Volunteer decisions; do not assign manually.");
+      return;
+    }
     const auth = getAuth();
     const adminUser = auth.currentUser;
 
@@ -2556,9 +2976,35 @@ export default function AdminCases() {
       return;
     }
 
+    const activeCount = activeAssignmentsForCase(incident.id).length;
+
+    // Emergency Volunteer support is optional and limited to one active
+    // Volunteer assignment at a time. Offline offers wait for acceptance.
+    if (activeCount >= 1) {
+      Alert.alert(
+        "Volunteer Support Already Active",
+        "This emergency already has an active Volunteer support assignment. Finish or cancel it before assigning another Volunteer."
+      );
+      return;
+    }
+
     const eligibility = volunteerEligibilityForCase(incident, volunteer);
     if (!eligibility.eligible) {
       Alert.alert("Volunteer Not Eligible", eligibility.reason);
+      return;
+    }
+
+    const requiredSkillList = (incident.requiredSkills || []).filter(Boolean);
+    const requiresSpecializedSkill = requiredSkillList.some(
+      (skill) => !String(skill).toLowerCase().includes("general volunteer"),
+    );
+    const matchedSkills = skillMatchCount(incident, volunteer);
+
+    if (requiresSpecializedSkill && matchedSkills <= 0) {
+      Alert.alert(
+        "Skill Match Required",
+        `${volunteer.fullName} does not have a verified skill matching this emergency. Choose a qualified responder for ${requiredSkillList.join(", ")}.`,
+      );
       return;
     }
 
@@ -2568,14 +3014,22 @@ export default function AdminCases() {
     try {
       const caseRef = doc(db, "disasterCases", incident.id);
       const volunteerRef = doc(db, "users", volunteer.uid);
+      const responderLockRef = doc(db, "responderLocks", volunteer.uid);
       const assignmentRef = doc(
         db,
         "responseAssignments",
         `${incident.id}_${volunteer.uid}`
       );
-      // Each offer creates a new notification for Android push, including re-offers.
-      const notificationRef = doc(collection(db, "notifications"));
-      const residentNotificationRef = doc(collection(db, "notifications"));
+      const notificationRef = doc(
+        db,
+        "notifications",
+        `response_${incident.id}_${volunteer.uid}`
+      );
+      const residentNotificationRef = doc(
+        db,
+        "notifications",
+        `resident_assignment_${incident.id}_${volunteer.uid}`
+      );
       const activityLogRef = doc(collection(db, "adminActivityLogs"));
 
       await runTransaction(db, async (transaction) => {
@@ -2583,10 +3037,12 @@ export default function AdminCases() {
           caseSnapshot,
           volunteerSnapshot,
           assignmentSnapshot,
+          responderLockSnapshot,
         ] = await Promise.all([
           transaction.get(caseRef),
           transaction.get(volunteerRef),
           transaction.get(assignmentRef),
+          transaction.get(responderLockRef),
         ]);
 
         if (!caseSnapshot.exists()) {
@@ -2607,16 +3063,48 @@ export default function AdminCases() {
             currentCase.reporterBarangay ||
             ""
         ).trim();
-        if (!normalizeBarangay(currentCaseBarangayRaw)) {
+        const currentCaseBarangay = normalizeBarangay(
+          currentCaseBarangayRaw
+        );
+        const currentVolunteerBarangay = normalizeBarangay(
+          currentVolunteer.barangay ||
+            currentVolunteer.addressBarangay ||
+            ""
+        );
+
+        if (!currentCaseBarangay) {
           throw new Error(
-            "Record the incident barangay for completion documents. The selected Volunteer may be from any SJDM barangay."
+            "This emergency case has no barangay. Add or verify the case barangay before requesting local Volunteer support."
           );
         }
 
-        // A pending offer is not an active response. Admin may offer a
-        // validated, safe support task to an approved Volunteer even when busy.
-        // On Accept, the Volunteer transaction enforces one active mission
-        // through responderLocks. No volunteer is dispatched automatically.
+        if (!currentVolunteerBarangay) {
+          throw new Error(
+            "This Volunteer profile has no barangay. Update the Volunteer profile before assigning local emergency support."
+          );
+        }
+
+        if (currentVolunteerBarangay !== currentCaseBarangay) {
+          throw new Error(
+            `${volunteer.fullName} is registered in ${
+              volunteer.barangay || "another barangay"
+            } and cannot be assigned to this ${
+              currentCaseBarangayRaw || "case"
+            } emergency.`
+          );
+        }
+
+        if (responderLockSnapshot.exists()) {
+          const lock: any = responderLockSnapshot.data();
+          throw new Error(
+            `${volunteer.fullName} is already active on another emergency response (${String(
+              lock.caseId || "active case",
+            )}). Choose another available qualified responder.`,
+          );
+        }
+
+        // Volunteer support is independent from the official LGU responder.
+        // LGU remains the primary authority even when optional support is offered.
 
         if (
           String(currentCase.reporterUid || "").trim() ===
@@ -2673,6 +3161,31 @@ export default function AdminCases() {
         const currentRequiredSkills = normalizeStringArray(
           currentCase.requiredSkills,
         );
+        const currentVolunteerSkills = Array.from(
+          new Set([
+            ...normalizeStringArray(currentVolunteer.skills),
+            ...normalizeStringArray(currentVolunteer.volunteerSkills),
+            ...normalizeStringArray(volunteer.skills),
+          ]),
+        );
+        const specializedSkills = currentRequiredSkills.filter(
+          (skill) => !skill.toLowerCase().includes("general volunteer"),
+        );
+        const hasCurrentSkillMatch = specializedSkills.length === 0 ||
+          specializedSkills.some((needed) =>
+            currentVolunteerSkills.some((skill) => {
+              const a = skill.toLowerCase();
+              const b = needed.toLowerCase();
+              return a === b || a.includes(b) || b.includes(a);
+            }),
+          );
+
+        if (!hasCurrentSkillMatch) {
+          throw new Error(
+            "Assignment blocked because this responder does not match the verified skills required by the emergency.",
+          );
+        }
+
         const currentVerification = String(
           currentCase.verificationStatus ||
             (currentCase.status === "validated" ||
@@ -2771,7 +3284,7 @@ export default function AdminCases() {
           title: `${severityLabel} emergency assignment`,
           message: `You were assigned to ${
             currentCase.title || incident.title || "an emergency case"
-          }. Required skills: ${currentRequiredSkills.join(", ") || "General response"}. Open Emergency Task to accept or decline.`,
+          }. Required skills: ${currentRequiredSkills.join(", ") || "General response"}. Open Volunteer Tasks to accept or decline.`,
           read: false,
           createdAt: serverTimestamp(),
         });
@@ -2785,7 +3298,7 @@ export default function AdminCases() {
             volunteerId: volunteer.uid,
             volunteerName: volunteer.fullName,
             title: "Volunteer Task Offered",
-            message: `Admin offered ${volunteer.fullName} a community assistance task. Live GPS appears only after the Volunteer starts the task and enables sharing.`,
+            message: `Admin offered ${volunteer.fullName} an emergency task. The Volunteer must accept before active response or live tracking begins.`,
             read: false,
             createdAt: serverTimestamp(),
           });
@@ -2802,8 +3315,8 @@ export default function AdminCases() {
       });
 
       Alert.alert(
-        "Volunteer Support Offered",
-        `${volunteer.fullName} received an optional Volunteer support offer. An in-app notice was created; Android push requires a registered device and enabled notifications. The Volunteer must accept before responding.`
+        "Volunteer Task Offered",
+        `${volunteer.fullName} received an emergency task offer, even when offline. The Volunteer must accept before active response and live tracking begin.`
       );
     } catch (error) {
       console.log("Assign volunteer error:", error);
@@ -2820,6 +3333,12 @@ export default function AdminCases() {
   };
 
   const cancelAssignment = async (assignment: ResponseAssignment) => {
+    if (cases.some(item => item.id === assignment.caseId &&
+      item.autoVolunteerDispatch?.origin === "render_resident_created_all_volunteers")) {
+      Alert.alert("Automatic Invitation Monitor",
+        "Volunteer invitation decisions are handled by the assigned Volunteers.");
+      return;
+    }
     try {
       const assignmentRef = doc(
         db,
@@ -2987,66 +3506,56 @@ export default function AdminCases() {
 
   return (
     <ScrollView
+      ref={screenRef}
       style={styles.screen}
       contentContainerStyle={styles.container}
       showsVerticalScrollIndicator={true}
     >
-      <AdminReviewHero
-        eyebrow="ADMIN / EMERGENCY & ASSISTANCE"
-        title="Emergency Reports"
-        subtitle="Validate resident emergency reports, assign volunteers, review task updates and field reports, and close resolved cases."
-        icon="warning-outline"
-        tag="INCIDENT RESPONSE"
-      />
-      <View style={styles.pageHeader}>
+      {!isCaseDetailOpen && <View style={styles.emergencyPageIntro}>
+        <View style={styles.emergencyPageIntroText}>
+          <Text style={styles.emergencyPageEyebrow}>ADMIN WORKSPACE / EMERGENCY RESPONSE</Text>
+          <Text style={styles.emergencyPageHeading}>Emergency Reports</Text>
+          <Text style={styles.emergencyPageSubheading}>
+            Validate reports, coordinate qualified Volunteers, and monitor responses in one focused workspace.
+          </Text>
+        </View>
+      </View>}
+      {!isCaseDetailOpen && <View style={styles.reportStatsRow}>
+        {([
+          ["Total Reports", cases.length, "#DFF6E9", "#0B7253"],
+          ["Pending Review", cases.filter(item =>
+            ["pending_verification","needs_more_evidence"].includes(
+              String(item.verificationStatus || "pending_verification"))
+          ).length, "#FFF3DF", "#AD6D0B"],
+          ["Validated", cases.filter(item => item.verificationStatus==="validated").length,
+            "#E5F6EB","#0B7253"],
+          ["In Progress", cases.filter(item => item.status==="in_progress").length,
+            "#E7F0FF","#265EAE"],
+        ] as const).map(([label, count, tint, ink]) =>
+          <View key={label} style={[styles.reportStatCard,{backgroundColor:tint}]}>
+            <Text style={[styles.reportStatNumber,{color:ink}]}>{count}</Text>
+            <Text style={styles.reportStatLabel}>{label}</Text>
+          </View>
+        )}
+      </View>}
+
+      <View style={[styles.pageHeader, isCaseDetailOpen && styles.hiddenSection]}>
         <View style={styles.headerTools}>
-            <View style={styles.searchBox}>
-              <Text style={styles.searchIcon}>⌕</Text>
-              <TextInput
-                value={caseSearch}
-                onChangeText={value => { setCaseSearch(value); setRecordPage(1); }}
-                placeholder="Search case, resident, location…"
-                placeholderTextColor="#94a3b8"
-                style={styles.searchInput}
-              />
-            </View>
-  
-            <View style={styles.liveSummary}>
-              <Text style={styles.liveSummaryNumber}>
-                {
-                  cases.filter((item) =>
-                    ["reported", "validated", "assigned", "in_progress"].includes(
-                      item.status
-                    )
-                  ).length
-                }
-              </Text>
-              <Text style={styles.liveSummaryLabel}>Open Cases</Text>
-            </View>
+          <View style={styles.searchBox}>
+            <Text style={styles.searchIcon}>⌕</Text>
+            <TextInput
+              value={caseSearch}
+              onChangeText={value => { setCaseSearch(value); setRecordPage(1); }}
+              placeholder="Search case, resident, location…"
+              placeholderTextColor="#94a3b8"
+              style={styles.searchInput}
+              accessibilityLabel="Search emergency reports"
+            />
           </View>
         </View>
-  
-        <View style={styles.filterCard}>
-          <View style={styles.filterToolbar}>
-            <View style={styles.filterToolbarCopy}>
-              <Text style={styles.filterToolbarTitle}>Refine reports</Text>
-              <Text style={styles.filterToolbarSubtitle}>Search above or narrow the report list.</Text>
-            </View>
-            <TouchableOpacity
-              accessibilityRole="button"
-              accessibilityLabel={filtersExpanded ? "Hide emergency report filters" : "Show emergency report filters"}
-              accessibilityState={{ expanded: filtersExpanded }}
-              style={styles.filterToggle}
-              onPress={() => setFiltersExpanded((current) => !current)}
-            >
-              <Text style={styles.filterToggleText}>
-                {filtersExpanded ? "Hide filters" : "Show filters"}
-                {filterStatus !== "all" || filterSeverity !== "all" ? " · Active" : ""}
-              </Text>
-            </TouchableOpacity>
-          </View>
-          {filtersExpanded ? (
-            <View style={styles.filterContent}>
+      </View>
+
+        <View style={[styles.filterCard, isCaseDetailOpen && styles.hiddenSection]}>
           <View style={styles.filterGroup}>
             <Text style={styles.filterLabel}>STATUS</Text>
             <View style={styles.pillRow}>
@@ -3110,15 +3619,8 @@ export default function AdminCases() {
               )}
             </View>
           </View>
-            </View>
-          ) : (
-            <Text style={styles.filterHint}>
-              {labelOfStatus(filterStatus)} · {filterSeverity === "all" ? "All severities" : severityLabel(filterSeverity)}
-            </Text>
-          )}
         </View>
 
-      <ListPagination page={activeCasePage} total={visibleCases.length} pageSize={5} onChange={setRecordPage} />
       {visibleCases.length === 0 ? (
         <View style={styles.emptyCard}>
           <Text style={styles.emptyTitle}>No emergency cases found</Text>
@@ -3133,95 +3635,199 @@ export default function AdminCases() {
             compact && styles.caseWorkspaceCompact,
           ]}
         >
-          <View style={[
-            styles.caseListPane,
-            !compact && detailTab === "personnel" && styles.caseListPaneAssignments,
-            compact && styles.caseListPaneCompact,
-          ]}>
+          {!isCaseDetailOpen && (
+          <View style={[styles.caseListPane, compact && styles.caseListPaneCompact]}>
+            {detailTab === "personnel" && selectedCase && (
+              <View style={styles.assignmentCaseSidebar}>
+                <TouchableOpacity accessibilityRole="button"
+                  style={styles.assignmentBackButton} onPress={() => setDetailTab("overview")}>
+                  <Text style={styles.assignmentBackText}>← Back to All Cases</Text>
+                </TouchableOpacity>
+                <Text style={styles.assignmentSidebarEyebrow}>CURRENT CASE</Text>
+                {firstIncidentImage(selectedCase.attachments) && (
+                  <Image source={{ uri: firstIncidentImage(selectedCase.attachments)! }}
+                    style={styles.assignmentSidebarPhoto} resizeMode="cover" />
+                )}
+                <Text style={styles.assignmentSidebarTitle}>{selectedCase.title}</Text>
+                <Text style={styles.assignmentSidebarSeverity}>
+                  {severityLabel(selectedCase.severity)}  ·  {labelOfStatus(selectedCase.status)}
+                </Text>
+                <Text style={styles.assignmentSidebarDetail}>
+                  ⌖  {selectedCase.location || "Location pending"}
+                </Text>
+                <Text style={styles.assignmentSidebarDetail}>
+                  ♙  {selectedCase.reporterName || "Resident"}
+                </Text>
+                <Text style={styles.assignmentSidebarDetail}>
+                  ♧  {selectedCase.affectedPeople || 0} people affected
+                </Text>
+                <Text style={styles.assignmentSidebarDetail}>
+                  ◷  {formatDate(selectedCase.createdAt)}
+                </Text>
+                <View style={styles.assignmentSidebarDivider} />
+                <Text style={styles.assignmentSidebarEyebrow}>CASE PROGRESS</Text>
+                {[
+                  ["reported", "Reported"],
+                  ["validated", "Validated"],
+                  ["assigned", "Volunteer Offer"],
+                  ["in_progress", "In Progress"],
+                  ["resolved", "Resolved"],
+                  ["closed", "Closed"],
+                ].map(([key, label], index) => {
+                  const order = ["reported","validated","assigned","in_progress","resolved","closed"];
+                  const current = order.indexOf(selectedCase.status);
+                  return (
+                    <View key={key} style={styles.assignmentSideStage}>
+                      <Text style={[
+                        styles.assignmentSideDot,
+                        index <= current && styles.assignmentSideDotActive,
+                      ]}>{index < current ? "✓" : String(index + 1)}</Text>
+                      <Text style={[
+                        styles.assignmentSideText,
+                        index <= current && styles.assignmentSideTextActive,
+                      ]}>{label}</Text>
+                    </View>
+                  );
+                })}
+              </View>
+            )}
+            {detailTab !== "personnel" && (
+              <>
             <View style={styles.caseListHeader}>
               <View>
-                <Text style={styles.caseListTitle}>All Emergency Cases</Text>
+                <Text style={styles.caseListTitle}>Emergency Report Queue</Text>
                 <Text style={styles.caseListCount}>{visibleCases.length} case{visibleCases.length === 1 ? "" : "s"}</Text>
               </View>
               <Text style={styles.caseListSort}>Priority · Newest</Text>
             </View>
 
+            {!compact && <View style={styles.queueTableHead}>
+              <Text style={[styles.queueHeadCell,{flex:2.6}]}>REPORT CASE</Text>
+              <Text style={[styles.queueHeadCell,{flex:1.7}]}>RESIDENT</Text>
+              <Text style={[styles.queueHeadCell,{flex:1.5}]}>BARANGAY</Text>
+              <Text style={[styles.queueHeadCell,{flex:1}]}>SEVERITY</Text>
+              <Text style={[styles.queueHeadCell,{flex:1}]}>STATUS</Text>
+              <Text style={[styles.queueHeadCell,{flex:1.3}]}>SUBMITTED</Text>
+            </View>}
             <View style={styles.caseListItems}>
               {pagedCases.map((item) => {
-                const active = selectedCase?.id === item.id;
-                const thumb = firstIncidentImage(item.attachments);
-
-                return (
-                  <TouchableOpacity
-                    key={item.id}
-                    activeOpacity={0.86}
-                    style={[styles.caseListItem, active && styles.caseListItemActive]}
-                    onPress={() => setSelectedCaseId(item.id)}
-                  >
+                const thumb=firstIncidentImage(item.attachments);
+                return <TouchableOpacity
+                  key={item.id}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Open ${item.title} from ${item.reporterName || "Resident"}`}
+                  activeOpacity={0.88}
+                  style={styles.queueReportRow}
+                  onPress={() => {
+                    setSelectedCaseId(item.id);
+                    setDetailTab("overview");
+                    setIsCaseDetailOpen(true);
+                  }}>
+                  <View style={styles.queueCaseColumn}>
                     <View style={styles.caseListThumb}>
-                      {thumb ? (
-                        <Image source={{ uri: thumb }} style={styles.caseListThumbImage} resizeMode="cover" />
-                      ) : (
+                      {thumb ? <Image source={{uri:thumb}}
+                        style={styles.caseListThumbImage} resizeMode="cover"/> :
                         <View style={styles.caseListThumbFallback}>
                           <Text style={styles.caseListThumbFallbackIcon}>{categoryIcon(item.category)}</Text>
-                        </View>
-                      )}
+                        </View>}
                     </View>
-
-                    <View style={styles.caseListBody}>
-                      <View style={styles.caseListTitleRow}>
-                        <Text numberOfLines={1} style={styles.caseListItemTitle}>{item.title}</Text>
-                        <View style={[styles.caseListSeverity, severityStyle(item.severity)]}>
-                          <Text style={styles.caseListSeverityText}>{severityLabel(item.severity)}</Text>
-                        </View>
-                      </View>
-                      <Text numberOfLines={1} style={styles.caseListLocation}>⌖ {item.location || "Location pending"}</Text>
-                      <View style={styles.caseListMetaRow}>
-                        <Text numberOfLines={1} style={styles.caseListMeta}>♙ {item.reporterName || "Resident"}</Text>
-                        <Text style={styles.caseListMeta}>◉ {item.affectedPeople || 0} affected</Text>
-                      </View>
+                    <View style={styles.queueCaseTitle}>
+                      <Text style={styles.caseListItemTitle} numberOfLines={2}>
+                        {item.title || "Emergency report"}
+                      </Text>
+                      <Text style={styles.queueCaseId}>CASE {item.id}</Text>
+                      {compact && <Text style={styles.queueSmallMeta}>
+                        {item.reporterName || "Resident"} · {item.incidentBarangay || item.reporterBarangay || "Location pending"}
+                      </Text>}
                     </View>
-
-                    <View style={styles.caseListRight}>
-                      <Text style={styles.caseListDate}>{formatDate(item.createdAt)}</Text>
-                      <Text style={styles.caseListChevron}>›</Text>
+                  </View>
+                  {!compact && <View style={[styles.queueDataColumn,{flex:1.7}]}>
+                    <Text style={styles.queueRowText} numberOfLines={2}>
+                      {item.reporterName || "Resident"}
+                    </Text>
+                    <Text style={styles.queueMuted}>
+                      {item.verification?.identityVerified ? "Verified Resident" : "Resident"}
+                    </Text>
+                  </View>}
+                  {!compact && <View style={[styles.queueDataColumn,{flex:1.5}]}>
+                    <Text style={styles.queueRowText} numberOfLines={2}>
+                      {item.incidentBarangay || item.reporterBarangay || "Not provided"}
+                    </Text>
+                  </View>}
+                  <View style={[styles.queueDataColumn,{flex:1}]}>
+                    <View style={[styles.caseListSeverity,severityStyle(item.severity)]}>
+                      <Text style={styles.caseListSeverityText}>
+                        {severityLabel(item.severity)}
+                      </Text>
                     </View>
-                  </TouchableOpacity>
-                );
+                  </View>
+                  <View style={[styles.queueDataColumn,{flex:1}]}>
+                    <View style={[styles.caseListSeverity,statusStyle(item.status)]}>
+                      <Text style={styles.caseListSeverityText}>
+                        {labelOfStatus(item.status)}
+                      </Text>
+                    </View>
+                  </View>
+                  {!compact && <View style={[styles.queueDataColumn,{flex:1.3}]}>
+                    <Text style={styles.queueMuted}>{formatDate(item.createdAt)}</Text>
+                  </View>}
+                  <Text style={styles.queueChevron}>›</Text>
+                </TouchableOpacity>;
               })}
             </View>
+            <View style={styles.caseListPagination}>
+              <ListPagination page={activeCasePage} total={visibleCases.length} pageSize={5} onChange={setRecordPage} />
+            </View>
+              </>
+            )}
           </View>
+          )}
 
+          {isCaseDetailOpen && selectedCase && (
           <View style={styles.caseDetailPane}>
+            {isCaseDetailOpen && (
+              <TouchableOpacity accessibilityRole="button" style={styles.focusBackButton}
+                onPress={() => { setIsCaseDetailOpen(false); setDetailTab("overview"); }}>
+                <Text style={styles.focusBackText}>← Back to Emergency Reports</Text>
+              </TouchableOpacity>
+            )}
             {[selectedCase].map((incident) => {
           const incidentAssignments = assignmentsForCase(incident.id);
           const activeAssignments = activeAssignmentsForCase(incident.id);
-          const publicCaseStatus = emergencyTaskStatusLabel(
-            incident.status,
-            incident.verificationStatus,
-            activeAssignments[0]?.status || incidentAssignments.find(item => item.status === "completed")?.status,
-          );
           const incidentFieldReports = fieldReportsForCase(incident.id);
+          const incidentLguFieldReports = lguFieldReports.filter(
+            (report) => report.caseId === incident.id
+          );
+          const latestLguFieldReport =
+            incidentLguFieldReports[0] || null;
+          const officialLguResponseStatus = String(
+            incident.officialLguResponseStatus || ""
+          )
+            .trim()
+            .toLowerCase();
+          const lguFieldReviewPending =
+            officialLguResponseStatus ===
+            "completed_pending_admin_review";
           const volunteerSupportAvailable = activeAssignments.length === 0;
-          const volunteerProgressStatus = incident.status === "closed" ? "CASE CLOSED"
-            : incident.status === "resolved" ? "COMPLETED"
-            : activeAssignments.some(item => item.status === "on_site") ? "VOLUNTEER ON SITE"
-            : activeAssignments.some(item => item.status === "responding") ? "VOLUNTEER IN PROGRESS"
-            : activeAssignments.some(item => item.status === "accepted") ? "VOLUNTEER ACCEPTED"
-            : activeAssignments.some(item => item.status === "offered") ? "WAITING FOR VOLUNTEER"
-            : incidentAssignments.some(item => item.status === "completed") ? "AWAITING ADMIN REVIEW"
-            : incident.status === "validated" ? "APPROVED · READY TO ASSIGN"
-            : "NO ACTIVE VOLUNTEER";
           const photoUrl = firstIncidentImage(incident.attachments);
           const note = notes[incident.id] ?? incident.adminNote ?? "";
 
           const assignmentPanelOpen = assignmentCaseId === incident.id;
           const volunteerCandidates = volunteerCandidatesForCase(incident);
-          const eligibleVolunteerCount = volunteerCandidates.filter(
-            (volunteer) => volunteerEligibilityForCase(incident, volunteer).eligible
+          const onDutyPersonnel = lguPersonnel.filter(personnel =>
+            personnel.uid !== incident.activeLguResponderUid && personnel.dutyStatus === "on_duty"
+          );
+          // Total local eligibility is independent from the search filters.
+          // Filtering to zero must not hide the controls needed to clear a search.
+          const eligibleVolunteerCount = approvedVolunteers.filter(
+            (volunteer) => volunteerEligibilityForCase(incident, volunteer).eligible,
           ).length;
+          const eligibleVolunteerCandidates = volunteerCandidates.filter(
+            (volunteer) => volunteerEligibilityForCase(incident, volunteer).eligible,
+          );
           const verificationStatus =
             incident.verificationStatus || "pending_verification";
+
 
           const imageEvidence = (incident.attachments || []).filter((item) =>
             String(item.type || "").toLowerCase().includes("image")
@@ -3236,6 +3842,30 @@ export default function AdminCases() {
             ["validated", "assigned", "in_progress", "resolved", "closed"].includes(
               incident.status
             );
+
+          const lguHeartbeatMs = timestampMillis(incident.activeLguHeartbeatAt);
+          const lguOwnerFresh =
+            Boolean(incident.activeLguResponderUid) &&
+            lguHeartbeatMs > 0 &&
+            Date.now() - lguHeartbeatMs < 120000;
+
+          const activeLguProfile = lguPersonnel.find(
+            (personnel) => personnel.uid === incident.activeLguResponderUid
+          ) || null;
+
+          const activeLguTrackingLabel = !activeLguProfile
+            ? lguOwnerFresh
+              ? "Live Tracking"
+              : "Assigned"
+            : activeLguProfile.availabilityStatus === "assigned"
+            ? "Awaiting Response"
+            : activeLguProfile.availabilityStatus === "responding"
+            ? lguOwnerFresh
+              ? "Live Tracking"
+              : "Responding"
+            : activeLguProfile.availabilityStatus === "on_site"
+            ? "On Site"
+            : labelOfStatus(activeLguProfile.availabilityStatus || "assigned");
 
           const directAssessmentId = `direct_${incident.id}`;
           const directAssessmentExists =
@@ -3304,8 +3934,44 @@ export default function AdminCases() {
             incident.rejectionReason ??
             "";
 
+          const progressStages: { key: CaseStatus; title: string }[] = [
+            { key: "reported", title: "Reported" },
+            { key: "validated", title: "Validated" },
+            { key: "assigned", title: "Volunteer Offer" },
+            { key: "in_progress", title: "In Progress" },
+            { key: "resolved", title: "Resolved" },
+            { key: "closed", title: "Closed" },
+          ];
+          const progressIndex = Math.max(
+            0, progressStages.findIndex((stage) => stage.key === incident.status),
+          );
+          const awaitingAdminVerification = verificationStatus !== "validated" &&
+            verificationStatus !== "rejected";
+
           return (
             <View key={incident.id} style={styles.caseCard}>
+              {incident.autoVolunteerDispatch?.origin === "render_resident_created_all_volunteers" && (
+                <View style={styles.renderAutoMonitor}>
+                  <Text style={styles.renderAutoMonitorTitle}>Automatic Volunteer Response Monitor</Text>
+                  <Text style={styles.renderAutoMonitorSummary}>
+                    {incidentAssignments.length} Invited  •  {incidentAssignments.filter(item =>
+                      ["accepted", "responding", "on_site", "completed"].includes(item.status)).length} Accepted
+                    {"  •  "}{incidentAssignments.filter(item => item.status === "declined").length} Declined
+                    {"  •  "}{incidentAssignments.filter(item => item.status === "offered").length} Pending
+                  </Text>
+                  {pageFive(incidentAssignments, activeAssignmentPage).map(item => (
+                    <View key={item.id} style={styles.renderAutoMonitorRow}>
+                      <Text style={styles.renderAutoMonitorName}>{item.volunteerName || "Volunteer"}</Text>
+                      <Text style={styles.renderAutoMonitorStatus}>{String(item.status).toUpperCase()}</Text>
+                    </View>
+                  ))}
+                  <ListPagination page={activeAssignmentPage}
+                    total={incidentAssignments.length} pageSize={5} onChange={setActiveAssignmentPage} />
+                  <Text style={styles.renderAutoMonitorHelp}>
+                    Invitations follow Resident submission. Admin verification is still required; Volunteer responses are independent.
+                  </Text>
+                </View>
+              )}
               <View
                 style={[
                   styles.caseMain,
@@ -3463,27 +4129,119 @@ export default function AdminCases() {
                     </View>
 
                     <View style={styles.metaItem}>
-                      <Text style={styles.metaLabel}>Volunteer Assignment</Text>
+                      <Text style={styles.metaLabel}>Volunteer Task</Text>
                       <Text style={styles.metaValue}>
-                        {activeAssignments.length > 0
-                          ? `${activeAssignments.length} active`
-                          : "None active"}
+                        {activeAssignments.some(item => ["responding", "on_site"].includes(String(item.status)))
+                          ? "Response underway"
+                          : activeAssignments.some(item => String(item.status) === "accepted")
+                            ? "Accepted · awaiting Start"
+                            : activeAssignments.some(item => String(item.status) === "offered")
+                              ? "Offer pending · awaiting acceptance"
+                              : "No active Volunteer"}
                       </Text>
                     </View>
 
-
+                    <View style={styles.metaItem}>
+                      <Text style={styles.metaLabel}>Volunteer Availability</Text>
+                      <Text style={styles.metaValue}>
+                        {activeAssignments.some(item => String(item.status) === "offered")
+                          ? "Offer sent · may be offline"
+                          : eligibleVolunteerCount > 0
+                            ? `${eligibleVolunteerCount} approved candidate(s)`
+                            : "No eligible candidates"}
+                      </Text>
+                    </View>
                   </View>
                 </View>
               </View>
+
+              <View style={styles.caseProgressPanel}>
+                <View style={styles.caseProgressCaptionRow}>
+                  <Text style={styles.caseProgressCaption}>CASE PROGRESS</Text>
+                  <Text style={styles.caseProgressCreated}>Reported {formatDate(incident.createdAt)}</Text>
+                </View>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={styles.caseProgressRow}>
+                  {progressStages.map((stage, index) => {
+                    const done = index < progressIndex;
+                    const current = index === progressIndex;
+                    return (
+                      <View key={stage.key}
+                        style={[styles.caseProgressStage,
+                          current && styles.caseProgressCurrent,
+                          done && styles.caseProgressDone]}>
+                        <View style={[styles.caseProgressDot,
+                          (done || current) && styles.caseProgressDotActive]}>
+                          <Text style={[styles.caseProgressDotText,
+                            (done || current) && styles.caseProgressDotTextActive]}>
+                            {done ? "✓" : String(index + 1)}
+                          </Text>
+                        </View>
+                        <Text style={[styles.caseProgressName,
+                          (done || current) && styles.caseProgressNameActive]}>
+                          {stage.title}
+                        </Text>
+                      </View>
+                    );
+                  })}
+                </ScrollView>
+              </View>
+
+              <View style={styles.casePrimaryActionBar}>
+                {awaitingAdminVerification ? (
+                  <>
+                    <TouchableOpacity accessibilityRole="button"
+                      accessibilityLabel="Review the report evidence before validating"
+                      style={styles.casePrimaryValidate}
+                      onPress={() => setDetailTab("evidence")}>
+                      <Text style={styles.casePrimaryValidateText}>✓ Review & Validate</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity accessibilityRole="button"
+                      style={styles.casePrimaryNeutral}
+                      onPress={() => setDetailTab("evidence")}>
+                      <Text style={styles.casePrimaryNeutralText}>Request Evidence</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity accessibilityRole="button"
+                      style={styles.casePrimaryReject}
+                      onPress={() => setDetailTab("evidence")}>
+                      <Text style={styles.casePrimaryRejectText}>Reject Report</Text>
+                    </TouchableOpacity>
+                  </>
+                ) : (
+                  <TouchableOpacity accessibilityRole="button"
+                    style={styles.casePrimaryNeutral}
+                    onPress={() => setDetailTab(verificationStatus === "rejected" ? "evidence" : "response")}>
+                    <Text style={styles.casePrimaryNeutralText}>
+                      {verificationStatus === "rejected" ? "View Rejection Details" : "View Response Controls"}
+                    </Text>
+                  </TouchableOpacity>
+                )}
+                {incident.severity === "critical" && verificationStatus !== "rejected" && (
+                  <TouchableOpacity accessibilityRole="button"
+                    accessibilityLabel="Call emergency hotline 911"
+                    style={styles.casePrimaryEmergency}
+                    onPress={() => {
+                      void Linking.openURL("tel:911").catch(() =>
+                        Alert.alert("Emergency hotline", "For immediate danger, call 911."));
+                    }}>
+                    <Text style={styles.casePrimaryEmergencyText}>Call Emergency 911</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+              {awaitingAdminVerification && (
+                <Text style={styles.caseActionHint}>
+                  Review the evidence and confirm your decision in the Evidence tab. These shortcuts do not approve or reject automatically.
+                </Text>
+              )}
 
               <View style={styles.detailTabs}>
                 {(
                   [
                     ["overview", "Overview"],
-                    ["map", "Map & Route"],
                     ["evidence", `Evidence (${imageEvidence.length + videoEvidence.length})`],
-                    ["personnel", "Assign Volunteers"],
-                    ["history", "History"],
+                    ["response", "Response"],
+                    ["personnel", "Volunteers"],
+                    ["history", "Activity Log"],
                   ] as const
                 ).map(([key, label]) => {
                   const active = detailTab === key;
@@ -3517,196 +4275,19 @@ export default function AdminCases() {
               </View>
 
               {detailTab === "overview" && (
-                <View style={styles.overviewDashboard}>
-                  <View style={styles.overviewCard}>
-                    <View style={styles.overviewCardHeader}>
-                      <Text style={styles.overviewCardIcon}>♙</Text>
-                      <Text style={styles.overviewCardTitle}>Resident Information</Text>
-                    </View>
-                    <Text style={styles.overviewPrimary}>{incident.reporterName || "Resident"}</Text>
-                    <Text style={styles.overviewLine}>{incident.contactNumber || "No contact number"}</Text>
-                    <Text style={styles.overviewLine}>{incident.reporterEmail || "No email on file"}</Text>
-                    <Text style={styles.overviewLine}>
-                      {incident.reporterBarangay
-                        ? `${incident.reporterBarangay}, San Jose del Monte, Bulacan`
-                        : incident.reporterAddress || "Barangay not provided"}
-                    </Text>
-                    <View style={styles.overviewVerifiedPill}>
-                      <Text style={styles.overviewVerifiedText}>
-                        {incident.verification?.identityVerified
-                          ? "✓ Verified Resident"
-                          : "Resident account"}
-                      </Text>
-                    </View>
-                  </View>
-
-                  <View style={styles.overviewCard}>
-                    <View style={styles.overviewCardHeader}>
-                      <Text style={styles.overviewCardIcon}>◉</Text>
-                      <Text style={styles.overviewCardTitle}>Report Status: {publicCaseStatus}</Text>
-                    </View>
-
-                    {[
-                      ["Reported", true, incident.createdAt],
-                      ["Validated", verificationStatus === "validated", incident.validatedAt],
-                      [
-                        "Volunteer Assigned",
-                        ["assigned", "in_progress", "resolved", "closed"].includes(incident.status),
-                        incident.assignedAt || incident.updatedAt,
-                      ],
-                      [
-                        "In Progress",
-                        ["in_progress", "resolved", "closed"].includes(incident.status),
-                        incident.status === "in_progress" ? incident.updatedAt : null,
-                      ],
-                      [
-                        "Resolved",
-                        ["resolved", "closed"].includes(incident.status),
-                        incident.resolvedAt,
-                      ],
-                      ["Closed", incident.status === "closed", incident.closedAt],
-                    ].map(([label, done, when], index) => (
-                      <View key={`${label}-${index}`} style={styles.statusTimelineRow}>
-                        <View
-                          style={[
-                            styles.statusTimelineDot,
-                            done ? styles.statusTimelineDotDone : styles.statusTimelineDotPending,
-                          ]}
-                        />
-                        <View style={{ flex: 1 }}>
-                          <Text
-                            style={[
-                              styles.statusTimelineLabel,
-                              done && styles.statusTimelineLabelDone,
-                            ]}
-                          >
-                            {String(label)}
-                          </Text>
-                          {done && when ? (
-                            <Text style={styles.statusTimelineTime}>{formatDate(when)}</Text>
-                          ) : null}
-                        </View>
-                      </View>
-                    ))}
-                  </View>
-
-                  <View style={styles.overviewCard}>
-                    <View style={styles.overviewCardHeader}>
-                      <Text style={styles.overviewCardIcon}>⚑</Text>
-                      <Text style={styles.overviewCardTitle}>Priority & Needs</Text>
-                    </View>
-
-                    <View style={styles.priorityRow}>
-                      <View style={[styles.badge, severityStyle(incident.severity)]}>
-                        <Text style={styles.badgeText}>{severityLabel(incident.severity)}</Text>
-                      </View>
-                      <Text style={styles.priorityPeople}>
-                        {incident.affectedPeople || 0} affected
-                      </Text>
-                    </View>
-
-                    <Text style={styles.overviewLabel}>Assistance Needed</Text>
-                    <View style={styles.needChipRow}>
-                      {(incident.assistanceTypes || []).length ? (
-                        (incident.assistanceTypes || []).slice(0, 5).map((item) => (
-                          <View key={item} style={styles.needChip}>
-                            <Text style={styles.needChipText}>{item}</Text>
-                          </View>
-                        ))
-                      ) : (
-                        <Text style={styles.overviewLine}>
-                          {incident.needs || "Not specified"}
-                        </Text>
-                      )}
-                    </View>
-
-                    <Text style={styles.overviewLabel}>Description</Text>
-                    <Text style={styles.overviewDescription}>
-                      {incident.details || "No additional incident description."}
-                    </Text>
-                  </View>
-                </View>
-              )}
-
-              <View
-                style={[
-                  styles.locationActionCard,
-                  !["overview", "map"].includes(detailTab) && styles.hiddenSection,
-                ]}
-              >
-                <View style={styles.locationActionMain}>
-                  <Text style={styles.sectionEyebrow}>LOCATION & ROUTE</Text>
-                  <Text style={styles.locationActionTitle}>Reported incident location</Text>
-                  <Text style={styles.locationActionAddress}>
-                    {incident.location || "Exact response location not provided"}
-                  </Text>
-                  <Text style={styles.locationActionCoords}>
-                    {Number.isFinite(incident.latitude) && Number.isFinite(incident.longitude)
-                      ? `${incident.latitude?.toFixed(6)}, ${incident.longitude?.toFixed(6)}`
-                      : "Incident coordinates unavailable"}
-                  </Text>
-                  <Text style={styles.locationActionCoords}>
-                    {incident.locationSource === "device_gps"
-                      ? `Device GPS · accuracy ${incident.gpsAccuracyMeters == null ? "unknown" : Math.round(incident.gpsAccuracyMeters) + " m"} · unverified`
-                      : incident.locationSource === "manual_map"
-                        ? "Manual map pin · not live GPS"
-                        : "Location source unknown · confirm with Resident"}
-                  </Text>
-                </View>
-
-                <View style={styles.locationActionButtons}>
-                  <TouchableOpacity
-                    style={styles.locationLiveButton}
-                    disabled={
-                      !Number.isFinite(incident.latitude) ||
-                      !Number.isFinite(incident.longitude)
-                    }
-                    onPress={() =>
-                      router.push(
-                        `/(admin)/admin-live-map?caseId=${encodeURIComponent(incident.id)}` as any
-                      )
-                    }
-                  >
-                    <Text style={styles.locationLiveButtonText}>Open Live Map</Text>
-                  </TouchableOpacity>
-
-                </View>
-              </View>
-
-              {detailTab === "map" && (
-                <View style={{ marginTop: 12, marginBottom: 18, gap: 10 }}>
-                  <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10 }}>
-                    <View style={{ flex: 1, minWidth: 210 }}>
-                      <Text style={{ color: "#153F32", fontSize: vsType.size.card, fontFamily: vsType.family, fontWeight: "800" }}>
-                        Incident Location & Volunteer Tracking
-                      </Text>
-                      <Text style={{ color: "#61766C", fontSize: vsType.size.meta, fontFamily: vsType.family, marginTop: 3 }}>
-                        Incident pin is always shown. Volunteer GPS appears only while an assigned Volunteer is actively sharing their location.
-                      </Text>
-                    </View>
-                    <TouchableOpacity
-                      disabled={!Number.isFinite(incident.latitude) || !Number.isFinite(incident.longitude)}
-                      onPress={() => router.push(`/(admin)/admin-live-map?caseId=${encodeURIComponent(incident.id)}` as any)}
-                      style={{ backgroundColor: "#087F67", paddingHorizontal: 14, paddingVertical: 11, borderRadius: 10 }}
-                    >
-                      <Text style={{ color: "#FFFFFF", fontWeight: "800", fontSize: vsType.size.meta, fontFamily: vsType.family }}>Open Full Live Map</Text>
-                    </TouchableOpacity>
-                  </View>
-                  {Number.isFinite(incident.latitude) && Number.isFinite(incident.longitude) ? (
-                    <EmergencyIncidentMap
-                      caseId={incident.id}
-                      latitude={Number(incident.latitude)}
-                      longitude={Number(incident.longitude)}
-                      assignments={activeAssignments}
-                    />
-                  ) : (
-                    <View style={{ borderRadius: 12, padding: 20, backgroundColor: "#F8FAF9", borderWidth: 1, borderColor: "#DCE7E1" }}>
-                      <Text style={{ color: "#174B3D", fontWeight: "800" }}>Exact GPS not available</Text>
-                      <Text style={{ color: "#64786F", marginTop: 5 }}>Review the resident location evidence. We will not invent a map pin from an incomplete address.</Text>
-                    </View>
+                <ReferenceOverview
+                  incident={incident}
+                  verificationStatus={verificationStatus}
+                  statusText={labelOfStatus(incident.status)}
+                  severityText={severityLabel(incident.severity)}
+                  activeAssignments={activeAssignments}
+                  onEvidence={() => setDetailTab("evidence")}
+                  onMap={() => router.push(
+                    `/(admin)/admin-live-map?caseId=${encodeURIComponent(incident.id)}` as any,
                   )}
-                </View>
+                />
               )}
+
               <View
                 style={[
                   styles.verificationPanel,
@@ -3716,10 +4297,10 @@ export default function AdminCases() {
                 <View style={styles.sectionHeader}>
                   <View>
                     <Text style={styles.sectionEyebrow}>
-                      ANTI-SCAM VERIFICATION
+                      REPORT VERIFICATION
                     </Text>
                     <Text style={styles.sectionTitle}>
-                      Review Resident Request
+                      Resident Report Review
                     </Text>
                   </View>
 
@@ -3755,7 +4336,7 @@ export default function AdminCases() {
                       {Number.isFinite(incident.latitude) &&
                       Number.isFinite(incident.longitude)
                         ? `${incident.latitude?.toFixed(6)}, ${incident.longitude?.toFixed(6)}`
-                        : "No incident coordinates"}
+                        : "No GPS coordinates"}
                     </Text>
                   </View>
 
@@ -3823,16 +4404,16 @@ export default function AdminCases() {
                   {incident.severity === "critical" &&
                     verificationStatus !== "rejected" && (
                     <View style={styles.criticalResponseNotice}>
-                      <Text style={styles.criticalResponseTitle}>
-                        Critical case — urgent admin validation required
-                      </Text>
-                      <Text style={styles.criticalResponseText}>
-                        Review the evidence and location promptly. For immediate danger,
-                        contact 911 or authorized emergency services. Volunteer
-                        task offers follow Admin validation and can be accepted or declined.
-                      </Text>
-                      <TouchableOpacity
-                        style={styles.criticalNavigateButton}
+                      <View style={styles.criticalResponseCopy}>
+                        <Text style={styles.criticalResponseTitle}>
+                          Critical case — official emergency services take priority
+                        </Text>
+                        <Text style={styles.criticalResponseText}>
+                          For immediate danger, call 911. VolunServe does not automatically
+                          dispatch police, fire, or medical teams.
+                        </Text>
+                      </View>
+                      <EmergencyMapButton
                         onPress={() =>
                           router.push(
                             `/(admin)/admin-live-map?caseId=${encodeURIComponent(
@@ -3840,11 +4421,7 @@ export default function AdminCases() {
                             )}` as any,
                           )
                         }
-                      >
-                        <Text style={styles.criticalNavigateButtonText}>
-                          Open Emergency Map & Route
-                        </Text>
-                      </TouchableOpacity>
+                      />
                     </View>
                   )}
 
@@ -3893,6 +4470,10 @@ export default function AdminCases() {
                   </View>
                 </View>
 
+                <View style={styles.referenceEvidenceColumns}>
+                  <View style={styles.referenceEvidenceMedia}>
+                    <Text style={styles.referenceEvidenceColumnTitle}>▧  Evidence Preview ({imageEvidence.length + videoEvidence.length})</Text>
+                    <Text style={styles.referenceEvidenceColumnSub}>Select a photo to view the original submitted evidence.</Text>
                 {imageEvidence.length > 0 && (
                   <View style={styles.evidenceGrid}>
                     <ListPagination page={Math.max(1, Math.min(photoPage, Math.ceil(imageEvidence.length / 5) || 1))} total={imageEvidence.length} pageSize={5} onChange={setPhotoPage} />
@@ -3949,6 +4530,10 @@ export default function AdminCases() {
                   </View>
                 )}
 
+                  </View>
+                  <View style={styles.referenceEvidenceNotes}>
+                    <Text style={styles.referenceEvidenceColumnTitle}>▤  Review Notes (Optional)</Text>
+                    <Text style={styles.referenceEvidenceColumnSub}>Record observations or explain a request or rejection.</Text>
                 {verificationStatus !== "validated" &&
                   verificationStatus !== "rejected" && (
                     <>
@@ -3968,7 +4553,85 @@ export default function AdminCases() {
                         }
                       />
 
-                      <View style={styles.reviewActions}>
+                      {["high", "critical"].includes(incident.severity) ? (
+                        <View style={{
+                          backgroundColor: "#F0F8F5", borderWidth: 1, borderColor: "#B8DDD0",
+                          borderRadius: 10, padding: 13, marginTop: 12, marginBottom: 14,
+                        }}>
+                          <Text style={{ fontWeight: "700", color: "#173D32", fontSize: 13 }}>
+                            Public safety warning — only for community-impact incidents
+                          </Text>
+                          <Text style={{ fontSize: 12, color: "#516A65", marginTop: 5 }}>
+                            Do not broadcast personal medical emergencies or private rescues. No resident information, photos, precise addresses or GPS will appear.
+                          </Text>
+                          <TouchableOpacity
+                            accessibilityRole="checkbox"
+                            accessibilityState={{ checked: Boolean(publicImpactConfirmed[incident.id]) }}
+                            onPress={() => setPublicImpactConfirmed(current => ({
+                              ...current, [incident.id]: !current[incident.id],
+                            }))}
+                            style={{ paddingVertical: 12 }}
+                          >
+                            <Text style={{ color: "#087C61", fontWeight: "700" }}>
+                              {publicImpactConfirmed[incident.id] ? "☑" : "☐"} Automatically publish a public advisory when I validate
+                            </Text>
+                          </TouchableOpacity>
+                          {publicImpactConfirmed[incident.id] ? (
+                            <View>
+                              <Text style={styles.controlLabel}>Confirm actual incident barangay in SJDM</Text>
+                              <TextInput
+                                style={styles.input}
+                                value={publicImpactBarangays[incident.id] || ""}
+                                onChangeText={value => setPublicImpactBarangays(current => ({
+                                  ...current, [incident.id]: value.slice(0, 70),
+                                }))}
+                                placeholder="Type an official incident barangay"
+                                placeholderTextColor="#64748B"
+                                maxLength={70}
+                              />
+                              {publicImpactBarangays[incident.id]?.trim().length >= 2 &&
+                               !safePublicAdvisoryBarangay(publicImpactBarangays[incident.id]) ? (
+                                <View style={{ borderWidth: 1, borderColor: "#D5E9E1", borderRadius: 8 }}>
+                                  {SJDM_BARANGAYS.filter(name => name.toLowerCase().includes(
+                                    String(publicImpactBarangays[incident.id] || "").trim().toLowerCase()
+                                  )).slice(0, 6).map(name => (
+                                    <TouchableOpacity key={name} accessibilityRole="button"
+                                      onPress={() => setPublicImpactBarangays(current => ({
+                                        ...current, [incident.id]: name,
+                                      }))}
+                                      style={{ padding: 10, borderBottomWidth: 1, borderBottomColor: "#E9F1EE" }}>
+                                      <Text style={{ color: "#173D32" }}>{name}</Text>
+                                    </TouchableOpacity>
+                                  ))}
+                                </View>
+                              ) : null}
+                              <Text style={{ color: "#516A65", fontSize: 11, marginTop: 8 }}>
+                                Check the actual incident location; do not use the reporter's home barangay. If unsure, uncheck public warning and validate privately.
+                              </Text>
+                            </View>
+                          ) : null}
+                        </View>
+                      ) : null}
+
+
+                    </>
+                  )}
+
+                    {verificationStatus === "validated" && (
+                      <View style={styles.reviewNotice}>
+                        <Text style={styles.warningTitle}>Report validated</Text>
+                        <Text style={styles.warningText}>The review decision is already recorded.</Text>
+                      </View>
+                    )}
+                    {verificationStatus === "rejected" && (
+                      <View style={styles.rejectNotice}>
+                        <Text style={styles.rejectNoticeText}>This report has been rejected; Volunteer dispatch remains blocked.</Text>
+                      </View>
+                    )}
+                  </View>
+                </View>
+                {verificationStatus !== "validated" && verificationStatus !== "rejected" && (
+                  <View style={styles.reviewActions}>
                         <TouchableOpacity
                           style={styles.validateButton}
                           onPress={() =>
@@ -4005,8 +4668,7 @@ export default function AdminCases() {
                           </Text>
                         </TouchableOpacity>
                       </View>
-                    </>
-                  )}
+                )}
 
                 {verificationStatus === "needs_more_evidence" && (
                   <View style={styles.reviewNotice}>
@@ -4036,332 +4698,389 @@ export default function AdminCases() {
                 )}
               </View>
 
-              {detailTab === "personnel" && (
-                <View style={styles.personnelReferenceLayout}>
-                  <View style={styles.personnelReferenceMain}>
-                    <View style={styles.personnelCleanCard}>
-                      <View style={styles.personnelCleanHeader}>
-                        <View style={styles.personnelCleanHeaderLeft}>
-                          <View style={styles.personnelSectionIconPurple}>
-                            <Text style={styles.personnelSectionIconText}>♧</Text>
-                          </View>
-                          <View style={{ flex: 1 }}>
-                            <View style={styles.personnelCleanTitleRow}>
-                              <Text style={styles.personnelCleanTitle}>Send Volunteer Task Offers</Text>
-                              <View style={styles.personnelCountBadgePurple}>
-                                <Text style={styles.personnelCountBadgePurpleText}>
-                                  {eligibleVolunteerCount} eligible
-                                </Text>
-                              </View>
-                            </View>
-                            <Text style={styles.personnelCleanSubtitle}>
-                              Choose an approved Volunteer. They receive the incident photo and task in New, then choose Accept or Decline.
-                            </Text>
-                          </View>
-                        </View>
-                      </View>
+              {detailTab === "response" && (
+                <ReferenceStatus
+                  incident={incident}
+                  verificationStatus={verificationStatus}
+                  statusText={labelOfStatus(incident.status)}
+                  severityText={severityLabel(incident.severity)}
+                  activeAssignments={activeAssignments}
+                  onEvidence={() => setDetailTab("evidence")}
+                  onMap={() => router.push(
+                    `/(admin)/admin-live-map?caseId=${encodeURIComponent(incident.id)}` as any,
+                  )}
+                  onAssignment={() => setDetailTab("personnel")}
+                />
+              )}
+              {detailTab === "response" && dispatchReady && (
+                <TouchableOpacity style={styles.advancedControlToggle}
+                  accessibilityRole="button"
+                  onPress={() => setAdvancedResponseOpen((current) => !current)}>
+                  <Text style={styles.advancedControlText}>
+                    {advancedResponseOpen ? "Hide existing operational controls  ‹" : "Show existing operational controls  ›"}
+                  </Text>
+                </TouchableOpacity>
+              )}
+              {detailTab === "response" && (dispatchReady ? (
+                <View style={[styles.adminSection, !advancedResponseOpen && styles.hiddenSection]}>
+                  <View style={styles.responseControlHeader}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.sectionEyebrow}>ACTIVE RESPONSE</Text>
+                      <Text style={styles.responseControlTitle}>
+                        Emergency Response Control
+                      </Text>
+                      <Text style={styles.responseControlSubtitle}>
+                        Admin assigns approved Volunteers directly, including offline candidates. Volunteers must accept their offers before responding.
+                      </Text>
+                    </View>
 
-                      <View style={styles.personnelBarangayStrip}>
-                        <View>
-                          <Text style={styles.personnelNeedLabel}>INCIDENT BARANGAY</Text>
-                          <Text style={styles.personnelBarangayValue}>
-                            {barangayDisplay(caseBarangayValue(incident))}
-                          </Text>
-                        </View>
-                        <Text style={styles.personnelBarangayHint}>
-                          Approved SJDM Volunteers can receive offers. Only accepted offers become active tasks.
-                        </Text>
-                      </View>
-
-                      {activeAssignments.length > 0 && (
-                        <View style={styles.personnelSupportNotice}>
-                          <Text style={styles.personnelSupportNoticeTitle}>
-                            {activeAssignments.length} existing task offer(s) or active task(s)
-                          </Text>
-                          <Text style={styles.personnelSupportNoticeText}>
-                            You can offer this case to other approved Volunteers. They may Accept or Decline; only one active mission per Volunteer is permitted.
-                          </Text>
-                        </View>
-                      )}
-
-                      {!!inviteFeedback && (
-                        <Text style={styles.volunteerRosterWarning}>{inviteFeedback}</Text>
-                      )}
-
-                      <View style={styles.personnelVolunteerToolbar}>
-                        <Text style={styles.personnelListHeading}>
-                          Approved Volunteers · {volunteerCandidates.length}
-                        </Text>
-
-                        <View style={styles.personnelVolunteerFilters}>
-                          <TextInput
-                            style={styles.personnelCompactFilter}
-                            value={skillFilter}
-                            placeholder="Search volunteer by name or skill"
-                            placeholderTextColor="#94a3b8"
-                            onChangeText={(value) => { setSkillFilter(value); setVolunteerPage(1); }}
-                          />
-                        </View>
-                      </View>
-
-                      {!dispatchReady && (
-                        <View style={styles.personnelCleanEmptyRow}>
-                          <Text style={styles.personnelCleanEmptyTitle}>Review approved volunteers before dispatch</Text>
-                          <Text style={styles.personnelCleanEmptyText}>
-                            Validate the emergency before assigning a qualified Volunteer. Their New task card includes the incident photo when accessible.
-                          </Text>
-                        </View>
-                      )}
-                      {volunteerCandidates.length === 0 ? (
-                        <View style={styles.personnelCleanEmptyRow}>
-                          <Text style={styles.personnelCleanEmptyTitle}>
-                            {"No approved Volunteers match the current filters"}
-                          </Text>
-                          <Text style={styles.personnelCleanEmptyText}>
-                            The Resident who filed this emergency is excluded automatically from this pool.
-                          </Text>
-                        </View>
-                      ) : (
-                        <View style={styles.personnelCompactList}>
-                          <ListPagination page={Math.max(1, Math.min(volunteerPage, Math.ceil(volunteerCandidates.length / 5) || 1))} total={volunteerCandidates.length} pageSize={5} onChange={setVolunteerPage} />
-                          {pageFive(volunteerCandidates, volunteerPage).map((volunteer) => {
-                            const key = `${incident.id}_${volunteer.uid}`;
-                            const eligibility = volunteerEligibilityForCase(incident, volunteer);
-                            const caseOpenForSupport = ["validated", "assigned", "in_progress"].includes(
-                              incident.status,
-                            );
-                            const dispatchDisabled = !eligibility.eligible ||
-                              !caseOpenForSupport || !!busyKey;
-                            const reasonLower = eligibility.reason.toLowerCase();
-                            const availabilityText = volunteer.availability.join(" ").toLowerCase();
-                            const offline = /offline|unavailable|off.?duty/.test(availabilityText);
-                            const availabilityLabel = !eligibility.eligible ? "Restricted" :
-                              offline ? "Offline · offer allowed" : "Eligible";
-
-                            return (
-                              <View key={volunteer.uid} style={styles.volunteerRosterCard}>
-                                <View style={styles.volunteerRosterTop}>
-                                  <View style={styles.volunteerAvatarCompact}>
-                                    <Text style={styles.volunteerAvatarCompactText}>
-                                      {volunteer.fullName
-                                        .split(" ")
-                                        .filter(Boolean)
-                                        .slice(0, 2)
-                                        .map((part) => part[0]?.toUpperCase())
-                                        .join("") || "V"}
-                                    </Text>
-                                  </View>
-                                  <View style={styles.volunteerRosterIdentity}>
-                                    <Text style={styles.volunteerRosterName}>{volunteer.fullName}</Text>
-                                    <Text style={styles.volunteerRosterMeta}>
-                                      Approved Volunteer · Citywide SJDM assignments
-                                    </Text>
-                                  </View>
-                                  <TouchableOpacity
-                                    accessibilityRole="button"
-                                    accessibilityLabel={`Assign validated community task to ${volunteer.fullName}`}
-                                    disabled={dispatchDisabled}
-                                    style={[styles.volunteerRosterAction, dispatchDisabled && styles.personnelAssignCompactDisabled]}
-                                    onPress={() => assignVolunteerToCase(incident, volunteer)}
-                                  >
-                                    <Text style={[styles.volunteerRosterActionText, dispatchDisabled && styles.personnelAssignCompactTextDisabled]}>
-                                      {dispatchDisabled ? "Cannot Offer" : "Send Task Offer"}
-                                    </Text>
-                                  </TouchableOpacity>
-                                </View>
-                                <View style={styles.volunteerRosterTags}>
-                                  <View style={offline ? styles.personnelMiniBadgeMuted : styles.personnelMiniBadgeGood}>
-                                    <Text style={offline ? styles.personnelMiniBadgeMutedText : styles.personnelMiniBadgeGoodText}>
-                                      {offline ? "Offline · can receive offer" : "Approved · can receive offer"}
-                                    </Text>
-                                  </View>
-                                  {volunteer.skills.slice(0, 3).map((skill) => (
-                                    <View key={`${volunteer.uid}_${skill}`} style={styles.personnelSkillPillBlue}>
-                                      <Text style={styles.personnelSkillPillBlueText}>{skill}</Text>
-                                    </View>
-                                  ))}
-                                </View>
-                                {eligibility.eligible && eligibility.reason.startsWith("Skill review needed") && (
-                                  <Text style={styles.volunteerRosterWarning}>
-                                    Check suitability: this Volunteer has no matching listed skill. Assign only safe support duties.
-                                  </Text>
-                                )}
-                                {!eligibility.eligible && (
-                                  <Text style={styles.volunteerRosterWarning}>
-                                    Assignment condition: {eligibility.reason}.
-                                  </Text>
-                                )}
-
-                              </View>
-                            );
-                          })}
-                        </View>
-                      )}
-
-                      <View style={styles.personnelSupportDivider} />
-
-                      <View style={styles.personnelActiveSupportHeader}>
-                        <Text style={styles.personnelListHeading}>Volunteer Task Status</Text>
-                        <View style={styles.personnelCountBadgeMuted}>
-                          <Text style={styles.personnelCountBadgeMutedText}>{activeAssignments.length}</Text>
-                        </View>
-                      </View>
-
-                      {activeAssignments.length === 0 ? (
-                        <View style={styles.personnelSupportEmpty}>
-                          <Text style={styles.personnelSupportEmptyIcon}>♧</Text>
-                          <View>
-                            <Text style={styles.personnelCleanEmptyTitle}>No task offers sent yet</Text>
-                            <Text style={styles.personnelCleanEmptyText}>
-                              Send an offer to an approved Volunteer, even offline. Android push requires a registered device; the Volunteer must accept to respond.
-                            </Text>
-                          </View>
-                        </View>
-                      ) : (
-                        <View style={styles.personnelCompactList}>
-                          <ListPagination page={Math.max(1, Math.min(activeAssignmentPage, Math.ceil(activeAssignments.length / 5) || 1))} total={activeAssignments.length} pageSize={5} onChange={setActiveAssignmentPage} />
-                          {pageFive(activeAssignments, activeAssignmentPage).map((assignment) => {
-                            const currentVolunteer = approvedVolunteers.find(
-                              (item) => item.uid === assignment.volunteerId,
-                            );
-                            const displayName =
-                              currentVolunteer?.fullName || assignment.volunteerName || "Volunteer";
-
-                            return (
-                              <View key={assignment.id} style={styles.personnelActiveSupportRow}>
-                                <View style={styles.volunteerAvatarCompact}>
-                                  <Text style={styles.volunteerAvatarCompactText}>
-                                    {displayName
-                                      .split(" ")
-                                      .filter(Boolean)
-                                      .slice(0, 2)
-                                      .map((part) => part[0]?.toUpperCase())
-                                      .join("") || "V"}
-                                  </Text>
-                                </View>
-
-                                <View style={styles.personnelCompactIdentity}>
-                                  <Text style={styles.personnelCompactName}>{displayName}</Text>
-                                  <Text style={styles.personnelCompactMeta}>
-                                    {currentVolunteer?.barangay
-                                      ? barangayDisplay(currentVolunteer.barangay)
-                                      : `Updated ${formatDate(assignment.updatedAt)}`}
-                                  </Text>
-                                </View>
-
-                                <View style={[styles.assignmentStatus, statusStyle(String(assignment.status))]}>
-                                  <Text style={styles.badgeText}>
-                                    {labelOfStatus(String(assignment.status))}
-                                  </Text>
-                                </View>
-
-                                {!["completed"].includes(String(assignment.status)) && (
-                                  <TouchableOpacity
-                                    style={styles.cancelButton}
-                                    onPress={() => cancelAssignment(assignment)}
-                                  >
-                                    <Text style={styles.cancelButtonText}>Cancel</Text>
-                                  </TouchableOpacity>
-                                )}
-                              </View>
-                            );
-                          })}
-                        </View>
-                      )}
+                    <View style={styles.responseStatusPill}>
+                      <Text style={styles.responseStatusDot}>●</Text>
+                      <Text style={styles.responseStatusText}>
+                        {lguFieldReviewPending
+                          ? "LGU REPORT PENDING REVIEW"
+                          : officialLguResponseStatus === "reviewed" &&
+                              incident.status === "in_progress"
+                            ? "READY FOR ADMIN DECISION"
+                            : incident.status === "validated"
+                              ? "READY FOR RESPONSE"
+                              : incident.status === "assigned"
+                                ? "SUPPORT REQUESTED"
+                                : incident.status === "in_progress"
+                                  ? "RESPONSE IN PROGRESS"
+                                  : incident.status === "resolved"
+                                    ? "RESOLVED"
+                                    : "CLOSED"}
+                      </Text>
                     </View>
                   </View>
 
+                  <View style={styles.responseActionGrid}>
+                    <TouchableOpacity
+                      style={[
+                        styles.supportButton,
+                        !volunteerSupportAvailable && styles.supportButtonActive,
+                      ]}
+                      onPress={() => {
+                        setAssignmentCaseId(incident.id);
+                        setSkillFilter("");
+                        setAvailabilityFilter("");
+                        setDetailTab("personnel");
+                      }}
+                    >
+                      <Text style={styles.supportButtonTitle}>
+                        {assignmentPanelOpen
+                          ? "Hide Volunteer Support"
+                          : activeAssignments.length > 0
+                            ? "View Volunteer Support"
+                            : "Offer Volunteer Task"}
+                      </Text>
+                      <Text style={styles.supportButtonSub}>
+                        {activeAssignments.length > 0
+                          ? `${activeAssignments.length} active support assignment`
+                          : `${eligibleVolunteerCount} eligible candidate${eligibleVolunteerCount === 1 ? "" : "s"}`}
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
 
-                  {dispatchReady && (
-                    <View style={styles.adminSection}>
-                  {incidentFieldReports.length > 0 && (
-                    <View style={{ marginTop: 12, padding: 14, borderRadius: 12, borderWidth: 1, borderColor: "#D7E8E0", backgroundColor: "#F7FCF9" }}>
-                      <Text style={{ fontWeight: "800", fontSize: vsType.size.bodyStrong, fontFamily: vsType.family, color: "#064E3B", marginBottom: 6 }}>
-                        Volunteer Completion Reports
-                      </Text>
-                      <Text style={{ color: "#47675C", fontSize: vsType.size.meta, fontFamily: vsType.family, marginBottom: 10 }}>
-                        Review the actual assistance submitted by assigned Volunteers. Task completion does not automatically close the case.
-                      </Text>
-                      <ListPagination
-                        page={Math.max(1, Math.min(fieldReportPage, Math.ceil(incidentFieldReports.length / 5) || 1))}
-                        total={incidentFieldReports.length}
-                        pageSize={5}
-                        onChange={setFieldReportPage}
-                      />
-                      {pageFive(incidentFieldReports, Math.max(1, Math.min(fieldReportPage, Math.ceil(incidentFieldReports.length / 5) || 1))).map((report) => {
-                        const submitted = String(report.reportStatus || "submitted") === "submitted";
-                        const reviewing = busyKey === `field_reviewed_${report.id}`;
+                  {(lguFieldReportsLoading ||
+                    lguFieldReportsError ||
+                    latestLguFieldReport ||
+                    lguFieldReviewPending) && (
+                    <View style={styles.lguOfficialReportSection}>
+                      <View style={styles.lguOfficialReportHeader}>
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.lguOfficialReportEyebrow}>
+                            OFFICIAL LGU FIELD REPORT
+                          </Text>
+                          <Text style={styles.lguOfficialReportTitle}>
+                            Field Response Review
+                          </Text>
+                          <Text style={styles.lguOfficialReportSubtitle}>
+                            Review the official responder's completed field report before deciding whether the emergency can be resolved or needs follow-up.
+                          </Text>
+                        </View>
+
+                        <TouchableOpacity
+                          disabled={lguFieldReportsLoading}
+                          style={[
+                            styles.lguReportRefreshButton,
+                            lguFieldReportsLoading && styles.disabledButton,
+                          ]}
+                          onPress={() =>
+                            void loadLguFieldReports(incident.id)
+                          }
+                        >
+                          <Text style={styles.lguReportRefreshText}>
+                            {lguFieldReportsLoading
+                              ? "Loading…"
+                              : "Refresh"}
+                          </Text>
+                        </TouchableOpacity>
+                      </View>
+
+                      {!!lguFieldReportsError && (
+                        <View style={styles.lguReportErrorBox}>
+                          <Text style={styles.lguReportErrorTitle}>
+                            Unable to load official field report
+                          </Text>
+                          <Text style={styles.lguReportErrorText}>
+                            {lguFieldReportsError}
+                          </Text>
+                        </View>
+                      )}
+
+                      {!lguFieldReportsLoading &&
+                        !lguFieldReportsError &&
+                        lguFieldReviewPending &&
+                        !latestLguFieldReport && (
+                          <View style={styles.lguReportWaitingBox}>
+                            <Text style={styles.lguReportWaitingTitle}>
+                              Field report is pending
+                            </Text>
+                            <Text style={styles.lguReportWaitingText}>
+                              The case is marked as awaiting Admin review, but the official field report is not available yet. Refresh this section before taking a final action.
+                            </Text>
+                          </View>
+                        )}
+
+                      {latestLguFieldReport && (() => {
+                        const report = latestLguFieldReport;
+                        const reviewStatus = String(
+                          report.adminReviewStatus || "pending"
+                        )
+                          .trim()
+                          .toLowerCase();
+                        const reviewed = reviewStatus === "reviewed";
+                        const reviewBusy =
+                          busyKey ===
+                          `lgu_field_review_${report.id}`;
+                        const reviewNote =
+                          lguFieldReviewNotes[report.id] ??
+                          report.adminReviewNote ??
+                          "";
+                        const followUpOutcome = [
+                          "referred",
+                          "needs_follow_up",
+                        ].includes(
+                          String(report.outcome || "")
+                            .trim()
+                            .toLowerCase()
+                        );
+
                         return (
-                          <View key={report.id} style={{ padding: 12, marginVertical: 6, borderRadius: 10, backgroundColor: "#FFFFFF", borderWidth: 1, borderColor: "#E0EAE5" }}>
-                            <Text style={{ fontWeight: "800", color: "#143B30" }}>{report.volunteerName || "Assigned Volunteer"}</Text>
-                            <Text style={{ fontSize: vsType.size.meta, fontFamily: vsType.family, color: "#58746B", marginBottom: 6 }}>
-                              Status: {String(report.reportStatus || "Submitted").replace(/_/g, " ")}
-                            </Text>
-                            <Text style={{ color: "#174E3D", marginBottom: 4 }}>
-                              Situation: {report.situationSummary || "Not provided"}
-                            </Text>
-                            <Text style={{ color: "#174E3D", marginBottom: 4 }}>
-                              Assistance: {report.assistanceProvided || "Not provided"}
-                            </Text>
-                            <Text style={{ color: "#174E3D", marginBottom: 4 }}>
-                              People helped: {Number(report.peopleHelped) || 0}
-                            </Text>
-                            {!!report.remainingNeeds?.length && (
-                              <Text style={{ color: "#7B4B25", marginBottom: 6 }}>
-                                Remaining needs: {report.remainingNeeds.join(", ")}
-                              </Text>
-                            )}
-                            {submitted && (
-                              <TouchableOpacity
-                                accessibilityRole="button"
-                                disabled={reviewing}
-                                onPress={() => void reviewVolunteerFieldReport(report, "reviewed")}
-                                style={{ marginTop: 8, borderRadius: 8, backgroundColor: "#087A62", padding: 11, alignItems: "center" }}
-                              >
-                                <Text style={{ fontWeight: "800", color: "#FFFFFF" }}>
-                                  {reviewing ? "Reviewing…" : "Mark Report Reviewed"}
+                          <View style={styles.lguOfficialReportCard}>
+                            <View style={styles.lguOfficialReportTopRow}>
+                              <View style={{ flex: 1 }}>
+                                <Text style={styles.lguOfficialResponderName}>
+                                  {report.personnelName ||
+                                    "Official LGU Responder"}
                                 </Text>
-                              </TouchableOpacity>
+                                <Text style={styles.lguOfficialResponderMeta}>
+                                  {[report.department, report.position]
+                                    .filter(Boolean)
+                                    .join(" · ") ||
+                                    "Official LGU Personnel"}
+                                </Text>
+                                <Text style={styles.lguOfficialReportMeta}>
+                                  Submitted {formatApiDate(report.submittedAt)}
+                                  {" · "}Assignment {report.assignmentId}
+                                </Text>
+                              </View>
+
+                              <View
+                                style={[
+                                  styles.lguOfficialReviewBadge,
+                                  reviewed
+                                    ? styles.lguOfficialReviewBadgeDone
+                                    : styles.lguOfficialReviewBadgePending,
+                                ]}
+                              >
+                                <Text
+                                  style={[
+                                    styles.lguOfficialReviewBadgeText,
+                                    reviewed &&
+                                      styles.lguOfficialReviewBadgeTextDone,
+                                  ]}
+                                >
+                                  {reviewed
+                                    ? "REVIEWED"
+                                    : "PENDING REVIEW"}
+                                </Text>
+                              </View>
+                            </View>
+
+                            <View style={styles.lguOfficialReportGrid}>
+                              <View style={styles.lguOfficialReportInfoCard}>
+                                <Text style={styles.metaLabel}>
+                                  Situation Summary
+                                </Text>
+                                <Text style={styles.lguOfficialReportValue}>
+                                  {report.situationSummary ||
+                                    "No situation summary submitted."}
+                                </Text>
+                              </View>
+
+                              <View style={styles.lguOfficialReportInfoCard}>
+                                <Text style={styles.metaLabel}>
+                                  Actions Taken
+                                </Text>
+                                <Text style={styles.lguOfficialReportValue}>
+                                  {report.actionsTaken ||
+                                    "No response actions recorded."}
+                                </Text>
+                              </View>
+
+                              <View style={styles.lguOfficialReportInfoCard}>
+                                <Text style={styles.metaLabel}>
+                                  People Assisted
+                                </Text>
+                                <Text style={styles.lguOfficialReportValueStrong}>
+                                  {report.peopleAssisted}
+                                </Text>
+                              </View>
+
+                              <View style={styles.lguOfficialReportInfoCard}>
+                                <Text style={styles.metaLabel}>
+                                  Field Outcome
+                                </Text>
+                                <Text style={styles.lguOfficialReportValueStrong}>
+                                  {lguFieldOutcomeLabel(report.outcome)}
+                                </Text>
+                              </View>
+                            </View>
+
+                            {followUpOutcome && (
+                              <View style={styles.lguFollowUpWarning}>
+                                <Text style={styles.lguFollowUpWarningTitle}>
+                                  Follow-up is still indicated
+                                </Text>
+                                <Text style={styles.lguFollowUpWarningText}>
+                                  The responder marked this field outcome as{" "}
+                                  {lguFieldOutcomeLabel(report.outcome)}.
+                                  Review the remaining need before resolving the case.
+                                </Text>
+                              </View>
+                            )}
+
+                            {!!report.remainingNeeds && (
+                              <View style={styles.lguOfficialNeedsBox}>
+                                <Text style={styles.metaLabel}>
+                                  REMAINING NEEDS / REFERRAL
+                                </Text>
+                                <Text style={styles.lguOfficialNeedsText}>
+                                  {report.remainingNeeds}
+                                </Text>
+                              </View>
+                            )}
+
+                            {!!report.notes && (
+                              <View style={styles.lguOfficialNotesBox}>
+                                <Text style={styles.metaLabel}>
+                                  ADDITIONAL FIELD NOTES
+                                </Text>
+                                <Text style={styles.lguOfficialNotesText}>
+                                  {report.notes}
+                                </Text>
+                              </View>
+                            )}
+
+                            {!reviewed ? (
+                              <View style={styles.lguOfficialReviewArea}>
+                                <Text style={styles.controlLabel}>
+                                  Admin review note · optional
+                                </Text>
+                                <TextInput
+                                  style={[
+                                    styles.input,
+                                    styles.lguOfficialReviewInput,
+                                  ]}
+                                  multiline
+                                  maxLength={1500}
+                                  value={reviewNote}
+                                  placeholder="Record follow-up instructions, verification details, or the basis for the Admin decision…"
+                                  placeholderTextColor="#94a3b8"
+                                  onChangeText={(value) =>
+                                    setLguFieldReviewNotes(
+                                      (current) => ({
+                                        ...current,
+                                        [report.id]: value,
+                                      })
+                                    )
+                                  }
+                                />
+
+                                <View style={styles.lguOfficialReviewActions}>
+                                  <TouchableOpacity
+                                    disabled={reviewBusy}
+                                    style={[
+                                      styles.lguMarkReviewedButton,
+                                      reviewBusy && styles.disabledButton,
+                                    ]}
+                                    onPress={() =>
+                                      void reviewLguFieldReport(report)
+                                    }
+                                  >
+                                    <Text style={styles.primaryButtonText}>
+                                      {reviewBusy
+                                        ? "Saving Review…"
+                                        : "Mark Official Report Reviewed"}
+                                    </Text>
+                                  </TouchableOpacity>
+
+                                  <Text style={styles.lguReviewDecisionHint}>
+                                    Reviewing the report does not close the emergency. After review, choose Resolve Case only if the incident is fully handled.
+                                  </Text>
+                                </View>
+                              </View>
+                            ) : (
+                              <View style={styles.lguReviewedSummary}>
+                                <Text style={styles.lguReviewedSummaryTitle}>
+                                  ✓ Official report reviewed
+                                </Text>
+                                <Text style={styles.lguReviewedSummaryText}>
+                                  Reviewed {formatApiDate(report.reviewedAt)}.
+                                  {report.adminReviewNote
+                                    ? ` Admin note: ${report.adminReviewNote}`
+                                    : " No additional Admin note was recorded."}
+                                </Text>
+                              </View>
                             )}
                           </View>
                         );
-                      })}
+                      })()}
                     </View>
                   )}
 
                   <View style={styles.responseLifecycleRow}>
-                    {["assigned", "in_progress"].includes(incident.status) &&
-                      incidentAssignments.some((item) => item.status === "completed") && (
+                    {["validated", "assigned"].includes(incident.status) && (
                       <TouchableOpacity
-                        disabled={
-                          busyKey === `confirm_completed_${incident.id}` ||
-                          !incidentAssignments.some((item) =>
-                            item.status === "completed" &&
-                            item.residentConfirmationStatus === "resident_confirmed" &&
-                            item.residentConfirmationOutcome === "fully_helped"
-                          )
+                        style={styles.progressButton}
+                        onPress={() =>
+                          changeCaseStatus(incident, "in_progress")
                         }
-                        style={styles.resolveButton}
-                        onPress={() => {
-                          const completed = incidentAssignments.find((item) => item.status === "completed");
-                          if (completed) void confirmVolunteerCompletion(incident, completed);
-                        }}
                       >
                         <Text style={styles.primaryButtonText}>
-                          {busyKey === `confirm_completed_${incident.id}`
-                            ? "Confirming…"
-                            : incidentAssignments.some((item) =>
-                                item.status === "completed" &&
-                                item.residentConfirmationStatus === "resident_confirmed" &&
-                                item.residentConfirmationOutcome === "fully_helped"
-                              )
-                              ? "Review & Resolve Case"
-                              : incidentAssignments.some((item) =>
-                                  item.status === "completed" &&
-                                  ["partially_helped", "not_helped"].includes(String(item.residentConfirmationOutcome || ""))
-                                )
-                                ? "Follow-up Required · Keep Case Open"
-                                : "Awaiting Resident Confirmation"}
+                          Start Emergency Response
+                        </Text>
+                      </TouchableOpacity>
+                    )}
+
+                    {incident.status === "in_progress" && (
+                      <TouchableOpacity
+                        disabled={lguFieldReviewPending}
+                        style={[
+                          styles.resolveButton,
+                          lguFieldReviewPending && styles.disabledButton,
+                        ]}
+                        onPress={() =>
+                          changeCaseStatus(incident, "resolved")
+                        }
+                      >
+                        <Text style={styles.primaryButtonText}>
+                          {lguFieldReviewPending
+                            ? "Review LGU Report First"
+                            : "Resolve Case"}
                         </Text>
                       </TouchableOpacity>
                     )}
@@ -4393,7 +5112,7 @@ export default function AdminCases() {
                         style={styles.coordinationInput}
                         value={note}
                         multiline
-                        placeholder="Add a short coordination note…"
+                        placeholder="Add a short Admin coordination note…"
                         placeholderTextColor="#94a3b8"
                         onChangeText={(value) =>
                           setNotes((current) => ({
@@ -4411,55 +5130,838 @@ export default function AdminCases() {
                       <Text style={styles.saveNoteButtonText}>Save note</Text>
                     </TouchableOpacity>
                   </View>
+                </View>
+              ) : null)}
+
+              {false && dispatchReady &&
+                (directAssessmentExists ||
+                  ["resolved", "closed"].includes(
+                    incident.status
+                  )) && (
+                  <View style={styles.directAssessmentSection}>
+                    <View style={styles.escalationSummaryRow}>
+                      <View style={styles.reliefSummaryIcon}>
+                        <Text style={styles.reliefSummaryIconText}>+</Text>
+                      </View>
+
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.sectionEyebrow}>
+                          RELIEF DECISION
+                        </Text>
+                        <Text style={styles.sectionTitle}>
+                          Relief Assessment
+                        </Text>
+                        <Text style={styles.escalationSummaryText}>
+                          Use this only when a validated emergency still has a verified material need, such as food, water, clothing, shelter, medical support, or housing-repair materials. Creating a relief need does not automatically create a donation campaign. Relief Operations must check LGU resources first.
+                        </Text>
+                      </View>
+
+                      {!directAssessmentExists && (
+                        <TouchableOpacity
+                          disabled={directAssessmentBusy}
+                          style={[
+                            styles.directAssessmentButton,
+                            directAssessmentBusy && styles.disabledButton,
+                          ]}
+                          onPress={() => openDirectNeedDraft(incident)}
+                        >
+                          <Text style={styles.directAssessmentButtonText}>
+                            {directDraftOpen
+                              ? "Cancel Assessment"
+                              : "Assess Relief Need"}
+                          </Text>
+                        </TouchableOpacity>
+                      )}
                     </View>
-                  )}
+
+                    {directAssessmentExists ? (
+                      <View style={styles.directAssessmentDone}>
+                        <Text style={styles.directAssessmentDoneText}>
+                          ✓ A verified relief assessment is already recorded for this case. Any separate financial support must be reviewed through Assistance Requests and its eligibility safeguards.
+                        </Text>
+                      </View>
+                    ) : (
+                      directDraftOpen && (
+                        <View style={styles.directFormCard}>
+                          <View style={styles.directFormHeader}>
+                            <View style={{ flex: 1 }}>
+                              <Text style={styles.directFormTitle}>
+                                LGU Relief Assessment
+                              </Text>
+                              <Text style={styles.directFormSubtitle}>
+                                Confirm the relief scope and record only the material needs that remain after the LGU has verified the situation. A serious single-household case may qualify, while broader incidents use the community scope.
+                              </Text>
+                            </View>
+                            <View style={styles.directFormBadge}>
+                              <Text style={styles.directFormBadgeText}>
+                                {directDraft.reliefScope === "community"
+                                  ? "COMMUNITY RELIEF"
+                                  : "HOUSEHOLD RELIEF"}
+                              </Text>
+                            </View>
+                          </View>
+
+                          <View style={styles.reliefPolicyBox}>
+                            <Text style={styles.reliefPolicyTitle}>
+                              Donation is not automatic
+                            </Text>
+                            <Text style={styles.reliefPolicyText}>
+                              This assessment only confirms that material relief is needed. Relief Operations will check existing LGU stock and resources first. Donation Support should be requested only when a verified shortage remains.
+                            </Text>
+                          </View>
+
+                          <View style={styles.directGroupCard}>
+                            <Text style={styles.directGroupNumber}>1</Text>
+                            <View style={styles.directGroupContent}>
+                              <Text style={styles.directGroupTitle}>
+                                Choose Relief Scope
+                              </Text>
+                              <Text style={styles.directGroupHint}>
+                                Choose whether this verified need is for one household or a wider community. This does not open Donation Support automatically.
+                              </Text>
+
+                              <FormSelect
+                                label="Relief type"
+                                placeholder="Select relief scope"
+                                value={directDraft.reliefScope}
+                                options={RELIEF_SCOPE_OPTIONS}
+                                onSelect={(value) =>
+                                  setDirectReliefScope(
+                                    incident,
+                                    value as ReliefScope
+                                  )
+                                }
+                              />
+
+                              <View style={styles.directInfoStrip}>
+                                <Text style={styles.directInfoStripTitle}>
+                                  {directDraft.reliefScope === "community"
+                                    ? "Community Relief"
+                                    : "Household Relief"}
+                                </Text>
+                                <Text style={styles.directInfoStripText}>
+                                  {directDraft.reliefScope === "community"
+                                    ? "Use this only when 2 or more households or a broader community-level need were officially verified."
+                                    : "Use this for one verified household with serious remaining material needs after the emergency response."}
+                                </Text>
+                              </View>
+                            </View>
+                          </View>
+
+                          <View style={styles.directGroupCard}>
+                            <Text style={styles.directGroupNumber}>2</Text>
+                            <View style={styles.directGroupContent}>
+                              <Text style={styles.directGroupTitle}>
+                                Confirm Who Needs Help
+                              </Text>
+                              <Text style={styles.directGroupHint}>
+                                Confirm the barangay and the exact number of households and people covered by this verified relief need.
+                              </Text>
+
+                              <Text style={styles.directFieldLabel}>
+                                Affected barangay
+                              </Text>
+                              <TextInput
+                                style={styles.input}
+                                value={directDraft.barangay}
+                                maxLength={120}
+                                onChangeText={(value) =>
+                                  updateDirectNeedDraft(
+                                    incident.id,
+                                    "barangay",
+                                    value
+                                  )
+                                }
+                                placeholder="Verified barangay"
+                              />
+                              <Text style={styles.directFieldHelp}>
+                                Pre-filled from the emergency case. Change it only if LGU verification confirmed a different barangay for this relief assessment.
+                              </Text>
+
+                              <View style={styles.directTwoColumn}>
+                                <View style={styles.directSmallField}>
+                                  <Text style={styles.directFieldLabel}>
+                                    Affected households
+                                  </Text>
+                                  <TextInput
+                                    style={[
+                                      styles.input,
+                                      directDraft.reliefScope === "household" &&
+                                        styles.directLockedInput,
+                                    ]}
+                                    editable={directDraft.reliefScope === "community"}
+                                    keyboardType="number-pad"
+                                    value={directDraft.affectedHouseholds}
+                                    onChangeText={(value) =>
+                                      updateDirectNeedDraft(
+                                        incident.id,
+                                        "affectedHouseholds",
+                                        value.replace(/[^0-9]/g, "").slice(0, 7)
+                                      )
+                                    }
+                                    placeholder={
+                                      directDraft.reliefScope === "community"
+                                        ? "At least 2"
+                                        : "1"
+                                    }
+                                  />
+                                  <Text style={styles.directFieldHelp}>
+                                    {directDraft.reliefScope === "community"
+                                      ? "Enter only the households actually confirmed by LGU/barangay verification."
+                                      : "Household Relief is fixed to exactly 1 verified household."}
+                                  </Text>
+                                </View>
+
+                                <View style={styles.directSmallField}>
+                                  <Text style={styles.directFieldLabel}>
+                                    Affected people
+                                  </Text>
+                                  <TextInput
+                                    style={styles.input}
+                                    keyboardType="number-pad"
+                                    value={directDraft.affectedPeople}
+                                    onChangeText={(value) =>
+                                      updateDirectNeedDraft(
+                                        incident.id,
+                                        "affectedPeople",
+                                        value.replace(/[^0-9]/g, "").slice(0, 8)
+                                      )
+                                    }
+                                    placeholder="Verified people count"
+                                  />
+                                  <Text style={styles.directFieldHelp}>
+                                    Use the verified number of people covered by this relief need.
+                                  </Text>
+                                </View>
+                              </View>
+                            </View>
+                          </View>
+
+                          <View style={styles.directGroupCard}>
+                            <Text style={styles.directGroupNumber}>3</Text>
+                            <View style={styles.directGroupContent}>
+                              <Text style={styles.directGroupTitle}>
+                                Select What They Still Need
+                              </Text>
+                              <Text style={styles.directGroupHint}>
+                                Select only the material needs that still remain after the immediate emergency response. Choose a category, then enter the verified count. Unselected categories stay at 0.
+                              </Text>
+
+                              <Text style={styles.directSubheading}>
+                                PEOPLE-BASED NEEDS
+                              </Text>
+                              <View style={styles.directNeedChoiceRow}>
+                                {([
+                                  ["peopleNeedingFood", "Food", "people"],
+                                  ["peopleNeedingWater", "Water", "people"],
+                                  ["peopleNeedingClothing", "Clothing", "people"],
+                                  ["peopleNeedingMedical", "Medical", "people"],
+                                ] as [
+                                  DirectNeedCountField,
+                                  string,
+                                  "people" | "households"
+                                ][]).map(([field, label, basis]) => {
+                                  const selected =
+                                    Number(directDraft[field] || 0) > 0;
+
+                                  return (
+                                    <TouchableOpacity
+                                      key={field}
+                                      style={[
+                                        styles.directNeedChoice,
+                                        selected &&
+                                          styles.directNeedChoiceActive,
+                                      ]}
+                                      activeOpacity={0.84}
+                                      onPress={() =>
+                                        toggleDirectNeedCategory(
+                                          incident,
+                                          field,
+                                          basis
+                                        )
+                                      }
+                                    >
+                                      <Text
+                                        style={[
+                                          styles.directNeedChoiceMark,
+                                          selected &&
+                                            styles.directNeedChoiceMarkActive,
+                                        ]}
+                                      >
+                                        {selected ? "✓" : "+"}
+                                      </Text>
+                                      <Text
+                                        style={[
+                                          styles.directNeedChoiceText,
+                                          selected &&
+                                            styles.directNeedChoiceTextActive,
+                                        ]}
+                                      >
+                                        {label}
+                                      </Text>
+                                    </TouchableOpacity>
+                                  );
+                                })}
+                              </View>
+
+                              <Text style={styles.directSubheading}>
+                                HOUSEHOLD-BASED NEEDS
+                              </Text>
+                              <View style={styles.directNeedChoiceRow}>
+                                {([
+                                  [
+                                    "householdsNeedingShelter",
+                                    "Temporary shelter",
+                                    "households",
+                                  ],
+                                  [
+                                    "householdsNeedingHygiene",
+                                    "Hygiene kits",
+                                    "households",
+                                  ],
+                                ] as [
+                                  DirectNeedCountField,
+                                  string,
+                                  "people" | "households"
+                                ][]).map(([field, label, basis]) => {
+                                  const selected =
+                                    Number(directDraft[field] || 0) > 0;
+
+                                  return (
+                                    <TouchableOpacity
+                                      key={field}
+                                      style={[
+                                        styles.directNeedChoice,
+                                        selected &&
+                                          styles.directNeedChoiceActive,
+                                      ]}
+                                      activeOpacity={0.84}
+                                      onPress={() =>
+                                        toggleDirectNeedCategory(
+                                          incident,
+                                          field,
+                                          basis
+                                        )
+                                      }
+                                    >
+                                      <Text
+                                        style={[
+                                          styles.directNeedChoiceMark,
+                                          selected &&
+                                            styles.directNeedChoiceMarkActive,
+                                        ]}
+                                      >
+                                        {selected ? "✓" : "+"}
+                                      </Text>
+                                      <Text
+                                        style={[
+                                          styles.directNeedChoiceText,
+                                          selected &&
+                                            styles.directNeedChoiceTextActive,
+                                        ]}
+                                      >
+                                        {label}
+                                      </Text>
+                                    </TouchableOpacity>
+                                  );
+                                })}
+                              </View>
+
+                              {directNeedReviewRows.length > 0 && (
+                                <View style={styles.directSelectedNeedsPanel}>
+                                  <Text style={styles.directSelectedNeedsTitle}>
+                                    Enter verified counts
+                                  </Text>
+                                  <Text style={styles.directSelectedNeedsHint}>
+                                    Counts cannot exceed the verified people or household totals above.
+                                  </Text>
+
+                                  <View style={styles.directNeedGrid}>
+                                    {([
+                                      ["peopleNeedingFood", "Food", "people"],
+                                      ["peopleNeedingWater", "Water", "people"],
+                                      ["peopleNeedingClothing", "Clothing", "people"],
+                                      ["peopleNeedingMedical", "Medical", "people"],
+                                      [
+                                        "householdsNeedingShelter",
+                                        "Temporary shelter",
+                                        "households",
+                                      ],
+                                      [
+                                        "householdsNeedingHygiene",
+                                        "Hygiene kits",
+                                        "households",
+                                      ],
+                                    ] as [
+                                      DirectNeedCountField,
+                                      string,
+                                      "people" | "households"
+                                    ][])
+                                      .filter(
+                                        ([field]) =>
+                                          Number(directDraft[field] || 0) > 0
+                                      )
+                                      .map(([field, label, basis]) => (
+                                        <View
+                                          key={field}
+                                          style={styles.directNeedField}
+                                        >
+                                          <Text style={styles.directNeedLabel}>
+                                            {label}
+                                          </Text>
+                                          <Text style={styles.directNeedUnit}>
+                                            {basis === "people"
+                                              ? `people · max ${directAffectedPeople || 0}`
+                                              : `households · max ${
+                                                  directAffectedHouseholds || 0
+                                                }`}
+                                          </Text>
+                                          <TextInput
+                                            style={styles.directNeedInput}
+                                            keyboardType="number-pad"
+                                            value={String(
+                                              directDraft[field]
+                                            )}
+                                            onChangeText={(value) =>
+                                              updateDirectNeedDraft(
+                                                incident.id,
+                                                field,
+                                                value
+                                                  .replace(/[^0-9]/g, "")
+                                                  .slice(0, 8)
+                                              )
+                                            }
+                                            placeholder="0"
+                                          />
+                                        </View>
+                                      ))}
+                                  </View>
+                                </View>
+                              )}
+
+                              <Text style={styles.directFieldLabel}>
+                                Other verified material need (optional)
+                              </Text>
+                              <TextInput
+                                style={[styles.input, styles.directNotesInput]}
+                                multiline
+                                maxLength={1000}
+                                value={directDraft.otherNeedDescription}
+                                onChangeText={(value) =>
+                                  updateDirectNeedDraft(
+                                    incident.id,
+                                    "otherNeedDescription",
+                                    value
+                                  )
+                                }
+                                placeholder="e.g. Roofing sheets, lumber, bedding, baby supplies, transport support, or another verified material need"
+                              />
+                            </View>
+                          </View>
+
+                          <View style={styles.directGroupCard}>
+                            <Text style={styles.directGroupNumber}>4</Text>
+                            <View style={styles.directGroupContent}>
+                              <Text style={styles.directGroupTitle}>
+                                Confirm How the Need Was Verified
+                              </Text>
+                              <Text style={styles.directGroupHint}>
+                                Choose the official verification source, then record what the LGU or barangay actually confirmed. This becomes the audit basis used by Relief Operations.
+                              </Text>
+
+                              <FormSelect
+                                label="How was this need verified?"
+                                placeholder="Select verification method"
+                                value={directDraft.verificationMethod}
+                                options={VERIFICATION_METHOD_OPTIONS}
+                                onSelect={(value) => {
+                                  updateDirectNeedDraft(
+                                    incident.id,
+                                    "verificationMethod",
+                                    value
+                                  );
+                                  if (value !== "other") {
+                                    updateDirectNeedDraft(
+                                      incident.id,
+                                      "verificationMethodOther",
+                                      ""
+                                    );
+                                  }
+                                }}
+                              />
+
+                              {directDraft.verificationMethod === "other" && (
+                                <>
+                                  <Text style={styles.directFieldLabel}>
+                                    Other official verification method
+                                  </Text>
+                                  <TextInput
+                                    style={styles.input}
+                                    value={directDraft.verificationMethodOther}
+                                    maxLength={160}
+                                    onChangeText={(value) =>
+                                      updateDirectNeedDraft(
+                                        incident.id,
+                                        "verificationMethodOther",
+                                        value
+                                      )
+                                    }
+                                    placeholder="e.g. City engineering inspection"
+                                  />
+                                </>
+                              )}
+
+                              <Text style={styles.directFieldLabel}>
+                                LGU verification note *
+                              </Text>
+                              <TextInput
+                                style={[styles.input, styles.directNotesInput]}
+                                multiline
+                                maxLength={1200}
+                                value={directDraft.adminNote}
+                                onChangeText={(value) =>
+                                  updateDirectNeedDraft(
+                                    incident.id,
+                                    "adminNote",
+                                    value
+                                  )
+                                }
+                                placeholder={
+                                  directDraft.reliefScope === "household"
+                                    ? "e.g. The household was inspected after the fire. The roof and essential belongings were damaged, and the listed material needs remain after immediate response."
+                                    : "e.g. Barangay and LGU verification confirmed the affected households and the listed remaining needs after initial response."
+                                }
+                              />
+                            </View>
+                          </View>
+
+                          <View style={styles.directGroupCard}>
+                            <Text style={styles.directGroupNumber}>5</Text>
+                            <View style={styles.directGroupContent}>
+                              <Text style={styles.directGroupTitle}>
+                                Review & Send to Relief Operations
+                              </Text>
+                              <Text style={styles.directGroupHint}>
+                                Check the verified scope, needs, and verification method before creating the official Relief Operations record.
+                              </Text>
+
+                              <View style={styles.directReviewCard}>
+                                <View style={styles.directReviewHeader}>
+                                  <View style={{ flex: 1 }}>
+                                    <Text style={styles.directReviewEyebrow}>
+                                      READY FOR RELIEF OPERATIONS
+                                    </Text>
+                                    <Text style={styles.directReviewTitle}>
+                                      {directDraft.reliefScope === "community"
+                                        ? "Community Relief"
+                                        : "Household Relief"}{" "}
+                                      — {directDraft.barangay || "Barangay not set"}
+                                    </Text>
+                                  </View>
+                                  <View style={styles.directReviewBadge}>
+                                    <Text style={styles.directReviewBadgeText}>
+                                      LGU VERIFIED
+                                    </Text>
+                                  </View>
+                                </View>
+
+                                <View style={styles.directReviewStats}>
+                                  <View style={styles.directReviewStat}>
+                                    <Text style={styles.directReviewStatLabel}>
+                                      HOUSEHOLDS
+                                    </Text>
+                                    <Text style={styles.directReviewStatValue}>
+                                      {directAffectedHouseholds || "—"}
+                                    </Text>
+                                  </View>
+                                  <View style={styles.directReviewStat}>
+                                    <Text style={styles.directReviewStatLabel}>
+                                      PEOPLE
+                                    </Text>
+                                    <Text style={styles.directReviewStatValue}>
+                                      {directAffectedPeople || "—"}
+                                    </Text>
+                                  </View>
+                                  <View style={styles.directReviewStat}>
+                                    <Text style={styles.directReviewStatLabel}>
+                                      VERIFICATION
+                                    </Text>
+                                    <Text
+                                      style={styles.directReviewStatValueSmall}
+                                    >
+                                      {directVerificationLabel}
+                                    </Text>
+                                  </View>
+                                </View>
+
+                                <Text style={styles.directReviewSectionLabel}>
+                                  REMAINING NEEDS
+                                </Text>
+                                <View style={styles.directReviewNeedRow}>
+                                  {directNeedReviewRows.length > 0 ? (
+                                    directNeedReviewRows.map((item) => (
+                                      <View
+                                        key={item.key}
+                                        style={styles.directReviewNeedPill}
+                                      >
+                                        <Text
+                                          style={
+                                            styles.directReviewNeedPillText
+                                          }
+                                        >
+                                          {item.label}: {item.value} {item.unit}
+                                        </Text>
+                                      </View>
+                                    ))
+                                  ) : (
+                                    <Text style={styles.directReviewEmpty}>
+                                      No standard need category selected yet.
+                                    </Text>
+                                  )}
+                                  {!!directDraft.otherNeedDescription.trim() && (
+                                    <View style={styles.directReviewNeedPill}>
+                                      <Text
+                                        style={
+                                          styles.directReviewNeedPillText
+                                        }
+                                      >
+                                        Other:{" "}
+                                        {directDraft.otherNeedDescription.trim()}
+                                      </Text>
+                                    </View>
+                                  )}
+                                </View>
+
+                                <View style={styles.directReviewNotice}>
+                                  <Text style={styles.directReviewNoticeTitle}>
+                                    What happens next?
+                                  </Text>
+                                  <Text style={styles.directReviewNoticeText}>
+                                    This creates a verified relief need only. Relief Operations will check LGU inventory and resources first. Donation Support can be requested later only if a confirmed shortage remains.
+                                  </Text>
+                                </View>
+                              </View>
+                            </View>
+                          </View>
+
+                          <View style={styles.directActionBar}>
+                            <View style={{ flex: 1 }}>
+                              <Text style={styles.directActionTitle}>
+                                Ready to send this verified need to Relief Operations?
+                              </Text>
+                              <Text style={styles.directActionHint}>
+                                Relief Operations will check LGU stock first, allocate available resources, and open Donation Support only if a verified shortage remains.
+                              </Text>
+                            </View>
+                            <TouchableOpacity
+                              disabled={directAssessmentBusy}
+                              style={[
+                                styles.directSaveButton,
+                                directAssessmentBusy && styles.disabledButton,
+                              ]}
+                              onPress={() => createDirectBarangayNeed(incident)}
+                            >
+                              <Text style={styles.primaryButtonText}>
+                                {directAssessmentBusy
+                                  ? "Saving..."
+                                  : "Create Verified Relief Need"}
+                              </Text>
+                            </TouchableOpacity>
+                          </View>
+                        </View>
+                      )
+                    )}
+                  </View>
+                )}
+
+              {detailTab === "personnel" && (
+                <ReferenceVolunteerMatching
+                  incident={incident}
+                  verificationStatus={verificationStatus}
+                  caseBarangay={barangayDisplay(caseBarangayValue(incident))}
+                  eligibleCount={eligibleVolunteerCount}
+                  activeAssignments={activeAssignments}
+                  allAssignments={incidentAssignments}
+                  automaticStatus={incident.autoVolunteerDispatch?.state}
+                  onCancelAssignment={(item) => {
+                    const savedAssignment = activeAssignments.find(
+                      (assignment) => assignment.id === item.id,
+                    );
+                    if (savedAssignment && savedAssignment.status !== "completed") {
+                      cancelAssignment(savedAssignment);
+                    }
+                  }}
+                />
+              )}
+              {detailTab === "personnel" && (
+                <VolunteerEligibilityValidation
+                  rows={approvedVolunteers.map((volunteer) => {
+                    const result = volunteerEligibilityForCase(incident, volunteer);
+                    const incidentBarangay = normalizeBarangay(caseBarangayValue(incident));
+                    const local = Boolean(incidentBarangay) &&
+                      normalizeBarangay(volunteer.barangay) === incidentBarangay;
+                    return {
+                      id: volunteer.uid,
+                      name: volunteer.fullName,
+                      barangay: barangayDisplay(volunteer.barangay),
+                      eligible: result.eligible,
+                      reason: result.reason,
+                      inCaseBarangay: local,
+                    };
+                  })}
+                  loaded={volunteerDirectoryState !== "loading"}
+                  failed={volunteerDirectoryState === "error"}
+                  caseBarangay={barangayDisplay(caseBarangayValue(incident))}
+                  isValidated={dispatchReady}
+                />
+              )}
+              {detailTab === "personnel" && dispatchReady &&
+                ["validated", "assigned", "in_progress"].includes(incident.status) &&
+                eligibleVolunteerCount > 0 && volunteerSupportAvailable && (
+                <View style={styles.personnelReferenceLayout}>
+                  <View style={styles.personnelCleanCard}>
+                    <View style={styles.personnelCleanHeader}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.personnelCleanTitle}>Available Qualified Volunteers</Text>
+                        <Text style={styles.personnelCleanSubtitle}>
+                          Send an offer to an approved local Volunteer. A Volunteer must accept before starting a task.
+                        </Text>
+                      </View>
+                    </View>
+                    <View style={styles.personnelVolunteerToolbar}>
+                      <Text style={styles.personnelListHeading}>Local Volunteers</Text>
+                      <View style={styles.personnelVolunteerFilters}>
+                        <TextInput
+                          style={styles.personnelCompactFilter}
+                          value={skillFilter}
+                          placeholder="Search skills"
+                          placeholderTextColor="#94a3b8"
+                          onChangeText={value => { setSkillFilter(value); setVolunteerPage(1); }}
+                        />
+                        <TextInput
+                          style={styles.personnelCompactFilter}
+                          value={availabilityFilter}
+                          placeholder="Filter availability"
+                          placeholderTextColor="#94a3b8"
+                          onChangeText={value => { setAvailabilityFilter(value); setVolunteerPage(1); }}
+                        />
+                      </View>
+                    </View>
+                    {eligibleVolunteerCandidates.length === 0 ? (
+                      <Text style={styles.personnelCleanEmptyText}>
+                        No qualified Volunteers match the current search filters. Clear the filters to see available local Volunteers.
+                      </Text>
+                    ) : (
+                      <View style={styles.personnelCompactList}>
+                        <ListPagination page={Math.max(1, Math.min(volunteerPage, Math.ceil(eligibleVolunteerCandidates.length / 5) || 1))} total={eligibleVolunteerCandidates.length} pageSize={5} onChange={setVolunteerPage} />
+                          {pageFive(eligibleVolunteerCandidates, volunteerPage).map((volunteer) => {
+                            const key = `${incident.id}_${volunteer.uid}`;
+                            const eligibility = volunteerEligibilityForCase(incident, volunteer);
+                            const caseOpenForSupport = ["validated", "assigned", "in_progress"].includes(
+                              incident.status,
+                            );
+                            const disabled =
+                              !eligibility.eligible ||
+                              !volunteerSupportAvailable ||
+                              !caseOpenForSupport ||
+                              busyKey === key;
+                            const reasonLower = eligibility.reason.toLowerCase();
+                            const availabilityText = volunteer.availability.join(" ").toLowerCase();
+                            const offline = /offline|unavailable|off.?duty/.test(availabilityText);
+                            const availabilityLabel = reasonLower.includes("busy") ? "Busy" :
+                              !eligibility.eligible ? "Restricted" :
+                              offline ? "Offline · offer allowed" : "Eligible";
+
+                            return (
+                              <View key={volunteer.uid} style={styles.personnelCompactRow}>
+                                <View style={styles.volunteerAvatarCompact}>
+                                  <Text style={styles.volunteerAvatarCompactText}>
+                                    {volunteer.fullName
+                                      .split(" ")
+                                      .filter(Boolean)
+                                      .slice(0, 2)
+                                      .map((part) => part[0]?.toUpperCase())
+                                      .join("") || "V"}
+                                  </Text>
+                                </View>
+
+                                <View style={styles.personnelCompactIdentity}>
+                                  <Text style={styles.personnelCompactName}>{volunteer.fullName}</Text>
+                                  <Text style={styles.personnelCompactMeta}>
+                                    {barangayDisplay(volunteer.barangay)}
+                                  </Text>
+                                </View>
+
+                                <View style={styles.personnelCompactChipRowWide}>
+                                  <View
+                                    style={
+                                      availabilityLabel === "Eligible"
+                                        ? styles.personnelMiniBadgeGood
+                                        : availabilityLabel === "Busy"
+                                          ? styles.personnelMiniBadgeBusy
+                                          : styles.personnelMiniBadgeMuted
+                                    }
+                                  >
+                                    <Text
+                                      style={
+                                        availabilityLabel === "Eligible"
+                                          ? styles.personnelMiniBadgeGoodText
+                                          : availabilityLabel === "Busy"
+                                            ? styles.personnelMiniBadgeBusyText
+                                            : styles.personnelMiniBadgeMutedText
+                                      }
+                                    >
+                                      {availabilityLabel}
+                                    </Text>
+                                  </View>
+
+                                  {volunteer.skills.slice(0, 2).map((skill) => (
+                                    <View
+                                      key={`${volunteer.uid}_${skill}`}
+                                      style={styles.personnelSkillPillBlue}
+                                    >
+                                      <Text style={styles.personnelSkillPillBlueText}>{skill}</Text>
+                                    </View>
+                                  ))}
+                                </View>
+
+                                <TouchableOpacity
+                                  disabled={disabled}
+                                  style={[
+                                    styles.personnelAssignCompact,
+                                    disabled && styles.personnelAssignCompactDisabled,
+                                  ]}
+                                  onPress={() => assignVolunteerToCase(incident, volunteer)}
+                                >
+                                  <Text
+                                    style={[
+                                      styles.personnelAssignCompactText,
+                                      disabled && styles.personnelAssignCompactTextDisabled,
+                                    ]}
+                                  >
+                                    {busyKey === key
+                                      ? "Sending…"
+                                      : eligibility.eligible && volunteerSupportAvailable && caseOpenForSupport
+                                        ? "Offer Task"
+                                        : "Not Eligible"}
+                                  </Text>
+                                </TouchableOpacity>
+                              </View>
+                            );
+                          })}
+                      </View>
+                    )}
+                  </View>
                 </View>
               )}
 
               {detailTab === "history" && (
-                <View style={styles.historyPanel}>
-                  <View style={styles.sectionHeader}>
-                    <View>
-                      <Text style={styles.sectionEyebrow}>CASE HISTORY</Text>
-                      <Text style={styles.sectionTitle}>Emergency Activity Timeline</Text>
-                    </View>
-                  </View>
-
-                  {[
-                    ["Report submitted", incident.createdAt],
-                    ["Report validated", incident.validatedAt],
-                    ["Responder assigned / response updated", incident.assignedAt],
-                    ["Case resolved", incident.resolvedAt],
-                    ["Case closed", incident.closedAt],
-                  ].filter(([, when]) => Boolean(when)).map(([label, when], index) => (
-                    <View key={`${label}-${index}`} style={styles.historyRow}>
-                      <View style={styles.historyDot} />
-                      <View style={{ flex: 1 }}>
-                        <Text style={styles.historyTitle}>{String(label)}</Text>
-                        <Text style={styles.historyTime}>{formatDate(when)}</Text>
-                      </View>
-                    </View>
-                  ))}
-
-                  {incidentAssignments.length > 0 && (
-                    <View style={styles.historyAssignments}>
-                      <Text style={styles.overviewLabel}>Volunteer support history</Text>
-                      <ListPagination page={Math.max(1, Math.min(historyAssignmentPage, Math.ceil(incidentAssignments.length / 5) || 1))} total={incidentAssignments.length} pageSize={5} onChange={setHistoryAssignmentPage} />
-                      {pageFive(incidentAssignments, historyAssignmentPage).map((assignment) => (
-                        <View key={assignment.id} style={styles.historyAssignmentRow}>
-                          <Text style={styles.historyAssignmentName}>
-                            {assignment.volunteerName || "Volunteer"}
-                          </Text>
-                          <Text style={styles.historyAssignmentStatus}>
-                            {labelOfStatus(String(assignment.status))}
-                          </Text>
-                        </View>
-                      ))}
-                    </View>
-                  )}
-                </View>
+                <ReferenceHistory
+                  incident={incident}
+                  assignments={incidentAssignments}
+                  formatDate={formatDate}
+                />
               )}
-
 
               {false && incidentFieldReports.length > 0 && (
                 <View style={styles.fieldReportsSection}>
@@ -4796,6 +6298,7 @@ export default function AdminCases() {
         })}
 
           </View>
+          )}
         </View>
       )}
     </ScrollView>
@@ -4929,132 +6432,120 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
   denied: {
-    fontSize: vsType.size.section, fontFamily: vsType.family,
-    fontWeight: "800",
+    fontSize: 18,
+    fontWeight: "900",
     color: "#b42318",
   },
 
-  pageHeader: {
-    width: "100%",
+  emergencyPageIntro: {
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: "#E0ECE6",
+    borderRadius: 16,
+    paddingHorizontal: 19,
+    paddingVertical: 15,
+    marginBottom: 11,
     flexDirection: "row",
-    alignItems: "stretch",
-    gap: 12,
-    marginBottom: 12,
+    flexWrap: "wrap",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: 15,
+  },
+  emergencyPageIntroText: {
+    flexGrow: 1,
+    flexBasis: 325,
+  },
+  emergencyPageEyebrow: {
+    color: "#078566",
+    fontSize: 9,
+    letterSpacing: 1,
+    fontWeight: "900",
+  },
+  emergencyPageHeading: {
+    color: "#123D32",
+    fontSize: 24,
+    lineHeight: 30,
+    fontWeight: "900",
+    marginTop: 4,
+  },
+  emergencyPageSubheading: {
+    color: "#5E776B",
+    fontSize: 11.5,
+    marginTop: 4,
+    lineHeight: 18,
+    maxWidth: 750,
+  },
+  pageHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 16,
+    marginBottom: 14,
   },
   eyebrow: {
     color: "#078f82",
-    fontSize: vsType.size.caption, fontFamily: vsType.family,
+    fontSize: 11,
     fontWeight: "800",
     letterSpacing: 1.2,
   },
   title: {
     marginTop: 2,
     color: "#0f172a",
-    fontSize: designUi.type.page.fontSize,
-    fontWeight: designUi.type.page.fontWeight, lineHeight: designUi.type.page.lineHeight,},
+    fontSize: 28,
+    fontWeight: "700",
+  },
   subtitle: {
     marginTop: 4,
     maxWidth: 760,
     color: "#64748b",
-    fontSize: designUi.type.body.fontSize,
-    lineHeight: designUi.type.body.lineHeight, fontWeight: designUi.type.body.fontWeight,},
+    fontSize: 13.5,
+    lineHeight: 20,
+  },
   liveSummary: {
     minWidth: 108,
-    minHeight: 46,
-    backgroundColor: "#f0faf5",
+    backgroundColor: "#ffffff",
     borderWidth: 1,
-    borderColor: "#c7e9d7",
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    flexDirection: "row",
-    justifyContent: "center",
+    borderColor: "#dfe7ee",
+    borderRadius: 15,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
     alignItems: "center",
-    gap: 7,
   },
   liveSummaryNumber: {
-    color: "#086b54",
-    fontSize: vsType.size.section, fontFamily: vsType.family,
-    fontWeight: "800",
+    color: "#0f172a",
+    fontSize: 24,
+    fontWeight: "900",
   },
   liveSummaryLabel: {
     marginTop: 2,
     color: "#64748b",
-    fontSize: designUi.type.label.fontSize,
-    fontWeight: designUi.type.label.fontWeight, lineHeight: designUi.type.label.lineHeight,},
+    fontSize: 10,
+    fontWeight: "800",
+  },
 
   filterCard: {
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "#ffffff",
     borderWidth: 1,
-    borderColor: "#DAE8DF",
+    borderColor: "#dfe7ee",
     borderRadius: 12,
-    paddingHorizontal: 14,
+    paddingHorizontal: 12,
     paddingVertical: 10,
     marginBottom: 12,
-    gap: 9,
-    minWidth: 0,
-  },
-  filterToolbar: {
     flexDirection: "row",
+    flexWrap: "wrap",
     alignItems: "center",
     justifyContent: "space-between",
-    flexWrap: "wrap",
-    gap: 10,
-  },
-  filterToolbarCopy: {
-    flexGrow: 1,
-    flexBasis: 190,
-    minWidth: 0,
-  },
-  filterToolbarTitle: {
-    color: "#15372c",
-    fontSize: vsType.size.label, fontFamily: vsType.family,
-    fontWeight: "800",
-  },
-  filterToolbarSubtitle: {
-    color: "#64748b",
-    marginTop: 3,
-    fontSize: vsType.size.caption, fontFamily: vsType.family,
-  },
-  filterToggle: {
-    borderRadius: 9,
-    borderWidth: 1,
-    borderColor: "#b7ddca",
-    backgroundColor: "#edf9f2",
-    paddingHorizontal: 14,
-    minHeight: 40,
-    justifyContent: "center",
-  },
-  filterToggleText: {
-    color: "#076b54",
-    fontSize: vsType.size.meta, fontFamily: vsType.family,
-    fontWeight: "800",
-  },
-  filterHint: {
-    color: "#65766d",
-    fontSize: vsType.size.caption, fontFamily: vsType.family,
-  },
-  filterContent: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 16,
-    borderTopWidth: 1,
-    borderTopColor: "#eef1f2",
-    paddingTop: 12,
+    gap: 14,
   },
   filterGroup: {
-    flexGrow: 1,
-    flexShrink: 1,
-    flexBasis: 295,
-    minWidth: 0,
-    maxWidth: "100%",
     gap: 7,
   },
   filterLabel: {
     color: "#94a3b8",
-    fontSize: designUi.type.label.fontSize,
-    fontWeight: designUi.type.label.fontWeight,
-    letterSpacing: 1, lineHeight: designUi.type.label.lineHeight,},
+    fontSize: 10,
+    fontWeight: "900",
+    letterSpacing: 1,
+  },
   pillRow: {
     flexDirection: "row",
     flexWrap: "wrap",
@@ -5069,30 +6560,25 @@ const styles = StyleSheet.create({
     borderRadius: 999,
   },
   pillActive: {
-    borderColor: "#176B52",
-    backgroundColor: "#176B52",
+    borderColor: "#078f82",
+    backgroundColor: "#078f82",
   },
   pillText: {
     color: "#475569",
-    fontSize: vsType.size.micro, fontFamily: vsType.family,
-    fontWeight: "800",
+    fontSize: 10,
+    fontWeight: "900",
   },
   pillTextActive: {
     color: "#ffffff",
   },
 
   headerTools: {
-    flex: 1,
-    minWidth: 0,
     flexDirection: "row",
-    flexWrap: "wrap",
-    alignItems: "stretch",
-    gap: 10,
+    alignItems: "center",
+    gap: 12,
   },
   searchBox: {
-    flexGrow: 1,
-    flexBasis: 260,
-    minWidth: 0,
+    width: 300,
     minHeight: 46,
     flexDirection: "row",
     alignItems: "center",
@@ -5105,14 +6591,14 @@ const styles = StyleSheet.create({
   },
   searchIcon: {
     color: "#64748b",
-    fontSize: vsType.size.subheading, fontFamily: vsType.family,
+    fontSize: 20,
     fontWeight: "700",
   },
   searchInput: {
     flex: 1,
     minWidth: 0,
     color: "#0f172a",
-    fontSize: vsType.size.label, fontFamily: vsType.family,
+    fontSize: 13,
   },
 
   hiddenSection: {
@@ -5139,15 +6625,384 @@ const styles = StyleSheet.create({
     borderBottomColor: "transparent",
   },
   detailTabButtonActive: {
-    borderBottomColor: "#17805E",
+    borderBottomColor: "#08856C",
   },
   detailTabText: {
     color: "#64748b",
-    fontSize: vsType.size.caption, fontFamily: vsType.family,
-    fontWeight: "800",
+    fontSize: 12,
+    fontWeight: "700",
+    lineHeight: 18,
   },
   detailTabTextActive: {
-    color: "#106848",
+    color: "#08765B",
+  },
+  // Focused, low-clutter Admin overview. The map lives in its dedicated route.
+  cleanOverviewSection: {
+    paddingHorizontal: 14,
+    paddingTop: 13,
+    gap: 11,
+  },
+  cleanOverviewHeading: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+    paddingHorizontal: 2,
+  },
+  cleanOverviewKicker: {
+    color: "#0F766E",
+    fontSize: 9,
+    fontWeight: "900",
+    letterSpacing: 1,
+  },
+  cleanOverviewTitle: {
+    marginTop: 3,
+    color: "#123D32",
+    fontSize: 17,
+    fontWeight: "900",
+  },
+  cleanOverviewSubtitle: {
+    marginTop: 4,
+    maxWidth: 520,
+    fontSize: 11,
+    lineHeight: 17,
+    color: "#64748B",
+  },
+  cleanEvidenceShortcut: {
+    minHeight: 35,
+    justifyContent: "center",
+    paddingHorizontal: 13,
+    backgroundColor: "#F3F9F6",
+    borderWidth: 1,
+    borderColor: "#B8DACC",
+    borderRadius: 10,
+  },
+  cleanEvidenceShortcutText: {
+    fontWeight: "800",
+    fontSize: 11,
+    color: "#0B6D55",
+  },
+  cleanOverviewGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 12,
+    alignItems: "stretch",
+  },
+  cleanOverviewCard: {
+    borderWidth: 1,
+    borderColor: "#DEE9E4",
+    borderRadius: 13,
+    padding: 13,
+    backgroundColor: "#FFFFFF",
+    minHeight: 260,
+    minWidth: 185,
+  },
+  cleanOverviewIncident: {
+    flexGrow: 1.4,
+    flexBasis: 325,
+  },
+  cleanOverviewResident: {
+    flexGrow: 1,
+    flexBasis: 265,
+  },
+  cleanOverviewCardHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 9,
+    marginBottom: 13,
+  },
+  cleanOverviewCardIcon: {
+    color: "#0D896D",
+    fontSize: 17,
+    fontWeight: "900",
+  },
+  cleanOverviewCardTitle: {
+    color: "#173D32",
+    fontSize: 14,
+    fontWeight: "900",
+  },
+  cleanOverviewFieldLabel: {
+    color: "#748A84",
+    fontSize: 9,
+    letterSpacing: 0.5,
+    fontWeight: "900",
+    marginTop: 8,
+    marginBottom: 5,
+  },
+  cleanOverviewFieldValue: {
+    color: "#334155",
+    fontSize: 11.5,
+    lineHeight: 17,
+    fontWeight: "600",
+  },
+  cleanOverviewDescription: {
+    color: "#334155",
+    fontSize: 12,
+    lineHeight: 19,
+  },
+  cleanOverviewSeparator: {
+    marginTop: 15,
+    marginBottom: 6,
+    height: 1,
+    backgroundColor: "#E7EEEB",
+  },
+  cleanOverviewResidentName: {
+    color: "#102E26",
+    fontSize: 15,
+    fontWeight: "900",
+  },
+  cleanAffectedRow: {
+    marginTop: 13,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  cleanAffectedCount: {
+    color: "#124B3B",
+    fontWeight: "900",
+    fontSize: 17,
+  },
+  cleanOverviewStatusBar: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 16,
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "#DCE9E4",
+    borderRadius: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    backgroundColor: "#F5FAF7",
+  },
+  cleanStatusItem: {
+    flexGrow: 1,
+    flexBasis: 180,
+    minWidth: 145,
+  },
+  cleanStatusValue: {
+    fontWeight: "800",
+    fontSize: 12,
+    color: "#214B3F",
+  },
+  cleanAssignmentShortcut: {
+    minHeight: 35,
+    paddingHorizontal: 11,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderRadius: 9,
+    borderColor: "#C2DFD2",
+    backgroundColor: "#FFFFFF",
+  },
+  cleanAssignmentShortcutText: {
+    color: "#08765B",
+    fontSize: 11,
+    fontWeight: "800",
+  },
+  caseListPagination: {
+    borderTopWidth: 1,
+    borderTopColor: "#EEF3F0",
+    paddingHorizontal: 9,
+    paddingVertical: 8,
+    backgroundColor: "#FBFDFC",
+  },
+  caseProgressPanel: {
+    borderTopWidth: 1,
+    borderTopColor: "#E3ECE8",
+    paddingHorizontal: 14,
+    paddingTop: 11,
+    paddingBottom: 10,
+    backgroundColor: "#FAFCFB",
+  },
+  caseProgressCaptionRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: 10,
+    marginBottom: 9,
+  },
+  caseProgressCaption: {
+    color: "#607A6C",
+    fontSize: 9,
+    fontWeight: "900",
+    letterSpacing: 0.7,
+  },
+  caseProgressCreated: {
+    color: "#7A8D83",
+    fontSize: 9.5,
+    fontWeight: "600",
+  },
+  caseProgressRow: {
+    flexDirection: "row",
+    gap: 6,
+    paddingRight: 2,
+  },
+  caseProgressStage: {
+    minWidth: 95,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingVertical: 7,
+    paddingHorizontal: 9,
+    borderRadius: 9,
+    backgroundColor: "#F0F4F2",
+  },
+  caseProgressCurrent: {
+    backgroundColor: "#E5F6ED",
+    borderWidth: 1,
+    borderColor: "#A6D6BC",
+  },
+  caseProgressDone: {
+    backgroundColor: "#EDF7F2",
+  },
+  caseProgressDot: {
+    width: 20,
+    height: 20,
+    borderRadius: 99,
+    backgroundColor: "#DFE7E3",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  caseProgressDotActive: {
+    backgroundColor: "#078C69",
+  },
+  caseProgressDotText: {
+    color: "#71857A",
+    fontSize: 10,
+    fontWeight: "900",
+  },
+  caseProgressDotTextActive: {
+    color: "#FFFFFF",
+  },
+  caseProgressName: {
+    color: "#72877B",
+    fontSize: 10,
+    fontWeight: "700",
+  },
+  caseProgressNameActive: {
+    color: "#155240",
+    fontWeight: "900",
+  },
+  casePrimaryActionBar: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    alignItems: "center",
+    gap: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 11,
+    backgroundColor: "#FFFFFF",
+  },
+  casePrimaryValidate: {
+    minHeight: 40,
+    justifyContent: "center",
+    paddingHorizontal: 17,
+    borderRadius: 9,
+    backgroundColor: "#087A56",
+  },
+  casePrimaryValidateText: {
+    color: "#FFFFFF",
+    fontSize: 12,
+    fontWeight: "800",
+  },
+  casePrimaryNeutral: {
+    minHeight: 40,
+    justifyContent: "center",
+    paddingHorizontal: 14,
+    borderRadius: 9,
+    backgroundColor: "#F8FCFA",
+    borderWidth: 1,
+    borderColor: "#B4D6C6",
+  },
+  casePrimaryNeutralText: {
+    color: "#116B51",
+    fontSize: 12,
+    fontWeight: "800",
+  },
+  casePrimaryReject: {
+    minHeight: 40,
+    justifyContent: "center",
+    paddingHorizontal: 14,
+    borderRadius: 9,
+    backgroundColor: "#FFF8F7",
+    borderWidth: 1,
+    borderColor: "#E7ADA8",
+  },
+  casePrimaryRejectText: {
+    color: "#B42318",
+    fontSize: 12,
+    fontWeight: "800",
+  },
+  casePrimaryEmergency: {
+    minHeight: 40,
+    justifyContent: "center",
+    paddingHorizontal: 14,
+    borderRadius: 9,
+    backgroundColor: "#FFF5F4",
+    borderWidth: 1,
+    borderColor: "#D9958F",
+  },
+  casePrimaryEmergencyText: {
+    color: "#B42318",
+    fontSize: 12,
+    fontWeight: "800",
+  },
+  caseActionHint: {
+    paddingHorizontal: 14,
+    paddingBottom: 9,
+    backgroundColor: "#FFFFFF",
+    fontSize: 9.5,
+    color: "#6B7C74",
+  },
+  completeResidentCard: {
+    flexGrow: 1,
+    flexBasis: 208,
+  },
+  completeIncidentCard: {
+    flexGrow: 1.06,
+    flexBasis: 220,
+  },
+  completeStatusCard: {
+    flexGrow: 1,
+    flexBasis: 200,
+  },
+  completeStatusText: {
+    color: "#195944",
+    fontWeight: "900",
+    fontSize: 12,
+    marginBottom: 6,
+  },
+  completeSeverityBadge: {
+    alignSelf: "flex-start",
+    marginTop: 5,
+    marginBottom: 3,
+  },
+  completeCriticalBanner: {
+    marginHorizontal: 14,
+    marginTop: 10,
+    borderWidth: 1,
+    borderColor: "#EAC2BD",
+    borderRadius: 12,
+    backgroundColor: "#FFF5F4",
+    paddingHorizontal: 15,
+    paddingVertical: 12,
+  },
+  completeCriticalTitle: {
+    color: "#A7231B",
+    fontWeight: "900",
+    fontSize: 12,
+  },
+  completeCriticalText: {
+    marginTop: 5,
+    color: "#884841",
+    fontSize: 10.5,
+    lineHeight: 16,
+  },
+  locationActionDescription: {
+    marginTop: 7,
+    fontSize: 10.5,
+    lineHeight: 16,
+    color: "#497D67",
   },
   overviewDashboard: {
     flexDirection: "row",
@@ -5173,23 +7028,24 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   overviewCardIcon: {
-    color: "#17765A",
-    fontSize: vsType.size.bodyStrong, fontFamily: vsType.family,
-    fontWeight: "800",
+    color: "#2563eb",
+    fontSize: 15,
+    fontWeight: "900",
   },
   overviewCardTitle: {
     color: "#0f172a",
-    fontSize: designUi.type.section.fontSize,
-    fontWeight: designUi.type.section.fontWeight, lineHeight: designUi.type.section.lineHeight,},
+    fontSize: 12.5,
+    fontWeight: "900",
+  },
   overviewPrimary: {
     color: "#0f172a",
-    fontSize: vsType.size.label, fontFamily: vsType.family,
-    fontWeight: "800",
+    fontSize: 13,
+    fontWeight: "900",
   },
   overviewLine: {
     marginTop: 5,
     color: "#64748b",
-    fontSize: vsType.size.caption, fontFamily: vsType.family,
+    fontSize: 10.5,
     lineHeight: 16,
   },
   overviewVerifiedPill: {
@@ -5202,7 +7058,7 @@ const styles = StyleSheet.create({
   },
   overviewVerifiedText: {
     color: "#0f766e",
-    fontSize: vsType.size.micro, fontFamily: vsType.family,
+    fontSize: 10,
     fontWeight: "800",
   },
   statusTimelineRow: {
@@ -5228,7 +7084,7 @@ const styles = StyleSheet.create({
   },
   statusTimelineLabel: {
     color: "#64748b",
-    fontSize: vsType.size.caption, fontFamily: vsType.family,
+    fontSize: 10.5,
     fontWeight: "700",
   },
   statusTimelineLabelDone: {
@@ -5238,7 +7094,7 @@ const styles = StyleSheet.create({
   statusTimelineTime: {
     marginTop: 1,
     color: "#94a3b8",
-    fontSize: vsType.size.micro, fontFamily: vsType.family,
+    fontSize: 10,
   },
   priorityRow: {
     flexDirection: "row",
@@ -5248,16 +7104,17 @@ const styles = StyleSheet.create({
   },
   priorityPeople: {
     color: "#334155",
-    fontSize: vsType.size.caption, fontFamily: vsType.family,
+    fontSize: 10.5,
     fontWeight: "800",
   },
   overviewLabel: {
     marginTop: 11,
     color: "#64748b",
-    fontSize: designUi.type.meta.fontSize,
-    fontWeight: designUi.type.meta.fontWeight,
+    fontSize: 10,
+    fontWeight: "900",
     textTransform: "uppercase",
-    letterSpacing: 0.5, lineHeight: designUi.type.meta.lineHeight,},
+    letterSpacing: 0.5,
+  },
   needChipRow: {
     marginTop: 7,
     flexDirection: "row",
@@ -5272,13 +7129,13 @@ const styles = StyleSheet.create({
   },
   needChipText: {
     color: "#475569",
-    fontSize: vsType.size.micro, fontFamily: vsType.family,
+    fontSize: 10,
     fontWeight: "700",
   },
   overviewDescription: {
     marginTop: 6,
     color: "#475569",
-    fontSize: vsType.size.caption, fontFamily: vsType.family,
+    fontSize: 10.5,
     lineHeight: 16,
   },
   assignLguButton: {
@@ -5296,18 +7153,18 @@ const styles = StyleSheet.create({
   },
   assignLguButtonIcon: {
     color: "#ffffff",
-    fontSize: vsType.size.section, fontFamily: vsType.family,
-    fontWeight: "800",
+    fontSize: 18,
+    fontWeight: "900",
   },
   assignLguButtonTitle: {
     color: "#ffffff",
-    fontSize: vsType.size.label, fontFamily: vsType.family,
-    fontWeight: "800",
+    fontSize: 12.5,
+    fontWeight: "900",
   },
   assignLguButtonSub: {
     marginTop: 2,
     color: "#ccfbf1",
-    fontSize: vsType.size.micro, fontFamily: vsType.family,
+    fontSize: 10,
   },
   personnelCleanWorkspace: {
     gap: 12,
@@ -5336,7 +7193,7 @@ const styles = StyleSheet.create({
   },
   personnelCleanCard: {
     width: "100%",
-    padding: 18,
+    padding: 8,
     borderWidth: 1,
     borderColor: "#dfe7ee",
     borderRadius: 10,
@@ -5375,8 +7232,8 @@ const styles = StyleSheet.create({
   },
   personnelSectionIconText: {
     color: "#ffffff",
-    fontSize: vsType.size.body, fontFamily: vsType.family,
-    fontWeight: "800",
+    fontSize: 14,
+    fontWeight: "900",
   },
   personnelCleanTitleRow: {
     flexDirection: "row",
@@ -5385,15 +7242,16 @@ const styles = StyleSheet.create({
     gap: 7,
   },
   personnelCleanTitle: {
-    color: "#0f172a",
-    fontSize: vsType.size.card, fontFamily: vsType.family,
+    color: "#14233B",
+    fontSize: 14,
+    lineHeight: 20,
     fontWeight: "800",
   },
   personnelCleanSubtitle: {
-    marginTop: 6,
-    color: "#64748b",
-    fontSize: vsType.size.meta, fontFamily: vsType.family,
-    lineHeight: 19,
+    marginTop: 4,
+    color: "#64748B",
+    fontSize: 11,
+    lineHeight: 17,
   },
   personnelCleanStatusPill: {
     paddingHorizontal: 10,
@@ -5406,8 +7264,8 @@ const styles = StyleSheet.create({
   },
   personnelCleanStatusText: {
     color: "#047857",
-    fontSize: vsType.size.caption, fontFamily: vsType.family,
-    fontWeight: "800",
+    fontSize: 10.5,
+    fontWeight: "900",
   },
   personnelCleanStatusTextMuted: {
     color: "#64748b",
@@ -5437,8 +7295,8 @@ const styles = StyleSheet.create({
   },
   personnelAvatarCompactText: {
     color: "#1d4ed8",
-    fontSize: vsType.size.caption, fontFamily: vsType.family,
-    fontWeight: "800",
+    fontSize: 10.5,
+    fontWeight: "900",
   },
   volunteerAvatarCompact: {
     width: 32,
@@ -5451,8 +7309,8 @@ const styles = StyleSheet.create({
   },
   volunteerAvatarCompactText: {
     color: "#6d28d9",
-    fontSize: vsType.size.caption, fontFamily: vsType.family,
-    fontWeight: "800",
+    fontSize: 10.5,
+    fontWeight: "900",
   },
   personnelCompactIdentity: {
     flex: 1,
@@ -5466,15 +7324,15 @@ const styles = StyleSheet.create({
     gap: 5,
   },
   personnelCompactName: {
-    color: "#0f172a",
-    fontSize: vsType.size.caption, fontFamily: vsType.family,
+    color: "#14233B",
+    fontSize: 12,
     fontWeight: "800",
     textAlign: "left",
   },
   personnelCompactMeta: {
     marginTop: 2,
     color: "#64748b",
-    fontSize: vsType.size.caption, fontFamily: vsType.family,
+    fontSize: 10.5,
     lineHeight: 11,
     textAlign: "left",
   },
@@ -5503,8 +7361,8 @@ const styles = StyleSheet.create({
   },
   personnelMiniBadgeGoodText: {
     color: "#087f5b",
-    fontSize: vsType.size.caption, fontFamily: vsType.family,
-    fontWeight: "800",
+    fontSize: 10.5,
+    fontWeight: "900",
   },
   personnelMiniBadgeBusy: {
     paddingHorizontal: 7,
@@ -5514,8 +7372,8 @@ const styles = StyleSheet.create({
   },
   personnelMiniBadgeBusyText: {
     color: "#c2410c",
-    fontSize: vsType.size.caption, fontFamily: vsType.family,
-    fontWeight: "800",
+    fontSize: 10.5,
+    fontWeight: "900",
   },
   personnelMiniBadgeMuted: {
     paddingHorizontal: 7,
@@ -5525,8 +7383,8 @@ const styles = StyleSheet.create({
   },
   personnelMiniBadgeMutedText: {
     color: "#64748b",
-    fontSize: vsType.size.caption, fontFamily: vsType.family,
-    fontWeight: "800",
+    fontSize: 10.5,
+    fontWeight: "900",
   },
   personnelMiniBadgeBlue: {
     paddingHorizontal: 6,
@@ -5536,8 +7394,8 @@ const styles = StyleSheet.create({
   },
   personnelMiniBadgeBlueText: {
     color: "#4338ca",
-    fontSize: vsType.size.caption, fontFamily: vsType.family,
-    fontWeight: "800",
+    fontSize: 10.5,
+    fontWeight: "900",
   },
   personnelSkillPill: {
     paddingHorizontal: 7,
@@ -5547,7 +7405,7 @@ const styles = StyleSheet.create({
   },
   personnelSkillPillText: {
     color: "#475569",
-    fontSize: vsType.size.caption, fontFamily: vsType.family,
+    fontSize: 10.5,
     fontWeight: "800",
   },
   personnelSkillPillBlue: {
@@ -5558,7 +7416,7 @@ const styles = StyleSheet.create({
   },
   personnelSkillPillBlueText: {
     color: "#2563eb",
-    fontSize: vsType.size.caption, fontFamily: vsType.family,
+    fontSize: 10.5,
     fontWeight: "800",
   },
   personnelPrimaryAction: {
@@ -5573,8 +7431,8 @@ const styles = StyleSheet.create({
   },
   personnelPrimaryActionText: {
     color: "#ffffff",
-    fontSize: vsType.size.caption, fontFamily: vsType.family,
-    fontWeight: "800",
+    fontSize: 10.5,
+    fontWeight: "900",
   },
   personnelCleanEmptyRow: {
     marginTop: 9,
@@ -5585,13 +7443,13 @@ const styles = StyleSheet.create({
   },
   personnelCleanEmptyTitle: {
     color: "#334155",
-    fontSize: vsType.size.caption, fontFamily: vsType.family,
-    fontWeight: "800",
+    fontSize: 10.5,
+    fontWeight: "900",
   },
   personnelCleanEmptyText: {
     marginTop: 3,
     color: "#64748b",
-    fontSize: vsType.size.caption, fontFamily: vsType.family,
+    fontSize: 10.5,
     lineHeight: 13,
   },
   personnelCountBadge: {
@@ -5602,8 +7460,8 @@ const styles = StyleSheet.create({
   },
   personnelCountBadgeText: {
     color: "#4338ca",
-    fontSize: vsType.size.caption, fontFamily: vsType.family,
-    fontWeight: "800",
+    fontSize: 10.5,
+    fontWeight: "900",
   },
   personnelCountBadgePurple: {
     paddingHorizontal: 7,
@@ -5613,8 +7471,8 @@ const styles = StyleSheet.create({
   },
   personnelCountBadgePurpleText: {
     color: "#7e22ce",
-    fontSize: vsType.size.caption, fontFamily: vsType.family,
-    fontWeight: "800",
+    fontSize: 10.5,
+    fontWeight: "900",
   },
   personnelCountBadgeMuted: {
     minWidth: 24,
@@ -5626,8 +7484,8 @@ const styles = StyleSheet.create({
   },
   personnelCountBadgeMutedText: {
     color: "#64748b",
-    fontSize: vsType.size.caption, fontFamily: vsType.family,
-    fontWeight: "800",
+    fontSize: 10.5,
+    fontWeight: "900",
   },
   personnelRefreshCompact: {
     minHeight: 31,
@@ -5641,8 +7499,8 @@ const styles = StyleSheet.create({
   },
   personnelRefreshCompactText: {
     color: "#0f766e",
-    fontSize: vsType.size.caption, fontFamily: vsType.family,
-    fontWeight: "800",
+    fontSize: 10.5,
+    fontWeight: "900",
   },
   personnelNeedStrip: {
     marginTop: 9,
@@ -5655,83 +7513,24 @@ const styles = StyleSheet.create({
   },
   personnelNeedLabel: {
     color: "#94a3b8",
-    fontSize: vsType.size.caption, fontFamily: vsType.family,
-    fontWeight: "800",
+    fontSize: 10.5,
+    fontWeight: "900",
     letterSpacing: 0.55,
   },
   personnelNeedValue: {
     marginTop: 3,
     color: "#1e3a8a",
-    fontSize: vsType.size.caption, fontFamily: vsType.family,
-    fontWeight: "800",
+    fontSize: 10.5,
+    fontWeight: "900",
   },
   personnelCompactList: {
-    marginTop: 12,
+    marginTop: 7,
     width: "100%",
     borderWidth: 1,
-    borderColor: "#dde8e3",
-    borderRadius: 12,
+    borderColor: "#edf1f5",
+    borderRadius: 8,
     overflow: "hidden",
     backgroundColor: "#ffffff",
-  },
-  volunteerRosterCard: {
-    width: "100%",
-    paddingHorizontal: 16,
-    paddingVertical: 15,
-    borderBottomWidth: 1,
-    borderBottomColor: "#e2ebe8",
-    backgroundColor: "#ffffff",
-    gap: 10,
-  },
-  volunteerRosterTop: {
-    width: "100%",
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    flexWrap: "wrap",
-  },
-  volunteerRosterIdentity: {
-    flex: 1,
-    minWidth: 165,
-  },
-  volunteerRosterName: {
-    color: "#12372c",
-    fontSize: vsType.size.body, fontFamily: vsType.family,
-    fontWeight: "800",
-    lineHeight: 20,
-  },
-  volunteerRosterMeta: {
-    marginTop: 4,
-    color: "#64748b",
-    fontSize: vsType.size.meta, fontFamily: vsType.family,
-    lineHeight: 17,
-  },
-  volunteerRosterAction: {
-    minWidth: 130,
-    minHeight: 40,
-    justifyContent: "center",
-    alignItems: "center",
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    backgroundColor: "#087e70",
-  },
-  volunteerRosterActionText: {
-    color: "#ffffff",
-    fontSize: vsType.size.meta, fontFamily: vsType.family,
-    fontWeight: "800",
-    textAlign: "center",
-  },
-  volunteerRosterTags: {
-    flexDirection: "row",
-    alignItems: "center",
-    flexWrap: "wrap",
-    gap: 8,
-  },
-  volunteerRosterWarning: {
-    fontSize: vsType.size.meta, fontFamily: vsType.family,
-    lineHeight: 17,
-    color: "#92400e",
   },
   personnelCompactRow: {
     width: "100%",
@@ -5762,14 +7561,14 @@ const styles = StyleSheet.create({
   },
   personnelAssignCompactText: {
     color: "#ffffff",
-    fontSize: vsType.size.caption, fontFamily: vsType.family,
+    fontSize: 10.5,
     fontWeight: "800",
   },
   personnelAssignCompactTextDisabled: {
     color: "#94a3b8",
   },
   personnelBarangayStrip: {
-    marginTop: 14,
+    marginTop: 7,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
@@ -5785,13 +7584,12 @@ const styles = StyleSheet.create({
   personnelBarangayValue: {
     marginTop: 2,
     color: "#0f172a",
-    fontSize: vsType.size.caption, fontFamily: vsType.family,
-    fontWeight: "800",
+    fontSize: 10.5,
+    fontWeight: "900",
   },
   personnelBarangayHint: {
     color: "#0f766e",
-    fontSize: vsType.size.meta, fontFamily: vsType.family,
-    lineHeight: 18,
+    fontSize: 10.5,
     fontWeight: "600",
   },
   personnelSupportNotice: {
@@ -5805,17 +7603,17 @@ const styles = StyleSheet.create({
   },
   personnelSupportNoticeTitle: {
     color: "#1d4ed8",
-    fontSize: vsType.size.caption, fontFamily: vsType.family,
-    fontWeight: "800",
+    fontSize: 10.5,
+    fontWeight: "900",
   },
   personnelSupportNoticeText: {
     marginTop: 2,
     color: "#475569",
-    fontSize: vsType.size.caption, fontFamily: vsType.family,
+    fontSize: 10.5,
     lineHeight: 12,
   },
   personnelVolunteerToolbar: {
-    marginTop: 16,
+    marginTop: 7,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
@@ -5823,8 +7621,8 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   personnelListHeading: {
-    color: "#0f172a",
-    fontSize: vsType.size.label, fontFamily: vsType.family,
+    color: "#14233B",
+    fontSize: 13,
     fontWeight: "800",
   },
   personnelVolunteerFilters: {
@@ -5833,8 +7631,8 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   personnelCompactFilter: {
-    width: 265,
-    minHeight: 42,
+    width: 154,
+    minHeight: 36,
     borderWidth: 1,
     borderColor: "#d9e1e8",
     borderRadius: 8,
@@ -5842,7 +7640,7 @@ const styles = StyleSheet.create({
     paddingVertical: 5,
     color: "#0f172a",
     backgroundColor: "#ffffff",
-    fontSize: vsType.size.caption, fontFamily: vsType.family,
+    fontSize: 10.5,
   },
   personnelSupportDivider: {
     marginTop: 11,
@@ -5870,8 +7668,8 @@ const styles = StyleSheet.create({
   },
   personnelSupportEmptyIcon: {
     color: "#94a3b8",
-    fontSize: vsType.size.titleSmall, fontFamily: vsType.family,
-    fontWeight: "800",
+    fontSize: 22,
+    fontWeight: "900",
   },
   personnelActiveSupportRow: {
     width: "100%",
@@ -5895,8 +7693,8 @@ const styles = StyleSheet.create({
   },
   personnelAsideTitle: {
     color: "#0f172a",
-    fontSize: vsType.size.body, fontFamily: vsType.family,
-    fontWeight: "800",
+    fontSize: 13.5,
+    fontWeight: "900",
   },
   personnelAsideHeaderRow: {
     flexDirection: "row",
@@ -5906,8 +7704,8 @@ const styles = StyleSheet.create({
   },
   personnelAsideMiniStatus: {
     color: "#0f766e",
-    fontSize: vsType.size.micro, fontFamily: vsType.family,
-    fontWeight: "800",
+    fontSize: 10,
+    fontWeight: "900",
   },
   personnelAsideCaseTop: {
     marginTop: 10,
@@ -5923,26 +7721,26 @@ const styles = StyleSheet.create({
   personnelAsideLabel: {
     marginTop: 9,
     color: "#64748b",
-    fontSize: vsType.size.micro, fontFamily: vsType.family,
+    fontSize: 10,
     fontWeight: "800",
   },
   personnelAsideValue: {
     marginTop: 2,
     color: "#0f172a",
-    fontSize: vsType.size.micro, fontFamily: vsType.family,
+    fontSize: 10,
     lineHeight: 14,
     fontWeight: "700",
   },
   personnelAsideStrong: {
     marginTop: 2,
     color: "#0f172a",
-    fontSize: vsType.size.caption, fontFamily: vsType.family,
-    fontWeight: "800",
+    fontSize: 10.8,
+    fontWeight: "900",
   },
   personnelAsideMeta: {
     marginTop: 2,
     color: "#64748b",
-    fontSize: vsType.size.micro, fontFamily: vsType.family,
+    fontSize: 10,
   },
   personnelAsideThumb: {
     width: 96,
@@ -5959,7 +7757,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#edf2f7",
   },
   personnelAsideThumbFallbackText: {
-    fontSize: vsType.size.title, fontFamily: vsType.family,
+    fontSize: 24,
   },
   personnelAsideSeverityPill: {
     alignSelf: "flex-start",
@@ -5989,20 +7787,20 @@ const styles = StyleSheet.create({
   },
   personnelMiniMapPinText: {
     color: "#dc2626",
-    fontSize: vsType.size.section, fontFamily: vsType.family,
-    fontWeight: "800",
+    fontSize: 18,
+    fontWeight: "900",
   },
   personnelMiniMapLocation: {
     marginTop: 8,
     color: "#0f172a",
-    fontSize: vsType.size.micro, fontFamily: vsType.family,
+    fontSize: 10,
     lineHeight: 14,
-    fontWeight: "800",
+    fontWeight: "900",
   },
   personnelMiniMapSub: {
     marginTop: 3,
     color: "#64748b",
-    fontSize: vsType.size.micro, fontFamily: vsType.family,
+    fontSize: 10,
   },
   personnelAsideActionRow: {
     marginTop: 9,
@@ -6019,8 +7817,8 @@ const styles = StyleSheet.create({
   },
   personnelAsidePrimaryButtonText: {
     color: "#ffffff",
-    fontSize: vsType.size.micro, fontFamily: vsType.family,
-    fontWeight: "800",
+    fontSize: 10,
+    fontWeight: "900",
   },
   personnelAsideSecondaryButton: {
     minWidth: 100,
@@ -6035,8 +7833,8 @@ const styles = StyleSheet.create({
   },
   personnelAsideSecondaryButtonText: {
     color: "#2563eb",
-    fontSize: vsType.size.micro, fontFamily: vsType.family,
-    fontWeight: "800",
+    fontSize: 10,
+    fontWeight: "900",
   },
   personnelTimelineRow: {
     minHeight: 42,
@@ -6075,7 +7873,7 @@ const styles = StyleSheet.create({
   },
   personnelTimelineLabel: {
     color: "#64748b",
-    fontSize: vsType.size.micro, fontFamily: vsType.family,
+    fontSize: 10,
     fontWeight: "800",
   },
   personnelTimelineLabelDone: {
@@ -6084,7 +7882,7 @@ const styles = StyleSheet.create({
   personnelTimelineTime: {
     marginTop: 2,
     color: "#94a3b8",
-    fontSize: vsType.size.micro, fontFamily: vsType.family,
+    fontSize: 10,
   },
 
   personnelWorkspace: {
@@ -6115,14 +7913,14 @@ const styles = StyleSheet.create({
   },
   personnelOverviewLabel: {
     color: "#94a3b8",
-    fontSize: vsType.size.micro, fontFamily: vsType.family,
-    fontWeight: "800",
+    fontSize: 10,
+    fontWeight: "900",
     letterSpacing: 0.55,
   },
   personnelOverviewValue: {
     marginTop: 3,
     color: "#0f172a",
-    fontSize: vsType.size.micro, fontFamily: vsType.family,
+    fontSize: 10,
     fontWeight: "800",
   },
   personnelVolunteerButton: {
@@ -6138,8 +7936,8 @@ const styles = StyleSheet.create({
   },
   personnelVolunteerButtonText: {
     color: "#4338ca",
-    fontSize: vsType.size.micro, fontFamily: vsType.family,
-    fontWeight: "800",
+    fontSize: 10,
+    fontWeight: "900",
   },
   personnelPanel: {
     width: "100%",
@@ -6169,8 +7967,8 @@ const styles = StyleSheet.create({
   },
   lguRefreshButtonText: {
     color: "#0f766e",
-    fontSize: vsType.size.micro, fontFamily: vsType.family,
-    fontWeight: "800",
+    fontSize: 10,
+    fontWeight: "900",
   },
   lguPersonnelError: {
     marginTop: 10,
@@ -6182,7 +7980,7 @@ const styles = StyleSheet.create({
   },
   lguPersonnelErrorText: {
     color: "#b91c1c",
-    fontSize: vsType.size.micro, fontFamily: vsType.family,
+    fontSize: 10,
     lineHeight: 14,
     fontWeight: "700",
   },
@@ -6228,13 +8026,13 @@ const styles = StyleSheet.create({
   },
   lguTestBadgeText: {
     color: "#4338ca",
-    fontSize: vsType.size.micro, fontFamily: vsType.family,
-    fontWeight: "800",
+    fontSize: 10,
+    fontWeight: "900",
   },
   lguCapabilityText: {
     marginTop: 4,
     color: "#475569",
-    fontSize: vsType.size.micro, fontFamily: vsType.family,
+    fontSize: 10,
     lineHeight: 13,
   },
   lguFieldRow: {
@@ -6255,13 +8053,13 @@ const styles = StyleSheet.create({
   },
   lguFieldBadgeText: {
     color: "#1d4ed8",
-    fontSize: vsType.size.micro, fontFamily: vsType.family,
-    fontWeight: "800",
+    fontSize: 10,
+    fontWeight: "900",
     letterSpacing: 0.25,
   },
   lguEmployeeIdText: {
     color: "#64748b",
-    fontSize: vsType.size.micro, fontFamily: vsType.family,
+    fontSize: 10,
     fontWeight: "800",
   },
   lguProfileGrid: {
@@ -6282,14 +8080,14 @@ const styles = StyleSheet.create({
   },
   lguProfileLabel: {
     color: "#94a3b8",
-    fontSize: vsType.size.micro, fontFamily: vsType.family,
-    fontWeight: "800",
+    fontSize: 10,
+    fontWeight: "900",
     letterSpacing: 0.55,
   },
   lguProfileValue: {
     marginTop: 3,
     color: "#0f172a",
-    fontSize: vsType.size.micro, fontFamily: vsType.family,
+    fontSize: 10,
     fontWeight: "800",
     lineHeight: 13,
   },
@@ -6312,13 +8110,13 @@ const styles = StyleSheet.create({
   },
   lguSkillChipText: {
     color: "#0f766e",
-    fontSize: vsType.size.micro, fontFamily: vsType.family,
+    fontSize: 10,
     fontWeight: "800",
   },
   lguNoSkillsText: {
     marginTop: 5,
     color: "#94a3b8",
-    fontSize: vsType.size.micro, fontFamily: vsType.family,
+    fontSize: 10,
     fontWeight: "700",
   },
   lguActionButton: {
@@ -6343,8 +8141,8 @@ const styles = StyleSheet.create({
     backgroundColor: "#f8fafc",
   },
   lguActionButtonText: {
-    fontSize: vsType.size.micro, fontFamily: vsType.family,
-    fontWeight: "800",
+    fontSize: 10,
+    fontWeight: "900",
   },
   lguActionButtonTextReady: {
     color: "#ffffff",
@@ -6377,8 +8175,8 @@ const styles = StyleSheet.create({
   },
   lguStatusChipText: {
     color: "#334155",
-    fontSize: vsType.size.micro, fontFamily: vsType.family,
-    fontWeight: "800",
+    fontSize: 10,
+    fontWeight: "900",
   },
   personnelPanelHeader: {
     flexDirection: "row",
@@ -6389,13 +8187,13 @@ const styles = StyleSheet.create({
   personnelPanelTitle: {
     marginTop: 2,
     color: "#0f172a",
-    fontSize: vsType.size.body, fontFamily: vsType.family,
-    fontWeight: "800",
+    fontSize: 14,
+    fontWeight: "900",
   },
   personnelPanelSubtitle: {
     marginTop: 4,
     color: "#64748b",
-    fontSize: vsType.size.micro, fontFamily: vsType.family,
+    fontSize: 10,
     lineHeight: 15,
   },
   personnelStatusPill: {
@@ -6406,8 +8204,8 @@ const styles = StyleSheet.create({
   },
   personnelStatusText: {
     color: "#047857",
-    fontSize: vsType.size.micro, fontFamily: vsType.family,
-    fontWeight: "800",
+    fontSize: 10,
+    fontWeight: "900",
   },
   personnelMemberRow: {
     marginTop: 12,
@@ -6428,18 +8226,18 @@ const styles = StyleSheet.create({
   },
   personnelAvatarText: {
     color: "#1d4ed8",
-    fontSize: vsType.size.meta, fontFamily: vsType.family,
-    fontWeight: "800",
+    fontSize: 12,
+    fontWeight: "900",
   },
   personnelName: {
     color: "#0f172a",
-    fontSize: vsType.size.meta, fontFamily: vsType.family,
-    fontWeight: "800",
+    fontSize: 11.5,
+    fontWeight: "900",
   },
   personnelMeta: {
     marginTop: 2,
     color: "#64748b",
-    fontSize: vsType.size.micro, fontFamily: vsType.family,
+    fontSize: 10,
   },
   personnelActiveBadge: {
     paddingHorizontal: 8,
@@ -6449,7 +8247,7 @@ const styles = StyleSheet.create({
   },
   personnelActiveBadgeText: {
     color: "#0f766e",
-    fontSize: vsType.size.micro, fontFamily: vsType.family,
+    fontSize: 10,
     fontWeight: "800",
   },
   personnelEmpty: {
@@ -6460,13 +8258,13 @@ const styles = StyleSheet.create({
   },
   personnelEmptyTitle: {
     color: "#0f172a",
-    fontSize: vsType.size.caption, fontFamily: vsType.family,
-    fontWeight: "800",
+    fontSize: 11,
+    fontWeight: "900",
   },
   personnelEmptyText: {
     marginTop: 4,
     color: "#64748b",
-    fontSize: vsType.size.micro, fontFamily: vsType.family,
+    fontSize: 10,
     lineHeight: 15,
   },
   attendanceEmpty: {
@@ -6480,13 +8278,13 @@ const styles = StyleSheet.create({
   },
   attendanceEmptyTitle: {
     color: "#334155",
-    fontSize: vsType.size.caption, fontFamily: vsType.family,
-    fontWeight: "800",
+    fontSize: 10.5,
+    fontWeight: "900",
   },
   attendanceEmptyText: {
     marginTop: 4,
     color: "#64748b",
-    fontSize: vsType.size.micro, fontFamily: vsType.family,
+    fontSize: 10,
     lineHeight: 15,
   },
   lguCaseNeedBox: {
@@ -6499,21 +8297,21 @@ const styles = StyleSheet.create({
   },
   lguCaseNeedLabel: {
     color: "#2563eb",
-    fontSize: vsType.size.micro, fontFamily: vsType.family,
-    fontWeight: "800",
+    fontSize: 10,
+    fontWeight: "900",
     letterSpacing: 0.6,
   },
   lguCaseNeedValue: {
     marginTop: 4,
     color: "#1e3a8a",
-    fontSize: vsType.size.caption, fontFamily: vsType.family,
-    fontWeight: "800",
+    fontSize: 10.5,
+    fontWeight: "900",
     lineHeight: 15,
   },
   lguCaseNeedHint: {
     marginTop: 4,
     color: "#64748b",
-    fontSize: vsType.size.micro, fontFamily: vsType.family,
+    fontSize: 10,
     lineHeight: 13,
   },
   assignedResponderCard: {
@@ -6558,13 +8356,13 @@ const styles = StyleSheet.create({
   },
   historyTitle: {
     color: "#0f172a",
-    fontSize: vsType.size.caption, fontFamily: vsType.family,
+    fontSize: 11,
     fontWeight: "800",
   },
   historyTime: {
     marginTop: 2,
     color: "#64748b",
-    fontSize: vsType.size.micro, fontFamily: vsType.family,
+    fontSize: 10,
   },
   historyAssignments: {
     marginTop: 12,
@@ -6581,75 +8379,135 @@ const styles = StyleSheet.create({
   },
   historyAssignmentName: {
     color: "#334155",
-    fontSize: vsType.size.caption, fontFamily: vsType.family,
+    fontSize: 10.5,
     fontWeight: "800",
   },
   historyAssignmentStatus: {
     color: "#64748b",
-    fontSize: vsType.size.micro, fontFamily: vsType.family,
+    fontSize: 10,
     fontWeight: "700",
   },
 
+  focusBackButton: {
+    paddingVertical: 12, paddingHorizontal: 16, backgroundColor: "#F4F9FD",
+    borderRadius: 10, borderWidth: 1, borderColor: "#D7E6EF", marginBottom: 10,
+    alignSelf: "flex-start",
+  },
+  focusBackText: { color: "#0B7052", fontWeight: "800", fontSize: 14 },
+  advancedControlToggle: {
+    margin: 15, padding: 11, backgroundColor: "#F6F9FD",
+    borderWidth: 1, borderColor: "#D9E6F2", borderRadius: 10,
+  },
+  advancedControlText: { color: "#1F5E9B", fontSize: 11, fontWeight: "900" },
   caseWorkspace: {
-    width: "100%",
-    minWidth: 0,
     flexDirection: "row",
     alignItems: "flex-start",
-    gap: 12,
+    gap: 10,
   },
   caseWorkspaceCompact: {
     flexDirection: "column",
-    alignItems: "stretch",
   },
+  assignmentCaseSidebar: {
+    backgroundColor: "#FFFFFF", padding: 17, gap: 9, minHeight: 615,
+  },
+  assignmentBackButton: {
+    alignSelf: "flex-start", borderRadius: 9, borderWidth: 1,
+    borderColor: "#D3E2F4", backgroundColor: "#F2F7FE",
+    paddingVertical: 9, paddingHorizontal: 12, marginBottom: 10,
+  },
+  assignmentBackText: { color: "#1A5797", fontSize: 11, fontWeight: "900" },
+  assignmentSidebarEyebrow: { color: "#637A92", fontSize: 10, fontWeight: "900", letterSpacing: 1 },
+  assignmentSidebarPhoto: { width: 110, height: 92, borderRadius: 11, backgroundColor: "#EDF1F7" },
+  assignmentSidebarTitle: { color: "#17283D", fontSize: 19, fontWeight: "900", lineHeight: 24 },
+  assignmentSidebarSeverity: {
+    color: "#AC3029", fontSize: 11, fontWeight: "900", backgroundColor: "#FFF4F3",
+    alignSelf: "flex-start", paddingVertical: 5, paddingHorizontal: 9, borderRadius: 9,
+  },
+  assignmentSidebarDetail: { color: "#334B65", fontSize: 11, lineHeight: 18, fontWeight: "600" },
+  assignmentSidebarDivider: { height: 1, backgroundColor: "#E2EAF0", marginVertical: 11 },
+  assignmentSideStage: { flexDirection: "row", gap: 10, alignItems: "center", paddingVertical: 7 },
+  assignmentSideDot: { width: 25, height: 25, borderRadius: 13, backgroundColor: "#E8EDF2",
+    textAlign: "center", textAlignVertical: "center", lineHeight: 25,
+    color: "#72869A", fontSize: 11, fontWeight: "900" },
+  assignmentSideDotActive: { backgroundColor: "#0E8A67", color: "#FFFFFF" },
+  assignmentSideText: { color: "#708298", fontSize: 12, fontWeight: "700" },
+  assignmentSideTextActive: { color: "#184C3D", fontWeight: "900" },
+  queueTableHead:{
+    flexDirection:"row",gap:14,paddingHorizontal:18,paddingVertical:13,
+    backgroundColor:"#F6F9F8",borderBottomWidth:1,borderBottomColor:"#E1E9E4",
+  },
+  queueHeadCell:{ fontSize:11,fontWeight:"800",color:"#60766B",letterSpacing:0.4 },
+  queueReportRow:{
+    flexDirection:"row",alignItems:"center",gap:14,paddingHorizontal:12,
+    minHeight:92,paddingVertical:13,backgroundColor:"#FFFFFF",
+    borderBottomWidth:1,borderBottomColor:"#E8EFEB",
+  },
+  queueCaseColumn:{ flex:2.6,flexDirection:"row",alignItems:"center",minWidth:140,gap:12 },
+  queueCaseTitle:{ flex:1,minWidth:0,gap:5 },
+  queueCaseId:{ color:"#7A8D84",fontSize:11,fontWeight:"600" },
+  queueSmallMeta:{ color:"#506F60",fontSize:11,marginTop:4 },
+  queueDataColumn:{ minWidth:0,alignItems:"flex-start" },
+  queueRowText:{ color:"#233D32",fontSize:13,fontWeight:"700" },
+  queueMuted:{ color:"#71867C",fontSize:11,lineHeight:17 },
+  queueChevron:{ color:"#0D7254",fontSize:22,fontWeight:"800" },
   caseListPane: {
-    width: 340,
-    flexShrink: 0,
+    width: "100%",
+    flexShrink: 1,
     backgroundColor: "#ffffff",
     borderWidth: 1,
     borderColor: "#dfe7ee",
     borderRadius: 14,
     overflow: "hidden",
   },
-  caseListPaneAssignments: {
-    width: 290,
-  },
   caseListPaneCompact: {
     width: "100%",
-    flexShrink: 1,
+  },
+  reportStatsRow: {
+    flexDirection: "row", flexWrap: "wrap", gap: 12, marginBottom: 16,
+  },
+  reportStatCard: {
+    minWidth: 145, flexBasis: 170, flexGrow: 1, borderRadius: 14,
+    paddingHorizontal: 20, paddingVertical: 15, gap: 4,
+    borderWidth: 1, borderColor: "#DDE9E4",
+  },
+  reportStatNumber: {
+    fontSize: 25, fontWeight: "800", lineHeight: 29,
+  },
+  reportStatLabel: {
+    fontSize: 13, color: "#345349", fontWeight: "700",
   },
   caseListHeader: {
-    minHeight: 64,
+    minHeight: 58,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
     gap: 10,
     paddingHorizontal: 14,
-    backgroundColor: "#EEF8F1",
     borderBottomWidth: 1,
-    borderBottomColor: "#D4E8DC",
+    borderBottomColor: "#edf1f5",
   },
   caseListTitle: {
-    color: "#153E30",
-    fontSize: vsType.size.card, fontFamily: vsType.family,
-    fontWeight: "800",
+    color: "#0f172a",
+    fontSize: 16,
+    fontWeight: "900",
   },
   caseListCount: {
     marginTop: 2,
-    color: "#17765A",
-    fontSize: vsType.size.caption, fontFamily: vsType.family,
+    color: "#2563eb",
+    fontSize: 10,
     fontWeight: "800",
   },
   caseListSort: {
     color: "#64748b",
-    fontSize: vsType.size.micro, fontFamily: vsType.family,
+    fontSize: 10,
     fontWeight: "700",
   },
   caseListItems: {
-    padding: 8,
-    gap: 6,
+    padding: 14,
+    gap: 9,
   },
   caseListItem: {
-    minHeight: 82,
+    minHeight: 102,
     flexDirection: "row",
     alignItems: "center",
     gap: 9,
@@ -6660,12 +8518,12 @@ const styles = StyleSheet.create({
     borderRadius: 10,
   },
   caseListItemActive: {
-    backgroundColor: "#E8F6EE",
-    borderColor: "#198566",
+    backgroundColor: "#effcf9",
+    borderColor: "#37b8aa",
   },
   caseListThumb: {
-    width: 60,
-    height: 54,
+    width: 64,
+    height: 56,
     flexShrink: 0,
     borderRadius: 8,
     overflow: "hidden",
@@ -6681,7 +8539,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   caseListThumbFallbackIcon: {
-    fontSize: vsType.size.title, fontFamily: vsType.family,
+    fontSize: 24,
   },
   caseListBody: {
     flex: 1,
@@ -6689,15 +8547,14 @@ const styles = StyleSheet.create({
   },
   caseListTitleRow: {
     flexDirection: "row",
-    flexWrap: "wrap",
     alignItems: "center",
     gap: 7,
   },
   caseListItemTitle: {
     flex: 1,
     minWidth: 0,
-    color: "#173D32",
-    fontSize: vsType.size.label, fontFamily: vsType.family,
+    color: "#14233B",
+    fontSize: 13,
     fontWeight: "800",
   },
   caseListSeverity: {
@@ -6707,13 +8564,13 @@ const styles = StyleSheet.create({
   },
   caseListSeverityText: {
     color: "#ffffff",
-    fontSize: vsType.size.micro, fontFamily: vsType.family,
-    fontWeight: "800",
+    fontSize: 10,
+    fontWeight: "900",
   },
   caseListLocation: {
     marginTop: 5,
     color: "#64748b",
-    fontSize: vsType.size.micro, fontFamily: vsType.family,
+    fontSize: 10,
     fontWeight: "600",
   },
   caseListMetaRow: {
@@ -6724,11 +8581,11 @@ const styles = StyleSheet.create({
   },
   caseListMeta: {
     color: "#475569",
-    fontSize: vsType.size.micro, fontFamily: vsType.family,
+    fontSize: 10,
     fontWeight: "700",
   },
   caseListRight: {
-    width: 62,
+    width: 78,
     flexShrink: 0,
     alignItems: "flex-end",
     justifyContent: "space-between",
@@ -6736,13 +8593,13 @@ const styles = StyleSheet.create({
   },
   caseListDate: {
     color: "#64748b",
-    fontSize: vsType.size.micro, fontFamily: vsType.family,
+    fontSize: 10,
     textAlign: "right",
     fontWeight: "700",
   },
   caseListChevron: {
     color: "#475569",
-    fontSize: vsType.size.titleSmall, fontFamily: vsType.family,
+    fontSize: 22,
     fontWeight: "400",
   },
   caseDetailPane: {
@@ -6751,9 +8608,9 @@ const styles = StyleSheet.create({
   },
 
   caseCard: {
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "#ffffff",
     borderWidth: 1,
-    borderColor: "#D6E5DC",
+    borderColor: "#dfe7ee",
     borderRadius: 14,
     marginBottom: 0,
     overflow: "hidden",
@@ -6776,13 +8633,9 @@ const styles = StyleSheet.create({
     backgroundColor: "#e8eef2",
   },
   mediaBoxCompact: {
-    width: "auto",
-    alignSelf: "stretch",
-    height: 136,
-    minHeight: 136,
-    marginLeft: 12,
-    marginRight: 12,
-    marginBottom: 0,
+    width: "100%",
+    height: 210,
+    minHeight: 210,
   },
   incidentImage: {
     width: "100%",
@@ -6796,42 +8649,40 @@ const styles = StyleSheet.create({
     padding: 10,
   },
   imageFallbackIcon: {
-    fontSize: vsType.size.xl, fontFamily: vsType.family,
+    fontSize: 38,
   },
   imageFallbackText: {
     marginTop: 9,
     color: "#334155",
-    fontWeight: "800",
+    fontWeight: "900",
     textAlign: "center",
   },
   imageFallbackSubtext: {
     marginTop: 3,
     color: "#94a3b8",
-    fontSize: vsType.size.micro, fontFamily: vsType.family,
+    fontSize: 10,
     fontWeight: "700",
   },
 
   caseContent: {
     flex: 1,
-    minWidth: 0,
     padding: 14,
   },
   caseTopRow: {
     flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 10,
+    gap: 12,
     alignItems: "flex-start",
   },
   caseTitle: {
     color: "#0f172a",
-    fontSize: vsType.size.section, fontFamily: vsType.family,
+    fontSize: 17.5,
     lineHeight: 24,
-    fontWeight: "800",
+    fontWeight: "900",
   },
   caseId: {
     color: "#94a3b8",
-    fontSize: vsType.size.micro, fontFamily: vsType.family,
-    fontWeight: "800",
+    fontSize: 10,
+    fontWeight: "900",
     maxWidth: 180,
   },
   badgeRow: {
@@ -6847,8 +8698,8 @@ const styles = StyleSheet.create({
   },
   badgeText: {
     color: "#ffffff",
-    fontSize: vsType.size.micro, fontFamily: vsType.family,
-    fontWeight: "800",
+    fontSize: 10,
+    fontWeight: "900",
   },
 
   severityCritical: { backgroundColor: "#c92a2a" },
@@ -6878,14 +8729,14 @@ const styles = StyleSheet.create({
   locationText: {
     marginTop: 8,
     color: "#0f766e",
-    fontSize: vsType.size.meta, fontFamily: vsType.family,
+    fontSize: 11.5,
     fontWeight: "800",
   },
   details: {
     marginTop: 6,
     color: "#64748b",
     lineHeight: 18,
-    fontSize: vsType.size.label, fontFamily: vsType.family,
+    fontSize: 12.5,
   },
   needsBox: {
     marginTop: 12,
@@ -6895,14 +8746,14 @@ const styles = StyleSheet.create({
   },
   needsLabel: {
     color: "#94a3b8",
-    fontSize: vsType.size.micro, fontFamily: vsType.family,
-    fontWeight: "800",
+    fontSize: 10,
+    fontWeight: "900",
     letterSpacing: 0.9,
   },
   needsText: {
     marginTop: 4,
     color: "#334155",
-    fontSize: vsType.size.body, fontFamily: vsType.family,
+    fontSize: 14,
     fontWeight: "600",
   },
 
@@ -6922,14 +8773,14 @@ const styles = StyleSheet.create({
   },
   metaLabel: {
     color: "#94a3b8",
-    fontSize: vsType.size.micro, fontFamily: vsType.family,
-    fontWeight: "800",
+    fontSize: 10,
+    fontWeight: "900",
     textTransform: "uppercase",
   },
   metaValue: {
     marginTop: 3,
     color: "#334155",
-    fontSize: vsType.size.caption, fontFamily: vsType.family,
+    fontSize: 10.5,
     fontWeight: "800",
   },
 
@@ -6951,18 +8802,18 @@ const styles = StyleSheet.create({
   },
 
   locationActionCard: {
-    margin: 12,
+    margin: 14,
     marginBottom: 0,
     flexDirection: "row",
     flexWrap: "wrap",
     alignItems: "center",
     justifyContent: "space-between",
     gap: 12,
-    padding: 12,
+    padding: 16,
     borderWidth: 1,
-    borderColor: "#dfe7ee",
-    borderRadius: 11,
-    backgroundColor: "#f8fafc",
+    borderColor: "#C6E4D6",
+    borderRadius: 13,
+    backgroundColor: "#EDF9F2",
   },
   locationActionMain: {
     flex: 1,
@@ -6971,19 +8822,19 @@ const styles = StyleSheet.create({
   locationActionTitle: {
     marginTop: 3,
     color: "#0f172a",
-    fontSize: vsType.size.bodyStrong, fontFamily: vsType.family,
-    fontWeight: "800",
+    fontSize: 15,
+    fontWeight: "900",
   },
   locationActionAddress: {
     marginTop: 5,
     color: "#334155",
-    fontSize: vsType.size.meta, fontFamily: vsType.family,
+    fontSize: 12,
     fontWeight: "700",
   },
   locationActionCoords: {
     marginTop: 3,
     color: "#64748b",
-    fontSize: vsType.size.micro, fontFamily: vsType.family,
+    fontSize: 10,
     fontWeight: "600",
   },
   locationActionButtons: {
@@ -6992,16 +8843,16 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   locationLiveButton: {
-    minHeight: 36,
+    minHeight: 44,
     justifyContent: "center",
-    paddingHorizontal: 13,
+    paddingHorizontal: 20,
     borderRadius: 9,
-    backgroundColor: "#0f766e",
+    backgroundColor: "#087A56",
   },
   locationLiveButtonText: {
     color: "#ffffff",
-    fontSize: vsType.size.meta, fontFamily: vsType.family,
-    fontWeight: "800",
+    fontSize: 11.5,
+    fontWeight: "900",
   },
   locationGoogleButton: {
     minHeight: 36,
@@ -7014,7 +8865,7 @@ const styles = StyleSheet.create({
   },
   locationGoogleButtonText: {
     color: "#1d4ed8",
-    fontSize: vsType.size.meta, fontFamily: vsType.family,
+    fontSize: 11.5,
     fontWeight: "800",
   },
 
@@ -7047,13 +8898,13 @@ const styles = StyleSheet.create({
   reviewInfoValue: {
     marginTop: 3,
     color: "#0f172a",
-    fontSize: vsType.size.meta, fontFamily: vsType.family,
-    fontWeight: "800",
+    fontSize: 11.5,
+    fontWeight: "900",
   },
   reviewInfoSub: {
     marginTop: 2,
     color: "#64748b",
-    fontSize: vsType.size.micro, fontFamily: vsType.family,
+    fontSize: 10,
     lineHeight: 14,
   },
   severityReviewCard: {
@@ -7068,7 +8919,7 @@ const styles = StyleSheet.create({
   severityReviewText: {
     marginTop: 4,
     color: "#64748b",
-    fontSize: vsType.size.micro, fontFamily: vsType.family,
+    fontSize: 10,
     lineHeight: 14,
   },
   severityChoiceRow: {
@@ -7087,30 +8938,41 @@ const styles = StyleSheet.create({
   },
   severityChoiceText: {
     color: "#475569",
-    fontSize: vsType.size.micro, fontFamily: vsType.family,
-    fontWeight: "800",
+    fontSize: 10,
+    fontWeight: "900",
   },
   severityChoiceTextActive: {
     color: "#ffffff",
   },
   criticalResponseNotice: {
     marginTop: 11,
-    padding: 12,
+    padding: 14,
     borderRadius: 11,
     borderWidth: 1,
     borderColor: "#f2b8b5",
     backgroundColor: "#fff1f0",
+    flexDirection: "row",
+    flexWrap: "wrap",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+  },
+  criticalResponseCopy: {
+    flexGrow: 1,
+    flexBasis: 320,
+    minWidth: 230,
   },
   criticalResponseTitle: {
     color: "#b42318",
-    fontSize: vsType.size.label, fontFamily: vsType.family,
+    fontSize: 14,
     fontWeight: "800",
+    lineHeight: 20,
   },
   criticalResponseText: {
     marginTop: 4,
     color: "#9f2f25",
-    fontSize: vsType.size.micro, fontFamily: vsType.family,
-    lineHeight: 14,
+    fontSize: 11,
+    lineHeight: 17,
   },
 
   verificationChecks: {
@@ -7132,13 +8994,37 @@ const styles = StyleSheet.create({
   },
   checkIcon: {
     color: "#078f82",
-    fontSize: vsType.size.micro, fontFamily: vsType.family,
-    fontWeight: "800",
+    fontSize: 10,
+    fontWeight: "900",
   },
   checkText: {
     color: "#49646f",
-    fontSize: vsType.size.micro, fontFamily: vsType.family,
+    fontSize: 10,
     fontWeight: "800",
+  },
+  referenceEvidenceColumns: {
+    marginTop: 15,
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 12,
+    alignItems: "stretch",
+  },
+  referenceEvidenceMedia: {
+    borderWidth: 1, borderColor: "#D8E4EF", borderRadius: 13,
+    backgroundColor: "#FFFFFF", padding: 13, flexGrow: 1, flexBasis: 300,
+    minWidth: 250, minHeight: 230,
+  },
+  referenceEvidenceNotes: {
+    borderWidth: 1, borderColor: "#D8E4EF", borderRadius: 13,
+    backgroundColor: "#FFFFFF", padding: 13, flexGrow: 1.1,
+    flexBasis: 310, minWidth: 250, minHeight: 230,
+  },
+  referenceEvidenceColumnTitle: {
+    color: "#14233B", fontSize: 14, fontWeight: "800", lineHeight: 20,
+  },
+  referenceEvidenceColumnSub: {
+    color: "#64748B", fontSize: 11, lineHeight: 17,
+    marginTop: 5,
   },
   evidenceGrid: {
     flexDirection: "row",
@@ -7163,7 +9049,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 9,
     paddingTop: 7,
     color: "#334155",
-    fontSize: vsType.size.micro, fontFamily: vsType.family,
+    fontSize: 10,
     fontWeight: "800",
   },
   evidenceOpen: {
@@ -7171,7 +9057,7 @@ const styles = StyleSheet.create({
     paddingTop: 2,
     paddingBottom: 8,
     color: "#078f82",
-    fontSize: vsType.size.micro, fontFamily: vsType.family,
+    fontSize: 10,
     fontWeight: "800",
   },
   videoList: {
@@ -7187,13 +9073,13 @@ const styles = StyleSheet.create({
   },
   videoButtonTitle: {
     color: "#27365f",
-    fontSize: vsType.size.label, fontFamily: vsType.family,
+    fontSize: 12.5,
     fontWeight: "800",
   },
   videoButtonSub: {
     marginTop: 2,
     color: "#6b7699",
-    fontSize: vsType.size.micro, fontFamily: vsType.family,
+    fontSize: 10,
   },
   reviewReasonInput: {
     minHeight: 72,
@@ -7222,7 +9108,7 @@ const styles = StyleSheet.create({
   },
   moreEvidenceText: {
     color: "#9a6700",
-    fontSize: vsType.size.label, fontFamily: vsType.family,
+    fontSize: 12,
     fontWeight: "800",
   },
   rejectButton: {
@@ -7235,7 +9121,7 @@ const styles = StyleSheet.create({
   },
   rejectButtonText: {
     color: "#b42318",
-    fontSize: vsType.size.label, fontFamily: vsType.family,
+    fontSize: 12,
     fontWeight: "800",
   },
   reviewNotice: {
@@ -7256,13 +9142,13 @@ const styles = StyleSheet.create({
   },
   rejectNoticeTitle: {
     color: "#b42318",
-    fontSize: vsType.size.label, fontFamily: vsType.family,
+    fontSize: 12.5,
     fontWeight: "800",
   },
   rejectNoticeText: {
     marginTop: 3,
     color: "#b42318",
-    fontSize: vsType.size.micro, fontFamily: vsType.family,
+    fontSize: 10,
     lineHeight: 14,
   },
   dispatchLocked: {
@@ -7273,20 +9159,20 @@ const styles = StyleSheet.create({
   },
   dispatchLockedTitle: {
     color: "#475569",
-    fontSize: vsType.size.caption, fontFamily: vsType.family,
-    fontWeight: "800",
+    fontSize: 11,
+    fontWeight: "900",
   },
   dispatchLockedText: {
     marginTop: 3,
     color: "#64748b",
-    fontSize: vsType.size.micro, fontFamily: vsType.family,
+    fontSize: 10,
     lineHeight: 14,
   },
   matchText: {
     marginTop: 4,
     color: "#078f82",
-    fontSize: vsType.size.micro, fontFamily: vsType.family,
-    fontWeight: "800",
+    fontSize: 10,
+    fontWeight: "900",
   },
 
   adminSection: {
@@ -7304,19 +9190,20 @@ const styles = StyleSheet.create({
   },
   sectionEyebrow: {
     color: "#94a3b8",
-    fontSize: vsType.size.micro, fontFamily: vsType.family,
+    fontSize: 10,
     fontWeight: "800",
     letterSpacing: 1.1,
   },
   sectionTitle: {
     marginTop: 2,
-    color: "#0f172a",
-    fontSize: vsType.size.section, fontFamily: vsType.family,
+    color: "#14233B",
+    fontSize: 18,
     fontWeight: "800",
+    lineHeight: 25,
   },
   slotText: {
     color: "#64748b",
-    fontSize: vsType.size.micro, fontFamily: vsType.family,
+    fontSize: 10,
     fontWeight: "800",
   },
 
@@ -7337,8 +9224,8 @@ const styles = StyleSheet.create({
   },
   controlLabel: {
     color: "#475569",
-    fontSize: vsType.size.micro, fontFamily: vsType.family,
-    fontWeight: "800",
+    fontSize: 10,
+    fontWeight: "900",
     marginBottom: 6,
   },
   inlineControl: {
@@ -7354,7 +9241,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 11,
     paddingVertical: 10,
     color: "#0f172a",
-    fontSize: vsType.size.body, fontFamily: vsType.family,
+    fontSize: 14,
     fontWeight: "600",
   },
   numberInput: {
@@ -7380,7 +9267,7 @@ const styles = StyleSheet.create({
   },
   primaryButtonText: {
     color: "#ffffff",
-    fontSize: vsType.size.meta, fontFamily: vsType.family,
+    fontSize: 11.5,
     fontWeight: "800",
   },
   secondaryButton: {
@@ -7395,7 +9282,7 @@ const styles = StyleSheet.create({
   },
   secondaryButtonText: {
     color: "#078f82",
-    fontSize: vsType.size.label, fontFamily: vsType.family,
+    fontSize: 12.5,
     fontWeight: "800",
   },
   assignButton: {
@@ -7408,7 +9295,7 @@ const styles = StyleSheet.create({
   },
   assignButtonText: {
     color: "#078f82",
-    fontSize: vsType.size.label, fontFamily: vsType.family,
+    fontSize: 12.5,
     fontWeight: "800",
   },
   progressButton: {
@@ -7431,8 +9318,8 @@ const styles = StyleSheet.create({
   },
   completedText: {
     color: "#15803d",
-    fontSize: vsType.size.caption, fontFamily: vsType.family,
-    fontWeight: "800",
+    fontSize: 11,
+    fontWeight: "900",
     paddingVertical: 8,
   },
 
@@ -7447,14 +9334,14 @@ const styles = StyleSheet.create({
   responseControlTitle: {
     marginTop: 4,
     color: "#0f172a",
-    fontSize: vsType.size.titleSmall, fontFamily: vsType.family,
+    fontSize: 22,
     fontWeight: "800",
   },
   responseControlSubtitle: {
     marginTop: 7,
     maxWidth: 760,
     color: "#64748b",
-    fontSize: vsType.size.body, fontFamily: vsType.family,
+    fontSize: 14,
     lineHeight: 21,
   },
   responseStatusPill: {
@@ -7470,11 +9357,11 @@ const styles = StyleSheet.create({
   },
   responseStatusDot: {
     color: "#078f82",
-    fontSize: vsType.size.caption, fontFamily: vsType.family,
+    fontSize: 11,
   },
   responseStatusText: {
     color: "#0f766e",
-    fontSize: vsType.size.micro, fontFamily: vsType.family,
+    fontSize: 10,
     fontWeight: "800",
     letterSpacing: 0.5,
   },
@@ -7498,18 +9385,18 @@ const styles = StyleSheet.create({
   },
   mapPrimaryButtonIcon: {
     color: "#ffffff",
-    fontSize: vsType.size.title, fontFamily: vsType.family,
+    fontSize: 24,
     fontWeight: "800",
   },
   mapPrimaryButtonTitle: {
     color: "#ffffff",
-    fontSize: vsType.size.bodyStrong, fontFamily: vsType.family,
+    fontSize: 15,
     fontWeight: "800",
   },
   mapPrimaryButtonSub: {
     marginTop: 3,
     color: "#ccfbf1",
-    fontSize: vsType.size.meta, fontFamily: vsType.family,
+    fontSize: 11.5,
     lineHeight: 16,
   },
   supportButton: {
@@ -7531,13 +9418,13 @@ const styles = StyleSheet.create({
   },
   supportButtonTitle: {
     color: "#0f172a",
-    fontSize: vsType.size.body, fontFamily: vsType.family,
+    fontSize: 14,
     fontWeight: "800",
   },
   supportButtonSub: {
     marginTop: 4,
     color: "#64748b",
-    fontSize: vsType.size.meta, fontFamily: vsType.family,
+    fontSize: 11.5,
   },
   lguOfficialReportSection: {
     marginTop: 14,
@@ -7555,21 +9442,21 @@ const styles = StyleSheet.create({
   },
   lguOfficialReportEyebrow: {
     color: "#0F766E",
-    fontSize: vsType.size.micro, fontFamily: vsType.family,
-    fontWeight: "800",
+    fontSize: 10,
+    fontWeight: "900",
     letterSpacing: 0.7,
   },
   lguOfficialReportTitle: {
     marginTop: 3,
     color: "#0F172A",
-    fontSize: vsType.size.card, fontFamily: vsType.family,
-    fontWeight: "800",
+    fontSize: 17,
+    fontWeight: "900",
   },
   lguOfficialReportSubtitle: {
     maxWidth: 720,
     marginTop: 4,
     color: "#64748B",
-    fontSize: vsType.size.caption, fontFamily: vsType.family,
+    fontSize: 10.5,
     lineHeight: 16,
   },
   lguReportRefreshButton: {
@@ -7583,8 +9470,8 @@ const styles = StyleSheet.create({
   },
   lguReportRefreshText: {
     color: "#0F766E",
-    fontSize: vsType.size.micro, fontFamily: vsType.family,
-    fontWeight: "800",
+    fontSize: 10,
+    fontWeight: "900",
   },
   lguReportErrorBox: {
     marginTop: 12,
@@ -7596,13 +9483,13 @@ const styles = StyleSheet.create({
   },
   lguReportErrorTitle: {
     color: "#B42318",
-    fontSize: vsType.size.caption, fontFamily: vsType.family,
-    fontWeight: "800",
+    fontSize: 11,
+    fontWeight: "900",
   },
   lguReportErrorText: {
     marginTop: 3,
     color: "#B42318",
-    fontSize: vsType.size.micro, fontFamily: vsType.family,
+    fontSize: 10,
     lineHeight: 15,
   },
   lguReportWaitingBox: {
@@ -7615,13 +9502,13 @@ const styles = StyleSheet.create({
   },
   lguReportWaitingTitle: {
     color: "#B54708",
-    fontSize: vsType.size.caption, fontFamily: vsType.family,
-    fontWeight: "800",
+    fontSize: 11,
+    fontWeight: "900",
   },
   lguReportWaitingText: {
     marginTop: 3,
     color: "#7A2E0E",
-    fontSize: vsType.size.micro, fontFamily: vsType.family,
+    fontSize: 10,
     lineHeight: 15,
   },
   lguOfficialReportCard: {
@@ -7639,19 +9526,19 @@ const styles = StyleSheet.create({
   },
   lguOfficialResponderName: {
     color: "#0F172A",
-    fontSize: vsType.size.body, fontFamily: vsType.family,
-    fontWeight: "800",
+    fontSize: 13.5,
+    fontWeight: "900",
   },
   lguOfficialResponderMeta: {
     marginTop: 2,
     color: "#475569",
-    fontSize: vsType.size.caption, fontFamily: vsType.family,
+    fontSize: 10.5,
     fontWeight: "800",
   },
   lguOfficialReportMeta: {
     marginTop: 3,
     color: "#94A3B8",
-    fontSize: vsType.size.micro, fontFamily: vsType.family,
+    fontSize: 10,
     lineHeight: 13,
   },
   lguOfficialReviewBadge: {
@@ -7670,8 +9557,8 @@ const styles = StyleSheet.create({
   },
   lguOfficialReviewBadgeText: {
     color: "#B54708",
-    fontSize: vsType.size.micro, fontFamily: vsType.family,
-    fontWeight: "800",
+    fontSize: 10,
+    fontWeight: "900",
   },
   lguOfficialReviewBadgeTextDone: {
     color: "#067647",
@@ -7693,15 +9580,15 @@ const styles = StyleSheet.create({
   lguOfficialReportValue: {
     marginTop: 4,
     color: "#334155",
-    fontSize: vsType.size.caption, fontFamily: vsType.family,
+    fontSize: 10.5,
     lineHeight: 16,
     fontWeight: "700",
   },
   lguOfficialReportValueStrong: {
     marginTop: 4,
     color: "#0F172A",
-    fontSize: vsType.size.meta, fontFamily: vsType.family,
-    fontWeight: "800",
+    fontSize: 12,
+    fontWeight: "900",
   },
   lguFollowUpWarning: {
     marginTop: 10,
@@ -7713,13 +9600,13 @@ const styles = StyleSheet.create({
   },
   lguFollowUpWarningTitle: {
     color: "#B54708",
-    fontSize: vsType.size.caption, fontFamily: vsType.family,
-    fontWeight: "800",
+    fontSize: 11,
+    fontWeight: "900",
   },
   lguFollowUpWarningText: {
     marginTop: 3,
     color: "#7A2E0E",
-    fontSize: vsType.size.micro, fontFamily: vsType.family,
+    fontSize: 10,
     lineHeight: 15,
   },
   lguOfficialNeedsBox: {
@@ -7733,7 +9620,7 @@ const styles = StyleSheet.create({
   lguOfficialNeedsText: {
     marginTop: 4,
     color: "#334155",
-    fontSize: vsType.size.caption, fontFamily: vsType.family,
+    fontSize: 10.5,
     lineHeight: 16,
     fontWeight: "700",
   },
@@ -7748,7 +9635,7 @@ const styles = StyleSheet.create({
   lguOfficialNotesText: {
     marginTop: 4,
     color: "#475569",
-    fontSize: vsType.size.caption, fontFamily: vsType.family,
+    fontSize: 10.5,
     lineHeight: 16,
   },
   lguOfficialReviewArea: {
@@ -7779,7 +9666,7 @@ const styles = StyleSheet.create({
     flex: 1,
     minWidth: 220,
     color: "#64748B",
-    fontSize: vsType.size.micro, fontFamily: vsType.family,
+    fontSize: 10,
     lineHeight: 14,
   },
   lguReviewedSummary: {
@@ -7792,13 +9679,13 @@ const styles = StyleSheet.create({
   },
   lguReviewedSummaryTitle: {
     color: "#067647",
-    fontSize: vsType.size.caption, fontFamily: vsType.family,
-    fontWeight: "800",
+    fontSize: 11,
+    fontWeight: "900",
   },
   lguReviewedSummaryText: {
     marginTop: 3,
     color: "#24704E",
-    fontSize: vsType.size.micro, fontFamily: vsType.family,
+    fontSize: 10,
     lineHeight: 15,
   },
   responseLifecycleRow: {
@@ -7820,7 +9707,7 @@ const styles = StyleSheet.create({
   coordinationLabel: {
     marginBottom: 7,
     color: "#475569",
-    fontSize: vsType.size.meta, fontFamily: vsType.family,
+    fontSize: 11.5,
     fontWeight: "700",
   },
   coordinationInput: {
@@ -7832,7 +9719,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 10,
     color: "#0f172a",
-    fontSize: vsType.size.label, fontFamily: vsType.family,
+    fontSize: 12.5,
     lineHeight: 18,
     textAlignVertical: "top",
   },
@@ -7847,7 +9734,7 @@ const styles = StyleSheet.create({
   },
   saveNoteButtonText: {
     color: "#0f766e",
-    fontSize: vsType.size.meta, fontFamily: vsType.family,
+    fontSize: 12,
     fontWeight: "800",
   },
   closedState: {
@@ -7859,7 +9746,7 @@ const styles = StyleSheet.create({
   },
   closedStateText: {
     color: "#15803d",
-    fontSize: vsType.size.meta, fontFamily: vsType.family,
+    fontSize: 12,
     fontWeight: "800",
   },
   supportPanelHeader: {
@@ -7872,14 +9759,14 @@ const styles = StyleSheet.create({
   supportPanelTitle: {
     marginTop: 3,
     color: "#0f172a",
-    fontSize: vsType.size.bodyStrong, fontFamily: vsType.family,
-    fontWeight: "800",
+    fontSize: 15,
+    fontWeight: "900",
   },
   supportPanelSubtitle: {
     marginTop: 4,
     maxWidth: 760,
     color: "#64748b",
-    fontSize: vsType.size.micro, fontFamily: vsType.family,
+    fontSize: 10,
     lineHeight: 15,
   },
   eligibleCountBox: {
@@ -7894,13 +9781,13 @@ const styles = StyleSheet.create({
   },
   eligibleCountNumber: {
     color: "#15803d",
-    fontSize: vsType.size.subheading, fontFamily: vsType.family,
+    fontSize: 20,
     fontWeight: "800",
   },
   eligibleCountLabel: {
     marginTop: 1,
     color: "#166534",
-    fontSize: vsType.size.micro, fontFamily: vsType.family,
+    fontSize: 10,
     fontWeight: "800",
     letterSpacing: 0.8,
   },
@@ -7918,26 +9805,26 @@ const styles = StyleSheet.create({
   },
   supportRequirementLabel: {
     color: "#94a3b8",
-    fontSize: vsType.size.micro, fontFamily: vsType.family,
+    fontSize: 10,
     fontWeight: "800",
     letterSpacing: 0.8,
   },
   supportRequirementValue: {
     marginTop: 4,
     color: "#0f172a",
-    fontSize: vsType.size.body, fontFamily: vsType.family,
+    fontSize: 13.5,
     fontWeight: "700",
   },
   supportBarangayHint: {
     marginTop: 4,
     color: "#0f766e",
-    fontSize: vsType.size.micro, fontFamily: vsType.family,
+    fontSize: 10,
     lineHeight: 14,
     fontWeight: "700",
   },
   supportRequirementSeverity: {
     color: "#475569",
-    fontSize: vsType.size.micro, fontFamily: vsType.family,
+    fontSize: 10,
     fontWeight: "800",
   },
   infoBox: {
@@ -7950,13 +9837,13 @@ const styles = StyleSheet.create({
   },
   infoBoxTitle: {
     color: "#1d4ed8",
-    fontSize: vsType.size.meta, fontFamily: vsType.family,
+    fontSize: 12,
     fontWeight: "800",
   },
   infoBoxText: {
     marginTop: 3,
     color: "#475569",
-    fontSize: vsType.size.caption, fontFamily: vsType.family,
+    fontSize: 11,
     lineHeight: 16,
   },
   volunteerCandidateCard: {
@@ -7996,7 +9883,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#f1f5f9",
   },
   eligibilityBadgeText: {
-    fontSize: vsType.size.micro, fontFamily: vsType.family,
+    fontSize: 10,
     fontWeight: "800",
     letterSpacing: 0.4,
   },
@@ -8009,7 +9896,7 @@ const styles = StyleSheet.create({
   eligibilityReason: {
     marginTop: 7,
     color: "#64748b",
-    fontSize: vsType.size.caption, fontFamily: vsType.family,
+    fontSize: 10.5,
     fontWeight: "700",
   },
   eligibilityReasonGood: {
@@ -8035,7 +9922,7 @@ const styles = StyleSheet.create({
   },
   volunteerCount: {
     color: "#64748b",
-    fontSize: vsType.size.micro, fontFamily: vsType.family,
+    fontSize: 10,
     fontWeight: "800",
   },
   warningBox: {
@@ -8048,13 +9935,13 @@ const styles = StyleSheet.create({
   },
   warningTitle: {
     color: "#9a3412",
-    fontSize: vsType.size.caption, fontFamily: vsType.family,
-    fontWeight: "800",
+    fontSize: 11,
+    fontWeight: "900",
   },
   warningText: {
     marginTop: 3,
     color: "#9a3412",
-    fontSize: vsType.size.micro, fontFamily: vsType.family,
+    fontSize: 10,
     lineHeight: 15,
   },
   matchFilters: {
@@ -8074,7 +9961,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 11,
     paddingVertical: 9,
     color: "#0f172a",
-    fontSize: vsType.size.caption, fontFamily: vsType.family,
+    fontSize: 10.5,
   },
 
   volunteerRow: {
@@ -8095,18 +9982,18 @@ const styles = StyleSheet.create({
   },
   avatarText: {
     color: "#078f82",
-    fontSize: vsType.size.caption, fontFamily: vsType.family,
-    fontWeight: "800",
+    fontSize: 11,
+    fontWeight: "900",
   },
   volunteerName: {
     color: "#0f172a",
-    fontSize: vsType.size.body, fontFamily: vsType.family,
+    fontSize: 14,
     fontWeight: "800",
   },
   volunteerMeta: {
     marginTop: 3,
     color: "#64748b",
-    fontSize: vsType.size.caption, fontFamily: vsType.family,
+    fontSize: 11,
     lineHeight: 16,
   },
   assignSmallButton: {
@@ -8119,7 +10006,7 @@ const styles = StyleSheet.create({
   },
   assignSmallButtonText: {
     color: "#ffffff",
-    fontSize: vsType.size.caption, fontFamily: vsType.family,
+    fontSize: 10.5,
     fontWeight: "800",
   },
   disabledButton: {
@@ -8156,8 +10043,8 @@ const styles = StyleSheet.create({
   },
   cancelButtonText: {
     color: "#b42318",
-    fontSize: vsType.size.micro, fontFamily: vsType.family,
-    fontWeight: "800",
+    fontSize: 10,
+    fontWeight: "900",
   },
 
   lguDoctrineNotice: {
@@ -8170,13 +10057,13 @@ const styles = StyleSheet.create({
   },
   lguDoctrineTitle: {
     color: "#087f74",
-    fontSize: vsType.size.label, fontFamily: vsType.family,
+    fontSize: 12.5,
     fontWeight: "800",
   },
   lguDoctrineText: {
     marginTop: 3,
     color: "#4f6b67",
-    fontSize: vsType.size.micro, fontFamily: vsType.family,
+    fontSize: 10,
     lineHeight: 14,
   },
 
@@ -8199,8 +10086,8 @@ const styles = StyleSheet.create({
 
   escalationSummaryIconText: {
     color: "#9A6700",
-    fontSize: vsType.size.section, fontFamily: vsType.family,
-    fontWeight: "800",
+    fontSize: 18,
+    fontWeight: "900",
   },
 
   reliefSummaryIcon: {
@@ -8215,7 +10102,7 @@ const styles = StyleSheet.create({
   },
   reliefSummaryIconText: {
     color: "#078F82",
-    fontSize: vsType.size.title, fontFamily: vsType.family,
+    fontSize: 24,
     fontWeight: "800",
   },
 
@@ -8223,7 +10110,7 @@ const styles = StyleSheet.create({
     marginTop: 5,
     maxWidth: 760,
     color: "#64748B",
-    fontSize: vsType.size.caption, fontFamily: vsType.family,
+    fontSize: 10.5,
     lineHeight: 16,
   },
 
@@ -8238,14 +10125,14 @@ const styles = StyleSheet.create({
 
   escalationRuleTitle: {
     color: "#7A4B00",
-    fontSize: vsType.size.label, fontFamily: vsType.family,
+    fontSize: 12.5,
     fontWeight: "800",
   },
 
   escalationRuleText: {
     marginTop: 4,
     color: "#795C2D",
-    fontSize: vsType.size.micro, fontFamily: vsType.family,
+    fontSize: 10,
     lineHeight: 15,
   },
 
@@ -8259,13 +10146,13 @@ const styles = StyleSheet.create({
   },
   reliefPolicyTitle: {
     color: "#1D4ED8",
-    fontSize: vsType.size.label, fontFamily: vsType.family,
+    fontSize: 12.5,
     fontWeight: "800",
   },
   reliefPolicyText: {
     marginTop: 4,
     color: "#475569",
-    fontSize: vsType.size.micro, fontFamily: vsType.family,
+    fontSize: 10,
     lineHeight: 15,
   },
 
@@ -8287,8 +10174,8 @@ const styles = StyleSheet.create({
   },
   directAssessmentButtonText: {
     color: "#078f82",
-    fontSize: vsType.size.micro, fontFamily: vsType.family,
-    fontWeight: "800",
+    fontSize: 10,
+    fontWeight: "900",
   },
   directAssessmentDone: {
     marginTop: 10,
@@ -8298,7 +10185,7 @@ const styles = StyleSheet.create({
   },
   directAssessmentDoneText: {
     color: "#15803d",
-    fontSize: vsType.size.micro, fontFamily: vsType.family,
+    fontSize: 10,
     lineHeight: 14,
     fontWeight: "800",
   },
@@ -8319,13 +10206,13 @@ const styles = StyleSheet.create({
   },
   directFormTitle: {
     color: "#0f172a",
-    fontSize: vsType.size.body, fontFamily: vsType.family,
-    fontWeight: "800",
+    fontSize: 14,
+    fontWeight: "900",
   },
   directFormSubtitle: {
     marginTop: 3,
     color: "#64748b",
-    fontSize: vsType.size.micro, fontFamily: vsType.family,
+    fontSize: 10,
     lineHeight: 14,
   },
   directFormBadge: {
@@ -8336,8 +10223,8 @@ const styles = StyleSheet.create({
   },
   directFormBadgeText: {
     color: "#0f766e",
-    fontSize: vsType.size.micro, fontFamily: vsType.family,
-    fontWeight: "800",
+    fontSize: 10,
+    fontWeight: "900",
     letterSpacing: 0.5,
   },
 
@@ -8363,7 +10250,7 @@ const styles = StyleSheet.create({
   },
   formSelectValue: {
     color: "#0F172A",
-    fontSize: vsType.size.label, fontFamily: vsType.family,
+    fontSize: 12.5,
     fontWeight: "800",
   },
   formSelectPlaceholder: {
@@ -8372,13 +10259,13 @@ const styles = StyleSheet.create({
   formSelectDescription: {
     marginTop: 2,
     color: "#64748B",
-    fontSize: vsType.size.micro, fontFamily: vsType.family,
+    fontSize: 10,
     lineHeight: 12,
   },
   formSelectChevron: {
     color: "#0F766E",
-    fontSize: vsType.size.section, fontFamily: vsType.family,
-    fontWeight: "800",
+    fontSize: 18,
+    fontWeight: "900",
   },
   formSelectMenu: {
     marginTop: 6,
@@ -8412,16 +10299,16 @@ const styles = StyleSheet.create({
   },
   formSelectOptionMarkText: {
     color: "#94A3B8",
-    fontSize: vsType.size.micro, fontFamily: vsType.family,
-    fontWeight: "800",
+    fontSize: 10,
+    fontWeight: "900",
   },
   formSelectOptionMarkTextActive: {
     color: "#0F766E",
   },
   formSelectOptionLabel: {
     color: "#334155",
-    fontSize: vsType.size.micro, fontFamily: vsType.family,
-    fontWeight: "800",
+    fontSize: 10,
+    fontWeight: "900",
   },
   formSelectOptionLabelActive: {
     color: "#0F766E",
@@ -8429,7 +10316,7 @@ const styles = StyleSheet.create({
   formSelectOptionDescription: {
     marginTop: 2,
     color: "#64748B",
-    fontSize: vsType.size.micro, fontFamily: vsType.family,
+    fontSize: 10,
     lineHeight: 12,
   },
   directInfoStrip: {
@@ -8442,13 +10329,13 @@ const styles = StyleSheet.create({
   },
   directInfoStripTitle: {
     color: "#0F766E",
-    fontSize: vsType.size.micro, fontFamily: vsType.family,
-    fontWeight: "800",
+    fontSize: 10,
+    fontWeight: "900",
   },
   directInfoStripText: {
     marginTop: 3,
     color: "#52706A",
-    fontSize: vsType.size.micro, fontFamily: vsType.family,
+    fontSize: 10,
     lineHeight: 13,
   },
   directGroupCard: {
@@ -8467,8 +10354,8 @@ const styles = StyleSheet.create({
     lineHeight: 24,
     color: "#ffffff",
     backgroundColor: "#0f766e",
-    fontSize: vsType.size.micro, fontFamily: vsType.family,
-    fontWeight: "800",
+    fontSize: 10,
+    fontWeight: "900",
   },
   directGroupContent: {
     flex: 1,
@@ -8494,7 +10381,7 @@ const styles = StyleSheet.create({
   },
   reliefScopeTitle: {
     color: "#334155",
-    fontSize: vsType.size.label, fontFamily: vsType.family,
+    fontSize: 12.5,
     fontWeight: "800",
   },
   reliefScopeTitleActive: {
@@ -8503,19 +10390,19 @@ const styles = StyleSheet.create({
   reliefScopeText: {
     marginTop: 4,
     color: "#64748B",
-    fontSize: vsType.size.micro, fontFamily: vsType.family,
+    fontSize: 10,
     lineHeight: 14,
   },
   directGroupTitle: {
     color: "#183448",
-    fontSize: vsType.size.meta, fontFamily: vsType.family,
-    fontWeight: "800",
+    fontSize: 11.5,
+    fontWeight: "900",
   },
   directGroupHint: {
     marginTop: 2,
     marginBottom: 9,
     color: "#7b8d9d",
-    fontSize: vsType.size.micro, fontFamily: vsType.family,
+    fontSize: 10,
     lineHeight: 13,
   },
   directTopGrid: {
@@ -8542,13 +10429,13 @@ const styles = StyleSheet.create({
     marginTop: 7,
     marginBottom: 5,
     color: "#475569",
-    fontSize: vsType.size.micro, fontFamily: vsType.family,
+    fontSize: 10,
     fontWeight: "800",
   },
   directFieldHelp: {
     marginTop: 4,
     color: "#94A3B8",
-    fontSize: vsType.size.micro, fontFamily: vsType.family,
+    fontSize: 10,
     lineHeight: 12,
   },
   directLockedInput: {
@@ -8559,8 +10446,8 @@ const styles = StyleSheet.create({
     marginTop: 5,
     marginBottom: 6,
     color: "#94a3b8",
-    fontSize: vsType.size.micro, fontFamily: vsType.family,
-    fontWeight: "800",
+    fontSize: 10,
+    fontWeight: "900",
     letterSpacing: 0.7,
   },
   directNeedGrid: {
@@ -8601,8 +10488,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#CBD5E1",
     color: "#64748B",
-    fontSize: vsType.size.micro, fontFamily: vsType.family,
-    fontWeight: "800",
+    fontSize: 10,
+    fontWeight: "900",
     backgroundColor: "#FFFFFF",
   },
   directNeedChoiceMarkActive: {
@@ -8612,8 +10499,8 @@ const styles = StyleSheet.create({
   },
   directNeedChoiceText: {
     color: "#475569",
-    fontSize: vsType.size.micro, fontFamily: vsType.family,
-    fontWeight: "800",
+    fontSize: 10,
+    fontWeight: "900",
   },
   directNeedChoiceTextActive: {
     color: "#0F766E",
@@ -8629,14 +10516,14 @@ const styles = StyleSheet.create({
   },
   directSelectedNeedsTitle: {
     color: "#334155",
-    fontSize: vsType.size.micro, fontFamily: vsType.family,
-    fontWeight: "800",
+    fontSize: 10,
+    fontWeight: "900",
   },
   directSelectedNeedsHint: {
     marginTop: 2,
     marginBottom: 7,
     color: "#64748B",
-    fontSize: vsType.size.micro, fontFamily: vsType.family,
+    fontSize: 10,
     lineHeight: 12,
   },
   directNeedField: {
@@ -8651,13 +10538,13 @@ const styles = StyleSheet.create({
   },
   directNeedLabel: {
     color: "#334155",
-    fontSize: vsType.size.micro, fontFamily: vsType.family,
-    fontWeight: "800",
+    fontSize: 10,
+    fontWeight: "900",
   },
   directNeedUnit: {
     marginTop: 1,
     color: "#94a3b8",
-    fontSize: vsType.size.micro, fontFamily: vsType.family,
+    fontSize: 10,
     fontWeight: "700",
   },
   directNeedInput: {
@@ -8669,7 +10556,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     backgroundColor: "#ffffff",
     color: "#0f172a",
-    fontSize: vsType.size.caption, fontFamily: vsType.family,
+    fontSize: 11,
     fontWeight: "800",
   },
   directNotesInput: {
@@ -8696,15 +10583,15 @@ const styles = StyleSheet.create({
   },
   directReviewEyebrow: {
     color: "#078F82",
-    fontSize: vsType.size.micro, fontFamily: vsType.family,
-    fontWeight: "800",
+    fontSize: 10,
+    fontWeight: "900",
     letterSpacing: 0.8,
   },
   directReviewTitle: {
     marginTop: 3,
     color: "#0F172A",
-    fontSize: vsType.size.meta, fontFamily: vsType.family,
-    fontWeight: "800",
+    fontSize: 11.5,
+    fontWeight: "900",
   },
   directReviewBadge: {
     paddingHorizontal: 8,
@@ -8714,8 +10601,8 @@ const styles = StyleSheet.create({
   },
   directReviewBadgeText: {
     color: "#15803D",
-    fontSize: vsType.size.micro, fontFamily: vsType.family,
-    fontWeight: "800",
+    fontSize: 10,
+    fontWeight: "900",
   },
   directReviewStats: {
     flexDirection: "row",
@@ -8733,29 +10620,29 @@ const styles = StyleSheet.create({
   },
   directReviewStatLabel: {
     color: "#94A3B8",
-    fontSize: vsType.size.micro, fontFamily: vsType.family,
-    fontWeight: "800",
+    fontSize: 10,
+    fontWeight: "900",
     letterSpacing: 0.6,
   },
   directReviewStatValue: {
     marginTop: 3,
     color: "#0F172A",
-    fontSize: vsType.size.section, fontFamily: vsType.family,
+    fontSize: 18,
     fontWeight: "800",
   },
   directReviewStatValueSmall: {
     marginTop: 3,
     color: "#0F172A",
-    fontSize: vsType.size.micro, fontFamily: vsType.family,
+    fontSize: 10,
     lineHeight: 13,
-    fontWeight: "800",
+    fontWeight: "900",
   },
   directReviewSectionLabel: {
     paddingHorizontal: 11,
     marginTop: 1,
     color: "#94A3B8",
-    fontSize: vsType.size.micro, fontFamily: vsType.family,
-    fontWeight: "800",
+    fontSize: 10,
+    fontWeight: "900",
     letterSpacing: 0.6,
   },
   directReviewNeedRow: {
@@ -8775,12 +10662,12 @@ const styles = StyleSheet.create({
   },
   directReviewNeedPillText: {
     color: "#0F766E",
-    fontSize: vsType.size.micro, fontFamily: vsType.family,
+    fontSize: 10,
     fontWeight: "800",
   },
   directReviewEmpty: {
     color: "#94A3B8",
-    fontSize: vsType.size.micro, fontFamily: vsType.family,
+    fontSize: 10,
     fontStyle: "italic",
   },
   directReviewNotice: {
@@ -8794,13 +10681,13 @@ const styles = StyleSheet.create({
   },
   directReviewNoticeTitle: {
     color: "#92400E",
-    fontSize: vsType.size.micro, fontFamily: vsType.family,
-    fontWeight: "800",
+    fontSize: 10,
+    fontWeight: "900",
   },
   directReviewNoticeText: {
     marginTop: 3,
     color: "#9A6700",
-    fontSize: vsType.size.micro, fontFamily: vsType.family,
+    fontSize: 10,
     lineHeight: 12.5,
   },
   directActionBar: {
@@ -8814,13 +10701,13 @@ const styles = StyleSheet.create({
   },
   directActionTitle: {
     color: "#183448",
-    fontSize: vsType.size.label, fontFamily: vsType.family,
+    fontSize: 12.5,
     fontWeight: "800",
   },
   directActionHint: {
     marginTop: 2,
     color: "#64748b",
-    fontSize: vsType.size.micro, fontFamily: vsType.family,
+    fontSize: 10,
     lineHeight: 13,
   },
   directSaveButton: {
@@ -8848,13 +10735,13 @@ const styles = StyleSheet.create({
   },
   fieldAuthorityTitle: {
     color: "#183448",
-    fontSize: vsType.size.label, fontFamily: vsType.family,
+    fontSize: 12.5,
     fontWeight: "800",
   },
   fieldAuthorityText: {
     marginTop: 3,
     color: "#64748b",
-    fontSize: vsType.size.micro, fontFamily: vsType.family,
+    fontSize: 10,
     lineHeight: 14,
   },
   fieldReportCard: {
@@ -8872,13 +10759,13 @@ const styles = StyleSheet.create({
   },
   fieldVolunteerName: {
     color: "#0f172a",
-    fontSize: vsType.size.label, fontFamily: vsType.family,
-    fontWeight: "800",
+    fontSize: 12.5,
+    fontWeight: "900",
   },
   fieldReportMeta: {
     marginTop: 2,
     color: "#7b8d9d",
-    fontSize: vsType.size.micro, fontFamily: vsType.family,
+    fontSize: 10,
     lineHeight: 13,
   },
   fieldReportStatus: {
@@ -8892,8 +10779,8 @@ const styles = StyleSheet.create({
   fieldStatusDismissed: { backgroundColor: "#64748b" },
   fieldReportStatusText: {
     color: "#ffffff",
-    fontSize: vsType.size.micro, fontFamily: vsType.family,
-    fontWeight: "800",
+    fontSize: 10,
+    fontWeight: "900",
   },
   fieldReportGrid: {
     flexDirection: "row",
@@ -8912,7 +10799,7 @@ const styles = StyleSheet.create({
   fieldReportValue: {
     marginTop: 4,
     color: "#334155",
-    fontSize: vsType.size.caption, fontFamily: vsType.family,
+    fontSize: 10.5,
     lineHeight: 15,
     fontWeight: "700",
   },
@@ -8927,13 +10814,13 @@ const styles = StyleSheet.create({
   remainingNeedsText: {
     marginTop: 4,
     color: "#7c5410",
-    fontSize: vsType.size.label, fontFamily: vsType.family,
+    fontSize: 12.5,
     fontWeight: "800",
   },
   remainingNeedsNote: {
     marginTop: 4,
     color: "#7a6740",
-    fontSize: vsType.size.micro, fontFamily: vsType.family,
+    fontSize: 10,
     lineHeight: 14,
   },
   fieldReviewInput: {
@@ -8962,8 +10849,8 @@ const styles = StyleSheet.create({
   },
   incorporateButtonText: {
     color: "#078f82",
-    fontSize: vsType.size.micro, fontFamily: vsType.family,
-    fontWeight: "800",
+    fontSize: 10,
+    fontWeight: "900",
   },
   dismissFieldButton: {
     backgroundColor: "#fff1f0",
@@ -8975,8 +10862,8 @@ const styles = StyleSheet.create({
   },
   dismissFieldButtonText: {
     color: "#b42318",
-    fontSize: vsType.size.micro, fontFamily: vsType.family,
-    fontWeight: "800",
+    fontSize: 10,
+    fontWeight: "900",
   },
   needAssessmentPanel: {
     marginTop: 12,
@@ -8988,20 +10875,20 @@ const styles = StyleSheet.create({
   },
   needAssessmentEyebrow: {
     color: "#078f82",
-    fontSize: vsType.size.micro, fontFamily: vsType.family,
-    fontWeight: "800",
+    fontSize: 10,
+    fontWeight: "900",
     letterSpacing: 0.8,
   },
   needAssessmentTitle: {
     marginTop: 2,
     color: "#183448",
-    fontSize: vsType.size.body, fontFamily: vsType.family,
-    fontWeight: "800",
+    fontSize: 14,
+    fontWeight: "900",
   },
   needAssessmentHint: {
     marginTop: 4,
     color: "#64748b",
-    fontSize: vsType.size.micro, fontFamily: vsType.family,
+    fontSize: 10,
     lineHeight: 14,
   },
   needInputGrid: {
@@ -9036,8 +10923,8 @@ const styles = StyleSheet.create({
   },
   fieldFinalNoticeText: {
     color: "#15803d",
-    fontSize: vsType.size.micro, fontFamily: vsType.family,
-    fontWeight: "800",
+    fontSize: 10,
+    fontWeight: "900",
   },
   fieldDismissedNotice: {
     marginTop: 10,
@@ -9047,10 +10934,20 @@ const styles = StyleSheet.create({
   },
   fieldDismissedNoticeText: {
     color: "#64748b",
-    fontSize: vsType.size.micro, fontFamily: vsType.family,
+    fontSize: 10,
     lineHeight: 14,
     fontWeight: "700",
   },
+
+  renderAutoMonitor: { backgroundColor: "#F4FAF6", borderColor: "#CDE9D7",
+    borderWidth: 1, borderRadius: 14, padding: 15, gap: 9, marginBottom: 12 },
+  renderAutoMonitorTitle: { color: "#075D47", fontSize: 13, fontWeight: "900" },
+  renderAutoMonitorSummary: { color: "#174C3C", fontSize: 12, fontWeight: "800" },
+  renderAutoMonitorRow: { flexDirection: "row", justifyContent: "space-between",
+    borderBottomWidth: 1, borderBottomColor: "#DCEFE2", paddingVertical: 7, gap: 9 },
+  renderAutoMonitorName: { color: "#16483A", fontSize: 12, fontWeight: "700", flex: 1 },
+  renderAutoMonitorStatus: { color: "#087D60", fontSize: 11, fontWeight: "800" },
+  renderAutoMonitorHelp: { color: "#527967", fontSize: 11, marginTop: 2 },
 
   emptyCard: {
     backgroundColor: "#ffffff",
@@ -9068,13 +10965,13 @@ const styles = StyleSheet.create({
   },
   emptyTitle: {
     color: "#0f172a",
-    fontSize: designUi.type.section.fontSize,
-    fontWeight: designUi.type.section.fontWeight, lineHeight: designUi.type.section.lineHeight,},
+    fontSize: 18,
+    fontWeight: "800",
+  },
   emptyText: {
     marginTop: 4,
     color: "#64748b",
-    fontSize: designUi.type.body.fontSize,
-    textAlign: "center", lineHeight: designUi.type.body.lineHeight, fontWeight: designUi.type.body.fontWeight,},
-  criticalNavigateButton: { marginTop: 12, minHeight: 42, alignItems: "center", justifyContent: "center", borderRadius: 10, backgroundColor: "#b91c1c", paddingHorizontal: 14 },
-  criticalNavigateButtonText: { color: "#ffffff", fontSize: vsType.size.meta, fontFamily: vsType.family, fontWeight: "800" },
+    fontSize: 11,
+    textAlign: "center",
+  },
 });

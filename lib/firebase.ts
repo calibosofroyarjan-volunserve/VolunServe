@@ -56,9 +56,10 @@ export const usingFirebaseEmulators =
  * These are Firebase's public WEB config fields, not service-account secrets.
  */
 const firebaseTarget = process.env.EXPO_PUBLIC_VOLUNSERVE_FIREBASE_TARGET || "production";
-if (firebaseTarget !== "production" && firebaseTarget !== "staging") {
-  throw new Error("Invalid Firebase target. Choose explicit 'staging' or 'production'.");
+if (firebaseTarget !== "staging" || process.env.EXPO_PUBLIC_VOLUNSERVE_ENV !== "staging") {
+  throw new Error("This staging build requires both staging targets before Firebase initialization.");
 }
+export const usingStagingFirebase = firebaseTarget === "staging";
 const useStagingFirebase = firebaseTarget === "staging";
 // A staging build must never authenticate against the live domain, and the
 // dedicated full-staging Hosting domain must never silently use production.
@@ -96,7 +97,7 @@ if (useStagingFirebase) {
   }
   // The dedicated Full Staging Hosting site must use its own Firebase Web App,
   // never a different staging project (including the older auth-only project).
-  if (fullStagingHosts.includes(currentHost) &&
+  if (useStagingFirebase &&
       (stage.projectId !== "volunserve-full-staging" ||
        stage.messagingSenderId !== "429213950126" ||
        stage.appId !== "1:429213950126:web:955dbf575697826b674d3f")) {

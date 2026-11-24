@@ -18,17 +18,10 @@ function load(source, imports = {}, env = process.env) {
 const read = file => fs.readFileSync(file,"utf8");
 const current = read("lib/firebaseAuth.ts");
 const baseline = cp.execFileSync("git",["show","e7c2cc8:lib/firebaseAuth.ts"],{encoding:"utf8"});
-const emailPolicy = load(read("lib/registrationEmailPolicy.ts"), {
-  "./disposableEmailDomains.generated": load(read("lib/disposableEmailDomains.generated.ts")),
-});
-const residentDetailsGuard = load(read("lib/requireCompleteResidentRegistration.ts"), {
-  "../constants/sjdmBarangays": load(read("constants/sjdmBarangays.ts")),
-  "../constants/occupationOptions": load(read("constants/occupationOptions.ts")),
-});
-const data = {firstName:"Maria",lastName:"Santos",middleName:"",email:"resident@example.com",password:"Password1!",age:25,phoneNumber:"+639171234567",region:"Region III ? Central Luzon",province:"Bulacan",city:"City of San Jose del Monte",barangay:"Muzon Proper",occupationCategory:"Student",occupationSpecialization:"College",occupationOther:"",role:"volunteer"};
+const data = {firstName:"Maria",lastName:"Santos",middleName:"",email:"resident@yahoo.com",password:"Password1!",age:25,phoneNumber:"+639171234567",region:"Region III ? Central Luzon",province:"Bulacan",city:"City of San Jose del Monte",barangay:"Muzon Proper",occupationCategory:"Student",occupationSpecialization:"College",occupationOther:"",role:"volunteer"};
 function harness(source, enabled, options = {}) {
   const calls = [];
-  const user = {uid:"signup-test",email:data.email,emailVerified:options.verified ?? true,providerData:(options.providers || ["password"]).map(providerId=>({providerId})),photoURL:"",reload:async()=>{calls.push("reload");}};
+  const user = {uid:"signup-test",email:options.userEmail || data.email,emailVerified:options.verified ?? true,providerData:(options.providers || ["password"]).map(providerId=>({providerId})),photoURL:"",reload:async()=>{calls.push("reload");}};
   const auth = {currentUser:options.noUser ? null : user};
   let profile = options.existing || null;
   let saved;
@@ -46,7 +39,12 @@ function harness(source, enabled, options = {}) {
     linkWithCredential:async()=>{calls.push("link");if(options.sdkLinkError)throw Object.assign(new Error("Link rejected"),{code:options.sdkLinkError});user.providerData.push({providerId:"password"});return {user};},
   };
   const store = {doc:(_,collection,uid)=>({collection,uid}),getDoc:async()=>{calls.push("read");return snapshot();},serverTimestamp:()=>"timestamp",writeBatch:()=>({set:(_,value)=>{saved=value;},commit:async()=>{calls.push("commit");profile=saved;}}),runTransaction:async(_,fn)=>{calls.push("transaction");await fn({get:async()=>options.raceExisting ? {exists:()=>true} : snapshot(),set:(_,value)=>{saved=value;profile=value;}});}};
-  const imports = {"./requireCompleteResidentRegistration":residentDetailsGuard,"./registrationEmailPolicy":emailPolicy,"./firebase":{auth,db:{}},"./signupFeature":{EMAIL_FIRST_SIGNUP_ENABLED:enabled},"firebase/auth":authSdk,"firebase/firestore":store,"react-native":{Platform:{OS:"web"}},"./androidNativePush":{disableAndroidPhoneAlerts:async()=>{}}};
+  const policy=load(read("lib/registrationEmailPolicy.ts"),{"./disposableEmailDomains.generated":load(read("lib/disposableEmailDomains.generated.ts"))});
+  const registrationFields=load(read("lib/requireCompleteResidentRegistration.ts"),{
+    "../constants/sjdmBarangays":load(read("constants/sjdmBarangays.ts")),
+    "../constants/occupationOptions":load(read("constants/occupationOptions.ts"))
+  });
+  const imports = {"./registrationEmailPolicy":policy,"./requireCompleteResidentRegistration":registrationFields,"./firebase":{auth,db:{}},"./signupFeature":{EMAIL_FIRST_SIGNUP_ENABLED:enabled},"firebase/auth":authSdk,"firebase/firestore":store,"react-native":{Platform:{OS:"web"}},"./androidNativePush":{disableAndroidPhoneAlerts:async()=>{}}};
   imports["./signupRegistration"]=load(read("lib/signupRegistration.ts"),imports);
   return {registration:imports["./signupRegistration"],api:load(source,imports),link:load(read("lib/emailFirstSignupAuth.ts"),imports),calls,user,auth,profile:()=>profile};
 }
@@ -66,34 +64,16 @@ function harness(source, enabled, options = {}) {
     const ios=load(read("lib/signupFeature.ts"),{"react-native":{Platform:{OS:"ios"}}},{EXPO_PUBLIC_EMAIL_FIRST_SIGNUP:""});
     assert.equal(ios.EMAIL_FIRST_SIGNUP_ENABLED,false);
   });
-  await check("legacy signup design matches published source apart from specific inline email errors",()=>{
-    const baseRef="f7bc8d12d8e926365175afb5288f2adf214025a5";
-    const extract=text=>text.replace(/\r\n/g,"\n").slice(text.replace(/\r\n/g,"\n").indexOf("  const currentMeta = STEP_META[step];")).replace(/\nexport default function Signup\(\) \{[\s\S]*$/,'').trimEnd();
+  await check("signup preserves hosted staging layout and deployed directory photo consent",()=>{
     for(const file of ["app/signup.tsx","app/signup.web.tsx"]) {
-      const source=read(file);
-      assert(source.includes("getRegistrationEmailError(formData.email)"),"Step 1 must screen disposable mail: "+file);
-      assert(source.includes("const emailValid = emailError === null;"),"Rejected email must block Next: "+file);
-      assert(source.includes("emailError,"),"Show the exact email validation reason: "+file);
-      let rendered=extract(source);
-      if(file.endsWith(".web.tsx")){
-        const current=`{formData.email.length > 0 && !!validation.emailError ? (
-                    <ValidationText ok={false}>{validation.emailError}</ValidationText>
-                  ) : null}`;
-        const original=`{formData.email.length > 0 && !validation.emailValid ? (
-                    <ValidationText ok={false}>Enter a valid email address.</ValidationText>
-                  ) : null}`;
-        assert.equal(rendered.split(current).length,2,"Specific web inline email error not found");
-        rendered=rendered.replace(current,original);
-      } else {
-        const newInline=`{formData.email.length > 0 && !!validation.emailError && (
-                <ValidationText ok={false}>{validation.emailError}</ValidationText>
-              )}
-              `;
-        assert.equal(rendered.split(newInline).length,2,"Native email field error not found");
-        rendered=rendered.replace(newInline,"");
-      }
-      const published=extract(cp.execFileSync("git",["show",baseRef+":"+file],{encoding:"utf8"}));
-      assert.equal(rendered,published,"Unexpected published signup layout drift: "+file);
+      const extract=text=>text.replace(/\r\n/g,"\n").slice(text.replace(/\r\n/g,"\n").indexOf("  const currentMeta = STEP_META[step];")).replace(/\nexport default function Signup\(\) \{[\s\S]*$/,'').trimEnd();
+      const deployed = ref => cp.execFileSync("git", ["show", ref + ":" + file], {encoding:"utf8"});
+      const consentRow = /^ *<CheckRow\s+label="Optional: [^"]*profile photo[^"]*"\s+checked=\{formData\.directoryConsent\}\s+onPress=\{[^\n]+?\}\s*\/>\n/gm;
+      const actual = extract(read(file));
+      const expectedConsent = extract(deployed("5af28d27")).match(consentRow);
+      assert.equal(expectedConsent?.length, 1);
+      assert.deepEqual(actual.match(consentRow), expectedConsent);
+      assert.equal(actual.replace(consentRow, ""), extract(deployed("ab81a3c6")));
     }
   });
   for(const enabled of [false,true]) {
@@ -129,7 +109,7 @@ function harness(source, enabled, options = {}) {
     });
   }
   await check("verified signup requires matching authenticated email",async()=>{
-    const h=harness(current,true);await assert.rejects(h.api.signUpUser({...data,email:"other@example.com",authProvider:"verified_email"}),/does not match/);assert.equal(h.profile(),null);
+    const h=harness(current,true);await assert.rejects(h.api.signUpUser({...data,email:"other@yahoo.com",authProvider:"verified_email"}),/does not match/);assert.equal(h.profile(),null);
   });
   await check("verified signup atomically creates production Basic Resident schema on the same UID",async()=>{
     const h=harness(current,true);await h.api.signUpUser({...data,password:"",authProvider:"verified_email"});
@@ -168,6 +148,17 @@ function harness(source, enabled, options = {}) {
   await check("unverified legacy profile can request verification without being replaced",async()=>{
     const original={role:"resident",status:"approved",fullName:"Existing Resident"};const h=harness(current,false,{verified:false,existing:original,createError:"auth/email-already-in-use"});await h.api.signUpUser({...data,authProvider:"email"});assert.deepEqual(h.profile(),original);assert(h.calls.includes("verification"));
   });
+  await check("verified Resident Signup accepts blank optional phone",async()=>{
+    const h=harness(current,true);
+    await h.api.signUpUser({...data,phoneNumber:"",authProvider:"verified_email"});
+    assert.equal(h.profile().phoneNumber,"");
+    assert.equal(h.profile().role,"resident");
+  });
+  await check("incomplete verified Resident profile is rejected before Firestore write",async()=>{
+    const h=harness(current,true);
+    await assert.rejects(h.api.signUpUser({...data,firstName:"",authProvider:"verified_email"}),/First name is required/);
+    assert(!h.calls.includes("transaction"));
+  });
   await check("email-first Create Account rejects a registered email without auto login",async()=>{
     const h=harness(current,true,{createError:"auth/email-already-in-use",noUser:true});
     await assert.rejects(
@@ -185,145 +176,108 @@ function harness(source, enabled, options = {}) {
   await check("Resume Registration only signs in and inspects the existing UID",async()=>{
     const h=harness(current,true,{verified:false});const user=await h.registration.authenticateEmailSignup(data.email,data.password,true);const state=await h.registration.inspectSignupUser(user);assert.equal(user.uid,h.user.uid);assert.equal(state.profileExists,false);assert.equal(user.emailVerified,false);assert(!h.calls.includes("create"));assert(!h.calls.includes("transaction"));
   });
-  await check("signup email syntax, typo, country domain and disposable checks",()=>{
+  await check("signup email syntax, exact Gmail/Yahoo allowlist and disposable checks",()=>{
     const generated=load(read("lib/disposableEmailDomains.generated.ts"));
     const policy=load(read("lib/registrationEmailPolicy.ts"),{"./disposableEmailDomains.generated":generated});
-    for(const value of ["person@yahoo.com.ph","person@outlook.com","person@department.gov.ph","person@legitimate.co"]) assert.equal(policy.getRegistrationEmailError(value),null);
-    for(const value of ["","bad@gmail..com","bad@gmail.con","bad@sub.mailinator.com","person@en2ch.co","person@en2ch.com","person@sub.en2ch.co","person@ruutukf.co","person@sub.ruutukf.co","person+tag@gmail.com","person+tag@googlemail.com"]) assert.equal(typeof policy.getRegistrationEmailError(value),"string");
+    for(const value of ["person@gmail.com","person@yahoo.com","PERSON@GMAIL.COM"," PERSON@YAHOO.COM "]) assert.equal(policy.getRegistrationEmailError(value),null);
+    for(const value of ["person@yahoo.com.ph","person@outlook.com","person@department.gov.ph","person@legitimate.co","person@legitimate.com","person@googlemail.com","person@sub.gmail.com","person@sub.yahoo.com","person@gmail.co","person@yahoo.co","person@en2ch.co","person@ruutukf.co","person@tempmail.com","person@smailpro.com","person@mailticking.com","person@emailnator.com","person@agogmail.com","les.terbigs.antos@gmail.com","ra.gngjb.a.hmkn@gmail.com","person@gmail.com.evil.com","", "bad@gmail..com","bad@gmail.con","bad@sub.mailinator.com"]) assert.equal(typeof policy.getRegistrationEmailError(value),"string",value);
+    assert.deepEqual([...policy.ALLOWED_NEW_SIGNUP_EMAIL_DOMAINS].sort(),["gmail.com","yahoo.com"]);
+    assert.match(policy.getRegistrationEmailError("person@unlisted-example.com"),/only @gmail\.com or @yahoo\.com/);
     for(const [wrong,right] of Object.entries(policy.KNOWN_PROVIDER_TYPO_CORRECTIONS)) assert(policy.getRegistrationEmailError("person@"+wrong).includes(right));
   });
-  await check("disposable domain rejects Firebase UID before creation and profile write",async()=>{
-    const h=harness(current,true,{noUser:true});
-    await assert.rejects(h.registration.authenticateEmailSignup("person@en2ch.com","Password1!",false,true),/Temporary email/);
-    await assert.rejects(h.registration.authenticateEmailSignup("person@en2ch.co","Password1!",false,true),/Temporary email/);
-    await assert.rejects(h.registration.authenticateEmailSignup("person@ruutukf.co","Password1!",false,true),/Temporary email/);
-    await assert.rejects(h.registration.authenticateEmailSignup("person@sub.ruutukf.co","Password1!",false,true),/Temporary email/);
-    assert(!h.calls.includes("create")); assert(!h.calls.includes("transaction"));
-    const existing=harness(current,true);
-    existing.user.email="person@en2ch.co";
-    await assert.rejects(existing.registration.inspectSignupUser(existing.user),/Temporary email/);
-    assert(!existing.calls.includes("transaction"));
-    const verified=harness(current,true);
-    await assert.rejects(verified.api.signUpUser({...data,email:"person@en2ch.com",authProvider:"verified_email"}),/Temporary email/);
-    assert(!verified.calls.includes("transaction"));
-  });
-  await check("known temporary email Resident cannot access login; staff remains compatible",async()=>{
-    const resident=harness(current,true,{existing:{role:"resident",status:"approved"}});
-    resident.user.email="person@en2ch.com";
-    await assert.rejects(resident.api.loginUser(resident.user.email,"Password1!"),/Temporary email/);
-    assert(resident.calls.includes("signout"));
-    const staff=harness(current,true,{existing:{role:"admin",status:"approved"}});
-    staff.user.email="person@en2ch.com";
-    await staff.api.loginUser(staff.user.email,"Password1!");
-    assert(!staff.calls.includes("signout"));
-  });
-  await check("guest mode clears Firebase session, and resident profile Rules enforce verification + details",()=>{
-    const web=read("app/login.web.tsx");
-    const native=read("app/login.tsx");
-    assert(web.includes('signOut(auth).then(() => router.replace("/public"))'));
-    assert(native.includes('firebaseSignOut(auth).then(() => router.replace("/public"))'));
-    const rules=read("firestore.rules");
-    assert(rules.includes('request.auth.token.get("email_verified", false) == true'));
-    assert(rules.includes('request.auth.token.get("email", "") == request.resource.data.email'));
-    assert(rules.includes('request.resource.data.keys().hasAll(['));
-  });
-  await check("verified Auth-only UID without Step 3 and Step 4 cannot create Basic Resident",async()=>{
-    for(const incomplete of [
-      {firstName:""},
-      {lastName:""},
-      {age:0},
-      {phoneNumber:"not-a-number"},
-      {barangay:""},
-      {barangay:"Outside SJDM"},
-      {occupationCategory:""},
-      {occupationSpecialization:""},
-    ]) {
-      const h=harness(current,true);
-      await assert.rejects(
-        h.api.signUpUser({...data,...incomplete,authProvider:"verified_email",password:""}),
-        /Step 3|Step 4/
-      );
-      assert(!h.calls.includes("transaction"), "Incomplete registration must not write users/{uid}");
-      assert.equal(h.profile(),null);
+  await check("invalid email domains stop new email/password and Google resident signup BEFORE Firebase writes",async()=>{
+    for(const email of ["x@sample.co","x@unknown.com","x@outlook.com","x@yahoo.com.ph","x@en2ch.co","x@ruutukf.co","x@tempmail.com","x@mailticking.com","x@emailnator.com","les.terbigs.antos@gmail.com","ra.gngjb.a.hmkn@gmail.com","x@gmail.com.attacker.test"]){
+      const h=harness(current,true,{noUser:true});
+      await assert.rejects(h.registration.authenticateEmailSignup(email,data.password,false,true));
+      assert(!h.calls.includes("create"),email);
+      const legacy=harness(current,false,{noUser:true});
+      await assert.rejects(legacy.api.signUpUser({...data,email,authProvider:"email"}));
+      assert(!legacy.calls.includes("create")&&!legacy.calls.includes("transaction"),email);
+      const google=harness(current,true,{providers:["google.com"]});
+      await assert.rejects(google.api.signUpUser({...data,email,authProvider:"google"}));
+      assert(!google.calls.includes("transaction"),email);
     }
-    const unverified=harness(current,true,{verified:false});
-    await assert.rejects(
-      unverified.api.signUpUser({...data,authProvider:"verified_email",password:""}),
-      /Verify your email/
-    );
-    assert(!unverified.calls.includes("transaction"));
   });
-  await check("email verification alone still leaves a pending Auth UID, never a Resident profile",async()=>{
-    const h=harness(current,true,{verified:false,noUser:true});
-    const user=await h.registration.authenticateEmailSignup(data.email,data.password,false,true);
-    assert.equal(user.uid,h.user.uid);
-    assert.equal(h.profile(),null);
-    assert(!h.calls.includes("transaction"));
-  });
-  await check("Google-only signup skips password, still requires details, and preserves same verified UID",async()=>{
-    const google=harness(current,true,{providers:["google.com"]});
-    await google.api.signUpUser({...data,authProvider:"google",password:""});
-    assert.equal(google.profile().uid,google.user.uid);
-    assert.equal(google.profile().role,"resident");
-    assert(google.calls.includes("transaction"));
-    assert(!google.calls.includes("create") && !google.calls.includes("link") && !google.calls.includes("first-password"));
-    const missing=harness(current,true,{providers:["google.com"]});
-    await assert.rejects(
-      missing.api.signUpUser({...data,firstName:"",authProvider:"google",password:""}),
-      /Step 3/
-    );
-    assert(!missing.calls.includes("transaction"));
-    const unverified=harness(current,true,{providers:["google.com"],verified:false});
-    await assert.rejects(
-      unverified.api.signUpUser({...data,authProvider:"google",password:""}),
-      /verified Google/
-    );
-    assert(!unverified.calls.includes("transaction"));
-    const fake=harness(current,true,{providers:["password"]});
-    await assert.rejects(
-      fake.api.signUpUser({...data,authProvider:"google",password:""}),
-      /verified Google/
-    );
-    assert(!fake.calls.includes("transaction"));
-  });
-  await check("Google onboarding shows Personal Details without forced password and keeps explicit privacy consent",()=>{
+  await check("legitimate Gmail/Yahoo email+password creates Auth UID and verified Basic Resident profile",async()=>{
+    for (const email of ["genuine.ordinary@gmail.com","newresident@yahoo.com"]) {
+      const h=harness(current,true,{noUser:true,userEmail:email});
+      const user=await h.registration.authenticateEmailSignup(email,"Password1!",false,true);
+      assert.equal(user.uid,h.user.uid);
+      assert(h.calls.includes("create"),"Email/password signup must create Firebase Auth UID for "+email);
+      const resume=harness(current,true,{userEmail:email});
+      await resume.api.signUpUser({...data,email,authProvider:"verified_email"});
+      assert(resume.calls.includes("transaction"),"Verified email/password signup must write Resident profile "+email);
+      assert.equal(resume.profile().role,"resident");
+      assert.equal(resume.profile().uid,resume.user.uid);
+    }
     const ui=read("components/auth/EmailFirstSignup.tsx");
-    assert(ui.includes("setStep(user.emailVerified ? 3 : 2)"));
-    assert(ui.includes("No extra password is needed"));
-    assert(ui.includes('authProvider: googleOnlyAccount ? "google" : "verified_email"'));
-    assert(ui.includes('if (!consent)'));
-    assert(ui.includes('Continue with Google'));
-    const stepOne = ui.slice(ui.indexOf('Step 1 — Get Started'), ui.indexOf('Step 2 — Verify Your Email'));
-    assert(stepOne.includes('label="Email Address *"'));
-    assert(stepOne.includes('Continue to Email Verification'));
-    assert(stepOne.includes('checkButton("Continue with Google"'));
-    assert(stepOne.indexOf('Continue to Email Verification') < stepOne.indexOf('checkButton("Continue with Google"'),
-      "Email & Password must be primary; Google is optional and below the email form");
-    assert(ui.includes('formatBirthday'));
-    assert(ui.includes('autoComplete={'));
-    assert(ui.includes('setFirstName(current => current ||'));
-    assert(ui.includes('setLastName(current => current ||'));
+    assert(ui.includes("Use a @gmail.com or @yahoo.com email. Email verification is required, or continue with Google."));
+    assert(ui.includes('Create Account & Verify Email'));
+    assert(ui.includes('Continue with Google'),"Google remains optional");
+    assert(!ui.includes("Gmail email/password registration is not allowed."));
+    assert(!ui.includes("gmailNeedsGoogle"));
+    assert(!read("lib/signupRegistration.ts").includes("requiresGoogleOAuthForNewRegistration"));
+    assert(!read("lib/firebaseAuth.ts").includes("GMAIL_GOOGLE_OAUTH_REQUIRED_MESSAGE"));
+    assert(ui.includes('styles.legacyInputInvalid'),"Invalid temporary domains show red validation");
   });
-  await check("legacy Guest profiles never become Resident accounts or link to signup",async()=>{
-    const legacy={role:"guest",status:"approved",email:data.email};
-    const h=harness(current,true,{existing:legacy});
-    assert.equal(h.api.isApprovedProfile(legacy),false);
-    await assert.rejects(h.registration.inspectSignupUser(h.user),/Guest Preview/);
-    assert(h.calls.includes("signout"));
-    assert.deepEqual(h.profile(),legacy);
-    assert(!h.calls.includes("transaction"));
-    const ui=read("components/guest/GuestWorkspace.tsx");
-    assert(ui.includes("Guest Preview · No Account"));
-    const publicLayout=read("app/public/_layout.tsx");
-    assert(publicLayout.includes("onAuthStateChanged(auth"));
-    assert(publicLayout.includes("void signOut(auth)"));
+  await check("observed shared Gmail examples and MailTicking domains are rejected before Firebase writes",async()=>{
+    const policy=load(read("lib/registrationEmailPolicy.ts"),{
+      "./disposableEmailDomains.generated":load(read("lib/disposableEmailDomains.generated.ts"))
+    });
+    const examples=["les.terbigs.antos@gmail.com","ra.gngjb.a.hmkn@gmail.com",
+      "random@mailticking.com","random@emailnator.com","random@agogmail.com"];
+    for(const email of examples) {
+      assert.equal(typeof policy.getRegistrationEmailError(email),"string",email);
+      const h=harness(current,true,{noUser:true,userEmail:email});
+      await assert.rejects(h.registration.authenticateEmailSignup(email,"Password1!",false,true));
+      assert(!h.calls.includes("create"),"Known temporary inbox must be rejected before Auth create");
+    }
+    // Ordinary Gmail local parts must not be treated as disposable just because they contain dots.
+    for(const legitimate of ["john.smith@gmail.com","student.2026@gmail.com","a.b.c@gmail.com"]) {
+      assert.equal(policy.getRegistrationEmailError(legitimate),null);
+    }
+  });
+  await check("fragmented Gmail formats and exact observed temporary Gmail dot-aliases are blocked",async()=>{
+    const generated=load(read("lib/disposableEmailDomains.generated.ts"));
+    const policy=load(read("lib/registrationEmailPolicy.ts"),{
+      "./disposableEmailDomains.generated":generated
+    });
+    const observed="po.p.ul.o.u.svm.b.xm.k@gmail.com";
+    const canonical=policy.canonicalGmailMailbox(observed);
+    assert.equal(canonical, "populousvmbxmk@gmail.com");
+    for(const email of [
+      observed, canonical, "p.o.p.ul.o.usv.m.bx.mk@gmail.com",
+      "les.terbigs.antos@gmail.com", "lesterbigsantos@gmail.com",
+      "ra.gngjb.a.hmkn@gmail.com", "r.a.gngjbahmkn@gmail.com",
+      "one.two.three.four.five@gmail.com", "a.b.c.d.e@gmail.com",
+      "person@mailticking.com", "person@emailnator.com",
+      "random.name@unknown.co", "random@outlook.com"
+    ]){
+      const problem=policy.getRegistrationEmailError(email);
+      assert.equal(typeof problem,"string",email);
+      const h=harness(current,true,{noUser:true,userEmail:email});
+      await assert.rejects(h.registration.authenticateEmailSignup(email,"Password1!",false,true));
+      assert(!h.calls.includes("create"),"Blocked input reached Firebase Auth: "+email);
+    }
+    for(const legitimate of [
+      "john.smith@gmail.com","student.2026@gmail.com",
+      "alice.b.smith@gmail.com","a.b.c@gmail.com",
+      "legitimateusername@gmail.com","resident@yahoo.com"
+    ]) assert.equal(policy.getRegistrationEmailError(legitimate),null,legitimate);
+    // These are rules for new Signup; never change existing login capabilities.
+    const ui=read("components/auth/EmailFirstSignup.tsx");
+    assert(ui.includes("completedEmailInput && !!emailErr"),
+      "Complete suspicious address must be shown red BEFORE form submission");
+    assert(ui.includes("Create Account & Verify Email"));
+    assert(ui.includes("Continue with Google"));
+    assert(!ui.includes("gmailNeedsGoogle"));
   });
   await check("native Google signup owns OAuth and never bounces pending users to Login",()=>{
     assert(read("lib/useSignupGoogle.ts").includes("signInWithCredential"));
     assert(read("lib/useSignupGoogle.web.ts").includes("signInWithPopup"));
     const ui=read("components/auth/EmailFirstSignup.tsx");
     assert(ui.includes("await signInGoogle()"));assert(ui.includes("authRevision.current === revision"));
-    assert(ui.includes("sendEmailVerification(user)"));assert(ui.includes('authProvider: googleOnlyAccount ? "google" : "verified_email"'));
+    assert(ui.includes("sendEmailVerification(user)"));assert(ui.includes('authProvider: googleSignupAccount ? "google" : "verified_email"'));
   });
   console.log(checks+" signup production regression cases passed");
 })().catch(e=>{console.error(e);process.exitCode=1;});

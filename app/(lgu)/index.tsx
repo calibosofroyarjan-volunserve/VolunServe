@@ -1,3 +1,4 @@
+import { getSafeVolunServeBackendBaseUrl } from "../../lib/stagingExpoServiceIsolation";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { doc, getDoc } from "firebase/firestore";
@@ -16,7 +17,7 @@ import {
 import { db } from "../../lib/firebase";
 import { logoutUser } from "../../lib/firebaseAuth";
 import { useUserSession } from "../../lib/useUserSession";
-const BACKEND_URL = "https://volunserve.onrender.com";
+const BACKEND_URL = getSafeVolunServeBackendBaseUrl();
 type LguPersonnel = {
   uid: string;
   fullName: string;

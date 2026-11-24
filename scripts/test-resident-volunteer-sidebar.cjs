@@ -23,12 +23,14 @@ test("Resident navigation has five service modules; Profile stays in account men
  assert.deepEqual(found,expected);
  for(const gone of ["my-cases","notifications","announcements","map-tracking","profile","certificate"])assert.ok(!found.includes(gone));
 });
-test("Volunteer navigation exposes Emergency Tasks and restored Certificates without duplicate progress or alerts",()=>{
+test("Volunteer navigation retains Emergency Tasks and My Certificates without redundant links",()=>{
  const menuText=menu("volunteerDesktopTabs");
  const found=[...menuText.matchAll(/name:"([^"]+)"/g)].map(x=>x[1]);
+ // Current production desktop sidebar intentionally includes a dedicated
+ // Certificates module; do not remove it to satisfy an obsolete three-tab test.
  assert.deepEqual(found,["index","volunteer","community-events","certificate"]);
- assert.match(menuText,/label:"My Certificates"/);
  assert.match(menuText,/label:"Emergency Tasks"/);
+ assert.match(menuText,/label:"My Certificates"/);
  assert.doesNotMatch(menuText,/My Progress|Volunteer Tasks|Notifications|Announcements|My Profile/);
  assert.match(web,/Emergency Tasks/);
  assert.match(native,/Emergency Tasks/);
@@ -59,4 +61,27 @@ test("Sidebars use only low-opacity Super Admin leaf accent",()=>{
  assert.match(layout,/mobileSidebarLeafDecoration/);
  assert.match(layout,/name="leaf-outline" size=\{220\}/);
  assert.match(layout,/opacity:0\.16/);
+});
+
+test("Resident and Volunteer non-Home desktop modules retain a shared, unobstructed account header",()=>{
+ const header=read("components/layout/ResidentDesktopActions.tsx");
+ // Both approved account modes use the same header on every non-Home route.
+ assert.match(layout,/currentMode === "resident" \|\| currentMode === "volunteer"/);
+ assert.match(layout,/route\.name !== "index"/);
+ assert.match(layout,/header: \(\) => <ResidentDesktopActions \/>/);
+ // Home already owns its bell and account dropdown: never duplicate there.
+ assert.match(homeWeb,/styles\.desktopHeaderStrip/);
+ // Mobile uses its existing account header; this change is desktop-only.
+ assert.match(layout,/if \(!isDesktopWeb\)/);
+ assert.match(layout,/onPress=\{\(\) => visit\("notifications"\)\}/);
+ assert.match(layout,/onPress=\{\(\) => visit\("profile"\)\}/);
+ // Dropdowns use a Modal above scrollable map/form/card layers and
+ // preserve the existing account and notification destinations.
+ assert.match(header,/<Modal/);
+ assert.match(header,/transparent/);
+ assert.match(header,/where\("userId", "==", user\.uid\)/);
+ assert.match(header,/useAnnouncementAlerts\(user\?\.uid\)/);
+ assert.match(header,/navigate\("\/notifications"\)/);
+ assert.match(header,/navigate\("\/profile"\)/);
+ assert.match(header,/label=\{loggingOut \? "Logging out\.\.\." : "Log Out"\}/);
 });
