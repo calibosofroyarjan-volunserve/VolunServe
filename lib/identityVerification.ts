@@ -135,7 +135,7 @@ export function resolveIdentityBackendBaseUrl(
     throw new Error("Staging identity API URL is required; refusing production fallback.");
   }
   let value = trimmed || FALLBACK_BACKEND_URL;
-  value = value.replace(/\\/+$/, "");
+  value = value.replace(/\/+$/, "");
   const suffixes = ["/api/identity/verify", "/api/identity/status"];
   for (const suffix of suffixes) {
     if (value.endsWith(suffix)) value = value.slice(0, -suffix.length);
@@ -163,7 +163,7 @@ export function resolveIdentityBackendBaseUrl(
       (host.includes("staging") || isLocal)) {
     throw new Error("Production identity verification cannot connect to staging.");
   }
-  return parsed.origin + parsed.pathname.replace(/\\/+$/, "");
+  return parsed.origin + parsed.pathname.replace(/\/+$/, "");
 }
 
 function getBackendBaseUrl() {
