@@ -108,27 +108,73 @@ export type PrecheckIdentityDocumentResult = {
 
 const FALLBACK_BACKEND_URL = "https://volunserve.onrender.com";
 
+/**
+ * Resolve the identity API without ever silently sending staging ID photos or
+ * Firebase tokens to production. This is intentionally independent of any
+ * legacy staging branches and keeps the established live endpoint intact.
+ */
+export function resolveIdentityBackendBaseUrl(
+  firebaseTarget: string,
+  firebaseProjectId: string,
+  configuredUrl?: string,
+): string {
+  if (firebaseTarget !== "production" && firebaseTarget !== "staging") {
+    throw new Error("Identity verification requires an explicit valid Firebase target.");
+  }
+  const projectId = String(firebaseProjectId || "").trim();
+  const productionProjectId = "volunserve-3aa5b";
+  if (firebaseTarget === "production" && projectId !== productionProjectId) {
+    throw new Error("Identity verification blocked: production Firebase project mismatch.");
+  }
+  if (firebaseTarget === "staging" && (!projectId || projectId === productionProjectId)) {
+    throw new Error("Identity verification blocked: staging requires separate Firebase.");
+  }
+
+  const trimmed = String(configuredUrl || "").trim();
+  if (firebaseTarget === "staging" && !trimmed) {
+    throw new Error("Staging identity API URL is required; refusing production fallback.");
+  }
+  let value = trimmed || FALLBACK_BACKEND_URL;
+  value = value.replace(/\\/+$/, "");
+  const suffixes = ["/api/identity/verify", "/api/identity/status"];
+  for (const suffix of suffixes) {
+    if (value.endsWith(suffix)) value = value.slice(0, -suffix.length);
+  }
+  let parsed: URL;
+  try {
+    parsed = new URL(value);
+  } catch {
+    throw new Error("Identity verification API URL is invalid.");
+  }
+  const host = parsed.hostname.toLowerCase();
+  const isLocal = host === "localhost" || host === "127.0.0.1";
+  if (parsed.username || parsed.password || parsed.search || parsed.hash ||
+      (parsed.protocol !== "https:" && !(firebaseTarget === "staging" && isLocal && parsed.protocol === "http:"))) {
+    throw new Error("Identity verification requires a secure API URL.");
+  }
+  const knownProductionHosts = [
+    "volunserve.onrender.com", "volunserve.com", "www.volunserve.com",
+    "volunserve.org", "www.volunserve.org",
+  ];
+  if (firebaseTarget === "staging" && knownProductionHosts.includes(host)) {
+    throw new Error("Staging identity verification cannot connect to production.");
+  }
+  if (firebaseTarget === "production" &&
+      (host.includes("staging") || isLocal)) {
+    throw new Error("Production identity verification cannot connect to staging.");
+  }
+  return parsed.origin + parsed.pathname.replace(/\\/+$/, "");
+}
+
 function getBackendBaseUrl() {
-  // The Resident app must always call the main VolunServe backend.
-  // The separate AI service is private and is reached only server-to-server.
-  let value =
-    process.env.EXPO_PUBLIC_IDENTITY_VERIFICATION_API_URL?.trim() ||
-    FALLBACK_BACKEND_URL;
-
-  value = value.replace(/\/+$/, "");
-
-  const verifySuffix = "/api/identity/verify";
-  const statusSuffix = "/api/identity/status";
-
-  if (value.endsWith(verifySuffix)) {
-    value = value.slice(0, -verifySuffix.length);
-  }
-
-  if (value.endsWith(statusSuffix)) {
-    value = value.slice(0, -statusSuffix.length);
-  }
-
-  return value;
+  const firebaseTarget =
+    process.env.EXPO_PUBLIC_VOLUNSERVE_FIREBASE_TARGET || "production";
+  const projectId = String(auth.app.options.projectId || "");
+  return resolveIdentityBackendBaseUrl(
+    firebaseTarget,
+    projectId,
+    process.env.EXPO_PUBLIC_IDENTITY_VERIFICATION_API_URL,
+  );
 }
 
 async function getAuthenticatedUser() {
