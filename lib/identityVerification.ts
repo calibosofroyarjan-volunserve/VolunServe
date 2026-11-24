@@ -308,6 +308,12 @@ export type SubmitIdentityVerificationInput = {
 const FALLBACK_BACKEND_URL = "https://volunserve.onrender.com";
 
 export function getBackendBaseUrl() {
+  // The Didit-only QA page resolves its separate backend independently.
+  // Legacy ID/selfie uploads and status calls must not send QA Firebase tokens
+  // to the shared staging or production Node services.
+  if (auth.app.options.projectId === "volunserve-didit-qa") {
+    throw new Error("Didit QA must use its isolated verification backend.");
+  }
   // The separate Python AI service is private; clients use the Node backend.
   // A staging build must NEVER silently send ID or selfie images to production.
   const staging = identityEnvironmentTarget({
