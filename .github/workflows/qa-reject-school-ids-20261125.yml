@@ -1,0 +1,41 @@
+name: QA school ID rejection (NO DEPLOY)
+on:
+  push:
+    branches: ['fix/reject-school-ids-identity-screening-20261125']
+    paths:
+      - 'identity-ai/**'
+      - 'backend/server.js'
+      - 'lib/identityVerification.ts'
+      - 'components/identity/DocumentScreeningSummary.tsx'
+      - 'scripts/test-unified-identity-ai-government-id-screening.cjs'
+      - '.github/workflows/qa-reject-school-ids-20261125.yml'
+permissions:
+  contents: read
+jobs:
+  screening:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Unit tests for Philippine government, school, and company ID text
+        run: python -m unittest discover -s identity-ai -p 'test_document_screening.py' -v
+      - name: Validate Python and Node integration syntax
+        run: |
+          python -m py_compile identity-ai/document_screening.py identity-ai/main.py
+          node --check backend/server.js
+          node scripts/test-unified-identity-ai-government-id-screening.cjs
+  client:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - run: npx tsc --noEmit --incremental false
+      - run: npx expo export --platform web

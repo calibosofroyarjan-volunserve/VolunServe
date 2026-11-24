@@ -23,6 +23,9 @@ export type DocumentScreening = {
 };
 
 export function documentScreeningLabel(value?: DocumentScreening | null): string {
+  if (value?.warningCodes.includes("non_government_id_detected")) {
+    return "School or company ID detected. Upload a supported government-issued photo ID.";
+  }
   switch (value?.status) {
     case "text_consistent_unverified":
       return "ID type matches recognized text, but authenticity is not verified.";

@@ -711,6 +711,7 @@ function normalizeIdDocumentScreening(value) {
     "selected_id_type_conflicts_with_ocr",
     "document_type_not_recognized",
     "multiple_document_type_signals",
+    "non_government_id_detected",
     "ocr_unavailable",
   ];
   const declared = String(value?.declaredIdType || "");
@@ -5065,13 +5066,20 @@ app.post(
       const aiResult = await callIdentityAiService(request);
       const documentScreening = normalizeIdDocumentScreening(aiResult?.documentScreening);
       const rawDecision = normalizeAiDecision(aiResult?.decision || aiResult?.status);
+      const explicitlyUnsupportedId =
+        documentScreening.status === "mismatch" &&
+        documentScreening.warningCodes.includes("non_government_id_detected");
+      // School/employee ID evidence overrides a positive face comparison.
+      // Unknown or conflicting OCR is never used as an automatic rejection.
       // Face comparison and keyword OCR cannot authenticate a government ID
       // or prove liveness. Never auto-verify without both verified assurances.
-      const decision = rawDecision === "verified" &&
+      const decision = explicitlyUnsupportedId
+        ? "failed"
+        : rawDecision === "verified" &&
           (documentScreening.authenticityVerified !== true ||
             aiResult?.livenessImplemented !== true)
-        ? "manual_review"
-        : rawDecision;
+          ? "manual_review"
+          : rawDecision;
       const matchScore = numberOrNull(aiResult?.matchScore);
       const livenessScore = numberOrNull(aiResult?.livenessScore);
       const verificationId = cleanText(
@@ -5096,7 +5104,9 @@ app.post(
         const attemptCycle = Number.isSafeInteger(current.aiAttemptCycle) && current.aiAttemptCycle > 0
           ? current.aiAttemptCycle : 1;
         const result = identityAttemptOutcome(decision, attemptCount);
-        const resultMessage = result.requiresManualReview && decision === "failed"
+        const resultMessage = explicitlyUnsupportedId
+          ? "School and company IDs are not accepted. Please scan a supported government-issued photo ID."
+          : result.requiresManualReview && decision === "failed"
           ? "Three identity verification attempts were unsuccessful. Your case has been referred for Admin review."
           : cleanText(aiResult?.message || (
             decision === "verified" ? "Identity verification completed successfully." :
