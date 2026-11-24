@@ -17,5 +17,5 @@ test("CORS preflight allows the identity ID-document consent header",()=>{
     assert.ok(headers.includes(value), "Missing preflight header: "+value);
   }
   assert.match(s,/request\.headers\["x-volunserve-document-precheck-consent"\] !== "true"/);
-  assert.match(s,/app\.post\(\s*"\/api\/identity\/document\/precheck"/);
+  assert.match(s,/app\.post\(\s*\[\s*"\/api\/identity\/document\/precheck",\s*"\/api\/identity\/document\/precheck-with-evidence"\s*\]/);
 });
