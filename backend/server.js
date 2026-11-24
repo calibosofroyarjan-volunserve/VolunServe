@@ -12251,6 +12251,13 @@ require("./renderEmergencyAutoInvites").installRoutes({
   app, db, FieldValue, requireFirebaseUser, loadUserProfile,
 });
 
+// Dedicated Didit Live verification endpoints: disabled unless explicitly
+// enabled with a non-Sandbox Live workflow, Live credentials and matching
+// production Firebase project. Does not replace the existing Admin review flow.
+require("./diditLiveIdentityRoutes").registerDiditIdentityRoutes(app, {
+  db, FieldValue, requireFirebaseUser,
+});
+
 // Automatic, idempotent recovery for eligible completed event certificates.
 // Does not change attendance, roles, certificates that already exist, or rules.
 startCommunityCertificateAutoSync({db,reconcile:reconcileCommunityEventCertificates});

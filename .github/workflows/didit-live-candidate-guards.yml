@@ -1,0 +1,30 @@
+name: Didit Live candidate guards (no deploy)
+on:
+  pull_request:
+    branches: [backend-live-protected]
+    paths:
+      - backend/diditLiveIdentityRoutes.js
+      - backend/test-didit-live-policy.cjs
+      - backend/server.js
+      - .github/workflows/didit-live-candidate-guards.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  didit-live-guards:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Check backend syntax
+        run: |
+          node --check backend/server.js
+          node --check backend/diditLiveIdentityRoutes.js
+          node --check backend/test-didit-live-policy.cjs
+      - name: Verify live/sandbox separation and decision policy
+        run: node --test backend/test-didit-live-policy.cjs
+      - name: No production changes or deployment
+        run: echo "Candidate branch only; no Render/Firebase deploy in this workflow."
