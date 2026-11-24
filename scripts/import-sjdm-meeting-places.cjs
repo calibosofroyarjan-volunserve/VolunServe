@@ -12,13 +12,22 @@ const inside=(lat,lng)=>{
 };
 const bounds="(14.758,121.005,14.877,121.178)";
 const categories=["amenity","shop","place","highway","tourism","leisure","office","historic","public_transport","railway","landuse","natural","building","healthcare","sport","craft","man_made"];
-const query="[out:json][timeout:45];("+categories.map(k=>"nwr[name]["+k+"]"+bounds+";").join("")+");out center;";
+const query='[out:json][timeout:60];nwr["name"][~"^('+categories.join("|")+')$"~"."]'+bounds+';out center;';
 async function load(){
- const endpoint="https://overpass-api.de/api/interpreter";
- const response=await fetch(endpoint,{method:"POST",body:new URLSearchParams({data:query}),headers:{"User-Agent":"VolunServe-SJDM-static-place-index/1.0 (https://volunserve.com)","Accept":"application/json"},signal:AbortSignal.timeout(70000)});
- assert(response.ok,"OSM extract unavailable HTTP "+response.status);
- const data=await response.json();assert(Array.isArray(data.elements));assert(!data.remark,"Incomplete OSM extract");
- return data.elements;
+ const endpoints=["https://overpass-api.de/api/interpreter","https://overpass.private.coffee/api/interpreter"];
+ let lastError;
+ for(const endpoint of endpoints){
+  try{
+   const url=endpoint+"?"+new URLSearchParams({data:query});
+   const response=await fetch(url,{headers:{"User-Agent":"VolunServe-SJDM-static-place-index/1.0 (https://volunserve.com)","Accept":"application/json"},signal:AbortSignal.timeout(100000)});
+   assert(response.ok,"OSM extract unavailable HTTP "+response.status);
+   const data=await response.json();assert(Array.isArray(data.elements));assert(!data.remark,"Incomplete OSM extract");
+   assert(data.elements.length>=100,"Incomplete named-place dataset");
+   console.log("Public OSM snapshot received: "+data.elements.length+" features");
+   return data.elements;
+  }catch(error){lastError=error;console.warn("One-time import unavailable: "+error.message);}
+ }
+ throw lastError;
 }
 (async()=>{
  const entries=await load();
