@@ -69,10 +69,13 @@ function identityAttemptCount(value) {
 }
 
 function identityAttemptOutcome(decision, attempts) {
-  const requiresManualReview = decision === "manual_review" ||
+  // A positive original AI face match is a candidate for independent
+  // LGU review, NEVER an automatic Verified Resident decision.
+  const requiresManualReview =
+    decision === "verified" ||
+    decision === "manual_review" ||
     (decision === "failed" && attempts >= MAX_IDENTITY_AI_ATTEMPTS);
-  const status = decision === "verified" ? "verified" :
-    requiresManualReview ? "pending" : "failed";
+  const status = requiresManualReview ? "pending" : "failed";
   return { status, requiresManualReview };
 }
 const ASSISTANCE_EVIDENCE_UPLOAD_LIMIT = "10mb";
