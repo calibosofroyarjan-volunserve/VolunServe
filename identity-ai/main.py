@@ -1363,6 +1363,10 @@ async def verify_identity(
         default=None,
         alias="X-VolunServe-Internal-Key",
     ),
+    x_volunserve_profile_first_name: str | None = Header(default=None, alias="X-VolunServe-Profile-First-Name"),
+    x_volunserve_profile_last_name: str | None = Header(default=None, alias="X-VolunServe-Profile-Last-Name"),
+    x_volunserve_profile_date_of_birth: str | None = Header(default=None, alias="X-VolunServe-Profile-Date-Of-Birth"),
+    x_volunserve_profile_barangay: str | None = Header(default=None, alias="X-VolunServe-Profile-Barangay"),
 ):
     require_internal_backend(
         x_volunserve_internal_key
@@ -1405,6 +1409,8 @@ async def verify_identity(
     selfie_upload = form.get(
         "selfie"
     )
+    id_back_upload = form.get("idBackDocument")
+    id_back_document_bytes = None
     try:
         id_document_bytes = (
             await read_upload(
@@ -1426,6 +1432,12 @@ async def verify_identity(
                 ),
             )
         )
+        if isinstance(id_back_upload, StarletteUploadFile):
+            id_back_document_bytes = await read_upload(
+                id_back_upload,
+                label="Government ID back image",
+                maximum_bytes=MAX_ID_DOCUMENT_BYTES,
+            )
     finally:
         if isinstance(
             id_upload,
@@ -1437,6 +1449,8 @@ async def verify_identity(
             StarletteUploadFile,
         ):
             await selfie_upload.close()
+        if isinstance(id_back_upload, StarletteUploadFile):
+            await id_back_upload.close()
     if not face_mesh_engine_ready():
         raise HTTPException(
             status_code=503,
@@ -1448,17 +1462,40 @@ async def verify_identity(
     try:
         # Both the profile's Be a Verified Resident flow and the LGU review
         # queue use this one protected endpoint; no separate visual-only AI.
-        result = await asyncio.to_thread(
-            run_face_verification,
-            uid=uid,
-            id_document_bytes=id_document_bytes,
-            selfie_bytes=selfie_bytes,
-        )
+        # Use the historical OCR gate FIRST, then invoke the unchanged
+        # original MediaPipe face matcher only for a plausible government ID.
         document_screening = await asyncio.to_thread(
             screen_government_id,
             declared_type=id_type,
             id_document_bytes=id_document_bytes,
+            id_back_document_bytes=id_back_document_bytes,
+            expected_first_name=x_volunserve_profile_first_name or "",
+            expected_last_name=x_volunserve_profile_last_name or "",
+            expected_date_of_birth=x_volunserve_profile_date_of_birth or "",
+            expected_barangay=x_volunserve_profile_barangay or "",
         )
+        ready = id_type != "other_government_id" and screening_ready_for_face_comparison(
+            document_screening, id_type
+        )
+        if id_back_document_bytes is not None and hashlib.sha256(id_document_bytes).digest() == hashlib.sha256(id_back_document_bytes).digest():
+            ready = False
+            document_screening["status"] = "inconclusive"
+            document_screening["warningCodes"] = list(dict.fromkeys(
+                document_screening.get("warningCodes", []) + ["document_front_back_duplicate"]
+            ))[:4]
+        if not ready:
+            result = failed_attempt_result(
+                uid=uid,
+                message="ID OCR screening did not confirm the selected government ID. Retake a clearer front/back scan or request Admin review.",
+                warning="document_precheck_not_ready",
+            )
+        else:
+            result = await asyncio.to_thread(
+                run_face_verification,
+                uid=uid,
+                id_document_bytes=id_document_bytes,
+                selfie_bytes=selfie_bytes,
+            )
     except HTTPException:
         raise
     except Exception:
