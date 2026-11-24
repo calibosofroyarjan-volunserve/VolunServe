@@ -1,0 +1,165 @@
+# One-time Hosting-only release. Fails closed on newer live revisions.
+# Publishes a hidden, nonprivileged Sandbox presentation page.
+name: Release Didit Sandbox Video Demo (Hosting only, rollback)
+on:
+  push:
+    branches: [live-protected]
+    paths: ['.github/workflows/release-didit-sandbox-video-20261124.yml']
+permissions:
+  contents: read
+concurrency:
+  group: volunserve-production-hosting-release
+  cancel-in-progress: false
+jobs:
+  publish:
+    if: github.repository == 'calibosofroyarjan-volunserve/VolunServe' && github.ref == 'refs/heads/live-protected'
+    environment: production
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      CI: 'true'
+      EXPO_NO_TELEMETRY: '1'
+      SITE: volunserve-3aa5b
+      BASE_SHA: 5af28d279618dacd5eab518e5e0d52259eae8844
+      SOURCE_SHA: 9264fe2ad8b958508c7e0dc35a16f4121f57a0f4
+      EXPO_PUBLIC_DIDIT_PRESENTATION_ENABLED: 'true'
+      EXPO_PUBLIC_VOLUNSERVE_ENV: production
+      EXPO_PUBLIC_VOLUNSERVE_FIREBASE_TARGET: production
+      EXPO_PUBLIC_IDENTITY_VERIFICATION_API_URL: https://volunserve.onrender.com
+    steps:
+      - name: Checkout exact release controller
+        uses: actions/checkout@v4
+        with:
+          path: controller
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          submodules: false
+      - name: Checkout exact CURRENT-LIVE-derived demo source
+        uses: actions/checkout@v4
+        with:
+          path: site
+          ref: 9264fe2ad8b958508c7e0dc35a16f4121f57a0f4
+          fetch-depth: 0
+          submodules: false
+      - name: Verify exact two-file additive demo and unchanged production baseline
+        working-directory: site
+        run: |
+          node <<'NODE'
+          const a=require("node:assert/strict"),fs=require("node:fs"),cp=require("node:child_process");
+          const git=(...p)=>cp.execFileSync("git",p,{encoding:"utf8"}).trim();
+          async function main(){
+            a.equal(git("rev-parse","HEAD"),process.env.SOURCE_SHA);
+            a.equal(git("ls-remote","--heads","origin","release/didit-sandbox-video-additive-live-20261124")
+              .split(/\s+/)[0],process.env.SOURCE_SHA,"candidate branch was updated");
+            cp.execFileSync("git",["merge-base","--is-ancestor",process.env.BASE_SHA,process.env.SOURCE_SHA]);
+            a.deepEqual(git("diff","--name-status","--no-renames",process.env.BASE_SHA,process.env.SOURCE_SHA)
+              .split("\n").filter(Boolean).sort(),[
+              "A\tapp/identity-didit-demo.tsx",
+              "A\t.github/workflows/qa-didit-sandbox-video-exact-live-20261124.yml",
+            ].sort(),"unapproved change in published website");
+            a.equal(JSON.parse(fs.readFileSync(".firebaserc","utf8")).projects.default,process.env.SITE);
+            const code=fs.readFileSync("app/identity-didit-demo.tsx","utf8");
+            a(code.includes('EXPO_PUBLIC_DIDIT_PRESENTATION_ENABLED === "true"'));
+            a(code.includes("volunserve-didit-qa-backend.onrender.com"));
+            a(!/from\s+["']firebase\/firestore/.test(code) && !/setDoc|updateDoc|deleteDoc/.test(code));
+            const controllerDiff=git("-C","../controller","diff","--name-status","HEAD^","HEAD")
+              .split("\n").filter(Boolean);
+            a.deepEqual(controllerDiff,["A\t.github/workflows/release-didit-sandbox-video-20261124.yml"],
+              "release controller changed extra paths");
+            a.equal(git("-C","../controller","ls-remote","--heads","origin","live-protected")
+              .split(/\s+/)[0],process.env.GITHUB_SHA,"protected controller branch moved");
+            const r=await fetch("https://volunserve.com/volunserve-release.json?didit_preflight="+Date.now(),{
+              headers:{"Cache-Control":"no-cache"},signal:AbortSignal.timeout(15000)});
+            a(r.ok,"live Hosting marker inaccessible");
+            const marker=await r.json();
+            a.equal(marker.firebaseProject,process.env.SITE);
+            a.equal(marker.revision,process.env.BASE_SHA,"production changed: abort");
+            console.log("PASS scoped demo route, live marker, unchanged security/data");
+          }
+          main().catch(e=>{console.error("BLOCKED "+e.message);process.exitCode=1});
+          NODE
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: site/package-lock.json
+      - name: Compile reviewed frontend with demo flag; no data writes
+        working-directory: site
+        run: |
+          set -euo pipefail
+          npm ci --no-audit --no-fund
+          npx tsc --noEmit --incremental false
+          npx expo export --platform web --clear
+          env -u GITHUB_SHA node scripts/verify-hosting-release.cjs
+          node <<'NODE'
+          const a=require("node:assert/strict"),fs=require("node:fs");
+          const m=JSON.parse(fs.readFileSync("dist/volunserve-release.json","utf8"));
+          a.equal(m.revision,process.env.SOURCE_SHA);
+          a.equal(m.firebaseProject,process.env.SITE);
+          a(fs.existsSync("dist/identity-didit-demo.html"),"Didit route wasn't compiled");
+          console.log("PASS complete website build + hidden demo route");
+          NODE
+      - name: Verify Hosting credential and live source before release
+        working-directory: site
+        shell: bash
+        env:
+          FIREBASE_SA: ${{ secrets.VOLUNSERVE_PRODUCTION_HOSTING_SERVICE_ACCOUNT }}
+        run: |
+          set -euo pipefail
+          test -n "$FIREBASE_SA" || { echo "::error::Production Hosting environment key unavailable"; exit 1; }
+          node <<'NODE'
+          const a=require("node:assert/strict"),fs=require("node:fs");
+          (async()=>{
+            const key=JSON.parse(process.env.FIREBASE_SA);
+            a.equal(key.project_id,process.env.SITE);
+            a.equal(key.type,"service_account");
+            a(key.private_key&&key.client_email);
+            const r=await fetch("https://volunserve.com/volunserve-release.json?didit_preupload="+Date.now(),{
+              headers:{"Cache-Control":"no-cache"},signal:AbortSignal.timeout(15000)});
+            a(r.ok);a.equal((await r.json()).revision,process.env.BASE_SHA,"newer live revision detected");
+            fs.writeFileSync(process.env.RUNNER_TEMP+"/didit-hosting-snapshot-key.json",process.env.FIREBASE_SA,{mode:0o600});
+          })().catch(e=>{console.error(e.message);process.exitCode=1});
+          NODE
+          echo "GOOGLE_APPLICATION_CREDENTIALS=$RUNNER_TEMP/didit-hosting-snapshot-key.json" >> "$GITHUB_ENV"
+      - name: Snapshot exact current Hosting version (rollback)
+        id: backup
+        working-directory: site
+        run: node ../controller/.github/scripts/hosting-live-release-snapshot-20261122.cjs snapshot
+      - name: Publish ONLY Firebase Hosting static site; no database/rules/functions
+        id: publish
+        uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          firebaseServiceAccount: ${{ secrets.VOLUNSERVE_PRODUCTION_HOSTING_SERVICE_ACCOUNT }}
+          projectId: volunserve-3aa5b
+          channelId: live
+          entryPoint: ./site
+      - name: Confirm new live marker and route
+        working-directory: site
+        env:
+          VOLUNSERVE_HOSTING_URL: https://volunserve.com
+          VOLUNSERVE_EXPECTED_SHA: 9264fe2ad8b958508c7e0dc35a16f4121f57a0f4
+        run: |
+          set -euo pipefail
+          for attempt in 1 2 3 4 5 6; do
+            if node scripts/check-live-hosting.cjs; then
+              node - <<'NODE'
+              (async()=>{
+                const r=await fetch("https://volunserve.com/identity-didit-demo?confirm="+Date.now(),{
+                  headers:{"Cache-Control":"no-cache"},signal:AbortSignal.timeout(15000)});
+                if(!r.ok || !(r.headers.get("content-type")||"").includes("html"))
+                  throw Error("Demo route not served after release");
+                console.log("PASS live video demo route ready");
+              })().catch(e=>{console.error(e);process.exitCode=1});
+              NODE
+              exit 0
+            fi
+            sleep 10
+          done
+          exit 1
+      - name: Restore previous immutable Hosting if release failed
+        if: failure() && steps.backup.outcome == 'success' && steps.publish.outcome != 'skipped'
+        working-directory: site
+        run: node ../controller/.github/scripts/hosting-live-release-snapshot-20261122.cjs restore
+      - name: Remove temporary Hosting credential
+        if: always()
+        run: rm -f "$RUNNER_TEMP/didit-hosting-snapshot-key.json"
