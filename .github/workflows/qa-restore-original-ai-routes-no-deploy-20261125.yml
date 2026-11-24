@@ -51,7 +51,7 @@ jobs:
           python -m unittest discover -s identity-ai -p 'test_profile_consistency.py' -v
           python -m unittest discover -s identity-ai -p 'test_face_preflight_policy.py' -v
           python -m unittest discover -s identity-ai -p 'test_passport_mrz_shadow.py' -v
-          node --test backend/test-identityPrivateEvidence.js backend/test-identityHybridPrecheckDecision.js backend/test-identityIssuerReviewPolicy.js
-          node --test backend/test-identity-final-admin-only.js backend/test-identity-review-reject.js backend/test-identity-three-attempt-review.js backend/test-identityPrecheckCors.js
+          (cd backend && node --test test-identityPrivateEvidence.js test-identityHybridPrecheckDecision.js test-identityIssuerReviewPolicy.js)
+          (cd backend && node --test test-identity-final-admin-only.js test-identity-review-reject.js test-identity-three-attempt-review.js test-identityPrecheckCors.js)
       - name: Confirm no release or live services were touched
         run: echo "NO DEPLOY / NO PRODUCTION DATA CHANGES. Synthetic and source checks only."
