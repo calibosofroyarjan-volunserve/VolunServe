@@ -1,7 +1,7 @@
 import { SJDM_REFERENCE_GEOMETRY } from "../constants/sjdmBoundaryReference";
 import { insideSjdmBoundary, type SjdmBoundary } from "./sjdmMapBoundary";
 export type MeetingPlace={name:string;latitude:number;longitude:number;detail?:string};
-const boundary:SjdmBoundary={type:"Feature",properties:{},geometry:SJDM_REFERENCE_GEOMETRY as unknown as SjdmBoundary["geometry"]};
+const boundary:SjdmBoundary={type:"Feature",properties:{source:"geoBoundaries ADM3",city:"City of San Jose del Monte",province:"Bulacan"},geometry:SJDM_REFERENCE_GEOMETRY as unknown as SjdmBoundary["geometry"]};
 export function validMeetingPlace(p:MeetingPlace){return Number.isFinite(p.latitude)&&Number.isFinite(p.longitude)&&insideSjdmBoundary(boundary,p.latitude,p.longitude);}
 const normalized=(s:string)=>s.toLowerCase().normalize("NFKD").replace(/[^a-z0-9 ]/g," ").replace(/\s+/g," ").trim();
 export function searchMeetingPlaces(places:MeetingPlace[],query:string):MeetingPlace[]{
