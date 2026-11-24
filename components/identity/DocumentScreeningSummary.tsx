@@ -18,11 +18,14 @@ export default function DocumentScreeningSummary({
 }) {
   if (!screening) return null;
 
+  const rejectedNonGovernment = screening.warningCodes.includes("non_government_id_detected");
   const recognized = screening.status === "text_consistent_unverified";
   const mismatch = screening.status === "mismatch";
-  const title = recognized
-    ? (screening.detectedIdType === "national_id" ? "National ID text recognized" : "Government ID text recognized")
-    : mismatch ? "Selected ID type does not match" : "Document recognition inconclusive";
+  const title = rejectedNonGovernment
+    ? "School or company ID not accepted"
+    : recognized
+      ? (screening.detectedIdType === "national_id" ? "National ID text recognized" : "Government ID text recognized")
+      : mismatch ? "Selected ID type does not match" : "Document recognition inconclusive";
   const icon = recognized ? "document-text-outline" : mismatch ? "alert-circle-outline" : "help-circle-outline";
   const accent = recognized ? "#12644E" : mismatch ? "#A13F2B" : "#A46B16";
 
@@ -49,7 +52,7 @@ export default function DocumentScreeningSummary({
         </View>
         <View style={styles.row}>
           <Text style={styles.label}>Identity decision</Text>
-          <Text style={styles.value}>Pending LGU validation</Text>
+          <Text style={styles.value}>{rejectedNonGovernment ? "Failed — government ID required" : "Pending LGU validation"}</Text>
         </View>
       </View>
       <Text style={styles.disclaimer}>
