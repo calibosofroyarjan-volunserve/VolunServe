@@ -27,6 +27,15 @@ function assertIsolatedStagingFirebase(env, serviceAccount) {
       actual === PRODUCTION_FIREBASE_PROJECT_ID || actual !== expected) {
     throw new Error("Staging Firebase isolation blocked: expected separate staging Firebase project does not match credentials.");
   }
+  // The disposable Didit QA project is ID-result-only; legacy identity media
+  // must not be sent to the existing AI staging service or a live AI backend.
+  if (env.VOLUNSERVE_DIDIT_QA_ISOLATED === "true") {
+    if (expected !== "volunserve-didit-qa" ||
+        String(env.IDENTITY_AI_SERVICE_URL || "").trim() !== "") {
+      throw new Error("Didit QA may not reuse existing AI or Firebase staging resources.");
+    }
+    return;
+  }
   const aiUrl = String(env.IDENTITY_AI_SERVICE_URL || "").trim().replace(/\/+$/, "");
   if (aiUrl !== EXPECTED_AI_STAGING_URL) {
     throw new Error("Staging AI isolation blocked: expected dedicated staging AI endpoint.");
