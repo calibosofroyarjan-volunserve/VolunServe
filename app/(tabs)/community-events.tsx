@@ -61,6 +61,29 @@ type Category =
 type Section = "explore" | "mine" | "propose";
 type EventListFilter = "all" | "new" | "upcoming" | "active" | "completed";
 type SelfAttendanceAction = "check-in" | "check-out";
+type AttendanceLocation = {latitude:number; longitude:number; accuracy:number | null; timestamp:number};
+async function getFreshAttendanceLocation(): Promise<AttendanceLocation> {
+  if (Platform.OS === "web") {
+    const geolocation = (globalThis as any).navigator?.geolocation;
+    if (!geolocation) throw new Error("Location is unavailable. Enable GPS on a supported device.");
+    return new Promise((resolve, reject) => geolocation.getCurrentPosition(
+      (position: {coords:{latitude:number;longitude:number;accuracy:number};timestamp:number}) =>
+        resolve({latitude:position.coords.latitude,longitude:position.coords.longitude,accuracy:position.coords.accuracy,timestamp:position.timestamp}),
+      (error: {code:number}) => reject(new Error(error.code === 1
+        ? "Allow location permission to record attendance."
+        : "Unable to obtain a fresh GPS location. Enable GPS and try again.")),
+      {enableHighAccuracy:true,maximumAge:0,timeout:20000}
+    ));
+  }
+  const Location = await import("expo-location");
+  const permission = await Location.requestForegroundPermissionsAsync();
+  if (permission.status !== "granted") throw new Error("Allow location permission to record attendance.");
+  if (!(await Location.hasServicesEnabledAsync())) throw new Error("Enable GPS to record attendance.");
+  const position = await Location.getCurrentPositionAsync({accuracy:Location.Accuracy.High});
+  if (position.mocked === true) throw new Error("Mock location is not permitted for attendance.");
+  return {latitude:position.coords.latitude,longitude:position.coords.longitude,accuracy:position.coords.accuracy,timestamp:position.timestamp};
+}
+
 type AttendanceFeedback = {
   eventId: string;
   type: "success" | "error";
@@ -1822,8 +1845,8 @@ export default function CommunityEventsScreen() {
     }
   };
 
-  // Secure volunteer self Time In / Time Out. Only server timestamps are
-  // written. All eligibility decisions are rechecked in the transaction.
+  // GPS and eligibility are checked by the authenticated Render endpoint.
+  // The server owns attendance writes; no direct client fallback.
   const recordSelfAttendance = async (
     event: CommunityEvent,
     action: SelfAttendanceAction
@@ -1835,70 +1858,24 @@ export default function CommunityEventsScreen() {
     setAttendanceBusy(event.id);
 
     try {
-      const eventRef = doc(db, "communityEvents", event.id);
-      const participantRef = doc(
-        db,
-        "communityEventParticipants",
-        `${event.id}_${user.uid}`
-      );
-
-      await runTransaction(db, async (transaction) => {
-        const eventSnapshot = await transaction.get(eventRef);
-        const participantSnapshot = await transaction.get(participantRef);
-
-        if (!eventSnapshot.exists() || !participantSnapshot.exists()) {
-          throw new Error("Event or your participation record was not found.");
-        }
-
-        const currentEvent = eventSnapshot.data();
-        const currentParticipation = participantSnapshot.data();
-
-        if (
-          currentEvent.publicationStatus !== "published" ||
-          currentEvent.status !== "active"
-        ) {
-          throw new Error("Time In and Time Out are only available while the event is ongoing.");
-        }
-        if (currentEvent.proposedBy === user.uid) {
-          throw new Error("You cannot record volunteer attendance for your own proposed event.");
-        }
-        if (
-          currentParticipation.eventId !== event.id ||
-          currentParticipation.uid !== user.uid ||
-          currentParticipation.status !== "joined"
-        ) {
-          throw new Error("Only volunteers joined to this event can record attendance.");
-        }
-        if (currentParticipation.attendanceVerified === true) {
-          throw new Error("This attendance has already been verified by Admin/LGU.");
-        }
-
-        if (action === "check-in") {
-          if (currentParticipation.checkedInAt || currentParticipation.checkedOutAt) {
-            throw new Error("Your Time In has already been recorded.");
-          }
-          transaction.update(participantRef, {
-            checkedInAt: serverTimestamp(),
-            checkedOutAt: null,
-            updatedAt: serverTimestamp(),
-          });
-        } else {
-          if (!currentParticipation.checkedInAt || currentParticipation.checkedOutAt) {
-            throw new Error("You must Time In first, and can Time Out only once.");
-          }
-          transaction.update(participantRef, {
-            checkedOutAt: serverTimestamp(),
-            updatedAt: serverTimestamp(),
-          });
-        }
+      const location = await getFreshAttendanceLocation();
+      const token = await user.getIdToken();
+      const response = await fetch(`${COMMUNITY_EVENT_PHOTO_BACKEND_URL}/api/community-events/attendance/record`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ eventId: event.id, action, location }),
       });
+      const result = await response.json().catch(() => null);
+      if (!response.ok || result?.ok !== true) {
+        throw new Error(result?.message || "Attendance location verification is unavailable. Please try again.");
+      }
 
       setAttendanceFeedback({
         eventId: event.id,
         type: "success",
         message: action === "check-in"
-          ? "Time In recorded using server time. Remember to Time Out when your participation ends."
-          : "Time Out recorded using server time. Your hours are pending Admin/LGU verification.",
+          ? "Location verified. Time In recorded using server time. Remember to Time Out at the event."
+          : "Location verified. Time Out recorded using server time. Your hours are pending Admin/LGU verification.",
       });
     } catch (error) {
       setAttendanceFeedback({
