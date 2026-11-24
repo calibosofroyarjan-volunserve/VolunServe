@@ -1364,21 +1364,24 @@ export default function IdentityVerificationWeb() {
   }
 
   if (effectiveStatus === "failed") {
+    const rejectedByAdmin = statusResult?.decision === "rejected";
     return (
       <StatusScreen
         icon="alert-circle-outline"
-        title="Verification Attempt Failed"
+        title={rejectedByAdmin ? "Identity Submission Rejected" : "Verification Attempt Failed"}
         message={
           localMessage ||
           statusResult?.message ||
-          "We could not verify the submitted identity images. Your Resident account is not banned; you can try again."
+          (rejectedByAdmin
+            ? "This identity submission was rejected by Admin. Your account is not Verified; review the reason and submit corrected evidence if eligible."
+            : "We could not verify the submitted identity images. Your Resident account is not banned; you can try again.")
         }
         background={COLORS.dangerBg}
         color={COLORS.danger}
-        badge="Failed · Retry Allowed"
+        badge={rejectedByAdmin ? "Rejected · Not Verified" : "Failed · Retry Allowed"}
         idPreviewUri={submittedIdPreviewUri}
         idPreviewLabel={selectedIdLabel}
-        primaryLabel="Try Verification Again"
+        primaryLabel={rejectedByAdmin ? "Submit New Application" : "Try Verification Again"}
         primaryAction={() => {
           stopCamera();
           if (selfie?.uri?.startsWith("blob:")) {
