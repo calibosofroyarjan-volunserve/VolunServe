@@ -19,6 +19,8 @@ export type DocumentScreening = {
   authenticityVerified: false;
   livenessVerified: false;
   manualReviewRequired: true;
+  backSideProvided?: boolean;
+  backSideScreened?: boolean;
   warningCodes: string[];
 };
 
@@ -49,6 +51,8 @@ function parseDocumentScreening(value: unknown): DocumentScreening | undefined {
     authenticityVerified: false,
     livenessVerified: false,
     manualReviewRequired: true,
+    backSideProvided: raw.backSideProvided === true,
+    backSideScreened: raw.backSideScreened === true,
     warningCodes: Array.isArray(raw.warningCodes)
       ? raw.warningCodes.filter((x): x is string => typeof x === "string").slice(0, 4) : [],
   };
@@ -85,6 +89,7 @@ export type IdentityVerificationResult = {
 export type SubmitIdentityVerificationInput = {
   idType: IdentityDocumentType;
   idDocument: CapturedIdentityMedia;
+  idBackDocument?: CapturedIdentityMedia | null;
   selfie: CapturedIdentityMedia;
 };
 
@@ -304,6 +309,10 @@ export const submitIdentityVerification = async (
     "Government ID image",
   );
 
+  if (input.idBackDocument) {
+    validateMedia(input.idBackDocument, "Government ID back image");
+  }
+
   validateMedia(
     input.selfie,
     "Live selfie",
@@ -324,6 +333,10 @@ export const submitIdentityVerification = async (
     "idDocument",
     input.idDocument,
   );
+
+  if (input.idBackDocument) {
+    appendMedia(formData, "idBackDocument", input.idBackDocument);
+  }
 
   appendMedia(
     formData,
