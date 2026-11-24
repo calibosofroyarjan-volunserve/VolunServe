@@ -2502,7 +2502,7 @@ function StatusScreen({
           {message}
         </Text>
 
-                <DocumentScreeningSummary screening={documentScreening} />
+                <DocumentScreeningSummary screening={documentScreening} showAdvancedChecks={false} />
 
         {idPreviewUri ? (
           <View style={styles.submittedIdCard}>
