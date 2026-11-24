@@ -2,7 +2,6 @@
 
 const {
   initializeApp,
-  applicationDefault,
   cert,
   getApps,
 } = require("firebase-admin/app");
@@ -56,28 +55,26 @@ function getFirebaseApp() {
   const serviceAccount =
     getServiceAccount();
 
-  // Enforce staging isolation BEFORE initializing or reusing Firebase Admin.
-  // A missing/mismatched staging project ID is a startup-blocking error.
-  assertIsolatedStagingFirebase(process.env, serviceAccount);
-
-  const existingApps =
-    getApps();
-
-  if (existingApps.length > 0) {
-    return existingApps[0];
+  const emulatorProject = process.env.GOOGLE_CLOUD_PROJECT;
+  const localEmulator = !process.env.RENDER && !serviceAccount &&
+    /^demo-[a-z0-9-]+$/.test(emulatorProject || "") &&
+    process.env.FIRESTORE_EMULATOR_HOST === "127.0.0.1:8080";
+  if (!localEmulator) {
+    if (process.env.VOLUNSERVE_DEPLOYMENT_ENV !== "staging" ||
+        process.env.VOLUNSERVE_STAGING_FIREBASE_PROJECT_ID !== "volunserve-full-staging" ||
+        process.env.VOLUNSERVE_STAGING_STRICT !== "true" ||
+        process.env.FIRESTORE_EMULATOR_HOST || process.env.FIREBASE_AUTH_EMULATOR_HOST) {
+      throw new Error("This staging backend requires the isolated full-staging configuration.");
+    }
+    assertIsolatedStagingFirebase(process.env, serviceAccount);
   }
-
-  if (serviceAccount) {
-    return initializeApp({
-      credential:
-        cert(serviceAccount),
-    });
+  const projectId = localEmulator ? emulatorProject : serviceAccount.project_id;
+  const existing = getApps().find(app => app.name === "[DEFAULT]");
+  if (existing) {
+    if (existing.options.projectId !== projectId) throw new Error("Firebase app project mismatch.");
+    return existing;
   }
-
-  return initializeApp({
-    credential:
-      applicationDefault(),
-  });
+  return initializeApp(localEmulator ? { projectId } : { projectId, credential: cert(serviceAccount) });
 }
 
 const app =
