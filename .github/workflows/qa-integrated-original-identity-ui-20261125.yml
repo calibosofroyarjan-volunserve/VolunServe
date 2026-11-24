@@ -45,7 +45,8 @@ jobs:
       - name: Validate document type / school ID regression tests
         run: |
           python -m unittest discover -s identity-ai -p 'test_document_screening.py' -v
-          python -m py_compile identity-ai/main.py identity-ai/document_screening.py
+          python -m unittest discover -s identity-ai -p 'test_strict_document_screening.py' -v
+          python -m py_compile identity-ai/main.py identity-ai/document_screening.py identity-ai/strict_document_screening.py
           node --check backend/server.js
   web-build:
     runs-on: ubuntu-latest
