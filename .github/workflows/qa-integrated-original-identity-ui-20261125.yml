@@ -26,7 +26,7 @@ jobs:
           const ui=fs.readFileSync("app/identity-verification.web.tsx","utf8");
           const api=fs.readFileSync("backend/server.js","utf8");
           const py=fs.readFileSync("identity-ai/main.py","utf8");
-          const ids=fs.readFileSync("identity-ai/document_screening.py","utf8");
+          const ids=fs.readFileSync("identity-ai/strict_document_screening.py","utf8");
           for(const marker of ["Government ID Details","Front of National ID","Back of National ID",
             "Check ID, then Face Scan","precheckIdentityDocument({","submitIdentityVerification({",
             "void captureFrame();","setSelfie({","setScanState(\"hold_still\")"]) {
