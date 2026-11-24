@@ -1,0 +1,43 @@
+name: QA Geofence Firebase Certificate Integration (NO DEPLOY)
+on:
+  push:
+    branches: [qa/geofence-firebase-integration-20261124]
+  pull_request:
+    branches: [review-base/attendance-geofence-backend-20261124]
+    paths: ['.github/workflows/qa-geofence-firebase-integration.yml','backend/test-geofence-firebase-certificate-integration.cjs']
+permissions:
+  contents: read
+jobs:
+  integration:
+    if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      GH_TOKEN: ${{ github.token }}
+      CI: 'true'
+    steps:
+      - name: Extract reviewed backend and pinned frontend rules
+        run: |
+          curl --fail --silent --show-error --location --retry 3 -H "Authorization: Bearer $GH_TOKEN" "https://api.github.com/repos/$GITHUB_REPOSITORY/tarball/$GITHUB_SHA" -o "$RUNNER_TEMP/source.tar.gz"
+          tar -xzf "$RUNNER_TEMP/source.tar.gz" --strip-components=1 -C "$GITHUB_WORKSPACE"
+          curl --fail --silent --show-error --location --retry 3 -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github.raw+json" "https://api.github.com/repos/$GITHUB_REPOSITORY/contents/firestore.rules?ref=4e5cd30c5f3c517bc6ae9f041a9df479a058b364" -o firestore.rules
+          grep -q 'Self attendance is written only by the authenticated Render backend' firestore.rules
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - run: npm ci --no-audit --no-fund
+      - run: npm ci --prefix backend --no-audit --no-fund
+      - name: Run geofence + Firestore + certificate lifecycle
+        run: |
+          unset GOOGLE_APPLICATION_CREDENTIALS
+          npx firebase-tools emulators:exec --only firestore --project demo-volunserve "node backend/test-geofence-firebase-certificate-integration.cjs"
+      - name: Actual Express endpoint with isolated Firebase Auth tokens
+        run: |
+          unset GOOGLE_APPLICATION_CREDENTIALS FIREBASE_SERVICE_ACCOUNT_JSON
+          npx firebase-tools emulators:exec --only auth,firestore --project demo-volunserve "node backend/test-geofence-auth-http-emulator.cjs"
+      - name: Existing certificate regression
+        run: node --test backend/test-communityCertificateIssuance.js backend/test-communityCertificateEligibility.js backend/test-communityCertificateLiveTemporary.js
