@@ -14,6 +14,7 @@ on:
       - 'identity-ai/test_document_precheck_contract.py'
       - 'backend/test-identity-optional-back-contract.cjs'
       - 'backend/test-identity-precheck-proxy-regression.cjs'
+      - 'backend/test-identity-backend-routing-safety.cjs'
       - 'identity-ai/test_document_screening.py'
       - 'lib/identityVerification.ts'
       - 'scripts/test-unified-identity-ai-government-id-screening.cjs'
@@ -43,7 +44,7 @@ jobs:
           cat /tmp/identity-changed.txt
           while IFS= read -r path; do
             case "$path" in
-              app/identity-verification.web.tsx|backend/server.js|components/identity/DocumentScreeningSummary.tsx|identity-ai/document_screening.py|identity-ai/main.py|identity-ai/test_document_precheck_contract.py|identity-ai/test_document_screening.py|backend/test-identity-optional-back-contract.cjs|backend/test-identity-precheck-proxy-regression.cjs|lib/identityVerification.ts|scripts/test-unified-identity-ai-government-id-screening.cjs|.github/workflows/qa-reject-school-ids-20261125.yml|.github/workflows/qa-live-baseline-identity-only-20261125.yml) ;;
+              app/identity-verification.web.tsx|backend/server.js|components/identity/DocumentScreeningSummary.tsx|identity-ai/document_screening.py|identity-ai/main.py|identity-ai/test_document_precheck_contract.py|identity-ai/test_document_screening.py|backend/test-identity-optional-back-contract.cjs|backend/test-identity-precheck-proxy-regression.cjs|backend/test-identity-backend-routing-safety.cjs|lib/identityVerification.ts|scripts/test-unified-identity-ai-government-id-screening.cjs|.github/workflows/qa-reject-school-ids-20261125.yml|.github/workflows/qa-live-baseline-identity-only-20261125.yml) ;;
               *) echo "::error file=$path::Unrelated or outdated file cannot be copied into VolunServe live identity change."; exit 1 ;;
             esac
           done < /tmp/identity-changed.txt
@@ -94,6 +95,8 @@ jobs:
           cache: npm
       - name: Install exact dependency lockfile without deployment
         run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Validate live/staging identity API isolation with actual TypeScript resolver
+        run: node --test backend/test-identity-backend-routing-safety.cjs
       - name: Typecheck restored original Resident identity flow
         run: npx tsc --noEmit --incremental false
       - name: Compile only, never publish
