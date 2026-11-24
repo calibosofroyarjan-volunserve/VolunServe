@@ -593,7 +593,7 @@ export default function CommunityAttendanceAdmin() {
 
   const visibleVolunteers = joined.filter((person) => {
     const search = volunteerSearch.trim().toLowerCase();
-    const searchable = `${person.fullName || ""} ${person.assignedRole || person.preferredRole || ""}`.toLowerCase();
+    const searchable = (person.fullName || "").toLowerCase();
     if (search && !searchable.includes(search)) return false;
     if (attendanceFilter === "verified") return person.attendanceVerified === true;
     if (attendanceFilter === "ready") return !person.attendanceVerified && !!person.checkedInAt && !!person.checkedOutAt;
@@ -1304,9 +1304,7 @@ export default function CommunityAttendanceAdmin() {
                           </View>
                           <View style={styles.mobileRosterIdentity}>
                             <Text style={styles.personName} numberOfLines={2}>{index + 1}. {person.fullName || "Volunteer"}</Text>
-                            <Text style={styles.personSub} numberOfLines={2}>
-                              {safeText(person.assignedRole, safeText(person.preferredRole, "Role not assigned"))}
-                            </Text>
+                            <Text style={styles.personSub}>Volunteer</Text>
                           </View>
                           <View style={[styles.attendanceStatus,
                             state.kind === "verified" && styles.attendanceVerified,
@@ -1368,7 +1366,6 @@ export default function CommunityAttendanceAdmin() {
                   <View style={styles.tableHeader}>
                     <Text style={[styles.tableHeadText, styles.colNumber]}>#</Text>
                     <Text style={[styles.tableHeadText, styles.colPerson]}>Volunteer</Text>
-                    <Text style={[styles.tableHeadText, styles.colRole]}>Assigned Role</Text>
                     <Text style={[styles.tableHeadText, styles.colTime]}>Time In</Text>
                     <Text style={[styles.tableHeadText, styles.colTime]}>Time Out</Text>
                     <Text style={[styles.tableHeadText, styles.colHours]}>Hours</Text>
@@ -1397,9 +1394,6 @@ export default function CommunityAttendanceAdmin() {
                             <Text style={styles.personSub}>Volunteer</Text>
                           </View>
                         </View>
-                        <Text style={[styles.tableText, styles.colRole]} numberOfLines={2}>
-                          {safeText(person.assignedRole, safeText(person.preferredRole, "Not assigned"))}
-                        </Text>
                         <View style={styles.colTime}>
                           <Text style={styles.timeText}>{clockStamp(person.checkedInAt)}</Text>
                           {!!person.checkedInAt && <Text style={styles.timeSub}>{dateStamp(person.checkedInAt)}</Text>}
@@ -1643,7 +1637,6 @@ const styles = StyleSheet.create({
   tableText: {fontSize: 11, color: "#526D84"},
   colNumber: {width: 21},
   colPerson: {width: 245},
-  colRole: {width: 123},
   colTime: {width: 113},
   colHours: {width: 85},
   colStatus: {width: 134},
