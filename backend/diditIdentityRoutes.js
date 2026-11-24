@@ -121,15 +121,31 @@ function validWebhookSignature(request) {
   return crypto.timingSafeEqual(Buffer.from(expected, "hex"), Buffer.from(signature, "hex"));
 }
 
+// Neither a production Firebase project nor an ordinary staging Render service
+// can enable Sandbox identity approval for QA users. Synthetic user UIDs are
+// additionally allowlisted per process in requireTestResident.
+function sandboxProjectAllowed(project, env = process.env) {
+  const emulator = project === "demo-volunserve" &&
+    Boolean(env.FIRESTORE_EMULATOR_HOST) && !env.RENDER;
+  if (emulator) return true;
+  if (env.VOLUNSERVE_DIDIT_QA_ISOLATED === "true") {
+    return project === "volunserve-didit-qa" &&
+      env.VOLUNSERVE_DEPLOYMENT_ENV === "staging" &&
+      env.VOLUNSERVE_STAGING_STRICT === "true" &&
+      env.VOLUNSERVE_STAGING_FIREBASE_PROJECT_ID === project &&
+      /^volunserve(?:-[a-z0-9]+)*-qa(?:-[a-z0-9]+)*$/.test(String(env.RENDER_SERVICE_NAME || ""));
+  }
+  return project === "volunserve-full-staging" &&
+    env.VOLUNSERVE_DIDIT_QA_ISOLATED !== "true";
+}
+
 function registerDiditIdentityRoutes(app, { db, FieldValue, requireFirebaseUser }) {
   const user = (uid) => db.collection("users").doc(uid);
   const verification = (uid) => db.collection("identityVerifications").doc(uid);
 
   // Check the actual Firestore client after its first read, before provider calls or writes.
   function requireTestResident(uid) {
-    const project = db.projectId;
-    const emulator = project === "demo-volunserve" && Boolean(process.env.FIRESTORE_EMULATOR_HOST);
-    if ((!emulator && project !== "volunserve-full-staging") ||
+    if (!sandboxProjectAllowed(db.projectId) ||
         !(process.env.DIDIT_TEST_UIDS || "").split(",").map(value => value.trim()).includes(uid)) {
       throw fail(403, "sandbox_only", "Verification is available only to designated staging residents.");
     }
@@ -365,4 +381,5 @@ module.exports = {
   evaluateDiditDecision,
   canonicalizeJson,
   validWebhookSignature,
+  sandboxProjectAllowed,
 };
