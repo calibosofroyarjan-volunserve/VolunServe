@@ -516,7 +516,17 @@ export default function IdentityVerificationWeb() {
     };
   }, [idCameraOpen, stopIdCamera]);
 
-  const chooseIdDocument = (side: "front" | "back") => {
+  const chooseIdDocument = async (side: "front" | "back") => {
+    // Check private media capability BEFORE opening a sensitive ID camera.
+    // The identity engine can be healthy while staging uploads are disabled.
+    try {
+      await checkIdentityEngineReady();
+    } catch (error: any) {
+      const reason = String(error?.message || "Identity media submission is unavailable.");
+      setDocumentPrecheckMessage(reason);
+      setLocalMessage(reason);
+      return;
+    }
     documentPrecheckRevisionRef.current += 1;
     setDocumentPrecheckOutcome(null);
     setDocumentPrecheckScreening(null);
