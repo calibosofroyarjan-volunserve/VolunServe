@@ -64,4 +64,10 @@ for (const page of [web, native, lgu]) {
 assert(summary.includes("National ID text recognized") &&
   summary.includes("Pending LGU validation"),
   "Shared result must show the detected document type, not pretend an ID is authenticated");
+assert(document.includes("_non_government_id_signal") &&
+  document.includes('"non_government_id_detected"') &&
+  backend.includes('documentScreening.warningCodes.includes("non_government_id_detected")') &&
+  backend.includes('const decision = explicitlyUnsupportedId') &&
+  summary.includes("School or company ID not accepted"),
+  "Unsupported school/company ID images must fail before face match can authorize verification");
 console.log("PASS unified Resident/LGU ID-document assessment, face comparison, safe metadata and manual review");
