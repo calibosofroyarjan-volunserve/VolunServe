@@ -32,6 +32,7 @@ import {
     CapturedIdentityMedia,
     getIdentityVerificationStatus,
     checkIdentityEngineReady,
+    precheckIdentityDocument,
     IdentityDocumentType,
     IdentityVerificationStatusResult,
     submitIdentityVerification,
@@ -248,6 +249,8 @@ export default function IdentityVerificationWeb() {
     useState<CapturedIdentityMedia | null>(null);
 
   const [consent, setConsent] = useState(false);
+  const [checkingId, setCheckingId] = useState(false);
+  const [idPrecheckMessage, setIdPrecheckMessage] = useState("");
   const [retryingFailed, setRetryingFailed] = useState(false);
   const [idCameraOpen, setIdCameraOpen] = useState(false);
   const [idCameraReady, setIdCameraReady] = useState(false);
@@ -473,7 +476,8 @@ export default function IdentityVerificationWeb() {
   }, [idCameraOpen, stopIdCamera]);
 
   const chooseIdDocument = (side: "front" | "back") => {
-    if (idCameraOpen) return;
+    if (idCameraOpen || checkingId) return;
+    setIdPrecheckMessage("");
     setIdCameraSide(side);
     setIdCameraReady(false);
     setIdCameraError("");
@@ -500,6 +504,7 @@ export default function IdentityVerificationWeb() {
       const name = `government-id-${idCameraSide}-${Date.now()}.jpg`;
       const file = new File([blob], name, { type: "image/jpeg" });
       const media = { uri: URL.createObjectURL(blob), name, type: "image/jpeg", file };
+      setIdPrecheckMessage("");
       if (idCameraSide === "back") {
         setIdBackDocument(media);
       } else {
@@ -513,7 +518,7 @@ export default function IdentityVerificationWeb() {
   };
 
   const chooseIdFile = (side: "front" | "back") => {
-    if (typeof document === "undefined" || idCameraOpen) return;
+    if (typeof document === "undefined" || idCameraOpen || checkingId) return;
     const input = document.createElement("input");
     input.type = "file";
     input.accept = "image/jpeg,image/png,image/webp";
@@ -533,19 +538,23 @@ export default function IdentityVerificationWeb() {
       };
       if (side === "back") setIdBackDocument(media);
       else setIdDocument(media);
+      setIdPrecheckMessage("");
       setIdCameraError("");
     };
     input.click();
   };
 
   const discardIdDocument = (side: "front" | "back") => {
+    if (checkingId) return;
+    setIdPrecheckMessage("");
     if (side === "back") setIdBackDocument(null);
     else setIdDocument(null);
     // The blob URL is revoked by the corresponding effect cleanup.
   };
 
   const changeIdType = (next: IdentityDocumentType) => {
-    if (idType === next) return;
+    if (checkingId || idType === next) return;
+    setIdPrecheckMessage("");
     setIdType(next);
     setIdDocument(null);
     setIdBackDocument(null);
@@ -951,24 +960,40 @@ export default function IdentityVerificationWeb() {
   };
 
   const openFaceScan = async () => {
-    if (idType !== "passport" && !idBackDocument) {
-      setLocalMessage("Scan the front and back of your government ID before continuing.");
+    if (checkingId || idCameraOpen) return;
+    if (!idDocument || (idType !== "passport" && !idBackDocument)) {
+      setIdPrecheckMessage("Scan both sides of the government ID (passport: bio page) before continuing.");
       return;
     }
-    if (!idDocument) {
-      Alert.alert(
-        "Government ID Required",
-        "Capture a clear government ID image using your camera before starting the face scan.",
+    if (!consent) {
+      setIdPrecheckMessage("Please consent to ID and selfie processing before screening your photos.");
+      return;
+    }
+    setCheckingId(true);
+    setIdPrecheckMessage("Checking government ID image quality and document type...");
+    try {
+      const result = await precheckIdentityDocument({
+        idType,
+        idDocument,
+        idBackDocument: idType === "passport" ? null : idBackDocument,
+        consent: true,
+      });
+      if (result.outcome !== "pass") {
+        setIdPrecheckMessage(result.message || "Unable to confirm this government ID. Retake the photos.");
+        return;
+      }
+      setIdPrecheckMessage("");
+      setSelfie(null);
+      stopCamera();
+      setStep(2);
+      setTimeout(() => { void startCamera(); }, 250);
+    } catch (error: any) {
+      setIdPrecheckMessage(
+        String(error?.message || "ID precheck is unavailable. No face scan or identity attempt was started."),
       );
-      return;
+    } finally {
+      setCheckingId(false);
     }
-
-    setSelfie(null);
-    stopCamera();
-    setStep(2);
-    setTimeout(() => {
-      void startCamera();
-    }, 250);
   };
 
   const retake = () => {
@@ -1296,6 +1321,10 @@ export default function IdentityVerificationWeb() {
           idBackDocument={idBackDocument}
           idCameraSide={idCameraSide}
           selectedIdLabel={selectedIdLabel}
+          consent={consent}
+          onConsentChange={(next) => { setConsent(next); setIdPrecheckMessage(""); }}
+          checkingId={checkingId}
+          precheckMessage={idPrecheckMessage}
           cameraOpen={idCameraOpen}
           cameraReady={idCameraReady}
           cameraError={idCameraError}
@@ -1568,31 +1597,6 @@ export default function IdentityVerificationWeb() {
           </View>
 
           <TouchableOpacity
-            style={styles.consentRow}
-            onPress={() => setConsent(!consent)}
-          >
-            <View
-              style={[
-                styles.checkbox,
-                consent && styles.checkboxActive,
-              ]}
-            >
-              {consent ? (
-                <Ionicons
-                  name="checkmark"
-                  size={15}
-                  color="#FFFFFF"
-                />
-              ) : null}
-            </View>
-            <Text style={styles.consentText}>
-              I consent to VolunServe processing my
-              government ID and captured face image for
-              private 1-to-1 identity verification.
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
             style={[
               styles.verifyButton,
               (!selfie || !consent) &&
@@ -1752,6 +1756,10 @@ function UploadIdStep({
   idBackDocument,
   idCameraSide,
   selectedIdLabel,
+  consent,
+  onConsentChange,
+  checkingId,
+  precheckMessage,
   cameraOpen,
   cameraReady,
   cameraError,
@@ -1770,6 +1778,10 @@ function UploadIdStep({
   idBackDocument: CapturedIdentityMedia | null;
   idCameraSide: "front" | "back";
   selectedIdLabel: string;
+  consent: boolean;
+  onConsentChange: (next: boolean) => void;
+  checkingId: boolean;
+  precheckMessage: string;
   cameraOpen: boolean;
   cameraReady: boolean;
   cameraError: string;
@@ -1849,14 +1861,14 @@ function UploadIdStep({
             <View style={styles.idCameraActions}>
               <TouchableOpacity
                 style={[styles.uploadZone, { flex: 1 }, cameraOpen && styles.disabledButton]}
-                onPress={() => onPick(side)} disabled={cameraOpen}
+                onPress={() => onPick(side)} disabled={cameraOpen || checkingId}
               >
                 <Ionicons name="camera-outline" size={22} color={COLORS.blue} />
                 <Text style={styles.uploadTitle}>Use Camera</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.uploadZone, { flex: 1 }, cameraOpen && styles.disabledButton]}
-                onPress={() => onFilePick(side)} disabled={cameraOpen}
+                onPress={() => onFilePick(side)} disabled={cameraOpen || checkingId}
               >
                 <Ionicons name="cloud-upload-outline" size={22} color={COLORS.blue} />
                 <Text style={styles.uploadTitle}>Upload File</Text>
@@ -1889,7 +1901,7 @@ function UploadIdStep({
               key={item.value}
               style={[styles.idTypeButton, selected && styles.idTypeButtonActive]}
               onPress={() => setIdType(item.value)}
-              disabled={cameraOpen}
+              disabled={cameraOpen || checkingId}
             >
               <Ionicons
                 name={selected ? "checkmark-circle" : "card-outline"}
@@ -1914,13 +1926,27 @@ function UploadIdStep({
         Images are temporary. The original private AI compares the front-ID portrait with a selfie;
         the back is OCR-screened for conflicting or unsupported ID evidence. Admin review is required.
       </Text>
+      <TouchableOpacity
+        style={styles.consentRow}
+        onPress={() => onConsentChange(!consent)}
+        disabled={checkingId}
+      >
+        <View style={[styles.checkbox, consent && styles.checkboxActive]}>
+          {consent ? <Ionicons name="checkmark" size={15} color="#FFFFFF" /> : null}
+        </View>
+        <Text style={styles.consentText}>
+          I consent to private processing of my ID front/back photos and the captured
+          selfie for identity verification, with Admin final review.
+        </Text>
+      </TouchableOpacity>
+      {precheckMessage ? <Text style={styles.idCameraError}>{precheckMessage}</Text> : null}
       <View style={styles.stepFooter}>
         <TouchableOpacity
-          style={[styles.nextButton, (!idDocument || (needsBack && !idBackDocument)) && styles.disabledButton]}
-          disabled={!idDocument || (needsBack && !idBackDocument) || cameraOpen}
+          style={[styles.nextButton, (!idDocument || (needsBack && !idBackDocument) || !consent || checkingId) && styles.disabledButton]}
+          disabled={!idDocument || (needsBack && !idBackDocument) || !consent || cameraOpen || checkingId}
           onPress={onNext}
         >
-          <Text style={styles.nextButtonText}>Continue to Face Scan</Text>
+          <Text style={styles.nextButtonText}>{checkingId ? "Checking ID..." : "Check ID, then Face Scan"}</Text>
           <Ionicons name="arrow-forward" size={18} color="#FFFFFF" />
         </TouchableOpacity>
       </View>
