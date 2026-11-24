@@ -34,7 +34,8 @@ test("The two original deployed frontend paths are authenticated on restored Nod
   assert(node.includes('request.path === "/api/identity/verify-with-evidence"'));
   assert(node.includes('"X-VolunServe-Document-Precheck-Consent"'));
   assert(node.includes("requireFirebaseUser"));
-  assert(node.includes("identityEvidenceConsent"));
+  assert(evidence.includes('form.get("identityEvidenceConsent") !== "true"'));
+  assert(node.includes("parseConsentedIdentityEvidence(request"));
 });
 test("Original private AI precheck only forwards ID evidence, no selfie/face attempt", () => {
   const start = python.indexOf("async def document_precheck(");
