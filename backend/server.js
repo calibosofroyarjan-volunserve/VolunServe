@@ -39,7 +39,11 @@ const DEFAULT_ALLOWED_ORIGINS = [
   "http\://127.0.0.1:19006",
   "http\://127.0.0.1:3000",
 ];
-const IDENTITY_UPLOAD_LIMIT = "20mb";
+// Three individually validated <=10MB images plus multipart framing.
+// Used only by the identity /verify and /document/precheck endpoints.
+const IDENTITY_UPLOAD_LIMIT = "32mb";
+const IDENTITY_PRECHECK_DELAY_MS = 6000;
+const identityPrecheckLastByUser = new Map();
 const IDENTITY_RETRY_DELAY_MS = 8000;
 const MAX_IDENTITY_AI_ATTEMPTS = 3;
 const IDENTITY_PROCESSING_LEASE_MS = 3 * 60 * 1000;
@@ -5029,6 +5033,34 @@ app.post(
         error: "invalid_id_scan",
         message: "Provide government ID photos and consent using a supported form.",
       });
+    }
+    // Protect the private OCR worker from repeated expensive scanning. This
+    // throttle is per authenticated UID and in-memory only: NO Firestore write.
+    const uid = String(request.firebaseUser?.uid || "");
+    if (!uid) {
+      return response.status(401).json({
+        ok: false, error: "not_authenticated",
+        message: "Sign in again before checking a government ID.",
+      });
+    }
+    const now = Date.now();
+    const last = identityPrecheckLastByUser.get(uid) || 0;
+    if (now - last < IDENTITY_PRECHECK_DELAY_MS) {
+      response.set("Retry-After", String(Math.ceil((IDENTITY_PRECHECK_DELAY_MS - (now - last)) / 1000)));
+      return response.status(429).json({
+        ok: false, error: "id_precheck_rate_limited",
+        message: "Please wait a few seconds before checking your ID photos again.",
+      });
+    }
+    identityPrecheckLastByUser.set(uid, now);
+    // Opportunistically evict old entries; never keep an unbounded UID map.
+    if (identityPrecheckLastByUser.size > 2000) {
+      for (const [userId, timestamp] of identityPrecheckLastByUser) {
+        if (now - timestamp > IDENTITY_PRECHECK_DELAY_MS) identityPrecheckLastByUser.delete(userId);
+      }
+      if (identityPrecheckLastByUser.size > 2000) {
+        identityPrecheckLastByUser.delete(identityPrecheckLastByUser.keys().next().value);
+      }
     }
     try {
       const upstream = await fetch(endpoint.replace(/\/verify$/, "/document/precheck"), {
