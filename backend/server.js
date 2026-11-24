@@ -12136,7 +12136,7 @@ app.post(
   async (request, response) => {
     try {
       const result = await require("./communityAttendanceGeofence").recordGeofencedAttendance({
-        db, FieldValue, uid:request.firebaseUser.uid,
+        db, FieldValue, uid:request.firebaseUser.uid, email:request.firebaseUser.email,
         eventId:request.body?.eventId, action:request.body?.action, location:request.body?.location,
       });
       response.status(200).json({ok:true,...result});
