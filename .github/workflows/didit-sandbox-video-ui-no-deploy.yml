@@ -1,0 +1,39 @@
+name: Didit Sandbox video page candidate (NO DEPLOY)
+on:
+  pull_request:
+    branches: [live-protected]
+    paths:
+      - 'app/identity-didit-demo.tsx'
+      - 'app/identity-verification.web.tsx'
+      - '.github/workflows/didit-sandbox-video-ui-no-deploy.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify-video-ui:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Typecheck complete VolunServe application
+        run: npx tsc --noEmit --incremental false
+      - name: Ensure demo route only shows when explicitly enabled
+        run: |
+          node - <<'NODE'
+          const fs=require('node:fs'),assert=require('node:assert/strict');
+          const demo=fs.readFileSync('app/identity-didit-demo.tsx','utf8');
+          const live=fs.readFileSync('app/identity-verification.web.tsx','utf8');
+          assert(demo.includes('EXPO_PUBLIC_DIDIT_PRESENTATION_ENABLED === "true"'));
+          assert(live.includes('EXPO_PUBLIC_DIDIT_PRESENTATION_ENABLED === "true"'));
+          assert(!/from\s+["']firebase\/firestore/.test(demo));
+          assert(!/setDoc|updateDoc|deleteDoc/.test(demo));
+          assert(demo.includes('volunserve-didit-qa-backend.onrender.com'));
+          assert(demo.includes('residentStatusUnchanged') === false);
+          console.log('PASS: presentation route is flag-gated and has no production Firestore writes');
+          NODE
+      - run: echo "No Firebase Hosting, Render production or Firestore release is performed."

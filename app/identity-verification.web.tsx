@@ -1229,6 +1229,22 @@ export default function IdentityVerificationWeb() {
         </Text>
       </View>
 
+      {process.env.EXPO_PUBLIC_DIDIT_PRESENTATION_ENABLED === "true" ? (
+        <TouchableOpacity
+          accessibilityRole="button"
+          onPress={() => router.push("/identity-didit-demo")}
+          style={{ backgroundColor:"#FFF7ED",borderColor:"#F59E0B",borderWidth:1,
+            borderRadius:12,padding:14,marginBottom:18 }}
+        >
+          <Text style={{ fontWeight:"800",color:"#92400E",fontSize:15,textAlign:"center" }}>
+            Didit Sandbox — Thesis Demo
+          </Text>
+          <Text style={{ color:"#92400E",fontSize:12,textAlign:"center",marginTop:5 }}>
+            Simulated result only. This does not change Verified Resident status.
+          </Text>
+        </TouchableOpacity>
+      ) : null}
+
       <WizardProgress step={step} />
 
       {step === 1 ? (
