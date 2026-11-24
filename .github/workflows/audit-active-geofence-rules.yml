@@ -43,11 +43,11 @@ jobs:
           tar -xzf "$RUNNER_TEMP/source.tar.gz" --strip-components=1 -C "$GITHUB_WORKSPACE"
       - name: Get ACTIVE Firestore rules fingerprint and patch exact attendance clause (NO write)
         env:
-          FIREBASE_SA: ${{ secrets.VOLUNSERVE_PRODUCTION_HOSTING_SERVICE_ACCOUNT || secrets.FIREBASE_SERVICE_ACCOUNT_VOLUNSERVE_3AA5B || secrets.FIREBASE_SERVICE_ACCOUNT }}
+          FIREBASE_SA: ${{ secrets.VOLUNSERVE_PRODUCTION_READONLY_SERVICE_ACCOUNT }}
         run: |
           node <<'NODE'
           const fs=require('fs'),crypto=require('crypto'),assert=require('assert/strict');
-          assert(process.env.FIREBASE_SA,'BLOCKED approved production environment credential unavailable');
+          assert(process.env.FIREBASE_SA,'BLOCKED dedicated read-only production credential unavailable');
           const sa=JSON.parse(process.env.FIREBASE_SA);
           assert.equal(sa.project_id,'volunserve-3aa5b');
           assert.equal(sa.type,'service_account');
