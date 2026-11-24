@@ -1,0 +1,75 @@
+name: Verify Automatic Volunteer Admin approval UI bridge — NO DEPLOY
+on:
+  push:
+    branches:
+      - feat/auto-volunteer-admin-approval-ui-hook-no-deploy-20261119
+  pull_request:
+    branches:
+      - live-protected
+permissions:
+  contents: read
+jobs:
+  ui-integration:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - name: Strict four-file UI-only diff
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --name-status 18404c5a89ee5a5deb46a148f2b6a591a0f33290 HEAD >/tmp/ui-scope
+          test "$(wc -l </tmp/ui-scope)" -eq 4
+          while IFS="$(printf '\t')" read -r change path; do
+            case "$change:$path" in
+              "M:app/(admin)/admin-cases.tsx"|"A:lib/automaticVolunteerApprovalBridge.ts"|"A:scripts/test-automatic-volunteer-approval-bridge-20261119.cjs"|"A:.github/workflows/verify-auto-volunteer-admin-bridge-no-deploy-20261119.yml") ;;
+              *) echo "BLOCKED unexpected file: $change $path"; exit 1 ;;
+            esac
+          done </tmp/ui-scope
+          test ! -f backend/autoVolunteerInviteOnApproval.js
+          echo "PASS: only UI hook and tests; no Firestore Rules, Firebase Functions or backend edits."
+      - name: Install web dependencies
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Typescript
+        run: npx tsc --noEmit
+      - name: Offline Admin approval integration regressions
+        run: node --test scripts/test-automatic-volunteer-approval-bridge-20261119.cjs
+      - name: Baseline-compatible Emergency UI regression
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const fs=require('fs'),assert=require('node:assert/strict');
+          const cp=require('child_process');
+          const filename='app/(admin)/admin-cases.tsx';
+          const before=cp.execFileSync('git',['show','18404c5a89ee5a5deb46a148f2b6a591a0f33290:'+filename],{encoding:'utf8'});
+          const after=fs.readFileSync(filename,'utf8');
+          const preserved=[
+            'pagedCases','pageSize={5}','caseSearch',
+            'detailTab === "map"','cancelAssignment',
+            'assignVolunteerToCase','reviewVerification',
+            'incidentAssignments','photoPage','videoPage'
+          ];
+          for(const needle of preserved){
+            assert.ok(before.includes(needle),'Baseline missing '+needle);
+            assert.ok(after.includes(needle),'Emergency UI regression: '+needle);
+          }
+          // The older unified UI test expects LGU assignment code that
+          // was already absent in the approved baseline; never re-add it.
+          assert.equal(before.includes('assignLguPersonnelToCase'),false);
+          assert.equal(after.includes('assignLguPersonnelToCase'),false);
+          assert.ok(after.includes('return { alreadyValidated: true };'),
+            'Repeated approval must not downgrade an active case');
+          assert.ok(after.includes('await requestAutomaticVolunteersAfterApproval('),
+            'Post-validation automatic invite hook must remain');
+          console.log('PASS: current protected Admin queue/map/manual Volunteer flow retained.');
+          console.log('Note: legacy LGU-personnel UI assertion is obsolete on current baseline.');
+          NODE
+      - name: Deployment disabled
+        run: echo "No Hosting, Render, Firebase or live Volunteer invitation changes."
