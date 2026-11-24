@@ -1,0 +1,31 @@
+name: QA certificate recovery read budget (NO DEPLOY)
+on:
+  pull_request:
+    branches: [backend-live-protected]
+    paths:
+      - 'backend/communityCertificateAutoSync.js'
+      - 'backend/test-communityCertificateAutoSync.js'
+      - '.github/workflows/qa-certificate-recovery-read-budget-20261124.yml'
+permissions:
+  contents: read
+jobs:
+  qa:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Fetch reviewed PR source without submodules
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          curl --fail --silent --show-error --location --retry 3 -H "Authorization: Bearer $GH_TOKEN" "https://api.github.com/repos/$GITHUB_REPOSITORY/tarball/$SOURCE_SHA" -o "$RUNNER_TEMP/source.tar.gz"
+          tar -xzf "$RUNNER_TEMP/source.tar.gz" --strip-components=1 -C "$GITHUB_WORKSPACE"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Validate quota optimization and existing certificate, identity and attendance regressions
+        working-directory: backend
+        run: |
+          npm ci --no-audit --no-fund
+          npm run check
+          node --test test-communityAttendanceGeofence.js
