@@ -1858,16 +1858,26 @@ export default function CommunityEventsScreen() {
     setAttendanceBusy(event.id);
 
     try {
-      const location = await getFreshAttendanceLocation();
       const token = await user.getIdToken();
-      const response = await fetch(`${COMMUNITY_EVENT_PHOTO_BACKEND_URL}/api/community-events/attendance/record`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ eventId: event.id, action, location }),
-      });
-      const result = await response.json().catch(() => null);
-      if (!response.ok || result?.ok !== true) {
-        throw new Error(result?.message || "Attendance location verification is unavailable. Please try again.");
+      const location = await getFreshAttendanceLocation();
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 20000);
+      try {
+        const response = await fetch(`${COMMUNITY_EVENT_PHOTO_BACKEND_URL}/api/community-events/attendance/record`, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+          body: JSON.stringify({ eventId: event.id, action, location }),
+          signal: controller.signal,
+        });
+        const result = await response.json().catch(() => null);
+        if (!response.ok || result?.ok !== true) {
+          throw new Error(result?.message || "Attendance location verification is unavailable. Please try again.");
+        }
+      } catch (error) {
+        if (controller.signal.aborted) throw new Error("Attendance request timed out. Check My Attendance before retrying.");
+        throw error;
+      } finally {
+        clearTimeout(timer);
       }
 
       setAttendanceFeedback({
