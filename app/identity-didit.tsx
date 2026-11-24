@@ -2,7 +2,6 @@ import React, { useCallback, useEffect, useState } from "react";
 import { ActivityIndicator, AppState, Linking, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { auth, firebaseConfig } from "../lib/firebase";
 
-import { getBackendBaseUrl } from "../lib/identityVerification";
 
 
 // Didit Live is opt-in; no Sandbox verification on the production website.
@@ -10,18 +9,9 @@ export const diditAvailable = process.env.EXPO_PUBLIC_DIDIT_LIVE_ENABLED === "tr
   (process.env.EXPO_PUBLIC_VOLUNSERVE_FIREBASE_TARGET || "production") === "production" &&
   firebaseConfig.projectId === "volunserve-3aa5b";
 
+// Fixed production endpoint: never send a resident Firebase token to QA.
 function getDiditBackendBaseUrl() {
-  const configured = getBackendBaseUrl();
-  // Guard against sending production Firebase ID tokens to a QA backend.
-  let url: URL;
-  try { url = new URL(configured); }
-  catch { throw new Error("The official VolunServe backend is unavailable."); }
-  if (url.origin !== "https://volunserve.onrender.com" ||
-      (url.pathname !== "/" && url.pathname !== "") || url.search || url.hash ||
-      url.username || url.password) {
-    throw new Error("Didit Live requires the official VolunServe backend.");
-  }
-  return url.origin;
+  return "https://volunserve.onrender.com";
 }
 
 type VerificationState = {
