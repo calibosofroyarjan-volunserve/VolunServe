@@ -1,6 +1,6 @@
 import { auth } from "./firebase";
+import { identityAdminApiBaseUrl } from "./identityEnvironmentTarget";
 
-const API_URL = "https://volunserve.onrender.com";
 export type CommunityMode = "resident" | "volunteer";
 export type CommunityMember = {
   key: string;
@@ -57,10 +57,20 @@ export async function communitySocialRequest<T>(
   method:"GET"|"POST"="GET",
   body?:object,
 ):Promise<T> {
+  // Resolve environment before reading an ID token: an isolated staging
+  // session may never contact the production messages endpoint.
+  const apiUrl = identityAdminApiBaseUrl({
+    runtimeEnv: process.env.EXPO_PUBLIC_VOLUNSERVE_ENV,
+    firebaseTarget: process.env.EXPO_PUBLIC_VOLUNSERVE_FIREBASE_TARGET,
+    projectId: auth.app.options.projectId,
+  });
+  if (!path.startsWith("/api/community/")) {
+    throw new Error("Unsupported community endpoint.");
+  }
   const current=auth.currentUser;
   if(!current)throw new Error("Sign in again to use Community Members.");
   const token=await current.getIdToken();
-  const response=await fetch(API_URL+path,{
+  const response=await fetch(apiUrl+path,{
     method,
     headers:{
       Authorization:"Bearer "+token,
