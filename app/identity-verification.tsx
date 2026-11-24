@@ -2352,7 +2352,7 @@ function StatusScreen({
           {message}
         </Text>
 
-                <DocumentScreeningSummary screening={documentScreening} />
+                <DocumentScreeningSummary screening={documentScreening} showAdvancedChecks={false} />
 
         <TouchableOpacity
           style={
