@@ -70,7 +70,7 @@ function createQaApp(env = process.env, dependencies = {}) {
   const validUid = uid => typeof uid === "string" && /^[A-Za-z0-9_-]{1,160}$/.test(uid);
   const allowedUids = new Set(String(env.DIDIT_TEST_UIDS).split(",").map(x => x.trim()).filter(validUid));
   async function requireQaResident(request, response, next) {
-    const match = /^Bearer (\\S+)$/.exec(String(request.headers.authorization || ""));
+    const match = /^Bearer ([A-Za-z0-9._-]+)$/.exec(String(request.headers.authorization || ""));
     if (!match) return response.status(401).json({ error: "unauthenticated" });
     try {
       const decoded = await auth.verifyIdToken(match[1], true);
