@@ -12,11 +12,16 @@ export const diditAvailable = process.env.EXPO_PUBLIC_DIDIT_LIVE_ENABLED === "tr
 
 function getDiditBackendBaseUrl() {
   const configured = getBackendBaseUrl();
-  // Guard against sending production residents' auth tokens to staging or QA.
-  if (configured.replace(/\\/+$/, "") !== "https://volunserve.onrender.com") {
+  // Guard against sending production Firebase ID tokens to a QA backend.
+  let url: URL;
+  try { url = new URL(configured); }
+  catch { throw new Error("The official VolunServe backend is unavailable."); }
+  if (url.origin !== "https://volunserve.onrender.com" ||
+      (url.pathname !== "/" && url.pathname !== "") || url.search || url.hash ||
+      url.username || url.password) {
     throw new Error("Didit Live requires the official VolunServe backend.");
   }
-  return "https://volunserve.onrender.com";
+  return url.origin;
 }
 
 type VerificationState = {
