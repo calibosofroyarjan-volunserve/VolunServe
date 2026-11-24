@@ -10,9 +10,10 @@ function send(res,status,body,type="application/json"){
  res.end(type==="application/json"?JSON.stringify(body):body);
 }
 http.createServer(async(req,res)=>{
- if(req.method==="GET"&&req.url==="/health")return send(res,200,{ok:true,mode:"synthetic-device-qa",firebaseConnected:false,productionWrites:false});
- if(req.method==="GET"&&req.url==="/")return send(res,200,html,"text/html; charset=utf-8");
- if(req.method!=="POST"||req.url!=="/api/qa/location")return send(res,404,{ok:false});
+ const pathname = new URL(req.url, "http://localhost").pathname;
+ if(req.method==="GET"&&pathname==="/health")return send(res,200,{ok:true,mode:"synthetic-device-qa",firebaseConnected:false,productionWrites:false});
+ if(req.method==="GET"&&pathname==="/")return send(res,200,html,"text/html; charset=utf-8");
+ if(req.method!=="POST"||pathname!=="/api/qa/location")return send(res,404,{ok:false});
  try{
  let body="";for await(const chunk of req){body+=chunk;if(body.length>4096)return send(res,413,{ok:false,message:"Request too large"});}
  const data=JSON.parse(body);
