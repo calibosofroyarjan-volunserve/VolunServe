@@ -60,11 +60,19 @@ function getFirebaseApp() {
     /^demo-[a-z0-9-]+$/.test(emulatorProject || "") &&
     process.env.FIRESTORE_EMULATOR_HOST === "127.0.0.1:8080";
   if (!localEmulator) {
+    // QA is a separate, explicitly selected project. Never make the ordinary
+    // staging backend accept the new QA project's service account by accident.
+    const qaMode = process.env.VOLUNSERVE_DIDIT_QA_ISOLATED === "true";
+    const expectedProject = qaMode ? "volunserve-didit-qa" : "volunserve-full-staging";
+    if (qaMode && !/^volunserve(?:-[a-z0-9]+)*-qa(?:-[a-z0-9]+)*$/.test(
+      String(process.env.RENDER_SERVICE_NAME || ""))) {
+      throw new Error("Didit QA requires a separately named QA Render service.");
+    }
     if (process.env.VOLUNSERVE_DEPLOYMENT_ENV !== "staging" ||
-        process.env.VOLUNSERVE_STAGING_FIREBASE_PROJECT_ID !== "volunserve-full-staging" ||
+        process.env.VOLUNSERVE_STAGING_FIREBASE_PROJECT_ID !== expectedProject ||
         process.env.VOLUNSERVE_STAGING_STRICT !== "true" ||
         process.env.FIRESTORE_EMULATOR_HOST || process.env.FIREBASE_AUTH_EMULATOR_HOST) {
-      throw new Error("This staging backend requires the isolated full-staging configuration.");
+      throw new Error("This backend requires an explicitly isolated staging or Didit QA Firebase project.");
     }
     assertIsolatedStagingFirebase(process.env, serviceAccount);
   }
