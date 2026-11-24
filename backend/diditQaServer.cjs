@@ -55,6 +55,11 @@ function createQaApp(env = process.env, dependencies = {}) {
     service: "volunserve-didit-isolated-qa",
     ready: check.ready,
   }));
+  // A separate presentation-only Sandbox API may run with production-auth
+  // signature verification, but never reads/writes production Firebase data.
+  // It has an independent opt-in flag and an explicit test UID allowlist.
+  require("./diditPresentationRoutes.cjs").registerPresentationRoutes(
+    app, env, dependencies.presentation || {});
   if (!check.ready) {
     // Do not disclose which particular secret is missing to unauthenticated clients.
     app.use("/api/identity/didit", (_req, res) =>
