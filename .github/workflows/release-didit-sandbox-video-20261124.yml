@@ -64,7 +64,7 @@ jobs:
             a(!/from\s+["']firebase\/firestore/.test(code) && !/setDoc|updateDoc|deleteDoc/.test(code));
             const controllerDiff=git("-C","../controller","diff","--name-status","HEAD^","HEAD")
               .split("\n").filter(Boolean);
-            a.deepEqual(controllerDiff,["A\t.github/workflows/release-didit-sandbox-video-20261124.yml"],
+            a.deepEqual(controllerDiff,["M\t.github/workflows/release-didit-sandbox-video-20261124.yml"],
               "release controller changed extra paths");
             a.equal(git("-C","../controller","ls-remote","--heads","origin","live-protected")
               .split(/\s+/)[0],process.env.GITHUB_SHA,"protected controller branch moved");
@@ -133,29 +133,36 @@ jobs:
           projectId: volunserve-3aa5b
           channelId: live
           entryPoint: ./site
-      - name: Confirm new live marker and route
+      - name: Confirm new live marker and route (safe Node retry)
         working-directory: site
         env:
           VOLUNSERVE_HOSTING_URL: https://volunserve.com
           VOLUNSERVE_EXPECTED_SHA: 9264fe2ad8b958508c7e0dc35a16f4121f57a0f4
         run: |
-          set -euo pipefail
-          for attempt in 1 2 3 4 5 6; do
-            if node scripts/check-live-hosting.cjs; then
-              node - <<'NODE'
-              (async()=>{
+          node <<'NODE'
+          const cp=require("node:child_process"),assert=require("node:assert/strict");
+          (async()=>{
+            let lastError;
+            for(let attempt=0;attempt<8;attempt++){
+              try{
+                cp.execFileSync(process.execPath,["scripts/check-live-hosting.cjs"],{
+                  env:process.env,stdio:"inherit",
+                });
                 const r=await fetch("https://volunserve.com/identity-didit-demo?confirm="+Date.now(),{
                   headers:{"Cache-Control":"no-cache"},signal:AbortSignal.timeout(15000)});
-                if(!r.ok || !(r.headers.get("content-type")||"").includes("html"))
-                  throw Error("Demo route not served after release");
-                console.log("PASS live video demo route ready");
-              })().catch(e=>{console.error(e);process.exitCode=1});
-              NODE
-              exit 0
-            fi
-            sleep 10
-          done
-          exit 1
+                assert(r.ok,"demo URL not accessible");
+                assert((r.headers.get("content-type")||"").includes("html"),"demo URL must serve HTML");
+                console.log("PASS live Didit Sandbox demo route and exact release marker confirmed");
+                return;
+              }catch(err){
+                lastError=err;
+                console.error("Verification retry "+(attempt+1)+": "+(err&&err.message||String(err)));
+                if(attempt<7)await new Promise(resolve=>setTimeout(resolve,8000));
+              }
+            }
+            throw lastError;
+          })().catch(err=>{console.error("BLOCKED post-deploy verification:",err&&err.message||String(err));process.exitCode=1});
+          NODE
       - name: Restore previous immutable Hosting if release failed
         if: failure() && steps.backup.outcome == 'success' && steps.publish.outcome != 'skipped'
         working-directory: site
