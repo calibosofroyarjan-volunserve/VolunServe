@@ -9,7 +9,7 @@ from io import BytesIO
 import cv2
 import mediapipe as mp
 import pytesseract
-from document_screening import assess_document_text, document_ocr_unavailable
+from document_screening import assess_document_text, document_ocr_unavailable, combine_document_sides
 import numpy as np
 from fastapi import FastAPI, Header, HTTPException, Request
 from starlette.datastructures import UploadFile as StarletteUploadFile
@@ -1223,6 +1223,10 @@ async def verify_identity(
     selfie_upload = form.get(
         "selfie"
     )
+    # Optional for older live clients: never require a new back image until
+    # the protected frontend rollout is independently tested.
+    id_back_upload = form.get("idBackDocument")
+    id_back_bytes = None
     try:
         id_document_bytes = (
             await read_upload(
@@ -1244,6 +1248,12 @@ async def verify_identity(
                 ),
             )
         )
+        if id_back_upload is not None:
+            id_back_bytes = await read_upload(
+                id_back_upload,
+                label="Government ID back image",
+                maximum_bytes=MAX_ID_DOCUMENT_BYTES,
+            )
     finally:
         if isinstance(
             id_upload,
@@ -1255,6 +1265,8 @@ async def verify_identity(
             StarletteUploadFile,
         ):
             await selfie_upload.close()
+        if isinstance(id_back_upload, StarletteUploadFile):
+            await id_back_upload.close()
     if not face_mesh_engine_ready():
         raise HTTPException(
             status_code=503,
@@ -1276,6 +1288,22 @@ async def verify_identity(
             screen_government_id,
             declared_type=id_type,
             id_document_bytes=id_document_bytes,
+        )
+        back_screening = (
+            await asyncio.to_thread(
+                screen_government_id,
+                declared_type=id_type,
+                id_document_bytes=id_back_bytes,
+            )
+            if id_back_bytes is not None else None
+        )
+        document_screening = combine_document_sides(
+            document_screening,
+            back_screening,
+            duplicate=(
+                id_back_bytes is not None and
+                id_back_bytes == id_document_bytes
+            ),
         )
     except HTTPException:
         raise
