@@ -94,7 +94,7 @@ function iframeDocument(token: string, latitude: number, longitude: number) {
         acceptedPoint = [lng,lat];
         document.getElementById("hint").textContent = "Meeting point inside San Jose del Monte";
         if (notify) parent.postMessage({kind:"volunserve:event-pin:select",token,latitude:lat,longitude:lng},"*");
-        map.easeTo({center:[lng,lat],duration:280});
+        map.easeTo({center:[lng,lat],zoom:Math.max(map.getZoom(),16),duration:280});
       }
       window.addEventListener("message", event => {
         if (event.source !== parent || event.data?.kind !== "volunserve:event-pin:sync" ||
@@ -124,6 +124,7 @@ function iframeDocument(token: string, latitude: number, longitude: number) {
           map.addLayer({id:"sjdm-outline",type:"line",source:"sjdm-boundary",
             paint:{"line-color":"#047857","line-width":3}});
           map.fitBounds([[121.013,14.767],[121.169,14.869]],{padding:20,duration:0});
+          parent.postMessage({kind:"volunserve:event-pin:ready",token},"*");
           // A previously saved valid location is still visible on the map.
           if (insideCity(initial.latitude,initial.longitude) &&
               (Math.abs(initial.latitude-14.8139)>0.000001 ||
@@ -155,11 +156,14 @@ export default function InteractiveEventPinMap({ latitude, longitude, onPick }: 
     iframeDocument(token.current, firstPoint.current.latitude, firstPoint.current.longitude)
   );
 
+  const syncRef = useRef<()=>void>(()=>{});
   useEffect(() => {
     const handler = (event: MessageEvent) => {
       if (event.source !== frame.current?.contentWindow) return;
       const data = event.data;
-      if (data?.kind !== "volunserve:event-pin:select" || data?.token !== token.current) return;
+      if (data?.token !== token.current) return;
+      if (data.kind === "volunserve:event-pin:ready") { syncRef.current(); return; }
+      if (data.kind !== "volunserve:event-pin:select") return;
       if (!isPoint(data.latitude, data.longitude)) return;
       onPickRef.current(data.latitude, data.longitude);
     };
@@ -175,6 +179,7 @@ export default function InteractiveEventPinMap({ latitude, longitude, onPick }: 
       longitude: isPoint(latitude, longitude) && withinSjdm(latitude!, longitude!) ? longitude : null,
     }, "*");
   };
+  syncRef.current = sync;
   useEffect(sync, [latitude, longitude]);
 
   return (
