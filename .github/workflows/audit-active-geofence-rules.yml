@@ -1,28 +1,52 @@
 name: Audit ACTIVE Firebase Rules before Geofence Release (READ ONLY)
 on:
+  push:
+    branches: [qa/geofence-live-rules-audit-20261124]
+    paths: ['.github/workflows/audit-active-geofence-rules.yml']
   pull_request:
     branches: [review-base/attendance-geofence-web-20261124]
     paths: ['.github/workflows/audit-active-geofence-rules.yml']
 permissions:
   contents: read
 jobs:
+  preflight:
+    if: github.repository == 'calibosofroyarjan-volunserve/VolunServe' && (github.event_name == 'push' || (github.event.pull_request.head.repo.full_name == github.repository && github.head_ref == 'qa/geofence-live-rules-audit-20261124'))
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    env:
+      GH_TOKEN: ${{ github.token }}
+      SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - name: Verify exact audited source without production credentials
+        run: |
+          curl --fail --silent --show-error --location --retry 3 -H "Authorization: Bearer $GH_TOKEN" "https://api.github.com/repos/$GITHUB_REPOSITORY/tarball/$SOURCE_SHA" -o "$RUNNER_TEMP/source.tar.gz"
+          tar -xzf "$RUNNER_TEMP/source.tar.gz" --strip-components=1 -C "$GITHUB_WORKSPACE"
+          grep -q 'Self attendance is written only by the authenticated Render backend' firestore.rules
+          test -f scripts/test-community-attendance-geofence-rules.cjs
+          echo "PASS source is available and reviewed attendance restriction is present."
+          echo "Protected production environment approval remains required for reading current rules."
   read-only-active-rules:
-    if: github.repository == 'calibosofroyarjan-volunserve/VolunServe' && github.event.pull_request.head.repo.full_name == github.repository && github.head_ref == 'qa/geofence-live-rules-audit-20261124'
+    needs: preflight
+    if: github.repository == 'calibosofroyarjan-volunserve/VolunServe' && (github.event_name == 'push' || (github.event.pull_request.head.repo.full_name == github.repository && github.head_ref == 'qa/geofence-live-rules-audit-20261124'))
     environment: production
     runs-on: ubuntu-24.04
     timeout-minutes: 20
+    env:
+      GH_TOKEN: ${{ github.token }}
+      SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
     steps:
-      - uses: actions/checkout@v4
-        with:
-          submodules: false
-          ref: ${{ github.event.pull_request.head.sha }}
+      - name: Extract exact reviewed source revision
+        run: |
+          curl --fail --silent --show-error --location --retry 3 -H "Authorization: Bearer $GH_TOKEN" "https://api.github.com/repos/$GITHUB_REPOSITORY/tarball/$SOURCE_SHA" -o "$RUNNER_TEMP/source.tar.gz"
+          tar -xzf "$RUNNER_TEMP/source.tar.gz" --strip-components=1 -C "$GITHUB_WORKSPACE"
       - name: Get ACTIVE Firestore rules fingerprint and patch exact attendance clause (NO write)
         env:
           FIREBASE_SA: ${{ secrets.VOLUNSERVE_PRODUCTION_HOSTING_SERVICE_ACCOUNT || secrets.FIREBASE_SERVICE_ACCOUNT_VOLUNSERVE_3AA5B || secrets.FIREBASE_SERVICE_ACCOUNT }}
         run: |
           node <<'NODE'
           const fs=require('fs'),crypto=require('crypto'),assert=require('assert/strict');
-          const sa=JSON.parse(process.env.FIREBASE_SA||'{}');
+          assert(process.env.FIREBASE_SA,'BLOCKED approved production environment credential unavailable');
+          const sa=JSON.parse(process.env.FIREBASE_SA);
           assert.equal(sa.project_id,'volunserve-3aa5b');
           assert.equal(sa.type,'service_account');
           async function token(){
