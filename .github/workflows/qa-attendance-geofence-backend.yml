@@ -1,0 +1,28 @@
+name: QA Backend Attendance Geofence (NO DEPLOY)
+on:
+  push:
+    branches: [feature/attendance-geofence-backend-20261124]
+    paths:
+      - '.github/workflows/qa-attendance-geofence-backend.yml'
+      - 'backend/communityAttendanceGeofence.js'
+      - 'backend/test-communityAttendanceGeofence.js'
+      - 'backend/server.js'
+permissions:
+  contents: read
+jobs:
+  qa:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Extract exact source revision
+        run: |
+          curl --fail --silent --show-error --location --retry 3 -H "Authorization: Bearer $GH_TOKEN" "https://api.github.com/repos/$GITHUB_REPOSITORY/tarball/$GITHUB_SHA" -o "$RUNNER_TEMP/source.tar.gz"
+          tar -xzf "$RUNNER_TEMP/source.tar.gz" --strip-components=1 -C "$GITHUB_WORKSPACE"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node --check backend/server.js
+      - run: node --test backend/test-communityAttendanceGeofence.js
+      - run: echo 'QA only; no production writes or deploy.'
