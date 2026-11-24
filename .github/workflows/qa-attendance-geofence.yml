@@ -1,0 +1,40 @@
+name: QA Attendance Geofence (NO DEPLOY)
+on:
+  push:
+    branches: [feature/attendance-geofence-web-20261124]
+    paths:
+      - '.github/workflows/qa-attendance-geofence.yml'
+      - 'scripts/test-community-attendance-geofence-rules.cjs'
+      - 'app/(tabs)/community-events.tsx'
+      - 'firestore.rules'
+permissions:
+  contents: read
+jobs:
+  qa:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      CI: 'true'
+      EXPO_NO_TELEMETRY: '1'
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Extract exact source revision
+        run: |
+          curl --fail --silent --show-error --location --retry 3 -H "Authorization: Bearer $GH_TOKEN" "https://api.github.com/repos/$GITHUB_REPOSITORY/tarball/$GITHUB_SHA" -o "$RUNNER_TEMP/source.tar.gz"
+          tar -xzf "$RUNNER_TEMP/source.tar.gz" --strip-components=1 -C "$GITHUB_WORKSPACE"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - run: npm ci --no-audit --no-fund
+      - name: Verify Firestore attendance rules against synthetic emulator only
+        run: npx firebase-tools emulators:exec --only firestore --project demo-volunserve "node scripts/test-community-attendance-geofence-rules.cjs"
+      - name: Typecheck and build locally
+        run: |
+          npx tsc --noEmit --incremental false
+          npx expo export --platform web --clear
+      - name: No deployment
+        run: echo 'QA only; no production writes or deploy.'
