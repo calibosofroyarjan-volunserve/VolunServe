@@ -91,9 +91,40 @@ jobs:
             console.log('Render invited-only clause deployed already? '+content.includes("render_resident_created_all_volunteers"));
             const old="                && eventAfter().participantsCount == eventBefore().participantsCount + 1\n                && eventAfter().participantsCount <= eventBefore().capacity\n              )\n              ||\n              (\n                // Volunteer Time In/Out, cannot self-verify.\n                resource.data.status == 'joined'\n                && resource.data.attendanceVerified == false\n                && request.resource.data.attendanceVerified == false\n                && request.resource.data.diff(resource.data)\n                  .affectedKeys().hasOnly([\n                    'checkedInAt', 'checkedOutAt', 'updatedAt'\n                  ])\n                && request.resource.data.updatedAt == request.time\n                && eventBefore().status == 'active'\n                && (\n                  (\n                    resource.data.checkedInAt == null\n                    && resource.data.checkedOutAt == null\n                    && request.resource.data.checkedInAt == request.time\n                    && request.resource.data.checkedOutAt == null\n                  )\n                  ||\n                  (\n                    resource.data.checkedInAt is timestamp\n                    && resource.data.checkedOutAt == null\n                    && request.resource.data.checkedInAt == resource.data.checkedInAt\n                    && request.resource.data.checkedOutAt == request.time\n                  )\n                )\n              )\n            )\n          )\n          ||";
             const next="                && eventAfter().participantsCount == eventBefore().participantsCount + 1\n                && eventAfter().participantsCount <= eventBefore().capacity\n              )\n              // Self attendance is written only by the authenticated Render backend.\n\n            )\n          )\n          ||";
-            assert.equal(content.split(old).length,2,'BLOCKED active attendance clause differs from reviewed baseline');
-            const patched=content.replace(old,next);
-            assert.equal(patched.replace(next,old),content,'BLOCKED unrelated rules changes');
+            // Match only the reviewed volunteer self-attendance OR arm, not its neighboring RSVP code.
+            const marker='// Volunteer Time In/Out, cannot self-verify.';
+            const oldStart=old.indexOf('              ||\n              (\n                '+marker);
+            const oldEnd=old.lastIndexOf('\n            )');
+            assert(oldStart>=0 && oldEnd>oldStart,'Invalid reviewed attendance patch');
+            const arm=old.slice(oldStart,oldEnd);
+            const sectionStart=content.indexOf('match /communityEventParticipants/{participantId}');
+            assert(sectionStart>=0 && content.indexOf('match /communityEventParticipants/{participantId}',sectionStart+1)<0,'Participant match missing or ambiguous');
+            const sectionEnd=content.indexOf('match /{document=**}',sectionStart);
+            assert(sectionEnd>sectionStart,'Participant section boundary not found');
+            const section=content.slice(sectionStart,sectionEnd);
+            // Tokenize while ignoring formatting and comments, preserving literal strings.
+            const tokenize=s=>Array.from(s.matchAll(/\/\/[^\n]*|\/\*[\s\S]*?\*\/|'(?:\\.|[^'\\])*'|"(?:\\.|[^"\\])*"|[A-Za-z_$][\w$]*|\d+|&&|\|\||==|!=|<=|>=|[^\s]/g)).filter(m=>!m[0].startsWith('//')&&!m[0].startsWith('/*'));
+            const target=tokenize(arm).map(t=>t[0]);
+            const actual=tokenize(section);
+            const hits=[];
+            for(let i=0;i<=actual.length-target.length;i++){
+              if(target.every((t,j)=>actual[i+j][0]===t))hits.push(i);
+            }
+            if(hits.length!==1){
+              console.log('ACTIVE_PARTICIPANT_RULES_BEGIN');
+              console.log(section);
+              console.log('ACTIVE_PARTICIPANT_RULES_END');
+              throw Error('BLOCKED actual attendance predicate differs semantically; inspect scoped source before editing');
+            }
+            const start=sectionStart+actual[hits[0]].index;
+            const last=actual[hits[0]+target.length-1];
+            const end=sectionStart+last.index+last[0].length;
+            const removed=content.slice(start,end);
+            const replacement='// Self attendance is written only by the authenticated Render backend.';
+            const patched=content.slice(0,start)+replacement+content.slice(end);
+            assert.equal(patched.slice(0,start)+removed+patched.slice(start+replacement.length),content,'BLOCKED unrelated rules changes');
+            console.log('PATCH_SCOPE=exact token-equivalent volunteer self-attendance arm only');
+            console.log('REMOVED_BYTES='+Buffer.byteLength(removed));
             fs.writeFileSync('firestore.rules',patched,{mode:0o600});
             console.log('PATCHED_RULES_SHA256='+hash(patched));
             console.log('READ ONLY audit completed; candidate exists only on temporary runner.');
