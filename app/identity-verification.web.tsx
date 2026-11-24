@@ -1044,7 +1044,7 @@ export default function IdentityVerificationWeb() {
     setLiveChecks(EMPTY_CHECKS);
     captureLockRef.current = false;
     stableSinceRef.current = null;
-    // Randomized motion guidance, not validated anti-spoofing.
+    // Original stable-face capture; no active movement/liveness challenge.
 
     let stream: MediaStream | null = null;
     let phase: "camera" | "preview" | "detector" = "camera";
