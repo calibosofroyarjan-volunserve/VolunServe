@@ -24,18 +24,28 @@ jobs:
       BASE_SHA: 0b14cd87e57dae72072942894b2b3d3137ac7a16
       SOURCE_SHA: 4e5cd30c5f3c517bc6ae9f041a9df479a058b364
     steps:
-      - uses: actions/checkout@v4
-        with:
-          path: controller
-          ref: ${{ github.sha }}
-          fetch-depth: 0
-          persist-credentials: false
-      - uses: actions/checkout@v4
-        with:
-          path: site
-          ref: 4e5cd30c5f3c517bc6ae9f041a9df479a058b364
-          fetch-depth: 0
-          persist-credentials: false
+      - name: Fetch exact controller and approved site without submodule traversal
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CONTROLLER_SHA: ${{ github.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          origin="https://github.com/$GITHUB_REPOSITORY.git"
+          auth="$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)"
+          echo "::add-mask::$auth"
+          for pair in "controller:$CONTROLLER_SHA" "site:$SOURCE_SHA"; do
+            dir="${pair%%:*}"
+            sha="${pair#*:}"
+            [[ "$sha" =~ ^[a-f0-9]{40}$ ]]
+            git init -q "$dir"
+            git -C "$dir" remote add origin "$origin"
+            git -C "$dir" -c "http.https://github.com/.extraheader=AUTHORIZATION: basic $auth" -c fetch.recurseSubmodules=false fetch --no-tags --no-recurse-submodules origin "$sha"
+            git -C "$dir" -c submodule.recurse=false checkout --detach "$sha"
+            test "$(git -C "$dir" rev-parse HEAD)" = "$sha"
+          done
+          unset auth GH_TOKEN
+          echo 'PASS exact sources checked out without touching repository submodules or persisting credentials'
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
