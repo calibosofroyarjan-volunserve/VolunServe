@@ -1,0 +1,64 @@
+"use strict";
+// Local emulator only. Never initialize the production Firebase Admin module.
+const assert=require("node:assert/strict");
+const fs=require("node:fs");
+const {initializeApp,deleteApp}=require("firebase-admin/app");
+const {getFirestore,FieldValue,Timestamp}=require("firebase-admin/firestore");
+const {initializeTestEnvironment,assertFails,assertSucceeds}=require("../node_modules/@firebase/rules-unit-testing");
+const {doc,updateDoc,serverTimestamp}=require("../node_modules/firebase/firestore");
+const {recordGeofencedAttendance}=require("./communityAttendanceGeofence");
+(async()=>{
+ const projectId="demo-volunserve";
+ if(!/^127\.0\.0\.1:\d+$/.test(process.env.FIRESTORE_EMULATOR_HOST||"")||process.env.GOOGLE_APPLICATION_CREDENTIALS) throw Error("Local emulator required, no credentials allowed");
+ const app=initializeApp({projectId},"geofence-test");
+ const db=getFirestore(app);
+ const env=await initializeTestEnvironment({projectId,firestore:{rules:fs.readFileSync("firestore.rules","utf8")}});
+ const firebasePath=require.resolve("./firebaseAdmin");
+ require.cache[firebasePath]={id:firebasePath,filename:firebasePath,loaded:true,exports:{db,FieldValue}};
+ const {issueCommunityEventCertificate,communityCertificateId}=require("./communityCertificates");
+ process.env.VOLUNSERVE_CERT_TEST_OVERRIDE_ENABLED="false";
+ process.env.VOLUNSERVE_CERT_LIVE_ONE_MIN_PERMANENT_ENABLED="false";
+ const eventId="qa-geofence",uid="qa-volunteer",adminId="qa-admin",pid=eventId+"_"+uid;
+ const eventRef=db.collection("communityEvents").doc(eventId),p=db.collection("communityEventParticipants").doc(pid);
+ const coords={latitude:14.81,longitude:121.04};
+ const fresh=(latitude=coords.latitude)=>({latitude,longitude:coords.longitude,accuracy:10,timestamp:Date.now()});
+ const request=(action,location=fresh())=>recordGeofencedAttendance({db,FieldValue,uid,email:"volunteer@gmail.com",eventId,action,location});
+ const read=async()=>(await p.get()).data();
+ try{
+ await env.clearFirestore();
+ await db.collection("users").doc(uid).set({role:"resident",email:"volunteer@gmail.com",status:"approved",fullName:"QA Volunteer",activeMode:"volunteer",residentAccess:true,volunteerAccess:true,volunteerStatus:"approved"});
+ await db.collection("users").doc(adminId).set({role:"admin",email:"admin@gmail.com",status:"approved"});
+ await eventRef.set({status:"active",publicationStatus:"published",proposedBy:"other",capacity:20,participantsCount:1,coordinates:coords,title:"QA Cleanup Event",location:"Synthetic venue",date:"2026-11-24",time:"08:00",barangay:"QA"});
+ await p.set({eventId,uid,fullName:"QA Volunteer",status:"joined",joinedAt:Timestamp.fromMillis(Date.now()-3600000),checkedInAt:null,checkedOutAt:null,attendanceVerified:false,attendanceVerifiedAt:null});
+ const v=env.authenticatedContext(uid,{email:"volunteer@gmail.com",email_verified:true}).firestore(),a=env.authenticatedContext(adminId,{email:"admin@gmail.com",email_verified:true}).firestore();
+ const part=doc(v,"communityEventParticipants",pid),adminPart=doc(a,"communityEventParticipants",pid);
+ await assert.rejects(request("check-in",fresh(14.812)),{code:"outside_event_area"});
+ assert.equal((await read()).checkedInAt,null);
+ await assertFails(updateDoc(part,{checkedInAt:serverTimestamp(),updatedAt:serverTimestamp()}));
+ await request("check-in");assert.ok((await read()).checkedInAt.toMillis()>0);
+ await assert.rejects(request("check-in"),{code:"already_checked_in"});
+ await assert.rejects(request("check-out",fresh(14.812)),{code:"outside_event_area"});
+ assert.equal((await read()).checkedOutAt,null);
+ await assertFails(updateDoc(part,{checkedOutAt:serverTimestamp(),updatedAt:serverTimestamp()}));
+ // Simulate elapsed 31 minutes using emulator-only fixture; not a measured duration.
+ await p.update({checkedInAt:Timestamp.fromMillis(Date.now()-31*60000)});
+ await request("check-out");const record=await read();
+ assert.ok(record.checkedOutAt.toMillis()-record.checkedInAt.toMillis()>=30*60000);
+ assert.equal(record.checkInGeofence.distanceMeters,0);assert.equal(record.checkOutGeofence.distanceMeters,0);
+ assert.equal((await issueCommunityEventCertificate(eventId,pid)).issued,false);
+ await assertFails(updateDoc(part,{attendanceVerified:true,attendanceVerifiedAt:serverTimestamp(),attendanceVerifiedBy:uid,updatedAt:serverTimestamp()}));
+ await assertSucceeds(updateDoc(adminPart,{attendanceVerified:true,attendanceVerifiedAt:serverTimestamp(),attendanceVerifiedBy:adminId,updatedAt:serverTimestamp()}));
+ assert.equal((await issueCommunityEventCertificate(eventId,pid)).issued,false);
+ await assertSucceeds(updateDoc(doc(a,"communityEvents",eventId),{status:"completed",completedAt:serverTimestamp(),completedBy:adminId,updatedAt:serverTimestamp()}));
+ const first=await issueCommunityEventCertificate(eventId,pid);
+ assert.equal(first.issued,true);
+ const id=communityCertificateId(eventId,uid,"2026-11-24");
+ assert.equal(first.certificateId,id);
+ assert.ok((await db.collection("certificates").doc(id).get()).exists);
+ assert.ok((await db.collection("publicCertificateVerifications").doc(id).get()).exists);
+ assert.ok((await db.collection("notifications").doc("community_certificate_"+id).get()).exists);
+ assert.equal((await issueCommunityEventCertificate(eventId,pid)).reason,"already_exists");
+ assert.equal((await db.collection("certificates").get()).size,1);
+ console.log("PASS geofence -> emulator attendance -> Admin verification -> event completion -> actual certificate issuer -> duplicate prevention (synthetic data, simulated elapsed time)");
+ }finally{await env.cleanup();await db.terminate();await deleteApp(app);}
+})().catch(e=>{console.error(e);process.exitCode=1});
