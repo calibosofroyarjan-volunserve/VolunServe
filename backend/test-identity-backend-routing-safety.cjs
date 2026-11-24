@@ -15,7 +15,10 @@ const compiled = ts.transpileModule(original.slice(start, end), {
   compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
   reportDiagnostics: true,
 });
-assert.equal(compiled.diagnostics?.length || 0, 0);
+if ((compiled.diagnostics?.length || 0) > 0) {
+  const details = compiled.diagnostics.map(d => ts.flattenDiagnosticMessageText(d.messageText, "\\n"));
+  throw new Error("Identity TypeScript resolver fixture did not compile: " + details.join(" | "));
+}
 const moduleMock = { exports: {} };
 vm.runInNewContext(compiled.outputText, {
   module: moduleMock,
