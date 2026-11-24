@@ -25,6 +25,21 @@ jobs:
           test -f scripts/test-community-attendance-geofence-rules.cjs
           echo "PASS source is available and reviewed attendance restriction is present."
           echo "Protected production environment approval remains required for reading current rules."
+          node <<'NODE'
+          const assert=require('node:assert/strict');
+          (async()=>{
+            const url=new URL('https://volunserve.com/volunserve-release.json');
+            url.searchParams.set('geofence_release_preflight',Date.now());
+            const r=await fetch(url,{headers:{'Cache-Control':'no-cache'},signal:AbortSignal.timeout(20000)});
+            assert(r.ok,'BLOCKED cannot read current Hosting marker: '+r.status);
+            const m=await r.json();
+            assert.equal(m.firebaseProject,'volunserve-3aa5b');
+            assert(/^[0-9a-f]{40}$/.test(m.revision),'Invalid Hosting revision');
+            console.log('CURRENT_LIVE_HOSTING_SHA='+m.revision);
+            assert.equal(m.revision,'0b14cd87e57dae72072942894b2b3d3137ac7a16','BLOCKED newer Hosting deployed; rebase geofence against actual published revision');
+            console.log('PASS exact live Hosting source matches geofence candidate baseline');
+          })().catch(e=>{console.error(e.message);process.exit(1)});
+          NODE
   # Authorized named-branch push audit after owner confirmed the exact branch rule.
   # PR merge refs are intentionally not eligible for the protected audit.
   # Run only on the named branch push, subject to the existing production environment policy.
