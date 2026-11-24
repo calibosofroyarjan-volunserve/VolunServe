@@ -1,11 +1,13 @@
 import { volunserveTypography as vsType } from "../../constants/volunserveLiveUi";
 import { liveUi as designUi } from "../../constants/volunserveLiveUi";
 import { Ionicons } from "@expo/vector-icons";
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useLocalSearchParams } from "expo-router";
 import ListPagination from "../../components/ui/ListPagination";
 import AdminReviewHero from "../../components/admin/AdminReviewHero";
 import DocumentScreeningSummary from "../../components/identity/DocumentScreeningSummary";
+import AdminIdentityEvidence from "../../components/identity/AdminIdentityEvidence";
+import { getIdentityBackendBaseUrl } from "../../lib/identityBackendUrl";
 import type { DocumentScreening } from "../../lib/identityVerification";
 import {
     ActivityIndicator,
@@ -22,7 +24,7 @@ import {
 
 import { useUserSession } from "../../lib/useUserSession";
 
-const BACKEND_URL = "https://volunserve.onrender.com";
+
 
 type ReviewFilter = "pending" | "verified" | "retry_required" | "all";
 
@@ -36,7 +38,14 @@ type IdentityReview = {
   decision?: string;
   matchScore?: number | null;
   livenessScore?: number | null;
+  idImageQualityScore?: number | null;
+  idBackImageQualityScore?: number | null;
+  idBackQualityChecked?: boolean;
+  selfieQualityScore?: number | null;
+  scanWarnings?: string[];
   documentScreening?: DocumentScreening;
+  evidenceAvailable?: boolean;
+  evidenceExpiresAt?: string;
   message?: string;
   requiresManualReview?: boolean;
   manualReviewDecision?: string;
@@ -58,6 +67,8 @@ type IdentityReview = {
     residentAccess?: boolean;
   };
 };
+
+const identityReviewKey = (item: IdentityReview) => item.uid + "::" + (item.verificationId || "");
 
 const VALIDATION_METHODS = [
   {
@@ -118,7 +129,9 @@ export default function IdentityReviewsAdmin() {
   const params = useLocalSearchParams<{ uid?: string }>();
   const { loading: sessionLoading, user, profile } = useUserSession();
   const { width } = useWindowDimensions();
-  const wide = width >= 1050;
+  // Two columns need space for both the 5-record queue and detailed evidence cards.
+  const wide = width >= 1240;
+  const scrollRef = useRef<ScrollView | null>(null);
 
   const [items, setItems] = useState<IdentityReview[]>([]);
   const [loading, setLoading] = useState(true);
@@ -131,9 +144,12 @@ export default function IdentityReviewsAdmin() {
   const [page, setPage] = useState(1);
   const PAGE_SIZE = 5;
   const [selected, setSelected] = useState<IdentityReview | null>(null);
+  const mobileDetail = !wide && !!selected;
   const [validationMethod, setValidationMethod] = useState("");
   const [notes, setNotes] = useState("");
   const [saving, setSaving] = useState<"" | "verify" | "require_retry">("");
+  const [readyEvidenceKey, setReadyEvidenceKey] = useState("");
+  const [confirmedEvidenceKey, setConfirmedEvidenceKey] = useState("");
 
   const role =
     typeof profile?.role === "string"
@@ -159,7 +175,7 @@ export default function IdentityReviewsAdmin() {
 
       const token = await user.getIdToken(true);
       const response = await fetch(
-        `${BACKEND_URL}/api/admin/identity/reviews`,
+        `${getIdentityBackendBaseUrl()}/api/admin/identity/reviews`,
         {
           method: "GET",
           headers: {
@@ -250,8 +266,21 @@ export default function IdentityReviewsAdmin() {
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const activePage = Math.max(1, Math.min(page, totalPages));
   const pagedReviews = filtered.slice((activePage - 1) * PAGE_SIZE, activePage * PAGE_SIZE);
+  // Keep mobile queue navigation explicit; on desktop show the first case.
+  useEffect(() => {
+    if (!wide || loading || selected || pagedReviews.length === 0) return;
+    const first = pagedReviews[0];
+    if (!first) return;
+    setSelected(first);
+    setValidationMethod(first.manualValidationMethod || "");
+    setNotes(first.manualReviewNotes || "");
+  }, [wide, loading, selected, activePage, items, filter, search]);
+
 
   const openReview = (item: IdentityReview) => {
+    setReadyEvidenceKey("");
+    setConfirmedEvidenceKey("");
+    if (!wide) scrollRef.current?.scrollTo({ y: 0, animated: false });
     setSelected(item);
     setValidationMethod(item.manualValidationMethod || "");
     setNotes(item.manualReviewNotes || "");
@@ -261,6 +290,14 @@ export default function IdentityReviewsAdmin() {
     action: "verify" | "require_retry",
   ) => {
     if (!selected || !user || saving) return;
+
+    if (action === "verify" &&
+        (readyEvidenceKey !== identityReviewKey(selected) ||
+         confirmedEvidenceKey !== identityReviewKey(selected))) {
+      Alert.alert("Review Photos First",
+        "Open all required private ID and selfie photos, then confirm your evidence review before approving.");
+      return;
+    }
 
     if (action === "verify" && !validationMethod) {
       Alert.alert(
@@ -293,7 +330,7 @@ export default function IdentityReviewsAdmin() {
 
       const token = await user.getIdToken(true);
       const response = await fetch(
-        `${BACKEND_URL}/api/admin/identity/reviews/${encodeURIComponent(
+        `${getIdentityBackendBaseUrl()}/api/admin/identity/reviews/${encodeURIComponent(
           selected.uid,
         )}/decision`,
         {
@@ -304,6 +341,8 @@ export default function IdentityReviewsAdmin() {
           },
           body: JSON.stringify({
             action,
+            imagesReviewed: action === "verify" &&
+              confirmedEvidenceKey === identityReviewKey(selected),
             validationMethod:
               action === "verify" ? validationMethod : "",
             notes: notes.trim(),
@@ -332,6 +371,8 @@ export default function IdentityReviewsAdmin() {
       );
 
       setSelected(null);
+      setReadyEvidenceKey("");
+      setConfirmedEvidenceKey("");
       setValidationMethod("");
       setNotes("");
       await loadReviews();
@@ -376,21 +417,24 @@ export default function IdentityReviewsAdmin() {
   return (
     <View style={styles.screen}>
       <ScrollView
+        ref={scrollRef}
         style={[
           styles.scroll,
           Platform.OS === "web" && styles.webScrollBar,
         ]}
-        contentContainerStyle={styles.page}
+        contentContainerStyle={[styles.page, !wide && styles.pageCompact]}
         showsVerticalScrollIndicator={true}
         keyboardShouldPersistTaps="handled"
         accessibilityLabel="Identity reviews content"
       >
+        {!mobileDetail ? <>
         <AdminReviewHero
           eyebrow="LGU OPERATIONS / PEOPLE & VERIFICATION"
           title="Resident Identity Reviews"
           subtitle="Review identity cases requiring independent LGU validation. AI-assisted checks and manual review remain separate."
           icon="shield-checkmark-outline"
           tag="IDENTITY PROTECTION"
+          variant="mint"
         />
         <View style={styles.summaryMetrics}>
           {[
@@ -401,106 +445,24 @@ export default function IdentityReviewsAdmin() {
           ].map(metric => (
             <View key={metric.label} style={styles.summaryMetric}>
               <View style={styles.summaryIcon}><Ionicons name={metric.icon} size={20} color="#08765A" /></View>
-              <Text style={styles.summaryLabel}>{metric.label}</Text>
-              <Text style={styles.summaryValue}>{metric.value}</Text>
+              <View style={styles.summaryCopy}>
+                <Text style={styles.summaryLabel}>{metric.label}</Text>
+                <Text style={styles.summaryValue}>{metric.value}</Text>
+              </View>
             </View>
           ))}
         </View>
-        <View style={styles.queueHeading}>
-          <View style={styles.flexOne}>
-            <Text style={styles.queueTitle}>Identity Verification Queue</Text>
-            <Text style={styles.queueSubheading}>Review supporting information, select a validation method, and record the decision.</Text>
-          </View>
-          <TouchableOpacity style={styles.refreshButton} onPress={() => void loadReviews()} disabled={loading}
-            accessibilityRole="button" accessibilityLabel="Refresh identity verification queue">
-            {loading ? <ActivityIndicator size="small" color="#08765A" /> : <Ionicons name="refresh-outline" size={19} color="#08765A" />}
-            <Text style={styles.refreshButtonText}>Refresh</Text>
+        </> : (
+          <TouchableOpacity accessibilityRole="button" accessibilityLabel="Back to identity verification queue"
+            onPress={() => { setSelected(null); setValidationMethod(""); setNotes(""); scrollRef.current?.scrollTo({ y: 0, animated: false }); }}
+            style={styles.mobileBackButton}>
+            <Ionicons name="arrow-back" size={18} color="#08765A" />
+            <View style={styles.flexOne}>
+              <Text style={styles.mobileBackText}>Back to identity verification queue</Text>
+              <Text style={styles.mobileBackDescription}>Resident details and private evidence</Text>
+            </View>
           </TouchableOpacity>
-        </View>
-        <View style={styles.privacyNotice}>
-          <Ionicons
-            name="lock-closed-outline"
-            size={20}
-            color="#0F766E"
-          />
-          <View style={styles.flexOne}>
-            <Text style={styles.noticeTitle}>
-              Privacy-preserving manual fallback
-            </Text>
-            <Text style={styles.noticeText}>
-              The AI service processes the submitted ID and selfie for
-              the 1-to-1 comparison, but this queue does not retain or
-              display those private images. Manual verification must use
-              an independent LGU-approved validation method.
-            </Text>
-          </View>
-        </View>
-
-        <View style={styles.filterRow}>
-          {[
-            { key: "pending" as const, label: "Pending", count: counts.pending },
-            { key: "verified" as const, label: "Verified", count: counts.verified },
-            {
-              key: "retry_required" as const,
-              label: "Retry Required",
-              count: counts.retry_required,
-            },
-            { key: "all" as const, label: "All", count: counts.all },
-          ].map((item) => {
-            const active = filter === item.key;
-            return (
-              <TouchableOpacity
-                key={item.key}
-                style={[
-                  styles.filterButton,
-                  active && styles.filterButtonActive,
-                ]}
-                onPress={() => { setFilter(item.key); setPage(1); setSelected(null); }}
-              >
-                <Text
-                  style={[
-                    styles.filterButtonText,
-                    active && styles.filterButtonTextActive,
-                  ]}
-                >
-                  {item.label}
-                </Text>
-                <View
-                  style={[
-                    styles.countBadge,
-                    active && styles.countBadgeActive,
-                  ]}
-                >
-                  <Text
-                    style={[
-                      styles.countBadgeText,
-                      active && styles.countBadgeTextActive,
-                    ]}
-                  >
-                    {item.count}
-                  </Text>
-                </View>
-              </TouchableOpacity>
-            );
-          })}
-        </View>
-
-        <View style={styles.searchWrap}>
-          <Ionicons
-            name="search-outline"
-            size={18}
-            color="#64748B"
-          />
-          <TextInput
-            style={styles.searchInput}
-            value={search}
-            onChangeText={value => { setSearch(value); setPage(1); }}
-            placeholder="Search Resident, email, barangay, or verification ID"
-            placeholderTextColor="#94A3B8"
-          />
-        </View>
-
-        <ListPagination page={activePage} total={filtered.length} pageSize={PAGE_SIZE} onChange={setPage} />
+        )}
         {error ? (
           <View style={styles.errorCard}>
             <Ionicons
@@ -519,21 +481,6 @@ export default function IdentityReviewsAdmin() {
               Loading identity reviews...
             </Text>
           </View>
-        ) : filtered.length === 0 ? (
-          <View style={styles.emptyCard}>
-            <Ionicons
-              name="shield-checkmark-outline"
-              size={38}
-              color="#94A3B8"
-            />
-            <Text style={styles.emptyTitle}>
-              No identity reviews here
-            </Text>
-            <Text style={styles.centerText}>
-              New AI-uncertain cases will appear in Pending when manual
-              validation is required.
-            </Text>
-          </View>
         ) : (
           <View
             style={[
@@ -541,7 +488,69 @@ export default function IdentityReviewsAdmin() {
               wide && styles.workspaceWide,
             ]}
           >
-            <View style={[styles.queue, wide && styles.queueWide]}>
+            {!mobileDetail ? <View style={[styles.queue, wide && styles.queueWide]}>
+              <View style={styles.queueHeading}>
+                <View style={styles.flexOne}>
+                  <Text style={styles.queueTitle}>Identity Verification Queue</Text>
+                  <Text style={styles.queueSubheading}>Select a resident to review and validate.</Text>
+                </View>
+                <TouchableOpacity style={styles.refreshButton} accessibilityRole="button"
+                  accessibilityLabel="Refresh identity verification queue"
+                  onPress={() => void loadReviews()} disabled={loading}>
+                  {loading ? <ActivityIndicator size="small" color="#08765A" /> :
+                    <Ionicons name="refresh-outline" size={17} color="#08765A" />}
+                  <Text style={styles.refreshButtonText}>Refresh</Text>
+                </TouchableOpacity>
+              </View>
+              <View style={styles.filterRow}>
+                {([
+                  { key: "pending" as const, label: "Pending", count: counts.pending },
+                  { key: "verified" as const, label: "Verified", count: counts.verified },
+                  { key: "retry_required" as const, label: "Retry Required", count: counts.retry_required },
+                  { key: "all" as const, label: "All", count: counts.all },
+                ]).map((choice) => {
+                  const active = filter === choice.key;
+                  return (
+                    <TouchableOpacity key={choice.key} accessibilityRole="button"
+                      accessibilityState={{ selected: active }}
+                      style={[styles.filterButton, active && styles.filterButtonActive]}
+                      onPress={() => {
+                        setFilter(choice.key); setPage(1); setSelected(null);
+                        setReadyEvidenceKey(""); setConfirmedEvidenceKey("");
+                      }}>
+                      <Text style={[styles.filterButtonText, active && styles.filterButtonTextActive]}>{choice.label}</Text>
+                      <View style={[styles.countBadge, active && styles.countBadgeActive]}>
+                        <Text style={[styles.countBadgeText, active && styles.countBadgeTextActive]}>{choice.count}</Text>
+                      </View>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+              <View style={styles.searchWrap}>
+                <Ionicons name="search-outline" size={17} color="#64748B" />
+                <TextInput style={styles.searchInput} value={search}
+                  onChangeText={(value) => {
+                    setSearch(value); setPage(1); setSelected(null);
+                    setReadyEvidenceKey(""); setConfirmedEvidenceKey("");
+                  }}
+                  placeholder="Search resident, email, barangay, or ID..."
+                  placeholderTextColor="#94A3B8" />
+              </View>
+              <View style={styles.queuePrivacyLine}>
+                <Ionicons name="lock-closed-outline" size={13} color="#08765A" />
+                <Text style={styles.queuePrivacyText}>Private evidence is available only to authorized LGU reviewers.</Text>
+              </View>
+
+              {pagedReviews.length === 0 ? (
+                <View style={styles.queueEmptyState}>
+                  <Ionicons name="search-outline" size={23} color="#8CA99A" />
+                  <Text style={styles.queueEmptyTitle}>No matching reviews</Text>
+                  <Text style={styles.queueEmptyText}>
+                    {search.trim() ? "Try another resident name or ID." :
+                      "No submissions in this status. Select another filter to continue."}
+                  </Text>
+                </View>
+              ) : null}
               {pagedReviews.map((item) => {
                 const active = selected?.uid === item.uid;
                 return (
@@ -582,17 +591,13 @@ export default function IdentityReviewsAdmin() {
                       <StatusChip bucket={reviewBucket(item)} />
                     </View>
 
-                    <View style={styles.scoreRow}>
-                      <Text style={styles.scoreLabel}>Government ID check</Text>
-                      <Text style={styles.scoreValue}>
-                        {item.documentScreening?.status === "text_consistent_unverified"
-                          ? "ID type recognized — unverified"
-                          : item.documentScreening?.status === "mismatch"
-                            ? "Selected ID type mismatch"
-                            : "Recognition inconclusive"}
+                    <View style={styles.evidenceStatusRow}>
+                      <Ionicons name={item.evidenceAvailable ? "lock-closed-outline" : "alert-circle-outline"}
+                        size={14} color={item.evidenceAvailable ? "#08765A" : "#B45309"} />
+                      <Text style={[styles.evidenceStatusText, !item.evidenceAvailable && styles.evidenceStatusWarning]}>
+                        {item.evidenceAvailable ? "Protected ID and selfie saved" : "Pictures unavailable — resubmission needed"}
                       </Text>
                     </View>
-
                     <Text style={styles.queueDate}>
                       Submitted{" "}
                       {formatDate(
@@ -604,19 +609,39 @@ export default function IdentityReviewsAdmin() {
                   </TouchableOpacity>
                 );
               })}
-            </View>
+              <View style={styles.queueFooter}>
+                <Text style={styles.queueFooterLabel}>
+                  {filtered.length ? (activePage - 1) * PAGE_SIZE + 1 : 0}–{Math.min(activePage * PAGE_SIZE, filtered.length)} of {filtered.length} records · 5 per page
+                </Text>
+                <ListPagination page={activePage} total={filtered.length} pageSize={PAGE_SIZE}
+                  onChange={(next) => { setPage(next); setSelected(null); setReadyEvidenceKey(""); setConfirmedEvidenceKey(""); }} />
+              </View>
+            </View> : null}
 
             <View
               style={[
                 styles.detailPanel,
-                wide && styles.detailPanelWide,
+                wide ? styles.detailPanelWide : styles.detailPanelCompact,
               ]}
             >
               {selected ? (
                 <ReviewDetail
                   item={selected}
+                  user={user}
                   validationMethod={validationMethod}
                   setValidationMethod={setValidationMethod}
+                  evidenceReady={readyEvidenceKey === identityReviewKey(selected)}
+                  evidenceAcknowledged={confirmedEvidenceKey === identityReviewKey(selected)}
+                  onEvidenceStateChange={(ready) => {
+                    const key = identityReviewKey(selected);
+                    if (ready) setReadyEvidenceKey(key);
+                    else {
+                      setReadyEvidenceKey((current) => current === key ? "" : current);
+                      setConfirmedEvidenceKey((current) => current === key ? "" : current);
+                    }
+                  }}
+                  onAcknowledgeEvidence={() => setConfirmedEvidenceKey((current) =>
+                    current === identityReviewKey(selected) ? "" : identityReviewKey(selected))}
                   notes={notes}
                   setNotes={setNotes}
                   saving={saving}
@@ -647,10 +672,10 @@ export default function IdentityReviewsAdmin() {
   );
 }
 
-function StatusChip({ bucket }: { bucket: ReviewFilter }) {
+function StatusChip({ bucket, detailed = false }: { bucket: ReviewFilter; detailed?: boolean }) {
   const meta =
     bucket === "pending"
-      ? { label: "Pending", background: "#FEF3C7", color: "#92400E" }
+      ? { label: detailed ? "Pending Review" : "Pending", background: "#FEF3C7", color: "#92400E" }
       : bucket === "verified"
         ? { label: "Verified", background: "#DCFCE7", color: "#166534" }
         : bucket === "retry_required"
@@ -677,252 +702,290 @@ function StatusChip({ bucket }: { bucket: ReviewFilter }) {
 }
 
 function ReviewDetail({
-  item,
-  validationMethod,
-  setValidationMethod,
-  notes,
-  setNotes,
-  saving,
-  onVerify,
-  onRetry,
+  item, user, validationMethod, setValidationMethod,
+  evidenceReady, evidenceAcknowledged, onEvidenceStateChange, onAcknowledgeEvidence,
+  notes, setNotes, saving, onVerify, onRetry,
 }: {
   item: IdentityReview;
+  user: { getIdToken: (forceRefresh?: boolean) => Promise<string> } | null;
   validationMethod: string;
   setValidationMethod: (value: string) => void;
+  evidenceReady: boolean;
+  evidenceAcknowledged: boolean;
+  onEvidenceStateChange: (ready: boolean) => void;
+  onAcknowledgeEvidence: () => void;
   notes: string;
   setNotes: (value: string) => void;
   saving: "" | "verify" | "require_retry";
   onVerify: () => void;
   onRetry: () => void;
 }) {
-  const pending = reviewBucket(item) === "pending";
+  const { width } = useWindowDimensions();
+  const wideDetail = width >= 1400;
+  const [tab, setTab] = useState<"review" | "details" | "audit">("review");
+  const [methodOpen, setMethodOpen] = useState(false);
+  useEffect(() => {
+    setTab("review");
+    setMethodOpen(false);
+  }, [item.uid, item.verificationId]);
 
+  const pending = reviewBucket(item) === "pending";
+  const evidenceExpired = !!item.evidenceExpiresAt &&
+    Date.parse(item.evidenceExpiresAt) <= Date.now();
+  const evidenceMissing = item.evidenceAvailable !== true || evidenceExpired;
+  const score = typeof item.matchScore === "number" && Number.isFinite(item.matchScore)
+    && item.matchScore >= 0 && item.matchScore <= 1
+    ? (item.matchScore * 100).toFixed(1) + "%" : "Not evaluated";
+  const quality = (value?: number | null) =>
+    typeof value === "number" && Number.isFinite(value) && value >= 0 && value <= 1
+      ? (value * 100).toFixed(0) + " / 100" : "Not evaluated";
+  const documentType = ({
+    national_id: "Philippine National ID",
+    passport: "Philippine Passport",
+    drivers_license: "Driver's License",
+    other_government_id: "Other Government ID",
+  } as const)[item.documentScreening?.declaredIdType || "other_government_id"];
+  const screening = item.documentScreening?.status === "text_consistent_unverified"
+    ? "ID type recognized — not authenticated"
+    : item.documentScreening?.status === "mismatch"
+      ? "Detected document type mismatch" : "Document screening inconclusive";
+  const selectedMethod = VALIDATION_METHODS.find((method) => method.value === validationMethod);
   return (
-    <View>
+    <View style={styles.reviewDetailRoot}>
       <View style={styles.detailHeader}>
         <View style={styles.detailHeaderIcon}>
-          <Ionicons
-            name="person-outline"
-            size={24}
-            color="#4F46E5"
-          />
+          <Text style={styles.detailAvatarText}>
+            {String(item.resident?.fullName || "R").trim().charAt(0).toUpperCase()}
+          </Text>
         </View>
-
         <View style={styles.flexOne}>
-          <Text style={styles.detailTitle}>
-            {item.resident?.fullName || "Resident"}
+          <Text style={styles.detailTitle}>{item.resident?.fullName || "Resident"}</Text>
+          <Text style={styles.detailMeta}>
+            {item.resident?.barangay ? "Brgy. " + item.resident.barangay : "Barangay not set"}
           </Text>
           <Text style={styles.detailMeta}>
-            {item.resident?.email || "No email"}
+            Submitted {formatDate(item.lastSubmissionAt || item.updatedAt || item.createdAt)}
           </Text>
         </View>
-
-        <StatusChip bucket={reviewBucket(item)} />
+        <StatusChip bucket={reviewBucket(item)} detailed />
       </View>
 
-      <SectionTitle
-        icon="person-circle-outline"
-        title="Resident Account"
-      />
-      <InfoLine
-        label="Barangay"
-        value={item.resident?.barangay || "Not set"}
-      />
-      <InfoLine
-        label="Phone"
-        value={item.resident?.phoneNumber || "Not set"}
-      />
-      <InfoLine
-        label="Account status"
-        value={item.resident?.accountStatus || "—"}
-      />
-
-      <SectionTitle
-        icon="scan-outline"
-        title="AI Verification Result"
-      />
-
-      <View style={styles.scoreCard}>
-        <View>
-          <Text style={styles.scoreCardLabel}>Document and identity review</Text>
-          <Text style={styles.scoreCardDecision}>
-            {item.documentScreening?.status === "text_consistent_unverified"
-              ? "Document text is consistent with the selected ID type; not authenticated"
-              : item.documentScreening?.status === "mismatch"
-                ? "Selected ID type conflicts with recognized document text"
-                : "Document type is inconclusive; verify using an independent LGU method"}
-          </Text>
-        </View>
-        <Text style={styles.scoreCardLabel}>
-          AI screening is preliminary. Approve only after checking identity through an approved LGU validation method.
-        </Text>
+      <View style={styles.detailTabRow}>
+        {([
+          { key: "review" as const, label: "Identity Review", icon: "shield-checkmark-outline" as const },
+          { key: "details" as const, label: "Details & History", icon: "time-outline" as const },
+          { key: "audit" as const, label: "Audit Trail", icon: "document-text-outline" as const },
+        ]).map(({ key, label, icon }) => (
+          <TouchableOpacity key={key} accessibilityRole="tab"
+            accessibilityState={{ selected: tab === key }}
+            onPress={() => setTab(key)}
+            style={[styles.detailTab, tab === key && styles.detailTabActive]}>
+            <Ionicons name={icon} size={16} color={tab === key ? "#08765A" : "#64748B"} />
+            <Text style={[styles.detailTabText, tab === key && styles.detailTabTextActive]}>
+              {label}
+            </Text>
+          </TouchableOpacity>
+        ))}
       </View>
 
-      <DocumentScreeningSummary screening={item.documentScreening} />
-
-      <InfoLine
-        label="Verification ID"
-        value={item.verificationId || "—"}
-      />
-      <InfoLine
-        label="Submitted"
-        value={formatDate(item.lastSubmissionAt || item.createdAt)}
-      />
-
-      {item.message ? (
-        <View style={styles.aiMessage}>
-          <Ionicons
-            name="information-circle-outline"
-            size={19}
-            color="#0F766E"
-          />
-          <Text style={styles.aiMessageText}>{item.message}</Text>
-        </View>
-      ) : null}
-
-      {pending ? (
+      {tab === "review" ? (
         <>
-          <SectionTitle
-            icon="shield-checkmark-outline"
-            title="Independent LGU Validation"
-          />
+          <View style={[styles.reviewTopGrid, wideDetail && styles.reviewTopGridWide]}>
+            <View style={[styles.reviewEvidencePanel, wideDetail && styles.reviewEvidenceWide]}>
+              <View style={styles.panelHeading}>
+                <Ionicons name="id-card-outline" size={19} color="#08765A" />
+                <Text style={styles.panelHeadingText}>Submitted Identity Evidence</Text>
+                <Ionicons name="lock-closed-outline" size={15} color="#08765A" />
+              </View>
+              <AdminIdentityEvidence uid={item.uid} verificationId={item.verificationId} user={user}
+                matchScore={item.matchScore} aiDecision={item.aiDecision}
+                onEvidenceStateChange={onEvidenceStateChange} compact />
+            </View>
 
-          <Text style={styles.helperText}>
-            Choose the method actually used by LGU/Admin. Do not verify
-            based only on the AI score.
-          </Text>
-
-          <View style={styles.methodList}>
-            {VALIDATION_METHODS.map((method) => {
-              const active = validationMethod === method.value;
-              return (
-                <TouchableOpacity
-                  key={method.value}
-                  style={[
-                    styles.methodButton,
-                    active && styles.methodButtonActive,
-                  ]}
-                  onPress={() => setValidationMethod(method.value)}
-                >
-                  <Ionicons
-                    name={method.icon}
-                    size={18}
-                    color={active ? "#0F766E" : "#64748B"}
-                  />
-                  <Text
-                    style={[
-                      styles.methodButtonText,
-                      active && styles.methodButtonTextActive,
-                    ]}
-                  >
-                    {method.label}
+            <View style={[styles.reviewAiPanel, wideDetail && styles.reviewAiNarrow]}>
+              <View style={styles.panelHeading}>
+                <Ionicons name="scan-outline" size={19} color="#08765A" />
+                <Text style={styles.panelHeadingText}>AI Verification Result</Text>
+              </View>
+              <View style={styles.reviewAiScoreBox}>
+                <Text style={styles.reviewAiScoreLabel}>Face similarity</Text>
+                <Text style={styles.reviewAiScore}>{score}</Text>
+                <Text style={styles.reviewAiScoreDescription}>
+                  Preliminary AI comparison only. Not proof of identity or liveness.
+                </Text>
+              </View>
+              <SectionTitle icon="images-outline" title="Image Quality Screening" />
+              <InfoLine label="ID Front" value={quality(item.idImageQualityScore)} />
+              <InfoLine label="ID Back" value={
+                item.idBackQualityChecked ? quality(item.idBackImageQualityScore) : "Not evaluated"
+              } />
+              <InfoLine label="Live Selfie" value={quality(item.selfieQualityScore)} />
+              <InfoLine label="AI result" value={
+                item.aiDecision === "failed" ? "Requires attention" :
+                item.requiresManualReview ? "Manual review required" : "Pending assessment"
+              } />
+              {item.scanWarnings?.length ? (
+                <View style={styles.reviewAiWarnings}>
+                  <Ionicons name="alert-circle-outline" size={15} color="#A16207" />
+                  <Text style={styles.reviewAiWarningText}>
+                    {item.scanWarnings.map((warning) => warning.replace(/_/g, " ")).join(" · ")}
                   </Text>
-                </TouchableOpacity>
-              );
-            })}
+                </View>
+              ) : null}
+            </View>
           </View>
 
-          <Text style={styles.inputLabel}>
-            Review notes / retry reason
-          </Text>
+          <View style={styles.reviewNotice}>
+            <Ionicons name="alert-circle-outline" size={17} color="#A16207" />
+            <Text style={styles.reviewNoticeText}>
+              AI similarity and OCR screening cannot establish document authenticity or liveness.
+              Final approval requires independent LGU validation.
+            </Text>
+          </View>
 
-          <TextInput
-            style={styles.notesInput}
-            value={notes}
-            onChangeText={setNotes}
-            multiline
-            placeholder="Add LGU validation notes. A retry decision requires a clear reason."
-            placeholderTextColor="#94A3B8"
-            textAlignVertical="top"
-          />
+          <View style={[styles.reviewBottomGrid, wideDetail && styles.reviewBottomGridWide]}>
+            <View style={[styles.reviewSummaryPanel, wideDetail && styles.reviewBottomChild]}>
+              <View style={styles.panelHeading}>
+                <Ionicons name="clipboard-outline" size={18} color="#08765A" />
+                <Text style={styles.panelHeadingText}>Review Summary</Text>
+              </View>
+              <InfoLine label="Document Type" value={documentType} />
+              <InfoLine label="Government ID Check" value={screening} />
+              <InfoLine label="AI Face Similarity" value={score} />
+              <InfoLine label="Evidence Status" value={
+                evidenceMissing ? "Missing / expired — resubmission needed" : "Private photos saved"
+              } />
+              <DocumentScreeningSummary screening={item.documentScreening} />
+              {item.message ? <Text style={styles.reviewSummaryMessage}>{item.message}</Text> : null}
+            </View>
 
-          <View style={styles.actionRow}>
-            <TouchableOpacity
-              style={[
+            <View style={[styles.reviewValidationPanel, wideDetail && styles.reviewBottomChild]}>
+              {pending ? (
+                <>
+                  <View style={styles.panelHeading}>
+                    <Ionicons name="shield-checkmark-outline" size={19} color="#08765A" />
+                    <Text style={styles.panelHeadingText}>Independent LGU Validation</Text>
+                  </View>
+                  {evidenceMissing ? (
+                    <View style={styles.reviewAiWarnings}>
+                      <Ionicons name="alert-circle-outline" size={16} color="#A16207" />
+                      <Text style={styles.reviewAiWarningText}>
+                        Required Front/Back ID or selfie evidence is unavailable.
+                        Ask the Resident to resubmit before approval.
+                      </Text>
+                    </View>
+                  ) : null}
+                  <TouchableOpacity accessibilityRole="checkbox"
+                    accessibilityState={{ checked: evidenceAcknowledged, disabled: !evidenceReady || evidenceMissing }}
+                    disabled={!evidenceReady || evidenceMissing}
+                    onPress={onAcknowledgeEvidence}
+                    style={styles.reviewCheckboxRow}>
+                    <Ionicons name={evidenceAcknowledged ? "checkbox" : "square-outline"}
+                      size={21} color={evidenceAcknowledged ? "#08765A" : "#64748B"} />
+                    <Text style={styles.reviewCheckboxText}>
+                      I reviewed the submitted identity images and AI results.
+                    </Text>
+                  </TouchableOpacity>
+                  <Text style={styles.reviewFieldLabel}>Validation Method *</Text>
+                  <TouchableOpacity accessibilityRole="button"
+                    accessibilityState={{ expanded: methodOpen }}
+                    style={styles.reviewSelectField} onPress={() => setMethodOpen(!methodOpen)}>
+                    <Text style={[styles.reviewSelectText, !selectedMethod && styles.reviewPlaceholder]}>
+                      {selectedMethod?.label || "Select an independent LGU validation method"}
+                    </Text>
+                    <Ionicons name={methodOpen ? "chevron-up-outline" : "chevron-down-outline"} size={17} color="#64748B" />
+                  </TouchableOpacity>
+                  {methodOpen ? (
+                    <View style={styles.reviewSelectOptions}>
+                      {VALIDATION_METHODS.map((method) => (
+                        <TouchableOpacity key={method.value} accessibilityRole="button"
+                          style={[styles.reviewSelectOption,
+                            validationMethod === method.value && styles.reviewSelectOptionSelected]}
+                          onPress={() => { setValidationMethod(method.value); setMethodOpen(false); }}>
+                          <Ionicons name={method.icon} size={16} color="#08765A" />
+                          <Text style={styles.reviewSelectOptionText}>{method.label}</Text>
+                          {validationMethod === method.value ?
+                            <Ionicons name="checkmark" size={16} color="#08765A" /> : null}
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  ) : null}
+                  <Text style={styles.reviewFieldLabel}>Review Notes / Retry Reason</Text>
+                  <TextInput multiline value={notes} onChangeText={setNotes}
+                    placeholder="Enter review observations or reason for retry..."
+                    placeholderTextColor="#94A3B8" textAlignVertical="top"
+                    style={styles.reviewNotesInput} maxLength={500} />
+                  <Text style={styles.reviewNoteHint}>
+                    Verify requires completed evidence review and independent validation.
+                    Retry requires a reason of at least 5 characters.
+                  </Text>
+                </>
+              ) : (
+                <>
+                  <View style={styles.panelHeading}>
+                    <Ionicons name="checkmark-circle-outline" size={18} color="#08765A" />
+                    <Text style={styles.panelHeadingText}>Recorded LGU Decision</Text>
+                  </View>
+                  <InfoLine label="Decision" value={item.manualReviewDecision || item.decision || item.status || "—"} />
+                  <InfoLine label="Method" value={item.manualValidationMethod || "—"} />
+                  <InfoLine label="Reviewed by" value={item.reviewedByName || item.reviewedBy || "—"} />
+                  <InfoLine label="Reviewed at" value={formatDate(item.reviewedAt)} />
+                  {item.manualReviewNotes ? <Text style={styles.reviewSummaryMessage}>{item.manualReviewNotes}</Text> : null}
+                </>
+              )}
+            </View>
+          </View>
+
+          {pending ? (
+            <View style={styles.reviewFooterActions}>
+              <TouchableOpacity style={[styles.retryButton, (notes.trim().length < 5 || !!saving) && styles.disabledButton]}
+                disabled={notes.trim().length < 5 || !!saving} onPress={onRetry}
+                accessibilityRole="button">
+                {saving === "require_retry" ? <ActivityIndicator color="#B91C1C" size="small" /> :
+                  <Ionicons name="refresh-outline" size={18} color="#B91C1C" />}
+                <Text style={styles.retryButtonText}>Require Retry</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[
                 styles.verifyButton,
-                (!validationMethod || !!saving) &&
-                  styles.disabledButton,
-              ]}
-              disabled={!validationMethod || !!saving}
-              onPress={onVerify}
-            >
-              {saving === "verify" ? (
-                <ActivityIndicator size="small" color="#FFFFFF" />
-              ) : (
-                <Ionicons
-                  name="shield-checkmark-outline"
-                  size={19}
-                  color="#FFFFFF"
-                />
-              )}
-              <Text style={styles.verifyButtonText}>
-                Verify Resident
-              </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[
-                styles.retryButton,
-                (notes.trim().length < 5 || !!saving) &&
-                  styles.disabledButton,
-              ]}
-              disabled={notes.trim().length < 5 || !!saving}
-              onPress={onRetry}
-            >
-              {saving === "require_retry" ? (
-                <ActivityIndicator size="small" color="#B91C1C" />
-              ) : (
-                <Ionicons
-                  name="refresh-outline"
-                  size={19}
-                  color="#B91C1C"
-                />
-              )}
-              <Text style={styles.retryButtonText}>
-                Require Retry
-              </Text>
-            </TouchableOpacity>
-          </View>
-        </>
-      ) : (
-        <>
-          <SectionTitle
-            icon="checkmark-circle-outline"
-            title="Manual Review Decision"
-          />
-          <InfoLine
-            label="Decision"
-            value={
-              item.manualReviewDecision ||
-              item.decision ||
-              item.status ||
-              "—"
-            }
-          />
-          <InfoLine
-            label="Validation method"
-            value={item.manualValidationMethod || "—"}
-          />
-          <InfoLine
-            label="Reviewed by"
-            value={item.reviewedByName || item.reviewedBy || "—"}
-          />
-          <InfoLine
-            label="Reviewed at"
-            value={formatDate(item.reviewedAt)}
-          />
-
-          {item.manualReviewNotes ? (
-            <View style={styles.resolvedNotes}>
-              <Text style={styles.resolvedNotesLabel}>
-                Review notes
-              </Text>
-              <Text style={styles.resolvedNotesText}>
-                {item.manualReviewNotes}
-              </Text>
+                (!validationMethod || !!saving || evidenceMissing || !evidenceReady || !evidenceAcknowledged)
+                  && styles.disabledButton,
+              ]} disabled={!validationMethod || !!saving || evidenceMissing || !evidenceReady || !evidenceAcknowledged}
+                onPress={onVerify} accessibilityRole="button">
+                {saving === "verify" ? <ActivityIndicator color="#FFFFFF" size="small" /> :
+                  <Ionicons name="checkmark-outline" size={19} color="#FFFFFF" />}
+                <Text style={styles.verifyButtonText}>Verify Resident</Text>
+              </TouchableOpacity>
             </View>
           ) : null}
         </>
+      ) : tab === "details" ? (
+        <View style={styles.reviewInformationPanel}>
+          <SectionTitle icon="person-circle-outline" title="Resident Account & Verification History" />
+          <InfoLine label="Resident" value={item.resident?.fullName || "Resident"} />
+          <InfoLine label="Email" value={item.resident?.email || "Not available"} />
+          <InfoLine label="Barangay" value={item.resident?.barangay || "Not provided"} />
+          <InfoLine label="Account status" value={item.resident?.accountStatus || "—"} />
+          <InfoLine label="Verification ID" value={item.verificationId || "—"} />
+          <InfoLine label="Submitted" value={formatDate(item.lastSubmissionAt || item.createdAt)} />
+          <InfoLine label="Current status" value={item.status || "—"} />
+          <InfoLine label="AI decision" value={item.aiDecision || "—"} />
+          <InfoLine label="Evidence expiry" value={formatDate(item.evidenceExpiresAt)} />
+          {item.message ? <Text style={styles.reviewSummaryMessage}>{item.message}</Text> : null}
+        </View>
+      ) : (
+        <View style={styles.reviewInformationPanel}>
+          <SectionTitle icon="document-text-outline" title="Available Review Audit Details" />
+          <Text style={styles.reviewNoteHint}>
+            This panel shows decision metadata from the current verification record.
+            Complete Admin activity logs remain in the protected audit system.
+          </Text>
+          <InfoLine label="Verification ID" value={item.verificationId || "—"} />
+          <InfoLine label="Last decision" value={item.manualReviewDecision || "No manual decision recorded"} />
+          <InfoLine label="LGU method" value={item.manualValidationMethod || "—"} />
+          <InfoLine label="Reviewed by" value={item.reviewedByName || item.reviewedBy || "—"} />
+          <InfoLine label="Reviewed at" value={formatDate(item.reviewedAt)} />
+          {item.manualReviewNotes ? <Text style={styles.reviewSummaryMessage}>{item.manualReviewNotes}</Text> : null}
+        </View>
       )}
     </View>
   );
@@ -977,7 +1040,7 @@ const styles = StyleSheet.create({
   webScrollBar: {
     overflowY: "scroll",
     scrollbarWidth: "auto",
-    scrollbarColor: "#8CA3B2 #F2F9FC",
+    scrollbarColor: "#A6BDB1 #F0F7F3",
   } as any,
   page: {
     width: "100%",
@@ -986,6 +1049,8 @@ const styles = StyleSheet.create({
     padding: 24,
     paddingBottom: 70,
   },
+  pageCompact: { paddingHorizontal: 12, paddingTop: 14, paddingBottom: 60 },
+  detailPanelCompact: { padding: 12, borderRadius: 13 },
   center: {
     flex: 1,
     minHeight: 500,
@@ -993,6 +1058,37 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     padding: 24,
     backgroundColor: "#F5F7FB",
+  },
+  evidenceAcknowledgement: {
+    marginTop: 12, marginBottom: 12, flexDirection: "row", alignItems: "flex-start", gap: 10,
+    borderRadius: 11, borderWidth: 1, borderColor: "#DCE6ED", padding: 13,
+    backgroundColor: "#F8FAFC",
+  },
+  evidenceAcknowledgementChecked: { backgroundColor: "#EFFAF3", borderColor: "#8CCDB3" },
+  evidenceAcknowledgementTitle: { color: "#173D32", fontSize: vsType.size.label,
+    fontFamily: vsType.family, fontWeight: "700" },
+  evidenceAcknowledgementText: { color: "#64748B", fontSize: vsType.size.caption,
+    fontFamily: vsType.family, lineHeight: 17, marginTop: 4 },
+  mobileBackButton: {
+    minHeight: 62,
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: "#D7E6DF",
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    marginBottom: 14,
+  },
+  mobileBackText: {
+    color: "#08765A", fontSize: vsType.size.label,
+    fontWeight: "700", fontFamily: vsType.family,
+  },
+  mobileBackDescription: {
+    marginTop: 3, color: "#64748B", fontSize: vsType.size.caption,
+    fontFamily: vsType.family,
   },
   centerText: {
     marginTop: 9,
@@ -1005,18 +1101,20 @@ const styles = StyleSheet.create({
   flexOne: {
     flex: 1,
   },
-  summaryMetrics: { flexDirection: "row", flexWrap: "wrap", gap: 11, marginBottom: 17 },
-  summaryMetric: { flexGrow: 1, flexBasis: 175, minWidth: 150, padding: 16, backgroundColor: "#FFFFFF",
-    borderRadius: 15, borderWidth: 1, borderColor: "#D8E9E0" },
-  summaryIcon: { width: 38, height: 38, borderRadius: 10, backgroundColor: "#E2F5EA",
-    alignItems: "center", justifyContent: "center", marginBottom: 9 },
-  summaryLabel: { color: "#315A4C", fontSize: vsType.size.caption, fontFamily: vsType.family, fontWeight: "800" },
-  summaryValue: { color: "#123F32", fontSize: vsType.size.title, fontFamily: vsType.family, fontWeight: "800", marginTop: 5 },
-  queueHeading: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 12,
-    backgroundColor: "#FFFFFF", borderRadius: 14, borderWidth: 1, borderColor: "#D8E9E0",
-    padding: 15, marginBottom: 13 },
-  queueTitle: { color: "#153D32", fontWeight: designUi.type.section.fontWeight, fontSize: designUi.type.section.fontSize, lineHeight: designUi.type.section.lineHeight,},
-  queueSubheading: { color: "#647E71", fontSize: vsType.size.meta, fontFamily: vsType.family, lineHeight: 19, marginTop: 4 },
+  summaryMetrics: { flexDirection: "row", flexWrap: "wrap", gap: 11, marginBottom: 13 },
+  summaryMetric: { flexGrow: 1, flexBasis: 210, minWidth: 150, minHeight: 66,
+    paddingVertical: 12, paddingHorizontal: 14, flexDirection: "row", alignItems: "center", gap: 12,
+    backgroundColor: "#FFFFFF", borderRadius: 13, borderWidth: 1, borderColor: "#D8E9E0" },
+  summaryIcon: { width: 44, height: 44, borderRadius: 11, backgroundColor: "#E2F5EA",
+    alignItems: "center", justifyContent: "center" },
+  summaryCopy: { flex: 1, gap: 1 },
+  summaryLabel: { color: "#284D40", fontSize: vsType.size.meta, fontFamily: vsType.family, fontWeight: "700" },
+  summaryValue: { color: "#123F32", fontSize: vsType.size.titleSmall, fontFamily: vsType.family, fontWeight: "800" },
+  queueHeading: { flexDirection: "row", alignItems: "center", gap: 8,
+    paddingBottom: 11, borderBottomWidth: 1, borderBottomColor: "#E8F0EB", marginBottom: 11 },
+  queueTitle: { color: "#153D32", fontFamily: vsType.family, fontWeight: "800",
+    fontSize: vsType.size.card, lineHeight: 22 },
+  queueSubheading: { color: "#647E71", fontSize: vsType.size.caption, fontFamily: vsType.family, lineHeight: 17, marginTop: 3 },
   header: {
     flexDirection: "row",
     alignItems: "center",
@@ -1058,15 +1156,15 @@ const styles = StyleSheet.create({
     fontSize: designUi.type.body.fontSize,
     lineHeight: designUi.type.body.lineHeight, fontWeight: designUi.type.body.fontWeight,},
   refreshButton: {
-    minHeight: 42,
+    minHeight: 36,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     gap: 7,
-    paddingHorizontal: 14,
-    borderRadius: 11,
+    paddingHorizontal: 10,
+    borderRadius: 9,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: "#DCE8E1",
     backgroundColor: "#FFFFFF",
   },
   refreshButtonText: {
@@ -1099,16 +1197,16 @@ const styles = StyleSheet.create({
   filterRow: {
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: 8,
-    marginBottom: 10,
+    gap: 5,
+    marginBottom: 11,
   },
   filterButton: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 7,
-    minHeight: 44,
-    paddingHorizontal: 13,
-    borderRadius: 10,
+    gap: 5,
+    minHeight: 35,
+    paddingHorizontal: 8,
+    borderRadius: 8,
     borderWidth: 1,
     borderColor: "#E2E8F0",
     backgroundColor: "#FFFFFF",
@@ -1119,17 +1217,17 @@ const styles = StyleSheet.create({
   },
   filterButtonText: {
     color: "#475569",
-    fontSize: vsType.size.meta, fontFamily: vsType.family,
-    fontWeight: "800",
+    fontSize: vsType.size.caption, fontFamily: vsType.family,
+    fontWeight: "700",
   },
   filterButtonTextActive: {
     color: "#FFFFFF",
   },
   countBadge: {
-    minWidth: 23,
-    height: 23,
-    paddingHorizontal: 6,
-    borderRadius: 12,
+    minWidth: 19,
+    height: 19,
+    paddingHorizontal: 4,
+    borderRadius: 10,
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: "#F6F8F7",
@@ -1146,7 +1244,7 @@ const styles = StyleSheet.create({
     color: "#FFFFFF",
   },
   searchWrap: {
-    minHeight: 46,
+    minHeight: 42,
     flexDirection: "row",
     alignItems: "center",
     gap: 9,
@@ -1206,30 +1304,34 @@ const styles = StyleSheet.create({
     fontSize: designUi.type.section.fontSize,
     fontWeight: designUi.type.section.fontWeight,
     textAlign: "center", lineHeight: designUi.type.section.lineHeight,},
-  workspace: {
-    gap: 14,
-  },
+  workspace: { gap: 13 },
   workspaceWide: {
     flexDirection: "row",
     alignItems: "flex-start",
   },
   queue: {
-    gap: 9,
+    gap: 9, padding: 13, minWidth: 0, backgroundColor: "#FFFFFF",
+    borderWidth: 1, borderColor: "#D8E9E0", borderRadius: 14,
   },
-  queueWide: {
-    width: 410,
-    flexShrink: 0,
-  },
-  queueCard: {
-    padding: 18,
-    borderRadius: 15,
-    borderWidth: 1,
-    borderColor: "#E2E8F0",
-    backgroundColor: "#FFFFFF",
-  },
+  queueWide: { width: 380, flexShrink: 0 },
+  queuePrivacyLine: { flexDirection: "row", alignItems: "flex-start", gap: 6,
+    backgroundColor: "#F4FAF6", padding: 9, borderRadius: 8, marginBottom: 2 },
+  queuePrivacyText: { flex: 1, color: "#527568", fontSize: vsType.size.micro,
+    fontFamily: vsType.family, lineHeight: 15 },
+  queueEmptyState: { minHeight: 165, padding: 18, alignItems: "center",
+    justifyContent: "center", gap: 8 },
+  queueEmptyTitle: { color: "#173D32", fontSize: vsType.size.label,
+    fontFamily: vsType.family, fontWeight: "700" },
+  queueEmptyText: { color: "#71867A", textAlign: "center",
+    fontSize: vsType.size.caption, fontFamily: vsType.family, lineHeight: 17 },
+  queueFooter: { marginTop: 7, borderTopWidth: 1, borderTopColor: "#E8F0EB",
+    paddingTop: 12, alignItems: "center", gap: 5 },
+  queueFooterLabel: { color: "#647E71", fontSize: vsType.size.caption, fontFamily: vsType.family },
+  queueCard: { padding: 13, borderRadius: 11, borderWidth: 1,
+    borderColor: "#E2EAE5", backgroundColor: "#FFFFFF" },
   queueCardActive: {
-    borderColor: "#818CF8",
-    backgroundColor: "#EEF2FF",
+    borderColor: "#08765A",
+    backgroundColor: "#EFFAF3",
   },
   queueTop: {
     flexDirection: "row",
@@ -1242,10 +1344,10 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#E0E7FF",
+    backgroundColor: "#E1F4EA",
   },
   avatarText: {
-    color: "#4338CA",
+    color: "#08765A",
     fontSize: vsType.size.label, fontFamily: vsType.family,
     fontWeight: "800",
   },
@@ -1287,18 +1389,16 @@ const styles = StyleSheet.create({
     fontSize: vsType.size.meta, fontFamily: vsType.family,
     fontWeight: "800",
   },
+  evidenceStatusRow: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 10 },
+  evidenceStatusText: { color: "#08765A", fontSize: vsType.size.caption, fontFamily: vsType.family, fontWeight: "600" },
+  evidenceStatusWarning: { color: "#B45309" },
   queueDate: {
     marginTop: 6,
     color: "#94A3B8",
     fontSize: vsType.size.micro, fontFamily: vsType.family,
   },
-  detailPanel: {
-    padding: 20,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: "#E2E8F0",
-    backgroundColor: "#FFFFFF",
-  },
+  detailPanel: { padding: 14, borderRadius: 14, borderWidth: 1,
+    borderColor: "#D8E9E0", backgroundColor: "#FFFFFF" },
   detailPanelWide: {
     flex: 1,
     minWidth: 0,
@@ -1324,7 +1424,7 @@ const styles = StyleSheet.create({
     borderRadius: 13,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#EEF2FF",
+    backgroundColor: "#EAE9FF",
   },
   detailTitle: {
     color: "#173D32",
@@ -1531,4 +1631,91 @@ const styles = StyleSheet.create({
     fontSize: vsType.size.caption, fontFamily: vsType.family,
     lineHeight: 17,
   },
+
+  // Approved Resident Identity Reviews composition. Scope confined to this page.
+  reviewDetailRoot: { gap: 11 },
+  detailAvatarText: { color: "#4844A8", fontSize: vsType.size.section,
+    fontFamily: vsType.family, fontWeight: "800" },
+  detailTabRow: { flexDirection: "row", gap: 13, alignItems: "center",
+    borderBottomWidth: 1, borderBottomColor: "#E7EEE9", flexWrap: "wrap" },
+  detailTab: { minHeight: 43, flexDirection: "row", alignItems: "center",
+    paddingHorizontal: 8, gap: 6, borderBottomWidth: 3,
+    borderBottomColor: "transparent" },
+  detailTabActive: { borderBottomColor: "#08765A" },
+  detailTabText: { color: "#64748B", fontSize: vsType.size.meta,
+    fontFamily: vsType.family, fontWeight: "600" },
+  detailTabTextActive: { color: "#08765A", fontWeight: "800" },
+  reviewTopGrid: { gap: 10 },
+  reviewTopGridWide: { flexDirection: "row", alignItems: "stretch" },
+  reviewEvidencePanel: { minWidth: 0, padding: 11, backgroundColor: "#FFFFFF",
+    borderWidth: 1, borderColor: "#DBE7E0", borderRadius: 12, flex: 1 },
+  reviewEvidenceWide: { flex: 1, minWidth: 0 },
+  reviewAiPanel: { padding: 13, backgroundColor: "#FFFFFF", borderWidth: 1,
+    borderColor: "#DBE7E0", borderRadius: 12, minWidth: 0 },
+  reviewAiNarrow: { width: 242, flexShrink: 0 },
+  panelHeading: { minHeight: 26, flexDirection: "row", flexWrap: "wrap", alignItems: "center",
+    gap: 7, marginBottom: 9 },
+  panelHeadingText: { color: "#173D32", fontSize: vsType.size.label,
+    fontFamily: vsType.family, fontWeight: "800", flex: 1 },
+  reviewAiScoreBox: { backgroundColor: "#E6F5ED", borderRadius: 10,
+    paddingVertical: 12, paddingHorizontal: 13, gap: 3, marginBottom: 11 },
+  reviewAiScoreLabel: { color: "#2C6750", fontSize: vsType.size.caption,
+    fontFamily: vsType.family, fontWeight: "700" },
+  reviewAiScore: { color: "#0E6C49", fontSize: vsType.size.title,
+    fontFamily: vsType.family, fontWeight: "800" },
+  reviewAiScoreDescription: { color: "#4E7362", fontSize: vsType.size.caption,
+    lineHeight: 16, fontFamily: vsType.family },
+  reviewAiWarnings: { padding: 10, backgroundColor: "#FFF9E9",
+    borderColor: "#F9E8B9", borderWidth: 1, borderRadius: 9,
+    flexDirection: "row", alignItems: "flex-start", gap: 7, marginTop: 9 },
+  reviewAiWarningText: { flex: 1, color: "#925B0B", fontSize: vsType.size.caption,
+    lineHeight: 16, fontFamily: vsType.family },
+  reviewNotice: { backgroundColor: "#FFFAE9", borderRadius: 10,
+    paddingVertical: 10, paddingHorizontal: 12, flexDirection: "row",
+    alignItems: "flex-start", gap: 8 },
+  reviewNoticeText: { flex: 1, color: "#725B2B", fontSize: vsType.size.caption,
+    lineHeight: 17, fontFamily: vsType.family },
+  reviewBottomGrid: { gap: 11 },
+  reviewBottomGridWide: { flexDirection: "row", alignItems: "flex-start" },
+  reviewBottomChild: { flex: 1, minWidth: 0 },
+  reviewSummaryPanel: { padding: 13, backgroundColor: "#FFFFFF", borderWidth: 1,
+    borderColor: "#DBE7E0", borderRadius: 12, minWidth: 0 },
+  reviewSummaryMessage: { color: "#536B60", fontSize: vsType.size.caption,
+    fontFamily: vsType.family, lineHeight: 17, marginTop: 11,
+    borderTopWidth: 1, borderTopColor: "#E8EFEA", paddingTop: 9 },
+  reviewValidationPanel: { padding: 13, backgroundColor: "#FFFFFF", borderWidth: 1,
+    borderColor: "#DBE7E0", borderRadius: 12, minWidth: 0 },
+  reviewCheckboxRow: { flexDirection: "row", alignItems: "flex-start",
+    gap: 8, marginVertical: 11, minHeight: 34 },
+  reviewCheckboxText: { flex: 1, color: "#355548", fontSize: vsType.size.meta,
+    fontFamily: vsType.family, lineHeight: 18, fontWeight: "600" },
+  reviewFieldLabel: { color: "#355548", fontSize: vsType.size.caption,
+    fontFamily: vsType.family, fontWeight: "700", marginBottom: 6, marginTop: 8 },
+  reviewSelectField: { minHeight: 42, borderColor: "#CADDD2", borderWidth: 1,
+    backgroundColor: "#FFFFFF", borderRadius: 9, flexDirection: "row",
+    alignItems: "center", gap: 8, paddingHorizontal: 11 },
+  reviewSelectText: { flex: 1, color: "#213D33", fontSize: vsType.size.meta,
+    fontFamily: vsType.family, fontWeight: "600" },
+  reviewPlaceholder: { color: "#71867A", fontWeight: "400" },
+  reviewSelectOptions: { borderWidth: 1, borderColor: "#C9E1D3",
+    backgroundColor: "#FFFFFF", borderRadius: 8, padding: 4, marginTop: 5 },
+  reviewSelectOption: { flexDirection: "row", alignItems: "center",
+    minHeight: 39, paddingHorizontal: 9, gap: 7, borderRadius: 6 },
+  reviewSelectOptionSelected: { backgroundColor: "#E9F5EE" },
+  reviewSelectOptionText: { flex: 1, fontSize: vsType.size.meta,
+    fontFamily: vsType.family, fontWeight: "600", color: "#264D3E" },
+  reviewNotesInput: { minHeight: 74, maxHeight: 135, padding: 10,
+    borderRadius: 9, borderWidth: 1, borderColor: "#CADDD2",
+    color: "#173D32", backgroundColor: "#FFFFFF",
+    fontFamily: vsType.family, fontSize: vsType.size.meta,
+    lineHeight: 18, outlineStyle: "none" } as any,
+  reviewNoteHint: { color: "#71867A", fontSize: vsType.size.caption,
+    fontFamily: vsType.family, lineHeight: 16, marginTop: 8 },
+  reviewFooterActions: { flexDirection: "row", flexWrap: "wrap",
+    justifyContent: "flex-end", gap: 11, paddingTop: 13,
+    borderTopWidth: 1, borderTopColor: "#E6EEE9" },
+  reviewInformationPanel: { padding: 18, borderWidth: 1,
+    borderColor: "#DBE7E0", borderRadius: 12,
+    backgroundColor: "#FFFFFF", minHeight: 300 },
+
 });

@@ -10,6 +10,7 @@ import cv2
 import mediapipe as mp
 import pytesseract
 from document_screening import assess_document_text, document_ocr_unavailable
+from back_quality_policy import back_quality_warning
 import numpy as np
 from fastapi import FastAPI, Header, HTTPException, Request
 from starlette.datastructures import UploadFile as StarletteUploadFile
@@ -1223,6 +1224,8 @@ async def verify_identity(
     selfie_upload = form.get(
         "selfie"
     )
+    back_upload = form.get("idBack")
+    id_back_bytes = None
     try:
         id_document_bytes = (
             await read_upload(
@@ -1244,6 +1247,15 @@ async def verify_identity(
                 ),
             )
         )
+        # The front provides the portrait for face matching; the National ID
+        # reverse is separately decoded and quality-screened for Admin review.
+        # This does NOT check QR signatures or authenticate issuance.
+        if id_type == "national_id":
+            id_back_bytes = await read_upload(
+                back_upload,
+                label="National ID back image",
+                maximum_bytes=MAX_ID_DOCUMENT_BYTES,
+            )
     finally:
         if isinstance(
             id_upload,
@@ -1255,6 +1267,8 @@ async def verify_identity(
             StarletteUploadFile,
         ):
             await selfie_upload.close()
+        if isinstance(back_upload, StarletteUploadFile):
+            await back_upload.close()
     if not face_mesh_engine_ready():
         raise HTTPException(
             status_code=503,
@@ -1277,6 +1291,27 @@ async def verify_identity(
             declared_type=id_type,
             id_document_bytes=id_document_bytes,
         )
+        back_quality = None
+        if id_back_bytes is not None:
+            back_image = await asyncio.to_thread(
+                decode_image, id_back_bytes, "National ID back image",
+            )
+            back_quality = await asyncio.to_thread(image_quality, back_image)
+            # Mild blur may still be readable to a reviewer; only very poor
+            # quality triggers manual review. Never claim ID authenticity.
+            back_warning = back_quality_warning(
+                back_quality["score"], get_min_quality_threshold(),
+            )
+            if back_warning:
+                result = {
+                    **result,
+                    "status": "pending",
+                    "decision": "manual_review",
+                    "message": "National ID back image quality is low. LGU/Admin review is required.",
+                    "warnings": list(result.get("warnings") or []) + [
+                        back_warning
+                    ],
+                }
     except HTTPException:
         raise
     except Exception:
@@ -1294,5 +1329,9 @@ async def verify_identity(
     return {
         **result,
         "idType": id_type,
+        "idBackImageQualityScore": (
+            back_quality["score"] if back_quality is not None else None
+        ),
+        "idBackQualityChecked": back_quality is not None,
         "documentScreening": document_screening,
     }

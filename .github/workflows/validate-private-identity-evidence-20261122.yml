@@ -1,0 +1,46 @@
+name: Validate Private Identity Evidence and Admin Review
+on:
+  push:
+    branches:
+      - feat/identity-secure-evidence-admin-review-20261122
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  identity-evidence:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install locked frontend dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Install locked backend dependencies
+        run: npm ci --prefix backend --no-audit --no-fund
+      - name: Check private backend syntax and multipart tests
+        run: |
+          node --check backend/server.js
+          node --check backend/identityEvidence.js
+          node --check backend/identityEvidenceReviewHandler.js
+          node --test backend/tests/identityEvidenceReviewHandler.test.js
+          node --check backend/identityStagingGuard.js
+          node --test backend/tests/identityStagingGuard.test.js
+          node --test backend/tests/identityEvidence.test.js
+          node --test backend/tests/identityEvidenceRoundTrip.test.js
+      - name: Check existing Identity and Admin contracts
+        run: |
+          node scripts/test-identity-api-staging-guard.cjs
+          node --test scripts/test-identity-admin-evidence-contract.cjs
+          node scripts/test-unified-identity-ai-government-id-screening.cjs
+          node scripts/test-admin-people-verification-premium-ui.cjs
+      - name: Validate National ID Back AI quality policy
+        run: |
+          python3 -m py_compile identity-ai/main.py identity-ai/back_quality_policy.py identity-ai/document_screening.py
+          python3 -m unittest discover -s identity-ai -p 'test_back_quality_policy.py'
+      - name: Check frontend TypeScript
+        run: npx tsc --noEmit --pretty false
+      - name: Compile web without deploying
+        run: npx expo export --platform web
