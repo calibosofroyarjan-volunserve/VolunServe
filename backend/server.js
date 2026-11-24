@@ -712,6 +712,8 @@ function normalizeIdDocumentScreening(value) {
     "document_type_not_recognized",
     "multiple_document_type_signals",
     "non_government_id_detected",
+    "low_document_image_quality",
+    "low_document_back_image_quality",
     "document_back_evidence_inconclusive",
     "document_back_type_conflict",
     "document_front_back_duplicate",
@@ -5001,6 +5003,77 @@ app.get(
           message:
             "Unable to load identity verification status.",
         });
+    }
+  },
+);
+// OCR-only preflight. Unlike /verify this route NEVER creates leases,
+// consumes face attempts, changes Firestore identity roles, or accepts selfies.
+app.post(
+  "/api/identity/document/precheck",
+  requireFirebaseUser,
+  express.raw({ type: "multipart/form-data", limit: IDENTITY_UPLOAD_LIMIT }),
+  async (request, response) => {
+    response.set("Cache-Control", "no-store");
+    const endpoint = getIdentityAiEndpoint();
+    if (!endpoint || !endpoint.endsWith("/verify")) {
+      return response.status(503).json({
+        ok: false,
+        error: "identity_precheck_unavailable",
+        message: "Private ID screening service is unavailable. No verification attempt was used.",
+      });
+    }
+    if (!Buffer.isBuffer(request.body) || request.body.length === 0 ||
+        !String(request.headers["content-type"] || "").toLowerCase().startsWith("multipart/form-data")) {
+      return response.status(400).json({
+        ok: false,
+        error: "invalid_id_scan",
+        message: "Provide government ID photos and consent using a supported form.",
+      });
+    }
+    try {
+      const upstream = await fetch(endpoint.replace(/\/verify$/, "/document/precheck"), {
+        method: "POST",
+        headers: getIdentityAiHeaders(request),
+        body: request.body,
+        signal: AbortSignal.timeout(45000),
+      });
+      if (!upstream.ok) {
+        // No private OCR text or provider errors are exposed in client output.
+        return response.status(upstream.status === 400 || upstream.status === 415 ? 400 : 503).json({
+          ok: false,
+          error: "identity_precheck_failed",
+          message: "Could not screen this ID. Check the photos, consent and AI service, then retry.",
+        });
+      }
+      const result = await upstream.json();
+      const screening = normalizeIdDocumentScreening(result?.documentScreening);
+      const isUnsupported = screening.warningCodes.includes("non_government_id_detected");
+      const acceptable =
+        result?.outcome === "pass" &&
+        screening.status === "text_consistent_unverified" &&
+        screening.declaredIdType !== null &&
+        screening.declaredIdType === screening.detectedIdType &&
+        screening.warningCodes.length === 0 &&
+        (screening.declaredIdType === "passport" ||
+          (screening.backSideProvided && screening.backSideScreened));
+      const outcome = isUnsupported ? "rejected" : acceptable ? "pass" : "retry";
+      return response.json({
+        ok: true,
+        outcome,
+        documentScreening: screening,
+        message: outcome === "rejected"
+          ? "School and company IDs are not accepted. Scan a supported government ID."
+          : outcome === "pass"
+          ? "ID type and image clarity precheck passed. Continue to selfie; Admin must still review the identity."
+          : "Could not confirm this ID type or image quality. Retake clear photos or request Admin help.",
+      });
+    } catch (error) {
+      console.warn("ID precheck unavailable:", error?.name || "unknown");
+      return response.status(503).json({
+        ok: false,
+        error: "identity_precheck_unavailable",
+        message: "ID screening is temporarily unavailable; no AI face attempt was used.",
+      });
     }
   },
 );
