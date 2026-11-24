@@ -43,6 +43,11 @@ jobs:
           }
           a(api.includes('"/api/identity/document/precheck"'),"Backend ID precheck endpoint missing");
           a(py.includes('"/document/precheck"'),"AI OCR precheck endpoint missing");
+          const summary=fs.readFileSync("components/identity/DocumentScreeningSummary.tsx","utf8");
+          const native=fs.readFileSync("app/identity-verification.tsx","utf8");
+          a(summary.includes("showAdvancedChecks = true"),"Reviewer's technical document information preserved");
+          a(ui.includes("<DocumentScreeningSummary screening={documentScreening} showAdvancedChecks={false} />"),"Resident web still shows advanced PAD controls");
+          a(native.includes("<DocumentScreeningSummary screening={documentScreening} showAdvancedChecks={false} />"),"Resident native still shows advanced PAD controls");
           a(ids.includes('"school_id_not_supported"'),"School ID rejection missing");
           a(py.includes('"school_id_not_supported"'),"Python precheck missing school rejection handling");
           a(api.includes('"school_id_not_supported"'),"Backend precheck missing school rejection handling");
@@ -52,6 +57,8 @@ jobs:
         run: |
           python -m unittest discover -s identity-ai -p 'test_document_screening.py' -v
           python -m unittest discover -s identity-ai -p 'test_strict_document_screening.py' -v
+          python -m unittest discover -s identity-ai -p 'test_ai_route_contract.py' -v
+          python -m unittest discover -s identity-ai -p 'test_live_camera_scan_policy.py' -v
           python -m py_compile identity-ai/main.py identity-ai/document_screening.py identity-ai/strict_document_screening.py
           node --check backend/server.js
   web-build:
