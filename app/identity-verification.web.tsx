@@ -1,4 +1,5 @@
 import DocumentScreeningSummary from "../components/identity/DocumentScreeningSummary";
+import { waitForCameraPreview } from "../lib/identityCameraPreview";
 import ResidentDesktopActions from "../components/layout/ResidentDesktopActions";
 import type { DocumentScreening } from "../lib/identityVerification";
 import { Ionicons } from "@expo/vector-icons";
@@ -495,8 +496,7 @@ export default function IdentityVerificationWeb() {
         idStreamRef.current = stream;
         const element = idVideoRef.current;
         if (!element) throw new Error("Unable to initialize the ID camera preview.");
-        element.srcObject = stream;
-        await element.play();
+        await waitForCameraPreview(element, stream);
         if (!cancelled) setIdCameraReady(true);
       } catch (error: any) {
         if (!cancelled) {
@@ -1072,16 +1072,13 @@ export default function IdentityVerificationWeb() {
       phase = "preview";
       const video = videoRef.current as HTMLVideoElement | null;
       if (!video) throw new Error("Webcam preview element was not mounted.");
-      video.srcObject = stream;
-      video.muted = true;
-      video.playsInline = true;
-      await video.play();
+      await waitForCameraPreview(video, stream);
       if (requestId !== cameraRequestRef.current) return;
-
+      // Show actual camera frames immediately before MediaPipe model startup.
+      setCameraActive(true);
       phase = "detector";
       await ensureDetector();
       if (requestId !== cameraRequestRef.current) return;
-      setCameraActive(true);
       setScanState("no_face");
       detectLoop();
     } catch (error: any) {
