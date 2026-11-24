@@ -150,6 +150,44 @@ def assess_document_text(declared_type: str, ocr_text: str) -> dict:
     }
 
 
+
+def combine_document_sides(front: dict, back: dict | None, *, duplicate: bool = False) -> dict:
+    """Merge sanitized OCR type clues without treating either side as genuine ID.
+
+    Optional back evidence preserves compatibility with existing front-only
+    clients. A recognized front never overrides an explicit School ID signal
+    on the back. No OCR text or private image bytes are returned.
+    """
+    result = dict(front)
+    result["backSideProvided"] = back is not None
+    result["backSideScreened"] = bool(
+        back is not None and "ocr_unavailable" not in back.get("warningCodes", [])
+    )
+    if back is None:
+        return result
+
+    warning_codes = list(result.get("warningCodes", []))
+    if duplicate:
+        result["status"] = "inconclusive"
+        warning_codes.append("document_front_back_duplicate")
+    elif "non_government_id_detected" in back.get("warningCodes", []):
+        result["status"] = "mismatch"
+        result["detectedIdType"] = None
+        warning_codes.append("non_government_id_detected")
+    elif back.get("status") == "mismatch":
+        result["status"] = "inconclusive"
+        warning_codes.append("document_back_type_conflict")
+    elif back.get("status") == "inconclusive":
+        result["status"] = "inconclusive"
+        warning_codes.append("document_back_evidence_inconclusive")
+
+    result["warningCodes"] = list(dict.fromkeys(warning_codes))[:4]
+    result["authenticityVerified"] = False
+    result["livenessVerified"] = False
+    result["manualReviewRequired"] = True
+    return result
+
+
 def document_ocr_unavailable(declared_type: str) -> dict:
     """Fail safely: never invent recognition or silently accept an ID."""
     return {
