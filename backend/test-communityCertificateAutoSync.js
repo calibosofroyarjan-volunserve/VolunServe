@@ -36,6 +36,30 @@ const reconcile=async ({eventId,execute})=>{
  let failed=await sync.runOnce();
  assert.equal(failed.failed,1,"Failures must not throw or abort other eligible events");
  assert.equal(queries,3);
+ // Budget regression: an exhausted query must not be repeated until cooldown.
+ const {RECOVERY_INTERVAL_MS,QUOTA_COOLDOWN_MS}=require("./communityCertificateAutoSync");
+ assert.equal(RECOVERY_INTERVAL_MS,30*60*1000);
+ assert.equal(QUOTA_COOLDOWN_MS,30*60*1000);
+ let clock=1000,blockedQueries=0,failQuota=true,successfulRecovery=0;
+ const quotaDb={collection(){return {orderBy(){return {limit(){return {get:async()=>{
+   blockedQueries++;if(failQuota)throw Object.assign(Error("RESOURCE_EXHAUSTED: Quota exceeded"),{code:8});
+   return {docs:[docs[0]]};
+ }}}}}}}};
+ const budgetSync=createCommunityCertificateAutoSync({db:quotaDb,reconcile:async()=>{successfulRecovery++;return {ok:true,issuedCount:0}},logger,now:()=>clock});
+ assert.equal((await budgetSync.runOnce()).failed,1);
+ assert.equal((await budgetSync.runOnce()).skipped,"quota_cooldown");
+ assert.equal(blockedQueries,1);
+ clock+=QUOTA_COOLDOWN_MS;failQuota=false;
+ assert.equal((await budgetSync.runOnce()).reviewed,1);
+ assert.equal(successfulRecovery,1);
+ assert.equal(blockedQueries,2);
+ // An exhaustion during one event must stop further event reconciliation in that pass.
+ let attempts=0;
+ const eventBudgetSync=createCommunityCertificateAutoSync({db,reconcile:async()=>{attempts++;throw Object.assign(Error("quota exceeded"),{code:8})},logger,now:()=>clock});
+ assert.equal((await eventBudgetSync.runOnce()).failed,1);
+ assert.equal(attempts,1);
+ assert.equal((await eventBudgetSync.runOnce()).skipped,"quota_cooldown");
+ console.log("PASS reduced recovery frequency, quota cooldown, resume after cooldown and no repeated exhausted event reads");
  const sidebar=fs.readFileSync("../app/(tabs)/_layout.tsx","utf8");
  const match=sidebar.match(/const volunteerDesktopTabs[^;]+;/s);
  assert(match && match[0].includes('name:"certificate",label:"My Certificates"'));
