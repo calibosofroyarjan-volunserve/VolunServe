@@ -97,14 +97,18 @@ function registerPresentationRoutes(app, env = process.env, deps = {}) {
     .update("presentation-session-key-v1").digest();
   app.use(DEMO_PATH, (req, res, next) => {
     res.set("Cache-Control", "no-store");
-    if (!ready) return res.status(503).json({error:"presentation_demo_disabled"});
+    // Browser requests are cross-origin. Set CORS *before* disabled-mode
+    // errors so the UI can show the real blocker instead of "Failed to fetch".
+    // Only the actual live VolunServe origin is allowed, never wildcards.
     const origin = req.headers.origin;
     if (!ORIGINS.has(origin)) return res.status(403).json({error:"demo_origin_required"});
     res.set("Vary","Origin");
     res.set("Access-Control-Allow-Origin", origin);
     res.set("Access-Control-Allow-Methods","GET, POST, OPTIONS");
     res.set("Access-Control-Allow-Headers","Authorization, Content-Type");
+    res.set("Access-Control-Max-Age", "300");
     if (req.method === "OPTIONS") return res.sendStatus(204);
+    if (!ready) return res.status(503).json({error:"presentation_demo_disabled"});
     next();
   });
   async function authorized(req,res,next) {
