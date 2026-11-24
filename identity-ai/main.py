@@ -1164,6 +1164,108 @@ def capabilities():
     }
 
 
+@app.post("/document/precheck")
+async def document_precheck(
+    request: Request,
+    x_volunserve_user_id: str | None = Header(
+        default=None, alias="X-VolunServe-User-Id",
+    ),
+    x_volunserve_internal_key: str | None = Header(
+        default=None, alias="X-VolunServe-Internal-Key",
+    ),
+):
+    """ID-only OCR precheck; no selfie, Firestore write, or attempt consumed.
+
+    Authorization must match the existing protected /verify route. This is
+    document-type screening, not issuer authentication or identity approval.
+    """
+    require_internal_backend(x_volunserve_internal_key)
+    validate_forwarded_user(x_volunserve_user_id)
+    if not clean_text(request.headers.get("content-type", ""), 200).lower().startswith(
+        "multipart/form-data"
+    ):
+        raise HTTPException(status_code=415, detail="Government ID scans require multipart form data.")
+    form = await request.form()
+    id_type = clean_text(form.get("idType"), 60).lower()
+    if id_type not in ACCEPTED_ID_TYPES:
+        raise HTTPException(status_code=400, detail="Select a supported government ID type.")
+    if str(form.get("consent") or "").lower() != "true":
+        raise HTTPException(status_code=400, detail="Consent is required to screen government ID images.")
+    front_upload = form.get("idDocument")
+    back_upload = form.get("idBackDocument")
+    front_bytes = None
+    back_bytes = None
+    try:
+        front_bytes = await read_upload(
+            front_upload, label="Government ID front image",
+            maximum_bytes=MAX_ID_DOCUMENT_BYTES,
+        )
+        if id_type != "passport":
+            back_bytes = await read_upload(
+                back_upload, label="Government ID back image",
+                maximum_bytes=MAX_ID_DOCUMENT_BYTES,
+            )
+        elif back_upload is not None:
+            raise HTTPException(status_code=400, detail="Scan the passport bio page only.")
+    finally:
+        if isinstance(front_upload, StarletteUploadFile):
+            await front_upload.close()
+        if isinstance(back_upload, StarletteUploadFile):
+            await back_upload.close()
+
+    # Image quality is checked independently of document keyword recognition.
+    # A physically invalid or blurry scan cannot bypass the OCR gate.
+    front_quality = image_quality(decode_image(front_bytes, "Government ID front image"))
+    back_quality = (
+        image_quality(decode_image(back_bytes, "Government ID back image"))
+        if back_bytes is not None else None
+    )
+    front_screen = await asyncio.to_thread(
+        screen_government_id,
+        declared_type=id_type, id_document_bytes=front_bytes,
+    )
+    back_screen = (
+        await asyncio.to_thread(
+            screen_government_id,
+            declared_type=id_type, id_document_bytes=back_bytes,
+        )
+        if back_bytes is not None else None
+    )
+    screening = combine_document_sides(
+        front_screen, back_screen,
+        duplicate=(back_bytes is not None and front_bytes == back_bytes),
+    )
+    warning_codes = list(screening.get("warningCodes") or [])
+    if front_quality["score"] < DEFAULT_MIN_IMAGE_QUALITY:
+        warning_codes.append("low_document_image_quality")
+    if back_quality is not None and back_quality["score"] < DEFAULT_MIN_IMAGE_QUALITY:
+        warning_codes.append("low_document_back_image_quality")
+    screening["warningCodes"] = list(dict.fromkeys(warning_codes))[:4]
+    screening["authenticityVerified"] = False
+    screening["livenessVerified"] = False
+    screening["manualReviewRequired"] = True
+
+    unsupported = "non_government_id_detected" in screening["warningCodes"]
+    ready = (
+        screening.get("status") == "text_consistent_unverified"
+        and screening.get("detectedIdType") == id_type
+        and not screening["warningCodes"]
+        and (id_type == "passport" or back_bytes is not None)
+    )
+    return {
+        "ok": True,
+        "outcome": "rejected" if unsupported else ("pass" if ready else "retry"),
+        "documentScreening": screening,
+        "message": (
+            "School and company IDs are not accepted. Scan a supported government ID."
+            if unsupported else
+            "ID photos were OCR-screened. Continue to selfie; this does not verify ID authenticity."
+            if ready else
+            "ID type or image quality could not be confirmed. Retake clear front/back ID photos."
+        ),
+    }
+
+
 @app.post(
     "/verify"
 )
