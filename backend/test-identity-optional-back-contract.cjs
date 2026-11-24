@@ -42,6 +42,52 @@ test("optional ID back uses same secure authenticated multipart route", () => {
   assert(py.includes("if id_back_bytes is not None else None"));
 });
 
+test("OCR precheck is Firebase-authenticated and never changes face attempts or records", () => {
+  const handler = backend.slice(
+    backend.indexOf('"/api/identity/document/precheck"'),
+    backend.indexOf('"/api/identity/verify"'),
+  );
+  assert(handler.includes("requireFirebaseUser"));
+  assert(handler.includes("getIdentityAiHeaders(request)"));
+  assert(handler.includes('endpoint.replace(/\\/verify$/, "/document/precheck")'));
+  assert(handler.includes('"Cache-Control", "no-store"'));
+  assert(!handler.includes("db.runTransaction"));
+  assert(!handler.includes(".collection("));
+  assert(!handler.includes("FieldValue."));
+  assert(!handler.includes("identityVerified: true"));
+});
+
+test("consent-only ID photo precheck cannot submit a selfie or bypass the OCR gate", () => {
+  const first = api.indexOf("export async function precheckIdentityDocument");
+  const last = api.indexOf("export const submitIdentityVerification", first);
+  assert(first >= 0 && last > first);
+  const client = api.slice(first, last);
+  assert(client.includes('formData.append("consent", "true")'));
+  assert(client.includes('"/api/identity/document/precheck"'));
+  assert(!client.includes('appendMedia(formData, "selfie"'));
+  const gate = ui.slice(ui.indexOf("const openFaceScan = async"), ui.indexOf("const retake ="));
+  assert(gate.includes("await precheckIdentityDocument({"));
+  assert(gate.indexOf('result.outcome !== "pass"') < gate.indexOf("setStep(2)"));
+  assert(gate.includes("if (!consent)"));
+  assert(ui.includes("Check ID, then Face Scan"));
+});
+
+test("private Python precheck requires internal key, consent, both ID sides and no face", () => {
+  const ai = fs.readFileSync("identity-ai/main.py", "utf8");
+  const start = ai.indexOf('async def document_precheck(');
+  const end = ai.indexOf('@app.post(\n    "/verify"', start);
+  assert(start >= 0 && end > start);
+  const route = ai.slice(start, end);
+  assert(route.includes("require_internal_backend("));
+  assert(route.includes("validate_forwarded_user("));
+  assert(route.includes('form.get("consent")'));
+  assert(route.includes('form.get("idBackDocument")'));
+  assert(!route.includes('form.get("selfie")'));
+  assert(!route.includes("run_face_verification"));
+  assert(!route.includes("db.collection"));
+  assert(route.includes('"outcome": "rejected" if unsupported'));
+});
+
 test("School ID back is a guarded failed decision, not a verified resident", () => {
   assert(screening.includes('warning_codes.append("non_government_id_detected")'));
   assert(screening.includes('result["status"] = "mismatch"'));
