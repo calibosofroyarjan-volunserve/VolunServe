@@ -1630,7 +1630,7 @@ const styles = StyleSheet.create({
   attendanceChipActive: {backgroundColor: "#E6F6F2", borderColor: "#99D5CA"},
   attendanceChipText: {fontSize: 10.5, fontWeight: "800", color: "#5F7487"},
   attendanceChipTextActive: {color: GREEN},
-  table: {minWidth: 1100, borderWidth: 1, borderColor: "#E6ECEF", borderRadius: 11, overflow: "hidden"},
+  table: {minWidth: 980, borderWidth: 1, borderColor: "#E6ECEF", borderRadius: 11, overflow: "hidden"},
   tableHeader: {minHeight: 43, backgroundColor: "#F0F5F8", flexDirection: "row", alignItems: "center", paddingHorizontal: 10, gap: 8},
   tableHeadText: {fontSize: 10.5, fontWeight: "900", color: "#425E78"},
   tableRow: {minHeight: 70, flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 10, borderTopWidth: 1, borderTopColor: "#ECF0F2", backgroundColor: "#FFFFFF"},
