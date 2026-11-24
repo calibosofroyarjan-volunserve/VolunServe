@@ -146,10 +146,13 @@ test("real Expo Admin component uses the pure gate in button AND submission path
  assert.match(admin,/import\s*\{[^}]*adminReviewDocumentEligible,[\s\S]*?adminReviewStatusBucket[^}]*\}/);
  assert.match(admin,/function reviewBucket\(item: IdentityReview\): ReviewFilter \{\s*return adminReviewStatusBucket\(item\)/);
  assert.match(admin,/!adminReviewDocumentEligible\(selected\.documentScreening\)/);
- assert.match(admin,/const documentEligible = adminReviewDocumentEligible\(item\.documentScreening\)/);
+ assert.match(admin,/const documentEligible = manualNoMedia\s*\? [^;]+\s*: adminReviewDocumentEligible\(item\.documentScreening\)/);
+ assert(admin.includes('if (!isNoMediaLGUReview(item)) return adminReviewMethodEligible(item.documentScreening, method)'));
+ assert(admin.includes('(!manualNoMedia || (inPersonIdInspected && inPersonFaceCompared))'));
+ assert(admin.includes('issuerReviewAttested && notes.trim().length >= (manualNoMedia ? 25 : 10)'));
  assert.match(admin,/const canVerify = pending && item\.targetEligible === true && documentEligible/);
- assert(admin.includes("adminReviewMethodEligible(item.documentScreening, validationMethod)"));
- assert(admin.includes("selected.documentScreening, validationMethod,"));
+ assert(admin.includes("reviewMethodAllowed(item, validationMethod)"));
+ assert(admin.includes('action === "verify" && !reviewMethodAllowed(selected, validationMethod)'));
  assert.match(admin,/reviewBucket\(selected\) !== "pending"/);
  assert.match(admin,/selected\.targetEligible !== true/);
  assert.match(admin,/Require Retry/);
