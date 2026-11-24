@@ -95,12 +95,19 @@ if (useStagingFirebase) {
       "STAGING FIREBASE CONFIG REQUIRED. Refusing to connect staging signup to production Firebase."
     );
   }
-  // The dedicated Full Staging Hosting site must use its own Firebase Web App,
-  // never a different staging project (including the older auth-only project).
-  if (useStagingFirebase &&
-      (stage.projectId !== "volunserve-full-staging" ||
-       stage.messagingSenderId !== "429213950126" ||
-       stage.appId !== "1:429213950126:web:955dbf575697826b674d3f")) {
+  // An isolated Didit QA build must never reuse existing staging records or
+  // silently point a full-staging Hosting site to a different Firebase project.
+  const diditQa = process.env.EXPO_PUBLIC_DIDIT_QA_MODE === "true";
+  if (diditQa) {
+    if (stage.projectId !== "volunserve-didit-qa" ||
+        fullStagingHosts.includes(currentHost) ||
+        !/^[0-9]{6,}$/.test(stage.messagingSenderId) ||
+        !/^1:[0-9]+:web:[a-f0-9]+$/i.test(stage.appId)) {
+      throw new Error("Didit QA requires its separate QA Firebase Web App and Hosting environment.");
+    }
+  } else if (stage.projectId !== "volunserve-full-staging" ||
+      stage.messagingSenderId !== "429213950126" ||
+      stage.appId !== "1:429213950126:web:955dbf575697826b674d3f") {
     throw new Error("Full staging Hosting requires the matching Full Staging Firebase Web App.");
   }
 }
