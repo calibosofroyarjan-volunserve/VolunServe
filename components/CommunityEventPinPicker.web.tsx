@@ -130,6 +130,7 @@ export default function CommunityEventPinPicker({ latitude, longitude, barangay 
       return false;
     }
     explicitPinRef.current = true;
+    setLookupState("idle");
     gpsRequestRef.current++;
     setGpsBusy(false);
     setSelectedPlace(null);
@@ -240,7 +241,7 @@ export default function CommunityEventPinPicker({ latitude, longitude, barangay 
     }
     const position = {lat: draft.latitude, lng: draft.longitude};
     if (!markerInstance.current) {
-      const marker = new g.maps.Marker({map, position, draggable: true, title:"Event meeting point"});
+      const marker = new g.maps.Marker({map, position, draggable: true, title:"Event meeting point", icon:{path:g.maps.SymbolPath.CIRCLE,scale:11,fillColor:"#0C8065",fillOpacity:1,strokeColor:"#FFFFFF",strokeWeight:3}});
       marker.addListener("dragend", (event: any) => {
         // Revert an invalid drag to the last accepted meeting point.
         if (!event.latLng || !pick(event.latLng.lat(), event.latLng.lng())) {
