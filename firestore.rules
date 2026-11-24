@@ -5454,34 +5454,8 @@ service cloud.firestore {
                 && eventAfter().participantsCount == eventBefore().participantsCount + 1
                 && eventAfter().participantsCount <= eventBefore().capacity
               )
-              ||
-              (
-                // Volunteer Time In/Out, cannot self-verify.
-                resource.data.status == 'joined'
-                && resource.data.attendanceVerified == false
-                && request.resource.data.attendanceVerified == false
-                && request.resource.data.diff(resource.data)
-                  .affectedKeys().hasOnly([
-                    'checkedInAt', 'checkedOutAt', 'updatedAt'
-                  ])
-                && request.resource.data.updatedAt == request.time
-                && eventBefore().status == 'active'
-                && (
-                  (
-                    resource.data.checkedInAt == null
-                    && resource.data.checkedOutAt == null
-                    && request.resource.data.checkedInAt == request.time
-                    && request.resource.data.checkedOutAt == null
-                  )
-                  ||
-                  (
-                    resource.data.checkedInAt is timestamp
-                    && resource.data.checkedOutAt == null
-                    && request.resource.data.checkedInAt == resource.data.checkedInAt
-                    && request.resource.data.checkedOutAt == request.time
-                  )
-                )
-              )
+              // Self attendance is written only by the authenticated Render backend.
+
             )
           )
           ||
