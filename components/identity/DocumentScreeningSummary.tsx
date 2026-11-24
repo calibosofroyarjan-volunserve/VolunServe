@@ -14,8 +14,11 @@ const NAMES: Record<string, string> = {
 /** Shared, privacy-safe document-type assessment for Residents and LGU. */
 export default function DocumentScreeningSummary({
   screening,
+  showAdvancedChecks = true,
 }: {
   screening?: DocumentScreening | null;
+  /** Keep technical PAD caveats available for reviewers; Resident uses the original simple flow. */
+  showAdvancedChecks?: boolean;
 }) {
   if (!screening) return null;
 
@@ -162,10 +165,12 @@ export default function DocumentScreeningSummary({
           <Text style={styles.label}>Official issuer check</Text>
           <Text style={styles.value}>Not verified — PSA/issuer check required</Text>
         </View>
-        <View style={styles.row}>
-          <Text style={styles.label}>Anti-spoofing (PAD)</Text>
-          <Text style={styles.value}>Not validated — movement is not proof</Text>
-        </View>
+        {showAdvancedChecks ? (
+          <View style={styles.row}>
+            <Text style={styles.label}>Anti-spoofing (PAD)</Text>
+            <Text style={styles.value}>Not validated — face matching alone is not proof of liveness</Text>
+          </View>
+        ) : null}
         <View style={styles.row}>
           <Text style={styles.label}>Identity decision</Text>
           <Text style={styles.value}>
@@ -181,7 +186,9 @@ export default function DocumentScreeningSummary({
         Only the five supported ID types may proceed after document screening.
         Birthday, barangay and ID-type comparisons are only OCR clues.
         They do not prove official issuance, residence or liveness.
-        Independent issuer checks, qualified anti-spoofing validation and Admin review are still required.
+        {showAdvancedChecks
+          ? " Independent issuer checks, qualified anti-spoofing validation and Admin review are still required."
+          : " Face comparison is not a liveness check. Final account approval requires independent Admin review."}
       </Text>
     </View>
   );
