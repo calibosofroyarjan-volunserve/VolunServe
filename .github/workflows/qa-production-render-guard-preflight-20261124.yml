@@ -1,0 +1,52 @@
+name: Read-only VolunServe production Render auto-invite preflight
+on:
+  push:
+    branches:
+      - qa/render-live-read-only-preflight-20261124
+permissions:
+  contents: read
+jobs:
+  no-mutations:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    env:
+      FIREBASE_SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_VOLUNSERVE_3AA5B || secrets.FIREBASE_SERVICE_ACCOUNT }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            backend/package-lock.json
+      - name: Install locked packages
+        run: npm ci --prefix backend --ignore-scripts --no-audit --no-fund
+      - name: Read-only Firebase credentials and quota probe
+        run: |
+          node <<'NODE'
+          const {initializeApp,cert,deleteApp}=require('./backend/node_modules/firebase-admin/app');
+          const {getFirestore}=require('./backend/node_modules/firebase-admin/firestore');
+          (async()=>{
+            const secret=process.env.FIREBASE_SA;
+            if(!secret){console.error('BLOCKER: production GitHub Firebase secret missing');process.exitCode=3;return}
+            let parsed;try{parsed=JSON.parse(secret)}catch{throw Error('Firebase secret is not JSON')}
+            if(parsed.project_id!=='volunserve-3aa5b')throw Error('Wrong Firebase project; STOP');
+            console.log('PASS: credential targets intended production Firebase project');
+            const app=initializeApp({credential:cert(parsed),projectId:parsed.project_id});
+            try {
+              const snap=await getFirestore(app).collection('disasterCases').limit(1).get();
+              console.log('PASS: Firestore read-only query succeeds; docs_returned='+snap.size);
+            }catch(e){
+              console.error('BLOCKER: Firestore read-only probe failed: '+String(e.code||e.message).slice(0,140));
+              process.exitCode=4;
+            }finally{await deleteApp(app)}
+          })().catch(e=>{console.error('BLOCKER: '+e.message);process.exitCode=2})
+          NODE
+      - name: Check guard wiring without contacting production volunteers
+        if: always()
+        run: |
+          node --check backend/renderEmergencyAutoInvites.js
+          node --check backend/server.js
+          node --test backend/test-renderEmergencyAutoInvites.cjs
+          echo 'No Firestore writes, no live emergency invitations, no deployment.'
