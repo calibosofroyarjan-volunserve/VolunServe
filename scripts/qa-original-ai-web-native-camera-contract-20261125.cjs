@@ -11,9 +11,9 @@ const vm = require("node:vm");
 const ts = require("typescript");
 const path = require("node:path");
 
-const nativePath = path.join(__dirname,"app","identity-verification.tsx");
-const webPath = path.join(__dirname,"app","identity-verification.web.tsx");
-const clientPath = path.join(__dirname,"lib","identityVerification.ts");
+const nativePath = path.join(__dirname,"..","app","identity-verification.tsx");
+const webPath = path.join(__dirname,"..","app","identity-verification.web.tsx");
+const clientPath = path.join(__dirname,"..","lib","identityVerification.ts");
 const native = fs.readFileSync(nativePath,"utf8");
 const web = fs.readFileSync(webPath,"utf8");
 const client = fs.readFileSync(clientPath,"utf8");
