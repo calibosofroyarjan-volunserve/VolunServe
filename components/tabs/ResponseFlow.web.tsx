@@ -13,6 +13,7 @@ import {
 import React, { useEffect, useMemo, useRef, useState } from "react";
 
 import { db } from "../../lib/firebase";
+import { emergencyArrivalAssessment } from "../../lib/emergencyArrival";
 import {
   activeModeForProfile,
   hasVolunteerAccess,
@@ -23,25 +24,6 @@ type Row = {
   id: string;
   [key: string]: any;
 };
-
-type CompletionDetails = {
-  contributionType: string;
-  contributionSummary: string;
-  peopleHelped: number;
-  completionNotes: string;
-};
-
-const contributionOptions = [
-  "Evacuation Assistance",
-  "Transport / Vehicle",
-  "Medical Assistance",
-  "Search and Rescue",
-  "Home Repair",
-  "Clearing / Heavy Lifting",
-  "Relief / Goods Delivery",
-  "Safety / Welfare Check",
-  "Other",
-];
 
 const activeStates = ["responding", "on_site"];
 const terminalStates = ["completed", "declined", "cancelled"];
@@ -416,44 +398,8 @@ export function useResponseFlow(
   const respond = (
     assignment: Row,
     next: string,
-    completion?: CompletionDetails,
   ) =>
     act(async () => {
-      if (next === "completed") {
-        if (!completion) {
-          throw new Error(
-            "Add the contribution details before completing this mission.",
-          );
-        }
-
-        if (!completion.contributionType.trim()) {
-          throw new Error(
-            "Select the type of contribution you provided.",
-          );
-        }
-
-        if (
-          completion.contributionSummary.trim().length <
-          10
-        ) {
-          throw new Error(
-            "Describe your actual contribution in at least 10 characters.",
-          );
-        }
-
-        if (
-          !Number.isInteger(
-            completion.peopleHelped,
-          ) ||
-          completion.peopleHelped < 0 ||
-          completion.peopleHelped > 999
-        ) {
-          throw new Error(
-            "Enter a valid number of people assisted (0 to 999).",
-          );
-        }
-      }
-
       await runTransaction(
         db,
         async (transaction) => {
@@ -537,27 +483,16 @@ export function useResponseFlow(
               serverTimestamp();
           }
 
-          if (
-            next === "completed" &&
-            completion
-          ) {
-            assignmentPatch.contributionType =
-              completion.contributionType.trim();
-
+          if (next === "completed") {
+            // One-tap task completion without a Volunteer Field Report.
+            // This record is not proof that assistance was provided.
+            assignmentPatch.contributionType = "Task completion";
             assignmentPatch.contributionSummary =
-              completion.contributionSummary.trim();
-
-            assignmentPatch.peopleHelped =
-              completion.peopleHelped;
-
-            assignmentPatch.completionNotes =
-              completion.completionNotes.trim();
-
-            assignmentPatch.completedAt =
-              serverTimestamp();
-
-            assignmentPatch.residentConfirmationStatus =
-              "pending";
+              "Volunteer marked task complete; no field report was submitted.";
+            assignmentPatch.peopleHelped = 0;
+            assignmentPatch.completionNotes = "";
+            assignmentPatch.completedAt = serverTimestamp();
+            assignmentPatch.residentConfirmationStatus = "pending";
           }
 
           transaction.update(
@@ -599,7 +534,7 @@ export function useResponseFlow(
             completed: {
               title:
                 "Please confirm the assistance received",
-              message: `${responderName} marked the mission complete and submitted a contribution summary. Open My Reports to confirm whether you were fully helped, partially helped, or not helped.`,
+              message: `${responderName} marked the Volunteer task complete. Please confirm whether you were fully helped, partially helped, or not helped in My Reports.`,
             },
           };
 
@@ -791,6 +726,7 @@ export function useResponseFlow(
     shareId,
     canShare,
     sentAt,
+    gps: location,
     error,
     busy,
     respond,
@@ -804,294 +740,6 @@ export function useResponseFlow(
       setTracking(true);
     },
   };
-}
-
-function MissionCompletionForm({
-  assignment,
-  busy,
-  defaultPeopleHelped = 1,
-  onComplete,
-}: {
-  assignment: Row;
-  busy: boolean;
-  defaultPeopleHelped?: number;
-  onComplete: (
-    assignment: Row,
-    next: string,
-    details: CompletionDetails,
-  ) => Promise<boolean>;
-}) {
-  const [open, setOpen] =
-    useState(false);
-
-  const [
-    contributionType,
-    setContributionType,
-  ] = useState("");
-
-  const [
-    contributionSummary,
-    setContributionSummary,
-  ] = useState("");
-
-  const [
-    peopleHelped,
-    setPeopleHelped,
-  ] = useState(
-    String(
-      Math.max(
-        0,
-        Math.min(
-          999,
-          Math.trunc(
-            defaultPeopleHelped ||
-              0,
-          ),
-        ),
-      ),
-    ),
-  );
-
-  const [
-    completionNotes,
-    setCompletionNotes,
-  ] = useState("");
-
-  const [
-    localError,
-    setLocalError,
-  ] = useState("");
-
-  const reset = () => {
-    setOpen(false);
-    setContributionType("");
-    setContributionSummary("");
-
-    setPeopleHelped(
-      String(
-        Math.max(
-          0,
-          Math.min(
-            999,
-            Math.trunc(
-              defaultPeopleHelped ||
-                0,
-            ),
-          ),
-        ),
-      ),
-    );
-
-    setCompletionNotes("");
-    setLocalError("");
-  };
-
-  const submit = async () => {
-    const count =
-      Number(peopleHelped);
-
-    const summary =
-      contributionSummary.trim();
-
-    if (!contributionType) {
-      setLocalError(
-        "Select the type of contribution you provided.",
-      );
-      return;
-    }
-
-    if (summary.length < 10) {
-      setLocalError(
-        "Briefly describe what you actually did during the response.",
-      );
-      return;
-    }
-
-    if (
-      !Number.isInteger(count) ||
-      count < 0 ||
-      count > 999
-    ) {
-      setLocalError(
-        "Enter a valid number of people assisted (0 to 999).",
-      );
-      return;
-    }
-
-    setLocalError("");
-
-    const completed =
-      await onComplete(
-        assignment,
-        "completed",
-        {
-          contributionType,
-          contributionSummary:
-            summary,
-          peopleHelped: count,
-          completionNotes:
-            completionNotes.trim(),
-        },
-      );
-
-    if (completed) reset();
-  };
-
-  if (!open) {
-    return (
-      <button
-        className="primary-button"
-        disabled={busy}
-        onClick={() =>
-          setOpen(true)
-        }
-      >
-        Complete Mission
-      </button>
-    );
-  }
-
-  return (
-    <div className="mission-completion-card">
-      <div className="mission-completion-heading">
-        <div>
-          <strong>
-            Complete mission &amp;
-            record contribution
-          </strong>
-
-          <span>
-            The resident will
-            review this contribution
-            before it becomes
-            verified help.
-          </span>
-        </div>
-
-        <button
-          type="button"
-          className="secondary-button"
-          disabled={busy}
-          onClick={reset}
-        >
-          Cancel
-        </button>
-      </div>
-
-      <label>
-        Contribution type
-
-        <select
-          value={
-            contributionType
-          }
-          disabled={busy}
-          onChange={(event) =>
-            setContributionType(
-              event.target.value,
-            )
-          }
-        >
-          <option value="">
-            Select contribution
-          </option>
-
-          {contributionOptions.map(
-            (item) => (
-              <option
-                key={item}
-                value={item}
-              >
-                {item}
-              </option>
-            ),
-          )}
-        </select>
-      </label>
-
-      <label>
-        What did you actually do?
-
-        <textarea
-          value={
-            contributionSummary
-          }
-          disabled={busy}
-          rows={3}
-          maxLength={1200}
-          placeholder="Example: Assisted two residents from the flooded home to the designated evacuation center."
-          onChange={(event) =>
-            setContributionSummary(
-              event.target.value,
-            )
-          }
-        />
-      </label>
-
-      <div className="mission-completion-grid">
-        <label>
-          People assisted
-
-          <input
-            type="number"
-            min="0"
-            max="999"
-            step="1"
-            value={
-              peopleHelped
-            }
-            disabled={busy}
-            onChange={(event) =>
-              setPeopleHelped(
-                event.target.value,
-              )
-            }
-          />
-        </label>
-
-        <label>
-          Optional completion notes
-
-          <input
-            type="text"
-            maxLength={600}
-            value={
-              completionNotes
-            }
-            disabled={busy}
-            placeholder="Any follow-up or important note"
-            onChange={(event) =>
-              setCompletionNotes(
-                event.target.value,
-              )
-            }
-          />
-        </label>
-      </div>
-
-      {localError && (
-        <p
-          className="mission-completion-error"
-          role="alert"
-        >
-          {localError}
-        </p>
-      )}
-
-      <div className="mission-completion-actions">
-        <button
-          type="button"
-          className="primary-button"
-          disabled={busy}
-          onClick={submit}
-        >
-          {busy
-            ? "Saving…"
-            : "Submit Contribution & Complete"}
-        </button>
-      </div>
-    </div>
-  );
 }
 
 export function ResponsePanel({
@@ -1123,6 +771,24 @@ export function ResponsePanel({
       (item) =>
         item.id === caseId,
     );
+
+  const arrival = emergencyArrivalAssessment(
+    flow.gps,
+    chosen && Number.isFinite(Number(chosen.latitude)) &&
+      Number.isFinite(Number(chosen.longitude))
+      ? { latitude: Number(chosen.latitude), longitude: Number(chosen.longitude) }
+      : null,
+  );
+  const proximityMessage =
+    arrival.status === "near"
+      ? "Near destination (within approximately 100 m). Tap Mark Arrived when actually on site."
+      : arrival.status === "en_route" && arrival.distanceMeters != null
+        ? `About ${Math.round(arrival.distanceMeters)} m from the saved incident pin (straight-line GPS estimate).`
+        : arrival.status === "stale"
+          ? "GPS reading is outdated. Arrival cannot be confirmed."
+          : arrival.status === "low_accuracy"
+            ? "GPS accuracy is too low to assess 100 m proximity. Confirm arrival manually."
+            : "Waiting for a fresh GPS reading and incident coordinates.";
 
   const volunteerMissionAssignment =
     flow.volunteer && caseId
@@ -1692,6 +1358,7 @@ export function ResponsePanel({
               </button>
             ) : assignment.status ===
                 "responding" ? (
+              <>
               <button
                 className="primary-button"
                 disabled={flow.busy}
@@ -1704,20 +1371,17 @@ export function ResponsePanel({
               >
                 Mark Arrived
               </button>
+              <span role="status" className="task-gate-note">{proximityMessage}</span>
+              </>
             ) : assignment.status ===
                 "on_site" ? (
-              <MissionCompletionForm
-                assignment={assignment}
-                busy={flow.busy}
-                defaultPeopleHelped={
-                  Number(
-                    chosen
-                      ?.affectedPeople ||
-                      1,
-                  )
-                }
-                onComplete={flow.respond}
-              />
+              <button
+                className="primary-button"
+                disabled={flow.busy}
+                onClick={() => flow.respond(assignment, "completed")}
+              >
+                {flow.busy ? "Saving…" : "Mark Task Complete"}
+              </button>
             ) : null}
           </div>
         </div>
@@ -2509,6 +2173,7 @@ export function ResponsePanel({
 
                     {assignment.status ===
                       "responding" && (
+                      <>
                       <button
                         className="secondary-button"
                         disabled={
@@ -2524,24 +2189,19 @@ export function ResponsePanel({
                         Mark
                         arrived
                       </button>
+                      <span role="status" className="task-gate-note">{proximityMessage}</span>
+                      </>
                     )}
 
                     {assignment.status ===
                       "on_site" && (
-                      <MissionCompletionForm
-                        assignment={
-                          assignment
-                        }
-                        busy={
-                          flow.busy
-                        }
-                        defaultPeopleHelped={
-                          1
-                        }
-                        onComplete={
-                          flow.respond
-                        }
-                      />
+                      <button
+                        className="primary-button"
+                        disabled={flow.busy}
+                        onClick={() => flow.respond(assignment, "completed")}
+                      >
+                        {flow.busy ? "Saving…" : "Mark Task Complete"}
+                      </button>
                     )}
                   </>
                 )}
