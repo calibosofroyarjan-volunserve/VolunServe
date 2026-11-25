@@ -100,18 +100,23 @@ test("face-score-only submission cannot obtain Verified access",async()=>{
 });
 
 
-test("real submission route records eligibility but cannot auto-promote a Resident",()=>{
+test("real submission route grants auto access only through disabled-by-default trusted gateway",()=>{
  const fs=require("node:fs");
  const source=fs.readFileSync("backend/server.js","utf8");
- const start=source.indexOf('["/api/identity/verify", "/api/identity/verify-with-evidence"]');
- const end=source.indexOf('function identityAdminTimestampIso',start);
- assert.ok(start>0 && end>start, "identity submit boundary is present");
+ const start=source.indexOf('["/api/identity/verify", "/api/identity/verify-with-evidence", "/api/identity/verify-face-only"]');
+ const end=source.indexOf("function identityAdminTimestampIso",start);
+ assert.ok(start>0 && end>start, "actual identity submit boundary exists");
  const route=source.slice(start,end);
  assert.match(route,/await assessAutomaticIdentityApproval\(/);
  assert.match(route,/automaticVerificationEligible: automaticApproval\.eligible/);
  assert.match(route,/automaticVerificationReason: automaticApproval\.reason/);
- assert.match(route,/identityVerified:\s*false/);
- assert.doesNotMatch(route,/identityVerified:\s*true/);
+ assert.match(route,/process\.env\.VOLUNSERVE_TRUSTED_AUTO_VERIFY_ENABLED === "true"/);
+ assert.match(route,/resolveTrustedAutomaticCompletion\(/);
+ assert.match(route,/identityVerified: autoCompletion\.eligible/);
+ assert.match(route,/result: "not_validated"/);
+ assert.match(route,/algorithmValidated: false/);
+ assert.match(route,/freshCapture: false/);
+ assert.match(route,/identityAutomationEvents/);
  assert.match(route,/requiresPrivateEvidence/);
  assert.match(route,/db\.runTransaction/);
  assert.doesNotMatch(route,/issuerValidator:\s*aiResult/);
