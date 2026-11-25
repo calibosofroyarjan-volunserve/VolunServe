@@ -5,6 +5,7 @@ on:
       - qa/original-ai-live-parity-20261125
     paths:
       - scripts/qa-original-ai-web-native-camera-contract-20261125.cjs
+      - scripts/qa-original-ai-web-camera-cancellation-synced-20261125.cjs
       - .github/workflows/qa-original-ai-web-native-camera-no-deploy-20261125.yml
   workflow_dispatch:
 permissions:
@@ -32,7 +33,7 @@ jobs:
               ['app/identity-verification.web.tsx',hosting],
               ['app/identity-verification.tsx',nativeFix],
               ['lib/identityVerification.ts',hosting],
-              ['scripts/test-identity-camera-cancellation.cjs',hosting],
+              ['scripts/qa-original-ai-web-camera-cancellation-synced-20261125.cjs',context.sha],
               ['scripts/test-original-ai-native-review-no-face-20261125.cjs',nativeFix],
               ['scripts/qa-original-ai-web-native-camera-contract-20261125.cjs',context.sha]
             ];
@@ -41,6 +42,7 @@ jobs:
             assert.equal(diff.data.behind_by,0,'QA must not lose previous real Node+Python pass');
             const allowed=[
               'scripts/qa-original-ai-web-native-camera-contract-20261125.cjs',
+              'scripts/qa-original-ai-web-camera-cancellation-synced-20261125.cjs',
               '.github/workflows/qa-original-ai-web-native-camera-no-deploy-20261125.yml'
             ];
             assert.deepEqual((diff.data.files||[]).map(f=>f.filename).sort(),allowed.sort(),
@@ -53,7 +55,7 @@ jobs:
               fs.writeFileSync(target,Buffer.from(data.content,'base64'));
               core.info('Read-only frontend/test file '+filename+' @ '+ref.slice(0,10));
             }
-            core.info('PASS: exact published Web/Client + tested native candidate, only two QA files changed');
+            core.info('PASS: exact published Web/Client + tested native candidate, only three QA files changed');
       - name: Install isolated TypeScript transpiler (no frontend build/deploy)
         run: |
           npm install --prefix .qa-ui --no-save --no-audit --no-fund --ignore-scripts typescript@5.9.3
@@ -78,7 +80,7 @@ jobs:
         working-directory: .qa-ui
         run: |
           node --test \
-            scripts/test-identity-camera-cancellation.cjs \
+            scripts/qa-original-ai-web-camera-cancellation-synced-20261125.cjs \
             scripts/test-original-ai-native-review-no-face-20261125.cjs \
             scripts/qa-original-ai-web-native-camera-contract-20261125.cjs
       - name: Confirm no privileged or real media operations
