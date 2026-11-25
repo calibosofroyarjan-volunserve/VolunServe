@@ -193,6 +193,8 @@ async function run() {
     pass("Resident cannot access private Admin identity queue (403)");
 
     await record(adminUid);
+    // Preserve the real Admin role while testing this Admin\'s own identity case.
+    await profileRef(adminUid).update({role:"admin",status:"approved",identityStatus:"basic"});
     res=await call("POST","/api/admin/identity/reviews/"+adminUid+"/decision",adminToken,verifiedBody);
     assert.equal(res.status,403,JSON.stringify(res.body));
     assert.equal(res.body.error,"self_identity_review_forbidden");
