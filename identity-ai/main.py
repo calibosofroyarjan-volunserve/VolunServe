@@ -20,6 +20,12 @@ from fastapi import FastAPI, Header, HTTPException, Request
 from starlette.datastructures import UploadFile as StarletteUploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from PIL import Image, ImageOps
+from staging_original_ai_isolation import assert_original_ai_staging_isolated
+
+# Staging-only credential and private-key isolation before AI app creation.
+# Existing production startup and original face matcher remain unchanged.
+assert_original_ai_staging_isolated()
+
 app = FastAPI(
     title="VolunServe Identity AI",
     version="2.1.0",
