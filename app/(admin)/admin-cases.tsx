@@ -1384,10 +1384,8 @@ export default function AdminCases() {
     const skillMatches = skillMatchCount(incident, volunteer);
     const skillReviewNeeded = specializedSkills.length > 0 && skillMatches === 0;
 
-    // Any approved Volunteer can support a validated SJDM emergency,
-    // regardless of which barangay they live in. Incident barangay is kept
-    // solely for location, community records, and completion documentation.
-    const caseBarangay = normalizeBarangay(caseBarangayValue(incident));
+    // Manual Volunteer selection is independent of the incident and Volunteer
+    // barangay. Location data remains available elsewhere for the incident map.
     if (reporterIsVolunteer) {
       return { eligible: false, reason: "Reporter cannot respond to own case", skillMatches };
     }
@@ -1396,9 +1394,6 @@ export default function AdminCases() {
     }
     if (explicitlyBlockedAccount || explicitlyRejectedIdentity) {
       return { eligible: false, reason: "Volunteer account is not currently eligible", skillMatches };
-    }
-    if (!caseBarangay) {
-      return { eligible: false, reason: "Record the incident barangay for the completion report; the Volunteer may be from any SJDM barangay", skillMatches };
     }
     if (alreadyAssigned) {
       return { eligible: false, reason: "Already assigned to this emergency", skillMatches };
@@ -2600,18 +2595,8 @@ export default function AdminCases() {
         const currentCase: any = caseSnapshot.data();
         const currentVolunteer: any = volunteerSnapshot.data();
 
-        const currentCaseBarangayRaw = String(
-          currentCase.incidentBarangay ||
-            currentCase.emergencyBarangay ||
-            currentCase.barangay ||
-            currentCase.reporterBarangay ||
-            ""
-        ).trim();
-        if (!normalizeBarangay(currentCaseBarangayRaw)) {
-          throw new Error(
-            "Record the incident barangay for completion documents. The selected Volunteer may be from any SJDM barangay."
-          );
-        }
+        // The Admin may offer a task without requiring barangay matching.
+        // Do not modify the incident's location, GPS or map fields here.
 
         // A pending offer is not an active response. Admin may offer a
         // validated, safe support task to an approved Volunteer even when busy.
@@ -4061,18 +4046,6 @@ export default function AdminCases() {
                         </View>
                       </View>
 
-                      <View style={styles.personnelBarangayStrip}>
-                        <View>
-                          <Text style={styles.personnelNeedLabel}>INCIDENT BARANGAY</Text>
-                          <Text style={styles.personnelBarangayValue}>
-                            {barangayDisplay(caseBarangayValue(incident))}
-                          </Text>
-                        </View>
-                        <Text style={styles.personnelBarangayHint}>
-                          Approved SJDM Volunteers can receive offers. Only accepted offers become active tasks.
-                        </Text>
-                      </View>
-
                       {activeAssignments.length > 0 && (
                         <View style={styles.personnelSupportNotice}>
                           <Text style={styles.personnelSupportNoticeTitle}>
@@ -4154,7 +4127,7 @@ export default function AdminCases() {
                                   <View style={styles.volunteerRosterIdentity}>
                                     <Text style={styles.volunteerRosterName}>{volunteer.fullName}</Text>
                                     <Text style={styles.volunteerRosterMeta}>
-                                      Approved Volunteer · Citywide SJDM assignments
+                                      Approved Volunteer · Manual assignment
                                     </Text>
                                   </View>
                                   <TouchableOpacity
@@ -4243,9 +4216,7 @@ export default function AdminCases() {
                                 <View style={styles.personnelCompactIdentity}>
                                   <Text style={styles.personnelCompactName}>{displayName}</Text>
                                   <Text style={styles.personnelCompactMeta}>
-                                    {currentVolunteer?.barangay
-                                      ? barangayDisplay(currentVolunteer.barangay)
-                                      : `Updated ${formatDate(assignment.updatedAt)}`}
+                                    Updated {formatDate(assignment.updatedAt)}
                                   </Text>
                                 </View>
 
