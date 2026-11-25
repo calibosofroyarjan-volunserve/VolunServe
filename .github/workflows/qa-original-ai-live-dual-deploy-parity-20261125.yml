@@ -71,7 +71,7 @@ jobs:
             ['dedicated resident face-only route',node.includes('"/api/identity/verify-face-only"')],
             ['Firebase-authenticated verify route',/app\.post\(\s*\["\/api\/identity\/verify",\s*"\/api\/identity\/verify-with-evidence",\s*"\/api\/identity\/verify-face-only"\],\s*requireFirebaseUser/.test(node)],
             ['feature flag defaults disabled',node.includes('VOLUNSERVE_FACE_ONLY_ENABLED || ""')],
-            ['uses dedicated AI forwarding',node.includes('replace(/\/verify$/, "/verify-face-only")')],
+            ['uses dedicated AI forwarding',node.includes(String.raw`replace(/\/verify$/, "/verify-face-only")`)],
             ['consented private photos required',node.includes('requiresPrivateEvidence = faceOnly ||')],
             ['uncertain matches fail closed',node.includes('faceComparisonPassed ? "manual_review" : "failed"')],
             ['no AI-only Verified Resident status',node.includes('identityVerified: false,')],
