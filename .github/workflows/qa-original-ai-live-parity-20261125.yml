@@ -37,25 +37,51 @@ jobs:
           assert.ok(s.includes('identityAttemptOutcome'), 'Missing Admin-only completion guard');
           console.log('PASS: production source contains original identity routes and auth guards');
           NODE
-      - name: Execute existing identity regression tests against exact deployed Node source
+      - name: Run original identity and unrelated attendance regressions from repository root
         run: |
-          node --test             backend/test-identityHybridPrecheckDecision.js             backend/test-identityPrivateEvidence.js             backend/test-identity-final-admin-only.js             backend/test-identity-three-attempt-review.js             backend/test-identityPrecheckCors.js             backend/test-communityAttendanceGeofence.js
+          node --test \
+            backend/test-identityPrivateEvidence.js \
+            backend/test-identity-final-admin-only.js \
+            backend/test-identity-three-attempt-review.js \
+            backend/test-communityAttendanceGeofence.js
+      - name: Run existing ID precheck classifier tests from their required working directory
+        working-directory: backend
+        run: node --test test-identityHybridPrecheckDecision.js
+      - name: Verify live CORS allowlist and legacy alias without outdated single-string-route assumption
+        run: |
+          node - <<'NODE'
+          const fs = require('node:fs');
+          const assert = require('node:assert/strict');
+          const s = fs.readFileSync('backend/server.js','utf8');
+          const pos = s.indexOf('app.use(\n  cors({');
+          assert.ok(pos >= 0, 'Live CORS middleware is present');
+          const block = s.slice(pos, s.indexOf('}),\n);', pos));
+          const allowed = block.match(/allowedHeaders:\s*\[([\s\S]*?)\]/);
+          assert.ok(allowed, 'CORS header allowlist exists');
+          const headers = [...allowed[1].matchAll(/"([^"]+)"/g)].map(x => x[1].toLowerCase());
+          for (const name of ['authorization','content-type','x-volunserve-document-precheck-consent'])
+            assert.ok(headers.includes(name),'Missing consent or auth header: '+name);
+          assert.ok(s.includes('["/api/identity/document/precheck", "/api/identity/document/precheck-with-evidence"]'), 'Current live dual-route alias missing');
+          assert.ok(s.includes('request.headers["x-volunserve-document-precheck-consent"] !== "true"'), 'Consent check missing');
+          console.log('PASS: actual live CORS and both precheck routes verified');
+          NODE
   python:
     name: Live Python government ID and face source tests
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: 319152e6a1cad5e54653c20e87bd1551a82b219e
-          path: live-ai
+          fetch-depth: 1
           persist-credentials: false
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-      - name: Confirm checkout is exactly Render private AI live commit
-        working-directory: live-ai
+      - name: Read exact deployed Python AI tree without nested checkout or malformed gitlink
         run: |
-          test "$(git rev-parse HEAD)" = "319152e6a1cad5e54653c20e87bd1551a82b219e"
+          git fetch --no-tags --depth=1 origin 319152e6a1cad5e54653c20e87bd1551a82b219e
+          test "$(git rev-parse FETCH_HEAD)" = "319152e6a1cad5e54653c20e87bd1551a82b219e"
+          mkdir -p live-ai
+          git archive 319152e6a1cad5e54653c20e87bd1551a82b219e identity-ai | tar -xf - -C live-ai
       - name: Compile live AI and verify original 1-to-1 matcher and private precheck
         run: |
           python -m py_compile live-ai/identity-ai/main.py live-ai/identity-ai/document_screening.py live-ai/identity-ai/profile_consistency.py
