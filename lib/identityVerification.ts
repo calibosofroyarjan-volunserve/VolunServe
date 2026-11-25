@@ -24,7 +24,7 @@ export type DocumentScreening = {
   backSideProvided?: boolean;
   backSideScreened?: boolean;
   profileNameCompared?: boolean;
-  profileNameCheck?: "possible_match" | "inconclusive" | "not_checked";
+  profileNameCheck?: "possible_match" | "possible_conflict" | "inconclusive" | "not_checked";
   profileBirthDateCompared?: boolean;
   profileBirthDateCheck?: "possible_match" | "possible_conflict" | "inconclusive" | "not_checked";
   profileAddressCompared?: boolean;
@@ -80,7 +80,7 @@ function parseDocumentScreening(value: unknown): DocumentScreening | undefined {
     backSideProvided: raw.backSideProvided === true,
     backSideScreened: raw.backSideScreened === true,
     profileNameCompared: raw.profileNameCompared === true,
-    profileNameCheck: raw.profileNameCheck === "possible_match" || raw.profileNameCheck === "inconclusive"
+    profileNameCheck: raw.profileNameCheck === "possible_match" || raw.profileNameCheck === "possible_conflict" || raw.profileNameCheck === "inconclusive"
       ? raw.profileNameCheck : "not_checked",
     profileBirthDateCompared: raw.profileBirthDateCompared === true,
     profileBirthDateCheck: raw.profileBirthDateCheck === "possible_match" ||
@@ -126,6 +126,10 @@ export type IdentityVerificationResult = {
 
 export type DocumentPrecheckResult = {
   outcome: "pass" | "review" | "retry";
+  // status=pending is a server-confirmed persisted Admin queue record.
+  status?: "pending";
+  decision?: "ready_for_face_scan" | "pending_admin_review" | "profile_mismatch" | "rescan_required";
+  verificationId?: string;
   detectedIdType: IdentityDocumentType | null;
   documentScreening?: DocumentScreening;
   message: string;
@@ -133,8 +137,9 @@ export type DocumentPrecheckResult = {
 
 /**
  * Private authenticated ID-only OCR screening before face capture.
- * Explicit user consent is required. Photos are transient and do not
- * consume a limited face-verification attempt; no selfie is sent.
+ * Explicit user consent is required. Passing OCR images stay transient;
+ * images escalated to Admin review are stored privately up to 30 days.
+ * No selfie is sent and no face-verification attempt is consumed.
  */
 export async function precheckIdentityDocument(input: {
   idType: IdentityDocumentType;
@@ -156,12 +161,15 @@ export async function precheckIdentityDocument(input: {
   const token = await user.getIdToken(true);
   const body = new FormData();
   body.append("idType", input.idType);
+  // OCR-only Admin escalation has a separate, explicitly consented
+  // private ID-photo route. No selfie exists at this precheck stage.
+  body.append("identityEvidenceConsent", "true");
   appendMedia(body, "idDocument", input.idDocument);
   if (input.idType !== "passport" && input.idBackDocument) {
     appendMedia(body, "idBackDocument", input.idBackDocument);
   }
   const response = await fetchWithTimeout(
-    `${getBackendBaseUrl()}/api/identity/document/precheck`,
+    `${getBackendBaseUrl()}/api/identity/document/precheck-with-evidence`,
     {
       method: "POST",
       headers: {
@@ -170,7 +178,10 @@ export async function precheckIdentityDocument(input: {
       },
       body,
     },
-    70000,
+    // Read-only document OCR can take longer on Render Free; the backend
+    // enforces a separate 105s cap for this zero-attempt precheck.
+    // Keep client > backend to show a friendly server message if it times out.
+    135000,
   );
   const data = await readResponseBody(response);
   if (!response.ok) {
@@ -184,6 +195,12 @@ export async function precheckIdentityDocument(input: {
     : data?.outcome === "review" ? "review" : "retry";
   return {
     outcome,
+    status: data?.status === "pending" && outcome === "review" ? "pending" : undefined,
+    decision: ["ready_for_face_scan", "pending_admin_review", "profile_mismatch", "rescan_required"]
+      .includes(String(data?.decision || ""))
+      ? data.decision : undefined,
+    verificationId: typeof data?.verificationId === "string"
+      ? data.verificationId.slice(0, 200) : undefined,
     detectedIdType: screening?.detectedIdType || null,
     documentScreening: screening,
     message: getResponseMessage(data, "Retake the scanned government ID."),
@@ -211,11 +228,17 @@ function getBackendBaseUrl() {
 
   value = value.replace(/\/+$/, "");
 
-  const verifySuffix = "/api/identity/verify";
+  const verifySuffixes = [
+    "/api/identity/verify-with-evidence",
+    "/api/identity/verify",
+  ];
   const statusSuffix = "/api/identity/status";
 
-  if (value.endsWith(verifySuffix)) {
-    value = value.slice(0, -verifySuffix.length);
+  for (const verifySuffix of verifySuffixes) {
+    if (value.endsWith(verifySuffix)) {
+      value = value.slice(0, -verifySuffix.length);
+      break;
+    }
   }
 
   if (value.endsWith(statusSuffix)) {
@@ -413,11 +436,11 @@ async function fetchWithTimeout(
  * Check the deployed Python AI engine before submitting private identity
  * media or consuming an AI attempt. This endpoint requires Firebase auth.
  */
-export async function checkIdentityEngineReady(): Promise<void> {
+export async function checkIdentityEngineReady(faceOnly = false): Promise<void> {
   const user = await getAuthenticatedUser();
   const token = await user.getIdToken();
   const response = await fetchWithTimeout(
-    `${getBackendBaseUrl()}/api/identity/engine-health`,
+    `${getBackendBaseUrl()}${faceOnly ? '/api/identity/face-engine-health' : '/api/identity/engine-health'}`,
     {
       method: "GET",
       headers: { Authorization: `Bearer ${token}` },
@@ -446,7 +469,12 @@ export async function checkIdentityEngineReady(): Promise<void> {
  */
 export const submitIdentityVerification = async (
   input: SubmitIdentityVerificationInput,
+  options: { faceOnly?: boolean } = {},
 ): Promise<IdentityVerificationResult> => {
+  const faceOnly = options.faceOnly === true;
+  if (faceOnly && input.idType !== "national_id") {
+    throw new Error("Original face-only verification accepts the National ID portrait only.");
+  }
   if (!input?.idType) {
     throw new Error("Select the government ID type.");
   }
@@ -456,7 +484,7 @@ export const submitIdentityVerification = async (
     "Government ID image",
   );
 
-  if (input.idType !== "passport") {
+  if (input.idType !== "passport" && !faceOnly) {
     validateMedia(
       input.idBackDocument || undefined,
       "Government ID back image",
@@ -479,6 +507,9 @@ export const submitIdentityVerification = async (
     "idType",
     input.idType,
   );
+  // This field is sent only after the Resident explicitly accepts private
+  // Admin evidence retention in the verification screen.
+  formData.append("identityEvidenceConsent", "true");
 
   appendMedia(
     formData,
@@ -500,8 +531,9 @@ export const submitIdentityVerification = async (
     input.selfie,
   );
 
-  const endpoint =
-    `${getBackendBaseUrl()}/api/identity/verify`;
+  const endpoint = faceOnly
+    ? `${getBackendBaseUrl()}/api/identity/verify-face-only`
+    : `${getBackendBaseUrl()}/api/identity/verify-with-evidence`;
 
   const response = await fetchWithTimeout(
     endpoint,
